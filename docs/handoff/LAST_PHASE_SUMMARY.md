@@ -1,5 +1,15 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
+## Iteração mais recente (manutenção) — 2026-06-26: Conta/Segurança em Configurações
+Adicionado `SecurityCard` em `/configuracoes` (após o `ProfileCard`) com **trocar e-mail** e
+**trocar senha**, refletindo direto no **Supabase Auth** (`auth.users`) — **sem migration**.
+Senha: reautentica com a atual (`signInWithPassword`) e aplica `updateUser({ password })`.
+E-mail: `updateUser({ email })` com confirmação dupla (padrão Supabase), reusando o `/auth/callback`.
+Convenção de auth do repo (client do navegador, `react-hook-form`+`zod`). Schemas/teste em
+`src/lib/validators/auth.ts(.test.ts)`. **Passo manual**: liberar `…/auth/callback` na *Redirect URLs*
+allow-list do projeto `yjvnlbjvippefvzgrxxw` (Authentication → URL Configuration). Detalhes em
+`docs/project/CURRENT_STATUS.md` → *Iterações (modo manutenção)*.
+
 ## Fase concluída: **Fase 14 — Segurança, Responsividade & Polimento Final** (2026-06-26) — **ÚLTIMA FASE / PROJETO CONCLUÍDO** 🎉
 
 ### Resumo da implementação

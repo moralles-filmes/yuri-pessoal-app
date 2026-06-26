@@ -4,6 +4,7 @@ import { CreditCard, Database, Download, FolderTree } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { AppearanceCard } from "@/components/settings/appearance-card";
 import { ProfileCard } from "@/components/settings/profile-card";
+import { SecurityCard } from "@/components/settings/security-card";
 import { RegionalCard } from "@/components/settings/regional-card";
 import { NotificationsCard } from "@/components/settings/notifications-card";
 import { DashboardPrefsCard } from "@/components/settings/dashboard-prefs-card";
@@ -57,6 +58,8 @@ export default async function ConfiguracoesPage() {
         displayName={settings.displayName}
         avatarUrl={settings.avatarUrl}
       />
+
+      <SecurityCard email={user?.email} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <AppearanceCard />

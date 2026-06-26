@@ -14,6 +14,13 @@ RLS + testes + responsividade. **Não** existe uma `PHASE_15`.
 ## Próxima fase
 **Nenhuma.** Projeto fechado em escopo (modo manutenção).
 
+## Iterações (modo manutenção)
+- **2026-06-26 — Conta/Segurança em Configurações (trocar e-mail + senha).** Novo card **`SecurityCard`** (`src/components/settings/security-card.tsx`) em `/configuracoes`, logo após o `ProfileCard`, com duas seções (Separator entre elas):
+  - **Trocar senha** (estando logado): senha atual + nova + confirmar. Reautentica com `signInWithPassword({ email, current })` e, se ok, `updateUser({ password })` — **reflete na hora** em `auth.users`.
+  - **Trocar e-mail**: `updateUser({ email }, { emailRedirectTo: \`${origin}/auth/callback?next=/configuracoes\` })` — fluxo **padrão seguro** do Supabase (confirma no e-mail antigo **e** no novo). Reusa o `/auth/callback` existente (`exchangeCodeForSession`). **Sem migration** (senha/e-mail vivem em `auth.users`).
+  - Segue a **convenção de auth do repo** (client do navegador, igual `auth-form.tsx`), `react-hook-form` + `zodResolver`. Schemas puros em `src/lib/validators/auth.ts` (`changePasswordSchema`/`changeEmailSchema`) + testes `auth.test.ts` (6). Suíte: **348 testes** (lint/tsc/build ok).
+  - **Config manual no Dashboard Supabase** (`yjvnlbjvippefvzgrxxw` → Authentication → URL Configuration), não exposto por MCP: incluir `http://localhost:3000/auth/callback` e o callback de produção na **Redirect URLs allow-list**; conferir **Site URL** e que **"Secure email change"/"Confirm email"** estão ativos.
+
 ## Fases
 | # | Fase | Status |
 | --- | --- | --- |

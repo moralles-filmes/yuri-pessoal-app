@@ -60,6 +60,8 @@ Esta versão tem breaking changes (ver `AGENTS.md`; guias em `node_modules/next/
 ### Camadas e fluxo de dados
 O padrão dominante em todo o app é **Server Component (lê) → Server Action (muta) → `revalidatePath`/`router.refresh`**. As decisões de fase mencionam TanStack Query/Zustand, mas a implementação real padronizou Server Actions para consistência — `@tanstack/react-query` está instalado mas o app não o usa para o fluxo principal. Siga o padrão Server Action ao adicionar features.
 
+**Exceção — operações de auth:** login, cadastro, logout e **trocar e-mail/senha** usam o **client do navegador** direto (`auth.signInWithPassword`/`signUp`/`updateUser`), não Server Actions — precisam da sessão do client e do `window.location.origin` para o `emailRedirectTo` (não há `NEXT_PUBLIC_SITE_URL`). Ver `src/components/auth/auth-form.tsx`, `src/components/layout/user-menu.tsx` e `src/components/settings/security-card.tsx`. Trocar e-mail/senha reflete direto em `auth.users` (sem migration); a confirmação de e-mail volta pelo `/auth/callback`.
+
 - **Páginas de módulo** em `src/app/(app)/<rota-ptbr>/page.tsx` são Server Components `force-dynamic` que chamam uma leitura agregada e renderizam um `*-client.tsx` (`'use client'`) para interatividade. Estado de filtro/visão vive na **URL** (`?view=&periodo=&date=`), não em estado global. Cada rota tem `loading.tsx` (skeleton).
 - **Leituras** (server-only) ficam em `src/lib/<domínio>/queries.ts`. Costumam fazer **uma** consulta ampla e derivar tudo em memória (evitar N+1).
 - **Mutações** ficam em `src/lib/actions/<domínio>.ts` (arquivos `"use server"`).
