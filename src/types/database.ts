@@ -139,6 +139,8 @@ export type TransactionWithRelations = TransactionRow & {
   category: Pick<CategoryRow, "id" | "name" | "color" | "icon"> | null;
   subcategory: Pick<SubcategoryRow, "id" | "name"> | null;
   card: Pick<CreditCardRow, "id" | "nome" | "cor" | "bandeira"> | null;
+  // Fatura do lançamento de cartão — permite derivar pago/em-aberto na leitura.
+  statement: Pick<CardStatementRow, "id" | "pago_em"> | null;
 };
 
 /* ───────────────────────────── Fase 04 — Parcelamentos ───────────────────────────── */

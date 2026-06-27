@@ -23,6 +23,7 @@ import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dial
 import {
   CategoryPill,
   ClassificacaoBadge,
+  EstornoBadge,
   SignedAmount,
   StatusBadge,
   TransactionTypeBadge,
@@ -132,6 +133,8 @@ export function TransactionsClient({
           {rows.map((t) => {
             const value = signedValue(t);
             const isTransfer = t.type === "transferencia";
+            // Estorno = receita vinculada a uma fatura de cartão (não é entrada em conta).
+            const isEstorno = t.type === "receita" && t.card_id != null;
             return (
               <Card key={t.id}>
                 <CardContent className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -141,16 +144,25 @@ export function TransactionsClient({
                         {t.description ||
                           (isTransfer ? "Transferência" : "Lançamento")}
                       </span>
-                      <TransactionTypeBadge type={t.type} />
-                      {t.parcelado ? (
-                        <Badge
-                          variant="secondary"
-                          className="border-0 bg-primary/10 text-primary"
-                        >
-                          Parcelado {t.qtd_parcelas}x
-                        </Badge>
+                      {isEstorno ? (
+                        <EstornoBadge />
                       ) : (
-                        <StatusBadge status={t.status} />
+                        <>
+                          <TransactionTypeBadge type={t.type} />
+                          {t.parcelado ? (
+                            <Badge
+                              variant="secondary"
+                              className="border-0 bg-primary/10 text-primary"
+                            >
+                              Parcelado {t.qtd_parcelas}x
+                            </Badge>
+                          ) : t.card ? (
+                            // Cartão: pago/em-aberto é DERIVADO da fatura (não do status gravado).
+                            <StatusBadge status={t.statement?.pago_em ? "pago" : "pendente"} />
+                          ) : (
+                            <StatusBadge status={t.status} />
+                          )}
+                        </>
                       )}
                       {!isTransfer && t.classificacao !== "pessoal" && (
                         <ClassificacaoBadge value={t.classificacao} />
