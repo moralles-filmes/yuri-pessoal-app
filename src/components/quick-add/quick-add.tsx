@@ -11,6 +11,7 @@ import {
   ListChecks,
   Plus,
   Target,
+  Trash2,
   TrendingDown,
   TrendingUp,
   type LucideIcon,
@@ -33,14 +34,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/financeiro/money-input";
-import { toDateInputValue } from "@/lib/format";
+import {
+  centavosParaReais,
+  formatCurrency,
+  parseCurrencyToNumber,
+  reaisParaCentavos,
+  toDateInputValue,
+} from "@/lib/format";
+import { dividirDespesa, type ParteDivisao } from "@/lib/finance/split";
 import { createTransaction } from "@/lib/actions/transactions";
 import { createTask } from "@/lib/actions/tasks";
 import { createEvent } from "@/lib/actions/calendar";
 import { createSession } from "@/lib/actions/studies";
 import { setHabitValue } from "@/lib/actions/habits";
 import { loadQuickAddOptions, type QuickAddOptions } from "@/lib/actions/quick-add";
-import { PAYMENT_METHOD_LABELS } from "@/lib/finance/constants";
+import {
+  CLASSIFICACAO_LABELS,
+  CLASSIFICACOES,
+  PAYMENT_METHOD_LABELS,
+  SPLIT_TYPE_LABELS,
+  SPLIT_TYPES,
+  type Classificacao,
+} from "@/lib/finance/constants";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "@/lib/tasks/constants";
 import { EVENT_TYPES, EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
 import { STUDY_DIFFICULTIES, STUDY_DIFFICULTY_LABELS } from "@/lib/studies/constants";
@@ -195,6 +210,13 @@ function SubmitBar({ pending }: { pending: boolean }) {
 
 const CASH_METHODS = ["pix", "debito", "dinheiro", "boleto", "conta_corrente"] as const;
 
+type QuickPart = {
+  person_id: string;
+  tipo: (typeof SPLIT_TYPES)[number];
+  valor: string;
+  percentual: string;
+};
+
 function QuickForm({
   type,
   options,
@@ -244,6 +266,64 @@ function ExpenseForm({
   const [method, setMethod] = React.useState<string>("pix");
   const [categoryId, setCategoryId] = React.useState("");
   const [date, setDate] = React.useState(today());
+  const [classificacao, setClassificacao] = React.useState<Classificacao>("pessoal");
+  const [parts, setParts] = React.useState<QuickPart[]>([]);
+
+  const isShared = classificacao !== "pessoal";
+
+  function changeClassificacao(v: Classificacao) {
+    setClassificacao(v);
+    if (v === "pessoal") setParts([]);
+    else if (parts.length === 0)
+      setParts([{ person_id: "", tipo: "valor", valor: "", percentual: "" }]);
+  }
+
+  function addPart() {
+    setParts((prev) => [
+      ...prev,
+      { person_id: "", tipo: "valor", valor: "", percentual: "" },
+    ]);
+  }
+  function removePart(idx: number) {
+    setParts((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function updatePart(idx: number, patch: Partial<QuickPart>) {
+    setParts((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+  }
+
+  // Prévia da divisão reaproveitando a regra pura `dividirDespesa` (mesma do form completo).
+  let splitPreview: {
+    minhaParteCentavos: number;
+    partesTerceiros: { personId: string; valorCentavos: number }[];
+  } | null = null;
+  let splitError = false;
+  if (isShared) {
+    const totalCentavos = reaisParaCentavos(parseCurrencyToNumber(amount));
+    const partes: ParteDivisao[] = parts
+      .filter((p) => p.person_id)
+      .map((p) =>
+        p.tipo === "valor"
+          ? {
+              personId: p.person_id,
+              tipo: "valor",
+              valorCentavos: reaisParaCentavos(parseCurrencyToNumber(p.valor)),
+            }
+          : {
+              personId: p.person_id,
+              tipo: "percentual",
+              percentual: parseCurrencyToNumber(p.percentual),
+            },
+      );
+    if (totalCentavos > 0 && partes.length > 0) {
+      try {
+        splitPreview = dividirDespesa(totalCentavos, partes);
+      } catch {
+        splitError = true;
+      }
+    }
+  }
+  const nomePessoa = (id: string) =>
+    options.people.find((p) => p.id === id)?.nome ?? "Pessoa";
 
   if (mode === "account" && options.accounts.length === 0)
     return <NoData>Cadastre uma conta no Financeiro para lançar despesas à vista.</NoData>;
@@ -263,6 +343,18 @@ function ExpenseForm({
         purchase_date: date,
         competence_date: date,
         description,
+        classificacao: classificacao === "pessoal" ? "pessoal" : classificacao,
+        parts:
+          classificacao === "pessoal"
+            ? []
+            : parts
+                .filter((p) => p.person_id)
+                .map((p) => ({
+                  person_id: p.person_id,
+                  tipo: p.tipo,
+                  valor: p.tipo === "valor" ? p.valor : "",
+                  percentual: p.tipo === "percentual" ? p.percentual : "",
+                })),
       }),
       "Despesa lançada.",
     );
@@ -323,6 +415,137 @@ function ExpenseForm({
           </SelectContent>
         </Select>
       </Field>
+
+      <div className="space-y-3 rounded-xl border border-border bg-card/40 p-3">
+        <Field label="Classificação">
+          <Select
+            value={classificacao}
+            onValueChange={(v) => changeClassificacao(v as Classificacao)}
+          >
+            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {CLASSIFICACOES.map((c) => (
+                <SelectItem key={c} value={c}>{CLASSIFICACAO_LABELS[c]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        {isShared &&
+          (options.people.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nenhuma pessoa cadastrada. Cadastre em A Receber → Pessoas.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {parts.map((p, idx) => (
+                <div key={idx} className="space-y-2 rounded-lg border border-border bg-card p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Pessoa {idx + 1}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Remover pessoa"
+                      onClick={() => removePart(idx)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                  <Field label="Pessoa">
+                    <Select
+                      value={p.person_id}
+                      onValueChange={(v) => updatePart(idx, { person_id: v })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.people.map((person) => (
+                          <SelectItem key={person.id} value={person.id}>
+                            {person.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="Tipo">
+                      <Select
+                        value={p.tipo}
+                        onValueChange={(v) =>
+                          updatePart(idx, { tipo: v as QuickPart["tipo"] })
+                        }
+                      >
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {SPLIT_TYPES.map((t) => (
+                            <SelectItem key={t} value={t}>{SPLIT_TYPE_LABELS[t]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field label={p.tipo === "valor" ? "Valor" : "%"}>
+                      {p.tipo === "valor" ? (
+                        <MoneyInput
+                          value={p.valor}
+                          onValueChange={(v) => updatePart(idx, { valor: v })}
+                        />
+                      ) : (
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step="0.01"
+                          inputMode="decimal"
+                          value={p.percentual}
+                          onChange={(e) => updatePart(idx, { percentual: e.target.value })}
+                        />
+                      )}
+                    </Field>
+                  </div>
+                </div>
+              ))}
+
+              <Button type="button" variant="outline" size="sm" onClick={addPart}>
+                <Plus /> Adicionar pessoa
+              </Button>
+
+              {splitError && (
+                <p className="text-xs text-destructive">
+                  A divisão não fecha: a soma dos terceiros passou do total ou os
+                  percentuais somam mais de 100%.
+                </p>
+              )}
+
+              {splitPreview && (
+                <div className="space-y-1 rounded-lg bg-muted/40 p-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Minha parte</span>
+                    <span className="font-medium tabular-nums text-foreground">
+                      {formatCurrency(centavosParaReais(splitPreview.minhaParteCentavos))}
+                    </span>
+                  </div>
+                  {splitPreview.partesTerceiros.map((t) => (
+                    <div
+                      key={t.personId}
+                      className="flex items-center justify-between text-muted-foreground"
+                    >
+                      <span className="truncate">{nomePessoa(t.personId)}</span>
+                      <span className="tabular-nums">
+                        {formatCurrency(centavosParaReais(t.valorCentavos))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+      </div>
+
       <Field label="Data">
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </Field>
