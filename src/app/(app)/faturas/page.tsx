@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import {
+  getAccounts,
   getCreditCards,
   getReceivablesByStatements,
   getStatementInstallmentItems,
@@ -24,6 +25,7 @@ export default async function FaturasPage({
 }) {
   const sp = await searchParams;
   const cards = await getCreditCards();
+  const accounts = await getAccounts();
 
   // Cartão selecionado: o da URL, senão o primeiro ativo, senão o primeiro.
   const selectedCardId =
@@ -67,6 +69,9 @@ export default async function FaturasPage({
         transactions={transactions}
         installmentItems={installmentItems}
         receivables={receivables}
+        accounts={accounts
+          .filter((a) => a.is_active)
+          .map((a) => ({ id: a.id, name: a.name }))}
         today={today}
         selectedCardId={selectedCardId}
         month={str(sp.month) ?? null}
