@@ -184,6 +184,27 @@ describe("resumoMes — separação meu × terceiros", () => {
     expect(z.entradas).toBe(0);
     expect(z.meu).toBe(0);
   });
+
+  it("estorno de cartão (receita vinculada à fatura) NÃO entra em entradas", () => {
+    // Estorno = receita com card_id/statement_id. Já está embutido no total_atual da fatura
+    // (reduz as saídas); contá-lo também como entrada seria contagem dupla.
+    const comEstorno = [
+      ...transactions,
+      tx({
+        amount: 40,
+        type: "receita",
+        status: "recebido",
+        competence_date: "2026-06-03",
+        card_id: "c1",
+        statement_id: "st1",
+      }),
+    ];
+    const r2 = resumoMes({ mes: "2026-06", transactions: comEstorno, statements, receivables });
+    // Entradas seguem 500 (só a receita de conta) — o estorno de 40 não soma.
+    expect(r2.entradas).toBe(500);
+    // Saídas inalteradas aqui (vêm do total_atual da fatura, que já considera o estorno).
+    expect(r2.saidas).toBe(300);
+  });
 });
 
 /* ───────────────────────────── categoria & forma ───────────────────────────── */

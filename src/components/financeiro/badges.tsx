@@ -1,3 +1,4 @@
+import { Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -50,6 +51,21 @@ export function TransactionTypeBadge({ type }: { type: TransactionType }) {
   return (
     <Badge variant="outline" className={cn("gap-1", TYPE_CLASSES[type])}>
       {TRANSACTION_TYPE_LABELS[type]}
+    </Badge>
+  );
+}
+
+/**
+ * Badge para ESTORNO de cartão (receita vinculada a uma fatura). Substitui "Receita + Recebido"
+ * na lista, deixando claro que é um crédito na fatura — não uma entrada em conta.
+ */
+export function EstornoBadge() {
+  return (
+    <Badge
+      variant="secondary"
+      className="gap-1 border-0 bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400"
+    >
+      <Undo2 className="size-3" /> Estorno de cartão
     </Badge>
   );
 }

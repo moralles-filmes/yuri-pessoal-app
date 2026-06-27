@@ -212,7 +212,10 @@ export function resumoMes(params: {
     if (mesDe(t.competence_date) !== mes) continue;
 
     if (t.type === "receita") {
-      entradasCent += cent(t.amount);
+      // Estorno de cartão (receita vinculada à fatura) NÃO é entrada de caixa: já reduz o total
+      // da fatura (total_atual = despesas − estornos + parcelas) e não cai em conta. Só receita
+      // "de conta" (sem cartão) conta como entrada do mês — senão o estorno é contado em dobro.
+      if (t.card_id === null) entradasCent += cent(t.amount);
       continue;
     }
     if (t.type !== "despesa") continue; // transferencia/ajuste fora
