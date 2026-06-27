@@ -260,7 +260,9 @@ export type Database = {
           data_vencimento: string
           id: string
           observacoes: string | null
+          pago_conta_id: string | null
           pago_em: string | null
+          pago_transacao_id: string | null
           status: string
           total_calculado: number
           updated_at: string
@@ -274,7 +276,9 @@ export type Database = {
           data_vencimento: string
           id?: string
           observacoes?: string | null
+          pago_conta_id?: string | null
           pago_em?: string | null
+          pago_transacao_id?: string | null
           status?: string
           total_calculado?: number
           updated_at?: string
@@ -288,7 +292,9 @@ export type Database = {
           data_vencimento?: string
           id?: string
           observacoes?: string | null
+          pago_conta_id?: string | null
           pago_em?: string | null
+          pago_transacao_id?: string | null
           status?: string
           total_calculado?: number
           updated_at?: string
@@ -300,6 +306,27 @@ export type Database = {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_statements_pago_conta_id_fkey"
+            columns: ["pago_conta_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_statements_pago_conta_id_fkey"
+            columns: ["pago_conta_id"]
+            isOneToOne: false
+            referencedRelation: "accounts_with_balance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_statements_pago_transacao_id_fkey"
+            columns: ["pago_transacao_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
         ]
@@ -547,6 +574,7 @@ export type Database = {
         Row: {
           account_id: string | null
           column_mapping: Json
+          competencia_fatura: string | null
           created_at: string
           credit_card_id: string | null
           file_name: string
@@ -565,6 +593,7 @@ export type Database = {
         Insert: {
           account_id?: string | null
           column_mapping?: Json
+          competencia_fatura?: string | null
           created_at?: string
           credit_card_id?: string | null
           file_name: string
@@ -583,6 +612,7 @@ export type Database = {
         Update: {
           account_id?: string | null
           column_mapping?: Json
+          competencia_fatura?: string | null
           created_at?: string
           credit_card_id?: string | null
           file_name?: string
