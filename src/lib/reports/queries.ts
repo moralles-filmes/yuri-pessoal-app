@@ -188,6 +188,10 @@ async function getFinanceAndCardReport(
     installment_id: r.installment_id,
     valor: r.valor,
     status: r.status,
+    ref_month:
+      r.statement?.competencia?.slice(0, 7) ??
+      r.transaction?.purchase_date?.slice(0, 7) ??
+      null,
   }));
   const inst: DashInstallmentItem[] = installmentItems.map((it) => ({
     id: it.id,
@@ -236,7 +240,7 @@ async function getFinanceAndCardReport(
   const formas = gastosPorForma({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
   const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, recorrencias, bills: dashBills });
   const contas = proximasContasPagar({ hoje, bills: dashBills });
-  const aReceber = totalAReceber(recs);
+  const aReceber = totalAReceber(recs, mesSel);
   const saldo = accounts.reduce((s, a) => s + (a.current_balance ?? 0), 0);
 
   const assinaturas = recurrences

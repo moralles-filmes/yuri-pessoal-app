@@ -374,6 +374,20 @@ describe("totalAReceber / proximasContasPagar", () => {
     expect(totalAReceber(comPago)).toBe(80);
   });
 
+  it("a receber filtra pelo mês de referência quando informado", () => {
+    const recs: DashReceivable[] = [
+      { statement_id: "st1", installment_id: null, valor: 50, status: "pendente", ref_month: "2026-06" },
+      { statement_id: "st2", installment_id: null, valor: 30, status: "cobrado", ref_month: "2026-06" },
+      { statement_id: "st3", installment_id: null, valor: 70, status: "pendente", ref_month: "2026-07" },
+      { statement_id: null, installment_id: null, valor: 999, status: "pago", ref_month: "2026-06" },
+    ];
+    expect(totalAReceber(recs, "2026-06")).toBe(80);
+    expect(totalAReceber(recs, "2026-07")).toBe(70);
+    expect(totalAReceber(recs, "2026-08")).toBe(0);
+    // Sem mês: soma todos os em aberto (comportamento legado).
+    expect(totalAReceber(recs)).toBe(150);
+  });
+
   it("próximas contas a pagar dentro da janela", () => {
     const bills: DashBill[] = [
       { name: "Internet", amount: 80, due_day: 20, is_active: true },

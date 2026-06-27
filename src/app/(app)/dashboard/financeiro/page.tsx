@@ -112,6 +112,10 @@ export default async function DashboardFinanceiroPage({
     installment_id: r.installment_id,
     valor: r.valor,
     status: r.status,
+    ref_month:
+      r.statement?.competencia?.slice(0, 7) ??
+      r.transaction?.purchase_date?.slice(0, 7) ??
+      null,
   }));
   const inst: DashInstallmentItem[] = installmentItems.map((it) => ({
     id: it.id,
@@ -156,7 +160,7 @@ export default async function DashboardFinanceiroPage({
   const faturas = proximas6Faturas({ hoje, cards: dashCards, statements: sts, receivables: recs });
   const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, recorrencias, bills: dashBills });
   const contas = proximasContasPagar({ hoje, bills: dashBills });
-  const aReceber = totalAReceber(recs);
+  const aReceber = totalAReceber(recs, mesSel);
   const saldo = accounts.reduce((s, a) => s + (a.current_balance ?? 0), 0);
 
   // Média de saídas dos meses anteriores ao selecionado (para o alerta de gasto alto).
