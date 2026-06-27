@@ -37,6 +37,14 @@ export const installmentPurchaseSchema = z
       .nonnegative()
       .optional()
       .nullable(),
+    // Importação de parcela do meio: numera as parcelas geradas a partir de `numero_inicial`
+    // (a parcela atual `k`) exibindo o total original em `parcelas_total_label` (`N`). Ambos
+    // opcionais — o fluxo manual não envia (default: numera de 1, total = qtd_parcelas).
+    numero_inicial: z.coerce.number().int().min(1).optional(),
+    parcelas_total_label: z.coerce.number().int().min(1).max(60).optional(),
+    // Importação: ancora a 1ª parcela gerada na competência da fatura sendo importada
+    // ('yyyy-MM-01'), em vez da fatura da data da compra original. Opcional (fluxo manual omite).
+    fatura_inicial_competencia: dateString.optional(),
   })
   .refine(
     (d) =>
@@ -49,6 +57,16 @@ export const installmentPurchaseSchema = z
     {
       message: "A soma das parcelas não bate com o total.",
       path: ["override_ultima_centavos"],
+    },
+  )
+  .refine(
+    // A última parcela gerada (numero_inicial − 1 + qtd) não pode ultrapassar o total exibido.
+    (d) =>
+      d.parcelas_total_label == null ||
+      (d.numero_inicial ?? 1) - 1 + d.qtd_parcelas <= d.parcelas_total_label,
+    {
+      message: "A numeração das parcelas geradas ultrapassa o total informado.",
+      path: ["parcelas_total_label"],
     },
   );
 

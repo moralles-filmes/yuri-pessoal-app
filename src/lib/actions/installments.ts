@@ -61,6 +61,8 @@ export async function createInstallmentPurchase(
       diaFechamento: card.dia_fechamento,
       diaVencimento: card.dia_vencimento,
       overrideUltimaCentavos: d.override_ultima_centavos ?? null,
+      numeroInicial: d.numero_inicial ?? 1,
+      competenciaBase: d.fatura_inicial_competencia ?? null,
     });
   } catch {
     return dbError("Não foi possível calcular as parcelas.");
@@ -124,7 +126,7 @@ export async function createInstallmentPurchase(
       card_id: d.card_id,
       statement_id: statementId,
       numero: p.numero,
-      total_parcelas: d.qtd_parcelas,
+      total_parcelas: d.parcelas_total_label ?? d.qtd_parcelas,
       valor: p.valor,
       data_competencia: p.fatura.competencia,
       status: "ativa",

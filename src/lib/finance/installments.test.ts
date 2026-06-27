@@ -111,6 +111,18 @@ describe("distribuirFaturas — N competências sequenciais (reusa invoice.ts)",
     expect(faturas[1].dataFechamento).toBe("2026-02-28");
     expect(faturas[2].dataFechamento).toBe("2026-03-31");
   });
+
+  it("competenciaBase ancora a 1ª fatura, ignorando dataCompra (importação)", () => {
+    // dataCompra antiga (compra original em fev), mas a fatura importada é junho:
+    // as parcelas saem de junho em diante, NÃO de fevereiro.
+    const faturas = distribuirFaturas("2026-02-25", 4, 21, 28, "2026-06-01");
+    expect(faturas.map((f) => f.competencia)).toEqual([
+      "2026-06-01",
+      "2026-07-01",
+      "2026-08-01",
+      "2026-09-01",
+    ]);
+  });
 });
 
 describe("planejarParcelamento — valor + fatura por parcela (preview = servidor)", () => {
@@ -152,5 +164,46 @@ describe("planejarParcelamento — valor + fatura por parcela (preview = servido
         overrideUltimaCentavos: 9999,
       }),
     ).toThrow();
+  });
+
+  it("numeroInicial desloca a numeração (importar parcela do meio), sem afetar valores/faturas", () => {
+    // Importar 5/12: 8 parcelas restantes numeradas 5..12; a 1ª cai na fatura da dataCompra.
+    const plano = planejarParcelamento({
+      valorTotalReais: 840, // 8 × 105,00
+      qtd: 8,
+      dataCompra: "2025-12-05",
+      diaFechamento: 10,
+      diaVencimento: 20,
+      numeroInicial: 5,
+    });
+    expect(plano.map((p) => p.numero)).toEqual([5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(plano.every((p) => p.valorCentavos === 10500)).toBe(true);
+    expect(plano[0].fatura.competencia).toBe("2025-12-01"); // 1ª gerada cai na fatura da dataCompra
+  });
+
+  it("importar 5/12 com competenciaBase: parcela 5 cai na fatura importada e segue à frente", () => {
+    // Cenário do bug: linha "5/12" na fatura de junho, mas a compra original foi em maio.
+    // Com competenciaBase=junho, a parcela 5 cai em junho (não em meses passados).
+    const plano = planejarParcelamento({
+      valorTotalReais: 840, // 8 × 105,00
+      qtd: 8,
+      dataCompra: "2026-05-22", // data da compra original (antiga)
+      diaFechamento: 21,
+      diaVencimento: 28,
+      numeroInicial: 5,
+      competenciaBase: "2026-06-01",
+    });
+    expect(plano.map((p) => p.numero)).toEqual([5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(plano.map((p) => p.fatura.competencia)).toEqual([
+      "2026-06-01",
+      "2026-07-01",
+      "2026-08-01",
+      "2026-09-01",
+      "2026-10-01",
+      "2026-11-01",
+      "2026-12-01",
+      "2027-01-01",
+    ]);
+    expect(plano.every((p) => p.valorCentavos === 10500)).toBe(true);
   });
 });

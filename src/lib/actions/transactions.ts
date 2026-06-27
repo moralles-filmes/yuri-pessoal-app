@@ -11,7 +11,10 @@ import {
   notAuthed,
   type AuthContext,
 } from "@/lib/actions/helpers";
-import { resolveOrCreateStatement } from "@/lib/finance/statements";
+import {
+  getOrCreateStatementForCompetencia,
+  resolveOrCreateStatement,
+} from "@/lib/finance/statements";
 import { applySplit, toPartesDivisao } from "@/lib/finance/split-persist";
 import {
   dividirDespesa,
@@ -86,7 +89,8 @@ export async function createTransaction(
     return { ok: true, data: { id: data[0].id } };
   }
 
-  // Compra no cartão (Fase 03): resolve/cria a fatura e vincula statement_id.
+  // Compra no cartão (Fase 03): resolve/cria a fatura e vincula statement_id. Na importação,
+  // `statement_competencia` força a fatura sendo importada (evita derivar de uma data antiga).
   let cardId: string | null = null;
   let statementId: string | null = null;
   if (
@@ -95,7 +99,13 @@ export async function createTransaction(
     d.card_id
   ) {
     cardId = d.card_id;
-    statementId = await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
+    statementId = d.statement_competencia
+      ? await getOrCreateStatementForCompetencia(
+          ctx,
+          d.card_id,
+          d.statement_competencia,
+        )
+      : await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
     if (!statementId) return dbError("Não foi possível resolver a fatura do cartão.");
   }
 
