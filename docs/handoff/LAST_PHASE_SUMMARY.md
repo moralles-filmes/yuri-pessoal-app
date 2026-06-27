@@ -1,6 +1,81 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-## Iteração mais recente (manutenção) — 2026-06-27: Divisão com terceiros na edição e na importação
+## Iteração mais recente (manutenção) — 2026-06-27: Embed ambíguo no `getTransactions` esvaziava as listas
+Regressão de **runtime** da feature de pagamento: a migration `20260627140000` adicionou
+`card_statements.pago_transacao_id → transactions.id` (um **2º FK** entre as tabelas) e o `TX_SELECT`
+passou a embutir `statement:card_statements(id,pago_em)` **sem dizer qual FK**. Com 2 caminhos, o
+PostgREST 14.5 devolve **`PGRST201` (HTTP 300)** e `getTransactions` cai em `data ?? []` → **lista
+vazia**. Em `/faturas`, o detalhe mostrava só as **parcelas** (query separada) e sumiam **à vista +
+estornos**; também quebrava **Lançamentos** e o **Dashboard**. Passou em build/tsc/lint/testes (erro só
+em runtime). **Fix (1 linha em `src/lib/finance/queries.ts`):** desambiguar igual ao `accounts` →
+`statement:card_statements!transactions_statement_id_fkey(id,pago_em)`. Verificado no REST real (antes
+HTTP 300/PGRST201 → depois HTTP 200). Sem migration, suíte **401**. **Lição:** novo FK que cria um 2º
+caminho entre tabelas usadas em embeds → revisar todos os `*_SELECT` do `queries.ts` e pôr `!nome_fk`.
+
+## Iteração anterior (manutenção) — 2026-06-27: Pagar fatura debita uma conta (+ resolve o "seletor de conta")
+O botão **Pagar** da fatura abre um diálogo que **sempre pede a conta** e cria **um lançamento tipo
+`transferencia`** (debita a conta, status `pago`, `amount` = total da fatura, sem `statement_id`/`card_id`).
+Por ser transferência fica **fora** de despesas/relatórios (o `dashboard` exclui) e **fora** do
+`total_atual` da fatura (a view só soma despesa/receita) → **zero duplicação**; e **abate o saldo** da
+conta. **Desfazer** deleta o lançamento (estorna o saldo) e limpa os campos. A fatura ganhou
+`pago_conta_id`/`pago_transacao_id` (migration `20260627140000`, idempotente; `supabase.ts` regenerado).
+Em **Lançamentos**, item de cartão mostra **pago/em aberto DERIVADO** da `pago_em` da fatura
+(`getTransactions` embute `statement(id,pago_em)`). **Resolve a pendência** anterior (`markStatementPaid(id)`
+sem `contaId`) → assinatura agora `(id, contaId)`, `build`/`tsc` verdes. Lógica pura `montarPagamentoFatura`
+(4 testes). Bloqueios: fatura já paga e total ≤ 0. Suíte **401** (lint/tsc/build ok). Detalhes em
+`docs/project/CURRENT_STATUS.md` → *Iterações (modo manutenção)*.
+
+## Iteração anterior (manutenção) — 2026-06-27: Importar fatura parcelada + divisão "por valor" dividia o recebível do terceiro por `qtd`
+Numa fatura de terceiro, dividir uma linha **parcelada** **por VALOR** deixava o recebível **dividido
+pelo nº de parcelas** (ex.: SUZY R$147,50/parcela aparecia como **R$73,75**). Causa-raiz (confirmada no
+banco): o diálogo de divisão da revisão prevê a parte contra **uma parcela** (o valor da linha), mas
+`createInstallmentPurchase`/`applySplitParcelado` dividem a parte pelo **total da compra** (parcela ×
+`qtd`) e a espalham nas parcelas → a parte por valor saía dividida por `qtd` (percentual não sofre).
+Correção: função pura **`escalarPartesParcelado`** (`src/lib/import/parcelamento.ts`) multiplica as
+partes **por valor** por `qtd` em centavos antes do motor; `commitImport` aplica só no ramo do
+parcelamento. Sem migration. Suíte **401** (lint ok, `tsc` só com erro **pré-existente** abaixo).
+**Dados:** corrigidas via SQL as 2 compras afetadas (Suzy/**Bruna Biju 2** e Nicole/**Cea Bau**),
+recebíveis e `valor_pessoal` recompostos — total da SUZY em jun/2026 voltou aos **R$773,53** exatos.
+**⚠ Pendência separada (pré-existente):** `build`/`tsc` quebram em `faturas/statements-client.tsx:260`
+(`markStatementPaid(id)` sem o 2º arg `contaId` — "marcar fatura como paga" meio-ligado no `b8696b5`);
+precisa de seletor de conta. Detalhes em `docs/project/CURRENT_STATUS.md` → *Iterações*.
+
+## Iteração anterior (manutenção) — 2026-06-27: Estorno de cartão não infla "Entradas"
+O estorno (receita vinculada à fatura, sem conta) era somado em `resumoMes.entradas` **e** já reduzia
+o `total_atual` da fatura → contado em dobro, inflando as Entradas no Painel/Relatórios (que reusam
+`resumoMes`). O **saldo das contas nunca foi afetado** (`account_balance` só soma transações com
+`account_id`). Correção: receita com `card_id` não entra em `entradas`. UI: `EstornoBadge` ("Estorno de
+cartão") substitui "Receita + Recebido" na lista de lançamentos. Suíte **391** (lint/tsc/build ok), sem
+migration. Detalhes em `docs/project/CURRENT_STATUS.md` → *Iterações (modo manutenção)*.
+
+## Iteração anterior (manutenção) — 2026-06-27: Importação de fatura — parcelas em meses passados + total errado
+Numa fatura de cartão, a linha "k/N" e a última parcela "N/N" trazem a **data da compra original**
+(meses atrás), não a data desta fatura. O `commitImport` ancorava a fatura de destino nessa data
+antiga, então a parcela `k` caía na fatura da compra original e espalhava `k…N` por **meses passados**
+— criando faturas "Atrasada" fantasma **e** drenando o total da fatura atual (mesma causa dos dois
+sintomas). Correção: **toda linha do arquivo pertence à fatura sendo importada**. Detecta-se a
+**competência** da fatura pelas compras à vista (pura `detectarCompetenciaFatura`), **confirmável na
+revisão** ("Fatura de destino") e gravada em `import_batches.competencia_fatura` (migration). O
+`commitImport` ancora todas as linhas de cartão nela: parcela `k` na fatura importada e `k+1…` nos
+meses seguintes (`planejarParcelamento`/`distribuirFaturas` + `competenciaBase`), última parcela/à
+vista via `statement_competencia` + `getOrCreateStatementForCompetencia`. Suíte **390** (lint/tsc/build
+ok), `supabase.ts` regenerado. **Dados:** o lote `fatura-azul-julho` foi desfeito e **reimportado** —
+junho fechou nos R$ 4.262,45 exatos. **Faturas vazias** (0 lançamentos, criadas pelo get-or-create)
+deixaram de listar: `getStatements` agora filtra `itens > 0`; as vazias do cartão foram apagadas.
+Detalhes em `docs/project/CURRENT_STATUS.md` → *Iterações (modo manutenção)*.
+
+## Iteração anterior (manutenção) — 2026-06-27: Importar fatura "como parcelado" (valor da parcela + só as restantes)
+Numa fatura de cartão, a linha "k/N" traz o valor de **uma parcela**, não o total da compra. O
+"Importar parcelado?" dividia o valor da linha por `N` e gerava `N` parcelas do zero — "5/12 R$105"
+virava 12× R$8,75. Agora, nova lógica pura **`planejarImportParcelado`** (`src/lib/import/parcelamento.ts`):
+cada parcela = valor da linha e gera **só as restantes** (`N − k + 1`), preservando a numeração
+original → "5/12 R$105" vira **8× R$105 numeradas 5/12…12/12**. `planejarParcelamento` ganhou
+`numeroInicial` (offset; default 1 mantém o fluxo manual), o schema ganhou `numero_inicial`/
+`parcelas_total_label` opcionais e `commitImport` calcula o plano pela função pura. UI: o botão some
+na **última parcela** (k = N). **Sem migration.** Suíte **382** (lint/tsc/build ok). Detalhes em
+`docs/project/CURRENT_STATUS.md` → *Iterações (modo manutenção)*.
+
+## Iteração anterior (manutenção) — 2026-06-27: Divisão com terceiros na edição e na importação
 A divisão de gastos (Fase 05) deixou de ser exclusiva da criação. **Na edição:** `updateTransaction`
 re-aplica a divisão de uma despesa simples (reusa `applySplit`), só quando ela muda de fato, e
 **bloqueia** se houver recebível `cobrado`/`pago`; o form pré-preenche as partes via

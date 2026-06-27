@@ -1,5 +1,13 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
+## ✅ Resolvido — "Marcar fatura como paga" (build voltou a passar)
+A pendência que travava o build foi **concluída** (branch `feat/pagamento-fatura-conta`, commits
+`818739c`..`c806bc6`): `markStatementPaid(id, contaId)` agora é chamado por um diálogo `PayStatementDialog`
+em `statements-client.tsx` (seletor de conta usando a prop `accounts`; botão Pagar oculto quando total ≤ 0).
+O pagamento cria um lançamento `transferencia` que debita a conta sem inflar relatórios/fatura; "Desfazer"
+estorna o saldo. Itens de cartão em Lançamentos exibem pago/em-aberto derivado da `pago_em` da fatura.
+`build`/`tsc`/`lint`/`test:run` (401) verdes. Detalhes em `docs/project/CURRENT_STATUS.md` → *Iterações*.
+
 ## ✅ Projeto concluído — modo manutenção (NÃO há próxima fase)
 **As 14 fases do roadmap estão concluídas.** Não existe (e não deve ser criada) uma `PHASE_15`.
 O sistema está fechado em escopo e entra em **manutenção/iteração**: mudanças futuras são
