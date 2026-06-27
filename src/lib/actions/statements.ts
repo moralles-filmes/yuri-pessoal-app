@@ -109,9 +109,11 @@ export async function markStatementUnpaid(id: string): Promise<ActionResult> {
     .from("card_statements")
     .select("pago_transacao_id")
     .eq("id", id)
+    .eq("user_id", ctx.userId)
     .single();
+  if (!st) return dbError("Fatura não encontrada.");
 
-  if (st?.pago_transacao_id) {
+  if (st.pago_transacao_id) {
     await ctx.supabase
       .from("transactions")
       .delete()

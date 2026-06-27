@@ -700,7 +700,13 @@ function PayStatementDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setContaId(undefined);
+      }}
+    >
       <DialogTrigger asChild>
         <Button
           variant="ghost"
