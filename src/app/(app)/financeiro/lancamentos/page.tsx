@@ -26,6 +26,7 @@ export default async function LancamentosPage({
     status: str(sp.status),
     accountId: str(sp.account),
     categoryId: str(sp.category),
+    cardId: str(sp.card),
     month: str(sp.month),
   };
 

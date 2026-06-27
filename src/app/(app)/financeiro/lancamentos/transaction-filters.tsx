@@ -24,9 +24,11 @@ const ALL = "all";
 export function TransactionFilters({
   accounts,
   categories,
+  cards,
 }: {
   accounts: { id: string; name: string }[];
   categories: { id: string; name: string }[];
+  cards: { id: string; nome: string }[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -43,9 +45,14 @@ export function TransactionFilters({
   );
 
   const current = (key: string) => searchParams.get(key) ?? ALL;
-  const hasFilters = ["type", "status", "account", "category", "month"].some(
-    (k) => searchParams.get(k),
-  );
+  const hasFilters = [
+    "type",
+    "status",
+    "account",
+    "card",
+    "category",
+    "month",
+  ].some((k) => searchParams.get(k));
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -92,6 +99,20 @@ export function TransactionFilters({
           {accounts.map((a) => (
             <SelectItem key={a.id} value={a.id}>
               {a.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={current("card")} onValueChange={(v) => setParam("card", v)}>
+        <SelectTrigger size="sm" className="w-auto min-w-28">
+          <SelectValue placeholder="Cartão" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>Todos os cartões</SelectItem>
+          {cards.map((c) => (
+            <SelectItem key={c.id} value={c.id}>
+              {c.nome}
             </SelectItem>
           ))}
         </SelectContent>
