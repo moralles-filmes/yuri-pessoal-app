@@ -39,10 +39,10 @@ export function MesAMesChart({ comparativo }: { comparativo: Comparativo }) {
 
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={data} margin={{ left: 4, right: 8 }}>
+      <BarChart data={data} margin={{ left: 4, right: 8, top: 8 }}>
         <CartesianGrid vertical={false} stroke={GRID_COLOR} />
         <XAxis dataKey="nome" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width={64} />
+        <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width={78} />
         <Tooltip
           cursor={{ fill: "var(--muted)", opacity: 0.4 }}
           formatter={(value) => formatCurrency(Number(value))}

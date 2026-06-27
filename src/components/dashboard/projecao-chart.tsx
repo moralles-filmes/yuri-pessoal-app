@@ -43,10 +43,10 @@ export function ProjecaoChart({ data }: { data: ProjecaoPonto[] }) {
 
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={chartData} margin={{ left: 4, right: 12 }}>
+      <BarChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
         <CartesianGrid vertical={false} stroke={GRID_COLOR} />
         <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width={64} />
+        <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width={78} />
         <Tooltip
           cursor={{ fill: "var(--muted)", opacity: 0.4 }}
           formatter={(value) => formatCurrency(Number(value))}
