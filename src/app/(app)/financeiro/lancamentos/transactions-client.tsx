@@ -116,7 +116,7 @@ export function TransactionsClient({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <TransactionFilters accounts={accounts} categories={categories} />
+        <TransactionFilters accounts={accounts} categories={categories} cards={cards} />
         <div className="shrink-0">{newButton}</div>
       </div>
 
