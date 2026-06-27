@@ -475,6 +475,11 @@ export function StatementsClient({
                             </p>
                             <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                               <span>{formatDate(t.purchase_date)}</span>
+                              {t.type === "receita" && (
+                                <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                                  Estorno
+                                </span>
+                              )}
                               {t.category && (
                                 <CategoryPill
                                   name={t.category.name}
@@ -484,7 +489,14 @@ export function StatementsClient({
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium tabular-nums">
+                            <span
+                              className={
+                                t.type === "receita"
+                                  ? "text-sm font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
+                                  : "text-sm font-medium tabular-nums"
+                              }
+                            >
+                              {t.type === "receita" ? "−" : ""}
                               {formatCurrency(t.amount)}
                             </span>
                             <MoveTransactionDialog

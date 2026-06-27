@@ -46,7 +46,11 @@ export function parseValorCentavos(input: string | null | undefined): number | n
     negativo = true;
     s = s.replace(/-\s*$/, "");
   }
-  if (/^\s*-/.test(s)) {
+  // Sinal '-' ANTES do número, mesmo com prefixo de moeda/espaço ("-50,00", "R$ -5,14", "- 5").
+  // Olhar só o trecho antes do 1º dígito evita confundir com um '-' que seja separador.
+  const primeiroDigito = s.search(/\d/);
+  const prefixo = primeiroDigito >= 0 ? s.slice(0, primeiroDigito) : s;
+  if (prefixo.includes("-")) {
     negativo = true;
   }
 

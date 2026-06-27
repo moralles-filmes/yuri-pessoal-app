@@ -49,6 +49,7 @@ import {
   MAPPING_FIELDS,
   type MappingField,
 } from "@/lib/import/constants";
+import { totaisPorStatus } from "@/lib/import/totals";
 import {
   cancelImportBatch,
   commitImport,
@@ -85,6 +86,13 @@ export function ImportReview({
   }, {});
   const paraImportar = counts["para_importar"] ?? 0;
 
+  // Total monetário do que será criado: enquanto revisa, soma das linhas "para importar"
+  // (ignoradas e duplicadas fora); depois de importado, soma do que de fato entrou.
+  const totais = totaisPorStatus(rows, isDone ? "importada" : "para_importar");
+  const temReceitas = totais.receitas > 0;
+  // Em fatura de cartão, "receita" significa estorno/crédito (reduz a fatura).
+  const creditoLabel = batch.origem === "cartao" ? "Estornos" : "Receitas";
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
@@ -117,6 +125,42 @@ export function ImportReview({
               <Chip label="Importadas" value={counts["importada"] ?? 0} tone="sky" />
             )}
           </div>
+
+          {/* Total monetário — para conferir contra o valor da fatura/extrato. */}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-border pt-3">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">
+                {isDone ? "Total importado" : "Total a importar"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {isDone
+                  ? "Soma das linhas efetivamente importadas."
+                  : "Soma das linhas marcadas para importar — ignoradas e duplicadas fora."}
+                {temReceitas &&
+                  ` Líquido (despesas − ${creditoLabel.toLowerCase()}).`}
+              </span>
+            </div>
+            <span className="text-lg font-semibold tabular-nums">
+              {formatCurrency(totais.liquido)}
+            </span>
+          </div>
+
+          {temReceitas && (
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+              <span>
+                Despesas{" "}
+                <span className="font-medium text-foreground tabular-nums">
+                  {formatCurrency(totais.despesas)}
+                </span>
+              </span>
+              <span>
+                {creditoLabel}{" "}
+                <span className="font-medium text-emerald-600 tabular-nums dark:text-emerald-400">
+                  −{formatCurrency(totais.receitas)}
+                </span>
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

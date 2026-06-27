@@ -34,7 +34,8 @@ export function chaveComposta(
 
 /**
  * Marca duplicatas em `rows`. Linhas válidas e não-duplicadas passam a `para_importar`
- * (entram por padrão); duplicatas viram `duplicada` com motivo; linhas em `erro` são mantidas.
+ * (entram por padrão); duplicatas viram `duplicada` com motivo; linhas em `erro` ou já
+ * `ignorada` (ex.: pagamento da fatura auto-ignorado no mapeamento) são mantidas como estão.
  * `existingKeys` é o conjunto de chaves compostas das transações já existentes do alvo
  * (montado no servidor com `chaveComposta`).
  */
@@ -47,7 +48,7 @@ export function detectarDuplicados(
   const vistasIdent = new Set<string>();
 
   return rows.map((r) => {
-    if (r.status === "erro") return r;
+    if (r.status === "erro" || r.status === "ignorada") return r;
 
     const composta = chaveComposta(
       r.dataNorm,

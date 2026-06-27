@@ -36,6 +36,12 @@ describe("parseValorCentavos", () => {
     expect(parseValorCentavos("(50,00)")).toBe(-5000);
   });
 
+  it("detecta o '-' mesmo após o prefixo de moeda (estorno de fatura)", () => {
+    expect(parseValorCentavos("R$ -5,14")).toBe(-514);
+    expect(parseValorCentavos("R$ -3.301,03")).toBe(-330103);
+    expect(parseValorCentavos("R$ 152,35")).toBe(15235); // positivo segue positivo
+  });
+
   it("retorna null para vazio ou texto não numérico", () => {
     expect(parseValorCentavos("")).toBeNull();
     expect(parseValorCentavos("   ")).toBeNull();

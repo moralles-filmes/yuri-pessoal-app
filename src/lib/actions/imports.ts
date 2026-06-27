@@ -1,9 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
+import {
+  authContext,
+  dbError,
+  invalid,
+  notAuthed,
+  type AuthContext,
+} from "@/lib/actions/helpers";
 import { createTransaction } from "@/lib/actions/transactions";
 import { createInstallmentPurchase } from "@/lib/actions/installments";
+import { resolveOrCreateStatement } from "@/lib/finance/statements";
 import {
   importUploadSchema,
   remapSchema,
@@ -399,6 +406,48 @@ export async function setImportRowSplit(
 }
 
 /**
+ * Cria um ESTORNO/crédito de fatura como uma RECEITA vinculada à fatura do cartão (reduz o
+ * total_atual da view). Vai por insert direto porque `createTransaction` só vincula statement_id
+ * a despesas — aqui o crédito precisa entrar na MESMA fatura da data, fora do saldo de conta.
+ * Valor sempre positivo (a subtração é feita na view); status 'recebido'.
+ */
+async function createCardEstorno(
+  ctx: AuthContext,
+  args: {
+    cardId: string;
+    amount: number;
+    date: string;
+    description: string;
+    categoryId: string | null;
+  },
+): Promise<ActionResult<{ id: string }>> {
+  const statementId = await resolveOrCreateStatement(ctx, args.cardId, args.date);
+  if (!statementId) return dbError("Não foi possível resolver a fatura do estorno.");
+
+  const { data, error } = await ctx.supabase
+    .from("transactions")
+    .insert({
+      user_id: ctx.userId,
+      type: "receita",
+      payment_method: null,
+      account_id: null,
+      card_id: args.cardId,
+      statement_id: statementId,
+      category_id: args.categoryId,
+      amount: args.amount,
+      purchase_date: args.date,
+      competence_date: args.date,
+      description: args.description,
+      status: "recebido",
+      classificacao: "pessoal",
+    })
+    .select("id")
+    .single();
+  if (error || !data) return dbError("Não foi possível registrar o estorno do cartão.");
+  return { ok: true, data: { id: data.id } };
+}
+
+/**
  * IMPORTA o lote: para cada linha `para_importar`, cria a transação reusando os MESMOS motores
  * do lançamento manual (createTransaction / createInstallmentPurchase) — nada de modelo paralelo.
  * Cada linha importada vira UMA transação na fatura/competência correta (regra das Fases 03/04);
@@ -454,7 +503,17 @@ export async function commitImport(
         : { classificacao: "pessoal" as const, parts: [] };
     let res: ActionResult<{ id: string }>;
 
-    if (
+    if (batch.origem === "cartao" && r.tipo === "receita") {
+      // Estorno/crédito na fatura: receita vinculada à fatura (subtrai do total). Não é
+      // parcelável nem divisível; entra direto via createCardEstorno.
+      res = await createCardEstorno(ctx, {
+        cardId: batch.credit_card_id!,
+        amount: r.valor,
+        date: r.data_norm,
+        description: r.descricao ?? "",
+        categoryId: r.categoria_sugerida_id ?? null,
+      });
+    } else if (
       batch.origem === "cartao" &&
       r.import_as === "parcelamento" &&
       r.parcelas_total &&

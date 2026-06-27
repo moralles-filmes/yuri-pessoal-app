@@ -3,6 +3,7 @@ import {
   applyMapping,
   autoDetectMapping,
   detectHeaderRow,
+  ehPagamentoFatura,
 } from "@/lib/import/mapping";
 import type { NormalizeOptions, ParsedTable } from "@/lib/import/types";
 
@@ -133,5 +134,50 @@ describe("applyMapping", () => {
   it("marca erro quando data e valor não estão mapeados", () => {
     const semMapeamento = applyMapping(table, {}, cartaoOpts);
     expect(semMapeamento.every((r) => r.status === "erro")).toBe(true);
+  });
+});
+
+describe("ehPagamentoFatura", () => {
+  it("reconhece descrições de pagamento da fatura", () => {
+    expect(ehPagamentoFatura("Pagamento Efetuado")).toBe(true);
+    expect(ehPagamentoFatura("PAGAMENTO RECEBIDO")).toBe(true);
+    expect(ehPagamentoFatura("Pagto. por deb conta")).toBe(true);
+    expect(ehPagamentoFatura("Pgto fatura")).toBe(true);
+  });
+
+  it("não confunde com compras comuns nem vazio", () => {
+    expect(ehPagamentoFatura("Supermercado Tauste")).toBe(false);
+    expect(ehPagamentoFatura("")).toBe(false);
+    expect(ehPagamentoFatura(null)).toBe(false);
+  });
+});
+
+describe("applyMapping — estornos/créditos na fatura de cartão", () => {
+  const table: ParsedTable = {
+    headers: ["Data", "Lançamento", "Valor"],
+    rows: [
+      ["21/06/2026", "Supermercado", "R$ 152,35"], // compra → despesa
+      ["15/06/2026", "Apple.com/bill", "R$ -5,14"], // estorno → receita
+      ["01/06/2026", "Pagamento Efetuado", "R$ -3.301,03"], // pagamento → ignorada
+    ],
+  };
+  const rows = applyMapping(table, autoDetectMapping(table.headers), cartaoOpts);
+
+  it("compra positiva continua despesa", () => {
+    expect(rows[0].tipo).toBe("despesa");
+    expect(rows[0].valorCentavos).toBe(15235);
+    expect(rows[0].status).toBe("pendente");
+  });
+
+  it("valor negativo vira estorno (receita), com magnitude positiva", () => {
+    expect(rows[1].tipo).toBe("receita");
+    expect(rows[1].valorCentavos).toBe(514);
+    expect(rows[1].status).toBe("pendente");
+  });
+
+  it("pagamento da fatura (negativo) é auto-ignorado", () => {
+    expect(rows[2].status).toBe("ignorada");
+    expect(rows[2].motivo).toBeTruthy();
+    expect(rows[2].valorCentavos).toBe(330103);
   });
 });

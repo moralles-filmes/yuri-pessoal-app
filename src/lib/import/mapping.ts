@@ -82,6 +82,18 @@ function cell(raw: string[], idx: number | undefined): string | null {
   return v == null ? null : String(v).trim();
 }
 
+/**
+ * True quando a descrição de uma linha de fatura é claramente o PAGAMENTO da fatura (anterior),
+ * e não um lançamento a importar. Só faz sentido aplicar a valores NEGATIVOS (créditos), para não
+ * confundir com uma compra que por acaso cite "pagamento". O texto é normalizado (sem acento,
+ * minúsculo, sem pontuação) antes de casar palavras inteiras.
+ */
+export function ehPagamentoFatura(descricao: string | null | undefined): boolean {
+  const d = normalizarDescricao(descricao);
+  if (!d) return false;
+  return /\b(pagamento|pagto|pgto)\b/.test(d);
+}
+
 /** Resolve a categoria: usa a coluna mapeada se casar com uma categoria; senão a heurística. */
 function resolverCategoria(
   descricao: string,
@@ -170,8 +182,19 @@ export function applyMapping(
     const magnitude = Math.abs(valorAssinado);
     let tipo: "despesa" | "receita";
     if (options.origem === "cartao") {
-      // Fatura de cartão: linhas são despesas (estornos/pagamentos são exceção e ficam editáveis).
-      tipo = "despesa";
+      // Fatura de cartão: compras são despesas; valor NEGATIVO é crédito — estorno (receita, que
+      // reduz a fatura) ou o pagamento da fatura anterior (não é lançamento → auto-ignora). O
+      // estorno entra como receita vinculada à fatura no commit (subtrai do total_atual).
+      tipo = valorAssinado < 0 ? "receita" : "despesa";
+      if (valorAssinado < 0 && ehPagamentoFatura(descricao)) {
+        return {
+          ...base,
+          valorCentavos: magnitude,
+          tipo,
+          status: "ignorada",
+          motivo: "Pagamento da fatura — não é um lançamento.",
+        };
+      }
     } else {
       const ehDespesa = options.sinalNegativoDespesa
         ? valorAssinado < 0
