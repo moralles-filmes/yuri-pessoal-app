@@ -40,14 +40,14 @@ export function ReportBarChart({
 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ left: 4, right: 12 }}>
+      <BarChart data={data} margin={{ left: 4, right: 12, top: 8 }}>
         <CartesianGrid vertical={false} stroke={GRID_COLOR} />
         <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
         <YAxis
           tick={axisTick}
           axisLine={false}
           tickLine={false}
-          width={56}
+          width={78}
           allowDecimals={false}
           tickFormatter={formatValue}
         />

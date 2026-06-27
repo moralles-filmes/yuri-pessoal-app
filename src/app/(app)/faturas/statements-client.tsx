@@ -98,6 +98,7 @@ export function StatementsClient({
   transactions,
   installmentItems,
   receivables,
+  accounts,
   today,
   selectedCardId,
   month,
@@ -108,6 +109,7 @@ export function StatementsClient({
   transactions: TransactionWithRelations[];
   installmentItems: StatementInstallmentItem[];
   receivables: ReceivableWithPerson[];
+  accounts: { id: string; name: string }[];
   today: string;
   selectedCardId: string | null;
   month: string | null;
@@ -255,16 +257,6 @@ export function StatementsClient({
   const faturaAtual = atualComp
     ? list.find((s) => s.competencia === atualComp)
     : undefined;
-
-  async function handlePay(id: string) {
-    const res = await markStatementPaid(id);
-    if (res.ok) {
-      toast.success("Fatura marcada como paga.");
-      router.refresh();
-    } else {
-      toast.error(res.error);
-    }
-  }
 
   async function handleUnpay(id: string) {
     const res = await markStatementUnpaid(id);
@@ -436,15 +428,13 @@ export function StatementsClient({
                           >
                             <RotateCcw /> Desfazer
                           </Button>
-                        ) : s.id ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handlePay(s.id as string)}
-                            className="text-emerald-600 hover:text-emerald-700"
-                          >
-                            <CheckCircle2 /> Pagar
-                          </Button>
+                        ) : s.id && s.total_atual > 0 ? (
+                          <PayStatementDialog
+                            statementId={s.id}
+                            total={s.total_atual}
+                            accounts={accounts}
+                            onPaid={() => router.refresh()}
+                          />
                         ) : null}
                         {s.id && hasItems && (
                           <Button
@@ -670,6 +660,108 @@ function MoveTransactionDialog({
             disabled={loading || !target || options.length === 0}
           >
             {loading ? "Movendo…" : "Mover"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PayStatementDialog({
+  statementId,
+  total,
+  accounts,
+  onPaid,
+}: {
+  statementId: string;
+  total: number;
+  accounts: { id: string; name: string }[];
+  onPaid: () => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [contaId, setContaId] = React.useState<string | undefined>(undefined);
+  const [loading, setLoading] = React.useState(false);
+
+  async function handleConfirm() {
+    if (!contaId) return;
+    setLoading(true);
+    try {
+      const res = await markStatementPaid(statementId, contaId);
+      if (res.ok) {
+        toast.success("Fatura paga e debitada da conta.");
+        setOpen(false);
+        onPaid();
+      } else {
+        toast.error(res.error);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setContaId(undefined);
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-emerald-600 hover:text-emerald-700"
+        >
+          <CheckCircle2 /> Pagar
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Pagar fatura</DialogTitle>
+          <DialogDescription>
+            Debita {formatCurrency(total)} da conta escolhida. O pagamento entra
+            como transferência (não conta como nova despesa).
+          </DialogDescription>
+        </DialogHeader>
+        {accounts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nenhuma conta cadastrada.{" "}
+            <Link href="/financeiro/contas" className="underline">
+              Cadastre uma conta
+            </Link>{" "}
+            para pagar a fatura.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            <Label>Debitar da conta</Label>
+            <Select value={contaId} onValueChange={setContaId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecione a conta" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={loading}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={loading || !contaId || accounts.length === 0}
+          >
+            {loading ? "Pagando…" : `Pagar ${formatCurrency(total)}`}
           </Button>
         </DialogFooter>
       </DialogContent>

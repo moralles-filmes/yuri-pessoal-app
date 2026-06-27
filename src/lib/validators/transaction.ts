@@ -32,6 +32,10 @@ export const transactionSchema = z
     notes: optionalText(1000),
     tags: tagsArray,
     status: z.enum(TRANSACTION_STATUSES).optional().transform((v) => v ?? "pago"),
+    // Importação: força a fatura do cartão para uma competência explícita ('yyyy-MM-01'), em vez
+    // de derivar da data da compra (que numa última parcela "N/N" é a data da compra original).
+    // Uso interno (não vem de formulário); ignorado quando não é compra no cartão.
+    statement_competencia: dateString.optional(),
   })
   .refine(
     (v) =>

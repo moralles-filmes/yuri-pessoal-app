@@ -10,7 +10,12 @@ import {
 } from "@/lib/actions/helpers";
 import { createTransaction } from "@/lib/actions/transactions";
 import { createInstallmentPurchase } from "@/lib/actions/installments";
-import { resolveOrCreateStatement } from "@/lib/finance/statements";
+import {
+  getOrCreateStatementForCompetencia,
+  resolveOrCreateStatement,
+} from "@/lib/finance/statements";
+import { resolverFatura } from "@/lib/finance/invoice";
+import { detectarCompetenciaFatura } from "@/lib/import/competencia";
 import {
   importUploadSchema,
   remapSchema,
@@ -19,6 +24,10 @@ import {
 import { splitSchema } from "@/lib/validators/split";
 import { autoDetectMapping, applyMapping } from "@/lib/import/mapping";
 import { chaveComposta, detectarDuplicados } from "@/lib/import/dedup";
+import {
+  escalarPartesParcelado,
+  planejarImportParcelado,
+} from "@/lib/import/parcelamento";
 import { parseOfx } from "@/lib/import/ofx";
 import { parseCsv } from "@/lib/import/csv";
 import { parseXlsx } from "@/lib/import/xlsx";
@@ -28,8 +37,13 @@ import type {
   NormalizedRow,
   ParsedTable,
 } from "@/lib/import/types";
-import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
+import {
+  centavosParaReais,
+  reaisParaCentavos,
+  toDateInputValue,
+} from "@/lib/format";
 import type { ActionResult } from "@/types/finance";
+import type { ImportSplitPart } from "@/types/database";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -133,6 +147,28 @@ function toRowInserts(
 }
 
 /**
+ * Detecta a competência da fatura de cartão sendo importada, a partir das linhas à vista do lote
+ * (regra pura em `detectarCompetenciaFatura`). Retorna 'yyyy-MM-01' ou null (sem linha à vista
+ * para inferir). Usada no parse/remap para pré-preencher e na revisão para o usuário confirmar.
+ */
+async function detectarCompetenciaLote(
+  ctx: AuthContext,
+  cardId: string,
+  rows: { dataNorm: string | null; parcelasTotal: number | null }[],
+): Promise<string | null> {
+  const { data: card } = await ctx.supabase
+    .from("credit_cards")
+    .select("dia_fechamento, dia_vencimento")
+    .eq("id", cardId)
+    .maybeSingle();
+  if (!card) return null;
+  return (
+    detectarCompetenciaFatura(rows, card.dia_fechamento, card.dia_vencimento)
+      ?.competencia ?? null
+  );
+}
+
+/**
  * Lê e processa um arquivo importado: parseia, detecta o mapeamento, normaliza, sugere
  * categorias e DETECTA DUPLICADOS, persistindo o lote (import_batches) + as linhas
  * (import_rows) para revisão editável. NÃO cria transações ainda (isso é o commit).
@@ -194,6 +230,13 @@ export async function parseImportFile(
   const deduped = detectarDuplicados(normalized, existingKeys, targetId);
   const duplicadas = deduped.filter((r) => r.status === "duplicada").length;
 
+  // Fatura de cartão: detecta a competência (das compras à vista) para ancorar parcelas e
+  // últimas parcelas na fatura certa. O usuário confirma/ajusta na revisão.
+  const competenciaFatura =
+    d.origem === "cartao" && d.credit_card_id
+      ? await detectarCompetenciaLote(ctx, d.credit_card_id, deduped)
+      : null;
+
   const { data: batch, error: batchErr } = await ctx.supabase
     .from("import_batches")
     .insert({
@@ -207,6 +250,7 @@ export async function parseImportFile(
       status: "revisando",
       total_linhas: deduped.length,
       total_duplicadas: duplicadas,
+      competencia_fatura: competenciaFatura,
       column_mapping: { headers: table.headers, fields },
     })
     .select("id")
@@ -283,6 +327,12 @@ export async function remapImportBatch(
   const existingKeys = await existingKeysFor(ctx, origem, targetId);
   const deduped = detectarDuplicados(normalized, existingKeys, targetId);
 
+  // Remap recalcula tudo (datas/valores/parcelas) → re-detecta a competência da fatura.
+  const competenciaFatura =
+    origem === "cartao"
+      ? await detectarCompetenciaLote(ctx, targetId, deduped)
+      : null;
+
   await ctx.supabase.from("import_rows").delete().eq("import_batch_id", batchId);
   const { error: insErr } = await ctx.supabase
     .from("import_rows")
@@ -296,6 +346,7 @@ export async function remapImportBatch(
       sinal_negativo_despesa: parsed.data.sinal_negativo_despesa,
       total_linhas: deduped.length,
       total_duplicadas: deduped.filter((r) => r.status === "duplicada").length,
+      competencia_fatura: competenciaFatura,
       column_mapping: { headers, fields },
     })
     .eq("id", batchId);
@@ -419,9 +470,13 @@ async function createCardEstorno(
     date: string;
     description: string;
     categoryId: string | null;
+    competencia?: string | null;
   },
 ): Promise<ActionResult<{ id: string }>> {
-  const statementId = await resolveOrCreateStatement(ctx, args.cardId, args.date);
+  // Na importação, `competencia` força a fatura sendo importada; senão deriva da data.
+  const statementId = args.competencia
+    ? await getOrCreateStatementForCompetencia(ctx, args.cardId, args.competencia)
+    : await resolveOrCreateStatement(ctx, args.cardId, args.date);
   if (!statementId) return dbError("Não foi possível resolver a fatura do estorno.");
 
   const { data, error } = await ctx.supabase
@@ -462,7 +517,7 @@ export async function commitImport(
 
   const { data: batch } = await ctx.supabase
     .from("import_batches")
-    .select("id, origem, credit_card_id, account_id, status")
+    .select("id, origem, credit_card_id, account_id, status, competencia_fatura")
     .eq("id", batchId)
     .maybeSingle();
   if (!batch) return dbError("Lote não encontrado.");
@@ -482,6 +537,38 @@ export async function commitImport(
     .eq("status", "para_importar")
     .order("linha_index", { ascending: true });
 
+  // Competência-âncora da fatura de cartão: TODAS as linhas do arquivo pertencem à fatura sendo
+  // importada — parcela "k" cai nela, "k+1, k+2…" nos meses seguintes; última parcela e à vista
+  // também caem nela. Usa a competência confirmada na revisão; se faltar (lote antigo), detecta
+  // das linhas e, em último caso, usa a fatura aberta de hoje.
+  let competenciaAlvo: string | null = null;
+  if (batch.origem === "cartao" && batch.credit_card_id) {
+    competenciaAlvo = batch.competencia_fatura ?? null;
+    if (!competenciaAlvo) {
+      const { data: card } = await ctx.supabase
+        .from("credit_cards")
+        .select("dia_fechamento, dia_vencimento")
+        .eq("id", batch.credit_card_id)
+        .maybeSingle();
+      if (card) {
+        competenciaAlvo =
+          detectarCompetenciaFatura(
+            (rows ?? []).map((r) => ({
+              dataNorm: r.data_norm,
+              parcelasTotal: r.parcelas_total,
+            })),
+            card.dia_fechamento,
+            card.dia_vencimento,
+          )?.competencia ??
+          resolverFatura(
+            toDateInputValue(new Date()),
+            card.dia_fechamento,
+            card.dia_vencimento,
+          ).competencia;
+      }
+    }
+  }
+
   let importadas = 0;
   let falhas = 0;
 
@@ -499,8 +586,12 @@ export async function commitImport(
     // (splitSchema revalida no destino); só faz efeito em despesa compartilhada/de terceiro.
     const split =
       r.classificacao && r.classificacao !== "pessoal"
-        ? { classificacao: r.classificacao, parts: r.split_parts ?? [] }
-        : { classificacao: "pessoal" as const, parts: [] };
+        ? {
+            classificacao: r.classificacao,
+            // Gravado pelo splitSchema (setImportRowSplit); o select inline devolve Json cru.
+            parts: (r.split_parts ?? []) as ImportSplitPart[],
+          }
+        : { classificacao: "pessoal" as const, parts: [] as ImportSplitPart[] };
     let res: ActionResult<{ id: string }>;
 
     if (batch.origem === "cartao" && r.tipo === "receita") {
@@ -512,24 +603,52 @@ export async function commitImport(
         date: r.data_norm,
         description: r.descricao ?? "",
         categoryId: r.categoria_sugerida_id ?? null,
+        competencia: competenciaAlvo,
       });
     } else if (
       batch.origem === "cartao" &&
       r.import_as === "parcelamento" &&
-      r.parcelas_total &&
-      r.parcelas_total > 1
+      r.parcela != null &&
+      r.parcelas_total != null &&
+      r.parcela < r.parcelas_total
     ) {
+      // Linha "k/N" de fatura: o valor da linha é o de UMA parcela. Gera só as restantes
+      // (k..N), cada uma nesse valor, preservando a numeração original (regra em
+      // parcelamento.ts). A última parcela (k === N) não entra aqui — cai no `else` abaixo
+      // como despesa avulsa, pois não há parcela futura a gerar.
+      const plano = planejarImportParcelado({
+        valorParcelaCentavos: reaisParaCentavos(r.valor),
+        parcela: r.parcela,
+        parcelasTotal: r.parcelas_total,
+      });
+      // A divisão foi digitada/prevista contra UMA parcela (o valor da linha), mas
+      // createInstallmentPurchase divide a parte de cada pessoa pelo total da compra
+      // (parcela × qtd). Escala as partes por valor por `qtd` para o recebível por parcela
+      // bater com o que o usuário viu — senão a parte do terceiro fica dividida por qtd.
+      const splitParcelado =
+        split.classificacao !== "pessoal"
+          ? {
+              classificacao: split.classificacao,
+              parts: escalarPartesParcelado(split.parts, plano.qtd),
+            }
+          : split;
       res = await createInstallmentPurchase({
         card_id: batch.credit_card_id,
-        qtd_parcelas: r.parcelas_total,
-        valor_total: r.valor,
+        qtd_parcelas: plano.qtd,
+        valor_total: centavosParaReais(plano.valorTotalCentavos),
+        numero_inicial: plano.numeroInicial,
+        parcelas_total_label: plano.totalLabel,
+        // A parcela atual (k) entra na fatura importada; as seguintes nos próximos meses.
+        fatura_inicial_competencia: competenciaAlvo ?? undefined,
         purchase_date: r.data_norm,
         competence_date: r.data_norm,
         category_id: category,
         description: r.descricao ?? "",
-        ...split,
+        ...splitParcelado,
       });
     } else if (batch.origem === "cartao") {
+      // Linha à vista OU última parcela (k === N): entra na fatura importada. Forçar a competência
+      // corrige as últimas parcelas, cuja data é a da compra original (antiga).
       res = await createTransaction({
         type: "despesa",
         payment_method: "cartao_credito",
@@ -539,6 +658,7 @@ export async function commitImport(
         amount: r.valor,
         purchase_date: r.data_norm,
         competence_date: r.data_norm,
+        statement_competencia: competenciaAlvo ?? undefined,
         description: r.descricao ?? "",
         status: "pago",
         ...split,
@@ -595,6 +715,48 @@ export async function commitImport(
 
   revalidateFinance();
   return { ok: true, data: { importadas, falhas } };
+}
+
+/**
+ * Define (ou limpa) a competência da fatura de cartão do lote — a fatura à qual TODAS as linhas
+ * pertencem (âncora das parcelas). Editável na revisão; normaliza para o dia 1 do mês. Só
+ * enquanto o lote não foi finalizado e só para origem cartão.
+ */
+export async function setImportBatchCompetencia(
+  batchId: string,
+  competencia: string | null,
+): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const { data: batch } = await ctx.supabase
+    .from("import_batches")
+    .select("id, status, origem")
+    .eq("id", batchId)
+    .maybeSingle();
+  if (!batch) return dbError("Lote não encontrado.");
+  if (batch.status === "importado" || batch.status === "cancelado") {
+    return dbError("Este lote já foi finalizado.");
+  }
+  if (batch.origem !== "cartao") {
+    return dbError("A competência só se aplica a faturas de cartão.");
+  }
+
+  let normalizada: string | null = null;
+  if (competencia) {
+    const m = /^(\d{4})-(\d{2})/.exec(competencia);
+    if (!m) return dbError("Competência inválida.");
+    normalizada = `${m[1]}-${m[2]}-01`;
+  }
+
+  const { error } = await ctx.supabase
+    .from("import_batches")
+    .update({ competencia_fatura: normalizada })
+    .eq("id", batchId);
+  if (error) return dbError("Não foi possível atualizar a competência da fatura.");
+
+  revalidateImports();
+  return { ok: true, data: undefined };
 }
 
 /** Cancela o lote (marca `cancelado`). NÃO apaga transações já importadas. */

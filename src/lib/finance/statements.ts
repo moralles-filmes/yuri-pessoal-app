@@ -11,7 +11,11 @@
  * reconsultar o cartão a cada parcela.
  */
 import type { AuthContext } from "@/lib/actions/helpers";
-import { resolverFatura, type FaturaAlvo } from "@/lib/finance/invoice";
+import {
+  montarFatura,
+  resolverFatura,
+  type FaturaAlvo,
+} from "@/lib/finance/invoice";
 
 /** Get-or-create da `card_statements` para uma fatura-alvo já calculada. */
 export async function getOrCreateStatementByFatura(
@@ -49,6 +53,35 @@ export async function getOrCreateStatementByFatura(
     .eq("competencia", alvo.competencia)
     .maybeSingle();
   return again.data?.id ?? null;
+}
+
+/**
+ * Get-or-create da fatura para uma COMPETÊNCIA explícita ('yyyy-MM-01' — ou qualquer dia do mês
+ * de fechamento). Diferente de `resolveOrCreateStatement`, não deriva a fatura da data da compra:
+ * monta a fatura direto do mês informado (regra de `montarFatura`). Usado na importação, onde a
+ * fatura-alvo é a que está sendo importada — não a da data da compra original (que pode ser antiga).
+ */
+export async function getOrCreateStatementForCompetencia(
+  ctx: AuthContext,
+  cardId: string,
+  competencia: string,
+): Promise<string | null> {
+  const { data: card } = await ctx.supabase
+    .from("credit_cards")
+    .select("id, dia_fechamento, dia_vencimento")
+    .eq("id", cardId)
+    .single();
+  if (!card) return null;
+
+  const [year, month] = competencia.split("-").map(Number); // 'yyyy-MM-01'
+  if (!year || !month) return null;
+  const alvo = montarFatura(
+    year,
+    month - 1, // montarFatura usa mês 0..11
+    card.dia_fechamento,
+    card.dia_vencimento,
+  );
+  return getOrCreateStatementByFatura(ctx, cardId, alvo);
 }
 
 export async function resolveOrCreateStatement(

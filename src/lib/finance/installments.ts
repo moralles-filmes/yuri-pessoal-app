@@ -98,18 +98,26 @@ export function overrideUltimaValido(
 /**
  * Faturas-alvo das `qtd` parcelas: a 1ª sai de `resolverFatura(dataCompra)`; a parcela i
  * cai na competência da 1ª + (i-1) meses (REUSA `montarFatura`). Cobre virada de ano.
+ *
+ * `competenciaBase` (opcional, 'yyyy-MM-01') ANCORA a 1ª parcela numa fatura explícita,
+ * ignorando `dataCompra`. Usado na importação: a parcela "k/N" pertence à fatura sendo
+ * importada (não à da compra original, que é antiga) — então a 1ª gerada cai nessa competência
+ * e as seguintes nos meses subsequentes.
  */
 export function distribuirFaturas(
   dataCompra: string | Date,
   qtd: number,
   diaFechamento: number,
   diaVencimento: number,
+  competenciaBase?: string | null,
 ): FaturaAlvo[] {
   if (!Number.isInteger(qtd) || qtd < 1) {
     throw new Error("qtd deve ser um inteiro >= 1.");
   }
-  const primeira = resolverFatura(dataCompra, diaFechamento, diaVencimento);
-  const [fy, fm] = primeira.competencia.split("-").map(Number); // 'yyyy-MM-01'
+  const baseCompetencia =
+    competenciaBase ??
+    resolverFatura(dataCompra, diaFechamento, diaVencimento).competencia;
+  const [fy, fm] = baseCompetencia.split("-").map(Number); // 'yyyy-MM-01'
   const faturas: FaturaAlvo[] = [];
   for (let i = 0; i < qtd; i++) {
     const mes = addMonths(new Date(fy, fm - 1, 1), i);
@@ -129,6 +137,11 @@ export function distribuirFaturas(
  * Plano completo do parcelamento: junta o valor de cada parcela (ajuste de centavos na
  * última, ou override validado) com a fatura-alvo de cada uma. Puro — usado tanto no preview
  * (UI) quanto na criação (servidor), garantindo que mostram exatamente a mesma coisa.
+ *
+ * `numeroInicial` (default 1) desloca a numeração: ao importar uma compra já no meio (parcela
+ * `k`), as `qtd` parcelas restantes saem numeradas `k, k+1, …` em vez de `1, 2, …`, preservando
+ * o "k/N" da fatura. `competenciaBase` (opcional) ancora a 1ª parcela gerada na fatura sendo
+ * importada (em vez da fatura de `dataCompra`, que na importação é a compra original/antiga).
  */
 export function planejarParcelamento(params: {
   valorTotalReais: number;
@@ -137,6 +150,8 @@ export function planejarParcelamento(params: {
   diaFechamento: number;
   diaVencimento: number;
   overrideUltimaCentavos?: number | null;
+  numeroInicial?: number;
+  competenciaBase?: string | null;
 }): ParcelaPlano[] {
   const totalCentavos = reaisParaCentavos(params.valorTotalReais);
   const valores =
@@ -152,9 +167,11 @@ export function planejarParcelamento(params: {
     params.qtd,
     params.diaFechamento,
     params.diaVencimento,
+    params.competenciaBase,
   );
+  const inicial = params.numeroInicial ?? 1;
   return valores.map((c, idx) => ({
-    numero: idx + 1,
+    numero: inicial + idx,
     valorCentavos: c,
     valor: centavosParaReais(c),
     fatura: faturas[idx],

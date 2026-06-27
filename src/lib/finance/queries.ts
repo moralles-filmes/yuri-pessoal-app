@@ -23,7 +23,7 @@ import type {
 } from "@/types/database";
 
 const TX_SELECT =
-  "*, account:accounts!transactions_account_id_fkey(id,name,color), transfer_account:accounts!transactions_transfer_account_id_fkey(id,name), category:categories(id,name,color,icon), subcategory:subcategories(id,name), card:credit_cards(id,nome,cor,bandeira)";
+  "*, account:accounts!transactions_account_id_fkey(id,name,color), transfer_account:accounts!transactions_transfer_account_id_fkey(id,name), category:categories(id,name,color,icon), subcategory:subcategories(id,name), card:credit_cards(id,nome,cor,bandeira), statement:card_statements!transactions_statement_id_fkey(id,pago_em)";
 
 export async function getAccounts(): Promise<AccountWithBalance[]> {
   const supabase = await createClient();
@@ -166,6 +166,10 @@ export type StatementFilters = {
  * Faturas com total calculado na leitura (view card_statements_with_total) e o cartão
  * embutido. O status efetivo (aberta/fechada/atrasada) é resolvido na UI com a data de
  * hoje via `statusEfetivo`; aqui só trazemos os dados crus.
+ *
+ * Só retorna faturas com pelo menos UM lançamento (`itens > 0`). Faturas vazias surgem do
+ * get-or-create (ex.: parcela cancelada/movida deixa a competência sem itens) e não são
+ * faturas reais — não devem listar nem contar como "atrasada".
  */
 export async function getStatements(
   filters: StatementFilters = {},
@@ -176,6 +180,7 @@ export async function getStatements(
     .select(
       "*, card:credit_cards(id,nome,cor,bandeira,dia_fechamento,dia_vencimento)",
     )
+    .gt("itens", 0)
     .order("competencia", { ascending: false });
 
   if (filters.cardId) query = query.eq("card_id", filters.cardId);

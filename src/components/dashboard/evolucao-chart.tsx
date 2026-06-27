@@ -43,10 +43,10 @@ export function EvolucaoChart({ data }: { data: EvolucaoPonto[] }) {
 
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <LineChart data={chartData} margin={{ left: 4, right: 12 }}>
+      <LineChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
         <CartesianGrid vertical={false} stroke={GRID_COLOR} />
         <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width={64} />
+        <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width={78} />
         <Tooltip
           formatter={(value) => formatCurrency(Number(value))}
           contentStyle={tooltipStyle}

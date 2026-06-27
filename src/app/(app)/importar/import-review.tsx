@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Ban,
+  CalendarClock,
   Check,
   CheckCircle2,
   ExternalLink,
@@ -14,6 +15,7 @@ import {
   Settings2,
   Upload,
   Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -54,6 +56,7 @@ import {
   cancelImportBatch,
   commitImport,
   remapImportBatch,
+  setImportBatchCompetencia,
   updateImportRow,
 } from "@/lib/actions/imports";
 import type {
@@ -164,6 +167,10 @@ export function ImportReview({
         </CardContent>
       </Card>
 
+      {batch.origem === "cartao" && (
+        <FaturaCompetencia batch={batch} isDone={isDone} />
+      )}
+
       {isDone ? (
         <ResultBanner status={batch.status} importadas={counts["importada"] ?? 0} />
       ) : (
@@ -251,6 +258,110 @@ function Chip({
       <span className="font-semibold tabular-nums">{value}</span>
       {label}
     </span>
+  );
+}
+
+const MESES_PT = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+/** 'yyyy-MM-01' → "Junho de 2026". Aceita 'yyyy-MM' também. */
+function formatCompetencia(competencia: string): string {
+  const [y, m] = competencia.split("-").map(Number);
+  if (!y || !m || m < 1 || m > 12) return competencia;
+  return `${MESES_PT[m - 1]} de ${y}`;
+}
+
+/**
+ * Fatura de destino (cartão): mês ao qual TODAS as linhas pertencem. Âncora das parcelas — a
+ * parcela "k" entra nessa fatura e "k+1, k+2…" nos meses seguintes; última parcela e à vista
+ * também. Detectada na importação a partir das compras à vista; editável aqui antes de importar.
+ */
+function FaturaCompetencia({
+  batch,
+  isDone,
+}: {
+  batch: ImportBatchWithTarget;
+  isDone: boolean;
+}) {
+  const router = useRouter();
+  const [saving, setSaving] = React.useState(false);
+  const value = batch.competencia_fatura
+    ? batch.competencia_fatura.slice(0, 7) // 'yyyy-MM'
+    : "";
+
+  async function change(mes: string) {
+    setSaving(true);
+    try {
+      const res = await setImportBatchCompetencia(
+        batch.id,
+        mes ? `${mes}-01` : null,
+      );
+      if (res.ok) {
+        toast.success("Mês da fatura atualizado.");
+        router.refresh();
+      } else {
+        toast.error(res.error);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-2">
+          <CalendarClock className="mt-0.5 size-4 shrink-0 text-primary" />
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">Fatura de destino</span>
+            <span className="text-xs text-muted-foreground">
+              {isDone
+                ? "Mês em que as linhas (incl. parcelas) entraram."
+                : "Mês desta fatura. As parcelas entram a partir dele — confira antes de importar."}
+            </span>
+            {!isDone && !batch.competencia_fatura && (
+              <span className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                Não detectamos o mês automaticamente — selecione para as parcelas
+                caírem na fatura certa.
+              </span>
+            )}
+          </div>
+        </div>
+        {isDone ? (
+          <span className="text-sm font-semibold">
+            {batch.competencia_fatura
+              ? formatCompetencia(batch.competencia_fatura)
+              : "—"}
+          </span>
+        ) : (
+          <div className="flex items-center gap-2">
+            {saving && (
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            )}
+            <input
+              type="month"
+              aria-label="Mês da fatura"
+              value={value}
+              disabled={saving}
+              onChange={(e) => change(e.target.value)}
+              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 [color-scheme:light] dark:[color-scheme:dark]"
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -549,8 +660,12 @@ function RowLine({
     }
   }
 
+  // Só oferece "importar parcelado" quando há parcela FUTURA a gerar: cartão, total > 1 e a
+  // linha não é a última (k < N). Numa 3/3 não há o que parcelar — já é a última parcela.
   const podeParcelar =
-    origem === "cartao" && (row.parcelas_total ?? 0) > 1;
+    origem === "cartao" &&
+    (row.parcelas_total ?? 0) > 1 &&
+    (row.parcela ?? 0) < (row.parcelas_total ?? 0);
   const isOpenForEdit =
     !isDone && (row.status === "para_importar" || row.status === "duplicada");
   // Divisão na importação (Fase 05+06): só despesa com valor, enquanto editável.
@@ -583,30 +698,33 @@ function RowLine({
                 numero={row.parcela}
                 total={row.parcelas_total}
               />
-              {podeParcelar && !isDone && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    patch({
-                      import_as:
-                        row.import_as === "parcelamento"
-                          ? "single"
-                          : "parcelamento",
-                    })
-                  }
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-[11px] ring-1 transition-colors",
-                    row.import_as === "parcelamento"
-                      ? "bg-primary/10 text-primary ring-primary/20"
-                      : "text-muted-foreground ring-border hover:bg-muted",
-                  )}
-                >
-                  {row.import_as === "parcelamento"
-                    ? "Como parcelamento"
-                    : "Importar parcelado?"}
-                </button>
-              )}
+              {podeParcelar &&
+                !isDone &&
+                (row.import_as === "parcelamento" ? (
+                  // Marcado como parcelamento: chip com "×" para cancelar fácil (reverte p/ avulso).
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 pr-1 pl-2 text-[11px] text-primary ring-1 ring-primary/20">
+                    Como parcelamento
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => patch({ import_as: "single" })}
+                      aria-label="Cancelar parcelamento"
+                      title="Cancelar parcelamento"
+                      className="rounded-full p-0.5 transition-colors hover:bg-primary/20 disabled:opacity-50"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => patch({ import_as: "parcelamento" })}
+                    className="rounded-full px-2 py-0.5 text-[11px] text-muted-foreground ring-1 ring-border transition-colors hover:bg-muted disabled:opacity-50"
+                  >
+                    Importar parcelado?
+                  </button>
+                ))}
             </span>
           )}
           {isShared && (

@@ -67,6 +67,8 @@ export type DashReceivable = {
   installment_id: string | null;
   valor: number;
   status: string;
+  /** Mês de referência 'yyyy-MM' (competência da fatura ou data da compra). Para filtrar por mês. */
+  ref_month?: string | null;
 };
 
 export type DashInstallmentItem = {
@@ -212,7 +214,10 @@ export function resumoMes(params: {
     if (mesDe(t.competence_date) !== mes) continue;
 
     if (t.type === "receita") {
-      entradasCent += cent(t.amount);
+      // Estorno de cartão (receita vinculada à fatura) NÃO é entrada de caixa: já reduz o total
+      // da fatura (total_atual = despesas − estornos + parcelas) e não cai em conta. Só receita
+      // "de conta" (sem cartão) conta como entrada do mês — senão o estorno é contado em dobro.
+      if (t.card_id === null) entradasCent += cent(t.amount);
       continue;
     }
     if (t.type !== "despesa") continue; // transferencia/ajuste fora
@@ -620,10 +625,14 @@ export function projecaoProximosMeses(params: {
 
 /* ───────────────────────────── A receber & próximas contas ───────────────────────────── */
 
-/** Total ainda a receber de terceiros (status pendente/cobrado). */
-export function totalAReceber(receivables: DashReceivable[]): number {
+/**
+ * Total ainda a receber de terceiros (status pendente/cobrado). Se `mes` ('yyyy-MM')
+ * for informado, conta só os recebíveis cujo mês de referência (`ref_month`) é `mes`.
+ */
+export function totalAReceber(receivables: DashReceivable[], mes?: string): number {
   const c = receivables
     .filter((r) => (RECEIVABLE_OPEN_STATUSES as string[]).includes(r.status))
+    .filter((r) => !mes || r.ref_month === mes)
     .reduce((s, r) => s + cent(r.valor), 0);
   return reais(c);
 }

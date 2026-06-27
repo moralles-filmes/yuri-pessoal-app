@@ -112,6 +112,10 @@ export async function getFinanceCardData(
     installment_id: r.installment_id,
     valor: r.valor,
     status: r.status,
+    ref_month:
+      r.statement?.competencia?.slice(0, 7) ??
+      r.transaction?.purchase_date?.slice(0, 7) ??
+      null,
   }));
   const dashBills: DashBill[] = bills.map((b) => ({
     name: b.name,
@@ -132,7 +136,7 @@ export async function getFinanceCardData(
     terceiros: resumo.terceiros,
     cartao: resumo.cartao,
     aVista: resumo.aVista,
-    aReceber: totalAReceber(recs),
+    aReceber: totalAReceber(recs, mes),
     contasTotal: contas.total,
     contasCount: contas.count,
     proximaConta: contas.proxima,
