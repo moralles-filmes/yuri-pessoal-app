@@ -23,8 +23,10 @@ import {
 import type { CategoryRow, RecurringTransactionRow } from "@/types/database";
 
 type Option = { id: string; name: string };
+type CardOption = Option & { ativo: boolean };
 type RecWithRel = RecurringTransactionRow & {
   account: { id: string; name: string } | null;
+  card: { id: string; nome: string } | null;
   category: Pick<CategoryRow, "id" | "name" | "color"> | null;
 };
 
@@ -32,10 +34,12 @@ export function RecurringClient({
   recurrences,
   accounts,
   categories,
+  cards,
 }: {
   recurrences: RecWithRel[];
   accounts: Option[];
   categories: Option[];
+  cards: CardOption[];
 }) {
   const router = useRouter();
   const [running, setRunning] = React.useState<string | null>(null);
@@ -44,6 +48,7 @@ export function RecurringClient({
     <RecurringFormDialog
       accounts={accounts}
       categories={categories}
+      cards={cards}
       trigger={
         <Button size="sm">
           <Plus /> Nova recorrência
@@ -130,7 +135,11 @@ export function RecurringClient({
                         color={rec.category.color}
                       />
                     )}
-                    {rec.account && <span>{rec.account.name}</span>}
+                    {rec.card ? (
+                      <span>{rec.card.nome}</span>
+                    ) : (
+                      rec.account && <span>{rec.account.name}</span>
+                    )}
                   </div>
                 </div>
 
@@ -148,6 +157,7 @@ export function RecurringClient({
                     recurrence={rec}
                     accounts={accounts}
                     categories={categories}
+                    cards={cards}
                     trigger={
                       <Button variant="ghost" size="icon-sm" aria-label="Editar">
                         <Pencil />

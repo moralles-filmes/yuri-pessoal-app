@@ -275,6 +275,7 @@ export async function getBills(): Promise<
 export async function getRecurrences(): Promise<
   (RecurringTransactionRow & {
     account: { id: string; name: string } | null;
+    card: { id: string; nome: string } | null;
     category: Pick<CategoryRow, "id" | "name" | "color"> | null;
   })[]
 > {
@@ -282,12 +283,13 @@ export async function getRecurrences(): Promise<
   const { data } = await supabase
     .from("recurring_transactions")
     .select(
-      "*, account:accounts(id,name), category:categories(id,name,color)",
+      "*, account:accounts(id,name), card:credit_cards(id,nome), category:categories(id,name,color)",
     )
     .order("is_active", { ascending: false })
     .order("next_due_date", { ascending: true });
   return (data ?? []) as unknown as (RecurringTransactionRow & {
     account: { id: string; name: string } | null;
+    card: { id: string; nome: string } | null;
     category: Pick<CategoryRow, "id" | "name" | "color"> | null;
   })[];
 }

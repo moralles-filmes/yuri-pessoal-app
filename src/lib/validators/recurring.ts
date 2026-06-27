@@ -23,6 +23,7 @@ export const recurringSchema = z.object({
     z.enum(PAYMENT_METHODS).nullable(),
   ),
   account_id: optionalUuid,
+  card_id: optionalUuid,
   category_id: optionalUuid,
   subcategory_id: optionalUuid,
   amount: moneyAmount,
@@ -46,6 +47,31 @@ export const recurringSchema = z.object({
     .optional()
     .transform((v) => v ?? "pago"),
   is_active: z.boolean().optional().transform((v) => v ?? true),
+}).superRefine((d, ctx) => {
+  // Recorrência de cartão: card_id obrigatório e só faz sentido como despesa
+  // (apenas despesa resolve fatura). Outras formas não carregam cartão.
+  if (d.payment_method === "cartao_credito") {
+    if (!d.card_id) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["card_id"],
+        message: "Selecione o cartão.",
+      });
+    }
+    if (d.type !== "despesa") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["type"],
+        message: "Recorrência em cartão só pode ser despesa.",
+      });
+    }
+  } else if (d.card_id) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["card_id"],
+      message: "Cartão só se aplica a pagamento por cartão de crédito.",
+    });
+  }
 });
 
 export type RecurringInput = z.infer<typeof recurringSchema>;

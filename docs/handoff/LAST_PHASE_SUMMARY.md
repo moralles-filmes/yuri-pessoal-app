@@ -1,6 +1,20 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-## Iteração mais recente (manutenção) — 2026-06-27: Embed ambíguo no `getTransactions` esvaziava as listas
+## Iteração mais recente (manutenção) — 2026-06-27: Recorrência em cartão de crédito
+Recorrências (Financeiro → Recorrências) só sabiam lidar com **conta**: o dropdown já listava
+"Cartão de crédito" (enum compartilhado), mas **não havia seletor de cartão**, ainda pedia conta, e
+salvar quebraria — `recurring_transactions` não tinha `card_id` nem aceitava `cartao_credito` no CHECK.
+Agora, ao escolher cartão o form **troca "Conta" por "Cartão"**, força **tipo = despesa**, e cada
+ocorrência gerada vira despesa no cartão **resolvida para a fatura da data** (reaproveita
+`resolveOrCreateStatement`/`resolverFatura`), **sem abater conta** (`account_id` null). Migration
+`20260627000000_recurring_card_support` (idempotente: `card_id` FK on delete set null + CHECK + índice;
+`supabase.ts` ajustado). Decisões: cartão = sempre despesa, `card_id` obrigatório (Zod `superRefine`);
+cartão excluído deixa recorrência **órfã** (`card_id` null) → a geração **pula** sem travar as demais.
+Lógica pura nova `buildGeneratedRow`/`isCardRecurrence` em `generation.ts` (5 testes). Arquivos: migration,
+`validators/recurring.ts`, `actions/recurring.ts`, `finance/generation.ts`, `finance/queries.ts`
+(join `card`), `recorrencias/{page,recurring-client,recurring-form}.tsx`. Suíte **407** (lint/tsc/build ok).
+
+## Iteração anterior (manutenção) — 2026-06-27: Embed ambíguo no `getTransactions` esvaziava as listas
 Regressão de **runtime** da feature de pagamento: a migration `20260627140000` adicionou
 `card_statements.pago_transacao_id → transactions.id` (um **2º FK** entre as tabelas) e o `TX_SELECT`
 passou a embutir `statement:card_statements(id,pago_em)` **sem dizer qual FK**. Com 2 caminhos, o

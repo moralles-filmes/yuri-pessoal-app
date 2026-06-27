@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -41,14 +41,17 @@ import {
 import type { RecurringTransactionRow } from "@/types/database";
 
 const NONE = "none";
+const CARD_METHOD = "cartao_credito";
 const TYPES = ["despesa", "receita", "ajuste"] as const;
 
 type Option = { id: string; name: string };
+type CardOption = Option & { ativo: boolean };
 
 type FormValues = {
   type: (typeof TYPES)[number];
   amount: string;
   account_id: string;
+  card_id: string;
   category_id: string;
   payment_method: string;
   frequency: Frequency;
@@ -68,6 +71,7 @@ function defaults(rec?: RecurringTransactionRow): FormValues {
     type: recType as (typeof TYPES)[number],
     amount: rec ? String(rec.amount).replace(".", ",") : "",
     account_id: rec?.account_id ?? NONE,
+    card_id: rec?.card_id ?? NONE,
     category_id: rec?.category_id ?? NONE,
     payment_method: rec?.payment_method ?? NONE,
     frequency: rec?.frequency ?? "mensal",
@@ -84,11 +88,13 @@ export function RecurringFormDialog({
   recurrence,
   accounts,
   categories,
+  cards,
   trigger,
 }: {
   recurrence?: RecurringTransactionRow;
   accounts: Option[];
   categories: Option[];
+  cards: CardOption[];
   trigger: React.ReactNode;
 }) {
   const router = useRouter();
@@ -100,6 +106,7 @@ export function RecurringFormDialog({
     control,
     handleSubmit,
     reset,
+    setValue,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ defaultValues: defaults(recurrence) });
@@ -108,11 +115,39 @@ export function RecurringFormDialog({
     if (open) reset(defaults(recurrence));
   }, [open, recurrence, reset]);
 
+  const paymentMethod = useWatch({ control, name: "payment_method" });
+  const isCard = paymentMethod === CARD_METHOD;
+
+  // Cartão só comporta despesa (só despesa resolve fatura) e não abate conta;
+  // ao sair do cartão, limpa o cartão escolhido.
+  React.useEffect(() => {
+    if (isCard) {
+      setValue("type", "despesa");
+      setValue("account_id", NONE);
+    } else {
+      setValue("card_id", NONE);
+    }
+  }, [isCard, setValue]);
+
+  // Cartões ativos + o cartão atual da recorrência (mesmo inativo), para edição
+  // não perder a seleção.
+  const cardOptions = React.useMemo(() => {
+    const active = cards.filter((c) => c.ativo);
+    const curId = recurrence?.card_id;
+    if (curId && !active.some((c) => c.id === curId)) {
+      const cur = cards.find((c) => c.id === curId);
+      if (cur) return [...active, cur];
+    }
+    return active;
+  }, [cards, recurrence]);
+
   async function onSubmit(values: FormValues) {
+    const card = values.payment_method === CARD_METHOD;
     const payload = {
       type: values.type,
       amount: values.amount,
-      account_id: values.account_id === NONE ? "" : values.account_id,
+      account_id: card || values.account_id === NONE ? "" : values.account_id,
+      card_id: card && values.card_id !== NONE ? values.card_id : "",
       category_id: values.category_id === NONE ? "" : values.category_id,
       payment_method:
         values.payment_method === NONE ? "" : values.payment_method,
@@ -159,7 +194,11 @@ export function RecurringFormDialog({
                 control={control}
                 name="type"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={isCard}
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
@@ -173,6 +212,11 @@ export function RecurringFormDialog({
                   </Select>
                 )}
               />
+              {isCard && (
+                <p className="text-xs text-muted-foreground">
+                  Cartão de crédito: sempre despesa.
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Valor</Label>
@@ -190,28 +234,58 @@ export function RecurringFormDialog({
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Conta</Label>
-              <Controller
-                control={control}
-                name="account_id"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Sem conta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>Sem conta</SelectItem>
-                      {accounts.map((a) => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {a.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {isCard ? (
+              <div className="space-y-1.5">
+                <Label>Cartão</Label>
+                <Controller
+                  control={control}
+                  name="card_id"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Selecione o cartão" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE}>Selecione o cartão</SelectItem>
+                        {cardOptions.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.card_id && (
+                  <p className="text-xs text-destructive">
+                    {errors.card_id.message}
+                  </p>
                 )}
-              />
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>Conta</Label>
+                <Controller
+                  control={control}
+                  name="account_id"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Sem conta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE}>Sem conta</SelectItem>
+                        {accounts.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Categoria</Label>
               <Controller
