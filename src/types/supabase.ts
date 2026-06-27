@@ -988,6 +988,7 @@ export type Database = {
           amount: number
           anchor_date: string
           bill_id: string | null
+          card_id: string | null
           category_id: string | null
           created_at: string
           description: string | null
@@ -1011,6 +1012,7 @@ export type Database = {
           amount: number
           anchor_date: string
           bill_id?: string | null
+          card_id?: string | null
           category_id?: string | null
           created_at?: string
           description?: string | null
@@ -1034,6 +1036,7 @@ export type Database = {
           amount?: number
           anchor_date?: string
           bill_id?: string | null
+          card_id?: string | null
           category_id?: string | null
           created_at?: string
           description?: string | null
@@ -1072,6 +1075,13 @@ export type Database = {
             columns: ["bill_id"]
             isOneToOne: false
             referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "credit_cards"
             referencedColumns: ["id"]
           },
           {
