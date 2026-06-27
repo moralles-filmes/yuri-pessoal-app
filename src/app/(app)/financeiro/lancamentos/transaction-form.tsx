@@ -36,6 +36,7 @@ import { InstallmentBadge } from "@/components/financeiro/badges";
 import { applyFieldErrors } from "@/components/financeiro/form-utils";
 import {
   createTransaction,
+  getTransactionSplit,
   updateTransaction,
 } from "@/lib/actions/transactions";
 import { createInstallmentPurchase } from "@/lib/actions/installments";
@@ -178,12 +179,29 @@ export function TransactionFormDialog({
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ defaultValues: defaults(transaction) });
 
-  const { fields: partFields, append: appendPart, remove: removePart } =
-    useFieldArray({ control, name: "parts" });
+  const {
+    fields: partFields,
+    append: appendPart,
+    remove: removePart,
+    replace: replaceParts,
+  } = useFieldArray({ control, name: "parts" });
 
+  // Ao abrir, reseta com os defaults; numa edição de despesa JÁ dividida, carrega as partes
+  // gravadas (shared_expenses) para pré-preencher a divisão (Fase 05 — divisão na edição).
   React.useEffect(() => {
-    if (open) reset(defaults(transaction));
-  }, [open, transaction, reset]);
+    if (!open) return;
+    reset(defaults(transaction));
+    if (!transaction || transaction.classificacao === "pessoal") return;
+    let active = true;
+    getTransactionSplit(transaction.id).then((res) => {
+      if (!active || !res.ok) return;
+      setValue("classificacao", res.data.classificacao);
+      replaceParts(res.data.parts);
+    });
+    return () => {
+      active = false;
+    };
+  }, [open, transaction, reset, setValue, replaceParts]);
 
   const type = useWatch({ control, name: "type" });
   const categoryId = useWatch({ control, name: "category_id" });
@@ -201,8 +219,9 @@ export function TransactionFormDialog({
   // Parcelamento só na criação (edição de parcelamento é feita em /parcelamentos).
   const canParcelar = !isEdit && isCard;
   const isParcelado = canParcelar && parcelado;
-  // Divisão de gastos (Fase 05): só em despesa e só na criação (definir-na-criação).
-  const canSplit = !isEdit && type === "despesa";
+  // Divisão de gastos (Fase 05): em despesa, na criação OU na edição de despesa simples.
+  // Compra parcelada já criada é gerida em /parcelamentos, então não dividimos aqui.
+  const canSplit = type === "despesa" && !(isEdit && transaction?.parcelado);
   const isShared = canSplit && classificacao !== "pessoal";
 
   const selectedCardObj = cards.find((c) => c.id === cardId);
@@ -380,8 +399,8 @@ export function TransactionFormDialog({
       status: values.status,
       description: values.description,
       notes: values.notes,
-      // Divisão só é aplicada na criação; na edição o servidor ignora estes campos.
-      ...(isEdit ? {} : splitPayload),
+      // Divisão aplicada na criação E na edição (o servidor re-aplica só quando muda).
+      ...splitPayload,
     };
 
     const res = isEdit

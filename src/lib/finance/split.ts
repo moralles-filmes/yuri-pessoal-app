@@ -18,6 +18,7 @@
  */
 
 import { dividirParcelas } from "@/lib/finance/installments";
+import type { SplitType } from "@/lib/finance/constants";
 
 /** Parte de UM terceiro: informada por valor (centavos) ou por percentual (0..100) do total. */
 export type ParteDivisao =
@@ -141,4 +142,45 @@ export function distribuirTerceirosPorParcela(
   }
 
   return m;
+}
+
+/** Parte da divisão na forma que o formulário consome (strings pt-BR/numérica). */
+export type SplitFormPart = {
+  person_id: string;
+  tipo: SplitType;
+  valor: string;
+  percentual: string;
+};
+
+/** Uma linha de `shared_expenses` (parte já resolvida) para reconstruir o formulário. */
+export type SharedExpenseLike = {
+  person_id: string;
+  tipo_divisao: SplitType;
+  percentual: number | null;
+  valor: number; // reais (parte resolvida da pessoa)
+};
+
+/**
+ * Converte `shared_expenses` gravadas → partes do formulário de edição (Fase 05). `valor` (reais)
+ * vira string pt-BR ("1.234,56" → "1234,56" com vírgula, igual ao default do form); `percentual`
+ * vira string numérica (ponto decimal, como o input `number`). Pura — testada em split.test.ts.
+ */
+export function sharedExpensesToFormParts(
+  rows: SharedExpenseLike[],
+): SplitFormPart[] {
+  return rows.map((r) =>
+    r.tipo_divisao === "percentual"
+      ? {
+          person_id: r.person_id,
+          tipo: "percentual",
+          valor: "",
+          percentual: r.percentual != null ? String(r.percentual) : "",
+        }
+      : {
+          person_id: r.person_id,
+          tipo: "valor",
+          valor: String(r.valor).replace(".", ","),
+          percentual: "",
+        },
+  );
 }

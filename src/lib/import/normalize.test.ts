@@ -79,6 +79,17 @@ describe("parseParcela", () => {
     expect(parseParcela("(1/10)")).toEqual({ parcela: 1, total: 10 });
   });
 
+  it("extrai 'k de N' (formato Itaú: 'Parcela 1 de 4')", () => {
+    expect(parseParcela("Parcela 1 de 4")).toEqual({ parcela: 1, total: 4 });
+    expect(parseParcela("Parcela 5 de 12")).toEqual({ parcela: 5, total: 12 });
+    expect(parseParcela("4 DE 10")).toEqual({ parcela: 4, total: 10 });
+  });
+
+  it("não confunde texto com dígitos sem padrão de parcela", () => {
+    expect(parseParcela("Loja De Bauru")).toBeNull();
+    expect(parseParcela("Posto 3 de Maio")).toBeNull();
+  });
+
   it("ignora 1/1 e parcela fora do intervalo", () => {
     expect(parseParcela("1/1")).toBeNull();
     expect(parseParcela("13/12")).toBeNull();

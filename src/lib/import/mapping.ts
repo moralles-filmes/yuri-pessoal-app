@@ -39,6 +39,23 @@ const DETECTION_ORDER: MappingField[] = [
   "identificador",
 ];
 
+/**
+ * Acha a linha de cabeçalho real numa matriz de células. Muitos extratos/faturas trazem linhas
+ * de título/resumo antes da tabela (nome, agência, "Fatura Fechada", subtotais). Escolhe a 1ª
+ * linha (nas ~30 primeiras) cujo `autoDetectMapping` já resolve DATA e VALOR (as colunas
+ * essenciais). Sem candidata, devolve 0 (1ª linha) — mantém o comportamento atual para arquivos
+ * já tabulares. Exigir data E valor na MESMA linha evita falso-positivo em linhas de resumo que
+ * têm só "Valor"/"R$".
+ */
+export function detectHeaderRow(rows: string[][]): number {
+  const limit = Math.min(rows.length, 30);
+  for (let i = 0; i < limit; i++) {
+    const m = autoDetectMapping(rows[i]);
+    if (m.data != null && m.valor != null) return i;
+  }
+  return 0;
+}
+
 /** Detecta o mapeamento das colunas pelo cabeçalho (ver DETECTION_ORDER). */
 export function autoDetectMapping(headers: string[]): ColumnMapping {
   const norm = headers.map((h) => semAcento(h ?? "").trim());

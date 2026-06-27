@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   distribuirTerceirosPorParcela,
   dividirDespesa,
+  sharedExpensesToFormParts,
   validarDivisao,
   somaTerceiros,
 } from "@/lib/finance/split";
@@ -170,5 +171,27 @@ describe("validarDivisao", () => {
     expect(
       validarDivisao(50000, [{ personId: "p1", tipo: "percentual", percentual: 120 }]),
     ).toBe(false);
+  });
+});
+
+describe("sharedExpensesToFormParts", () => {
+  it("reconstrói partes do form a partir das shared_expenses gravadas", () => {
+    const parts = sharedExpensesToFormParts([
+      { person_id: "p1", tipo_divisao: "valor", percentual: null, valor: 44.01 },
+      { person_id: "p2", tipo_divisao: "percentual", percentual: 30, valor: 30 },
+    ]);
+    expect(parts).toEqual([
+      { person_id: "p1", tipo: "valor", valor: "44,01", percentual: "" },
+      { person_id: "p2", tipo: "percentual", valor: "", percentual: "30" },
+    ]);
+  });
+
+  it("usa vírgula decimal no valor e devolve vazio quando não há linhas", () => {
+    expect(
+      sharedExpensesToFormParts([
+        { person_id: "p1", tipo_divisao: "valor", percentual: null, valor: 1234.5 },
+      ])[0].valor,
+    ).toBe("1234,5");
+    expect(sharedExpensesToFormParts([])).toEqual([]);
   });
 });

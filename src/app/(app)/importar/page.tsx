@@ -7,6 +7,7 @@ import {
   getImportBatch,
   getImportBatches,
   getImportRows,
+  getPeopleForSelect,
 } from "@/lib/finance/queries";
 import { ImportUpload } from "./import-upload";
 import { ImportHistory } from "./import-history";
@@ -26,9 +27,10 @@ export default async function ImportarPage({
   if (batchId) {
     const batch = await getImportBatch(batchId);
     if (batch) {
-      const [rows, categories] = await Promise.all([
+      const [rows, categories, people] = await Promise.all([
         getImportRows(batchId),
         getCategories(),
+        getPeopleForSelect(),
       ]);
       return (
         <div className="space-y-6">
@@ -45,6 +47,7 @@ export default async function ImportarPage({
               name: c.name,
               color: c.color,
             }))}
+            people={people}
           />
         </div>
       );

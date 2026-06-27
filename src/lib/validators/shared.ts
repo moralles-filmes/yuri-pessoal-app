@@ -26,7 +26,7 @@ export const optionalUuid = z.preprocess(
  * para o formato que `Number()` entende ("1234.56"). Sem vírgula, passa intacto
  * (ex.: "1234.56" vindo do banco). Não-string passa direto.
  */
-function normalizeBRMoney(v: unknown): unknown {
+export function normalizeBRMoney(v: unknown): unknown {
   if (typeof v !== "string") return v;
   const cleaned = v.trim().replace(/\s/g, "").replace(/R\$/gi, "");
   return cleaned.includes(",")

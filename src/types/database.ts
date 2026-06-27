@@ -234,14 +234,24 @@ export type ImportBatchRow = Omit<
   column_mapping: ImportMappingJson;
 };
 
+/** Parte da divisão configurada numa linha de importação (formato de splitSchema). */
+export type ImportSplitPart = {
+  person_id: string;
+  tipo: SplitType;
+  valor?: number | null;
+  percentual?: number | null;
+};
+
 export type ImportRowRow = Omit<
   Row<"import_rows">,
-  "status" | "tipo" | "import_as" | "raw"
+  "status" | "tipo" | "import_as" | "raw" | "classificacao" | "split_parts"
 > & {
   status: ImportRowStatus;
   tipo: "despesa" | "receita" | null;
   import_as: ImportAs;
   raw: string[];
+  classificacao: Classificacao;
+  split_parts: ImportSplitPart[];
 };
 
 /** Lote com o alvo (cartão/conta) resolvido para exibição. */

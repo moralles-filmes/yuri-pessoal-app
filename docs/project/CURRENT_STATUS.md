@@ -1,6 +1,6 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-06-26**.
+> Atualizado ao final de **cada** fase. Última atualização: **2026-06-27**.
 
 ## 🎉 PROJETO CONCLUÍDO
 **Todas as 14 fases do roadmap estão concluídas.** O sistema entra em **modo manutenção/iteração** —
@@ -15,6 +15,12 @@ RLS + testes + responsividade. **Não** existe uma `PHASE_15`.
 **Nenhuma.** Projeto fechado em escopo (modo manutenção).
 
 ## Iterações (modo manutenção)
+- **2026-06-27 — Divisão com terceiros na edição e na importação.** Antes a divisão (Fase 05) só podia ser definida na **criação** manual. Agora:
+  - **Dividir na edição:** `updateTransaction` passa a (re)aplicar a divisão de uma **despesa simples (não parcelada)** — reusa `applySplit`. Só re-aplica quando a divisão **muda de fato** (classificação, total ou partes), então editar só descrição/categoria/data de um gasto já dividido não mexe nos recebíveis. **Bloqueia** alterar a divisão se já houver recebível `cobrado`/`pago` (protege histórico). O form de lançamento mostra a seção de divisão na edição e **pré-preenche** com as partes gravadas (`getTransactionSplit` + `sharedExpensesToFormParts`). Parcelados seguem em `/parcelamentos`.
+  - **Dividir na revisão da importação:** migration `20260627120000_import_rows_split` adiciona `classificacao` + `split_parts (jsonb)` a `import_rows`. Botão **"Dividir"** por linha (despesa) abre o editor (`ImportRowSplitDialog`) com preview; `setImportRowSplit` grava na linha; `commitImport` repassa a divisão para `createTransaction`/`createInstallmentPurchase` (já aceitavam) — então a transação importada **já nasce dividida**, inclusive parceladas.
+  - **Correção:** `splitSchema` (validators/split) agora aceita valor no padrão BR (`"44,01"`, `"1.234,56"`) via `normalizeBRMoney` — antes `z.coerce.number` quebrava com vírgula, então "dividir por valor" só funcionava com inteiros.
+  - Testes novos (`sharedExpensesToFormParts`, `validators/split`): suíte **362** (lint/tsc/build ok). `src/types/supabase.ts` regenerado após a migration.
+- **2026-06-27 — Importação: detecção do cabeçalho fora da 1ª linha.** Faturas/extratos reais (ex.: export do Itaú/cartão Azul) trazem linhas de **título/resumo antes da tabela**, então o cabeçalho real não é a 1ª linha. `parseCsv`/`parseXlsx` pegavam o título (`Nome;Yuri…`) como cabeçalho → `autoDetectMapping` devolvia `{}` → **toda** linha caía em "Mapeie as colunas de data e valor.". Correção: nova função pura **`detectHeaderRow()`** (`src/lib/import/mapping.ts`) acha a 1ª linha (nas ~30 primeiras) cujo `autoDetectMapping` resolve **DATA e VALOR**; `csv.ts`/`xlsx.ts` fatiam a partir dela. **Fallback para a linha 0** → sem regressão em arquivos já tabulares. Também: **`parseParcela`** passou a entender **"Parcela X de N"** (formato Itaú), além de "k/N". Testes novos (`csv.test.ts`, casos de `detectHeaderRow` e parcela "de"): suíte **356 testes** (lint/tsc/build ok). Linhas de rodapé (Subtotal/aviso) saem como `erro` ignorável e nunca são importadas.
 - **2026-06-26 — Conta/Segurança em Configurações (trocar e-mail + senha).** Novo card **`SecurityCard`** (`src/components/settings/security-card.tsx`) em `/configuracoes`, logo após o `ProfileCard`, com duas seções (Separator entre elas):
   - **Trocar senha** (estando logado): senha atual + nova + confirmar. Reautentica com `signInWithPassword({ email, current })` e, se ok, `updateUser({ password })` — **reflete na hora** em `auth.users`.
   - **Trocar e-mail**: `updateUser({ email }, { emailRedirectTo: \`${origin}/auth/callback?next=/configuracoes\` })` — fluxo **padrão seguro** do Supabase (confirma no e-mail antigo **e** no novo). Reusa o `/auth/callback` existente (`exchangeCodeForSession`). **Sem migration** (senha/e-mail vivem em `auth.users`).

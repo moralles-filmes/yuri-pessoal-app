@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Settings2,
   Upload,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,9 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { ImportBatchStatusBadge, ImportRowStatusBadge } from "./import-badges";
+import { ImportRowSplitDialog } from "./import-split-dialog";
 import { InstallmentBadge } from "@/components/financeiro/badges";
+import { CLASSIFICACAO_LABELS } from "@/lib/finance/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   IMPORT_FORMAT_LABELS,
@@ -60,15 +63,18 @@ import type {
 const NONE = "none";
 
 type Categoria = { id: string; name: string; color: string | null };
+type PersonOption = { id: string; nome: string };
 
 export function ImportReview({
   batch,
   rows,
   categories,
+  people,
 }: {
   batch: ImportBatchWithTarget;
   rows: ImportRowWithRelations[];
   categories: Categoria[];
+  people: PersonOption[];
 }) {
   const router = useRouter();
   const isDone = batch.status === "importado" || batch.status === "cancelado";
@@ -161,6 +167,7 @@ export function ImportReview({
                   key={r.id}
                   row={r}
                   categories={categories}
+                  people={people}
                   isDone={isDone}
                   origem={batch.origem}
                   onChanged={() => router.refresh()}
@@ -473,12 +480,14 @@ function CancelButton({
 function RowLine({
   row,
   categories,
+  people,
   isDone,
   origem,
   onChanged,
 }: {
   row: ImportRowWithRelations;
   categories: Categoria[];
+  people: PersonOption[];
   isDone: boolean;
   origem: "cartao" | "conta";
   onChanged: () => void;
@@ -500,6 +509,9 @@ function RowLine({
     origem === "cartao" && (row.parcelas_total ?? 0) > 1;
   const isOpenForEdit =
     !isDone && (row.status === "para_importar" || row.status === "duplicada");
+  // Divisão na importação (Fase 05+06): só despesa com valor, enquanto editável.
+  const podeDividir = isOpenForEdit && row.tipo === "despesa" && row.valor != null;
+  const isShared = row.classificacao !== "pessoal";
 
   return (
     <tr
@@ -553,6 +565,11 @@ function RowLine({
               )}
             </span>
           )}
+          {isShared && (
+            <span className="inline-flex w-fit items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary ring-1 ring-primary/20">
+              <Users className="size-3" /> {CLASSIFICACAO_LABELS[row.classificacao]}
+            </span>
+          )}
           {row.motivo && (
             <span className="text-xs text-muted-foreground">{row.motivo}</span>
           )}
@@ -601,6 +618,26 @@ function RowLine({
       {!isDone ? (
         <td className="px-3 py-2">
           <div className="flex items-center gap-1">
+            {podeDividir && (
+              <ImportRowSplitDialog
+                rowId={row.id}
+                descricao={row.descricao ?? ""}
+                valor={row.valor ?? 0}
+                classificacao={row.classificacao}
+                splitParts={row.split_parts}
+                people={people}
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Dividir com terceiros"
+                    className={cn(isShared && "text-primary")}
+                  >
+                    <Users />
+                  </Button>
+                }
+              />
+            )}
             {row.status === "duplicada" && (
               <Button
                 variant="ghost"

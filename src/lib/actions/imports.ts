@@ -9,6 +9,7 @@ import {
   remapSchema,
   updateImportRowSchema,
 } from "@/lib/validators/import";
+import { splitSchema } from "@/lib/validators/split";
 import { autoDetectMapping, applyMapping } from "@/lib/import/mapping";
 import { chaveComposta, detectarDuplicados } from "@/lib/import/dedup";
 import { parseOfx } from "@/lib/import/ofx";
@@ -355,6 +356,49 @@ export async function updateImportRow(
 }
 
 /**
+ * Define (ou remove) a divisão com terceiros de UMA linha da revisão (Fase 05 + 06). Guarda
+ * `classificacao` + `split_parts` na linha; quem aplica de fato é o `commitImport`, repassando
+ * para os mesmos motores de divisão (applySplit/applySplitParcelado). Só despesas podem ser
+ * divididas; só enquanto o lote não foi finalizado.
+ */
+export async function setImportRowSplit(
+  rowId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = splitSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const { data: row } = await ctx.supabase
+    .from("import_rows")
+    .select("id, tipo, import_batches(status)")
+    .eq("id", rowId)
+    .maybeSingle();
+  if (!row) return dbError("Linha não encontrada.");
+  const batchStatus = (row.import_batches as { status?: string } | null)?.status;
+  if (batchStatus === "importado" || batchStatus === "cancelado") {
+    return dbError("Este lote já foi finalizado.");
+  }
+  if (parsed.data.classificacao !== "pessoal" && row.tipo !== "despesa") {
+    return dbError("Só é possível dividir despesas.");
+  }
+
+  const { error } = await ctx.supabase
+    .from("import_rows")
+    .update({
+      classificacao: parsed.data.classificacao,
+      split_parts: parsed.data.parts,
+    })
+    .eq("id", rowId);
+  if (error) return dbError("Não foi possível salvar a divisão.");
+
+  revalidateImports();
+  return { ok: true, data: undefined };
+}
+
+/**
  * IMPORTA o lote: para cada linha `para_importar`, cria a transação reusando os MESMOS motores
  * do lançamento manual (createTransaction / createInstallmentPurchase) — nada de modelo paralelo.
  * Cada linha importada vira UMA transação na fatura/competência correta (regra das Fases 03/04);
@@ -383,7 +427,7 @@ export async function commitImport(
   const { data: rows } = await ctx.supabase
     .from("import_rows")
     .select(
-      "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, parcela, parcelas_total, import_as",
+      "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, parcela, parcelas_total, import_as, classificacao, split_parts",
     )
     .eq("import_batch_id", batchId)
     .eq("status", "para_importar")
@@ -402,6 +446,12 @@ export async function commitImport(
       continue;
     }
     const category = r.categoria_sugerida_id ?? "";
+    // Divisão configurada na revisão (Fase 05): repassa para os motores reusados. `parts` vai cru
+    // (splitSchema revalida no destino); só faz efeito em despesa compartilhada/de terceiro.
+    const split =
+      r.classificacao && r.classificacao !== "pessoal"
+        ? { classificacao: r.classificacao, parts: r.split_parts ?? [] }
+        : { classificacao: "pessoal" as const, parts: [] };
     let res: ActionResult<{ id: string }>;
 
     if (
@@ -418,8 +468,7 @@ export async function commitImport(
         competence_date: r.data_norm,
         category_id: category,
         description: r.descricao ?? "",
-        classificacao: "pessoal",
-        parts: [],
+        ...split,
       });
     } else if (batch.origem === "cartao") {
       res = await createTransaction({
@@ -433,6 +482,7 @@ export async function commitImport(
         competence_date: r.data_norm,
         description: r.descricao ?? "",
         status: "pago",
+        ...split,
       });
     } else {
       const tipo = r.tipo === "receita" ? "receita" : "despesa";
@@ -447,6 +497,7 @@ export async function commitImport(
         competence_date: r.data_norm,
         description: r.descricao ?? "",
         status: tipo === "receita" ? "recebido" : "pago",
+        ...split,
       });
     }
 

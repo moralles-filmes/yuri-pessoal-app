@@ -1,9 +1,14 @@
 import { z } from "zod";
 import { CLASSIFICACOES, SPLIT_TYPES } from "@/lib/finance/constants";
+import { normalizeBRMoney } from "@/lib/validators/shared";
 
-/** Valor (reais) opcional vindo do form: string vazia/ausente → undefined. */
+/**
+ * Valor (reais) opcional vindo do form: string vazia/ausente → undefined. Aceita o padrão BR
+ * ("44,01", "1.234,56") normalizando antes de coagir — igual ao `moneyAmount` do restante do app.
+ */
 const optionalMoney = z.preprocess(
-  (v) => (v === "" || v === undefined || v === null ? undefined : v),
+  (v) =>
+    v === "" || v === undefined || v === null ? undefined : normalizeBRMoney(v),
   z.coerce
     .number()
     .finite("Valor inválido")

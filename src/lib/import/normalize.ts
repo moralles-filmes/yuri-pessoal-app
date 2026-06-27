@@ -142,15 +142,16 @@ export function parseDataIso(input: string | null | undefined): string | null {
 }
 
 /**
- * Extrai "k/N" de um texto (descrição ou coluna de parcela): "3/12", "PARC 03/12", "(1/10)".
- * Só considera parcelamento quando N > 1 e 1 <= k <= N. Retorna null caso contrário.
+ * Extrai a parcela de um texto (descrição ou coluna de parcela). Aceita "k/N" ("3/12",
+ * "PARC 03/12", "(1/10)") e "k de N" ("Parcela 1 de 4" — formato do Itaú). Só considera
+ * parcelamento quando N > 1 e 1 <= k <= N. Retorna null caso contrário.
  */
 export function parseParcela(
   input: string | null | undefined,
 ): { parcela: number; total: number } | null {
   if (input == null) return null;
   const s = String(input);
-  const m = s.match(/(\d{1,3})\s*\/\s*(\d{1,3})/);
+  const m = s.match(/(\d{1,3})\s*(?:\/|\bde\b)\s*(\d{1,3})/i);
   if (!m) return null;
   const parcela = Number(m[1]);
   const total = Number(m[2]);

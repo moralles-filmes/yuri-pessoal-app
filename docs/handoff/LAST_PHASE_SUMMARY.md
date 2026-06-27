@@ -1,6 +1,27 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-## Iteração mais recente (manutenção) — 2026-06-26: Conta/Segurança em Configurações
+## Iteração mais recente (manutenção) — 2026-06-27: Divisão com terceiros na edição e na importação
+A divisão de gastos (Fase 05) deixou de ser exclusiva da criação. **Na edição:** `updateTransaction`
+re-aplica a divisão de uma despesa simples (reusa `applySplit`), só quando ela muda de fato, e
+**bloqueia** se houver recebível `cobrado`/`pago`; o form pré-preenche as partes via
+`getTransactionSplit`/`sharedExpensesToFormParts`. **Na importação:** migration
+`20260627120000_import_rows_split` (+`classificacao`/`split_parts` em `import_rows`), botão "Dividir"
+por linha (`ImportRowSplitDialog`), `setImportRowSplit` grava e `commitImport` repassa para
+`createTransaction`/`createInstallmentPurchase`. **Correção:** `splitSchema` passou a aceitar valor BR
+com vírgula (`normalizeBRMoney`). Suíte **362** (lint/tsc/build ok); `src/types/supabase.ts`
+regenerado. Detalhes em `docs/project/CURRENT_STATUS.md` → *Iterações (modo manutenção)*.
+
+## Iteração anterior (manutenção) — 2026-06-27: Importação — cabeçalho fora da 1ª linha
+Faturas/extratos reais (ex.: export do Itaú/cartão Azul) trazem **título/resumo antes da tabela**,
+então o cabeçalho real não está na 1ª linha. Os parsers (`parseCsv`/`parseXlsx`) assumiam "1ª linha
+= cabeçalho", pegavam o título (`Nome;Yuri…`) e **toda** linha caía em *"Mapeie as colunas de data e
+valor."*. Correção: nova função pura **`detectHeaderRow()`** em `src/lib/import/mapping.ts` (acha a 1ª
+linha cujo `autoDetectMapping` resolve **data E valor**; fallback linha 0 → sem regressão). `csv.ts` e
+`xlsx.ts` passam a fatiar a partir dela. Bônus: **`parseParcela`** entende `"Parcela X de N"` (Itaú),
+além de `"k/N"`. Testes novos (`csv.test.ts`, `detectHeaderRow`, parcela "de") → suíte **356**
+(lint/tsc/build ok). Detalhes em `docs/project/CURRENT_STATUS.md` → *Iterações (modo manutenção)*.
+
+## Iteração anterior (manutenção) — 2026-06-26: Conta/Segurança em Configurações
 Adicionado `SecurityCard` em `/configuracoes` (após o `ProfileCard`) com **trocar e-mail** e
 **trocar senha**, refletindo direto no **Supabase Auth** (`auth.users`) — **sem migration**.
 Senha: reautentica com a atual (`signInWithPassword`) e aplica `updateUser({ password })`.

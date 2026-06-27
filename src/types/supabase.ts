@@ -625,6 +625,7 @@ export type Database = {
       import_rows: {
         Row: {
           categoria_sugerida_id: string | null
+          classificacao: string
           created_at: string
           data_norm: string | null
           descricao: string | null
@@ -637,6 +638,7 @@ export type Database = {
           parcela: number | null
           parcelas_total: number | null
           raw: Json
+          split_parts: Json
           status: string
           tipo: string | null
           transaction_id: string | null
@@ -646,6 +648,7 @@ export type Database = {
         }
         Insert: {
           categoria_sugerida_id?: string | null
+          classificacao?: string
           created_at?: string
           data_norm?: string | null
           descricao?: string | null
@@ -658,6 +661,7 @@ export type Database = {
           parcela?: number | null
           parcelas_total?: number | null
           raw?: Json
+          split_parts?: Json
           status?: string
           tipo?: string | null
           transaction_id?: string | null
@@ -667,6 +671,7 @@ export type Database = {
         }
         Update: {
           categoria_sugerida_id?: string | null
+          classificacao?: string
           created_at?: string
           data_norm?: string | null
           descricao?: string | null
@@ -679,6 +684,7 @@ export type Database = {
           parcela?: number | null
           parcelas_total?: number | null
           raw?: Json
+          split_parts?: Json
           status?: string
           tipo?: string | null
           transaction_id?: string | null

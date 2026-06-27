@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { applyMapping, autoDetectMapping } from "@/lib/import/mapping";
+import {
+  applyMapping,
+  autoDetectMapping,
+  detectHeaderRow,
+} from "@/lib/import/mapping";
 import type { NormalizeOptions, ParsedTable } from "@/lib/import/types";
 
 const categorias = [
@@ -46,6 +50,26 @@ describe("autoDetectMapping", () => {
     expect(m.data).toBe(1);
     expect(m.valor).toBe(2);
     expect(m.descricao).toBe(3);
+  });
+});
+
+describe("detectHeaderRow", () => {
+  it("acha o cabeçalho real pulando linhas de título/resumo (fatura Itaú)", () => {
+    const matrix = [
+      ["", "Nome", "Yuri Ribeiro Moraes", "", "", "", "", "", "", ""],
+      ["", "Conta", "61613-3", "", "", "", "", "", "", ""],
+      ["", "Cartão", "", "", "", "", "Valor", "", "Vencimento", ""],
+      ["", "Azul Itau Infinite Visa", "", "", "", "", "R$ 4.262,45", "", "29/06/2026", ""],
+      ["", "Lançamentos", "", "", "", "", "", "", "", ""],
+      ["", "Data", "Lançamento", "Parcelamento", "Valor", "", "Titularidade", "Nome", "Tipo do cartão", "Número do cartão"],
+      ["", "01/06/2026", "Pagamento Efetuado", "", "R$ -3.301,03", "", "Titular", "Yuri", "Físico", "****5188"],
+    ];
+    expect(detectHeaderRow(matrix)).toBe(5);
+  });
+
+  it("ignora linha de resumo que só tem Valor (sem Data) e devolve 0 para tabela limpa", () => {
+    expect(detectHeaderRow([["Data", "Histórico", "Valor"], ["26/06/2026", "X", "10,00"]])).toBe(0);
+    expect(detectHeaderRow([["Cartão", "", "Valor", "Vencimento"]])).toBe(0); // sem candidata → fallback 0
   });
 });
 
