@@ -10,6 +10,7 @@ import {
   Plus,
   RotateCcw,
   Trash2,
+  UserRound,
   Users,
   Wallet2,
 } from "lucide-react";
@@ -122,6 +123,11 @@ export function TerceirosClient({
   const abertos = filtered.filter((r) => OPEN_STATUSES.includes(r.status));
   const historico = filtered.filter((r) => !OPEN_STATUSES.includes(r.status));
 
+  // Card por pessoa: aparece só com uma pessoa selecionada; soma o que está em
+  // aberto dela já respeitando os filtros ativos (mês/cartão/status) — bate com a lista abaixo.
+  const pessoaSel = pessoa !== ALL ? people.find((p) => p.id === pessoa) ?? null : null;
+  const aReceberPessoa = abertos.reduce((s, r) => s + r.valor, 0);
+
   return (
     <Tabs defaultValue="receber" className="gap-4">
       <TabsList>
@@ -148,6 +154,14 @@ export function TerceirosClient({
             icon={Wallet2}
             hint={monthYearLabel(`${currentMonth}-01`)}
           />
+          {pessoaSel && (
+            <StatCard
+              label={`A receber de ${pessoaSel.nome}`}
+              value={formatCurrency(aReceberPessoa)}
+              icon={UserRound}
+              hint={`${abertos.length} em aberto`}
+            />
+          )}
         </div>
 
         {/* Filtros */}
