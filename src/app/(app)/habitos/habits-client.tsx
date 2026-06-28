@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
+import { SortableList } from "@/components/shared/sortable-list";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import { cn } from "@/lib/utils";
 import {
@@ -37,6 +38,7 @@ import { ConsistencyView } from "@/components/habits/consistency-view";
 import { HabitFormDialog } from "./habit-form";
 import {
   deleteHabit,
+  reorderHabits,
   seedDefaultHabits,
   toggleHabitActive,
 } from "@/lib/actions/habits";
@@ -292,17 +294,48 @@ function ManageView({
     okMsg: string,
   ) => Promise<void>;
 }) {
+  const router = useRouter();
+  // Estado local p/ optimistic UI: reordena na hora e sincroniza quando o
+  // servidor revalida (a prop `habits` chega ordenada por position). Ajuste
+  // durante o render comparando a prop anterior (padrão React, sem useEffect).
+  const [ordered, setOrdered] = React.useState(habits);
+  const [prevHabits, setPrevHabits] = React.useState(habits);
+  if (habits !== prevHabits) {
+    setPrevHabits(habits);
+    setOrdered(habits);
+  }
+
+  async function handleReorder(orderedIds: string[]) {
+    const byId = new Map(ordered.map((h) => [h.id, h]));
+    const next = orderedIds
+      .map((id) => byId.get(id))
+      .filter((h): h is HabitWithStats => Boolean(h));
+    setOrdered(next);
+    const res = await reorderHabits(orderedIds);
+    if (!res.ok) {
+      toast.error(res.error ?? "Não foi possível salvar a nova ordem.");
+      setOrdered(habits);
+      router.refresh();
+    }
+  }
+
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-muted-foreground">
-          Todos os hábitos ({habits.length})
+          Todos os hábitos ({ordered.length})
         </h2>
+        <p className="text-xs text-muted-foreground">Arraste ⠿ para reordenar</p>
       </div>
-      <div className="grid gap-2">
-        {habits.map((h) => (
-          <Card key={h.id} className={cn(!h.is_active && "opacity-60")}>
+      <SortableList
+        items={ordered}
+        getId={(h) => h.id}
+        onReorder={handleReorder}
+        className="grid gap-2"
+        renderItem={(h, handle) => (
+          <Card className={cn(!h.is_active && "opacity-60")}>
             <CardContent className="flex items-center gap-3 p-3.5">
+              {handle}
               <span className="text-xl" aria-hidden>
                 {habitIcon(h.icon, h.category)}
               </span>
@@ -364,8 +397,8 @@ function ManageView({
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
+        )}
+      />
     </section>
   );
 }

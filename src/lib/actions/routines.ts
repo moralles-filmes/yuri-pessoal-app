@@ -7,6 +7,7 @@ import {
   routineSchema,
 } from "@/lib/validators/routine";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
+import { reorderedPositions } from "@/lib/shared/reorder";
 import type { ActionResult } from "@/types/finance";
 import type { RoutineType } from "@/lib/tasks/constants";
 
@@ -111,6 +112,38 @@ export async function deleteRoutine(id: string): Promise<ActionResult> {
   if (!ctx) return notAuthed;
   const { error } = await ctx.supabase.from("routines").delete().eq("id", id);
   if (error) return dbError("Não foi possível excluir a rotina.");
+  revalidate();
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Reordena as rotinas: grava `position = índice` para cada id na ordem recebida.
+ * Single-user com poucas rotinas → updates em paralelo (sem RPC/migration). RLS
+ * garante que cada update só atinge linhas do próprio usuário.
+ */
+export async function reorderRoutines(
+  orderedIds: string[],
+): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+  if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== "string")) {
+    return invalid({ orderedIds: ["Lista de rotinas inválida."] });
+  }
+
+  const updates = reorderedPositions(orderedIds);
+  const results = await Promise.all(
+    updates.map(({ id, position }) =>
+      ctx.supabase
+        .from("routines")
+        .update({ position })
+        .eq("id", id)
+        .eq("user_id", ctx.userId),
+    ),
+  );
+
+  if (results.some((r) => r.error)) {
+    return dbError("Não foi possível salvar a nova ordem.");
+  }
   revalidate();
   return { ok: true, data: undefined };
 }
