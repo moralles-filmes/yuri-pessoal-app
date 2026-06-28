@@ -7,7 +7,7 @@ import {
 } from "@/lib/tasks/queries";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { TASK_VIEWS, type TaskView } from "@/lib/tasks/constants";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import { TasksClient } from "./tasks-client";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export default async function TarefasPage({
     : "lista";
 
   const now = new Date();
-  const todayIso = toDateInputValue(now);
+  const todayIso = hojeISO();
   const dateRaw = first(sp.date);
   const dateIso =
     dateRaw && /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : todayIso;

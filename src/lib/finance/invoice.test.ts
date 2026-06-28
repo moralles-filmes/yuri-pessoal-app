@@ -170,17 +170,21 @@ describe("statusEfetivo — derivado de hoje vs datas", () => {
     );
   });
 
-  it("no fechamento e até o vencimento → fechada", () => {
+  it("do fechamento ATÉ o vencimento (inclusive) → fechada", () => {
     expect(statusEfetivo({ ...base, pago_em: null }, "2026-01-10")).toBe(
       "fechada",
     );
     expect(statusEfetivo({ ...base, pago_em: null }, "2026-01-15")).toBe(
       "fechada",
     );
+    // No próprio dia do vencimento ainda dá pra pagar → fechada, não atrasada.
+    expect(statusEfetivo({ ...base, pago_em: null }, "2026-01-20")).toBe(
+      "fechada",
+    );
   });
 
-  it("no vencimento ou depois, sem pagamento → atrasada", () => {
-    expect(statusEfetivo({ ...base, pago_em: null }, "2026-01-20")).toBe(
+  it("só DEPOIS do vencimento, sem pagamento → atrasada", () => {
+    expect(statusEfetivo({ ...base, pago_em: null }, "2026-01-21")).toBe(
       "atrasada",
     );
     expect(statusEfetivo({ ...base, pago_em: null }, "2026-02-01")).toBe(

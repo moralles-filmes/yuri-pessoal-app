@@ -9,7 +9,7 @@ import {
 } from "@/lib/actions/helpers";
 import { montarPagamentoFatura } from "@/lib/finance/statement-payment";
 import { pagamentoFaturaSchema } from "@/lib/validators/statement";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import type { ActionResult } from "@/types/finance";
 
 function revalidateStatements() {
@@ -68,7 +68,7 @@ export async function markStatementPaid(
     total,
     cartaoNome: card?.nome ?? "Cartão",
     competencia: st.competencia ?? "",
-    hoje: toDateInputValue(new Date()),
+    hoje: hojeISO(),
   });
 
   const { data: pago, error: insErr } = await ctx.supabase

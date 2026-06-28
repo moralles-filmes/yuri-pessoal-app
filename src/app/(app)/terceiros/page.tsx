@@ -5,7 +5,7 @@ import {
   getPeople,
   getReceivables,
 } from "@/lib/finance/queries";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import { TerceirosClient } from "./terceiros-client";
 
 export const metadata: Metadata = { title: "A Receber" };
@@ -18,7 +18,7 @@ export default async function TerceirosPage() {
     getCreditCards(),
   ]);
 
-  const currentMonth = toDateInputValue(new Date()).slice(0, 7);
+  const currentMonth = hojeISO().slice(0, 7);
 
   return (
     <div className="space-y-6">

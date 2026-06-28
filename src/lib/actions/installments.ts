@@ -11,7 +11,7 @@ import { getOrCreateStatementByFatura } from "@/lib/finance/statements";
 import { planejarParcelamento } from "@/lib/finance/installments";
 import { applySplitParcelado } from "@/lib/finance/split-persist";
 import { statusEfetivo } from "@/lib/finance/invoice";
-import { centavosParaReais, reaisParaCentavos, toDateInputValue } from "@/lib/format";
+import { centavosParaReais, hojeISO, reaisParaCentavos } from "@/lib/format";
 import type { ActionResult } from "@/types/finance";
 
 function revalidateInstallments() {
@@ -209,7 +209,7 @@ export async function cancelInstallmentFuture(
     : { data: [] };
   const stMap = new Map((statements ?? []).map((s) => [s.id, s]));
 
-  const today = toDateInputValue(new Date());
+  const today = hojeISO();
   const cancelaveis = parcelas.filter((p) => {
     if (!p.statement_id) return true; // sem fatura resolvida → tratável como futura
     const s = stMap.get(p.statement_id);

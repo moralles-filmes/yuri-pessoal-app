@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dateInSaoPaulo,
   formatCurrency,
   formatDate,
   getInitials,
@@ -67,6 +68,17 @@ describe("toDateInputValue", () => {
   it("converte para 'yyyy-MM-dd'", () => {
     expect(toDateInputValue(new Date(2026, 5, 25))).toBe("2026-06-25");
     expect(toDateInputValue(new Date(2026, 0, 3))).toBe("2026-01-03");
+  });
+});
+
+describe("dateInSaoPaulo — data do calendário no fuso pt-BR", () => {
+  it("não 'vira o dia' à noite quando o servidor está em UTC", () => {
+    // 28/06 00:30 UTC ainda é 27/06 21:30 em São Paulo (UTC-3): deve ser dia 27.
+    expect(dateInSaoPaulo(new Date("2026-06-28T00:30:00Z"))).toBe("2026-06-27");
+    // 23:30 UTC do dia 27 já é 27/06 20:30 em SP: continua dia 27.
+    expect(dateInSaoPaulo(new Date("2026-06-27T23:30:00Z"))).toBe("2026-06-27");
+    // 13:00 UTC = 10:00 BRT: mesmo dia.
+    expect(dateInSaoPaulo(new Date("2026-06-28T13:00:00Z"))).toBe("2026-06-28");
   });
 });
 

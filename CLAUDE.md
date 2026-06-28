@@ -82,6 +82,7 @@ Padrões recorrentes que valem entender lendo o código:
 - **"Status derivado na leitura, nunca gravado":** fatura, `tasks.status='atrasada'`, cursos atrasados — todos calculados na leitura a partir de datas. Não persista esses estados.
 - **Dinheiro em centavos (integer)** no financeiro; formatação centralizada em `src/lib/format.ts` (`Intl.NumberFormat('pt-BR')`, `date-fns` com `ptBR`).
 - **Datas locais pt-BR** (`'yyyy-MM-dd'` puro) em logs/streaks/heatmaps para evitar drift de UTC ("virar o dia").
+- **"Hoje" no servidor SEMPRE via `hojeISO()` / `dateInSaoPaulo()` (`src/lib/format.ts`, fuso `America/Sao_Paulo`)**, nunca `toDateInputValue(new Date())` — na Vercel o processo roda em UTC e à noite (BRT) "vira o dia", fazendo fatura/tarefa parecer atrasada 1 dia antes. `toDateInputValue` fica só para formatar `Date`/strings já conhecidos.
 
 ### Clientes Supabase (3, não confunda)
 - `src/lib/supabase/client.ts` — `createBrowserClient` (componentes client).

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getHabitsDashboard } from "@/lib/habits/queries";
 import { HABIT_VIEWS, type HabitView } from "@/lib/habits/constants";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import { HabitsClient } from "./habits-client";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export default async function HabitosPage({
     ? (viewRaw as HabitView)
     : "hoje";
 
-  const todayIso = toDateInputValue(new Date());
+  const todayIso = hojeISO();
   const dashboard = await getHabitsDashboard(todayIso);
 
   return (

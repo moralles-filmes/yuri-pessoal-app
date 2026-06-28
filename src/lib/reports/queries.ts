@@ -6,7 +6,7 @@
  * A RLS garante o escopo por usuário. Tudo roda em paralelo (Promise.all), sem N+1.
  */
 import { createClient } from "@/lib/supabase/server";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO, toDateInputValue } from "@/lib/format";
 import {
   getAccounts,
   getBills,
@@ -380,7 +380,7 @@ async function getTasksReportData(todayIso: string): Promise<TasksReport> {
 /* ───────────────────────────── Orquestrador ───────────────────────────── */
 
 export async function getReportsData(mesSel: string): Promise<ReportsData> {
-  const hoje = toDateInputValue(new Date());
+  const hoje = hojeISO();
   const [financeAndCard, habits, studies, tasks] = await Promise.all([
     getFinanceAndCardReport(mesSel, hoje),
     getHabitsReport(hoje),
