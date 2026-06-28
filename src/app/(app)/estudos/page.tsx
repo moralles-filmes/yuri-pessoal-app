@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getStudyDashboard } from "@/lib/studies/queries";
 import { STUDY_VIEWS, type StudyView } from "@/lib/studies/constants";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import { StudiesClient } from "./studies-client";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export default async function EstudosPage({
     ? (viewRaw as StudyView)
     : "painel";
 
-  const todayIso = toDateInputValue(new Date());
+  const todayIso = hojeISO();
   const dashboard = await getStudyDashboard(todayIso);
 
   return <StudiesClient dashboard={dashboard} view={view} todayIso={todayIso} />;

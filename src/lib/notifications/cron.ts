@@ -9,6 +9,7 @@
 import { addDays } from "date-fns";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
+import { dateInSaoPaulo } from "@/lib/format";
 import { expandRowsToOccurrences } from "@/lib/calendar/expand";
 import { proximosCompromissos } from "@/lib/calendar/upcoming";
 import { habitOccursOn } from "@/lib/habits/streak";
@@ -30,15 +31,7 @@ import {
 type Service = SupabaseClient<Database>;
 
 /** Data local pt-BR ('yyyy-MM-dd') de um instante, independente do fuso do servidor. */
-const SP_DATE = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/Sao_Paulo",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-function spDateIso(d: Date): string {
-  return SP_DATE.format(d); // en-CA → 'yyyy-MM-dd'
-}
+const spDateIso = dateInSaoPaulo;
 
 export type UserGenResult = { userId: string; candidates: number; inserted: number };
 

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { recurringSchema } from "@/lib/validators/recurring";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
 import type { ActionResult, GenerationResult } from "@/types/finance";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import {
   RECURRENCE_FIELDS,
   runGeneration,
@@ -118,7 +118,7 @@ export async function generateRecurringNow(
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const today = toDateInputValue(new Date());
+  const today = hojeISO();
   let query = ctx.supabase
     .from("recurring_transactions")
     .select(RECURRENCE_FIELDS)

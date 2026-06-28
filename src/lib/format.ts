@@ -120,3 +120,26 @@ export function toDateInputValue(date: Date | string | number): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * Data do calendário ('yyyy-MM-dd') de um instante NO FUSO pt-BR (America/Sao_Paulo),
+ * independente do timezone em que o código roda. Crítico no servidor: na Vercel o
+ * processo roda em UTC, então `toDateInputValue(new Date())` "vira o dia" à noite
+ * (ex.: 21h BRT = 00h UTC do dia seguinte) e faria uma fatura parecer atrasada um dia
+ * antes do vencimento. `en-CA` formata como 'yyyy-MM-dd'.
+ */
+const SAO_PAULO_DATE = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+export function dateInSaoPaulo(date: Date): string {
+  if (Number.isNaN(date.getTime())) return "";
+  return SAO_PAULO_DATE.format(date);
+}
+
+/** Data de hoje ('yyyy-MM-dd') no fuso pt-BR. Use no servidor em vez de `toDateInputValue(new Date())`. */
+export function hojeISO(): string {
+  return dateInSaoPaulo(new Date());
+}

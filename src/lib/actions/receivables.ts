@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { authContext, dbError, notAuthed } from "@/lib/actions/helpers";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import {
   RECEIVABLE_STATUSES,
   type ReceivableStatus,
@@ -25,7 +25,7 @@ export async function markReceivableReceived(
   const data =
     pagoEm && /^\d{4}-\d{2}-\d{2}$/.test(pagoEm)
       ? pagoEm
-      : toDateInputValue(new Date());
+      : hojeISO();
 
   const { error } = await ctx.supabase
     .from("receivables")
@@ -51,7 +51,7 @@ export async function setReceivableStatus(
 
   const updates =
     status === "pago"
-      ? { status, pago_em: toDateInputValue(new Date()) }
+      ? { status, pago_em: hojeISO() }
       : { status, pago_em: null };
 
   const { error } = await ctx.supabase

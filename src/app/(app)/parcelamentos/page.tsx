@@ -5,7 +5,7 @@ import {
   getCreditCards,
   getInstallmentPurchases,
 } from "@/lib/finance/queries";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import { InstallmentsClient } from "./installments-client";
 
 export const metadata: Metadata = { title: "Parcelamentos" };
@@ -30,7 +30,7 @@ export default async function ParcelamentosPage({
     getCategories(),
   ]);
 
-  const today = toDateInputValue(new Date());
+  const today = hojeISO();
 
   return (
     <div className="space-y-6">

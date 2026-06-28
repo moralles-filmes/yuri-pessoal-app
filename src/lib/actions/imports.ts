@@ -39,8 +39,8 @@ import type {
 } from "@/lib/import/types";
 import {
   centavosParaReais,
+  hojeISO,
   reaisParaCentavos,
-  toDateInputValue,
 } from "@/lib/format";
 import type { ActionResult } from "@/types/finance";
 import type { ImportSplitPart } from "@/types/database";
@@ -561,7 +561,7 @@ export async function commitImport(
             card.dia_vencimento,
           )?.competencia ??
           resolverFatura(
-            toDateInputValue(new Date()),
+            hojeISO(),
             card.dia_fechamento,
             card.dia_vencimento,
           ).competencia;

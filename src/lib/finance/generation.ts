@@ -7,7 +7,7 @@
 import { authContext, type AuthContext } from "@/lib/actions/helpers";
 import { computeDueOccurrences } from "@/lib/finance/recurrence";
 import { resolveOrCreateStatement } from "@/lib/finance/statements";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import type { Frequency } from "@/lib/finance/constants";
 import type { GenerationResult } from "@/types/finance";
 
@@ -155,7 +155,7 @@ export async function catchUpRecurrences(): Promise<GenerationResult> {
   const ctx = await authContext();
   if (!ctx) return { generated: 0, recurrences: 0 };
 
-  const today = toDateInputValue(new Date());
+  const today = hojeISO();
   const { data, error } = await ctx.supabase
     .from("recurring_transactions")
     .select(RECURRENCE_FIELDS)

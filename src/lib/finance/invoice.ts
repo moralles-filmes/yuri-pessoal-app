@@ -135,7 +135,8 @@ export function resolverFatura(
  * Status efetivo da fatura, calculado na leitura (sem cron). Só `pago_em` é persistido;
  * aberta/fechada/atrasada derivam de `hoje` vs as datas. Convenção (fonte única):
  *  - pago_em definido            → 'paga' (vence as demais)
- *  - hoje >= data_vencimento     → 'atrasada'
+ *  - hoje > data_vencimento      → 'atrasada' (só DEPOIS do vencimento; no próprio dia
+ *                                   do vencimento ainda dá pra pagar → fica 'fechada')
  *  - hoje >= data_fechamento     → 'fechada'
  *  - caso contrário              → 'aberta'
  * Comparação lexicográfica de strings 'yyyy-MM-dd' (ISO) é segura.
@@ -149,7 +150,7 @@ export function statusEfetivo(
   hoje: string,
 ): StatementStatus {
   if (s.pago_em) return "paga";
-  if (hoje >= s.data_vencimento) return "atrasada";
+  if (hoje > s.data_vencimento) return "atrasada";
   if (hoje >= s.data_fechamento) return "fechada";
   return "aberta";
 }

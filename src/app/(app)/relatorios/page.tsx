@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import { getReportsData } from "@/lib/reports/queries";
 import { mesDe } from "@/lib/finance/dashboard";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import { RelatoriosClient } from "./relatorios-client";
 
 export const metadata: Metadata = { title: "Relatórios" };
@@ -18,7 +18,7 @@ export default async function RelatoriosPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const mesAtual = mesDe(toDateInputValue(new Date()));
+  const mesAtual = mesDe(hojeISO());
   const mesSel = (() => {
     const v = str(sp.mes);
     return v && /^\d{4}-\d{2}$/.test(v) ? v : mesAtual;

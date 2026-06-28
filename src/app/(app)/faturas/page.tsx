@@ -8,7 +8,7 @@ import {
   getStatements,
   getTransactions,
 } from "@/lib/finance/queries";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import { StatementsClient } from "./statements-client";
 
 export const metadata: Metadata = { title: "Faturas" };
@@ -49,7 +49,7 @@ export default async function FaturasPage({
       ])
     : [[], []];
 
-  const today = toDateInputValue(new Date());
+  const today = hojeISO();
 
   return (
     <div className="space-y-6">

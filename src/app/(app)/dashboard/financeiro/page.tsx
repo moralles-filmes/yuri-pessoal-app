@@ -32,7 +32,7 @@ import {
   type DashStatement,
   type DashTx,
 } from "@/lib/finance/dashboard";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO, toDateInputValue } from "@/lib/format";
 import { DashboardClient } from "./financial-dashboard-client";
 
 export const metadata: Metadata = { title: "Dashboard financeiro" };
@@ -54,7 +54,7 @@ export default async function DashboardFinanceiroPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const hoje = toDateInputValue(new Date());
+  const hoje = hojeISO();
   const mesAtual = mesDe(hoje);
   const mesSel = (() => {
     const v = str(sp.mes);

@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { getDashboardLayout } from "@/lib/dashboard/settings";
 import { asPeriod, asView, resolveWindow } from "@/lib/dashboard/period";
 import { type DashCardId } from "@/lib/dashboard/cards";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import { GeneralDashboard } from "./general-dashboard-client";
 import { CardBodySkeleton } from "@/components/dashboard/general/card-skeleton";
 import { FinanceCard } from "@/components/dashboard/general/finance-card";
@@ -31,7 +31,7 @@ export default async function DashboardPage({
   const layout = await getDashboardLayout();
 
   const now = new Date();
-  const todayIso = toDateInputValue(now);
+  const todayIso = hojeISO();
 
   const period = asPeriod(str(sp.periodo) ?? layout.period);
   const view = asView(str(sp.visao) ?? layout.view);
