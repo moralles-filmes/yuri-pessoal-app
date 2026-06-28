@@ -20,12 +20,14 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
+import { SortableList } from "@/components/shared/sortable-list";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import { RoutineTypeBadge } from "@/components/tasks/badges";
 import { cn } from "@/lib/utils";
 import { RoutineFormDialog } from "./routine-form";
 import {
   deleteRoutine,
+  reorderRoutines,
   seedDefaultRoutines,
   setRoutineDone,
   setRoutineItemDone,
@@ -149,77 +151,7 @@ export function RoutinesClient({
           </section>
 
           {/* Todas */}
-          <section className="space-y-2">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              Todas as rotinas
-            </h2>
-            <div className="grid gap-2">
-              {routines.map((r) => (
-                <Card key={r.id} className={cn(!r.is_active && "opacity-60")}>
-                  <CardContent className="flex items-center gap-3 p-3.5">
-                    <span className="text-xl" aria-hidden>
-                      {r.icon || "🔁"}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate font-medium">{r.name}</span>
-                        <RoutineTypeBadge type={r.type} />
-                        {!r.is_active && (
-                          <Badge variant="outline" className="text-muted-foreground">
-                            Inativa
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {frequencySummary(r)}
-                        {r.time_of_day ? ` · ${r.time_of_day.slice(0, 5)}` : ""}
-                        {r.items.length > 0 ? ` · ${r.items.length} passo(s)` : ""}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Editar rotina"
-                        onClick={() => openEdit(r)}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={r.is_active ? "Desativar" : "Ativar"}
-                        onClick={() =>
-                          run(
-                            toggleRoutineActive(r.id, !r.is_active),
-                            r.is_active ? "Rotina desativada." : "Rotina ativada.",
-                          )
-                        }
-                      >
-                        <Power className={cn(r.is_active && "text-emerald-600")} />
-                      </Button>
-                      <DeleteConfirmDialog
-                        title="Excluir rotina"
-                        description={`Excluir "${r.name}"? O histórico de check-ins também será removido.`}
-                        successMessage="Rotina excluída."
-                        onConfirm={() => deleteRoutine(r.id)}
-                        trigger={
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Excluir rotina"
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 />
-                          </Button>
-                        }
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </section>
+          <AllRoutinesSection routines={routines} onEdit={openEdit} run={run} />
         </>
       )}
 
@@ -229,6 +161,126 @@ export function RoutinesClient({
         onOpenChange={setFormOpen}
       />
     </div>
+  );
+}
+
+function AllRoutinesSection({
+  routines,
+  onEdit,
+  run,
+}: {
+  routines: RoutineWithToday[];
+  onEdit: (r: RoutineWithToday) => void;
+  run: (
+    action: Promise<{ ok: boolean; error?: string }>,
+    okMsg: string,
+  ) => Promise<void>;
+}) {
+  const router = useRouter();
+  // Optimistic UI: reordena na hora; sincroniza quando o servidor revalida
+  // (a prop `routines` chega ordenada por position). Ajuste durante o render
+  // comparando a prop anterior (padrão React, sem useEffect).
+  const [ordered, setOrdered] = React.useState(routines);
+  const [prevRoutines, setPrevRoutines] = React.useState(routines);
+  if (routines !== prevRoutines) {
+    setPrevRoutines(routines);
+    setOrdered(routines);
+  }
+
+  async function handleReorder(orderedIds: string[]) {
+    const byId = new Map(ordered.map((r) => [r.id, r]));
+    const next = orderedIds
+      .map((id) => byId.get(id))
+      .filter((r): r is RoutineWithToday => Boolean(r));
+    setOrdered(next);
+    const res = await reorderRoutines(orderedIds);
+    if (!res.ok) {
+      toast.error(res.error ?? "Não foi possível salvar a nova ordem.");
+      setOrdered(routines);
+      router.refresh();
+    }
+  }
+
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium text-muted-foreground">
+          Todas as rotinas
+        </h2>
+        <p className="text-xs text-muted-foreground">Arraste ⠿ para reordenar</p>
+      </div>
+      <SortableList
+        items={ordered}
+        getId={(r) => r.id}
+        onReorder={handleReorder}
+        className="grid gap-2"
+        renderItem={(r, handle) => (
+          <Card className={cn(!r.is_active && "opacity-60")}>
+            <CardContent className="flex items-center gap-3 p-3.5">
+              {handle}
+              <span className="text-xl" aria-hidden>
+                {r.icon || "🔁"}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate font-medium">{r.name}</span>
+                  <RoutineTypeBadge type={r.type} />
+                  {!r.is_active && (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      Inativa
+                    </Badge>
+                  )}
+                </div>
+                <p className="truncate text-xs text-muted-foreground">
+                  {frequencySummary(r)}
+                  {r.time_of_day ? ` · ${r.time_of_day.slice(0, 5)}` : ""}
+                  {r.items.length > 0 ? ` · ${r.items.length} passo(s)` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Editar rotina"
+                  onClick={() => onEdit(r)}
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={r.is_active ? "Desativar" : "Ativar"}
+                  onClick={() =>
+                    run(
+                      toggleRoutineActive(r.id, !r.is_active),
+                      r.is_active ? "Rotina desativada." : "Rotina ativada.",
+                    )
+                  }
+                >
+                  <Power className={cn(r.is_active && "text-emerald-600")} />
+                </Button>
+                <DeleteConfirmDialog
+                  title="Excluir rotina"
+                  description={`Excluir "${r.name}"? O histórico de check-ins também será removido.`}
+                  successMessage="Rotina excluída."
+                  onConfirm={() => deleteRoutine(r.id)}
+                  trigger={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Excluir rotina"
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 />
+                    </Button>
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      />
+    </section>
   );
 }
 

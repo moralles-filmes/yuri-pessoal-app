@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { habitLogSchema, habitSchema } from "@/lib/validators/habit";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
 import { reachedTarget } from "@/lib/habits/streak";
+import { reorderedPositions } from "@/lib/shared/reorder";
 import type { ActionResult } from "@/types/finance";
 import type { HabitCategory, HabitUnit } from "@/lib/habits/constants";
 
@@ -133,6 +134,38 @@ export async function deleteHabit(id: string): Promise<ActionResult> {
   if (!ctx) return notAuthed;
   const { error } = await ctx.supabase.from("habits").delete().eq("id", id);
   if (error) return dbError("Não foi possível excluir o hábito.");
+  revalidate();
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Reordena os hábitos: grava `position = índice` para cada id na ordem recebida.
+ * Single-user com poucos hábitos → updates em paralelo (sem RPC/migration). RLS
+ * garante que cada update só atinge linhas do próprio usuário.
+ */
+export async function reorderHabits(
+  orderedIds: string[],
+): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+  if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== "string")) {
+    return invalid({ orderedIds: ["Lista de hábitos inválida."] });
+  }
+
+  const updates = reorderedPositions(orderedIds);
+  const results = await Promise.all(
+    updates.map(({ id, position }) =>
+      ctx.supabase
+        .from("habits")
+        .update({ position })
+        .eq("id", id)
+        .eq("user_id", ctx.userId),
+    ),
+  );
+
+  if (results.some((r) => r.error)) {
+    return dbError("Não foi possível salvar a nova ordem.");
+  }
   revalidate();
   return { ok: true, data: undefined };
 }
