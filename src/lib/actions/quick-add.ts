@@ -9,6 +9,7 @@ export type QuickAddOptions = {
   projects: { id: string; name: string }[];
   courses: { id: string; title: string }[];
   habits: { id: string; name: string; unit: string; target: number; category: string }[];
+  people: { id: string; nome: string }[];
 };
 
 const EMPTY: QuickAddOptions = {
@@ -18,6 +19,7 @@ const EMPTY: QuickAddOptions = {
   projects: [],
   courses: [],
   habits: [],
+  people: [],
 };
 
 /**
@@ -29,7 +31,7 @@ export async function loadQuickAddOptions(): Promise<QuickAddOptions> {
   if (!ctx) return EMPTY;
   const { supabase } = ctx;
 
-  const [accounts, cards, categories, projects, courses, habits] = await Promise.all([
+  const [accounts, cards, categories, projects, courses, habits, people] = await Promise.all([
     supabase.from("accounts").select("id, name").eq("is_active", true).order("name"),
     supabase.from("credit_cards").select("id, nome").eq("ativo", true).order("nome"),
     supabase.from("categories").select("id, name, kind").order("sort_order").order("name"),
@@ -44,6 +46,7 @@ export async function loadQuickAddOptions(): Promise<QuickAddOptions> {
       .select("id, name, unit, target_value, category")
       .eq("is_active", true)
       .order("position"),
+    supabase.from("people").select("id, nome").eq("ativo", true).order("nome"),
   ]);
 
   return {
@@ -68,5 +71,6 @@ export async function loadQuickAddOptions(): Promise<QuickAddOptions> {
       target: Number(h.target_value),
       category: h.category,
     })),
+    people: (people.data ?? []) as QuickAddOptions["people"],
   };
 }

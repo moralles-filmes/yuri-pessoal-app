@@ -11,6 +11,7 @@ import {
   ListChecks,
   Plus,
   Target,
+  Trash2,
   TrendingDown,
   TrendingUp,
   type LucideIcon,
@@ -33,14 +34,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/financeiro/money-input";
-import { toDateInputValue } from "@/lib/format";
+import {
+  centavosParaReais,
+  formatCurrency,
+  parseCurrencyToNumber,
+  reaisParaCentavos,
+  toDateInputValue,
+} from "@/lib/format";
 import { createTransaction } from "@/lib/actions/transactions";
 import { createTask } from "@/lib/actions/tasks";
 import { createEvent } from "@/lib/actions/calendar";
 import { createSession } from "@/lib/actions/studies";
 import { setHabitValue } from "@/lib/actions/habits";
 import { loadQuickAddOptions, type QuickAddOptions } from "@/lib/actions/quick-add";
-import { PAYMENT_METHOD_LABELS } from "@/lib/finance/constants";
+import { dividirDespesa, type ParteDivisao } from "@/lib/finance/split";
+import {
+  CLASSIFICACAO_LABELS,
+  CLASSIFICACOES,
+  PAYMENT_METHOD_LABELS,
+  SPLIT_TYPE_LABELS,
+  SPLIT_TYPES,
+  type Classificacao,
+  type SplitType,
+} from "@/lib/finance/constants";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "@/lib/tasks/constants";
 import { EVENT_TYPES, EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
 import { STUDY_DIFFICULTIES, STUDY_DIFFICULTY_LABELS } from "@/lib/studies/constants";
@@ -195,6 +211,210 @@ function SubmitBar({ pending }: { pending: boolean }) {
 
 const CASH_METHODS = ["pix", "debito", "dinheiro", "boleto", "conta_corrente"] as const;
 
+/* ─────────────────── Divisão com terceiros (Fase 05) ─────────────────── */
+
+type PartValue = {
+  person_id: string;
+  tipo: SplitType;
+  valor: string;
+  percentual: string;
+};
+
+const EMPTY_PART: PartValue = { person_id: "", tipo: "valor", valor: "", percentual: "" };
+
+/**
+ * Editor compacto de divisão de despesa para o lançamento rápido (plain state, igual ao
+ * `import-split-dialog.tsx`). A autoridade final é o servidor (`createTransaction` → splitSchema).
+ */
+function SplitFields({
+  people,
+  amount,
+  classificacao,
+  parts,
+  onClassificacaoChange,
+  onPartsChange,
+}: {
+  people: QuickAddOptions["people"];
+  amount: string;
+  classificacao: Classificacao;
+  parts: PartValue[];
+  onClassificacaoChange: (v: Classificacao) => void;
+  onPartsChange: (parts: PartValue[]) => void;
+}) {
+  const isShared = classificacao !== "pessoal";
+  const nomePessoa = (id: string) => people.find((p) => p.id === id)?.nome ?? "Pessoa";
+
+  function setClassif(v: Classificacao) {
+    onClassificacaoChange(v);
+    if (v === "pessoal") onPartsChange([]);
+    else if (parts.length === 0) onPartsChange([EMPTY_PART]);
+  }
+
+  function updatePart(idx: number, patch: Partial<PartValue>) {
+    onPartsChange(parts.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+  }
+
+  // Preview reativo (lógica pura, idêntica ao servidor).
+  let preview: {
+    minhaParteCentavos: number;
+    partesTerceiros: { personId: string; valorCentavos: number }[];
+  } | null = null;
+  let previewError = false;
+  if (isShared) {
+    const totalCentavos = reaisParaCentavos(parseCurrencyToNumber(amount));
+    const partes: ParteDivisao[] = parts
+      .filter((p) => p.person_id)
+      .map((p) =>
+        p.tipo === "valor"
+          ? {
+              personId: p.person_id,
+              tipo: "valor",
+              valorCentavos: reaisParaCentavos(parseCurrencyToNumber(p.valor)),
+            }
+          : {
+              personId: p.person_id,
+              tipo: "percentual",
+              percentual: parseCurrencyToNumber(p.percentual),
+            },
+      );
+    if (totalCentavos > 0 && partes.length > 0) {
+      try {
+        preview = dividirDespesa(totalCentavos, partes);
+      } catch {
+        previewError = true;
+      }
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-card/40 p-3">
+      <Field label="Classificação">
+        <Select value={classificacao} onValueChange={(v) => setClassif(v as Classificacao)}>
+          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {CLASSIFICACOES.map((c) => (
+              <SelectItem key={c} value={c}>{CLASSIFICACAO_LABELS[c]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
+      {isShared &&
+        (people.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhuma pessoa cadastrada. Cadastre em A Receber → Pessoas.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {parts.map((p, idx) => (
+              <div key={idx} className="space-y-2 rounded-lg border border-border/60 p-2">
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs">Pessoa</Label>
+                    <Select value={p.person_id} onValueChange={(v) => updatePart(idx, { person_id: v })}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {people.map((person) => (
+                          <SelectItem key={person.id} value={person.id}>{person.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Remover pessoa"
+                    onClick={() => onPartsChange(parts.filter((_, i) => i !== idx))}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Tipo</Label>
+                    <Select value={p.tipo} onValueChange={(v) => updatePart(idx, { tipo: v as SplitType })}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {SPLIT_TYPES.map((t) => (
+                          <SelectItem key={t} value={t}>{SPLIT_TYPE_LABELS[t]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{p.tipo === "valor" ? "Valor" : "%"}</Label>
+                    {p.tipo === "valor" ? (
+                      <MoneyInput value={p.valor} onValueChange={(v) => updatePart(idx, { valor: v })} />
+                    ) : (
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.01"
+                        inputMode="decimal"
+                        value={p.percentual}
+                        onChange={(e) => updatePart(idx, { percentual: e.target.value })}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onPartsChange([...parts, EMPTY_PART])}
+            >
+              <Plus /> Adicionar pessoa
+            </Button>
+
+            {previewError && (
+              <p className="text-xs text-destructive">
+                A divisão não fecha: a soma dos terceiros passou do total ou os percentuais somam mais de 100%.
+              </p>
+            )}
+
+            {preview && (
+              <div className="space-y-1 rounded-lg bg-muted/40 p-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Minha parte</span>
+                  <span className="font-medium tabular-nums text-foreground">
+                    {formatCurrency(centavosParaReais(preview.minhaParteCentavos))}
+                  </span>
+                </div>
+                {preview.partesTerceiros.map((t) => (
+                  <div key={t.personId} className="flex items-center justify-between text-muted-foreground">
+                    <span className="truncate">{nomePessoa(t.personId)}</span>
+                    <span className="tabular-nums">
+                      {formatCurrency(centavosParaReais(t.valorCentavos))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+    </div>
+  );
+}
+
+/** Monta as `parts` a enviar ao servidor (vazio quando pessoal). */
+function buildSplitParts(classificacao: Classificacao, parts: PartValue[]) {
+  if (classificacao === "pessoal") return [];
+  return parts
+    .filter((p) => p.person_id)
+    .map((p) => ({
+      person_id: p.person_id,
+      tipo: p.tipo,
+      valor: p.tipo === "valor" ? p.valor : "",
+      percentual: p.tipo === "percentual" ? p.percentual : "",
+    }));
+}
+
 function QuickForm({
   type,
   options,
@@ -244,6 +464,8 @@ function ExpenseForm({
   const [method, setMethod] = React.useState<string>("pix");
   const [categoryId, setCategoryId] = React.useState("");
   const [date, setDate] = React.useState(today());
+  const [classificacao, setClassificacao] = React.useState<Classificacao>("pessoal");
+  const [parts, setParts] = React.useState<PartValue[]>([]);
 
   if (mode === "account" && options.accounts.length === 0)
     return <NoData>Cadastre uma conta no Financeiro para lançar despesas à vista.</NoData>;
@@ -263,6 +485,8 @@ function ExpenseForm({
         purchase_date: date,
         competence_date: date,
         description,
+        classificacao,
+        parts: buildSplitParts(classificacao, parts),
       }),
       "Despesa lançada.",
     );
@@ -326,6 +550,14 @@ function ExpenseForm({
       <Field label="Data">
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </Field>
+      <SplitFields
+        people={options.people}
+        amount={amount}
+        classificacao={classificacao}
+        parts={parts}
+        onClassificacaoChange={setClassificacao}
+        onPartsChange={setParts}
+      />
       <SubmitBar pending={pending} />
     </form>
   );
