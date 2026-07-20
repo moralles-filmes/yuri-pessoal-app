@@ -8,7 +8,11 @@
  */
 import { addDays, format, startOfMonth, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
-import { toDateInputValue } from "@/lib/format";
+import {
+  dateInSaoPaulo,
+  saoPauloWallClockToInstant,
+  toDateInputValue,
+} from "@/lib/format";
 import {
   getAccounts,
   getBills,
@@ -61,6 +65,18 @@ import type {
 } from "@/lib/dashboard/types";
 
 const ISO = "yyyy-MM-dd";
+
+const UM_DIA_MS = 86_400_000;
+
+/** Instante da meia-noite de um dia ('yyyy-MM-dd') em Brasília. */
+function inicioDoDiaSP(dia: string): Date {
+  return saoPauloWallClockToInstant(dia, "00:00");
+}
+
+/** Último instante do dia em Brasília (00:00 do dia seguinte − 1ms). */
+function fimDoDiaSP(dia: string): Date {
+  return new Date(inicioDoDiaSP(dia).getTime() + UM_DIA_MS - 1);
+}
 
 /** Último dia do mês 'yyyy-MM' como 'yyyy-MM-dd'. */
 function fimDoMes(mes: string): string {
@@ -216,11 +232,14 @@ export async function getAgendaCardData(
   window: DashWindow,
   now: Date,
 ): Promise<AgendaCardData> {
-  const fromW = new Date(`${window.from}T00:00:00`);
-  const toW = new Date(`${window.to}T23:59:59`);
-  const todayIso = format(now, ISO);
-  const todayStart = new Date(`${todayIso}T00:00:00`);
-  const todayEnd = new Date(`${todayIso}T23:59:59`);
+  // Janelas ancoradas em Brasília, não no fuso do processo. Antes: `new Date('…T00:00:00')`
+  // montava o dia em UTC (= 21h-20h59 BRT, deslocado 3h TODO dia) e `format(now, ISO)` já
+  // devolvia o dia seguinte a partir das 21h — o card "Eventos hoje" contava o dia errado.
+  const fromW = inicioDoDiaSP(window.from);
+  const toW = fimDoDiaSP(window.to);
+  const todayIso = dateInSaoPaulo(now);
+  const todayStart = inicioDoDiaSP(todayIso);
+  const todayEnd = fimDoDiaSP(todayIso);
 
   const [windowOccurrences, todayOccurrences, upcoming] = await Promise.all([
     getCalendarEvents(fromW, toW),

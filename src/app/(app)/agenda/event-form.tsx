@@ -35,6 +35,11 @@ import {
   type EventType,
 } from "@/lib/calendar/constants";
 import { EVENT_TYPE_COLORS } from "@/lib/calendar/colors";
+import {
+  dateInSaoPaulo,
+  saoPauloWallClockToInstant,
+  timeInSaoPaulo,
+} from "@/lib/format";
 import type { CalendarEventRow } from "@/types/database";
 
 const NONE = "none";
@@ -57,15 +62,13 @@ type FormValues = {
   color: string;
 };
 
-function pad(n: number) {
-  return String(n).padStart(2, "0");
-}
-
+// Instante -> hora de parede de BRASÍLIA (não do aparelho): um celular configurado em
+// outro fuso mostraria o evento com horas de diferença.
 function localDate(d: Date): string {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return dateInSaoPaulo(d);
 }
 function localTime(d: Date): string {
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return timeInSaoPaulo(d);
 }
 
 function defaults(
@@ -122,8 +125,11 @@ function defaults(
 }
 
 function buildIso(date: string, time: string, allDay: boolean): string {
+  // Dia inteiro é ancorado ao meio-dia UTC de propósito (mesma convenção do Google).
   if (allDay) return `${date}T12:00:00.000Z`;
-  return new Date(`${date}T${time || "00:00"}`).toISOString();
+  // Com hora: "19:00" significa 19:00 EM BRASÍLIA. `new Date('…T19:00')` resolveria pelo
+  // fuso do dispositivo e gravaria o instante errado fora do BRT (viagem, VPN, tablet).
+  return saoPauloWallClockToInstant(date, time || "00:00").toISOString();
 }
 
 export function EventFormDialog({

@@ -39,7 +39,8 @@ import {
   formatCurrency,
   parseCurrencyToNumber,
   reaisParaCentavos,
-  toDateInputValue,
+  hojeISO,
+  saoPauloWallClockToInstant,
 } from "@/lib/format";
 import { createTransaction } from "@/lib/actions/transactions";
 import { createTask } from "@/lib/actions/tasks";
@@ -83,7 +84,8 @@ const TYPES: { id: QuickType; label: string; icon: LucideIcon }[] = [
   { id: "estudo", label: "Sessão de estudo", icon: GraduationCap },
 ];
 
-const today = () => toDateInputValue(new Date());
+// Hoje em Brasília — não a data do fuso do aparelho.
+const today = () => hojeISO();
 
 /** Lançamento rápido: triggers no header + modal com seletor de tipo e mini-forms. */
 export function QuickAdd() {
@@ -742,8 +744,9 @@ function EventForm({ onDone }: { onDone: () => void }) {
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const startAt = new Date(`${date}T${start}`);
-    const endAt = new Date(`${date}T${end}`);
+    // Horários digitados são hora de parede de Brasília (ver saoPauloWallClockToInstant).
+    const startAt = saoPauloWallClockToInstant(date, start);
+    const endAt = saoPauloWallClockToInstant(date, end);
     if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
       toast.error("Informe data e horários válidos.");
       return;

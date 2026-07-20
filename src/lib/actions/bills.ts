@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { billSchema } from "@/lib/validators/bill";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
 import type { ActionResult } from "@/types/finance";
-import { toDateInputValue } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 
 function revalidateBills() {
   revalidatePath("/financeiro");
@@ -96,12 +96,15 @@ export async function generateBillTransaction(
     .single();
   if (error || !bill) return dbError("Conta fixa não encontrada.");
 
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const lastDay = new Date(year, month + 1, 0).getDate();
+  // Competência derivada do mês corrente EM BRASÍLIA. Com `new Date()` no servidor (UTC),
+  // entre 21h e 00h do último dia do mês o mês já era o seguinte: a conta fixa era lançada
+  // na competência errada e — como a guarda de duplicata abaixo compara justamente esta
+  // data — não enxergava o lançamento correto do dia, duplicando a despesa.
+  const hoje = hojeISO();
+  const [year, month] = hoje.split("-").map(Number); // month é 1-based
+  const lastDay = new Date(year, month, 0).getDate(); // dia 0 do mês seguinte = último deste
   const day = Math.min(bill.due_day, lastDay);
-  const dueDate = toDateInputValue(new Date(year, month, day));
+  const dueDate = `${hoje.slice(0, 7)}-${String(day).padStart(2, "0")}`;
 
   const { data: dup } = await ctx.supabase
     .from("transactions")

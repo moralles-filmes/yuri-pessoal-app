@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/card";
 import { getAccounts, getTransactions } from "@/lib/finance/queries";
 import { catchUpRecurrences } from "@/lib/finance/generation";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, hojeISO } from "@/lib/format";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
 
 export const dynamic = "force-dynamic";
@@ -62,8 +62,9 @@ export default async function FinanceiroOverviewPage() {
   // Catch-up de recorrências vencidas (idempotente, seguro no render).
   await catchUpRecurrences();
 
-  const now = new Date();
-  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  // Mês corrente em Brasília. Derivar de `new Date()` aqui daria o mês seguinte na
+  // virada do mês entre 21h e 00h (BRT), zerando os cards de entradas/saídas.
+  const month = hojeISO().slice(0, 7);
 
   const [accounts, monthTx] = await Promise.all([
     getAccounts(),
@@ -88,10 +89,11 @@ export default async function FinanceiroOverviewPage() {
   const saidas = settled
     .filter((t) => t.type === "despesa")
     .reduce((s, t) => s + t.amount, 0);
+  const [anoMes, mesMes] = month.split("-").map(Number);
   const monthLabel = new Intl.DateTimeFormat("pt-BR", {
     month: "long",
     year: "numeric",
-  }).format(now);
+  }).format(new Date(anoMes, mesMes - 1, 1));
 
   return (
     <div className="space-y-6">
