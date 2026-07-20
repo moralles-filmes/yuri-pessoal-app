@@ -1,6 +1,37 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-## Iteração mais recente (manutenção) — 2026-06-27: Recorrência em cartão de crédito
+## Iteração mais recente (manutenção) — 2026-07-19: Apagar o pagamento reabre a fatura
+O pagamento de fatura é um lançamento `transferencia` comum e aparece em Lançamentos com
+Editar/Excluir. **Excluir por ali** estornava o saldo mas deixava a fatura **marcada como paga**:
+o FK `card_statements.pago_transacao_id` é `on delete set null`, então zerava o ponteiro sem limpar
+`pago_em`/`status`/`pago_conta_id` — fatura "paga" apontando para o nada. Agora `deleteTransaction`
+usa o helper novo **`statementPaidBy`** para detectar que o lançamento quita uma fatura e a **reabre**
+(`status='aberta'` + campos de pagamento nulos), igual ao `markStatementUnpaid`. O mesmo helper cobre
+a **edição**: editar transferência apaga e recria a linha, então o pagamento recriado teria **outro
+`id`** e a fatura perderia o vínculo — `updateTransaction` religa `pago_transacao_id` ao lançamento
+recriado (**editar o pagamento não desfaz o pagamento**). Sem migration; sem teste de unidade novo
+(I/O puro, como `markStatementUnpaid`). Suíte **414** (lint/tsc/build ok).
+
+## Iteração anterior (manutenção) — 2026-07-19: Transferência não mexia no saldo das contas
+Registrar transferência entre contas **não alterava saldo nenhum** (Cofre travado no `initial_balance`
+mesmo com 3 transferências recebidas). Contradição entre schema e cálculo: `20260625120300_transactions`
+definiu transferência como **DUAS linhas espelhadas** (A→B e B→A, mesmo `transfer_group_id`) e
+`createTransaction` gravava as duas — mas `public.account_balance` (`20260625120600`) já deriva **os dois
+lados de UMA linha** (`-amount` em `account_id`, `+amount` em `transfer_account_id`). Cada conta recebia
+`-amount` de uma perna e `+amount` da outra → **soma sempre zero**. O par também era **simétrico e sem
+marcador de direção**, então a origem/destino exibida na lista saía do desempate arbitrário do `ORDER BY`
+(as duas linhas têm `competence_date`/`created_at` idênticos). Agora: **uma linha por transferência**
+(origem em `account_id`, destino em `transfer_account_id`); `transfer_group_id` fica como marcador de
+"isto é transferência" — update/delete/status já operavam por grupo e seguem iguais. Migration
+`20260720030000_transferencia_uma_linha` (idempotente): apaga a perna espelhada mantendo a de **origem**
+(menor `ctid`, a que o app já exibia) + índice único parcial `transactions_transfer_group_unique` para o
+par não voltar. A dedup por grupo em `transactions-client.tsx` saiu (virou desnecessária). Dados: 3
+transferências Mercado Pago → Cofre corrigidas (Cofre 756,18 → **1.891,04**; MP 6.222,70 → **5.087,84**).
+Relatórios/dashboard não mudam (`transferencia` já ficava fora de entradas/saídas). Suíte **414**
+(lint/tsc/build ok). **Aprendizado:** quando o cálculo de saldo vive numa função SQL, o formato gravado
+pelo action precisa casar com o que a função assume — aqui as duas convenções coexistiram e se anularam.
+
+## Iteração anterior (manutenção) — 2026-06-27: Recorrência em cartão de crédito
 Recorrências (Financeiro → Recorrências) só sabiam lidar com **conta**: o dropdown já listava
 "Cartão de crédito" (enum compartilhado), mas **não havia seletor de cartão**, ainda pedia conta, e
 salvar quebraria — `recurring_transactions` não tinha `card_id` nem aceitava `cartao_credito` no CHECK.
@@ -14,7 +45,7 @@ Lógica pura nova `buildGeneratedRow`/`isCardRecurrence` em `generation.ts` (5 t
 `validators/recurring.ts`, `actions/recurring.ts`, `finance/generation.ts`, `finance/queries.ts`
 (join `card`), `recorrencias/{page,recurring-client,recurring-form}.tsx`. Suíte **407** (lint/tsc/build ok).
 
-## Iteração anterior (manutenção) — 2026-06-27: Embed ambíguo no `getTransactions` esvaziava as listas
+## Iteração (manutenção) — 2026-06-27: Embed ambíguo no `getTransactions` esvaziava as listas
 Regressão de **runtime** da feature de pagamento: a migration `20260627140000` adicionou
 `card_statements.pago_transacao_id → transactions.id` (um **2º FK** entre as tabelas) e o `TX_SELECT`
 passou a embutir `statement:card_statements(id,pago_em)` **sem dizer qual FK**. Com 2 caminhos, o

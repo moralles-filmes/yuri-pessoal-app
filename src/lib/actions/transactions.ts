@@ -50,43 +50,37 @@ export async function createTransaction(
   const d = parsed.data;
 
   if (d.type === "transferencia") {
-    const groupId = randomUUID();
-    const common = {
-      user_id: ctx.userId,
-      type: "transferencia" as const,
-      payment_method: "transferencia" as const,
-      amount: d.amount,
-      purchase_date: d.purchase_date,
-      competence_date: d.competence_date,
-      description: d.description,
-      notes: d.notes,
-      tags: d.tags,
-      status: d.status,
-      transfer_group_id: groupId,
-      category_id: null,
-      subcategory_id: null,
-    };
-    const rows = [
-      {
-        ...common,
-        account_id: d.account_id,
-        transfer_account_id: d.transfer_account_id,
-      },
-      {
-        ...common,
-        account_id: d.transfer_account_id,
-        transfer_account_id: d.account_id,
-      },
-    ];
+    // UMA linha por transferência: `public.account_balance` já deriva os dois lados da
+    // mesma linha (-amount na conta de origem `account_id`, +amount no destino
+    // `transfer_account_id`). Gravar as duas pernas espelhadas fazia os efeitos se
+    // anularem e o saldo das contas não mudava. `transfer_group_id` continua marcando
+    // a linha como transferência (usado em update/delete/status).
     const { data, error } = await ctx.supabase
       .from("transactions")
-      .insert(rows)
-      .select("id");
-    if (error || !data || data.length === 0) {
+      .insert({
+        user_id: ctx.userId,
+        type: "transferencia" as const,
+        payment_method: "transferencia" as const,
+        account_id: d.account_id,
+        transfer_account_id: d.transfer_account_id,
+        transfer_group_id: randomUUID(),
+        amount: d.amount,
+        purchase_date: d.purchase_date,
+        competence_date: d.competence_date,
+        description: d.description,
+        notes: d.notes,
+        tags: d.tags,
+        status: d.status,
+        category_id: null,
+        subcategory_id: null,
+      })
+      .select("id")
+      .single();
+    if (error || !data) {
       return dbError("Não foi possível registrar a transferência.");
     }
     revalidateTransactions();
-    return { ok: true, data: { id: data[0].id } };
+    return { ok: true, data: { id: data.id } };
   }
 
   // Compra no cartão (Fase 03): resolve/cria a fatura e vincula statement_id. Na importação,
@@ -189,6 +183,10 @@ export async function updateTransaction(
   // Transferências são substituídas (remove e recria) para manter as duas pernas
   // sempre consistentes; lançamentos simples são atualizados no lugar.
   if (wasTransfer || isTransfer) {
+    // Se for o pagamento de uma fatura, a fatura precisa apontar para o lançamento RECRIADO
+    // (o delete abaixo zeraria `pago_transacao_id`). Editar o pagamento não desfaz o pagamento.
+    const statementId = await statementPaidBy(ctx, id);
+
     if (wasTransfer && existing.transfer_group_id) {
       await ctx.supabase
         .from("transactions")
@@ -197,7 +195,15 @@ export async function updateTransaction(
     } else {
       await ctx.supabase.from("transactions").delete().eq("id", id);
     }
-    return createTransaction(input);
+
+    const recriado = await createTransaction(input);
+    if (recriado.ok && statementId) {
+      await ctx.supabase
+        .from("card_statements")
+        .update({ pago_transacao_id: recriado.data.id })
+        .eq("id", statementId);
+    }
+    return recriado;
   }
 
   // Re-resolve a fatura ao editar (ex.: mudou a data ou o cartão). Se deixar de ser
@@ -403,6 +409,25 @@ export async function getTransactionSplit(
   };
 }
 
+/**
+ * Id da fatura que este lançamento quita, se ele for o pagamento de alguma — ou null.
+ *
+ * `card_statements.pago_transacao_id` é FK `on delete set null`: apagar o lançamento de
+ * pagamento zera o ponteiro mas NÃO limpa `pago_em`/`status`, então a fatura ficaria "paga"
+ * apontando para o nada. Quem apaga/recria o lançamento usa isto para acertar a fatura.
+ */
+async function statementPaidBy(
+  ctx: AuthContext,
+  txId: string,
+): Promise<string | null> {
+  const { data } = await ctx.supabase
+    .from("card_statements")
+    .select("id")
+    .eq("pago_transacao_id", txId)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
 export async function deleteTransaction(id: string): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
@@ -412,6 +437,21 @@ export async function deleteTransaction(id: string): Promise<ActionResult> {
     .select("transfer_group_id")
     .eq("id", id)
     .single();
+
+  // Apagar o pagamento pela tela de Lançamentos reabre a fatura — mesmo efeito do
+  // "Desfazer" em /faturas (o saldo da conta já estorna sozinho, junto com o lançamento).
+  const statementId = await statementPaidBy(ctx, id);
+  if (statementId) {
+    await ctx.supabase
+      .from("card_statements")
+      .update({
+        status: "aberta",
+        pago_em: null,
+        pago_conta_id: null,
+        pago_transacao_id: null,
+      })
+      .eq("id", statementId);
+  }
 
   if (existing?.transfer_group_id) {
     await ctx.supabase
