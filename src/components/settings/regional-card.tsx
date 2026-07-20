@@ -20,7 +20,7 @@ import {
   DATE_FORMAT_LABELS,
   type DateFormatPreference,
 } from "@/lib/settings/constants";
-import { formatCurrency, formatDateWith } from "@/lib/format";
+import { formatCurrency, formatDateWith, hojeISO } from "@/lib/format";
 
 /** Card regional: moeda (BRL, fixa) + formato de data com pré-visualização ao vivo. */
 export function RegionalCard({
@@ -86,7 +86,7 @@ export function RegionalCard({
               <p className="text-xs text-muted-foreground">
                 Pré-visualização:{" "}
                 <span className="font-medium text-foreground tabular-nums">
-                  {formatDateWith(new Date(), fmt)}
+                  {formatDateWith(hojeISO(), fmt)}
                 </span>
               </p>
             </div>

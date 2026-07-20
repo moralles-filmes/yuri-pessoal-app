@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import { EventTypeBadge } from "@/components/calendar/event-type-badge";
 import { deleteEvent } from "@/lib/actions/calendar";
-import { eventTimeRange, fullDayLabel } from "@/lib/calendar/format";
+import { emBrasilia, eventTimeRange, fullDayLabel } from "@/lib/calendar/format";
 import {
   EVENT_FREQUENCY_LABELS,
   REMINDER_OPTIONS,
@@ -74,7 +74,7 @@ export function EventDetailsDialog({
 
           <p className="flex items-center gap-2 text-muted-foreground">
             <CalendarDays className="size-4 shrink-0" />
-            <span className="capitalize">{fullDayLabel(event.start)}</span>
+            <span className="capitalize">{fullDayLabel(emBrasilia(event.start))}</span>
           </p>
           <p className="flex items-center gap-2 text-muted-foreground">
             <Clock className="size-4 shrink-0" />

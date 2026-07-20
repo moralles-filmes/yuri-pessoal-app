@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { getAgendaCardData } from "@/lib/dashboard/queries";
 import { eventColor, eventDotStyle } from "@/lib/calendar/colors";
-import { eventTimeRange, longDateLabel } from "@/lib/calendar/format";
+import { emBrasilia, eventTimeRange, longDateLabel } from "@/lib/calendar/format";
 import { relativeDayLabel } from "@/lib/calendar/upcoming";
-import { toDateInputValue } from "@/lib/format";
+import { dateInSaoPaulo } from "@/lib/format";
 import { periodWord, type DashWindow } from "@/lib/dashboard/period";
 import { Metric, CardEmpty } from "./primitives";
 
@@ -38,7 +38,7 @@ export async function AgendaCard({
               return (
                 <li key={ev.id}>
                   <Link
-                    href={`/agenda?view=dia&date=${toDateInputValue(ev.start)}`}
+                    href={`/agenda?view=dia&date=${dateInSaoPaulo(ev.start)}`}
                     className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted"
                   >
                     <span
@@ -49,7 +49,7 @@ export async function AgendaCard({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{ev.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {rel ?? longDateLabel(ev.start)} ·{" "}
+                        {rel ?? longDateLabel(emBrasilia(ev.start))} ·{" "}
                         {eventTimeRange(ev.start, ev.end, ev.allDay)}
                       </p>
                     </div>

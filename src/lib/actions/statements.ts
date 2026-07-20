@@ -21,19 +21,34 @@ function revalidateStatements() {
 }
 
 /**
+ * Marca de "pago em" gravado em `card_statements.pago_em` (timestamptz) a partir da data
+ * escolhida. Meio-dia UTC = 09h em São Paulo: cai no MESMO dia do calendário em qualquer
+ * leitura no fuso BR (meia-noite UTC voltaria um dia).
+ */
+function pagoEmTimestamp(data: string): string {
+  return `${data}T12:00:00Z`;
+}
+
+/**
  * Paga a fatura: cria UM lançamento de pagamento (transferência que debita a conta escolhida)
  * e marca a fatura como paga, guardando a conta e o lançamento para o "Desfazer".
  * O valor é o total da fatura no momento do pagamento.
+ *
+ * `dataPagamento` ('yyyy-MM-dd') é a data em que o dinheiro saiu da conta — quem paga informa
+ * para bater com o extrato do banco. Ausente, usa hoje.
  */
 export async function markStatementPaid(
   id: string,
   contaId: string,
+  dataPagamento?: string,
 ): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const parsed = pagamentoFaturaSchema.safeParse({ id, contaId });
+  const parsed = pagamentoFaturaSchema.safeParse({ id, contaId, dataPagamento });
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const data = parsed.data.dataPagamento ?? hojeISO();
 
   // Fatura com total calculado (view) — precisamos de competência e total.
   const { data: st, error: loadErr } = await ctx.supabase
@@ -68,7 +83,7 @@ export async function markStatementPaid(
     total,
     cartaoNome: card?.nome ?? "Cartão",
     competencia: st.competencia ?? "",
-    hoje: hojeISO(),
+    dataPagamento: data,
   });
 
   const { data: pago, error: insErr } = await ctx.supabase
@@ -82,7 +97,7 @@ export async function markStatementPaid(
     .from("card_statements")
     .update({
       status: "paga",
-      pago_em: new Date().toISOString(),
+      pago_em: pagoEmTimestamp(data),
       pago_conta_id: contaId,
       pago_transacao_id: pago.id,
     })
