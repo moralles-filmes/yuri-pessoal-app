@@ -6,7 +6,8 @@
  * entradas/saídas dos relatórios (ver dashboard.ts) e a view `card_statements_with_total` não o
  * soma — então NÃO duplica os gastos do cartão, que já entram via total da fatura.
  *
- * Sem efeitos colaterais e sem Date.now(): `hoje` ('yyyy-MM-dd') é sempre injetado.
+ * Sem efeitos colaterais e sem Date.now(): `dataPagamento` ('yyyy-MM-dd') é sempre injetada —
+ * quem paga escolhe a data para bater com o extrato do banco (o padrão é hoje).
  */
 
 export type PagamentoFaturaPayload = {
@@ -45,10 +46,10 @@ export function montarPagamentoFatura(params: {
   cartaoNome: string;
   /** Competência da fatura ('yyyy-MM-01'). */
   competencia: string;
-  /** Data do pagamento ('yyyy-MM-dd'), injetada. */
-  hoje: string;
+  /** Data em que o pagamento saiu da conta ('yyyy-MM-dd'), injetada. */
+  dataPagamento: string;
 }): PagamentoFaturaPayload {
-  const { contaId, total, cartaoNome, competencia, hoje } = params;
+  const { contaId, total, cartaoNome, competencia, dataPagamento } = params;
   return {
     type: "transferencia",
     payment_method: "transferencia",
@@ -61,8 +62,8 @@ export function montarPagamentoFatura(params: {
     category_id: null,
     subcategory_id: null,
     amount: total,
-    purchase_date: hoje,
-    competence_date: hoje,
+    purchase_date: dataPagamento,
+    competence_date: dataPagamento,
     description: descricaoPagamentoFatura(cartaoNome, competencia),
   };
 }

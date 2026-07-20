@@ -10,7 +10,7 @@ describe("montarPagamentoFatura", () => {
     total: 693.07,
     cartaoNome: "Nubank",
     competencia: "2026-07-01",
-    hoje: "2026-06-27",
+    dataPagamento: "2026-06-27",
   };
 
   it("é uma transferência paga, fora da fatura e dos relatórios", () => {
@@ -31,10 +31,16 @@ describe("montarPagamentoFatura", () => {
     expect(p.amount).toBe(693.07);
   });
 
-  it("usa a data injetada (hoje) como compra e competência", () => {
+  it("usa a data de pagamento injetada como compra e competência", () => {
     const p = montarPagamentoFatura(base);
     expect(p.purchase_date).toBe("2026-06-27");
     expect(p.competence_date).toBe("2026-06-27");
+  });
+
+  it("aceita data retroativa (pagamento lançado depois, batendo com o extrato)", () => {
+    const p = montarPagamentoFatura({ ...base, dataPagamento: "2026-06-10" });
+    expect(p.purchase_date).toBe("2026-06-10");
+    expect(p.competence_date).toBe("2026-06-10");
   });
 
   it("descreve o pagamento com o cartão e o ano da competência", () => {

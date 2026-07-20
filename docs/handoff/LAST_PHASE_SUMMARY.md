@@ -1,6 +1,20 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-## Iteração mais recente (manutenção) — 2026-07-19: Apagar o pagamento reabre a fatura
+## Iteração mais recente (manutenção) — 2026-07-19: Data do pagamento da fatura é escolhida
+O diálogo **Pagar** de `/faturas` só pedia a conta e carimbava **hoje** (`hojeISO()` no lançamento e
+`new Date()` em `pago_em`), então quem lançava a fatura dias depois de pagar ficava com a data errada e
+o extrato do banco não batia. Agora o diálogo tem **"Data do pagamento"** (`<input type="date">`,
+default hoje, aceita retroativa/futura) e o valor desce até o lançamento:
+`markStatementPaid(id, contaId, dataPagamento?)` → `montarPagamentoFatura` (o parâmetro `hoje` virou
+**`dataPagamento`** — mesma injeção pura, sem `Date.now()`) → `purchase_date`/`competence_date`.
+`card_statements.pago_em` (timestamptz) também reflete a data escolhida via helper **`pagoEmTimestamp`**,
+que grava **meio-dia UTC** (09h em São Paulo) para a data cair no **mesmo dia do calendário** lida no
+fuso BR — meia-noite UTC voltaria um dia. `pagamentoFaturaSchema` ganhou `dataPagamento` opcional
+(ausente → servidor usa `hojeISO()`, então a chamada antiga de 2 args continua válida). Sem migration.
+Nada muda em status/relatórios: `statusEfetivo` só testa a *presença* de `pago_em` e o pagamento segue
+`transferencia` (fora de entradas/saídas e do total da fatura). Suíte **415** (lint/tsc/build ok).
+
+## Iteração anterior (manutenção) — 2026-07-19: Apagar o pagamento reabre a fatura
 O pagamento de fatura é um lançamento `transferencia` comum e aparece em Lançamentos com
 Editar/Excluir. **Excluir por ali** estornava o saldo mas deixava a fatura **marcada como paga**:
 o FK `card_statements.pago_transacao_id` é `on delete set null`, então zerava o ponteiro sem limpar

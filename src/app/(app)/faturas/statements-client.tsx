@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -433,6 +434,7 @@ export function StatementsClient({
                             statementId={s.id}
                             total={s.total_atual}
                             accounts={accounts}
+                            today={today}
                             onPaid={() => router.refresh()}
                           />
                         ) : null}
@@ -671,22 +673,26 @@ function PayStatementDialog({
   statementId,
   total,
   accounts,
+  today,
   onPaid,
 }: {
   statementId: string;
   total: number;
   accounts: { id: string; name: string }[];
+  today: string;
   onPaid: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const [contaId, setContaId] = React.useState<string | undefined>(undefined);
+  // Data em que o pagamento saiu da conta — editável para bater com o extrato do banco.
+  const [data, setData] = React.useState(today);
   const [loading, setLoading] = React.useState(false);
 
   async function handleConfirm() {
-    if (!contaId) return;
+    if (!contaId || !data) return;
     setLoading(true);
     try {
-      const res = await markStatementPaid(statementId, contaId);
+      const res = await markStatementPaid(statementId, contaId, data);
       if (res.ok) {
         toast.success("Fatura paga e debitada da conta.");
         setOpen(false);
@@ -704,7 +710,10 @@ function PayStatementDialog({
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
-        if (!v) setContaId(undefined);
+        if (!v) {
+          setContaId(undefined);
+          setData(today);
+        }
       }}
     >
       <DialogTrigger asChild>
@@ -733,20 +742,34 @@ function PayStatementDialog({
             para pagar a fatura.
           </p>
         ) : (
-          <div className="space-y-1.5">
-            <Label>Debitar da conta</Label>
-            <Select value={contaId} onValueChange={setContaId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecione a conta" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Debitar da conta</Label>
+              <Select value={contaId} onValueChange={setContaId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione a conta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="fatura-data-pagamento">Data do pagamento</Label>
+              <Input
+                id="fatura-data-pagamento"
+                type="date"
+                value={data}
+                onChange={(e) => setData(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Use a data em que o valor saiu da conta, para bater com o extrato.
+              </p>
+            </div>
           </div>
         )}
         <DialogFooter>
@@ -759,7 +782,7 @@ function PayStatementDialog({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={loading || !contaId || accounts.length === 0}
+            disabled={loading || !contaId || !data || accounts.length === 0}
           >
             {loading ? "Pagando…" : `Pagar ${formatCurrency(total)}`}
           </Button>
