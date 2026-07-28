@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 import { eventColor, eventDotStyle } from "@/lib/calendar/colors";
-import { eventTimeRange, longDateLabel } from "@/lib/calendar/format";
+import { emBrasilia, eventTimeRange, longDateLabel } from "@/lib/calendar/format";
 import { expandRowsToOccurrences } from "@/lib/calendar/expand";
 import { proximosCompromissos, relativeDayLabel } from "@/lib/calendar/upcoming";
 import { toDateInputValue } from "@/lib/format";
@@ -76,7 +76,7 @@ export function UpcomingEvents({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{ev.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {rel ?? longDateLabel(ev.start)} ·{" "}
+                        {rel ?? longDateLabel(emBrasilia(ev.start))} ·{" "}
                         {eventTimeRange(ev.start, ev.end, ev.allDay)}
                         {ev.location ? ` · ${ev.location}` : ""}
                       </p>

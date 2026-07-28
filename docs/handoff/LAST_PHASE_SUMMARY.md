@@ -3,7 +3,8 @@
 ## Iteração — Fecha as 3 pendências do TO-DO (2026-07-28) ✅
 
 Feita logo após a Fase 15, a pedido do usuário ("vamos resolver isso tudo"). Fecha os três
-itens que a fase havia deixado em aberto. **Testes: 529 → 582** (+53 puros novos).
+itens que a fase havia deixado em aberto. **Testes: 529 → 589** (+53 puros desta iteração;
+os outros 7 vieram da reforma de fuso que entrou no `main` em paralelo).
 
 ### 1. Entrada em linguagem natural — implementada
 `src/lib/todo/parse.ts` (puro, `hoje` injetado, **37 testes**) + chips de confirmação no
@@ -55,9 +56,14 @@ de navegação, nunca aninhados (botão dentro de botão é HTML inválido e que
 leitor de tela). O lápis é **sempre visível** — telas de toque não têm hover.
 
 ### Verificação
-`npm run test:run` **582 passando (43 arquivos)** · `npx tsc --noEmit` limpo ·
-`npm run lint` 0 erros/0 avisos · `npm run build` compila · `get_advisors(security)` só o
-aviso externo pré-existente de Auth.
+**589 passando (43 arquivos)** · `npx tsc --noEmit` limpo · `npm run lint` 0 erros/0 avisos ·
+build compila · `get_advisors(security)` só o aviso externo pré-existente de Auth.
+
+⚠️ **No Windows, `npm run test:run`, `npm run build` e `npm run dev` falham** desde a reforma
+de fuso: os scripts usam o prefixo POSIX `TZ=America/Sao_Paulo`, e o npm no Windows executa
+via `cmd`, que não reconhece essa sintaxe. Não afeta a Vercel (Linux). Contorno local:
+`$env:TZ='America/Sao_Paulo'; npx vitest run` (idem `npx next build` / `npx next dev`).
+Correção definitiva sugerida: `cross-env` ou mover o `TZ` para a config do Vitest/Next.
 
 ---
 
@@ -209,7 +215,90 @@ Usar o módulo alguns dias no fluxo real antes de expandir.
 # Histórico anterior (fases e iterações anteriores)
 
 
-## Iteração mais recente (manutenção) — 2026-06-27: Recorrência em cartão de crédito
+## Iteração anterior (manutenção) — 2026-07-20: Sistema inteiro em America/Sao_Paulo
+Auditoria completa de fuso (financeiro, agenda/tarefas/notificações, hábitos/estudos/busca/export):
+~25 pontos vazavam UTC. Raiz: na Vercel o Node roda em **UTC**, então `date-fns`
+(`startOfDay`/`isSameDay`/`format`), os getters de `Date` e `Intl` **sem** `timeZone` respondiam
+em UTC no servidor — **entre 21h e 00h (BRT) o dia virava**.
+
+Correção em três camadas, nesta ordem de importância:
+1. **`TZ=America/Sao_Paulo` no processo** — novo `src/instrumentation.ts` (roda antes do app em
+   todo boot/cold start) + scripts do `package.json`, para dev/build/test baterem com produção.
+   É **rede de segurança**, não a defesa principal.
+2. **Formatadores explícitos** (valem mesmo onde o fuso ambiente não se aplica — o browser):
+   `formatDate`/`formatDateWith` agora separam **data pura** (`'yyyy-MM-dd'` reordenada como
+   TEXTO, imune a fuso) de **instante** (lido em Brasília). Novos:
+   `timeInSaoPaulo`, **`saoPauloWallClockToInstant`** (a hora que o usuário digita é hora de
+   Brasília, não do fuso do aparelho), `toDateTimeLocalInSaoPaulo`, `TIMEZONE`,
+   `SAO_PAULO_UTC_OFFSET` (offset fixo — sem horário de verão desde 2019).
+3. **Pontos onde a data vinha de um instante** — o `TZ` **não** conserta `.slice(0,10)` de um
+   `timestamptz`, que é sempre UTC. Bugs de dado: `bills.ts` lançava a conta fixa na competência
+   errada **e duplicava** na virada do mês; `dashboard/queries.ts` montava a janela do card Agenda
+   em UTC (deslocada 3h todo dia); `search/queries.ts` gerava link quebrado; `reports/tasks.ts`
+   jogava tarefa de domingo à noite na semana seguinte. Mais `financeiro/page.tsx`,
+   `agenda-card.tsx`, `export/route.ts`, `period.ts`, `regional-card.tsx`.
+
+Na Agenda, `calendar/format.ts` passou a distinguir **instante** (novo `emBrasilia`, aplicado em
+`agenda-card`/`upcoming-events`/`event-details`) de **data de grade** — esta NÃO converte, pois
+já é consistente com o fuso ambiente por construção e converter deslocaria um dia.
+**Cron da Vercel é sempre UTC:** `vercel.json` virou `0 12`/`0 0` para rodar às 09h/21h BRT
+(antes disparava 06h/18h). Sem migration.
+
+**Como isto é verificado:** os testes de fuso usam instantes absolutos (`Z`) e esperam valores em
+BRT, então não dependem do `TZ` da máquina — a suíte passa em `TZ=UTC`, `America/Sao_Paulo` e
+`Asia/Tokyo`. Suíte **421** (lint/tsc/build ok).
+
+**Resíduo conhecido:** o agrupamento por dia da grade da Agenda (`calendar/events.ts`, `grid.ts`,
+`upcoming.ts`, `recurrence.ts`) usa `date-fns` no fuso ambiente. Correto no servidor (fixado) e em
+aparelho brasileiro; num aparelho configurado em outro fuso ainda seguiria o dispositivo. Fechar
+isso exigiria uma lib tz-aware (`@date-fns/tz`) na camada de grade.
+
+## Iteração anterior (manutenção) — 2026-07-19: Data do pagamento da fatura é escolhida
+O diálogo **Pagar** de `/faturas` só pedia a conta e carimbava **hoje** (`hojeISO()` no lançamento e
+`new Date()` em `pago_em`), então quem lançava a fatura dias depois de pagar ficava com a data errada e
+o extrato do banco não batia. Agora o diálogo tem **"Data do pagamento"** (`<input type="date">`,
+default hoje, aceita retroativa/futura) e o valor desce até o lançamento:
+`markStatementPaid(id, contaId, dataPagamento?)` → `montarPagamentoFatura` (o parâmetro `hoje` virou
+**`dataPagamento`** — mesma injeção pura, sem `Date.now()`) → `purchase_date`/`competence_date`.
+`card_statements.pago_em` (timestamptz) também reflete a data escolhida via helper **`pagoEmTimestamp`**,
+que grava **meio-dia UTC** (09h em São Paulo) para a data cair no **mesmo dia do calendário** lida no
+fuso BR — meia-noite UTC voltaria um dia. `pagamentoFaturaSchema` ganhou `dataPagamento` opcional
+(ausente → servidor usa `hojeISO()`, então a chamada antiga de 2 args continua válida). Sem migration.
+Nada muda em status/relatórios: `statusEfetivo` só testa a *presença* de `pago_em` e o pagamento segue
+`transferencia` (fora de entradas/saídas e do total da fatura). Suíte **415** (lint/tsc/build ok).
+
+## Iteração anterior (manutenção) — 2026-07-19: Apagar o pagamento reabre a fatura
+O pagamento de fatura é um lançamento `transferencia` comum e aparece em Lançamentos com
+Editar/Excluir. **Excluir por ali** estornava o saldo mas deixava a fatura **marcada como paga**:
+o FK `card_statements.pago_transacao_id` é `on delete set null`, então zerava o ponteiro sem limpar
+`pago_em`/`status`/`pago_conta_id` — fatura "paga" apontando para o nada. Agora `deleteTransaction`
+usa o helper novo **`statementPaidBy`** para detectar que o lançamento quita uma fatura e a **reabre**
+(`status='aberta'` + campos de pagamento nulos), igual ao `markStatementUnpaid`. O mesmo helper cobre
+a **edição**: editar transferência apaga e recria a linha, então o pagamento recriado teria **outro
+`id`** e a fatura perderia o vínculo — `updateTransaction` religa `pago_transacao_id` ao lançamento
+recriado (**editar o pagamento não desfaz o pagamento**). Sem migration; sem teste de unidade novo
+(I/O puro, como `markStatementUnpaid`). Suíte **414** (lint/tsc/build ok).
+
+## Iteração anterior (manutenção) — 2026-07-19: Transferência não mexia no saldo das contas
+Registrar transferência entre contas **não alterava saldo nenhum** (Cofre travado no `initial_balance`
+mesmo com 3 transferências recebidas). Contradição entre schema e cálculo: `20260625120300_transactions`
+definiu transferência como **DUAS linhas espelhadas** (A→B e B→A, mesmo `transfer_group_id`) e
+`createTransaction` gravava as duas — mas `public.account_balance` (`20260625120600`) já deriva **os dois
+lados de UMA linha** (`-amount` em `account_id`, `+amount` em `transfer_account_id`). Cada conta recebia
+`-amount` de uma perna e `+amount` da outra → **soma sempre zero**. O par também era **simétrico e sem
+marcador de direção**, então a origem/destino exibida na lista saía do desempate arbitrário do `ORDER BY`
+(as duas linhas têm `competence_date`/`created_at` idênticos). Agora: **uma linha por transferência**
+(origem em `account_id`, destino em `transfer_account_id`); `transfer_group_id` fica como marcador de
+"isto é transferência" — update/delete/status já operavam por grupo e seguem iguais. Migration
+`20260720030000_transferencia_uma_linha` (idempotente): apaga a perna espelhada mantendo a de **origem**
+(menor `ctid`, a que o app já exibia) + índice único parcial `transactions_transfer_group_unique` para o
+par não voltar. A dedup por grupo em `transactions-client.tsx` saiu (virou desnecessária). Dados: 3
+transferências Mercado Pago → Cofre corrigidas (Cofre 756,18 → **1.891,04**; MP 6.222,70 → **5.087,84**).
+Relatórios/dashboard não mudam (`transferencia` já ficava fora de entradas/saídas). Suíte **414**
+(lint/tsc/build ok). **Aprendizado:** quando o cálculo de saldo vive numa função SQL, o formato gravado
+pelo action precisa casar com o que a função assume — aqui as duas convenções coexistiram e se anularam.
+
+## Iteração anterior (manutenção) — 2026-06-27: Recorrência em cartão de crédito
 Recorrências (Financeiro → Recorrências) só sabiam lidar com **conta**: o dropdown já listava
 "Cartão de crédito" (enum compartilhado), mas **não havia seletor de cartão**, ainda pedia conta, e
 salvar quebraria — `recurring_transactions` não tinha `card_id` nem aceitava `cartao_credito` no CHECK.
@@ -223,7 +312,7 @@ Lógica pura nova `buildGeneratedRow`/`isCardRecurrence` em `generation.ts` (5 t
 `validators/recurring.ts`, `actions/recurring.ts`, `finance/generation.ts`, `finance/queries.ts`
 (join `card`), `recorrencias/{page,recurring-client,recurring-form}.tsx`. Suíte **407** (lint/tsc/build ok).
 
-## Iteração anterior (manutenção) — 2026-06-27: Embed ambíguo no `getTransactions` esvaziava as listas
+## Iteração (manutenção) — 2026-06-27: Embed ambíguo no `getTransactions` esvaziava as listas
 Regressão de **runtime** da feature de pagamento: a migration `20260627140000` adicionou
 `card_statements.pago_transacao_id → transactions.id` (um **2º FK** entre as tabelas) e o `TX_SELECT`
 passou a embutir `statement:card_statements(id,pago_em)` **sem dizer qual FK**. Com 2 caminhos, o

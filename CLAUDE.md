@@ -97,7 +97,21 @@ Padrões recorrentes que valem entender lendo o código:
 - **"Status derivado na leitura, nunca gravado":** fatura, `tasks.status='atrasada'`, cursos atrasados — todos calculados na leitura a partir de datas. Não persista esses estados.
 - **Dinheiro em centavos (integer)** no financeiro; formatação centralizada em `src/lib/format.ts` (`Intl.NumberFormat('pt-BR')`, `date-fns` com `ptBR`).
 - **Datas locais pt-BR** (`'yyyy-MM-dd'` puro) em logs/streaks/heatmaps para evitar drift de UTC ("virar o dia").
-- **"Hoje" no servidor SEMPRE via `hojeISO()` / `dateInSaoPaulo()` (`src/lib/format.ts`, fuso `America/Sao_Paulo`)**, nunca `toDateInputValue(new Date())` — na Vercel o processo roda em UTC e à noite (BRT) "vira o dia", fazendo fatura/tarefa parecer atrasada 1 dia antes. `toDateInputValue` fica só para formatar `Date`/strings já conhecidos.
+
+### Fuso: o sistema inteiro é `America/Sao_Paulo`, nunca UTC
+O processo roda com **`TZ=America/Sao_Paulo`** (`src/instrumentation.ts` + scripts do `package.json`) — sem isso a Vercel roda em UTC e tudo que lê o fuso "local" (`date-fns`, getters de `Date`, `Intl` sem `timeZone`) erra o dia entre 21h e 00h BRT. **Mas o `TZ` é rede de segurança, não a defesa principal:** o código não pode depender dele.
+
+Distinga sempre os dois tipos de valor — é daí que vem todo bug de fuso deste projeto:
+- **Data pura** (`'yyyy-MM-dd'`, coluna `date`): não tem fuso. Manipule como **texto**; nunca converta para `Date` só para formatar.
+- **Instante** (`timestamptz`, `Date`, ISO com hora): grave em UTC (`toISOString()`) e **leia sempre em Brasília** com `dateInSaoPaulo` / `timeInSaoPaulo` / `formatDate`. **Nunca** `.slice(0, 10)` num timestamptz — isso devolve o dia em UTC.
+
+Helpers em `src/lib/format.ts`: `hojeISO()` ("hoje" no servidor), `dateInSaoPaulo`/`timeInSaoPaulo` (instante → data/hora BRT), `saoPauloWallClockToInstant(data, hora)` (hora digitada → instante; o input do usuário é hora de **Brasília**, não do fuso do aparelho dele), `toDateTimeLocalInSaoPaulo`. `toDateInputValue` é só para ler de volta um `Date` construído componente-a-componente (ex.: `new Date(y, m, 0)`) — **nunca** para um instante.
+
+Em `src/lib/calendar/format.ts`, `monthYearLabel`/`weekdayShort` recebem **data de grade** (meia-noite construída localmente) e não convertem; para rótulo de instante use `emBrasilia(ev.start)` antes de `longDateLabel`/`fullDayLabel`.
+
+**Crons da Vercel são sempre UTC:** `vercel.json` usa `0 12` e `0 0` para rodar às **09h e 21h de Brasília**.
+
+Testes de fuso não podem depender do `TZ` da máquina: use instantes absolutos (com `Z`) e valores esperados em BRT. A suíte deve passar em qualquer fuso — verifique com `TZ=UTC npx vitest run`.
 
 ### Clientes Supabase (3, não confunda)
 - `src/lib/supabase/client.ts` — `createBrowserClient` (componentes client).

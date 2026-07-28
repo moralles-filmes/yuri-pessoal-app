@@ -4,7 +4,7 @@
  * (nunca varre dados de outro). Devolve um shape unificado agrupado por tipo.
  */
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { dateInSaoPaulo, formatCurrency, formatDate } from "@/lib/format";
 import {
   ACCOUNT_TYPE_LABELS,
   CARD_BRAND_LABELS,
@@ -383,7 +383,9 @@ export async function searchAll(
         start_at: string;
         tipo: EventType;
       }>).map((e) => {
-        const dia = e.start_at.slice(0, 10);
+        // `start_at` é timestamptz e chega em UTC — fatiar a string daria o dia errado
+        // (e um link para um dia vazio) em todo evento entre 21h e 00h de Brasília.
+        const dia = dateInSaoPaulo(new Date(e.start_at));
         return {
           type: "evento",
           id: e.id,

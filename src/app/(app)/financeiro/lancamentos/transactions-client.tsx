@@ -78,15 +78,8 @@ export function TransactionsClient({
 }) {
   const router = useRouter();
 
-  // Transferências têm duas pernas: mostramos só uma por grupo.
-  const seen = new Set<string>();
-  const rows = transactions.filter((t) => {
-    if (t.type === "transferencia" && t.transfer_group_id) {
-      if (seen.has(t.transfer_group_id)) return false;
-      seen.add(t.transfer_group_id);
-    }
-    return true;
-  });
+  // Transferência é UMA linha (origem em `account_id`, destino em `transfer_account_id`).
+  const rows = transactions;
 
   const newButton = (
     <TransactionFormDialog

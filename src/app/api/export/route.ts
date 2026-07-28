@@ -8,6 +8,7 @@
  */
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hojeISO } from "@/lib/format";
 import type { Database } from "@/types/supabase";
 
 export const runtime = "nodejs";
@@ -75,9 +76,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const today = new Date().toISOString();
+  // `exported_at` é instante (ISO/UTC, correto); o nome do arquivo usa o dia em Brasília,
+  // senão um backup baixado às 22h sai nomeado com a data de amanhã.
   const result: Record<string, unknown> = {
-    exported_at: today,
+    exported_at: new Date().toISOString(),
     app: "Sistema Pessoal Yuri",
     user: { id: user.id, email: user.email },
   };
@@ -95,7 +97,7 @@ export async function GET() {
     status: 200,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="backup-yuri-${today.slice(0, 10)}.json"`,
+      "Content-Disposition": `attachment; filename="backup-yuri-${hojeISO()}.json"`,
       "Cache-Control": "no-store",
     },
   });

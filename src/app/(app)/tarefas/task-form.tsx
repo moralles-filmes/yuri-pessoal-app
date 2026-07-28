@@ -36,7 +36,11 @@ import {
   type TaskPriority,
   type TaskStoredStatus,
 } from "@/lib/tasks/constants";
-import { formatDate } from "@/lib/format";
+import {
+  formatDate,
+  saoPauloWallClockToInstant,
+  toDateTimeLocalInSaoPaulo,
+} from "@/lib/format";
 import type { TaskWithRelations } from "@/types/database";
 
 const NONE = "none";
@@ -70,14 +74,12 @@ type FormValues = {
   notes: string;
 };
 
+/** timestamptz -> valor de <input type="datetime-local"> na hora de parede de Brasília. */
 function isoToLocalInput(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
+  return toDateTimeLocalInSaoPaulo(d);
 }
 
 function defaults(task?: TaskWithRelations | null, defaultDate?: string | null): FormValues {
@@ -167,8 +169,12 @@ export function TaskFormDialog({
       status: values.status,
       start_date: values.start_date,
       due_date: values.due_date,
+      // O lembrete digitado é hora de Brasília, não do fuso do aparelho.
       reminder_at: values.reminder_at
-        ? new Date(values.reminder_at).toISOString()
+        ? saoPauloWallClockToInstant(
+            values.reminder_at.slice(0, 10),
+            values.reminder_at.slice(11, 16),
+          ).toISOString()
         : null,
       tags: parseTags(values.tags),
       recurrence,

@@ -15,6 +15,7 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
+import { hojeISO } from "@/lib/format";
 
 const ISO = "yyyy-MM-dd";
 
@@ -118,9 +119,8 @@ export function resolveWindow(params: {
   from?: string | null;
   to?: string | null;
 }): DashWindow {
-  const today = isIsoDate(params.today)
-    ? params.today
-    : format(new Date(), ISO);
+  // Fallback também em Brasília — `format(new Date())` cairia no fuso do processo.
+  const today = isIsoDate(params.today) ? params.today : hojeISO();
   const t = localDate(today);
 
   switch (params.period) {

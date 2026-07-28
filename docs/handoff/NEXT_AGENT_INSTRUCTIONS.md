@@ -128,7 +128,11 @@ Puro, com `hoje` injetado. Reconhece data, hora, prazo (`até …`), prioridade 
 ```
 npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
-Os **582 testes** devem continuar passando (acrescente testes para qualquer lógica pura nova).
+Os **589 testes** devem continuar passando (acrescente testes para qualquer lógica pura nova).
+
+⚠️ **No Windows esses scripts falham** (`TZ=America/Sao_Paulo` é sintaxe POSIX e o npm roda
+via `cmd`). Use `$env:TZ='America/Sao_Paulo'; npx vitest run` / `npx next build` até alguém
+trocar por `cross-env` ou mover o `TZ` para a config. Na Vercel (Linux) funciona normalmente.
 Faça um smoke test das rotas afetadas (rotas privadas → 307 `/login`; `/api/cron/*` → 401 sem segredo).
 
 ## Mapa rápido do que existe (para reaproveitar, não reescrever)

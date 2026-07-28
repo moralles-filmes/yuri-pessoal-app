@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { NotificationType } from "@/lib/notifications/constants";
+import { TIMEZONE } from "@/lib/format";
 
 /** Ícone lucide por tipo de notificação (com fallback genérico). */
 const ICONS: Record<NotificationType, LucideIcon> = {
@@ -50,9 +51,10 @@ const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
   month: "2-digit",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: TIMEZONE,
 });
 
-/** "26/06 14:30" a partir de um timestamptz ISO. */
+/** "26/06 14:30" (hora de Brasília) a partir de um timestamptz ISO. */
 export function formatNotificationTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";

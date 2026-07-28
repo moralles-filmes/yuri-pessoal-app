@@ -6,6 +6,7 @@
  * Recebe linhas já buscadas e devolve agregados planos (contagens + produtividade semanal).
  */
 import { addDays, format, startOfWeek } from "date-fns";
+import { dateInSaoPaulo } from "@/lib/format";
 import { effectiveTaskStatus, isOverdue } from "@/lib/tasks/status";
 import type { TaskStoredStatus } from "@/lib/tasks/constants";
 
@@ -36,10 +37,18 @@ export type TasksReport = {
   activeProjects: number;
 };
 
-/** 'yyyy-MM-ddT…' ou 'yyyy-MM-dd' → 'yyyy-MM-dd'. */
+/**
+ * 'yyyy-MM-ddT…' ou 'yyyy-MM-dd' → 'yyyy-MM-dd'.
+ *
+ * `completed_at` é `timestamptz` e o PostgREST devolve em UTC — fatiar os 10 primeiros
+ * caracteres daria o dia em UTC, jogando a tarefa concluída no domingo às 22h (BRT) para
+ * a semana seguinte no gráfico. Data pura passa direto (não é instante, não tem fuso).
+ */
 function dayOf(value: string | null): string | null {
   if (!value) return null;
-  return value.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : dateInSaoPaulo(d);
 }
 
 export function tasksReport(params: {
