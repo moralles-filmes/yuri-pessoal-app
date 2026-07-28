@@ -291,6 +291,8 @@ export type GoogleConnectionStatus = {
   connected: boolean;
   email: string | null;
   lastSyncedAt: string | null;
+  /** Envio de tarefas do TO-DO para o Google (opt-in, Fase 15). */
+  todoSyncEnabled: boolean;
 };
 
 /* ───────────────────── Fase 09 — Demandas, Tarefas & Rotinas ───────────────────── */

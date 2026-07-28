@@ -432,6 +432,7 @@ export type Database = {
           refresh_token: string | null
           scope: string | null
           sync_token: string | null
+          todo_sync_enabled: boolean
           token_expiry: string | null
           updated_at: string
           user_id: string
@@ -446,6 +447,7 @@ export type Database = {
           refresh_token?: string | null
           scope?: string | null
           sync_token?: string | null
+          todo_sync_enabled?: boolean
           token_expiry?: string | null
           updated_at?: string
           user_id: string
@@ -460,6 +462,7 @@ export type Database = {
           refresh_token?: string | null
           scope?: string | null
           sync_token?: string | null
+          todo_sync_enabled?: boolean
           token_expiry?: string | null
           updated_at?: string
           user_id?: string
@@ -1860,6 +1863,681 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      todo_activity: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          new_data: Json | null
+          previous_data: Json | null
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          new_data?: Json | null
+          previous_data?: Json | null
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          new_data?: Json | null
+          previous_data?: Json | null
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_activity_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "todo_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      todo_calendar_sync: {
+        Row: {
+          created_at: string
+          external_calendar_id: string | null
+          external_event_id: string | null
+          id: string
+          last_error: string | null
+          last_synced_at: string | null
+          local_event_id: string | null
+          provider: string
+          sync_status: string
+          task_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          external_calendar_id?: string | null
+          external_event_id?: string | null
+          id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          local_event_id?: string | null
+          provider?: string
+          sync_status?: string
+          task_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          external_calendar_id?: string | null
+          external_event_id?: string | null
+          id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          local_event_id?: string | null
+          provider?: string
+          sync_status?: string
+          task_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_calendar_sync_local_event_id_fkey"
+            columns: ["local_event_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "todo_calendar_sync_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "todo_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      todo_comments: {
+        Row: {
+          author_id: string
+          content: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          task_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          author_id: string
+          content: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          task_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          author_id?: string
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          edited_at?: string | null
+          id?: string
+          task_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "todo_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      todo_completions: {
+        Row: {
+          completed_at: string
+          completion_source: string
+          created_at: string
+          id: string
+          scheduled_for: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          completion_source?: string
+          created_at?: string
+          id?: string
+          scheduled_for: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          completion_source?: string
+          created_at?: string
+          id?: string
+          scheduled_for?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_completions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "todo_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      todo_labels: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          position: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          position?: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          position?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      todo_preferences: {
+        Row: {
+          created_at: string
+          group_by: string
+          id: string
+          scope: string
+          show_completed: boolean
+          sort_by: string
+          sort_dir: string
+          updated_at: string
+          user_id: string
+          view: string
+        }
+        Insert: {
+          created_at?: string
+          group_by?: string
+          id?: string
+          scope?: string
+          show_completed?: boolean
+          sort_by?: string
+          sort_dir?: string
+          updated_at?: string
+          user_id: string
+          view?: string
+        }
+        Update: {
+          created_at?: string
+          group_by?: string
+          id?: string
+          scope?: string
+          show_completed?: boolean
+          sort_by?: string
+          sort_dir?: string
+          updated_at?: string
+          user_id?: string
+          view?: string
+        }
+        Relationships: []
+      }
+      todo_projects: {
+        Row: {
+          archived_at: string | null
+          color: string
+          created_at: string
+          default_view: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_favorite: boolean
+          name: string
+          parent_project_id: string | null
+          position: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          color?: string
+          created_at?: string
+          default_view?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_favorite?: boolean
+          name: string
+          parent_project_id?: string | null
+          position?: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          color?: string
+          created_at?: string
+          default_view?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_favorite?: boolean
+          name?: string
+          parent_project_id?: string | null
+          position?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_projects_parent_project_id_fkey"
+            columns: ["parent_project_id"]
+            isOneToOne: false
+            referencedRelation: "todo_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      todo_recurrences: {
+        Row: {
+          business_day_rule: string | null
+          created_at: string
+          day_of_month: number | null
+          days_of_week: number[] | null
+          ends_on: string | null
+          frequency: string
+          id: string
+          interval_count: number
+          is_paused: boolean
+          max_occurrences: number | null
+          month_of_year: number | null
+          occurrences_created: number
+          recurrence_mode: string
+          rule_json: Json | null
+          starts_on: string | null
+          task_id: string
+          timezone: string
+          updated_at: string
+          user_id: string
+          week_of_month: number | null
+        }
+        Insert: {
+          business_day_rule?: string | null
+          created_at?: string
+          day_of_month?: number | null
+          days_of_week?: number[] | null
+          ends_on?: string | null
+          frequency: string
+          id?: string
+          interval_count?: number
+          is_paused?: boolean
+          max_occurrences?: number | null
+          month_of_year?: number | null
+          occurrences_created?: number
+          recurrence_mode?: string
+          rule_json?: Json | null
+          starts_on?: string | null
+          task_id: string
+          timezone?: string
+          updated_at?: string
+          user_id: string
+          week_of_month?: number | null
+        }
+        Update: {
+          business_day_rule?: string | null
+          created_at?: string
+          day_of_month?: number | null
+          days_of_week?: number[] | null
+          ends_on?: string | null
+          frequency?: string
+          id?: string
+          interval_count?: number
+          is_paused?: boolean
+          max_occurrences?: number | null
+          month_of_year?: number | null
+          occurrences_created?: number
+          recurrence_mode?: string
+          rule_json?: Json | null
+          starts_on?: string | null
+          task_id?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+          week_of_month?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_recurrences_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "todo_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      todo_reminders: {
+        Row: {
+          attempts: number
+          channel: string
+          created_at: string
+          id: string
+          last_error: string | null
+          offset_minutes: number | null
+          remind_at: string
+          sent_at: string | null
+          status: string
+          task_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          channel?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          offset_minutes?: number | null
+          remind_at: string
+          sent_at?: string | null
+          status?: string
+          task_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          channel?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          offset_minutes?: number | null
+          remind_at?: string
+          sent_at?: string | null
+          status?: string
+          task_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_reminders_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "todo_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      todo_saved_filters: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          filter_definition: Json
+          icon: string | null
+          id: string
+          is_favorite: boolean
+          name: string
+          position: number
+          show_in_nav: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          filter_definition?: Json
+          icon?: string | null
+          id?: string
+          is_favorite?: boolean
+          name: string
+          position?: number
+          show_in_nav?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          filter_definition?: Json
+          icon?: string | null
+          id?: string
+          is_favorite?: boolean
+          name?: string
+          position?: number
+          show_in_nav?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      todo_sections: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          position: number
+          project_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          position?: number
+          project_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          position?: number
+          project_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_sections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "todo_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      todo_task_labels: {
+        Row: {
+          created_at: string
+          label_id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          label_id: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          label_id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_task_labels_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "todo_labels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "todo_task_labels_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "todo_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      todo_tasks: {
+        Row: {
+          archived_at: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          created_at: string
+          deadline_at: string | null
+          description: string | null
+          duration_minutes: number | null
+          external_reference: string | null
+          id: string
+          is_all_day: boolean
+          parent_task_id: string | null
+          position: number
+          priority: number
+          project_id: string | null
+          scheduled_date: string | null
+          scheduled_time: string | null
+          section_id: string | null
+          series_id: string | null
+          source: string
+          status: string
+          timezone: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          cancelled_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          deadline_at?: string | null
+          description?: string | null
+          duration_minutes?: number | null
+          external_reference?: string | null
+          id?: string
+          is_all_day?: boolean
+          parent_task_id?: string | null
+          position?: number
+          priority?: number
+          project_id?: string | null
+          scheduled_date?: string | null
+          scheduled_time?: string | null
+          section_id?: string | null
+          series_id?: string | null
+          source?: string
+          status?: string
+          timezone?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          cancelled_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          deadline_at?: string | null
+          description?: string | null
+          duration_minutes?: number | null
+          external_reference?: string | null
+          id?: string
+          is_all_day?: boolean
+          parent_task_id?: string | null
+          position?: number
+          priority?: number
+          project_id?: string | null
+          scheduled_date?: string | null
+          scheduled_time?: string | null
+          section_id?: string | null
+          series_id?: string | null
+          source?: string
+          status?: string
+          timezone?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "todo_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "todo_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "todo_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "todo_tasks_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "todo_sections"
             referencedColumns: ["id"]
           },
         ]

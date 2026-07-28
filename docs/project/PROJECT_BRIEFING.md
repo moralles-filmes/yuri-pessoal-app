@@ -129,6 +129,39 @@ A construção segue esta ordem de prioridade geral:
 - Visões: lista, kanban, calendário, hoje, semana, atrasadas, concluídas.
 - Rotinas: manhã, noite, trabalho, estudos, exercícios; marcar execução diária; acompanhar frequência.
 
+> **Atualização (Fase 15):** a parte de **tarefas** deste módulo foi superada pelo
+> **Módulo 16 — TO-DO** (abaixo), que passa a ser o gerenciador principal de execução.
+> Este módulo continua ativo em `/tarefas` e `/rotinas` por causa das **rotinas** (check-in
+> diário) e do vínculo `calendar_events.task_id` com a agenda.
+
+### Módulo 16 — TO-DO (gerenciador principal de tarefas)
+> Adicionado na **Fase 15**, fora do roadmap original. Rota: `/todo`.
+> Inspirado na **experiência** (organização, velocidade, facilidade) de ferramentas como o
+> Todoist — **sem** copiar nome, logo, textos, ícones, código, assets ou identidade visual.
+> A interface segue integralmente o design system do sistema.
+
+- **Organiza:** tarefas pessoais, demandas profissionais, projetos, compromissos, estudos,
+  pendências financeiras, tarefas recorrentes, subtarefas, comentários, anexos, lembretes,
+  prioridades, etiquetas e filtros personalizados.
+- **Visões:** Caixa de entrada, Hoje (atrasadas · hoje · concluídas hoje), Próximos, Todas,
+  Concluídas, por Projeto, por Etiqueta e por Filtro salvo. Cada uma renderiza em **lista**,
+  **quadro/Kanban** (colunas = seções) ou **calendário**.
+- **Tarefa:** título, descrição, projeto, seção, tarefa-pai, **data programada** (quando
+  pretendo fazer) separada do **prazo final** (limite máximo), horário, duração estimada,
+  prioridade P1–P4, etiquetas, recorrência, lembretes, status, comentários, anexos e
+  histórico de atividades.
+- **Projetos e seções:** cor, ícone, favorito, ordem manual, projeto-pai, visão padrão,
+  arquivar/restaurar. Seções viram colunas no quadro.
+- **Recorrência robusta:** modos **fixo** (ancorado no calendário) e **após conclusão**;
+  diária/semanal/mensal/anual; dias específicos da semana; dia do mês; último dia do mês;
+  primeiro/último dia útil; n-ésimo dia da semana do mês; somente dias úteis; data final;
+  número máximo de ocorrências; pausa.
+- **Separação de responsabilidades:** TO-DO controla **execução e pendências**; Agenda
+  controla **compromissos e blocos de tempo**; Hábitos controlam **consistência**; Estudos
+  controlam **conteúdo e progresso**; Financeiro controla **transações e vencimentos**.
+- **Integrado a:** sidebar, lançamento rápido global, busca global, Dashboard Geral e
+  notificações (incluindo destaque para tarefa P1 atrasada).
+
 ### Módulo 9 — Hábitos
 - Leitura, exercícios, água, sono, estudos, caminhada, alimentação e qualquer hábito customizado.
 - Cadastro: nome, categoria, frequência (diária, semanal, dias específicos), meta, unidade (vezes, minutos, horas, litros, páginas...), horário ideal, lembrete, cor/ícone, status.

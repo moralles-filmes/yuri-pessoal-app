@@ -140,3 +140,39 @@
 **Entregáveis:** sistema polido, seguro, responsivo e performático.
 **Critérios de aceite:** checklist de aceite do briefing satisfeito; sem rota desprotegida; UX consistente.
 **Arquivo:** `docs/phases/PHASE_14_POLISH_SECURITY.md`
+
+---
+
+## Fase 15 — Módulo TO-DO completo
+> **Fora do roadmap original.** Aberta em 2026-07-28, a pedido do usuário, já em modo
+> manutenção. Não substitui nem invalida nenhuma fase anterior.
+
+**Objetivo:** entregar um gerenciador de tarefas completo (rota `/todo`) para organizar
+tarefas pessoais, demandas profissionais, projetos, compromissos, estudos, pendências,
+recorrências, subtarefas, comentários, anexos, lembretes, prioridades, etiquetas e filtros —
+com a identidade visual, a arquitetura e as regras já existentes no sistema.
+
+**Escopo:** 13 tabelas `todo_*` (RLS + FORCE RLS); recorrência avançada com modos fixo e após
+conclusão; status `atrasada` derivado; visões Caixa de entrada/Hoje/Próximos/Todas/Concluídas
++ lista/Kanban/calendário; projetos com seções; subtarefas; etiquetas; filtros salvos;
+comentários; anexos (reusando `attachments`); lembretes; histórico de atividades; ações em
+massa; integrações com sidebar, lançamento rápido, busca global, dashboard e notificações.
+
+**Dependências:** Fases 08 (agenda), 09 (padrões de tarefa), 13 (busca/quick-add/notificações)
+e 14 (`attachments` + bucket privado).
+
+**Entregáveis:** módulo TO-DO funcional com persistência real, 115 testes puros novos e
+documentação atualizada.
+
+**Critérios de aceite:** criar/editar/concluir/reabrir/excluir tarefa; projetos e seções;
+subtarefas; prioridade, etiquetas, data, horário, duração e prazo; recorrência com próxima
+ocorrência correta e sem duplicação; comentários, anexos e lembretes; todas as visões;
+filtros e filtros salvos; integração com quick-add, dashboard, busca e notificações; RLS
+funcionando; dark/light; desktop e celular; fases anteriores intactas; testes passando.
+
+**Arquivo:** `docs/phases/PHASE_15_TODO_COMPLETE.md`
+
+**Decisão registrada:** o TO-DO **não** substituiu as tabelas `tasks`/`projects` da Fase 09.
+Os dois módulos coexistem — `/todo` é o gerenciador principal de execução e `/tarefas` segue
+por causa das rotinas e do vínculo com a agenda. A justificativa completa está no arquivo da
+fase, em "Decisão arquitetural central".

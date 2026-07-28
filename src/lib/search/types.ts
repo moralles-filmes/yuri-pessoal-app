@@ -4,6 +4,10 @@
  */
 
 export const SEARCH_TYPES = [
+  // TO-DO (Fase 15) vem primeiro: é o módulo de execução do dia a dia.
+  "todo_tarefa",
+  "todo_projeto",
+  "todo_etiqueta",
   "transacao",
   "cartao",
   "fatura",
@@ -20,12 +24,15 @@ export type SearchType = (typeof SEARCH_TYPES)[number];
 
 /** Rótulo pt-BR (plural) de cada grupo de resultado. */
 export const SEARCH_TYPE_LABELS: Record<SearchType, string> = {
+  todo_tarefa: "TO-DO · Tarefas",
+  todo_projeto: "TO-DO · Projetos",
+  todo_etiqueta: "TO-DO · Etiquetas",
   transacao: "Transações",
   cartao: "Cartões",
   fatura: "Faturas",
   pessoa: "Pessoas",
   conta: "Contas",
-  tarefa: "Tarefas",
+  tarefa: "Tarefas (Fase 09)",
   rotina: "Rotinas",
   habito: "Hábitos",
   estudo: "Estudos",

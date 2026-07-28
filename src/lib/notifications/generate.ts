@@ -14,6 +14,12 @@ import { getDaysInMonth, format } from "date-fns";
 import { statusEfetivo } from "@/lib/finance/invoice";
 import { isDueToday, isOverdue } from "@/lib/tasks/status";
 import { courseOverdueReason } from "@/lib/studies/progress";
+import {
+  isDeadlineNear as todoDeadlineNear,
+  isDueToday as todoIsDueToday,
+  isOverdue as todoIsOverdue,
+} from "@/lib/todo/status";
+import type { TodoStatus } from "@/lib/todo/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { TaskPriority, TaskStoredStatus } from "@/lib/tasks/constants";
 import type { NotificationPriority, NotificationType } from "./constants";
@@ -99,6 +105,29 @@ export type GenSpending = {
   mediaSaidas: number; // reais
 };
 
+/** Tarefa do módulo TO-DO (Fase 15). Datas em 'yyyy-MM-dd' puro. */
+export type GenTodoTask = {
+  id: string;
+  title: string;
+  status: string;
+  scheduled_date: string | null;
+  deadline_at: string | null;
+  priority: number; // 1 = P1 … 4 = P4
+  projectId: string | null;
+};
+
+/** Lembrete de tarefa TO-DO pendente de disparo. */
+export type GenTodoReminder = {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  /** Epoch ms do disparo. */
+  remindAtMs: number;
+  /** 'yyyy-MM-dd' do disparo (compõe o dedupe_key). */
+  remindAtIso: string;
+  projectId: string | null;
+};
+
 export type GenerateOptions = {
   /** Fatura/conta "a vencer" dentro de N dias. */
   diasVencimento?: number;
@@ -112,6 +141,8 @@ export type GenerateOptions = {
   limiarLimite?: number;
   /** Gasto alto: saídas acima da média × este fator. */
   limiarGastoAlto?: number;
+  /** Prazo do TO-DO "próximo" dentro de N dias. */
+  diasPrazoTodo?: number;
 };
 
 export type GenerateInput = {
@@ -126,6 +157,8 @@ export type GenerateInput = {
   habits?: GenHabit[];
   courses?: GenCourse[];
   spending?: GenSpending | null;
+  todoTasks?: GenTodoTask[];
+  todoReminders?: GenTodoReminder[];
   options?: GenerateOptions;
 };
 
@@ -148,6 +181,7 @@ const DEFAULTS: Required<GenerateOptions> = {
   horasEvento: 24,
   limiarLimite: 0.8,
   limiarGastoAlto: 1.2,
+  diasPrazoTodo: 3,
 };
 
 /* ───────────────────────────── Helpers de data (puros) ───────────────────────────── */
@@ -409,6 +443,82 @@ export function generateNotifications(input: GenerateInput): NotificationCandida
       entity_type: "study_course",
       entity_id: c.id,
       dedupe_key: `study_overdue:${c.id}:${reason}`,
+    });
+  }
+
+  /* ── TO-DO (Fase 15): atrasadas, do dia e prazo próximo ── */
+  for (const t of input.todoTasks ?? []) {
+    // Reusa a MESMA regra pura da UI (nada de reimplementar "atrasada" aqui).
+    const shape = {
+      status: t.status as TodoStatus,
+      scheduledDate: t.scheduled_date,
+      deadlineAt: t.deadline_at,
+    };
+    const link = t.projectId
+      ? `/todo?v=projeto&id=${t.projectId}&task=${t.id}`
+      : `/todo?v=todas&task=${t.id}`;
+
+    if (todoIsOverdue(shape, today)) {
+      const urgente = t.priority === 1;
+      out.push({
+        type: "todo_overdue",
+        priority: urgente ? "urgent" : "high",
+        // A tarefa P1 atrasada ganha destaque próprio, conforme o pedido da fase.
+        title: urgente ? `Urgente atrasada — ${t.title}` : `Tarefa atrasada — ${t.title}`,
+        description: t.scheduled_date
+          ? `Estava programada para ${brDate(t.scheduled_date)}`
+          : t.deadline_at
+            ? `Prazo venceu em ${brDate(t.deadline_at)}`
+            : null,
+        link,
+        entity_type: "todo_task",
+        entity_id: t.id,
+        dedupe_key: `todo_overdue:${t.id}`,
+      });
+    } else if (todoIsDueToday(shape, today)) {
+      out.push({
+        type: "todo_today",
+        priority: t.priority <= 2 ? "high" : "medium",
+        title: `Tarefa para hoje — ${t.title}`,
+        description: "Programada para hoje",
+        link,
+        entity_type: "todo_task",
+        entity_id: t.id,
+        // Inclui o dia: a mesma tarefa pode voltar a ser "de hoje" numa recorrência.
+        dedupe_key: `todo_today:${t.id}:${today}`,
+      });
+    }
+
+    // Prazo próximo é um alerta SEPARADO de "vence hoje" — são conceitos diferentes.
+    if (todoDeadlineNear(shape, today, opt.diasPrazoTodo) && !todoIsDueToday(shape, today)) {
+      out.push({
+        type: "todo_deadline",
+        priority: t.priority <= 2 ? "high" : "medium",
+        title: `Prazo próximo — ${t.title}`,
+        description: t.deadline_at ? `Prazo final em ${brDate(t.deadline_at)}` : null,
+        link,
+        entity_type: "todo_task",
+        entity_id: t.id,
+        dedupe_key: `todo_deadline:${t.id}:${t.deadline_at}`,
+      });
+    }
+  }
+
+  /* ── Lembretes de tarefa cujo horário já chegou ── */
+  for (const r of input.todoReminders ?? []) {
+    if (r.remindAtMs > input.nowMs) continue;
+    out.push({
+      type: "todo_reminder",
+      priority: "high",
+      title: `Lembrete — ${r.taskTitle}`,
+      description: "Você pediu para ser lembrado desta tarefa.",
+      link: r.projectId
+        ? `/todo?v=projeto&id=${r.projectId}&task=${r.taskId}`
+        : `/todo?v=todas&task=${r.taskId}`,
+      entity_type: "todo_task",
+      entity_id: r.taskId,
+      // Chave pelo ID do lembrete: cada lembrete dispara uma vez só.
+      dedupe_key: `todo_reminder:${r.id}`,
     });
   }
 

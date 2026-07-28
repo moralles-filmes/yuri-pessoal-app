@@ -9,6 +9,7 @@ import {
   FileUp,
   CalendarDays,
   ListChecks,
+  ListTodo,
   Repeat,
   Target,
   GraduationCap,
@@ -56,6 +57,9 @@ export const navSections: NavSection[] = [
   {
     title: "Organização",
     items: [
+      // TO-DO é o gerenciador principal de execução (Fase 15). "Tarefas" (Fase 09)
+      // continua disponível como módulo legado, ligado às rotinas e à agenda.
+      { title: "TO-DO", href: "/todo", icon: ListTodo, phase: "Fase 15" },
       { title: "Agenda", href: "/agenda", icon: CalendarDays, phase: "Fase 08" },
       { title: "Tarefas", href: "/tarefas", icon: ListChecks, phase: "Fase 09" },
       { title: "Rotinas", href: "/rotinas", icon: Repeat, phase: "Fase 09" },

@@ -11,6 +11,7 @@ import {
   GraduationCap,
   HandCoins,
   ListChecks,
+  ListTodo,
   ReceiptText,
   Target,
   TrendingUp,
@@ -34,6 +35,11 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   study_overdue: GraduationCap,
   card_limit: CreditCard,
   high_spending: TrendingUp,
+  // Fase 15 — TO-DO.
+  todo_overdue: ListTodo,
+  todo_today: ListTodo,
+  todo_deadline: AlarmClock,
+  todo_reminder: Bell,
 };
 
 export function notificationIcon(type: string): LucideIcon {

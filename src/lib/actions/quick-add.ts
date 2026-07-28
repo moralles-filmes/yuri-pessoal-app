@@ -10,6 +10,8 @@ export type QuickAddOptions = {
   courses: { id: string; title: string }[];
   habits: { id: string; name: string; unit: string; target: number; category: string }[];
   people: { id: string; nome: string }[];
+  /** Projetos do módulo TO-DO (Fase 15) — distintos dos `projects` da Fase 09. */
+  todoProjects: { id: string; name: string }[];
 };
 
 const EMPTY: QuickAddOptions = {
@@ -20,6 +22,7 @@ const EMPTY: QuickAddOptions = {
   courses: [],
   habits: [],
   people: [],
+  todoProjects: [],
 };
 
 /**
@@ -31,7 +34,8 @@ export async function loadQuickAddOptions(): Promise<QuickAddOptions> {
   if (!ctx) return EMPTY;
   const { supabase } = ctx;
 
-  const [accounts, cards, categories, projects, courses, habits, people] = await Promise.all([
+  const [accounts, cards, categories, projects, courses, habits, people, todoProjects] =
+    await Promise.all([
     supabase.from("accounts").select("id, name").eq("is_active", true).order("name"),
     supabase.from("credit_cards").select("id, nome").eq("ativo", true).order("nome"),
     supabase.from("categories").select("id, name, kind").order("sort_order").order("name"),
@@ -46,8 +50,13 @@ export async function loadQuickAddOptions(): Promise<QuickAddOptions> {
       .select("id, name, unit, target_value, category")
       .eq("is_active", true)
       .order("position"),
-    supabase.from("people").select("id, nome").eq("ativo", true).order("nome"),
-  ]);
+      supabase.from("people").select("id, nome").eq("ativo", true).order("nome"),
+      supabase
+        .from("todo_projects")
+        .select("id, name")
+        .eq("status", "ativo")
+        .order("position"),
+    ]);
 
   return {
     accounts: (accounts.data ?? []) as QuickAddOptions["accounts"],
@@ -72,5 +81,6 @@ export async function loadQuickAddOptions(): Promise<QuickAddOptions> {
       category: h.category,
     })),
     people: (people.data ?? []) as QuickAddOptions["people"],
+    todoProjects: (todoProjects.data ?? []) as QuickAddOptions["todoProjects"],
   };
 }

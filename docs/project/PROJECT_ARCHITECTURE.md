@@ -151,3 +151,68 @@ npm run lint     # ESLint
 - OneDrive + caminho com espaços: funciona, mas evitar ferramentas que não lidam bem com espaços; usar caminhos relativos.
 - Git foi inicializado pelo `create-next-app`.
 - `AGENTS.md`/`CLAUDE.md` na raiz apontam para as regras do Next 16 e para esta documentação — leia antes de codar.
+
+---
+
+## Módulo TO-DO (Fase 15)
+
+Gerenciador principal de tarefas, em `/todo`. Segue o mesmo padrão do resto do sistema
+(Server Component lê → Server Action muta → `revalidatePath`), com a lógica de negócio
+isolada em funções puras testadas.
+
+### Por que tabelas `todo_*` novas
+`tasks`/`projects` (Fase 09) estão acoplados a `calendar_events.task_id`, ao gerador de
+notificações, à busca global, ao dashboard e ao kanban-por-status. Remodelar essas tabelas
+para suportar seções, subtarefas, `scheduled_date` + `deadline_at` e séries recorrentes
+exigiria alterar os cinco pontos ao mesmo tempo. As tabelas `todo_*` são um superset e
+convivem com as antigas. **Não remover `/tarefas` sem antes migrar aqueles cinco pontos.**
+
+### Mapa de arquivos
+| Camada | Caminho |
+| --- | --- |
+| Enums, rótulos, tokens visuais | `src/lib/todo/constants.ts` |
+| Tipos de domínio | `src/lib/todo/types.ts` |
+| **Recorrência (puro)** | `src/lib/todo/recurrence.ts` + `recurrence.test.ts` |
+| **Status derivado (puro)** | `src/lib/todo/status.ts` + `status.test.ts` |
+| **Filtro/ordenação/agrupamento (puro)** | `src/lib/todo/filters.ts` + `filters.test.ts` |
+| **Linguagem natural (puro)** | `src/lib/todo/parse.ts` + `parse.test.ts` |
+| **Tarefa → evento Google (puro)** | `src/lib/todo/google-event.ts` + `google-event.test.ts` |
+| Envio ao Google (I/O, server-only) | `src/lib/todo/calendar-sync.ts` |
+| Leitura (server-only) | `src/lib/todo/queries.ts` |
+| Histórico de atividades | `src/lib/todo/activity.ts` |
+| Validação Zod | `src/lib/validators/todo.ts` |
+| Actions de tarefa | `src/lib/actions/todo.ts` |
+| Actions de projeto/seção/etiqueta | `src/lib/actions/todo-projects.ts` |
+| Actions de comentário/anexo/lembrete/filtro/preferência | `src/lib/actions/todo-extras.ts` |
+| Página e cliente | `src/app/(app)/todo/` |
+| Componentes | `src/components/todo/` |
+| Card do dashboard | `src/components/dashboard/general/todo-card.tsx` |
+
+### Invariantes que não podem ser quebradas
+1. **`atrasada` nunca é gravado.** É derivado de `scheduled_date`/`deadline_at` na leitura
+   (`effectiveStatus`). Persistir esse estado quebra a consistência com o resto do sistema.
+2. **Conclusão é idempotente por `(user_id, task_id, scheduled_for)`** em
+   `todo_completions`. É o que impede duplicar ocorrência ao concluir → reabrir → concluir.
+3. **Tarefa recorrente avança a própria linha**, não cria linha nova. O histórico vive em
+   `todo_completions`.
+4. **Nenhuma exclusão silenciosa.** Projeto, seção e série recorrente exigem escolha
+   explícita do destino das tarefas. Etiqueta só remove a associação.
+5. **Datas puras `'yyyy-MM-dd'` + hora em coluna `time` separada.** Nunca um timestamptz para
+   representar "o dia da tarefa" — o servidor roda em UTC na Vercel.
+6. **Toda aritmética de data em `recurrence.ts` usa `Date.UTC` internamente**, e nenhuma
+   função pura chama `Date.now()`.
+7. **Anexos:** tabela genérica `attachments` + bucket privado `attachments`, caminho
+   `{user_id}/todo_task/{task_id}/…`. Sem tabela nem bucket novos; sem URL pública.
+8. **A interpretação de texto nunca reescreve o que o usuário digitou.** `parse.ts` devolve
+   um `title` derivado e os `tokens` com os intervalos; a caixa continua com o texto
+   original e os chips mostram o entendimento **antes** de salvar. Padrão ambíguo é
+   ignorado. A normalização remove acentos **preservando o comprimento** — se decompuser
+   (`String.normalize`), os índices das regex desalinham do texto original.
+9. **Envio ao Google é opt-in e de sentido único.** Só com
+   `google_integrations.todo_sync_enabled`; tarefa vira evento, evento não vira tarefa
+   (isso duplicaria com a importação da Fase 08). **Recorrente não publica RRULE**: como a
+   série avança na própria linha (invariante 3), um RRULE sairia do lugar assim que o
+   usuário concluísse fora da data — enviamos só a ocorrência atual e movemos o mesmo
+   evento. Excluir tarefa remove o evento **antes** do `delete` (a ponte
+   `todo_calendar_sync` é `on delete cascade`). Falha do Google nunca derruba a ação: fica
+   em `last_error`, sem token nem corpo de resposta.

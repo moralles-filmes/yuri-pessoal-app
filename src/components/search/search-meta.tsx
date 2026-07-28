@@ -7,10 +7,13 @@ import {
   CalendarDays,
   CreditCard,
   GraduationCap,
+  FolderOpen,
   ListChecks,
+  ListTodo,
   ReceiptText,
   Repeat,
   Search,
+  Tag,
   Target,
   Users,
   Wallet,
@@ -19,6 +22,9 @@ import {
 import type { SearchType } from "@/lib/search/types";
 
 const ICONS: Record<SearchType, LucideIcon> = {
+  todo_tarefa: ListTodo,
+  todo_projeto: FolderOpen,
+  todo_etiqueta: Tag,
   transacao: ArrowLeftRight,
   cartao: CreditCard,
   fatura: ReceiptText,

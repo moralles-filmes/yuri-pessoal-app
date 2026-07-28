@@ -66,7 +66,12 @@ export async function getGoogleConnectionStatus(): Promise<{
   const ctx = await authContext();
   if (!ctx) {
     return {
-      status: { connected: false, email: null, lastSyncedAt: null },
+      status: {
+        connected: false,
+        email: null,
+        lastSyncedAt: null,
+        todoSyncEnabled: false,
+      },
       configured: isGoogleConfigured,
     };
   }

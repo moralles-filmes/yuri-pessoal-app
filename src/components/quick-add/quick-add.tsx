@@ -9,6 +9,7 @@ import {
   CreditCard,
   GraduationCap,
   ListChecks,
+  ListTodo,
   Plus,
   Target,
   Trash2,
@@ -44,6 +45,7 @@ import {
 } from "@/lib/format";
 import { createTransaction } from "@/lib/actions/transactions";
 import { createTask } from "@/lib/actions/tasks";
+import { createTodoTask } from "@/lib/actions/todo";
 import { createEvent } from "@/lib/actions/calendar";
 import { createSession } from "@/lib/actions/studies";
 import { setHabitValue } from "@/lib/actions/habits";
@@ -59,6 +61,7 @@ import {
   type SplitType,
 } from "@/lib/finance/constants";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "@/lib/tasks/constants";
+import { TODO_PRIORITIES, TODO_PRIORITY_LABELS } from "@/lib/todo/constants";
 import { EVENT_TYPES, EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
 import { STUDY_DIFFICULTIES, STUDY_DIFFICULTY_LABELS } from "@/lib/studies/constants";
 
@@ -68,6 +71,7 @@ type QuickType =
   | "cartao"
   | "receita"
   | "transferencia"
+  | "todo"
   | "tarefa"
   | "evento"
   | "habito"
@@ -78,10 +82,13 @@ const TYPES: { id: QuickType; label: string; icon: LucideIcon }[] = [
   { id: "cartao", label: "Gasto no cartão", icon: CreditCard },
   { id: "receita", label: "Receita", icon: TrendingUp },
   { id: "transferencia", label: "Transferência", icon: ArrowLeftRight },
-  { id: "tarefa", label: "Tarefa", icon: ListChecks },
+  // TO-DO (Fase 15) é o caminho principal para criar tarefa; "Tarefa (lista)" segue
+  // criando na estrutura da Fase 09, que ainda alimenta rotinas e agenda.
+  { id: "todo", label: "Nova tarefa", icon: ListTodo },
   { id: "evento", label: "Evento", icon: CalendarPlus },
   { id: "habito", label: "Check-in de hábito", icon: Target },
   { id: "estudo", label: "Sessão de estudo", icon: GraduationCap },
+  { id: "tarefa", label: "Tarefa (lista antiga)", icon: ListChecks },
 ];
 
 // Hoje em Brasília — não a data do fuso do aparelho.
@@ -438,6 +445,8 @@ function QuickForm({
       return <IncomeForm options={options} onDone={onDone} />;
     case "transferencia":
       return <TransferForm options={options} onDone={onDone} />;
+    case "todo":
+      return <TodoTaskForm options={options} onDone={onDone} />;
     case "tarefa":
       return <TaskForm onDone={onDone} />;
     case "evento":
@@ -695,6 +704,143 @@ function TransferForm({ options, onDone }: { options: QuickAddOptions; onDone: (
       <Field label="Data">
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </Field>
+      <SubmitBar pending={pending} />
+    </form>
+  );
+}
+
+/**
+ * Nova tarefa no módulo TO-DO (Fase 15). Campos rápidos: título, projeto, data,
+ * horário, prioridade e repetição básica — o resto se preenche abrindo a tarefa.
+ */
+function TodoTaskForm({
+  options,
+  onDone,
+}: {
+  options: QuickAddOptions;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const [title, setTitle] = React.useState("");
+  const [projectId, setProjectId] = React.useState("");
+  const [date, setDate] = React.useState("");
+  const [time, setTime] = React.useState("");
+  const [priority, setPriority] = React.useState("4");
+  const [repeat, setRepeat] = React.useState("nao");
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) {
+      toast.error("Informe um título.");
+      return;
+    }
+    // A repetição rápida cobre os casos comuns; a personalizada fica no painel da tarefa.
+    const recurrence =
+      repeat === "nao"
+        ? null
+        : {
+            frequency: repeat === "uteis" ? "diaria" : repeat,
+            interval_count: 1,
+            business_day_rule: repeat === "uteis" ? "apenas_dias_uteis" : null,
+            recurrence_mode: "fixo",
+          };
+
+    start(async () => {
+      const res = await createTodoTask({
+        title,
+        project_id: projectId || null,
+        scheduled_date: date || null,
+        scheduled_time: time || null,
+        priority,
+        recurrence,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "Não foi possível criar a tarefa.");
+        return;
+      }
+      toast.success("Tarefa criada.", {
+        action: {
+          label: "Abrir",
+          onClick: () => router.push(`/todo?v=todas&task=${res.data.id}`),
+        },
+      });
+      router.refresh();
+      onDone();
+    });
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3">
+      <Field label="Título">
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="O que precisa ser feito?"
+        />
+      </Field>
+      <Field label="Projeto">
+        <Select
+          value={projectId || "__inbox__"}
+          onValueChange={(v) => setProjectId(v === "__inbox__" ? "" : v)}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__inbox__">Caixa de entrada</SelectItem>
+            {options.todoProjects.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Data (opcional)">
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        <Field label="Horário (opcional)">
+          <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Prioridade">
+          <Select value={priority} onValueChange={setPriority}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TODO_PRIORITIES.map((p) => (
+                <SelectItem key={p} value={String(p)}>
+                  {TODO_PRIORITY_LABELS[p]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Repetir">
+          <Select value={repeat} onValueChange={setRepeat}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nao">Não repetir</SelectItem>
+              <SelectItem value="diaria">Todos os dias</SelectItem>
+              <SelectItem value="uteis">Dias úteis</SelectItem>
+              <SelectItem value="semanal">Toda semana</SelectItem>
+              <SelectItem value="mensal">Todo mês</SelectItem>
+              <SelectItem value="anual">Todo ano</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
+      {repeat !== "nao" && !date && (
+        <p className="text-xs text-muted-foreground">
+          Defina uma data para a repetição valer.
+        </p>
+      )}
       <SubmitBar pending={pending} />
     </form>
   );

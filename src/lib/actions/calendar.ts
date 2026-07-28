@@ -19,6 +19,9 @@ import {
   updateLastSynced,
 } from "@/lib/google/tokens";
 import { revokeToken } from "@/lib/google/oauth";
+import { syncAllTasksToGoogle } from "@/lib/todo/calendar-sync";
+import { addDaysIso } from "@/lib/todo/recurrence";
+import { hojeISO } from "@/lib/format";
 import {
   deleteEvent as googleDeleteEvent,
   insertEvent as googleInsertEvent,
@@ -212,6 +215,66 @@ export async function disconnectGoogle(): Promise<ActionResult> {
 
   revalidatePath("/agenda");
   return { ok: true, data: undefined };
+}
+
+/* ─────────────── TO-DO → Google Agenda (Fase 15, iteração) ─────────────── */
+
+/**
+ * Liga/desliga o envio de tarefas do TO-DO para o Google. É opt-in: enquanto estiver
+ * desligado, nenhuma tarefa sai daqui.
+ *
+ * Ao DESLIGAR, os eventos já criados permanecem no Google — o usuário decide o que
+ * fazer com eles. Apagar em massa seria destrutivo e irreversível.
+ */
+export async function setTodoGoogleSync(enabled: boolean): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const integration = await getGoogleIntegration(ctx);
+  if (!integration) {
+    return { ok: false, error: "Conecte a conta Google antes de ativar o envio." };
+  }
+
+  const { error } = await ctx.supabase
+    .from("google_integrations")
+    .update({ todo_sync_enabled: Boolean(enabled) })
+    .eq("user_id", ctx.userId);
+  if (error) return dbError("Não foi possível salvar a preferência.");
+
+  revalidatePath("/agenda");
+  revalidatePath("/todo");
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Envia agora as tarefas com data numa janela [−7d, +180d]. Serve para popular o
+ * calendário logo depois de ligar a opção, sem despejar todo o histórico.
+ */
+export async function syncTodoToGoogle(): Promise<
+  ActionResult<{ synced: number; failed: number }>
+> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const integration = await getGoogleIntegration(ctx);
+  if (!integration) {
+    return { ok: false, error: "Google não conectado. Conecte a conta primeiro." };
+  }
+  if (!integration.todo_sync_enabled) {
+    return { ok: false, error: "Ative o envio de tarefas antes de sincronizar." };
+  }
+
+  const today = hojeISO();
+  const result = await syncAllTasksToGoogle(
+    ctx,
+    addDaysIso(today, -7),
+    addDaysIso(today, 180),
+  );
+
+  await updateLastSynced(ctx);
+  revalidatePath("/agenda");
+  revalidatePath("/todo");
+  return { ok: true, data: result };
 }
 
 /**

@@ -50,6 +50,9 @@ export async function searchAll(
   const like = `%${q}%`;
 
   const byType: Record<SearchType, SearchResult[]> = {
+    todo_tarefa: [],
+    todo_projeto: [],
+    todo_etiqueta: [],
     transacao: [],
     cartao: [],
     fatura: [],
@@ -64,6 +67,89 @@ export async function searchAll(
   };
 
   await Promise.all([
+    // TO-DO — tarefas (título e descrição). O link abre a tarefa já na visão geral.
+    safe(
+      supabase
+        .from("todo_tasks")
+        .select(
+          "id, title, status, priority, scheduled_date, deadline_at, project_id, project:todo_projects(name)",
+        )
+        .or(`title.ilike.${like},description.ilike.${like}`)
+        .order("scheduled_date", { ascending: true, nullsFirst: false })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.todo_tarefa = (rows as Array<{
+        id: string;
+        title: string;
+        status: string;
+        priority: number;
+        scheduled_date: string | null;
+        deadline_at: string | null;
+        project_id: string | null;
+        project: { name: string } | { name: string }[] | null;
+      }>).map((t) => {
+        const projeto =
+          (Array.isArray(t.project) ? t.project[0]?.name : t.project?.name) ??
+          "Caixa de entrada";
+        const data = t.scheduled_date ?? t.deadline_at;
+        const partes = [
+          projeto,
+          `P${t.priority}`,
+          data ? formatDate(data) : null,
+          pretty(t.status),
+        ].filter(Boolean);
+        return {
+          type: "todo_tarefa",
+          id: t.id,
+          title: t.title,
+          subtitle: partes.join(" · "),
+          // `task` abre o painel de detalhes direto na tarefa.
+          link: t.project_id
+            ? `/todo?v=projeto&id=${t.project_id}&task=${t.id}`
+            : `/todo?v=todas&task=${t.id}`,
+        };
+      });
+    }),
+
+    // TO-DO — projetos
+    safe(
+      supabase
+        .from("todo_projects")
+        .select("id, name, status")
+        .ilike("name", like)
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.todo_projeto = (rows as Array<{ id: string; name: string; status: string }>).map(
+        (p) => ({
+          type: "todo_projeto",
+          id: p.id,
+          title: p.name,
+          subtitle: p.status === "arquivado" ? "Projeto arquivado" : "Projeto",
+          link: `/todo?v=projeto&id=${p.id}`,
+        }),
+      );
+    }),
+
+    // TO-DO — etiquetas
+    safe(
+      supabase
+        .from("todo_labels")
+        .select("id, name")
+        .ilike("name", like)
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.todo_etiqueta = (rows as Array<{ id: string; name: string }>).map((l) => ({
+        type: "todo_etiqueta",
+        id: l.id,
+        title: `@${l.name}`,
+        subtitle: "Etiqueta",
+        link: `/todo?v=etiqueta&id=${l.id}`,
+      }));
+    }),
+
     // Transações
     safe(
       supabase

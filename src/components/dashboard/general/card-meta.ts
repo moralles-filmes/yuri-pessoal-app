@@ -7,6 +7,7 @@ import {
   CalendarClock,
   GraduationCap,
   ListChecks,
+  ListTodo,
   ReceiptText,
   Target,
   Wallet,
@@ -16,6 +17,7 @@ import type { DashCardId } from "@/lib/dashboard/cards";
 
 export const DASH_CARD_ICONS: Record<DashCardId, LucideIcon> = {
   financeiro: Wallet,
+  todo: ListTodo,
   faturas: ReceiptText,
   agenda: CalendarClock,
   tarefas: ListChecks,
@@ -27,6 +29,7 @@ export const DASH_CARD_ICONS: Record<DashCardId, LucideIcon> = {
 /** Para onde o link "Ver" de cada card aponta. */
 export const DASH_CARD_HREF: Record<DashCardId, string> = {
   financeiro: "/dashboard/financeiro",
+  todo: "/todo",
   faturas: "/faturas",
   agenda: "/agenda",
   tarefas: "/tarefas",
