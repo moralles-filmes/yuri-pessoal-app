@@ -1,5 +1,214 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
+## Iteração — Fecha as 3 pendências do TO-DO (2026-07-28) ✅
+
+Feita logo após a Fase 15, a pedido do usuário ("vamos resolver isso tudo"). Fecha os três
+itens que a fase havia deixado em aberto. **Testes: 529 → 582** (+53 puros novos).
+
+### 1. Entrada em linguagem natural — implementada
+`src/lib/todo/parse.ts` (puro, `hoje` injetado, **37 testes**) + chips de confirmação no
+`QuickTaskInput`. Reconhece data (`hoje`, `amanhã`, `sexta`, `dia 15`, `15/09`,
+`10 de setembro`, `em 3 dias`), hora (`às 10h`, `14h30`, `14:05`, `meio-dia`), prazo
+(`até…`, `vence…`, `prazo…`), prioridade (`p1`–`p4`), `#projeto`, `@etiqueta` e recorrência
+(`toda segunda`, `todo dia 10`, `a cada 2 semanas`, `de 3 em 3 dias`, `dias úteis`,
+`último dia útil do mês`, `após concluir`).
+
+Contrato da tela: **o texto digitado nunca é reescrito**; tudo que foi entendido aparece em
+chip **antes** de salvar; há o botão "Usar o texto como está" para desligar; padrão ambíguo
+(`31/02`) é ignorado e fica no título. Efeito colateral necessário: `todoQuickTaskSchema`
+ganhou `deadline_at` (+ o mesmo `superRefine` da edição completa) — sem isso o chip
+"Prazo final" prometeria algo que não seria salvo.
+
+### 2. Sincronização com Google Agenda — implementada (opt-in)
+**A premissa anterior estava errada:** o projeto sempre teve escopo de escrita
+(`calendar.events`), e a Fase 08 já criava/atualizava/excluía eventos. Nada de novo foi
+pedido ao Google — reaproveitamos tokens e cliente HTTP existentes.
+
+- `src/lib/todo/google-event.ts` — mapeamento **puro** tarefa → evento (**16 testes**).
+- `src/lib/todo/calendar-sync.ts` — I/O, `server-only`, best-effort.
+- Migration `20260728120000_todo_google_sync.sql` — `google_integrations.todo_sync_enabled`
+  (default `false`) + `comment on table/column` corrigindo a documentação do schema.
+- Interruptor + "Enviar tarefas agora" no card do Google em `/agenda`.
+
+Decisões que valem como contrato: **opt-in**; **sentido único** (tarefa → evento, sem
+reimportar); **recorrente não vira RRULE** (só a ocorrência atual, movida a cada conclusão —
+publicar RRULE dessincronizaria assim que o usuário concluísse fora da data); excluir tarefa
+chama `removeTaskFromGoogle` **antes** do delete (a ponte é `on delete cascade`); concluir
+tarefa não recorrente não mexe no evento; cancelar/arquivar removem, restaurar recria.
+
+### 3. Actions sem gatilho — todas expostas
+- **Arraste na navegação** (`SortableList`, o mesmo de hábitos/rotinas) para **projetos,
+  etiquetas e filtros salvos**, com UI otimista e reversão no erro.
+- **Seções:** menu da coluna no Kanban → "Mover para a esquerda/direita" (acessível por
+  teclado, ao contrário de arrastar coluna).
+- **`mergeTodoLabels`:** bloco "Mesclar com outra etiqueta" no `LabelDialog`, dizendo quantas
+  tarefas migram e que nenhuma é apagada.
+- **`updateTodoSavedFilter` / `deleteTodoSavedFilter`:** `SaveFilterDialog` ganhou modo de
+  edição e exclusão. A definição guardada é **preservada por padrão**; substituir pelos
+  filtros da tela exige marcar um switch.
+- **Bônus:** editar/excluir **etiqueta** era impossível pela interface (as actions existiam,
+  mas nada as chamava) — agora há um lápis em cada linha da navegação. E nasceu
+  `reorderTodoSavedFilters`, que não existia.
+
+`NavButton` foi reestruturado: a alça de arraste e o botão de editar são **irmãos** do botão
+de navegação, nunca aninhados (botão dentro de botão é HTML inválido e quebra teclado e
+leitor de tela). O lápis é **sempre visível** — telas de toque não têm hover.
+
+### Verificação
+`npm run test:run` **582 passando (43 arquivos)** · `npx tsc --noEmit` limpo ·
+`npm run lint` 0 erros/0 avisos · `npm run build` compila · `get_advisors(security)` só o
+aviso externo pré-existente de Auth.
+
+---
+
+## Fase 15 — Módulo TO-DO completo (2026-07-28) ✅
+
+> Fase **fora do roadmap original** (as 14 fases originais já estavam fechadas), aberta a
+> pedido do usuário. Arquivo da fase: `docs/phases/PHASE_15_TODO_COMPLETE.md`.
+
+### Resumo
+Entregue o **TO-DO** (`/todo`): gerenciador de tarefas completo com projetos, seções,
+subtarefas, etiquetas, prioridades P1–P4, **data programada separada do prazo final**,
+horário e duração, recorrência avançada, lembretes, comentários, anexos, histórico de
+atividades, filtros combináveis e salvos, ações em massa, e visões **lista / Kanban /
+calendário**. Inspirado na *experiência* de ferramentas como o Todoist — **sem copiar nome,
+logo, textos, ícones, código, assets ou identidade visual**. Usa integralmente o design
+system existente (preto/branco/dourado, dark+light, Arial, shadcn/ui).
+
+### Decisão técnica mais importante
+**13 tabelas `todo_*` novas, em vez de evoluir `tasks`/`projects` (Fase 09).** `tasks` está
+acoplado a cinco pontos já entregues — `calendar_events.task_id`, `notifications/generate.ts`,
+`search/queries.ts`, `dashboard/queries.ts` e o kanban-por-status. Remodelá-la exigiria mexer
+nos cinco ao mesmo tempo (risco alto numa base com 414 testes verdes). **Consequência
+assumida:** dois módulos de tarefas coexistem — `/todo` é o principal de execução; `/tarefas`
++ `/rotinas` seguem por causa das rotinas e do vínculo com a agenda.
+
+### Arquivos criados
+**Migrations (`supabase/migrations/`, idempotentes):** `20260728100000_todo_projects.sql`,
+`…100100_todo_sections`, `…100200_todo_labels`, `…100300_todo_tasks`,
+`…100400_todo_task_labels`, `…100500_todo_recurrences`, `…100600_todo_completions`,
+`…100700_todo_comments`, `…100800_todo_reminders`, `…100900_todo_saved_filters`,
+`…101000_todo_activity`, `…101100_todo_preferences`, `…101200_todo_calendar_sync`.
+
+**Lógica pura + testes:** `src/lib/todo/constants.ts`, `types.ts`,
+`recurrence.ts` + `recurrence.test.ts` (53), `status.ts` + `status.test.ts` (26),
+`filters.ts` + `filters.test.ts` (36), `queries.ts`, `activity.ts`.
+
+**Validação/mutação:** `src/lib/validators/todo.ts`; `src/lib/actions/todo.ts` (tarefas),
+`todo-projects.ts` (projetos/seções/etiquetas), `todo-extras.ts` (comentários/anexos/
+lembretes/filtros/preferências).
+
+**UI:** `src/app/(app)/todo/{page,loading,todo-client}.tsx`; `src/components/todo/`
+(`badges`, `task-row`, `task-board`, `task-calendar`, `task-detail-sheet`,
+`quick-task-input`, `recurrence-editor`, `todo-nav`, `todo-dialogs`);
+`src/components/dashboard/general/todo-card.tsx`.
+
+### Arquivos alterados
+`src/config/nav.ts` (item TO-DO) · `src/types/supabase.ts` (regenerado) ·
+`src/lib/search/{types,queries}.ts` + `src/components/search/search-meta.tsx` (busca cobre
+tarefas/projetos/etiquetas do TO-DO, com `?task=` abrindo o painel) ·
+`src/lib/actions/quick-add.ts` + `src/components/quick-add/quick-add.tsx` (tipo "Nova
+tarefa"; o antigo virou "Tarefa (lista antiga)") · `src/lib/notifications/{constants,generate,
+cron}.ts` + `src/components/notifications/notification-meta.tsx` (4 tipos novos + fecho dos
+lembretes) · `src/lib/dashboard/cards.ts` + `src/components/dashboard/general/card-meta.ts` +
+`src/app/(app)/dashboard/page.tsx` (card TO-DO) · `src/app/api/export/route.ts` (13 tabelas) ·
+docs (`PROJECT_BRIEFING`, `PROJECT_ARCHITECTURE`, `PROJECT_ROADMAP`, `CURRENT_STATUS`,
+`NEXT_AGENT_INSTRUCTIONS`, `CLAUDE.md`).
+
+### Migrations e RLS
+13 migrations aplicadas em `yjvnlbjvippefvzgrxxw`. **Todas as 13 tabelas** com `user_id` NOT
+NULL → `auth.users(id) ON DELETE CASCADE`, **RLS + FORCE RLS**, policy
+`for all using (user_id = auth.uid()) with check (user_id = auth.uid())`, índice em `user_id`,
+índices de consulta e trigger `set_updated_at`. Conferido no banco: **13/13** com
+`relrowsecurity` e `relforcerowsecurity` verdadeiros e 1 policy cada. **`get_advisors`
+(security): 0 lints de schema** (resta só o aviso externo pré-existente de "leaked password
+protection"). Total do projeto: **47 tabelas**.
+
+Índices únicos que sustentam regra de negócio:
+`todo_completions (user_id, task_id, scheduled_for)` (não-duplicação de ocorrência) ·
+`todo_recurrences (task_id)` (1:1) · `todo_labels (user_id, lower(name))` ·
+`todo_preferences (user_id, scope)` · `todo_calendar_sync (task_id, provider)` e
+`(user_id, provider, external_event_id)`.
+
+### Invariantes implementadas
+1. **`atrasada` nunca é gravado** — derivado na leitura (`effectiveStatus`).
+2. **Conclusão idempotente** por `(user_id, task_id, scheduled_for)`.
+3. **Tarefa recorrente avança a própria linha** (preserva projeto/seção/prioridade/etiquetas/
+   lembretes sem copiar nada); histórico em `todo_completions`. **Reabrir remove a última
+   conclusão e volta a data** — não cria ocorrência extra.
+4. **Nenhuma exclusão silenciosa**: projeto/seção exigem escolher o destino das tarefas
+   (com confirmação digitando "EXCLUIR" no caso destrutivo); etiqueta remove só a associação;
+   série recorrente pergunta o escopo; concluir tarefa-mãe com subtarefas pendentes pergunta.
+5. **Datas puras 'yyyy-MM-dd' + `time` separado**; toda a aritmética de recorrência em
+   `Date.UTC` interno; nenhuma função pura chama `Date.now()`.
+
+### Testes realizados
+`npm run test:run` → **529 testes passando** em 41 arquivos (eram **414**). Os 115 novos são
+**puros, com datas injetadas, sem tocar no banco**.
+
+Cobrem: recorrência diária/semanal/mensal/anual; intervalo de N unidades; dias específicos da
+semana com ciclo de N semanas; dia do mês com clamp; **último dia do mês**; **primeiro/último
+dia útil**; **n-ésimo dia da semana do mês**; "somente dias úteis"; `ends_on`;
+`max_occurrences`; pausa; **ano bissexto** (2024/2026/1900/2000); **virada de ano**; 29/02 em
+ano não bissexto; **modo fixo vs. após conclusão** (inclusive concluindo atrasado);
+materialização preservando a folga entre data programada e prazo; status derivado; prazo
+próximo; progresso de subtarefas; horário final com virada de meia-noite; filtros combinados;
+ordenação com nulos por último; agrupamento; árvore de subtarefas com proteção contra ciclo.
+
+**Qualidade:** `npx tsc --noEmit` ✅ · `npm run lint` ✅ (0 erros, 0 avisos) · `npm run build` ✅
+(rota `/todo` registrada).
+
+**Smoke test no banco real** (dados criados e removidos por completo ao final):
+
+| Verificação | Resultado |
+| --- | --- |
+| 2ª conclusão da mesma ocorrência rejeitada pelo unique | ✅ bloqueada |
+| Conclusões após tentar duplicar | 1 |
+| Excluir etiqueta **não** apaga a tarefa | ✅ |
+| Associação tarefa↔etiqueta removida | ✅ |
+| Excluir projeto apaga as seções (cascade) | ✅ |
+| Excluir projeto **não** apaga a tarefa (vai p/ Caixa de entrada) | ✅ |
+| Excluir tarefa apaga recorrência e conclusões (cascade) | ✅ |
+| Limpeza dos dados de teste | ✅ 0 restantes |
+
+### Problemas encontrados e resolvidos
+1. **Embed 1:1 do PostgREST** (`recurrence:todo_recurrences(*)`) colapsava para `never` na
+   tipagem. Resolvido com um tipo explícito `RawRecurrenceRow` no ponto de leitura, sem
+   espalhar `any`.
+2. **`Record<string, unknown>` não é atribuível a `Json`** nas colunas jsonb do histórico.
+   Criado `ActivityPayload` (`{ [k: string]: Json | undefined }`), o que também deixa
+   explícito que só valor serializável entra na auditoria.
+3. **Sincronizar prop→estado sem `useEffect`** (o lint de React 19 do projeto proíbe): usado o
+   padrão já adotado no repo — ajuste no render guardado por um "id visto" — no painel de
+   detalhes, nos diálogos e no `?task=`.
+
+### Pendências conhecidas (estado no fechamento da Fase 15)
+
+> ⚠️ As pendências **1, 2 e 6** foram **resolvidas na iteração de 2026-07-28**, descrita no
+> topo deste arquivo. O texto abaixo fica como registro do que a fase entregou e do que
+> ficou para depois — não use como lista de trabalho.
+
+1. ~~**Entrada em linguagem natural**~~ → **implementada** (`src/lib/todo/parse.ts`).
+2. ~~**Sincronização com Google Agenda**~~ → **implementada e opt-in**. A justificativa
+   registrada aqui (falta de escopo OAuth de escrita) **estava errada**: a Fase 08 sempre
+   pediu `calendar.events`, que é leitura e escrita.
+3. **Canais de lembrete `email`/`push`** existem no CHECK mas **não são oferecidos na UI** —
+   só o canal interno (sino) tem infraestrutura real. **Continua em aberto.**
+4. **Dois módulos de tarefas coexistem.** Aposentar `/tarefas` exige antes migrar
+   `calendar_events.task_id`, `generate.ts`, `search/queries.ts` e `dashboard/queries.ts`.
+   **Continua em aberto (proposital).**
+5. **Reordenação de tarefas** persiste com um `update` por item (`Promise.all`), igual a
+   `reorderHabits`/`reorderRoutines`. Suficiente para single-user.
+6. ~~**Actions sem gatilho na interface**~~ → **todas expostas**; ver o topo do arquivo.
+
+### Recomendação
+Usar o módulo alguns dias no fluxo real antes de expandir.
+
+---
+
+# Histórico anterior (fases e iterações anteriores)
+
+
 ## Iteração mais recente (manutenção) — 2026-06-27: Recorrência em cartão de crédito
 Recorrências (Financeiro → Recorrências) só sabiam lidar com **conta**: o dropdown já listava
 "Cartão de crédito" (enum compartilhado), mas **não havia seletor de cartão**, ainda pedia conta, e

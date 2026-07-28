@@ -50,6 +50,20 @@ const EXPORT_TABLES: TableName[] = [
   "study_language_practice",
   "notifications",
   "attachments",
+  // Fase 15 — módulo TO-DO.
+  "todo_projects",
+  "todo_sections",
+  "todo_labels",
+  "todo_tasks",
+  "todo_task_labels",
+  "todo_recurrences",
+  "todo_completions",
+  "todo_comments",
+  "todo_reminders",
+  "todo_saved_filters",
+  "todo_activity",
+  "todo_preferences",
+  "todo_calendar_sync",
 ];
 
 export async function GET() {

@@ -6,11 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Sistema Pessoal Yuri
 
-Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gastos de terceiros, importação, agenda + Google Agenda, tarefas/rotinas, hábitos, estudos, dashboards, busca global, notificações). Next.js 16 + Supabase + Tailwind v4 + shadcn/ui. Locale **pt-BR**, moeda **BRL**, datas no formato brasileiro.
+Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gastos de terceiros, importação, agenda + Google Agenda, **TO-DO**, tarefas/rotinas, hábitos, estudos, dashboards, busca global, notificações). Next.js 16 + Supabase + Tailwind v4 + shadcn/ui. Locale **pt-BR**, moeda **BRL**, datas no formato brasileiro.
 
 ## Estado do projeto
 
-As **14 fases do roadmap estão concluídas** (ver `docs/project/CURRENT_STATUS.md`) — o projeto está em **modo manutenção/iteração**. **Não existe uma "próxima fase" nem `PHASE_15`**. Mudanças novas são melhorias pontuais; a documentação de fases serve como histórico e fonte das decisões já tomadas.
+As **14 fases do roadmap original estão concluídas**, e a **Fase 15 — Módulo TO-DO** (aberta fora do roadmap, a pedido do usuário) também (ver `docs/project/CURRENT_STATUS.md`). O projeto está em **modo manutenção/iteração** e **não há próxima fase planejada**. Mudanças novas são melhorias pontuais; a documentação de fases serve como histórico e fonte das decisões já tomadas.
+
+## Dois módulos de tarefas coexistem (proposital)
+
+| Módulo | Rota | Papel |
+| --- | --- | --- |
+| **TO-DO** (Fase 15) | `/todo` | Gerenciador **principal** de execução e pendências |
+| Tarefas & Rotinas (Fase 09) | `/tarefas`, `/rotinas` | Legado + **rotinas** com check-in diário |
+
+O TO-DO usa tabelas `todo_*` próprias em vez de evoluir `tasks`/`projects`, porque `tasks` está acoplado a `calendar_events.task_id`, `notifications/generate.ts`, `search/queries.ts` e `dashboard/queries.ts`. **Não remova `/tarefas`** sem migrar esses quatro pontos antes. Justificativa completa em `docs/phases/PHASE_15_TODO_COMPLETE.md`.
+
+**Invariantes do TO-DO:** `atrasada` nunca é gravado (derivado na leitura); conclusão é idempotente pelo unique `todo_completions (user_id, task_id, scheduled_for)`; tarefa recorrente **avança a própria linha** (histórico em `todo_completions`) e reabrir volta a data sem criar ocorrência extra; nenhuma exclusão de projeto/seção/série acontece sem escolha explícita do destino das tarefas; recorrência é pura, com aritmética em `Date.UTC` (`src/lib/todo/recurrence.ts`).
+
+**Entrada em linguagem natural** (`src/lib/todo/parse.ts`, puro, `hoje` injetado): nunca reescreve o texto digitado — devolve `title` derivado + `tokens` que a UI mostra como chips **antes** de salvar; padrão ambíguo é ignorado; a normalização tira acentos **preservando o comprimento** (senão os índices das regex desalinham).
+
+**Envio ao Google Agenda** (`src/lib/todo/calendar-sync.ts` + `google-event.ts`): opt-in por `google_integrations.todo_sync_enabled`; sentido único (tarefa → evento); tarefa recorrente **não vira RRULE** — só a ocorrência atual, movida a cada conclusão; excluir tarefa chama `removeTaskFromGoogle` **antes** do delete (a ponte `todo_calendar_sync` é `on delete cascade`); falha do Google nunca derruba a ação.
 
 ## Leitura obrigatória antes de mexer no código
 
@@ -90,7 +105,7 @@ Padrões recorrentes que valem entender lendo o código:
 - `src/lib/supabase/service.ts` — **service role, SERVER-ONLY**. Usado **só** pelo Vercel Cron (`/api/cron/notifications`), que não tem sessão. Ignora RLS → **toda** query carrega `user_id` explícito. Nunca importar em código client.
 
 ### Segurança / multi-tenant (single-user na prática)
-- **RLS + FORCE RLS em todas as 34 tabelas**, policies `using (user_id = auth.uid()) with check (...)`. Auth nativo do Supabase (`auth.users`).
+- **RLS + FORCE RLS em todas as 47 tabelas** (34 até a Fase 14 + 13 do TO-DO), policies `using (user_id = auth.uid()) with check (...)`. Auth nativo do Supabase (`auth.users`).
 - **Proteção de rotas** em `src/lib/supabase/proxy-session.ts`: tudo exige sessão exceto `PUBLIC_PATHS` (`/login`, `/cadastro`, `/auth`, `/recuperar-senha`, `/api/cron`). `/api/cron/*` é público para o proxy mas protegido por `CRON_SECRET` (Bearer) na própria rota.
 - O app **degrada com elegância sem chaves**: sem credenciais Supabase o proxy só segue adiante; integrações Google e Cron só "ligam" quando suas env vars existem (ver `src/config/env.ts` e `.env.local.example`).
 

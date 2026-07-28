@@ -1,18 +1,112 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-06-27**.
+> Atualizado ao final de **cada** fase. Última atualização: **2026-07-28**.
 
-## 🎉 PROJETO CONCLUÍDO
-**Todas as 14 fases do roadmap estão concluídas.** O sistema entra em **modo manutenção/iteração** —
-**não há próxima fase**. Mudanças futuras são melhorias pontuais (ver
-`docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`): ler briefing/regras, abrir tarefa pontual, manter
-RLS + testes + responsividade. **Não** existe uma `PHASE_15`.
+## Estado
+**As 14 fases do roadmap original estão concluídas.** O projeto seguiu em modo
+manutenção/iteração até 2026-07-28, quando o usuário abriu uma **fase nova fora do roadmap
+original**: a **Fase 15 — Módulo TO-DO**. Ela está **concluída** (ver abaixo). Não há uma
+Fase 16 planejada — novas mudanças voltam a ser melhorias pontuais.
 
 ## Fase atual
-**Fase 14 — Segurança, Responsividade & Polimento Final → CONCLUÍDA ✅ (última fase)**
+**Fase 15 — Módulo TO-DO completo → CONCLUÍDA ✅**
+Arquivo da fase: `docs/phases/PHASE_15_TODO_COMPLETE.md`
 
 ## Próxima fase
-**Nenhuma.** Projeto fechado em escopo (modo manutenção).
+**Nenhuma planejada.** Voltamos ao modo manutenção. Pendências e melhorias registradas em
+`docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
+
+## Iteração 2026-07-28 — as 3 pendências do TO-DO foram fechadas
+
+Logo após a Fase 15, a pedido do usuário. **Testes: 529 → 582.**
+
+1. **Entrada em linguagem natural — implementada.** `src/lib/todo/parse.ts` (função pura com
+   `hoje` injetado, **37 testes**) reconhece data, hora, prazo, prioridade, `#projeto`,
+   `@etiqueta` e recorrência. O `QuickTaskInput` mostra chips do que foi entendido **antes**
+   de salvar e **nunca reescreve o texto digitado**; há botão para desligar a interpretação.
+   `todoQuickTaskSchema` ganhou `deadline_at` para o chip "Prazo final" não prometer algo que
+   não seria salvo.
+2. **Sincronização com Google Agenda — implementada, opt-in.** `google-event.ts` (mapeamento
+   puro, **16 testes**) + `calendar-sync.ts` (I/O, `server-only`, best-effort). Nova coluna
+   `google_integrations.todo_sync_enabled` (default `false`) e interruptor em `/agenda`.
+   **Correção de premissa:** a Fase 15 registrou que faltava escopo OAuth de escrita — estava
+   errado; a Fase 08 sempre pediu `calendar.events` (leitura **e** escrita) e já escrevia
+   eventos. **Recorrente não vira RRULE**: enviamos só a ocorrência atual e movemos o mesmo
+   evento a cada conclusão, coerente com o modelo de "a série avança na própria linha".
+3. **Actions sem gatilho — todas expostas.** Arraste na navegação (projetos, etiquetas,
+   filtros salvos), mover seção pelo menu da coluna no Kanban, mesclar etiquetas no
+   `LabelDialog`, editar/excluir filtro salvo no `SaveFilterDialog`. Descoberto no caminho:
+   **editar/excluir etiqueta era impossível pela interface** — agora há um lápis em cada
+   linha. Criada a action `reorderTodoSavedFilters`, que não existia.
+
+**Total do projeto após a iteração: 47 tabelas, 582 testes.** Migration nova:
+`20260728120000_todo_google_sync.sql`.
+
+## O que foi implementado na Fase 15 (Módulo TO-DO)
+
+Gerenciador de tarefas completo em `/todo`, inspirado na *experiência* de ferramentas como o
+Todoist (organização, velocidade, facilidade) — **sem copiar nome, logo, textos, ícones,
+código, assets ou identidade visual de terceiros**. Segue integralmente o design system do
+sistema (preto/branco/dourado, dark+light, Arial, shadcn/ui).
+
+**Decisão arquitetural central:** o TO-DO usa **13 tabelas `todo_*` novas** em vez de evoluir
+`tasks`/`projects` (Fase 09). Motivo: `tasks` está acoplado a `calendar_events.task_id`,
+`generate.ts`, busca global, dashboard e ao kanban-por-status; remodelá-la para suportar
+seções, subtarefas, `scheduled_date` + `deadline_at` e séries recorrentes exigiria mexer nos
+cinco ao mesmo tempo — risco alto de regressão. **Consequência assumida:** o sistema tem
+**dois módulos de tarefas coexistindo**; `/todo` é o gerenciador principal de execução e
+`/tarefas` (Fase 09) segue vivo por causa das rotinas e do vínculo com a agenda. A separação
+de responsabilidades está documentada no arquivo da fase.
+
+- **Schema (13 tabelas, todas com RLS + FORCE RLS + policy `user_id = auth.uid()` + índices
+  + trigger `updated_at`):** `todo_projects`, `todo_sections`, `todo_labels`, `todo_tasks`,
+  `todo_task_labels`, `todo_recurrences`, `todo_completions`, `todo_comments`,
+  `todo_reminders`, `todo_saved_filters`, `todo_activity`, `todo_preferences`,
+  `todo_calendar_sync`. Security advisor: **0 lints de schema**. Total do projeto: **47 tabelas**.
+- **Reuso, não duplicação:** anexos usam a tabela genérica **`attachments`** + bucket privado
+  **`attachments`** (Fase 14) com `entity_type = 'todo_task'`; notificações usam a tabela
+  **`notifications`** + `dedupe_key` + o Cron existente; drag-and-drop usa o **`SortableList`**;
+  datas usam `hojeISO()`/`dateInSaoPaulo()`.
+- **Regras críticas (puras, com datas injetadas, testadas):**
+  - **`atrasada` NUNCA é gravado** — derivado na leitura de `scheduled_date`/`deadline_at`
+    (`src/lib/todo/status.ts`), mesma regra das Fases 03/09.
+  - **Recorrência** (`src/lib/todo/recurrence.ts`): modos **fixo** (calendário) e **após
+    conclusão**; diária/semanal/mensal/anual; dias específicos da semana com ciclo de N
+    semanas; dia do mês com clamp; **último dia do mês**; **primeiro/último dia útil**;
+    **n-ésimo dia da semana do mês** (1ª..4ª e última); "somente dias úteis"; `ends_on`;
+    `max_occurrences`; pausa. Toda a aritmética roda em **UTC interno** (`Date.UTC`) para
+    eliminar o drift de fuso. Ano bissexto e virada de ano cobertos por teste.
+  - **Não-duplicação de ocorrência:** concluir grava em `todo_completions` com unique
+    `(user_id, task_id, scheduled_for)`; a tarefa recorrente **avança a própria linha** em vez
+    de criar outra (preserva projeto, seção, prioridade, etiquetas e lembretes sem copiar
+    nada). Reabrir **remove a última conclusão e volta a data** — não gera ocorrência extra.
+    Verificado no banco real: a segunda conclusão da mesma data é rejeitada pelo unique.
+  - **Nenhuma exclusão silenciosa:** excluir projeto exige escolher entre mover para a Caixa
+    de entrada / mover para outro projeto / excluir tudo (com confirmação digitando
+    "EXCLUIR"); excluir seção idem; excluir etiqueta remove **só a associação**; excluir série
+    recorrente pergunta o escopo. Verificado no banco: excluir projeto move a tarefa para a
+    caixa de entrada; excluir etiqueta mantém a tarefa.
+  - **Concluir tarefa-mãe com subtarefas pendentes SEMPRE pergunta** (concluir tudo / só esta
+    / cancelar).
+- **UI (`/todo`):** navegação interna (Caixa de entrada, Hoje, Próximos, Todas, Concluídas,
+  Projetos, Favoritos, Etiquetas, Filtros salvos, Projetos arquivados) — coluna fixa no
+  desktop, gaveta no celular. Visões **lista** (agrupável, com subtarefas aninhadas e drag),
+  **quadro/Kanban** (colunas = seções, drag entre colunas) e **calendário mensal** (drag
+  reagenda). Painel de detalhes em drawer com abas Dados/Subtarefas/Notas/Histórico.
+  Criação rápida com atalho **`T`**, `Enter` salva, `Ctrl/Cmd+Enter` salva e continua.
+  Ações em massa, menu de contexto por tarefa, filtros combináveis e filtros salvos.
+- **Integrações:** item **TO-DO** na sidebar; tipo **"Nova tarefa"** no lançamento rápido
+  global; busca global passa a encontrar **tarefas, projetos e etiquetas do TO-DO** (com link
+  que abre o painel da tarefa via `?task=`); **card TO-DO no Dashboard Geral**; notificações
+  novas `todo_overdue` / `todo_today` / `todo_deadline` / `todo_reminder`, todas com
+  `dedupe_key` determinístico (P1 atrasada tem destaque próprio); export de dados inclui as 13
+  tabelas.
+- **Fora do escopo (registrado, não silenciado):** entrada em linguagem natural (a
+  arquitetura está preparada; a UI usa seletores convencionais) e **sincronização com Google
+  Agenda** (a modelagem `todo_calendar_sync` existe com idempotência, mas **não há simulação
+  de sync** — escrever eventos exige escopo OAuth de escrita que o projeto não tem).
+- **Testes:** +115 testes puros novos (recorrência 53, status 26, filtros 36). Suíte total:
+  **529** (era 414). `npm run lint`, `npx tsc --noEmit` e `npm run build` passam.
 
 ## Iterações (modo manutenção)
 - **2026-06-27 — Ordenação manual (drag-and-drop) de Hábitos e Rotinas.** Antes a ordem dos cards era fixa (`position` só era gravada na criação, sem como reorganizar). Agora dá para **arrastar e soltar por uma alça (⠿)** em **Hábitos → "Gerenciar"** e em **Rotinas → "Todas as rotinas"** (só os cards de topo; itens internos da rotina ficam fora de escopo). A nova ordem grava na coluna `position` (**já existia** em `habits`/`routines`; as queries já faziam `ORDER BY position`) e passa a valer em todas as telas, inclusive "Hoje" — a visão "Hoje" dos hábitos já respeita a ordem porque o `Array.sort` por `todayDone` é **estável** sobre a lista ordenada por `position` (pendentes/feitos mantêm a ordem manual dentro de cada grupo). **Sem migration/RPC:** as actions novas **`reorderHabits`/`reorderRoutines`** gravam `position = índice` via updates em paralelo (`Promise.all`, filtrando `id`+`user_id`; single-user, poucos itens). Lib **`@dnd-kit`** (core+sortable+utilities) instalada; componente reutilizável **`SortableList`** (`src/components/shared/sortable-list.tsx`) com alça dedicada (só ela arrasta — botões Editar/Ativar/Excluir seguem clicáveis), acessível por teclado e com sensor de toque (delay p/ não brigar com scroll). **Optimistic UI** nas duas telas (reordena na hora; em erro → toast + `router.refresh` reverte; sincroniza a prop do servidor via ajuste de estado no render, sem `useEffect` — exigência do lint do React 19). Lógica pura **`reorderedPositions`/`arrayMoveById`** (`src/lib/shared/reorder.ts`) com testes. Arquivos: a lib, o componente, `actions/habits.ts`, `actions/routines.ts`, `habitos/habits-client.tsx`, `rotinas/routines-client.tsx`. Testes novos (`reorder.test.ts`, 6 casos): suíte **414** (lint/tsc/build ok). Spec em `docs/superpowers/specs/2026-06-27-ordenacao-habitos-rotinas-design.md`.
@@ -55,6 +149,7 @@ RLS + testes + responsividade. **Não** existe uma `PHASE_15`.
 | 12 | Dashboard Geral | ✅ Concluída |
 | 13 | Busca Global, Lançamento Rápido & Notificações | ✅ Concluída |
 | 14 | Segurança, Responsividade & Polimento Final | ✅ Concluída |
+| 15 | Módulo TO-DO completo (fora do roadmap original) | ✅ Concluída |
 
 ## O que foi implementado na Fase 14 (Segurança, Responsividade & Polimento Final)
 - **Schema finalizado (idempotente)** em `supabase/migrations/`, aplicado no projeto `yjvnlbjvippefvzgrxxw`. Security advisor: **0 lints de schema** (resta só o aviso externo de Auth "leaked password protection"). **34 tabelas** no total (+ `attachments`) e **2 buckets** privados de Storage.

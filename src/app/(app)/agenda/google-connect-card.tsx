@@ -2,12 +2,19 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCheck, Link2, RefreshCw, Unlink } from "lucide-react";
+import { CalendarCheck, Link2, ListTodo, RefreshCw, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
-import { disconnectGoogle, syncGoogleCalendar } from "@/lib/actions/calendar";
+import {
+  disconnectGoogle,
+  setTodoGoogleSync,
+  syncGoogleCalendar,
+  syncTodoToGoogle,
+} from "@/lib/actions/calendar";
 import { formatDate } from "@/lib/format";
 import type { GoogleConnectionStatus } from "@/types/database";
 
@@ -32,6 +39,45 @@ export function GoogleConnectCard({
 }) {
   const router = useRouter();
   const [syncing, setSyncing] = React.useState(false);
+  const [todoBusy, setTodoBusy] = React.useState(false);
+
+  async function handleTodoToggle(enabled: boolean) {
+    setTodoBusy(true);
+    try {
+      const res = await setTodoGoogleSync(enabled);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        enabled
+          ? "Envio ligado. Use “Enviar tarefas” para preencher o calendário."
+          : "Envio desligado. Os eventos já criados continuam no Google.",
+      );
+      router.refresh();
+    } finally {
+      setTodoBusy(false);
+    }
+  }
+
+  async function handleTodoSync() {
+    setTodoBusy(true);
+    try {
+      const res = await syncTodoToGoogle();
+      if (res.ok) {
+        toast.success(
+          `Tarefas enviadas: ${res.data.synced}${
+            res.data.failed > 0 ? ` · ${res.data.failed} com falha` : ""
+          }.`,
+        );
+        router.refresh();
+      } else {
+        toast.error(res.error);
+      }
+    } finally {
+      setTodoBusy(false);
+    }
+  }
 
   React.useEffect(() => {
     if (!notice) return;
@@ -63,7 +109,8 @@ export function GoogleConnectCard({
   if (status.connected) {
     return (
       <Card>
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <CardContent className="space-y-3 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
               <CalendarCheck className="size-5" />
@@ -101,6 +148,43 @@ export function GoogleConnectCard({
                 </Button>
               }
             />
+          </div>
+          </div>
+
+          {/* Envio das tarefas do TO-DO (opt-in, Fase 15). */}
+          <div className="space-y-2 rounded-lg border border-border p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-2.5">
+                <ListTodo className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <div className="min-w-0">
+                  <Label htmlFor="todo-sync" className="text-sm font-medium">
+                    Enviar tarefas do TO-DO
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Tarefas com data programada viram eventos no Google. Recorrentes
+                    enviam só a próxima ocorrência, que se move a cada conclusão.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="todo-sync"
+                checked={status.todoSyncEnabled}
+                onCheckedChange={handleTodoToggle}
+                disabled={todoBusy}
+              />
+            </div>
+            {status.todoSyncEnabled && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTodoSync}
+                disabled={todoBusy}
+                className="w-full sm:w-auto"
+              >
+                <RefreshCw className={todoBusy ? "animate-spin" : ""} />
+                {todoBusy ? "Enviando…" : "Enviar tarefas agora"}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

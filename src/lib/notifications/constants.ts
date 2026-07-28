@@ -50,6 +50,11 @@ export const NOTIFICATION_TYPES = [
   "study_overdue",
   "card_limit",
   "high_spending",
+  // Fase 15 — módulo TO-DO.
+  "todo_overdue",
+  "todo_today",
+  "todo_deadline",
+  "todo_reminder",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -67,6 +72,10 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   study_overdue: "Estudo atrasado",
   card_limit: "Limite do cartão",
   high_spending: "Gasto alto",
+  todo_overdue: "TO-DO atrasado",
+  todo_today: "TO-DO de hoje",
+  todo_deadline: "Prazo próximo",
+  todo_reminder: "Lembrete de tarefa",
 };
 
 /** Rótulo amigável de um tipo (com fallback para tipos desconhecidos). */

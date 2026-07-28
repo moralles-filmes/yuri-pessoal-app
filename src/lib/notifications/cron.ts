@@ -58,6 +58,8 @@ export async function generateForUser(
     coursesRes,
     sessionsRes,
     txRes,
+    todoTasksRes,
+    todoRemindersRes,
   ] = await Promise.all([
     service.from("credit_cards").select("id, nome, limite_total").eq("user_id", userId),
     service
@@ -111,6 +113,19 @@ export async function generateForUser(
       .eq("user_id", userId)
       .gte("competence_date", `${addMes(mesAtual, -3)}-01`)
       .lte("competence_date", todayIso),
+    // Fase 15 — TO-DO: só as tarefas ABERTAS interessam para alerta.
+    service
+      .from("todo_tasks")
+      .select("id, title, status, scheduled_date, deadline_at, priority, project_id")
+      .eq("user_id", userId)
+      .in("status", ["pendente", "em_andamento"]),
+    // Lembretes ainda não disparados cujo horário já chegou.
+    service
+      .from("todo_reminders")
+      .select("id, task_id, remind_at, task:todo_tasks(title, project_id)")
+      .eq("user_id", userId)
+      .eq("status", "pendente")
+      .lte("remind_at", now.toISOString()),
   ]);
 
   /* ── Faturas / cartões ── */
@@ -301,6 +316,43 @@ export async function generateForUser(
   );
   const mediaSaidas = priorSaidas.reduce((a, b) => a + b, 0) / priorMonths.length;
 
+  /* ── TO-DO (Fase 15) ── */
+  const genTodoTasks = ((todoTasksRes.data ?? []) as Array<{
+    id: string;
+    title: string;
+    status: string;
+    scheduled_date: string | null;
+    deadline_at: string | null;
+    priority: number;
+    project_id: string | null;
+  }>).map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    scheduled_date: t.scheduled_date,
+    deadline_at: t.deadline_at,
+    priority: Number(t.priority),
+    projectId: t.project_id,
+  }));
+
+  const genTodoReminders = ((todoRemindersRes.data ?? []) as Array<{
+    id: string;
+    task_id: string;
+    remind_at: string;
+    task: { title: string; project_id: string | null } | { title: string; project_id: string | null }[] | null;
+  }>).map((r) => {
+    const task = Array.isArray(r.task) ? r.task[0] : r.task;
+    const at = new Date(r.remind_at);
+    return {
+      id: r.id,
+      taskId: r.task_id,
+      taskTitle: task?.title ?? "Tarefa",
+      remindAtMs: at.getTime(),
+      remindAtIso: spDateIso(at),
+      projectId: task?.project_id ?? null,
+    };
+  });
+
   /* ── Geração pura ── */
   const input: GenerateInput = {
     todayIso,
@@ -314,6 +366,8 @@ export async function generateForUser(
     habits: genHabits,
     courses: genCourses,
     spending: { mes: mesAtual, saidas: resumoAtual.saidas, mediaSaidas },
+    todoTasks: genTodoTasks,
+    todoReminders: genTodoReminders,
   };
 
   const candidates = generateNotifications(input);
@@ -357,6 +411,21 @@ export async function generateForUser(
     // Não falha o Cron inteiro por um usuário; reporta 0 inseridos.
     return { userId, candidates: candidates.length, inserted: 0 };
   }
+
+  // Fase 15 — fecha os lembretes de TO-DO que viraram notificação. A dupla proteção
+  // (dedupe_key + status 'enviado') garante que o lembrete não dispare de novo, mesmo
+  // que a notificação seja apagada depois.
+  const sentReminderIds = fresh
+    .filter((c) => c.type === "todo_reminder")
+    .map((c) => c.dedupe_key.replace("todo_reminder:", ""));
+  if (sentReminderIds.length > 0) {
+    await service
+      .from("todo_reminders")
+      .update({ status: "enviado", sent_at: nowIso })
+      .eq("user_id", userId)
+      .in("id", sentReminderIds);
+  }
+
   return { userId, candidates: candidates.length, inserted: fresh.length };
 }
 

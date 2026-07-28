@@ -11,6 +11,7 @@ import { asPeriod, asView, type DashPeriod, type DashView } from "./period";
 /** Ids dos cards do dashboard (ordem = ordem padrão). */
 export const DASH_CARD_IDS = [
   "financeiro",
+  "todo",
   "faturas",
   "agenda",
   "tarefas",
@@ -23,6 +24,7 @@ export type DashCardId = (typeof DASH_CARD_IDS)[number];
 /** Título pt-BR de cada card (usado no cabeçalho e no menu "Personalizar"). */
 export const DASH_CARD_TITLES: Record<DashCardId, string> = {
   financeiro: "Financeiro",
+  todo: "TO-DO",
   faturas: "Cartões & Faturas",
   agenda: "Agenda",
   tarefas: "Tarefas & Rotinas",

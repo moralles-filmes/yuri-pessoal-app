@@ -11,6 +11,7 @@ import { FinanceCard } from "@/components/dashboard/general/finance-card";
 import { InvoicesCard } from "@/components/dashboard/general/invoices-card";
 import { AgendaCard } from "@/components/dashboard/general/agenda-card";
 import { TasksCard } from "@/components/dashboard/general/tasks-card";
+import { TodoCard } from "@/components/dashboard/general/todo-card";
 import { HabitsCard } from "@/components/dashboard/general/habits-card";
 import { StudiesCard } from "@/components/dashboard/general/studies-card";
 import { NotificationsCard } from "@/components/dashboard/general/notifications-card";
@@ -49,6 +50,11 @@ export default async function DashboardPage({
     financeiro: (
       <Suspense fallback={<CardBodySkeleton lines={5} />}>
         <FinanceCard window={window} todayIso={todayIso} />
+      </Suspense>
+    ),
+    todo: (
+      <Suspense fallback={<CardBodySkeleton lines={5} />}>
+        <TodoCard todayIso={todayIso} />
       </Suspense>
     ),
     faturas: (
