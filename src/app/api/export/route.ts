@@ -65,7 +65,70 @@ const EXPORT_TABLES: TableName[] = [
   "todo_activity",
   "todo_preferences",
   "todo_calendar_sync",
+  // Fase 16 — módulo Dieta e Alimentação. `nutrition_nutrients` fica de fora de propósito:
+  // é vocabulário global do sistema (sem `user_id`), recriado por migration, não dado do
+  // usuário. Os 597 alimentos da TACO também não entram — ver o `.eq("user_id", …)` abaixo.
+  "nutrition_food_sources",
+  "nutrition_food_categories",
+  "nutrition_foods",
+  "nutrition_food_nutrients",
+  "nutrition_food_measures",
+  "nutrition_food_prefs",
+  "nutrition_food_tags",
+  "nutrition_food_tag_links",
+  "nutrition_import_batches",
+  "nutrition_profiles",
+  "nutrition_meal_types",
+  "nutrition_goal_periods",
+  "nutrition_goal_items",
+  "nutrition_plans",
+  "nutrition_plan_days",
+  "nutrition_planned_meals",
+  "nutrition_planned_meal_items",
+  "nutrition_diary_meals",
+  "nutrition_diary_entries",
 ];
+
+/**
+ * Lê uma tabela inteira do usuário.
+ *
+ * DOIS DETALHES QUE PARECEM DE ESTILO E NÃO SÃO:
+ *
+ * 1. `.eq("user_id", …)` é REDUNDANTE para a maioria das tabelas (a RLS já filtra), mas é
+ *    ESSENCIAL para as do módulo Dieta que aceitam `user_id` nulo: nelas a policy de SELECT
+ *    alcança também as linhas globais, e sem o filtro o backup viria com os 597 alimentos da
+ *    TACO e seus 21.147 valores — dado que não é do usuário e que a migration recria.
+ *
+ * 2. O cast localizado existe por causa do TS2589. O `from()` do supabase-js resolve o tipo
+ *    da tabela a partir do LITERAL da string; com a união de todas as tabelas do projeto (67
+ *    desde a Fase 16-B) o compilador estoura o limite de instanciação. Aqui a tabela é
+ *    dinâmica e as linhas vão direto para o JSON do backup — nenhum tipo de linha é usado —
+ *    então um cast único e explicado resolve sem espalhar `any` pelo arquivo.
+ */
+async function dumpTable(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: TableName,
+  userId: string,
+): Promise<unknown[]> {
+  const dynamicClient = supabase as unknown as {
+    from: (t: string) => {
+      select: (columns: string) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => {
+          limit: (n: number) => Promise<{ data: unknown[] | null; error: unknown }>;
+        };
+      };
+    };
+  };
+  const { data, error } = await dynamicClient
+    .from(table)
+    .select("*")
+    .eq("user_id", userId)
+    .limit(100000);
+  return error ? [] : (data ?? []);
+}
 
 export async function GET() {
   const supabase = await createClient();
@@ -86,8 +149,7 @@ export async function GET() {
 
   const entries = await Promise.all(
     EXPORT_TABLES.map(async (table) => {
-      const { data, error } = await supabase.from(table).select("*").limit(100000);
-      return [table, error ? [] : (data ?? [])] as const;
+      return [table, await dumpTable(supabase, table, user.id)] as const;
     }),
   );
   for (const [table, rows] of entries) result[table] = rows;

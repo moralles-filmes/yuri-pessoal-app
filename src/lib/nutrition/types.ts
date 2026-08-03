@@ -6,15 +6,22 @@
  * efetiva) resolvido.
  */
 import type {
+  ActivityLevel,
   BaseUnit,
+  ChangeKind,
   DataQuality,
+  DayKind,
   FoodType,
+  GoalDirection,
+  GoalType,
+  MealStatus,
   MeasureUnitType,
   NutrientGroup,
   NutrientMethod,
   NutrientUnit,
   NutrientValueState,
   PreparationState,
+  ProfileSex,
 } from "./constants";
 
 /** Definição de um nutriente (catálogo global de referência). */
@@ -199,4 +206,201 @@ export const EMPTY_FOOD_FILTERS: FoodFilterState = {
   minProtein: null,
   maxProtein: null,
   sort: "nome",
+};
+
+/* ═════════════════════ Fase 16-B — Metas, diário e planejamento ═════════════════════ */
+
+/* ───────────────────────────── Perfil e metas ───────────────────────────── */
+
+/** Perfil informado pelo usuário. Nada aqui é obrigatório e nada é prescrição. */
+export type NutritionProfile = {
+  id: string;
+  birthDate: string | null;
+  sex: ProfileSex;
+  heightCm: number | null;
+  weightKg: number | null;
+  activityLevel: ActivityLevel;
+  goalDirection: GoalDirection;
+  restrictions: string[];
+  notes: string | null;
+};
+
+/**
+ * Um valor de meta já resolvido para um escopo concreto (dia + tipo de dia + refeição).
+ * `amount` nulo significa "não há alvo definido" — nunca zero: um alvo de 0 g de açúcar e
+ * a ausência de meta de açúcar são coisas diferentes.
+ */
+export type GoalTarget = {
+  code: string;
+  amount: number | null;
+  min: number | null;
+  max: number | null;
+  /** De onde o valor veio: digitado direto ou calculado como % da meta do dia. */
+  origin: "absoluto" | "percentual";
+  /** Percentual usado, quando `origin` é "percentual". Serve para a UI explicar o número. */
+  percentOfDay: number | null;
+};
+
+export type GoalItemRow = {
+  id: string;
+  periodId: string;
+  nutrientCode: string;
+  weekday: number | null;
+  dayKind: DayKind | null;
+  mealTypeId: string | null;
+  targetAmount: number | null;
+  targetPercent: number | null;
+  minAmount: number | null;
+  maxAmount: number | null;
+  notes: string | null;
+  createdAt: string;
+};
+
+export type GoalPeriod = {
+  id: string;
+  name: string | null;
+  reason: string | null;
+  startsOn: string;
+  endsOn: string | null;
+  goalType: GoalType;
+  notes: string | null;
+  isActive: boolean;
+  createdAt: string;
+  items: GoalItemRow[];
+};
+
+/* ───────────────────────────── Refeições ───────────────────────────── */
+
+export type MealType = {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
+  color: string | null;
+  defaultTime: string | null;
+  position: number;
+  isActive: boolean;
+};
+
+/* ───────────────────────────── Diário ─────────────────────────────
+ * O snapshot é o coração da subfase: o que está aqui foi congelado no momento do registro e
+ * NÃO é recalculado a partir do catálogo. Editar o alimento depois não muda nada disto.
+ */
+
+/** Um nutriente dentro do `nutrients_snapshot`. */
+export type SnapshotNutrient = {
+  amount: number | null;
+  state: NutrientValueState;
+  method: NutrientMethod;
+};
+
+export type NutrientSnapshotBag = Record<string, SnapshotNutrient>;
+
+/** O snapshot completo gravado ao registrar consumo. */
+export type DiaryEntrySnapshot = {
+  foodNameSnapshot: string;
+  preparationStateSnapshot: PreparationState | null;
+  brandSnapshot: string | null;
+  quantity: number;
+  measureLabel: string | null;
+  /** Quantidade na unidade-base do alimento (ver `baseUnit`). */
+  gramsEquivalent: number;
+  baseQuantity: number;
+  baseUnit: BaseUnit;
+  sourceIdSnapshot: string | null;
+  sourceNameSnapshot: string | null;
+  sourceVersionSnapshot: string | null;
+  sourceFoodCodeSnapshot: string | null;
+  nutrientsSnapshot: NutrientSnapshotBag;
+  /** Derivadas do snapshot na gravação. `null` = não disponível, nunca zero. */
+  energyKcal: number | null;
+  proteinG: number | null;
+  carbG: number | null;
+  fatG: number | null;
+  fiberG: number | null;
+};
+
+/** Item do diário como a leitura entrega. */
+export type DiaryEntry = DiaryEntrySnapshot & {
+  id: string;
+  diaryMealId: string;
+  /** Referência informativa. Nulo quando o alimento foi excluído do catálogo. */
+  foodId: string | null;
+  entryKind: "alimento" | "livre";
+  plannedItemId: string | null;
+  changeKind: ChangeKind;
+  changedAt: string | null;
+  notes: string | null;
+  position: number;
+};
+
+export type DiaryMeal = {
+  id: string;
+  diaryDate: string;
+  mealTypeId: string;
+  mealTypeName: string;
+  mealTypeIcon: string | null;
+  plannedMealId: string | null;
+  plannedTime: string | null;
+  consumedTime: string | null;
+  /** Status GRAVADO. O que a tela exibe é o derivado — ver `effectiveMealStatus`. */
+  status: MealStatus;
+  title: string | null;
+  notes: string | null;
+  position: number;
+  entries: DiaryEntry[];
+};
+
+/* ───────────────────────────── Planejamento ───────────────────────────── */
+
+export type PlannedMealItem = {
+  id: string;
+  plannedMealId: string;
+  foodId: string | null;
+  customLabel: string | null;
+  quantity: number | null;
+  measureId: string | null;
+  measureLabel: string | null;
+  isOptional: boolean;
+  notes: string | null;
+  position: number;
+};
+
+export type PlannedMeal = {
+  id: string;
+  planId: string | null;
+  planDayId: string | null;
+  /** Nulo = linha de modelo (sem data). */
+  plannedDate: string | null;
+  mealTypeId: string;
+  mealTypeName: string;
+  mealTypeIcon: string | null;
+  plannedTime: string | null;
+  title: string | null;
+  notes: string | null;
+  position: number;
+  items: PlannedMealItem[];
+};
+
+export type PlanDay = {
+  id: string;
+  planId: string;
+  weekIndex: number;
+  weekday: number;
+  label: string | null;
+  dayKind: DayKind | null;
+  notes: string | null;
+  meals: PlannedMeal[];
+};
+
+export type NutritionPlan = {
+  id: string;
+  name: string;
+  description: string | null;
+  cycleWeeks: number;
+  weekStartDay: number;
+  anchorDate: string | null;
+  isActive: boolean;
+  isDefault: boolean;
+  days: PlanDay[];
 };

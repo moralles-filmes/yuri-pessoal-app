@@ -197,7 +197,7 @@ visual, textos, logotipos, telas ou assets de terceiros é copiado.**
 | Subfase | Tema | Arquivo | Status |
 | --- | --- | --- | --- |
 | 16-A | Fundação, núcleo de cálculo e catálogo de alimentos | `PHASE_16_A_NUTRITION_FOUNDATION_FOODS.md` | ✅ Concluída |
-| 16-B | Metas, diário alimentar e planejamento | `PHASE_16_B_NUTRITION_DIARY_PLANNING.md` | ⬜ Próxima |
+| 16-B | Metas, diário alimentar e planejamento | `PHASE_16_B_NUTRITION_DIARY_PLANNING.md` | ✅ Concluída |
 | 16-C | Receitas, refeições-modelo e substituições | `PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` | ⬜ |
 | 16-D | Lista de compras e despensa | `PHASE_16_D_NUTRITION_SHOPPING_LIST.md` | ⬜ |
 | 16-E | Medidas corporais, evolução e relatórios | `PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` | ⬜ |
@@ -225,3 +225,55 @@ global, lançamento rápido, notificações + Cron), 14 (`attachments`, buckets 
 
 **Critérios de aceite da fase completa:** os 40 itens listados na seção "Critérios de aceite
 gerais" do arquivo da Subfase F.
+
+---
+
+## Fase 17 — Módulo Treinos (6 subfases)
+> **Fora do roadmap original.** Aberta em 2026-08-03, a pedido do usuário, em paralelo à
+> Fase 16 (que continua com as subfases B–F pendentes). Não substitui nem invalida nenhuma
+> fase anterior. Quebrada em **6 subfases sequenciais (A–F)**, cada uma com arquivo próprio.
+
+**Objetivo:** um módulo central em `/treinos` para **planejar, executar e acompanhar**
+treino de academia: musculação, hipertrofia, força e condicionamento complementar —
+exercícios, treinos-modelo, programas, planejamento semanal, sessão ao vivo, registro de
+desempenho, progressão de carga, histórico, recordes, metas, evolução corporal, dashboards e
+relatórios — com a identidade visual, a arquitetura e as regras já existentes no sistema.
+
+**Referência funcional (não visual, não de código):** a *organização*, a *facilidade de
+registro durante o treino* e a *profundidade funcional* de bons apps de treino. **Nada de
+código, identidade visual, textos, ícones, telas, vídeos, imagens ou assets de terceiros é
+copiado.** A base de exercícios é de autoria própria.
+
+| Subfase | Tema | Arquivo | Status |
+| --- | --- | --- | --- |
+| 17-A | Fundação, vocabulário e catálogo de exercícios | `PHASE_17_A_TRAINING_FOUNDATION_EXERCISES.md` | ✅ Concluída |
+| 17-B | Programas, treinos-modelo e planejamento semanal | `PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` | ⬜ Próxima |
+| 17-C | Preparação, sessão ao vivo, cronômetro e recuperação | `PHASE_17_C_TRAINING_LIVE_SESSION.md` | ⬜ |
+| 17-D | Histórico, volume, recordes e progressão | `PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` | ⬜ |
+| 17-E | Metas, medidas corporais compartilhadas e dashboards | `PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` | ⬜ |
+| 17-F | Integrações, notificações, resiliência e polimento | `PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` | ⬜ |
+
+**Dependências gerais:** Fases 01 (design system/app shell), 08 (agenda), 10 (hábitos),
+12 (dashboard geral), 13 (busca global, lançamento rápido, notificações + Cron),
+14 (`attachments`, buckets privados, `settings`, exportação), 15 (padrão de módulo com
+navegação interna própria) e 16 (padrão de base global imutável + cópia pessoal).
+
+**Decisões registradas antes de começar:**
+1. **Rota `/treinos`** (padrão pt-BR do projeto), não `/training`. Prefixo de tabela
+   `training_*` (código/schema em inglês, como `todo_*`/`nutrition_*`).
+2. **Base de exercícios de autoria própria**, sem imagem, vídeo, texto ou dado copiado de
+   apps de terceiros. Procedência em `data/training/exercise-base/ATTRIBUTION.md`.
+3. **`tracking_type` é obrigatório** em todo exercício — é o contrato de medição que impede o
+   sistema de somar quilos com segundos na Subfase D.
+4. **Base global (`user_id is null`) é somente leitura**, com policies separadas por comando;
+   preferências do usuário vão para `training_exercise_prefs`. Mesmo padrão da Fase 16-A.
+5. **Modelo é mutável; execução é imutável.** A sessão (17-C) grava **snapshot** do treino;
+   editar o modelo nunca reescreve o passado.
+6. **Medidas corporais são um módulo central compartilhado (`body_*`)**, não tabelas de
+   Treinos nem de Dieta. Quem chegar primeiro (16-E ou 17-E) cria; o outro consome. **Nunca
+   existem duas tabelas de peso corporal.** Registrado na 17-E e anotado na 16-E.
+7. **Ferramenta de organização e registro.** Sem diagnóstico, sem prescrição, sem garantia de
+   resultado, sem sugestão de carga máxima e sem incentivo a treinar com dor.
+
+**Critérios de aceite da fase completa:** os **55 itens** listados na seção "Critérios de
+aceite gerais do módulo Treinos" do arquivo da Subfase F.

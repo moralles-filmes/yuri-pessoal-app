@@ -10,7 +10,7 @@ Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gas
 
 ## Estado do projeto
 
-As **14 fases do roadmap original** e a **Fase 15 — Módulo TO-DO** estão concluídas. Desde **2026-08-03** o projeto está na **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**: a **16-A está concluída** e a **16-B é a próxima** (ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`). Fora dessa fase, o projeto segue em modo manutenção/iteração.
+As **14 fases do roadmap original** e a **Fase 15 — Módulo TO-DO** estão concluídas. Desde **2026-08-03** o projeto está na **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**: as **16-A e 16-B estão concluídas** e a **16-C é a próxima** (ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`). Fora dessa fase, o projeto segue em modo manutenção/iteração.
 
 ## Dois módulos de tarefas coexistem (proposital)
 
@@ -29,7 +29,7 @@ O TO-DO usa tabelas `todo_*` próprias em vez de evoluir `tasks`/`projects`, por
 
 ## Módulo Dieta e Alimentação (Fase 16, em andamento)
 
-Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 submódulos. A **16-A** entregou schema, base nutricional, núcleo de cálculo e catálogo de alimentos; diário, planejamento, receitas, substituições, compras, medidas e integrações vêm nas subfases B–F (`docs/phases/PHASE_16_*`).
+Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 submódulos. A **16-A** entregou schema, base nutricional, núcleo de cálculo e catálogo de alimentos; a **16-B** entregou metas com histórico datado, diário alimentar com snapshot imutável, planejamento com modelos de semana e a visão geral real. Receitas, substituições, compras, medidas e integrações vêm nas subfases C–F (`docs/phases/PHASE_16_*`).
 
 **Invariantes do módulo:**
 1. **Ausência de dado NÃO é zero.** `value_state` (`disponivel|traco|nao_disponivel|nao_aplicavel|em_revisao`) distingue "medido zero" de "não medido"; uma CHECK garante no banco. Toda soma propaga `exato|aproximado|parcial` e a UI mostra isso. Nunca `amount ?? 0` fora de `calc.ts`.
@@ -40,6 +40,10 @@ Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 sub
 6. **Nenhum valor nutricional é inventado.** Base = TACO 4ª ed. (NEPA/UNICAMP), do XLSX oficial, com licença de reprodução mediante citação. Pipeline em `scripts/nutrition/`, atribuição em `data/nutrition/taco-4/ATTRIBUTION.md`. Fonte nova entra pelo mesmo pipeline, com licença registrada.
 7. **Arredondar só na apresentação** (`roundForDisplay`, precisão por nutriente).
 8. **A água continua sendo do módulo Hábitos** — Dieta lê e linka, não duplica.
+9. **O histórico do consumo é imutável** (16-B). `nutrition_diary_entries` congela nutrientes, quantidade, conversão e procedência **no ato do registro** (`nutrients_snapshot jsonb`); o total do dia soma esse jsonb e nunca o catálogo. `food_id` é `on delete set null`; o discriminador estável é `entry_kind`. Reuse `buildDiaryEntrySnapshot` — receita e refeição-modelo (16-C) entram pelo **mesmo** caminho de gravação.
+10. **Planejado ≠ consumido**; **`pendente` não existe no CHECK** (deriva de `planned_time` + agora); **a meta de um dia é a que valia nele** (`nutrition_goal_periods`); **nenhum escopo de edição do planejamento alcança o passado**.
+11. **`ON CONFLICT` não serve para os índices únicos parciais/de expressão deste módulo** — o Postgres não os infere e o `upsert` do PostgREST quebra **só em runtime** (`42P10`). Use select-then-insert/update. E `.eq(coluna, null)` não casa com NULL no PostgREST: use `.is(coluna, null)`.
+12. **Sem prescrição.** O estimador de gasto energético é opcional, mostra a fórmula, se identifica como estimativa e **nunca grava meta**.
 
 ## Leitura obrigatória antes de mexer no código
 
@@ -67,7 +71,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa, 671 testes)
+npm run test:run       # vitest run (suíte completa, 889 testes)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos
@@ -133,7 +137,7 @@ Testes de fuso não podem depender do `TZ` da máquina: use instantes absolutos 
 - `src/lib/supabase/service.ts` — **service role, SERVER-ONLY**. Usado **só** pelo Vercel Cron (`/api/cron/notifications`), que não tem sessão. Ignora RLS → **toda** query carrega `user_id` explícito. Nunca importar em código client.
 
 ### Segurança / multi-tenant (single-user na prática)
-- **RLS + FORCE RLS em todas as 47 tabelas** (34 até a Fase 14 + 13 do TO-DO), policies `using (user_id = auth.uid()) with check (...)`. Auth nativo do Supabase (`auth.users`).
+- **RLS + FORCE RLS em todas as tabelas** (34 até a Fase 14, 13 do TO-DO, 20 da Fase 16), policies `using (user_id = auth.uid()) with check (...)`. Auth nativo do Supabase (`auth.users`).
 - **Proteção de rotas** em `src/lib/supabase/proxy-session.ts`: tudo exige sessão exceto `PUBLIC_PATHS` (`/login`, `/cadastro`, `/auth`, `/recuperar-senha`, `/api/cron`). `/api/cron/*` é público para o proxy mas protegido por `CRON_SECRET` (Bearer) na própria rota.
 - O app **degrada com elegância sem chaves**: sem credenciais Supabase o proxy só segue adiante; integrações Google e Cron só "ligam" quando suas env vars existem (ver `src/config/env.ts` e `.env.local.example`).
 
