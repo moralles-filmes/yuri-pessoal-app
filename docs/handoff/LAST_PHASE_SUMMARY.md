@@ -1,5 +1,110 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
+## Subfase 16-A — Dieta e Alimentação · Fundação, núcleo de cálculo e catálogo (2026-08-03) ✅
+
+Primeira das 6 subfases da **Fase 16**, aberta pelo usuário fora do roadmap original.
+Entrega a fundação do módulo: rota, navegação, schema, base nutricional brasileira real,
+núcleo de cálculo testado e catálogo de alimentos completo. **Testes: 589 → 671** (+82).
+
+### A decisão que define o módulo inteiro
+**Ausência de dado não é zero.** Todo valor nutricional carrega um estado
+(`disponivel | traco | nao_disponivel | nao_aplicavel | em_revisao`); só `disponivel` tem
+número, e uma **CHECK constraint** garante isso no banco. Toda soma propaga uma qualidade
+(`exato | aproximado | parcial`) que a interface é obrigada a mostrar. Somar tratando "não
+analisado" como 0 inventa precisão que o dado não tem.
+
+Isso apareceu no dado real logo no primeiro teste: **"Sal, grosso" tem energia marcada como
+`NA` (não aplicável) na TACO** — o app mostra "n/a", não "0 kcal".
+
+### Base nutricional: TACO 4ª edição, real e verificável
+597 alimentos e **21.147 valores nutricionais**, do **XLSX oficial do NEPA/UNICAMP**. Sem
+scraping, sem cópia de terceiros, sem nenhum número gerado por IA. A obra declara *"É
+permitida a reprodução parcial ou total desta obra, desde que citada a fonte"* — a citação
+aparece na visão geral e no detalhe de cada alimento.
+
+Pipeline determinístico, reexecutável, com SHA-256 da origem no manifesto:
+`build-taco-dataset.mjs` (XLSX → dataset validado) → `generate-taco-migration.mjs`
+(dataset → 8 migrations idempotentes). Documentado em `data/nutrition/taco-4/ATTRIBUTION.md`.
+
+**Fidelidade à fonte, item por item:**
+- Os quatro marcadores viraram estados distintos: branco = "análises não solicitadas",
+  `Tr` = traço, `NA` = não aplicável, `*` = "as análises estão sendo reavaliadas"
+  (21 alimentos ficaram `is_verified = false` por causa disso).
+- **Carboidrato levemente negativo** em 4 pescados/carnes magras — resultado real do cálculo
+  por diferença da própria TACO — foi **preservado como publicado**, não zerado.
+- Energia, carboidrato e vitamina A são marcados como `calculado`, não `analitico`: a própria
+  TACO os obtém por cálculo.
+- **Nenhuma medida caseira foi inventada** — a TACO não publica medida por alimento. A
+  estrutura, a UI e o cálculo estão prontos; o usuário cadastra as suas.
+
+### Schema — 10 tabelas + 1 view (projeto: 57 tabelas, 0 lints de schema)
+`nutrition_nutrients` (catálogo global **sem policy de escrita**), `nutrition_food_sources`,
+`nutrition_food_categories`, `nutrition_foods`, `nutrition_food_nutrients` (**única fonte de
+verdade**), `nutrition_food_measures`, `nutrition_food_prefs`, `nutrition_food_tags`,
+`nutrition_food_tag_links`, `nutrition_import_batches` + `nutrition_foods_view`
+(`security_invoker`).
+
+Novidade de modelagem em relação ao resto do projeto: **`user_id` nulo = linha global,
+imutável**, com policies **separadas por comando** (SELECT alcança o global, escrita não).
+Preferências do usuário sobre alimentos globais (favorito, arquivado, **recategorização**)
+moram em `nutrition_food_prefs`.
+
+> A recategorização nasceu de um caso real: a TACO lista "Biscoito, polvilho doce" em
+> *Verduras e hortaliças* (a tabela é alfabética dentro da seção). Corrigir na base seria
+> reescrever a fonte; o override resolve para o usuário sem mentir sobre o que foi publicado.
+
+### Núcleo puro (+82 testes)
+`units.ts` (conversão; **conversão impossível é erro tipado, nunca estimativa** — g→ml exige
+densidade), `calc.ts` (fórmula única com a base lida do alimento, propagação de qualidade,
+Atwater separado do declarado, arredondamento só na apresentação) e `filters.ts` (busca sem
+acento, 13 filtros combináveis, URL ↔ filtros testada como ida e volta). A suíte passa em
+`TZ=UTC`, `America/Sao_Paulo` e `Asia/Tokyo`.
+
+### Interface
+Item **"Dieta e Alimentação"** na sidebar (grupo Saúde). Visão geral com o estado real do
+catálogo e a procedência da base. Catálogo com busca instantânea, 13 filtros, ações em massa
+com confirmação e relatório do que foi ignorado, e painel de detalhe com 4 abas —
+**calculadora de porção** (exercita o núcleo de ponta a ponta), nutrientes agrupados com
+estado do valor, medidas caseiras (CRUD) e procedência. No formulário, **campo vazio =
+"não informado"**, nunca zero. As 10 rotas restantes existem e dizem em qual subfase chegam.
+
+### Segurança — 10 verificações de RLS pela role `authenticated`
+Editar/excluir alimento global: **0 linhas**. Alterar nutriente da base: **0 linhas**.
+`user_id` de terceiro, forjar alimento "oficial", escrever no catálogo de nutrientes, gravar
+valor com estado incoerente e medida sem conversão: **todos bloqueados**. Favoritar alimento
+da base: **permitido** (é preferência). Resíduos removidos e integridade reconferida.
+
+### Arquivos principais criados
+`scripts/nutrition/{build-taco-dataset,generate-taco-migration,uuid}.mjs` ·
+`data/nutrition/taco-4/{foods.json,manifest.json,ATTRIBUTION.md}` ·
+`supabase/migrations/2026080312*.sql` (10 de schema + seed de referência),
+`2026080313*.sql` (8 de seed da TACO), `20260803140000_nutrition_taco4_batch.sql` ·
+`src/lib/nutrition/{constants,types,units,calc,filters,queries}.ts` (+ 3 de teste) ·
+`src/lib/validators/nutrition.ts` · `src/lib/actions/nutrition-foods.ts` ·
+`src/components/nutrition/{nutrition-nav,nutrition-shell,nutrient-value,food-filters,food-detail-sheet,food-form-dialog,measure-dialog}.tsx` ·
+`src/app/(app)/nutricao/` (layout, visão geral, catálogo + 10 rotas de submódulo).
+
+### Arquivos alterados
+`src/config/nav.ts` (grupo Saúde) · `src/types/supabase.ts` (regenerado) ·
+`docs/project/{PROJECT_BRIEFING,PROJECT_ROADMAP,PROJECT_ARCHITECTURE,CURRENT_STATUS}.md` ·
+`docs/handoff/{LAST_PHASE_SUMMARY,NEXT_AGENT_INSTRUCTIONS}.md` · `CLAUDE.md`.
+
+### Verificação
+`npm run test:run` (**671**), `npm run lint`, `npx tsc --noEmit`, `npm run build` — todos
+passam. Rotas privadas: **307 → /login**. Nenhuma fase anterior foi tocada.
+
+### Pendências conscientes (registradas, não silenciadas)
+Medidas caseiras oficiais em massa (a TACO não publica — importar segunda fonte pelo mesmo
+pipeline); scanner de código de barras pela câmera (16-F); dashboard geral, busca global,
+lançamento rápido e notificações (16-F); exportação do catálogo em CSV (16-E).
+
+### Próxima subfase
+**16-B — Metas, diário alimentar e planejamento** ·
+`docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md`
+
+---
+
+
 ## Iteração — Fecha as 3 pendências do TO-DO (2026-07-28) ✅
 
 Feita logo após a Fase 15, a pedido do usuário ("vamos resolver isso tudo"). Fecha os três

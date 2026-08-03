@@ -806,6 +806,579 @@ export type Database = {
         }
         Relationships: []
       }
+      nutrition_food_categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          position: number
+          slug: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          position?: number
+          slug: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          position?: number
+          slug?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_food_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_food_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_food_measures: {
+        Row: {
+          created_at: string
+          food_id: string
+          grams: number | null
+          id: string
+          is_default: boolean
+          label: string
+          milliliters: number | null
+          position: number
+          source_note: string | null
+          unit_type: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          food_id: string
+          grams?: number | null
+          id?: string
+          is_default?: boolean
+          label: string
+          milliliters?: number | null
+          position?: number
+          source_note?: string | null
+          unit_type?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          food_id?: string
+          grams?: number | null
+          id?: string
+          is_default?: boolean
+          label?: string
+          milliliters?: number | null
+          position?: number
+          source_note?: string | null
+          unit_type?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_food_measures_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_food_measures_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_food_nutrients: {
+        Row: {
+          amount: number | null
+          created_at: string
+          food_id: string
+          id: string
+          method: string
+          nutrient_code: string
+          source_note: string | null
+          updated_at: string
+          user_id: string | null
+          value_state: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          food_id: string
+          id?: string
+          method?: string
+          nutrient_code: string
+          source_note?: string | null
+          updated_at?: string
+          user_id?: string | null
+          value_state?: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          food_id?: string
+          id?: string
+          method?: string
+          nutrient_code?: string
+          source_note?: string | null
+          updated_at?: string
+          user_id?: string | null
+          value_state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_food_nutrients_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_food_nutrients_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_food_nutrients_nutrient_code_fkey"
+            columns: ["nutrient_code"]
+            isOneToOne: false
+            referencedRelation: "nutrition_nutrients"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      nutrition_food_prefs: {
+        Row: {
+          archived_at: string | null
+          category_override_id: string | null
+          created_at: string
+          custom_note: string | null
+          food_id: string
+          id: string
+          is_favorite: boolean
+          last_used_at: string | null
+          updated_at: string
+          use_count: number
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          category_override_id?: string | null
+          created_at?: string
+          custom_note?: string | null
+          food_id: string
+          id?: string
+          is_favorite?: boolean
+          last_used_at?: string | null
+          updated_at?: string
+          use_count?: number
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          category_override_id?: string | null
+          created_at?: string
+          custom_note?: string | null
+          food_id?: string
+          id?: string
+          is_favorite?: boolean
+          last_used_at?: string | null
+          updated_at?: string
+          use_count?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_food_prefs_category_override_id_fkey"
+            columns: ["category_override_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_food_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_food_prefs_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_food_prefs_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_food_sources: {
+        Row: {
+          citation: string | null
+          code: string
+          created_at: string
+          edition: string | null
+          id: string
+          is_official: boolean
+          license_note: string | null
+          name: string
+          notes: string | null
+          obtained_at: string | null
+          publisher: string | null
+          reference_url: string | null
+          updated_at: string
+          user_id: string | null
+          version: string | null
+        }
+        Insert: {
+          citation?: string | null
+          code: string
+          created_at?: string
+          edition?: string | null
+          id?: string
+          is_official?: boolean
+          license_note?: string | null
+          name: string
+          notes?: string | null
+          obtained_at?: string | null
+          publisher?: string | null
+          reference_url?: string | null
+          updated_at?: string
+          user_id?: string | null
+          version?: string | null
+        }
+        Update: {
+          citation?: string | null
+          code?: string
+          created_at?: string
+          edition?: string | null
+          id?: string
+          is_official?: boolean
+          license_note?: string | null
+          name?: string
+          notes?: string | null
+          obtained_at?: string | null
+          publisher?: string | null
+          reference_url?: string | null
+          updated_at?: string
+          user_id?: string | null
+          version?: string | null
+        }
+        Relationships: []
+      }
+      nutrition_food_tag_links: {
+        Row: {
+          created_at: string
+          food_id: string
+          id: string
+          tag_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          food_id: string
+          id?: string
+          tag_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          food_id?: string
+          id?: string
+          tag_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_food_tag_links_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_food_tag_links_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_food_tag_links_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_food_tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_food_tags: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          position: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      nutrition_foods: {
+        Row: {
+          alternative_name: string | null
+          archived_at: string | null
+          barcode: string | null
+          base_quantity: number
+          base_unit: string
+          brand: string | null
+          category_id: string | null
+          created_at: string
+          data_quality: string
+          edible_portion_percent: number | null
+          food_type: string
+          id: string
+          is_system_food: boolean
+          is_verified: boolean
+          last_verified_at: string | null
+          name: string
+          notes: string | null
+          origin_food_id: string | null
+          preparation_state: string
+          source_food_code: string | null
+          source_id: string | null
+          source_version: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          alternative_name?: string | null
+          archived_at?: string | null
+          barcode?: string | null
+          base_quantity?: number
+          base_unit?: string
+          brand?: string | null
+          category_id?: string | null
+          created_at?: string
+          data_quality?: string
+          edible_portion_percent?: number | null
+          food_type?: string
+          id?: string
+          is_system_food?: boolean
+          is_verified?: boolean
+          last_verified_at?: string | null
+          name: string
+          notes?: string | null
+          origin_food_id?: string | null
+          preparation_state?: string
+          source_food_code?: string | null
+          source_id?: string | null
+          source_version?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          alternative_name?: string | null
+          archived_at?: string | null
+          barcode?: string | null
+          base_quantity?: number
+          base_unit?: string
+          brand?: string | null
+          category_id?: string | null
+          created_at?: string
+          data_quality?: string
+          edible_portion_percent?: number | null
+          food_type?: string
+          id?: string
+          is_system_food?: boolean
+          is_verified?: boolean
+          last_verified_at?: string | null
+          name?: string
+          notes?: string | null
+          origin_food_id?: string | null
+          preparation_state?: string
+          source_food_code?: string | null
+          source_id?: string | null
+          source_version?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_foods_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_food_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_foods_origin_food_id_fkey"
+            columns: ["origin_food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_foods_origin_food_id_fkey"
+            columns: ["origin_food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_foods_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_food_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_import_batches: {
+        Row: {
+          created_at: string
+          file_checksum: string | null
+          file_name: string | null
+          finished_at: string | null
+          id: string
+          report: Json
+          rows_failed: number
+          rows_imported: number
+          rows_skipped: number
+          rows_total: number
+          source_id: string | null
+          source_version: string | null
+          started_at: string
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_checksum?: string | null
+          file_name?: string | null
+          finished_at?: string | null
+          id?: string
+          report?: Json
+          rows_failed?: number
+          rows_imported?: number
+          rows_skipped?: number
+          rows_total?: number
+          source_id?: string | null
+          source_version?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_checksum?: string | null
+          file_name?: string | null
+          finished_at?: string | null
+          id?: string
+          report?: Json
+          rows_failed?: number
+          rows_imported?: number
+          rows_skipped?: number
+          rows_total?: number
+          source_id?: string | null
+          source_version?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_import_batches_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_food_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_nutrients: {
+        Row: {
+          code: string
+          created_at: string
+          is_core: boolean
+          name: string
+          nutrient_group: string
+          position: number
+          precision: number
+          short_name: string | null
+          unit: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          is_core?: boolean
+          name: string
+          nutrient_group: string
+          position?: number
+          precision?: number
+          short_name?: string | null
+          unit: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          is_core?: boolean
+          name?: string
+          nutrient_group?: string
+          position?: number
+          precision?: number
+          short_name?: string | null
+          unit?: string
+        }
+        Relationships: []
+      }
       people: {
         Row: {
           ativo: boolean
@@ -2844,6 +3417,73 @@ export type Database = {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_foods_view: {
+        Row: {
+          acucares_totais: number | null
+          ag_saturados: number | null
+          alternative_name: string | null
+          archived_at: string | null
+          barcode: string | null
+          base_quantity: number | null
+          base_unit: string | null
+          brand: string | null
+          carboidrato: number | null
+          category_id: string | null
+          created_at: string | null
+          data_quality: string | null
+          edible_portion_percent: number | null
+          energia_kcal: number | null
+          fibra: number | null
+          food_type: string | null
+          id: string | null
+          is_system_food: boolean | null
+          is_verified: boolean | null
+          last_verified_at: string | null
+          lipidios: number | null
+          name: string | null
+          notes: string | null
+          nutrients_available: number | null
+          origin_food_id: string | null
+          preparation_state: string | null
+          proteina: number | null
+          sodio: number | null
+          source_food_code: string | null
+          source_id: string | null
+          source_version: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_foods_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_food_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_foods_origin_food_id_fkey"
+            columns: ["origin_food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_foods_origin_food_id_fkey"
+            columns: ["origin_food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_foods_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_food_sources"
             referencedColumns: ["id"]
           },
         ]

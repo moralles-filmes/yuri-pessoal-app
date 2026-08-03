@@ -216,3 +216,68 @@ convivem com as antigas. **Não remover `/tarefas` sem antes migrar aqueles cinc
    evento. Excluir tarefa remove o evento **antes** do `delete` (a ponte
    `todo_calendar_sync` é `on delete cascade`). Falha do Google nunca derruba a ação: fica
    em `last_error`, sem token nem corpo de resposta.
+
+---
+
+## Módulo Dieta e Alimentação (Fase 16 — Subfase A concluída)
+
+Módulo central em `/nutricao`, com **navegação interna própria** (12 submódulos) no mesmo
+padrão do TO-DO. Segue o fluxo do resto do sistema: Server Component lê → Server Action muta
+→ `revalidatePath`, com a lógica de negócio isolada em funções puras testadas.
+
+### As três invariantes que sustentam o módulo
+
+1. **Ausência de dado NÃO é zero.** Cada valor nutricional carrega um `value_state`:
+   `disponivel | traco | nao_disponivel | nao_aplicavel | em_revisao`. Só `disponivel` tem
+   número — uma CHECK constraint garante isso no banco, não só no código. Toda soma propaga
+   uma **qualidade** (`exato | aproximado | parcial`) e a interface é obrigada a exibi-la.
+   *Exemplo real:* "Sal, grosso" tem energia `nao_aplicavel` na TACO e o app mostra "n/a",
+   não "0 kcal".
+2. **A base do sistema é imutável.** `user_id is null` = linha global, somente leitura. As
+   policies são **separadas por comando** (SELECT alcança o global; INSERT/UPDATE/DELETE só o
+   próprio). Favoritar, arquivar e recategorizar um alimento global grava em
+   `nutrition_food_prefs` (dado do usuário), nunca no alimento. Duplicar cria cópia editável
+   com `origin_food_id`.
+3. **Conversão impossível é erro explícito, nunca estimativa.** Medida em gramas + alimento
+   medido em ml exigiria densidade; `convertToBase` devolve um erro tipado e a UI explica.
+   Não há conversão genérica entre alimentos (colher de arroz ≠ colher de azeite).
+
+### Base nutricional
+**TACO 4ª edição (NEPA/UNICAMP, 2011)** — 597 alimentos, 21.147 valores. Obtida do XLSX
+**oficial** publicado pelo NEPA (sem scraping). A obra autoriza reprodução mediante citação,
+que a interface exibe. Pipeline determinístico e reexecutável:
+
+```bash
+node scripts/nutrition/build-taco-dataset.mjs <taco.xlsx>   # XLSX → dataset + manifesto (SHA-256)
+node scripts/nutrition/generate-taco-migration.mjs          # dataset → migrations idempotentes
+```
+
+Atribuição, licença e decisões de fidelidade em `data/nutrition/taco-4/ATTRIBUTION.md`.
+
+### Schema (10 tabelas + 1 view)
+`nutrition_nutrients` (catálogo global de referência, **somente leitura, sem policy de
+escrita**), `nutrition_food_sources`, `nutrition_food_categories`, `nutrition_foods`,
+`nutrition_food_nutrients` (**única fonte de verdade** de nutriente), `nutrition_food_measures`,
+`nutrition_food_prefs`, `nutrition_food_tags`, `nutrition_food_tag_links`,
+`nutrition_import_batches` + a view `nutrition_foods_view` (`security_invoker = true`).
+
+A view **pivota** os nutrientes quentes para permitir ordenar/filtrar sem N+1. É derivação,
+não segunda fonte de verdade — **nunca materialize nutriente em coluna de `nutrition_foods`**.
+
+### Mapa de arquivos
+| Camada | Caminho |
+| --- | --- |
+| Enums, rótulos, seções da navegação | `src/lib/nutrition/constants.ts` |
+| Tipos de domínio | `src/lib/nutrition/types.ts` |
+| **Conversão de medidas (puro)** | `src/lib/nutrition/units.ts` + `units.test.ts` |
+| **Cálculo nutricional (puro)** | `src/lib/nutrition/calc.ts` + `calc.test.ts` |
+| **Filtro/ordenação/URL (puro)** | `src/lib/nutrition/filters.ts` + `filters.test.ts` |
+| Leitura (server-only) | `src/lib/nutrition/queries.ts` |
+| Validação Zod | `src/lib/validators/nutrition.ts` |
+| Server Actions | `src/lib/actions/nutrition-foods.ts` |
+| Rotas | `src/app/(app)/nutricao/` |
+| Componentes | `src/components/nutrition/` |
+| Pipeline da base | `scripts/nutrition/` · dados em `data/nutrition/taco-4/` |
+
+**Todo total do módulo sai de `calc.ts`.** As subfases B–F devem reusar, nunca reimplementar
+a conta — é o que garante que diário, receita e relatório concordem entre si.

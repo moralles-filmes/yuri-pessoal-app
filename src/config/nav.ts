@@ -1,4 +1,5 @@
 import {
+  Apple,
   LayoutDashboard,
   LineChart,
   Wallet,
@@ -65,6 +66,14 @@ export const navSections: NavSection[] = [
       { title: "Rotinas", href: "/rotinas", icon: Repeat, phase: "Fase 09" },
       { title: "Hábitos", href: "/habitos", icon: Target, phase: "Fase 10" },
       { title: "Estudos", href: "/estudos", icon: GraduationCap, phase: "Fase 11" },
+    ],
+  },
+  {
+    title: "Saúde",
+    items: [
+      // Módulo central com navegação interna própria (12 submódulos). A água continua
+      // sendo do módulo Hábitos — aqui ela é lida, nunca duplicada.
+      { title: "Dieta e Alimentação", href: "/nutricao", icon: Apple, phase: "Fase 16" },
     ],
   },
   {
