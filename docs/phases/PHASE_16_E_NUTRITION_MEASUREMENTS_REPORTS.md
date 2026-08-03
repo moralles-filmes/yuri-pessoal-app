@@ -24,10 +24,21 @@ histórico acumulado nas subfases anteriores.
 ## Escopo
 
 ### Dados
-`nutrition_measurement_types` (seed: peso, percentual de gordura, massa muscular, cintura,
+
+> ⚠️ **Alterado em 2026-08-03 pela abertura da Fase 17 (Treinos).** As medidas corporais
+> deixaram de ser estrutura exclusiva de Dieta e passaram a ser um **módulo central
+> compartilhado**, porque Treinos precisa exatamente do mesmo dado — e duas tabelas de peso
+> corporal significam dois gráficos que discordam sobre quanto o usuário pesa.
+>
+> **Use o prefixo `body_*`, com código em `src/lib/body/`:** `body_measurement_types`,
+> `body_measurements`, `body_measurement_goals`, `body_progress_photos`.
+> **Não crie `nutrition_measurement_*`.** Quem chegar primeiro (esta subfase ou a 17-E) cria
+> as tabelas; a outra apenas consome. Detalhes da decisão em
+> `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`.
+
+`body_measurement_types` (seed: peso, percentual de gordura, massa muscular, cintura,
 abdômen, quadril, peitoral, pescoço, braço D/E, antebraço D/E, coxa D/E, panturrilha D/E +
-personalizados), `nutrition_measurements`, `nutrition_measurement_goals`,
-`nutrition_progress_photos`.
+personalizados), `body_measurements`, `body_measurement_goals`, `body_progress_photos`.
 
 ### Registro de medida
 Data, horário, valor, unidade, observação, **condição da medição** (jejum, pós-treino,

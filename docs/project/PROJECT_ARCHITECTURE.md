@@ -322,3 +322,79 @@ primeira leitura por `ensureMealTypes()`, idempotente pelo unique `(user_id, slu
 
 **Todo total do módulo sai de `calc.ts`.** As subfases B–F devem reusar, nunca reimplementar
 a conta — é o que garante que diário, receita e relatório concordem entre si.
+
+---
+
+## Módulo Treinos (Fase 17 — Subfase A concluída)
+
+Módulo central em `/treinos`, com **navegação interna própria** (13 submódulos) no mesmo
+padrão do TO-DO e da Dieta. Segue o fluxo do resto do sistema: Server Component lê → Server
+Action muta → `revalidatePath`, com a lógica de negócio isolada em funções puras testadas.
+
+### A invariante que sustenta o módulo: **`tracking_type` é um contrato de medição**
+
+Um exercício não é um nome — é a declaração do que aquele movimento **mede**:
+
+```
+peso_reps                → peso + repetições              (supino, agachamento)
+peso_corporal_reps       → repetições                     (flexão)
+peso_corporal_adicional  → repetições + carga adicional   (paralelas com cinto)
+peso_corporal_assistido  → repetições + ASSISTÊNCIA       (barra assistida)
+duracao / isometria      → segundos
+distancia_duracao        → distância + segundos
+calorias                 → estimativa do painel do aparelho
+reps_sem_carga           → repetições
+lado_a_lado              → valores por lado
+personalizado            → campos livres
+```
+
+`src/lib/training/tracking.ts` é a **única** fonte dessa matriz — formulário, treino-modelo
+(17-B), sessão (17-C), volume (17-D) e relatório (17-E) leem dali. Duas consequências que
+parecem detalhe e não são, ambas cobertas por teste:
+
+1. **Assistência SUBTRAI carga**; carga adicional soma. Inverter o sinal faria o app mostrar
+   progresso justamente quando o usuário está regredindo.
+2. **Sem peso corporal registrado, a carga efetiva é INDISPONÍVEL, nunca zero.** Uma flexão
+   não é "0 kg × 12". Mesma disciplina do `value_state` da Dieta: ausência de dado não é zero,
+   e o agregado do período fica marcado como **parcial**.
+
+### As outras invariantes
+
+3. **A base do sistema é imutável.** `user_id is null` = linha global, somente leitura, com
+   policies **separadas por comando**. Três constraints amarram `user_id is null` ⇔
+   `is_system_exercise` ⇔ `source = 'sistema'`, então um exercício digitado à mão não pode se
+   apresentar como parte da base. Favoritar, arquivar, apelidar e ajustar descanso/incremento
+   vão para `training_exercise_prefs`; duplicar cria cópia com `origin_exercise_id`.
+4. **Modelo é mutável; execução é imutável.** A sessão (17-C) grava **snapshot** do treino ao
+   iniciar. Nenhuma leitura de histórico pode passar pelo modelo atual.
+5. **Nenhum asset de terceiros.** A base de exercícios é autoral; sem imagem, vídeo, texto de
+   instrução ou banco de dados copiado de apps de treino. Procedência em
+   `data/training/exercise-base/ATTRIBUTION.md`.
+6. **Medidas corporais são `body_*`** — módulo central compartilhado com a Dieta. Quem chegar
+   primeiro (16-E ou 17-E) cria; o outro consome. **Nunca duas tabelas de peso corporal.**
+7. **Ferramenta de organização e registro.** Sem diagnóstico, sem prescrição, sem garantia de
+   resultado, sem sugestão de carga máxima e sem incentivo a treinar com dor.
+
+### Schema (7 tabelas na 17-A)
+`training_muscle_groups`, `training_equipment`, `training_exercises`,
+`training_exercise_muscles` (secundários, com trigger que impede repetir o principal),
+`training_exercise_alternatives` (relação dirigida, do usuário), `training_exercise_prefs`
+e `training_preferences` (uma linha por usuário).
+
+### Mapa de arquivos
+| Camada | Caminho |
+| --- | --- |
+| Enums, rótulos, seções da navegação | `src/lib/training/constants.ts` |
+| Tipos de domínio | `src/lib/training/types.ts` |
+| **Contrato de medição (puro)** | `src/lib/training/tracking.ts` + `tracking.test.ts` |
+| **Filtro/ordenação/URL (puro)** | `src/lib/training/filters.ts` + `filters.test.ts` |
+| Leitura (server-only) | `src/lib/training/queries.ts` |
+| Validação Zod | `src/lib/validators/training.ts` |
+| Server Actions | `src/lib/actions/training-{exercises,preferences}.ts` |
+| Rotas | `src/app/(app)/treinos/` |
+| Componentes | `src/components/training/` |
+| Pipeline da base | `scripts/training/` · dados em `data/training/exercise-base/` |
+
+**Todo número agregado do módulo vai sair de `src/lib/training/metrics.ts` (17-D)** — do mesmo
+jeito que todo total da Dieta sai de `calc.ts`. Histórico, gráfico, recorde, dashboard e
+relatório precisam concordar entre si.

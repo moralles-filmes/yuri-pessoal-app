@@ -1,9 +1,72 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
+> ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
+> (16-A e 16-B concluídas) e a **Fase 17 — Módulo Treinos** (17-A concluída). Este arquivo tem
+> o resumo das duas, na ordem em que foram concluídas — a mais recente primeiro.
+
+---
+
+## Subfase 17-A — Treinos · Fundação, vocabulário e catálogo de exercícios (2026-08-03) ✅
+
+Primeira das 6 subfases da **Fase 17**, aberta a pedido do usuário. Módulo novo em
+`/treinos`, com navegação interna própria para 13 submódulos. **Testes: 823 → 889** (+66).
+
+### A regra que a subfase existe para garantir
+**Um exercício não é um nome, é um contrato de medição.** `tracking_type` é `not null` e diz o
+que o movimento mede: peso × repetições, só repetições, segundos, distância ou calorias do
+painel do aparelho. Sem esse campo, a Subfase 17-D somaria 100 kg × 8 do supino com 60
+segundos de prancha e 3 km de esteira num "volume" único — número bonito e sem significado.
+
+`src/lib/training/tracking.ts` é a **única** fonte dessa matriz. Duas consequências testadas:
+- **Assistência subtrai carga** (barra fixa assistida). Somar inverteria o sinal e mostraria
+  progresso justamente na regressão.
+- **Sem peso corporal do dia, a carga efetiva é INDISPONÍVEL, nunca zero.** Mesma disciplina
+  do `value_state` da Dieta.
+
+### O que foi entregue
+- **7 tabelas** `training_*` (RLS + FORCE RLS + índices + trigger `updated_at`). Total do
+  projeto: **74 tabelas**. Security advisor: 0 lints de schema.
+- **Base de 106 exercícios + 132 vínculos de músculo secundário**, 22 grupos musculares e 20
+  equipamentos. **Conteúdo autoral**: nenhuma imagem, vídeo, texto de instrução ou base de
+  dados de terceiro. Pipeline reexecutável (`data/training/exercise-base/` +
+  `scripts/training/`), procedência em `ATTRIBUTION.md`.
+- **Catálogo completo** em `/treinos/exercicios`: 11 filtros combináveis, busca sem acento,
+  ordenação, detalhe em 3 abas, duplicar, favoritar, arquivar, personalizar, ações em massa
+  que **relatam o que foi ignorado**, exercício da base somente leitura.
+- **Preferências do módulo** em `/treinos/configuracoes`, com aviso explícito de quais opções
+  só passam a valer nas subfases 17-C e 17-D.
+- **Visão geral honesta**: mostra o estado real do catálogo e **não inventa** "0 treinos esta
+  semana" — não existe sessão registrada antes da 17-C.
+
+### Decisões registradas
+1. **Rota `/treinos`** (padrão pt-BR do projeto), tabelas `training_*`.
+2. **Base global (`user_id is null`) somente leitura**, policies separadas por comando; três
+   constraints amarram `user_id is null` ⇔ `is_system_exercise` ⇔ `source = 'sistema'`.
+   Preferência do usuário vai para `training_exercise_prefs`. Mesmo desenho de `nutrition_foods`.
+3. **Modelo é mutável; execução é imutável** — a sessão (17-C) vai gravar snapshot.
+4. **Medidas corporais serão `body_*`**, módulo central compartilhado com a Dieta. Registrado
+   na 17-E e anotado na 16-E. **Nunca duas tabelas de peso corporal.**
+5. **Sem prescrição, sem diagnóstico**, sem sugestão de carga máxima, sem incentivo a treinar
+   com dor — em todas as subfases.
+
+### Verificação
+`npm run test:run` **889** · `npm run lint` limpo · `npx tsc --noEmit` limpo · `npm run build`
+com as 13 rotas de `/treinos`. **13 verificações de RLS** rodadas pela role `authenticated`
+(base global inalterável, forja bloqueada, favoritar permitido), com a integridade
+reconferida depois: 106 exercícios / 132 vínculos / 0 resíduos.
+
+### Fora do escopo (registrado, não silenciado)
+Programas e treinos-modelo (17-B), sessão ao vivo e cronômetro (17-C), histórico/volume/
+recordes (17-D), metas/medidas/dashboards (17-E), busca global, lançamento rápido,
+notificações, agenda, TO-DO, hábitos e upload de mídia (17-F).
+
+---
+
 ## Subfase 16-B — Dieta e Alimentação · Metas, diário alimentar e planejamento (2026-08-03) ✅
 
 Segunda das 6 subfases da **Fase 16**. A 16-A entregou o catálogo; a 16-B faz o sistema saber
-**o que o usuário comeu**. **Testes: 671 → 889** (+218 puros).
+**o que o usuário comeu**. **Testes: 671 → 823** (+152 puros; a suíte total marca **889**
+contando os 66 da Subfase 17-A, que corre em paralelo).
 
 ### A regra que a subfase existe para garantir
 **Editar ou excluir um alimento não pode mudar o passado.** O erro clássico de app de
@@ -89,7 +152,7 @@ migration recria. O mesmo `.eq` resolveu um **TS2589** ("type instantiation is e
 deep") que a união de 67 tabelas provocou no `from()` dinâmico da rota.
 
 ### Verificação
-`npm run test:run` **889** (53 arquivos) · `npm run lint` 0/0 · `npx tsc --noEmit` limpo ·
+`npm run test:run` **889** (53 arquivos — 823 da Dieta e anteriores + 66 da 17-A) · `npm run lint` 0/0 · `npx tsc --noEmit` limpo ·
 `npm run build` verde com as 4 rotas registradas. Suíte passa em `TZ=UTC` e `TZ=Asia/Tokyo`.
 Smoke: `/nutricao`, `/nutricao/diario`, `/nutricao/metas`, `/nutricao/planejamento` → **307
 `/login`**; `/login` → 200; `/api/cron/notifications` → **401**.

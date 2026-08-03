@@ -4,16 +4,125 @@
 
 ## Estado
 As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluídas. Em
-**2026-08-03** o usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em
-**6 subfases (A–F)**. As **Subfases 16-A e 16-B estão concluídas**; a 16-C é a próxima.
+**2026-08-03** o usuário abriu **duas frentes de módulo grande, que convivem**:
 
-## Fase atual
-**Fase 16-B — Dieta e Alimentação · Metas, diário alimentar e planejamento → CONCLUÍDA ✅**
-Arquivo da fase: `docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md`
+| Fase | Módulo | Subfases | Situação |
+| --- | --- | --- | --- |
+| **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A e 16-B concluídas**; 16-C é a próxima |
+| **17** | Treinos (`/treinos`) | A–F | **17-A concluída**; 17-B é a próxima |
 
-## Próxima fase
-**Subfase 16-C — Receitas, refeições-modelo e substituições.**
-Arquivo: `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
+> ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
+> `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
+> **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
+> Ponto de contato: **medidas corporais são `body_*`**, módulo central compartilhado; quem
+> chegar primeiro (16-E ou 17-E) cria, o outro consome. Nunca duas tabelas de peso corporal.
+
+## Fases atuais
+- **Fase 16-B — Dieta e Alimentação · Metas, diário alimentar e planejamento → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md`
+- **Fase 17-A — Treinos · Fundação, vocabulário e catálogo de exercícios → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_17_A_TRAINING_FOUNDATION_EXERCISES.md`
+
+## Próximas fases
+- **Subfase 16-C — Receitas, refeições-modelo e substituições.**
+  Arquivo: `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
+- **Subfase 17-B — Programas, treinos-modelo e planejamento semanal.**
+  Arquivo: `docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md`
+
+---
+
+## O que foi implementado na Subfase 17-A (Treinos — fundação e catálogo)
+
+Módulo central novo em **`/treinos`**, com navegação interna própria para **13 submódulos**.
+Inspirado na *organização e na facilidade de registro durante o treino* de bons apps de
+academia — **sem** copiar código, identidade visual, textos, ícones, telas, vídeos, imagens
+ou base de dados de terceiros.
+
+### A decisão que define o módulo: **um exercício é um contrato de medição**
+
+`tracking_type` é `not null` em `training_exercises` e diz o que aquele movimento **mede**:
+peso × repetições, só repetições, segundos, distância, calorias do painel do aparelho. Sem
+isso, a Subfase 17-D somaria 100 kg × 8 do supino com 60 segundos de prancha e 3 km de
+esteira num "volume" único — um gráfico bonito e sem significado.
+
+Duas consequências que parecem detalhe e não são, ambas testadas:
+- **Assistência SUBTRAI carga.** Na barra fixa assistida, 30 kg de assistência deixam o
+  exercício mais fácil. Somar inverteria o sinal e mostraria "progresso" justamente quando o
+  usuário estivesse regredindo.
+- **Sem peso corporal registrado, a carga efetiva é INDISPONÍVEL — nunca zero.** Uma flexão
+  não é "0 kg × 12". É a mesma disciplina do `value_state` da Dieta: ausência de dado não é
+  zero. `src/lib/training/tracking.ts` é a única fonte dessa matriz.
+
+### Base de exercícios própria e declarada
+- **106 exercícios**, **132 vínculos de músculo secundário**, 22 grupos musculares e 20
+  equipamentos — peitoral, costas, ombros, bíceps, tríceps, quadríceps/glúteos, posteriores,
+  panturrilhas, abdômen/core e cardio complementar.
+- **Conteúdo autoral**, produzido para o projeto. **Zero imagem, zero vídeo, zero texto de
+  instrução e zero base de dados de terceiro.** Os campos `instructions`, `tips` e
+  `common_mistakes` nascem vazios — quem escreve é o usuário.
+- Pipeline determinístico e reexecutável: `data/training/exercise-base/exercises.json` →
+  `scripts/training/generate-exercise-base-migration.mjs` → migration idempotente
+  (`on conflict (system_code)` → atualiza, não duplica). Procedência, licença e as escolhas
+  discutíveis (ex.: levantamento terra classificado em Costas) em
+  `data/training/exercise-base/ATTRIBUTION.md`.
+
+### Schema — 7 tabelas (RLS + FORCE RLS em todas)
+`training_muscle_groups`, `training_equipment`, `training_exercises`,
+`training_exercise_muscles`, `training_exercise_alternatives`, `training_exercise_prefs`,
+`training_preferences`. **Total do projeto: 74 tabelas.** Security advisor: **0 lints de
+schema**.
+
+- **`user_id` nulo = base do sistema, imutável** — policies **separadas por comando** (SELECT
+  alcança o global; INSERT/UPDATE/DELETE só o próprio), como em `nutrition_foods`. Três
+  constraints amarradas (`user_id is null` ⇔ `is_system_exercise` ⇔ `source = 'sistema'`)
+  impedem que um exercício digitado à mão se apresente como parte da base.
+- **Preferência ≠ exercício.** Favoritar, arquivar, apelidar e ajustar descanso/incremento de
+  um exercício global gravam em `training_exercise_prefs`. Duplicar cria cópia editável com
+  `origin_exercise_id`.
+- **Uma trigger impede o grupo principal de aparecer também como secundário** — a duplicidade
+  inconsistente que o briefing do módulo pede para evitar. CHECK não resolveria: a informação
+  está em outra tabela.
+- `training_preferences` já nasce com as chaves das subfases seguintes (avanço automático,
+  som/vibração, regra de volume unilateral, fórmula de 1RM, progressão) e **a tela diz a
+  partir de quando cada bloco vale** — interruptor que não faz nada e não avisa é pior do que
+  não existir.
+
+### Lógica pura (+66 testes) — suíte: 823 → **889**
+- `tracking.ts` — a matriz de medição dos 11 tipos, carga efetiva com assistência/adicional/
+  peso corporal, resolução de incremento e descanso por especificidade, `snapToIncrement`.
+- `filters.ts` — busca sem acento por múltiplos termos, 11 filtros combináveis, ordenação e
+  serialização URL ↔ filtros (testada como ida e volta).
+- `constants.ts` / `types.ts` — enums, rótulos pt-BR, seções da navegação e conversores
+  seguros do banco para o tipo.
+
+### Interface
+- Item **Treinos** na sidebar (grupo **Saúde**, ícone halteres).
+- **Visão geral** (`/treinos`) com o estado real do catálogo, distribuição por grupo muscular
+  e a procedência da base. **Não exibe "0 treinos esta semana"** — não há de onde tirar esse
+  número antes da 17-C, e inventá-lo seria desonesto.
+- **Catálogo** (`/treinos/exercicios`): busca instantânea, 11 filtros com contagem, ordenação,
+  seleção múltipla e ações em massa (favoritar/desfavoritar/arquivar/restaurar/excluir) que
+  **relatam quantos itens foram ignorados** por serem da base, criar/editar/duplicar/excluir,
+  lista incremental (60 por vez).
+- **Painel de detalhe** com 3 abas: como o exercício é medido (com os campos que cada série
+  vai pedir), alternativas (organização do usuário, sem afirmar equivalência biomecânica) e
+  personalização (apelido/descanso/incremento próprios).
+- **Configurações** (`/treinos/configuracoes`) com as preferências do módulo.
+- As outras 10 rotas existem e dizem honestamente em qual subfase chegam.
+
+### Segurança — 13 verificações de RLS executadas pela role `authenticated`
+Ler a base (106 exercícios, 22 grupos, 132 vínculos): OK. Editar / excluir exercício global:
+**0 linhas**. Editar grupo global: **0 linhas**. Editar equipamento global: **0 linhas**.
+Excluir vínculo da base: **0 linhas**. Inserir com `user_id` de terceiro: **bloqueado**.
+Forjar exercício "da base": **bloqueado**. Criar grupo global: **bloqueado**. Repetir o grupo
+principal como secundário: **bloqueado pela trigger**. Favoritar exercício da base:
+**permitido** (é preferência do usuário). Integridade reconferida depois: 106/132/0 — nenhum
+resíduo de teste.
+
+### Verificação
+`npm run test:run` (**889 testes**), `npm run lint`, `npx tsc --noEmit` e `npm run build`
+passam. Nenhuma fase anterior foi tocada — as únicas alterações fora de `training`/`treinos`
+são a linha nova em `src/config/nav.ts` e a nota de decisão na 16-E.
 
 ---
 
@@ -21,7 +130,8 @@ Arquivo: `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
 
 A 16-A entregou o catálogo; a 16-B faz o sistema saber **o que o usuário comeu**. Quatro
 telas reais (`/nutricao`, `/nutricao/diario`, `/nutricao/metas`, `/nutricao/planejamento`),
-10 tabelas novas e **+218 testes puros** (671 → 889).
+10 tabelas novas e **+152 testes puros** (671 → 823; a suíte total marca 889 somando os 66
+da Subfase 17-A, que corre em paralelo).
 
 ### A decisão que define a subfase: **o histórico não muda quando o alimento muda**
 
@@ -118,7 +228,7 @@ dado que não é do usuário e que a migration recria. O mesmo `.eq` resolveu um
 instantiation is excessively deep") que a união de 67 tabelas provocou no `from()` dinâmico.
 
 ### Verificação
-`npm run test:run` (**889**, eram 671), `npm run lint`, `npx tsc --noEmit`, `npm run build` —
+`npm run test:run` (**889** no total; 823 sem os testes da 17-A, eram 671), `npm run lint`, `npx tsc --noEmit`, `npm run build` —
 todos verdes. Suíte passa em `TZ=UTC` e `TZ=Asia/Tokyo`. Rotas privadas → **307 `/login`**;
 `/api/cron/*` → **401**. **30 verificações no banco pela role `authenticated`** (20 de
 RLS/CHECK + 10 de imutabilidade e idempotência), com todos os dados de teste removidos ao

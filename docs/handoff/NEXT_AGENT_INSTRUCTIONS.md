@@ -16,7 +16,19 @@ usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 
 > central compartilhado; quem chegar primeiro (16-E ou 17-E) cria, o outro consome. **Nunca
 > existem duas tabelas de peso corporal.**
 
-## ▶️ Sua tarefa: Subfase 16-C — Receitas, refeições-modelo e substituições
+## ▶️ Duas tarefas possíveis — confirme com o usuário qual frente ele quer
+
+| Frente | Próxima subfase | Arquivo |
+| --- | --- | --- |
+| **Dieta e Alimentação** | **16-C** — Receitas, refeições-modelo e substituições | `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` |
+| **Treinos** | **17-B** — Programas, treinos-modelo e planejamento semanal | `docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` |
+
+As duas são independentes até a Subfase E de cada uma, quando se encontram nas **medidas
+corporais compartilhadas (`body_*`)**. Faça **uma** por vez.
+
+---
+
+## ▶️ Frente Dieta: Subfase 16-C — Receitas, refeições-modelo e substituições
 
 **Arquivo da fase (leia inteiro antes de codar):**
 `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
@@ -49,6 +61,60 @@ Não crie um segundo caminho de gravação. O contrato já está pronto para iss
 - O snapshot de uma receita deve congelar os nutrientes **da receita naquele momento**, pelo
   mesmo `scaleNutrients`/`convertToBase`. Editar a receita depois não pode mudar o passado —
   é a mesma regra do alimento, e já existe teste de referência em `snapshot.test.ts`.
+
+---
+
+## ▶️ Frente Treinos: Subfase 17-B — Programas, treinos-modelo e planejamento semanal
+
+**Arquivo da fase (leia inteiro antes de codar):**
+`docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md`
+
+**Leitura obrigatória, nesta ordem:**
+1. `docs/project/PROJECT_RULES.md`
+2. `docs/project/PROJECT_ARCHITECTURE.md` (seção "Módulo Treinos")
+3. `docs/project/PROJECT_ROADMAP.md` (Fase 17, tabela das subfases)
+4. `docs/project/CURRENT_STATUS.md`
+5. `docs/handoff/LAST_PHASE_SUMMARY.md`
+6. `docs/phases/PHASE_17_A_TRAINING_FOUNDATION_EXERCISES.md` (o que já existe)
+7. `docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` (o que você vai fazer)
+8. `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md` — **leia mesmo sem implementar**: a 17-B
+   precisa entregar o modelo no formato que a sessão vai congelar.
+
+**Código que você precisa entender antes de escrever qualquer linha:**
+`src/lib/training/tracking.ts`, `constants.ts`, `types.ts`, `filters.ts`, `queries.ts` e
+`src/lib/actions/training-exercises.ts`.
+
+### ⛔ Invariantes do módulo Treinos que NÃO podem ser quebradas
+
+1. **`tracking.ts` É A ÚNICA MATRIZ DE MEDIÇÃO.** O que cada exercício mede sai dali —
+   formulário, treino-modelo, sessão (17-C), volume (17-D) e relatório (17-E). Reimplementar
+   a matriz faz o módulo somar quilos com segundos.
+2. **ASSISTÊNCIA SUBTRAI CARGA, CARGA ADICIONAL SOMA.** Já testado; não inverta o sinal.
+3. **SEM PESO CORPORAL, A CARGA EFETIVA É INDISPONÍVEL — NUNCA ZERO.** Agregado incompleto é
+   marcado como parcial, com o motivo.
+4. **A BASE DO SISTEMA É IMUTÁVEL.** `user_id is null` = somente leitura, policies separadas
+   por comando + três constraints amarradas. Favoritar/arquivar/apelidar grava em
+   `training_exercise_prefs`. Duplicar cria cópia com `origin_exercise_id`.
+5. **MODELO É MUTÁVEL; EXECUÇÃO É IMUTÁVEL.** A 17-B constrói o modelo sabendo que a 17-C tira
+   um **snapshot** ao iniciar a sessão. **Não crie vínculo vivo entre sessão e modelo** —
+   senão editar o treino reescreve o passado.
+6. **STATUS DERIVADO NA LEITURA.** "Em andamento" e "atrasado" do planejamento saem de data +
+   agora, como `atrasada` no TO-DO e o status da fatura. Não persista.
+7. **NENHUMA EXCLUSÃO SILENCIOSA.** Excluir programa/treino pergunta o destino do que
+   dependia dele.
+8. **NENHUM ASSET DE TERCEIROS.** Sem imagem, vídeo, ícone, texto ou base de dados copiados de
+   apps de treino. Referência é funcional apenas, e a procedência fica escrita.
+9. **SEM PRESCRIÇÃO.** Objetivo e nível são organizacionais. O módulo não recomenda treino,
+   não avalia lesão, não promete resultado e nunca sugere tentativa de carga máxima.
+10. **DATA PURA `'yyyy-MM-dd'`** para o dia planejado + hora em coluna `time`; aritmética em
+    `Date.UTC` nas funções puras, nunca `Date.now()`.
+
+### 🧭 O que a 17-B precisa entregar para a 17-C não sofrer
+`expandPlannedSets` — um formato **único** de série planejada, que resolve tanto o caso
+uniforme (`default_sets`) quanto o configurado série a série (`training_workout_sets`). A
+sessão ao vivo deve consumir só esse formato.
+
+---
 
 ## ⛔ Invariantes do módulo Dieta que NÃO podem ser quebradas
 
@@ -132,7 +198,7 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 
 ## ⛔ Invariantes gerais do projeto (bloqueantes)
 
-- **RLS + FORCE RLS em TODAS as tabelas** (hoje **67**). Teste pelo client SDK autenticado ou
+- **RLS + FORCE RLS em TODAS as tabelas** (hoje **74**: 67 + 7 de `training_*`). Teste pelo client SDK autenticado ou
   trocando de role no SQL — o SQL editor como `postgres` ignora RLS.
 - **Zod no servidor** em toda Server Action; `user_id` sempre de `auth.getUser()`.
 - **Nenhum `service_role` no client** — só `src/lib/supabase/service.ts` e o Cron.
@@ -146,7 +212,8 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
 
-Os **889 testes** devem continuar passando (acrescente testes para toda lógica pura nova).
+Os **889 testes** (823 de Dieta e anteriores + 66 de Treinos) devem continuar passando —
+acrescente testes para toda lógica pura nova.
 A suíte precisa passar em qualquer fuso — confira com `TZ=UTC npx vitest run`.
 Smoke test: rotas privadas → 307 `/login`; `/api/cron/*` → 401 sem segredo.
 
