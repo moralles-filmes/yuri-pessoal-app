@@ -6,11 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Sistema Pessoal Yuri
 
-Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gastos de terceiros, importação, agenda + Google Agenda, **TO-DO**, tarefas/rotinas, hábitos, estudos, **dieta e alimentação**, dashboards, busca global, notificações). Next.js 16 + Supabase + Tailwind v4 + shadcn/ui. Locale **pt-BR**, moeda **BRL**, datas no formato brasileiro.
+Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gastos de terceiros, importação, agenda + Google Agenda, **TO-DO**, tarefas/rotinas, hábitos, estudos, **dieta e alimentação**, **treinos**, dashboards, busca global, notificações). Next.js 16 + Supabase + Tailwind v4 + shadcn/ui. Locale **pt-BR**, moeda **BRL**, datas no formato brasileiro.
 
 ## Estado do projeto
 
-As **14 fases do roadmap original** e a **Fase 15 — Módulo TO-DO** estão concluídas. Desde **2026-08-03** o projeto está na **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**: as **16-A e 16-B estão concluídas** e a **16-C é a próxima** (ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`). Fora dessa fase, o projeto segue em modo manutenção/iteração.
+As **14 fases do roadmap original** e a **Fase 15 — Módulo TO-DO** estão concluídas. Desde **2026-08-03** correm **duas frentes de módulo grande, em paralelo**, cada uma dividida em 6 subfases (A–F):
+
+| Fase | Módulo | Situação |
+| --- | --- | --- |
+| **16** | Dieta e Alimentação (`/nutricao`) | **16-A e 16-B concluídas**; 16-C é a próxima |
+| **17** | Treinos (`/treinos`) | **17-A concluída**; 17-B é a próxima |
+
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Fora dessas fases, o projeto segue em modo manutenção/iteração. **74 tabelas** no banco.
+
+> As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
 ## Dois módulos de tarefas coexistem (proposital)
 
@@ -44,6 +53,21 @@ Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 sub
 10. **Planejado ≠ consumido**; **`pendente` não existe no CHECK** (deriva de `planned_time` + agora); **a meta de um dia é a que valia nele** (`nutrition_goal_periods`); **nenhum escopo de edição do planejamento alcança o passado**.
 11. **`ON CONFLICT` não serve para os índices únicos parciais/de expressão deste módulo** — o Postgres não os infere e o `upsert` do PostgREST quebra **só em runtime** (`42P10`). Use select-then-insert/update. E `.eq(coluna, null)` não casa com NULL no PostgREST: use `.is(coluna, null)`.
 12. **Sem prescrição.** O estimador de gasto energético é opcional, mostra a fórmula, se identifica como estimativa e **nunca grava meta**.
+
+## Módulo Treinos (Fase 17, em andamento)
+
+Rota `/treinos`, tabelas `training_*`, navegação interna própria com 13 submódulos. A **17-A** entregou o vocabulário do domínio, o catálogo de exercícios (base autoral de 106 movimentos) e as preferências do módulo; programas/treinos-modelo, sessão ao vivo, histórico, metas/medidas e integrações vêm nas subfases B–F (`docs/phases/PHASE_17_*`).
+
+**Invariantes do módulo:**
+1. **`tracking_type` é um contrato de medição, não um rótulo.** Ele diz o que o exercício mede (peso×reps, reps, segundos, distância, calorias). `src/lib/training/tracking.ts` é a **única** matriz — formulário, treino-modelo, sessão, volume e relatório leem dali. É o que impede o módulo de somar quilos com segundos.
+2. **Assistência SUBTRAI carga; carga adicional soma.** Inverter o sinal mostraria progresso na regressão.
+3. **Sem peso corporal do dia, a carga efetiva é INDISPONÍVEL, nunca zero.** Agregado incompleto é marcado como **parcial**, com o motivo — mesma disciplina do `value_state` da Dieta.
+4. **`user_id is null` = base do sistema, imutável.** Policies **separadas por comando** + três constraints amarrando `user_id is null` ⇔ `is_system_exercise` ⇔ `source='sistema'`. Favoritar/arquivar/apelidar grava em `training_exercise_prefs`; duplicar cria cópia com `origin_exercise_id`.
+5. **Modelo é mutável; execução é imutável.** A sessão (17-C) grava **snapshot** do treino; nenhuma leitura de histórico passa pelo modelo atual.
+6. **Nenhum asset de terceiros.** Base de exercícios autoral, sem imagem/vídeo/texto/dados copiados de apps de treino. Procedência em `data/training/exercise-base/ATTRIBUTION.md`; pipeline em `scripts/training/`.
+7. **Medidas corporais são `body_*`**, módulo central compartilhado com a Dieta. Quem chegar primeiro (16-E ou 17-E) cria; o outro consome. **Nunca duas tabelas de peso corporal.**
+8. **Sem prescrição, sem diagnóstico**, sem garantia de resultado, sem sugestão de carga máxima e sem incentivo a treinar com dor. Objetivo e nível de programa são organizacionais.
+9. **Todo agregado vai sair de `src/lib/training/metrics.ts` (17-D)** — como todo total da Dieta sai de `calc.ts`.
 
 ## Leitura obrigatória antes de mexer no código
 

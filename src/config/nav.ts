@@ -4,6 +4,7 @@ import {
   LineChart,
   Wallet,
   CreditCard,
+  Dumbbell,
   ReceiptText,
   Layers,
   HandCoins,
@@ -74,6 +75,9 @@ export const navSections: NavSection[] = [
       // Módulo central com navegação interna própria (12 submódulos). A água continua
       // sendo do módulo Hábitos — aqui ela é lida, nunca duplicada.
       { title: "Dieta e Alimentação", href: "/nutricao", icon: Apple, phase: "Fase 16" },
+      // Módulo central com navegação interna própria (13 submódulos). A sessão de treino é
+      // a fonte de verdade de "treinei" — Hábitos lê, não duplica.
+      { title: "Treinos", href: "/treinos", icon: Dumbbell, phase: "Fase 17" },
     ],
   },
   {
