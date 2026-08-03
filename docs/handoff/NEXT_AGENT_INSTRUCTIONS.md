@@ -5,7 +5,9 @@
 As 14 fases do roadmap original e a Fase 15 (TO-DO) estão concluídas. Em **2026-08-03** o
 usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**.
 
-**A Subfase 16-A está concluída.**
+**A Subfase 16-A está concluída, mergeada no `main` (PR #13) e aplicada no banco.**
+O working tree está limpo e todas as migrations da 16-A já estão no ledger — você começa do
+zero, sem nada pendente para arrumar. Crie um branch novo antes de codar.
 
 ## ▶️ Sua tarefa: Subfase 16-B — Metas, diário alimentar e planejamento
 
@@ -80,6 +82,10 @@ usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 
 
 Padrão: **Supabase MCP `apply_migration`** no projeto `yjvnlbjvippefvzgrxxw`, com o arquivo
 versionado em `supabase/migrations/` (idempotente, timestamp `YYYYMMDDHHMMSS`).
+
+⚠️ O `apply_migration` grava no ledger a **hora em que rodou**, não o timestamp do nome do
+arquivo — então `supabase migration list` mostra versões diferentes dos nomes locais em todo o
+histórico do projeto. É esperado e não é drift; o que importa é o **nome** bater com o arquivo.
 
 Para cargas grandes de dados (como o seed da TACO, 488 KB), o conteúdo não cabe
 confortavelmente numa chamada MCP. Nesse caso os arquivos foram aplicados **direto do disco**
