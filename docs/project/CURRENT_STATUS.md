@@ -1,20 +1,115 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-07-28**.
+> Atualizado ao final de **cada** fase. Última atualização: **2026-08-03**.
 
 ## Estado
-**As 14 fases do roadmap original estão concluídas.** O projeto seguiu em modo
-manutenção/iteração até 2026-07-28, quando o usuário abriu uma **fase nova fora do roadmap
-original**: a **Fase 15 — Módulo TO-DO**. Ela está **concluída** (ver abaixo). Não há uma
-Fase 16 planejada — novas mudanças voltam a ser melhorias pontuais.
+As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluídas. Em
+**2026-08-03** o usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em
+**6 subfases (A–F)**. A **Subfase 16-A está concluída**; a 16-B é a próxima.
 
 ## Fase atual
-**Fase 15 — Módulo TO-DO completo → CONCLUÍDA ✅**
-Arquivo da fase: `docs/phases/PHASE_15_TODO_COMPLETE.md`
+**Fase 16-A — Dieta e Alimentação · Fundação, núcleo de cálculo e catálogo → CONCLUÍDA ✅**
+Arquivo da fase: `docs/phases/PHASE_16_A_NUTRITION_FOUNDATION_FOODS.md`
 
 ## Próxima fase
-**Nenhuma planejada.** Voltamos ao modo manutenção. Pendências e melhorias registradas em
-`docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
+**Subfase 16-B — Metas, diário alimentar e planejamento.**
+Arquivo: `docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md`
+
+---
+
+## O que foi implementado na Subfase 16-A (Dieta e Alimentação — fundação)
+
+Módulo central novo em **`/nutricao`** ("Dieta e Alimentação"), com navegação interna própria
+para 12 submódulos. Inspirado na *organização e facilidade de registro* de bons apps de
+nutrição — **sem** copiar código, identidade visual, textos, telas ou assets de terceiros.
+
+### A decisão que define o módulo: **ausência de dado não é zero**
+Todo valor nutricional carrega um **estado**: `disponivel | traco | nao_disponivel |
+nao_aplicavel | em_revisao`. Só `disponivel` tem número, e uma **CHECK constraint** garante
+isso no banco — não só no código. Toda soma propaga uma **qualidade** (`exato | aproximado |
+parcial`) que a interface é obrigada a exibir. Somar tratando "não analisado" como 0 inventa
+precisão que o dado não tem, e é o erro clássico de app de nutrição.
+*Prova disso no dado real:* "Sal, grosso" tem energia `nao_aplicavel` na TACO, e o app mostra
+**"n/a"**, não "0 kcal".
+
+### Base nutricional real e verificável
+- **TACO 4ª edição (NEPA/UNICAMP, 2011): 597 alimentos, 21.147 valores nutricionais**,
+  17 categorias, 80 definições de nutriente (macros, minerais, vitaminas, 19 ácidos graxos
+  individuais e 18 aminoácidos).
+- Obtida do **XLSX oficial publicado pelo NEPA** — sem scraping, sem cópia de terceiros, sem
+  valor gerado por IA. A obra declara: *"É permitida a reprodução parcial ou total desta
+  obra, desde que citada a fonte"*; a citação aparece na interface.
+- **Pipeline determinístico e reexecutável**, com SHA-256 do arquivo de origem no manifesto:
+  `scripts/nutrition/build-taco-dataset.mjs` (XLSX → dataset + manifesto) e
+  `generate-taco-migration.mjs` (dataset → 8 migrations idempotentes). Atribuição, licença e
+  decisões de fidelidade em `data/nutrition/taco-4/ATTRIBUTION.md`.
+- **Marcadores da fonte preservados um a um:** branco = "análises não solicitadas",
+  `Tr` = traço, `NA` = não aplicável, `*` = "as análises estão sendo reavaliadas" (21
+  alimentos ficaram `is_verified = false` por isso). Carboidrato levemente **negativo** em
+  pescados/carnes magras — resultado real do cálculo por diferença da própria TACO — foi
+  **preservado como publicado**, não "corrigido" para zero.
+- **Medidas caseiras não foram inventadas:** a TACO não publica medida caseira por alimento.
+  A estrutura, a UI e o cálculo estão prontos; o usuário cadastra as suas e o pipeline aceita
+  uma segunda fonte oficial depois. Registrado como fora de escopo, não silenciado.
+
+### Schema — 10 tabelas + 1 view (RLS + FORCE RLS em todas)
+`nutrition_nutrients` (catálogo global de referência, **somente leitura: nenhuma policy de
+escrita**), `nutrition_food_sources`, `nutrition_food_categories`, `nutrition_foods`,
+`nutrition_food_nutrients` (**única fonte de verdade** de nutriente),
+`nutrition_food_measures`, `nutrition_food_prefs`, `nutrition_food_tags`,
+`nutrition_food_tag_links`, `nutrition_import_batches` + view `nutrition_foods_view`
+(`security_invoker = true`). **Total do projeto: 57 tabelas.** Security advisor: **0 lints de
+schema**.
+
+- **`user_id` nulo = linha global, imutável.** As policies são **separadas por comando**
+  (SELECT alcança o global; INSERT/UPDATE/DELETE só o próprio) — é o que permite ler a base
+  oficial sem nunca poder reescrevê-la. Uma constraint amarra `user_id is null` a
+  `is_system_food`, então não dá para forjar um alimento "oficial".
+- **Preferência ≠ alimento.** Favoritar, arquivar e até **recategorizar** um alimento global
+  gravam em `nutrition_food_prefs`. (A recategorização nasceu de um caso real: a TACO lista
+  "Biscoito, polvilho doce" em *Verduras e hortaliças*, porque a tabela é alfabética dentro
+  da seção. Corrigir na base seria reescrever a fonte; o override resolve sem mentir.)
+- A **view pivota** os nutrientes quentes para ordenar/filtrar sem N+1 — derivação, nunca
+  segunda fonte de verdade.
+
+### Núcleo de cálculo puro (+82 testes) — suíte: 589 → **671**
+- `units.ts` — conversão medida → base. **Conversão impossível é erro tipado, nunca
+  estimativa**: gramas → mililitros exigiria densidade, e densidade chutada é dado inventado.
+  Nenhuma conversão genérica entre alimentos (colher de arroz ≠ colher de azeite).
+- `calc.ts` — fórmula única (`nutriente × quantidade ÷ base`, com a base lida do alimento,
+  nunca assumida como 100), propagação de qualidade, energia estimada por Atwater **separada**
+  da declarada, e arredondamento **só na apresentação**.
+- `filters.ts` — busca sem acento por múltiplos termos, 13 filtros combináveis, ordenação e
+  serialização URL ↔ filtros (testada como ida e volta).
+- A suíte passa em `TZ=UTC`, `America/Sao_Paulo` e `Asia/Tokyo`.
+
+### Interface
+- Item **"Dieta e Alimentação"** na sidebar (grupo **Saúde**, ícone maçã).
+- **Visão geral** (`/nutricao`) com o estado real do catálogo e a procedência da base.
+- **Catálogo** (`/nutricao/alimentos`): busca instantânea, 13 filtros combináveis com
+  contagem, ordenação, seleção múltipla e ações em massa (favoritar/arquivar/restaurar/
+  excluir, com confirmação e relatório do que foi ignorado), criar/editar/duplicar/excluir,
+  lista incremental (60 por vez).
+- **Painel de detalhe** com 4 abas: **calculadora de porção** (usa o núcleo de ponta a ponta),
+  todos os nutrientes agrupados com estado de valor, **medidas caseiras** (CRUD) e
+  **procedência** (fonte, edição, código original, data de verificação e citação).
+- **No formulário, campo vazio = "não informado"**, nunca zero — a UX foi desenhada a partir
+  da regra de dado.
+- 10 rotas de submódulo já existem e dizem honestamente em qual subfase chegam.
+
+### Segurança — 10 verificações de RLS executadas pela role `authenticated`
+Ler a base global: OK (597). Editar / excluir alimento global: **0 linhas**. Alterar nutriente
+da base: **0 linhas**. Inserir com `user_id` de terceiro: **bloqueado**. Forjar alimento "da
+base": **bloqueado**. Escrever no catálogo de nutrientes: **bloqueado**. Gravar valor com
+estado `nao_disponivel`: **bloqueado**. Medida sem conversão: **bloqueado**. Favoritar
+alimento da base: **permitido** (é preferência do usuário). Resíduos do teste removidos e
+integridade reconferida.
+
+### Verificação
+`npm run test:run` (**671 testes**), `npm run lint`, `npx tsc --noEmit` e `npm run build`
+passam. Rotas privadas respondem **307 → /login**. Nenhuma fase anterior foi tocada.
+
+---
 
 ## Iteração 2026-07-28 — as 3 pendências do TO-DO foram fechadas
 
@@ -154,6 +249,12 @@ de responsabilidades está documentada no arquivo da fase.
 | 13 | Busca Global, Lançamento Rápido & Notificações | ✅ Concluída |
 | 14 | Segurança, Responsividade & Polimento Final | ✅ Concluída |
 | 15 | Módulo TO-DO completo (fora do roadmap original) | ✅ Concluída |
+| 16-A | Dieta e Alimentação · Fundação, cálculo e catálogo | ✅ Concluída |
+| 16-B | Dieta e Alimentação · Metas, diário e planejamento | ⬜ Próxima |
+| 16-C | Dieta e Alimentação · Receitas, refeições e substituições | ⬜ |
+| 16-D | Dieta e Alimentação · Lista de compras e despensa | ⬜ |
+| 16-E | Dieta e Alimentação · Medidas, evolução e relatórios | ⬜ |
+| 16-F | Dieta e Alimentação · Integrações e polimento | ⬜ |
 
 ## O que foi implementado na Fase 14 (Segurança, Responsividade & Polimento Final)
 - **Schema finalizado (idempotente)** em `supabase/migrations/`, aplicado no projeto `yjvnlbjvippefvzgrxxw`. Security advisor: **0 lints de schema** (resta só o aviso externo de Auth "leaked password protection"). **34 tabelas** no total (+ `attachments`) e **2 buckets** privados de Storage.

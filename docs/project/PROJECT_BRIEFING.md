@@ -162,6 +162,51 @@ A construção segue esta ordem de prioridade geral:
 - **Integrado a:** sidebar, lançamento rápido global, busca global, Dashboard Geral e
   notificações (incluindo destaque para tarefa P1 atrasada).
 
+### Módulo 17 — Dieta e Alimentação
+> Adicionado na **Fase 16**, fora do roadmap original. Rota: `/nutricao`.
+> Inspirado na **organização, facilidade de registro e profundidade funcional** de bons
+> aplicativos de nutrição — **sem** copiar código, identidade visual, textos, logotipos,
+> telas ou assets de terceiros. A interface segue integralmente o design system do sistema.
+
+**Conceitos, separados no banco e na interface (não confundir):**
+
+| Conceito | O que é | Exemplo |
+| --- | --- | --- |
+| **Alimento** | Item individual com informação nutricional | Arroz branco cozido; ovo cozido; whey de uma marca |
+| **Receita** | Preparação composta por vários alimentos | Omelete; panqueca de banana |
+| **Refeição-modelo** | Conjunto reutilizável de alimentos/receitas | "Café da manhã padrão" |
+| **Refeição planejada** | Refeição programada para data e horário | Almoço de terça, 12h |
+| **Refeição consumida** | O que realmente foi consumido | Igual, parcial, substituída, editada ou não consumida |
+| **Substituição** | Alternativa para refeição, receita ou alimento | Arroz → batata |
+| **Registro nutricional** | Histórico dos nutrientes efetivamente consumidos | Snapshot imutável do dia |
+
+**Submódulos (navegação interna própria):** Visão geral · Diário alimentar · Planejamento ·
+Refeições · Receitas · Alimentos · Substituições · Lista de compras · Medidas e evolução ·
+Metas nutricionais · Relatórios · Configurações.
+
+- **Catálogo de alimentos:** base brasileira real e **verificável** (TACO 4ª edição —
+  NEPA/UNICAMP), alimentos personalizados, industrializados, suplementos e ingredientes;
+  estado/preparo diferenciado (cru ≠ cozido); nutrientes por 100 g/100 ml; **medidas
+  caseiras com conversão real por alimento**; código de barras; favoritos, arquivamento,
+  duplicação e ações em massa.
+- **Rastreabilidade obrigatória:** todo alimento guarda **fonte**, **versão da fonte**,
+  **código original**, **data de verificação** e o **estado de cada valor** (disponível,
+  traço, não disponível, não aplicável) + o **método** (analítico, calculado, estimado,
+  rótulo). Valor ausente **nunca** vira zero.
+- **Diário alimentar:** planejado × consumido lado a lado, sem sobrescrever o
+  planejamento; status por refeição (planejada, pendente, consumida, parcialmente
+  consumida, substituída, não consumida, fora do planejamento).
+- **Snapshot histórico:** editar um alimento **não** altera registros passados.
+- **Metas nutricionais** com histórico datado (alterar meta não muda relatório antigo),
+  metas por dia da semana, treino/descanso e distribuição por refeição.
+- **Medidas corporais e fotos de evolução** — fotos em **bucket privado**, com URL
+  assinada, nunca pública.
+- **Ferramenta de registro, não de prescrição:** o sistema não diagnostica, não prescreve
+  dieta clínica e não define metas médicas automaticamente. Estimativas são opcionais,
+  explicam a fórmula e exigem confirmação do usuário.
+- **Não duplica a água** — a fonte de verdade continua sendo o módulo Hábitos; Dieta lê,
+  exibe e linka para registrar.
+
 ### Módulo 9 — Hábitos
 - Leitura, exercícios, água, sono, estudos, caminhada, alimentação e qualquer hábito customizado.
 - Cadastro: nome, categoria, frequência (diária, semanal, dias específicos), meta, unidade (vezes, minutos, horas, litros, páginas...), horário ideal, lembrete, cor/ícone, status.

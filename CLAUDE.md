@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Sistema Pessoal Yuri
 
-Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gastos de terceiros, importação, agenda + Google Agenda, **TO-DO**, tarefas/rotinas, hábitos, estudos, dashboards, busca global, notificações). Next.js 16 + Supabase + Tailwind v4 + shadcn/ui. Locale **pt-BR**, moeda **BRL**, datas no formato brasileiro.
+Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gastos de terceiros, importação, agenda + Google Agenda, **TO-DO**, tarefas/rotinas, hábitos, estudos, **dieta e alimentação**, dashboards, busca global, notificações). Next.js 16 + Supabase + Tailwind v4 + shadcn/ui. Locale **pt-BR**, moeda **BRL**, datas no formato brasileiro.
 
 ## Estado do projeto
 
-As **14 fases do roadmap original estão concluídas**, e a **Fase 15 — Módulo TO-DO** (aberta fora do roadmap, a pedido do usuário) também (ver `docs/project/CURRENT_STATUS.md`). O projeto está em **modo manutenção/iteração** e **não há próxima fase planejada**. Mudanças novas são melhorias pontuais; a documentação de fases serve como histórico e fonte das decisões já tomadas.
+As **14 fases do roadmap original** e a **Fase 15 — Módulo TO-DO** estão concluídas. Desde **2026-08-03** o projeto está na **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**: a **16-A está concluída** e a **16-B é a próxima** (ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`). Fora dessa fase, o projeto segue em modo manutenção/iteração.
 
 ## Dois módulos de tarefas coexistem (proposital)
 
@@ -26,6 +26,20 @@ O TO-DO usa tabelas `todo_*` próprias em vez de evoluir `tasks`/`projects`, por
 **Entrada em linguagem natural** (`src/lib/todo/parse.ts`, puro, `hoje` injetado): nunca reescreve o texto digitado — devolve `title` derivado + `tokens` que a UI mostra como chips **antes** de salvar; padrão ambíguo é ignorado; a normalização tira acentos **preservando o comprimento** (senão os índices das regex desalinham).
 
 **Envio ao Google Agenda** (`src/lib/todo/calendar-sync.ts` + `google-event.ts`): opt-in por `google_integrations.todo_sync_enabled`; sentido único (tarefa → evento); tarefa recorrente **não vira RRULE** — só a ocorrência atual, movida a cada conclusão; excluir tarefa chama `removeTaskFromGoogle` **antes** do delete (a ponte `todo_calendar_sync` é `on delete cascade`); falha do Google nunca derruba a ação.
+
+## Módulo Dieta e Alimentação (Fase 16, em andamento)
+
+Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 submódulos. A **16-A** entregou schema, base nutricional, núcleo de cálculo e catálogo de alimentos; diário, planejamento, receitas, substituições, compras, medidas e integrações vêm nas subfases B–F (`docs/phases/PHASE_16_*`).
+
+**Invariantes do módulo:**
+1. **Ausência de dado NÃO é zero.** `value_state` (`disponivel|traco|nao_disponivel|nao_aplicavel|em_revisao`) distingue "medido zero" de "não medido"; uma CHECK garante no banco. Toda soma propaga `exato|aproximado|parcial` e a UI mostra isso. Nunca `amount ?? 0` fora de `calc.ts`.
+2. **Todo total sai de `src/lib/nutrition/calc.ts`** — reuse `convertToBase` + `scaleNutrients` + `sumNutrients` + `mergeTotals`. Reimplementar a conta faz diário, receita e relatório discordarem.
+3. **`user_id is null` = base do sistema, imutável.** Policies **separadas por comando** (SELECT alcança o global; escrita não). Favoritar/arquivar/recategorizar grava em `nutrition_food_prefs`; duplicar cria cópia com `origin_food_id`.
+4. **Conversão impossível é erro tipado, nunca estimativa** (g→ml exige densidade). Sem conversão genérica entre alimentos.
+5. **Nunca materialize nutriente** em coluna de `nutrition_foods` — o pivô é a view `nutrition_foods_view` (derivação, não segunda verdade).
+6. **Nenhum valor nutricional é inventado.** Base = TACO 4ª ed. (NEPA/UNICAMP), do XLSX oficial, com licença de reprodução mediante citação. Pipeline em `scripts/nutrition/`, atribuição em `data/nutrition/taco-4/ATTRIBUTION.md`. Fonte nova entra pelo mesmo pipeline, com licença registrada.
+7. **Arredondar só na apresentação** (`roundForDisplay`, precisão por nutriente).
+8. **A água continua sendo do módulo Hábitos** — Dieta lê e linka, não duplica.
 
 ## Leitura obrigatória antes de mexer no código
 
@@ -53,7 +67,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa, ~340 testes)
+npm run test:run       # vitest run (suíte completa, 671 testes)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

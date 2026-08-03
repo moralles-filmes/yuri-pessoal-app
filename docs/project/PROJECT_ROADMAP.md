@@ -176,3 +176,52 @@ funcionando; dark/light; desktop e celular; fases anteriores intactas; testes pa
 Os dois módulos coexistem — `/todo` é o gerenciador principal de execução e `/tarefas` segue
 por causa das rotinas e do vínculo com a agenda. A justificativa completa está no arquivo da
 fase, em "Decisão arquitetural central".
+
+---
+
+## Fase 16 — Módulo Dieta e Alimentação (6 subfases)
+> **Fora do roadmap original.** Aberta em 2026-08-03, a pedido do usuário. Não substitui nem
+> invalida nenhuma fase anterior. É a maior fase do projeto até hoje e por isso foi quebrada
+> em **6 subfases sequenciais (A–F)**, cada uma com arquivo próprio e critérios de aceite.
+
+**Objetivo:** um módulo central em `/nutricao` ("Dieta e Alimentação") para **planejar,
+registrar e acompanhar** alimentação: alimentos, receitas, refeições-modelo, diário alimentar,
+planejamento diário/semanal, substituições, lista de compras, despensa, medidas corporais,
+metas nutricionais e relatórios — com a identidade visual, a arquitetura e as regras já
+existentes no sistema.
+
+**Referência funcional (não visual, não de código):** a *organização*, a *facilidade de
+registro* e a *profundidade funcional* de bons apps de nutrição. **Nada de código, identidade
+visual, textos, logotipos, telas ou assets de terceiros é copiado.**
+
+| Subfase | Tema | Arquivo | Status |
+| --- | --- | --- | --- |
+| 16-A | Fundação, núcleo de cálculo e catálogo de alimentos | `PHASE_16_A_NUTRITION_FOUNDATION_FOODS.md` | ✅ Concluída |
+| 16-B | Metas, diário alimentar e planejamento | `PHASE_16_B_NUTRITION_DIARY_PLANNING.md` | ⬜ Próxima |
+| 16-C | Receitas, refeições-modelo e substituições | `PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` | ⬜ |
+| 16-D | Lista de compras e despensa | `PHASE_16_D_NUTRITION_SHOPPING_LIST.md` | ⬜ |
+| 16-E | Medidas corporais, evolução e relatórios | `PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` | ⬜ |
+| 16-F | Integrações, notificações e polimento | `PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` | ⬜ |
+
+**Dependências gerais:** Fases 01 (design system/app shell), 12 (dashboard geral), 13 (busca
+global, lançamento rápido, notificações + Cron), 14 (`attachments`, buckets privados,
+`settings`, exportação) e 15 (padrões de módulo com navegação interna própria).
+
+**Decisões registradas antes de começar:**
+1. **Rota `/nutricao`** (padrão pt-BR do projeto), não `/nutrition`. Prefixo de tabela
+   `nutrition_*` (código/schema em inglês, como `todo_*`/`study_*`).
+2. **Base nutricional real, nunca inventada.** Fonte primária: **TACO 4ª edição
+   (NEPA/UNICAMP, 2011)** — 597 alimentos, arquivo XLSX oficial, cuja obra declara
+   *"É permitida a reprodução parcial ou total desta obra, desde que citada a fonte"*.
+   Atribuição obrigatória em `data/nutrition/taco-4/ATTRIBUTION.md` e na UI.
+3. **Nutrientes em tabela normalizada** (`nutrition_food_nutrients`), com **view de pivô**
+   para os nutrientes quentes — derivação, não segunda fonte de verdade.
+4. **Snapshot histórico obrigatório** no consumo (Subfase B): editar um alimento nunca
+   altera o passado.
+5. **A base global tem `user_id` nulo** e é **somente leitura** para o usuário (policy
+   separada de SELECT e de escrita). Duplicar cria cópia pessoal editável com referência
+   à origem.
+6. **Água continua sendo do módulo Hábitos** (Fase 10). Dieta lê e exibe; não duplica.
+
+**Critérios de aceite da fase completa:** os 40 itens listados na seção "Critérios de aceite
+gerais" do arquivo da Subfase F.
