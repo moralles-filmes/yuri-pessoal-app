@@ -1,5 +1,126 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
+## Subfase 16-B — Dieta e Alimentação · Metas, diário alimentar e planejamento (2026-08-03) ✅
+
+Segunda das 6 subfases da **Fase 16**. A 16-A entregou o catálogo; a 16-B faz o sistema saber
+**o que o usuário comeu**. **Testes: 671 → 889** (+218 puros).
+
+### A regra que a subfase existe para garantir
+**Editar ou excluir um alimento não pode mudar o passado.** O erro clássico de app de
+nutrição é guardar `food_id` + `quantity` e recalcular o histórico a partir do catálogo
+atual — aí corrigir a proteína de um alimento hoje reescreve, em silêncio, o que a pessoa
+comeu no ano passado.
+
+`nutrition_diary_entries` congela **no ato do registro**: identidade, preparo, marca,
+quantidade, medida, conversão para a unidade-base, procedência (fonte/versão/código) e os
+nutrientes já ajustados à porção (`nutrients_snapshot jsonb`). O total do dia soma **esse
+jsonb** — não existe caminho de leitura do total que passe pelo catálogo. `food_id` é
+`on delete set null`: excluir o alimento perde o link, nunca o histórico.
+
+**Provado no banco real** (role `authenticated`): editado o alimento (nome + energia
+128 → 999) e depois excluído, o registro de 192 kcal continuou 192 kcal, com o nome de origem
+e `food_id` nulo.
+
+### Decisões de contrato
+1. **Planejado ≠ consumido.** Tabelas separadas; nenhuma action de consumo escreve no
+   planejamento. O cruzamento é derivado por `planned_item_id` + `change_kind`. `removido`
+   registra a *decisão* de pular (≠ "não registrei") e não entra nas somas.
+2. **`pendente` não existe no CHECK** — sai de `planned_time` + agora, como 'atrasada' no
+   TO-DO. Tolerância de atraso: **45 min**, em constante nomeada. Refeição de hoje **sem
+   horário nunca vira atrasada**: não há como saber.
+3. **Meta vigente por data.** `nutrition_goal_periods` com `starts_on`/`ends_on`; a tela
+   separa "editar este período" de "começar novo período" porque um muda o passado e o outro
+   o preserva. Três eixos de escopo (dia da semana · treino/descanso · refeição) resolvidos
+   do mais específico para o mais geral; trocar o tipo da meta não apaga o eixo desligado.
+4. **Aderência é proximidade, não razão.** Comer o dobro não dá 200%. 100% dentro da meta ou
+   da faixa; fora, cai com o desvio relativo. A fórmula é exibida na tela.
+5. **Aplicar modelo materializa** refeições com data, sem vínculo vivo. Editar em série
+   sempre pergunta o escopo, e **nenhum dos três escopos alcança o passado**.
+6. **Água não se duplica** — lida de `habits`/`habit_logs` (Fase 10), com link para
+   `/habitos`. Sem hábito, a tela diz isso em vez de mostrar "0 de 0".
+7. **Sem prescrição.** O estimador (Mifflin-St Jeor) é opcional, mostra a fórmula por
+   extenso, avisa que não é recomendação e **nunca grava meta**.
+
+### Schema — 10 tabelas (projeto: 67 tabelas, 0 lints de schema)
+`20260803150000_nutrition_profiles` · `…150100_nutrition_meal_types` ·
+`…150200_nutrition_goal_periods` · `…150300_nutrition_goal_items` · `…150400_nutrition_plans` ·
+`…150500_nutrition_plan_days` · `…150600_nutrition_planned_meals` ·
+`…150700_nutrition_planned_meal_items` · `…150800_nutrition_diary_meals` ·
+`…150900_nutrition_diary_entries`. Todas com RLS + FORCE RLS, índice em `user_id` e trigger
+`set_updated_at`.
+
+> Os tipos de refeição **não são seedados por migration**: são dado do usuário (renomeável,
+> reordenável, desativável), criados na primeira leitura por `ensureMealTypes()`, idempotente
+> pelo unique `(user_id, slug)`.
+
+### ⚠️ Armadilha que passaria por build, tsc e lint
+Os índices únicos que sustentam a idempotência são **parciais**
+(`where planned_item_id is not null`; `where plan_day_id is not null and planned_date is not null`),
+e o Postgres **não infere índice parcial num `ON CONFLICT`** sem repetir o predicado. O
+`upsert` do PostgREST falharia **só em runtime**. Confirmado no banco (erro `42P10`) e
+resolvido com *select-then-insert/update* em `skipPlannedItem` e na materialização de modelo.
+A mesma regra vale para o índice de escopo de `nutrition_goal_items`, que usa `coalesce(...)`
+— por isso `saveGoalItem`/`saveGoalItems` fazem delete-do-escopo + insert, e o filtro usa
+`.is(coluna, null)` (um `.eq(coluna, null)` no PostgREST não casa com NULL).
+
+### Arquivos criados
+**Migrations:** as 10 acima.
+**Lógica pura + testes:** `src/lib/nutrition/calendar.ts` (+26), `snapshot.ts` (+18),
+`goals.ts` (+44), `diary.ts` (+36), `plan-recurrence.ts` (+28).
+**Leitura/validação/mutação:** `src/lib/nutrition/diary-queries.ts`,
+`src/lib/validators/nutrition-diary.ts`, `src/lib/actions/nutrition-diary.ts`,
+`nutrition-goals.ts`, `nutrition-plans.ts`.
+**UI:** `src/components/nutrition/{goal-progress-bar,food-picker-dialog}.tsx` ·
+`src/app/(app)/nutricao/diario/{page,diary-client,loading}.tsx` ·
+`metas/{page,goals-client,loading}.tsx` · `planejamento/{page,planning-client,loading}.tsx`.
+
+### Arquivos alterados
+`src/lib/nutrition/{constants,types}.ts` (enums, rótulos e tipos da 16-B; as 3 seções da
+navegação passaram a "pronto") · `src/types/supabase.ts` (regenerado) ·
+`src/app/(app)/nutricao/page.tsx` (visão geral real) · **`src/app/api/export/route.ts`** ·
+docs.
+
+### Correção de efeito colateral: o backup não incluía o módulo Dieta
+`/api/export` não tinha nenhuma tabela `nutrition_*` (pendência não registrada da 16-A) — o
+diário alimentar inteiro ficaria fora do backup. Agora inclui as 19 tabelas do usuário, com
+`.eq("user_id", …)` explícito: sem ele, as tabelas que aceitam `user_id` nulo trariam os 597
+alimentos e os 21.147 valores da TACO para o backup — dado que não é do usuário e que a
+migration recria. O mesmo `.eq` resolveu um **TS2589** ("type instantiation is excessively
+deep") que a união de 67 tabelas provocou no `from()` dinâmico da rota.
+
+### Verificação
+`npm run test:run` **889** (53 arquivos) · `npm run lint` 0/0 · `npx tsc --noEmit` limpo ·
+`npm run build` verde com as 4 rotas registradas. Suíte passa em `TZ=UTC` e `TZ=Asia/Tokyo`.
+Smoke: `/nutricao`, `/nutricao/diario`, `/nutricao/metas`, `/nutricao/planejamento` → **307
+`/login`**; `/login` → 200; `/api/cron/notifications` → **401**.
+
+**30 verificações no banco pela role `authenticated`** (o SQL editor como `postgres` ignora
+RLS): 20 de RLS/CHECK — intruso não lê, não edita, não apaga e não forja linha em nenhuma das
+10 tabelas; `pendente`, snapshot incompleto, percentual sem refeição, período invertido e
+refeição sem âncora são rejeitados pelos CHECKs — e 10 de imutabilidade/idempotência —
+snapshot sobrevive a edição e exclusão do alimento, confirmar o mesmo item planejado 2× é
+bloqueado pelo unique parcial, excluir o planejamento preserva o consumido, e tipo de refeição
+em uso não pode ser excluído (FK `restrict`). **Todos os dados de teste foram removidos** e o
+catálogo da 16-A foi reconferido: 597 alimentos, 21.147 valores.
+
+### Pendências conscientes (registradas, não silenciadas)
+| Item | Onde entra |
+| --- | --- |
+| Receita e refeição-modelo como item do diário | **16-C** — devem reusar `buildDiaryEntrySnapshot`, não criar um segundo caminho de gravação |
+| Substituição de refeição/alimento com comparação | **16-C** |
+| Visão de **mês** do diário (calendário com indicadores) | **16-E**, junto dos relatórios de período — hoje `?visao=mes` cai na visão de semana |
+| Editar os **dias do modelo** pela interface (hoje o modelo é criado e aplicado; montar os dias exige a 16-C) | **16-C** |
+| `updatePlannedMealInScope` existe e é testada, mas a UI só expõe o escopo na **exclusão** | **16-C**, junto da edição de refeição planejada |
+| Micronutrientes com meta já funcionam; **relatório** de micro por período | **16-E** |
+| Notificação de refeição pendente, busca global, lançamento rápido, card no dashboard | **16-F** |
+
+### Próxima subfase
+**16-C — Receitas, refeições-modelo e substituições** ·
+`docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
+
+---
+
+
 ## Subfase 16-A — Dieta e Alimentação · Fundação, núcleo de cálculo e catálogo (2026-08-03) ✅
 
 Primeira das 6 subfases da **Fase 16**, aberta pelo usuário fora do roadmap original.

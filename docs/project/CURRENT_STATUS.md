@@ -5,15 +5,124 @@
 ## Estado
 As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluídas. Em
 **2026-08-03** o usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em
-**6 subfases (A–F)**. A **Subfase 16-A está concluída**; a 16-B é a próxima.
+**6 subfases (A–F)**. As **Subfases 16-A e 16-B estão concluídas**; a 16-C é a próxima.
 
 ## Fase atual
-**Fase 16-A — Dieta e Alimentação · Fundação, núcleo de cálculo e catálogo → CONCLUÍDA ✅**
-Arquivo da fase: `docs/phases/PHASE_16_A_NUTRITION_FOUNDATION_FOODS.md`
+**Fase 16-B — Dieta e Alimentação · Metas, diário alimentar e planejamento → CONCLUÍDA ✅**
+Arquivo da fase: `docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md`
 
 ## Próxima fase
-**Subfase 16-B — Metas, diário alimentar e planejamento.**
-Arquivo: `docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md`
+**Subfase 16-C — Receitas, refeições-modelo e substituições.**
+Arquivo: `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
+
+---
+
+## O que foi implementado na Subfase 16-B (metas, diário e planejamento)
+
+A 16-A entregou o catálogo; a 16-B faz o sistema saber **o que o usuário comeu**. Quatro
+telas reais (`/nutricao`, `/nutricao/diario`, `/nutricao/metas`, `/nutricao/planejamento`),
+10 tabelas novas e **+218 testes puros** (671 → 889).
+
+### A decisão que define a subfase: **o histórico não muda quando o alimento muda**
+
+`nutrition_diary_entries` congela, **no ato do registro**, tudo que o cálculo precisa:
+identidade do alimento, preparo, marca, quantidade, medida, conversão para a unidade-base,
+procedência (fonte/versão/código) e os nutrientes já ajustados à porção
+(`nutrients_snapshot jsonb`). O total do dia soma **esse jsonb** — não existe caminho de
+leitura do total que passe pelo catálogo.
+
+Consequências deliberadas:
+- `food_id` é `on delete set null` (referência informativa). **Excluir um alimento perde o
+  link, nunca o histórico.**
+- `entry_kind` é o discriminador estável da linha, e não a presença de `food_id` — que pode
+  virar nulo.
+- As colunas quentes (`energy_kcal`, `protein_g`…) são derivadas **na gravação** e servem só
+  para listar/ordenar; `NULL` nelas significa **não disponível**, jamais zero.
+- **Verificado no banco real** (role `authenticated`): editar o alimento (nome + energia
+  128 → 999) e depois excluí-lo deixou o registro de 192 kcal intacto, com o nome de origem.
+
+### Planejado ≠ consumido
+`nutrition_planned_meals`/`_items` e `nutrition_diary_meals`/`_entries` são tabelas
+separadas, e **nenhuma action de consumo escreve no planejamento**. O cruzamento é derivado
+na leitura por `planned_item_id` + `change_kind`
+(`igual | quantidade_ajustada | substituido | removido | extra`), e a tela mostra os dois
+lados com a diferença nutricional. `removido` registra a *decisão* de pular um item — é
+diferente de "não registrei nada" — e por isso não entra nas somas.
+
+### Status derivado, como fatura (F03), tarefa (F09) e TO-DO (F15)
+**`pendente` não existe no CHECK do banco.** Ele e o atraso saem de `planned_time` + hora
+atual em `effectiveMealStatus`. Duas decisões de produto ficaram explícitas em constante, em
+vez de escondidas numa comparação: a tolerância de atraso é de **45 minutos**, e uma refeição
+de hoje **sem horário previsto nunca vira "atrasada"** — não há como saber, e cobrar por
+suposição seria inventar.
+
+### Meta vigente por data
+A meta não é uma linha sobrescrita: é `nutrition_goal_periods` com `starts_on`/`ends_on`.
+Toda leitura pergunta *"qual meta valia nesta data"*. A tela separa **"editar este período"**
+de **"começar novo período"** justamente porque um muda o passado e o outro o preserva —
+`startNewGoalPeriod` encerra o anterior na véspera e abre o novo.
+
+O valor da meta tem três eixos de escopo opcionais (dia da semana · treino/descanso ·
+refeição), resolvidos do mais específico para o mais geral por `resolveTarget`. Trocar o tipo
+da meta e voltar **não apaga nada**: as linhas do eixo desligado ficam guardadas e a leitura
+as ignora.
+
+### Aderência: proximidade, não razão simples
+Comer o dobro da meta de gordura daria "200% de aderência" numa divisão ingênua. Aqui
+aderência é **100% quando o consumo fica na meta ou dentro da faixa**, e cai proporcional ao
+desvio relativo fora dela. A fórmula é exportada como texto (`ADHERENCE_FORMULA`) e exibida
+na tela — número que a pessoa usa para se avaliar não pode ser uma caixa-preta. Toda
+aderência carrega a **qualidade** do pior total considerado.
+
+### Recorrência do planejamento
+Um modelo de semana com ciclo de 1 a 8 semanas. **Aplicar materializa** refeições com data
+concreta em vez de criar vínculo vivo — se o modelo reescrevesse o passado, o histórico
+deixaria de ser confiável. `weekIndexForDate` devolve `null` quando o ciclo tem mais de uma
+semana e falta a âncora, em vez de chutar a "semana A".
+
+Editar/excluir em série **sempre pergunta o escopo** (somente este dia / este e os próximos /
+todo o modelo), e **nenhum dos três alcança datas passadas**.
+
+### Schema — 10 tabelas (projeto: 67 tabelas, 0 lints de schema)
+`nutrition_profiles`, `nutrition_meal_types`, `nutrition_goal_periods`,
+`nutrition_goal_items`, `nutrition_plans`, `nutrition_plan_days`,
+`nutrition_planned_meals`, `nutrition_planned_meal_items`, `nutrition_diary_meals`,
+`nutrition_diary_entries`. Todas com RLS + FORCE RLS, índice em `user_id` e trigger
+`set_updated_at`.
+
+**Armadilha encontrada e registrada:** os índices únicos que sustentam a idempotência são
+**parciais** (`where planned_item_id is not null`, `where plan_day_id is not null and …`), e
+o Postgres **não infere índice parcial num `ON CONFLICT`** sem repetir o predicado — o
+`upsert` do PostgREST falharia em runtime, passando por build, tsc e lint. Confirmado no
+banco (`42P10`) e resolvido com *select-then-insert/update* nos dois pontos afetados
+(`confirmPlannedMeal`/`skipPlannedItem` e a materialização de modelo). Mesma armadilha vale
+para o índice de escopo de `nutrition_goal_items`, que usa `coalesce(...)`.
+
+### Água não é duplicada (regra 7)
+A fonte de verdade continua sendo o módulo Hábitos (Fase 10). O módulo Dieta **lê**
+`habits`/`habit_logs` da categoria `agua` e linka para `/habitos`; não existe tabela de água
+aqui. Sem hábito cadastrado, a tela diz isso e oferece o link — em vez de mostrar "0 de 0".
+
+### Sem prescrição (regra 12)
+O estimador de gasto energético (Mifflin-St Jeor) é **opcional**, devolve a **fórmula por
+extenso** junto do número, exibe um aviso de que não é recomendação nutricional nem médica, e
+**nunca grava meta**: ele preenche a tela, e quem salva é o usuário. Sem os dados necessários
+devolve `null` e diz o que falta, em vez de estimar.
+
+### Correção de efeito colateral: backup
+`/api/export` não incluía nenhuma tabela do módulo Dieta (pendência não registrada da 16-A) —
+o diário alimentar inteiro ficaria fora do backup. Agora inclui as 19 tabelas `nutrition_*`
+do usuário, com `.eq("user_id", …)` explícito: sem esse filtro, as tabelas que aceitam
+`user_id` nulo trariam os 597 alimentos e os 21.147 valores da TACO para dentro do backup —
+dado que não é do usuário e que a migration recria. O mesmo `.eq` resolveu um `TS2589` ("type
+instantiation is excessively deep") que a união de 67 tabelas provocou no `from()` dinâmico.
+
+### Verificação
+`npm run test:run` (**889**, eram 671), `npm run lint`, `npx tsc --noEmit`, `npm run build` —
+todos verdes. Suíte passa em `TZ=UTC` e `TZ=Asia/Tokyo`. Rotas privadas → **307 `/login`**;
+`/api/cron/*` → **401**. **30 verificações no banco pela role `authenticated`** (20 de
+RLS/CHECK + 10 de imutabilidade e idempotência), com todos os dados de teste removidos ao
+final e o catálogo da 16-A reconferido (597 alimentos, 21.147 valores).
 
 ---
 

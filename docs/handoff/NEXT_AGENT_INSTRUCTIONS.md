@@ -5,14 +5,21 @@
 As 14 fases do roadmap original e a Fase 15 (TO-DO) estão concluídas. Em **2026-08-03** o
 usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**.
 
-**A Subfase 16-A está concluída, mergeada no `main` (PR #13) e aplicada no banco.**
-O working tree está limpo e todas as migrations da 16-A já estão no ledger — você começa do
-zero, sem nada pendente para arrumar. Crie um branch novo antes de codar.
+**As Subfases 16-A e 16-B estão concluídas e aplicadas no banco.** Crie um branch novo.
 
-## ▶️ Sua tarefa: Subfase 16-B — Metas, diário alimentar e planejamento
+> ⚠️ **Há outra frente em paralelo.** Em 2026-08-03 também foi aberta a **Fase 17 — Módulo
+> Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a 17-A
+> concluída. As duas fases convivem no mesmo repositório e no mesmo banco. Antes de mexer em
+> `docs/project/PROJECT_ROADMAP.md`, `CURRENT_STATUS.md` ou `src/types/supabase.ts`, **leia o
+> arquivo primeiro e edite de forma pontual** — sobrescrever levaria embora o trabalho da
+> outra frente. Ponto de contato entre elas: **medidas corporais são `body_*`**, um módulo
+> central compartilhado; quem chegar primeiro (16-E ou 17-E) cria, o outro consome. **Nunca
+> existem duas tabelas de peso corporal.**
+
+## ▶️ Sua tarefa: Subfase 16-C — Receitas, refeições-modelo e substituições
 
 **Arquivo da fase (leia inteiro antes de codar):**
-`docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md`
+`docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
 
 **Leitura obrigatória, nesta ordem:**
 1. `docs/project/PROJECT_BRIEFING.md` (Módulo 17 — Dieta e Alimentação)
@@ -21,62 +28,80 @@ zero, sem nada pendente para arrumar. Crie um branch novo antes de codar.
 4. `docs/project/PROJECT_ROADMAP.md` (Fase 16, tabela das subfases)
 5. `docs/project/CURRENT_STATUS.md`
 6. `docs/handoff/LAST_PHASE_SUMMARY.md`
-7. `docs/phases/PHASE_16_A_NUTRITION_FOUNDATION_FOODS.md` (o que já existe)
-8. `docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md` (o que você vai fazer)
+7. `docs/phases/PHASE_16_A_NUTRITION_FOUNDATION_FOODS.md` e
+   `PHASE_16_B_NUTRITION_DIARY_PLANNING.md` (o que já existe)
+8. `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` (o que você vai fazer)
 
 **Código que você precisa entender antes de escrever qualquer linha:**
-`src/lib/nutrition/units.ts`, `calc.ts`, `constants.ts`, `types.ts`, `queries.ts` e
-`src/lib/actions/nutrition-foods.ts`.
+`src/lib/nutrition/units.ts`, `calc.ts`, **`snapshot.ts`**, `diary.ts`, `goals.ts`,
+`plan-recurrence.ts`, `calendar.ts`, `constants.ts`, `types.ts`, `queries.ts`,
+`diary-queries.ts` e as actions `nutrition-{foods,diary,goals,plans}.ts`.
 
----
+### ⛔ O ponto mais importante da 16-C
+
+**Receita e refeição-modelo viram itens do diário REUSANDO `buildDiaryEntrySnapshot`.**
+Não crie um segundo caminho de gravação. O contrato já está pronto para isso:
+
+- `nutrition_diary_entries.entry_kind` tem CHECK `in ('alimento','livre')` — **acrescente
+  `'receita'` e `'modelo'` a esse CHECK** numa migration, em vez de inventar outra tabela.
+- `nutrition_planned_meal_items` hoje só aponta para `food_id`; a 16-C precisa acrescentar a
+  origem receita/modelo (coluna + CHECK), como está registrado no comentário da migration.
+- O snapshot de uma receita deve congelar os nutrientes **da receita naquele momento**, pelo
+  mesmo `scaleNutrients`/`convertToBase`. Editar a receita depois não pode mudar o passado —
+  é a mesma regra do alimento, e já existe teste de referência em `snapshot.test.ts`.
 
 ## ⛔ Invariantes do módulo Dieta que NÃO podem ser quebradas
 
-1. **AUSÊNCIA DE DADO NÃO É ZERO.** É a regra que sustenta o módulo inteiro.
-   `value_state` distingue `disponivel | traco | nao_disponivel | nao_aplicavel |
-   em_revisao`, e uma CHECK constraint impede valor sem estado coerente. Toda soma propaga
-   `exato | aproximado | parcial` e a interface **tem de mostrar isso**. Nunca faça
-   `amount ?? 0` fora de `calc.ts`.
-2. **TODO TOTAL SAI DE `calc.ts`.** Diário, receita e relatório precisam concordar entre si —
-   reimplementar a conta em qualquer lugar quebra isso silenciosamente. Reuse
-   `convertToBase` + `scaleNutrients` + `sumNutrients` + `mergeTotals`.
-3. **A BASE DO SISTEMA É IMUTÁVEL.** `user_id is null` = somente leitura, garantido por
-   policies separadas por comando. Favoritar/arquivar/recategorizar vai em
-   `nutrition_food_prefs`. Duplicar cria cópia com `origin_food_id`.
-4. **CONVERSÃO IMPOSSÍVEL É ERRO EXPLÍCITO.** `convertToBase` devolve `{ok:false, reason}` —
-   mostre a mensagem de `CONVERSION_FAILURE_MESSAGES`, nunca estime.
-5. **NUNCA MATERIALIZE NUTRIENTE** em coluna de `nutrition_foods`. O pivô é a view
-   `nutrition_foods_view`, que é derivação. Duas fontes de verdade dessincronizam.
-6. **NÃO INVENTE DADO NUTRICIONAL.** Nenhum valor entra no sistema sem fonte. Se precisar de
-   outra base, use o pipeline de `scripts/nutrition/` e registre a licença.
-7. **ARREDONDE SÓ NA APRESENTAÇÃO** (`roundForDisplay`, com a precisão de cada nutriente).
+1. **AUSÊNCIA DE DADO NÃO É ZERO.** `value_state` distingue `disponivel | traco |
+   nao_disponivel | nao_aplicavel | em_revisao`, com CHECK no banco. Toda soma propaga
+   `exato | aproximado | parcial` e a interface **tem de mostrar**. Nunca `amount ?? 0` fora
+   de `calc.ts`.
+2. **TODO TOTAL SAI DE `calc.ts`** — reuse `convertToBase` + `scaleNutrients` +
+   `sumNutrients` + `mergeTotals`.
+3. **SNAPSHOT HISTÓRICO IMUTÁVEL.** O total do consumo sai do `nutrients_snapshot`, nunca do
+   catálogo. `food_id` é `on delete set null`, e o discriminador estável é `entry_kind`.
+4. **PLANEJADO ≠ CONSUMIDO.** Tabelas separadas; consumo nunca escreve no planejamento.
+5. **STATUS DERIVADO NA LEITURA.** `pendente` não existe no CHECK do banco.
+6. **META VIGENTE POR DATA.** Alterar a meta de hoje não muda relatório anterior.
+7. **A BASE DO SISTEMA É IMUTÁVEL** (`user_id is null`, policies separadas por comando).
+8. **CONVERSÃO IMPOSSÍVEL É ERRO TIPADO**, nunca estimativa.
+9. **NÃO INVENTE DADO NUTRICIONAL.** Fonte nova entra pelo pipeline de `scripts/nutrition/`.
+10. **ARREDONDE SÓ NA APRESENTAÇÃO** (`roundForDisplay`).
+11. **DATA PURA `'yyyy-MM-dd'`** para o dia + hora em coluna `time`. Use `src/lib/nutrition/
+    calendar.ts` (aritmética em `Date.UTC`), nunca `new Date()` no fuso local.
+12. **ÁGUA NÃO SE DUPLICA** — fonte de verdade é o módulo Hábitos (Fase 10).
+13. **SEM PRESCRIÇÃO.** Estimador é opcional, mostra a fórmula, se identifica como estimativa
+    e exige confirmação.
 
-## ⛔ O que a Subfase 16-B precisa acertar (e é fácil errar)
+## ⚠️ Armadilha do banco que passou por build, tsc e lint (não repita)
 
-- **SNAPSHOT HISTÓRICO.** Ao registrar consumo, grave quantidade, unidade, conversão em
-  gramas, nutrientes, fonte e versão **no momento do registro**. Editar o alimento depois
-  **não pode** mudar o passado. Escreva um teste que edita o alimento e confere o histórico.
-- **PLANEJADO ≠ CONSUMIDO.** Registrar consumo nunca sobrescreve o planejamento. Tabelas
-  separadas + `planned_item_id` + `change_kind`.
-- **STATUS DERIVADO NA LEITURA**, como fatura (F03), tarefa (F09) e TO-DO (F15). `pendente` e
-  atraso saem de `planned_time` + agora; não persista.
-- **META VIGENTE POR DATA.** Alterar a meta hoje não pode mudar relatório de mês passado.
-- **DATA PURA** `'yyyy-MM-dd'` para o dia do diário + hora em coluna `time`. Nunca
-  timestamptz para representar "o dia" (na Vercel o processo roda em UTC).
-- **ÁGUA NÃO SE DUPLICA** — a fonte de verdade é o módulo Hábitos (Fase 10). Leia e linke.
-- **SEM PRESCRIÇÃO.** O módulo registra e organiza; não diagnostica, não prescreve dieta
-  clínica e não define meta médica automaticamente. Estimador (se houver) é opcional, mostra
-  a fórmula, se identifica como estimativa e exige confirmação.
+Os índices únicos que sustentam a idempotência da 16-B são **parciais**:
 
-## 📋 Pendências registradas da 16-A (não são bugs — escopo consciente)
+```sql
+… on nutrition_diary_entries (user_id, diary_meal_id, planned_item_id)
+  where planned_item_id is not null;
+… on nutrition_planned_meals (plan_day_id, planned_date, meal_type_id)
+  where plan_day_id is not null and planned_date is not null;
+```
+
+O Postgres **não infere índice parcial num `ON CONFLICT`** sem repetir o predicado, e o
+PostgREST não permite repetir — o `upsert` falha **só em runtime** (`42P10`). Use
+*select-then-insert/update* nesses casos. O mesmo vale para índices de **expressão**
+(`coalesce(...)`), como o de escopo de `nutrition_goal_items`. E no PostgREST,
+`.eq(coluna, null)` **não** casa com NULL: use `.is(coluna, null)`.
+
+## 📋 Pendências registradas da 16-A e da 16-B (escopo consciente, não bugs)
 
 | Item | Onde resolve |
 | --- | --- |
-| Medidas caseiras oficiais em massa (a TACO não publica) | Importar uma segunda fonte pelo mesmo pipeline; nada foi inventado |
-| Leitura de código de barras pela câmera | Subfase 16-F (o campo, a busca e o cadastro manual já existem) |
-| Cards no dashboard geral, busca global, lançamento rápido, notificações | Subfase 16-F |
-| Micronutrientes na tela de metas | Subfases 16-B / 16-E |
-| Exportação do catálogo em CSV | Subfase 16-E (com os demais relatórios) |
+| Medidas caseiras oficiais em massa (a TACO não publica) | Segunda fonte pelo mesmo pipeline; nada foi inventado |
+| Leitura de código de barras pela câmera | 16-F (campo, busca e cadastro manual já existem) |
+| Cards no dashboard geral, busca global, lançamento rápido, notificações | 16-F |
+| Exportação do catálogo em CSV | 16-E |
+| **Visão de mês do diário** (calendário com indicadores) — `?visao=mes` hoje cai na semana | 16-E |
+| **Montar os dias de um modelo pela interface** (criar e aplicar já funcionam) | 16-C |
+| `updatePlannedMealInScope` existe e é testada; a UI só expõe escopo na **exclusão** | 16-C |
+| Relatório de micronutrientes por período (a **meta** de micro já funciona) | 16-E |
 
 ## 🔁 Como aplicar migrations neste projeto
 
@@ -107,7 +132,7 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 
 ## ⛔ Invariantes gerais do projeto (bloqueantes)
 
-- **RLS + FORCE RLS em TODAS as tabelas** (hoje **57**). Teste pelo client SDK autenticado ou
+- **RLS + FORCE RLS em TODAS as tabelas** (hoje **67**). Teste pelo client SDK autenticado ou
   trocando de role no SQL — o SQL editor como `postgres` ignora RLS.
 - **Zod no servidor** em toda Server Action; `user_id` sempre de `auth.getUser()`.
 - **Nenhum `service_role` no client** — só `src/lib/supabase/service.ts` e o Cron.
@@ -121,13 +146,15 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
 
-Os **671 testes** devem continuar passando (acrescente testes para toda lógica pura nova).
+Os **889 testes** devem continuar passando (acrescente testes para toda lógica pura nova).
 A suíte precisa passar em qualquer fuso — confira com `TZ=UTC npx vitest run`.
 Smoke test: rotas privadas → 307 `/login`; `/api/cron/*` → 401 sem segredo.
 
 ## 🗺️ Mapa rápido do que existe (reaproveitar, não reescrever)
 
-- **Dieta:** `src/lib/nutrition/*` (puro + queries), `src/lib/actions/nutrition-foods.ts`,
+- **Dieta:** `src/lib/nutrition/*` (puro + queries; destaque para `snapshot.ts`, `calc.ts`,
+  `goals.ts`, `diary.ts`, `plan-recurrence.ts`, `calendar.ts`),
+  `src/lib/actions/nutrition-{foods,diary,goals,plans}.ts`,
   `src/components/nutrition/*`, `src/app/(app)/nutricao/*`, `scripts/nutrition/*`,
   `data/nutrition/taco-4/*`.
 - **TO-DO:** `src/lib/todo/*` — referência de recorrência pura em `Date.UTC`.

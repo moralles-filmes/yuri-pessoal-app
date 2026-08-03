@@ -230,6 +230,243 @@ export const MEASURE_LABEL_SUGGESTIONS = [
   "Pedaço",
 ] as const;
 
+/* ═════════════════════════ Fase 16-B — Diário, metas e planejamento ═════════════════════════ */
+
+/* ───────────────────────────── Status da refeição ─────────────────────────────
+ * Só estes seis são GRAVADOS: cada um é um fato que aconteceu e que o usuário declarou.
+ * "pendente" e o atraso NÃO estão aqui de propósito — são DERIVADOS de `planned_time` +
+ * hora atual na leitura (ver `effectiveMealStatus` em diary.ts), exatamente como 'atrasada'
+ * no TO-DO (Fase 15) e o status da fatura (Fase 03). Persistir estado derivado obrigaria a
+ * reprocessar o banco de hora em hora só para ele continuar verdadeiro.
+ */
+export const MEAL_STATUSES = [
+  "planejada",
+  "consumida",
+  "parcialmente_consumida",
+  "substituida",
+  "nao_consumida",
+  "fora_do_planejamento",
+] as const;
+export type MealStatus = (typeof MEAL_STATUSES)[number];
+
+export const MEAL_STATUS_LABELS: Record<MealStatus, string> = {
+  planejada: "Planejada",
+  consumida: "Consumida",
+  parcialmente_consumida: "Parcialmente consumida",
+  substituida: "Substituída",
+  nao_consumida: "Não consumida",
+  fora_do_planejamento: "Fora do planejamento",
+};
+
+/** Status como a tela vê: os gravados mais o "pendente", que é derivado. */
+export type EffectiveMealStatus = MealStatus | "pendente";
+
+export const EFFECTIVE_MEAL_STATUS_LABELS: Record<EffectiveMealStatus, string> = {
+  ...MEAL_STATUS_LABELS,
+  pendente: "Pendente",
+};
+
+export const EFFECTIVE_MEAL_STATUS_HINTS: Record<EffectiveMealStatus, string> = {
+  planejada: "Ainda vai acontecer.",
+  pendente: "O horário já chegou e nada foi registrado.",
+  consumida: "Registrada como consumida.",
+  parcialmente_consumida: "Consumida em parte.",
+  substituida: "Você comeu outra coisa no lugar.",
+  nao_consumida: "Você decidiu não fazer esta refeição.",
+  fora_do_planejamento: "Não estava prevista e aconteceu.",
+};
+
+/**
+ * Minutos de folga antes de uma refeição pendente ser considerada atrasada.
+ * Fica explícito (e não escondido numa comparação) porque é uma escolha de produto: comer o
+ * almoço 20 minutos depois do previsto não é "atraso" para ninguém.
+ */
+export const MEAL_LATE_TOLERANCE_MINUTES = 45;
+
+/* ───────────────────────────── Planejado × consumido ─────────────────────────────
+ * Como o item consumido se relaciona com o que estava planejado. O planejamento NUNCA é
+ * reescrito: é esta classificação, gravada no item do diário, que conta a história.
+ */
+export const CHANGE_KINDS = [
+  "igual",
+  "quantidade_ajustada",
+  "substituido",
+  "removido",
+  "extra",
+] as const;
+export type ChangeKind = (typeof CHANGE_KINDS)[number];
+
+export const CHANGE_KIND_LABELS: Record<ChangeKind, string> = {
+  igual: "Conforme o planejado",
+  quantidade_ajustada: "Quantidade ajustada",
+  substituido: "Substituído",
+  removido: "Removido do plano",
+  extra: "Extra",
+};
+
+/** Item planejado que não gerou registro nenhum — nem consumo, nem remoção explícita. */
+export const NOT_REGISTERED = "nao_registrado" as const;
+
+/* ───────────────────────────── Tipo de dia ───────────────────────────── */
+export const DAY_KINDS = ["treino", "descanso"] as const;
+export type DayKind = (typeof DAY_KINDS)[number];
+
+export const DAY_KIND_LABELS: Record<DayKind, string> = {
+  treino: "Dia de treino",
+  descanso: "Dia de descanso",
+};
+
+/* ───────────────────────────── Metas ───────────────────────────── */
+export const GOAL_TYPES = ["fixa", "por_dia_semana", "treino_descanso", "periodo"] as const;
+export type GoalType = (typeof GOAL_TYPES)[number];
+
+export const GOAL_TYPE_LABELS: Record<GoalType, string> = {
+  fixa: "Igual todos os dias",
+  por_dia_semana: "Por dia da semana",
+  treino_descanso: "Treino e descanso",
+  periodo: "Do período inteiro",
+};
+
+export const GOAL_TYPE_HINTS: Record<GoalType, string> = {
+  fixa: "Um conjunto de valores que vale para qualquer dia do período.",
+  por_dia_semana: "Valores diferentes para cada dia da semana.",
+  treino_descanso: "Um conjunto para dias de treino e outro para dias de descanso.",
+  periodo: "Valores de referência do período, sem variação por dia.",
+};
+
+/** Nutrientes oferecidos na tela de metas. Micronutrientes entram pelo seletor "adicionar". */
+export const GOAL_DEFAULT_NUTRIENTS = [
+  CORE_NUTRIENTS.energia,
+  CORE_NUTRIENTS.proteina,
+  CORE_NUTRIENTS.carboidrato,
+  CORE_NUTRIENTS.lipidios,
+  CORE_NUTRIENTS.fibra,
+  CORE_NUTRIENTS.sodio,
+  CORE_NUTRIENTS.acucares,
+] as const;
+
+/* ───────────────────────────── Perfil ───────────────────────────── */
+export const PROFILE_SEXES = ["feminino", "masculino", "nao_informado"] as const;
+export type ProfileSex = (typeof PROFILE_SEXES)[number];
+
+export const PROFILE_SEX_LABELS: Record<ProfileSex, string> = {
+  feminino: "Feminino",
+  masculino: "Masculino",
+  nao_informado: "Prefiro não informar",
+};
+
+export const ACTIVITY_LEVELS = [
+  "nao_informado",
+  "sedentario",
+  "leve",
+  "moderado",
+  "intenso",
+  "muito_intenso",
+] as const;
+export type ActivityLevel = (typeof ACTIVITY_LEVELS)[number];
+
+export const ACTIVITY_LEVEL_LABELS: Record<ActivityLevel, string> = {
+  nao_informado: "Não informado",
+  sedentario: "Sedentário",
+  leve: "Levemente ativo",
+  moderado: "Moderadamente ativo",
+  intenso: "Muito ativo",
+  muito_intenso: "Extremamente ativo",
+};
+
+export const ACTIVITY_LEVEL_HINTS: Record<ActivityLevel, string> = {
+  nao_informado: "Sem estimativa de gasto energético.",
+  sedentario: "Pouco ou nenhum exercício.",
+  leve: "Exercício leve 1 a 3 dias por semana.",
+  moderado: "Exercício moderado 3 a 5 dias por semana.",
+  intenso: "Exercício intenso 6 a 7 dias por semana.",
+  muito_intenso: "Exercício muito intenso ou trabalho físico pesado.",
+};
+
+export const GOAL_DIRECTIONS = ["nao_informado", "perder", "manter", "ganhar"] as const;
+export type GoalDirection = (typeof GOAL_DIRECTIONS)[number];
+
+export const GOAL_DIRECTION_LABELS: Record<GoalDirection, string> = {
+  nao_informado: "Não informado",
+  perder: "Perder peso",
+  manter: "Manter peso",
+  ganhar: "Ganhar peso",
+};
+
+/* ───────────────────────────── Tipos de refeição ─────────────────────────────
+ * O seed padrão. NÃO entra por migration: é criado na primeira leitura do módulo, de forma
+ * idempotente pelo unique (user_id, slug) — ver `ensureMealTypes` em diary-queries.ts. São
+ * dado do usuário, e ele pode renomear, reordenar, desativar e criar os seus.
+ */
+export const DEFAULT_MEAL_TYPES: {
+  slug: string;
+  name: string;
+  defaultTime: string | null;
+  icon: string;
+}[] = [
+  { slug: "cafe_da_manha", name: "Café da manhã", defaultTime: "07:00", icon: "☕" },
+  { slug: "lanche_da_manha", name: "Lanche da manhã", defaultTime: "10:00", icon: "🍎" },
+  { slug: "almoco", name: "Almoço", defaultTime: "12:30", icon: "🍽️" },
+  { slug: "lanche_da_tarde", name: "Lanche da tarde", defaultTime: "16:00", icon: "🥪" },
+  { slug: "jantar", name: "Jantar", defaultTime: "19:30", icon: "🍲" },
+  { slug: "ceia", name: "Ceia", defaultTime: "22:00", icon: "🥛" },
+  { slug: "refeicao_livre", name: "Refeição livre", defaultTime: null, icon: "🎉" },
+  { slug: "outros", name: "Outros", defaultTime: null, icon: "🍴" },
+];
+
+/* ───────────────────────────── Dias da semana ─────────────────────────────
+ * 0 = domingo … 6 = sábado — mesma convenção de `habits.weekdays` (Fase 10) e de
+ * `Date.getUTCDay()`, para a aritmética pura não precisar de tradução.
+ */
+export const WEEKDAY_LABELS = [
+  "Domingo",
+  "Segunda-feira",
+  "Terça-feira",
+  "Quarta-feira",
+  "Quinta-feira",
+  "Sexta-feira",
+  "Sábado",
+] as const;
+
+export const WEEKDAY_SHORT_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
+
+/* ───────────────────────────── Visões do diário ───────────────────────────── */
+export const DIARY_VIEWS = ["dia", "semana", "mes"] as const;
+export type DiaryView = (typeof DIARY_VIEWS)[number];
+
+export const DIARY_VIEW_LABELS: Record<DiaryView, string> = {
+  dia: "Dia",
+  semana: "Semana",
+  mes: "Mês",
+};
+
+export const PLANNING_VIEWS = ["dia", "semana", "modelos"] as const;
+export type PlanningView = (typeof PLANNING_VIEWS)[number];
+
+export const PLANNING_VIEW_LABELS: Record<PlanningView, string> = {
+  dia: "Dia",
+  semana: "Semana",
+  modelos: "Modelos",
+};
+
+/** Escopo de uma edição no planejamento. A UI SEMPRE pergunta — nunca decide sozinha. */
+export const PLAN_EDIT_SCOPES = ["somente_este_dia", "este_e_proximos", "todo_o_modelo"] as const;
+export type PlanEditScope = (typeof PLAN_EDIT_SCOPES)[number];
+
+export const PLAN_EDIT_SCOPE_LABELS: Record<PlanEditScope, string> = {
+  somente_este_dia: "Somente este dia",
+  este_e_proximos: "Este dia e os próximos",
+  todo_o_modelo: "Todo o modelo",
+};
+
+export const PLAN_EDIT_SCOPE_HINTS: Record<PlanEditScope, string> = {
+  somente_este_dia: "Altera apenas a data escolhida. O modelo e os outros dias ficam como estão.",
+  este_e_proximos:
+    "Altera esta data e as futuras que vieram do mesmo dia do modelo. O passado não é tocado.",
+  todo_o_modelo:
+    "Altera o modelo e reaplica nas datas futuras. Dias já passados continuam como foram planejados.",
+};
+
 /* ───────────────────────────── Navegação interna ───────────────────────────── */
 export const NUTRITION_BASE_PATH = "/nutricao";
 
@@ -275,7 +512,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "O que foi realmente consumido, dia a dia.",
     href: `${NUTRITION_BASE_PATH}/diario`,
     icon: "notebook-pen",
-    status: "proxima",
+    status: "pronto",
     phase: "Subfase 16-B",
   },
   {
@@ -284,7 +521,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Refeições planejadas por dia e por semana.",
     href: `${NUTRITION_BASE_PATH}/planejamento`,
     icon: "calendar-range",
-    status: "proxima",
+    status: "pronto",
     phase: "Subfase 16-B",
   },
   {
@@ -293,7 +530,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Calorias, macros e distribuição por refeição.",
     href: `${NUTRITION_BASE_PATH}/metas`,
     icon: "target",
-    status: "proxima",
+    status: "pronto",
     phase: "Subfase 16-B",
   },
   {
@@ -417,3 +654,21 @@ export const asMeasureUnitType = (v: unknown): MeasureUnitType =>
   includes(MEASURE_UNIT_TYPES, v) ? v : "peso";
 export const asFoodSort = (v: unknown): FoodSort => (includes(FOOD_SORTS, v) ? v : "nome");
 export const asFoodOrigin = (v: unknown): FoodOrigin => (includes(FOOD_ORIGINS, v) ? v : "todos");
+
+/* Fase 16-B */
+export const asMealStatus = (v: unknown): MealStatus =>
+  includes(MEAL_STATUSES, v) ? v : "planejada";
+export const asChangeKind = (v: unknown): ChangeKind => (includes(CHANGE_KINDS, v) ? v : "extra");
+export const asDayKind = (v: unknown): DayKind | null => (includes(DAY_KINDS, v) ? v : null);
+export const asGoalType = (v: unknown): GoalType => (includes(GOAL_TYPES, v) ? v : "fixa");
+export const asProfileSex = (v: unknown): ProfileSex =>
+  includes(PROFILE_SEXES, v) ? v : "nao_informado";
+export const asActivityLevel = (v: unknown): ActivityLevel =>
+  includes(ACTIVITY_LEVELS, v) ? v : "nao_informado";
+export const asGoalDirection = (v: unknown): GoalDirection =>
+  includes(GOAL_DIRECTIONS, v) ? v : "nao_informado";
+export const asDiaryView = (v: unknown): DiaryView => (includes(DIARY_VIEWS, v) ? v : "dia");
+export const asPlanningView = (v: unknown): PlanningView =>
+  includes(PLANNING_VIEWS, v) ? v : "dia";
+export const asPlanEditScope = (v: unknown): PlanEditScope =>
+  includes(PLAN_EDIT_SCOPES, v) ? v : "somente_este_dia";

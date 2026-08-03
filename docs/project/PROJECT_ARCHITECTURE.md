@@ -219,7 +219,7 @@ convivem com as antigas. **Não remover `/tarefas` sem antes migrar aqueles cinc
 
 ---
 
-## Módulo Dieta e Alimentação (Fase 16 — Subfase A concluída)
+## Módulo Dieta e Alimentação (Fase 16 — Subfases A e B concluídas)
 
 Módulo central em `/nutricao`, com **navegação interna própria** (12 submódulos) no mesmo
 padrão do TO-DO. Segue o fluxo do resto do sistema: Server Component lê → Server Action muta
@@ -241,6 +241,22 @@ padrão do TO-DO. Segue o fluxo do resto do sistema: Server Component lê → Se
 3. **Conversão impossível é erro explícito, nunca estimativa.** Medida em gramas + alimento
    medido em ml exigiria densidade; `convertToBase` devolve um erro tipado e a UI explica.
    Não há conversão genérica entre alimentos (colher de arroz ≠ colher de azeite).
+4. **O histórico não muda quando o alimento muda** (16-B). `nutrition_diary_entries` congela
+   o consumo no ato do registro — identidade, quantidade, conversão, procedência e os
+   nutrientes já ajustados à porção (`nutrients_snapshot jsonb`). O total do dia soma **esse
+   jsonb**: não existe caminho de leitura do total que passe pelo catálogo. `food_id` é
+   `on delete set null` (referência informativa), e o discriminador estável da linha é
+   `entry_kind` — não a presença de `food_id`, que pode virar nulo.
+5. **Planejado ≠ consumido** (16-B). Tabelas separadas; registrar consumo nunca escreve no
+   planejamento. A diferença é derivada por `planned_item_id` + `change_kind`.
+6. **Status derivado na leitura** (16-B). `pendente` **não existe no CHECK** de
+   `nutrition_diary_meals`: sai de `planned_time` + hora atual, como 'atrasada' no TO-DO
+   (F15) e o status da fatura (F03).
+7. **A meta de um dia é a que valia naquele dia** (16-B). `nutrition_goal_periods` tem
+   `starts_on`/`ends_on`; mudar de objetivo encerra o período e abre outro, em vez de
+   sobrescrever o alvo — senão o relatório do mês passado mudaria sozinho.
+8. **A água é do módulo Hábitos** (F10). Dieta lê `habits`/`habit_logs` da categoria `agua` e
+   linka; não existe tabela de água aqui.
 
 ### Base nutricional
 **TACO 4ª edição (NEPA/UNICAMP, 2011)** — 597 alimentos, 21.147 valores. Obtida do XLSX
@@ -254,7 +270,7 @@ node scripts/nutrition/generate-taco-migration.mjs          # dataset → migrat
 
 Atribuição, licença e decisões de fidelidade em `data/nutrition/taco-4/ATTRIBUTION.md`.
 
-### Schema (10 tabelas + 1 view)
+### Schema — 16-A (10 tabelas + 1 view)
 `nutrition_nutrients` (catálogo global de referência, **somente leitura, sem policy de
 escrita**), `nutrition_food_sources`, `nutrition_food_categories`, `nutrition_foods`,
 `nutrition_food_nutrients` (**única fonte de verdade** de nutriente), `nutrition_food_measures`,
@@ -264,6 +280,26 @@ escrita**), `nutrition_food_sources`, `nutrition_food_categories`, `nutrition_fo
 A view **pivota** os nutrientes quentes para permitir ordenar/filtrar sem N+1. É derivação,
 não segunda fonte de verdade — **nunca materialize nutriente em coluna de `nutrition_foods`**.
 
+### Schema — 16-B (10 tabelas)
+**Metas:** `nutrition_profiles` (uma linha/usuário, tudo informado por ele),
+`nutrition_goal_periods` (meta vigente por data), `nutrition_goal_items` (valor por nutriente
+e escopo: dia da semana · treino/descanso · refeição).
+**Diário:** `nutrition_meal_types` (dado do usuário — sem seed em migration; criados na
+primeira leitura por `ensureMealTypes()`, idempotente pelo unique `(user_id, slug)`),
+`nutrition_diary_meals` (dia em `date` puro + horas em `time`), `nutrition_diary_entries`
+(**o snapshot**).
+**Planejamento:** `nutrition_plans` (modelo de semana, ciclo de 1 a 8 semanas),
+`nutrition_plan_days`, `nutrition_planned_meals` (âncora dupla: `planned_date` **ou**
+`plan_day_id`), `nutrition_planned_meal_items`.
+
+> ⚠️ **`ON CONFLICT` não funciona com os índices únicos parciais e de expressão deste
+> módulo.** O Postgres não infere índice parcial sem repetir o predicado, e o PostgREST não
+> permite repetir — o `upsert` falha **só em runtime** (`42P10`). Use
+> *select-then-insert/update* nos pontos idempotentes
+> (`nutrition_diary_entries.planned_item_id`, materialização de modelo) e delete-do-escopo +
+> insert em `nutrition_goal_items` (índice com `coalesce`). No PostgREST,
+> `.eq(coluna, null)` não casa com NULL — use `.is(coluna, null)`.
+
 ### Mapa de arquivos
 | Camada | Caminho |
 | --- | --- |
@@ -272,9 +308,14 @@ não segunda fonte de verdade — **nunca materialize nutriente em coluna de `nu
 | **Conversão de medidas (puro)** | `src/lib/nutrition/units.ts` + `units.test.ts` |
 | **Cálculo nutricional (puro)** | `src/lib/nutrition/calc.ts` + `calc.test.ts` |
 | **Filtro/ordenação/URL (puro)** | `src/lib/nutrition/filters.ts` + `filters.test.ts` |
-| Leitura (server-only) | `src/lib/nutrition/queries.ts` |
-| Validação Zod | `src/lib/validators/nutrition.ts` |
-| Server Actions | `src/lib/actions/nutrition-foods.ts` |
+| **Data pura e horário (puro)** | `src/lib/nutrition/calendar.ts` + `calendar.test.ts` |
+| **Snapshot do consumo (puro)** | `src/lib/nutrition/snapshot.ts` + `snapshot.test.ts` |
+| **Metas, progresso e aderência (puro)** | `src/lib/nutrition/goals.ts` + `goals.test.ts` |
+| **Diário: totais, status, planejado × consumido (puro)** | `src/lib/nutrition/diary.ts` + `diary.test.ts` |
+| **Recorrência do planejamento (puro)** | `src/lib/nutrition/plan-recurrence.ts` + `plan-recurrence.test.ts` |
+| Leitura (server-only) | `src/lib/nutrition/queries.ts` · `diary-queries.ts` |
+| Validação Zod | `src/lib/validators/nutrition.ts` · `nutrition-diary.ts` |
+| Server Actions | `src/lib/actions/nutrition-{foods,diary,goals,plans}.ts` |
 | Rotas | `src/app/(app)/nutricao/` |
 | Componentes | `src/components/nutrition/` |
 | Pipeline da base | `scripts/nutrition/` · dados em `data/nutrition/taco-4/` |
