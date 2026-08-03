@@ -32,10 +32,12 @@ export function MobileNav() {
       </SheetTrigger>
       <SheetContent side="left" className="w-72 gap-0 p-0">
         <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
-        <div className="flex h-16 items-center border-b border-sidebar-border px-4">
+        <div className="flex h-16 shrink-0 items-center border-b border-sidebar-border px-4">
           <Logo />
         </div>
-        <div className="overflow-y-auto px-3 py-4">
+        {/* Mesma regra da Sidebar: `min-h-0 flex-1` dentro do flex-col do
+            SheetContent, senão a lista estoura o drawer sem rolar. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
           <NavLinks onNavigate={() => setOpen(false)} />
         </div>
       </SheetContent>

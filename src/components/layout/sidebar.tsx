@@ -27,20 +27,23 @@ export function Sidebar({
     >
       <div
         className={cn(
-          "flex h-16 items-center border-b border-sidebar-border px-3",
+          "flex h-16 shrink-0 items-center border-b border-sidebar-border px-3",
           collapsed ? "justify-center" : "px-4",
         )}
       >
         <Logo collapsed={collapsed} />
       </div>
 
-      <ScrollArea className="flex-1">
+      {/* `min-h-0` é obrigatório: sem ele o item flex não encolhe abaixo do
+          conteúdo (min-height:auto), a ScrollArea cresce até a altura da lista
+          e o scroll nunca ativa — o menu fica "travado". */}
+      <ScrollArea className="min-h-0 flex-1">
         <div className="px-3 py-4">
           <NavLinks collapsed={collapsed} />
         </div>
       </ScrollArea>
 
-      <div className="border-t border-sidebar-border p-3">
+      <div className="shrink-0 border-t border-sidebar-border p-3">
         <Button
           variant="ghost"
           size={collapsed ? "icon" : "default"}
