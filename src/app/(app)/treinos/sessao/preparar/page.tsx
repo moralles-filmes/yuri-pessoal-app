@@ -15,6 +15,7 @@ import {
 } from "@/lib/training/session-queries";
 import { previousPerformance, type PreviousPerformance } from "@/lib/training/previous";
 import { PrepareChooseClient } from "@/components/training/session/prepare-choose-client";
+import { getLatestWeight } from "@/lib/body/queries";
 import { PrepareReviewClient } from "@/components/training/session/prepare-review-client";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +64,13 @@ export default async function PrepararPage({
       .map((exercise) => exercise.exerciseId)
       .filter((id): id is string => Boolean(id));
 
-    const history = await getExerciseHistory(exerciseIds, { excludeSessionId: session.id });
+    // 17-E — o peso mais recente do MÓDULO CENTRAL `body_*` (16-E), só para PRÉ-PREENCHER o
+    // campo. O que ficar gravado na sessão continua sendo o peso DAQUELE treino, congelado —
+    // `training_sessions.body_weight_kg` não é, e não vira, histórico de medida.
+    const [history, latestWeight] = await Promise.all([
+      getExerciseHistory(exerciseIds, { excludeSessionId: session.id }),
+      getLatestWeight(session.sessionDate),
+    ]);
 
     // Duas fontes, porque as duas respostas são legítimas e diferentes: "a última vez que fiz
     // este exercício" e "a última vez que fiz este exercício NESTE treino". Quem escolhe é o
@@ -101,6 +108,9 @@ export default async function PrepararPage({
           previousAny={previousAny}
           previousSame={previousSame}
           difficultyScale={preferences.difficultyScale}
+          latestWeight={
+            latestWeight ? { valueKg: latestWeight.value, measuredOn: latestWeight.measuredOn } : null
+          }
         />
       </div>
     );

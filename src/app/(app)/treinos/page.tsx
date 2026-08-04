@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
+  BarChart3,
   CalendarCheck,
   CalendarRange,
   ClipboardList,
   Dumbbell,
   History,
   Layers,
+  Play,
+  Scale,
   Settings,
-  Star,
+  Target,
+  TrendingUp,
   Trophy,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -17,18 +22,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { hojeISO } from "@/lib/format";
+import { getCurrentUser } from "@/lib/supabase/server";
+import { getLatestWeight, getMeasurementTypes } from "@/lib/body/queries";
+import { formatMeasurement } from "@/lib/body/measurements";
 import {
+  DERIVED_SCHEDULE_STATUS_LABELS,
   TRAINING_BASE_PATH,
   TRAINING_SECTIONS,
-  MUSCLE_REGION_LABELS,
 } from "@/lib/training/constants";
-import {
-  getEquipment,
-  getExercises,
-  getMuscleGroups,
-  getTrainingPreferences,
-  summarizeCatalog,
-} from "@/lib/training/queries";
+import { getTrainingPreferences } from "@/lib/training/queries";
 import {
   getPrograms,
   getScheduledWorkouts,
@@ -42,64 +44,142 @@ import {
   nextScheduledEntry,
 } from "@/lib/training/schedule";
 import { getSessionHistory } from "@/lib/training/history-queries";
-import { aggregateSessions, formatVolumeKg, frequencyMetrics } from "@/lib/training/metrics";
-import { DERIVED_SCHEDULE_STATUS_LABELS } from "@/lib/training/constants";
+import { getTrainingGoals, getGoalProgressEntries, resolveGoals } from "@/lib/training/goal-queries";
+import { getExercises, getMuscleGroups } from "@/lib/training/queries";
+import { getMeasurements } from "@/lib/body/queries";
+import {
+  adherence,
+  buildDashboard,
+  comparePeriods,
+  dashboardRange,
+  deltaLabel,
+  previousRange,
+  sessionsInRange,
+  weeklyGoalStreak,
+} from "@/lib/training/dashboards";
+import { aggregateSessions, formatVolumeKg } from "@/lib/training/metrics";
+import { durationLabel, shortDateLabelIso } from "@/lib/training/history";
+import {
+  GOAL_STATUS_LABELS,
+  formatGoalValue,
+  isGoalOpen,
+  sortGoalsForDisplay,
+} from "@/lib/training/goals";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Treinos" };
 
 /**
- * Fase 17-D — Visão geral do módulo Treinos.
+ * Fase 17-E — Visão geral do módulo Treinos, completa.
  *
- * Continua mostrando o que EXISTE, nunca o que existirá. A 17-B trouxe a rotina (programas,
- * treinos-modelo e planejamento) e a 17-D trouxe o que foi de fato treinado — por isso os
- * números dos últimos 30 dias aparecem aqui, todos saídos de `metrics.ts`, a mesma fonte do
- * histórico e dos recordes. Sem treino registrado no período, a tela diz isso em vez de
- * mostrar "0 kg" com cara de resultado.
+ * Resumo do dia, resumo da semana (com comparação), metas em andamento, evolução recente e
+ * ações rápidas. **Todo número sai de `metrics.ts` (17-D)** por meio de `dashboards.ts`; o
+ * peso corporal vem do módulo central `body_*` (16-E), o mesmo da Dieta.
+ *
+ * A tela continua mostrando o que EXISTE: sem treino no período, ela diz isso em vez de
+ * exibir "0 kg" com cara de resultado.
  */
 export default async function TreinosPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   const hoje = hojeISO();
 
-  const [exercises, groups, equipment, preferences, programs, workouts, scheduled, history] =
-    await Promise.all([
-      getExercises(),
-      getMuscleGroups(),
-      getEquipment(),
-      getTrainingPreferences(),
-      getPrograms(),
-      getWorkouts(),
-      getScheduledWorkouts(addDaysIso(hoje, -14), addDaysIso(hoje, 21)),
-      getSessionHistory({ from: addDaysIso(hoje, -29), to: hoje }),
-    ]);
+  const [
+    exercises,
+    groups,
+    preferences,
+    programs,
+    workouts,
+    scheduled,
+    history,
+    goals,
+    measurements,
+    measurementTypes,
+    latestWeight,
+  ] = await Promise.all([
+    getExercises(),
+    getMuscleGroups(),
+    getTrainingPreferences(),
+    getPrograms(),
+    getWorkouts(),
+    getScheduledWorkouts(addDaysIso(hoje, -120), addDaysIso(hoje, 21)),
+    getSessionHistory({ from: addDaysIso(hoje, -120), to: hoje }),
+    getTrainingGoals(),
+    getMeasurements({ from: addDaysIso(hoje, -365), to: hoje }),
+    getMeasurementTypes(),
+    getLatestWeight(hoje),
+  ]);
 
-  const summary = summarizeCatalog(exercises);
-  // 17-D — os números do período saem de `metrics.ts`, com a regra do usuário aplicada.
   const metricOptions = {
     includeWarmup: preferences.countWarmupInVolume,
     unilateralRule: preferences.unilateralVolumeRule,
+    weekStartsOn: preferences.weekStartsOn,
   };
-  const last30 = aggregateSessions(history, metricOptions);
-  const frequency = frequencyMetrics(history, hoje, { weekStartsOn: preferences.weekStartsOn });
+
+  // ── Semana atual, com comparação (dashboards.ts consome metrics.ts) ──
+  const weekRange = dashboardRange("semana", hoje, preferences.weekStartsOn);
+  const dashboard = buildDashboard(history, "semana", weekRange, hoje, metricOptions);
+  const lastWeek = aggregateSessions(
+    sessionsInRange(history, previousRange("semana", weekRange)),
+    metricOptions,
+  );
+  const weekComparison = comparePeriods(dashboard.metrics, lastWeek);
+
+  const plannedDays = scheduled.map((entry) => ({
+    scheduledDate: entry.scheduledDate,
+    entryKind: entry.entryKind,
+    status: entry.status,
+  }));
+  const weekAdherence = adherence(plannedDays, dashboard.metrics.trainedDays, weekRange, hoje);
+  const goalStreak = preferences.weeklyWorkoutGoal
+    ? weeklyGoalStreak(history, preferences.weeklyWorkoutGoal, hoje, preferences.weekStartsOn)
+    : 0;
+
+  // ── Metas em andamento ──
+  const progressEntries = goals.length > 0 ? await getGoalProgressEntries(goals.map((g) => g.id)) : [];
+  const resolved = resolveGoals({
+    goals,
+    history,
+    planned: plannedDays,
+    measurements,
+    measurementTypes,
+    progressEntries,
+    exerciseNames: new Map(exercises.map((exercise) => [exercise.id, exercise.name])),
+    muscleGroupNames: new Map(groups.map((group) => [group.id, group.name])),
+    programNames: new Map(programs.map((program) => [program.id, program.name])),
+    hoje,
+    options: { ...metricOptions, oneRmFormula: preferences.oneRmFormula },
+  });
+  const openGoals = sortGoalsForDisplay(
+    resolved
+      .filter((item) => isGoalOpen(item.progress.status))
+      .map((item) => ({
+        ...item,
+        status: item.progress.status,
+        endsOn: item.goal.endsOn,
+        position: item.goal.position,
+        name: item.goal.name,
+      })),
+  ).slice(0, 4);
+
+  // ── Hoje ──
+  const todayEntries = scheduled.filter((entry) => entry.scheduledDate === hoje);
+  const todaySessions = history.filter((item) => item.sessionDate === hoje);
+  const todayMetrics = todaySessions.length > 0 ? aggregateSessions(todaySessions, metricOptions) : null;
+
   const routines = summarizeRoutines(programs, workouts);
   const week = buildScheduleWeek(scheduled, hoje, hoje, preferences.weekStartsOn);
   const next = nextScheduledEntry(scheduled, hoje);
-  const groupById = new Map(groups.map((g) => [g.id, g]));
 
-  const topGroups = Object.entries(summary.byMuscleGroup)
-    .map(([id, count]) => ({ group: groupById.get(id), count }))
-    .filter((item): item is { group: NonNullable<typeof item.group>; count: number } =>
-      Boolean(item.group),
-    )
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
-
+  const weightType = measurementTypes.find((type) => type.slug === "peso");
   const upcoming = TRAINING_SECTIONS.filter((section) => section.status !== "pronto");
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Treinos"
-        description="Musculação, hipertrofia, força e condicionamento — do catálogo de exercícios ao histórico."
+        description="Musculação, hipertrofia, força e condicionamento — do catálogo de exercícios às metas e relatórios."
       >
         <Button asChild variant="outline" size="sm">
           <Link href={`${TRAINING_BASE_PATH}/exercicios`}>
@@ -108,120 +188,300 @@ export default async function TreinosPage() {
           </Link>
         </Button>
         <Button asChild size="sm">
-          <Link href={`${TRAINING_BASE_PATH}/hoje`}>
-            <CalendarCheck className="size-4" />
-            Treino de hoje
+          <Link href={`${TRAINING_BASE_PATH}/sessao/preparar`}>
+            <Play className="size-4" />
+            Iniciar treino
           </Link>
         </Button>
       </PageHeader>
 
-      {/* 17-D — o que foi realmente treinado. Sem sessão no período, a tela diz isso. */}
+      {/* ═══ Hoje ═══ */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Hoje</CardTitle>
+          <CardDescription>
+            {todayMetrics
+              ? `${todaySessions.length} treino(s) registrado(s) hoje.`
+              : todayEntries.some((entry) => entry.entryKind === "treino")
+                ? "Você tem treino programado para hoje."
+                : todayEntries.some((entry) => entry.entryKind === "descanso")
+                  ? "Hoje está marcado como descanso."
+                  : "Nada programado para hoje. Você pode treinar assim mesmo."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {todayMetrics && (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <StatCard
+                label="Volume de hoje"
+                value={
+                  todayMetrics.totals.units.includes("kg")
+                    ? formatVolumeKg(todayMetrics.totals.volumeKg)
+                    : "—"
+                }
+                icon={Dumbbell}
+                hint={todayMetrics.totals.quality === "parcial" ? "parcial" : "carga × repetições"}
+              />
+              <StatCard
+                label="Séries"
+                value={String(todayMetrics.totals.sets)}
+                icon={ClipboardList}
+              />
+              <StatCard
+                label="Tempo"
+                value={todayMetrics.totalSeconds > 0 ? durationLabel(todayMetrics.totalSeconds) : "—"}
+                icon={CalendarCheck}
+              />
+            </div>
+          )}
+
+          {todayEntries.length > 0 && (
+            <ul className="space-y-1.5 text-sm">
+              {todayEntries.map((entry) => (
+                <li key={entry.id} className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="text-[10px]">
+                    {DERIVED_SCHEDULE_STATUS_LABELS[derivePlannedStatus(entry, hoje)]}
+                  </Badge>
+                  <span>
+                    {entry.entryKind === "descanso"
+                      ? "Descanso"
+                      : (entry.workoutName ?? entry.title ?? "Treino")}
+                  </span>
+                  {entry.plannedTime && (
+                    <span className="text-xs text-muted-foreground">
+                      {entry.plannedTime.slice(0, 5)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/hoje`}>
+                <CalendarCheck className="size-4" />
+                Treino de hoje
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/calendario`}>
+                <CalendarRange className="size-4" />
+                Planejar a semana
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ═══ Esta semana ═══ */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-medium">Últimos 30 dias</h2>
+          <h2 className="text-sm font-medium">Esta semana · {dashboard.label}</h2>
           <div className="flex gap-2">
+            <Button asChild variant="ghost" size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/relatorios`}>
+                <BarChart3 className="size-4" />
+                Relatórios
+              </Link>
+            </Button>
             <Button asChild variant="ghost" size="sm">
               <Link href={`${TRAINING_BASE_PATH}/historico`}>
                 <History className="size-4" />
                 Histórico
               </Link>
             </Button>
-            <Button asChild variant="ghost" size="sm">
-              <Link href={`${TRAINING_BASE_PATH}/recordes`}>
-                <Trophy className="size-4" />
-                Recordes
-              </Link>
-            </Button>
           </div>
         </div>
 
-        {last30.sessionCount === 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Treinos"
+            value={String(dashboard.metrics.sessionCount)}
+            icon={CalendarCheck}
+            hint={`${deltaLabel(weekComparison.sessions)} vs. semana anterior`}
+          />
+          <StatCard
+            label="Volume"
+            value={
+              dashboard.metrics.totals.units.includes("kg")
+                ? formatVolumeKg(dashboard.metrics.totals.volumeKg)
+                : "—"
+            }
+            icon={Dumbbell}
+            hint={
+              dashboard.metrics.totals.quality === "parcial"
+                ? "parcial — veja o motivo no histórico"
+                : `${deltaLabel(weekComparison.volumeKg)} vs. semana anterior`
+            }
+          />
+          <StatCard
+            label="Aderência"
+            value={
+              weekAdherence.percent === null
+                ? "—"
+                : `${weekAdherence.percent.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`
+            }
+            icon={Target}
+            hint={
+              weekAdherence.percent === null
+                ? "nada planejado nesta semana"
+                : `${weekAdherence.done} de ${weekAdherence.planned} dias planejados`
+            }
+          />
+          <StatCard
+            label="Sequência"
+            value={`${dashboard.frequency.currentWeekStreak} sem.`}
+            icon={CalendarRange}
+            hint={
+              preferences.weeklyWorkoutGoal
+                ? `${goalStreak} semana(s) batendo a meta de ${preferences.weeklyWorkoutGoal}`
+                : `maior sequência: ${dashboard.frequency.longestWeekStreak}`
+            }
+          />
+        </div>
+
+        {dashboard.metrics.sessionCount === 0 && (
           <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-            Nenhum treino registrado nos últimos 30 dias. Quando você finalizar uma sessão, o
-            volume, as séries e a frequência aparecem aqui.
+            Nenhum treino registrado nesta semana ainda. Quando você finalizar uma sessão, o
+            volume, as séries e a aderência aparecem aqui.
           </p>
-        ) : (
-          <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard
-                label="Treinos"
-                value={String(last30.sessionCount)}
-                icon={CalendarCheck}
-                hint={`${frequency.trainedDays} dia(s) treinados`}
-              />
-              <StatCard
-                label="Volume"
-                value={formatVolumeKg(last30.totals.volumeKg)}
-                icon={Dumbbell}
-                hint={
-                  last30.totals.quality === "parcial"
-                    ? "Parcial — alguma série ficou fora do cálculo"
-                    : "carga × repetições"
-                }
-              />
-              <StatCard
-                label="Séries"
-                value={String(last30.totals.sets)}
-                icon={ClipboardList}
-                hint={`${last30.totals.workingSets} de trabalho`}
-              />
-              <StatCard
-                label="Sequência"
-                value={`${frequency.currentWeekStreak} sem.`}
-                icon={CalendarRange}
-                hint={`maior sequência: ${frequency.longestWeekStreak}`}
-              />
-            </div>
-            {last30.totals.quality === "parcial" && (
-              <p className="text-xs text-muted-foreground">
-                O volume do período está marcado como parcial: alguma série não tinha dado
-                suficiente para entrar na conta. O motivo aparece no histórico.
-              </p>
-            )}
-          </>
         )}
       </section>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Treinos-modelo"
-          value={String(routines.workouts)}
-          icon={ClipboardList}
-          hint={
-            routines.emptyWorkouts > 0
-              ? `${routines.emptyWorkouts} ainda sem exercícios`
-              : "Todos com exercícios"
-          }
-        />
-        <StatCard
-          label="Programas"
-          value={String(routines.programs)}
-          icon={Layers}
-          hint={
-            routines.activePrograms > 0
-              ? `${routines.activePrograms} em uso`
-              : "Nenhum em uso"
-          }
-        />
-        <StatCard
-          label="Planejado nesta semana"
-          value={String(week.counts.total)}
-          icon={CalendarRange}
-          hint={
-            week.counts.descanso > 0
-              ? `${week.counts.descanso} dia(s) de descanso marcados`
-              : "Nenhum descanso marcado"
-          }
-        />
-        <StatCard
-          label="Exercícios disponíveis"
-          value={String(summary.totalExercises)}
-          icon={Dumbbell}
-          hint={`${summary.systemExercises} da base · ${summary.ownExercises} seus`}
-        />
+      {/* ═══ Metas + evolução corporal ═══ */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Metas em andamento</CardTitle>
+            <CardDescription>
+              O valor sai dos treinos registrados e das medidas corporais — o sistema não sugere
+              alvo nenhum.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {openGoals.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma meta em andamento.{" "}
+                <Link href={`${TRAINING_BASE_PATH}/metas`} className="underline underline-offset-2">
+                  Criar uma meta
+                </Link>
+                .
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {openGoals.map((item) => (
+                  <li key={item.goal.id} className="space-y-1.5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="truncate text-sm font-medium">{item.goal.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {GOAL_STATUS_LABELS[item.progress.status]}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 text-sm">
+                      <span className="tabular-nums">
+                        {formatGoalValue(item.value.value, item.unit)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        de {formatGoalValue(item.goal.targetValue, item.unit)}
+                      </span>
+                    </div>
+                    {item.progress.percent !== null ? (
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${item.progress.percent}%` }}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">{item.value.reason}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button asChild variant="outline" size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/metas`}>
+                <Target className="size-4" />
+                Todas as metas
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Evolução recente</CardTitle>
+            <CardDescription>
+              Desempenho e corpo lado a lado. Correlação não é causa — o sistema mostra os dois,
+              sem afirmar que um explica o outro.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <StatCard
+                label="Peso corporal"
+                value={
+                  latestWeight && weightType
+                    ? formatMeasurement(
+                        latestWeight.value,
+                        latestWeight.unit,
+                        weightType.decimals,
+                      )
+                    : "—"
+                }
+                icon={Scale}
+                hint={
+                  latestWeight
+                    ? `medido em ${shortDateLabelIso(latestWeight.measuredOn)}`
+                    : "nenhuma medição registrada"
+                }
+              />
+              <StatCard
+                label="Séries na semana"
+                value={String(dashboard.metrics.totals.sets)}
+                icon={ClipboardList}
+                hint={`${dashboard.metrics.totals.workingSets} de trabalho`}
+              />
+            </div>
+
+            {dashboard.muscleGroups.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs text-muted-foreground">
+                  Seu registro de treinamento por grupo, nesta semana:
+                </p>
+                <ul className="space-y-1 text-sm">
+                  {dashboard.muscleGroups.slice(0, 5).map((share) => (
+                    <li key={share.group} className="flex items-baseline justify-between gap-3">
+                      <span className="truncate">{share.group}</span>
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {share.sets} série(s)
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline" size="sm">
+                <Link href={`${TRAINING_BASE_PATH}/evolucao`}>
+                  <TrendingUp className="size-4" />
+                  Evolução
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href={`${TRAINING_BASE_PATH}/recordes`}>
+                  <Trophy className="size-4" />
+                  Recordes
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* A semana planejada — status derivado da data, nunca gravado. */}
+      {/* ═══ A semana planejada ═══ */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Sua semana</CardTitle>
@@ -245,11 +505,7 @@ export default async function TreinosPage() {
                     {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
                   </p>
                   <p className="mt-1 truncate">
-                    {entry
-                      ? (entry.workoutName ?? "Treino")
-                      : day.hasRest
-                        ? "Descanso"
-                        : "—"}
+                    {entry ? (entry.workoutName ?? "Treino") : day.hasRest ? "Descanso" : "—"}
                   </p>
                   {derived && derived !== "planejado" && (
                     <Badge variant="secondary" className="mt-1 text-[9px]">
@@ -262,9 +518,9 @@ export default async function TreinosPage() {
           </ul>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={`${TRAINING_BASE_PATH}/calendario`}>
+              <Link href={`${TRAINING_BASE_PATH}/calendario?visao=consistencia`}>
                 <CalendarRange className="size-4" />
-                Planejar a semana
+                Consistência
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm">
@@ -277,92 +533,67 @@ export default async function TreinosPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* ═══ Catálogo e rotina ═══ */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Treinos-modelo"
+          value={String(routines.workouts)}
+          icon={ClipboardList}
+          hint={
+            routines.emptyWorkouts > 0
+              ? `${routines.emptyWorkouts} ainda sem exercícios`
+              : "Todos com exercícios"
+          }
+        />
+        <StatCard
+          label="Programas"
+          value={String(routines.programs)}
+          icon={Layers}
+          hint={routines.activePrograms > 0 ? `${routines.activePrograms} em uso` : "Nenhum em uso"}
+        />
+        <StatCard
+          label="Exercícios disponíveis"
+          value={String(exercises.length)}
+          icon={Dumbbell}
+          hint={`${exercises.filter((exercise) => exercise.isSystemExercise).length} da base`}
+        />
+        <StatCard
+          label="Metas cadastradas"
+          value={String(goals.length)}
+          icon={Target}
+          hint={`${openGoals.length} em andamento`}
+        />
+      </div>
+
+      {upcoming.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Catálogo por grupo muscular</CardTitle>
+            <CardTitle className="text-base">O que ainda vem</CardTitle>
             <CardDescription>
-              Contagem pelo grupo <strong>principal</strong> de cada exercício. Um exercício
-              aparece uma vez só, mesmo trabalhando vários músculos.
+              O módulo é entregue em 6 subfases. Cada seção abaixo já tem rota e diz em qual delas
+              chega — nada de link morto nem de tela que finge funcionar.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {topGroups.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum exercício no catálogo ainda.</p>
-            ) : (
-              <ul className="space-y-2">
-                {topGroups.map(({ group, count }) => (
-                  <li key={group.id}>
-                    <Link
-                      href={`${TRAINING_BASE_PATH}/exercicios?grupo=${group.id}`}
-                      className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span className="min-w-0 flex-1 truncate text-sm">{group.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {MUSCLE_REGION_LABELS[group.region]}
-                      </span>
-                      <span className="w-8 shrink-0 text-right text-sm font-medium tabular-nums">
-                        {count}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {upcoming.map((section) => (
+                <li
+                  key={section.slug}
+                  className="flex items-start justify-between gap-3 rounded-lg border p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{section.title}</p>
+                    <p className="text-xs text-muted-foreground">{section.description}</p>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                    {section.phase.replace("Subfase ", "")}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">De onde vem a base de exercícios</CardTitle>
-            <CardDescription>Procedência declarada, como no catálogo de alimentos.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              Os {summary.systemExercises} exercícios da base são{" "}
-              <strong className="text-foreground">conteúdo autoral</strong>, produzido para este
-              projeto. Nada foi copiado de aplicativos de treino: sem imagem, sem vídeo, sem texto
-              de instrução e sem banco de dados de terceiros.
-            </p>
-            <p>
-              A classificação (grupo muscular, equipamento, padrão de movimento) é uma aproximação
-              útil para organizar treino — não é laudo biomecânico. Você pode duplicar qualquer
-              exercício da base e ajustar a classificação na sua cópia.
-            </p>
-            <p className="text-xs">
-              Procedência completa em <code>data/training/exercise-base/ATTRIBUTION.md</code>.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">O que ainda vem</CardTitle>
-          <CardDescription>
-            O módulo é entregue em 6 subfases. Cada seção abaixo já tem rota e diz em qual delas
-            chega — nada de link morto nem de tela que finge funcionar.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {upcoming.map((section) => (
-              <li
-                key={section.slug}
-                className="flex items-start justify-between gap-3 rounded-lg border p-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{section.title}</p>
-                  <p className="text-xs text-muted-foreground">{section.description}</p>
-                </div>
-                <Badge variant="secondary" className="shrink-0 text-[10px]">
-                  {section.phase.replace("Subfase ", "")}
-                </Badge>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline" size="sm">
@@ -386,10 +617,10 @@ export default async function TreinosPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Favoritos no catálogo: {summary.favorites} · {groups.length} grupos musculares ·{" "}
-        {equipment.length} equipamentos · incremento padrão {preferences.defaultIncrementKg}{" "}
-        {preferences.weightUnit}. <Star className="inline size-3" /> Metas, medidas corporais e
-        dashboards por período chegam na Subfase 17-E.
+        {groups.length} grupos musculares · incremento padrão {preferences.defaultIncrementKg}{" "}
+        {preferences.weightUnit} · regra de volume:{" "}
+        {preferences.countWarmupInVolume ? "aquecimento incluído" : "aquecimento fora"}. As
+        medidas corporais são as mesmas do módulo de Dieta — não existe duas fontes de peso.
       </p>
     </div>
   );

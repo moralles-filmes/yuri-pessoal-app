@@ -9,6 +9,7 @@ import {
   startOfMonthIso,
   startOfWeekIso,
 } from "@/lib/training/schedule";
+import { getSessionHistory } from "@/lib/training/history-queries";
 import { CalendarClient } from "./calendar-client";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,14 @@ export default async function CalendarioPage({
   const params = await searchParams;
   const hoje = hojeISO();
 
-  const view = params.visao === "mes" ? "mes" : params.visao === "lista" ? "lista" : "semana";
+  const view =
+    params.visao === "mes"
+      ? "mes"
+      : params.visao === "lista"
+        ? "lista"
+        : params.visao === "consistencia"
+          ? "consistencia"
+          : "semana";
   const reference = isDateIso(params.data) ? params.data : hoje;
 
   const preferences = await getTrainingPreferences();
@@ -45,15 +53,23 @@ export default async function CalendarioPage({
         }
       : view === "lista"
         ? { from: addDaysIso(reference, -60), to: addDaysIso(reference, 60) }
-        : {
-            from: addDaysIso(startOfWeekIso(reference, weekStartsOn), -7),
-            to: addDaysIso(startOfWeekIso(reference, weekStartsOn), 13),
-          };
+        : view === "consistencia"
+          ? // O mapa mostra 6 meses: o planejamento precisa cobrir a mesma janela para o dia
+            // "planejado sem execução" não sumir do passado.
+            { from: addDaysIso(startOfMonthIso(reference), -190), to: reference }
+          : {
+              from: addDaysIso(startOfWeekIso(reference, weekStartsOn), -7),
+              to: addDaysIso(startOfWeekIso(reference, weekStartsOn), 13),
+            };
 
-  const [entries, workouts, programs] = await Promise.all([
+  const [entries, workouts, programs, history] = await Promise.all([
     getScheduledWorkouts(from, to),
     getWorkouts(),
     getPrograms(),
+    // Só o mapa de consistência precisa do histórico — as outras visões não pagam a consulta.
+    view === "consistencia"
+      ? getSessionHistory({ from: addDaysIso(startOfMonthIso(reference), -190), to: reference })
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -65,6 +81,11 @@ export default async function CalendarioPage({
       reference={reference}
       view={view}
       weekStartsOn={weekStartsOn}
+      history={history}
+      metricOptions={{
+        includeWarmup: preferences.countWarmupInVolume,
+        unilateralRule: preferences.unilateralVolumeRule,
+      }}
     />
   );
 }

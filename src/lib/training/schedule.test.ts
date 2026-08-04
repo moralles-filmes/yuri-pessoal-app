@@ -12,6 +12,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addDaysIso,
+  addMonthsIso,
   buildScheduleWeek,
   countByDerivedStatus,
   derivePlannedStatus,
@@ -90,6 +91,30 @@ describe("aritmética de data pura (Date.UTC, nunca fuso local)", () => {
     expect(endOfMonthIso("2028-02-10")).toBe("2028-02-29");
     expect(endOfMonthIso("2026-04-10")).toBe("2026-04-30");
     expect(endOfMonthIso("2026-12-01")).toBe("2026-12-31");
+  });
+
+  /* addMonthsIso chegou na 17-E, para os períodos trimestral/semestral/anual das metas. */
+  it("addMonthsIso soma e subtrai meses", () => {
+    expect(addMonthsIso("2026-03-10", 3)).toBe("2026-06-10");
+    expect(addMonthsIso("2026-03-10", -1)).toBe("2026-02-10");
+    expect(addMonthsIso("2026-08-05", 0)).toBe("2026-08-05");
+  });
+
+  it("addMonthsIso PRENDE ao último dia quando o dia não existe no destino", () => {
+    expect(addMonthsIso("2026-01-31", 1)).toBe("2026-02-28");
+    expect(addMonthsIso("2028-01-31", 1)).toBe("2028-02-29");
+    expect(addMonthsIso("2026-03-31", -1)).toBe("2026-02-28");
+    expect(addMonthsIso("2026-05-31", 1)).toBe("2026-06-30");
+  });
+
+  it("addMonthsIso atravessa a virada de ano nos dois sentidos", () => {
+    expect(addMonthsIso("2026-11-15", 3)).toBe("2027-02-15");
+    expect(addMonthsIso("2026-02-15", -3)).toBe("2025-11-15");
+    expect(addMonthsIso("2026-01-01", 12)).toBe("2027-01-01");
+  });
+
+  it("addMonthsIso devolve a entrada quando ela não é data", () => {
+    expect(addMonthsIso("não é data", 1)).toBe("não é data");
   });
 
   it("monthGridIso cobre o mês com semanas completas", () => {
