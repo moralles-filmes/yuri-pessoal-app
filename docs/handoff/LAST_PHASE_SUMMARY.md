@@ -1,9 +1,108 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
 > ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
-> (16-A, 16-B, 16-C e 16-D concluídas) e a **Fase 17 — Módulo Treinos** (17-A, 17-B e 17-C
+> (16-A, 16-B, 16-C e 16-D concluídas) e a **Fase 17 — Módulo Treinos** (17-A, 17-B, 17-C e 17-D
 > concluídas). Este arquivo tem o resumo das duas, na ordem em que foram concluídas — a mais
 > recente primeiro.
+
+---
+
+## Subfase 17-D — Treinos · Histórico, volume, recordes e progressão (2026-08-04) ✅
+
+Quarta das 6 subfases da **Fase 17**. A 17-C fez o sistema **acumular** sessões; a 17-D
+transforma esse acúmulo em **leitura útil**. **3 tabelas novas, +158 testes puros** (suíte:
+1321 → 1479).
+
+### ⛔ A regra que a subfase existe para garantir
+
+**NÃO SOMAR O QUE NÃO SE SOMA.** Um minuto de prancha, 12 repetições de flexão e 100 kg × 8 no
+supino não têm denominador comum. Um app que joga tudo num "volume" único produz um gráfico
+bonito e sem significado.
+
+`src/lib/training/metrics.ts` é para os Treinos o que `calc.ts` é para a Dieta: **todo** número
+agregado sai dali, e cada `tracking_type` acumula na SUA unidade, declarada em `tracking.ts`
+(kg · repetições · segundos · distância · calorias). Histórico, gráfico, recorde, visão geral e —
+na 17-E — dashboards e relatórios usam a mesma função.
+
+### Arquivos criados
+
+**Migrations (3):** `20260805100000_training_personal_records.sql`,
+`…100100_training_progression_rules.sql`, `…100200_training_progression_suggestions.sql`.
+
+**Lógica pura (5 arquivos + 5 de teste):** `src/lib/training/metrics.ts` (+44),
+`one-rm.ts` (+24), `records.ts` (+30), `progression.ts` (+26), `history.ts` (+27).
+
+**Servidor:** `src/lib/training/history-queries.ts` (leitura ampla do histórico, recordes,
+regras e sugestões), `src/lib/training/records-sync.ts` (I/O da consolidação),
+`src/lib/validators/training-history.ts`, `src/lib/actions/training-history.ts`.
+
+**Interface:** `src/app/(app)/treinos/historico/{page,history-client,loading}.tsx`,
+`historico/[id]/{page,session-detail-client}.tsx`,
+`exercicios/[id]/{page,exercise-history-client}.tsx`,
+`recordes/records-client.tsx`, `evolucao/evolution-client.tsx` e
+`src/components/training/{metrics-summary,training-charts,progression-rule-dialog}.tsx`.
+
+**Alterados:** `src/lib/training/constants.ts` (histórico, recordes e evolução viraram
+"pronto"), `src/lib/actions/training-sessions.ts` (`finishSession` consolida recordes e avalia
+progressão), `src/components/training/exercise-detail-sheet.tsx` (link para o histórico do
+exercício), `src/app/(app)/treinos/page.tsx` (últimos 30 dias, reais),
+`treinos/configuracoes/preferences-client.tsx` (as preferências de volume passaram a valer),
+`src/lib/validators/round-trip.test.ts` (+6) e `src/types/supabase.ts` (regenerado — **só
+adição**, nada da Dieta foi tocado).
+
+### Decisões técnicas registradas
+
+1. **Ausência de dado não é zero.** Sem peso corporal na sessão, a série de peso corporal fica de
+   fora do volume e o total do período é marcado **parcial**, com o motivo por extenso. Mesma
+   disciplina do `value_state` da Dieta.
+2. **A regra de contagem viaja com o número.** Toda tela que mostra volume mostra também
+   aquecimento dentro/fora e a regra do unilateral (`volumeRuleLabel`).
+3. **Unilateral em três regras**, e a diferença é o que o número REGISTRADO significa:
+   `por_lado` (2 séries, valores dobrados), `soma_dos_lados` (1 série, dobrados) e
+   `serie_completa` (1 série, o valor já é a série inteira). Com os lados gravados separadamente,
+   o trabalho executado soma nas três — muda só a contagem de séries.
+4. **Drop set soma os blocos e conta como UMA série.**
+5. **1RM é estimativa**, com fórmula visível e escolhível. 1 repetição devolve o próprio peso (é
+   medida); acima de 12 repetições vem **com aviso** e **não vira recorde**. Nada sugere carga
+   máxima.
+6. **Empate não gera recorde novo**; a marca anterior fica em `previous_value`.
+7. **Excluir sessão recalcula pelo MESMO caminho da finalização** (`rebuildRecords`): o segundo
+   melhor assume com a data dele. Valor que cai limpa `previous_value` — afirmar uma marca que o
+   histórico não sustenta seria inventar.
+8. **Progressão nunca é aplicada sozinha e dor bloqueia sempre** (bloqueio não configurável).
+   Aceitar é a única escrita da 17-D no treino-modelo.
+9. **Gráfico nunca é a única leitura do dado**: todo gráfico tem tabela equivalente dobrável.
+10. **Nenhuma métrica materializada** — volume, tonelagem e 1RM continuam derivados na leitura.
+
+### Armadilha do banco (a mesma da Dieta, em outro domínio)
+O índice de deduplicação das sugestões é **PARCIAL** (`where status in ('pendente','ignorada')`).
+`ON CONFLICT` não infere índice parcial e falharia **só em runtime** (42P10) — por isso a
+gravação é *select-then-insert*. Verificado no banco: a mesma proposta é recusada enquanto
+pendente e **pode voltar** depois de aceita (a carga subiu e desceu de novo é caso legítimo).
+
+### Segurança verificada no banco (role `authenticated`)
+**10 tentativas indevidas bloqueadas**: forjar recorde com `user_id` alheio, recorde geral com
+`exercise_id`, `previous_value` maior que `value`, `record_key` duplicada, regra com 1 sessão,
+incremento fixo sem valor, regra de exercício sem alvo, segunda regra global, sugestão decidida
+sem `decided_at` e `dedupe_key` repetida com sugestão pendente. Intruso lê/edita/exclui **0
+linhas** nas três tabelas; o dono lê e escreve o que é dele. **0 resíduo** de teste; catálogo
+intacto (106 exercícios).
+
+### Verificação
+`npm run lint`, `npx tsc --noEmit`, `npm run test:run` (**1479 testes**, de 1321) e
+`npm run build` passam. Suíte verde também em `TZ=UTC`. Smoke: `/treinos/historico`,
+`/treinos/recordes`, `/treinos/evolucao` e `/treinos/exercicios/[id]` → **307 `/login`**;
+`/login` → 200; `/api/cron/*` → **401**. `get_advisors`: 0 lints de schema. **109 tabelas** no
+projeto (26 `training_*`).
+
+### Pendências registradas (escopo consciente, não bugs)
+| Item | Onde resolve |
+| --- | --- |
+| Metas, medidas corporais `body_*`, dashboards e relatórios por período | 17-E |
+| Exportação dos relatórios | 17-E |
+| **Notificação de novo recorde** (a detecção já acontece; `syncPersonalRecords` devolve `highlights`) | 17-F |
+| Busca global, lançamento rápido e card no dashboard geral | 17-F |
+| Comparar com outros usuários ou normas populacionais | **Nunca** — o sistema é single-user e não faz comparação normativa |
 
 ---
 

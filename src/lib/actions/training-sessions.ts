@@ -69,6 +69,10 @@ import { adjustRest, sessionTimes } from "@/lib/training/timers";
 import { getWorkout } from "@/lib/training/routine-queries";
 import { getTrainingPreferences } from "@/lib/training/queries";
 import {
+  syncPersonalRecords,
+  syncProgressionSuggestions,
+} from "@/lib/training/records-sync";
+import {
   exerciseAddSchema,
   exerciseMoveSchema,
   exerciseReorderSchema,
@@ -1755,7 +1759,22 @@ export async function finishSession(input: unknown): Promise<ActionResult<{ id: 
 
   await logEvent(ctx, data.id, "sessao_concluida");
 
+  /* 17-D — a consolidação dos recordes e a avaliação das regras de progressão acontecem AQUI,
+     depois de a execução estar fechada. As duas são idempotentes e nenhuma pode derrubar a
+     finalização: um erro em `metrics`/`records` não pode custar ao usuário o treino que ele
+     acabou de fazer. `syncProgressionSuggestions` respeita o interruptor do módulo e a trava de
+     dor registrada — a decisão continua sendo de `progression.ts`. */
+  try {
+    await syncPersonalRecords(ctx);
+    await syncProgressionSuggestions(ctx);
+  } catch {
+    // Silencioso de propósito: o recálculo pode ser refeito pelo botão da tela de recordes.
+  }
+
   revalidateSession();
+  revalidatePath(`${TRAINING_BASE_PATH}/historico`);
+  revalidatePath(`${TRAINING_BASE_PATH}/recordes`);
+  revalidatePath(`${TRAINING_BASE_PATH}/evolucao`);
   return { ok: true, data: { id: data.id } };
 }
 

@@ -249,8 +249,8 @@ copiado.** A base de exercícios é de autoria própria.
 | 17-A | Fundação, vocabulário e catálogo de exercícios | `PHASE_17_A_TRAINING_FOUNDATION_EXERCISES.md` | ✅ Concluída |
 | 17-B | Programas, treinos-modelo e planejamento semanal | `PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` | ✅ Concluída |
 | 17-C | Preparação, sessão ao vivo, cronômetro e recuperação | `PHASE_17_C_TRAINING_LIVE_SESSION.md` | ✅ Concluída |
-| 17-D | Histórico, volume, recordes e progressão | `PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` | ⬜ Próxima |
-| 17-E | Metas, medidas corporais compartilhadas e dashboards | `PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` | ⬜ |
+| 17-D | Histórico, volume, recordes e progressão | `PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` | ✅ Concluída |
+| 17-E | Metas, medidas corporais compartilhadas e dashboards | `PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` | ⬜ Próxima |
 | 17-F | Integrações, notificações, resiliência e polimento | `PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` | ⬜ |
 
 **Dependências gerais:** Fases 01 (design system/app shell), 08 (agenda), 10 (hábitos),

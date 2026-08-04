@@ -5,9 +5,11 @@ import {
   CalendarRange,
   ClipboardList,
   Dumbbell,
+  History,
   Layers,
   Settings,
   Star,
+  Trophy,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,23 +41,26 @@ import {
   derivePlannedStatus,
   nextScheduledEntry,
 } from "@/lib/training/schedule";
+import { getSessionHistory } from "@/lib/training/history-queries";
+import { aggregateSessions, formatVolumeKg, frequencyMetrics } from "@/lib/training/metrics";
 import { DERIVED_SCHEDULE_STATUS_LABELS } from "@/lib/training/constants";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Treinos" };
 
 /**
- * Fase 17-B — Visão geral do módulo Treinos.
+ * Fase 17-D — Visão geral do módulo Treinos.
  *
- * Continua mostrando o que EXISTE, nunca o que existirá. A 17-B acrescentou rotina
- * (programas, treinos-modelo e planejamento), então a semana planejada aparece aqui — mas
- * **volume treinado, recorde e evolução continuam ausentes**: não há sessão registrada até a
- * 17-C, e inventar esses números seria desonesto.
+ * Continua mostrando o que EXISTE, nunca o que existirá. A 17-B trouxe a rotina (programas,
+ * treinos-modelo e planejamento) e a 17-D trouxe o que foi de fato treinado — por isso os
+ * números dos últimos 30 dias aparecem aqui, todos saídos de `metrics.ts`, a mesma fonte do
+ * histórico e dos recordes. Sem treino registrado no período, a tela diz isso em vez de
+ * mostrar "0 kg" com cara de resultado.
  */
 export default async function TreinosPage() {
   const hoje = hojeISO();
 
-  const [exercises, groups, equipment, preferences, programs, workouts, scheduled] =
+  const [exercises, groups, equipment, preferences, programs, workouts, scheduled, history] =
     await Promise.all([
       getExercises(),
       getMuscleGroups(),
@@ -64,9 +69,17 @@ export default async function TreinosPage() {
       getPrograms(),
       getWorkouts(),
       getScheduledWorkouts(addDaysIso(hoje, -14), addDaysIso(hoje, 21)),
+      getSessionHistory({ from: addDaysIso(hoje, -29), to: hoje }),
     ]);
 
   const summary = summarizeCatalog(exercises);
+  // 17-D — os números do período saem de `metrics.ts`, com a regra do usuário aplicada.
+  const metricOptions = {
+    includeWarmup: preferences.countWarmupInVolume,
+    unilateralRule: preferences.unilateralVolumeRule,
+  };
+  const last30 = aggregateSessions(history, metricOptions);
+  const frequency = frequencyMetrics(history, hoje, { weekStartsOn: preferences.weekStartsOn });
   const routines = summarizeRoutines(programs, workouts);
   const week = buildScheduleWeek(scheduled, hoje, hoje, preferences.weekStartsOn);
   const next = nextScheduledEntry(scheduled, hoje);
@@ -101,6 +114,73 @@ export default async function TreinosPage() {
           </Link>
         </Button>
       </PageHeader>
+
+      {/* 17-D — o que foi realmente treinado. Sem sessão no período, a tela diz isso. */}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-medium">Últimos 30 dias</h2>
+          <div className="flex gap-2">
+            <Button asChild variant="ghost" size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/historico`}>
+                <History className="size-4" />
+                Histórico
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/recordes`}>
+                <Trophy className="size-4" />
+                Recordes
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        {last30.sessionCount === 0 ? (
+          <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+            Nenhum treino registrado nos últimos 30 dias. Quando você finalizar uma sessão, o
+            volume, as séries e a frequência aparecem aqui.
+          </p>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                label="Treinos"
+                value={String(last30.sessionCount)}
+                icon={CalendarCheck}
+                hint={`${frequency.trainedDays} dia(s) treinados`}
+              />
+              <StatCard
+                label="Volume"
+                value={formatVolumeKg(last30.totals.volumeKg)}
+                icon={Dumbbell}
+                hint={
+                  last30.totals.quality === "parcial"
+                    ? "Parcial — alguma série ficou fora do cálculo"
+                    : "carga × repetições"
+                }
+              />
+              <StatCard
+                label="Séries"
+                value={String(last30.totals.sets)}
+                icon={ClipboardList}
+                hint={`${last30.totals.workingSets} de trabalho`}
+              />
+              <StatCard
+                label="Sequência"
+                value={`${frequency.currentWeekStreak} sem.`}
+                icon={CalendarRange}
+                hint={`maior sequência: ${frequency.longestWeekStreak}`}
+              />
+            </div>
+            {last30.totals.quality === "parcial" && (
+              <p className="text-xs text-muted-foreground">
+                O volume do período está marcado como parcial: alguma série não tinha dado
+                suficiente para entrar na conta. O motivo aparece no histórico.
+              </p>
+            )}
+          </>
+        )}
+      </section>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -308,8 +388,8 @@ export default async function TreinosPage() {
       <p className="text-xs text-muted-foreground">
         Favoritos no catálogo: {summary.favorites} · {groups.length} grupos musculares ·{" "}
         {equipment.length} equipamentos · incremento padrão {preferences.defaultIncrementKg}{" "}
-        {preferences.weightUnit}. <Star className="inline size-3" /> Volume treinado, recordes e
-        evolução só existem a partir da Subfase 17-C, quando a sessão passa a ser registrada.
+        {preferences.weightUnit}. <Star className="inline size-3" /> Metas, medidas corporais e
+        dashboards por período chegam na Subfase 17-E.
       </p>
     </div>
   );

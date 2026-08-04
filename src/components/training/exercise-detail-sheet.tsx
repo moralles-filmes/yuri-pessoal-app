@@ -11,7 +11,8 @@
  *    `training_exercise_prefs`. É como se ajusta um exercício da base sem nunca editá-lo.
  */
 import * as React from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { History, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ import {
   MUSCLE_ROLE_LABELS,
   TRACKING_TYPE_HINTS,
   TRACKING_TYPE_LABELS,
+  TRAINING_BASE_PATH,
 } from "@/lib/training/constants";
 import { METRIC_FIELD_LABELS, fieldsForTracking } from "@/lib/training/tracking";
 import {
@@ -109,6 +111,14 @@ function DetailBody({
           {exercise.isArchived && <Badge variant="outline">Arquivado</Badge>}
           {!exercise.isEditable && <Badge variant="outline">Somente leitura</Badge>}
         </div>
+        {/* 17-D — o histórico completo (melhores marcas, gráficos e todas as séries) tem
+            página própria: aqui o painel continua sendo sobre o exercício, não sobre o passado. */}
+        <Button variant="outline" size="sm" asChild className="mt-2 w-fit">
+          <Link href={`${TRAINING_BASE_PATH}/exercicios/${exercise.id}`}>
+            <History className="size-4" />
+            Ver histórico e melhores marcas
+          </Link>
+        </Button>
       </SheetHeader>
 
       <div className="px-4 pb-8">

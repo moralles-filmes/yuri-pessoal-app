@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/shared/page-header";
-import { TrainingSectionPlaceholder } from "@/components/training/training-nav";
+import { getPersonalRecords } from "@/lib/training/history-queries";
+import { getTrainingPreferences } from "@/lib/training/queries";
+import { RecordsClient } from "./records-client";
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Recordes · Treinos" };
 
-/** Fase 17-A — Rota reservada. A tela chega na subfase indicada no placeholder. */
-export default function Page() {
-  return (
-    <div className="space-y-6">
-      <PageHeader title="Recordes" description="Melhores marcas por exercício." />
-      <TrainingSectionPlaceholder slug="recordes" />
-    </div>
-  );
+/**
+ * Fase 17-D — Recordes pessoais consolidados.
+ *
+ * A tabela guarda o MELHOR de cada chave `(exercício, tipo de recorde)` e preserva a marca
+ * anterior. Empate não gera recorde novo — por isso a lista não tem duplicidade.
+ */
+export default async function RecordesPage() {
+  const [records, preferences] = await Promise.all([
+    getPersonalRecords(),
+    getTrainingPreferences(),
+  ]);
+
+  return <RecordsClient records={records} oneRmFormula={preferences.oneRmFormula} />;
 }

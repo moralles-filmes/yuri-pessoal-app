@@ -398,7 +398,7 @@ irmão em compras: **toda decisão sobre o que soma com o quê sai de `shopping.
 
 ---
 
-## Módulo Treinos (Fase 17 — Subfases A, B e C concluídas)
+## Módulo Treinos (Fase 17 — Subfases A, B, C e D concluídas)
 
 Módulo central em `/treinos`, com **navegação interna própria** (13 submódulos) no mesmo
 padrão do TO-DO e da Dieta. Segue o fluxo do resto do sistema: Server Component lê → Server
@@ -422,7 +422,7 @@ personalizado            → campos livres
 ```
 
 `src/lib/training/tracking.ts` é a **única** fonte dessa matriz — formulário, treino-modelo
-(17-B), sessão (17-C), volume (17-D) e relatório (17-E) leem dali. Duas consequências que
+(17-B), sessão (17-C), volume (17-D, em `metrics.ts`) e relatório (17-E) leem dali. Duas consequências que
 parecem detalhe e não são, ambas cobertas por teste:
 
 1. **Assistência SUBTRAI carga**; carga adicional soma. Inverter o sinal faria o app mostrar
@@ -532,7 +532,46 @@ que já tinham sido feitas.
 Não é uma segunda tabela de peso corporal: quando a 17-E criar o módulo `body_*`, a preparação
 passa a pré-preencher dali.
 
-### Schema (23 tabelas: 7 na 17-A + 7 na 17-B + 9 na 17-C)
+### Histórico, volume e recordes (17-D)
+
+**`src/lib/training/metrics.ts` é a fonte ÚNICA de todo número agregado do módulo** — o que
+`calc.ts` é para a Dieta. Volume, tonelagem, repetições, tempo sob tensão, distância, séries por
+grupo muscular e agregação por sessão/semana/mês/programa saem dali, e cada `tracking_type`
+acumula na unidade declarada em `tracking.ts`. É o que impede o módulo de somar quilos com
+segundos, e o que faz histórico, gráfico, recorde e dashboard concordarem entre si.
+
+Quatro regras moram só nesse arquivo, todas testadas:
+
+- **Sem peso corporal do dia, a série de peso corporal fica de fora** e o total vira **parcial**,
+  com o motivo (`partialExplanation`) — nunca 0 kg.
+- **A regra de contagem viaja com o número** (`volumeRuleLabel`): aquecimento dentro/fora e a
+  regra do unilateral aparecem na tela ao lado do total.
+- **Unilateral em três regras**: `por_lado` (2 séries, valores dobrados), `soma_dos_lados`
+  (1 série, valores dobrados) e `serie_completa` (1 série, o valor registrado já é a série
+  inteira). Com os lados registrados separadamente, o trabalho executado soma nas três.
+- **Drop set soma os blocos e conta como UMA série.**
+
+`one-rm.ts` estima 1RM por Epley/Brzycki/Lombardi/Lander, sempre com a fórmula visível; 1
+repetição devolve o próprio peso (é medida, não estimativa) e acima de 12 repetições o número vem
+**com aviso** e **não vira recorde**. Nada no módulo sugere carga máxima.
+
+`records.ts` consolida os recordes por `record_key` — id do exercício ou, na falta dele, o NOME
+congelado, de modo que um exercício excluído do catálogo continue com a marca legível. **Empate
+não gera recorde novo**, a marca anterior fica em `previous_value`, e excluir uma sessão dispara
+`rebuildRecords`: o segundo melhor assume com a data dele. Quando o valor cai, `previous_value` é
+limpo (uma marca que o histórico não sustenta não pode ser afirmada).
+
+`progression.ts` avalia a regra que o **usuário** escreveu sobre as últimas N sessões (N ≥ 2, com
+CHECK no banco) e devolve um motivo em pt-BR. **Dor registrada bloqueia sempre**, e o bloqueio não
+é configurável; `progression_enabled` desliga o recurso inteiro. Aceitar uma sugestão é a única
+escrita da 17-D no treino-modelo, e acontece por decisão explícita.
+
+`history.ts` cuida de filtro, agrupamento e comparação — e, como todo o resto do histórico, lê só
+o snapshot. `history-queries.ts` **não tem nenhuma leitura de `training_workouts`**; a única
+consulta ao catálogo em toda a subfase está em `records-sync.ts`, para decidir o FUTURO (qual
+regra se aplica, qual o menor salto realizável, qual linha do modelo receberia a carga aceita).
+
+### Schema (26 tabelas: 7 na 17-A + 7 na 17-B + 9 na 17-C + 3 na 17-D)
 **17-A** — `training_muscle_groups`, `training_equipment`, `training_exercises`,
 `training_exercise_muscles` (secundários, com trigger que impede repetir o principal),
 `training_exercise_alternatives` (relação dirigida, do usuário), `training_exercise_prefs`
@@ -542,6 +581,13 @@ e `training_preferences` (uma linha por usuário).
 pode ser avulso ou compor vários programas), `training_workouts` (com `version` +
 `superseded_by` + `version_group_id`), `training_workout_exercises`, `training_workout_sets`,
 `training_workout_alternatives` e `training_scheduled_workouts` (data pura + hora em `time`).
+
+**17-D** — `training_personal_records` (recorde consolidado, `record_key` único por usuário,
+marca anterior preservada), `training_progression_rules` (a regra do usuário; único parcial por
+exercício, por grupo e um global) e `training_progression_suggestions` (`basis` congelado +
+`dedupe_key` com índice único **parcial** — `ON CONFLICT` não o infere, use select-then-insert).
+**Nenhuma métrica agregada é materializada**: volume, tonelagem e 1RM continuam derivados na
+leitura.
 
 **17-C** — `training_locations`, `training_location_plates` (estoque real de anilhas por local),
 `training_sessions` (o snapshot + tempos congelados na finalização), `training_session_exercises`
@@ -567,13 +613,19 @@ local padrão por usuário.
 | **Valores da última vez (puro)** | `src/lib/training/previous.ts` + `.test.ts` |
 | **Calculadora de anilhas (puro)** | `src/lib/training/plates.ts` + `.test.ts` |
 | **Congelamento do treino (puro)** | `src/lib/training/session-snapshot.ts` + `.test.ts` |
-| Leitura (server-only) | `src/lib/training/queries.ts` · `routine-queries.ts` · `session-queries.ts` |
-| Validação Zod | `src/lib/validators/training.ts` · `training-routines.ts` · `training-session.ts` |
-| Server Actions | `src/lib/actions/training-{exercises,preferences,programs,workouts,schedule,sessions,locations}.ts` |
+| **Todo agregado do módulo (puro)** | `src/lib/training/metrics.ts` + `metrics.test.ts` |
+| **1RM estimado (puro)** | `src/lib/training/one-rm.ts` + `one-rm.test.ts` |
+| **Recordes: detecção e consolidação (puro)** | `src/lib/training/records.ts` + `records.test.ts` |
+| **Progressão: regra, bloqueio e motivo (puro)** | `src/lib/training/progression.ts` + `progression.test.ts` |
+| **Histórico: filtro, grupo, comparação (puro)** | `src/lib/training/history.ts` + `history.test.ts` |
+| Leitura (server-only) | `src/lib/training/queries.ts` · `routine-queries.ts` · `session-queries.ts` · `history-queries.ts` |
+| Sincronização de recordes/sugestões (I/O) | `src/lib/training/records-sync.ts` |
+| Validação Zod | `src/lib/validators/training.ts` · `training-routines.ts` · `training-session.ts` · `training-history.ts` |
+| Server Actions | `src/lib/actions/training-{exercises,preferences,programs,workouts,schedule,sessions,locations,history}.ts` |
 | Rotas | `src/app/(app)/treinos/` |
 | Componentes | `src/components/training/` · `src/components/training/session/` |
 | Pipeline da base | `scripts/training/` · dados em `data/training/exercise-base/` |
 
-**Todo número agregado do módulo vai sair de `src/lib/training/metrics.ts` (17-D)** — do mesmo
-jeito que todo total da Dieta sai de `calc.ts`. Histórico, gráfico, recorde, dashboard e
-relatório precisam concordar entre si.
+**Todo número agregado do módulo sai de `src/lib/training/metrics.ts` (17-D)** — do mesmo jeito
+que todo total da Dieta sai de `calc.ts`. Histórico, gráfico, recorde, visão geral e, a partir da
+17-E, dashboards e relatórios **consomem** essa fonte; nenhum deles recalcula.
