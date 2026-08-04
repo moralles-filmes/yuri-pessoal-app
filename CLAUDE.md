@@ -146,6 +146,11 @@ Toda action segue o molde em `src/lib/actions/accounts.ts` + `src/lib/actions/he
 
 O client trata `ActionResult` com toast (sonner) — mensagens de erro em pt-BR.
 
+**⛔ Duas regras que vieram de um bug real (formulário que nunca salvava, sem destacar campo):**
+
+1. **O schema tem de aceitar a própria saída.** Com `zodResolver`, o react-hook-form entrega ao `onSubmit` a saída **já transformada**, o formulário manda isso para a action e a action valida de novo com o **mesmo** schema. Logo `parse(parse(x))` precisa funcionar — todo helper `optional*` aceita `null` na entrada, não só `""`/ausente. Fixado em `src/lib/validators/round-trip.test.ts`; acrescente ali todo schema novo usado com resolver.
+2. **"Verifique os campos destacados" só vale se algum campo for destacado.** Use `mapServerFieldErrors` (`src/lib/forms/server-errors.ts`): erro de campo que existe na tela vira `setError`; erro de campo que a tela **não tem** sobe para o toast com o nome do campo. Descartar `fieldErrors` deixa o usuário sem saída.
+
 ### Lógica pura + testes (regra forte do projeto)
 Regras de negócio críticas são **funções puras com datas/`now` injetados (sem `Date.now()`)** em `src/lib/<domínio>/*.ts`, cobertas por Vitest co-localizado (`*.test.ts`, ambiente `node`). O I/O (Supabase) fica separado em `queries.ts`/`actions`. Exemplos canônicos: `src/lib/finance/invoice.ts` (regra de fatura cartão), `installments.ts`, `src/lib/notifications/generate.ts` (idempotência por `dedupe_key`), streaks de hábitos/estudos, recorrência de tarefas/agenda. **Ao mexer numa regra, ajuste/adicione testes puros — não teste via banco.**
 
