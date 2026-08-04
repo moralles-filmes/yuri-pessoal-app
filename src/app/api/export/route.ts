@@ -106,6 +106,17 @@ const EXPORT_TABLES: TableName[] = [
   "nutrition_shopping_lists",
   "nutrition_shopping_list_items",
   "nutrition_pantry_items",
+  // Subfase 16-E — MÓDULO CENTRAL de medidas corporais (`body_*`), compartilhado com a Fase
+  // 17 (Treinos). Não é dado de Dieta: entra aqui porque o backup é do usuário inteiro.
+  //
+  // ⚠️ `body_progress_photos` leva o METADADO da foto (data, ângulo, peso, observação), NUNCA
+  // o binário — os arquivos vivem no bucket privado `attachments` e não cabem num JSON. A
+  // tela de exportação diz isso explicitamente, em vez de deixar o usuário supor que as
+  // fotos estão salvas aqui.
+  "body_measurement_types",
+  "body_measurements",
+  "body_measurement_goals",
+  "body_progress_photos",
 ];
 
 /**

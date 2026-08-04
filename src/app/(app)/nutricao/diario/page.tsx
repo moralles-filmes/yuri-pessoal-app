@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { hojeISO, timeInSaoPaulo } from "@/lib/format";
 import { getCurrentUser } from "@/lib/supabase/server";
-import { isDateIso, timeToMinutes, weekDays } from "@/lib/nutrition/calendar";
+import { isDateIso, monthGridRange, timeToMinutes, weekDays } from "@/lib/nutrition/calendar";
 import { asDiaryView } from "@/lib/nutrition/constants";
 import {
   ensureMealTypes,
@@ -55,7 +55,13 @@ export default async function DiarioPage({
   await ensureMealTypes(user.id);
 
   const week = weekDays(date);
-  const [from, to] = view === "semana" ? [week[0], week[6]] : [date, date];
+
+  // 16-E — a visão de MÊS lê a grade inteira do calendário, e não só o mês: a primeira e a
+  // última semana mostram dias vizinhos, e uma célula vazia por falta de leitura daria a
+  // impressão errada de que não houve registro naquele dia.
+  const monthRange = monthGridRange(date);
+  const [from, to] =
+    view === "mes" ? monthRange : view === "semana" ? [week[0], week[6]] : [date, date];
 
   const [
     meals,
@@ -72,8 +78,10 @@ export default async function DiarioPage({
     substitutionGroups,
   ] = await Promise.all([
     getDiaryMeals(date, date),
-    view === "semana" ? getDiaryMeals(from, to) : Promise.resolve([]),
-    getPlannedMeals(date, date),
+    view === "dia" ? Promise.resolve([]) : getDiaryMeals(from, to),
+    // Na visão de mês o planejamento do intervalo inteiro alimenta os indicadores das
+    // células; nas outras, só o do dia.
+    view === "mes" ? getPlannedMeals(from, to) : getPlannedMeals(date, date),
     getMealTypes(),
     getGoalPeriods(),
     getFoods(),
@@ -120,7 +128,7 @@ export default async function DiarioPage({
       date={date}
       hoje={hoje}
       minutosAgora={timeToMinutes(timeInSaoPaulo(new Date())) ?? 0}
-      view={view === "mes" ? "semana" : view}
+      view={view}
       meals={meals}
       weekMeals={weekMeals}
       planned={planned}
