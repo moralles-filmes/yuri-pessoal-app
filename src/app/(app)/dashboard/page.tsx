@@ -14,7 +14,9 @@ import { TasksCard } from "@/components/dashboard/general/tasks-card";
 import { TodoCard } from "@/components/dashboard/general/todo-card";
 import { HabitsCard } from "@/components/dashboard/general/habits-card";
 import { StudiesCard } from "@/components/dashboard/general/studies-card";
+import { NutritionCard } from "@/components/dashboard/general/nutrition-card";
 import { NotificationsCard } from "@/components/dashboard/general/notifications-card";
+import { timeInSaoPaulo } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -33,6 +35,10 @@ export default async function DashboardPage({
 
   const now = new Date();
   const todayIso = hojeISO();
+  // Minutos desde a meia-noite EM BRASÍLIA (o status "pendente" da refeição é derivado da
+  // hora). `now.getHours()` devolveria a hora do processo — em UTC, o almoço "atrasaria" às 9h.
+  const [horaSp, minutoSp] = timeInSaoPaulo(now).split(":").map(Number);
+  const minutosAgora = (horaSp || 0) * 60 + (minutoSp || 0);
 
   const period = asPeriod(str(sp.periodo) ?? layout.period);
   const view = asView(str(sp.visao) ?? layout.view);
@@ -65,6 +71,11 @@ export default async function DashboardPage({
     agenda: (
       <Suspense fallback={<CardBodySkeleton lines={4} />}>
         <AgendaCard window={window} now={now} />
+      </Suspense>
+    ),
+    dieta: (
+      <Suspense fallback={<CardBodySkeleton lines={5} />}>
+        <NutritionCard todayIso={todayIso} minutosAgora={minutosAgora} />
       </Suspense>
     ),
     tarefas: (

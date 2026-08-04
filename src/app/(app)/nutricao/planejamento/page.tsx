@@ -30,7 +30,8 @@ export const metadata: Metadata = { title: "Planejamento · Dieta" };
 export default async function PlanejamentoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data?: string; visao?: string }>;
+  // `?plano=<id>` é o deep-link da busca global (16-F).
+  searchParams: Promise<{ data?: string; visao?: string; plano?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
@@ -104,6 +105,7 @@ export default async function PlanejamentoPage({
         useCount: recipe.useCount,
         totals: recipe.calc.totals,
       }))}
+      initialPlanId={plans.some((p) => p.id === params.plano) ? (params.plano ?? null) : null}
     />
   );
 }

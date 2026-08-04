@@ -16,6 +16,13 @@ import {
 import { EVENT_TYPE_LABELS, type EventType } from "@/lib/calendar/constants";
 import { notificationTypeLabel } from "@/lib/notifications/constants";
 import {
+  foodLink,
+  mealTemplateLink,
+  planLink,
+  recipeLink,
+  shoppingListLink,
+} from "@/lib/search/nutrition-links";
+import {
   SEARCH_TYPES,
   SEARCH_TYPE_LABELS,
   type SearchGroup,
@@ -63,6 +70,11 @@ export async function searchAll(
     habito: [],
     estudo: [],
     evento: [],
+    nutricao_alimento: [],
+    nutricao_receita: [],
+    nutricao_modelo: [],
+    nutricao_plano: [],
+    nutricao_lista: [],
     notificacao: [],
   };
 
@@ -394,6 +406,158 @@ export async function searchAll(
           link: `/agenda?view=dia&date=${dia}`,
         };
       });
+    }),
+
+    /* ═══════════ Fase 16-F — módulo Dieta e Alimentação ═══════════
+     * Cada consulta roda sob a sessão, então a RLS decide o escopo. Nas tabelas que aceitam
+     * `user_id` nulo (alimentos), a policy de SELECT alcança também a BASE DO SISTEMA — o que
+     * é desejado: procurar "arroz" tem de achar o arroz da TACO. O que ela nunca alcança é o
+     * alimento de OUTRO usuário. */
+
+    // Alimentos (nome, nome alternativo, marca e código de barras)
+    safe(
+      supabase
+        .from("nutrition_foods")
+        .select("id, name, alternative_name, brand, barcode, is_system_food, archived_at")
+        .or(
+          `name.ilike.${like},alternative_name.ilike.${like},brand.ilike.${like},barcode.ilike.${like}`,
+        )
+        .is("archived_at", null)
+        .order("name", { ascending: true })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.nutricao_alimento = (rows as Array<{
+        id: string;
+        name: string;
+        alternative_name: string | null;
+        brand: string | null;
+        barcode: string | null;
+        is_system_food: boolean;
+      }>).map((f) => ({
+        type: "nutricao_alimento",
+        id: f.id,
+        title: f.name,
+        subtitle: [f.brand, f.is_system_food ? "Base do sistema" : "Alimento próprio"]
+          .filter(Boolean)
+          .join(" · "),
+        link: foodLink(f.id),
+      }));
+    }),
+
+    // Receitas
+    safe(
+      supabase
+        .from("nutrition_recipes")
+        .select("id, name, servings, serving_label, is_favorite, archived_at")
+        .ilike("name", like)
+        .is("archived_at", null)
+        .order("name", { ascending: true })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.nutricao_receita = (rows as Array<{
+        id: string;
+        name: string;
+        servings: number | null;
+        serving_label: string | null;
+        is_favorite: boolean;
+      }>).map((r) => ({
+        type: "nutricao_receita",
+        id: r.id,
+        title: r.name,
+        subtitle: r.servings
+          ? `${r.servings} ${r.serving_label ?? "porção(ões)"}`
+          : "Receita",
+        link: recipeLink(r.id),
+      }));
+    }),
+
+    // Refeições-modelo
+    safe(
+      supabase
+        .from("nutrition_meal_templates")
+        .select("id, name, description, archived_at")
+        .or(`name.ilike.${like},description.ilike.${like}`)
+        .is("archived_at", null)
+        .order("name", { ascending: true })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.nutricao_modelo = (rows as Array<{
+        id: string;
+        name: string;
+        description: string | null;
+      }>).map((t) => ({
+        type: "nutricao_modelo",
+        id: t.id,
+        title: t.name,
+        subtitle: t.description ?? "Refeição-modelo",
+        link: mealTemplateLink(t.id),
+      }));
+    }),
+
+    // Modelos de semana (planejamento)
+    safe(
+      supabase
+        .from("nutrition_plans")
+        .select("id, name, description, cycle_weeks, is_active")
+        .or(`name.ilike.${like},description.ilike.${like}`)
+        .order("name", { ascending: true })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.nutricao_plano = (rows as Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        cycle_weeks: number;
+        is_active: boolean;
+      }>).map((p) => ({
+        type: "nutricao_plano",
+        id: p.id,
+        title: p.name,
+        subtitle: [
+          `${p.cycle_weeks} semana(s)`,
+          p.is_active ? "Em uso" : null,
+          p.description,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        link: planLink(p.id),
+      }));
+    }),
+
+    // Listas de compras
+    safe(
+      supabase
+        .from("nutrition_shopping_lists")
+        .select("id, name, status, store, source_from, source_to")
+        .or(`name.ilike.${like},store.ilike.${like}`)
+        .order("created_at", { ascending: false })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.nutricao_lista = (rows as Array<{
+        id: string;
+        name: string;
+        status: string;
+        store: string | null;
+        source_from: string | null;
+        source_to: string | null;
+      }>).map((l) => ({
+        type: "nutricao_lista",
+        id: l.id,
+        title: l.name,
+        subtitle: [
+          pretty(l.status),
+          l.store,
+          l.source_from ? `${formatDate(l.source_from)}${l.source_to ? ` a ${formatDate(l.source_to)}` : ""}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        link: shoppingListLink(l.id),
+      }));
     }),
 
     // Notificações

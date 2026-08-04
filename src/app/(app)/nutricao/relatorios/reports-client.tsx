@@ -18,11 +18,13 @@ import {
   BarChart3,
   CalendarRange,
   Download,
+  FileSpreadsheet,
   Percent,
   Repeat,
   ShoppingCart,
   UtensilsCrossed,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,12 +65,15 @@ import {
 } from "@/lib/nutrition/reports";
 import { toCsv } from "@/lib/reports/csv";
 import { downloadCsv } from "@/lib/reports/download";
+import { downloadXlsx } from "@/lib/reports/xlsx";
 import {
   DAILY_REPORT_HEADERS,
+  MEASUREMENT_HEADERS,
   NUTRIENT_REPORT_HEADERS,
   SUBSTITUTION_HEADERS,
   TOP_FOODS_HEADERS,
   dailyReportRows,
+  measurementRows,
   nutrientReportRows,
   periodTitle,
   substitutionRows,
@@ -146,6 +151,53 @@ export function ReportsClient(props: ReportsClientProps) {
     );
   }
 
+  /**
+   * 16-F — o relatório INTEIRO numa planilha só, uma aba por seção.
+   *
+   * O CSV continua existindo por seção (é o padrão do projeto: texto, abre em qualquer
+   * lugar). O XLSX resolve o caso de quem quer tudo de uma vez, sem cinco downloads.
+   * A biblioteca é carregada só aqui dentro, por import dinâmico.
+   */
+  const [exportando, setExportando] = React.useState(false);
+
+  async function exportWorkbook() {
+    setExportando(true);
+    try {
+      await downloadXlsx(`dieta-${props.from}-a-${props.to}.xlsx`, [
+        {
+          name: "Consumo diário",
+          headers: DAILY_REPORT_HEADERS,
+          rows: dailyReportRows(props.daily, MACRO_CODES),
+        },
+        {
+          name: "Nutrientes",
+          headers: NUTRIENT_REPORT_HEADERS,
+          rows: nutrientReportRows(props.nutrients, props.definitions),
+        },
+        {
+          name: "Alimentos mais consumidos",
+          headers: TOP_FOODS_HEADERS,
+          rows: topFoodsRows(props.topFoods),
+        },
+        {
+          name: "Substituições",
+          headers: SUBSTITUTION_HEADERS,
+          rows: substitutionRows(props.substitutions),
+        },
+        {
+          name: "Medidas",
+          headers: MEASUREMENT_HEADERS,
+          rows: measurementRows(props.measurements),
+        },
+      ]);
+      toast.success("Planilha gerada.");
+    } catch {
+      toast.error("Não foi possível gerar a planilha.");
+    } finally {
+      setExportando(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -154,7 +206,15 @@ export function ReportsClient(props: ReportsClientProps) {
       >
         <Button variant="outline" onClick={exportDaily} disabled={props.daily.length === 0}>
           <Download className="size-4" />
-          Exportar período
+          CSV do período
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => void exportWorkbook()}
+          disabled={exportando || props.daily.length === 0}
+        >
+          <FileSpreadsheet className="size-4" />
+          {exportando ? "Gerando…" : "Planilha (.xlsx)"}
         </Button>
       </PageHeader>
 

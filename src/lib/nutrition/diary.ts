@@ -64,8 +64,17 @@ export function mealTotals(entries: DiaryEntry[]): Record<string, NutrientTotal>
   return sumNutrients(entries.filter(entryCounts).map(entryBag));
 }
 
+/**
+ * O mínimo que um item precisa ter para entrar (ou não) numa soma: a decisão registrada e o
+ * snapshot. Declarado à parte para o Cron (16-F) somar o dia sem precisar montar um
+ * `DiaryEntry` inteiro — ele lê duas colunas, não vinte.
+ */
+export type CountableEntry = Pick<DiaryEntry, "changeKind" | "nutrientsSnapshot">;
+
 /** Total do dia: soma dos itens de todas as refeições, com a qualidade propagada. */
-export function dayTotals(meals: { entries: DiaryEntry[] }[]): Record<string, NutrientTotal> {
+export function dayTotals(
+  meals: { entries: CountableEntry[] }[],
+): Record<string, NutrientTotal> {
   const bags: NutrientBag[] = [];
   for (const meal of meals) {
     for (const entry of meal.entries) {

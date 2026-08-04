@@ -40,11 +40,14 @@ import {
   bulkRecipeAction,
   deleteRecipe,
   deleteRecipeIngredient,
+  deleteRecipePhoto,
   duplicateRecipe,
+  reorderRecipeIngredients,
   saveRecipe,
   saveRecipeIngredient,
   setRecipeArchived,
   setRecipeFavorite,
+  uploadRecipePhoto,
 } from "@/lib/actions/nutrition-recipes";
 import { createTemplateFromRecipe } from "@/lib/actions/nutrition-meal-templates";
 import {
@@ -64,6 +67,12 @@ export type RecipesClientProps = {
   foods: FoodListItem[];
   measures: [string, PickerMeasure[]][];
   nutrients: Record<string, NutrientDefinition>;
+  /**
+   * Fase 16-F — deep-link da busca global (`?receita=<id>`): abre o detalhe direto.
+   * Vem como estado INICIAL (e não por efeito) porque o React Compiler está ativo e
+   * `setState` em `useEffect` é proibido no projeto.
+   */
+  initialDetailId?: string | null;
 };
 
 export function RecipesClient(props: RecipesClientProps) {
@@ -83,7 +92,9 @@ export function RecipesClient(props: RecipesClientProps) {
   const [sort, setSort] = React.useState<RecipeSort>("nome");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
 
-  const [detailId, setDetailId] = React.useState<string | null>(null);
+  const [detailId, setDetailId] = React.useState<string | null>(
+    props.initialDetailId ?? null,
+  );
   const [formOpen, setFormOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [ingredientFor, setIngredientFor] = React.useState<string | null>(null);
@@ -480,6 +491,27 @@ export function RecipesClient(props: RecipesClientProps) {
         onAddIngredient={() => setIngredientFor(detail?.id ?? null)}
         onRemoveIngredient={(ingredientId) =>
           run(() => deleteRecipeIngredient(ingredientId), "Ingrediente removido.")
+        }
+        // 16-F: `reorderRecipeIngredients` existia e era testada desde a 16-C; faltava o
+        // gatilho. A tela manda a ordem INTEIRA — a action recusa lista incompleta.
+        onReorderIngredients={(orderedIds) =>
+          detail &&
+          run(
+            () => reorderRecipeIngredients({ recipe_id: detail.id, ids: orderedIds }),
+            "Ordem dos ingredientes atualizada.",
+          )
+        }
+        onUploadPhoto={(file) => {
+          if (!detail) return;
+          // FormData: o BINÁRIO passa pelo servidor, que valida MIME e tamanho sobre o
+          // arquivo real. O navegador não decide nada aqui.
+          const formData = new FormData();
+          formData.append("recipe_id", detail.id);
+          formData.append("file", file);
+          run(() => uploadRecipePhoto(formData), "Foto enviada.");
+        }}
+        onRemovePhoto={(attachmentId) =>
+          run(() => deleteRecipePhoto(attachmentId), "Foto removida.")
         }
         onCreateTemplate={() =>
           startTransition(async () => {

@@ -24,13 +24,20 @@
  */
 import { revalidatePath } from "next/cache";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
-import { NUTRITION_BASE_PATH } from "@/lib/nutrition/constants";
+import {
+  NUTRITION_BASE_PATH,
+  RECIPE_PHOTO_BUCKET,
+  RECIPE_PHOTO_ENTITY_TYPE,
+  RECIPE_PHOTO_EXTENSION_BY_MIME,
+} from "@/lib/nutrition/constants";
 import { copyName, DUPLICATION_RESET } from "@/lib/nutrition/meal-template";
 import { convertToBase } from "@/lib/nutrition/units";
 import {
   recipeCategorySchema,
   recipeIngredientReorderSchema,
   recipeIngredientSchema,
+  recipePhotoFileSchema,
+  recipePhotoSchema,
   recipeSchema,
 } from "@/lib/validators/nutrition-recipes";
 import type { ActionResult } from "@/types/finance";
@@ -479,4 +486,109 @@ export async function bulkRecipeAction(
 
   revalidateRecipes();
   return { ok: true, data: { afetadas, ignoradas: ids.length - afetadas, motivos } };
+}
+
+/* ═══════════════════════════ Foto da receita (Fase 16-F) ═══════════════════════════ */
+
+/**
+ * Envia a foto de uma receita.
+ *
+ * ⛔ CÓPIA EXATA DO CAMINHO DE `uploadProgressPhoto` (16-E) — nenhum segundo mecanismo de
+ * upload foi inventado. As cinco travas, na mesma ordem:
+ *
+ *   1. o BINÁRIO passa pelo servidor (`FormData`), para MIME e tamanho serem validados sobre
+ *      o `File` REAL — a extensão do nome não prova nada;
+ *   2. nome ALEATÓRIO (`crypto.randomUUID`); o nome do cliente é descartado do caminho;
+ *   3. pasta SEMPRE `{auth.getUser().id}/…`, nunca um id vindo do navegador;
+ *   4. falha ao gravar o metadado REMOVE o arquivo — nada de órfão anônimo no bucket;
+ *   5. a receita é conferida como do usuário ANTES de qualquer escrita.
+ *
+ * `storage_path` não volta para a UI: a leitura devolve URL assinada de 5 min (16-F).
+ */
+export async function uploadRecipePhoto(
+  formData: FormData,
+): Promise<ActionResult<{ id: string }>> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = recipePhotoSchema.safeParse({ recipe_id: formData.get("recipe_id") });
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+  const recipeId = parsed.data.recipe_id;
+
+  // ⛔ TRAVA 5 — dono conferido antes de subir byte nenhum.
+  if (!(await ownsRecipe(ctx, recipeId))) return dbError("Receita não encontrada.");
+
+  // ⛔ TRAVA 1 — o arquivo real, no servidor.
+  const fileResult = recipePhotoFileSchema.safeParse(formData.get("file"));
+  if (!fileResult.success) {
+    return invalid({ file: fileResult.error.issues.map((issue) => issue.message) });
+  }
+  const file = fileResult.data;
+
+  // ⛔ TRAVAS 2 e 3.
+  const extension = RECIPE_PHOTO_EXTENSION_BY_MIME[file.type] ?? "bin";
+  const storagePath = `${ctx.userId}/${RECIPE_PHOTO_ENTITY_TYPE}/${recipeId}/${crypto.randomUUID()}.${extension}`;
+
+  const { error: uploadError } = await ctx.supabase.storage
+    .from(RECIPE_PHOTO_BUCKET)
+    .upload(storagePath, file, {
+      contentType: file.type,
+      upsert: false,
+      cacheControl: "private, max-age=0, no-store",
+    });
+  if (uploadError) return dbError("Não foi possível enviar a foto.");
+
+  const { data: attachment, error } = await ctx.supabase
+    .from("attachments")
+    .insert({
+      user_id: ctx.userId,
+      entity_type: RECIPE_PHOTO_ENTITY_TYPE,
+      entity_id: recipeId,
+      bucket_id: RECIPE_PHOTO_BUCKET,
+      storage_path: storagePath,
+      file_name: file.name.slice(0, 200),
+      mime_type: file.type,
+      size_bytes: file.size,
+    })
+    .select("id")
+    .single();
+
+  if (error || !attachment) {
+    // ⛔ TRAVA 4.
+    await ctx.supabase.storage.from(RECIPE_PHOTO_BUCKET).remove([storagePath]);
+    return dbError("Não foi possível registrar a foto.");
+  }
+
+  revalidateRecipes();
+  return { ok: true, data: { id: attachment.id } };
+}
+
+/**
+ * Remove a foto de uma receita (arquivo + metadado).
+ *
+ * O `storage_path` é lido AQUI, no servidor, a partir do id do anexo — o cliente manda só o
+ * id, e a RLS de `attachments` garante que ele é do próprio usuário. Aceitar um caminho vindo
+ * do navegador permitiria apontar para o arquivo de outra pessoa.
+ */
+export async function deleteRecipePhoto(attachmentId: string): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const { data: attachment } = await ctx.supabase
+    .from("attachments")
+    .select("id,bucket_id,storage_path,entity_type")
+    .eq("id", attachmentId)
+    .eq("entity_type", RECIPE_PHOTO_ENTITY_TYPE)
+    .maybeSingle();
+  if (!attachment) return dbError("Foto não encontrada.");
+
+  await ctx.supabase.storage
+    .from(attachment.bucket_id ?? RECIPE_PHOTO_BUCKET)
+    .remove([attachment.storage_path]);
+
+  const { error } = await ctx.supabase.from("attachments").delete().eq("id", attachment.id);
+  if (error) return dbError("Não foi possível remover a foto.");
+
+  revalidateRecipes();
+  return { ok: true, data: undefined };
 }

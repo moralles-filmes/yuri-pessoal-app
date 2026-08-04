@@ -10,7 +10,7 @@
  * ou compartilhar o link preserva exatamente a mesma visão.
  */
 import * as React from "react";
-import { Filter, Search, SlidersHorizontal, X } from "lucide-react";
+import { Filter, ScanLine, Search, SlidersHorizontal, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ import {
   PREPARATION_STATE_LABELS,
 } from "@/lib/nutrition/constants";
 import { countActiveFilters } from "@/lib/nutrition/filters";
+import { BarcodeScannerDialog } from "@/components/nutrition/barcode-scanner-dialog";
 import type { FoodCategory, FoodFilterState, FoodSource, FoodTag } from "@/lib/nutrition/types";
 
 /** Radix Select não aceita valor vazio; "__all__" é o sentinela de "sem filtro". */
@@ -63,6 +64,8 @@ export function FoodFilters({
   resultCount: number;
   totalCount: number;
 }) {
+  const [scannerOpen, setScannerOpen] = React.useState(false);
+
   const activeCount = countActiveFilters(filters);
 
   const numberField = (
@@ -108,6 +111,20 @@ export function FoodFilters({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 16-F — ler o código de barras para ENCONTRAR o alimento no catálogo. A busca já
+              casava com `barcode` desde a 16-A; faltava a câmera. Falhar em silêncio no
+              celular é o pior resultado, então o diálogo escreve todo erro na tela. */}
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 shrink-0"
+            aria-label="Buscar alimento lendo o código de barras"
+            onClick={() => setScannerOpen(true)}
+          >
+            <ScanLine className="size-4" />
+          </Button>
+
           <Select value={filters.sort} onValueChange={(value) => onChange({ sort: value })}>
             <SelectTrigger className="h-10 w-full sm:w-[190px]" aria-label="Ordenar">
               <SelectValue />
@@ -364,6 +381,14 @@ export function FoodFilters({
             : `${resultCount.toLocaleString("pt-BR")} de ${totalCount.toLocaleString("pt-BR")} alimentos`}
         </span>
       </div>
+
+      {/* O código lido cai no MESMO campo de busca — que já casava com `barcode` desde a
+          16-A. Nenhuma consulta a base externa de produto acontece aqui. */}
+      <BarcodeScannerDialog
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onDetected={(code) => onChange({ search: code })}
+      />
     </div>
   );
 }

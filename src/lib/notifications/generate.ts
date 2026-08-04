@@ -22,6 +22,11 @@ import {
 import type { TodoStatus } from "@/lib/todo/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { TaskPriority, TaskStoredStatus } from "@/lib/tasks/constants";
+import {
+  generateNutritionNotifications,
+  type NutritionGenInput,
+} from "./nutrition";
+import { notificationEnabled, type NotificationPrefs } from "@/lib/settings/constants";
 import type { NotificationPriority, NotificationType } from "./constants";
 
 const ISO = "yyyy-MM-dd";
@@ -159,6 +164,12 @@ export type GenerateInput = {
   spending?: GenSpending | null;
   todoTasks?: GenTodoTask[];
   todoReminders?: GenTodoReminder[];
+  /**
+   * Fase 16-F — as 8 famílias do módulo Dieta. Ficam num arquivo próprio
+   * (`./nutrition.ts`) por volume, mas entram pelo MESMO gerador: `dedupe_key`,
+   * `selectNewCandidates` e o Cron continuam sendo um caminho só.
+   */
+  nutrition?: NutritionGenInput | null;
   options?: GenerateOptions;
 };
 
@@ -538,7 +549,30 @@ export function generateNotifications(input: GenerateInput): NotificationCandida
     });
   }
 
+  /* ── Dieta e Alimentação (Fase 16-F) ── */
+  if (input.nutrition) {
+    out.push(...generateNutritionNotifications(input.nutrition));
+  }
+
   return out;
+}
+
+/**
+ * Fase 16-F — respeita `settings.notification_prefs`.
+ *
+ * PURO e separado da geração de propósito: o gerador continua dizendo "isto é verdade sobre
+ * os dados", e este filtro diz "isto o usuário quer receber". Junto de `notificationEnabled`,
+ * é o que faz TODA notificação ser desativável — e o que faz os tipos opt-in (a meta do dia)
+ * nascerem desligados.
+ *
+ * ⚠️ Filtrar aqui, e não dentro de cada família, é o que impede um tipo novo de escapar da
+ * preferência por esquecimento de quem o escreveu.
+ */
+export function filterByPrefs(
+  candidates: NotificationCandidate[],
+  prefs: NotificationPrefs | null | undefined,
+): NotificationCandidate[] {
+  return candidates.filter((c) => notificationEnabled(prefs, c.type));
 }
 
 /** Formata "valor unidade" de hábito de forma enxuta (pt-BR). */

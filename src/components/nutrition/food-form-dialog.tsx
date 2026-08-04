@@ -15,7 +15,7 @@
 import * as React from "react";
 import { useFieldArray, useForm, useWatch, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, ScanLine, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { BarcodeScannerDialog } from "@/components/nutrition/barcode-scanner-dialog";
 import {
   BASE_UNITS,
   BASE_UNIT_LABELS,
@@ -179,6 +180,7 @@ export function FoodFormDialog({
   onSaved: () => void;
 }) {
   const [saving, setSaving] = React.useState(false);
+  const [scannerOpen, setScannerOpen] = React.useState(false);
   const [addCode, setAddCode] = React.useState<string>(NONE);
 
   const form = useForm<FormValues>({
@@ -301,12 +303,25 @@ export function FoodFormDialog({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="f-barras">Código de barras</Label>
-                <Input
-                  id="f-barras"
-                  inputMode="numeric"
-                  placeholder="8 a 14 dígitos"
-                  {...form.register("food.barcode")}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="f-barras"
+                    inputMode="numeric"
+                    placeholder="8 a 14 dígitos"
+                    {...form.register("food.barcode")}
+                  />
+                  {/* 16-F: a câmera é ATALHO. Digitar continua funcionando sempre, e o
+                      diálogo transforma qualquer falha em texto na tela. */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Ler código de barras com a câmera"
+                    onClick={() => setScannerOpen(true)}
+                  >
+                    <ScanLine className="size-4" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="f-cat">Categoria</Label>
@@ -587,6 +602,17 @@ export function FoodFormDialog({
           </DialogFooter>
         </form>
       </DialogContent>
+
+      {/* 16-F — o código lido só PREENCHE O CAMPO. Nenhum dado nutricional é buscado numa
+          base externa nem gravado sozinho: quem confirma os valores é o usuário. */}
+      <BarcodeScannerDialog
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onDetected={(code) => {
+          form.setValue("food.barcode", code, { shouldDirty: true });
+          toast.success(`Código ${code} preenchido. Confira os dados antes de salvar.`);
+        }}
+      />
     </Dialog>
   );
 }

@@ -21,6 +21,7 @@ import {
   Pencil,
   Plus,
   Ruler,
+  Settings2,
   Target,
   Trash2,
   TrendingDown,
@@ -54,6 +55,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { MeasurementChart, MeasurementTable } from "@/components/body/measurement-chart";
+import { MeasurementTypesDialog } from "@/components/body/measurement-types-dialog";
 import { ProgressPhotos } from "@/components/body/progress-photos";
 import {
   CORRELATION_DISCLAIMER,
@@ -127,6 +129,16 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
 
   const [formOpen, setFormOpen] = React.useState(false);
   const [batchOpen, setBatchOpen] = React.useState(false);
+  const [typesOpen, setTypesOpen] = React.useState(false);
+
+  /** Quantas medições cada tipo tem — derivado da lista já carregada, sem ida ao banco. */
+  const measurementCountByType = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of props.measurements) {
+      map.set(m.typeId, (map.get(m.typeId) ?? 0) + 1);
+    }
+    return map;
+  }, [props.measurements]);
   const [goalOpen, setGoalOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<MeasurementWithType | null>(null);
   const [editingGoal, setEditingGoal] = React.useState<MeasurementGoal | null>(null);
@@ -253,6 +265,12 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
         title="Medidas e evolução"
         description="Peso, composição corporal, circunferências e fotos privadas."
       >
+        {/* 16-F: `saveMeasurementType`/`reorderMeasurementTypes`/`deleteMeasurementType`
+            existiam desde a 16-E sem nenhuma tela chamando. */}
+        <Button variant="outline" onClick={() => setTypesOpen(true)} disabled={pending}>
+          <Settings2 className="size-4" />
+          Tipos de medida
+        </Button>
         <Button variant="outline" onClick={() => setBatchOpen(true)} disabled={pending}>
           <Ruler className="size-4" />
           Sessão de medidas
@@ -724,6 +742,15 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
         hoje={props.hoje}
         editing={editingGoal}
         onSaved={refresh}
+      />
+
+      {/* Passa TODOS os tipos (inclusive os desativados): é aqui que se reativa um.
+          A contagem por tipo decide se a exclusão precisa perguntar o destino do histórico. */}
+      <MeasurementTypesDialog
+        open={typesOpen}
+        onOpenChange={setTypesOpen}
+        types={props.types}
+        measurementCountByType={measurementCountByType}
       />
     </div>
   );

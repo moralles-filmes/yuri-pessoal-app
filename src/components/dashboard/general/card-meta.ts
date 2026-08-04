@@ -10,6 +10,7 @@ import {
   ListTodo,
   ReceiptText,
   Target,
+  UtensilsCrossed,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -20,6 +21,7 @@ export const DASH_CARD_ICONS: Record<DashCardId, LucideIcon> = {
   todo: ListTodo,
   faturas: ReceiptText,
   agenda: CalendarClock,
+  dieta: UtensilsCrossed,
   tarefas: ListChecks,
   habitos: Target,
   estudos: GraduationCap,
@@ -32,6 +34,7 @@ export const DASH_CARD_HREF: Record<DashCardId, string> = {
   todo: "/todo",
   faturas: "/faturas",
   agenda: "/agenda",
+  dieta: "/nutricao",
   tarefas: "/tarefas",
   habitos: "/habitos",
   estudos: "/estudos",

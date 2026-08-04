@@ -987,3 +987,24 @@ export const asShoppingPriority = (v: unknown): ShoppingPriority =>
   includes(SHOPPING_PRIORITIES, v) ? v : "normal";
 export const asShoppingSort = (v: unknown): ShoppingSort =>
   includes(SHOPPING_SORTS, v) ? v : "categoria";
+
+/* ═════════════════════ Fase 16-F — Foto da receita ═════════════════════
+ * A foto da receita reusa a tabela `attachments` e o bucket PRIVADO `attachments` (Fase 14),
+ * com o MESMO desenho das fotos de evolução (16-E): nome aleatório, pasta `{user_id}/…`,
+ * validação do arquivo real no servidor e URL assinada curta gerada a cada leitura.
+ *
+ * As constantes de tipo/tamanho são REEXPORTADAS de `src/lib/body/constants.ts` de propósito:
+ * duas listas de MIME aceito divergiriam na primeira vez que alguém acrescentasse um formato
+ * num lado só, e o resultado seria um upload que passa numa tela e falha na outra.
+ */
+export {
+  PHOTO_ACCEPT_ATTRIBUTE as RECIPE_PHOTO_ACCEPT_ATTRIBUTE,
+  PHOTO_ALLOWED_MIME as RECIPE_PHOTO_ALLOWED_MIME,
+  PHOTO_BUCKET as RECIPE_PHOTO_BUCKET,
+  PHOTO_EXTENSION_BY_MIME as RECIPE_PHOTO_EXTENSION_BY_MIME,
+  PHOTO_MAX_BYTES as RECIPE_PHOTO_MAX_BYTES,
+  PHOTO_SIGNED_URL_TTL_SECONDS as RECIPE_PHOTO_SIGNED_URL_TTL_SECONDS,
+} from "@/lib/body/constants";
+
+/** `entity_type` da foto de receita em `attachments`. Define a pasta no Storage. */
+export const RECIPE_PHOTO_ENTITY_TYPE = "nutrition_recipe";

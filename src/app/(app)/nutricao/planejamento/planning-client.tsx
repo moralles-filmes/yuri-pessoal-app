@@ -18,6 +18,7 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  CalendarPlus,
   CalendarRange,
   ChefHat,
   ChevronLeft,
@@ -97,6 +98,7 @@ import {
   type PickerRecipe,
 } from "@/components/nutrition/recipe-picker-dialog";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
+import { ScheduleMealDialog } from "@/components/nutrition/schedule-meal-dialog";
 
 export type PlanningClientProps = {
   date: string;
@@ -111,6 +113,8 @@ export type PlanningClientProps = {
   foodData: [string, PlannedFoodData][];
   /** 16-C: receitas com o total já calculado no servidor. */
   recipes: PickerRecipe[];
+  /** Fase 16-F — deep-link da busca global (`?plano=<id>`): abre os dias do modelo. */
+  initialPlanId?: string | null;
 };
 
 export function PlanningClient(props: PlanningClientProps) {
@@ -145,9 +149,12 @@ export function PlanningClient(props: PlanningClientProps) {
   });
   const [applyOpen, setApplyOpen] = React.useState<NutritionPlan | null>(null);
   // Pendência da 16-B fechada aqui: montar os dias do modelo pela interface.
-  const [daysPlanId, setDaysPlanId] = React.useState<string | null>(null);
+  const [daysPlanId, setDaysPlanId] = React.useState<string | null>(
+    props.initialPlanId ?? null,
+  );
   const [planDialog, setPlanDialog] = React.useState(false);
   const [copyOpen, setCopyOpen] = React.useState(false);
+  const [scheduleFor, setScheduleFor] = React.useState<PlannedMeal | null>(null);
 
   function goTo(next: { date?: string; view?: string }) {
     const search = new URLSearchParams(params.toString());
@@ -350,6 +357,7 @@ export function PlanningClient(props: PlanningClientProps) {
             <div className="space-y-3">
               {dayMeals.map((meal) => (
                 <PlannedMealCard
+                  onSchedule={() => setScheduleFor(meal)}
                   key={meal.id}
                   meal={meal}
                   foodNames={foodNames}
@@ -419,6 +427,15 @@ export function PlanningClient(props: PlanningClientProps) {
             toast.error(result.error ?? "Não foi possível planejar.");
           }
         }}
+      />
+
+      {/* 16-F — ponte OPCIONAL com a agenda: um bloco, para uma data, por clique. */}
+      <ScheduleMealDialog
+        open={scheduleFor !== null}
+        onOpenChange={(open) => !open && setScheduleFor(null)}
+        defaultTitle={scheduleFor?.title || scheduleFor?.mealTypeName || "Refeição"}
+        defaultDate={scheduleFor?.plannedDate ?? props.date}
+        defaultTime={scheduleFor?.plannedTime ?? null}
       />
 
       <ScopeDialog
@@ -574,6 +591,7 @@ function PlannedMealCard({
   onEdit,
   onDelete,
   onRemoveItem,
+  onSchedule,
 }: {
   meal: PlannedMeal;
   foodNames: Map<string, string>;
@@ -585,6 +603,8 @@ function PlannedMealCard({
   onEdit: () => void;
   onDelete: () => void;
   onRemoveItem: (itemId: string) => void;
+  /** 16-F — ponte OPCIONAL com a agenda. Nenhuma refeição vira evento sozinha. */
+  onSchedule: () => void;
 }) {
   const energia = totals[CORE_NUTRIENTS.energia];
 
@@ -615,6 +635,16 @@ function PlannedMealCard({
               <TotalQualityBadge quality={energia.quality} />
             </span>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Criar bloco na agenda para esta refeição"
+            title="Criar bloco na agenda"
+            disabled={pending}
+            onClick={onSchedule}
+          >
+            <CalendarPlus className="size-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"

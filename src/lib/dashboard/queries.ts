@@ -49,6 +49,15 @@ import {
   sessionDateSet,
 } from "@/lib/studies/progress";
 import { studyStreak } from "@/lib/studies/streak";
+import { getNutritionDay } from "@/lib/nutrition/diary-queries";
+import { getShoppingLists } from "@/lib/nutrition/shopping-queries";
+import { getNutrientDefinitions, indexNutrients } from "@/lib/nutrition/queries";
+import { buildDailyReports, displayAmount } from "@/lib/nutrition/reports";
+import { effectiveMealStatus, summarizeDay, upcomingMeals } from "@/lib/nutrition/diary";
+import { shortTime } from "@/lib/nutrition/calendar";
+import { SHOPPING_OPEN_STATUSES } from "@/lib/nutrition/constants";
+import { getMeasurements } from "@/lib/body/queries";
+import { summarizeType } from "@/lib/body/measurements";
 import type { DashWindow } from "@/lib/dashboard/period";
 import type { TaskPriority, TaskStoredStatus } from "@/lib/tasks/constants";
 import type { StudyCategory, StudyStatus } from "@/lib/studies/constants";
@@ -56,10 +65,12 @@ import type {
   AgendaCardData,
   DashCourseItem,
   DashHabitItem,
+  DashNutrientValue,
   FinanceCardData,
   HabitsCardData,
   InvoicesCardData,
   NotificationsCardData,
+  NutritionCardData,
   StudiesCardData,
   TasksCardData,
 } from "@/lib/dashboard/types";
@@ -438,4 +449,111 @@ export async function getNotificationsCardData(): Promise<NotificationsCardData>
     .eq("is_resolved", false);
   if (error) return { available: false, unread: 0 };
   return { available: true, unread: count ?? 0 };
+}
+
+/* ───────────────────────────── Dieta e Alimentação (Fase 16-F) ───────────────────────────── */
+
+/**
+ * Card de Dieta no Dashboard Geral.
+ *
+ * ⛔ CONSOME, NÃO RECALCULA. Todo número aqui já existe e já é testado:
+ *  • os totais e a meta do dia saem de `buildDailyReports` (16-E), que entra por `dayTotals`
+ *    (soma do SNAPSHOT) e resolve a meta VIGENTE NAQUELE DIA com `goalPeriodForDate`;
+ *  • o status das refeições sai de `summarizeDay`/`upcomingMeals` (16-B, status derivado);
+ *  • a evolução do peso sai de `summarizeType` (16-E);
+ *  • a água sai do módulo HÁBITOS — a Dieta lê e linka, nunca duplica a fonte de verdade.
+ *
+ * Reimplementar qualquer um deles faria o dashboard e o módulo mostrarem números diferentes
+ * para o mesmo dia.
+ */
+export async function getNutritionCardData(
+  todayIso: string,
+  minutosAgora: number,
+): Promise<NutritionCardData> {
+  const [day, lists, measurements, definitions] = await Promise.all([
+    getNutritionDay(todayIso),
+    getShoppingLists(),
+    getMeasurements({ typeIds: undefined }),
+    getNutrientDefinitions(),
+  ]);
+
+  // Um dia só: `buildDailyReports` devolve exatamente um relatório, já com meta da época.
+  const [report] = buildDailyReports(day.meals, day.periods, todayIso, todayIso);
+  const byCode = indexNutrients(definitions);
+
+  const nutrient = (code: string): DashNutrientValue | null => {
+    const definition = byCode[code];
+    if (!definition) return null;
+    const total = report.totals[code];
+    const target = report.targets[code]?.amount ?? null;
+    // ⛔ Sem registro, `amount` é NULL. Um 0 aqui afirmaria "não comeu nada".
+    const amount = report.hasRecord ? (total?.amount ?? null) : null;
+    return {
+      code,
+      label: definition.shortName ?? definition.name,
+      unit: definition.unit,
+      amount: amount === null ? null : displayAmount(amount, definition),
+      target: target === null ? null : displayAmount(target, definition),
+      percent:
+        amount !== null && target !== null && target > 0 ? (amount / target) * 100 : null,
+      quality: amount === null ? null : (total?.quality ?? null),
+    };
+  };
+
+  const now = { hoje: todayIso, minutosAgora };
+  const summary = summarizeDay(day.meals, now);
+  const [proxima] = upcomingMeals(day.meals, now, 1);
+  const nextState = proxima ? effectiveMealStatus(proxima, now) : null;
+
+  const activeLists = lists.filter((l) => !l.isArchived && l.status === "ativa");
+  const shoppingPending = activeLists.reduce(
+    (sum, list) =>
+      sum + list.items.filter((item) => SHOPPING_OPEN_STATUSES.includes(item.status)).length,
+    0,
+  );
+
+  const weightMeasurements = measurements.filter((m) => m.typeSlug === "peso");
+  const weightSummary = summarizeType(weightMeasurements);
+  const weightUnit = weightMeasurements[0]?.unit ?? "kg";
+  const weightDecimals = weightMeasurements[0]?.typeDecimals ?? 1;
+
+  return {
+    hasRecord: report.hasRecord,
+    hasModule:
+      day.meals.length > 0 ||
+      day.planned.length > 0 ||
+      day.periods.length > 0 ||
+      activeLists.length > 0 ||
+      weightMeasurements.length > 0,
+    energy: nutrient("energia"),
+    protein: nutrient("proteina"),
+    adherence: report.hasRecord ? report.adherence.percent : null,
+    mealsTotal: summary.total,
+    mealsDone: summary.consumidas,
+    mealsPending: summary.pendentes,
+    mealsLate: summary.atrasadas,
+    nextMeal: proxima
+      ? {
+          name: proxima.mealTypeName,
+          time: shortTime(proxima.plannedTime) || null,
+          late: Boolean(nextState?.isLate),
+        }
+      : null,
+    shoppingPending,
+    shoppingLists: activeLists.length,
+    weight:
+      weightSummary.current !== null && weightSummary.currentDate
+        ? {
+            value: weightSummary.current,
+            unit: weightUnit,
+            decimals: weightDecimals,
+            measuredOn: weightSummary.currentDate,
+            sincePrevious: weightSummary.sincePrevious?.absolute ?? null,
+          }
+        : null,
+    // A ÁGUA É DO MÓDULO HÁBITOS. Aqui é leitura + link; nada é gravado por este card.
+    water: day.water
+      ? { value: day.water.value, target: day.water.target, unit: day.water.unit }
+      : null,
+  };
 }
