@@ -5,6 +5,8 @@
  * nunca vê o shape cru do Supabase — é o que permite mudar coluna sem mexer em componente.
  */
 import type {
+  DerivedExerciseStatus,
+  DifficultyLevel,
   DifficultyScale,
   EquipmentCategory,
   ExerciseSource,
@@ -14,12 +16,20 @@ import type {
   MuscleRegion,
   MuscleRole,
   OneRmFormula,
+  PlateKind,
   ProgramStatus,
+  RestEndKind,
   ScheduleEntryKind,
   ScheduleSource,
   ScheduleStatus,
+  SessionEventKind,
+  SessionExerciseStatus,
+  SessionOrigin,
+  SessionSetStatus,
+  SessionStatus,
   SetTechnique,
   SetType,
+  SubstitutionReason,
   TrackingType,
   TrainingGoal,
   TrainingLevel,
@@ -27,6 +37,7 @@ import type {
   WeightUnit,
   WorkoutStatus,
 } from "./constants";
+import type { WorkoutSnapshot } from "./session-snapshot";
 
 /* ─────────────────────────────── Vocabulário ─────────────────────────────── */
 
@@ -419,6 +430,227 @@ export const EMPTY_PROGRAM_FILTERS: ProgramFilterState = {
   level: null,
   onlyActive: false,
   showArchived: false,
+};
+
+/* ═══════════════════════ Fase 17-C — Sessão ao vivo ═══════════════════════
+ *
+ * ⛔ TUDO AQUI É EXECUÇÃO, e execução é IMUTÁVEL. Os campos `*Snapshot` são cópias congeladas
+ * no ato do início — nenhuma tela lê o modelo (17-B) para renderizar uma sessão.
+ */
+
+export type TrainingLocation = {
+  id: string;
+  name: string;
+  notes: string | null;
+  isDefault: boolean;
+  isArchived: boolean;
+  plates: LocationPlate[];
+};
+
+export type LocationPlate = {
+  id: string;
+  locationId: string;
+  kind: PlateKind;
+  weightKg: number;
+  /** Unidades no local (não pares). A calculadora divide por dois. */
+  quantity: number;
+  notes: string | null;
+};
+
+/** Uma série executada, já tipada. Os campos `planned*` são o congelamento do previsto. */
+export type SessionSet = {
+  id: string;
+  sessionId: string;
+  sessionExerciseId: string;
+  setNumber: number;
+  setType: SetType;
+  status: SessionSetStatus;
+
+  plannedRepsMin: number | null;
+  plannedRepsMax: number | null;
+  plannedWeightKg: number | null;
+  plannedAdditionalWeightKg: number | null;
+  plannedAssistanceWeightKg: number | null;
+  plannedDurationSeconds: number | null;
+  plannedDistanceM: number | null;
+  plannedRestSeconds: number | null;
+  plannedRir: number | null;
+  plannedRpe: number | null;
+
+  reps: number | null;
+  weightKg: number | null;
+  /** SOMA à carga efetiva. */
+  additionalWeightKg: number | null;
+  /** SUBTRAI da carga efetiva. Nunca somar. */
+  assistanceWeightKg: number | null;
+  durationSeconds: number | null;
+  distanceM: number | null;
+  /** Estimativa do painel do aparelho — a UI é obrigada a rotular. */
+  calories: number | null;
+  inclinePercent: number | null;
+  resistanceLevel: number | null;
+
+  repsLeft: number | null;
+  repsRight: number | null;
+  weightLeftKg: number | null;
+  weightRightKg: number | null;
+
+  rir: number | null;
+  rpe: number | null;
+  difficulty: DifficultyLevel | null;
+
+  isWarmup: boolean;
+  countsInVolume: boolean;
+  /** MARCADOR de candidato a recorde. A consolidação é da 17-D. */
+  isPersonalRecord: boolean;
+
+  notes: string | null;
+  completedAt: string | null;
+  clientMutationId: string;
+};
+
+export type SessionExercise = {
+  id: string;
+  sessionId: string;
+  /** Referência informativa (`set null`). Nunca fonte de leitura. */
+  exerciseId: string | null;
+  workoutExerciseId: string | null;
+
+  plannedPosition: number;
+  executedPosition: number;
+  /** O GRAVADO. `parcial`/`concluido` saem de `deriveExerciseStatus`. */
+  status: SessionExerciseStatus;
+  /** O APRESENTADO, já derivado das séries. */
+  derivedStatus: DerivedExerciseStatus;
+
+  exerciseName: string;
+  trackingType: TrackingType;
+  laterality: Laterality;
+  muscleGroup: string | null;
+  equipment: string | null;
+  movementPattern: string | null;
+
+  supersetGroup: string | null;
+  technique: SetTechnique | null;
+  isWarmup: boolean;
+  countsInVolume: boolean;
+  restSeconds: number | null;
+  incrementKg: number | null;
+  notes: string | null;
+  skipReason: string | null;
+
+  replacedSessionExerciseId: string | null;
+  isExtra: boolean;
+
+  startedAt: string | null;
+  endedAt: string | null;
+
+  sets: SessionSet[];
+};
+
+export type SessionRest = {
+  id: string;
+  sessionId: string;
+  sessionExerciseId: string | null;
+  sessionSetId: string | null;
+  plannedSeconds: number;
+  adjustmentSeconds: number;
+  startedAt: string;
+  endedAt: string | null;
+  actualSeconds: number | null;
+  endKind: RestEndKind | null;
+};
+
+export type SessionPause = {
+  id: string;
+  sessionId: string;
+  startedAt: string;
+  endedAt: string | null;
+  reason: string | null;
+};
+
+export type SessionEvent = {
+  id: string;
+  kind: SessionEventKind;
+  occurredAt: string;
+  sessionExerciseId: string | null;
+  sessionSetId: string | null;
+  description: string | null;
+};
+
+export type SessionSubstitution = {
+  id: string;
+  originalSessionExerciseId: string | null;
+  newSessionExerciseId: string | null;
+  originalName: string;
+  substituteName: string;
+  reason: SubstitutionReason;
+  reasonNotes: string | null;
+  occurredAt: string;
+};
+
+export type TrainingSession = {
+  id: string;
+  status: SessionStatus;
+  origin: SessionOrigin;
+
+  /** Referências INFORMATIVAS. */
+  workoutId: string | null;
+  programId: string | null;
+  scheduledWorkoutId: string | null;
+  locationId: string | null;
+  locationName: string | null;
+
+  /** Data PURA. Sessão que atravessa a meia-noite fica no dia em que começou. */
+  sessionDate: string;
+  startedAt: string | null;
+  endedAt: string | null;
+
+  workoutName: string;
+  workoutShortName: string | null;
+  workoutVersion: number | null;
+  programName: string | null;
+  /**
+   * O congelamento lido de volta. Na PREPARAÇÃO ele é a única fonte (as linhas filhas só
+   * nascem ao iniciar); depois de iniciada, as linhas são a forma consultável do mesmo
+   * congelamento. Em nenhum dos dois casos o treino-modelo é consultado.
+   */
+  snapshot: WorkoutSnapshot | null;
+
+  defaultRestSeconds: number;
+  autoAdvance: "automatico" | "avisar" | "nunca";
+  soundEnabled: boolean;
+  vibrationEnabled: boolean;
+  keepScreenAwake: boolean;
+  weightUnit: WeightUnit;
+
+  /** Sem ele, carga efetiva de peso corporal é INDISPONÍVEL — nunca zero. */
+  bodyWeightKg: number | null;
+  energyLevel: number | null;
+  moodLevel: number | null;
+  sleepQuality: number | null;
+  sorenessLevel: number | null;
+  preNotes: string | null;
+
+  rating: number | null;
+  perceivedEffort: number | null;
+  notes: string | null;
+  feltPain: boolean;
+  painNotes: string | null;
+
+  /** Congelados na finalização. A tela ao vivo deriva de timestamps. */
+  totalSeconds: number | null;
+  activeSeconds: number | null;
+  restTotalSeconds: number | null;
+  pauseTotalSeconds: number | null;
+
+  exercises: SessionExercise[];
+  rests: SessionRest[];
+  pauses: SessionPause[];
+  substitutions: SessionSubstitution[];
+
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type WorkoutSort = "nome" | "recentes" | "exercicios";

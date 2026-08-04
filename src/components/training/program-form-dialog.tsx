@@ -39,12 +39,27 @@ import {
   TRAINING_LEVEL_LABELS,
 } from "@/lib/training/constants";
 import { programSchema } from "@/lib/validators/training-routines";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 import {
   createTrainingProgram,
   updateTrainingProgram,
 } from "@/lib/actions/training-programs";
 import type { TrainingProgram } from "@/lib/training/types";
 import { Field } from "./field";
+
+/** Os campos que ESTA tela mostra. Erro de campo fora daqui vai para o toast, não some. */
+const FORM_FIELDS = [
+  "name",
+  "description",
+  "goal",
+  "level",
+  "status",
+  "starts_on",
+  "ends_on",
+  "duration_weeks",
+  "weekly_frequency",
+  "notes",
+] as const;
 
 type FormValues = {
   name: string;
@@ -112,7 +127,12 @@ export function ProgramFormDialog({
     setSaving(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      // O servidor recusou: destaca o que dá para destacar e diz o resto em voz alta.
+      const mapped = mapServerFieldErrors(result.fieldErrors, FORM_FIELDS);
+      for (const { name, message } of mapped.toSet) {
+        form.setError(name as keyof FormValues, { type: "server", message });
+      }
+      toast.error(serverErrorMessage(result.error, mapped));
       return;
     }
     toast.success(isEditing ? "Programa atualizado." : "Programa criado.");
@@ -141,7 +161,11 @@ export function ProgramFormDialog({
               <Input {...form.register("name")} placeholder="ABC — hipertrofia" autoFocus />
             </Field>
 
-            <Field label="Objetivo" hint="Serve para organizar e achar. Não é prescrição.">
+            <Field
+              label="Objetivo"
+              hint="Serve para organizar e achar. Não é prescrição."
+              error={form.formState.errors.goal?.message}
+            >
               <Select
                 value={values.goal ?? "personalizado"}
                 onValueChange={(value) => form.setValue("goal", value)}
@@ -159,7 +183,11 @@ export function ProgramFormDialog({
               </Select>
             </Field>
 
-            <Field label="Nível" hint="Como você classifica este programa para si.">
+            <Field
+              label="Nível"
+              hint="Como você classifica este programa para si."
+              error={form.formState.errors.level?.message}
+            >
               <Select
                 value={values.level ?? "nao_informado"}
                 onValueChange={(value) => form.setValue("level", value)}
@@ -177,7 +205,7 @@ export function ProgramFormDialog({
               </Select>
             </Field>
 
-            <Field label="Início">
+            <Field label="Início" error={form.formState.errors.starts_on?.message}>
               <Input type="date" {...form.register("starts_on")} />
             </Field>
 
@@ -185,16 +213,16 @@ export function ProgramFormDialog({
               <Input type="date" {...form.register("ends_on")} />
             </Field>
 
-            <Field label="Duração (semanas)">
+            <Field label="Duração (semanas)" error={form.formState.errors.duration_weeks?.message}>
               <Input {...form.register("duration_weeks")} inputMode="numeric" placeholder="12" />
             </Field>
 
-            <Field label="Treinos por semana">
+            <Field label="Treinos por semana" error={form.formState.errors.weekly_frequency?.message}>
               <Input {...form.register("weekly_frequency")} inputMode="numeric" placeholder="4" />
             </Field>
 
             {isEditing && (
-              <Field label="Situação">
+              <Field label="Situação" error={form.formState.errors.status?.message}>
                 <Select
                   value={values.status ?? "rascunho"}
                   onValueChange={(value) => form.setValue("status", value)}
@@ -213,11 +241,19 @@ export function ProgramFormDialog({
               </Field>
             )}
 
-            <Field label="Descrição" className="sm:col-span-2">
+            <Field
+              label="Descrição"
+              className="sm:col-span-2"
+              error={form.formState.errors.description?.message}
+            >
               <Textarea {...form.register("description")} rows={2} />
             </Field>
 
-            <Field label="Observações" className="sm:col-span-2">
+            <Field
+              label="Observações"
+              className="sm:col-span-2"
+              error={form.formState.errors.notes?.message}
+            >
               <Textarea {...form.register("notes")} rows={2} />
             </Field>
           </div>

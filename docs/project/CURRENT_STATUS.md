@@ -1,6 +1,6 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-08-03**.
+> Atualizado ao final de **cada** fase. Última atualização: **2026-08-04**.
 
 ## Estado
 As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluídas. Em
@@ -9,7 +9,7 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A, 16-B, 16-C e 16-D concluídas**; 16-E é a próxima |
-| **17** | Treinos (`/treinos`) | A–F | **17-A e 17-B concluídas**; 17-C é a próxima |
+| **17** | Treinos (`/treinos`) | A–F | **17-A, 17-B e 17-C concluídas**; 17-D é a próxima |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -20,14 +20,129 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 ## Fases atuais
 - **Fase 16-D — Dieta e Alimentação · Lista de compras e despensa → CONCLUÍDA ✅**
   Arquivo: `docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md`
-- **Fase 17-B — Treinos · Programas, treinos-modelo e planejamento semanal → CONCLUÍDA ✅**
-  Arquivo: `docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md`
+- **Fase 17-C — Treinos · Preparação, sessão ao vivo, cronômetro e recuperação → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md`
 
 ## Próximas fases
 - **Subfase 16-E — Medidas, fotos de evolução e relatórios.**
   Arquivo: `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
-- **Subfase 17-C — Preparação, sessão ao vivo, cronômetro e recuperação.**
-  Arquivo: `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md`
+- **Subfase 17-D — Histórico, volume, recordes e progressão.**
+  Arquivo: `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`
+
+---
+
+## O que foi implementado na Subfase 17-C (Treinos — sessão ao vivo)
+
+A subfase mais importante do módulo: a tela que o usuário abre suado, com uma mão, no celular,
+com Wi-Fi ruim, no meio da academia. **9 tabelas novas** e **+165 testes puros**.
+
+### ⛔ A regra inegociável: o treino é CONGELADO ao iniciar
+
+`startSession` copia o modelo para `training_sessions.workout_snapshot` (jsonb) **e** para as
+linhas de `training_session_exercises` / `training_session_sets`. A partir daí **nenhuma leitura
+de sessão passa pelo treino-modelo** — `session-queries.ts` não tem uma única referência a
+`training_workouts`. `workout_id`, `exercise_id` e `scheduled_workout_id` são `on delete set
+null`: referência informativa, nunca fonte de leitura.
+
+**Verificado no banco, não só no código:** renomear o modelo, trocar a carga planejada para 999,
+subir para 10 séries e por fim **excluir o treino inteiro** — a sessão registrada continua com
+"TESTE MODELO 17C", 60 kg planejados, 1 série e o nome do exercício congelado; `workout_id` vira
+`NULL` e nada mais muda. Mesmo princípio do `nutrients_snapshot` da 16-B, em outro domínio.
+
+### O congelamento passa por `expandPlannedSets`, não por uma segunda expansão
+
+`session-snapshot.ts` **chama** `expandPlannedSets` (17-B) em vez de reimplementar a expansão de
+séries — como `buildRecipeEntrySnapshot` chama `buildDiaryEntrySnapshot` na Dieta. Construtor,
+pré-visualização e sessão nunca discordam sobre quantas séries o treino tem, e a máscara por
+`tracking_type` continua vindo de `tracking.ts`, a única matriz de medição do módulo.
+
+### Schema — 9 tabelas (RLS + FORCE RLS em todas)
+`training_locations`, `training_location_plates`, `training_sessions`,
+`training_session_exercises`, `training_session_sets`, `training_session_rests`,
+`training_session_pauses`, `training_session_events`, `training_session_substitutions`.
+**Total do projeto: 102 tabelas.** Security advisor: **0 lints de schema**.
+
+Decisões registradas:
+- **Ordem planejada × ordem executada.** `planned_position` nunca muda; `executed_position` é
+  reescrita ao reordenar. As séries pertencem ao EXERCÍCIO, não à posição — por isso reordenar,
+  pular, voltar depois, mandar para o fim e substituir não perdem nada.
+- **`parcial` e `concluido` não são graváveis** em `training_session_exercises.status`: só
+  decisão do usuário entra (`pendente`, `ativo`, `pulado`, `substituido`), e os outros dois saem
+  de `deriveExerciseStatus` na leitura. Mesma disciplina de `atrasada` no TO-DO.
+- **`training_session_events` é append-only**: sem `updated_at`, sem trigger. Evento reescrito
+  deixa de ser evento.
+- **Índices únicos parciais** garantem no banco: uma sessão em execução por usuário, um descanso
+  ativo por sessão, uma pausa aberta por sessão, um local padrão por usuário.
+- **Idempotência por `client_mutation_id`** com unique por sessão — clique duplo, retry da fila e
+  duas abas convergem para uma linha. As linhas planejadas nascem com um uuid do servidor; os do
+  dispositivo entram ao registrar ou acrescentar série.
+- **Peso corporal fica na sessão**, não numa tabela nova: é o valor USADO naquele treino,
+  congelado. Quando a 17-E criar o módulo `body_*`, a preparação passa a pré-preencher dali.
+  **Continua não existindo duas tabelas de peso corporal.**
+
+### Lógica pura (+165 testes) — suíte de Treinos: 171 → **336**
+- `session-machine.ts` — transições de sessão, exercício e série. O teste mais importante é o
+  das transições **inválidas**: uma mutação atrasada da fila que chega depois do fim é recusada
+  com motivo, não aplicada por cima. Concluída só volta a ativa com confirmação explícita;
+  cancelada é definitiva.
+- `session-flow.ts` — `nextStep`. **Concluir a 3ª de 4 séries leva para a 4ª SÉRIE**, não para
+  outro exercício (critério de aceite literal, com teste isolado e nome explícito). Superset
+  alterna A1 → B1 → A2 → B2 pela regra "menor série pendente do bloco, empate resolve pela ordem
+  depois do atual"; circuito de três sai da mesma regra, sem caso especial.
+- `timers.ts` — tudo derivado de timestamps com `agora` injetado. Tempo ativo = total − **união**
+  de pausas e descansos (um descanso dentro de uma pausa não é descontado duas vezes). Reduzir o
+  descanso abaixo do já decorrido ENCERRA em vez de criar alvo no passado.
+- `previous.ts` — última execução por fonte escolhida pelo usuário; melhor marca ignora séries
+  sem carga calculável e marca o agregado como **parcial**; assistência subtrai, adicional soma.
+- `plates.ts` — calculadora com o estoque real do local, em pares (barra é simétrica), que
+  **nunca passa do alvo** e declara a diferença quando não dá para fechar.
+- `session-snapshot.ts` — o congelamento, com os testes de "editar o modelo depois".
+
+### Resiliência: o que é prometido é o que é entregue
+**Não afirmamos "funciona offline"** — não há service worker e recarregar sem rede não abre a
+tela. O que existe: cada mutação é aplicada no estado local, persistida no dispositivo e
+enfileirada; a fila reenvia **em ordem, uma por vez** ao voltar a conexão; o
+`client_mutation_id` impede duplicata. A UI mostra o tempo todo `Salvo` · `Salvando` · `Salvo no
+dispositivo` · `Aguardando conexão` · `Erro ao sincronizar`, com botão de tentar de novo.
+
+Recuperação de sessão interrompida não depende do dispositivo: a sessão em execução vive no
+servidor, então fechar a aba e reabrir cai na tela com tudo no lugar — inclusive o descanso,
+recalculado a partir do `started_at`.
+
+### Interface
+- **`/treinos/sessao/preparar`** — etapa 1 (programado · cadastrado · recente · favorito · vazio
+  · repetir o último · duplicar sessão) e etapa 2 (revisar ordem, séries, reps, cargas,
+  descansos, RIR/RPE, superset + local, som, vibração, avanço automático, tela ativa, peso
+  corporal, energia, disposição, sono e dor). Os valores da última vez são **sugestão**: o
+  usuário escolhe a fonte e aplica com um toque — nada muda sozinho.
+- **`/treinos/sessao`** — um exercício por vez, alvos de toque de 48 px, teclado numérico,
+  cronômetro de descanso em componente isolado (o tique não re-renderiza a tela toda),
+  reordenação com alternativa por teclado, substituição com motivo obrigatório e calculadora de
+  anilhas.
+- **`/treinos/sessao/revisar`** — resumo, tempos, tonelagem **marcada como parcial** quando
+  alguma série não tinha carga calculável, substituições, linha do tempo e avaliação. Descartar
+  exige digitar `DESCARTAR`; a alternativa oferecida é encerrar guardando o que foi feito.
+- **`/treinos/hoje`** — ganhou **Iniciar treino**; sessão em andamento tem precedência.
+- **`/treinos/configuracoes`** — locais de treino e estoque de anilhas de cada um.
+
+### Sem prescrição, sem diagnóstico
+Dor registrada gera aviso neutro, preserva o registro, oferece adaptar ou encerrar e sugere
+orientação profissional — sem diagnóstico e **sem nenhuma sugestão de aumento de carga**.
+Calorias de equipamento são sempre rotuladas como estimativa. Substituir é registro, e a tela diz
+explicitamente que o sistema **não afirma equivalência** entre os exercícios.
+
+### Segurança — verificado no banco pela role `authenticated`
+Ler, editar e excluir sessão, exercício e série de terceiro: **0 linhas** em todos os casos.
+Inserir com `user_id` alheio nas duas tabelas: **bloqueado**. Duas sessões em execução, dois
+descansos ativos, duas pausas abertas, duas séries com o mesmo número, `client_mutation_id`
+repetido, concluir sem `ended_at`, encerrar descanso sem tempo real, dois locais padrão e anilha
+repetida: **todos bloqueados**. Integridade reconferida: 106 exercícios, 0 resíduo de teste.
+
+### Verificação
+`npm run lint` (0 erros), `npx tsc --noEmit` (0 erros), `npm run test:run` (**1297 testes**, de
+1132) e `npm run build` passam. Suíte verde também em `TZ=UTC`. Smoke test: `/treinos/sessao`,
+`/treinos/sessao/preparar` e `/treinos/sessao/revisar` → 307 `/login`; `/api/cron/*` → 401.
+Fora de `training`/`treinos`, nada foi tocado.
 
 ---
 

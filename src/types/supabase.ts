@@ -5146,6 +5146,83 @@ export type Database = {
           },
         ]
       }
+      training_location_plates: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          location_id: string
+          notes: string | null
+          quantity: number
+          updated_at: string
+          user_id: string
+          weight_kg: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: string
+          location_id: string
+          notes?: string | null
+          quantity?: number
+          updated_at?: string
+          user_id: string
+          weight_kg: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          location_id?: string
+          notes?: string | null
+          quantity?: number
+          updated_at?: string
+          user_id?: string
+          weight_kg?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_location_plates_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "training_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_locations: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          notes: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          notes?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       training_muscle_groups: {
         Row: {
           archived_at: string | null
@@ -5453,6 +5530,686 @@ export type Database = {
           },
           {
             foreignKeyName: "training_scheduled_workouts_workout_id_fkey"
+            columns: ["workout_id"]
+            isOneToOne: false
+            referencedRelation: "training_workouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_session_events: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          kind: string
+          occurred_at: string
+          payload: Json
+          session_exercise_id: string | null
+          session_id: string
+          session_set_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          kind: string
+          occurred_at?: string
+          payload?: Json
+          session_exercise_id?: string | null
+          session_id: string
+          session_set_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          kind?: string
+          occurred_at?: string
+          payload?: Json
+          session_exercise_id?: string | null
+          session_id?: string
+          session_set_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_session_events_session_exercise_id_fkey"
+            columns: ["session_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_session_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_events_session_set_id_fkey"
+            columns: ["session_set_id"]
+            isOneToOne: false
+            referencedRelation: "training_session_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_session_exercises: {
+        Row: {
+          counts_in_volume: boolean
+          created_at: string
+          ended_at: string | null
+          equipment_snapshot: string | null
+          executed_position: number
+          exercise_id: string | null
+          exercise_name_snapshot: string
+          id: string
+          increment_kg: number | null
+          is_extra: boolean
+          is_warmup: boolean
+          laterality: string
+          movement_pattern_snapshot: string | null
+          muscle_group_snapshot: string | null
+          notes: string | null
+          planned_position: number
+          replaced_session_exercise_id: string | null
+          rest_seconds: number | null
+          session_id: string
+          skip_reason: string | null
+          started_at: string | null
+          status: string
+          superset_group: string | null
+          technique: string | null
+          tracking_type: string
+          updated_at: string
+          user_id: string
+          workout_exercise_id: string | null
+        }
+        Insert: {
+          counts_in_volume?: boolean
+          created_at?: string
+          ended_at?: string | null
+          equipment_snapshot?: string | null
+          executed_position?: number
+          exercise_id?: string | null
+          exercise_name_snapshot: string
+          id?: string
+          increment_kg?: number | null
+          is_extra?: boolean
+          is_warmup?: boolean
+          laterality?: string
+          movement_pattern_snapshot?: string | null
+          muscle_group_snapshot?: string | null
+          notes?: string | null
+          planned_position?: number
+          replaced_session_exercise_id?: string | null
+          rest_seconds?: number | null
+          session_id: string
+          skip_reason?: string | null
+          started_at?: string | null
+          status?: string
+          superset_group?: string | null
+          technique?: string | null
+          tracking_type: string
+          updated_at?: string
+          user_id: string
+          workout_exercise_id?: string | null
+        }
+        Update: {
+          counts_in_volume?: boolean
+          created_at?: string
+          ended_at?: string | null
+          equipment_snapshot?: string | null
+          executed_position?: number
+          exercise_id?: string | null
+          exercise_name_snapshot?: string
+          id?: string
+          increment_kg?: number | null
+          is_extra?: boolean
+          is_warmup?: boolean
+          laterality?: string
+          movement_pattern_snapshot?: string | null
+          muscle_group_snapshot?: string | null
+          notes?: string | null
+          planned_position?: number
+          replaced_session_exercise_id?: string | null
+          rest_seconds?: number | null
+          session_id?: string
+          skip_reason?: string | null
+          started_at?: string | null
+          status?: string
+          superset_group?: string | null
+          technique?: string | null
+          tracking_type?: string
+          updated_at?: string
+          user_id?: string
+          workout_exercise_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_session_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_exercises_replaced_session_exercise_id_fkey"
+            columns: ["replaced_session_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_session_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_exercises_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_exercises_workout_exercise_id_fkey"
+            columns: ["workout_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_workout_exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_session_pauses: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          reason: string | null
+          session_id: string
+          started_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          reason?: string | null
+          session_id: string
+          started_at: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          reason?: string | null
+          session_id?: string
+          started_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_session_pauses_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_session_rests: {
+        Row: {
+          actual_seconds: number | null
+          adjustment_seconds: number
+          created_at: string
+          end_kind: string | null
+          ended_at: string | null
+          id: string
+          planned_seconds: number
+          session_exercise_id: string | null
+          session_id: string
+          session_set_id: string | null
+          started_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_seconds?: number | null
+          adjustment_seconds?: number
+          created_at?: string
+          end_kind?: string | null
+          ended_at?: string | null
+          id?: string
+          planned_seconds?: number
+          session_exercise_id?: string | null
+          session_id: string
+          session_set_id?: string | null
+          started_at: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actual_seconds?: number | null
+          adjustment_seconds?: number
+          created_at?: string
+          end_kind?: string | null
+          ended_at?: string | null
+          id?: string
+          planned_seconds?: number
+          session_exercise_id?: string | null
+          session_id?: string
+          session_set_id?: string | null
+          started_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_session_rests_session_exercise_id_fkey"
+            columns: ["session_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_session_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_rests_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_rests_session_set_id_fkey"
+            columns: ["session_set_id"]
+            isOneToOne: false
+            referencedRelation: "training_session_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_session_sets: {
+        Row: {
+          additional_weight_kg: number | null
+          assistance_weight_kg: number | null
+          calories: number | null
+          client_mutation_id: string
+          completed_at: string | null
+          counts_in_volume: boolean
+          created_at: string
+          difficulty: string | null
+          distance_m: number | null
+          duration_seconds: number | null
+          id: string
+          incline_percent: number | null
+          is_personal_record: boolean
+          is_warmup: boolean
+          notes: string | null
+          planned_additional_weight_kg: number | null
+          planned_assistance_weight_kg: number | null
+          planned_distance_m: number | null
+          planned_duration_seconds: number | null
+          planned_reps_max: number | null
+          planned_reps_min: number | null
+          planned_rest_seconds: number | null
+          planned_rir: number | null
+          planned_rpe: number | null
+          planned_weight_kg: number | null
+          reps: number | null
+          reps_left: number | null
+          reps_right: number | null
+          resistance_level: number | null
+          rir: number | null
+          rpe: number | null
+          session_exercise_id: string
+          session_id: string
+          set_number: number
+          set_type: string
+          status: string
+          updated_at: string
+          user_id: string
+          weight_kg: number | null
+          weight_left_kg: number | null
+          weight_right_kg: number | null
+        }
+        Insert: {
+          additional_weight_kg?: number | null
+          assistance_weight_kg?: number | null
+          calories?: number | null
+          client_mutation_id: string
+          completed_at?: string | null
+          counts_in_volume?: boolean
+          created_at?: string
+          difficulty?: string | null
+          distance_m?: number | null
+          duration_seconds?: number | null
+          id?: string
+          incline_percent?: number | null
+          is_personal_record?: boolean
+          is_warmup?: boolean
+          notes?: string | null
+          planned_additional_weight_kg?: number | null
+          planned_assistance_weight_kg?: number | null
+          planned_distance_m?: number | null
+          planned_duration_seconds?: number | null
+          planned_reps_max?: number | null
+          planned_reps_min?: number | null
+          planned_rest_seconds?: number | null
+          planned_rir?: number | null
+          planned_rpe?: number | null
+          planned_weight_kg?: number | null
+          reps?: number | null
+          reps_left?: number | null
+          reps_right?: number | null
+          resistance_level?: number | null
+          rir?: number | null
+          rpe?: number | null
+          session_exercise_id: string
+          session_id: string
+          set_number: number
+          set_type?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          weight_kg?: number | null
+          weight_left_kg?: number | null
+          weight_right_kg?: number | null
+        }
+        Update: {
+          additional_weight_kg?: number | null
+          assistance_weight_kg?: number | null
+          calories?: number | null
+          client_mutation_id?: string
+          completed_at?: string | null
+          counts_in_volume?: boolean
+          created_at?: string
+          difficulty?: string | null
+          distance_m?: number | null
+          duration_seconds?: number | null
+          id?: string
+          incline_percent?: number | null
+          is_personal_record?: boolean
+          is_warmup?: boolean
+          notes?: string | null
+          planned_additional_weight_kg?: number | null
+          planned_assistance_weight_kg?: number | null
+          planned_distance_m?: number | null
+          planned_duration_seconds?: number | null
+          planned_reps_max?: number | null
+          planned_reps_min?: number | null
+          planned_rest_seconds?: number | null
+          planned_rir?: number | null
+          planned_rpe?: number | null
+          planned_weight_kg?: number | null
+          reps?: number | null
+          reps_left?: number | null
+          reps_right?: number | null
+          resistance_level?: number | null
+          rir?: number | null
+          rpe?: number | null
+          session_exercise_id?: string
+          session_id?: string
+          set_number?: number
+          set_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          weight_kg?: number | null
+          weight_left_kg?: number | null
+          weight_right_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_session_sets_session_exercise_id_fkey"
+            columns: ["session_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_session_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_sets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_session_substitutions: {
+        Row: {
+          created_at: string
+          id: string
+          new_session_exercise_id: string | null
+          occurred_at: string
+          original_exercise_id: string | null
+          original_name_snapshot: string
+          original_session_exercise_id: string | null
+          reason: string
+          reason_notes: string | null
+          session_id: string
+          substitute_exercise_id: string | null
+          substitute_name_snapshot: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          new_session_exercise_id?: string | null
+          occurred_at?: string
+          original_exercise_id?: string | null
+          original_name_snapshot: string
+          original_session_exercise_id?: string | null
+          reason?: string
+          reason_notes?: string | null
+          session_id: string
+          substitute_exercise_id?: string | null
+          substitute_name_snapshot: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          new_session_exercise_id?: string | null
+          occurred_at?: string
+          original_exercise_id?: string | null
+          original_name_snapshot?: string
+          original_session_exercise_id?: string | null
+          reason?: string
+          reason_notes?: string | null
+          session_id?: string
+          substitute_exercise_id?: string | null
+          substitute_name_snapshot?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_session_substitution_original_session_exercise_id_fkey"
+            columns: ["original_session_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_session_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_substitutions_new_session_exercise_id_fkey"
+            columns: ["new_session_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_session_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_substitutions_original_exercise_id_fkey"
+            columns: ["original_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_substitutions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_session_substitutions_substitute_exercise_id_fkey"
+            columns: ["substitute_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_sessions: {
+        Row: {
+          active_seconds: number | null
+          auto_advance: string
+          body_weight_kg: number | null
+          created_at: string
+          default_rest_seconds: number
+          ended_at: string | null
+          energy_level: number | null
+          felt_pain: boolean
+          id: string
+          keep_screen_awake: boolean
+          location_id: string | null
+          mood_level: number | null
+          notes: string | null
+          origin_kind: string
+          pain_notes: string | null
+          pause_total_seconds: number | null
+          perceived_effort: number | null
+          pre_notes: string | null
+          program_id: string | null
+          program_name_snapshot: string | null
+          rating: number | null
+          rest_total_seconds: number | null
+          scheduled_workout_id: string | null
+          session_date: string
+          sleep_quality: number | null
+          soreness_level: number | null
+          sound_enabled: boolean
+          started_at: string | null
+          status: string
+          total_seconds: number | null
+          updated_at: string
+          user_id: string
+          vibration_enabled: boolean
+          weight_unit: string
+          workout_id: string | null
+          workout_name_snapshot: string
+          workout_short_name_snapshot: string | null
+          workout_snapshot: Json
+          workout_version: number | null
+        }
+        Insert: {
+          active_seconds?: number | null
+          auto_advance?: string
+          body_weight_kg?: number | null
+          created_at?: string
+          default_rest_seconds?: number
+          ended_at?: string | null
+          energy_level?: number | null
+          felt_pain?: boolean
+          id?: string
+          keep_screen_awake?: boolean
+          location_id?: string | null
+          mood_level?: number | null
+          notes?: string | null
+          origin_kind?: string
+          pain_notes?: string | null
+          pause_total_seconds?: number | null
+          perceived_effort?: number | null
+          pre_notes?: string | null
+          program_id?: string | null
+          program_name_snapshot?: string | null
+          rating?: number | null
+          rest_total_seconds?: number | null
+          scheduled_workout_id?: string | null
+          session_date: string
+          sleep_quality?: number | null
+          soreness_level?: number | null
+          sound_enabled?: boolean
+          started_at?: string | null
+          status?: string
+          total_seconds?: number | null
+          updated_at?: string
+          user_id: string
+          vibration_enabled?: boolean
+          weight_unit?: string
+          workout_id?: string | null
+          workout_name_snapshot: string
+          workout_short_name_snapshot?: string | null
+          workout_snapshot?: Json
+          workout_version?: number | null
+        }
+        Update: {
+          active_seconds?: number | null
+          auto_advance?: string
+          body_weight_kg?: number | null
+          created_at?: string
+          default_rest_seconds?: number
+          ended_at?: string | null
+          energy_level?: number | null
+          felt_pain?: boolean
+          id?: string
+          keep_screen_awake?: boolean
+          location_id?: string | null
+          mood_level?: number | null
+          notes?: string | null
+          origin_kind?: string
+          pain_notes?: string | null
+          pause_total_seconds?: number | null
+          perceived_effort?: number | null
+          pre_notes?: string | null
+          program_id?: string | null
+          program_name_snapshot?: string | null
+          rating?: number | null
+          rest_total_seconds?: number | null
+          scheduled_workout_id?: string | null
+          session_date?: string
+          sleep_quality?: number | null
+          soreness_level?: number | null
+          sound_enabled?: boolean
+          started_at?: string | null
+          status?: string
+          total_seconds?: number | null
+          updated_at?: string
+          user_id?: string
+          vibration_enabled?: boolean
+          weight_unit?: string
+          workout_id?: string | null
+          workout_name_snapshot?: string
+          workout_short_name_snapshot?: string | null
+          workout_snapshot?: Json
+          workout_version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_sessions_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "training_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_sessions_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "training_programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_sessions_scheduled_workout_id_fkey"
+            columns: ["scheduled_workout_id"]
+            isOneToOne: false
+            referencedRelation: "training_scheduled_workouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_sessions_workout_id_fkey"
             columns: ["workout_id"]
             isOneToOne: false
             referencedRelation: "training_workouts"

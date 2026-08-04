@@ -8,8 +8,8 @@ usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 
 **As Subfases 16-A, 16-B, 16-C e 16-D estão concluídas e aplicadas no banco.** Crie um branch novo.
 
 > ⚠️ **Há outra frente em paralelo.** Em 2026-08-03 também foi aberta a **Fase 17 — Módulo
-> Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a **17-A e a 17-B
-> concluídas**. As duas fases convivem no mesmo repositório e no mesmo banco. Antes de mexer em
+> Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a **17-A, a 17-B e
+> a 17-C concluídas**. As duas fases convivem no mesmo repositório e no mesmo banco. Antes de mexer em
 > `docs/project/PROJECT_ROADMAP.md`, `CURRENT_STATUS.md` ou `src/types/supabase.ts`, **leia o
 > arquivo primeiro e edite de forma pontual** — sobrescrever levaria embora o trabalho da
 > outra frente. Ponto de contato entre elas: **medidas corporais são `body_*`**, um módulo
@@ -21,7 +21,7 @@ usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 
 | Frente | Próxima subfase | Arquivo |
 | --- | --- | --- |
 | **Dieta e Alimentação** | **16-E** — Medidas, fotos de evolução e relatórios | `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` |
-| **Treinos** | **17-C** — Preparação, sessão ao vivo, cronômetro e recuperação | `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md` |
+| **Treinos** | **17-D** — Histórico, volume, recordes e progressão | `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` |
 
 ⚠️ **As duas frentes SE ENCONTRAM AGORA.** A 16-E é a Subfase E da Dieta: é nela que as
 **medidas corporais compartilhadas (`body_*`)** entram. Quem chegar primeiro (16-E ou 17-E)
@@ -81,86 +81,82 @@ insumo do estimador de gasto energético: não é histórico de medida e não su
 
 ---
 
-## ▶️ Frente Treinos: Subfase 17-C — Preparação, sessão ao vivo, cronômetro e recuperação
+## ▶️ Frente Treinos: Subfase 17-D — Histórico, volume, recordes e progressão
 
 **Arquivo da fase (leia inteiro antes de codar):**
-`docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md`
-
-> É **a subfase mais importante do módulo** — a tela que o usuário abre suado, com uma mão só,
-> num celular, com Wi-Fi ruim, no meio da academia.
+`docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`
 
 **Leitura obrigatória, nesta ordem:**
 1. `docs/project/PROJECT_RULES.md`
-2. `docs/project/PROJECT_ARCHITECTURE.md` (seção "Módulo Treinos")
+2. `docs/project/PROJECT_ARCHITECTURE.md` (seção "Módulo Treinos", em especial "A sessão ao vivo")
 3. `docs/project/PROJECT_ROADMAP.md` (Fase 17, tabela das subfases)
 4. `docs/project/CURRENT_STATUS.md`
 5. `docs/handoff/LAST_PHASE_SUMMARY.md`
-6. `docs/phases/PHASE_17_A_TRAINING_FOUNDATION_EXERCISES.md` e
-   `PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` (o que já existe)
-7. `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md` (o que você vai fazer)
-8. `docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md` — referência de **snapshot imutável**
-   (`nutrition_diary_entries`): mesmo princípio, outro domínio.
+6. `docs/phases/PHASE_17_A_…`, `PHASE_17_B_…` e `PHASE_17_C_TRAINING_LIVE_SESSION.md`
+7. `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` (o que você vai fazer)
 
 **Código que você precisa entender antes de escrever qualquer linha:**
-`src/lib/training/tracking.ts`, **`workout.ts` (`expandPlannedSets`)**, **`schedule.ts`**,
-`constants.ts`, `types.ts`, `queries.ts`, `routine-queries.ts` e as actions
-`src/lib/actions/training-{exercises,programs,workouts,schedule}.ts`.
+`src/lib/training/tracking.ts`, `workout.ts` (`expandPlannedSets`), **`session-snapshot.ts`**,
+**`session-machine.ts`** (`deriveExerciseStatus`, `isSetDone`), `session-flow.ts`, `timers.ts`,
+**`previous.ts`**, `plates.ts`, `constants.ts`, `types.ts`, **`session-queries.ts`** e as actions
+`src/lib/actions/training-{sessions,locations,workouts,schedule}.ts`.
 
-### ⛔ O que você recebe pronto e NÃO deve reimplementar
+### ⛔ A regra que você NÃO pode quebrar
+
+**LEIA SEMPRE O SNAPSHOT, NUNCA O MODELO ATUAL.** A sessão congelou tudo ao iniciar: nome do
+treino, nome do exercício, `tracking_type`, lateralidade, séries previstas e cargas planejadas
+estão em `training_session_exercises` / `training_session_sets` e em
+`training_sessions.workout_snapshot`. `session-queries.ts` **não tem uma única referência a
+`training_workouts`** — mantenha assim.
+
+Se um gráfico de evolução mudar porque o usuário renomeou um exercício ou editou o treino, a
+17-C foi violada. Existe teste no banco provando que hoje isso não acontece (editar e até
+**excluir** o modelo não muda a sessão registrada) — não crie o caminho de volta.
+
+### 📌 O que a 17-C deixou pronto para você
 
 | Já existe | Onde |
 | --- | --- |
-| **Formato único de série planejada** (`PlannedSet[]`) | `expandPlannedSets`, em `src/lib/training/workout.ts` |
-| Matriz de medição (quais campos cada exercício usa) | `src/lib/training/tracking.ts` |
-| Validação de superset (contiguidade) | `validateSupersets`, em `workout.ts` |
-| Status derivado do planejado (`atrasado`/`hoje`) | `derivePlannedStatus`, em `schedule.ts` |
-| Duração estimada e séries por grupo muscular | `summarizeWorkout`, em `workout.ts` |
+| Snapshot congelado + leitura por sessão | `session-snapshot.ts`, `session-queries.ts` |
+| `deriveExerciseStatus`, `isSetDone`, `isSetResolved` | `session-machine.ts` |
+| Tempos (total, ativo, pausado, descanso) por timestamp | `timers.ts` (`sessionTimes`) |
+| "Última vez", melhor marca e comparação | `previous.ts` |
+| `getExerciseHistory(exerciseIds)` — séries já executadas, sem tocar no modelo | `session-queries.ts` |
+| `getRecentSessions(limit)` — lista leve, sem carregar séries | `session-queries.ts` |
+| Carga efetiva com sinal correto (assistência subtrai) | `tracking.ts` (`effectiveLoadKg`) |
 
-### ⛔ A regra inegociável da 17-C
+### 🧭 Três avisos concretos da 17-C para a 17-D
 
-**Ao iniciar a sessão, CONGELE tudo isso num snapshot** (`training_sessions.workout_snapshot`
-+ linhas próprias de exercício e série) e **nunca mais leia o modelo** para renderizar uma
-sessão passada. `workout_id` e `exercise_id` continuam gravados como referência informativa
-(`on delete set null`), jamais como fonte de leitura.
-
-Teste explícito exigido: **editar o treino-modelo depois e conferir que a sessão registrada não
-mudou**.
-
-### 🧭 Dois pontos de contato que a 17-B deixou preparados
-- `training_scheduled_workouts` **não tem** coluna apontando para sessão, de propósito. Quem
-  cria a referência é a 17-C, do lado dela.
-- O status `concluido` já existe no CHECK do planejamento, mas **a 17-B nunca o grava**: é a
-  sessão que conclui um dia planejado. Não existe "concluído manual" para reconciliar.
+1. **`training_session_sets.is_personal_record` é só um MARCADOR** gravado no calor da sessão.
+   A consolidação, a desduplicação e o histórico de recordes são **seu** trabalho.
+2. **Séries com unidades diferentes NUNCA se somam.** `tracking.ts` diz em que unidade cada
+   exercício acumula volume (`kg`, `reps`, `segundos`, `distancia`, `calorias`, `nenhum`).
+   A revisão da 17-C já soma tonelagem só das séries com carga calculável e **marca o total como
+   parcial** quando alguma fica de fora — repita essa disciplina em todo agregado.
+3. **`src/lib/training/metrics.ts` é seu**, e deve ser para a 17-D o que `calc.ts` é para a
+   Dieta: **todo** número agregado do módulo (volume, 1RM estimado, frequência, recorde) sai de
+   lá. Histórico, gráfico, dashboard e relatório precisam concordar entre si.
 
 ### ⛔ Invariantes do módulo Treinos que NÃO podem ser quebradas
 
-1. **`tracking.ts` É A ÚNICA MATRIZ DE MEDIÇÃO.** O que cada exercício mede sai dali —
-   formulário, treino-modelo, sessão (17-C), volume (17-D) e relatório (17-E). Reimplementar
-   a matriz faz o módulo somar quilos com segundos.
+1. **`tracking.ts` É A ÚNICA MATRIZ DE MEDIÇÃO.** Reimplementá-la faz o módulo somar quilos com
+   segundos.
 2. **ASSISTÊNCIA SUBTRAI CARGA, CARGA ADICIONAL SOMA.** Já testado; não inverta o sinal.
 3. **SEM PESO CORPORAL, A CARGA EFETIVA É INDISPONÍVEL — NUNCA ZERO.** Agregado incompleto é
-   marcado como parcial, com o motivo.
-4. **A BASE DO SISTEMA É IMUTÁVEL.** `user_id is null` = somente leitura, policies separadas
-   por comando + três constraints amarradas. Favoritar/arquivar/apelidar grava em
-   `training_exercise_prefs`. Duplicar cria cópia com `origin_exercise_id`.
-5. **MODELO É MUTÁVEL; EXECUÇÃO É IMUTÁVEL.** A 17-B constrói o modelo sabendo que a 17-C tira
-   um **snapshot** ao iniciar a sessão. **Não crie vínculo vivo entre sessão e modelo** —
-   senão editar o treino reescreve o passado.
-6. **STATUS DERIVADO NA LEITURA.** "Em andamento" e "atrasado" do planejamento saem de data +
-   agora, como `atrasada` no TO-DO e o status da fatura. Não persista.
-7. **NENHUMA EXCLUSÃO SILENCIOSA.** Excluir programa/treino pergunta o destino do que
-   dependia dele.
-8. **NENHUM ASSET DE TERCEIROS.** Sem imagem, vídeo, ícone, texto ou base de dados copiados de
-   apps de treino. Referência é funcional apenas, e a procedência fica escrita.
-9. **SEM PRESCRIÇÃO.** Objetivo e nível são organizacionais. O módulo não recomenda treino,
-   não avalia lesão, não promete resultado e nunca sugere tentativa de carga máxima.
-10. **DATA PURA `'yyyy-MM-dd'`** para o dia planejado + hora em coluna `time`; aritmética em
-    `Date.UTC` nas funções puras, nunca `Date.now()`.
-
-### 🧭 O que a 17-B precisa entregar para a 17-C não sofrer
-`expandPlannedSets` — um formato **único** de série planejada, que resolve tanto o caso
-uniforme (`default_sets`) quanto o configurado série a série (`training_workout_sets`). A
-sessão ao vivo deve consumir só esse formato.
+   marcado como parcial, com o motivo. O peso do dia está em `training_sessions.body_weight_kg`.
+4. **A BASE DO SISTEMA É IMUTÁVEL** (`user_id is null`, policies separadas por comando).
+5. **MODELO É MUTÁVEL; EXECUÇÃO É IMUTÁVEL.** Ver a regra em destaque acima.
+6. **STATUS DERIVADO NA LEITURA.** `atrasado`/`hoje` do planejamento e `parcial`/`concluido` do
+   exercício da sessão são derivados, nunca gravados.
+7. **NENHUMA EXCLUSÃO SILENCIOSA.** Descartar sessão exige confirmação reforçada (digitar a
+   palavra); excluir programa/treino pergunta o destino do que dependia dele.
+8. **NENHUM ASSET DE TERCEIROS** — nem imagem, nem vídeo, nem som (o bipe do descanso é gerado
+   por Web Audio de propósito).
+9. **SEM PRESCRIÇÃO.** Nada de sugerir carga máxima, diagnosticar dor ou prometer resultado.
+   Dor registrada gera aviso neutro e **nenhuma sugestão de aumento de carga**.
+10. **DATA PURA `'yyyy-MM-dd'`** para o dia (`session_date`, `scheduled_date`); instante é
+    `timestamptz` e se lê com `dateInSaoPaulo`/`timeInSaoPaulo`. Aritmética em `Date.UTC` nas
+    funções puras, `hojeISO()` no servidor. **Nunca `toISOString().slice(0,10)`.**
 
 ---
 
@@ -292,7 +288,7 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
 
-Os testes existentes devem continuar passando (**1.132** ao fim da 16-D; as duas frentes
+Os testes existentes devem continuar passando (**1.297** ao fim da 17-C; as duas frentes
 acrescentam testes em paralelo, então **rode antes de citar um número**) — e acrescente testes
 para toda lógica pura nova.
 A suíte precisa passar em qualquer fuso — confira com `TZ=UTC npx vitest run`.
@@ -305,6 +301,10 @@ Smoke test: rotas privadas → 307 `/login`; `/api/cron/*` → 401 sem segredo.
   `src/lib/actions/nutrition-{foods,diary,goals,plans,shopping}.ts`,
   `src/components/nutrition/*`, `src/app/(app)/nutricao/*`, `scripts/nutrition/*`,
   `data/nutrition/taco-4/*`.
+- **Treinos:** `src/lib/training/*` (puro + queries; destaque para `tracking.ts`, `workout.ts`,
+  `schedule.ts`, `session-machine.ts`, `session-flow.ts`, `timers.ts`, `previous.ts`,
+  `plates.ts`, `session-snapshot.ts`), `src/lib/actions/training-*.ts`,
+  `src/components/training/*` (+ `session/`), `src/app/(app)/treinos/*`.
 - **TO-DO:** `src/lib/todo/*` — referência de recorrência pura em `Date.UTC`.
 - **Financeiro/relatórios:** `src/lib/finance/*`, `src/lib/reports/*`.
 - **Preferências:** store `settings` (uma linha/usuário) — **estenda com chaves novas**,
