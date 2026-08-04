@@ -105,6 +105,9 @@ O veredito item a item dos 55 critérios da Fase 17 e dos 40 da Fase 16 está em
 2. `docs/project/PROJECT_ARCHITECTURE.md` (a seção do módulo que você vai mexer)
 3. `docs/project/CURRENT_STATUS.md`
 4. `CLAUDE.md` da raiz — em especial **"Layout responsivo — 5 regras que vieram de bugs reais"**
+   e a regra **"campo de TEXTO nunca é controlado pelo valor da URL"** (em "Camadas e fluxo de
+   dados"): as duas saíram de defeitos que chegaram a produção e não aparecem no desktop de
+   quem escreveu a tela
 5. O arquivo da fase que criou a área (`docs/phases/PHASE_*`)
 6. As invariantes dos dois módulos, listadas abaixo — elas continuam valendo integralmente
 
@@ -330,6 +333,9 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 - **pt-BR / BRL**, datas BR, **dark/light** e responsividade reais em tudo.
 - **React Compiler ativo:** use `useWatch`/`Controller`, nunca `form.watch()` nem `setState`
   em `useEffect` (ajuste de estado durante o render é o padrão adotado).
+- **Campo de TEXTO nunca é controlado pelo valor da URL.** Filtro na URL vale para clique, não
+  para digitação: as páginas são `force-dynamic`, então gravar a cada tecla faz o campo esperar
+  o servidor e digitar rápido perde caractere. Use `useUrlText` (correção de 2026-08-04, 5 telas).
 
 ## ✅ Verificação obrigatória antes de fechar qualquer mudança
 
@@ -364,6 +370,11 @@ Smoke test: rotas privadas → 307 `/login`; `/api/cron/*` → 401 sem segredo.
 - **Anexos genéricos:** tabela `attachments` + bucket privado `attachments`
   (`{user_id}/…`) — é o que a foto de receita (16-C) e a de evolução (16-E) devem usar.
 - **Notificações:** `src/lib/notifications/*` com `dedupe_key` + Cron da Vercel.
+- **Campo de busca que alimenta a URL:** `useUrlText` (`src/lib/forms/use-url-text.ts`), com as
+  decisões puras em `url-text-sync.ts`. **Já está nas 5 telas que tinham o problema** — use ao
+  criar qualquer busca nova, não reescreva o debounce.
+- **Escolher UM exercício digitando:** `src/components/training/exercise-search-picker.tsx`
+  (reusa `matchesSearch` da 17-A). Um `Select` cru com o catálogo inteiro dentro não serve.
 
 ## 🧩 Os dois módulos de tarefas continuam coexistindo (proposital)
 

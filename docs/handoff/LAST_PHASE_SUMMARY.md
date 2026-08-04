@@ -7,6 +7,34 @@
 
 ---
 
+## Correção avulsa (2026-08-04) — busca travando ao digitar · **não é subfase**
+
+Tarefa de manutenção, em paralelo à 18-A. Três defeitos relatados no módulo Treinos; a varredura
+mostrou que o primeiro era um **padrão em 5 telas**, inclusive fora de Treinos.
+
+| Defeito | Causa-raiz | Correção |
+| --- | --- | --- |
+| Digitar na busca travava e atrasava | Input controlado pelo **valor da URL**: cada tecla chamava `router.replace` e, em página `force-dynamic`, o campo só atualizava após a ida ao servidor | `useUrlText` — texto local, URL depois de 300 ms |
+| Grupo muscular trazia secundários ao adicionar exercício ao treino | O picker espalhava `EMPTY_EXERCISE_FILTERS` (`includeSecondary: true`) e **não tem o toggle** que o catálogo tem | `exercisePickerFilters`, função nomeada e testada |
+| Escolher alternativa/substituto sem poder digitar | Dois `Select` crus com o catálogo inteiro (um com até 200 itens) | `ExerciseSearchPicker`, reusando `matchesSearch` da 17-A |
+
+Telas do primeiro: `treinos/exercicios`, `treinos/treinos`, `treinos/programas`,
+`treinos/historico` e `nutricao/alimentos`.
+
+**O que quase passou:** a primeira versão da correção tinha o mesmo defeito que combatia — se o
+usuário seguisse digitando enquanto a gravação anterior estava em voo, o eco atrasado da URL
+devolvia o texto antigo ao campo. Um teste puro pegou antes do deploy; a decisão passou a
+comparar também com o último valor gravado, distinguindo **eco próprio** de **mudança externa**
+(limpar filtros, voltar).
+
+**Para reaproveitar:** `src/lib/forms/use-url-text.ts` + `url-text-sync.ts` (puro, testado) e
+`src/components/training/exercise-search-picker.tsx`. Regra registrada no `CLAUDE.md`.
+
+⚠️ **Limite da verificação:** testes, lint, tsc, build e smoke de rota — **as três telas não
+foram exercitadas na aplicação rodando** (atrás do login, sem sessão disponível).
+
+---
+
 ## Fase 18-A — IA · Fundação, provedores e chat (2026-08-04) ✅ **IMPLEMENTADA E VERIFICADA**
 
 **A 18-A para antes de encostar nos dados, de propósito.** O risco desta subfase nunca foi a IA
