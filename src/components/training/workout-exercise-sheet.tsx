@@ -31,6 +31,7 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ExerciseSearchPicker } from "@/components/training/exercise-search-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
@@ -816,7 +817,6 @@ function AlternativesTab({
   catalog: ExerciseListItem[];
   onChanged: () => void;
 }) {
-  const [choice, setChoice] = React.useState("");
   const [working, setWorking] = React.useState(false);
 
   const taken = new Set([item.exerciseId, ...item.alternatives.map((a) => a.alternativeExerciseId)]);
@@ -829,7 +829,6 @@ function AlternativesTab({
       alternative_exercise_id: exerciseId,
     });
     setWorking(false);
-    setChoice("");
     if (!result.ok) {
       toast.error(result.error);
       return;
@@ -878,25 +877,15 @@ function AlternativesTab({
         </ul>
       )}
 
-      <Select
-        value={choice}
-        onValueChange={(value) => {
-          setChoice(value);
-          add(value);
-        }}
+      <ExerciseSearchPicker
+        exercises={available}
+        onSelect={add}
         disabled={working}
-      >
-        <SelectTrigger aria-label="Adicionar alternativa">
-          <SelectValue placeholder="Adicionar alternativa…" />
-        </SelectTrigger>
-        <SelectContent>
-          {available.slice(0, 200).map((exercise) => (
-            <SelectItem key={exercise.id} value={exercise.id}>
-              {exercise.displayName}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        className="w-full"
+        triggerLabel="Adicionar alternativa…"
+        title="Escolher alternativa"
+        description="Vale só para este exercício neste treino."
+      />
     </>
   );
 }

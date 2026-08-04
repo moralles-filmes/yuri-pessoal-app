@@ -20,14 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ExerciseSearchPicker } from "@/components/training/exercise-search-picker";
 import { Textarea } from "@/components/ui/textarea";
 import {
   EXERCISE_SOURCE_LABELS,
@@ -290,8 +284,9 @@ function AlternativesTab({
         (item.movementPattern === exercise.movementPattern ? 0 : 1) +
         (item.primaryMuscleGroupId === exercise.primaryMuscleGroupId ? 0 : 2);
       return score(a) - score(b) || a.displayName.localeCompare(b.displayName, "pt-BR");
-    })
-    .slice(0, 200);
+    });
+
+  const chosen = candidates.find((item) => item.id === selected) ?? null;
 
   async function add() {
     if (!selected) return;
@@ -359,18 +354,14 @@ function AlternativesTab({
 
       <div className="space-y-2">
         <Label className="text-xs text-muted-foreground">Adicionar alternativa</Label>
-        <Select value={selected} onValueChange={setSelected}>
-          <SelectTrigger aria-label="Exercício alternativo">
-            <SelectValue placeholder="Escolha um exercício" />
-          </SelectTrigger>
-          <SelectContent>
-            {candidates.map((item) => (
-              <SelectItem key={item.id} value={item.id}>
-                {item.displayName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ExerciseSearchPicker
+          exercises={candidates}
+          onSelect={setSelected}
+          className="w-full justify-start"
+          triggerLabel={chosen ? chosen.displayName : "Escolha um exercício"}
+          title="Escolher exercício alternativo"
+          description="A ordem sugerida é a sua prioridade — a busca alcança o catálogo inteiro."
+        />
         <Input
           value={note}
           onChange={(event) => setNote(event.target.value)}

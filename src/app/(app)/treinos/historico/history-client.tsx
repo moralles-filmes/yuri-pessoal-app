@@ -52,6 +52,7 @@ import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { cn } from "@/lib/utils";
+import { useUrlText } from "@/lib/forms/use-url-text";
 import { MetricsSummary } from "@/components/training/metrics-summary";
 import { PeriodBarChart, type ChartPoint } from "@/components/training/training-charts";
 import {
@@ -102,7 +103,15 @@ export function HistoryClient({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const filters = historyFiltersFromParams(params);
+  const urlFilters = React.useMemo(() => historyFiltersFromParams(params), [params]);
+
+  // O texto responde na hora e alcança a URL depois da pausa. Controlado pelo parâmetro, cada
+  // tecla esperava um render inteiro do servidor — esta página é `force-dynamic`.
+  const [search, setSearch] = useUrlText(urlFilters.search, (value) =>
+    setParam("q", value || null),
+  );
+  const filters = React.useMemo(() => ({ ...urlFilters, search }), [urlFilters, search]);
+
   const metricOptions: MetricOptions = {
     includeWarmup: preferences.includeWarmup,
     unilateralRule: preferences.unilateralRule,
@@ -111,7 +120,7 @@ export function HistoryClient({
   const visible = React.useMemo(
     () => applyHistoryFilters(items, filters, metricOptions),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, params],
+    [items, filters],
   );
 
   const period = React.useMemo(
@@ -205,8 +214,8 @@ export function HistoryClient({
             <CardContent className="space-y-3 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Input
-                  value={filters.search}
-                  onChange={(event) => setParam("q", event.target.value || null)}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
                   placeholder="Buscar por treino, exercício, grupo ou local…"
                   className="h-9 min-w-[200px] flex-1"
                   aria-label="Buscar no histórico"

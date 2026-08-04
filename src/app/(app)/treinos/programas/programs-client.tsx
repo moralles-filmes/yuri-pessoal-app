@@ -53,6 +53,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { SortableList } from "@/components/shared/sortable-list";
 import { cn } from "@/lib/utils";
+import { useUrlText } from "@/lib/forms/use-url-text";
 import { normalizeText } from "@/lib/training/filters";
 import {
   PROGRAM_STATUSES,
@@ -97,7 +98,11 @@ export function ProgramsClient({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const search = searchParams.get("q") ?? "";
+  // A busca responde na hora e alcança a URL depois da pausa — controlada pela URL, cada
+  // tecla esperava a ida ao servidor desta página `force-dynamic`.
+  const [search, setSearch] = useUrlText(searchParams.get("q") ?? "", (value) =>
+    setParam("q", value || null),
+  );
   const statusFilter = (searchParams.get("situacao") as ProgramStatus | null) ?? null;
   const goalFilter = (searchParams.get("objetivo") as TrainingGoal | null) ?? null;
   const showArchived = searchParams.get("arquivados") === "1";
@@ -238,7 +243,7 @@ export function ProgramsClient({
       <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
         <Input
           value={search}
-          onChange={(event) => setParam("q", event.target.value || null)}
+          onChange={(event) => setSearch(event.target.value)}
           placeholder="Buscar programa…"
           className="h-9 w-full sm:w-56"
           aria-label="Buscar programa"
