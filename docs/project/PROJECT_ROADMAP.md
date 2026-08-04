@@ -239,7 +239,7 @@ gerais" do arquivo da Subfase F.
 
 ## Fase 17 — Módulo Treinos (6 subfases)
 > **Fora do roadmap original.** Aberta em 2026-08-03, a pedido do usuário, em paralelo à
-> Fase 16 (que continua com as subfases B–F pendentes). Não substitui nem invalida nenhuma
+> Fase 16 (concluída em 2026-08-04). Não substitui nem invalida nenhuma
 > fase anterior. Quebrada em **6 subfases sequenciais (A–F)**, cada uma com arquivo próprio.
 
 **Objetivo:** um módulo central em `/treinos` para **planejar, executar e acompanhar**
@@ -260,7 +260,12 @@ copiado.** A base de exercícios é de autoria própria.
 | 17-C | Preparação, sessão ao vivo, cronômetro e recuperação | `PHASE_17_C_TRAINING_LIVE_SESSION.md` | ✅ Concluída |
 | 17-D | Histórico, volume, recordes e progressão | `PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` | ✅ Concluída |
 | 17-E | Metas, medidas corporais compartilhadas e dashboards | `PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` | ✅ Concluída |
-| 17-F | Integrações, notificações, resiliência e polimento | `PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` | ⬜ Próxima |
+| 17-F | Integrações, notificações, resiliência e polimento | `PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` | ✅ Concluída — **FECHA A FASE 17** |
+
+> ✅ **FASE 17 CONCLUÍDA em 2026-08-04** (17-A a 17-F). Os **55 critérios de aceite gerais do
+> módulo foram validados um a um na 17-F: 55 de 55 atendidos** — o veredito item a item está em
+> `docs/handoff/LAST_PHASE_SUMMARY.md`. Com a Fase 16 também fechada, **o projeto inteiro volta
+> ao modo manutenção/iteração**: não há 17-G, e melhoria entra como tarefa avulsa.
 
 **Dependências gerais:** Fases 01 (design system/app shell), 08 (agenda), 10 (hábitos),
 12 (dashboard geral), 13 (busca global, lançamento rápido, notificações + Cron),

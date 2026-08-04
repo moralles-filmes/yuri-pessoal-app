@@ -1,10 +1,158 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-> ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
-> (✅ **CONCLUÍDA** — 16-A a 16-F, com os 40 critérios de aceite validados) e a **Fase 17 —
-> Módulo Treinos** (17-A a **17-E** concluídas; a 17-F é a próxima e fecha a fase).
+> ✅ **AS DUAS FRENTES ESTÃO CONCLUÍDAS (2026-08-04)**: a **Fase 16 — Dieta e Alimentação**
+> (16-A a 16-F, 40 de 40 critérios) e a **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55
+> critérios). O projeto volta ao modo manutenção/iteração.
 > Este arquivo tem o resumo das duas, na ordem em que foram concluídas — a mais recente
 > primeiro.
+
+---
+
+## Subfase 17-F — Treinos · Integrações, notificações e resiliência (2026-08-04) ✅ **FECHA A FASE 17**
+
+Sexta e última subfase da **Fase 17**. As anteriores entregaram um módulo completo e **isolado**;
+a 17-F o liga à busca global, ao lançamento rápido, às notificações, ao dashboard, à agenda, ao
+TO-DO, à Dieta e aos Hábitos — e valida os **55 critérios de aceite gerais**.
+**3 migrations (1 tabela nova + 2 colunas + 2 FKs compostas), +70 testes puros.** Suíte:
+1.846 → **1.916**.
+
+### ⛔ A regra que a subfase existe para garantir
+
+**NENHUMA DUPLICIDADE DE VERDADE.** O mesmo treino podia virar tarefa no TO-DO, evento na
+agenda, dia planejado no calendário e check-in de hábito. A tabela de fonte de verdade está
+implementada:
+
+- **o treino aconteceu** → `training_sessions`. O hábito "Treinar" **reflete** (upsert na linha
+  única de `habit_logs` do dia); nunca há segundo registro, e excluir a sessão devolve o dia;
+- **está planejado** → `training_scheduled_workouts`. Agenda e TO-DO são espelhos **opcionais**;
+- **peso e medidas** → `body_*` (16-E), o mesmo serviço da Dieta;
+- **dia de treino/descanso** → Treinos responde, **a Dieta consome** (`day-kind.ts`).
+
+### Arquivos criados
+
+**Migrations (3):** `20260806100000_training_calendar_sync.sql`,
+`…100100_training_preferences_habit_link.sql`, `…100200_training_cross_owner_fks.sql`.
+
+**Lógica pura (5 arquivos + 5 de teste, +70):** `src/lib/search/training-links.ts` (+7),
+`src/lib/training/day-kind.ts` (+10), `google-event.ts` (+12), `habit-reflection.ts` (+9),
+`src/lib/notifications/training.ts` (+28). `dashboard/cards.test.ts` e
+`settings/export-tables.test.ts` ganharam os casos da 17-F.
+
+**Servidor:** `src/lib/notifications/training-cron.ts`, `src/lib/training/calendar-sync.ts`,
+`habit-sync.ts`, `day-kind-queries.ts`, `src/lib/actions/training-integrations.ts`,
+`src/lib/actions/training-quick-add.ts`.
+
+**Interface:** `src/components/dashboard/general/training-card.tsx`,
+`src/components/training/{integrations-card,todo-link-dialog}.tsx`,
+`src/components/shared/deep-link-highlight.tsx`.
+
+**Alterados:** `notifications/{constants,generate,cron}.ts` · `settings/constants.ts` ·
+`settings/export-tables.ts` · `search/{types,queries}.ts` · `dashboard/{cards,types,queries}.ts` ·
+`training/{queries,types,history-queries}.ts` · `actions/{training-schedule,training-sessions,training-history}.ts` ·
+`google/tokens.ts` · `calendar/queries.ts` · `types/database.ts` · `nutrition/report-queries.ts` ·
+`components/{quick-add,search,notifications,dashboard}/*` · `agenda/google-connect-card.tsx` ·
+as páginas de `/treinos/{hoje,metas,recordes,programas,configuracoes}` e `/nutricao/diario`.
+
+### ⚠️ A armadilha que só o teste no banco revelou
+
+Pela role `authenticated`, o intruso conseguia inserir
+`training_calendar_sync(user_id = ele, scheduled_workout_id = <dia de outro>)` — a RLS confere o
+`user_id` da **própria linha** e nada sabe sobre a linha apontada. Não vazava dado, mas ocupava
+a chave única `(scheduled_workout_id, provider)`: **negação de serviço silenciosa** contra o
+dono. Corrigido com **FK composta**, a mesma solução da 16-E nas fotos de evolução. Reconferido:
+**23503** para o intruso, **OK** para o dono.
+
+### Segurança verificada no banco (role `authenticated`)
+
+**11 verificações.** Intruso lê/edita/exclui **0 linhas** em `training_calendar_sync`,
+`training_preferences`, `training_scheduled_workouts`, `habits` e `habit_logs` alheios; não
+forja ponte com `user_id` de terceiro (42501); **não reivindica** dia planejado nem hábito
+alheios (23503, depois da FK composta); duas pontes para o mesmo dia+provedor são recusadas
+(23505); `sync_status` fora do CHECK é recusado (23514); o dono cria a própria ponte
+normalmente. **0 resíduo** (tudo em transação com rollback); catálogo intacto (106 exercícios).
+
+### Verificação
+
+`npm run lint` limpo · `npx tsc --noEmit` limpo · `npm run test:run` **1.916** (de 1.846) ·
+`npm run build` verde. Suíte passa em `TZ=UTC`. Smoke: `/dashboard`, `/treinos`,
+`/treinos/{metas,recordes,programas,configuracoes}`, `/nutricao/diario`, `/agenda` e
+`/api/export` → **307 `/login`**; `/login` → 200; `/api/cron/notifications` → **401**.
+`get_advisors`: **0 lints de schema**. **112 tabelas, 0 sem RLS.**
+
+---
+
+## ✅ Os 55 critérios de aceite da Fase 17 — veredito item a item
+
+**55 de 55 atendidos.** Cada item foi conferido no código, no banco ou na suíte.
+
+| # | Critério | Veredito | Onde |
+| --- | --- | --- | --- |
+| 1 | Aba central Treinos na sidebar | ✅ | `src/config/nav.ts` → `/treinos` |
+| 2 | Os 13 submódulos organizados dentro dela | ✅ | `TRAINING_SECTIONS`: **13 seções, todas `pronto`** |
+| 3 | Cadastro exercícios | ✅ | `/treinos/exercicios` (17-A) |
+| 4 | Base inicial útil | ✅ | **106 exercícios** autorais (reconferido no banco) |
+| 5 | Filtro exercícios | ✅ | `filters.ts` (busca sem acento + 9 filtros combináveis) |
+| 6 | Duplico exercícios pessoais | ✅ | `duplicateExercise` + `origin_exercise_id` |
+| 7 | Exclusões em massa | ✅ | `bulkExerciseAction` (17-A) |
+| 8 | Cadastro programas | ✅ | `/treinos/programas` (17-B) |
+| 9 | Cadastro treinos | ✅ | `/treinos/treinos` + construtor |
+| 10 | Exercícios, ordem, séries, repetições e descanso | ✅ | `expandPlannedSets` (`workout.ts`) |
+| 11 | Escolho o treino ao iniciar | ✅ | `/treinos/sessao/preparar` + lançamento rápido (17-F) |
+| 12 | Reviso e altero antes de iniciar | ✅ | `prepare-review-client` (17-C) |
+| 13 | Sistema sugere dados do último treino | ✅ | `previous.ts` (17-C) |
+| 14 | Edito os valores sugeridos | ✅ | `applyPreparation` (ajuste explícito) |
+| 15 | Um exercício por vez | ✅ | `session-live-client` (17-C) |
+| 16 | Peso e repetições por série | ✅ | `recordSet` + `set-editor` |
+| 17 | Dificuldade, RIR ou RPE | ✅ | `difficulty_scale` nas preferências |
+| 18 | O descanso funciona | ✅ | `timers.ts` (timestamp, não contagem local) |
+| 19 | **3ª de 4 séries → 4ª SÉRIE** | ✅ | `session-flow.test.ts` (teste com esse nome) |
+| 20 | Última série → próximo exercício | ✅ | idem, `nextStep` |
+| 21 | Mudo a ordem durante a sessão | ✅ | `applyExecutedOrder`/`moveExercise` |
+| 22 | Pulo e volto a um exercício | ✅ | `setSessionExerciseStatus` |
+| 23 | Substituo um exercício | ✅ | `substituteSessionExercise` + motivo obrigatório |
+| 24 | Séries não se perdem ao reordenar | ✅ | séries pertencem ao exercício, não à posição (17-C) |
+| 25 | Tempo total registrado | ✅ | `finalizeTimes` |
+| 26 | Tempo ativo registrado | ✅ | `timers.ts` — união de pausas e descansos |
+| 27 | Descansos registrados | ✅ | `training_session_rests` |
+| 28 | Pauso e retomo | ✅ | `pauseSession`/`resumeSession` |
+| 29 | Sessão interrompida pode ser recuperada | ✅ | a sessão vive no servidor (`getRunningSession`) |
+| 30 | Tolera conexão instável | ✅ | fila local + `client_mutation_id` + status visível (17-C) |
+| 31 | Finalizo e reviso | ✅ | `/treinos/sessao/revisar` |
+| 32 | Abro qualquer treino passado | ✅ | `/treinos/historico/[id]` |
+| 33 | Vejo pesos, séries, repetições e descansos | ✅ | detalhe da sessão (do SNAPSHOT) |
+| 34 | Histórico de um exercício | ✅ | `/treinos/exercicios/[id]` |
+| 35 | Gráficos de evolução por exercício | ✅ | `training-charts` + tabela equivalente |
+| 36 | Volume por sessão/semana/mês/grupo, com a regra explicada | ✅ | `metrics.ts` + `volumeRuleLabel` ao lado do número |
+| 37 | Recordes sem duplicidade | ✅ | `record_key` único; empate não gera marca |
+| 38 | 1RM identificado como estimativa, com a fórmula | ✅ | `one-rm.ts`; fora da faixa não vira recorde |
+| 39 | Progressão transparente, ignorável e desativável | ✅ | `progression.ts`; **dor bloqueia sempre** |
+| 40 | Metas de frequência, desempenho, corporais e personalizadas | ✅ | `/treinos/metas` (17-E) |
+| 41 | Peso e medidas na estrutura compartilhada | ✅ | `body_*` — **4 tabelas, nenhuma em `training_*`** |
+| 42 | Dashboards semanal/mensal/anual + calendário de consistência | ✅ | `dashboards.ts` (consome `metrics.ts`) |
+| 43 | Relatórios e exportação | ✅ | `/treinos/relatorios` + `/api/export` (**27 tabelas `training_*`**) |
+| 44 | Busca global encontra as 6 entidades | ✅ | `search/queries.ts` + `training-links.ts` (**teste de contrato**) |
+| 45 | Inicio treino e registro peso pelo lançamento rápido | ✅ | `training-quick-add.ts` (caminho oficial) + tipo "Peso e medidas" |
+| 46 | Notificações configuráveis, sem duplicidade e sem culpa | ✅ | 9 famílias; **teste de vocabulário proibido** + rodar 3× não duplica |
+| 47 | Agenda e TO-DO **por escolha minha** | ✅ | `training_sync_enabled` (opt-in) + `TodoLinkDialog` (por clique) |
+| 48 | Hábito "Treinar" reflete a sessão, sem registro duplicado | ✅ | `habit-sync.ts` — upsert na linha única do dia |
+| 49 | Treino de hoje, meta, último treino, evolução e sessão ativa no dashboard | ✅ | `training-card.tsx` (+ botão **Continuar treino**) |
+| 50 | Uso confortável no celular, com uma mão | ✅ | alvos `h-11`/`h-12`, grades responsivas, `min-w-0`+`truncate` |
+| 51 | Dark/light, desktop/tablet/celular, pt-BR | ✅ | só tokens do design system; nenhuma cor fixa nova |
+| 52 | Teclado, foco visível, rótulos e contraste | ✅ | `Label`+`id` em todo campo novo; `aria-current`; `prefers-reduced-motion` |
+| 53 | RLS + FORCE RLS em todas as tabelas do módulo | ✅ | **112 tabelas, 0 sem RLS**; 11 verificações pela role `authenticated` |
+| 54 | Nenhum segredo no client, nenhuma foto pública, nada sensível em log | ✅ | `service_role` só no Cron; `last_error` sem token nem corpo |
+| 55 | Nenhuma fase anterior quebrada; lint, tsc, testes e build passam | ✅ | **1.916 testes** verdes (também em `TZ=UTC`) |
+
+### Pendências conscientes da Fase 17 (escopo, não bugs)
+
+| Item | Por quê |
+| --- | --- |
+| PWA / service worker / offline real | **Não implementado, e a interface não promete.** O que existe é fila local + reenvio em ordem + status de sincronização sempre visível (17-C) |
+| Canais externos de notificação (push/e-mail) | Fora do escopo do sistema inteiro; só com infraestrutura real de envio |
+| Integração com balança, relógio ou wearable | Não planejado. `body_measurements.source` já prevê o campo |
+| Vídeo/imagem de terceiros por exercício | **Nunca.** Só asset próprio, com licença registrada |
+| Sugestão de treino por IA; comparação com outras pessoas | **Nunca** — sistema single-user, sem prescrição |
+| "Registrar treino passado" pelo lançamento rápido | O caminho existe na preparação da sessão (com data); o modal rápido cobre iniciar treino e peso, que são os do critério 45 |
 
 ---
 

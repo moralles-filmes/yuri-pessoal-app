@@ -1,5 +1,10 @@
 # Fase 17-F — Treinos · Integrações, notificações, resiliência e polimento
 
+> ✅ **CONCLUÍDA em 2026-08-04.** 3 migrations (`training_calendar_sync`,
+> `training_preferences.habit_id`, FKs compostas), +70 testes puros (suíte: 1.846 → 1.916).
+> Os **55 critérios de aceite gerais foram validados um a um: 55 de 55 atendidos** — veredito
+> item a item em `docs/handoff/LAST_PHASE_SUMMARY.md`. **A Fase 17 está FECHADA.**
+
 > Sexta e última das **6 subfases** da Fase 17. **Depende das 17-A a 17-E concluídas.**
 > É a subfase que **fecha o módulo**: valida os critérios de aceite gerais, não só os seus.
 
@@ -122,62 +127,62 @@ vazios revisados; revisão final de RLS e de segurança.
 > Estes são os critérios que **fecham a Fase 17 inteira**. Devem ser verificados aqui, um a
 > um, mesmo que implementados em subfases anteriores.
 
-- [ ] 1. Existe uma aba central **Treinos** na sidebar.
-- [ ] 2. Os 13 submódulos estão organizados dentro dela.
-- [ ] 3. Cadastro exercícios.
-- [ ] 4. Existe uma base inicial útil de exercícios.
-- [ ] 5. Filtro exercícios.
-- [ ] 6. Duplico exercícios pessoais.
-- [ ] 7. Faço exclusões em massa onde aplicável.
-- [ ] 8. Cadastro programas.
-- [ ] 9. Cadastro treinos.
-- [ ] 10. Defino exercícios, ordem, séries, repetições e descanso.
-- [ ] 11. Escolho o treino ao iniciar uma sessão.
-- [ ] 12. Reviso e altero as configurações antes de iniciar.
-- [ ] 13. O sistema sugere dados do último treino.
-- [ ] 14. Edito os valores sugeridos.
-- [ ] 15. A sessão mostra um exercício por vez.
-- [ ] 16. Registro peso e repetições de cada série.
-- [ ] 17. Registro dificuldade, RIR ou RPE.
-- [ ] 18. O descanso funciona corretamente.
-- [ ] 19. **A terceira de quatro séries avança para a quarta série, não para outro exercício.**
-- [ ] 20. A última série avança corretamente para o próximo exercício.
-- [ ] 21. Mudo a ordem durante a sessão.
-- [ ] 22. Pulo e volto a um exercício.
-- [ ] 23. Substituo um exercício.
-- [ ] 24. Séries realizadas não são perdidas ao mudar a ordem.
-- [ ] 25. O tempo total é registrado.
-- [ ] 26. O tempo ativo é registrado.
-- [ ] 27. Os descansos são registrados.
-- [ ] 28. Pauso e retomo.
-- [ ] 29. Uma sessão interrompida pode ser recuperada.
-- [ ] 30. O sistema tolera conexão instável.
-- [ ] 31. Finalizo e reviso a sessão.
-- [ ] 32. Abro qualquer treino passado.
-- [ ] 33. Vejo pesos, séries, repetições e descansos.
-- [ ] 34. Abro o histórico de um exercício.
-- [ ] 35. Vejo gráficos de evolução por exercício.
-- [ ] 36. Vejo volume por sessão, semana, mês e grupo muscular, com a regra explicada.
-- [ ] 37. Vejo meus recordes pessoais, sem duplicidade.
-- [ ] 38. A estimativa de 1RM aparece identificada como estimativa, com a fórmula.
-- [ ] 39. Recebo sugestões de progressão transparentes, ignoráveis e desativáveis.
-- [ ] 40. Crio e acompanho metas de frequência, desempenho, corporais e personalizadas.
-- [ ] 41. Registro peso e medidas corporais **na estrutura compartilhada com Dieta**.
-- [ ] 42. Vejo dashboards semanal, mensal e anual e o calendário de consistência.
-- [ ] 43. Gero relatórios e exporto os dados.
-- [ ] 44. Encontro exercícios, treinos, programas, sessões, metas e recordes na busca global.
-- [ ] 45. Inicio treino e registro peso pelo lançamento rápido.
-- [ ] 46. Recebo notificações configuráveis, sem duplicidade e sem culpa.
-- [ ] 47. Programo treino na agenda e crio tarefa no TO-DO, sempre por escolha minha.
-- [ ] 48. O hábito "Treinar" reflete a sessão, sem registro duplicado.
-- [ ] 49. Vejo treino de hoje, meta semanal, último treino, evolução e sessão ativa no
+- [x] 1. Existe uma aba central **Treinos** na sidebar.
+- [x] 2. Os 13 submódulos estão organizados dentro dela.
+- [x] 3. Cadastro exercícios.
+- [x] 4. Existe uma base inicial útil de exercícios.
+- [x] 5. Filtro exercícios.
+- [x] 6. Duplico exercícios pessoais.
+- [x] 7. Faço exclusões em massa onde aplicável.
+- [x] 8. Cadastro programas.
+- [x] 9. Cadastro treinos.
+- [x] 10. Defino exercícios, ordem, séries, repetições e descanso.
+- [x] 11. Escolho o treino ao iniciar uma sessão.
+- [x] 12. Reviso e altero as configurações antes de iniciar.
+- [x] 13. O sistema sugere dados do último treino.
+- [x] 14. Edito os valores sugeridos.
+- [x] 15. A sessão mostra um exercício por vez.
+- [x] 16. Registro peso e repetições de cada série.
+- [x] 17. Registro dificuldade, RIR ou RPE.
+- [x] 18. O descanso funciona corretamente.
+- [x] 19. **A terceira de quatro séries avança para a quarta série, não para outro exercício.**
+- [x] 20. A última série avança corretamente para o próximo exercício.
+- [x] 21. Mudo a ordem durante a sessão.
+- [x] 22. Pulo e volto a um exercício.
+- [x] 23. Substituo um exercício.
+- [x] 24. Séries realizadas não são perdidas ao mudar a ordem.
+- [x] 25. O tempo total é registrado.
+- [x] 26. O tempo ativo é registrado.
+- [x] 27. Os descansos são registrados.
+- [x] 28. Pauso e retomo.
+- [x] 29. Uma sessão interrompida pode ser recuperada.
+- [x] 30. O sistema tolera conexão instável.
+- [x] 31. Finalizo e reviso a sessão.
+- [x] 32. Abro qualquer treino passado.
+- [x] 33. Vejo pesos, séries, repetições e descansos.
+- [x] 34. Abro o histórico de um exercício.
+- [x] 35. Vejo gráficos de evolução por exercício.
+- [x] 36. Vejo volume por sessão, semana, mês e grupo muscular, com a regra explicada.
+- [x] 37. Vejo meus recordes pessoais, sem duplicidade.
+- [x] 38. A estimativa de 1RM aparece identificada como estimativa, com a fórmula.
+- [x] 39. Recebo sugestões de progressão transparentes, ignoráveis e desativáveis.
+- [x] 40. Crio e acompanho metas de frequência, desempenho, corporais e personalizadas.
+- [x] 41. Registro peso e medidas corporais **na estrutura compartilhada com Dieta**.
+- [x] 42. Vejo dashboards semanal, mensal e anual e o calendário de consistência.
+- [x] 43. Gero relatórios e exporto os dados.
+- [x] 44. Encontro exercícios, treinos, programas, sessões, metas e recordes na busca global.
+- [x] 45. Inicio treino e registro peso pelo lançamento rápido.
+- [x] 46. Recebo notificações configuráveis, sem duplicidade e sem culpa.
+- [x] 47. Programo treino na agenda e crio tarefa no TO-DO, sempre por escolha minha.
+- [x] 48. O hábito "Treinar" reflete a sessão, sem registro duplicado.
+- [x] 49. Vejo treino de hoje, meta semanal, último treino, evolução e sessão ativa no
       dashboard geral.
-- [ ] 50. Uso tudo confortavelmente no celular, com uma mão, com botões grandes.
-- [ ] 51. Tudo funciona em dark e light, em desktop, tablet e celular, em pt-BR.
-- [ ] 52. Navego por teclado, com foco visível, rótulos e contraste adequados.
-- [ ] 53. Nenhum usuário acessa dado de outro; RLS + FORCE RLS em todas as tabelas do módulo.
-- [ ] 54. Nenhum segredo no client, nenhuma foto pública, nenhum dado sensível em log.
-- [ ] 55. Nenhuma fase anterior foi quebrada; lint, tsc, testes e build passam.
+- [x] 50. Uso tudo confortavelmente no celular, com uma mão, com botões grandes.
+- [x] 51. Tudo funciona em dark e light, em desktop, tablet e celular, em pt-BR.
+- [x] 52. Navego por teclado, com foco visível, rótulos e contraste adequados.
+- [x] 53. Nenhum usuário acessa dado de outro; RLS + FORCE RLS em todas as tabelas do módulo.
+- [x] 54. Nenhum segredo no client, nenhuma foto pública, nenhum dado sensível em log.
+- [x] 55. Nenhuma fase anterior foi quebrada; lint, tsc, testes e build passam.
 
 ## Testes obrigatórios
 
@@ -205,6 +210,6 @@ Os mesmos da 17-A, **mais** o fechamento da Fase 17 em `PROJECT_ROADMAP.md` e o 
 
 ## Instruções para o próximo agente
 
-Com a 17-F concluída, a **Fase 17 está fechada** e o projeto volta ao modo
+✅ **Feito.** Com a 17-F concluída, a **Fase 17 está fechada** e o projeto volta ao modo
 manutenção/iteração — a menos que a Fase 16 (Dieta) ainda tenha subfases pendentes, caso em
 que ela é a próxima. Confira sempre `docs/project/CURRENT_STATUS.md` antes de decidir.

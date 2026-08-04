@@ -95,8 +95,8 @@ export async function TrainingCard({ todayIso }: { todayIso: string }) {
           }
           value={
             data.today ? (
-              <span className="flex flex-wrap items-center justify-end gap-1.5">
-                {data.today.label}
+              <span className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+                <span className="truncate">{data.today.label}</span>
                 {data.today.time && (
                   <span className="text-muted-foreground">{data.today.time}</span>
                 )}
@@ -132,10 +132,10 @@ export async function TrainingCard({ todayIso }: { todayIso: string }) {
               </Link>
             }
             value={
-              <span className="flex flex-wrap items-center justify-end gap-1.5">
-                {data.lastSession.label}
+              <span className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+                <span className="truncate">{data.lastSession.label}</span>
                 {data.lastSession.durationSeconds !== null && (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="shrink-0 text-xs text-muted-foreground">
                     {durationLabel(data.lastSession.durationSeconds)}
                   </span>
                 )}

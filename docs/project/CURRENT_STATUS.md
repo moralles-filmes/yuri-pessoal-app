@@ -9,7 +9,7 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | A–F | ✅ **FASE CONCLUÍDA** (16-A a 16-F). Em manutenção/iteração |
-| **17** | Treinos (`/treinos`) | A–F | **17-A a 17-E concluídas**; 17-F é a próxima (fecha a fase) |
+| **17** | Treinos (`/treinos`) | A–F | ✅ **FASE CONCLUÍDA** (17-A a 17-F). Em manutenção/iteração |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -23,6 +23,11 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 > é histórico de medida. Nunca duas tabelas de peso corporal.
 
 ## Fases atuais
+- **Fase 17-F — Treinos · Integrações, notificações, resiliência e polimento → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md`
+  **Ela FECHA a Fase 17:** os 55 critérios de aceite gerais foram validados um a um —
+  **55 de 55 atendidos** (veredito item a item em `docs/handoff/LAST_PHASE_SUMMARY.md`).
+  Com a Fase 16 também fechada, **o projeto inteiro volta ao modo manutenção/iteração**.
 - **Fase 16-F — Dieta e Alimentação · Integrações, notificações e polimento → CONCLUÍDA ✅**
   Arquivo: `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md`
   **Ela FECHA a Fase 16:** os 40 critérios de aceite gerais foram validados um a um —
@@ -31,12 +36,89 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
   Arquivo: `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`
 
 ## Próximas fases
-- **Frente Dieta: NÃO HÁ PRÓXIMA SUBFASE.** A Fase 16 está concluída e o módulo entra em
-  **manutenção/iteração**. Melhorias entram como tarefa avulsa, não como subfase.
+**NÃO HÁ PRÓXIMA FASE.** As duas frentes (16 — Dieta e 17 — Treinos) estão concluídas, e o
+projeto volta ao **modo manutenção/iteração**: melhoria entra como tarefa avulsa, com branch
+própria, e não como subfase. As pendências conscientes de cada módulo estão listadas em
+`docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
 
-- **Subfase 17-F — Integrações, notificações, resiliência e polimento** (fecha a Fase 17;
-  precisa validar os **critérios de aceite gerais do módulo**, listados no próprio arquivo).
-  Arquivo: `docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md`
+---
+
+## O que foi implementado na Subfase 17-F (integrações, notificações e resiliência) — FECHA A FASE 17
+
+As subfases 17-A a 17-E entregaram um módulo completo e **isolado**. A 17-F o costura ao resto
+do sistema — busca global, lançamento rápido, notificações, dashboard geral, agenda, TO-DO,
+Dieta e Hábitos — e fecha a Fase 17.
+
+### ⛔ A decisão central da subfase: FONTE DE VERDADE DECLARADA
+
+O risco da 17-F nunca foi técnico, foi de **duplicidade**: o mesmo treino podia virar tarefa no
+TO-DO, evento na agenda, dia planejado no calendário e check-in de hábito — quatro registros da
+mesma coisa, divergindo no primeiro esquecimento. A tabela abaixo é a resposta, e está
+implementada, não só escrita:
+
+| Informação | Fonte de verdade | Os outros módulos |
+| --- | --- | --- |
+| O treino aconteceu | `training_sessions` | O hábito "Treinar" **reflete** (`habit-sync.ts`); nunca há segundo registro |
+| Está planejado para o dia | `training_scheduled_workouts` | Agenda e TO-DO são **espelhos opcionais**, com vínculo |
+| Peso e medidas | `body_*` (16-E) | Dieta e Treinos leem/escrevem pelo MESMO serviço |
+| Dia é de treino ou descanso | `training_scheduled_workouts` + sessões | A **Dieta consome** (`day-kind.ts`), não deduz sozinha |
+
+### O que foi entregue
+
+| Integração | Onde | Consome (nunca recalcula) |
+| --- | --- | --- |
+| Busca global — 6 entidades | `lib/search/queries.ts` + **`training-links.ts`** (puro, testado) | RLS por sessão; sessão vem do **nome congelado** |
+| Lançamento rápido — iniciar treino | `lib/actions/training-quick-add.ts` | `createSession` + `startSession` (17-C) |
+| Card no dashboard geral | `components/dashboard/general/training-card.tsx` | `metrics.ts` (17-D) via `dashboards.ts`/`goals.ts` (17-E) |
+| 9 famílias de notificação | `lib/notifications/training.ts` (puro) + `training-cron.ts` (I/O) | `derivePlannedStatus`, `deriveGoalStatus`, `resolveGoals` |
+| Espelho na agenda (opt-in) | `lib/training/{google-event,calendar-sync}.ts` + `training_calendar_sync` | contrato idêntico ao `todo_calendar_sync` (F15) |
+| Pontes com o TO-DO | `lib/actions/training-integrations.ts` | `createTodoTask` (F15) |
+| Hábito "Treinar" | `lib/training/{habit-reflection,habit-sync}.ts` + `training_preferences.habit_id` | as sessões concluídas do dia |
+| Tipo de dia para a Dieta | `lib/training/day-kind.ts` + `day-kind-queries.ts` | consumido por `report-queries.ts` e pelo diário |
+
+### Decisões técnicas registradas
+
+1. **Nenhum tipo novo de "medição pendente".** A medida corporal é o módulo central `body_*`,
+   e `nutrition_measurement_due` (16-F) já avisa sobre ela. Criar um irmão `training_*` daria
+   **duas notificações para o mesmo peso não medido** — o oposto do que a subfase existe para
+   evitar. O rótulo e a explicação foram ajustados para dizer que vale para as duas frentes.
+2. **`training_goal_progress` nasce DESLIGADO** (`NOTIFICATION_OPT_IN_TYPES`). Avisar sem ser
+   pedido sobre o quanto falta para a meta da semana é lido como cobrança — mesma decisão da
+   `nutrition_goal_close` na Dieta, pelo mesmo motivo.
+3. **O recorde é notificado a partir da MARCA, não do evento.** A chave é
+   `training_record:{record_key}:{achieved_on}`: consolidar de novo o mesmo recorde não gera um
+   segundo aviso, e uma marca nova no dia seguinte gera.
+4. **`getSessionHistory` ganhou `client`/`userId` opcionais** em vez de o Cron reimplementar a
+   leitura. Um segundo caminho para montar o histórico discordaria deste no primeiro campo novo
+   — e o número da notificação deixaria de bater com o da tela.
+5. **Ausência de dado continua não sendo zero.** Semana sem treino devolve volume `null` ("sem
+   treino"), meta sem base devolve `null` ("sem base ainda"), e um dia sem planejamento e sem
+   sessão **não** vira "descanso" para a Dieta.
+6. **Deep-link que abre o registro**, não a lista: `?meta=`, `?programa=` e `?recorde=`
+   destacam o item com âncora, anel e `aria-current` (e respeitam `prefers-reduced-motion`).
+
+### ⚠️ A armadilha que só o teste no banco revelou (e a correção)
+
+Pela role `authenticated`, um intruso conseguia inserir
+`training_calendar_sync(user_id = ele, scheduled_workout_id = <dia planejado de outro>)`: a RLS
+confere o `user_id` da **própria linha** e nada sabe sobre a linha apontada. Não vazava dado (a
+leitura junta o planejamento, cuja RLS bloqueia), mas **ocupava a chave única
+`(scheduled_workout_id, provider)`** — e o dono deixaria de conseguir sincronizar aquele dia,
+sem nenhuma mensagem que explicasse por quê.
+
+Correção: **FK COMPOSTA** `(scheduled_workout_id, user_id)` → `training_scheduled_workouts
+(id, user_id)`, e a mesma disciplina no vínculo do hábito (`habit_id, user_id`). É exatamente a
+correção que a 16-E aplicou às fotos de evolução — a família de problema se repete sempre que
+uma tabela aponta para outra dentro do mesmo usuário. Reconferido: **23503** para o intruso,
+**OK** para o dono.
+
+### Verificação (17-F)
+
+`npm run lint`, `npx tsc --noEmit`, `npm run test:run` (**1.916 testes**, de 1.846) e
+`npm run build` passam; a suíte também passa em `TZ=UTC`. Smoke: rotas privadas → **307
+`/login`**, `/login` → 200, `/api/cron/notifications` sem segredo → **401**.
+`get_advisors`: **0 lints de schema**. Banco: **112 tabelas, 0 sem RLS** (29 `training_*`,
+4 `body_*`, 32 `nutrition_*`), base de exercícios intacta (**106**), **0 resíduo** de teste.
 
 ---
 

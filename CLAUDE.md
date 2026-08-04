@@ -10,14 +10,14 @@ Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gas
 
 ## Estado do projeto
 
-As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO** e a **Fase 16 — Dieta e Alimentação** estão concluídas. Desde **2026-08-03** correram **duas frentes de módulo grande, em paralelo**, cada uma dividida em 6 subfases (A–F):
+As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 16 — Dieta e Alimentação** e a **Fase 17 — Treinos** estão **concluídas**. As duas frentes grandes (16 e 17), abertas em **2026-08-03** e divididas em 6 subfases cada (A–F), fecharam em **2026-08-04**: **40 de 40** e **55 de 55** critérios de aceite validados. **Não há 16-G nem 17-G** — o projeto está em manutenção/iteração e melhoria entra como tarefa avulsa.
 
 | Fase | Módulo | Situação |
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | **17-A a 17-E concluídas**; 17-F é a próxima (fecha a fase) |
 
-Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Fora dessas fases, o projeto segue em modo manutenção/iteração. **33 tabelas `nutrition_*`** + **28 `training_*`** + **4 tabelas centrais `body_*`** (16-E, compartilhadas com Treinos); o total do banco muda a cada subfase das duas frentes — **conte antes de citar um número**.
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **33 tabelas `nutrition_*`** + **28 `training_*`** + **4 tabelas centrais `body_*`** (16-E, compartilhadas com Treinos); o total do banco muda a cada subfase das duas frentes — **conte antes de citar um número**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -103,6 +103,13 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 17. **1RM é estimativa**, com a fórmula visível e escolhível; 1 repetição devolve o próprio peso, e acima de 12 repetições a UI avisa e o valor **não vira recorde**. Nada no módulo sugere carga máxima.
 18. **Progressão nunca é aplicada sozinha** (17-D): a regra é do usuário, avaliada sobre as últimas N sessões (N ≥ 2), com motivo em pt-BR; aceitar é a única escrita da 17-D no treino-modelo. **Dor registrada bloqueia sempre**, e o bloqueio não é configurável.
 19. **Não prometemos offline.** Não há service worker; o que existe é fila local + reenvio em ordem + status de sincronização sempre visível. A sessão em execução vive no servidor, então fechar a aba e reabrir recupera tudo.
+
+**Invariantes acrescentadas pela 17-F (integrações):**
+20. **A FONTE DE VERDADE É DECLARADA E ÚNICA.** *O treino aconteceu* → `training_sessions` (o hábito "Treinar" **reflete** por `habit-sync.ts`, upsert na linha única de `habit_logs` do dia — nunca um segundo registro). *Está planejado para o dia* → `training_scheduled_workouts` (agenda e TO-DO são **espelhos opcionais**, com vínculo). *Peso e medidas* → `body_*`. *Dia é de treino ou descanso* → Treinos responde (`day-kind.ts`), **a Dieta consome** — e dia sem informação **não** vira "descanso".
+21. **Nenhuma integração é automática.** Agenda (`google_integrations.training_sync_enabled`), TO-DO (por clique) e o vínculo do hábito (`training_preferences.habit_id`) nascem **desligados**. Falha do Google nunca derruba a ação: fica em `training_calendar_sync.last_error`, **sem token e sem corpo de resposta**. Excluir dia planejado remove o evento **antes** do delete (a ponte é `on delete cascade`).
+22. **Notificação de Treinos informa, nunca cobra.** 9 famílias, todas `low`/`medium`, todas com link, `dedupe_key` determinístico (rodar o Cron 3× não duplica) e um teste que varre vocabulário proibido **e** vocabulário de prescrição. `training_goal_progress` nasce **desligado** (opt-in). **Não existe tipo `training_measurement_due`**: a medição corporal já é avisada por `nutrition_measurement_due`, porque a tabela é a mesma (`body_*`) — dois tipos dariam dois avisos para o mesmo fato.
+23. **FK COMPOSTA sempre que uma tabela apontar para outra dentro do mesmo usuário.** A RLS confere o `user_id` da **própria linha** e não alcança a linha apontada. Sem isso, um intruso ocupava a chave única `(scheduled_workout_id, provider)` da ponte da agenda e **impedia o dono de sincronizar** aquele dia. Mesma correção da 16-E nas fotos de evolução.
+24. **`getSessionHistory` aceita `client`/`userId`** para o Cron (service role, sem sessão) usar **a mesma leitura da tela**. Um segundo caminho de montagem do histórico faria o número da notificação divergir do número da tela.
 
 ## Leitura obrigatória antes de mexer no código
 

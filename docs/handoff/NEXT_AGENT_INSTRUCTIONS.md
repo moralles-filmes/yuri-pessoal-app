@@ -1,138 +1,66 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-## 📌 Estado atual — Dieta CONCLUÍDA, Treinos em andamento
+## 📌 Estado atual — AS DUAS FRENTES ESTÃO CONCLUÍDAS
 
-As 14 fases do roadmap original e a Fase 15 (TO-DO) estão concluídas.
+As 14 fases do roadmap original, a **Fase 15 (TO-DO)**, a **Fase 16 (Dieta e Alimentação)** e a
+**Fase 17 (Treinos)** estão concluídas.
 
-✅ **A FASE 16 — Dieta e Alimentação está CONCLUÍDA** (16-A a 16-F, em 2026-08-04). Os **40
-critérios de aceite gerais foram validados um a um na 16-F: 40 de 40 atendidos** — o veredito
-item a item está em `docs/handoff/LAST_PHASE_SUMMARY.md`. A frente Dieta entra em
-**manutenção/iteração**: **não há 16-G**, e melhoria nela entra como tarefa avulsa, não como
-subfase.
-
-**Só a frente Treinos tem próxima subfase.** Crie um branch novo.
-
-> ⚠️ **Há outra frente em paralelo.** Em 2026-08-03 também foi aberta a **Fase 17 — Módulo
-> Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a **17-A a 17-E
-> concluídas**. As duas fases convivem no mesmo repositório e no mesmo banco. Antes de mexer em
-> `docs/project/PROJECT_ROADMAP.md`, `CURRENT_STATUS.md` ou `src/types/supabase.ts`, **leia o
-> arquivo primeiro e edite de forma pontual** — sobrescrever levaria embora o trabalho da
-> outra frente.
->
-> ✅ **O PONTO DE CONTATO ENTRE AS DUAS FRENTES ESTÁ CUMPRIDO (2026-08-04).**
-> A **16-E CRIOU** o módulo central `body_*` (4 tabelas + código em `src/lib/body/`) e a
-> **17-E CONSUMIU** — sem criar tabela nenhuma. Conferido no banco depois da 17-E: 4 tabelas
-> `body_*`, e a única coluna de peso corporal fora delas é `training_sessions.body_weight_kg`,
-> que é o peso USADO naquele treino (17-C), não histórico. **Nunca duas tabelas de peso.**
-
-## ▶️ A próxima tarefa
-
-| Frente | Próxima subfase | Arquivo |
+| Fase | Módulo | Situação |
 | --- | --- | --- |
-| **Treinos** | **17-F** — Integrações, notificações, resiliência e polimento (**fecha a Fase 17**) | `docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` |
-| ~~Dieta e Alimentação~~ | ✅ **Fase 16 concluída** (16-A a 16-F) — em manutenção/iteração, sem próxima subfase | — |
+| **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F) — **40 de 40** critérios |
+| **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — **55 de 55** critérios |
 
-Faça **uma** subfase por vez.
+**NÃO HÁ PRÓXIMA FASE.** Não existe 16-G nem 17-G. O projeto inteiro está em **modo
+manutenção/iteração**: toda melhoria entra como **tarefa avulsa**, com branch própria,
+verificação completa e documentação atualizada — não como subfase.
 
----
+O veredito item a item dos 55 critérios da Fase 17 e dos 40 da Fase 16 está em
+`docs/handoff/LAST_PHASE_SUMMARY.md`.
 
-## ✅ O QUE A 17-E JÁ FEZ (e o que a 17-F herda pronto)
+## ▶️ Se você foi chamado para uma tarefa avulsa
 
-A 17-E consumiu o módulo central `body_*` sem criar nada, e entregou metas, dashboards,
-relatórios e o calendário de consistência. O que está pronto para a 17-F:
+**Leitura obrigatória antes de tocar em código:**
 
-| Já existe | Onde |
-| --- | --- |
-| Metas com progresso, status derivado, marcos e histórico de alterações | `src/lib/training/goals.ts` + `goal-queries.ts` + `actions/training-goals.ts` |
-| Agregação de semana/mês/ano, comparação com o período anterior, aderência, sequência | `src/lib/training/dashboards.ts` |
-| Calendário de consistência (classificação por dia, sem linguagem de culpa) | `dashboards.ts` (`consistencyCalendar`) + `components/training/consistency-calendar.tsx` |
-| Relatórios por período + linhas e seções de CSV | `src/lib/training/reports.ts` |
-| Evolução corporal dentro de Treinos, lendo/escrevendo em `body_*` | `components/training/body-evolution.tsx` |
-| Peso corporal pré-preenchido na preparação da sessão | `getLatestWeight()` em `sessao/preparar/page.tsx` |
-| Exportação JSON com as 28 tabelas `training_*` | `src/app/api/export/route.ts` |
-
-### 🧭 Três avisos concretos da 17-E para a 17-F
-
-1. **A notificação de meta atingida tem o gancho pronto**: `deriveGoalStatus` já devolve
-   `atingida`/`expirada`/`em_atraso` na leitura. Falta só notificar **uma vez** (`dedupe_key`),
-   como o recorde da 17-D.
-2. **`reorderTrainingGoals` existe e nenhuma tela a chama** — arrastar meta é da 17-F.
-3. **Se for cruzar treino com dieta, LEIA a Dieta pelas funções dela** (`calc.ts`), como a
-   17-E leu o corpo por `src/lib/body/`. Não recalcule nutriente aqui.
-
-### ⚠️ Ponto de merge entre as duas frentes (conferir na integração)
-
-A 16-F extraiu `EXPORT_TABLES` de `src/app/api/export/route.ts` para
-`src/lib/settings/export-tables.ts`, e o arquivo novo **já contém** as entradas `training_*` que
-a 17-E acrescentou. Ao integrar as branches, resolva o conflito em `route.ts` **ficando com a
-versão extraída da 16-F** e confira se as 28 tabelas `training_*` continuam na lista.
-
----
-
-## ▶️ Frente Treinos: Subfase 17-F — Integrações, notificações e polimento
-
-**Arquivo da fase (leia inteiro antes de codar):**
-`docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md`
-
-É a subfase que **FECHA a Fase 17** — ela precisa validar os **critérios de aceite gerais do
-módulo**, listados no próprio arquivo, não apenas os seus.
-
-**Leitura obrigatória, nesta ordem:**
 1. `docs/project/PROJECT_RULES.md`
-2. `docs/project/PROJECT_ARCHITECTURE.md` (seção "Módulo Treinos")
-3. `docs/project/PROJECT_ROADMAP.md` (Fase 17, tabela das subfases)
-4. `docs/project/CURRENT_STATUS.md`
-5. `docs/handoff/LAST_PHASE_SUMMARY.md`
-6. `docs/phases/PHASE_17_A_…` até `PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`
-7. `docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` (o que você vai fazer)
+2. `docs/project/PROJECT_ARCHITECTURE.md` (a seção do módulo que você vai mexer)
+3. `docs/project/CURRENT_STATUS.md`
+4. `CLAUDE.md` da raiz — em especial **"Layout responsivo — 5 regras que vieram de bugs reais"**
+5. O arquivo da fase que criou a área (`docs/phases/PHASE_*`)
+6. As invariantes dos dois módulos, listadas abaixo — elas continuam valendo integralmente
 
-**Código que você precisa entender antes de escrever qualquer linha:**
-**`src/lib/training/metrics.ts`** (a fonte única dos agregados), `goals.ts`, `dashboards.ts`,
-`reports.ts`, `records.ts`, `progression.ts`, `history.ts`, `tracking.ts`, `session-flow.ts`,
-`goal-queries.ts`, `history-queries.ts`, `records-sync.ts` e as actions `training-*.ts`.
-Para as integrações: `src/lib/notifications/*` (`dedupe_key` + Cron),
-`src/lib/search/queries.ts`, `src/lib/dashboard/queries.ts` e `src/components/quick-add/*`.
+**Antes de fechar:** `npm run lint && npx tsc --noEmit && npm run test:run && npm run build`,
+suíte verde também em `TZ=UTC`, smoke (rotas privadas → 307 `/login`; `/api/cron/*` → 401) e,
+se mexer em RLS, teste pela role `authenticated` em transação com **rollback**.
 
 ---
 
-## ✅ Frente Dieta: FASE 16 CONCLUÍDA — manutenção/iteração
-
-**Não há próxima subfase.** As 6 subfases (16-A a 16-F) estão entregues e os **40 critérios de
-aceite gerais foram validados um a um na 16-F: 40 de 40 atendidos**. O veredito item a item, as
-decisões técnicas e as pendências conscientes estão em `docs/handoff/LAST_PHASE_SUMMARY.md`.
-
-Melhoria na Dieta agora entra como **tarefa avulsa**, não como subfase. Antes de mexer, leia
-`docs/project/CURRENT_STATUS.md` (seções 16-A a 16-F) e respeite as **24 invariantes do módulo**
-listadas mais abaixo — elas continuam valendo integralmente.
-
-### O que a 16-F acrescentou e você vai encontrar ligado
+## ✅ O que a 17-F entregou (e você vai encontrar ligado)
 
 | Integração | Onde |
 | --- | --- |
-| Card "Dieta e Alimentação" no dashboard geral | `src/components/dashboard/general/nutrition-card.tsx` + `cards.ts` |
-| Busca global (alimento, receita, modelo, plano, lista) | `src/lib/search/queries.ts` + **`nutrition-links.ts`** (deep-links puros e testados) |
-| Lançamento rápido (alimento, refeição, medida, item de lista) | `src/lib/actions/nutrition-quick-add.ts` |
-| 8 famílias de notificação | `src/lib/notifications/nutrition.ts` (puro) + `nutrition-cron.ts` (I/O) |
-| Preferências de notificação **realmente respeitadas** | `filterByPrefs` em `generate.ts`, chamado pelo Cron |
-| Pontes opcionais com TO-DO e Agenda | `src/lib/actions/nutrition-integrations.ts` |
-| Scanner de código de barras | `src/components/nutrition/barcode-scanner-dialog.tsx` |
-| Upload da foto de receita | `uploadRecipePhoto`/`deleteRecipePhoto` em `nutrition-recipes.ts` |
-| XLSX dos relatórios | `src/lib/reports/xlsx.ts` (import dinâmico) |
+| Card "Treinos" no dashboard geral (com **Continuar treino**) | `src/components/dashboard/general/training-card.tsx` |
+| Busca global — exercício, treino, programa, sessão, meta, recorde | `src/lib/search/queries.ts` + **`training-links.ts`** (deep-links puros e testados) |
+| Lançamento rápido — iniciar treino | `src/lib/actions/training-quick-add.ts` (delega para `createSession`/`startSession`) |
+| 9 famílias de notificação | `src/lib/notifications/training.ts` (puro) + `training-cron.ts` (I/O) |
+| Espelho do planejamento na agenda (opt-in) | `src/lib/training/{google-event,calendar-sync}.ts` + `training_calendar_sync` |
+| Pontes com o TO-DO (treino e meta) | `src/lib/actions/training-integrations.ts` + `components/training/todo-link-dialog.tsx` |
+| Hábito "Treinar" refletindo a sessão | `src/lib/training/{habit-reflection,habit-sync}.ts` + `training_preferences.habit_id` |
+| Tipo de dia (treino/descanso) para a Dieta | `src/lib/training/day-kind.ts` + `day-kind-queries.ts` |
 
-### ⛔ Três coisas que a 16-F deixou travadas e não devem ser afrouxadas
+### ⛔ Quatro coisas que a 17-F travou e não devem ser afrouxadas
 
-1. **`filterByPrefs` é o ÚNICO ponto onde a preferência decide.** Não replique a checagem dentro
-   de uma família — filtrar num lugar só é o que impede um tipo novo de escapar por esquecimento.
-2. **O teste de "sem linguagem de culpa" varre todo texto gerado.** Se você acrescentar uma
-   família, ela passa pelo mesmo teste. Isso é proposital.
-3. **`src/lib/search/nutrition-links.ts` é a fonte única dos deep-links.** A despensa **não é
-   rota própria** (`?aba=despensa` de `/nutricao/compras`); um link direto vira 404.
+1. **A tabela de fonte de verdade.** O treino aconteceu → `training_sessions` (o hábito só
+   reflete). Está planejado → `training_scheduled_workouts` (agenda e TO-DO são espelhos).
+   Peso e medidas → `body_*`. Dia de treino/descanso → Treinos responde, a Dieta consome.
+2. **`filterByPrefs` continua sendo o ÚNICO ponto onde a preferência decide.** Um tipo novo de
+   notificação não deve checar preferência por conta própria.
+3. **O teste de "sem linguagem de culpa" varre todo texto gerado** — em Dieta e em Treinos.
+   Família nova passa pelo mesmo teste. Isso é proposital.
+4. **FK COMPOSTA sempre que uma tabela apontar para outra dentro do mesmo usuário.** A RLS
+   confere a própria linha e **não alcança a linha apontada** — foi assim nas fotos de evolução
+   (16-E) e na ponte da agenda (17-F, onde permitia negação de serviço na chave única).
 
-### 🔴 Ponto de contato NOVO entre as duas frentes
-
-**`src/lib/settings/export-tables.ts`** — a lista de tabelas do backup saiu de
-`src/app/api/export/route.ts` e virou módulo puro testado. A frente Treinos acrescenta as
-`training_*` ali na 17-E. **ACRESCENTE a sua seção; não reescreva a do outro.**
+---
 
 ## ⛔ Invariantes do módulo Treinos que NÃO podem ser quebradas
 

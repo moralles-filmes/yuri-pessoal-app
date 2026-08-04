@@ -489,7 +489,7 @@ irmão em compras: **toda decisão sobre o que soma com o quê sai de `shopping.
 
 ---
 
-## Módulo Treinos (Fase 17 — Subfases A, B, C, D e E concluídas)
+## Módulo Treinos (Fase 17 — CONCLUÍDA, subfases A a F)
 
 Módulo central em `/treinos`, com **navegação interna própria** (13 submódulos) no mesmo
 padrão do TO-DO e da Dieta. Segue o fluxo do resto do sistema: Server Component lê → Server
@@ -747,6 +747,31 @@ rótulos procurando palavras de cobrança.
 | Rotas | `src/app/(app)/treinos/` |
 | Componentes | `src/components/training/` · `src/components/training/session/` |
 | Pipeline da base | `scripts/training/` · dados em `data/training/exercise-base/` |
+
+### Integrações (17-F) — a subfase que fecha a Fase 17
+
+O módulo passa a existir para o resto do sistema. A regra é a mesma da 16-F: **integrar, não
+reimplementar** — toda tela nova é casca sobre lógica já testada.
+
+| Integração | Consome | Arquivo |
+| --- | --- | --- |
+| Card no dashboard geral | `metrics.ts` (17-D), `dashboards.ts`/`goals.ts` (17-E), `body/measurements.ts` | `components/dashboard/general/training-card.tsx` |
+| Busca global (6 tipos) | RLS por sessão; sessão pelo **nome congelado** | `lib/search/queries.ts` + **`lib/search/training-links.ts`** |
+| Lançamento rápido (iniciar treino) | `createSession` + `startSession` (17-C) | `lib/actions/training-quick-add.ts` |
+| 9 famílias de notificação | `derivePlannedStatus` (17-B), `deriveGoalStatus`/`resolveGoals` (17-E) | `lib/notifications/training.ts` (puro) + `training-cron.ts` (I/O) |
+| Espelho na agenda (opt-in) | `lib/google/calendar.ts` (F08) | `lib/training/{google-event,calendar-sync}.ts` + `training_calendar_sync` |
+| Pontes com o TO-DO | `createTodoTask` (F15) | `lib/actions/training-integrations.ts` |
+| Hábito "Treinar" | as sessões concluídas do dia | `lib/training/{habit-reflection,habit-sync}.ts` |
+| Tipo de dia para a Dieta | — | `lib/training/day-kind.ts` + `day-kind-queries.ts` |
+
+**A fonte de verdade é declarada e única** (ver invariante 20 do `CLAUDE.md`): o hábito reflete
+a sessão em vez de ser um segundo registro; agenda e TO-DO carregam vínculo; a Dieta consome o
+tipo de dia em vez de deduzir.
+
+**FK composta onde a RLS não alcança.** `training_calendar_sync (scheduled_workout_id, user_id)`
+e `training_preferences (habit_id, user_id)` apontam para `(id, user_id)` do destino. Sem isso,
+um intruso ocupava a chave única da ponte e impedia o dono de sincronizar — o mesmo problema que
+a 16-E resolveu nas fotos de evolução.
 
 **Todo número agregado do módulo sai de `src/lib/training/metrics.ts` (17-D)** — do mesmo jeito
 que todo total da Dieta sai de `calc.ts`. Histórico, gráfico, recorde, visão geral, **metas,
