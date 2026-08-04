@@ -9,20 +9,24 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A a 16-E concluídas**; 16-F é a próxima (fecha a fase) |
-| **17** | Treinos (`/treinos`) | A–F | **17-A a 17-D concluídas**; 17-E é a próxima |
+| **17** | Treinos (`/treinos`) | A–F | **17-A a 17-E concluídas**; 17-F é a próxima (fecha a fase) |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
 > **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 >
-> ✅ **PONTO DE CONTATO RESOLVIDO (2026-08-04):** as medidas corporais `body_*` **foram
-> CRIADAS pela 16-E**. A **17-E CONSOME** — lê e escreve por `src/lib/body/queries.ts` e
-> `src/lib/actions/body-measurements.ts`, e **não cria tabela nenhuma**. Nunca duas tabelas de
-> peso corporal.
+> ✅ **PONTO DE CONTATO CUMPRIDO (2026-08-04):** as medidas corporais `body_*` foram
+> **CRIADAS pela 16-E** e a **17-E CONSOME** — lê e escreve por `src/lib/body/queries.ts` e
+> `src/lib/actions/body-measurements.ts`, e **não criou tabela nenhuma**. Conferido no banco
+> depois da 17-E: **4 tabelas `body_*`**, e a única coluna de peso corporal fora delas é
+> `training_sessions.body_weight_kg` — o peso USADO naquele treino, congelado (17-C), que não
+> é histórico de medida. Nunca duas tabelas de peso corporal.
 
 ## Fases atuais
 - **Fase 16-E — Dieta e Alimentação · Medidas corporais, fotos de evolução e relatórios → CONCLUÍDA ✅**
   Arquivo: `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
+- **Fase 17-E — Treinos · Metas, medidas corporais compartilhadas e dashboards → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`
 - **Fase 17-D — Treinos · Histórico, volume, recordes e progressão → CONCLUÍDA ✅**
   Arquivo: `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`
 
@@ -30,10 +34,105 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 - **Subfase 16-F — Integrações, notificações e polimento** (fecha a Fase 16; precisa validar
   os **40 critérios de aceite gerais** listados no próprio arquivo).
   Arquivo: `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md`
-- **Subfase 17-E — Metas, medidas corporais compartilhadas e dashboards.**
-  Arquivo: `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`
+- **Subfase 17-F — Integrações, notificações, resiliência e polimento** (fecha a Fase 17;
+  precisa validar os **critérios de aceite gerais do módulo**, listados no próprio arquivo).
+  Arquivo: `docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md`
 
 ---
+
+## O que foi implementado na Subfase 17-E (metas, dashboards, relatórios e corpo)
+
+A 17-D transformou o acúmulo de sessões em **leitura**. A 17-E acrescenta a camada de
+**direção** (metas) e a de **síntese** (dashboards e relatórios) — e liga o módulo à evolução
+corporal, que é o que dá sentido ao resto.
+
+### ⛔ A 17-E CONSUMIU `body_*`. Não criou tabela de medida nenhuma.
+
+Conferido no banco antes de escrever a primeira linha (MCP `list_tables`): as 4 tabelas
+`body_*` da 16-E já existiam. A 17-E **lê e escreve por `src/lib/body/`** — as mesmas queries,
+as mesmas actions e os mesmos componentes (`measurement-chart`, `progress-photos`) que a Dieta
+usa. Um peso registrado em `/treinos/evolucao` aparece em `/nutricao/medidas`, e vice-versa.
+
+`training_goals.body_measurement_type_id` aponta para `body_measurement_types` com
+`on delete set null` **de propósito**: excluir um tipo de medida é um fluxo da 16-E, com
+escolha explícita do destino do histórico. Um `restrict` faria aquele fluxo estourar com um
+erro que o módulo Dieta não saberia explicar; com `set null`, a meta sobrevive e a leitura a
+marca como **"medida removida"** — indisponível, nunca zero.
+
+### As duas tabelas novas (projeto: 111 tabelas · 28 `training_*`)
+
+| Tabela | Papel |
+| --- | --- |
+| `training_goals` | A meta: família, o que mede, alvo, direção, período, prazo, marcos (jsonb) e situação |
+| `training_goal_progress` | O histórico DELA: cada leitura de progresso e **toda** alteração de alvo, prazo ou situação |
+
+### As regras que a subfase existe para garantir
+
+1. **O dashboard não recalcula nada.** Volume, séries, repetições, tempo, frequência e
+   distribuição por grupo saem de `metrics.ts` (17-D) através de `dashboards.ts`. Um teste
+   compara os totais do dashboard com `aggregateSessions` diretamente: têm de ser idênticos.
+   Se faltar um agregado, ele é acrescentado **em `metrics.ts`**.
+2. **`atingida`, `expirada` e `em_atraso` são DERIVADOS na leitura**, de valor × alvo × prazo,
+   com `hoje` injetado pelo servidor. O CHECK da migration **não aceita** esses três valores —
+   verificado no banco. Só decisão do usuário (`planejada`, `ativa`, `pausada`, `concluida`,
+   `cancelada`) é gravada, e ela **vence sempre**: uma meta pausada não vira "atingida"
+   sozinha porque o número passou pelo alvo.
+3. **Alterar a meta não reescreve o passado.** Cada campo que muda o significado (alvo,
+   partida, prazo, direção, período, unidade, medição, situação) vira uma linha em
+   `training_goal_progress` com anterior, novo, data e origem. Renomear a meta não polui o
+   histórico; mudar o alvo, sim.
+4. **Ausência de dado é `null` com motivo, nunca zero.** Meta corporal sem medição, exercício
+   nunca executado e aderência sem planejamento devolvem `null`, e a tela escreve o porquê em
+   vez de desenhar uma barra em 0% que pareceria fracasso. Já um período de frequência **sem
+   nenhum treino vale 0** — aí o zero é fato medido, não buraco.
+5. **Nenhuma divisão por zero.** Período vazio é caso normal (férias, lesão, semana corrida):
+   toda razão devolve `null` e a tela diz "sem base de comparação". Um teste serializa o
+   dashboard inteiro de um período vazio e exige que não apareça `NaN` nem `Infinity`.
+6. **Sem prescrição.** O sistema não sugere alvo, prazo, direção nem carga; a distribuição por
+   grupo muscular é apresentada como **"seu registro de treinamento"**, nunca como "o ideal é
+   X séries".
+7. **Sem linguagem de culpa.** O calendário de consistência mostra treinado, parcial, descanso
+   planejado, planejado sem execução e **dia livre** — sem vermelho de alarme e sem "faltas".
+   Um teste varre os rótulos procurando palavras de cobrança.
+8. **Nenhuma afirmação de causalidade.** Treino e corpo aparecem lado a lado com o aviso
+   explícito de que correlação não é causa.
+
+### O valor de uma meta, e de onde ele vem
+
+`goalCurrentValue` **não calcula**: recebe `PeriodMetrics`/`FrequencyMetrics` prontos e escolhe
+o número que responde àquela meta. As melhores marcas de um exercício saem das séries
+concluídas e não-aquecimento (a mesma regra de `records.ts`), e o **1RM só entra dentro da
+faixa de validade** — acima dela vem com aviso e não vira marca, como na 17-D. Toda meta que
+usa 1RM carrega a qualidade `parcial` com a frase "é uma ESTIMATIVA, não uma carga testada".
+
+### Períodos: calendário para o que é semanal/mensal, bloco para o resto
+
+`semanal` e `mensal` acompanham o CALENDÁRIO (é o que as palavras significam para quem lê);
+`trimestral`, `semestral` e `anual` são blocos contados a partir de `starts_on` — uma meta que
+começou em março fecha o trimestre no fim de maio, não porque o trimestre do calendário
+terminou. Em todos os casos a janela é **presa** a `[starts_on, ends_on]`. A aritmética de mês
+ganhou `addMonthsIso` em `schedule.ts` (prende ao último dia: 31/01 + 1 mês = 28/02), com teste.
+
+### Telas
+
+- **`/treinos/metas`** — criar, acompanhar, pausar, retomar, concluir, cancelar e excluir;
+  marcos intermediários marcados na barra; histórico de alterações dobrável em cada card;
+  registro manual só na meta personalizada.
+- **`/treinos/relatorios`** — período (semana/mês/ano/personalizado), agrupamento (dia/semana/
+  mês), comparação com o período anterior, aderência, grupos musculares, exercícios, recordes,
+  medidas e **exportação CSV** com período, regra de contagem e qualidade no cabeçalho.
+- **`/treinos/evolucao`** — ganhou a aba **Corpo**: gráfico com linha interrompida no dia sem
+  medição, tabela equivalente, registro de medida e fotos privadas, tudo pelo módulo central.
+  A aba Corpo funciona **mesmo sem treino registrado**.
+- **`/treinos/calendario?visao=consistencia`** — mapa de 6 meses, com legenda contada e
+  `aria-label` por dia.
+- **`/treinos`** — visão geral completa: hoje, semana com comparação e aderência, metas em
+  andamento, evolução recente (peso + séries por grupo) e ações rápidas.
+- **Preparação da sessão** pré-preenche o peso corporal com `getLatestWeight()`. O valor da
+  sessão vence sempre; o do histórico é só sugestão editável, e o que ficar gravado continua
+  sendo o peso **daquele** treino.
+- **`/api/export`** passou a incluir as 28 tabelas `training_*`. A base global de exercícios
+  fica de fora pelo mesmo motivo da TACO: não é dado do usuário e a migration a recria.
 
 ## O que foi implementado na Subfase 16-E (medidas corporais, fotos e relatórios)
 

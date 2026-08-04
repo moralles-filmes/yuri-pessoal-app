@@ -460,7 +460,7 @@ irmão em compras: **toda decisão sobre o que soma com o quê sai de `shopping.
 
 ---
 
-## Módulo Treinos (Fase 17 — Subfases A, B, C e D concluídas)
+## Módulo Treinos (Fase 17 — Subfases A, B, C, D e E concluídas)
 
 Módulo central em `/treinos`, com **navegação interna própria** (13 submódulos) no mesmo
 padrão do TO-DO e da Dieta. Segue o fluxo do resto do sistema: Server Component lê → Server
@@ -484,7 +484,7 @@ personalizado            → campos livres
 ```
 
 `src/lib/training/tracking.ts` é a **única** fonte dessa matriz — formulário, treino-modelo
-(17-B), sessão (17-C), volume (17-D, em `metrics.ts`) e relatório (17-E) leem dali. Duas consequências que
+(17-B), sessão (17-C), volume (17-D, em `metrics.ts`) e metas/dashboards/relatórios (17-E) leem dali. Duas consequências que
 parecem detalhe e não são, ambas cobertas por teste:
 
 1. **Assistência SUBTRAI carga**; carga adicional soma. Inverter o sinal faria o app mostrar
@@ -508,8 +508,11 @@ parecem detalhe e não são, ambas cobertas por teste:
 5. **Nenhum asset de terceiros.** A base de exercícios é autoral; sem imagem, vídeo, texto de
    instrução ou banco de dados copiado de apps de treino. Procedência em
    `data/training/exercise-base/ATTRIBUTION.md`.
-6. **Medidas corporais são `body_*`** — módulo central compartilhado com a Dieta. Quem chegar
-   primeiro (16-E ou 17-E) cria; o outro consome. **Nunca duas tabelas de peso corporal.**
+6. **Medidas corporais são `body_*`** — módulo central compartilhado com a Dieta. A **16-E
+   criou** e a **17-E consumiu**, sem criar tabela nenhuma: `src/lib/body/queries.ts`,
+   `actions/body-measurements.ts`, `measurements.ts` e os componentes `body/*` servem aos dois
+   módulos. `training_sessions.body_weight_kg` é o peso USADO naquele treino, congelado — não é
+   histórico de medida. **Nunca duas tabelas de peso corporal.**
 7. **Ferramenta de organização e registro.** Sem diagnóstico, sem prescrição, sem garantia de
    resultado, sem sugestão de carga máxima e sem incentivo a treinar com dor.
 
@@ -633,7 +636,7 @@ o snapshot. `history-queries.ts` **não tem nenhuma leitura de `training_workout
 consulta ao catálogo em toda a subfase está em `records-sync.ts`, para decidir o FUTURO (qual
 regra se aplica, qual o menor salto realizável, qual linha do modelo receberia a carga aceita).
 
-### Schema (26 tabelas: 7 na 17-A + 7 na 17-B + 9 na 17-C + 3 na 17-D)
+### Schema (28 tabelas: 7 na 17-A + 7 na 17-B + 9 na 17-C + 3 na 17-D + 2 na 17-E)
 **17-A** — `training_muscle_groups`, `training_equipment`, `training_exercises`,
 `training_exercise_muscles` (secundários, com trigger que impede repetir o principal),
 `training_exercise_alternatives` (relação dirigida, do usuário), `training_exercise_prefs`
@@ -660,6 +663,31 @@ leitura.
 execução por usuário, **um** descanso ativo por sessão, **uma** pausa aberta por sessão e **um**
 local padrão por usuário.
 
+### Metas, dashboards e relatórios (17-E)
+
+**Duas tabelas** — `training_goals` (a meta) e `training_goal_progress` (o histórico dela).
+Nenhuma tabela de medida corporal: a meta corporal aponta para `body_measurement_types` (16-E)
+com `on delete set null`, e a leitura marca "medida removida" em vez de inventar um zero.
+
+Quatro regras moram nesta subfase, todas testadas:
+
+- **`atingida`, `expirada` e `em_atraso` são DERIVADOS** de valor × alvo × prazo, com `hoje`
+  injetado. O CHECK do banco recusa os três — verificado. Decisão do usuário vence sempre.
+- **Alterar a meta não reescreve o passado**: cada campo que muda o significado vira linha em
+  `training_goal_progress`, com anterior, novo, data e origem.
+- **`dashboards.ts` e `reports.ts` CONSOMEM `metrics.ts`** — um teste compara os totais do
+  dashboard com `aggregateSessions` e exige igualdade.
+- **Período vazio não divide por zero**: toda razão devolve `null` e a tela diz "sem base". Um
+  teste serializa o dashboard de um período vazio e proíbe `NaN`/`Infinity`.
+
+Os períodos `semanal`/`mensal` acompanham o calendário; `trimestral`/`semestral`/`anual` são
+blocos contados de `starts_on` — e todos presos a `[starts_on, ends_on]`. `addMonthsIso`
+(`schedule.ts`) prende ao último dia do mês (31/01 + 1 mês = 28/02).
+
+O **calendário de consistência** classifica cada dia em treinado, parcial, descanso planejado,
+planejado sem execução, livre ou futuro — **sem linguagem de culpa**, com um teste que varre os
+rótulos procurando palavras de cobrança.
+
 ### Mapa de arquivos
 | Camada | Caminho |
 | --- | --- |
@@ -680,14 +708,19 @@ local padrão por usuário.
 | **Recordes: detecção e consolidação (puro)** | `src/lib/training/records.ts` + `records.test.ts` |
 | **Progressão: regra, bloqueio e motivo (puro)** | `src/lib/training/progression.ts` + `progression.test.ts` |
 | **Histórico: filtro, grupo, comparação (puro)** | `src/lib/training/history.ts` + `history.test.ts` |
-| Leitura (server-only) | `src/lib/training/queries.ts` · `routine-queries.ts` · `session-queries.ts` · `history-queries.ts` |
+| **Metas: progresso, status derivado, marcos (puro)** | `src/lib/training/goals.ts` + `goals.test.ts` |
+| **Dashboards: período, comparação, aderência, consistência (puro)** | `src/lib/training/dashboards.ts` + `dashboards.test.ts` |
+| **Relatórios e linhas de CSV (puro)** | `src/lib/training/reports.ts` + `reports.test.ts` |
+| Leitura (server-only) | `src/lib/training/queries.ts` · `routine-queries.ts` · `session-queries.ts` · `history-queries.ts` · `goal-queries.ts` |
 | Sincronização de recordes/sugestões (I/O) | `src/lib/training/records-sync.ts` |
-| Validação Zod | `src/lib/validators/training.ts` · `training-routines.ts` · `training-session.ts` · `training-history.ts` |
-| Server Actions | `src/lib/actions/training-{exercises,preferences,programs,workouts,schedule,sessions,locations,history}.ts` |
+| Validação Zod | `src/lib/validators/training.ts` · `training-routines.ts` · `training-session.ts` · `training-history.ts` · `training-goals.ts` |
+| Server Actions | `src/lib/actions/training-{exercises,preferences,programs,workouts,schedule,sessions,locations,history,goals}.ts` |
 | Rotas | `src/app/(app)/treinos/` |
 | Componentes | `src/components/training/` · `src/components/training/session/` |
 | Pipeline da base | `scripts/training/` · dados em `data/training/exercise-base/` |
 
 **Todo número agregado do módulo sai de `src/lib/training/metrics.ts` (17-D)** — do mesmo jeito
-que todo total da Dieta sai de `calc.ts`. Histórico, gráfico, recorde, visão geral e, a partir da
-17-E, dashboards e relatórios **consomem** essa fonte; nenhum deles recalcula.
+que todo total da Dieta sai de `calc.ts`. Histórico, gráfico, recorde, visão geral, **metas,
+dashboards e relatórios (17-E)** consomem essa fonte; nenhum deles recalcula. Um teste de
+`dashboards.test.ts` compara os totais do dashboard com `aggregateSessions` chamado direto e
+exige igualdade — se alguém refizer a conta, ele quebra.
