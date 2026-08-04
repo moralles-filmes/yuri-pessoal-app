@@ -13,6 +13,7 @@ import {
   getPlannedMeals,
 } from "@/lib/nutrition/diary-queries";
 import { getFoods } from "@/lib/nutrition/queries";
+import { getRecipesWithTotals } from "@/lib/nutrition/recipe-queries";
 import type { PlannedFoodData } from "@/lib/nutrition/diary";
 import { PlanningClient } from "./planning-client";
 
@@ -43,13 +44,15 @@ export default async function PlanejamentoPage({
 
   const week = weekDays(date);
 
-  const [meals, weekMeals, plans, mealTypes, foods, measuresByFood] = await Promise.all([
+  const [meals, weekMeals, plans, mealTypes, foods, measuresByFood, recipes] = await Promise.all([
     getPlannedMeals(date, date),
     view === "semana" ? getPlannedMeals(week[0], week[6]) : Promise.resolve([]),
     getNutritionPlans(),
     getMealTypes(),
     getFoods(),
     getAllMeasuresByFood(),
+    // 16-C: uma receita pode ser um item planejado, e o total do dia precisa contá-la.
+    getRecipesWithTotals(),
   ]);
 
   const visibleMeals = [...meals, ...weekMeals];
@@ -90,6 +93,17 @@ export default async function PlanejamentoPage({
       foods={foods}
       measures={[...measuresByFood.entries()]}
       foodData={foodData}
+      recipes={recipes.map((recipe) => ({
+        id: recipe.id,
+        name: recipe.name,
+        servings: recipe.servings,
+        servingLabel: recipe.servingLabel,
+        totalWeightG: recipe.totalWeightG,
+        isFavorite: recipe.isFavorite,
+        isArchived: recipe.isArchived,
+        useCount: recipe.useCount,
+        totals: recipe.calc.totals,
+      }))}
     />
   );
 }

@@ -1,8 +1,174 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
 > ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
-> (16-A e 16-B concluídas) e a **Fase 17 — Módulo Treinos** (17-A concluída). Este arquivo tem
-> o resumo das duas, na ordem em que foram concluídas — a mais recente primeiro.
+> (16-A, 16-B e 16-C concluídas) e a **Fase 17 — Módulo Treinos** (17-A e 17-B concluídas).
+> Este arquivo tem o resumo das duas, na ordem em que foram concluídas — a mais recente
+> primeiro.
+
+---
+
+## Subfase 16-C — Dieta e Alimentação · Receitas, refeições-modelo e substituições (2026-08-04) ✅
+
+Terceira das 6 subfases da **Fase 16**. A 16-B fez o sistema saber o que foi comido item a
+item; a 16-C entrega o que torna o uso diário rápido — **receita**, **refeição-modelo** e
+**substituição** — sem abrir um segundo caminho de gravação. **+79 testes puros.**
+
+### A regra que a subfase existe para garantir
+**O peso de uma comida pronta não se deduz somando os ingredientes crus.** Um refogado perde
+água, um bolo perde água e ganha volume, um feijão ganha água — a variação depende do fogo, do
+tempo e da panela. Por isso `total_weight_g` é **informado**, e sem ele o **"por 100 g" fica
+indisponível com explicação**, em vez de cair para a soma dos crus: daria um número plausível
+e errado, e ninguém perceberia.
+
+### ⛔ O ponto mais importante: um caminho só de gravação
+`buildRecipeEntrySnapshot` **chama** `buildDiaryEntrySnapshot` (16-B). Nenhuma tabela
+paralela, nenhuma segunda fórmula. Por construção: o total do dia soma o `nutrients_snapshot`,
+editar/excluir a receita **não muda o passado**, e a qualidade do cálculo viaja com o número.
+`entry_kind` ganhou `'receita'` e `'modelo'` (o CHECK da 16-B já previa); os itens planejados
+ganharam `item_kind` + `recipe_id` + `portion_unit`.
+
+**Provado no banco real** (role `authenticated`): editada a receita (nome, rendimento e peso) e
+depois **excluída**, o consumo continuou com o nome de origem, 276,75 kcal e a qualidade
+"parcial" congelada — `recipe_id` nulo, `entry_kind` intacto.
+
+### Decisões de contrato
+1. **Sem peso final, só porções** — e `grams_equivalent`/`base_quantity`/`base_unit` ficam
+   **NULOS**. "Não sei quanto pesa" ≠ "pesa zero".
+2. **A qualidade agregada passou a viajar com o número.** `SnapshotNutrient` e
+   `ComputedNutrient` ganharam `quality` **opcional**, e `sumNutrient` o respeita. Sem isso,
+   uma receita parcial entraria no dia como exata. Mudança aditiva: nada da 16-B mudou.
+3. **Modelo aponta para a receita**, não copia ingredientes: melhorar a receita melhora o
+   modelo.
+4. **Adicionar o mesmo modelo duas vezes não duplica.** A idempotência é de leitura
+   (`templateItemsToRegister`), e não um índice único — um modelo vira VÁRIAS linhas no diário,
+   e o índice impediria o caso normal. Repetir de propósito exige interruptor explícito.
+5. **Substituir é sempre confirmado**, e a diferença é **recalculada no servidor** antes de
+   gravar: o que a tela mostrou é conferido, nunca copiado.
+6. **Nenhuma equivalência é afirmada.** A ordem das alternativas é a prioridade do usuário; a
+   tolerância é preferência dele; "fora da tolerância" é aviso, não impedimento.
+7. **Diferença desconhecida não é zero** — vira "não dá para comparar", e o impacto no dia fica
+   parcial.
+8. **Duplicar não herda passado**: uso, favorito, arquivamento, consumo e logs ficam com o
+   original.
+
+### Schema — 8 tabelas + 2 alterações (0 lints de schema)
+`20260804100000_nutrition_recipe_categories` · `…100100_nutrition_recipes` ·
+`…100200_nutrition_recipe_ingredients` · `…100300_nutrition_meal_templates` ·
+`…100400_nutrition_meal_template_items` · `…100500_nutrition_substitution_groups` ·
+`…100600_nutrition_substitution_options` · `…100700_nutrition_substitution_logs` ·
+`…100800_nutrition_diary_entries_recipe_template` ·
+`…100900_nutrition_planned_meal_items_recipe`.
+**A foto da receita reusa `attachments` + o bucket privado `attachments`** — sem bucket novo.
+
+### Arquivos criados
+**Lógica pura + testes:** `src/lib/nutrition/recipe.ts` (+36), `substitution.ts` (+26),
+`meal-template.ts` (+17), `entry-columns.ts`.
+**Leitura/validação/mutação:** `src/lib/nutrition/recipe-queries.ts` ·
+`src/lib/validators/nutrition-recipes.ts` · `src/lib/actions/nutrition-recipes.ts`,
+`nutrition-meal-templates.ts`, `nutrition-substitutions.ts`.
+**UI:** `src/components/nutrition/{recipe-picker-dialog,recipe-form-dialog,recipe-detail-sheet,substitution-compare-dialog}.tsx` ·
+`src/app/(app)/nutricao/receitas/{page,recipes-client,loading}.tsx` ·
+`refeicoes/{page,meal-templates-client,loading}.tsx` ·
+`substituicoes/{page,substitutions-client,loading}.tsx`.
+
+### Arquivos alterados
+`src/lib/nutrition/{calc,constants,types,snapshot,diary-queries}.ts` (extensões aditivas) ·
+`src/lib/actions/nutrition-diary.ts` (usa o `snapshotColumns` compartilhado) ·
+`src/app/(app)/nutricao/{page,diario/*,planejamento/*}.tsx` · **`src/app/api/export/route.ts`**
+· `src/types/supabase.ts` (regenerado) · docs.
+
+### Pendências da 16-B fechadas aqui
+- **Montar os dias de um modelo de semana pela interface.**
+- **Escopo na EDIÇÃO de refeição planejada** (`updatePlannedMealInScope` já existia e era
+  testada; só a UI faltava).
+
+### Verificação
+`npm run test:run` **1.073** · `npm run lint` limpo · `npx tsc --noEmit` limpo ·
+`npm run build` verde com as 12 rotas de `/nutricao`. Suíte passa em `TZ=UTC` e
+`TZ=Asia/Tokyo`. Smoke: rotas privadas → **307 `/login`**, `/login` → 200,
+`/api/cron/notifications` → **401**. No banco, pela role `authenticated`: intruso não lê, não
+edita e não apaga nas 8 tabelas; forja bloqueada; 8 CHECKs conferidos; imutabilidade e
+sobrevivência do histórico provadas. Dados de teste removidos; catálogo reconferido (597
+alimentos, 21.147 valores).
+
+### Pendências conscientes (registradas, não silenciadas)
+| Item | Onde entra |
+| --- | --- |
+| Lista de compras a partir das receitas | **16-D** — a consolidação **não pode somar unidades incompatíveis** |
+| Relatório de "substituições mais realizadas" | **16-E** |
+| Busca global e lançamento rápido de receita | **16-F** |
+| **Upload** da foto da receita pela interface (tabela e bucket já são lidos) | **16-F**, junto do upload de anexos |
+| Reordenar ingredientes arrastando (a action existe e não tem gatilho) | **16-F** |
+| Sugestão automática por IA ou heurística nova | **Nunca** |
+
+### Próxima subfase
+**16-D — Lista de compras** · `docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md`
+
+---
+
+## Subfase 17-B — Treinos · Programas, treinos-modelo e planejamento semanal (2026-08-03) ✅
+
+Segunda das 6 subfases da **Fase 17**. A 17-A entregou o vocabulário e o catálogo; a 17-B
+entrega a camada que transforma exercícios soltos em **rotina**. **Testes de Treinos: 66 → 171**
+(+105); suíte total: **1073**.
+
+### A regra que a subfase existe para garantir
+**Modelo é intenção e muda quando o usuário quiser; execução é fato consumado e nunca muda.**
+
+A 17-B constrói só o lado **mutável** — mas constrói **sabendo** que a 17-C vai congelar um
+snapshot dele. Por isso **nenhuma tabela desta subfase tem coluna apontando para sessão**, e
+nenhuma leitura de histórico pode passar por elas. O versionamento (`version` +
+`superseded_by` + `version_group_id`) **não** é o que protege o histórico: ele existe para o
+usuário **comparar intenções** ("meu ABC de janeiro × o de maio"), e só é criado por escolha
+explícita ("salvar como nova versão") — versionar a cada edição encheria o banco.
+
+### `expandPlannedSets` — o que a 17-C recebe pronto
+Dois jeitos de configurar séries (uniforme por `default_sets` × série a série em
+`training_workout_sets`) resolvidos num **formato único**, `PlannedSet[]`. Existindo ao menos
+uma linha configurada, ela é a verdade; `null` numa série herda do exercício; a numeração é
+reescrita 1..N; e os campos que o `tracking_type` não usa viram `null` **pela matriz de
+`tracking.ts`** — nenhuma segunda matriz de medição foi criada.
+
+### O que foi entregue
+- **7 tabelas** `training_*` (RLS + FORCE RLS + índices + trigger `updated_at`). Total do
+  projeto: **81 tabelas**. Security advisor: **0 lints de schema**.
+- **`src/lib/training/workout.ts`** (+47 testes) — `expandPlannedSets`, contagem de séries,
+  séries por grupo muscular com **principal e secundário separados**, duração estimada
+  (execução + descanso, sem o descanso da última série, marcada como **parcial** quando falta
+  alvo), validação de superset (contíguo × furado × sozinho) e reordenação que nunca perde item.
+- **`src/lib/training/schedule.ts`** (+58 testes) — data pura em `Date.UTC` (virada de mês, de
+  ano, bissexto), semana com primeiro dia configurável, **status derivado**, rodízio A/B/C que
+  avança **por dia de treino**, ciclo de N semanas com âncora, duplicação de semana,
+  reagendamento preservando a **primeira** data original e aderência que **só conta o passado**.
+- **Quatro telas reais**: `/treinos/programas`, `/treinos/treinos` + construtor em
+  `/treinos/treinos/[id]`, `/treinos/calendario` (semana, mês, lista, arrastar para reagendar)
+  e `/treinos/hoje`. A visão geral passou a mostrar a semana planejada.
+- **Nenhuma exclusão silenciosa**: excluir programa pergunta o destino dos treinos; excluir
+  treino pergunta o destino do planejamento futuro. Os schemas dessas ações **não têm valor
+  padrão** para a escolha.
+
+### Decisões de schema registradas
+| Decisão | Motivo |
+| --- | --- |
+| Junção `training_program_workouts`, e não FK direta | Treino pode ser avulso ou compor vários programas |
+| Três colunas de carga planejada (peso / adicional / assistência) | Num campo só, alguma tela erraria o sinal e mostraria progresso na regressão |
+| `exercise_id` `on delete restrict` | Excluir exercício em uso não pode removê-lo do treino em silêncio |
+| `workout_id` do planejamento `on delete set null` | Excluir treino não apaga dia planejado; a linha vira "treino removido" |
+| `is_active` **sem** índice único | Mais de um programa em uso gera **aviso**, não erro de banco |
+| Índice único parcial por dia | No máximo **um** marcador de descanso por data |
+
+### O que ficou de fora (escopo consciente, registrado na 17-C)
+Iniciar/executar sessão, cronômetro, registro de série, snapshot histórico e sugestão de carga
+— tudo **17-C**. `/treinos/hoje` diz isso na tela em vez de mostrar um botão que não faz nada.
+Marcar um dia como **concluído** também é da 17-C: fazê-lo à mão aqui criaria histórico sem
+execução.
+
+### Verificação
+`npm run test:run` **1073** · `npm run lint` 0 erros · `npx tsc --noEmit` 0 erros nos arquivos
+da 17-B · `npm run build` OK (verificado numa árvore isolada, porque a frente da Dieta estava
+com trabalho em andamento no mesmo diretório) · smoke test: rotas privadas → 307 `/login`,
+`/api/cron/*` → 401 sem segredo · **13 verificações de RLS e de invariantes executadas no banco
+pela role `authenticated`**, com limpeza total depois (106 exercícios, 1 usuário, 0 resíduos).
 
 ---
 

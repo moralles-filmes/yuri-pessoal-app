@@ -15,6 +15,11 @@ import {
   getWaterForDate,
 } from "@/lib/nutrition/diary-queries";
 import { getFoods, getNutrientDefinitions, indexNutrients } from "@/lib/nutrition/queries";
+import {
+  getMealTemplatesWithTotals,
+  getRecipesWithTotals,
+  getSubstitutionGroupsWithTotals,
+} from "@/lib/nutrition/recipe-queries";
 import type { PlannedFoodData } from "@/lib/nutrition/diary";
 import { DiaryClient } from "./diary-client";
 
@@ -52,18 +57,34 @@ export default async function DiarioPage({
   const week = weekDays(date);
   const [from, to] = view === "semana" ? [week[0], week[6]] : [date, date];
 
-  const [meals, weekMeals, planned, mealTypes, periods, foods, nutrientList, measuresByFood, water] =
-    await Promise.all([
-      getDiaryMeals(date, date),
-      view === "semana" ? getDiaryMeals(from, to) : Promise.resolve([]),
-      getPlannedMeals(date, date),
-      getMealTypes(),
-      getGoalPeriods(),
-      getFoods(),
-      getNutrientDefinitions(),
-      getAllMeasuresByFood(),
-      getWaterForDate(date),
-    ]);
+  const [
+    meals,
+    weekMeals,
+    planned,
+    mealTypes,
+    periods,
+    foods,
+    nutrientList,
+    measuresByFood,
+    water,
+    recipes,
+    templates,
+    substitutionGroups,
+  ] = await Promise.all([
+    getDiaryMeals(date, date),
+    view === "semana" ? getDiaryMeals(from, to) : Promise.resolve([]),
+    getPlannedMeals(date, date),
+    getMealTypes(),
+    getGoalPeriods(),
+    getFoods(),
+    getNutrientDefinitions(),
+    getAllMeasuresByFood(),
+    getWaterForDate(date),
+    // 16-C: receitas e refeições-modelo entram no diário pelo mesmo caminho de snapshot.
+    getRecipesWithTotals(),
+    getMealTemplatesWithTotals(),
+    getSubstitutionGroupsWithTotals(),
+  ]);
 
   // Nutrientes dos alimentos que aparecem no PLANEJAMENTO do dia — necessários para calcular
   // o lado "planejado" da comparação. O lado "consumido" sai do snapshot e não precisa disto.
@@ -111,6 +132,25 @@ export default async function DiarioPage({
       foodNames={foodNames}
       nutrients={indexNutrients(nutrientList)}
       water={water}
+      recipes={recipes.map((recipe) => ({
+        id: recipe.id,
+        name: recipe.name,
+        servings: recipe.servings,
+        servingLabel: recipe.servingLabel,
+        totalWeightG: recipe.totalWeightG,
+        isFavorite: recipe.isFavorite,
+        isArchived: recipe.isArchived,
+        useCount: recipe.useCount,
+        totals: recipe.calc.totals,
+      }))}
+      templates={templates.map((template) => ({
+        id: template.id,
+        name: template.name,
+        itemCount: template.items.length,
+        isArchived: template.isArchived,
+        totals: template.calc.totals,
+      }))}
+      substitutionGroups={substitutionGroups}
     />
   );
 }

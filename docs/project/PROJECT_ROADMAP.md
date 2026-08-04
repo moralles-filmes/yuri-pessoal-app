@@ -198,7 +198,7 @@ visual, textos, logotipos, telas ou assets de terceiros é copiado.**
 | --- | --- | --- | --- |
 | 16-A | Fundação, núcleo de cálculo e catálogo de alimentos | `PHASE_16_A_NUTRITION_FOUNDATION_FOODS.md` | ✅ Concluída |
 | 16-B | Metas, diário alimentar e planejamento | `PHASE_16_B_NUTRITION_DIARY_PLANNING.md` | ✅ Concluída |
-| 16-C | Receitas, refeições-modelo e substituições | `PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` | ⬜ |
+| 16-C | Receitas, refeições-modelo e substituições | `PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` | ✅ Concluída |
 | 16-D | Lista de compras e despensa | `PHASE_16_D_NUTRITION_SHOPPING_LIST.md` | ⬜ |
 | 16-E | Medidas corporais, evolução e relatórios | `PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` | ⬜ |
 | 16-F | Integrações, notificações e polimento | `PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` | ⬜ |
@@ -247,8 +247,8 @@ copiado.** A base de exercícios é de autoria própria.
 | Subfase | Tema | Arquivo | Status |
 | --- | --- | --- | --- |
 | 17-A | Fundação, vocabulário e catálogo de exercícios | `PHASE_17_A_TRAINING_FOUNDATION_EXERCISES.md` | ✅ Concluída |
-| 17-B | Programas, treinos-modelo e planejamento semanal | `PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` | ⬜ Próxima |
-| 17-C | Preparação, sessão ao vivo, cronômetro e recuperação | `PHASE_17_C_TRAINING_LIVE_SESSION.md` | ⬜ |
+| 17-B | Programas, treinos-modelo e planejamento semanal | `PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` | ✅ Concluída |
+| 17-C | Preparação, sessão ao vivo, cronômetro e recuperação | `PHASE_17_C_TRAINING_LIVE_SESSION.md` | ⬜ Próxima |
 | 17-D | Histórico, volume, recordes e progressão | `PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` | ⬜ |
 | 17-E | Metas, medidas corporais compartilhadas e dashboards | `PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` | ⬜ |
 | 17-F | Integrações, notificações, resiliência e polimento | `PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` | ⬜ |

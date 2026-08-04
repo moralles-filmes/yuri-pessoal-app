@@ -11,6 +11,7 @@ import type {
   ChangeKind,
   DataQuality,
   DayKind,
+  DiaryEntryKind,
   FoodType,
   GoalDirection,
   GoalType,
@@ -18,10 +19,15 @@ import type {
   MeasureUnitType,
   NutrientGroup,
   NutrientMethod,
+  NutrientTotalQuality,
   NutrientUnit,
   NutrientValueState,
+  PortionUnit,
   PreparationState,
   ProfileSex,
+  SubstitutionLevel,
+  SubstitutionOptionKind,
+  TemplateItemKind,
 } from "./constants";
 
 /** Definição de um nutriente (catálogo global de referência). */
@@ -49,6 +55,12 @@ export type FoodNutrientValue = {
   state: NutrientValueState;
   method: NutrientMethod;
   sourceNote: string | null;
+  /**
+   * Só em valor JÁ AGREGADO (16-C): o total de uma receita é a soma dos ingredientes e carrega
+   * a qualidade dessa soma. `calc.ts` propaga o campo para o total do dia não parecer exato
+   * quando um ingrediente não tinha o nutriente analisado.
+   */
+  quality?: NutrientTotalQuality;
 };
 
 /** Medida caseira com conversão real, específica de um alimento. */
@@ -292,6 +304,12 @@ export type SnapshotNutrient = {
   amount: number | null;
   state: NutrientValueState;
   method: NutrientMethod;
+  /**
+   * Presente quando a linha do diário é uma RECEITA ou uma REFEIÇÃO-MODELO (16-C): o valor é
+   * a soma de vários itens e pode ser um piso. Congelar a qualidade junto do número é o que
+   * impede o total do dia de parecer exato quando não é.
+   */
+  quality?: NutrientTotalQuality;
 };
 
 export type NutrientSnapshotBag = Record<string, SnapshotNutrient>;
@@ -303,10 +321,16 @@ export type DiaryEntrySnapshot = {
   brandSnapshot: string | null;
   quantity: number;
   measureLabel: string | null;
-  /** Quantidade na unidade-base do alimento (ver `baseUnit`). */
-  gramsEquivalent: number;
-  baseQuantity: number;
-  baseUnit: BaseUnit;
+  /**
+   * Quantidade na unidade-base do alimento (ver `baseUnit`).
+   *
+   * NULO só acontece com RECEITA registrada em porções sem peso final informado (16-C): não há
+   * como converter porção em gramas sem estimar, e estimar é proibido. Nulo aqui significa
+   * "não sei o peso" — nunca "pesa zero".
+   */
+  gramsEquivalent: number | null;
+  baseQuantity: number | null;
+  baseUnit: BaseUnit | null;
   sourceIdSnapshot: string | null;
   sourceNameSnapshot: string | null;
   sourceVersionSnapshot: string | null;
@@ -326,7 +350,11 @@ export type DiaryEntry = DiaryEntrySnapshot & {
   diaryMealId: string;
   /** Referência informativa. Nulo quando o alimento foi excluído do catálogo. */
   foodId: string | null;
-  entryKind: "alimento" | "livre";
+  /** Procedência (16-C). Nulos quando a receita/modelo foi excluída — o snapshot permanece. */
+  recipeId: string | null;
+  mealTemplateId: string | null;
+  /** Discriminador ESTÁVEL da linha; não depende de nenhuma FK, que pode virar nula. */
+  entryKind: DiaryEntryKind;
   plannedItemId: string | null;
   changeKind: ChangeKind;
   changedAt: string | null;
@@ -356,11 +384,18 @@ export type DiaryMeal = {
 export type PlannedMealItem = {
   id: string;
   plannedMealId: string;
+  /** Discriminador ESTÁVEL (16-C): `foodId`/`recipeId` viram nulos ao excluir a origem. */
+  itemKind: TemplateItemKind;
   foodId: string | null;
+  recipeId: string | null;
+  /** Refeição-modelo que originou o item, quando veio de uma. Procedência, não vínculo vivo. */
+  mealTemplateId: string | null;
   customLabel: string | null;
   quantity: number | null;
   measureId: string | null;
   measureLabel: string | null;
+  /** Só para item de receita: a quantidade está em porções ou em gramas do preparo pronto. */
+  portionUnit: PortionUnit | null;
   isOptional: boolean;
   notes: string | null;
   position: number;
@@ -403,4 +438,181 @@ export type NutritionPlan = {
   isActive: boolean;
   isDefault: boolean;
   days: PlanDay[];
+};
+
+/* ═════════════ Fase 16-C — Receitas, refeições-modelo e substituições ═════════════ */
+
+export type RecipeCategory = {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  position: number;
+};
+
+/** Ingrediente de uma receita. Sem snapshot: a receita é um MODELO mutável. */
+export type RecipeIngredient = {
+  id: string;
+  recipeId: string;
+  foodId: string | null;
+  customLabel: string | null;
+  quantity: number | null;
+  measureId: string | null;
+  measureLabel: string | null;
+  /** Conversão para a unidade-base, resolvida ao salvar. Nula = conversão impossível. */
+  gramsEquivalent: number | null;
+  isOptional: boolean;
+  note: string | null;
+  position: number;
+};
+
+export type Recipe = {
+  id: string;
+  name: string;
+  description: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  instructions: string | null;
+  prepMinutes: number | null;
+  cookMinutes: number | null;
+  /** Rendimento em porções. Alterar recalcula o POR PORÇÃO sem mexer no total. */
+  servings: number;
+  servingLabel: string | null;
+  yieldNote: string | null;
+  /**
+   * Peso final preparado, INFORMADO. Nulo = sem "por 100 g" e sem registro em gramas.
+   * Nunca estimado a partir dos ingredientes (regra 1 da subfase).
+   */
+  totalWeightG: number | null;
+  source: string | null;
+  tags: string[];
+  notes: string | null;
+  isFavorite: boolean;
+  isArchived: boolean;
+  originRecipeId: string | null;
+  isCopy: boolean;
+  useCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  ingredients: RecipeIngredient[];
+  /** Anexo de foto (bucket privado `attachments`), quando houver. */
+  photo: { id: string; storagePath: string; fileName: string } | null;
+};
+
+export type MealTemplateItem = {
+  id: string;
+  templateId: string;
+  itemKind: TemplateItemKind;
+  foodId: string | null;
+  recipeId: string | null;
+  customLabel: string | null;
+  quantity: number | null;
+  measureId: string | null;
+  measureLabel: string | null;
+  portionUnit: PortionUnit | null;
+  isOptional: boolean;
+  notes: string | null;
+  position: number;
+};
+
+export type MealTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  mealTypeId: string | null;
+  mealTypeName: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  suggestedTime: string | null;
+  tags: string[];
+  notes: string | null;
+  isFavorite: boolean;
+  isArchived: boolean;
+  originTemplateId: string | null;
+  isCopy: boolean;
+  useCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: MealTemplateItem[];
+};
+
+/* ───────────────────────────── Substituições ───────────────────────────── */
+
+/** Tolerâncias por macro, em %. Nulo = "não defini", nunca "tolerância zero". */
+export type SubstitutionTolerances = {
+  energy: number | null;
+  protein: number | null;
+  carb: number | null;
+  fat: number | null;
+  fiber: number | null;
+};
+
+export type SubstitutionOption = {
+  id: string;
+  groupId: string;
+  optionKind: SubstitutionOptionKind;
+  foodId: string | null;
+  recipeId: string | null;
+  mealTemplateId: string | null;
+  customLabel: string | null;
+  quantity: number | null;
+  measureId: string | null;
+  measureLabel: string | null;
+  portionUnit: PortionUnit | null;
+  /** Preferência DO USUÁRIO (menor = preferida). Não é ranking nutricional calculado. */
+  priority: number;
+  notes: string | null;
+  isActive: boolean;
+  position: number;
+  /** Rótulo já resolvido para exibição. */
+  label: string;
+};
+
+export type SubstitutionGroup = {
+  id: string;
+  name: string;
+  groupKind: SubstitutionLevel;
+  description: string | null;
+  foodId: string | null;
+  recipeId: string | null;
+  mealTemplateId: string | null;
+  customLabel: string | null;
+  baseQuantity: number | null;
+  baseMeasureId: string | null;
+  baseMeasureLabel: string | null;
+  basePortionUnit: PortionUnit | null;
+  tolerances: SubstitutionTolerances;
+  restrictions: string[];
+  notes: string | null;
+  isActive: boolean;
+  position: number;
+  /** Rótulo do item original, já resolvido para exibição. */
+  originalLabel: string;
+  options: SubstitutionOption[];
+};
+
+/** Uma troca confirmada. Rótulos e diferença são CONGELADOS na gravação. */
+export type SubstitutionLog = {
+  id: string;
+  groupId: string | null;
+  optionId: string | null;
+  level: SubstitutionLevel;
+  appliedOn: string;
+  diaryMealId: string | null;
+  diaryEntryId: string | null;
+  originalLabel: string;
+  originalQuantity: number | null;
+  originalMeasureLabel: string | null;
+  replacementLabel: string;
+  replacementQuantity: number | null;
+  replacementMeasureLabel: string | null;
+  deltaEnergyKcal: number | null;
+  deltaProteinG: number | null;
+  deltaCarbG: number | null;
+  deltaFatG: number | null;
+  deltaFiberG: number | null;
+  reason: string | null;
+  createdAt: string;
 };
