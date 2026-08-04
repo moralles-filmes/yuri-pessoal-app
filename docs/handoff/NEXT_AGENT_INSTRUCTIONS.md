@@ -1,11 +1,16 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-## 📌 Estado atual — duas frentes em andamento (Dieta e Treinos)
+## 📌 Estado atual — Dieta CONCLUÍDA, Treinos em andamento
 
-As 14 fases do roadmap original e a Fase 15 (TO-DO) estão concluídas. Em **2026-08-03** o
-usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**.
+As 14 fases do roadmap original e a Fase 15 (TO-DO) estão concluídas.
 
-**As Subfases 16-A a 16-E estão concluídas e aplicadas no banco.** Crie um branch novo.
+✅ **A FASE 16 — Dieta e Alimentação está CONCLUÍDA** (16-A a 16-F, em 2026-08-04). Os **40
+critérios de aceite gerais foram validados um a um na 16-F: 40 de 40 atendidos** — o veredito
+item a item está em `docs/handoff/LAST_PHASE_SUMMARY.md`. A frente Dieta entra em
+**manutenção/iteração**: **não há 16-G**, e melhoria nela entra como tarefa avulsa, não como
+subfase.
+
+**Só a frente Treinos tem próxima subfase.** Crie um branch novo.
 
 > ⚠️ **Há outra frente em paralelo.** Em 2026-08-03 também foi aberta a **Fase 17 — Módulo
 > Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a **17-A a 17-E
@@ -20,12 +25,12 @@ usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 
 > `body_*`, e a única coluna de peso corporal fora delas é `training_sessions.body_weight_kg`,
 > que é o peso USADO naquele treino (17-C), não histórico. **Nunca duas tabelas de peso.**
 
-## ▶️ Duas tarefas possíveis — confirme com o usuário qual frente ele quer
+## ▶️ A próxima tarefa
 
 | Frente | Próxima subfase | Arquivo |
 | --- | --- | --- |
-| **Dieta e Alimentação** | **16-F** — Integrações, notificações e polimento (**fecha a Fase 16**) | `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` |
 | **Treinos** | **17-F** — Integrações, notificações, resiliência e polimento (**fecha a Fase 17**) | `docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` |
+| ~~Dieta e Alimentação~~ | ✅ **Fase 16 concluída** (16-A a 16-F) — em manutenção/iteração, sem próxima subfase | — |
 
 Faça **uma** subfase por vez.
 
@@ -90,60 +95,44 @@ Para as integrações: `src/lib/notifications/*` (`dedupe_key` + Cron),
 
 ---
 
-## ▶️ Frente Dieta: Subfase 16-F — Integrações, notificações e polimento
+## ✅ Frente Dieta: FASE 16 CONCLUÍDA — manutenção/iteração
 
-**Arquivo da fase (leia inteiro antes de codar):**
-`docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md`
+**Não há próxima subfase.** As 6 subfases (16-A a 16-F) estão entregues e os **40 critérios de
+aceite gerais foram validados um a um na 16-F: 40 de 40 atendidos**. O veredito item a item, as
+decisões técnicas e as pendências conscientes estão em `docs/handoff/LAST_PHASE_SUMMARY.md`.
 
-É a subfase que **FECHA a Fase 16** — ela precisa validar os **40 critérios de aceite gerais**
-listados no próprio arquivo, não só os seus.
+Melhoria na Dieta agora entra como **tarefa avulsa**, não como subfase. Antes de mexer, leia
+`docs/project/CURRENT_STATUS.md` (seções 16-A a 16-F) e respeite as **24 invariantes do módulo**
+listadas mais abaixo — elas continuam valendo integralmente.
 
-**Leitura obrigatória, nesta ordem:**
-1. `docs/project/PROJECT_BRIEFING.md` (Módulo 17 — Dieta e Alimentação)
-2. `docs/project/PROJECT_RULES.md`
-3. `docs/project/PROJECT_ARCHITECTURE.md` (seção "Módulo Dieta e Alimentação")
-4. `docs/project/PROJECT_ROADMAP.md` (Fase 16, tabela das subfases)
-5. `docs/project/CURRENT_STATUS.md`
-6. `docs/handoff/LAST_PHASE_SUMMARY.md`
-7. `docs/phases/PHASE_16_A_…` até `PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
-8. `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` (o que você vai fazer)
+### O que a 16-F acrescentou e você vai encontrar ligado
 
-**Código que você precisa entender antes de escrever qualquer linha:**
-`src/lib/nutrition/calc.ts`, `snapshot.ts`, `diary.ts`, `goals.ts`, `calendar.ts`,
-`shopping.ts`, **`reports.ts`**, **`diary-month.ts`**, **`csv-export.ts`**, `constants.ts`,
-`types.ts`, `queries.ts`, `diary-queries.ts`, `recipe-queries.ts`, `shopping-queries.ts`,
-**`report-queries.ts`** e as actions `nutrition-*.ts`. Para medidas e fotos:
-**`src/lib/body/*`** e `src/lib/actions/body-measurements.ts`.
-Para as integrações: `src/lib/notifications/*` (`dedupe_key` + Cron), `src/lib/search/queries.ts`,
-`src/lib/dashboard/queries.ts` e `src/components/quick-add/*`.
-
-### 📋 O que a 16-F precisa fechar (pendências acumuladas de A a E)
-
-| Item | Situação hoje |
+| Integração | Onde |
 | --- | --- |
-| **Leitura de código de barras pela câmera** | Campo, busca e cadastro manual já existem (16-A) |
-| **Upload da foto de RECEITA pela interface** | A tabela `attachments` e o bucket já são LIDOS pela receita; falta o gatilho de envio. **A 16-E já resolveu esse fluxo para as fotos de evolução — copie o padrão de `uploadProgressPhoto`** |
-| **Arrastar ingrediente** (`reorderRecipeIngredients`) | A action existe e é testada pelo tipo; nenhuma tela a chama |
-| **Busca global e lançamento rápido** de receita/refeição-modelo | Nada ligado ainda |
-| **Cards no dashboard geral** (consumo do dia, evolução recente) | Nada ligado ainda |
-| **Notificação de item da despensa vencendo** | A data já é gravada e exibida (16-D) |
-| **Gerenciar corredores de mercado pela interface** | `saveMarketCategory`, `deleteMarketCategory` e `reorderMarketCategories` existem; nenhuma tela os chama |
-| **Escolher a quantidade de cada receita** ao gerar a lista por "receitas" | Hoje entra 1 porção e o usuário ajusta no item |
-| **Gerenciar tipos de medida pela interface** (16-E) | `saveMeasurementType`, `reorderMeasurementTypes` e `deleteMeasurementType` existem; a semente dos 16 tipos cobre o uso normal |
-| **Notificação de medição pendente** e **cards de evolução** (16-E) | Nada ligado ainda |
-| **XLSX nos relatórios** (16-E) | O pacote `xlsx` já está no projeto; a 16-E entregou CSV, que é o padrão |
+| Card "Dieta e Alimentação" no dashboard geral | `src/components/dashboard/general/nutrition-card.tsx` + `cards.ts` |
+| Busca global (alimento, receita, modelo, plano, lista) | `src/lib/search/queries.ts` + **`nutrition-links.ts`** (deep-links puros e testados) |
+| Lançamento rápido (alimento, refeição, medida, item de lista) | `src/lib/actions/nutrition-quick-add.ts` |
+| 8 famílias de notificação | `src/lib/notifications/nutrition.ts` (puro) + `nutrition-cron.ts` (I/O) |
+| Preferências de notificação **realmente respeitadas** | `filterByPrefs` em `generate.ts`, chamado pelo Cron |
+| Pontes opcionais com TO-DO e Agenda | `src/lib/actions/nutrition-integrations.ts` |
+| Scanner de código de barras | `src/components/nutrition/barcode-scanner-dialog.tsx` |
+| Upload da foto de receita | `uploadRecipePhoto`/`deleteRecipePhoto` em `nutrition-recipes.ts` |
+| XLSX dos relatórios | `src/lib/reports/xlsx.ts` (import dinâmico) |
 
-### 📌 O que a 16-E deixou pronto para você
+### ⛔ Três coisas que a 16-F deixou travadas e não devem ser afrouxadas
 
-- **`src/lib/nutrition/reports.ts`** — toda agregação por período já existe e é testada
-  (54 testes): `buildDailyReports`, `summarizePeriod`, `nutrientReport`, `topFoods`,
-  `substitutionRanking`, `marketSpendReport`, `diaryFrequency`, `adherenceRanking`. Os cards do
-  dashboard geral devem **consumir daqui**, não recalcular.
-- **`src/lib/nutrition/csv-export.ts`** — linhas prontas para CSV, reusando `toCsv`/`downloadCsv`
-  (Fase 14). **Célula vazia ≠ zero**, e a citação da TACO viaja com o arquivo.
-- **`src/lib/body/*`** — o módulo central de medidas, com upload de foto privada resolvido.
-- **`uploadProgressPhoto`** (`src/lib/actions/body-measurements.ts`) — o padrão de upload com
-  validação real no servidor. **A foto de receita deve seguir exatamente esse caminho.**
+1. **`filterByPrefs` é o ÚNICO ponto onde a preferência decide.** Não replique a checagem dentro
+   de uma família — filtrar num lugar só é o que impede um tipo novo de escapar por esquecimento.
+2. **O teste de "sem linguagem de culpa" varre todo texto gerado.** Se você acrescentar uma
+   família, ela passa pelo mesmo teste. Isso é proposital.
+3. **`src/lib/search/nutrition-links.ts` é a fonte única dos deep-links.** A despensa **não é
+   rota própria** (`?aba=despensa` de `/nutricao/compras`); um link direto vira 404.
+
+### 🔴 Ponto de contato NOVO entre as duas frentes
+
+**`src/lib/settings/export-tables.ts`** — a lista de tabelas do backup saiu de
+`src/app/api/export/route.ts` e virou módulo puro testado. A frente Treinos acrescenta as
+`training_*` ali na 17-E. **ACRESCENTE a sua seção; não reescreva a do outro.**
 
 ## ⛔ Invariantes do módulo Treinos que NÃO podem ser quebradas
 
@@ -268,29 +257,32 @@ PostgREST não permite repetir — o `upsert` falha **só em runtime** (`42P10`)
 (`coalesce(...)`), como o de escopo de `nutrition_goal_items`. E no PostgREST,
 `.eq(coluna, null)` **não** casa com NULL: use `.is(coluna, null)`.
 
-## 📋 Pendências registradas da 16-A a 16-E (escopo consciente, não bugs)
+## 📋 Pendências da Fase 16 — TODAS as de 16-F foram fechadas
 
-| Item | Onde resolve |
+| Item | Situação |
 | --- | --- |
-| Medidas caseiras oficiais em massa (a TACO não publica) | Segunda fonte pelo mesmo pipeline; nada foi inventado |
-| Leitura de código de barras pela câmera | 16-F (campo, busca e cadastro manual já existem) |
-| Cards no dashboard geral, busca global, lançamento rápido, notificações | 16-F |
-| ~~Exportação do catálogo em CSV~~ | ✅ **fechada na 16-E** (`csv-export.ts`) |
-| ~~**Visão de mês do diário**~~ | ✅ **fechada na 16-E** (`diary-month.ts`) |
-| ~~Montar os dias de um modelo pela interface~~ | ✅ **fechada na 16-C** |
-| ~~`updatePlannedMealInScope` sem escopo na UI de edição~~ | ✅ **fechada na 16-C** |
-| ~~Relatório de micronutrientes por período~~ | ✅ **fechada na 16-E** (com a coluna "dias incompletos") |
-| ~~Relatório de "substituições mais realizadas"~~ | ✅ **fechada na 16-E** |
-| **Upload** da foto de receita pela interface — a tabela `attachments` e o bucket já são LIDOS pela receita; falta o gatilho de envio | 16-F |
-| `reorderRecipeIngredients` existe e é testada pelo tipo, mas nenhuma tela a chama (arrastar ingrediente) | 16-F |
-| Busca global e lançamento rápido de receita/refeição-modelo | 16-F |
-| ~~Relatório de gasto com mercado × financeiro~~ | ✅ **fechada na 16-E** (reusa `summarizeShoppingList`; virar lançamento continua sendo decisão do usuário) |
-| Notificação de item da despensa vencendo (a data já é gravada e exibida) | 16-F |
-| Gerenciar corredores de mercado pela interface — `saveMarketCategory`, `deleteMarketCategory` e `reorderMarketCategories` existem, mas nenhuma tela os chama (a semente cobre o uso normal) | 16-F |
-| Escolher a quantidade de cada receita ao gerar a lista por "receitas" (hoje entra 1 porção e o usuário ajusta no item) | 16-F |
-| Gerenciar tipos de medida pela interface — `saveMeasurementType`, `reorderMeasurementTypes` e `deleteMeasurementType` existem, mas nenhuma tela os chama (a semente dos 16 tipos cobre o uso normal) | 16-F |
-| Notificação de medição pendente e cards de evolução no dashboard geral | 16-F |
-| XLSX nos relatórios (o pacote `xlsx` já está no projeto; a 16-E entregou CSV, o padrão) | 16-F |
+| ~~Leitura de código de barras pela câmera~~ | ✅ **fechada na 16-F** (`barcode-scanner-dialog.tsx`, `BarcodeDetector` nativa) |
+| ~~Cards no dashboard geral~~ | ✅ **fechada na 16-F** (`nutrition-card.tsx`) |
+| ~~Busca global e lançamento rápido~~ | ✅ **fechada na 16-F** (5 tipos de busca + 4 de lançamento) |
+| ~~Notificações (refeição, planejamento, compras, despensa, medida)~~ | ✅ **fechada na 16-F** (8 famílias) |
+| ~~**Upload** da foto de receita pela interface~~ | ✅ **fechada na 16-F** (copiando `uploadProgressPhoto`) |
+| ~~`reorderRecipeIngredients` sem gatilho (arrastar ingrediente)~~ | ✅ **fechada na 16-F** (arrasto + setas ↑↓) |
+| ~~Gerenciar corredores de mercado pela interface~~ | ✅ **fechada na 16-F** |
+| ~~Gerenciar tipos de medida pela interface~~ | ✅ **fechada na 16-F** |
+| ~~Escolher a quantidade de cada receita ao gerar a lista~~ | ✅ **fechada na 16-F** (campo de porções) |
+| ~~XLSX nos relatórios~~ | ✅ **fechada na 16-F** (uma aba por seção, import dinâmico) |
+| ~~Exportação do catálogo em CSV~~ · ~~visão de mês~~ · ~~micronutrientes~~ · ~~substituições~~ · ~~gasto com mercado~~ | ✅ fechadas na 16-E |
+| ~~Montar os dias de um modelo~~ · ~~escopo na edição de refeição planejada~~ | ✅ fechadas na 16-C |
+
+### Pendências que permanecem (escopo consciente, não bugs)
+
+| Item | Por quê |
+| --- | --- |
+| Medidas caseiras oficiais em massa | A TACO não publica. Entra por segunda fonte, pelo mesmo pipeline — nada foi inventado |
+| Base externa de código de barras (consultar produto pelo EAN) | **Decisão de produto**: dado nutricional de fonte não verificada não entra. O scanner identifica o código; os valores continuam sendo do usuário ou da base |
+| Canais externos de notificação (push/e-mail) | Fora do escopo do sistema inteiro; só com infraestrutura real de envio |
+| Integração com balança | Não planejado (`body_measurements.source` já prevê o campo) |
+| Prescrição/diagnóstico nutricional; comparação com outros usuários | **Nunca** — decisão de produto |
 | `src/lib/nutrition/calendar.ts` é consumido por `src/lib/body/` — se o acoplamento incomodar, **promova** a util central, nunca copie | Quando incomodar |
 
 ## 🔁 Como aplicar migrations neste projeto
@@ -337,7 +329,7 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
 
-Os testes existentes devem continuar passando (**1.630** com a 16-E e a 17-D integradas; as duas frentes
+Os testes existentes devem continuar passando (**1.846** com a Fase 16 inteira e a 17-E integradas; as duas frentes
 acrescentam testes em paralelo, então **rode antes de citar um número**) — e acrescente testes
 para toda lógica pura nova.
 A suíte precisa passar em qualquer fuso — confira com `TZ=UTC npx vitest run`.

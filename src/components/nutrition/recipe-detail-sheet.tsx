@@ -17,8 +17,11 @@
  */
 import * as React from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   ChefHat,
   Copy,
+  Image as ImageIcon,
   Pencil,
   Plus,
   Star,
@@ -26,6 +29,7 @@ import {
   Utensils,
   X,
 } from "lucide-react";
+import { RECIPE_PHOTO_ACCEPT_ATTRIBUTE } from "@/lib/nutrition/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -69,6 +73,9 @@ export function RecipeDetailSheet({
   onDelete,
   onAddIngredient,
   onRemoveIngredient,
+  onReorderIngredients,
+  onUploadPhoto,
+  onRemovePhoto,
   onCreateTemplate,
 }: {
   recipe: RecipeWithCalc | null;
@@ -83,15 +90,38 @@ export function RecipeDetailSheet({
   onDelete: () => void;
   onAddIngredient: () => void;
   onRemoveIngredient: (ingredientId: string) => void;
+  /** Fase 16-F — chama `reorderRecipeIngredients`, que existia desde a 16-C sem gatilho. */
+  onReorderIngredients: (orderedIds: string[]) => void;
+  /** Fase 16-F — envio da foto (FormData, para o servidor ver o arquivo real). */
+  onUploadPhoto: (file: File) => void;
+  onRemovePhoto: (attachmentId: string) => void;
   onCreateTemplate: () => void;
 }) {
   const [scope, setScope] = React.useState<Scope>("porcao");
+  const [dragId, setDragId] = React.useState<string | null>(null);
+  const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   const seen = recipe?.id ?? null;
   const [lastSeen, setLastSeen] = React.useState(seen);
   if (seen !== lastSeen) {
     setLastSeen(seen);
     setScope("porcao");
+    setDragId(null);
+  }
+
+  /**
+   * Move um ingrediente e manda a ordem inteira para `reorderRecipeIngredients`.
+   *
+   * Existe em DUAS formas de propósito: arrastar (mouse/toque) e as setas ↑ ↓ (teclado e
+   * leitor de tela). Uma lista reordenável só por arrasto é inacessível — e acessibilidade
+   * é requisito da subfase, não enfeite.
+   */
+  function move(ids: string[], from: number, to: number) {
+    if (from === to || to < 0 || to >= ids.length) return;
+    const next = [...ids];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onReorderIngredients(next);
   }
 
   if (!recipe) return null;
@@ -206,21 +236,105 @@ export function RecipeDetailSheet({
 
             {/* ══ Ingredientes ══ */}
             <TabsContent value="ingredientes" className="space-y-3 pt-3">
+              {/* ══ Foto (16-F) — bucket PRIVADO, URL assinada de 5 min gerada na leitura.
+                  O caminho no Storage nunca chega aqui. ══ */}
+              <div className="flex items-center gap-3 rounded-lg border p-3">
+                {recipe.photo?.url ? (
+                  // URL assinada de curta duração num bucket privado — `next/image` a
+                  // otimizaria e cacharia, que é o oposto do que se quer aqui (16-E).
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={recipe.photo.url}
+                    alt={`Foto da receita ${recipe.name}`}
+                    className="size-16 shrink-0 rounded-md object-cover"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div
+                    aria-hidden
+                    className="grid size-16 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
+                  >
+                    <ImageIcon className="size-5" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">Foto da receita</p>
+                  <p className="text-xs text-muted-foreground">
+                    {recipe.photo
+                      ? recipe.photo.url
+                        ? "Guardada em armazenamento privado — o link expira em 5 minutos."
+                        : "A imagem existe, mas o link não pôde ser gerado agora."
+                      : "JPG, PNG, WEBP ou HEIC, até 8 MB."}
+                  </p>
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept={RECIPE_PHOTO_ACCEPT_ATTRIBUTE}
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    // O valor é limpo para escolher o MESMO arquivo duas vezes seguidas.
+                    e.target.value = "";
+                    if (file) onUploadPhoto(file);
+                  }}
+                />
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {recipe.photo ? "Trocar" : "Enviar"}
+                  </Button>
+                  {recipe.photo && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-8"
+                      aria-label="Remover foto da receita"
+                      disabled={pending}
+                      onClick={() => onRemovePhoto(recipe.photo!.id)}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
               {recipe.ingredients.length === 0 ? (
                 <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                   Nenhum ingrediente ainda. Sem eles não há valor nutricional para calcular.
                 </p>
               ) : (
                 <ul className="divide-y rounded-lg border">
-                  {recipe.ingredients.map((ingredient) => {
+                  {recipe.ingredients.map((ingredient, index) => {
                     const skip = skipById.get(ingredient.id);
+                    const ids = recipe.ingredients.map((i) => i.id);
                     const label =
                       ingredient.customLabel ??
                       (ingredient.foodId
                         ? (foodNames.get(ingredient.foodId) ?? "Alimento removido do catálogo")
                         : "Item");
                     return (
-                      <li key={ingredient.id} className="flex items-start justify-between gap-3 p-3">
+                      <li
+                        key={ingredient.id}
+                        draggable={!pending}
+                        onDragStart={() => setDragId(ingredient.id)}
+                        onDragEnd={() => setDragId(null)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (!dragId || dragId === ingredient.id) return;
+                          move(ids, ids.indexOf(dragId), index);
+                          setDragId(null);
+                        }}
+                        className={`flex items-start justify-between gap-3 p-3 ${
+                          dragId === ingredient.id ? "opacity-50" : ""
+                        }`}
+                      >
                         <div className="min-w-0">
                           <p className="truncate text-sm">
                             {label}
@@ -249,16 +363,40 @@ export function RecipeDetailSheet({
                             </p>
                           )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 shrink-0"
-                          aria-label={`Remover ${label}`}
-                          disabled={pending}
-                          onClick={() => onRemoveIngredient(ingredient.id)}
-                        >
-                          <X className="size-3.5" />
-                        </Button>
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          {/* Setas: o caminho por teclado e leitor de tela. Arrastar é o
+                              atalho de mouse, nunca a única forma de reordenar. */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            aria-label={`Mover ${label} para cima`}
+                            disabled={pending || index === 0}
+                            onClick={() => move(ids, index, index - 1)}
+                          >
+                            <ArrowUp className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            aria-label={`Mover ${label} para baixo`}
+                            disabled={pending || index === recipe.ingredients.length - 1}
+                            onClick={() => move(ids, index, index + 1)}
+                          >
+                            <ArrowDown className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            aria-label={`Remover ${label}`}
+                            disabled={pending}
+                            onClick={() => onRemoveIngredient(ingredient.id)}
+                          >
+                            <X className="size-3.5" />
+                          </Button>
+                        </div>
                       </li>
                     );
                   })}

@@ -501,8 +501,15 @@ export type Recipe = {
   createdAt: string;
   updatedAt: string;
   ingredients: RecipeIngredient[];
-  /** Anexo de foto (bucket privado `attachments`), quando houver. */
-  photo: { id: string; storagePath: string; fileName: string } | null;
+  /**
+   * Foto da receita (bucket PRIVADO `attachments`), quando houver.
+   *
+   * ⚠️ 16-F: `storagePath` NÃO sai mais do servidor — o cliente recebe apenas uma **URL
+   * assinada de curta duração**, gerada a cada leitura, exatamente como as fotos de evolução
+   * (invariante 21, 16-E). `url` é `null` quando a assinatura falha: a tela mostra um aviso,
+   * não uma imagem quebrada.
+   */
+  photo: { id: string; fileName: string; url: string | null } | null;
 };
 
 export type MealTemplateItem = {

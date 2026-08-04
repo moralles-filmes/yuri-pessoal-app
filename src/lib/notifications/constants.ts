@@ -55,8 +55,32 @@ export const NOTIFICATION_TYPES = [
   "todo_today",
   "todo_deadline",
   "todo_reminder",
+  // Fase 16-F — módulo Dieta e Alimentação.
+  "nutrition_meal_upcoming",
+  "nutrition_meal_missing",
+  "nutrition_plan_week",
+  "nutrition_shopping_pending",
+  "nutrition_pantry_expiring",
+  "nutrition_measurement_due",
+  "nutrition_goal_close",
+  "nutrition_food_review",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+/**
+ * Fase 16-F — tipos que nascem DESLIGADOS (opt-in explícito).
+ *
+ * A regra geral do sistema é "ausente = ligado" (`notificationEnabled`), porque um alerta de
+ * fatura atrasada tem de existir sem configuração prévia. Mas acompanhar o quanto falta para a
+ * meta do dia é outra coisa: no módulo que trata de comida e corpo, um aviso não pedido sobre
+ * o quanto a pessoa ainda "pode" comer pode ser lido como cobrança. Quem quiser, liga.
+ */
+export const NOTIFICATION_OPT_IN_TYPES: NotificationType[] = ["nutrition_goal_close"];
+
+/** True se o tipo só existe quando o usuário liga explicitamente. */
+export function isOptInNotification(type: string): boolean {
+  return (NOTIFICATION_OPT_IN_TYPES as string[]).includes(type);
+}
 
 export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   invoice_due: "Fatura a vencer",
@@ -76,6 +100,14 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   todo_today: "TO-DO de hoje",
   todo_deadline: "Prazo próximo",
   todo_reminder: "Lembrete de tarefa",
+  nutrition_meal_upcoming: "Próxima refeição",
+  nutrition_meal_missing: "Refeição sem registro",
+  nutrition_plan_week: "Planejamento da semana",
+  nutrition_shopping_pending: "Lista de compras pendente",
+  nutrition_pantry_expiring: "Validade na despensa",
+  nutrition_measurement_due: "Medida pendente",
+  nutrition_goal_close: "Meta do dia por perto",
+  nutrition_food_review: "Alimento a revisar",
 };
 
 /** Rótulo amigável de um tipo (com fallback para tipos desconhecidos). */

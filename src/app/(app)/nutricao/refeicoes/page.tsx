@@ -24,10 +24,16 @@ export const metadata: Metadata = { title: "Refeições-modelo · Dieta" };
  * O total de cada modelo é calculado no SERVIDOR, somando alimentos e receitas pelo mesmo
  * núcleo (`templateTotals` → `calc.ts`). As receitas citadas são resolvidas uma vez só.
  */
-export default async function RefeicoesPage() {
+export default async function RefeicoesPage({
+  searchParams,
+}: {
+  // `?modelo=<id>` é o deep-link da busca global (16-F).
+  searchParams: Promise<{ modelo?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
+  const { modelo } = await searchParams;
   await ensureMealTypes(user.id);
 
   const [templates, recipes, categories, mealTypes, foods, nutrientList, measuresByFood] =
@@ -61,6 +67,7 @@ export default async function RefeicoesPage() {
       foods={foods}
       measures={[...measuresByFood.entries()]}
       nutrients={indexNutrients(nutrientList)}
+      initialDetailId={templates.some((t) => t.id === modelo) ? (modelo ?? null) : null}
     />
   );
 }

@@ -17,9 +17,16 @@ export const metadata: Metadata = { title: "Receitas · Dieta" };
  * apenas o escala para "por porção" e "por 100 g" — nenhuma tabela de nutrientes desce para o
  * navegador, e nenhum total nasce lá.
  */
-export default async function ReceitasPage() {
+export default async function ReceitasPage({
+  searchParams,
+}: {
+  // `?receita=<id>` é o deep-link da busca global (16-F).
+  searchParams: Promise<{ receita?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+
+  const { receita } = await searchParams;
 
   const [recipes, categories, foods, nutrientList, measuresByFood] = await Promise.all([
     getRecipesWithTotals(),
@@ -36,6 +43,9 @@ export default async function ReceitasPage() {
       foods={foods}
       measures={[...measuresByFood.entries()]}
       nutrients={indexNutrients(nutrientList)}
+      // Só abre se a receita existir E for do usuário — a lista já veio filtrada pela RLS,
+      // então um id de terceiro simplesmente não casa e a tela abre normal.
+      initialDetailId={recipes.some((r) => r.id === receita) ? (receita ?? null) : null}
     />
   );
 }

@@ -4,9 +4,9 @@
 > Você só precisa **editar 1 linha** — a que começa com `>>> FASE A IMPLEMENTAR:`.
 > Use a tabela do fim para saber o nome do arquivo de cada fase.
 
-> ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: Fase 16 (Dieta, `/nutricao`) e
-> Fase 17 (Treinos, `/treinos`). Escolha **uma** por chat. A próxima de cada uma está em
-> `docs/project/CURRENT_STATUS.md`.
+> ✅ **A Fase 16 (Dieta, `/nutricao`) está CONCLUÍDA** desde 2026-08-04 — 16-A a 16-F, com os
+> 40 critérios de aceite validados. **Só a Fase 17 (Treinos, `/treinos`) tem próxima subfase.**
+> A frente Dieta está em manutenção: melhoria nela entra como tarefa avulsa.
 
 ---
 
@@ -41,6 +41,10 @@ Implemente AGORA apenas a fase indicada acima, seguindo o arquivo da fase e as r
   `git branch --show-current` ANTES de cada commit. As duas frentes usam a mesma pasta e a
   outra pode trocar a branch no meio do trabalho: já aconteceu de uma fase inteira ser
   commitada na branch da outra frente e o push subir uma branch vazia.
+  ACONTECEU DE NOVO NA 16-F (2026-08-04): a branch virou a da outra frente com o trabalho
+  ainda não commitado. Se acontecer: `git stash push -u -- src/`, volte para a SUA branch,
+  `git stash pop`, e confira que nenhum arquivo da outra frente entrou. COMMITE CEDO E
+  COMMITE SÓ OS SEUS ARQUIVOS.
 - Migrations em supabase/migrations/ (idempotentes, timestamp YYYYMMDDHHMMSS) com RLS +
   FORCE RLS por user_id = auth.uid() em TODAS as tabelas; índice em user_id; trigger
   updated_at. Nunca confie em user_id vindo do client — sempre auth.getUser().
@@ -102,19 +106,20 @@ do arquivo que o próximo agente deve abrir.
 | --- | --- |
 | 16-D | ✅ concluída (`PHASE_16_D_NUTRITION_SHOPPING_LIST.md`) |
 | 16-E | ✅ concluída (`PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`) |
-| 16-F | `Subfase 16-F — docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` ← **próxima (FECHA a Fase 16)** |
+| 16-F | `Subfase 16-F — docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` — ✅ **concluída (FECHOU a Fase 16)** |
 
 > ✅ **O encontro das duas frentes já aconteceu (2026-08-04).** A **16-E CRIOU** o módulo
 > central `body_*` (4 tabelas + `src/lib/body/`); a **17-E CONSOME** e **não cria tabela
 > nenhuma** — `getLatestWeight()` já está pronto para a preparação da sessão pré-preencher o
 > peso. Nunca duas tabelas de peso corporal.
 >
-> ⚠️ **A 16-F FECHA a Fase 16** e precisa validar os **40 critérios de aceite gerais** do
-> próprio arquivo — não só os seus. Ela também fecha as pendências acumuladas de A a E
-> (código de barras pela câmera, upload da foto de receita, arrastar ingrediente, busca global,
-> lançamento rápido, cards no dashboard, notificação de despensa vencendo, corredores de
-> mercado e tipos de medida pela interface, quantidade por receita na lista). A lista completa
-> está em `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
+> ✅ **A Fase 16 está CONCLUÍDA.** A 16-F validou os **40 critérios de aceite gerais** — 40 de
+> 40 atendidos (veredito item a item em `docs/handoff/LAST_PHASE_SUMMARY.md`). **Não há 16-G**:
+> a frente Dieta entra em manutenção/iteração. A 16-F também fechou todas as pendências
+> acumuladas de A a E — código de barras pela câmera, upload da foto de receita, arrastar
+> ingrediente, busca global, lançamento rápido, card no dashboard, notificações (8 famílias),
+> corredores de mercado e tipos de medida pela interface, quantidade por receita na lista e
+> XLSX nos relatórios.
 
 ### Fases do roadmap original (todas concluídas — referência histórica)
 

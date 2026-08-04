@@ -70,6 +70,7 @@ export function FoodsClient({
   tags,
   nutrientList,
   nutrients,
+  initialDetail,
 }: {
   foods: FoodListItem[];
   categories: FoodCategory[];
@@ -77,6 +78,13 @@ export function FoodsClient({
   tags: FoodTag[];
   nutrientList: NutrientDefinition[];
   nutrients: Record<string, NutrientDefinition>;
+  /**
+   * Fase 16-F — deep-link da busca global (`?alimento=<id>`). O detalhe vem RESOLVIDO DO
+   * SERVIDOR (e não buscado num efeito): o React Compiler está ativo e `setState` em
+   * `useEffect` é proibido no projeto. `null` = id inexistente ou de outro usuário — a tela
+   * abre normal, sem erro.
+   */
+  initialDetail?: FoodDetail | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -91,8 +99,8 @@ export function FoodsClient({
 
   const [limit, setLimit] = React.useState(PAGE_SIZE);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
-  const [detail, setDetail] = React.useState<FoodDetail | null>(null);
-  const [detailOpen, setDetailOpen] = React.useState(false);
+  const [detail, setDetail] = React.useState<FoodDetail | null>(initialDetail ?? null);
+  const [detailOpen, setDetailOpen] = React.useState(Boolean(initialDetail));
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<FoodDetail | null>(null);
   const [measureOpen, setMeasureOpen] = React.useState(false);

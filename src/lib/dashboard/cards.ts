@@ -14,6 +14,9 @@ export const DASH_CARD_IDS = [
   "todo",
   "faturas",
   "agenda",
+  // Fase 16-F — Dieta. Acrescentar no FIM da lista é o que faz `normalizeLayout` anexar o
+  // card novo ao layout já salvo em vez de reordenar a preferência do usuário.
+  "dieta",
   "tarefas",
   "habitos",
   "estudos",
@@ -27,6 +30,7 @@ export const DASH_CARD_TITLES: Record<DashCardId, string> = {
   todo: "TO-DO",
   faturas: "Cartões & Faturas",
   agenda: "Agenda",
+  dieta: "Dieta e Alimentação",
   tarefas: "Tarefas & Rotinas",
   habitos: "Hábitos",
   estudos: "Estudos",

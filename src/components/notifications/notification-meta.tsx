@@ -4,17 +4,22 @@
  */
 import {
   AlarmClock,
+  Apple,
   Bell,
   CalendarClock,
+  CalendarRange,
   CreditCard,
   Droplets,
   GraduationCap,
   HandCoins,
   ListChecks,
   ListTodo,
+  Ruler,
   ReceiptText,
+  ShoppingCart,
   Target,
   TrendingUp,
+  UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
 import type { NotificationType } from "@/lib/notifications/constants";
@@ -40,6 +45,15 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   todo_today: ListTodo,
   todo_deadline: AlarmClock,
   todo_reminder: Bell,
+  // Fase 16-F — Dieta e Alimentação.
+  nutrition_meal_upcoming: UtensilsCrossed,
+  nutrition_meal_missing: UtensilsCrossed,
+  nutrition_plan_week: CalendarRange,
+  nutrition_shopping_pending: ShoppingCart,
+  nutrition_pantry_expiring: Apple,
+  nutrition_measurement_due: Ruler,
+  nutrition_goal_close: Target,
+  nutrition_food_review: Apple,
 };
 
 export function notificationIcon(type: string): LucideIcon {

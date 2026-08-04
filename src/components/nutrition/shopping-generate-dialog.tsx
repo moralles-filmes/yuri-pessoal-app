@@ -76,7 +76,12 @@ export function ShoppingGenerateDialog({
   const [to, setTo] = React.useState(addDaysIso(startOfWeekIso(hoje), 6));
   const [recurrence, setRecurrence] = React.useState<(typeof SHOPPING_RECURRENCES)[number]>("nenhuma");
   const [name, setName] = React.useState("");
-  const [selectedRecipes, setSelectedRecipes] = React.useState<Set<string>>(new Set());
+  // 16-F: a quantidade de PORÇÕES de cada receita passou a ser escolhida aqui. Antes toda
+  // receita entrava com 1 e o usuário corrigia item a item — o que, numa receita de 4
+  // porções, subestimava a compra inteira.
+  const [selectedRecipes, setSelectedRecipes] = React.useState<Map<string, number>>(
+    new Map(),
+  );
   const [discountPantry, setDiscountPantry] = React.useState(false);
   const [removeObsolete, setRemoveObsolete] = React.useState(false);
   const [preview, setPreview] = React.useState<ShoppingGenerationPreview | null>(null);
@@ -92,7 +97,7 @@ export function ShoppingGenerateDialog({
       setTo(addDaysIso(startOfWeekIso(hoje), 6));
       setRecurrence("nenhuma");
       setName("");
-      setSelectedRecipes(new Set());
+      setSelectedRecipes(new Map());
       setDiscountPantry(false);
       setRemoveObsolete(false);
       setPreview(null);
@@ -119,7 +124,12 @@ export function ShoppingGenerateDialog({
     source_kind: source,
     from: source === "receitas" ? null : from,
     to: source === "receitas" ? null : source === "dia" ? from : to,
-    recipes: [...selectedRecipes].map((id) => ({ recipe_id: id, quantity: 1, portion_unit: "porcao" })),
+    recipes: [...selectedRecipes.entries()].map(([id, quantity]) => ({
+      recipe_id: id,
+      // Quantidade em PORÇÕES. Zero ou vazio não chega aqui: o campo tem mínimo 1.
+      quantity,
+      portion_unit: "porcao",
+    })),
     recurrence,
     discount_pantry: discountPantry,
     remove_obsolete: removeObsolete,
@@ -211,30 +221,68 @@ export function ShoppingGenerateDialog({
                 {recipes.length === 0 && (
                   <p className="p-2 text-sm text-muted-foreground">Nenhuma receita cadastrada.</p>
                 )}
-                {recipes.map((recipe) => (
-                  <label
-                    key={recipe.id}
-                    className="flex items-center gap-3 rounded-md px-2 py-2.5 text-sm"
-                  >
-                    <Checkbox
-                      checked={selectedRecipes.has(recipe.id)}
-                      onCheckedChange={() => {
-                        setSelectedRecipes((current) => {
-                          const next = new Set(current);
-                          if (next.has(recipe.id)) next.delete(recipe.id);
-                          else next.add(recipe.id);
-                          return next;
-                        });
-                        setPreview(null);
-                      }}
-                      className="size-5"
-                    />
-                    <span className="min-w-0 flex-1 truncate">{recipe.name}</span>
-                  </label>
-                ))}
+                {recipes.map((recipe) => {
+                  const selected = selectedRecipes.has(recipe.id);
+                  return (
+                    <div
+                      key={recipe.id}
+                      className="flex items-center gap-3 rounded-md px-2 py-2.5 text-sm"
+                    >
+                      <Checkbox
+                        id={`gerar-receita-${recipe.id}`}
+                        checked={selected}
+                        onCheckedChange={() => {
+                          setSelectedRecipes((current) => {
+                            const next = new Map(current);
+                            if (next.has(recipe.id)) next.delete(recipe.id);
+                            else next.set(recipe.id, 1);
+                            return next;
+                          });
+                          setPreview(null);
+                        }}
+                        className="size-5"
+                      />
+                      <Label
+                        htmlFor={`gerar-receita-${recipe.id}`}
+                        className="min-w-0 flex-1 truncate font-normal"
+                      >
+                        {recipe.name}
+                      </Label>
+                      {selected && (
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <Input
+                            type="number"
+                            min={1}
+                            step="any"
+                            inputMode="decimal"
+                            aria-label={`Porções de ${recipe.name}`}
+                            value={selectedRecipes.get(recipe.id) ?? 1}
+                            onChange={(e) => {
+                              const parsed = Number(e.target.value);
+                              setSelectedRecipes((current) => {
+                                const next = new Map(current);
+                                // Valor inválido volta para 1 em vez de virar 0: "zero
+                                // porções" seria pedir para não comprar nada.
+                                next.set(
+                                  recipe.id,
+                                  Number.isFinite(parsed) && parsed > 0 ? parsed : 1,
+                                );
+                                return next;
+                              });
+                              setPreview(null);
+                            }}
+                            className="h-9 w-20"
+                          />
+                          <span className="text-xs text-muted-foreground">porç.</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Cada receita entra com 1 porção. Ajuste a quantidade depois, direto no item.
+                A quantidade é em porções da receita. Os ingredientes entram na lista já
+                multiplicados — e continuam ajustáveis item a item depois.
               </p>
             </div>
           )}

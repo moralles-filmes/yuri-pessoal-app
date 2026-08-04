@@ -31,6 +31,8 @@ import {
   ChevronDown,
   Copy,
   ListChecks,
+  ListOrdered,
+  ListTodo,
   Package,
   Pencil,
   Plus,
@@ -50,6 +52,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { MarketCategoriesDialog } from "@/components/nutrition/market-categories-dialog";
+import { createShoppingTodo } from "@/lib/actions/nutrition-integrations";
 import { SortableList } from "@/components/shared/sortable-list";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
@@ -138,6 +142,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
     item: null,
   });
   const [generateOpen, setGenerateOpen] = React.useState(false);
+  const [categoriesOpen, setCategoriesOpen] = React.useState(false);
   const [regenerate, setRegenerate] = React.useState(false);
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
 
@@ -273,6 +278,16 @@ export function ShoppingClient(props: ShoppingClientProps) {
         title="Lista de compras"
         description="Gerada do planejamento, agrupada por corredor e feita para o celular."
       >
+        {/* 16-F: `saveMarketCategory`/`deleteMarketCategory`/`reorderMarketCategories`
+            existiam desde a 16-D sem nenhuma tela chamando. */}
+        <Button
+          variant="outline"
+          className="h-11"
+          onClick={() => setCategoriesOpen(true)}
+        >
+          <ListOrdered className="size-4" />
+          Corredores
+        </Button>
         <Button
           variant="outline"
           className="h-11"
@@ -464,6 +479,22 @@ export function ShoppingClient(props: ShoppingClientProps) {
               Exportar
             </Button>
 
+            {/* 16-F — ponte OPCIONAL com o TO-DO. Nada vira tarefa sozinho. */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11"
+              disabled={pending}
+              onClick={() =>
+                run(
+                  () => createShoppingTodo({ list_id: list.id, scheduled_date: null }),
+                  "Tarefa criada no TO-DO.",
+                )
+              }
+            >
+              <ListTodo className="size-4" />
+              Criar tarefa
+            </Button>
             <Button variant="outline" size="sm" className="h-11" onClick={() => window.print()}>
               <Printer className="size-4" />
               Imprimir
@@ -836,6 +867,12 @@ export function ShoppingClient(props: ShoppingClientProps) {
             toast.error(result.error ?? "Não foi possível salvar.");
           }
         }}
+      />
+
+      <MarketCategoriesDialog
+        open={categoriesOpen}
+        onOpenChange={setCategoriesOpen}
+        categories={props.categories}
       />
 
       <ShoppingGenerateDialog

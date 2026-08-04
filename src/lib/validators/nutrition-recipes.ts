@@ -20,6 +20,10 @@
  */
 import { z } from "zod";
 import {
+  RECIPE_PHOTO_ALLOWED_MIME,
+  RECIPE_PHOTO_MAX_BYTES,
+} from "@/lib/nutrition/constants";
+import {
   PORTION_UNITS,
   SUBSTITUTION_LEVELS,
   SUBSTITUTION_OPTION_KINDS,
@@ -382,3 +386,30 @@ export const applySubstitutionSchema = z
 export type RecipeInput = z.infer<typeof recipeSchema>;
 export type MealTemplateInput = z.infer<typeof mealTemplateSchema>;
 export type SubstitutionGroupInput = z.infer<typeof substitutionGroupSchema>;
+
+/* ═══════════════════════════ Foto da receita (Fase 16-F) ═══════════════════════════ */
+
+export const recipePhotoSchema = z.object({
+  recipe_id: z.uuid("Receita inválida"),
+});
+
+/**
+ * O ARQUIVO. Tipo e tamanho conferidos sobre o `File` REAL recebido pela action — não sobre
+ * a extensão do nome, que o cliente escolhe.
+ *
+ * Mesmas regras (e mesmas constantes) das fotos de evolução da 16-E: duas listas de MIME
+ * aceito divergiriam na primeira vez que alguém acrescentasse um formato num lado só.
+ * `size === 0` é recusado à parte porque um arquivo vazio passa em qualquer teste de
+ * "tamanho máximo" e depois vira uma imagem quebrada no bucket.
+ */
+export const recipePhotoFileSchema = z
+  .instanceof(File, { message: "Selecione uma imagem" })
+  .refine((file) => file.size > 0, "O arquivo está vazio")
+  .refine(
+    (file) => file.size <= RECIPE_PHOTO_MAX_BYTES,
+    `A imagem deve ter no máximo ${Math.round(RECIPE_PHOTO_MAX_BYTES / (1024 * 1024))} MB`,
+  )
+  .refine(
+    (file) => (RECIPE_PHOTO_ALLOWED_MIME as readonly string[]).includes(file.type),
+    "Formato não aceito. Envie JPG, PNG, WEBP ou HEIC.",
+  );

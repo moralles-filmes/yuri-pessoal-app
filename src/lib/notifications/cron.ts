@@ -22,11 +22,15 @@ import {
 } from "@/lib/finance/dashboard";
 import type { CalendarEventRow } from "@/types/database";
 import {
+  filterByPrefs,
   generateNotifications,
   selectNewCandidates,
   type GenerateInput,
   type GenTask,
 } from "@/lib/notifications/generate";
+import { buildNutritionGenInput } from "@/lib/notifications/nutrition-cron";
+import { normalizeNotificationPrefs } from "@/lib/settings/constants";
+import { timeInSaoPaulo } from "@/lib/format";
 
 type Service = SupabaseClient<Database>;
 
@@ -44,6 +48,11 @@ export async function generateForUser(
   const todayIso = spDateIso(now);
   const nowMs = now.getTime();
   const mesAtual = todayIso.slice(0, 7);
+  // Minutos desde a meia-noite EM BRASÍLIA. `now.getHours()` devolveria a hora do processo —
+  // e o "faltam 30 min para o almoço" sairia com 3 horas de erro quando o TZ não estivesse
+  // configurado (a Vercel roda em UTC por padrão).
+  const [horaSp, minutoSp] = timeInSaoPaulo(now).split(":").map(Number);
+  const minutosAgora = (horaSp || 0) * 60 + (minutoSp || 0);
 
   // Leituras em paralelo (todas filtradas por user_id).
   const [
@@ -368,9 +377,26 @@ export async function generateForUser(
     spending: { mes: mesAtual, saidas: resumoAtual.saidas, mediaSaidas },
     todoTasks: genTodoTasks,
     todoReminders: genTodoReminders,
+    // Fase 16-F — Dieta. Isolada num try: uma falha de leitura do módulo não pode impedir
+    // o alerta de fatura atrasada de existir.
+    nutrition: await buildNutritionGenInput(service, userId, todayIso, minutosAgora).catch(
+      () => null,
+    ),
   };
 
-  const candidates = generateNotifications(input);
+  const generated = generateNotifications(input);
+
+  // Fase 16-F — TODA notificação é desativável. As preferências são lidas aqui (e não dentro
+  // do gerador) para que o módulo puro continue respondendo "isto é verdade sobre os dados"
+  // e a decisão de entregar fique num lugar só.
+  const { data: settingsRow } = await service
+    .from("settings")
+    .select("notification_prefs")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const prefs = normalizeNotificationPrefs(settingsRow?.notification_prefs);
+
+  const candidates = filterByPrefs(generated, prefs);
   if (candidates.length === 0) {
     return { userId, candidates: 0, inserted: 0 };
   }

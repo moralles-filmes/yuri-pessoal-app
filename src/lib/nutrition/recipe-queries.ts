@@ -22,6 +22,9 @@ import {
   asSubstitutionLevel,
   asSubstitutionOptionKind,
   asTemplateItemKind,
+  RECIPE_PHOTO_BUCKET,
+  RECIPE_PHOTO_ENTITY_TYPE,
+  RECIPE_PHOTO_SIGNED_URL_TTL_SECONDS,
   type PortionUnit,
 } from "./constants";
 import { getFoodBasics, getFoodNutrientsFor } from "./diary-queries";
@@ -104,7 +107,7 @@ export async function getRecipes(): Promise<Recipe[]> {
     supabase
       .from("attachments")
       .select("id,entity_id,storage_path,file_name,created_at")
-      .eq("entity_type", "nutrition_recipe")
+      .eq("entity_type", RECIPE_PHOTO_ENTITY_TYPE)
       .order("created_at", { ascending: false }),
   ]);
 
@@ -131,14 +134,39 @@ export async function getRecipes(): Promise<Recipe[]> {
   }
 
   // Só a foto mais recente de cada receita interessa (a lista já vem ordenada por data).
-  const photoByRecipe = new Map<string, { id: string; storagePath: string; fileName: string }>();
+  const latestByRecipe = new Map<string, { id: string; storagePath: string; fileName: string }>();
   for (const row of photosResult.data ?? []) {
-    if (!row.entity_id || photoByRecipe.has(row.entity_id)) continue;
-    photoByRecipe.set(row.entity_id, {
+    if (!row.entity_id || latestByRecipe.has(row.entity_id)) continue;
+    latestByRecipe.set(row.entity_id, {
       id: row.id,
       storagePath: row.storage_path,
       fileName: row.file_name,
     });
+  }
+
+  // ⛔ 16-F — o caminho no Storage NÃO desce para o navegador. O cliente recebe uma URL
+  // assinada de 5 min, gerada agora, igual às fotos de evolução (16-E). Uma chamada só de
+  // `createSignedUrls` para todas as receitas: não é N+1.
+  const photoByRecipe = new Map<string, { id: string; fileName: string; url: string | null }>();
+  if (latestByRecipe.size > 0) {
+    const entries = [...latestByRecipe.entries()];
+    const { data: signed } = await supabase.storage
+      .from(RECIPE_PHOTO_BUCKET)
+      .createSignedUrls(
+        entries.map(([, photo]) => photo.storagePath),
+        RECIPE_PHOTO_SIGNED_URL_TTL_SECONDS,
+      );
+    const urlByPath = new Map<string, string>();
+    for (const item of signed ?? []) {
+      if (item.path && item.signedUrl) urlByPath.set(item.path, item.signedUrl);
+    }
+    for (const [recipeId, photo] of entries) {
+      photoByRecipe.set(recipeId, {
+        id: photo.id,
+        fileName: photo.fileName,
+        url: urlByPath.get(photo.storagePath) ?? null,
+      });
+    }
   }
 
   return (recipesResult.data ?? []).map((row) => ({

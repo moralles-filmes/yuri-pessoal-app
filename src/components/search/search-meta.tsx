@@ -2,9 +2,12 @@
  * Fase 13 — Ícone por tipo de resultado da busca global (client-safe).
  */
 import {
+  Apple,
   ArrowLeftRight,
   Bell,
   CalendarDays,
+  CalendarRange,
+  ChefHat,
   CreditCard,
   GraduationCap,
   FolderOpen,
@@ -13,9 +16,11 @@ import {
   ReceiptText,
   Repeat,
   Search,
+  ShoppingCart,
   Tag,
   Target,
   Users,
+  UtensilsCrossed,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -35,6 +40,12 @@ const ICONS: Record<SearchType, LucideIcon> = {
   habito: Target,
   estudo: GraduationCap,
   evento: CalendarDays,
+  // Fase 16-F — Dieta e Alimentação.
+  nutricao_alimento: Apple,
+  nutricao_receita: ChefHat,
+  nutricao_modelo: UtensilsCrossed,
+  nutricao_plano: CalendarRange,
+  nutricao_lista: ShoppingCart,
   notificacao: Bell,
 };
 

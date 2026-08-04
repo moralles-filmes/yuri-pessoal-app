@@ -167,6 +167,35 @@ para suportar seções, subtarefas, `scheduled_date` + `deadline_at` e séries r
 exigiria alterar os cinco pontos ao mesmo tempo. As tabelas `todo_*` são um superset e
 convivem com as antigas. **Não remover `/tarefas` sem antes migrar aqueles cinco pontos.**
 
+### Integrações do módulo (16-F) — a fase que fecha a Fase 16
+
+O módulo passa a existir para o resto do sistema. A regra: **integrar, não reimplementar** —
+toda tela nova é casca sobre lógica já testada.
+
+| Integração | Consome | Arquivo |
+| --- | --- | --- |
+| Card no dashboard geral | `buildDailyReports` (16-E), `summarizeDay` (16-B), `summarizeType` (16-E) | `components/dashboard/general/nutrition-card.tsx` |
+| Busca global (5 tipos) | RLS por sessão; deep-links puros | `lib/search/queries.ts` + **`lib/search/nutrition-links.ts`** |
+| Lançamento rápido (4 tipos) | `addDiaryEntry`, `addMealTemplateToDiary`, `saveMeasurement`, `saveShoppingItem` | `lib/actions/nutrition-quick-add.ts` |
+| 8 famílias de notificação | `effectiveMealStatus` (16-B), `calendar.ts` | `lib/notifications/nutrition.ts` (puro) + `nutrition-cron.ts` (I/O) |
+| Pontes com TO-DO e Agenda | `createTodoTask` (F15), `createEvent` (F08) | `lib/actions/nutrition-integrations.ts` |
+
+**`quickAddDiaryEntry` só resolve a refeição do dia e delega.** O snapshot do registro rápido
+nasce idêntico ao do registro normal — não existe um segundo caminho de gravação.
+
+**A preferência de notificação finalmente decide.** `settings.notification_prefs` era salvo e
+nunca lido: o Cron gerava tudo. `filterByPrefs` (puro) roda entre a geração e a gravação e vale
+para **todos** os tipos, inclusive os das fases anteriores. `NOTIFICATION_OPT_IN_TYPES` dá
+semântica de opt-in aos tipos que devem nascer desligados.
+
+**Sem linguagem de culpa, travado por teste.** Um vocabulário proibido é varrido em todo texto
+gerado; nenhuma notificação da Dieta é `high`/`urgent`; chaves de dedupe **semanais** onde um
+aviso diário viraria cobrança.
+
+**A lista do backup virou módulo puro** (`lib/settings/export-tables.ts`) para poder ser
+testada: nenhum token, nenhuma view, nenhuma duplicata. **É ponto de contato entre as duas
+frentes** — a 17-E acrescenta as `training_*` ali.
+
 ### Mapa de arquivos
 | Camada | Caminho |
 | --- | --- |

@@ -96,6 +96,8 @@ export type MealTemplatesClientProps = {
   foods: FoodListItem[];
   measures: [string, PickerMeasure[]][];
   nutrients: Record<string, NutrientDefinition>;
+  /** Fase 16-F — deep-link da busca global (`?modelo=<id>`): abre o detalhe direto. */
+  initialDetailId?: string | null;
 };
 
 export function MealTemplatesClient(props: MealTemplatesClientProps) {
@@ -116,7 +118,9 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
   const [showArchived, setShowArchived] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
 
-  const [detailId, setDetailId] = React.useState<string | null>(null);
+  const [detailId, setDetailId] = React.useState<string | null>(
+    props.initialDetailId ?? null,
+  );
   const [formOpen, setFormOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [foodPickerFor, setFoodPickerFor] = React.useState<string | null>(null);

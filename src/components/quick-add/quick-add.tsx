@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  Apple,
   ArrowLeft,
   ArrowLeftRight,
   CalendarPlus,
@@ -11,10 +12,13 @@ import {
   ListChecks,
   ListTodo,
   Plus,
+  Ruler,
+  ShoppingCart,
   Target,
   Trash2,
   TrendingDown,
   TrendingUp,
+  UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -50,6 +54,16 @@ import { createEvent } from "@/lib/actions/calendar";
 import { createSession } from "@/lib/actions/studies";
 import { setHabitValue } from "@/lib/actions/habits";
 import { loadQuickAddOptions, type QuickAddOptions } from "@/lib/actions/quick-add";
+import {
+  loadNutritionQuickAddOptions,
+  quickAddDiaryEntry,
+  quickAddMealTemplate,
+  searchQuickAddFoods,
+  type NutritionQuickAddOptions,
+  type QuickAddFood,
+} from "@/lib/actions/nutrition-quick-add";
+import { saveMeasurement } from "@/lib/actions/body-measurements";
+import { saveShoppingItem } from "@/lib/actions/nutrition-shopping";
 import { dividirDespesa, type ParteDivisao } from "@/lib/finance/split";
 import {
   CLASSIFICACAO_LABELS,
@@ -75,7 +89,12 @@ type QuickType =
   | "tarefa"
   | "evento"
   | "habito"
-  | "estudo";
+  | "estudo"
+  // Fase 16-F — módulo Dieta e Alimentação.
+  | "alimento"
+  | "refeicao"
+  | "medida"
+  | "compra";
 
 const TYPES: { id: QuickType; label: string; icon: LucideIcon }[] = [
   { id: "despesa", label: "Despesa", icon: TrendingDown },
@@ -86,10 +105,17 @@ const TYPES: { id: QuickType; label: string; icon: LucideIcon }[] = [
   // criando na estrutura da Fase 09, que ainda alimenta rotinas e agenda.
   { id: "todo", label: "Nova tarefa", icon: ListTodo },
   { id: "evento", label: "Evento", icon: CalendarPlus },
+  { id: "alimento", label: "Registrar alimento", icon: Apple },
+  { id: "refeicao", label: "Registrar refeição", icon: UtensilsCrossed },
+  { id: "medida", label: "Adicionar medida", icon: Ruler },
+  { id: "compra", label: "Item na lista", icon: ShoppingCart },
   { id: "habito", label: "Check-in de hábito", icon: Target },
   { id: "estudo", label: "Sessão de estudo", icon: GraduationCap },
   { id: "tarefa", label: "Tarefa (lista antiga)", icon: ListChecks },
 ];
+
+/** Tipos que dependem das opções do módulo Dieta (carregadas junto do modal). */
+const NUTRITION_TYPES: QuickType[] = ["alimento", "refeicao", "medida", "compra"];
 
 // Hoje em Brasília — não a data do fuso do aparelho.
 const today = () => hojeISO();
@@ -99,6 +125,8 @@ export function QuickAdd() {
   const [open, setOpen] = React.useState(false);
   const [type, setType] = React.useState<QuickType | null>(null);
   const [options, setOptions] = React.useState<QuickAddOptions | null>(null);
+  const [nutriOptions, setNutriOptions] =
+    React.useState<NutritionQuickAddOptions | null>(null);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -108,6 +136,11 @@ export function QuickAdd() {
         loadQuickAddOptions()
           .then(setOptions)
           .catch(() => setOptions(null));
+      }
+      if (!nutriOptions) {
+        loadNutritionQuickAddOptions()
+          .then(setNutriOptions)
+          .catch(() => setNutriOptions(null));
       }
     }
   }
@@ -165,7 +198,12 @@ export function QuickAdd() {
               ))}
             </div>
           ) : (
-            <QuickForm type={type} options={options} onDone={close} />
+            <QuickForm
+              type={type}
+              options={options}
+              nutriOptions={nutriOptions}
+              onDone={close}
+            />
           )}
         </DialogContent>
       </Dialog>
@@ -427,12 +465,33 @@ function buildSplitParts(classificacao: Classificacao, parts: PartValue[]) {
 function QuickForm({
   type,
   options,
+  nutriOptions,
   onDone,
 }: {
   type: QuickType;
   options: QuickAddOptions | null;
+  nutriOptions: NutritionQuickAddOptions | null;
   onDone: () => void;
 }) {
+  // Os tipos da Dieta dependem de outra leitura: esperam a própria, não a do financeiro.
+  if (NUTRITION_TYPES.includes(type)) {
+    if (!nutriOptions) {
+      return <p className="py-6 text-center text-sm text-muted-foreground">Carregando…</p>;
+    }
+    switch (type) {
+      case "alimento":
+        return <FoodEntryForm options={nutriOptions} onDone={onDone} />;
+      case "refeicao":
+        return <MealTemplateForm options={nutriOptions} onDone={onDone} />;
+      case "medida":
+        return <MeasurementForm options={nutriOptions} onDone={onDone} />;
+      case "compra":
+        return <ShoppingItemForm options={nutriOptions} onDone={onDone} />;
+      default:
+        break;
+    }
+  }
+
   if (!options) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Carregando…</p>;
   }
@@ -455,7 +514,470 @@ function QuickForm({
       return <HabitForm options={options} onDone={onDone} />;
     case "estudo":
       return <StudyForm options={options} onDone={onDone} />;
+    default:
+      return null;
   }
+}
+
+/* ═══════════════════ Fase 16-F — Dieta e Alimentação ═══════════════════ */
+
+/**
+ * Registrar alimento: buscar → medida → quantidade → refeição → data → salvar.
+ *
+ * ⛔ A gravação é `quickAddDiaryEntry`, que só resolve a refeição do dia e delega para
+ * `addDiaryEntry` (16-B). O SNAPSHOT é montado no servidor, a partir do catálogo, pelo mesmo
+ * caminho do registro normal — nenhum nutriente sobe do navegador.
+ */
+function FoodEntryForm({
+  options,
+  onDone,
+}: {
+  options: NutritionQuickAddOptions;
+  onDone: () => void;
+}) {
+  const { pending, run } = useSubmitter(onDone);
+  const [term, setTerm] = React.useState("");
+  const [results, setResults] = React.useState<QuickAddFood[]>([]);
+  const [searching, setSearching] = React.useState(false);
+  const [food, setFood] = React.useState<QuickAddFood | null>(null);
+  const [measureId, setMeasureId] = React.useState("");
+  const [quantity, setQuantity] = React.useState("100");
+  const [mealTypeId, setMealTypeId] = React.useState(options.mealTypes[0]?.id ?? "");
+  const [date, setDate] = React.useState(today());
+
+  if (options.mealTypes.length === 0) {
+    return <NoData>Abra Dieta e Alimentação uma vez para criar os tipos de refeição.</NoData>;
+  }
+
+  async function doSearch() {
+    if (term.trim().length < 2) {
+      toast.error("Digite ao menos 2 letras para buscar.");
+      return;
+    }
+    setSearching(true);
+    try {
+      setResults(await searchQuickAddFoods(term));
+    } catch {
+      toast.error("Não foi possível buscar alimentos agora.");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function choose(item: QuickAddFood) {
+    setFood(item);
+    setResults([]);
+    // Sem medida caseira escolhida, a quantidade é na unidade-base do alimento.
+    setMeasureId("");
+    setQuantity(String(item.baseQuantity || 100));
+  }
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!food) {
+      toast.error("Escolha um alimento.");
+      return;
+    }
+    run(
+      quickAddDiaryEntry({
+        date,
+        meal_type_id: mealTypeId,
+        food_id: food.id,
+        quantity,
+        measure_id: measureId || null,
+      }),
+      "Consumo registrado.",
+    );
+  }
+
+  const unidade = measureId
+    ? (food?.measures.find((m) => m.id === measureId)?.label ?? "")
+    : (food?.baseUnit ?? "");
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3">
+      {!food ? (
+        <>
+          <Field label="Buscar alimento">
+            <div className="flex gap-2">
+              <Input
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void doSearch();
+                  }
+                }}
+                placeholder="Ex.: arroz, frango, banana"
+                autoFocus
+              />
+              <Button type="button" variant="outline" onClick={() => void doSearch()}>
+                Buscar
+              </Button>
+            </div>
+          </Field>
+
+          {searching && <p className="text-xs text-muted-foreground">Buscando…</p>}
+
+          {results.length > 0 && (
+            <ul className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-border p-1">
+              {results.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => choose(item)}
+                    className="w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted"
+                  >
+                    <span className="block truncate font-medium">{item.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {[item.brand, item.isSystemFood ? "Base do sistema" : "Alimento próprio"]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!searching && results.length === 0 && term.trim().length >= 2 && (
+            <p className="text-xs text-muted-foreground">
+              Nenhum alimento encontrado. Você pode cadastrar em{" "}
+              <a href="/nutricao/alimentos" className="underline underline-offset-2">
+                Alimentos
+              </a>
+              .
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-2 rounded-lg bg-muted/50 p-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{food.name}</p>
+              {food.brand && (
+                <p className="truncate text-xs text-muted-foreground">{food.brand}</p>
+              )}
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setFood(null)}>
+              Trocar
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Medida">
+              <Select
+                value={measureId || "__base__"}
+                onValueChange={(v) => setMeasureId(v === "__base__" ? "" : v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__base__">Em {food.baseUnit}</SelectItem>
+                  {food.measures.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label={`Quantidade${unidade ? ` (${unidade})` : ""}`}>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min={0}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+              />
+            </Field>
+          </div>
+
+          <Field label="Refeição">
+            <Select value={mealTypeId} onValueChange={setMealTypeId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.mealTypes.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field label="Data">
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+
+          <SubmitBar pending={pending} />
+        </>
+      )}
+    </form>
+  );
+}
+
+/** Registrar uma refeição-modelo inteira (16-C) numa refeição do dia. */
+function MealTemplateForm({
+  options,
+  onDone,
+}: {
+  options: NutritionQuickAddOptions;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [submitting, startSubmit] = React.useTransition();
+  const [templateId, setTemplateId] = React.useState("");
+  const [mealTypeId, setMealTypeId] = React.useState(options.mealTypes[0]?.id ?? "");
+  const [date, setDate] = React.useState(today());
+
+  if (options.mealTemplates.length === 0) {
+    return (
+      <NoData>
+        Nenhuma refeição-modelo criada ainda. Monte uma em Dieta → Refeições-modelo.
+      </NoData>
+    );
+  }
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!templateId) {
+      toast.error("Escolha a refeição-modelo.");
+      return;
+    }
+    startSubmit(async () => {
+      const res = await quickAddMealTemplate({
+        date,
+        meal_type_id: mealTypeId,
+        template_id: templateId,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "Não foi possível registrar.");
+        return;
+      }
+      // A idempotência é de leitura (16-C): adicionar o mesmo modelo 2× não duplica. Quando
+      // nada foi registrado por já estar lá, a tela DIZ isso em vez de fingir sucesso.
+      if (res.data.registrados === 0 && res.data.jaRegistrado) {
+        toast.info("Esta refeição-modelo já estava registrada nesta refeição.");
+      } else {
+        toast.success(
+          `${res.data.registrados} ${res.data.registrados === 1 ? "item registrado" : "itens registrados"}.`,
+        );
+      }
+      if (res.data.falhas.length > 0) {
+        toast.warning(
+          `${res.data.falhas.length} item(ns) não puderam ser convertidos: ${res.data.falhas.join("; ")}`,
+        );
+      }
+      router.refresh();
+      onDone();
+    });
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3">
+      <Field label="Refeição-modelo">
+        <Select value={templateId} onValueChange={setTemplateId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
+          <SelectContent>
+            {options.mealTemplates.map((t) => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Refeição do dia">
+        <Select value={mealTypeId} onValueChange={setMealTypeId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
+          <SelectContent>
+            {options.mealTypes.map((t) => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Data">
+        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </Field>
+      <SubmitBar pending={submitting} />
+    </form>
+  );
+}
+
+/**
+ * Adicionar uma medida corporal. Chama `saveMeasurement` (16-E) direto — o módulo `body_*` é
+ * central e compartilhado com Treinos; não existe um segundo caminho de gravação.
+ */
+function MeasurementForm({
+  options,
+  onDone,
+}: {
+  options: NutritionQuickAddOptions;
+  onDone: () => void;
+}) {
+  const { pending, run } = useSubmitter(onDone);
+  const [typeId, setTypeId] = React.useState(options.measurementTypes[0]?.id ?? "");
+  const [value, setValue] = React.useState("");
+  const [date, setDate] = React.useState(today());
+
+  if (options.measurementTypes.length === 0) {
+    return <NoData>Abra Dieta → Medidas uma vez para criar os tipos de medida.</NoData>;
+  }
+
+  const selected = options.measurementTypes.find((t) => t.id === typeId);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!value.trim()) {
+      toast.error("Informe o valor medido.");
+      return;
+    }
+    run(
+      saveMeasurement({
+        typeId,
+        measuredOn: date,
+        measuredAt: null,
+        value,
+        condition: null,
+        note: null,
+      }),
+      "Medida registrada.",
+    );
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3">
+      <Field label="Medida">
+        <Select value={typeId} onValueChange={setTypeId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
+          <SelectContent>
+            {options.measurementTypes.map((t) => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label={`Valor${selected ? ` (${selected.unit})` : ""}`}>
+        <Input
+          type="number"
+          inputMode="decimal"
+          step="any"
+          min={0}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          autoFocus
+        />
+      </Field>
+      <Field label="Data">
+        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </Field>
+      <p className="text-[0.7rem] leading-snug text-muted-foreground">
+        Medida é registro, não avaliação — o sistema não sugere valor ideal nem classifica o
+        resultado.
+      </p>
+      <SubmitBar pending={pending} />
+    </form>
+  );
+}
+
+/** Adicionar um item digitado à mão numa lista de compras ativa (16-D). */
+function ShoppingItemForm({
+  options,
+  onDone,
+}: {
+  options: NutritionQuickAddOptions;
+  onDone: () => void;
+}) {
+  const { pending, run } = useSubmitter(onDone);
+  const [listId, setListId] = React.useState(options.shoppingLists[0]?.id ?? "");
+  const [label, setLabel] = React.useState("");
+  const [quantity, setQuantity] = React.useState("");
+  const [unit, setUnit] = React.useState("un");
+
+  if (options.shoppingLists.length === 0) {
+    return <NoData>Nenhuma lista de compras ativa. Crie uma em Dieta → Compras.</NoData>;
+  }
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!label.trim()) {
+      toast.error("Escreva o que precisa comprar.");
+      return;
+    }
+    run(
+      // Item digitado à mão: `is_manual` é decidido no servidor, e a regeração do
+      // planejamento nunca o toca (invariante 18 do módulo).
+      saveShoppingItem({
+        list_id: listId,
+        label,
+        // Quantidade em branco continua NULA ("a gosto"), nunca zero.
+        quantity: quantity.trim() === "" ? null : quantity,
+        unit,
+      }),
+      "Item adicionado à lista.",
+    );
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3">
+      <Field label="Lista">
+        <Select value={listId} onValueChange={setListId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
+          <SelectContent>
+            {options.shoppingLists.map((l) => (
+              <SelectItem key={l.id} value={l.id}>
+                {l.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="O que comprar">
+        <Input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Ex.: Papel toalha"
+          autoFocus
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Quantidade (opcional)">
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="any"
+            min={0}
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            placeholder="a gosto"
+          />
+        </Field>
+        <Field label="Unidade">
+          <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="un" />
+        </Field>
+      </div>
+      <SubmitBar pending={pending} />
+    </form>
+  );
 }
 
 function ExpenseForm({

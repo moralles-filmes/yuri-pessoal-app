@@ -18,6 +18,12 @@ export const SEARCH_TYPES = [
   "habito",
   "estudo",
   "evento",
+  // Fase 16-F — módulo Dieta e Alimentação.
+  "nutricao_alimento",
+  "nutricao_receita",
+  "nutricao_modelo",
+  "nutricao_plano",
+  "nutricao_lista",
   "notificacao",
 ] as const;
 export type SearchType = (typeof SEARCH_TYPES)[number];
@@ -37,6 +43,11 @@ export const SEARCH_TYPE_LABELS: Record<SearchType, string> = {
   habito: "Hábitos",
   estudo: "Estudos",
   evento: "Agenda",
+  nutricao_alimento: "Dieta · Alimentos",
+  nutricao_receita: "Dieta · Receitas",
+  nutricao_modelo: "Dieta · Refeições-modelo",
+  nutricao_plano: "Dieta · Modelos de semana",
+  nutricao_lista: "Dieta · Listas de compras",
   notificacao: "Notificações",
 };
 

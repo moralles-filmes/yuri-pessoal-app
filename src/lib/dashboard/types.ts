@@ -4,6 +4,7 @@
  * de card no client, sem arrastar código de servidor para o bundle do navegador.
  */
 import type { CalendarEventLite } from "@/lib/calendar/events";
+import type { NutrientTotalQuality } from "@/lib/nutrition/constants";
 import type { StatementStatus } from "@/lib/finance/constants";
 import type { HabitCategory, HabitUnit } from "@/lib/habits/constants";
 import type { StudyCategory } from "@/lib/studies/constants";
@@ -142,4 +143,60 @@ export type StudiesCardData = {
 export type NotificationsCardData = {
   available: boolean;
   unread: number;
+};
+
+/* ───────────────────────────── Dieta e Alimentação (Fase 16-F) ───────────────────────────── */
+
+/**
+ * Um nutriente no card. `amount` é `null` quando NÃO HOUVE REGISTRO no dia — jamais 0.
+ * `quality` viaja junto porque um total somado sobre itens sem o nutriente analisado é um
+ * piso, e a tela é obrigada a dizer isso (regra 1 do módulo).
+ */
+export type DashNutrientValue = {
+  code: string;
+  label: string;
+  unit: string;
+  amount: number | null;
+  target: number | null;
+  /** 0..100 do alvo. `null` quando não há meta ou não há registro. */
+  percent: number | null;
+  quality: NutrientTotalQuality | null;
+};
+
+export type DashNextMeal = {
+  name: string;
+  /** 'HH:mm' já formatado, ou null quando a refeição não tem horário. */
+  time: string | null;
+  /** O horário já passou da tolerância. */
+  late: boolean;
+};
+
+export type NutritionCardData = {
+  /** Houve ao menos um item registrado hoje. Falso ≠ "comeu zero". */
+  hasRecord: boolean;
+  /** Existe alguma coisa do módulo configurada (evita um card vazio sem explicação). */
+  hasModule: boolean;
+  energy: DashNutrientValue | null;
+  protein: DashNutrientValue | null;
+  /** 0..100 da aderência do dia; `null` sem meta ou sem registro. */
+  adherence: number | null;
+  mealsTotal: number;
+  mealsDone: number;
+  mealsPending: number;
+  mealsLate: number;
+  nextMeal: DashNextMeal | null;
+  /** Itens a pegar somados nas listas ativas. */
+  shoppingPending: number;
+  shoppingLists: number;
+  /** Última medição de peso. `null` = nunca mediu. */
+  weight: {
+    value: number;
+    unit: string;
+    decimals: number;
+    measuredOn: string;
+    /** Diferença desde a medição anterior. `null` com uma medição só. */
+    sincePrevious: number | null;
+  } | null;
+  /** Meta de água do dia (fonte de verdade: módulo Hábitos). `null` = sem hábito de água. */
+  water: { value: number; target: number; unit: string } | null;
 };
