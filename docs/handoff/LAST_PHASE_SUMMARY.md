@@ -1,8 +1,8 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
 > ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
-> (✅ **CONCLUÍDA** — 16-A a 16-F, com os 40 critérios validados) e a **Fase 17 — Módulo
-> Treinos** (17-A a **17-D** concluídas; a 17-E é a próxima).
+> (✅ **CONCLUÍDA** — 16-A a 16-F, com os 40 critérios de aceite validados) e a **Fase 17 —
+> Módulo Treinos** (17-A a **17-E** concluídas; a 17-F é a próxima e fecha a fase).
 > Este arquivo tem o resumo das duas, na ordem em que foram concluídas — a mais recente
 > primeiro.
 
@@ -12,8 +12,8 @@
 
 Sexta e última subfase da **Fase 16**. As anteriores entregaram um módulo completo e **isolado**;
 a 16-F o liga ao dashboard, à busca global, ao lançamento rápido, às notificações, ao TO-DO e à
-agenda — e valida os **40 critérios de aceite gerais**. **Nenhuma tabela nova; +64 testes puros**
-(suíte: 1.630 → 1.694).
+agenda — e valida os **40 critérios de aceite gerais**.
+**Nenhuma tabela nova; +65 testes puros.** Medido isolado sobre o `main` de então: 1.630 → 1.694. **Depois do merge com a 17-E (que entrou primeiro), a suíte marca 1.846** — conte antes de citar um número.
 
 ### ⛔ A regra que a subfase existe para garantir
 
@@ -118,7 +118,8 @@ ação em massa alcança **0** linhas alheias; `storage.objects` devolve 0. **0 
 catálogo reconferido (597 alimentos, 21.147 valores). `get_advisors`: **0 lints de schema**.
 
 ### Verificação
-`npm run lint` limpo · `npx tsc --noEmit` limpo · `npm run test:run` **1.694** (de 1.630) ·
+`npm run lint` limpo · `npx tsc --noEmit` limpo · `npm run test:run` **1.694** isolado (de
+1.630) e **1.846** já integrado com a 17-E ·
 `npm run build` verde com as 12 rotas de `/nutricao`. Suíte passa em `TZ=UTC`.
 Smoke: rotas privadas → **307 `/login`**, `/login` → 200, `/api/cron/notifications` → **401**.
 **111 tabelas** no projeto, **0 sem RLS**. Nenhuma migration (a 16-F não criou tabela).
@@ -183,6 +184,128 @@ na suíte, e a evidência está na coluna à direita.
 | Integração com balança | Não planejado (`body_measurements.source` já prevê o campo) |
 | Prescrição/diagnóstico nutricional | **Nunca** — decisão de produto |
 | Comparar com outros usuários ou normas populacionais | **Nunca** — o sistema é single-user |
+## Subfase 17-E — Treinos · Metas, medidas corporais compartilhadas e dashboards (2026-08-04) ✅
+
+Quinta das 6 subfases da **Fase 17**. A 17-D transformou o acúmulo de sessões em leitura; a
+17-E acrescenta **direção** (metas) e **síntese** (dashboards e relatórios), e liga o módulo à
+evolução corporal. **2 tabelas novas, +147 testes puros** (suíte: 1634 → 1781).
+
+### ⛔ A decisão mais delicada da fase, e ela não era sobre treino
+
+**A 17-E NÃO CRIOU TABELA DE MEDIDA CORPORAL.** Conferido no banco antes da primeira linha de
+código: as 4 tabelas `body_*` da 16-E já existiam. A 17-E **consome** — `src/lib/body/queries.ts`,
+`src/lib/actions/body-measurements.ts`, `src/lib/body/measurements.ts` e os componentes
+`measurement-chart` / `progress-photos`, os mesmos que a Dieta usa. Um peso registrado em
+`/treinos/evolucao` aparece em `/nutricao/medidas`, e vice-versa.
+
+**Verificado no banco depois de pronta:** 4 tabelas `body_*`, e a única coluna de peso corporal
+fora delas é `training_sessions.body_weight_kg` — o peso USADO naquele treino, congelado
+(17-C), que não é histórico de medida. Critério de aceite cumprido.
+
+`training_goals.body_measurement_type_id` é `on delete set null` de propósito: excluir um tipo
+de medida é um fluxo da 16-E com escolha explícita do destino do histórico, e um `restrict`
+aqui faria aquele fluxo estourar com um erro que a Dieta não sabe explicar. Com `set null` a
+meta sobrevive e a leitura a marca como **"medida removida"** — indisponível, nunca zero.
+
+### ⛔ A segunda regra: o dashboard CONSOME, não recalcula
+
+Volume, séries, repetições, tempo, frequência e distribuição por grupo saem de `metrics.ts`
+(17-D) através de `dashboards.ts`. Há um teste que compara os totais do dashboard com
+`aggregateSessions` chamado diretamente e exige igualdade — se alguém refizer a conta aqui, ele
+quebra. `topExercises` usa `exerciseMetrics`, a mesma função do histórico.
+
+### Arquivos criados
+
+**Migrations (2):** `20260805110000_training_goals.sql`,
+`20260805110100_training_goal_progress.sql`.
+
+**Lógica pura (3 arquivos + 3 de teste):** `src/lib/training/goals.ts` (+69),
+`dashboards.ts` (+44), `reports.ts` (+19). `schedule.ts` ganhou `addMonthsIso` (+4 testes) e
+`round-trip.test.ts` ganhou os schemas das metas (+15).
+
+**Servidor:** `src/lib/training/goal-queries.ts`, `src/lib/validators/training-goals.ts`,
+`src/lib/actions/training-goals.ts`.
+
+**Interface:** `src/app/(app)/treinos/metas/{page,goals-client,loading}.tsx`,
+`relatorios/{page,reports-client,loading}.tsx`,
+`src/components/training/{goal-form-dialog,body-evolution,consistency-calendar}.tsx`.
+
+**Alterados:** `src/lib/training/constants.ts` (metas e relatórios viraram "pronto"),
+`treinos/page.tsx` (visão geral completa), `treinos/evolucao/{page,evolution-client}.tsx`
+(aba Corpo), `treinos/calendario/{page,calendar-client}.tsx` (visão consistência),
+`treinos/sessao/preparar/page.tsx` + `session/prepare-review-client.tsx` (peso pré-preenchido),
+`src/app/api/export/route.ts` (as 28 tabelas `training_*`) e `src/types/supabase.ts`
+(regenerado — **só adição**, nada da Dieta foi tocado: 169 inserções, 0 remoções).
+
+### Decisões técnicas registradas
+
+1. **Status derivado não é gravável.** O CHECK da migration não aceita `atingida`, `expirada`
+   nem `em_atraso` — verificado no banco, as três inserções são bloqueadas. Decisão do usuário
+   vence sempre: meta pausada não vira "atingida" porque o número passou pelo alvo.
+2. **Alterar a meta não reescreve o passado.** Cada campo que muda o SIGNIFICADO vira linha em
+   `training_goal_progress`. Renomear não polui o histórico; mudar o alvo, sim.
+3. **Os marcos são configuração** (jsonb na própria meta), porque um marco não tem história
+   própria. O que tem história vive na tabela de progresso. `parseMilestones` descarta lixo do
+   jsonb sem quebrar — um marco sem número não é marco.
+4. **O valor atual não vem do cliente.** É derivado de `metrics.ts` e das medidas. A única
+   exceção é a meta `personalizada`, e a action **confere o tipo** antes de gravar: numa meta
+   de volume, o valor digitado é recusado com explicação.
+5. **Períodos:** `semanal`/`mensal` acompanham o calendário; `trimestral`/`semestral`/`anual`
+   são blocos contados de `starts_on`. Sempre presos a `[starts_on, ends_on]`.
+6. **Nenhuma divisão por zero.** Período sem treino é normal; toda razão devolve `null` e a
+   tela diz "sem base". Um teste serializa o dashboard de um período vazio e proíbe `NaN` e
+   `Infinity` no JSON.
+7. **Aderência só olha o passado**, descanso planejado não entra no denominador de treino, e
+   dia cancelado/reagendado sai dele. Nada planejado = `null`, não 0%.
+8. **1RM só vira valor de meta dentro da faixa de validade**, e sempre marcado como estimativa.
+9. **O CSV reusa `toCsv` (Fase 14)** — nenhuma segunda implementação de RFC 4180. Célula vazia
+   ≠ zero, e período/regra/qualidade viajam no cabeçalho do arquivo.
+10. **Nenhuma foto entra em exportação** — nem binário, nem URL assinada (que expira em
+    minutos e não faz sentido dentro de um arquivo salvo).
+
+### Segurança verificada no banco (role `authenticated`)
+
+**17 verificações, todas OK.** RLS: o dono lê o que é dele; o intruso lê **0 linhas** nas duas
+tabelas, não edita, não exclui e não consegue forjar meta em nome do dono. CHECKs: os três
+status derivados são recusados, período personalizado sem prazo é recusado, prazo antes do
+início é recusado, meta corporal com métrica de outra família é recusada, `milestones` que não
+é array é recusado, `metric` fora do vocabulário é recusado e alteração sem dizer qual campo
+mudou é recusada. **0 resíduo** (tudo em transação com rollback); catálogo intacto (106
+exercícios da base).
+
+### Verificação
+
+`npm run lint`, `npx tsc --noEmit`, `npm run test:run` (**1781 testes**, de 1634) e
+`npm run build` passam. Suíte verde também em `TZ=UTC`. Smoke: `/treinos`, `/treinos/metas`,
+`/treinos/relatorios`, `/treinos/evolucao`, `/treinos/calendario?visao=consistencia`,
+`/treinos/sessao/preparar` e `/api/export` → **307 `/login`**; `/login` → 200;
+`/api/cron/notifications` sem segredo → **401**. `get_advisors`: **0 lints de schema e 0 de
+performance**. **111 tabelas** no projeto (28 `training_*`, 4 `body_*`).
+
+> ⚠️ **A verificação rodou numa árvore isolada** (`git worktree`), porque a frente da Dieta
+> estava com a 16-F em andamento no mesmo diretório — inclusive trocando a branch do
+> working tree no meio do trabalho. Os dois commits da 17-E estão em
+> `feat/treinos-fase-17e`; nenhum arquivo da Dieta foi tocado.
+
+### ⚠️ Ponto de merge a conferir na integração
+
+A 16-F **extraiu** `EXPORT_TABLES` de `src/app/api/export/route.ts` para
+`src/lib/settings/export-tables.ts`, e o arquivo novo dela **já contém** as 31 entradas
+`training_*` que a 17-E acrescentou (ela refatorou a partir da árvore que já tinha a mudança).
+Na hora de integrar as duas branches, o conflito em `route.ts` deve ser resolvido **ficando com
+a versão extraída da 16-F** — o conteúdo da 17-E está preservado lá dentro. Confira se as 28
+tabelas `training_*` + as 2 da 17-E continuam na lista.
+
+### Pendências registradas (escopo consciente, não bugs)
+
+| Item | Onde resolve |
+| --- | --- |
+| Notificação de meta atingida e de medição pendente | **17-F** (a detecção do status derivado já existe) |
+| Card de treino no dashboard geral do sistema, busca global e lançamento rápido | **17-F** |
+| Reordenar metas arrastando (`reorderTrainingGoals` existe e nenhuma tela a chama) | **17-F** |
+| XLSX nos relatórios (o pacote `xlsx` já está no projeto; a 17-E entregou CSV, o padrão) | **17-F** |
+| Integração com balança ou wearable | **Não planejado.** `body_measurements.source` já prevê o campo |
+| Recomendação de meta pelo sistema | **Nunca.** Meta é decisão do usuário |
 
 ---
 

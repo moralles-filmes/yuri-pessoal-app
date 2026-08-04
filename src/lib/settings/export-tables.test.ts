@@ -55,6 +55,25 @@ describe("backup do usuário", () => {
     expect(body as string[]).toContain("body_progress_photos");
   });
 
+  /**
+   * ⚠️ Ponto de contato entre as DUAS FRENTES. A Fase 17 (Treinos) acrescenta as suas tabelas
+   * a esta mesma lista. O teste existe para que um merge que descarte a seção do outro seja
+   * pego aqui, e não meses depois, quando alguém tentar restaurar o backup.
+   */
+  it("inclui as 26 tabelas do módulo Treinos (frente paralela)", () => {
+    const training = EXPORT_TABLES.filter((t) => t.startsWith("training_"));
+    expect(training).toHaveLength(26);
+    for (const table of [
+      "training_exercises", // 17-A
+      "training_workouts", // 17-B
+      "training_sessions", // 17-C — o histórico imutável
+      "training_personal_records", // 17-D
+      "training_goal_progress", // 17-E
+    ]) {
+      expect(training as string[], table).toContain(table);
+    }
+  });
+
   it("`nutrition_nutrients` fica de fora — é vocabulário do sistema, não dado do usuário", () => {
     expect(EXPORT_TABLES as string[]).not.toContain("nutrition_nutrients");
     expect(EXPORT_EXCLUDED.nutrition_nutrients).toBeTruthy();

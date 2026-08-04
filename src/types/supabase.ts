@@ -5353,6 +5353,175 @@ export type Database = {
           },
         ]
       }
+      training_goal_progress: {
+        Row: {
+          created_at: string
+          entry_kind: string
+          field: string | null
+          goal_id: string
+          id: string
+          new_text: string | null
+          new_value: number | null
+          note: string | null
+          previous_text: string | null
+          previous_value: number | null
+          recorded_on: string
+          source: string
+          updated_at: string
+          user_id: string
+          value: number | null
+        }
+        Insert: {
+          created_at?: string
+          entry_kind: string
+          field?: string | null
+          goal_id: string
+          id?: string
+          new_text?: string | null
+          new_value?: number | null
+          note?: string | null
+          previous_text?: string | null
+          previous_value?: number | null
+          recorded_on: string
+          source?: string
+          updated_at?: string
+          user_id: string
+          value?: number | null
+        }
+        Update: {
+          created_at?: string
+          entry_kind?: string
+          field?: string | null
+          goal_id?: string
+          id?: string
+          new_text?: string | null
+          new_value?: number | null
+          note?: string | null
+          previous_text?: string | null
+          previous_value?: number | null
+          recorded_on?: string
+          source?: string
+          updated_at?: string
+          user_id?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_goal_progress_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "training_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_goals: {
+        Row: {
+          body_measurement_type_id: string | null
+          created_at: string
+          description: string | null
+          direction: string
+          ends_on: string | null
+          exercise_id: string | null
+          goal_kind: string
+          id: string
+          metric: string
+          milestones: Json
+          muscle_group_id: string | null
+          name: string
+          notes: string | null
+          period: string
+          position: number
+          program_id: string | null
+          start_value: number | null
+          starts_on: string
+          status: string
+          target_value: number
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body_measurement_type_id?: string | null
+          created_at?: string
+          description?: string | null
+          direction?: string
+          ends_on?: string | null
+          exercise_id?: string | null
+          goal_kind: string
+          id?: string
+          metric: string
+          milestones?: Json
+          muscle_group_id?: string | null
+          name: string
+          notes?: string | null
+          period: string
+          position?: number
+          program_id?: string | null
+          start_value?: number | null
+          starts_on: string
+          status?: string
+          target_value: number
+          unit: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body_measurement_type_id?: string | null
+          created_at?: string
+          description?: string | null
+          direction?: string
+          ends_on?: string | null
+          exercise_id?: string | null
+          goal_kind?: string
+          id?: string
+          metric?: string
+          milestones?: Json
+          muscle_group_id?: string | null
+          name?: string
+          notes?: string | null
+          period?: string
+          position?: number
+          program_id?: string | null
+          start_value?: number | null
+          starts_on?: string
+          status?: string
+          target_value?: number
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_goals_body_measurement_type_id_fkey"
+            columns: ["body_measurement_type_id"]
+            isOneToOne: false
+            referencedRelation: "body_measurement_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_goals_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_goals_muscle_group_id_fkey"
+            columns: ["muscle_group_id"]
+            isOneToOne: false
+            referencedRelation: "training_muscle_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_goals_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "training_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       training_location_plates: {
         Row: {
           created_at: string

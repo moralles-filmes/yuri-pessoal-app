@@ -1,5 +1,10 @@
 # Fase 17-E — Treinos · Metas, medidas corporais compartilhadas, dashboards e relatórios
 
+> ✅ **CONCLUÍDA em 2026-08-04.** 2 tabelas novas (`training_goals`, `training_goal_progress`),
+> +147 testes puros (suíte: 1634 → 1781). **Nenhuma tabela de medida corporal foi criada** — a
+> estrutura `body_*` da 16-E já existia e foi consumida por `src/lib/body/`. Resumo completo em
+> `docs/handoff/LAST_PHASE_SUMMARY.md`.
+
 > Quinta das **6 subfases** da Fase 17. **Depende das 17-A a 17-D concluídas.**
 
 ## Contexto
@@ -24,6 +29,11 @@ exclusiva de Dieta.
 
 **Decisão:** a estrutura nasce como **módulo central compartilhado**, com prefixo `body_*` e
 código em `src/lib/body/`, consumida por Dieta **e** por Treinos.
+
+> ✅ **Desfecho:** a **16-E chegou primeiro** e criou as 4 tabelas em 2026-08-04. A 17-E
+> **consumiu**, sem criar nada. Conferido no banco depois de pronta: 4 tabelas `body_*`, e a
+> única coluna de peso corporal fora delas é `training_sessions.body_weight_kg` — o peso USADO
+> naquele treino, congelado (17-C), que não é histórico de medida.
 
 | Tabela | Papel |
 | --- | --- |
@@ -138,20 +148,20 @@ Status: planejada, ativa, atingida, pausada, cancelada, expirada.
 
 ## Critérios de aceite
 
-- [ ] Crio metas de frequência, desempenho, corporais, de organização e personalizadas.
-- [ ] Defino período, valor inicial, valor-alvo, unidade, prazo e metas intermediárias.
-- [ ] Vejo progresso, percentual e status; pauso, cancelo e concluo.
-- [ ] Alterar uma meta não apaga o histórico anterior.
-- [ ] Registro peso, %GC e medidas corporais **usando a estrutura compartilhada**, e o mesmo
+- [x] Crio metas de frequência, desempenho, corporais, de organização e personalizadas.
+- [x] Defino período, valor inicial, valor-alvo, unidade, prazo e metas intermediárias.
+- [x] Vejo progresso, percentual e status; pauso, cancelo e concluo.
+- [x] Alterar uma meta não apaga o histórico anterior.
+- [x] Registro peso, %GC e medidas corporais **usando a estrutura compartilhada**, e o mesmo
       dado aparece no módulo Dieta.
-- [ ] Não existe nenhuma segunda tabela de peso corporal no banco.
-- [ ] Envio fotos de evolução privadas e comparo duas datas; sem sessão, o acesso é negado.
-- [ ] Vejo dashboards semanal, mensal e anual com comparação com o período anterior.
-- [ ] Vejo séries semanais por grupo muscular, frequência e última vez treinado.
-- [ ] Vejo o calendário de consistência com dias treinados, parciais, descanso e não
+- [x] Não existe nenhuma segunda tabela de peso corporal no banco.
+- [x] Envio fotos de evolução privadas e comparo duas datas; sem sessão, o acesso é negado.
+- [x] Vejo dashboards semanal, mensal e anual com comparação com o período anterior.
+- [x] Vejo séries semanais por grupo muscular, frequência e última vez treinado.
+- [x] Vejo o calendário de consistência com dias treinados, parciais, descanso e não
       realizados — sem linguagem de culpa.
-- [ ] Gero relatórios por período com filtros e exporto em CSV.
-- [ ] Dark/light, responsivo, pt-BR; suíte, lint, tsc e build verdes.
+- [x] Gero relatórios por período com filtros e exporto em CSV.
+- [x] Dark/light, responsivo, pt-BR; suíte, lint, tsc e build verdes.
 
 ## Testes obrigatórios
 

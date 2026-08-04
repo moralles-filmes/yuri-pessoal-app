@@ -57,6 +57,8 @@ import {
   type ChartPoint,
 } from "@/components/training/training-charts";
 import { ProgressionRuleDialog } from "@/components/training/progression-rule-dialog";
+import { BodyEvolution } from "@/components/training/body-evolution";
+import type { MeasurementType, MeasurementWithType, SignedProgressPhoto } from "@/lib/body/types";
 import { TRAINING_BASE_PATH, type OneRmFormula } from "@/lib/training/constants";
 import { shortDateLabelIso } from "@/lib/training/history";
 import type { HistoryItem } from "@/lib/training/history";
@@ -83,6 +85,24 @@ import {
 
 const ALL = "__todos__";
 
+/**
+ * Sem histórico, as abas de desempenho dizem isso — em vez de mostrar "0 kg" com cara de
+ * resultado. A aba **Corpo** continua funcionando: medir o corpo não depende de ter treinado.
+ */
+function SemHistorico() {
+  return (
+    <EmptyState
+      icon={TrendingUp}
+      title="Sem treinos registrados no último ano"
+      description="Estes números saem do histórico. Registre um treino e os gráficos aparecem aqui. A aba Corpo já funciona mesmo sem treino registrado."
+    >
+      <Button asChild>
+        <Link href={`${TRAINING_BASE_PATH}/hoje`}>Ir para o treino de hoje</Link>
+      </Button>
+    </EmptyState>
+  );
+}
+
 export function EvolutionClient({
   history,
   facets,
@@ -90,6 +110,7 @@ export function EvolutionClient({
   suggestions,
   muscleGroups,
   hoje,
+  body,
   preferences,
 }: {
   history: HistoryItem[];
@@ -98,6 +119,12 @@ export function EvolutionClient({
   suggestions: ProgressionSuggestionRow[];
   muscleGroups: { id: string; name: string }[];
   hoje: string;
+  /** 17-E — vem do MÓDULO CENTRAL `body_*` (16-E), compartilhado com a Dieta. */
+  body: {
+    types: MeasurementType[];
+    measurements: MeasurementWithType[];
+    photos: SignedProgressPhoto[];
+  };
   preferences: MetricOptions & {
     weekStartsOn: number;
     progressionEnabled: boolean;
@@ -223,34 +250,48 @@ export function EvolutionClient({
     <div className="space-y-6">
       <PageHeader
         title="Evolução"
-        description="Volume, frequência e progressão de carga a partir dos treinos registrados."
+        description="Desempenho a partir dos treinos registrados e evolução corporal, lado a lado."
       />
 
-      {history.length === 0 ? (
-        <EmptyState
-          icon={TrendingUp}
-          title="Sem treinos registrados no último ano"
-          description="A evolução é calculada a partir do histórico. Registre um treino e os gráficos aparecem aqui."
-        >
-          <Button asChild>
-            <Link href={`${TRAINING_BASE_PATH}/hoje`}>Ir para o treino de hoje</Link>
-          </Button>
-        </EmptyState>
-      ) : (
-        <Tabs defaultValue="desempenho">
-          <TabsList>
-            <TabsTrigger value="desempenho">Desempenho</TabsTrigger>
-            <TabsTrigger value="exercicio">Por exercício</TabsTrigger>
-            <TabsTrigger value="progressao">
-              Progressão
-              {pending.length > 0 && (
-                <Badge variant="secondary" className="ml-1.5">
-                  {pending.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue={history.length === 0 ? "corpo" : "desempenho"}>
+        <TabsList>
+          <TabsTrigger value="desempenho">Desempenho</TabsTrigger>
+          <TabsTrigger value="exercicio">Por exercício</TabsTrigger>
+          <TabsTrigger value="corpo">Corpo</TabsTrigger>
+          <TabsTrigger value="progressao">
+            Progressão
+            {pending.length > 0 && (
+              <Badge variant="secondary" className="ml-1.5">
+                {pending.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
+        {/* ── Corpo (17-E) — módulo central `body_*`, compartilhado com a Dieta ── */}
+        <TabsContent value="corpo" className="mt-4">
+          <BodyEvolution
+            types={body.types}
+            measurements={body.measurements}
+            photos={body.photos}
+            hoje={hoje}
+          />
+        </TabsContent>
+
+        {history.length === 0 ? (
+          <>
+            <TabsContent value="desempenho" className="mt-4">
+              <SemHistorico />
+            </TabsContent>
+            <TabsContent value="exercicio" className="mt-4">
+              <SemHistorico />
+            </TabsContent>
+            <TabsContent value="progressao" className="mt-4">
+              <SemHistorico />
+            </TabsContent>
+          </>
+        ) : (
+          <>
           {/* ── Desempenho ── */}
           <TabsContent value="desempenho" className="mt-4 space-y-4">
             <MetricsSummary
@@ -545,8 +586,9 @@ export function EvolutionClient({
               </div>
             )}
           </TabsContent>
-        </Tabs>
-      )}
+          </>
+        )}
+      </Tabs>
 
       <ProgressionRuleDialog
         open={ruleDialogOpen}

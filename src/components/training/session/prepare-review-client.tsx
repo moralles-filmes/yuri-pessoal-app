@@ -54,6 +54,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
+import { shortDateLabelIso } from "@/lib/training/history";
 import {
   AUTO_ADVANCE_LABELS,
   AUTO_ADVANCE_MODES,
@@ -147,6 +148,7 @@ export function PrepareReviewClient({
   previousAny,
   previousSame,
   difficultyScale,
+  latestWeight,
 }: {
   session: TrainingSession;
   snapshot: WorkoutSnapshot;
@@ -154,6 +156,12 @@ export function PrepareReviewClient({
   previousAny: Record<string, PreviousPerformance | null>;
   previousSame: Record<string, PreviousPerformance | null>;
   difficultyScale: DifficultyScale;
+  /**
+   * 17-E — a medição de peso mais recente do MÓDULO CENTRAL `body_*` (16-E), só para
+   * PRÉ-PREENCHER. `null` quando nunca houve medição: sem peso corporal a carga efetiva é
+   * indisponível, NUNCA zero.
+   */
+  latestWeight: { valueKg: number; measuredOn: string } | null;
 }) {
   const router = useRouter();
 
@@ -170,7 +178,11 @@ export function PrepareReviewClient({
   const [sound, setSound] = React.useState(session.soundEnabled);
   const [vibration, setVibration] = React.useState(session.vibrationEnabled);
   const [screenAwake, setScreenAwake] = React.useState(session.keepScreenAwake);
-  const [bodyWeight, setBodyWeight] = React.useState(text(session.bodyWeightKg));
+  // O valor JÁ GRAVADO na sessão vence sempre — ele é o peso daquele treino, congelado. Só
+  // quando não há nenhum é que o histórico de medidas entra, como sugestão editável.
+  const [bodyWeight, setBodyWeight] = React.useState(
+    session.bodyWeightKg !== null ? text(session.bodyWeightKg) : text(latestWeight?.valueKg ?? null),
+  );
   const [energy, setEnergy] = React.useState(text(session.energyLevel));
   const [mood, setMood] = React.useState(text(session.moodLevel));
   const [sleep, setSleep] = React.useState(text(session.sleepQuality));
@@ -777,6 +789,13 @@ export function PrepareReviewClient({
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Sem ele, a carga de exercícios de peso corporal fica indisponível — nunca zero.
+                {session.bodyWeightKg === null && latestWeight && (
+                  <>
+                    {" "}
+                    Sugerido a partir da sua última medição ({shortDateLabelIso(latestWeight.measuredOn)}); o
+                    que ficar aqui é o peso <strong>deste</strong> treino.
+                  </>
+                )}
               </p>
             </div>
             <ScaleField label="Energia" value={energy} onChange={setEnergy} />

@@ -70,6 +70,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/shared/page-header";
+import { ConsistencyCalendar } from "@/components/training/consistency-calendar";
+import type { MetricOptions, MetricSession } from "@/lib/training/metrics";
 import { cn } from "@/lib/utils";
 import {
   DERIVED_SCHEDULE_STATUS_LABELS,
@@ -102,7 +104,14 @@ import {
 } from "@/lib/actions/training-schedule";
 import { Field } from "@/components/training/field";
 
-type View = "semana" | "mes" | "lista";
+type View = "semana" | "mes" | "lista" | "consistencia";
+
+const VIEW_LABELS: Record<View, string> = {
+  semana: "Semana",
+  mes: "Mês",
+  lista: "Lista",
+  consistencia: "Consistência",
+};
 
 const STATUS_STYLES: Record<DerivedScheduleStatus, string> = {
   planejado: "border-border bg-card",
@@ -125,6 +134,8 @@ export function CalendarClient({
   reference,
   view,
   weekStartsOn,
+  history,
+  metricOptions,
 }: {
   entries: ScheduledWorkout[];
   workouts: TrainingWorkout[];
@@ -133,6 +144,9 @@ export function CalendarClient({
   reference: string;
   view: View;
   weekStartsOn: number;
+  /** 17-E — sessões executadas, para o mapa de consistência. Só o SNAPSHOT, como sempre. */
+  history: MetricSession[];
+  metricOptions: MetricOptions;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -278,14 +292,14 @@ export function CalendarClient({
         </span>
 
         <div className="ml-auto flex flex-wrap items-center gap-1">
-          {(["semana", "mes", "lista"] as View[]).map((option) => (
+          {(["semana", "mes", "lista", "consistencia"] as View[]).map((option) => (
             <Button
               key={option}
               variant={view === option ? "default" : "outline"}
               size="sm"
               onClick={() => setParam("visao", option === "semana" ? null : option)}
             >
-              {option === "semana" ? "Semana" : option === "mes" ? "Mês" : "Lista"}
+              {VIEW_LABELS[option]}
             </Button>
           ))}
 
@@ -353,6 +367,22 @@ export function CalendarClient({
           hoje={hoje}
           onOutcome={setOutcomeEntry}
           onRemove={removeEntry}
+        />
+      )}
+
+      {/* 17-E — mapa de consistência. O que aconteceu, sem cobrança. */}
+      {view === "consistencia" && (
+        <ConsistencyCalendar
+          sessions={history}
+          planned={entries.map((entry) => ({
+            scheduledDate: entry.scheduledDate,
+            entryKind: entry.entryKind,
+            status: entry.status,
+          }))}
+          hoje={hoje}
+          months={6}
+          options={metricOptions}
+          weekStartsOn={weekStartsOn}
         />
       )}
 
