@@ -122,6 +122,22 @@ export function monthGrid(iso: string, weekStartDay = 1): string[][] {
   return weeks;
 }
 
+/**
+ * Primeiro e último dia da GRADE do mês — o intervalo que `monthGrid` cobre, incluindo os
+ * dias vizinhos que completam a primeira e a última semana.
+ *
+ * Existe (16-E) para o servidor ler exatamente o que o calendário vai desenhar: buscar só o
+ * mês deixaria as células da borda em branco, e branco no calendário significa "não houve
+ * registro" — uma afirmação falsa sobre um dia que simplesmente não foi consultado.
+ */
+export function monthGridRange(iso: string, weekStartDay = 1): [string, string] {
+  const grid = monthGrid(iso, weekStartDay);
+  const first = grid[0]?.[0] ?? startOfMonthIso(iso);
+  const lastWeek = grid[grid.length - 1];
+  const last = lastWeek?.[lastWeek.length - 1] ?? endOfMonthIso(iso);
+  return [first, last];
+}
+
 /** Todos os dias de [from, to], inclusive. Vazio quando o intervalo é inválido. */
 export function eachDayIso(from: string, to: string): string[] {
   const total = diffDaysIso(from, to);

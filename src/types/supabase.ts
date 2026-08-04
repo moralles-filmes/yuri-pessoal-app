@@ -168,6 +168,213 @@ export type Database = {
           },
         ]
       }
+      body_measurement_types: {
+        Row: {
+          category: string
+          created_at: string
+          decimals: number
+          id: string
+          is_active: boolean
+          is_default: boolean
+          name: string
+          note: string | null
+          position: number
+          side: string | null
+          slug: string
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          decimals?: number
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name: string
+          note?: string | null
+          position?: number
+          side?: string | null
+          slug: string
+          unit: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          decimals?: number
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name?: string
+          note?: string | null
+          position?: number
+          side?: string | null
+          slug?: string
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      body_measurements: {
+        Row: {
+          condition: string | null
+          created_at: string
+          id: string
+          measured_at: string | null
+          measured_on: string
+          note: string | null
+          source: string
+          type_id: string
+          unit: string
+          updated_at: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          condition?: string | null
+          created_at?: string
+          id?: string
+          measured_at?: string | null
+          measured_on: string
+          note?: string | null
+          source?: string
+          type_id: string
+          unit: string
+          updated_at?: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          condition?: string | null
+          created_at?: string
+          id?: string
+          measured_at?: string | null
+          measured_on?: string
+          note?: string | null
+          source?: string
+          type_id?: string
+          unit?: string
+          updated_at?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_measurements_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "body_measurement_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      body_measurement_goals: {
+        Row: {
+          created_at: string
+          direction: string
+          id: string
+          note: string | null
+          start_value: number | null
+          starts_on: string
+          status: string
+          target_date: string | null
+          target_value: number
+          type_id: string
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          id?: string
+          note?: string | null
+          start_value?: number | null
+          starts_on: string
+          status?: string
+          target_date?: string | null
+          target_value: number
+          type_id: string
+          unit: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          id?: string
+          note?: string | null
+          start_value?: number | null
+          starts_on?: string
+          status?: string
+          target_date?: string | null
+          target_value?: number
+          type_id?: string
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_measurement_goals_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "body_measurement_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      body_progress_photos: {
+        Row: {
+          angle: string
+          attachment_id: string
+          created_at: string
+          id: string
+          note: string | null
+          position: number
+          taken_on: string
+          updated_at: string
+          user_id: string
+          weight_kg: number | null
+        }
+        Insert: {
+          angle?: string
+          attachment_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          position?: number
+          taken_on: string
+          updated_at?: string
+          user_id: string
+          weight_kg?: number | null
+        }
+        Update: {
+          angle?: string
+          attachment_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          position?: number
+          taken_on?: string
+          updated_at?: string
+          user_id?: string
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_progress_photos_attachment_owner_fkey"
+            columns: ["attachment_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "attachments"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
       calendar_events: {
         Row: {
           all_day: boolean

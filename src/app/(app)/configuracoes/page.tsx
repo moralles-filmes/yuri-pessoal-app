@@ -86,12 +86,22 @@ export default async function ConfiguracoesPage() {
               o seu acesso (RLS).
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <Button asChild>
               <a href="/api/export">
                 <Download /> Baixar backup (JSON)
               </a>
             </Button>
+            {/*
+              Honestidade sobre o que o backup NÃO leva (16-E). As fotos de evolução são
+              arquivos no Storage privado, e um JSON não os carrega. Dizer isso é melhor do
+              que deixar o usuário descobrir na hora de restaurar.
+            */}
+            <p className="text-xs text-muted-foreground">
+              O arquivo traz seus registros, incluindo os dados das fotos de evolução (data,
+              ângulo e observações) — mas <strong>não as imagens em si</strong>, que ficam
+              guardadas em área privada e precisam ser baixadas pela tela de medidas.
+            </p>
           </CardContent>
         </Card>
       </div>
