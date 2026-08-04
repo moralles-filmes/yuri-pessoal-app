@@ -39,6 +39,13 @@ import {
   progressionRuleUpdateSchema,
   suggestionDecisionSchema,
 } from "@/lib/validators/training-history";
+import {
+  goalProgressEntrySchema,
+  trainingGoalDeleteSchema,
+  trainingGoalSchema,
+  trainingGoalStatusSchema,
+  trainingGoalUpdateSchema,
+} from "@/lib/validators/training-goals";
 
 const UUID = "11111111-2222-4333-8444-555555555555";
 
@@ -255,5 +262,166 @@ describe("regra de progressão (17-D)", () => {
     expect(deleteSessionSchema.safeParse({ id: UUID }).success).toBe(false);
     expect(deleteSessionSchema.safeParse({ id: UUID, confirm: false }).success).toBe(false);
     expect(deleteSessionSchema.safeParse({ id: UUID, confirm: true }).success).toBe(true);
+  });
+});
+
+/* ═══════════════════════════ Fase 17-E — Metas de treino ═══════════════════════════ */
+
+describe("metas de treino (17-E)", () => {
+  const doFormulario = {
+    name: "4 treinos por semana",
+    description: "",
+    goal_kind: "frequencia",
+    metric: "treinos_por_semana",
+    exercise_id: "",
+    muscle_group_id: "",
+    program_id: "",
+    body_measurement_type_id: "",
+    direction: "aumentar",
+    period: "semanal",
+    starts_on: "2026-08-01",
+    ends_on: "",
+    start_value: "",
+    target_value: "4",
+    unit: "treinos",
+    milestones: [],
+    status: "ativa",
+    notes: "",
+  };
+
+  it("passa no servidor com os opcionais em branco", () => {
+    const { noServidor } = roundTrip(trainingGoalSchema, doFormulario);
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+  });
+
+  it("vale também para a edição", () => {
+    const { noServidor } = roundTrip(trainingGoalUpdateSchema, { ...doFormulario, id: UUID });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+  });
+
+  it("os marcos sobrevivem à ida e volta", () => {
+    const { noCliente, noServidor } = roundTrip(trainingGoalSchema, {
+      ...doFormulario,
+      milestones: [
+        { value: "2", label: "", due_on: "" },
+        { value: "3", label: "quase lá", due_on: "2026-09-30" },
+      ],
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    const saida = noCliente.data as { milestones: { value: number; label: string | null; due_on: string | null }[] };
+    expect(saida.milestones).toEqual([
+      { value: 2, label: null, due_on: null },
+      { value: 3, label: "quase lá", due_on: "2026-09-30" },
+    ]);
+  });
+
+  it("valor inicial em branco vira NULL, nunca 0", () => {
+    const parsed = trainingGoalSchema.safeParse(doFormulario);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.start_value).toBeNull();
+  });
+
+  it("aceita valor digitado no padrão BR", () => {
+    const parsed = trainingGoalSchema.safeParse({
+      ...doFormulario,
+      goal_kind: "desempenho",
+      metric: "peso_exercicio",
+      exercise_id: UUID,
+      unit: "kg",
+      target_value: "102,5",
+      start_value: "1.000,25",
+    });
+    expect(parsed.success, parsed.success ? "" : fieldErrors(parsed.error)).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.target_value).toBe(102.5);
+      expect(parsed.data.start_value).toBe(1000.25);
+    }
+  });
+
+  it("métrica fora da família escolhida destaca o campo da métrica", () => {
+    const parsed = trainingGoalSchema.safeParse({
+      ...doFormulario,
+      goal_kind: "frequencia",
+      metric: "peso_exercicio",
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.error.flatten().fieldErrors.metric).toBeTruthy();
+  });
+
+  it("meta de exercício sem exercício destaca o campo certo", () => {
+    const parsed = trainingGoalSchema.safeParse({
+      ...doFormulario,
+      goal_kind: "desempenho",
+      metric: "peso_exercicio",
+      unit: "kg",
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.error.flatten().fieldErrors.exercise_id).toBeTruthy();
+  });
+
+  it("meta corporal sem tipo de medida destaca o campo da medida", () => {
+    const parsed = trainingGoalSchema.safeParse({
+      ...doFormulario,
+      goal_kind: "corporal",
+      metric: "medida_corporal",
+      direction: "reduzir",
+      unit: "kg",
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.flatten().fieldErrors.body_measurement_type_id).toBeTruthy();
+    }
+  });
+
+  it("período personalizado sem data final destaca o prazo", () => {
+    const parsed = trainingGoalSchema.safeParse({ ...doFormulario, period: "personalizado" });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.error.flatten().fieldErrors.ends_on).toBeTruthy();
+  });
+
+  it("prazo antes do início destaca o prazo", () => {
+    const parsed = trainingGoalSchema.safeParse({
+      ...doFormulario,
+      starts_on: "2026-08-10",
+      ends_on: "2026-08-01",
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.error.flatten().fieldErrors.ends_on).toBeTruthy();
+  });
+
+  it("unidade em branco destaca o campo da unidade", () => {
+    const parsed = trainingGoalSchema.safeParse({ ...doFormulario, unit: "" });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) expect(parsed.error.flatten().fieldErrors.unit).toBeTruthy();
+  });
+
+  it("STATUS DERIVADO não é gravável", () => {
+    for (const derivado of ["atingida", "expirada", "em_atraso"]) {
+      expect(trainingGoalSchema.safeParse({ ...doFormulario, status: derivado }).success).toBe(false);
+      expect(
+        trainingGoalStatusSchema.safeParse({ id: UUID, status: derivado }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("mudar a situação exige uma escolha explícita", () => {
+    expect(trainingGoalStatusSchema.safeParse({ id: UUID }).success).toBe(false);
+    expect(trainingGoalStatusSchema.safeParse({ id: UUID, status: "pausada" }).success).toBe(true);
+  });
+
+  it("excluir uma meta exige confirmação explícita", () => {
+    expect(trainingGoalDeleteSchema.safeParse({ id: UUID }).success).toBe(false);
+    expect(trainingGoalDeleteSchema.safeParse({ id: UUID, confirm: false }).success).toBe(false);
+    expect(trainingGoalDeleteSchema.safeParse({ id: UUID, confirm: true }).success).toBe(true);
+  });
+
+  it("registro manual de progresso também faz a ida e volta", () => {
+    const { noServidor } = roundTrip(goalProgressEntrySchema, {
+      goal_id: UUID,
+      recorded_on: "2026-08-05",
+      value: "12,5",
+      note: "",
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
   });
 });

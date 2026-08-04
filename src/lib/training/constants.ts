@@ -565,7 +565,7 @@ export const TRAINING_SECTIONS: TrainingSection[] = [
   {
     slug: "evolucao",
     title: "Evolução",
-    description: "Volume, frequência e progressão de carga. A evolução corporal chega na 17-E.",
+    description: "Desempenho e evolução corporal, lado a lado.",
     href: `${TRAINING_BASE_PATH}/evolucao`,
     icon: "trending-up",
     status: "pronto",
@@ -577,16 +577,16 @@ export const TRAINING_SECTIONS: TrainingSection[] = [
     description: "Frequência, desempenho, corporais e personalizadas.",
     href: `${TRAINING_BASE_PATH}/metas`,
     icon: "target",
-    status: "planejada",
+    status: "pronto",
     phase: "Subfase 17-E",
   },
   {
     slug: "relatorios",
     title: "Relatórios",
-    description: "Consumo de tempo, volume e aderência por período.",
+    description: "Volume, aderência e evolução por período, com exportação.",
     href: `${TRAINING_BASE_PATH}/relatorios`,
     icon: "bar-chart-3",
-    status: "planejada",
+    status: "pronto",
     phase: "Subfase 17-E",
   },
 ];

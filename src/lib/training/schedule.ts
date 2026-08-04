@@ -95,6 +95,22 @@ export function endOfMonthIso(iso: string): string {
   return fromUtc(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
 }
 
+/**
+ * Soma (ou subtrai) meses a uma data pura, **prendendo ao último dia do mês** quando o dia não
+ * existe no destino: 31/01 + 1 mês = 28/02 (ou 29/02 em bissexto), nunca 03/03.
+ *
+ * Usada pelos períodos trimestral/semestral/anual das metas (17-E). Mora aqui, junto do resto
+ * da aritmética de data pura do módulo — duas implementações de "somar mês" ficariam livres
+ * para divergir na virada de fevereiro, que é justamente onde o erro apareceria.
+ */
+export function addMonthsIso(iso: string, months: number): string {
+  if (!isDateIso(iso)) return iso;
+  const [y, m, d] = iso.split("-").map(Number);
+  // Dia 0 do mês seguinte = último dia do mês de destino.
+  const lastDay = new Date(Date.UTC(y, m - 1 + months + 1, 0)).getUTCDate();
+  return fromUtc(Date.UTC(y, m - 1 + months, Math.min(d, lastDay)));
+}
+
 /** Grade do mês: semanas completas, incluindo os dias vizinhos que fecham a primeira/última. */
 export function monthGridIso(iso: string, weekStartsOn = 1): string[][] {
   const last = endOfMonthIso(iso);
