@@ -11,6 +11,10 @@
     "test:run": "cross-env TZ=America/Sao_Paulo vitest run"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.29",
+    "@ai-sdk/google": "^4.0.33",
+    "@ai-sdk/openai": "^4.0.29",
+    "@ai-sdk/xai": "^4.0.27",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -19,6 +23,7 @@
     "@supabase/supabase-js": "^2.108.2",
     "@tanstack/react-query": "^5.101.1",
     "@tanstack/react-table": "^8.21.3",
+    "ai": "^7.0.51",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
@@ -31,6 +36,7 @@
     "react-dom": "19.2.4",
     "react-hook-form": "^7.80.0",
     "recharts": "^3.9.0",
+    "server-only": "^0.0.1",
     "shadcn": "^4.11.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",

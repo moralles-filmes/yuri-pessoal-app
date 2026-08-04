@@ -1,6 +1,86 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-## 📌 Estado atual — AS DUAS FRENTES ESTÃO CONCLUÍDAS
+## 🎯 PRÓXIMA FASE: 18-B — IA · Contexto, ferramentas de leitura e agentes
+
+**Arquivo a abrir:** `docs/phases/PHASE_18_B_AI_CONTEXT_READ_TOOLS_AGENTS.md`
+**Desenho validado (leia ANTES):** `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`
+**O que já existe:** `docs/handoff/LAST_PHASE_SUMMARY.md` → seção **Fase 18-A**
+
+A **18-A foi implementada e verificada em 2026-08-04**: fundação, quatro adapters, catálogos
+versionados, credenciais cifradas, chat com streaming, medição por tentativa e orçamento com
+reserva. **A IA ainda não lê um único registro do usuário** — é exatamente isso que a 18-B
+começa a mudar, e por isso ela é a subfase mais delicada da fase inteira.
+
+⚠️ **A 18-B exige autorização explícita do usuário.** Não comece a implementar por encontrar
+este arquivo.
+
+### O que a 18-A deixou pronto para você usar (não reescreva nada disto)
+
+| Precisa de… | Use |
+| --- | --- |
+| Contratos de IA independentes de fornecedor | `src/lib/ai/core/contracts.ts` |
+| Escolher provedor e modelo | `core/router.ts` — **nunca** aceite provedor/modelo do cliente sem passar por ele |
+| Classificar erro e decidir fallback | `core/errors.ts` + `core/fallback.ts` |
+| Custo e orçamento | `usage/meter.ts` · `usage/reservation.ts` · `usage/budget.ts` |
+| Empacotar dado recuperado | **`security/untrusted.ts`** — é o ponto de entrada da 18-B |
+| Sanear erro e log | `security/redact.ts` (único caminho de saída de erro do módulo) |
+| Falar com o provedor | `providers/provider-factory.ts` |
+| Rodar um chat inteiro | `server/chat-runner.ts` |
+| Ler as telas | `src/lib/ai/queries.ts` (colunas explícitas, nunca `select('*')`) |
+
+### As dez coisas que a 18-A fixou e a 18-B NÃO pode afrouxar
+
+1. **A IA nunca acessa o banco.** Camada controlada de ferramentas; sem SQL livre, sem
+   `service_role` no caminho da requisição, sem ferramenta criada em runtime.
+2. **`user_id` só de `authContext()`** — não existe nos schemas de entrada. Zod `.strict()`.
+3. **`core/` não importa pacote de fornecedor.** Só `providers/` importa `ai` e `@ai-sdk/*`.
+   Garantido por ESLint, `server-only` e teste que pega import dinâmico.
+4. **Tool Registry nasce VAZIO na 18-A.** Nenhuma definição vai ao provedor. Tool call
+   inesperada encerra o run como `failed` com `UNEXPECTED_TOOL_CALL` sanitizado.
+5. **A master key nunca entra no banco.** Envelope AES-256-GCM, AAD
+   `credential_id | owner_id | provider | key_version`, keyring versionado. `credential_id` é
+   gerado **antes** de cifrar. Query da UI com colunas explícitas — nunca `select('*')`.
+6. **`ai_usage_events` é por TENTATIVA**, com `UNIQUE (run_id, attempt_index)` + FK composta
+   `(run_id, user_id)`. Insert primeiro, `23505` lê o existente. **`select-then-insert` não é
+   garantia de idempotência.** Moeda canônica **USD**, sem câmbio na 18-A.
+7. **O run é reserva financeira** e seu início é **atômico** (`SECURITY INVOKER`,
+   `SET search_path = ''`, advisory lock por usuário, `auth.uid()` lido dentro da função).
+8. **Recuperação preguiçosa é a primária.** O Cron roda `0 12` e `0 0` — **2×/dia, pior caso
+   de 12 h**. Rodar a reconciliação **antes de reservar novo run** é o que impede um run
+   travado de bloquear a próxima conversa e prender orçamento.
+9. **Sem master key, só a IA para** — o resto do sistema continua funcionando.
+10. **Trava de honestidade:** o assistente da 18-A **não tem acesso aos dados** e deve dizer
+    isso, não inventar número. É critério de aceite.
+
+### O que continua bloqueado depois da 18-B
+
+Escrita, propostas e confirmações (18-C) · imagens e documentos, **inclusive qualquer upload**
+(18-D) · insights e dashboards (18-E) · memória, voz, automações, botão flutuante,
+**sino/notificações** e busca global (18-F).
+
+### As três armadilhas que a 18-A encontrou e você vai reencontrar
+
+1. **`no-restricted-imports` usa semântica de .gitignore**, não de caminho: um grupo sem barra
+   casa com qualquer componente. Ao acrescentar zonas no `eslint.config.mjs`, prefira `paths`
+   (casamento exato) para pacotes, e leia o comentário que já está lá.
+2. **`server-only` lança fora do bundle do Next**, então qualquer arquivo novo em
+   `src/lib/ai/server/` fica intestável sem o alias do Vitest (`src/test/server-only-stub.ts`).
+   O alias vale **só** no test runner — não afrouxe o build.
+3. **FK composta impede o embed do PostgREST.** `ai_messages` ↔ `ai_runs` já são lidos em duas
+   consultas de propósito (mesma consequência que a 16-E documentou nas fotos de evolução).
+   Ao ligar uma tabela nova a outra do mesmo usuário, use FK composta e leia em duas consultas.
+
+### A pergunta que a 18-B tem de responder ANTES de escrever código
+
+`security/untrusted.ts` existe, está testado e **nunca foi usado** — porque a 18-A não recupera
+nada. A 18-B é a primeira a passar dado do usuário para um modelo. Antes da primeira ferramenta
+de leitura, deixe explícito: **quais campos** vão, **quantos registros**, **qual limite de
+tamanho**, e **como o usuário liga e desliga cada módulo** (as flags `allow_*` de
+`ai_user_preferences` já existem e nascem **todas desligadas** — nenhuma delas é lida ainda).
+
+---
+
+## 📌 Estado das fases anteriores — AS DUAS FRENTES ESTÃO CONCLUÍDAS
 
 As 14 fases do roadmap original, a **Fase 15 (TO-DO)**, a **Fase 16 (Dieta e Alimentação)** e a
 **Fase 17 (Treinos)** estão concluídas.
@@ -10,9 +90,9 @@ As 14 fases do roadmap original, a **Fase 15 (TO-DO)**, a **Fase 16 (Dieta e Ali
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F) — **40 de 40** critérios |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — **55 de 55** critérios |
 
-**NÃO HÁ PRÓXIMA FASE.** Não existe 16-G nem 17-G. O projeto inteiro está em **modo
-manutenção/iteração**: toda melhoria entra como **tarefa avulsa**, com branch própria,
-verificação completa e documentação atualizada — não como subfase.
+Não existe 16-G nem 17-G. Os dois módulos estão em **modo manutenção/iteração**: melhoria
+neles entra como **tarefa avulsa**, com branch própria, verificação completa e documentação
+atualizada — não como subfase.
 
 O veredito item a item dos 55 critérios da Fase 17 e dos 40 da Fase 16 está em
 `docs/handoff/LAST_PHASE_SUMMARY.md`.

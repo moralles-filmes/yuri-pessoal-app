@@ -8,6 +8,7 @@ import { SecurityCard } from "@/components/settings/security-card";
 import { RegionalCard } from "@/components/settings/regional-card";
 import { NotificationsCard } from "@/components/settings/notifications-card";
 import { DashboardPrefsCard } from "@/components/settings/dashboard-prefs-card";
+import { AiCard } from "@/components/settings/ai-card";
 import { GoogleConnectCard } from "@/app/(app)/agenda/google-connect-card";
 import {
   Card,
@@ -20,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getUserSettings } from "@/lib/settings/queries";
 import { getGoogleConnectionStatus } from "@/lib/calendar/queries";
+import { getProviderCards } from "@/lib/ai/queries";
+import { cryptoProblemMessage } from "@/lib/ai/server/crypto-readiness";
 
 export const metadata: Metadata = { title: "Configurações" };
 export const dynamic = "force-dynamic";
@@ -46,6 +49,10 @@ export default async function ConfiguracoesPage() {
     getGoogleConnectionStatus(),
   ]);
 
+  // Fase 18-A: as chaves dos provedores de IA moram aqui, em Configurações — é onde o
+  // usuário procura por "chave de API". A tela completa fica em `/ia/configuracoes`.
+  const aiCards = user ? await getProviderCards(user.id) : [];
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -67,6 +74,8 @@ export default async function ConfiguracoesPage() {
       </div>
 
       <NotificationsCard prefs={settings.notificationPrefs} />
+
+      <AiCard cards={aiCards} problemaCripto={cryptoProblemMessage()} />
 
       {/* Integração Google Agenda */}
       <div className="space-y-2">

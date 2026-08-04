@@ -1,0 +1,463 @@
+import "server-only";
+
+/**
+ * Fase 18-A — IA · Leituras das telas. COLUNAS EXPLÍCITAS, nunca `select('*')`.
+ *
+ * Uma consulta ampla por tela, derivando o resto em memória — o padrão do projeto para
+ * evitar N+1. E nenhuma leitura daqui traz `ciphertext`, `wrapped_dek`, `iv` ou `auth_tag`:
+ * material criptográfico só é lido no caminho que decifra (`credential-store.ts`).
+ */
+
+import { createClient } from "@/lib/supabase/server";
+import { AI_PROVIDERS, type AiProviderId } from "./core/contracts";
+import { PROVIDER_REGISTRY } from "./providers/registry";
+import {
+  computeBudgetUsage,
+  nivelAtingido,
+  type RunForBudget,
+  type RunStatus as BudgetRunStatus,
+} from "./usage/budget";
+import { round6, sumRunCost } from "./usage/meter";
+import type { ProviderConfigView } from "./core/router";
+import type {
+  AiPreferencesView,
+  ConversationDetail,
+  ConversationListItem,
+  ConversationMessage,
+  MessageRunInfo,
+  ProviderCardView,
+  ProviderUsageRow,
+  UsagePeriodSummary,
+} from "./types";
+
+/** Quantas mensagens do histórico vão para o provedor. Teto de custo e de contexto. */
+export const MAX_HISTORY_MESSAGES = 20;
+/** Teto do histórico em caracteres, aplicado depois do corte por quantidade. */
+export const MAX_HISTORY_CHARS = 24_000;
+
+// ─────────────────────────── Configurações e preferências ───────────────────────────
+
+export async function getProviderCards(userId: string): Promise<ProviderCardView[]> {
+  const supabase = await createClient();
+
+  const [configs, creds] = await Promise.all([
+    supabase
+      .from("ai_provider_configs")
+      .select(
+        "provider, enabled, display_name, default_model, economy_model, advanced_model, vision_model, timeout_ms, max_retries, daily_limit, monthly_limit, fallback_allowed, fallback_order",
+      )
+      .eq("user_id", userId),
+    supabase
+      .from("ai_provider_credentials")
+      .select("provider, status, last_four, last_validated_at")
+      .eq("user_id", userId),
+  ]);
+
+  const porProvedor = new Map(
+    (configs.data ?? []).map((c) => [c.provider as AiProviderId, c]),
+  );
+  const credPorProvedor = new Map(
+    (creds.data ?? []).map((c) => [c.provider as AiProviderId, c]),
+  );
+
+  // Os quatro aparecem SEMPRE, mesmo sem linha no banco: a tela precisa oferecer o que
+  // ainda não foi configurado, e não só o que já foi.
+  return AI_PROVIDERS.map((provider) => {
+    const cfg = porProvedor.get(provider);
+    const cred = credPorProvedor.get(provider);
+    const meta = PROVIDER_REGISTRY[provider];
+
+    return {
+      provider,
+      label: meta.label,
+      enabled: cfg?.enabled ?? false,
+      displayName: cfg?.display_name ?? null,
+      defaultModel: cfg?.default_model ?? null,
+      economyModel: cfg?.economy_model ?? null,
+      advancedModel: cfg?.advanced_model ?? null,
+      visionModel: cfg?.vision_model ?? null,
+      timeoutMs: cfg?.timeout_ms ?? 60_000,
+      maxRetries: cfg?.max_retries ?? 1,
+      dailyLimit: cfg?.daily_limit ?? null,
+      monthlyLimit: cfg?.monthly_limit ?? null,
+      fallbackAllowed: cfg?.fallback_allowed ?? false,
+      fallbackOrder: cfg?.fallback_order ?? [],
+      credentialStatus: (cred?.status as ProviderCardView["credentialStatus"]) ?? null,
+      lastFour: cred?.last_four ?? null,
+      lastValidatedAt: cred?.last_validated_at ?? null,
+      keyHint: meta.keyHint,
+      consoleUrl: meta.consoleUrl,
+    };
+  });
+}
+
+/** O recorte que `core/router.ts` consome. Puro dado, sem decisão. */
+export async function getRouterConfigs(
+  userId: string,
+): Promise<ProviderConfigView[]> {
+  const cards = await getProviderCards(userId);
+  return cards.map((c) => ({
+    provider: c.provider,
+    enabled: c.enabled,
+    defaultModel: c.defaultModel,
+    economyModel: c.economyModel,
+    advancedModel: c.advancedModel,
+    visionModel: c.visionModel,
+    fallbackAllowed: c.fallbackAllowed,
+    fallbackOrder: c.fallbackOrder,
+    maxRetries: c.maxRetries,
+    timeoutMs: c.timeoutMs,
+    // `nao_validada` CONTA como utilizável: o usuário pode ter salvo a chave sem testar, e
+    // recusar por isso o obrigaria a um teste burocrático antes da primeira conversa. Só
+    // `invalida` — comprovadamente recusada pelo provedor — bloqueia.
+    hasUsableCredential:
+      c.credentialStatus === "valida" || c.credentialStatus === "nao_validada",
+  }));
+}
+
+const PREFS_PADRAO: AiPreferencesView = {
+  defaultProvider: null,
+  defaultModel: null,
+  confirmationMode: "seguro",
+  allowFallback: false,
+  dailyBudget: null,
+  monthlyBudget: null,
+  budgetBlockOnLimit: true,
+  budgetAlertLevelReached: 0,
+  reservationMargin: 1.15,
+  rateLimitPerMinute: 10,
+  rateLimitPerHour: 120,
+};
+
+export async function getAiPreferences(userId: string): Promise<AiPreferencesView> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ai_user_preferences")
+    .select(
+      "default_provider, default_model, confirmation_mode, allow_fallback, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
+    )
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!data) return PREFS_PADRAO;
+
+  return {
+    defaultProvider: (data.default_provider as AiProviderId | null) ?? null,
+    defaultModel: data.default_model,
+    confirmationMode: data.confirmation_mode as AiPreferencesView["confirmationMode"],
+    allowFallback: data.allow_fallback,
+    dailyBudget: data.daily_budget,
+    monthlyBudget: data.monthly_budget,
+    budgetBlockOnLimit: data.budget_block_on_limit,
+    budgetAlertLevelReached: data.budget_alert_level_reached,
+    reservationMargin: data.reservation_margin,
+    rateLimitPerMinute: data.rate_limit_per_minute,
+    rateLimitPerHour: data.rate_limit_per_hour,
+  };
+}
+
+// ─────────────────────────── Conversas ───────────────────────────
+
+export async function listConversations(
+  userId: string,
+  incluirArquivadas = false,
+): Promise<ConversationListItem[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("ai_conversations")
+    .select("id, title, agent_id, status, is_favorite, last_message_at, created_at")
+    .eq("user_id", userId)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(100);
+
+  if (!incluirArquivadas) q = q.eq("status", "ativa");
+
+  const { data } = await q;
+  return (data ?? []).map((c) => ({
+    id: c.id,
+    title: c.title,
+    agentId: c.agent_id,
+    status: c.status as ConversationListItem["status"],
+    isFavorite: c.is_favorite,
+    lastMessageAt: c.last_message_at,
+    createdAt: c.created_at,
+  }));
+}
+
+/**
+ * A conversa inteira: mensagens + as execuções que as produziram.
+ *
+ * As duas leituras são separadas de propósito — `ai_messages` e `ai_runs` se apontam
+ * mutuamente por FK COMPOSTA, e FK composta impede o embed do PostgREST (a 16-E documentou
+ * o mesmo nas fotos de evolução). Juntar em memória é mais barato que abrir mão da FK.
+ */
+export async function getConversation(
+  userId: string,
+  conversationId: string,
+): Promise<ConversationDetail | null> {
+  const supabase = await createClient();
+
+  const { data: conversa } = await supabase
+    .from("ai_conversations")
+    .select("id, title, agent_id, status, is_favorite, last_message_at, created_at")
+    .eq("id", conversationId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!conversa) return null;
+
+  const [{ data: mensagens }, { data: runs }] = await Promise.all([
+    supabase
+      .from("ai_messages")
+      .select("id, role, content, status, created_at, run_id")
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(500),
+    supabase
+      .from("ai_runs")
+      .select(
+        "id, status, selected_provider, selected_model, completed_provider, completed_model, attempt_count, fallback_count, total_latency_ms, error_code, error_message_sanitized",
+      )
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId)
+      .limit(500),
+  ]);
+
+  const runIds = (runs ?? []).map((r) => r.id);
+  const custosPorRun = new Map<string, (number | null)[]>();
+
+  if (runIds.length > 0) {
+    const { data: eventos } = await supabase
+      .from("ai_usage_events")
+      .select("run_id, estimated_cost")
+      .eq("user_id", userId)
+      .in("run_id", runIds);
+
+    for (const ev of eventos ?? []) {
+      const lista = custosPorRun.get(ev.run_id) ?? [];
+      lista.push(ev.estimated_cost);
+      custosPorRun.set(ev.run_id, lista);
+    }
+  }
+
+  const runsInfo: Record<string, MessageRunInfo> = {};
+  for (const r of runs ?? []) {
+    const custos = custosPorRun.get(r.id) ?? [];
+    const total = sumRunCost(custos);
+    runsInfo[r.id] = {
+      runId: r.id,
+      status: r.status as MessageRunInfo["status"],
+      provider: (r.completed_provider ?? r.selected_provider) as AiProviderId | null,
+      model: r.completed_model ?? r.selected_model,
+      // Sem NENHUMA tentativa medida, o custo é indisponível — não é zero.
+      costUsd: custos.length === 0 || total.semCusto === custos.length ? null : total.totalUsd,
+      custoParcial: total.parcial,
+      avisoParcial: total.avisoParcial,
+      attemptCount: r.attempt_count,
+      fallbackCount: r.fallback_count,
+      latencyMs: r.total_latency_ms,
+      errorCode: r.error_code,
+      errorMessage: r.error_message_sanitized,
+    };
+  }
+
+  const lista: ConversationMessage[] = (mensagens ?? []).map((m) => ({
+    id: m.id,
+    role: m.role as ConversationMessage["role"],
+    content: m.content,
+    status: m.status as ConversationMessage["status"],
+    createdAt: m.created_at,
+    runId: m.run_id,
+  }));
+
+  return {
+    conversation: {
+      id: conversa.id,
+      title: conversa.title,
+      agentId: conversa.agent_id,
+      status: conversa.status as ConversationListItem["status"],
+      isFavorite: conversa.is_favorite,
+      lastMessageAt: conversa.last_message_at,
+      createdAt: conversa.created_at,
+    },
+    messages: lista,
+    runs: runsInfo,
+  };
+}
+
+/**
+ * O histórico que vai para o provedor. Recortado por quantidade E por caracteres — as duas
+ * coisas, porque 20 mensagens curtas e 20 mensagens gigantes custam muito diferente.
+ *
+ * Mensagem em `streaming`, `cancelled` ou `failed` fica de fora: mandar meia resposta de
+ * volta como se fosse a fala do assistente ensinaria o modelo a continuar de onde parou uma
+ * frase que o usuário nunca chegou a ver inteira.
+ */
+export async function getHistoryForPrompt(
+  userId: string,
+  conversationId: string,
+): Promise<{ role: "user" | "assistant"; content: string }[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ai_messages")
+    .select("role, content, status, created_at")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId)
+    .eq("status", "complete")
+    .in("role", ["user", "assistant"])
+    .order("created_at", { ascending: false })
+    .limit(MAX_HISTORY_MESSAGES);
+
+  const recentesPrimeiro = data ?? [];
+  const saida: { role: "user" | "assistant"; content: string }[] = [];
+  let acumulado = 0;
+
+  for (const m of recentesPrimeiro) {
+    if (!m.content) continue;
+    if (acumulado + m.content.length > MAX_HISTORY_CHARS) break;
+    acumulado += m.content.length;
+    saida.push({ role: m.role as "user" | "assistant", content: m.content });
+  }
+
+  return saida.reverse();
+}
+
+// ─────────────────────────── Consumo ───────────────────────────
+
+/**
+ * O consumo do período, pelas DUAS vias do invariante: custo real dos terminais + reserva
+ * dos não-terminais. O dia e o mês são os de BRASÍLIA — em UTC o período "viraria" às 21h.
+ */
+export async function getUsageSummary(
+  userId: string,
+  periodo: "dia" | "mes",
+  limiteUsd: number | null,
+  agora: Date,
+): Promise<UsagePeriodSummary> {
+  const supabase = await createClient();
+  const inicio = inicioDoPeriodoEmBrasilia(periodo, agora);
+
+  const { data: runs } = await supabase
+    .from("ai_runs")
+    .select("id, status, reserved_cost, reservation_expires_at")
+    .eq("user_id", userId)
+    .gte("created_at", inicio.toISOString())
+    .limit(2000);
+
+  const runIds = (runs ?? []).map((r) => r.id);
+  const custosPorRun = new Map<string, (number | null)[]>();
+
+  if (runIds.length > 0) {
+    const { data: eventos } = await supabase
+      .from("ai_usage_events")
+      .select("run_id, estimated_cost")
+      .eq("user_id", userId)
+      .in("run_id", runIds);
+
+    for (const ev of eventos ?? []) {
+      const lista = custosPorRun.get(ev.run_id) ?? [];
+      lista.push(ev.estimated_cost);
+      custosPorRun.set(ev.run_id, lista);
+    }
+  }
+
+  const paraOrcamento: RunForBudget[] = (runs ?? []).map((r) => ({
+    id: r.id,
+    status: r.status as BudgetRunStatus,
+    reservedCost: r.reserved_cost,
+    reservationExpiresAt: r.reservation_expires_at,
+    attemptCosts: custosPorRun.get(r.id) ?? [],
+  }));
+
+  const uso = computeBudgetUsage(paraOrcamento, agora.getTime());
+  const percentual =
+    limiteUsd !== null && limiteUsd > 0
+      ? round6((uso.totalUsd / limiteUsd) * 100)
+      : null;
+
+  return {
+    periodo,
+    confirmadoUsd: uso.confirmadoUsd,
+    reservadoUsd: uso.reservadoUsd,
+    totalUsd: uso.totalUsd,
+    limiteUsd,
+    restanteUsd: limiteUsd === null ? null : round6(limiteUsd - uso.totalUsd),
+    percentual,
+    nivelDeAlerta: nivelAtingido(uso.totalUsd, limiteUsd),
+    execucoesSemCusto: uso.execucoesSemCusto,
+    runsComReservaAtiva: uso.runsComReservaAtiva,
+    execucoes: paraOrcamento.length,
+  };
+}
+
+export async function getUsageByModel(
+  userId: string,
+  periodo: "dia" | "mes",
+  agora: Date,
+): Promise<ProviderUsageRow[]> {
+  const supabase = await createClient();
+  const inicio = inicioDoPeriodoEmBrasilia(periodo, agora);
+
+  const { data } = await supabase
+    .from("ai_usage_events")
+    .select("provider, model_id, estimated_cost")
+    .eq("user_id", userId)
+    .gte("created_at", inicio.toISOString())
+    .limit(5000);
+
+  const agregado = new Map<string, ProviderUsageRow>();
+  for (const ev of data ?? []) {
+    const chave = `${ev.provider}::${ev.model_id}`;
+    const atual = agregado.get(chave) ?? {
+      provider: ev.provider as AiProviderId,
+      model: ev.model_id,
+      execucoes: 0,
+      custoUsd: 0,
+      semCusto: 0,
+    };
+    agregado.set(chave, {
+      ...atual,
+      execucoes: atual.execucoes + 1,
+      custoUsd:
+        ev.estimated_cost === null
+          ? atual.custoUsd
+          : round6(atual.custoUsd + ev.estimated_cost),
+      semCusto: atual.semCusto + (ev.estimated_cost === null ? 1 : 0),
+    });
+  }
+
+  return [...agregado.values()].sort((a, b) => b.custoUsd - a.custoUsd);
+}
+
+/**
+ * Início do dia/mês EM BRASÍLIA, devolvido como instante. A mesma conta que
+ * `ai_begin_chat_run` faz em SQL — as duas precisam concordar, senão a tela mostraria um
+ * consumo e o bloqueio usaria outro.
+ */
+function inicioDoPeriodoEmBrasilia(periodo: "dia" | "mes", agora: Date): Date {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(agora);
+
+  const ano = Number(partes.find((p) => p.type === "year")?.value);
+  const mes = Number(partes.find((p) => p.type === "month")?.value);
+  const dia = periodo === "dia" ? Number(partes.find((p) => p.type === "day")?.value) : 1;
+
+  // Meia-noite de Brasília. O deslocamento é obtido comparando o mesmo instante nos dois
+  // fusos — sem tabela de horário de verão embutida, que envelheceria sozinha.
+  const palpite = Date.UTC(ano, mes - 1, dia, 0, 0, 0);
+  const offsetMs = offsetDeBrasiliaEm(new Date(palpite));
+  return new Date(palpite - offsetMs);
+}
+
+function offsetDeBrasiliaEm(instante: Date): number {
+  const local = new Date(
+    instante.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }),
+  );
+  const utc = new Date(instante.toLocaleString("en-US", { timeZone: "UTC" }));
+  return local.getTime() - utc.getTime();
+}

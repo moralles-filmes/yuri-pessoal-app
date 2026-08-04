@@ -11,6 +11,12 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 | **16** | Dieta e Alimentação (`/nutricao`) | A–F | ✅ **FASE CONCLUÍDA** (16-A a 16-F). Em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | A–F | ✅ **FASE CONCLUÍDA** (17-A a 17-F). Em manutenção/iteração |
 
+Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteligência Artificial**:
+
+| Fase | Módulo | Subfases | Situação |
+| --- | --- | --- | --- |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅ concluída (2026-08-04); **18-B é a próxima** |
+
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
 > **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
@@ -36,10 +42,130 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
   Arquivo: `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`
 
 ## Próximas fases
-**NÃO HÁ PRÓXIMA FASE.** As duas frentes (16 — Dieta e 17 — Treinos) estão concluídas, e o
-projeto volta ao **modo manutenção/iteração**: melhoria entra como tarefa avulsa, com branch
-própria, e não como subfase. As pendências conscientes de cada módulo estão listadas em
-`docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
+
+**Fase 18-B — IA · Contexto, ferramentas de leitura e agentes.**
+Arquivo: `docs/phases/PHASE_18_B_AI_CONTEXT_READ_TOOLS_AGENTS.md`
+Desenho validado: `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`
+
+A **18-A foi implementada e verificada em 2026-08-04** (detalhe em
+`docs/handoff/LAST_PHASE_SUMMARY.md`). Ela entregou a fundação inteira — contratos internos,
+quatro adapters, catálogos versionados, credenciais cifradas, chat com streaming, medição por
+tentativa e orçamento com reserva — **sem que a IA leia um único registro do usuário**. Essa
+ordem é proposital: a camada de segurança precisa existir, estar testada e ser difícil de furar
+**antes** da primeira leitura, e é isso que a 18-B começa a fazer.
+
+| Subfase | Tema | Status |
+| --- | --- | --- |
+| 18-A | Fundação, provedores e chat | ✅ **CONCLUÍDA** (2026-08-04) |
+| 18-B | Contexto, ferramentas de leitura e agentes | ⬜ **Próxima** |
+| 18-C | Ações, aprovações, idempotência e auditoria | ⬜ |
+| 18-D | Visão, documentos e comprovantes | ⬜ |
+| 18-E | Insights, relatórios e dashboards | ⬜ |
+| 18-F | Memória, voz, integrações e polimento | ⬜ — fecha a fase |
+
+As frentes 16 (Dieta) e 17 (Treinos) continuam **concluídas e em manutenção/iteração**:
+melhoria nelas entra como tarefa avulsa, com branch própria, e não como subfase. As pendências
+conscientes de cada uma estão em `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
+
+### Decisões técnicas registradas da Fase 18 (antes de implementar)
+
+1. **Rota `/ia`, tabelas `ai_*`** — convenção do projeto (rota pt-BR, schema em inglês).
+2. **A IA nunca acessa o banco diretamente.** Camada controlada de ferramentas; o modelo pede,
+   o backend valida e executa. Sem SQL livre, sem `service_role`, sem ferramenta em runtime.
+3. **`user_id` sempre de `authContext()`** — não existe nos schemas de entrada das ferramentas.
+4. **Vercel AI SDK isolado em `src/lib/ai/providers/`**; `core/` e o resto dependem só de
+   contratos internos. Fronteira garantida por ESLint, `server-only` e teste.
+5. **Envelope encryption AES-256-GCM** com AAD e keyring versionado (`AI_MASTER_KEYS`); a
+   master key nunca entra no banco.
+6. **Streaming por Route Handler `/api/ia/chat`** — segunda exceção estrutural ao padrão Server
+   Action (a primeira foi o auth). Transporte apenas; não autoriza outros endpoints.
+7. **`ai_usage_events` é por tentativa**, não por run — retry e fallback têm tarifas próprias.
+8. **O run é reserva financeira temporária**, e seu início é atômico numa função
+   `SECURITY INVOKER` com advisory lock por usuário.
+9. **Commands extraídos sob demanda na 18-C**, só para as actions que a IA usar. Nenhuma regra
+   de negócio é reescrita; `revalidatePath` fica na casca da Server Action.
+10. **Recuperação de run abandonado é preguiçosa (primária) + carona no Cron (rede).** O Cron
+    existente roda `0 12` e `0 0` (09h e 21h BRT): **pior caso de 12 h**, registrado como risco.
+
+---
+
+## O que foi implementado na Subfase 18-A (fundação, provedores e chat) — 2026-08-04
+
+A 18-A **para antes de encostar nos dados**, de propósito. O risco desta subfase nunca foi a
+IA responder mal: foi **vazar chave de API**, **estourar orçamento** e **deixar registro
+inconsistente** — três coisas que nenhum prompt melhor conserta. Um módulo de IA que nasce com
+acesso aos dados e ganha segurança depois nunca fica seguro.
+
+### Banco — 7 tabelas `ai_*`, 2 funções, 0 tabelas existentes alteradas
+
+`ai_provider_configs` · `ai_provider_credentials` · `ai_user_preferences` ·
+`ai_conversations` · `ai_messages` · `ai_runs` · `ai_usage_events`.
+Migrations `20260807100000_ai_foundation.sql` (estrutura) e `20260807100100_ai_begin_chat_run.sql`
+(admissão atômica + reconciliação). `get_advisors` → **nenhum lint novo**.
+
+### As sete decisões que a implementação fixou
+
+1. **A chave de API nunca é gravada em claro.** Envelope AES-256-GCM: uma DEK por credencial,
+   embrulhada pela master key do ambiente. A master key **não está no banco e nunca estará** —
+   quem lê `ai_provider_credentials` inteira não decifra nada. O AAD
+   (`credential_id | owner_id | provider | key_version`) amarra o ciphertext à linha: movê-lo
+   para outro dono, outro provedor ou outra credencial **falha**, em vez de decifrar em
+   silêncio. Rotação re-embrulha só a DEK; duas versões coexistem durante ela.
+2. **A admissão é ATÔMICA e o commit acontece ANTES de qualquer chamada externa.**
+   `ai_begin_chat_run` (`SECURITY INVOKER`, `SET search_path = ''`,
+   `pg_advisory_xact_lock` por usuário, `lock_timeout 3s`) reconcilia reservas vencidas, valida
+   rate limit e orçamento, cria conversa + mensagem do usuário + run + mensagem do assistente —
+   tudo ou nada. **Nenhum lock e nenhuma transação ficam abertos durante o streaming.** Timeout
+   do lock vira **429**, não 500: não houve falha, houve concorrência.
+3. **O run é uma RESERVA FINANCEIRA.** `consumo = Σ custo dos terminais + Σ reserva dos
+   não-terminais não vencidos`, e todo run pertence a **exatamente um** dos dois somatórios.
+   Sem isso, duas mensagens quase simultâneas leriam o mesmo gasto confirmado e as duas
+   passariam no limite. A reserva usa a tarifa do **modelo mais caro da cadeia de fallback
+   autorizada**, porque o fallback não ganha segunda reserva.
+4. **`ai_usage_events` é por TENTATIVA.** Retry e fallback criam linhas novas, cada uma com o
+   seu `rate_snapshot`. Idempotência por `INSERT` + `23505` (não `select-then-insert`, que tem
+   corrida). Tentativa terminal é **imutável** — a policy de UPDATE exige `status = 'started'`,
+   então retificação de uso tardio é impossível no banco, não só no código.
+5. **Ausência nunca é zero.** Provedor que não informa tokens produz `estimated_cost` **nulo**
+   e `usage_availability` marcando o que faltou. O total de um run com alguma tentativa sem
+   custo é exibido como **parcial**, nunca como se estivesse completo.
+6. **Moeda canônica USD, sem câmbio.** Os quatro provedores publicam em USD; converter exigiria
+   fonte de taxa, snapshot e versão — uma segunda fonte de verdade inteira para um número que
+   **não é a cobrança oficial**. Custo de IA não é transação do usuário e **não entra** nos
+   relatórios de finanças. Câmbio, se desejado, é 18-F.
+7. **Fail-closed só para a IA.** Sem `AI_MASTER_KEYS` o resto do sistema funciona normalmente;
+   apenas `/ia` fica indisponível, com a explicação na tela, e `/api/ia/chat` responde
+   **503**. Chave curta **não** é completada com padding, senha humana **não** vira master key
+   e versão ausente **não** é substituída em silêncio.
+
+### Fronteiras arquiteturais — três mecanismos independentes
+
+`core/`, `agents/`, `tools/`, `usage/` e `security/` não importam pacote de fornecedor; só
+`providers/` importa `ai` e `@ai-sdk/*`. Garantido por **(1)** ESLint por zona, **(2)**
+`server-only` (quebra o build) e **(3)** um teste de rede que varre import **estático e
+dinâmico** — `no-restricted-imports` não enxerga `await import()`. Conferido também no bundle:
+**nenhum vestígio de AI SDK ou de material criptográfico no JavaScript do cliente**.
+
+⚠️ Achado durante a implementação: `patterns.group` do `no-restricted-imports` usa semântica de
+**.gitignore**, não de caminho — o grupo `"ai"` bloqueava `@/lib/ai/**` inteiro. O pacote `ai`
+passou para `paths` (casamento exato). Registrado no comentário do `eslint.config.mjs`.
+
+### Trava de honestidade — critério de aceite, não boa vontade do modelo
+
+O assistente da 18-A **não consulta nenhum registro** e o prompt diz isso com todas as letras,
+aponta o módulo onde o dado está e proíbe explicitamente inventar número (inclusive as duas
+formas disfarçadas: "provavelmente uns R$ 300" e "assumindo que você gastou X"). A garantia
+real, porém, é estrutural: **o Tool Registry nasce vazio**, nenhuma definição vai ao provedor,
+e uma tool call inesperada encerra o run como `failed` com `UNEXPECTED_TOOL_CALL` — sem
+executar nada.
+
+### Verificação
+
+`npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm run test:run` **2.129 testes** ✅ ·
+suíte verde também em **`TZ=UTC`** ✅ · `npm run build` ✅.
+RLS, atomicidade, anti-enumeração, unicidade `(run_id, attempt_index)`, imutabilidade da
+tentativa terminal, FK composta, transições condicionais, recuperação e rate limit **testados
+no banco pela role `authenticated`**, em transação com rollback — 28 asserções, todas verdes.
 
 ---
 

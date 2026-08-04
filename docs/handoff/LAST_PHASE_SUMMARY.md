@@ -1,10 +1,260 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-> ✅ **AS DUAS FRENTES ESTÃO CONCLUÍDAS (2026-08-04)**: a **Fase 16 — Dieta e Alimentação**
-> (16-A a 16-F, 40 de 40 critérios) e a **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55
-> critérios). O projeto volta ao modo manutenção/iteração.
-> Este arquivo tem o resumo das duas, na ordem em que foram concluídas — a mais recente
-> primeiro.
+> 🟡 **ÚLTIMA SUBFASE CONCLUÍDA: 18-A — IA · Fundação, provedores e chat (2026-08-04).**
+> Antes dela, as duas frentes grandes: **Fase 16 — Dieta e Alimentação** (16-A a 16-F, 40 de 40
+> critérios) e **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55). Este arquivo tem os
+> resumos na ordem inversa de conclusão — o mais recente primeiro.
+
+---
+
+## Fase 18-A — IA · Fundação, provedores e chat (2026-08-04) ✅ **IMPLEMENTADA E VERIFICADA**
+
+**A 18-A para antes de encostar nos dados, de propósito.** O risco desta subfase nunca foi a IA
+responder mal: foi **vazar chave de API**, **estourar orçamento** e **deixar registro
+inconsistente**. Um módulo de IA que nasce com acesso aos dados e ganha segurança depois nunca
+fica seguro.
+
+### O que foi entregue
+
+| Camada | Arquivos |
+| --- | --- |
+| Banco | 2 migrations · 7 tabelas `ai_*` · 2 funções (`ai_begin_chat_run`, `ai_reconcile_abandoned_runs`) |
+| `core/` (puro) | `contracts` · `capabilities` · `models` · `pricing` · `router` · `fallback` · `errors` · `result` |
+| `providers/` | `registry` · `provider-factory` · `ai-sdk/{adapter,openai,gemini,anthropic,xai,error-map}` |
+| `agents/` · `tools/` | registry estático (1 agente) · prompt de segurança + prompt do agente · **Tool Registry VAZIO** |
+| `usage/` · `security/` | `meter` · `reservation` · `budget` · `untrusted` · `redact` · `rate-limit` |
+| `server/` | `keyring` · `crypto-readiness` · `credential-crypto` · `credential-store` · `run-store` · `reconcile` · `chat-runner` |
+| Transporte | `POST /api/ia/chat` (SSE, runtime nodejs) |
+| Actions | `ai-providers` · `ai-preferences` · `ai-conversations` + `validators/ai.ts` |
+| UI | `/ia` (chat · conversas · consumo · configurações) · card em **Configurações** · item na sidebar |
+
+### As sete decisões que a implementação fixou
+
+1. **A chave de API nunca é gravada em claro.** Envelope AES-256-GCM (DEK por credencial,
+   embrulhada pela master key do ambiente). A master key **não está no banco**: quem lê
+   `ai_provider_credentials` inteira não decifra nada. O AAD
+   (`credential_id | owner_id | provider | key_version`) amarra o ciphertext à linha — movê-lo
+   para outro dono ou outro provedor **falha**, em vez de decifrar em silêncio.
+2. **A admissão é atômica e o commit acontece ANTES de qualquer chamada externa.** Advisory
+   lock **transacional** por usuário (nunca de sessão: num pool, lock de sessão vaza para a
+   próxima requisição). Timeout do lock vira **429**, não 500 — não houve falha, houve
+   concorrência.
+3. **O run é uma reserva financeira**, com o invariante XOR testado nas duas vias de soma.
+4. **`ai_usage_events` é por tentativa**, com `UNIQUE (run_id, attempt_index)` + FK composta, e
+   a policy de UPDATE exige `status = 'started'` — **retificação de uso tardio é impossível no
+   banco**, não só no código.
+5. **Ausência nunca é zero** — custo `null` + `usage_availability`, e total exibido como
+   *parcial* quando alguma tentativa ficou sem custo.
+6. **Moeda canônica USD, sem câmbio.** Custo de IA não é transação do usuário e não entra nos
+   relatórios de finanças.
+7. **Fail-closed só para a IA** — sem `AI_MASTER_KEYS`, o resto do sistema funciona normalmente.
+
+### O que a implementação DESCOBRIU (e não estava no spec)
+
+1. **`no-restricted-imports` usa semântica de .gitignore, não de caminho.** O grupo `"ai"`
+   bloqueava `@/lib/ai/**` inteiro — o próprio módulo. O pacote `ai` passou para `paths`
+   (casamento exato). Registrado no comentário do `eslint.config.mjs`.
+2. **O anexo K dizia "`ai_usage_events` sem policy de UPDATE", e isso contradizia o anexo G.**
+   A tentativa nasce `started` e fecha em `completed|failed|cancelled` — isso **é** um UPDATE.
+   Implementado como policy de UPDATE com `using (... and status = 'started')`: mais forte que
+   a intenção original, porque torna a linha terminal imutável **no banco**.
+3. **`server-only` lança fora do bundle do Next**, o que impediria os testes unitários exigidos
+   pelos critérios 18–25. Resolvido com alias **só no Vitest** (`src/test/server-only-stub.ts`);
+   o `next build` continua usando o pacote real, e há teste conferindo que todo arquivo de
+   `server/` importa a guarda.
+4. **Endpoint de listagem de modelos existe nos quatro provedores** — o teste de conexão custa
+   **zero tokens** e a contingência de "1 token de saída" do anexo I não foi necessária.
+5. **`ceil6` com `toFixed(3)` zerava tarifas minúsculas**, e reserva zero não protege nada.
+   Trocado por `toPrecision(12)` (precisão relativa).
+6. **Contador de teste de conexão precisou de duas colunas novas** em
+   `ai_provider_credentials` (`test_window_started_at`, `test_count`): em serverless um
+   contador em memória reinicia a cada processo. Fica ali, e não em `ai_runs`, porque testar
+   credencial **não é conversa** — não cria run, não gera evento e não entra no orçamento.
+
+### Versões instaladas (registradas, como o anexo J pediu)
+
+`ai@^7.0.51` · `@ai-sdk/openai@^4.0.29` · `@ai-sdk/google@^4.0.33` ·
+`@ai-sdk/anthropic@^4.0.29` · `@ai-sdk/xai@^4.0.27` · `server-only@^0.0.1`.
+Compatíveis com Next 16.2.9, React 19.2.4 e Zod 4.4.3 (build e suíte verdes).
+
+### Catálogo e tarifas — conferidos na documentação oficial em 2026-08-04
+
+11 modelos ativos e 12 linhas de tarifa, cada uma com `verified_at` e a URL da fonte.
+O **Claude Sonnet 5 tem DUAS tarifas** (promocional até 31/08/2026, padrão a partir de
+01/09/2026) — é o caso real que justifica `effective_from`/`effective_until`. A **xAI cobra por
+faixa** acima de 200k tokens de entrada: a medição usa a faixa efetiva, a reserva usa sempre a
+cara. `contextWindow` fica **`null` onde a documentação não afirmava** — não verificado nunca
+vira "ilimitado".
+
+### Verificação
+
+`lint` ✅ · `tsc --noEmit` ✅ · `test:run` **2.129 testes** ✅ (eram 1.694) · **`TZ=UTC`** ✅ ·
+`build` ✅. Bundle do cliente sem vestígio de AI SDK ou de material criptográfico.
+28 asserções de banco pela role `authenticated`, em transação com rollback: RLS, atomicidade,
+anti-enumeração, unicidade da tentativa, imutabilidade terminal, FK composta, transições
+condicionais, recuperação (heartbeat recente impede / lease vencida fecha / reexecução no-op) e
+rate limit.
+
+### Veredito dos 84 critérios de aceite — item a item
+
+**Legenda da evidência:** 🧪 teste automatizado · 🗄️ testado no banco pela role
+`authenticated` (transação com rollback) · 🔎 verificado por execução ou inspeção (build,
+bundle, grep, revisão do código).
+
+**Fundação e fronteira (1–6) — 6/6**
+1 🧪🔎 ESLint + `boundaries.test.ts` · 2 🧪🔎 · 3 🧪 · 4 🔎 build verde + bundle do cliente sem
+vestígio · 5 🧪 · 6 🧪 o teste varre `import()` dinâmico, que o ESLint não vê.
+
+**Provedores (7–12) — 6/6**
+7 🧪 os quatro pelo mesmo contrato · 8 🧪 17 casos nas 10 classes, sanitizados · 9 🧪
+`CAPABILITY_MISSING` (e nenhuma ferramenta é enviada, porque o registry é vazio) · 10 🧪
+`MODEL_NOT_IN_CATALOG` · 11 🧪 Zod enum + router · 12 🧪🗄️ `AI_CREDENTIAL_NOT_AVAILABLE`.
+
+**Catálogos (13–17) — 5/5**
+13 🔎 os quatro conferidos na documentação oficial em 2026-08-04, com `verified_at` e URL por
+entrada 🧪 · 14 🔎 grep: nenhum preço fora de `core/pricing.ts`; a aritmética vive só em
+`usage/` · 15 🧪 `rate_snapshot` por tentativa · 16 🧪 `numeric` + USD + versão · 17 🧪
+`MODEL_DISABLED` sai da seleção mas continua resolvível pelo histórico.
+
+**Credenciais (18–28) — 11/11** — todos 🧪, mais 26 🔎 (`COLUNAS_PUBLICAS`) e 28 🔎.
+Ciclo íntegro · IV distinto · tag adulterada falha · AAD inválido falha · ciphertext movido de
+dono/provedor falha · versão desconhecida é erro **tipado** · chave errada falha · rotação com
+duas versões · query da tela sem material criptográfico · chave nunca sai em resposta/log ·
+teste de conexão grava `last_validated_at` sem revelar nada.
+
+**Master key (29–32) — 4/4** — 29/30 🔎 (`getCryptoReadiness` não lança e não afeta outros
+módulos; build verde sem as variáveis) · 31 🔎 `saveCredential` recusa sem keyring · 32 🧪
+sem padding, sem senha humana, sem versão silenciosa.
+
+**Chat (33–41) — 9/9**
+33 🔎 · 34 🔎 `Sec-Fetch-Site`/`Origin` · 35 🧪🔎 corpo e mensagem (o histórico não vem do
+cliente: é lido do banco e cortado por quantidade **e** caracteres) · 36 🧪 nove campos
+proibidos, incluindo `user_id` e `attachments` · 37 🧪🗄️ persistência periódica + transições
+condicionais · 38 🔎🗄️ · 39 🧪🔎 mensagem sanitizada · 40 🔎 `cancel()` do stream chama
+`return()` do runner · 41 🗄️ a mensagem do assistente nasce na admissão.
+
+**Início atômico (42–47) — 6/6** — todos 🗄️. Rollback total nas recusas · não existe run sem
+mensagem · nem mensagem de assistente sem run · nem reserva sem run · conversa alheia recusada ·
+`auth.uid()` nulo rejeitado e nenhum limite aceito do cliente.
+
+**Uso por tentativa (48–54) — 7/7**
+48/49 🔎 o runner abre uma linha por tentativa (`startAttempt` por iteração) · 50/51 🧪 tarifas
+não se misturam · 52 🗄️ `23505` na reexecução · 53 🧪 soma correta · 54 🧪 indisponível ≠ 0.
+
+**Reserva e orçamento (55–64) — 10/10**
+55 🧪 · 56 🧪 · 57 🧪 XOR provado por duas vias de soma · 58 🔎 · 59 🧪 · 60 🧪 · 61 🧪 teto
+explícito em toda chamada · 62 🧪 · 63 🗄️ `AI_BUDGET_EXCEEDED_DAILY` **antes** da chamada ·
+64 🔎 grep: nenhuma notificação de IA existe.
+
+**Recuperação (65–70) — 6/6** — 65/66/68 🗄️ · 67 🗄️ segundo fechamento é no-op · 69 🧪
+reserva vencida sai do somatório · 70 🔎🗄️ a função chama a reconciliação **antes** de reservar.
+
+**Rate limit (71–72) — 2/2** — 72 🗄️ limite lido pelo banco · 71 🗄️ o limite é aplicado dentro
+da transação sob advisory lock. ⚠️ **A corrida real (duas transações simultâneas) não foi
+simulada** — o que foi verificado é que o lock existe, é transacional e que o limite recusa.
+
+**Segurança e ferramentas (73–77) — 5/5**
+73 🧪 texto de injection vira conteúdo de bloco tipado, com aviso · 74 🧪 nenhuma definição é
+enviada, mesmo com allowlist preenchida · 75 🧪 evento repassado, nada executado · 76 🧪🔎 ·
+77 🧪 nenhum import de query de módulo em `src/lib/ai/`.
+
+**Trava de honestidade (78) — 1/1** — 🧪 8 asserções sobre o prompt, incluindo as duas formas
+disfarçadas de inventar ("provavelmente uns R$ 300", "assumindo que você gastou X").
+
+**Transversais (79–84) — 6/6**
+79 🔎 pt-BR em toda a UI · 80 🔎 dark/light por tokens e as 5 regras de responsividade
+aplicadas (`min-w-0`, `sm:max-w-lg` no diálogo, `top-18` na barra fixa, tabela com
+`overflow-x-auto`) — **conferido por revisão, não por screenshot** · 81 🗄️ RLS + FORCE nas 7
+tabelas · 82 🔎 lint + tsc + 2.129 testes + build, todos verdes · 83 🔎 suíte verde em `TZ=UTC` ·
+84 🔎 `/ia` e `/api/ia` fora de `PUBLIC_PATHS`; `/api/cron` segue protegido por `CRON_SECRET`.
+
+**84 de 84 atendidos.** As duas ressalvas honestas estão marcadas acima (71 e 80) — em ambas o
+mecanismo está implementado e verificado; o que não houve foi simulação de concorrência real e
+inspeção visual automatizada.
+
+### ⚠️ Pendências conscientes da 18-A
+
+- **`vercel.json` não foi alterado.** O Cron continua 2×/dia (pior caso 12 h para a varredura
+  global). Aceito porque a reconciliação preguiçosa é a primária — em especial a que roda
+  **dentro** de `ai_begin_chat_run`, antes de reservar novo run.
+- **`revalidatePath` em Route Handler não foi exercitado** (o chat não invalida cache; a tela
+  chama `router.refresh()`). A verificação empírica continua sendo tarefa da 18-C.
+- **Capacidades `visao`/`tool_calling` não foram marcadas em nenhum modelo**, porque a
+  documentação consultada não afirmava por modelo. Não limita a 18-A (que usa só texto +
+  streaming); a 18-D precisará conferir modelo a modelo antes de habilitar imagem.
+
+---
+
+## Fase 18 — Inteligência Artificial (2026-08-04) 📝 **A ETAPA DE DESIGN**
+
+O registro da etapa de **design** que precedeu a implementação, aprovada pelo usuário em quatro
+rodadas de revisão.
+
+### O que foi produzido
+
+| Arquivo | O quê |
+| --- | --- |
+| `docs/superpowers/specs/2026-08-04-modulo-ia-design.md` | **Spec de referência** — desenho completo e validado |
+| `docs/phases/PHASE_18_A_AI_FOUNDATION_PROVIDERS_CHAT.md` | 18-A, detalhada (84 critérios de aceite) |
+| `docs/phases/PHASE_18_B_AI_CONTEXT_READ_TOOLS_AGENTS.md` | 18-B |
+| `docs/phases/PHASE_18_C_AI_ACTIONS_APPROVALS_AUDIT.md` | 18-C |
+| `docs/phases/PHASE_18_D_AI_VISION_DOCUMENTS_RECEIPTS.md` | 18-D |
+| `docs/phases/PHASE_18_E_AI_INSIGHTS_REPORTS_DASHBOARDS.md` | 18-E |
+| `docs/phases/PHASE_18_F_AI_MEMORY_VOICE_INTEGRATIONS_POLISH.md` | 18-F, fecha a fase |
+
+Atualizados: `PROJECT_BRIEFING.md`, `PROJECT_ROADMAP.md`, `PROJECT_ARCHITECTURE.md`,
+`CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `CLAUDE.md`.
+
+### O que NÃO foi feito **nesta etapa** (proposital)
+
+Nenhum arquivo em `src/` foi criado ou alterado · nenhuma dependência instalada · nenhuma
+migration criada ou aplicada · `vercel.json` intacto · nenhum deploy.
+
+> ✅ A implementação veio depois, com autorização explícita — ver a seção da **18-A** acima.
+> `vercel.json` continua intacto.
+
+### As decisões que custaram debate (e por que ficaram assim)
+
+1. **`ai_usage_events` é por TENTATIVA, não por run.** Um run pode ter retry, fallback de
+   provedor e fallback de modelo — cada um com provedor, modelo, moeda e tarifa próprios. Uma
+   linha por run obrigaria a sobrescrever custo, perder a primeira tentativa ou misturar
+   tarifas. Chave **revisada na última rodada** para `(run_id, attempt_index)` + FK composta
+   `(run_id, user_id)`: `run_id` já é globalmente único e determina o dono, então `user_id` na
+   constraint não acrescentava unicidade — quem protege de verdade é a FK composta.
+2. **`select-then-insert` não garante idempotência.** Duas execuções concorrentes fazem o
+   select, não acham nada e inserem as duas. A garantia é a constraint: insert primeiro, e em
+   `23505` lê a linha existente. O `42P10` que mordeu o projeto na 16-B é outro problema
+   (índice **parcial** que o Postgres não infere) e se resolve conferindo a constraint, não
+   abrindo mão de atomicidade.
+3. **Contar runs e depois inserir tem corrida.** Duas requisições veem 9 de 10 e ambas passam.
+   Por isso o início do run é uma função com `pg_advisory_xact_lock` por usuário.
+4. **O advisory lock não resolve a corrida de orçamento.** Duas requisições veem o mesmo
+   consumo confirmado enquanto a primeira ainda não gerou evento de uso. Por isso o run também
+   é **reserva financeira temporária** (`reserved_cost`, `reservation_expires_at`).
+5. **"Nenhum run fica preso" não é verdade num crash.** O correto é um **SLA declarado**:
+   heartbeat a cada 10 s, abandono após 5 min, recuperação **preguiçosa** ao abrir `/ia`,
+   listar conversas e **antes de reservar novo run**, com o Cron como rede.
+   ⚠️ **O Cron real roda `0 12` e `0 0` — 2×/dia, 09h e 21h BRT, pior caso de 12 h.**
+   Registrado como risco; `vercel.json` **não** foi alterado.
+6. **`base_url` editável foi removida.** URL arbitrária abriria SSRF, envio da chave para
+   domínio malicioso e vazamento de prompt. Endpoint oficial fica no adapter.
+7. **`revalidatePath` sozinho não torna uma action acoplada à interface.** Levantamento das 44
+   actions: 0 com `redirect()`, 3 com `FormData`, 41 com `revalidatePath`. Classificar as 41
+   como Caso B viraria um refactor da camada de mutação inteira. Commands são extraídos **sob
+   demanda na 18-C**, só para o que a IA usar.
+8. **Falta de master key desativa só a IA.** O resto do sistema continua funcionando;
+   `/api/ia/chat` responde `503 AI_CRYPTO_NOT_CONFIGURED`. Sem padding em chave curta, sem
+   derivar de senha, sem escolher outra versão em silêncio.
+
+### Divergências encontradas no repositório (não corrigidas)
+
+- **`PROJECT_BRIEFING.md` tem numeração de módulo colidindo:** "Módulo 16" aparece como TO-DO
+  e como "Banco de dados"; "Módulo 17" como Dieta e como "Segurança e privacidade". O módulo
+  **Treinos não está no briefing**. Por isso a seção de IA entrou como "Módulo IA", sem número.
+  Renumerar é tarefa avulsa própria.
+- **A doc local do Next 16 (`09-revalidating.md:158`) declara escopo para `revalidateTag`**
+  ("Server Actions and Route Handlers") mas **não declara para `revalidatePath`**. A 18-C deve
+  confirmar empiricamente antes de depender disso.
 
 ---
 

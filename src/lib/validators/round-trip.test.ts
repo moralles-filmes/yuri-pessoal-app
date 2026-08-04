@@ -24,6 +24,10 @@
 import { describe, expect, it } from "vitest";
 import { optionalText } from "@/lib/validators/shared";
 import {
+  aiPreferencesSchema,
+  aiProviderConfigSchema,
+} from "@/lib/validators/ai";
+import {
   programSchema,
   programUpdateSchema,
   workoutSchema,
@@ -423,5 +427,46 @@ describe("metas de treino (17-E)", () => {
       note: "",
     });
     expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+  });
+});
+
+/**
+ * ─────────────────────────── Fase 18-A · Inteligência Artificial ───────────────────────────
+ *
+ * Os formulários de IA usam estado local + Server Action, e NÃO `zodResolver`. Mesmo assim a
+ * propriedade vale, e os testes de ida e volta estão em `src/lib/validators/ai.test.ts` — a
+ * action valida a saída do formulário com o MESMO schema, então `parse(parse(x))` precisa
+ * funcionar de qualquer jeito. Um `optional*` que só aceitasse `""`/ausente quebraria na
+ * segunda passada, exatamente como quebrou em "Novo treino".
+ *
+ * O teste abaixo é a amarra: se algum desses schemas passar a ser usado com resolver, ele
+ * já está coberto aqui também.
+ */
+describe("Fase 18-A — schemas de IA aceitam a própria saída", () => {
+  it("aiProviderConfigSchema e aiPreferencesSchema fazem a ida e volta", () => {
+    const config = roundTrip(aiProviderConfigSchema, {
+      provider: "openai",
+      enabled: false,
+      displayName: "",
+      defaultModel: "",
+      economyModel: "",
+      advancedModel: "",
+      visionModel: "",
+      timeoutMs: 60000,
+      maxRetries: 1,
+      fallbackAllowed: false,
+    });
+    expect(config.noServidor.success, fieldErrors(config.noServidor.error)).toBe(true);
+
+    const prefs = roundTrip(aiPreferencesSchema, {
+      defaultModel: "",
+      confirmationMode: "seguro",
+      allowFallback: false,
+      budgetBlockOnLimit: true,
+      reservationMargin: 1.15,
+      rateLimitPerMinute: 10,
+      rateLimitPerHour: 120,
+    });
+    expect(prefs.noServidor.success, fieldErrors(prefs.noServidor.error)).toBe(true);
   });
 });
