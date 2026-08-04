@@ -1,11 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Dumbbell, Layers, Settings, Star, Wrench } from "lucide-react";
+import {
+  CalendarCheck,
+  CalendarRange,
+  ClipboardList,
+  Dumbbell,
+  Layers,
+  Settings,
+  Star,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
+import { hojeISO } from "@/lib/format";
 import {
   TRAINING_BASE_PATH,
   TRAINING_SECTIONS,
@@ -18,27 +27,49 @@ import {
   getTrainingPreferences,
   summarizeCatalog,
 } from "@/lib/training/queries";
+import {
+  getPrograms,
+  getScheduledWorkouts,
+  getWorkouts,
+  summarizeRoutines,
+} from "@/lib/training/routine-queries";
+import {
+  addDaysIso,
+  buildScheduleWeek,
+  derivePlannedStatus,
+  nextScheduledEntry,
+} from "@/lib/training/schedule";
+import { DERIVED_SCHEDULE_STATUS_LABELS } from "@/lib/training/constants";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Treinos" };
 
 /**
- * Fase 17-A — Visão geral do módulo Treinos.
+ * Fase 17-B — Visão geral do módulo Treinos.
  *
- * Mostra o que EXISTE hoje, não o que existirá. Enquanto não houver sessão registrada (17-C),
- * seria desonesto exibir "0 treinos esta semana" como se fosse um dado — não há de onde tirar
- * esse número ainda. Então a tela apresenta o estado real do catálogo e diz, com todas as
- * letras, em que subfase cada indicador chega.
+ * Continua mostrando o que EXISTE, nunca o que existirá. A 17-B acrescentou rotina
+ * (programas, treinos-modelo e planejamento), então a semana planejada aparece aqui — mas
+ * **volume treinado, recorde e evolução continuam ausentes**: não há sessão registrada até a
+ * 17-C, e inventar esses números seria desonesto.
  */
 export default async function TreinosPage() {
-  const [exercises, groups, equipment, preferences] = await Promise.all([
-    getExercises(),
-    getMuscleGroups(),
-    getEquipment(),
-    getTrainingPreferences(),
-  ]);
+  const hoje = hojeISO();
+
+  const [exercises, groups, equipment, preferences, programs, workouts, scheduled] =
+    await Promise.all([
+      getExercises(),
+      getMuscleGroups(),
+      getEquipment(),
+      getTrainingPreferences(),
+      getPrograms(),
+      getWorkouts(),
+      getScheduledWorkouts(addDaysIso(hoje, -14), addDaysIso(hoje, 21)),
+    ]);
 
   const summary = summarizeCatalog(exercises);
+  const routines = summarizeRoutines(programs, workouts);
+  const week = buildScheduleWeek(scheduled, hoje, hoje, preferences.weekStartsOn);
+  const next = nextScheduledEntry(scheduled, hoje);
   const groupById = new Map(groups.map((g) => [g.id, g]));
 
   const topGroups = Object.entries(summary.byMuscleGroup)
@@ -57,40 +88,114 @@ export default async function TreinosPage() {
         title="Treinos"
         description="Musculação, hipertrofia, força e condicionamento — do catálogo de exercícios ao histórico."
       >
-        <Button asChild size="sm">
+        <Button asChild variant="outline" size="sm">
           <Link href={`${TRAINING_BASE_PATH}/exercicios`}>
             <Dumbbell className="size-4" />
-            Abrir catálogo
+            Catálogo
+          </Link>
+        </Button>
+        <Button asChild size="sm">
+          <Link href={`${TRAINING_BASE_PATH}/hoje`}>
+            <CalendarCheck className="size-4" />
+            Treino de hoje
           </Link>
         </Button>
       </PageHeader>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
+          label="Treinos-modelo"
+          value={String(routines.workouts)}
+          icon={ClipboardList}
+          hint={
+            routines.emptyWorkouts > 0
+              ? `${routines.emptyWorkouts} ainda sem exercícios`
+              : "Todos com exercícios"
+          }
+        />
+        <StatCard
+          label="Programas"
+          value={String(routines.programs)}
+          icon={Layers}
+          hint={
+            routines.activePrograms > 0
+              ? `${routines.activePrograms} em uso`
+              : "Nenhum em uso"
+          }
+        />
+        <StatCard
+          label="Planejado nesta semana"
+          value={String(week.counts.total)}
+          icon={CalendarRange}
+          hint={
+            week.counts.descanso > 0
+              ? `${week.counts.descanso} dia(s) de descanso marcados`
+              : "Nenhum descanso marcado"
+          }
+        />
+        <StatCard
           label="Exercícios disponíveis"
           value={String(summary.totalExercises)}
           icon={Dumbbell}
           hint={`${summary.systemExercises} da base · ${summary.ownExercises} seus`}
         />
-        <StatCard
-          label="Favoritos"
-          value={String(summary.favorites)}
-          icon={Star}
-          hint={summary.archived > 0 ? `${summary.archived} arquivados` : "Nenhum arquivado"}
-        />
-        <StatCard
-          label="Grupos musculares"
-          value={String(groups.length)}
-          icon={Layers}
-          hint="Base do sistema + os seus"
-        />
-        <StatCard
-          label="Equipamentos"
-          value={String(equipment.length)}
-          icon={Wrench}
-          hint={`Incremento padrão: ${preferences.defaultIncrementKg} ${preferences.weightUnit}`}
-        />
       </div>
+
+      {/* A semana planejada — status derivado da data, nunca gravado. */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Sua semana</CardTitle>
+          <CardDescription>
+            {next
+              ? `Próximo treino: ${next.entry.workoutName ?? "sem treino definido"} em ${next.daysAhead} dia(s).`
+              : "Nada planejado à frente. Monte a semana no calendário."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            {week.days.map((day) => {
+              const entry = day.entries.find((item) => item.entryKind === "treino");
+              const derived = entry ? derivePlannedStatus(entry, hoje) : null;
+              return (
+                <li
+                  key={day.date}
+                  className={`rounded-lg border p-2 text-xs ${day.isToday ? "border-primary/50 bg-primary/5" : ""}`}
+                >
+                  <p className="font-medium text-muted-foreground">
+                    {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
+                  </p>
+                  <p className="mt-1 truncate">
+                    {entry
+                      ? (entry.workoutName ?? "Treino")
+                      : day.hasRest
+                        ? "Descanso"
+                        : "—"}
+                  </p>
+                  {derived && derived !== "planejado" && (
+                    <Badge variant="secondary" className="mt-1 text-[9px]">
+                      {DERIVED_SCHEDULE_STATUS_LABELS[derived]}
+                    </Badge>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/calendario`}>
+                <CalendarRange className="size-4" />
+                Planejar a semana
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/treinos`}>
+                <ClipboardList className="size-4" />
+                Meus treinos
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -187,12 +292,25 @@ export default async function TreinosPage() {
           </Link>
         </Button>
         <Button asChild variant="outline" size="sm">
+          <Link href={`${TRAINING_BASE_PATH}/programas`}>
+            <Layers className="size-4" />
+            Programas
+          </Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
           <Link href={`${TRAINING_BASE_PATH}/configuracoes`}>
             <Settings className="size-4" />
             Configurações
           </Link>
         </Button>
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Favoritos no catálogo: {summary.favorites} · {groups.length} grupos musculares ·{" "}
+        {equipment.length} equipamentos · incremento padrão {preferences.defaultIncrementKg}{" "}
+        {preferences.weightUnit}. <Star className="inline size-3" /> Volume treinado, recordes e
+        evolução só existem a partir da Subfase 17-C, quando a sessão passa a ser registrada.
+      </p>
     </div>
   );
 }

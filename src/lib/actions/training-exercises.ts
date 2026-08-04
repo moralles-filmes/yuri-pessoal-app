@@ -202,6 +202,25 @@ export async function deleteTrainingExercise(id: string): Promise<ActionResult<n
   if (!ctx) return notAuthed;
   if (!(await ownsExercise(ctx, id))) return dbError(NOT_EDITABLE);
 
+  /*
+   * Fase 17-B: `training_workout_exercises.exercise_id` é `on delete restrict`. Excluir um
+   * exercício que está num treino-modelo não pode removê-lo do treino em silêncio — o banco
+   * barra, e aqui contamos quantos treinos usam para dizer isso em pt-BR em vez de devolver
+   * "violação de chave estrangeira".
+   */
+  const { data: inWorkouts } = await ctx.supabase
+    .from("training_workout_exercises")
+    .select("workout_id")
+    .eq("exercise_id", id)
+    .eq("user_id", ctx.userId);
+
+  const workoutCount = new Set((inWorkouts ?? []).map((row) => row.workout_id)).size;
+  if (workoutCount > 0) {
+    return dbError(
+      `Este exercício está em ${workoutCount} ${workoutCount === 1 ? "treino" : "treinos"}. Remova-o desses treinos antes de excluir — ou arquive o exercício, que o esconde do catálogo sem quebrar nada.`,
+    );
+  }
+
   const { error } = await ctx.supabase
     .from("training_exercises")
     .delete()
@@ -406,12 +425,38 @@ export async function bulkTrainingExercises(
   }
 
   if (action === "excluir") {
-    const { error } = await ctx.supabase
-      .from("training_exercises")
-      .delete()
-      .in("id", ownIds)
+    // Fase 17-B: exercício em uso num treino-modelo é preservado (FK `restrict`) e RELATADO,
+    // em vez de fazer a operação inteira falhar por causa de um item.
+    const { data: used } = await ctx.supabase
+      .from("training_workout_exercises")
+      .select("exercise_id")
+      .in("exercise_id", ownIds)
       .eq("user_id", ctx.userId);
-    if (error) return dbError("Não foi possível excluir os exercícios.");
+
+    const inUse = new Set((used ?? []).map((row) => row.exercise_id));
+    const deletable = ownIds.filter((exerciseId) => !inUse.has(exerciseId));
+
+    if (deletable.length > 0) {
+      const { error } = await ctx.supabase
+        .from("training_exercises")
+        .delete()
+        .in("id", deletable)
+        .eq("user_id", ctx.userId);
+      if (error) return dbError("Não foi possível excluir os exercícios.");
+    }
+
+    revalidateTraining();
+    return {
+      ok: true,
+      data: {
+        affected: deletable.length,
+        skipped: skipped + inUse.size,
+        reason:
+          inUse.size > 0
+            ? "Exercícios em uso em algum treino-modelo (e os da base do sistema) foram ignorados."
+            : skipReason,
+      },
+    };
   }
 
   if (action === "mudar_grupo") {

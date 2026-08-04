@@ -14,9 +14,18 @@ import type {
   MuscleRegion,
   MuscleRole,
   OneRmFormula,
+  ProgramStatus,
+  ScheduleEntryKind,
+  ScheduleSource,
+  ScheduleStatus,
+  SetTechnique,
+  SetType,
   TrackingType,
+  TrainingGoal,
+  TrainingLevel,
   UnilateralVolumeRule,
   WeightUnit,
+  WorkoutStatus,
 } from "./constants";
 
 /* ─────────────────────────────── Vocabulário ─────────────────────────────── */
@@ -208,4 +217,231 @@ export type TrainingCatalogSummary = {
   equipment: number;
   /** Quantos exercícios existem por grupo muscular principal (id → total). */
   byMuscleGroup: Record<string, number>;
+};
+
+/* ═══════════════════ Fase 17-B — Programa, treino-modelo e planejamento ═══════════════════
+ *
+ * MODELO É MUTÁVEL; EXECUÇÃO É IMUTÁVEL. Tudo abaixo descreve INTENÇÃO. A sessão ao vivo
+ * (17-C) congela um snapshot destes valores e nunca mais lê estas estruturas para renderizar
+ * o que já aconteceu.
+ */
+
+/* ─────────────────────────────── Programa ─────────────────────────────── */
+
+export type TrainingProgram = {
+  id: string;
+  name: string;
+  description: string | null;
+  goal: TrainingGoal;
+  level: TrainingLevel;
+  status: ProgramStatus;
+  startsOn: string | null;
+  endsOn: string | null;
+  durationWeeks: number | null;
+  weeklyFrequency: number | null;
+  color: string | null;
+  icon: string | null;
+  notes: string | null;
+  position: number;
+  isActive: boolean;
+  isArchived: boolean;
+  /** Treinos que compõem o programa, já na ordem. */
+  workouts: ProgramWorkoutLink[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ProgramWorkoutLink = {
+  id: string;
+  programId: string;
+  workoutId: string;
+  workoutName: string;
+  workoutShortName: string | null;
+  position: number;
+  label: string | null;
+  /** 0 = domingo … 6 = sábado. Sugestão do programa, NÃO planejamento com data. */
+  suggestedWeekdays: number[];
+  notes: string | null;
+};
+
+/* ─────────────────────────── Treino-modelo ─────────────────────────── */
+
+/**
+ * Exercício configurado dentro do treino. `null` em qualquer campo alvo significa
+ * "não definido" — nunca zero. Quem transforma isto em séries concretas é
+ * `expandPlannedSets` (workout.ts), e é o ÚNICO caminho.
+ */
+export type WorkoutExercise = {
+  id: string;
+  workoutId: string;
+  exerciseId: string;
+
+  /** Denormalizado na leitura para a UI não precisar cruzar catálogo a cada render. */
+  exerciseName: string;
+  trackingType: TrackingType;
+  laterality: Laterality;
+  primaryMuscleGroupId: string;
+  primaryMuscleGroupName: string;
+  secondaryMuscleGroupIds: string[];
+  equipmentName: string | null;
+
+  position: number;
+  defaultSets: number;
+
+  targetRepsMin: number | null;
+  targetRepsMax: number | null;
+  targetDurationSeconds: number | null;
+  targetDistanceM: number | null;
+
+  plannedWeightKg: number | null;
+  /** SOMA à carga efetiva (cinto, colete). */
+  plannedAdditionalWeightKg: number | null;
+  /** SUBTRAI da carga efetiva (barra assistida). Nunca somar. */
+  plannedAssistanceWeightKg: number | null;
+
+  restSeconds: number | null;
+  targetRir: number | null;
+  targetRpe: number | null;
+
+  setType: SetType;
+  technique: SetTechnique | null;
+  supersetGroup: string | null;
+
+  isWarmup: boolean;
+  countsInVolume: boolean;
+
+  incrementKg: number | null;
+  tempo: string | null;
+  notes: string | null;
+
+  /** Configuração série a série. Vazio = séries uniformes por `defaultSets`. */
+  sets: WorkoutSetConfig[];
+  /** Alternativas daquele exercício NAQUELE treino. */
+  alternatives: WorkoutExerciseAlternative[];
+};
+
+export type WorkoutSetConfig = {
+  id: string;
+  workoutExerciseId: string;
+  setNumber: number;
+  setType: SetType;
+  targetRepsMin: number | null;
+  targetRepsMax: number | null;
+  targetDurationSeconds: number | null;
+  targetDistanceM: number | null;
+  plannedWeightKg: number | null;
+  plannedAdditionalWeightKg: number | null;
+  plannedAssistanceWeightKg: number | null;
+  restSeconds: number | null;
+  targetRir: number | null;
+  targetRpe: number | null;
+  isWarmup: boolean;
+  countsInVolume: boolean;
+  notes: string | null;
+};
+
+export type WorkoutExerciseAlternative = {
+  id: string;
+  workoutExerciseId: string;
+  alternativeExerciseId: string;
+  alternativeName: string;
+  note: string | null;
+  position: number;
+};
+
+export type TrainingWorkout = {
+  id: string;
+  name: string;
+  shortName: string | null;
+  description: string | null;
+  goal: TrainingGoal;
+  status: WorkoutStatus;
+  programId: string | null;
+  programName: string | null;
+  estimatedMinutes: number | null;
+  color: string | null;
+  icon: string | null;
+  notes: string | null;
+  version: number;
+  versionGroupId: string;
+  supersededBy: string | null;
+  /** Derivado: esta versão foi substituída por outra. Continua legível. */
+  isSuperseded: boolean;
+  isFavorite: boolean;
+  position: number;
+  isArchived: boolean;
+  exercises: WorkoutExercise[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/* ─────────────────────────── Planejamento ─────────────────────────── */
+
+/** Uma linha de `training_scheduled_workouts`, já tipada. Status aqui é o GRAVADO. */
+export type ScheduledWorkout = {
+  id: string;
+  /** Data PURA 'yyyy-MM-dd'. Nunca converter para Date só para exibir. */
+  scheduledDate: string;
+  plannedTime: string | null;
+  plannedDurationMinutes: number | null;
+  entryKind: ScheduleEntryKind;
+  workoutId: string | null;
+  workoutName: string | null;
+  programId: string | null;
+  programName: string | null;
+  title: string | null;
+  status: ScheduleStatus;
+  position: number;
+  originalDate: string | null;
+  rescheduleReason: string | null;
+  skipReason: string | null;
+  notes: string | null;
+  source: ScheduleSource;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/* ─────────────────────────── Filtros das telas ─────────────────────────── */
+
+export type ProgramFilterState = {
+  search: string;
+  status: ProgramStatus | null;
+  goal: TrainingGoal | null;
+  level: TrainingLevel | null;
+  onlyActive: boolean;
+  showArchived: boolean;
+};
+
+export const EMPTY_PROGRAM_FILTERS: ProgramFilterState = {
+  search: "",
+  status: null,
+  goal: null,
+  level: null,
+  onlyActive: false,
+  showArchived: false,
+};
+
+export type WorkoutSort = "nome" | "recentes" | "exercicios";
+
+export type WorkoutFilterState = {
+  search: string;
+  programId: string | null;
+  goal: TrainingGoal | null;
+  muscleGroupId: string | null;
+  onlyFavorites: boolean;
+  /** Versões substituídas ficam escondidas por padrão — continuam legíveis quando pedidas. */
+  showSuperseded: boolean;
+  showArchived: boolean;
+  sort: WorkoutSort;
+};
+
+export const EMPTY_WORKOUT_FILTERS: WorkoutFilterState = {
+  search: "",
+  programId: null,
+  goal: null,
+  muscleGroupId: null,
+  onlyFavorites: false,
+  showSuperseded: false,
+  showArchived: false,
+  sort: "nome",
 };

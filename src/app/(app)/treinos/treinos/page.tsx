@@ -1,15 +1,26 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/shared/page-header";
-import { TrainingSectionPlaceholder } from "@/components/training/training-nav";
+import { hojeISO } from "@/lib/format";
+import { getTrainingPreferences } from "@/lib/training/queries";
+import { getPrograms, getWorkouts } from "@/lib/training/routine-queries";
+import { WorkoutsClient } from "./workouts-client";
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Treinos · Treinos" };
 
-/** Fase 17-A — Rota reservada. A tela chega na subfase indicada no placeholder. */
-export default function Page() {
+/** Fase 17-B — Lista de treinos-modelo. */
+export default async function TreinosModeloPage() {
+  const [workouts, programs, preferences] = await Promise.all([
+    getWorkouts(),
+    getPrograms(),
+    getTrainingPreferences(),
+  ]);
+
   return (
-    <div className="space-y-6">
-      <PageHeader title="Treinos" description="Modelos de treino reutilizáveis." />
-      <TrainingSectionPlaceholder slug="treinos" />
-    </div>
+    <WorkoutsClient
+      workouts={workouts}
+      programs={programs}
+      hoje={hojeISO()}
+      defaultRestSeconds={preferences.defaultRestSeconds}
+    />
   );
 }
