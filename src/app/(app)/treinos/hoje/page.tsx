@@ -6,6 +6,7 @@ import {
   Dumbbell,
   Layers,
   Moon,
+  Play,
   Timer,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -31,33 +32,40 @@ import {
 } from "@/lib/training/workout";
 import {
   DERIVED_SCHEDULE_STATUS_LABELS,
+  SESSION_STATUS_LABELS,
   SET_TYPE_LABELS,
   TRAINING_BASE_PATH,
 } from "@/lib/training/constants";
+import { getRecentSessions, getRunningSession } from "@/lib/training/session-queries";
 import type { ScheduledWorkout, TrainingWorkout } from "@/lib/training/types";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Treino de hoje · Treinos" };
 
 /**
- * Fase 17-B — Treino de hoje.
+ * Fase 17-B (+ 17-C) — Treino de hoje.
  *
  * Mostra o que está programado para hoje, com grupos musculares, número de exercícios, total
  * de séries e duração estimada — tudo saindo de `summarizeWorkout`, a mesma função do
  * construtor e da lista, para as três telas nunca discordarem.
  *
- * **Ainda não existe "Iniciar treino".** A sessão ao vivo chega na Subfase 17-C, e a tela diz
- * isso em vez de mostrar um botão que não faz nada.
+ * A partir da 17-C existe **Iniciar treino**: o botão leva para a preparação, onde o usuário
+ * revisa tudo antes de o treino ser congelado num snapshot. Uma sessão já em andamento tem
+ * precedência — a tela oferece continuar em vez de deixar começar uma segunda.
  */
 export default async function HojePage() {
   const hoje = hojeISO();
 
-  const [entries, workouts, groups, preferences] = await Promise.all([
+  const [entries, workouts, groups, preferences, running, recent] = await Promise.all([
     getScheduledWorkouts(addDaysIso(hoje, -30), addDaysIso(hoje, 30)),
     getWorkouts(),
     getMuscleGroups(),
     getTrainingPreferences(),
+    getRunningSession(),
+    getRecentSessions(1),
   ]);
+
+  const lastSession = recent[0] ?? null;
 
   const workoutById = new Map(workouts.map((workout) => [workout.id, workout]));
   const groupName = new Map(groups.map((group) => [group.id, group.name]));
@@ -100,6 +108,12 @@ export default async function HojePage() {
             description="Planeje a semana no calendário ou aplique um programa para preencher os dias de uma vez."
           >
             <Button asChild size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/sessao/preparar`}>
+                <Play className="size-4" />
+                Escolher um treino e começar
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
               <Link href={`${TRAINING_BASE_PATH}/calendario`}>
                 <CalendarRange className="size-4" />
                 Planejar
@@ -122,20 +136,56 @@ export default async function HojePage() {
         </div>
       )}
 
-      {/* A sessão ao vivo é a 17-C. A tela diz isso — nada de botão decorativo. */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Timer className="size-4 text-primary" />
-            Registrar o treino durante a execução
-          </CardTitle>
-          <CardDescription>
-            O botão <strong>Iniciar treino</strong> — com cronômetro, registro série a série e
-            descanso — chega na <strong>Subfase 17-C</strong>. Até lá, esta tela mostra o
-            planejamento, e o histórico de execução ainda não existe.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      {/* Sessão em andamento tem precedência sobre qualquer outra ação da tela. */}
+      {running ? (
+        <Card className="border-primary">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Timer className="size-4 text-primary" />
+              Você tem um treino em andamento
+            </CardTitle>
+            <CardDescription>
+              {running.workoutName} · {SESSION_STATUS_LABELS[running.status].toLowerCase()}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild className="h-12">
+              <Link href={`${TRAINING_BASE_PATH}/sessao`}>
+                <Play className="size-4" />
+                Continuar treino
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Timer className="size-4 text-primary" />
+              Registrar o treino durante a execução
+            </CardTitle>
+            <CardDescription>
+              Cronômetro de descanso, registro série a série, reordenação e substituição. Você
+              revisa tudo antes de começar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button asChild className="h-12">
+              <Link href={`${TRAINING_BASE_PATH}/sessao/preparar`}>
+                <Play className="size-4" />
+                Iniciar treino
+              </Link>
+            </Button>
+            {lastSession && (
+              <Button asChild variant="outline" className="h-12">
+                <Link href={`${TRAINING_BASE_PATH}/sessao/revisar?id=${lastSession.id}`}>
+                  Ver o último treino
+                </Link>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -263,9 +313,17 @@ function TodayCard({
                 : ""}
             </CardDescription>
           </div>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`${TRAINING_BASE_PATH}/treinos/${workout.id}`}>Abrir treino</Link>
-          </Button>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/treinos/${workout.id}`}>Abrir treino</Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link href={`${TRAINING_BASE_PATH}/sessao/preparar?planejado=${entry.id}`}>
+                <Play className="size-3.5" />
+                Iniciar
+              </Link>
+            </Button>
+          </div>
         </div>
       </CardHeader>
 

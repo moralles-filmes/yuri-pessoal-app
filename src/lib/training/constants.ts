@@ -541,7 +541,7 @@ export const TRAINING_SECTIONS: TrainingSection[] = [
     description: "O treino acontecendo, série por série.",
     href: `${TRAINING_BASE_PATH}/sessao`,
     icon: "timer",
-    status: "proxima",
+    status: "pronto",
     phase: "Subfase 17-C",
   },
   {
@@ -550,7 +550,7 @@ export const TRAINING_SECTIONS: TrainingSection[] = [
     description: "Tudo o que já foi treinado, com detalhe de cada sessão.",
     href: `${TRAINING_BASE_PATH}/historico`,
     icon: "history",
-    status: "planejada",
+    status: "proxima",
     phase: "Subfase 17-D",
   },
   {
@@ -591,6 +591,214 @@ export const TRAINING_SECTIONS: TrainingSection[] = [
   },
 ];
 
+/* ═══════════════════════ Fase 17-C — Sessão ao vivo ═══════════════════════ */
+
+/* ───────────────────────────── Estado da sessão ─────────────────────────────
+ * rascunho → pronta → ativa ⇄ descansando ⇄ pausada → concluida
+ *                                                   ↘ abandonada / cancelada
+ *
+ * Aqui o status é FATO (a máquina de estados decidiu), ao contrário de "atrasado" no
+ * planejamento, que é derivado. As transições válidas moram em `session-machine.ts`.
+ */
+export const SESSION_STATUSES = [
+  "rascunho",
+  "pronta",
+  "ativa",
+  "descansando",
+  "pausada",
+  "concluida",
+  "abandonada",
+  "cancelada",
+] as const;
+export type SessionStatus = (typeof SESSION_STATUSES)[number];
+
+export const SESSION_STATUS_LABELS: Record<SessionStatus, string> = {
+  rascunho: "Rascunho",
+  pronta: "Pronta para começar",
+  ativa: "Em andamento",
+  descansando: "Descansando",
+  pausada: "Pausada",
+  concluida: "Concluída",
+  abandonada: "Abandonada",
+  cancelada: "Cancelada",
+};
+
+/** De onde a sessão nasceu. Organizacional — não muda nenhuma regra de cálculo. */
+export const SESSION_ORIGINS = [
+  "planejado",
+  "modelo",
+  "recente",
+  "favorito",
+  "vazio",
+  "repetir",
+  "duplicar",
+  "avulso",
+] as const;
+export type SessionOrigin = (typeof SESSION_ORIGINS)[number];
+
+export const SESSION_ORIGIN_LABELS: Record<SessionOrigin, string> = {
+  planejado: "Treino programado",
+  modelo: "Treino cadastrado",
+  recente: "Treino recente",
+  favorito: "Treino favorito",
+  vazio: "Treino vazio",
+  repetir: "Repetir o último",
+  duplicar: "Duplicar uma sessão",
+  avulso: "Avulso",
+};
+
+/* ─────────────────────── Estado do exercício na sessão ───────────────────────
+ * Só DECISÃO do usuário é gravada. `parcial` e `concluido` são DERIVADOS da contagem de
+ * séries em `deriveExerciseStatus` — gravá-los criaria uma segunda verdade que discordaria
+ * das séries no primeiro "desfazer".
+ */
+export const SESSION_EXERCISE_STATUSES = ["pendente", "ativo", "pulado", "substituido"] as const;
+export type SessionExerciseStatus = (typeof SESSION_EXERCISE_STATUSES)[number];
+
+/** Status APRESENTADO do exercício: o gravado + os dois derivados. */
+export const DERIVED_EXERCISE_STATUSES = [
+  ...SESSION_EXERCISE_STATUSES,
+  "parcial",
+  "concluido",
+] as const;
+export type DerivedExerciseStatus = (typeof DERIVED_EXERCISE_STATUSES)[number];
+
+export const DERIVED_EXERCISE_STATUS_LABELS: Record<DerivedExerciseStatus, string> = {
+  pendente: "Pendente",
+  ativo: "Em andamento",
+  parcial: "Parcialmente feito",
+  concluido: "Concluído",
+  pulado: "Pulado",
+  substituido: "Substituído",
+};
+
+/* ─────────────────────────── Estado da série ─────────────────────────── */
+export const SESSION_SET_STATUSES = [
+  "pendente",
+  "ativa",
+  "concluida",
+  "pulada",
+  "falhou",
+  "cancelada",
+] as const;
+export type SessionSetStatus = (typeof SESSION_SET_STATUSES)[number];
+
+export const SESSION_SET_STATUS_LABELS: Record<SessionSetStatus, string> = {
+  pendente: "Pendente",
+  ativa: "Em andamento",
+  concluida: "Concluída",
+  pulada: "Pulada",
+  falhou: "Até a falha",
+  cancelada: "Cancelada",
+};
+
+/* ─────────────────────────── Descanso ─────────────────────────── */
+export const REST_END_KINDS = ["natural", "pulado", "proxima_serie", "cancelado"] as const;
+export type RestEndKind = (typeof REST_END_KINDS)[number];
+
+export const REST_END_KIND_LABELS: Record<RestEndKind, string> = {
+  natural: "Terminou o tempo",
+  pulado: "Pulado",
+  proxima_serie: "Próxima série começou",
+  cancelado: "Cancelado",
+};
+
+/** Ajustes rápidos oferecidos durante o descanso, em segundos. */
+export const REST_ADJUSTMENTS = [-15, 15, 30] as const;
+
+/* ─────────────────────────── Substituição ───────────────────────────
+ * A tela deixa explícito que substituir é REGISTRO, não afirmação de equivalência.
+ */
+export const SUBSTITUTION_REASONS = [
+  "aparelho_ocupado",
+  "equipamento_indisponivel",
+  "dor_desconforto",
+  "preferencia",
+  "tempo",
+  "lesao_previa",
+  "outro",
+] as const;
+export type SubstitutionReason = (typeof SUBSTITUTION_REASONS)[number];
+
+export const SUBSTITUTION_REASON_LABELS: Record<SubstitutionReason, string> = {
+  aparelho_ocupado: "Aparelho ocupado",
+  equipamento_indisponivel: "Equipamento indisponível",
+  dor_desconforto: "Dor ou desconforto",
+  preferencia: "Preferência",
+  tempo: "Falta de tempo",
+  lesao_previa: "Lesão anterior",
+  outro: "Outro motivo",
+};
+
+/* ─────────────────────────── Linha do tempo ─────────────────────────── */
+export const SESSION_EVENT_KINDS = [
+  "sessao_iniciada",
+  "sessao_pausada",
+  "sessao_retomada",
+  "sessao_concluida",
+  "sessao_abandonada",
+  "sessao_cancelada",
+  "sessao_reaberta",
+  "serie_registrada",
+  "serie_desfeita",
+  "serie_pulada",
+  "serie_adicionada",
+  "descanso_iniciado",
+  "descanso_encerrado",
+  "descanso_ajustado",
+  "exercicio_iniciado",
+  "exercicio_reordenado",
+  "exercicio_pulado",
+  "exercicio_retomado",
+  "exercicio_substituido",
+  "exercicio_adicionado",
+  "observacao",
+] as const;
+export type SessionEventKind = (typeof SESSION_EVENT_KINDS)[number];
+
+export const SESSION_EVENT_LABELS: Record<SessionEventKind, string> = {
+  sessao_iniciada: "Treino iniciado",
+  sessao_pausada: "Treino pausado",
+  sessao_retomada: "Treino retomado",
+  sessao_concluida: "Treino concluído",
+  sessao_abandonada: "Treino abandonado",
+  sessao_cancelada: "Treino cancelado",
+  sessao_reaberta: "Treino reaberto",
+  serie_registrada: "Série registrada",
+  serie_desfeita: "Série desfeita",
+  serie_pulada: "Série pulada",
+  serie_adicionada: "Série adicionada",
+  descanso_iniciado: "Descanso iniciado",
+  descanso_encerrado: "Descanso encerrado",
+  descanso_ajustado: "Descanso ajustado",
+  exercicio_iniciado: "Exercício iniciado",
+  exercicio_reordenado: "Exercícios reordenados",
+  exercicio_pulado: "Exercício pulado",
+  exercicio_retomado: "Exercício retomado",
+  exercicio_substituido: "Exercício substituído",
+  exercicio_adicionado: "Exercício adicionado",
+  observacao: "Observação",
+};
+
+/* ─────────────────────────── Anilhas ─────────────────────────── */
+export const PLATE_KINDS = ["anilha", "barra", "halter"] as const;
+export type PlateKind = (typeof PLATE_KINDS)[number];
+
+export const PLATE_KIND_LABELS: Record<PlateKind, string> = {
+  anilha: "Anilha",
+  barra: "Barra",
+  halter: "Halter",
+};
+
+/** Fonte dos valores da última vez. A escolha é do usuário — nada é aplicado sozinho. */
+export const PREVIOUS_SOURCES = ["qualquer_treino", "mesmo_modelo"] as const;
+export type PreviousSource = (typeof PREVIOUS_SOURCES)[number];
+
+export const PREVIOUS_SOURCE_LABELS: Record<PreviousSource, string> = {
+  qualquer_treino: "Última vez em qualquer treino",
+  mesmo_modelo: "Última vez neste mesmo treino",
+};
+
 /* ───────────────────── Conversores seguros (linha do banco → enum) ─────────────────────
  * O banco devolve `string`. Estas funções trazem para o tipo, com fallback — nenhuma tela
  * quebra se um valor novo aparecer antes de o código conhecer.
@@ -627,3 +835,20 @@ export const asScheduleSource = asEnum(SCHEDULE_SOURCES, "manual");
 /** Técnica é opcional: `null` continua `null` em vez de virar um valor inventado. */
 export const asSetTechnique = (value: string | null | undefined): SetTechnique | null =>
   SET_TECHNIQUES.includes(value as SetTechnique) ? (value as SetTechnique) : null;
+
+/* Fase 17-C */
+export const asSessionStatus = asEnum(SESSION_STATUSES, "rascunho");
+export const asSessionOrigin = asEnum(SESSION_ORIGINS, "avulso");
+export const asSessionExerciseStatus = asEnum(SESSION_EXERCISE_STATUSES, "pendente");
+export const asSessionSetStatus = asEnum(SESSION_SET_STATUSES, "pendente");
+export const asSubstitutionReason = asEnum(SUBSTITUTION_REASONS, "outro");
+export const asSessionEventKind = asEnum(SESSION_EVENT_KINDS, "observacao");
+export const asPlateKind = asEnum(PLATE_KINDS, "anilha");
+export const asPreviousSource = asEnum(PREVIOUS_SOURCES, "qualquer_treino");
+
+/** Dificuldade e encerramento de descanso são opcionais: `null` continua `null`. */
+export const asDifficultyLevel = (value: string | null | undefined): DifficultyLevel | null =>
+  DIFFICULTY_LEVELS.includes(value as DifficultyLevel) ? (value as DifficultyLevel) : null;
+
+export const asRestEndKind = (value: string | null | undefined): RestEndKind | null =>
+  REST_END_KINDS.includes(value as RestEndKind) ? (value as RestEndKind) : null;

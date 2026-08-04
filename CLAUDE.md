@@ -15,7 +15,7 @@ As **14 fases do roadmap original** e a **Fase 15 — Módulo TO-DO** estão con
 | Fase | Módulo | Situação |
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | **16-A, 16-B, 16-C e 16-D concluídas**; 16-E é a próxima |
-| **17** | Treinos (`/treinos`) | **17-A e 17-B concluídas**; 17-C é a próxima |
+| **17** | Treinos (`/treinos`) | **17-A, 17-B e 17-C concluídas**; 17-D é a próxima |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Fora dessas fases, o projeto segue em modo manutenção/iteração. **32 tabelas `nutrition_*`**; o total do banco muda a cada subfase das duas frentes — **conte antes de citar um número**.
 
@@ -63,21 +63,25 @@ Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 sub
 
 ## Módulo Treinos (Fase 17, em andamento)
 
-Rota `/treinos`, tabelas `training_*`, navegação interna própria com 13 submódulos. A **17-A** entregou o vocabulário do domínio, o catálogo de exercícios (base autoral de 106 movimentos) e as preferências do módulo; a **17-B** entregou programas, treinos-modelo com construtor, séries configuráveis, supersets, versionamento e planejamento semanal. Sessão ao vivo, histórico, metas/medidas e integrações vêm nas subfases C–F (`docs/phases/PHASE_17_*`).
+Rota `/treinos`, tabelas `training_*`, navegação interna própria com 13 submódulos. A **17-A** entregou o vocabulário do domínio, o catálogo de exercícios (base autoral de 106 movimentos) e as preferências do módulo; a **17-B** entregou programas, treinos-modelo com construtor, séries configuráveis, supersets, versionamento e planejamento semanal; a **17-C** entregou a sessão ao vivo — preparação, snapshot congelado, cronômetro por timestamp, fila local e finalização com revisão. Histórico/volume, metas/medidas e integrações vêm nas subfases D–F (`docs/phases/PHASE_17_*`).
 
 **Invariantes do módulo:**
 1. **`tracking_type` é um contrato de medição, não um rótulo.** Ele diz o que o exercício mede (peso×reps, reps, segundos, distância, calorias). `src/lib/training/tracking.ts` é a **única** matriz — formulário, treino-modelo, sessão, volume e relatório leem dali. É o que impede o módulo de somar quilos com segundos.
 2. **Assistência SUBTRAI carga; carga adicional soma.** Inverter o sinal mostraria progresso na regressão. Por isso a carga planejada tem **três colunas separadas** (`planned_weight_kg`, `planned_additional_weight_kg`, `planned_assistance_weight_kg`) — num campo só, alguma tela erraria o sinal.
 3. **Sem peso corporal do dia, a carga efetiva é INDISPONÍVEL, nunca zero.** Agregado incompleto é marcado como **parcial**, com o motivo — mesma disciplina do `value_state` da Dieta.
 4. **`user_id is null` = base do sistema, imutável.** Policies **separadas por comando** + três constraints amarrando `user_id is null` ⇔ `is_system_exercise` ⇔ `source='sistema'`. Favoritar/arquivar/apelidar grava em `training_exercise_prefs`; duplicar cria cópia com `origin_exercise_id`.
-5. **Modelo é mutável; execução é imutável.** A sessão (17-C) grava **snapshot** do treino; nenhuma leitura de histórico passa pelo modelo atual. Nenhuma tabela da 17-B tem coluna apontando para sessão, de propósito. O versionamento de treino (`version` + `superseded_by` + `version_group_id`) serve para **comparar intenções**, não para proteger histórico — e só é criado por escolha explícita do usuário.
+5. **Modelo é mutável; execução é imutável** (17-C, cumprida). `startSession` congela o treino em `training_sessions.workout_snapshot` **e** nas linhas de `training_session_exercises`/`training_session_sets`; `src/lib/training/session-queries.ts` **não tem uma única referência a `training_workouts`**. `workout_id`/`exercise_id` são `on delete set null` — referência informativa, nunca fonte de leitura. Editar ou excluir o modelo não muda a sessão registrada (verificado no banco). O versionamento de treino (`version` + `superseded_by` + `version_group_id`) serve para **comparar intenções**, não para proteger histórico.
 6. **`expandPlannedSets` (`src/lib/training/workout.ts`) é o formato ÚNICO de série planejada**, resolvendo tanto o caso uniforme (`default_sets`) quanto o configurado série a série (`training_workout_sets`). A 17-C consome só esse formato. Existindo linha configurada, ela é a verdade; `null` na série herda do exercício.
 7. **Status do planejamento é derivado na leitura.** `training_scheduled_workouts.status` grava só fato; **`atrasado` e `hoje` saem de `derivePlannedStatus(entry, hoje)`** com `hoje` injetado pelo servidor. **`concluido` não é gravável pela 17-B** — quem conclui um treino é a sessão (17-C).
 8. **Nenhuma exclusão silenciosa.** Excluir programa pergunta o destino dos treinos; excluir treino pergunta o destino do planejamento **futuro** (o passado nunca é alterado). Os schemas dessas ações **não têm valor padrão** para a escolha. No banco: `exercise_id` do treino é `on delete restrict`; `workout_id` do planejamento é `on delete set null`.
 9. **Nenhum asset de terceiros.** Base de exercícios autoral, sem imagem/vídeo/texto/dados copiados de apps de treino. Procedência em `data/training/exercise-base/ATTRIBUTION.md`; pipeline em `scripts/training/`.
 10. **Medidas corporais são `body_*`**, módulo central compartilhado com a Dieta. Quem chegar primeiro (16-E ou 17-E) cria; o outro consome. **Nunca duas tabelas de peso corporal.**
 11. **Sem prescrição, sem diagnóstico**, sem garantia de resultado, sem sugestão de carga máxima e sem incentivo a treinar com dor. Objetivo e nível de programa são organizacionais.
-12. **Todo agregado vai sair de `src/lib/training/metrics.ts` (17-D)** — como todo total da Dieta sai de `calc.ts`.
+12. **Todo agregado vai sair de `src/lib/training/metrics.ts` (17-D)** — como todo total da Dieta sai de `calc.ts`. `training_session_sets.is_personal_record` é só um **marcador** de candidato; a consolidação é da 17-D.
+13. **O fluxo da sessão sai de `session-flow.ts`** (17-C): concluir a 3ª de 4 séries leva para a **4ª série**, não para outro exercício; superset alterna A1→B1→A2→B2. E o estado sai de `session-machine.ts` — nenhuma action grava `status` direto.
+14. **Cronômetro nasce de timestamp, nunca de contagem local** (`timers.ts`, `agora` injetado). Tempo ativo = total − **união** de pausas e descansos. Só um descanso ativo e só uma sessão em execução — índices únicos parciais garantem no banco.
+15. **Toda gravação de série carrega `client_mutation_id`** (uuid do dispositivo, unique por sessão), e a action confere se já foi aplicada **antes** de aplicar: clique duplo, retry da fila e duas abas convergem para uma linha.
+16. **Não prometemos offline.** Não há service worker; o que existe é fila local + reenvio em ordem + status de sincronização sempre visível. A sessão em execução vive no servidor, então fechar a aba e reabrir recupera tudo.
 
 ## Leitura obrigatória antes de mexer no código
 
@@ -105,7 +109,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 1.073 testes em 2026-08-04)
+npm run test:run       # vitest run (suíte completa; 1.297 testes em 2026-08-04)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

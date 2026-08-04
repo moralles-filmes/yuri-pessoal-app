@@ -398,7 +398,7 @@ irmão em compras: **toda decisão sobre o que soma com o quê sai de `shopping.
 
 ---
 
-## Módulo Treinos (Fase 17 — Subfases A e B concluídas)
+## Módulo Treinos (Fase 17 — Subfases A, B e C concluídas)
 
 Módulo central em `/treinos`, com **navegação interna própria** (13 submódulos) no mesmo
 padrão do TO-DO e da Dieta. Segue o fluxo do resto do sistema: Server Component lê → Server
@@ -438,8 +438,11 @@ parecem detalhe e não são, ambas cobertas por teste:
    `is_system_exercise` ⇔ `source = 'sistema'`, então um exercício digitado à mão não pode se
    apresentar como parte da base. Favoritar, arquivar, apelidar e ajustar descanso/incremento
    vão para `training_exercise_prefs`; duplicar cria cópia com `origin_exercise_id`.
-4. **Modelo é mutável; execução é imutável.** A sessão (17-C) grava **snapshot** do treino ao
-   iniciar. Nenhuma leitura de histórico pode passar pelo modelo atual.
+4. **Modelo é mutável; execução é imutável** (17-C, cumprida). `startSession` copia o modelo
+   para `training_sessions.workout_snapshot` **e** para as linhas de
+   `training_session_exercises` / `training_session_sets`. `session-queries.ts` **não tem uma
+   única referência a `training_workouts`** — renomear, editar, arquivar ou excluir o modelo não
+   muda nada do que já aconteceu. Verificado no banco, não só no código.
 5. **Nenhum asset de terceiros.** A base de exercícios é autoral; sem imagem, vídeo, texto de
    instrução ou banco de dados copiado de apps de treino. Procedência em
    `data/training/exercise-base/ATTRIBUTION.md`.
@@ -475,7 +478,8 @@ mostrando "progresso" justamente na regressão. A conta continua saindo de `effe
 `reagendado`, `cancelado`). **"Atrasado" e "hoje" nascem em `derivePlannedStatus(entry, hoje)`**
 com o `hoje` injetado pelo servidor (`hojeISO()`, Brasília) — nunca são persistidos, como
 `atrasada` no TO-DO e o status da fatura. Desfecho gravado sempre vence a derivação.
-**"Concluído" não é gravável pela 17-B**: quem conclui um treino é a sessão (17-C).
+**"Concluído" não é gravável pela 17-B**: quem conclui um dia planejado é `finishSession`
+(17-C), ao finalizar a execução — não existe "concluído manual" sem treino registrado.
 
 ### Nenhuma exclusão silenciosa (17-B)
 Excluir programa pergunta o destino dos treinos (manter avulsos / mover / excluir junto);
@@ -485,7 +489,50 @@ schemas Zod dessas ações **não têm valor padrão** para a escolha: esquecer 
 validação, não perda de dado. No banco, `exercise_id` do treino é `on delete restrict` e
 `workout_id` do planejamento é `on delete set null`.
 
-### Schema (14 tabelas: 7 na 17-A + 7 na 17-B)
+### A sessão ao vivo (17-C)
+
+**Estados** (`session-machine.ts`, a única fonte das transições válidas):
+
+```
+Sessão    rascunho → pronta → ativa ⇄ descansando ⇄ pausada → concluida
+                                                            ↘ abandonada / cancelada
+Exercício pendente → ativo → (parcial) → (concluido)     ↘ pulado / substituido
+Série     pendente → ativa → concluida                   ↘ pulada / falhou / cancelada
+```
+
+`parcial` e `concluido` do exercício **não são graváveis**: nascem de `deriveExerciseStatus` a
+partir da contagem das séries — mesma disciplina de `atrasada` no TO-DO. O status da SESSÃO é
+gravado, porque é ele que sustenta o índice único de "nunca duas em execução".
+
+**Ordem planejada × ordem executada.** `planned_position` nunca muda; `executed_position` é
+reescrita ao reordenar. As séries pertencem ao **exercício**, não à posição — por isso reordenar,
+pular, voltar depois, mandar para o fim e substituir nunca perdem uma série registrada.
+
+**Cronômetro por timestamps** (`timers.ts`, `agora` injetado). Nada de contagem local: o descanso
+guarda `started_at` + `planned_seconds` + ajustes, e o restante é recalculado do zero a cada
+render. Tempo ativo = total − **união** de pausas e descansos (descanso dentro de pausa não é
+descontado duas vezes). Um `setInterval` só provoca o re-render.
+
+**Idempotência por `client_mutation_id`** (uuid do dispositivo, unique por sessão): clique duplo,
+retry da fila local e duas abas convergem para uma linha. As actions conferem se a mutação já foi
+aplicada antes de aplicar — é isso que impede um retry atrasado de desfazer uma correção
+posterior.
+
+**Resiliência declarada com honestidade.** Não há service worker e o app **não** funciona
+offline. O que existe: mutação aplicada localmente → persistida no dispositivo → enfileirada →
+reenviada em ordem quando a conexão volta, com o estado (`Salvo` · `Salvando` · `Salvo no
+dispositivo` · `Aguardando conexão` · `Erro ao sincronizar`) sempre visível. A sessão em execução
+vive no **servidor**, então fechar a aba e reabrir recupera tudo.
+
+**Substituição é registro, não equivalência.** Original, substituto, motivo (obrigatório, sem
+valor padrão) e momento ficam gravados; o exercício substituído permanece na sessão com as séries
+que já tinham sido feitas.
+
+**Peso corporal fica na sessão** (`body_weight_kg`), congelado como o valor usado naquele treino.
+Não é uma segunda tabela de peso corporal: quando a 17-E criar o módulo `body_*`, a preparação
+passa a pré-preencher dali.
+
+### Schema (23 tabelas: 7 na 17-A + 7 na 17-B + 9 na 17-C)
 **17-A** — `training_muscle_groups`, `training_equipment`, `training_exercises`,
 `training_exercise_muscles` (secundários, com trigger que impede repetir o principal),
 `training_exercise_alternatives` (relação dirigida, do usuário), `training_exercise_prefs`
@@ -496,6 +543,15 @@ pode ser avulso ou compor vários programas), `training_workouts` (com `version`
 `superseded_by` + `version_group_id`), `training_workout_exercises`, `training_workout_sets`,
 `training_workout_alternatives` e `training_scheduled_workouts` (data pura + hora em `time`).
 
+**17-C** — `training_locations`, `training_location_plates` (estoque real de anilhas por local),
+`training_sessions` (o snapshot + tempos congelados na finalização), `training_session_exercises`
+(cópia histórica, com ordem planejada e executada), `training_session_sets` (idempotente por
+`client_mutation_id`), `training_session_rests`, `training_session_pauses`,
+`training_session_events` (**append-only**, sem `updated_at`) e
+`training_session_substitutions`. Índices únicos parciais garantem no banco: **uma** sessão em
+execução por usuário, **um** descanso ativo por sessão, **uma** pausa aberta por sessão e **um**
+local padrão por usuário.
+
 ### Mapa de arquivos
 | Camada | Caminho |
 | --- | --- |
@@ -505,11 +561,17 @@ pode ser avulso ou compor vários programas), `training_workouts` (com `version`
 | **Filtro/ordenação/URL (puro)** | `src/lib/training/filters.ts` + `filters.test.ts` |
 | **Treino-modelo: `expandPlannedSets`, superset, duração (puro)** | `src/lib/training/workout.ts` + `workout.test.ts` |
 | **Planejamento: recorrência, rodízio, status derivado (puro)** | `src/lib/training/schedule.ts` + `schedule.test.ts` |
-| Leitura (server-only) | `src/lib/training/queries.ts` · `routine-queries.ts` |
-| Validação Zod | `src/lib/validators/training.ts` · `training-routines.ts` |
-| Server Actions | `src/lib/actions/training-{exercises,preferences,programs,workouts,schedule}.ts` |
+| **Máquina de estados da sessão (puro)** | `src/lib/training/session-machine.ts` + `.test.ts` |
+| **Fluxo: `nextStep`, superset, reordenação (puro)** | `src/lib/training/session-flow.ts` + `.test.ts` |
+| **Cronômetros por timestamp (puro)** | `src/lib/training/timers.ts` + `.test.ts` |
+| **Valores da última vez (puro)** | `src/lib/training/previous.ts` + `.test.ts` |
+| **Calculadora de anilhas (puro)** | `src/lib/training/plates.ts` + `.test.ts` |
+| **Congelamento do treino (puro)** | `src/lib/training/session-snapshot.ts` + `.test.ts` |
+| Leitura (server-only) | `src/lib/training/queries.ts` · `routine-queries.ts` · `session-queries.ts` |
+| Validação Zod | `src/lib/validators/training.ts` · `training-routines.ts` · `training-session.ts` |
+| Server Actions | `src/lib/actions/training-{exercises,preferences,programs,workouts,schedule,sessions,locations}.ts` |
 | Rotas | `src/app/(app)/treinos/` |
-| Componentes | `src/components/training/` |
+| Componentes | `src/components/training/` · `src/components/training/session/` |
 | Pipeline da base | `scripts/training/` · dados em `data/training/exercise-base/` |
 
 **Todo número agregado do módulo vai sair de `src/lib/training/metrics.ts` (17-D)** — do mesmo

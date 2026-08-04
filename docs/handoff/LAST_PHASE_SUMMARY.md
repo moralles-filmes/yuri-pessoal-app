@@ -1,9 +1,118 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
 > ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
-> (16-A, 16-B, 16-C e 16-D concluídas) e a **Fase 17 — Módulo Treinos** (17-A e 17-B
+> (16-A, 16-B, 16-C e 16-D concluídas) e a **Fase 17 — Módulo Treinos** (17-A, 17-B e 17-C
 > concluídas). Este arquivo tem o resumo das duas, na ordem em que foram concluídas — a mais
 > recente primeiro.
+
+---
+
+## Subfase 17-C — Treinos · Preparação, sessão ao vivo, cronômetro e recuperação (2026-08-04) ✅
+
+Terceira das 6 subfases da **Fase 17**, e a mais importante do módulo: a tela que o usuário abre
+suado, com uma mão, no celular, com Wi-Fi ruim, no meio da academia. **9 tabelas novas, +165
+testes puros.**
+
+### ⛔ A regra que a subfase existe para garantir
+
+**AO INICIAR, O TREINO É CONGELADO — E NENHUMA LEITURA DE SESSÃO VOLTA AO MODELO.**
+
+`startSession` copia o treino-modelo para `training_sessions.workout_snapshot` (jsonb) **e** para
+as linhas de `training_session_exercises` / `training_session_sets`. Daí em diante,
+`src/lib/training/session-queries.ts` **não tem uma única referência a `training_workouts`**.
+`workout_id`, `exercise_id` e `scheduled_workout_id` são `on delete set null`: referência
+informativa, jamais fonte de leitura.
+
+**Provado no banco, não só no código.** O teste executado: criar modelo → congelar sessão →
+renomear o modelo, trocar a carga planejada para 999, subir para 10 séries → e por fim **excluir
+o treino inteiro**. Resultado: a sessão continua com o nome original, 60 kg planejados, 1 série e
+o nome do exercício congelado; `workout_id` vira `NULL` e a série executada (62,5 kg × 10)
+permanece. Mesmo princípio do `nutrients_snapshot` da 16-B, em outro domínio.
+
+### Arquivos criados
+
+**Migrations (9):** `20260804120000_training_locations.sql`,
+`…120100_training_location_plates.sql`, `…120200_training_sessions.sql`,
+`…120300_training_session_exercises.sql`, `…120400_training_session_sets.sql`,
+`…120500_training_session_rests.sql`, `…120600_training_session_pauses.sql`,
+`…120700_training_session_events.sql`, `…120800_training_session_substitutions.sql`.
+
+**Lógica pura (6 arquivos + 6 de teste):** `src/lib/training/session-machine.ts`,
+`session-flow.ts`, `timers.ts`, `previous.ts`, `plates.ts`, `session-snapshot.ts`.
+
+**Servidor:** `src/lib/training/session-queries.ts`,
+`src/lib/validators/training-session.ts`, `src/lib/actions/training-sessions.ts`,
+`src/lib/actions/training-locations.ts`.
+
+**Interface:** `src/app/(app)/treinos/sessao/{page,loading}.tsx`,
+`sessao/preparar/{page,loading}.tsx`, `sessao/revisar/{page,loading}.tsx` e
+`src/components/training/session/` (use-now, use-session-queue, sync-status, rest-panel,
+set-editor, plate-calculator, exercise-list-sheet, substitute-sheet, add-exercise-sheet,
+prepare-choose-client, prepare-review-client, session-live-client, session-review-client,
+locations-client).
+
+**Alterados:** `src/lib/training/constants.ts` (enums da sessão + `sessao` virou `pronto` na
+navegação), `types.ts`, `src/types/supabase.ts` (regenerado — **só adição**, nada da Dieta foi
+tocado), `src/app/(app)/treinos/hoje/page.tsx` (ganhou **Iniciar treino**),
+`treinos/configuracoes/page.tsx` (locais e anilhas).
+
+### Decisões técnicas registradas
+
+1. **`session-snapshot.ts` CHAMA `expandPlannedSets`** (17-B) em vez de reimplementar a expansão
+   de séries — como `buildRecipeEntrySnapshot` chama `buildDiaryEntrySnapshot` na Dieta. É o que
+   mantém construtor, pré-visualização e sessão concordando sobre quantas séries o treino tem.
+2. **A regra literal do fluxo:** concluir a 3ª de 4 séries leva para a **4ª SÉRIE**, não para
+   outro exercício. `nextStep` (`session-flow.ts`) tem teste isolado com esse nome.
+3. **Superset alterna antes de repetir a rodada** (A1 → B1 → A2 → B2) por uma regra só: dentro do
+   bloco, vai quem tem a menor série pendente; empate resolve pela ordem **depois do atual**.
+   Circuito de três sai da mesma regra, sem caso especial.
+4. **`parcial`/`concluido` do exercício não são graváveis** — nascem de `deriveExerciseStatus` na
+   leitura. Só decisão do usuário entra na coluna (`pendente`, `ativo`, `pulado`, `substituido`).
+5. **Tempo ativo usa UNIÃO de pausas e descansos.** Somar os dois separadamente descontaria duas
+   vezes um descanso que caiu dentro de uma pausa — e o total poderia ficar negativo.
+6. **Reduzir o descanso abaixo do já decorrido ENCERRA** o descanso, em vez de criar um alvo no
+   passado.
+7. **`training_session_events` é append-only**: sem `updated_at`, sem trigger de atualização.
+8. **Idempotência confere ANTES de aplicar.** As actions perguntam se aquele
+   `client_mutation_id` já foi usado na sessão; se sim, devolvem sucesso sem tocar em nada. É o
+   que impede um retry atrasado da fila de desfazer uma correção posterior (last-write-wins seria
+   pior que duplicar).
+9. **A preparação não aceita snapshot pronto do cliente.** O cliente manda ajustes numéricos e de
+   ordem; nome, `tracking_type` e lateralidade são resolvidos no servidor contra o catálogo.
+10. **`?treino=` e `?planejado=` destacam a escolha em vez de iniciar sozinho.** Criar sessão por
+    efeito deixaria rascunhos órfãos a cada "voltar".
+11. **Peso corporal na sessão, não em tabela nova.** É o valor USADO naquele treino, congelado.
+    A 17-E cria `body_*` e a preparação passa a pré-preencher dali — **continua não existindo
+    duas tabelas de peso corporal**.
+
+### O que NÃO foi prometido
+**O app não funciona offline** — não há service worker e recarregar sem rede não abre a tela. O
+que existe e é testado: mutação aplicada localmente → persistida no dispositivo → enfileirada →
+reenviada **em ordem** quando a conexão volta, sem duplicar. O estado da sincronização fica
+visível o tempo todo. A recuperação de sessão interrompida não depende do dispositivo: a sessão
+em execução vive no servidor.
+
+### Segurança verificada no banco (role `authenticated`)
+8 verificações de isolamento (ler/editar/excluir sessão, exercício e série de terceiro → 0
+linhas; inserir com `user_id` alheio → bloqueado) e 9 de invariante (duas sessões em execução,
+dois descansos ativos, duas pausas abertas, duas séries com o mesmo número,
+`client_mutation_id` repetido, concluir sem `ended_at`, encerrar descanso sem tempo real, dois
+locais padrão, anilha repetida) — **todas bloqueadas**. 0 resíduo de teste no banco.
+
+### Verificação
+`npm run lint`, `npx tsc --noEmit`, `npm run test:run` (**1297 testes**, de 1132) e
+`npm run build` passam. Suíte verde também em `TZ=UTC`. Smoke test: rotas da sessão → 307
+`/login`; `/api/cron/*` → 401. `get_advisors`: 0 lints de schema. **102 tabelas** no projeto.
+
+### Pendências registradas (escopo consciente, não bugs)
+| Item | Onde resolve |
+| --- | --- |
+| Histórico navegável, detalhe de sessão passada, gráficos | 17-D |
+| Volume agregado, 1RM, recordes consolidados (a sessão só **marca** o candidato em `is_personal_record`) | 17-D |
+| Sugestão de progressão de carga | 17-D |
+| Metas, medidas corporais `body_*`, dashboards | 17-E |
+| Notificação, agenda, TO-DO, hábitos, PWA/service worker | 17-F |
+| Reordenar exercício **arrastando** na sessão (as setas ↑ ↓, "fazer agora" e "para o fim" já funcionam) | 17-F |
 
 ---
 
