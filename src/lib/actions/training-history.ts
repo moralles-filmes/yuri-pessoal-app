@@ -23,6 +23,8 @@ import {
   syncPersonalRecords,
   syncProgressionSuggestions,
 } from "@/lib/training/records-sync";
+// 17-F — o hábito "Treinar" reflete o histórico (opt-in, sem segundo registro).
+import { reflectTrainingInHabit } from "@/lib/training/habit-sync";
 import {
   deleteSessionSchema,
   generateSuggestionsSchema,
@@ -94,7 +96,7 @@ export async function deleteTrainingSession(
 
   const { data: session } = await ctx.supabase
     .from("training_sessions")
-    .select("id,status,scheduled_workout_id")
+    .select("id,status,scheduled_workout_id,session_date")
     .eq("id", id)
     .eq("user_id", ctx.userId)
     .maybeSingle();
@@ -133,8 +135,12 @@ export async function deleteTrainingSession(
     // A exclusão já aconteceu; o recálculo pode ser refeito pelo botão da tela de recordes.
   }
 
+  // 17-F — o hábito vinculado volta a refletir o que o histórico sustenta naquele dia.
+  await reflectTrainingInHabit(ctx, session.session_date);
+
   revalidateHistory();
   revalidatePath(`${TRAINING_BASE_PATH}/calendario`);
+  revalidatePath("/habitos");
   return { ok: true, data: { recordsRemoved } };
 }
 

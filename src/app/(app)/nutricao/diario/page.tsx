@@ -15,6 +15,9 @@ import {
   getWaterForDate,
 } from "@/lib/nutrition/diary-queries";
 import { getFoods, getNutrientDefinitions, indexNutrients } from "@/lib/nutrition/queries";
+// 17-F — quem sabe se o dia é de treino ou de descanso é o módulo TREINOS. A Dieta lê e usa
+// para resolver a meta por tipo de dia (16-B); não recalcula nada de treino.
+import { getTrainingDayKinds } from "@/lib/training/day-kind-queries";
 import {
   getMealTemplatesWithTotals,
   getRecipesWithTotals,
@@ -94,6 +97,10 @@ export default async function DiarioPage({
     getSubstitutionGroupsWithTotals(),
   ]);
 
+  // Mapa de dias de treino/descanso do intervalo lido. Dia sem informação fica FORA do mapa —
+  // ausência de dado não é "descanso", e a meta do dia continua a sem recorte.
+  const dayKinds = await getTrainingDayKinds(from, to);
+
   // Nutrientes dos alimentos que aparecem no PLANEJAMENTO do dia — necessários para calcular
   // o lado "planejado" da comparação. O lado "consumido" sai do snapshot e não precisa disto.
   const plannedFoodIds = [
@@ -138,6 +145,7 @@ export default async function DiarioPage({
       measures={[...measuresByFood.entries()]}
       foodData={foodData}
       foodNames={foodNames}
+      dayKinds={[...dayKinds.entries()]}
       nutrients={indexNutrients(nutrientList)}
       water={water}
       recipes={recipes.map((recipe) => ({

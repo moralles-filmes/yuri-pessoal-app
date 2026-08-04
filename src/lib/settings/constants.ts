@@ -125,6 +125,23 @@ export const NOTIFICATION_PREF_GROUPS: {
       "nutrition_food_review",
     ],
   },
+  {
+    // Fase 17-F. `nutrition_measurement_due` NÃO se repete aqui de propósito: a medição
+    // corporal é o módulo central `body_*` (16-E), compartilhado pelas duas frentes — um
+    // segundo tipo para o mesmo fato geraria duas notificações do mesmo peso não medido.
+    title: "Treinos",
+    types: [
+      "training_planned_today",
+      "training_session_soon",
+      "training_planned_missed",
+      "training_session_open",
+      "training_record",
+      "training_goal_reached",
+      "training_goal_progress",
+      "training_goal_deadline",
+      "training_program_ending",
+    ],
+  },
 ];
 
 /** Explicação curta de cada tipo, exibida ao lado do interruptor em /configuracoes. */
@@ -135,11 +152,26 @@ export const NOTIFICATION_TYPE_HINTS: Partial<Record<NotificationType, string>> 
   nutrition_plan_week: "Lembra que a próxima semana ainda não tem refeições planejadas.",
   nutrition_shopping_pending: "Uma lista de compras ativa ainda tem itens a pegar.",
   nutrition_pantry_expiring: "Um item da despensa está perto da validade ou já passou dela.",
-  nutrition_measurement_due: "Faz um tempo desde a última medição de um tipo que você acompanha.",
+  // Vale para as DUAS frentes: as medidas são o módulo central `body_*` (16-E), registradas
+  // tanto em Dieta → Medidas quanto em Treinos → Evolução.
+  nutrition_measurement_due:
+    "Faz um tempo desde a última medição de um tipo que você acompanha (vale para Dieta e Treinos — as medidas são as mesmas).",
   nutrition_goal_close:
     "Desligado por padrão. Quando ligado, avisa que o consumo do dia se aproximou de uma meta.",
   nutrition_food_review:
     "Um alimento seu está sem energia analisada, sem fonte registrada ou marcado em revisão.",
+  training_planned_today: "Há um treino planejado para hoje e ainda sem sessão registrada.",
+  training_session_soon: "Aviso pouco antes do horário previsto do treino de hoje.",
+  training_planned_missed:
+    "Um treino planejado ficou para trás sem desfecho. Informa e oferece reagendar ou encerrar — nada é marcado por você.",
+  training_session_open:
+    "Uma sessão continua em execução há horas. Dá para retomar ou finalizar; o registrado está salvo.",
+  training_record: "Uma marca pessoal nova foi consolidada a partir do seu histórico.",
+  training_goal_reached: "Uma meta de treino alcançou o alvo que você definiu.",
+  training_goal_progress:
+    "Desligado por padrão. Quando ligado, acompanha o andamento das metas de período curto.",
+  training_goal_deadline: "O prazo de uma meta de treino está chegando.",
+  training_program_ending: "Um programa ativo está perto da data de fim que você planejou.",
 };
 
 export { NOTIFICATION_TYPE_LABELS };

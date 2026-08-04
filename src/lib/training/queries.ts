@@ -107,7 +107,7 @@ export async function getTrainingPreferences(): Promise<TrainingPreferences> {
   const { data } = await supabase
     .from("training_preferences")
     .select(
-      "weight_unit,difficulty_scale,default_rest_seconds,default_increment_kg,week_starts_on,weekly_workout_goal,auto_advance,rest_sound_enabled,rest_vibration_enabled,keep_screen_awake,unilateral_volume_rule,count_warmup_in_volume,one_rm_formula,progression_enabled",
+      "weight_unit,difficulty_scale,default_rest_seconds,default_increment_kg,week_starts_on,weekly_workout_goal,auto_advance,rest_sound_enabled,rest_vibration_enabled,keep_screen_awake,unilateral_volume_rule,count_warmup_in_volume,one_rm_formula,progression_enabled,habit_id",
     )
     .maybeSingle();
 
@@ -129,6 +129,8 @@ export async function getTrainingPreferences(): Promise<TrainingPreferences> {
     countWarmupInVolume: data.count_warmup_in_volume,
     oneRmFormula: asOneRmFormula(data.one_rm_formula),
     progressionEnabled: data.progression_enabled,
+    // 17-F — hábito que REFLETE as sessões concluídas (opt-in). NULL = desligado.
+    habitId: data.habit_id ?? null,
   };
 }
 

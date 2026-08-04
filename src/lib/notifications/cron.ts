@@ -29,6 +29,7 @@ import {
   type GenTask,
 } from "@/lib/notifications/generate";
 import { buildNutritionGenInput } from "@/lib/notifications/nutrition-cron";
+import { buildTrainingGenInput } from "@/lib/notifications/training-cron";
 import { normalizeNotificationPrefs } from "@/lib/settings/constants";
 import { timeInSaoPaulo } from "@/lib/format";
 
@@ -382,6 +383,15 @@ export async function generateForUser(
     nutrition: await buildNutritionGenInput(service, userId, todayIso, minutosAgora).catch(
       () => null,
     ),
+    // Fase 17-F — Treinos. Mesmo isolamento da Dieta: uma falha de leitura do módulo não pode
+    // impedir o alerta de fatura atrasada de existir.
+    training: await buildTrainingGenInput(
+      service,
+      userId,
+      todayIso,
+      minutosAgora,
+      nowMs,
+    ).catch(() => null),
   };
 
   const generated = generateNotifications(input);

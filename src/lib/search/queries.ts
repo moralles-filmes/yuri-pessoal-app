@@ -23,6 +23,29 @@ import {
   shoppingListLink,
 } from "@/lib/search/nutrition-links";
 import {
+  exerciseLink,
+  goalLink,
+  programLink,
+  recordLink,
+  sessionLink,
+  workoutLink,
+} from "@/lib/search/training-links";
+import {
+  PROGRAM_STATUS_LABELS,
+  TRACKING_TYPE_LABELS,
+  WORKOUT_STATUS_LABELS,
+  type ProgramStatus,
+  type TrackingType,
+  type WorkoutStatus,
+} from "@/lib/training/constants";
+import { GOAL_STATUS_LABELS, asGoalStatus } from "@/lib/training/goals";
+import {
+  asRecordType,
+  asRecordUnit,
+  formatRecordValue,
+  RECORD_TYPE_LABELS,
+} from "@/lib/training/records";
+import {
   SEARCH_TYPES,
   SEARCH_TYPE_LABELS,
   type SearchGroup,
@@ -75,6 +98,12 @@ export async function searchAll(
     nutricao_modelo: [],
     nutricao_plano: [],
     nutricao_lista: [],
+    treino_exercicio: [],
+    treino_treino: [],
+    treino_programa: [],
+    treino_sessao: [],
+    treino_meta: [],
+    treino_recorde: [],
     notificacao: [],
   };
 
@@ -557,6 +586,201 @@ export async function searchAll(
           .filter(Boolean)
           .join(" · "),
         link: shoppingListLink(l.id),
+      }));
+    }),
+
+    /* ═══════════ Fase 17-F — módulo Treinos ═══════════
+     * Cada consulta roda sob a sessão, então a RLS decide o escopo. Em `training_exercises`,
+     * que aceita `user_id` nulo, a policy de SELECT alcança também a BASE DO SISTEMA (os 106
+     * exercícios) — desejado: procurar "supino" tem de achar o supino da base. O que ela nunca
+     * alcança é o exercício de OUTRO usuário.
+     *
+     * ⛔ A sessão é buscada pelo NOME CONGELADO (`workout_name_snapshot`), nunca por um join
+     * em `training_workouts`: renomear o modelo hoje não pode mudar o que aconteceu em março
+     * (invariante 5 do módulo). */
+
+    // Exercícios (nome, nome alternativo)
+    safe(
+      supabase
+        .from("training_exercises")
+        .select("id, name, alternative_name, tracking_type, is_system_exercise, archived_at")
+        .or(`name.ilike.${like},alternative_name.ilike.${like}`)
+        .is("archived_at", null)
+        .order("name", { ascending: true })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.treino_exercicio = (rows as Array<{
+        id: string;
+        name: string;
+        alternative_name: string | null;
+        tracking_type: string;
+        is_system_exercise: boolean;
+      }>).map((e) => ({
+        type: "treino_exercicio",
+        id: e.id,
+        title: e.name,
+        subtitle: [
+          TRACKING_TYPE_LABELS[e.tracking_type as TrackingType] ?? pretty(e.tracking_type),
+          e.is_system_exercise ? "Base do sistema" : "Exercício próprio",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        link: exerciseLink(e.id),
+      }));
+    }),
+
+    // Treinos-modelo
+    safe(
+      supabase
+        .from("training_workouts")
+        .select("id, name, short_name, description, status, version, archived_at")
+        .or(`name.ilike.${like},short_name.ilike.${like},description.ilike.${like}`)
+        .is("archived_at", null)
+        .order("name", { ascending: true })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.treino_treino = (rows as Array<{
+        id: string;
+        name: string;
+        short_name: string | null;
+        status: string;
+        version: number;
+      }>).map((w) => ({
+        type: "treino_treino",
+        id: w.id,
+        title: w.name,
+        subtitle: [
+          WORKOUT_STATUS_LABELS[w.status as WorkoutStatus] ?? pretty(w.status),
+          w.version > 1 ? `versão ${w.version}` : null,
+          w.short_name,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        link: workoutLink(w.id),
+      }));
+    }),
+
+    // Programas
+    safe(
+      supabase
+        .from("training_programs")
+        .select("id, name, description, status, goal, archived_at")
+        .or(`name.ilike.${like},description.ilike.${like}`)
+        .is("archived_at", null)
+        .order("name", { ascending: true })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.treino_programa = (rows as Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        status: string;
+        goal: string;
+      }>).map((p) => ({
+        type: "treino_programa",
+        id: p.id,
+        title: p.name,
+        subtitle: [
+          PROGRAM_STATUS_LABELS[p.status as ProgramStatus] ?? pretty(p.status),
+          pretty(p.goal),
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        link: programLink(p.id),
+      }));
+    }),
+
+    // Sessões registradas (pelo nome CONGELADO do treino e pelas anotações)
+    safe(
+      supabase
+        .from("training_sessions")
+        .select("id, workout_name_snapshot, program_name_snapshot, session_date, status")
+        .or(`workout_name_snapshot.ilike.${like},program_name_snapshot.ilike.${like},notes.ilike.${like}`)
+        .order("session_date", { ascending: false })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.treino_sessao = (rows as Array<{
+        id: string;
+        workout_name_snapshot: string | null;
+        program_name_snapshot: string | null;
+        session_date: string;
+        status: string;
+      }>).map((s) => ({
+        type: "treino_sessao",
+        id: s.id,
+        title: s.workout_name_snapshot ?? "Treino livre",
+        subtitle: [formatDate(s.session_date), s.program_name_snapshot, pretty(s.status)]
+          .filter(Boolean)
+          .join(" · "),
+        link: sessionLink(s.id),
+      }));
+    }),
+
+    // Metas
+    safe(
+      supabase
+        .from("training_goals")
+        .select("id, name, description, status, starts_on, ends_on")
+        .or(`name.ilike.${like},description.ilike.${like}`)
+        .order("starts_on", { ascending: false })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.treino_meta = (rows as Array<{
+        id: string;
+        name: string;
+        status: string;
+        starts_on: string;
+        ends_on: string | null;
+      }>).map((g) => ({
+        type: "treino_meta",
+        id: g.id,
+        // O status GRAVADO. "Atingida"/"expirada" são derivados na leitura (17-E) e a busca
+        // não recalcula meta — quem faz isso é a tela, com `hoje` do servidor.
+        subtitle: [
+          GOAL_STATUS_LABELS[asGoalStatus(g.status)],
+          g.ends_on ? `até ${formatDate(g.ends_on)}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        title: g.name,
+        link: goalLink(g.id),
+      }));
+    }),
+
+    // Recordes consolidados (pelo nome congelado do exercício)
+    safe(
+      supabase
+        .from("training_personal_records")
+        .select("id, exercise_name_snapshot, record_type, value, unit, achieved_on")
+        .ilike("exercise_name_snapshot", like)
+        .order("achieved_on", { ascending: false })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.treino_recorde = (rows as Array<{
+        id: string;
+        exercise_name_snapshot: string | null;
+        record_type: string;
+        value: number | string;
+        unit: string;
+        achieved_on: string;
+      }>).map((r) => ({
+        type: "treino_recorde",
+        id: r.id,
+        title: r.exercise_name_snapshot ?? "Recorde",
+        subtitle: [
+          RECORD_TYPE_LABELS[asRecordType(r.record_type)],
+          formatRecordValue(Number(r.value), asRecordUnit(r.unit)),
+          formatDate(r.achieved_on),
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        link: recordLink(r.id),
       }));
     }),
 

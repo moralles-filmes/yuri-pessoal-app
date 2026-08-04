@@ -14,6 +14,8 @@ import "server-only";
  * Padrão do projeto: poucas consultas amplas, em paralelo, e derivação em memória.
  */
 import { createClient } from "@/lib/supabase/server";
+import { mergeDayKinds } from "@/lib/training/day-kind";
+import { getTrainingDayKinds } from "@/lib/training/day-kind-queries";
 import { getMeasurementTypes, getMeasurements } from "@/lib/body/queries";
 import type { MeasurementType, MeasurementWithType } from "@/lib/body/types";
 import {
@@ -53,11 +55,19 @@ async function getDayKinds(from: string, to: string): Promise<Map<string, DayKin
   const supabase = await createClient();
   const map = new Map<string, DayKind | null>();
 
-  const { data } = await supabase
-    .from("nutrition_planned_meals")
-    .select("planned_date,plan_day_id,nutrition_plan_days(day_kind)")
-    .gte("planned_date", from)
-    .lte("planned_date", to);
+  const [{ data }, fromTraining] = await Promise.all([
+    supabase
+      .from("nutrition_planned_meals")
+      .select("planned_date,plan_day_id,nutrition_plan_days(day_kind)")
+      .gte("planned_date", from)
+      .lte("planned_date", to),
+    // ⛔ Fase 17-F — QUEM SABE SE O DIA É DE TREINO É O MÓDULO TREINOS.
+    // A Dieta tem metas por tipo de dia desde a 16-B e até aqui classificava o dia só pelo
+    // PLANO dela. Agora o planejamento de treino (e a sessão que realmente aconteceu) tem
+    // prioridade; o plano da Dieta continua valendo onde Treinos não sabe responder.
+    // Ausência de informação NÃO vira "descanso": o dia simplesmente não entra no mapa.
+    getTrainingDayKinds(from, to),
+  ]);
 
   for (const row of (data ?? []) as unknown as {
     planned_date: string | null;
@@ -67,7 +77,7 @@ async function getDayKinds(from: string, to: string): Promise<Map<string, DayKin
     map.set(row.planned_date, asDayKind(row.nutrition_plan_days?.day_kind));
   }
 
-  return map;
+  return mergeDayKinds(map, fromTraining);
 }
 
 /**

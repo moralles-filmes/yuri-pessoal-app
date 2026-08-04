@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   Info,
+  ListTodo,
   Loader2,
   Pause,
   Pencil,
@@ -70,6 +71,8 @@ import {
 } from "@/lib/training/goals";
 import { shortDateLabelIso } from "@/lib/training/history";
 import type { ResolvedGoal } from "@/lib/training/goal-queries";
+import { DeepLinkHighlight } from "@/components/shared/deep-link-highlight";
+import { TodoLinkDialog } from "@/components/training/todo-link-dialog";
 import type { MeasurementType } from "@/lib/body/types";
 import {
   deleteTrainingGoal,
@@ -98,6 +101,7 @@ export function GoalsClient({
   muscleGroups,
   programs,
   measurementTypes,
+  highlightId = null,
 }: {
   goals: ResolvedGoal[];
   hoje: string;
@@ -105,6 +109,8 @@ export function GoalsClient({
   muscleGroups: { id: string; name: string }[];
   programs: { id: string; name: string }[];
   measurementTypes: MeasurementType[];
+  /** 17-F — meta aberta por deep-link (`?meta=`), destacada na lista. */
+  highlightId?: string | null;
 }) {
   const router = useRouter();
 
@@ -243,8 +249,12 @@ export function GoalsClient({
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
               {visible.map((item) => (
-                <GoalCard
+                <DeepLinkHighlight
                   key={item.goal.id}
+                  id={`meta-${item.goal.id}`}
+                  active={item.goal.id === highlightId}
+                >
+                <GoalCard
                   item={item}
                   busy={busy}
                   onEdit={() => {
@@ -255,6 +265,7 @@ export function GoalsClient({
                   onRecord={() => setRecording(item)}
                   onStatus={(status) => changeStatus(item, status)}
                 />
+                </DeepLinkHighlight>
               ))}
             </div>
           )}
@@ -453,6 +464,21 @@ function GoalCard({
               Registrar valor
             </Button>
           )}
+
+          {/* 17-F — ponte OPCIONAL com o TO-DO. A tarefa lembra de acompanhar a meta; o valor
+              continua saindo de `metrics.ts` e das medidas, nunca da tarefa. */}
+          <TodoLinkDialog
+            kind="meta"
+            goalId={goal.id}
+            defaultTitle={`Acompanhar meta — ${goal.name}`}
+            defaultDate={goal.endsOn}
+            trigger={
+              <Button variant="ghost" size="sm" disabled={busy}>
+                <ListTodo className="size-4" />
+                Criar tarefa
+              </Button>
+            }
+          />
 
           {goal.status === "pausada" ? (
             <Button variant="ghost" size="sm" onClick={() => onStatus("ativa")} disabled={busy}>

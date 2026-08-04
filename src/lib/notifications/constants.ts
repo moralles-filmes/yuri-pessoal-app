@@ -64,6 +64,16 @@ export const NOTIFICATION_TYPES = [
   "nutrition_measurement_due",
   "nutrition_goal_close",
   "nutrition_food_review",
+  // Fase 17-F — módulo Treinos.
+  "training_planned_today",
+  "training_session_soon",
+  "training_planned_missed",
+  "training_session_open",
+  "training_record",
+  "training_goal_reached",
+  "training_goal_progress",
+  "training_goal_deadline",
+  "training_program_ending",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -75,7 +85,12 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
  * meta do dia é outra coisa: no módulo que trata de comida e corpo, um aviso não pedido sobre
  * o quanto a pessoa ainda "pode" comer pode ser lido como cobrança. Quem quiser, liga.
  */
-export const NOTIFICATION_OPT_IN_TYPES: NotificationType[] = ["nutrition_goal_close"];
+export const NOTIFICATION_OPT_IN_TYPES: NotificationType[] = [
+  "nutrition_goal_close",
+  // Fase 17-F — acompanhar o quanto falta para a meta da semana é útil para quem PEDE, e vira
+  // cobrança para quem não pediu. Mesma decisão da meta do dia na Dieta, mesmo motivo.
+  "training_goal_progress",
+];
 
 /** True se o tipo só existe quando o usuário liga explicitamente. */
 export function isOptInNotification(type: string): boolean {
@@ -108,6 +123,15 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   nutrition_measurement_due: "Medida pendente",
   nutrition_goal_close: "Meta do dia por perto",
   nutrition_food_review: "Alimento a revisar",
+  training_planned_today: "Treino de hoje",
+  training_session_soon: "Horário do treino",
+  training_planned_missed: "Treino em aberto",
+  training_session_open: "Sessão em execução",
+  training_record: "Nova marca pessoal",
+  training_goal_reached: "Meta de treino atingida",
+  training_goal_progress: "Meta de treino em andamento",
+  training_goal_deadline: "Prazo da meta de treino",
+  training_program_ending: "Programa perto do fim",
 };
 
 /** Rótulo amigável de um tipo (com fallback para tipos desconhecidos). */

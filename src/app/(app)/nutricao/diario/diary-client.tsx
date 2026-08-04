@@ -83,6 +83,7 @@ import {
   MACRO_ORDER,
   MEAL_STATUSES,
   MEAL_STATUS_LABELS,
+  type DayKind,
   type MealStatus,
 } from "@/lib/nutrition/constants";
 // 16-E — visão de mês do diário (a pendência que `?visao=mes` carregava desde a 16-B).
@@ -188,6 +189,12 @@ export type DiaryClientProps = {
   recipes: PickerRecipe[];
   templates: DiaryTemplate[];
   substitutionGroups: SubstitutionGroupWithTotals[];
+  /* ── 17-F ── */
+  /**
+   * `[data, 'treino'|'descanso']` resolvido pelo módulo TREINOS no servidor. Dia ausente do
+   * mapa = sem informação, e a meta usada é a sem recorte — nunca "descanso" por suposição.
+   */
+  dayKinds?: [string, DayKind | null][];
 };
 
 export function DiaryClient(props: DiaryClientProps) {
@@ -204,6 +211,15 @@ export function DiaryClient(props: DiaryClientProps) {
   const measures = React.useMemo(() => new Map(props.measures), [props.measures]);
   const foodData = React.useMemo(() => new Map(props.foodData), [props.foodData]);
   const foodNames = React.useMemo(() => new Map(props.foodNames), [props.foodNames]);
+  /**
+   * 17-F — tipo de cada dia (treino/descanso) resolvido pelo módulo TREINOS, no servidor.
+   * Serve às metas por tipo de dia da 16-B. Dia ausente do mapa = sem informação, e a meta
+   * usada é a sem recorte — nunca a de "descanso" por suposição.
+   */
+  const dayKinds = React.useMemo(
+    () => new Map<string, DayKind | null>(props.dayKinds ?? []),
+    [props.dayKinds],
+  );
   const plannedById = React.useMemo(
     () => new Map(props.planned.map((meal) => [meal.id, meal])),
     [props.planned],
@@ -217,9 +233,9 @@ export function DiaryClient(props: DiaryClientProps) {
   const monthView = React.useMemo(
     () =>
       buildMonthView(props.date, props.weekMeals, props.planned, props.periods, now, {
-        dayKinds: new Map(),
+        dayKinds,
       }),
-    [props.date, props.weekMeals, props.planned, props.periods, now],
+    [props.date, props.weekMeals, props.planned, props.periods, now, dayKinds],
   );
 
   const orderedMeals = React.useMemo(() => sortMealsByTime(props.meals), [props.meals]);
@@ -232,8 +248,8 @@ export function DiaryClient(props: DiaryClientProps) {
     [props.periods, props.date],
   );
   const targets = React.useMemo(
-    () => dayTargets(period, { date: props.date, dayKind: null }),
-    [period, props.date],
+    () => dayTargets(period, { date: props.date, dayKind: dayKinds.get(props.date) ?? null }),
+    [period, props.date, dayKinds],
   );
   const progress = React.useMemo(() => progressForDay(totals, targets), [totals, targets]);
   const dayAdherence = React.useMemo(() => adherence(progress), [progress]);

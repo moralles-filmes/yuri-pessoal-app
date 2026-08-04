@@ -159,6 +159,11 @@ export type TrainingPreferences = {
   countWarmupInVolume: boolean;
   oneRmFormula: OneRmFormula;
   progressionEnabled: boolean;
+  /**
+   * 17-F — hábito (Fase 10) que REFLETE as sessões concluídas. `null` = desligado.
+   * Não é uma segunda fonte de verdade: quem sabe que o treino aconteceu é `training_sessions`.
+   */
+  habitId: string | null;
 };
 
 export const DEFAULT_TRAINING_PREFERENCES: TrainingPreferences = {
@@ -176,6 +181,7 @@ export const DEFAULT_TRAINING_PREFERENCES: TrainingPreferences = {
   countWarmupInVolume: false,
   oneRmFormula: "epley",
   progressionEnabled: true,
+  habitId: null,
 };
 
 /* ─────────────────────────────── Filtros ─────────────────────────────── */

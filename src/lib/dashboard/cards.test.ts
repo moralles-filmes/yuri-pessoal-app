@@ -27,8 +27,12 @@ describe("normalizeLayout com o card novo da 16-F", () => {
     const layout = normalizeLayout(layoutAntigo);
     expect(layout.order.slice(0, 3)).toEqual(["habitos", "financeiro", "todo"]);
     expect(layout.order).toContain("dieta");
-    // O card novo entra no FIM — não empurra nada que o usuário já tinha posicionado.
-    expect(layout.order[layout.order.length - 1]).toBe("dieta");
+    // O card novo entra DEPOIS de tudo que o usuário já tinha posicionado — não empurra nada.
+    // (A 17-F acrescentou "treinos" atrás dele pelo mesmo motivo; o que este teste trava é a
+    // regra, não a posição absoluta de um id.)
+    const salvos = layoutAntigo.order.length;
+    expect(layout.order.slice(0, salvos)).toEqual(layoutAntigo.order);
+    expect(layout.order.indexOf("dieta")).toBeGreaterThanOrEqual(salvos);
   });
 
   it("preserva o que estava oculto e o período escolhido", () => {
@@ -70,5 +74,50 @@ describe("normalizeLayout com o card novo da 16-F", () => {
     const layout = normalizeLayout({ order: ["dieta", "modulo_inexistente", "todo"] });
     expect(layout.order).not.toContain("modulo_inexistente");
     expect(layout.order[0]).toBe("dieta");
+  });
+});
+
+/**
+ * Fase 17-F — o card de Treinos entra pela mesma porta do de Dieta: um id novo no FIM de
+ * `DASH_CARD_IDS`. Estes testes provam que quem já usava o dashboard (inclusive quem já tinha
+ * o card da Dieta posicionado) não perde nada.
+ */
+describe("normalizeLayout com o card novo da 17-F", () => {
+  /** Layout salvo DEPOIS da 16-F e ANTES da 17-F, com ordem personalizada e card oculto. */
+  const layoutPos16F = {
+    order: [
+      "dieta",
+      "habitos",
+      "financeiro",
+      "todo",
+      "faturas",
+      "agenda",
+      "tarefas",
+      "estudos",
+      "notificacoes",
+    ],
+    hidden: ["estudos"],
+    period: "mes",
+    view: "mes",
+  };
+
+  it("anexa 'treinos' no fim, preservando a ordem salva inteira", () => {
+    const layout = normalizeLayout(layoutPos16F);
+    expect(layout.order.slice(0, layoutPos16F.order.length)).toEqual(layoutPos16F.order);
+    expect(layout.order[layout.order.length - 1]).toBe("treinos");
+  });
+
+  it("o card de Treinos nasce VISÍVEL e pode ser ocultado como qualquer outro", () => {
+    expect(visibleCards(normalizeLayout(layoutPos16F))).toContain("treinos");
+
+    const oculto = normalizeLayout({ ...layoutPos16F, hidden: ["treinos"] });
+    expect(visibleCards(oculto)).not.toContain("treinos");
+    expect(oculto.order).toContain("treinos");
+  });
+
+  it("o card da Dieta continua onde o usuário o deixou", () => {
+    const layout = normalizeLayout(layoutPos16F);
+    expect(layout.order[0]).toBe("dieta");
+    expect(layout.hidden).toEqual(["estudos"]);
   });
 });

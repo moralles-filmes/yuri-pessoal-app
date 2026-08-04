@@ -158,6 +158,11 @@ export const EXPORT_TABLES: ExportTableName[] = [
   // exatamente a informação que a tabela existe para preservar.
   "training_goals",
   "training_goal_progress",
+  // Subfase 17-F — ponte do espelho na agenda. Não guarda token: só o id do evento no
+  // provedor e o estado da última sincronização. Fica no backup pelo mesmo motivo de
+  // `todo_calendar_sync`: sem ela, restaurar criaria eventos DUPLICADOS no Google, já que a
+  // idempotência mora justamente aqui.
+  "training_calendar_sync",
 ];
 
 

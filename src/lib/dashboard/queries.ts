@@ -56,8 +56,24 @@ import { buildDailyReports, displayAmount } from "@/lib/nutrition/reports";
 import { effectiveMealStatus, summarizeDay, upcomingMeals } from "@/lib/nutrition/diary";
 import { shortTime } from "@/lib/nutrition/calendar";
 import { SHOPPING_OPEN_STATUSES } from "@/lib/nutrition/constants";
-import { getMeasurements } from "@/lib/body/queries";
+import { getMeasurements, getMeasurementTypes } from "@/lib/body/queries";
 import { summarizeType } from "@/lib/body/measurements";
+// Fase 17-F — Treinos. Tudo aqui é CONSUMO: `metrics.ts` (17-D) via `dashboards.ts` (17-E).
+import { getScheduledWorkouts } from "@/lib/training/routine-queries";
+import { getSessionHistory } from "@/lib/training/history-queries";
+import { getTrainingPreferences } from "@/lib/training/queries";
+import {
+  getGoalProgressEntries,
+  getTrainingGoals,
+  resolveGoals,
+} from "@/lib/training/goal-queries";
+import { getExercises, getMuscleGroups } from "@/lib/training/queries";
+import { aggregateSessions, partialExplanation, volumeRuleLabel } from "@/lib/training/metrics";
+import { dashboardRange, sessionsInRange } from "@/lib/training/dashboards";
+import { addDaysIso, derivePlannedStatus } from "@/lib/training/schedule";
+import { isGoalOpen, sortGoalsForDisplay } from "@/lib/training/goals";
+import { DERIVED_SCHEDULE_STATUS_LABELS } from "@/lib/training/constants";
+import { RUNNING_SESSION_STATUSES } from "@/lib/training/session-machine";
 import type { DashWindow } from "@/lib/dashboard/period";
 import type { TaskPriority, TaskStoredStatus } from "@/lib/tasks/constants";
 import type { StudyCategory, StudyStatus } from "@/lib/studies/constants";
@@ -73,6 +89,7 @@ import type {
   NutritionCardData,
   StudiesCardData,
   TasksCardData,
+  TrainingCardData,
 } from "@/lib/dashboard/types";
 
 const ISO = "yyyy-MM-dd";
@@ -555,5 +572,176 @@ export async function getNutritionCardData(
     water: day.water
       ? { value: day.water.value, target: day.water.target, unit: day.water.unit }
       : null,
+  };
+}
+
+/* ───────────────────────────── Treinos (Fase 17-F) ───────────────────────────── */
+
+/**
+ * Card de Treinos no Dashboard Geral.
+ *
+ * ⛔ CONSOME, NÃO RECALCULA — a mesma regra do card de Dieta (16-F). Todo número aqui já
+ * existe e já é testado:
+ *  • volume e séries da semana saem de `aggregateSessions` (`metrics.ts`, 17-D), com a REGRA
+ *    DE CONTAGEM vigente (`volumeRuleLabel`) viajando junto;
+ *  • o status do dia planejado sai de `derivePlannedStatus` (17-B), com `hoje` do servidor;
+ *  • o progresso da meta sai de `resolveGoals` (17-E);
+ *  • o peso vem do módulo central `body_*` (16-E) — o MESMO dado que a Dieta mostra.
+ *
+ * ⛔ Nenhuma leitura passa por `training_workouts` para montar histórico: o card lê o snapshot
+ * (`getSessionHistory`), como manda a invariante 5 do módulo.
+ */
+export async function getTrainingCardData(todayIso: string): Promise<TrainingCardData> {
+  const supabase = await createClient();
+
+  const [preferences, scheduled, history, running, measurements, measurementTypes] =
+    await Promise.all([
+      getTrainingPreferences(),
+      getScheduledWorkouts(todayIso, todayIso),
+      // 60 dias cobrem a semana atual e o "último treino" sem trazer o histórico inteiro.
+      getSessionHistory({ from: addDaysIso(todayIso, -60), to: todayIso }),
+      supabase
+        .from("training_sessions")
+        .select("id,status,workout_name_snapshot")
+        .in("status", [...RUNNING_SESSION_STATUSES])
+        .order("started_at", { ascending: false })
+        .limit(1),
+      getMeasurements({ from: addDaysIso(todayIso, -365), to: todayIso }),
+      getMeasurementTypes(),
+    ]);
+
+  const metricOptions = {
+    includeWarmup: preferences.countWarmupInVolume,
+    unilateralRule: preferences.unilateralVolumeRule,
+    weekStartsOn: preferences.weekStartsOn,
+  };
+
+  // ── Semana atual ──
+  const weekRange = dashboardRange("semana", todayIso, preferences.weekStartsOn);
+  const weekMetrics = aggregateSessions(sessionsInRange(history, weekRange), metricOptions);
+  const semTreino = weekMetrics.sessionCount === 0;
+
+  // ── Hoje ──
+  const todayEntry =
+    scheduled.find((entry) => entry.entryKind === "treino" && entry.status !== "cancelado") ??
+    scheduled.find((entry) => entry.entryKind === "descanso") ??
+    null;
+  const trainedToday = history.some((item) => item.sessionDate === todayIso);
+
+  // ── Último treino ──
+  const [last] = [...history].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate));
+  const lastMetrics = last ? aggregateSessions([last], metricOptions) : null;
+
+  // ── Uma meta em andamento ──
+  const goals = await getTrainingGoals();
+  let goalCard: TrainingCardData["goal"] = null;
+  if (goals.length > 0) {
+    const [exercises, muscleGroups, progressEntries] = await Promise.all([
+      getExercises(),
+      getMuscleGroups(),
+      getGoalProgressEntries(goals.map((goal) => goal.id)),
+    ]);
+    const resolved = resolveGoals({
+      goals,
+      history,
+      planned: scheduled.map((entry) => ({
+        scheduledDate: entry.scheduledDate,
+        entryKind: entry.entryKind,
+        status: entry.status,
+      })),
+      measurements,
+      measurementTypes,
+      progressEntries,
+      exerciseNames: new Map(exercises.map((exercise) => [exercise.id, exercise.name])),
+      muscleGroupNames: new Map(muscleGroups.map((group) => [group.id, group.name])),
+      programNames: new Map(),
+      hoje: todayIso,
+      options: { ...metricOptions, oneRmFormula: preferences.oneRmFormula },
+    });
+    const [open] = sortGoalsForDisplay(
+      resolved
+        .filter((item) => isGoalOpen(item.progress.status))
+        .map((item) => ({
+          ...item,
+          status: item.progress.status,
+          endsOn: item.goal.endsOn,
+          position: item.goal.position,
+          name: item.goal.name,
+        })),
+    );
+    if (open) {
+      goalCard = {
+        id: open.goal.id,
+        name: open.goal.name,
+        percent: open.progress.percent,
+        status: open.progress.status,
+      };
+    }
+  }
+
+  // ── Peso (módulo central `body_*`) ──
+  const weightMeasurements = measurements.filter((m) => m.typeSlug === "peso");
+  const weightSummary = summarizeType(weightMeasurements);
+  const weightUnit = weightMeasurements[0]?.unit ?? "kg";
+  const weightDecimals = weightMeasurements[0]?.typeDecimals ?? 1;
+
+  const runningRow = (running.data ?? [])[0];
+
+  return {
+    hasModule:
+      history.length > 0 ||
+      scheduled.length > 0 ||
+      goals.length > 0 ||
+      Boolean(runningRow) ||
+      weightMeasurements.length > 0,
+    activeSession: runningRow
+      ? {
+          id: runningRow.id,
+          label: runningRow.workout_name_snapshot ?? "Treino",
+          status: runningRow.status,
+        }
+      : null,
+    today: todayEntry
+      ? {
+          label:
+            todayEntry.workoutName ??
+            todayEntry.title ??
+            (todayEntry.entryKind === "descanso" ? "Descanso" : "Treino"),
+          time: todayEntry.plannedTime ? todayEntry.plannedTime.slice(0, 5) : null,
+          isRest: todayEntry.entryKind === "descanso",
+          status:
+            DERIVED_SCHEDULE_STATUS_LABELS[derivePlannedStatus(todayEntry, todayIso)] ??
+            "Planejado",
+        }
+      : null,
+    trainedToday,
+    week: {
+      sessions: weekMetrics.sessionCount,
+      target: preferences.weeklyWorkoutGoal ?? null,
+      // ⛔ Semana sem treino não é "0 kg de volume": é semana sem treino.
+      volumeKg: semTreino ? null : weekMetrics.totals.volumeKg,
+      partialReason: semTreino ? "" : partialExplanation(weekMetrics.totals),
+    },
+    volumeRule: volumeRuleLabel(metricOptions),
+    lastSession: last
+      ? {
+          id: last.id,
+          label: last.workoutName ?? "Treino livre",
+          date: last.sessionDate,
+          volumeKg: lastMetrics && lastMetrics.totals.volumeKg > 0 ? lastMetrics.totals.volumeKg : null,
+          durationSeconds: last.totalSeconds,
+        }
+      : null,
+    goal: goalCard,
+    weight:
+      weightSummary.current !== null && weightSummary.currentDate
+        ? {
+            value: weightSummary.current,
+            unit: weightUnit,
+            decimals: weightDecimals,
+            measuredOn: weightSummary.currentDate,
+            sincePrevious: weightSummary.sincePrevious?.absolute ?? null,
+          }
+        : null,
   };
 }

@@ -21,6 +21,9 @@ export const DASH_CARD_IDS = [
   "habitos",
   "estudos",
   "notificacoes",
+  // Fase 17-F — Treinos. Pelo mesmo motivo da Dieta, entra no FIM: quem já personalizou a
+  // ordem recebe o card novo no fim da lista, sem nada mudar de lugar.
+  "treinos",
 ] as const;
 export type DashCardId = (typeof DASH_CARD_IDS)[number];
 
@@ -35,6 +38,7 @@ export const DASH_CARD_TITLES: Record<DashCardId, string> = {
   habitos: "Hábitos",
   estudos: "Estudos",
   notificacoes: "Notificações",
+  treinos: "Treinos",
 };
 
 /** Preferência de layout do dashboard (persistida em settings.dashboard_layout). */

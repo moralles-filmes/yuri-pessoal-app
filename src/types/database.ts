@@ -293,6 +293,8 @@ export type GoogleConnectionStatus = {
   lastSyncedAt: string | null;
   /** Envio de tarefas do TO-DO para o Google (opt-in, Fase 15). */
   todoSyncEnabled: boolean;
+  /** Envio de treinos planejados para o Google (opt-in, Fase 17-F). */
+  trainingSyncEnabled: boolean;
 };
 
 /* ───────────────────── Fase 09 — Demandas, Tarefas & Rotinas ───────────────────── */

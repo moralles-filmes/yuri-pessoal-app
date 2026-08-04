@@ -40,6 +40,7 @@ import {
   recordTypeLabel,
   type RecordType,
 } from "@/lib/training/records";
+import { DeepLinkHighlight } from "@/components/shared/deep-link-highlight";
 import type { PersonalRecord } from "@/lib/training/history-queries";
 import { rebuildPersonalRecords } from "@/lib/actions/training-history";
 
@@ -48,9 +49,12 @@ type GroupMode = "exercicio" | "tipo";
 export function RecordsClient({
   records,
   oneRmFormula,
+  highlightId = null,
 }: {
   records: PersonalRecord[];
   oneRmFormula: OneRmFormula;
+  /** 17-F — recorde aberto por deep-link (`?recorde=`), destacado na lista. */
+  highlightId?: string | null;
 }) {
   const router = useRouter();
   const [mode, setMode] = React.useState<GroupMode>("exercicio");
@@ -151,8 +155,10 @@ export function RecordsClient({
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
                 {general.map((record) => (
-                  <div
+                  <DeepLinkHighlight
                     key={record.id}
+                    id={`recorde-${record.id}`}
+                    active={record.id === highlightId}
                     className="rounded-xl border border-border bg-card/60 p-3"
                   >
                     <p className="text-sm text-muted-foreground">
@@ -164,7 +170,7 @@ export function RecordsClient({
                     <p className="text-xs text-muted-foreground">
                       {shortDateLabelIso(record.achievedOn)}
                     </p>
-                  </div>
+                  </DeepLinkHighlight>
                 ))}
               </CardContent>
             </Card>
@@ -179,7 +185,13 @@ export function RecordsClient({
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {group.records.map((record) => (
-                    <RecordRow key={record.id} record={record} mode={mode} />
+                    <DeepLinkHighlight
+                      key={record.id}
+                      id={`recorde-${record.id}`}
+                      active={record.id === highlightId}
+                    >
+                      <RecordRow record={record} mode={mode} />
+                    </DeepLinkHighlight>
                   ))}
                 </CardContent>
               </Card>

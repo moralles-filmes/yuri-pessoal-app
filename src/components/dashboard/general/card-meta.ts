@@ -5,6 +5,7 @@
 import {
   Bell,
   CalendarClock,
+  Dumbbell,
   GraduationCap,
   ListChecks,
   ListTodo,
@@ -26,6 +27,7 @@ export const DASH_CARD_ICONS: Record<DashCardId, LucideIcon> = {
   habitos: Target,
   estudos: GraduationCap,
   notificacoes: Bell,
+  treinos: Dumbbell,
 };
 
 /** Para onde o link "Ver" de cada card aponta. */
@@ -39,4 +41,5 @@ export const DASH_CARD_HREF: Record<DashCardId, string> = {
   habitos: "/habitos",
   estudos: "/estudos",
   notificacoes: "/configuracoes",
+  treinos: "/treinos",
 };

@@ -60,18 +60,32 @@ describe("backup do usuário", () => {
    * a esta mesma lista. O teste existe para que um merge que descarte a seção do outro seja
    * pego aqui, e não meses depois, quando alguém tentar restaurar o backup.
    */
-  it("inclui as 26 tabelas do módulo Treinos (frente paralela)", () => {
+  it("inclui as 27 tabelas do módulo Treinos que são dado do usuário", () => {
+    // ⚠️ 27, não 29: `training_muscle_groups` e `training_equipment` são VOCABULÁRIO GLOBAL
+    // do sistema (aceitam `user_id` nulo e são recriados por migration), como
+    // `nutrition_nutrients`. Os exercícios PRÓPRIOS entram; os 106 da base, não — o
+    // `.eq("user_id", …)` da rota garante isso.
     const training = EXPORT_TABLES.filter((t) => t.startsWith("training_"));
-    expect(training).toHaveLength(26);
+    expect(training).toHaveLength(27);
     for (const table of [
       "training_exercises", // 17-A
       "training_workouts", // 17-B
       "training_sessions", // 17-C — o histórico imutável
       "training_personal_records", // 17-D
       "training_goal_progress", // 17-E
+      "training_calendar_sync", // 17-F — sem ela, restaurar duplicaria eventos no Google
     ]) {
       expect(training as string[], table).toContain(table);
     }
+  });
+
+  it("a ponte da agenda não guarda credencial — só o id do evento no provedor", () => {
+    // `training_calendar_sync` e `todo_calendar_sync` entram no backup; `google_integrations`
+    // (que guarda os tokens) continua fora. A distinção é o que permite restaurar a
+    // idempotência sem restaurar segredo nenhum.
+    expect(EXPORT_TABLES as string[]).toContain("training_calendar_sync");
+    expect(EXPORT_TABLES as string[]).toContain("todo_calendar_sync");
+    expect(EXPORT_TABLES as string[]).not.toContain("google_integrations");
   });
 
   it("`nutrition_nutrients` fica de fora — é vocabulário do sistema, não dado do usuário", () => {

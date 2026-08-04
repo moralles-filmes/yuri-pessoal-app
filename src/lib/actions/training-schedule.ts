@@ -18,6 +18,11 @@
  * 4. **`hoje` vem de `hojeISO()`** (Brasília), nunca de `toISOString().slice(0,10)` — que
  *    devolveria o dia em UTC e, entre 21h e a meia-noite, trataria o treino de hoje como
  *    passado.
+ *
+ * ⛔ **Fase 17-F — o espelho na agenda é OPT-IN e nunca derruba a ação.** Toda escrita daqui
+ * chama a sincronização, que sai na primeira consulta quando o envio está desligado (o padrão).
+ * Excluir remove o evento ANTES do delete: a ponte é `on delete cascade` e, depois, o id do
+ * evento já não existiria para ser apagado no Google.
  */
 import { revalidatePath } from "next/cache";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
@@ -30,6 +35,11 @@ import {
   startOfWeekIso,
   weekDaysIso,
 } from "@/lib/training/schedule";
+import {
+  removeScheduledWorkoutFromGoogle,
+  syncScheduledWorkoutToGoogle,
+  syncScheduledWorkoutsToGoogle,
+} from "@/lib/training/calendar-sync";
 import {
   scheduleDuplicateWeekSchema,
   scheduleEntrySchema,
@@ -93,6 +103,7 @@ export async function createScheduledWorkout(
 
   if (error || !created) return dbError("Não foi possível salvar o dia planejado.");
 
+  await syncScheduledWorkoutToGoogle(ctx, created.id);
   revalidateSchedule();
   return { ok: true, data: { id: created.id } };
 }
@@ -122,6 +133,7 @@ export async function updateScheduledWorkout(input: unknown): Promise<ActionResu
 
   if (error) return dbError("Não foi possível salvar o dia planejado.");
 
+  await syncScheduledWorkoutToGoogle(ctx, id);
   revalidateSchedule();
   return { ok: true, data: null };
 }
@@ -129,6 +141,10 @@ export async function updateScheduledWorkout(input: unknown): Promise<ActionResu
 export async function deleteScheduledWorkout(id: string): Promise<ActionResult<null>> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
+
+  // ⛔ ANTES do delete: a ponte é `on delete cascade` e, depois, o id do evento no Google já
+  // não existiria para ser apagado — o evento ficaria órfão no calendário do usuário.
+  await removeScheduledWorkoutFromGoogle(ctx, id);
 
   const { error } = await ctx.supabase
     .from("training_scheduled_workouts")
@@ -198,6 +214,8 @@ export async function rescheduleScheduledWorkout(input: unknown): Promise<Action
 
   if (error) return dbError("Não foi possível reagendar.");
 
+  // O MESMO evento é movido (a ponte é por linha planejada), nunca duplicado.
+  await syncScheduledWorkoutToGoogle(ctx, id);
   revalidateSchedule();
   return { ok: true, data: null };
 }
@@ -231,6 +249,8 @@ export async function setScheduledWorkoutOutcome(input: unknown): Promise<Action
 
   if (error) return dbError("Não foi possível registrar.");
 
+  // Cancelar remove o evento (o mapeamento puro devolve `null`); voltar a "planejado" o recria.
+  await syncScheduledWorkoutToGoogle(ctx, id);
   revalidateSchedule();
   return { ok: true, data: null };
 }
@@ -426,6 +446,8 @@ async function writeGenerated(
   }
 
   if (toDelete.length > 0) {
+    // Remove o espelho ANTES do delete (a ponte é cascade).
+    for (const id of toDelete) await removeScheduledWorkoutFromGoogle(ctx, id);
     const { error } = await ctx.supabase
       .from("training_scheduled_workouts")
       .delete()
@@ -434,26 +456,32 @@ async function writeGenerated(
     if (error) return dbError("Não foi possível substituir os dias já planejados.");
   }
 
+  const insertedIds: string[] = [];
   if (toInsert.length > 0) {
-    const { error } = await ctx.supabase.from("training_scheduled_workouts").insert(
-      toInsert.map((entry) => ({
-        user_id: ctx.userId,
-        scheduled_date: entry.scheduledDate,
-        entry_kind: entry.entryKind,
-        workout_id: entry.entryKind === "descanso" ? null : entry.workoutId,
-        program_id: entry.programId,
-        planned_time: entry.plannedTime,
-        planned_duration_minutes: entry.plannedDurationMinutes,
-        title: entry.title,
-        notes: entry.notes,
-        position: entry.position,
-        status: "planejado",
-        source,
-      })),
-    );
+    const { data: inserted, error } = await ctx.supabase
+      .from("training_scheduled_workouts")
+      .insert(
+        toInsert.map((entry) => ({
+          user_id: ctx.userId,
+          scheduled_date: entry.scheduledDate,
+          entry_kind: entry.entryKind,
+          workout_id: entry.entryKind === "descanso" ? null : entry.workoutId,
+          program_id: entry.programId,
+          planned_time: entry.plannedTime,
+          planned_duration_minutes: entry.plannedDurationMinutes,
+          title: entry.title,
+          notes: entry.notes,
+          position: entry.position,
+          status: "planejado",
+          source,
+        })),
+      )
+      .select("id");
     if (error) return dbError("Não foi possível gravar o planejamento.");
+    insertedIds.push(...(inserted ?? []).map((row) => row.id));
   }
 
+  await syncScheduledWorkoutsToGoogle(ctx, insertedIds);
   revalidateSchedule();
   return { ok: true, data: { created: toInsert.length, skipped, replaced } };
 }
@@ -560,6 +588,8 @@ export async function clearTrainingWeek(
   const kept = (rows?.length ?? 0) - removable.length;
 
   if (removable.length > 0) {
+    // Espelho removido ANTES do delete (ponte `on delete cascade`).
+    for (const row of removable) await removeScheduledWorkoutFromGoogle(ctx, row.id);
     const { error } = await ctx.supabase
       .from("training_scheduled_workouts")
       .delete()

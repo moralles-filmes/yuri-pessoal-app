@@ -37,6 +37,8 @@ import {
   TRAINING_BASE_PATH,
 } from "@/lib/training/constants";
 import { getRecentSessions, getRunningSession } from "@/lib/training/session-queries";
+// 17-F — ponte OPCIONAL com o TO-DO: a tarefa é lembrete, a sessão é o registro.
+import { TodoLinkDialog } from "@/components/training/todo-link-dialog";
 import type { ScheduledWorkout, TrainingWorkout } from "@/lib/training/types";
 
 export const dynamic = "force-dynamic";
@@ -323,6 +325,12 @@ function TodayCard({
                 Iniciar
               </Link>
             </Button>
+            <TodoLinkDialog
+              kind="treino"
+              defaultTitle={`Treinar — ${workout.name}`}
+              defaultDate={entry.scheduledDate}
+              scheduledId={entry.id}
+            />
           </div>
         </div>
       </CardHeader>

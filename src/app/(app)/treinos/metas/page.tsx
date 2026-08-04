@@ -17,11 +17,17 @@ export const metadata: Metadata = { title: "Metas · Treinos" };
  *   Esta tela não recalcula nada.
  * • As medidas corporais são as MESMAS do módulo Dieta — não existe segunda tabela de peso.
  */
-export default async function MetasPage() {
-  const overview = await getGoalsOverview();
+export default async function MetasPage({
+  searchParams,
+}: {
+  // 17-F — `?meta=<id>` vem da busca global e das notificações de meta.
+  searchParams: Promise<{ meta?: string }>;
+}) {
+  const [{ meta }, overview] = await Promise.all([searchParams, getGoalsOverview()]);
 
   return (
     <GoalsClient
+      highlightId={meta ?? null}
       goals={overview.goals}
       hoje={overview.hoje}
       exercises={overview.exercises}

@@ -72,6 +72,8 @@ import {
   syncPersonalRecords,
   syncProgressionSuggestions,
 } from "@/lib/training/records-sync";
+// 17-F — o hábito "Treinar" reflete a sessão (opt-in, sem segundo registro).
+import { reflectTrainingInHabit } from "@/lib/training/habit-sync";
 import {
   exerciseAddSchema,
   exerciseMoveSchema,
@@ -1771,10 +1773,16 @@ export async function finishSession(input: unknown): Promise<ActionResult<{ id: 
     // Silencioso de propósito: o recálculo pode ser refeito pelo botão da tela de recordes.
   }
 
+  /* 17-F — o hábito "Treinar" REFLETE a sessão: opt-in (só com hábito vinculado nas
+     preferências), derivado do dia inteiro e gravado na linha única de `habit_logs`. Não é um
+     segundo registro do treino — a fonte de verdade continua sendo `training_sessions`. */
+  await reflectTrainingInHabit(ctx, session.session_date);
+
   revalidateSession();
   revalidatePath(`${TRAINING_BASE_PATH}/historico`);
   revalidatePath(`${TRAINING_BASE_PATH}/recordes`);
   revalidatePath(`${TRAINING_BASE_PATH}/evolucao`);
+  revalidatePath("/habitos");
   return { ok: true, data: { id: data.id } };
 }
 
@@ -1803,6 +1811,8 @@ export async function abandonSession(input: unknown): Promise<ActionResult<{ del
       .eq("user_id", ctx.userId);
     if (error) return dbError("Não foi possível descartar o treino.");
 
+    // O dia perdeu uma execução: o hábito vinculado volta ao que o histórico sustenta.
+    await reflectTrainingInHabit(ctx, session.session_date);
     revalidateSession();
     return { ok: true, data: { deleted: true } };
   }
@@ -1825,6 +1835,8 @@ export async function abandonSession(input: unknown): Promise<ActionResult<{ del
   await finalizeTimes(ctx, data.id, "abandonada", { notes: data.reason });
   await logEvent(ctx, data.id, "sessao_abandonada", { description: data.reason });
 
+  // Abandonada não é concluída: o hábito do dia volta a refletir só o que foi concluído.
+  await reflectTrainingInHabit(ctx, session.session_date);
   revalidateSession();
   return { ok: true, data: { deleted: false } };
 }
@@ -1863,6 +1875,8 @@ export async function reopenSession(input: unknown): Promise<ActionResult<null>>
 
   await logEvent(ctx, id, "sessao_reaberta");
 
+  // Reabrir desfaz a conclusão do dia — o hábito acompanha.
+  await reflectTrainingInHabit(ctx, session.session_date);
   revalidateSession();
   return { ok: true, data: null };
 }

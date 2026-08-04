@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCheck, Link2, ListTodo, RefreshCw, Unlink } from "lucide-react";
+import { CalendarCheck, Dumbbell, Link2, ListTodo, RefreshCw, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +15,10 @@ import {
   syncGoogleCalendar,
   syncTodoToGoogle,
 } from "@/lib/actions/calendar";
+import {
+  setTrainingGoogleSync,
+  syncTrainingToGoogle,
+} from "@/lib/actions/training-integrations";
 import { formatDate } from "@/lib/format";
 import type { GoogleConnectionStatus } from "@/types/database";
 
@@ -40,6 +44,45 @@ export function GoogleConnectCard({
   const router = useRouter();
   const [syncing, setSyncing] = React.useState(false);
   const [todoBusy, setTodoBusy] = React.useState(false);
+  const [trainingBusy, setTrainingBusy] = React.useState(false);
+
+  async function handleTrainingToggle(enabled: boolean) {
+    setTrainingBusy(true);
+    try {
+      const res = await setTrainingGoogleSync(enabled);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        enabled
+          ? "Envio ligado. Use “Enviar treinos” para preencher o calendário."
+          : "Envio desligado. Os eventos já criados continuam no Google.",
+      );
+      router.refresh();
+    } finally {
+      setTrainingBusy(false);
+    }
+  }
+
+  async function handleTrainingSync() {
+    setTrainingBusy(true);
+    try {
+      const res = await syncTrainingToGoogle();
+      if (res.ok) {
+        toast.success(
+          `Treinos enviados: ${res.data.synced}${
+            res.data.failed > 0 ? ` · ${res.data.failed} com falha` : ""
+          }.`,
+        );
+        router.refresh();
+      } else {
+        toast.error(res.error);
+      }
+    } finally {
+      setTrainingBusy(false);
+    }
+  }
 
   async function handleTodoToggle(enabled: boolean) {
     setTodoBusy(true);
@@ -183,6 +226,42 @@ export function GoogleConnectCard({
               >
                 <RefreshCw className={todoBusy ? "animate-spin" : ""} />
                 {todoBusy ? "Enviando…" : "Enviar tarefas agora"}
+              </Button>
+            )}
+          </div>
+
+          {/* Espelho dos treinos planejados (opt-in, Fase 17-F). */}
+          <div className="space-y-2 rounded-lg border border-border p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-2.5">
+                <Dumbbell className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <div className="min-w-0">
+                  <Label htmlFor="training-sync" className="text-sm font-medium">
+                    Enviar treinos planejados
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Dias planejados com treino viram eventos no Google. Dia de descanso não vira
+                    evento, e o que já foi treinado continua morando no histórico do módulo.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="training-sync"
+                checked={status.trainingSyncEnabled}
+                onCheckedChange={handleTrainingToggle}
+                disabled={trainingBusy}
+              />
+            </div>
+            {status.trainingSyncEnabled && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTrainingSync}
+                disabled={trainingBusy}
+                className="w-full sm:w-auto"
+              >
+                <RefreshCw className={trainingBusy ? "animate-spin" : ""} />
+                {trainingBusy ? "Enviando…" : "Enviar treinos agora"}
               </Button>
             )}
           </div>

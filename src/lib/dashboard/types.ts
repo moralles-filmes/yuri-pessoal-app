@@ -200,3 +200,54 @@ export type NutritionCardData = {
   /** Meta de água do dia (fonte de verdade: módulo Hábitos). `null` = sem hábito de água. */
   water: { value: number; target: number; unit: string } | null;
 };
+
+/* ───────────────────────────── Treinos (Fase 17-F) ───────────────────────────── */
+
+/**
+ * O card de Treinos no Dashboard Geral.
+ *
+ * ⛔ TODO NÚMERO AQUI JÁ EXISTE. Volume, séries e frequência saem de `metrics.ts` (17-D) por
+ * meio de `dashboards.ts` (17-E); o status do dia planejado sai de `derivePlannedStatus`
+ * (17-B); o peso vem do módulo central `body_*` (16-E). O card não soma nada.
+ *
+ * ⛔ AUSÊNCIA DE DADO NÃO É ZERO. Semana sem treino devolve o volume como `null` com o motivo,
+ * nunca "0 kg" com cara de resultado.
+ */
+export type TrainingCardData = {
+  /** Existe alguma coisa do módulo configurada (evita card vazio sem explicação). */
+  hasModule: boolean;
+  /** A sessão em execução — o botão "continuar" do card. */
+  activeSession: { id: string; label: string; status: string } | null;
+  /** O que está planejado para hoje (ou o descanso marcado). */
+  today: {
+    label: string;
+    time: string | null;
+    isRest: boolean;
+    /** Status DERIVADO na leitura (17-B), nunca gravado. */
+    status: string;
+  } | null;
+  /** Já houve sessão concluída hoje? */
+  trainedToday: boolean;
+  /** Sessões da semana × meta semanal das preferências. `target` nulo = sem meta declarada. */
+  week: { sessions: number; target: number | null; volumeKg: number | null; partialReason: string };
+  /** A regra de contagem vigente, que viaja junto do volume (17-D). */
+  volumeRule: string;
+  /** Último treino registrado. */
+  lastSession: {
+    id: string;
+    label: string;
+    date: string;
+    volumeKg: number | null;
+    durationSeconds: number | null;
+  } | null;
+  /** Uma meta em andamento, para dar direção. `percent` nulo = sem base para calcular. */
+  goal: { id: string; name: string; percent: number | null; status: string } | null;
+  /** Última medição de peso — o MESMO dado que a Dieta mostra (`body_*`). */
+  weight: {
+    value: number;
+    unit: string;
+    decimals: number;
+    measuredOn: string;
+    sincePrevious: number | null;
+  } | null;
+};

@@ -8,6 +8,7 @@ import {
   ArrowLeftRight,
   CalendarPlus,
   CreditCard,
+  Dumbbell,
   GraduationCap,
   ListChecks,
   ListTodo,
@@ -64,6 +65,11 @@ import {
 } from "@/lib/actions/nutrition-quick-add";
 import { saveMeasurement } from "@/lib/actions/body-measurements";
 import { saveShoppingItem } from "@/lib/actions/nutrition-shopping";
+import {
+  loadTrainingQuickAddOptions,
+  quickStartTraining,
+  type TrainingQuickAddOptions,
+} from "@/lib/actions/training-quick-add";
 import { dividirDespesa, type ParteDivisao } from "@/lib/finance/split";
 import {
   CLASSIFICACAO_LABELS,
@@ -94,7 +100,9 @@ type QuickType =
   | "alimento"
   | "refeicao"
   | "medida"
-  | "compra";
+  | "compra"
+  // Fase 17-F — módulo Treinos.
+  | "treino";
 
 const TYPES: { id: QuickType; label: string; icon: LucideIcon }[] = [
   { id: "despesa", label: "Despesa", icon: TrendingDown },
@@ -105,9 +113,12 @@ const TYPES: { id: QuickType; label: string; icon: LucideIcon }[] = [
   // criando na estrutura da Fase 09, que ainda alimenta rotinas e agenda.
   { id: "todo", label: "Nova tarefa", icon: ListTodo },
   { id: "evento", label: "Evento", icon: CalendarPlus },
+  { id: "treino", label: "Iniciar treino", icon: Dumbbell },
   { id: "alimento", label: "Registrar alimento", icon: Apple },
   { id: "refeicao", label: "Registrar refeição", icon: UtensilsCrossed },
-  { id: "medida", label: "Adicionar medida", icon: Ruler },
+  // Peso e circunferências são o módulo central `body_*` (16-E): o mesmo registro serve a
+  // Dieta e a Treinos — não existem duas telas de peso, existem duas portas para a mesma.
+  { id: "medida", label: "Peso e medidas", icon: Ruler },
   { id: "compra", label: "Item na lista", icon: ShoppingCart },
   { id: "habito", label: "Check-in de hábito", icon: Target },
   { id: "estudo", label: "Sessão de estudo", icon: GraduationCap },
@@ -127,6 +138,8 @@ export function QuickAdd() {
   const [options, setOptions] = React.useState<QuickAddOptions | null>(null);
   const [nutriOptions, setNutriOptions] =
     React.useState<NutritionQuickAddOptions | null>(null);
+  const [trainingOptions, setTrainingOptions] =
+    React.useState<TrainingQuickAddOptions | null>(null);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -141,6 +154,11 @@ export function QuickAdd() {
         loadNutritionQuickAddOptions()
           .then(setNutriOptions)
           .catch(() => setNutriOptions(null));
+      }
+      if (!trainingOptions) {
+        loadTrainingQuickAddOptions()
+          .then(setTrainingOptions)
+          .catch(() => setTrainingOptions(null));
       }
     }
   }
@@ -202,6 +220,7 @@ export function QuickAdd() {
               type={type}
               options={options}
               nutriOptions={nutriOptions}
+              trainingOptions={trainingOptions}
               onDone={close}
             />
           )}
@@ -466,13 +485,23 @@ function QuickForm({
   type,
   options,
   nutriOptions,
+  trainingOptions,
   onDone,
 }: {
   type: QuickType;
   options: QuickAddOptions | null;
   nutriOptions: NutritionQuickAddOptions | null;
+  trainingOptions: TrainingQuickAddOptions | null;
   onDone: () => void;
 }) {
+  // Treinos tem leitura própria (17-F) — espera a dele, não a do financeiro.
+  if (type === "treino") {
+    if (!trainingOptions) {
+      return <p className="py-6 text-center text-sm text-muted-foreground">Carregando…</p>;
+    }
+    return <TrainingStartForm options={trainingOptions} onDone={onDone} />;
+  }
+
   // Os tipos da Dieta dependem de outra leitura: esperam a própria, não a do financeiro.
   if (NUTRITION_TYPES.includes(type)) {
     if (!nutriOptions) {
@@ -517,6 +546,109 @@ function QuickForm({
     default:
       return null;
   }
+}
+
+/* ═══════════════════ Fase 17-F — Treinos ═══════════════════ */
+
+/**
+ * Iniciar treino em dois toques: escolher o treino → começar.
+ *
+ * ⛔ A gravação é `quickStartTraining`, que só resolve QUAL treino e delega para
+ * `createSession` + `startSession` (17-C). O snapshot congelado, a máquina de estados e a
+ * trava de "uma sessão em execução" são exatamente os do fluxo normal — não existe um segundo
+ * caminho de criação de sessão.
+ */
+function TrainingStartForm({
+  options,
+  onDone,
+}: {
+  options: TrainingQuickAddOptions;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+  const [workoutId, setWorkoutId] = React.useState(options.workouts[0]?.id ?? "");
+
+  // Já existe treino em andamento: a saída honesta é continuar, não abrir outro.
+  if (options.runningSessionId) {
+    return (
+      <div className="space-y-3">
+        <p className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+          Você já tem um treino em andamento. Dá para continuar de onde parou — o que já foi
+          registrado está salvo.
+        </p>
+        <Button
+          className="w-full"
+          onClick={() => {
+            router.push("/treinos/sessao");
+            onDone();
+          }}
+        >
+          Continuar treino
+        </Button>
+      </div>
+    );
+  }
+
+  if (options.workouts.length === 0) {
+    return <NoData>Monte um treino em Treinos → Treinos para começar por aqui.</NoData>;
+  }
+
+  const selected = options.workouts.find((w) => w.id === workoutId);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!workoutId) {
+      toast.error("Selecione o treino.");
+      return;
+    }
+    start(async () => {
+      const res = await quickStartTraining({
+        workout_id: workoutId,
+        scheduled_workout_id: selected?.scheduledId ?? null,
+      });
+      if (res.ok) {
+        toast.success("Treino iniciado.");
+        router.push("/treinos/sessao");
+        router.refresh();
+        onDone();
+      } else {
+        toast.error(res.error ?? "Não foi possível iniciar o treino.");
+      }
+    });
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3">
+      <Field label="Treino">
+        <Select value={workoutId} onValueChange={setWorkoutId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
+          <SelectContent>
+            {options.workouts.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {w.name}
+                {w.scheduledId ? " · planejado para hoje" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      {selected?.plannedTime && (
+        <p className="text-[0.7rem] leading-snug text-muted-foreground">
+          Planejado para hoje às {selected.plannedTime}.
+        </p>
+      )}
+      <p className="text-[0.7rem] leading-snug text-muted-foreground">
+        A sessão abre com os valores do treino e a revisão continua disponível na tela do
+        treino. Nada é sugerido como carga máxima.
+      </p>
+      <Button type="submit" className="w-full" disabled={pending}>
+        {pending ? "Iniciando…" : "Iniciar treino"}
+      </Button>
+    </form>
+  );
 }
 
 /* ═══════════════════ Fase 16-F — Dieta e Alimentação ═══════════════════ */
@@ -834,7 +966,13 @@ function MeasurementForm({
   const [date, setDate] = React.useState(today());
 
   if (options.measurementTypes.length === 0) {
-    return <NoData>Abra Dieta → Medidas uma vez para criar os tipos de medida.</NoData>;
+    // As medidas são o módulo central `body_*` (16-E): abrir qualquer uma das duas telas cria
+    // os tipos padrão, e o registro aparece nos dois módulos.
+    return (
+      <NoData>
+        Abra Dieta → Medidas ou Treinos → Evolução uma vez para criar os tipos de medida.
+      </NoData>
+    );
   }
 
   const selected = options.measurementTypes.find((t) => t.id === typeId);

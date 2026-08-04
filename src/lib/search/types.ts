@@ -24,6 +24,13 @@ export const SEARCH_TYPES = [
   "nutricao_modelo",
   "nutricao_plano",
   "nutricao_lista",
+  // Fase 17-F — módulo Treinos. As 6 entidades que o usuário procura pelo nome.
+  "treino_exercicio",
+  "treino_treino",
+  "treino_programa",
+  "treino_sessao",
+  "treino_meta",
+  "treino_recorde",
   "notificacao",
 ] as const;
 export type SearchType = (typeof SEARCH_TYPES)[number];
@@ -48,6 +55,12 @@ export const SEARCH_TYPE_LABELS: Record<SearchType, string> = {
   nutricao_modelo: "Dieta · Refeições-modelo",
   nutricao_plano: "Dieta · Modelos de semana",
   nutricao_lista: "Dieta · Listas de compras",
+  treino_exercicio: "Treinos · Exercícios",
+  treino_treino: "Treinos · Treinos",
+  treino_programa: "Treinos · Programas",
+  treino_sessao: "Treinos · Sessões",
+  treino_meta: "Treinos · Metas",
+  treino_recorde: "Treinos · Recordes",
   notificacao: "Notificações",
 };
 

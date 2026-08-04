@@ -33,6 +33,7 @@ export async function getGoogleStatus(
     email: row?.google_email ?? null,
     lastSyncedAt: row?.last_synced_at ?? null,
     todoSyncEnabled: row?.todo_sync_enabled ?? false,
+    trainingSyncEnabled: row?.training_sync_enabled ?? false,
   };
 }
 

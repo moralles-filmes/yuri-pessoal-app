@@ -48,6 +48,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DeepLinkHighlight } from "@/components/shared/deep-link-highlight";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { SortableList } from "@/components/shared/sortable-list";
@@ -100,6 +101,8 @@ export function ProgramsClient({
   const statusFilter = (searchParams.get("situacao") as ProgramStatus | null) ?? null;
   const goalFilter = (searchParams.get("objetivo") as TrainingGoal | null) ?? null;
   const showArchived = searchParams.get("arquivados") === "1";
+  // 17-F — `?programa=<id>` vem da busca global e da notificação de programa perto do fim.
+  const highlightId = searchParams.get("programa");
 
   const visible = React.useMemo(() => {
     const terms = normalizeText(search).split(/\s+/).filter(Boolean);
@@ -307,6 +310,10 @@ export function ProgramsClient({
         <ul className="space-y-3">
           {visible.map((program) => (
             <li key={program.id}>
+              <DeepLinkHighlight
+                id={`programa-${program.id}`}
+                active={program.id === highlightId}
+              >
               <ProgramCard
                 program={program}
                 workouts={activeWorkouts}
@@ -325,6 +332,7 @@ export function ProgramsClient({
                 onDelete={() => openDelete(program)}
                 onChanged={() => router.refresh()}
               />
+              </DeepLinkHighlight>
             </li>
           ))}
         </ul>

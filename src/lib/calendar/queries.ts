@@ -71,6 +71,7 @@ export async function getGoogleConnectionStatus(): Promise<{
         email: null,
         lastSyncedAt: null,
         todoSyncEnabled: false,
+        trainingSyncEnabled: false,
       },
       configured: isGoogleConfigured,
     };

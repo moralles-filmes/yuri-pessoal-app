@@ -15,6 +15,7 @@ import { TodoCard } from "@/components/dashboard/general/todo-card";
 import { HabitsCard } from "@/components/dashboard/general/habits-card";
 import { StudiesCard } from "@/components/dashboard/general/studies-card";
 import { NutritionCard } from "@/components/dashboard/general/nutrition-card";
+import { TrainingCard } from "@/components/dashboard/general/training-card";
 import { NotificationsCard } from "@/components/dashboard/general/notifications-card";
 import { timeInSaoPaulo } from "@/lib/format";
 
@@ -96,6 +97,11 @@ export default async function DashboardPage({
     notificacoes: (
       <Suspense fallback={<CardBodySkeleton lines={3} />}>
         <NotificationsCard />
+      </Suspense>
+    ),
+    treinos: (
+      <Suspense fallback={<CardBodySkeleton lines={5} />}>
+        <TrainingCard todayIso={todayIso} />
       </Suspense>
     ),
   };

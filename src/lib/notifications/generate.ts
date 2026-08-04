@@ -26,6 +26,10 @@ import {
   generateNutritionNotifications,
   type NutritionGenInput,
 } from "./nutrition";
+import {
+  generateTrainingNotifications,
+  type TrainingGenInput,
+} from "./training";
 import { notificationEnabled, type NotificationPrefs } from "@/lib/settings/constants";
 import type { NotificationPriority, NotificationType } from "./constants";
 
@@ -170,6 +174,12 @@ export type GenerateInput = {
    * `selectNewCandidates` e o Cron continuam sendo um caminho só.
    */
   nutrition?: NutritionGenInput | null;
+  /**
+   * Fase 17-F — as 9 famílias do módulo Treinos. Mesmo desenho da Dieta: arquivo próprio por
+   * volume, mas UM caminho só de geração — `dedupe_key`, `selectNewCandidates`, `filterByPrefs`
+   * e o Cron continuam valendo igual para todos os módulos.
+   */
+  training?: TrainingGenInput | null;
   options?: GenerateOptions;
 };
 
@@ -552,6 +562,11 @@ export function generateNotifications(input: GenerateInput): NotificationCandida
   /* ── Dieta e Alimentação (Fase 16-F) ── */
   if (input.nutrition) {
     out.push(...generateNutritionNotifications(input.nutrition));
+  }
+
+  /* ── Treinos (Fase 17-F) ── */
+  if (input.training) {
+    out.push(...generateTrainingNotifications(input.training));
   }
 
   return out;

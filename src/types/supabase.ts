@@ -641,6 +641,7 @@ export type Database = {
           sync_token: string | null
           todo_sync_enabled: boolean
           token_expiry: string | null
+          training_sync_enabled: boolean
           updated_at: string
           user_id: string
         }
@@ -656,6 +657,7 @@ export type Database = {
           sync_token?: string | null
           todo_sync_enabled?: boolean
           token_expiry?: string | null
+          training_sync_enabled?: boolean
           updated_at?: string
           user_id: string
         }
@@ -671,6 +673,7 @@ export type Database = {
           sync_token?: string | null
           todo_sync_enabled?: boolean
           token_expiry?: string | null
+          training_sync_enabled?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -5056,6 +5059,66 @@ export type Database = {
           },
         ]
       }
+      training_calendar_sync: {
+        Row: {
+          created_at: string
+          external_calendar_id: string | null
+          external_event_id: string | null
+          id: string
+          last_error: string | null
+          last_synced_at: string | null
+          local_event_id: string | null
+          provider: string
+          scheduled_workout_id: string
+          sync_status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          external_calendar_id?: string | null
+          external_event_id?: string | null
+          id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          local_event_id?: string | null
+          provider?: string
+          scheduled_workout_id: string
+          sync_status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          external_calendar_id?: string | null
+          external_event_id?: string | null
+          id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          local_event_id?: string | null
+          provider?: string
+          scheduled_workout_id?: string
+          sync_status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_calendar_sync_local_event_id_fkey"
+            columns: ["local_event_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_calendar_sync_scheduled_workout_id_fkey"
+            columns: ["scheduled_workout_id"]
+            isOneToOne: false
+            referencedRelation: "training_scheduled_workouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       training_equipment: {
         Row: {
           archived_at: string | null
@@ -5754,6 +5817,7 @@ export type Database = {
           default_increment_kg: number
           default_rest_seconds: number
           difficulty_scale: string
+          habit_id: string | null
           id: string
           keep_screen_awake: boolean
           one_rm_formula: string
@@ -5774,6 +5838,7 @@ export type Database = {
           default_increment_kg?: number
           default_rest_seconds?: number
           difficulty_scale?: string
+          habit_id?: string | null
           id?: string
           keep_screen_awake?: boolean
           one_rm_formula?: string
@@ -5794,6 +5859,7 @@ export type Database = {
           default_increment_kg?: number
           default_rest_seconds?: number
           difficulty_scale?: string
+          habit_id?: string | null
           id?: string
           keep_screen_awake?: boolean
           one_rm_formula?: string
@@ -5807,7 +5873,15 @@ export type Database = {
           weekly_workout_goal?: number | null
           weight_unit?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "training_preferences_habit_id_fkey"
+            columns: ["habit_id"]
+            isOneToOne: false
+            referencedRelation: "habits"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       training_program_workouts: {
         Row: {

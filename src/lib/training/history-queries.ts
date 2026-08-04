@@ -78,7 +78,21 @@ export type HistoryRange = {
   to?: string | null;
   days?: number;
   limit?: number;
+  /**
+   * Fase 17-F — cliente alternativo. O Cron da Vercel roda com a **service role**, que não tem
+   * sessão de usuário. Quando este campo vem preenchido, `userId` é OBRIGATÓRIO: a service role
+   * IGNORA a RLS, então cada consulta passa a filtrar `user_id` explicitamente.
+   *
+   * Acrescentado em vez de duplicar a leitura no Cron: um segundo caminho para montar o
+   * histórico discordaria deste no primeiro campo novo — e o número da notificação deixaria de
+   * bater com o da tela.
+   */
+  client?: HistoryClient;
+  userId?: string;
 };
+
+/** O mesmo shape do cliente de servidor (aceita o de sessão e o de service role). */
+type HistoryClient = Awaited<ReturnType<typeof createClient>>;
 
 /**
  * As sessões do período, com exercícios e séries — a "uma leitura ampla" do módulo.
@@ -88,17 +102,22 @@ export type HistoryRange = {
  * `history.ts`.
  */
 export async function getSessionHistory(range: HistoryRange = {}): Promise<HistoryItem[]> {
-  const supabase = await createClient();
+  const supabase = range.client ?? (await createClient());
+  // Sem sessão (service role), o escopo do usuário deixa de vir da RLS e passa a ser nosso.
+  const owner = range.client ? range.userId : undefined;
+  if (range.client && !owner) return [];
 
   const to = range.to ?? hojeISO();
   const from = range.from ?? addDaysIso(to, -(range.days ?? 365));
 
-  const { data: sessions } = await supabase
+  const sessionQuery = supabase
     .from("training_sessions")
     .select(HISTORY_SESSION_SELECT)
     .in("status", ["concluida", "abandonada"])
     .gte("session_date", from)
-    .lte("session_date", to)
+    .lte("session_date", to);
+
+  const { data: sessions } = await (owner ? sessionQuery.eq("user_id", owner) : sessionQuery)
     .order("session_date", { ascending: false })
     .order("started_at", { ascending: false })
     .limit(range.limit ?? SESSION_LIMIT);
@@ -109,26 +128,34 @@ export async function getSessionHistory(range: HistoryRange = {}): Promise<Histo
   const sessionIds = rows.map((row) => row.id);
   const locationIds = [...new Set(rows.map((row) => row.location_id).filter(Boolean))] as string[];
 
+  const scoped = <T extends { eq: (column: string, value: string) => T }>(query: T): T =>
+    owner ? query.eq("user_id", owner) : query;
+
   const [exercisesRes, setsRes, recordsRes, locationsRes] = await Promise.all([
-    supabase
-      .from("training_session_exercises")
-      .select(HISTORY_EXERCISE_SELECT)
-      .in("session_id", sessionIds)
+    scoped(
+      supabase
+        .from("training_session_exercises")
+        .select(HISTORY_EXERCISE_SELECT)
+        .in("session_id", sessionIds),
+    )
       .order("executed_position", { ascending: true })
       .limit(CHILD_LIMIT),
-    supabase
-      .from("training_session_sets")
-      .select(HISTORY_SET_SELECT)
-      .in("session_id", sessionIds)
+    scoped(
+      supabase
+        .from("training_session_sets")
+        .select(HISTORY_SET_SELECT)
+        .in("session_id", sessionIds),
+    )
       .order("set_number", { ascending: true })
       .limit(CHILD_LIMIT),
-    supabase
-      .from("training_personal_records")
-      .select("session_id")
-      .in("session_id", sessionIds)
-      .limit(CHILD_LIMIT),
+    scoped(
+      supabase
+        .from("training_personal_records")
+        .select("session_id")
+        .in("session_id", sessionIds),
+    ).limit(CHILD_LIMIT),
     locationIds.length > 0
-      ? supabase.from("training_locations").select("id,name").in("id", locationIds)
+      ? scoped(supabase.from("training_locations").select("id,name").in("id", locationIds))
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
   ]);
 
