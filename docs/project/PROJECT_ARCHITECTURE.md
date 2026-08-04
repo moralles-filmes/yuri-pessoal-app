@@ -219,7 +219,7 @@ convivem com as antigas. **Não remover `/tarefas` sem antes migrar aqueles cinc
 
 ---
 
-## Módulo Dieta e Alimentação (Fase 16 — Subfases A, B, C e D concluídas)
+## Módulo Dieta e Alimentação (Fase 16 — Subfases A a E concluídas)
 
 Módulo central em `/nutricao`, com **navegação interna própria** (12 submódulos) no mesmo
 padrão do TO-DO. Segue o fluxo do resto do sistema: Server Component lê → Server Action muta
@@ -364,6 +364,53 @@ período, `pantry_applied_at`), `nutrition_shopping_list_items` (`origins` jsonb
 > `nutrition_goal_items` (índice com `coalesce`). No PostgREST, `.eq(coluna, null)` não casa
 > com NULL — use `.is(coluna, null)`.
 
+### Schema — 16-E: o MÓDULO CENTRAL `body_*` (4 tabelas)
+
+> ⛔ **Estas tabelas NÃO são de Dieta.** Peso, percentual de gordura e circunferências
+> interessam à Fase 16 e à Fase 17 ao mesmo tempo, e duas tabelas seriam dois gráficos
+> discordando sobre quanto o usuário pesa. Por isso o prefixo é `body_*`, o código vive em
+> `src/lib/body/` e **as duas frentes consomem o mesmo lugar**. A 16-E **criou**; a 17-E
+> **consome**. `nutrition_profiles.weight_kg` (16-A) é outra coisa: o peso do PERFIL, insumo
+> do estimador de gasto energético.
+
+`body_measurement_types` (16 tipos semeados na 1ª leitura por `ensureMeasurementTypes()`;
+unique **total** `(user_id, slug)`, então aqui `ON CONFLICT` é seguro), `body_measurements`
+(data pura + `time`, **unidade congelada na gravação**, `condition`, `source`; `type_id` é
+`on delete restrict`), `body_measurement_goals` (`direction` escolhida pelo usuário,
+`start_value` nulo = "use a primeira medida") e `body_progress_photos` (só o metadado).
+
+**As fotos de evolução — o dado mais sensível do sistema.** O binário vive no bucket
+**privado** `attachments` (Fase 14), em `{user_id}/body_progress_photo/{id}/{aleatório}`, com
+metadado na tabela genérica `attachments` — o mesmo mecanismo da foto de receita, sem um
+segundo caminho de upload. Cinco travas:
+
+1. o binário **passa pelo servidor** (Server Action com `FormData`), para MIME e tamanho serem
+   validados sobre o arquivo real — o `accept` do input é conveniência, não segurança;
+2. **nome aleatório** (`crypto.randomUUID`); o nome do cliente é descartado;
+3. pasta **sempre** `{auth.getUser().id}/…`, nunca vinda do formulário;
+4. falha ao gravar o metadado **remove o arquivo**;
+5. **FK composta `(attachment_id, user_id) → attachments(id, user_id)`**, que impede
+   reivindicar anexo alheio no banco em vez de depender do comportamento de um JOIN.
+
+Leitura **apenas** por URL assinada de **5 minutos**, gerada no servidor a cada acesso;
+`storage_path` não sai do servidor. Nunca URL pública, nunca link compartilhável.
+
+> ⚠️ **A FK composta impede o embed do PostgREST.** `getProgressPhotos` faz **duas consultas**
+> e junta em memória em vez de `select("...,attachments(...)")`: um embed sobre FK composta
+> dependeria de inferência do PostgREST e quebraria **só em runtime** — a mesma família da
+> armadilha 42P10.
+
+### Relatórios e visão de mês (16-E)
+
+`reports.ts` agrega **a partir do SNAPSHOT** (entra por `dayTotals`) e resolve a meta com
+`goalPeriodForDate` **dia a dia**: editar um alimento ou a meta hoje não mexe no relatório do
+mês passado. `diary-month.ts` entrega o calendário do diário reusando `monthGrid` +
+`buildDailyReports`.
+
+**Buraco não é zero.** Série, calendário e relatório devolvem `null` no dia sem registro; o
+gráfico usa `connectNulls={false}` e a UI escreve "sem registro". Um dia **com meta e sem
+registro** não entra na aderência média — "esqueci de anotar" não é "falhei na meta".
+
 ### Mapa de arquivos
 | Camada | Caminho |
 | --- | --- |
@@ -381,13 +428,28 @@ período, `pantry_applied_at`), `nutrition_shopping_list_items` (`origins` jsonb
 | **Refeições-modelo e duplicação (puro)** | `src/lib/nutrition/meal-template.ts` + `meal-template.test.ts` |
 | **Substituições: diferença, tolerância, impacto (puro)** | `src/lib/nutrition/substitution.ts` + `substitution.test.ts` |
 | **Compras: consolidação, despensa, recorrência (puro)** | `src/lib/nutrition/shopping.ts` + `shopping.test.ts` |
+| **Relatórios por período (puro)** | `src/lib/nutrition/reports.ts` + `reports.test.ts` |
+| **Visão de mês do diário (puro)** | `src/lib/nutrition/diary-month.ts` + `diary-month.test.ts` |
+| **Linhas de CSV (puro)** | `src/lib/nutrition/csv-export.ts` |
 | Snapshot → colunas do diário | `src/lib/nutrition/entry-columns.ts` |
-| Leitura (server-only) | `src/lib/nutrition/queries.ts` · `diary-queries.ts` · `recipe-queries.ts` · `shopping-queries.ts` |
+| Leitura (server-only) | `src/lib/nutrition/queries.ts` · `diary-queries.ts` · `recipe-queries.ts` · `shopping-queries.ts` · `report-queries.ts` |
 | Validação Zod | `src/lib/validators/nutrition.ts` · `nutrition-diary.ts` · `nutrition-recipes.ts` · `nutrition-shopping.ts` |
 | Server Actions | `src/lib/actions/nutrition-{foods,diary,goals,plans,recipes,meal-templates,substitutions,shopping}.ts` |
 | Rotas | `src/app/(app)/nutricao/` |
 | Componentes | `src/components/nutrition/` |
 | Pipeline da base | `scripts/nutrition/` · dados em `data/nutrition/taco-4/` |
+
+**Módulo CENTRAL de medidas corporais (16-E) — consumido por Dieta E Treinos:**
+
+| Camada | Caminho |
+| --- | --- |
+| Vocabulário, seed dos 16 tipos, avisos | `src/lib/body/constants.ts` |
+| Tipos de domínio | `src/lib/body/types.ts` |
+| **Diferença, série, média móvel, meta (puro)** | `src/lib/body/measurements.ts` + `measurements.test.ts` |
+| Leitura (server-only), inclusive `getLatestWeight()` | `src/lib/body/queries.ts` |
+| Validação Zod | `src/lib/validators/body.ts` |
+| Server Actions (inclui o upload de foto) | `src/lib/actions/body-measurements.ts` |
+| Componentes (gráfico + fotos) | `src/components/body/` |
 
 **Todo total do módulo sai de `calc.ts`.** As subfases E–F devem reusar, nunca reimplementar
 a conta — é o que garante que diário, receita e relatório concordem entre si. Na 16-C isso

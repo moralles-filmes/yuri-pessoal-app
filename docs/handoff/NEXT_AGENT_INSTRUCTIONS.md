@@ -5,35 +5,67 @@
 As 14 fases do roadmap original e a Fase 15 (TO-DO) estão concluídas. Em **2026-08-03** o
 usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**.
 
-**As Subfases 16-A, 16-B, 16-C e 16-D estão concluídas e aplicadas no banco.** Crie um branch novo.
+**As Subfases 16-A a 16-E estão concluídas e aplicadas no banco.** Crie um branch novo.
 
 > ⚠️ **Há outra frente em paralelo.** Em 2026-08-03 também foi aberta a **Fase 17 — Módulo
 > Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a **17-A, a 17-B e
 > a 17-C concluídas**. As duas fases convivem no mesmo repositório e no mesmo banco. Antes de mexer em
 > `docs/project/PROJECT_ROADMAP.md`, `CURRENT_STATUS.md` ou `src/types/supabase.ts`, **leia o
 > arquivo primeiro e edite de forma pontual** — sobrescrever levaria embora o trabalho da
-> outra frente. Ponto de contato entre elas: **medidas corporais são `body_*`**, um módulo
-> central compartilhado; quem chegar primeiro (16-E ou 17-E) cria, o outro consome. **Nunca
-> existem duas tabelas de peso corporal.**
+> outra frente.
+>
+> ✅ **O PONTO DE CONTATO ENTRE AS DUAS FRENTES ESTÁ RESOLVIDO (2026-08-04).**
+> A **16-E CRIOU** o módulo central `body_*` (4 tabelas + código em `src/lib/body/`).
+> A **17-E CONSOME** — ver a seção dedicada mais abaixo. **Nunca duas tabelas de peso corporal.**
 
 ## ▶️ Duas tarefas possíveis — confirme com o usuário qual frente ele quer
 
 | Frente | Próxima subfase | Arquivo |
 | --- | --- | --- |
-| **Dieta e Alimentação** | **16-E** — Medidas, fotos de evolução e relatórios | `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` |
+| **Dieta e Alimentação** | **16-F** — Integrações, notificações e polimento (**fecha a Fase 16**) | `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` |
 | **Treinos** | **17-D** — Histórico, volume, recordes e progressão | `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` |
 
-⚠️ **As duas frentes SE ENCONTRAM AGORA.** A 16-E é a Subfase E da Dieta: é nela que as
-**medidas corporais compartilhadas (`body_*`)** entram. Quem chegar primeiro (16-E ou 17-E)
-**cria** as tabelas; o outro **consome**. **Nunca duas tabelas de peso corporal.** Faça **uma**
-subfase por vez.
+Faça **uma** subfase por vez.
 
 ---
 
-## ▶️ Frente Dieta: Subfase 16-E — Medidas, fotos de evolução e relatórios
+## ⛔ PARA A 17-E: as medidas corporais JÁ EXISTEM. NÃO CRIE NADA.
+
+A 16-E chegou primeiro e criou as **4 tabelas centrais** — `body_measurement_types`,
+`body_measurements`, `body_measurement_goals`, `body_progress_photos` — todas com RLS + FORCE
+RLS, índice em `user_id` e trigger de `updated_at`.
+
+**A 17-E deve CONSUMIR, não recriar.** O que já está pronto para você:
+
+| Já existe | Onde |
+| --- | --- |
+| Leitura de tipos, medições, metas e fotos | `src/lib/body/queries.ts` |
+| **`getLatestWeight(upTo?)`** — o peso mais recente até uma data | `src/lib/body/queries.ts` |
+| Gravação (medição, lote, meta, foto) com Zod e `ActionResult` | `src/lib/actions/body-measurements.ts` |
+| Diferença, percentual, comparação entre datas, média móvel, progresso de meta | `src/lib/body/measurements.ts` (puro, 69 testes) |
+| Gráfico + tabela textual equivalente | `src/components/body/measurement-chart.tsx` |
+| Fotos privadas com upload, comparação e URL assinada | `src/components/body/progress-photos.tsx` |
+| Vocabulário, seed dos 16 tipos, avisos de texto | `src/lib/body/constants.ts` |
+
+**`getLatestWeight` existe especificamente para você:** a preparação da sessão (17-C) hoje pede
+o peso digitado na hora; com ele, passa a pré-preencher do histórico. Ele devolve `null` quando
+não há registro — **sem peso corporal, a carga efetiva é indisponível, NUNCA zero** (invariante
+3 do módulo Treinos).
+
+O `revalidatePath("/treinos")` já está em `src/lib/actions/body-measurements.ts`, aguardando as
+telas de treino que vão consumir esses dados.
+
+---
+
+---
+
+## ▶️ Frente Dieta: Subfase 16-F — Integrações, notificações e polimento
 
 **Arquivo da fase (leia inteiro antes de codar):**
-`docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
+`docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md`
+
+É a subfase que **FECHA a Fase 16** — ela precisa validar os **40 critérios de aceite gerais**
+listados no próprio arquivo, não só os seus.
 
 **Leitura obrigatória, nesta ordem:**
 1. `docs/project/PROJECT_BRIEFING.md` (Módulo 17 — Dieta e Alimentação)
@@ -42,44 +74,45 @@ subfase por vez.
 4. `docs/project/PROJECT_ROADMAP.md` (Fase 16, tabela das subfases)
 5. `docs/project/CURRENT_STATUS.md`
 6. `docs/handoff/LAST_PHASE_SUMMARY.md`
-7. `docs/phases/PHASE_16_A_…` até `PHASE_16_D_NUTRITION_SHOPPING_LIST.md` (o que já existe)
-8. `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` (o que você vai fazer)
+7. `docs/phases/PHASE_16_A_…` até `PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
+8. `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` (o que você vai fazer)
 
 **Código que você precisa entender antes de escrever qualquer linha:**
 `src/lib/nutrition/calc.ts`, `snapshot.ts`, `diary.ts`, `goals.ts`, `calendar.ts`,
-**`shopping.ts`**, `constants.ts`, `types.ts`, `queries.ts`, `diary-queries.ts`,
-`recipe-queries.ts`, `shopping-queries.ts` e as actions
-`nutrition-{foods,diary,goals,plans,recipes,meal-templates,substitutions,shopping}.ts`.
-Para as fotos: `src/lib/actions/attachments.ts` e o bucket privado `attachments` (Fase 14).
+`shopping.ts`, **`reports.ts`**, **`diary-month.ts`**, **`csv-export.ts`**, `constants.ts`,
+`types.ts`, `queries.ts`, `diary-queries.ts`, `recipe-queries.ts`, `shopping-queries.ts`,
+**`report-queries.ts`** e as actions `nutrition-*.ts`. Para medidas e fotos:
+**`src/lib/body/*`** e `src/lib/actions/body-measurements.ts`.
+Para as integrações: `src/lib/notifications/*` (`dedupe_key` + Cron), `src/lib/search/queries.ts`,
+`src/lib/dashboard/queries.ts` e `src/components/quick-add/*`.
 
-### ⛔ Os dois pontos mais delicados da 16-E
+### 📋 O que a 16-F precisa fechar (pendências acumuladas de A a E)
 
-**1. AS FOTOS DE EVOLUÇÃO SÃO O DADO MAIS SENSÍVEL DO MÓDULO INTEIRO.**
-Bucket **privado**, **URL assinada de vida curta**, policy por pasta `{user_id}/…`, validação
-de tipo e de tamanho no servidor. **Nunca URL pública**, nunca link compartilhável, nunca nome
-de arquivo previsível. Reuse a tabela `attachments` + o bucket privado `attachments` (Fase 14),
-que a foto de receita (16-C) já usa — não crie um segundo mecanismo de upload.
+| Item | Situação hoje |
+| --- | --- |
+| **Leitura de código de barras pela câmera** | Campo, busca e cadastro manual já existem (16-A) |
+| **Upload da foto de RECEITA pela interface** | A tabela `attachments` e o bucket já são LIDOS pela receita; falta o gatilho de envio. **A 16-E já resolveu esse fluxo para as fotos de evolução — copie o padrão de `uploadProgressPhoto`** |
+| **Arrastar ingrediente** (`reorderRecipeIngredients`) | A action existe e é testada pelo tipo; nenhuma tela a chama |
+| **Busca global e lançamento rápido** de receita/refeição-modelo | Nada ligado ainda |
+| **Cards no dashboard geral** (consumo do dia, evolução recente) | Nada ligado ainda |
+| **Notificação de item da despensa vencendo** | A data já é gravada e exibida (16-D) |
+| **Gerenciar corredores de mercado pela interface** | `saveMarketCategory`, `deleteMarketCategory` e `reorderMarketCategories` existem; nenhuma tela os chama |
+| **Escolher a quantidade de cada receita** ao gerar a lista por "receitas" | Hoje entra 1 porção e o usuário ajusta no item |
+| **Gerenciar tipos de medida pela interface** (16-E) | `saveMeasurementType`, `reorderMeasurementTypes` e `deleteMeasurementType` existem; a semente dos 16 tipos cobre o uso normal |
+| **Notificação de medição pendente** e **cards de evolução** (16-E) | Nada ligado ainda |
+| **XLSX nos relatórios** (16-E) | O pacote `xlsx` já está no projeto; a 16-E entregou CSV, que é o padrão |
 
-**2. MEDIDAS CORPORAIS SÃO `body_*`, MÓDULO COMPARTILHADO COM A FASE 17.**
-Não crie `nutrition_body_*`. Quem chegar primeiro (16-E ou 17-E) **cria** as tabelas `body_*`;
-o outro **consome**. **Nunca existem duas tabelas de peso corporal** — antes de criar, confira
-no banco se a outra frente já criou. `nutrition_profiles.weight_kg` (16-A) é o peso do PERFIL,
-insumo do estimador de gasto energético: não é histórico de medida e não substitui `body_*`.
+### 📌 O que a 16-E deixou pronto para você
 
-### 📌 O que a 16-D deixou pronto para você
-
-- `src/lib/nutrition/shopping.ts` — `summarizeShoppingList` já soma preços **em centavos** e
-  conta quantos itens estão **sem preço**. O relatório de gasto com mercado deve REUSAR isso,
-  não recontar: ausência de preço não é zero.
-- `nutrition_shopping_list_items.actual_price_cents` — o preço realmente pago, item a item. É a
-  matéria-prima do "gasto com mercado × financeiro". Virar lançamento financeiro é **decisão
-  explícita do usuário**, nunca automático.
-- `nutrition_market_categories` — corredores por usuário, já semeados na primeira leitura.
-- Pendências que caem na 16-E: relatório de micronutrientes por período, "substituições mais
-  realizadas", exportação do catálogo em CSV e a **visão de mês do diário** (`?visao=mes` hoje
-  cai na semana).
-
----
+- **`src/lib/nutrition/reports.ts`** — toda agregação por período já existe e é testada
+  (54 testes): `buildDailyReports`, `summarizePeriod`, `nutrientReport`, `topFoods`,
+  `substitutionRanking`, `marketSpendReport`, `diaryFrequency`, `adherenceRanking`. Os cards do
+  dashboard geral devem **consumir daqui**, não recalcular.
+- **`src/lib/nutrition/csv-export.ts`** — linhas prontas para CSV, reusando `toCsv`/`downloadCsv`
+  (Fase 14). **Célula vazia ≠ zero**, e a citação da TACO viaja com o arquivo.
+- **`src/lib/body/*`** — o módulo central de medidas, com upload de foto privada resolvido.
+- **`uploadProgressPhoto`** (`src/lib/actions/body-measurements.ts`) — o padrão de upload com
+  validação real no servidor. **A foto de receita deve seguir exatamente esse caminho.**
 
 ## ▶️ Frente Treinos: Subfase 17-D — Histórico, volume, recordes e progressão
 
@@ -197,6 +230,27 @@ Se um gráfico de evolução mudar porque o usuário renomeou um exercício ou e
     marcar um item como comprado **não** dá baixa nela.
 18. **A LISTA NÃO TEM LINK PÚBLICO** (16-D) — ela conta o que a pessoa come e quanto gasta.
     Exportar e imprimir sim; publicar, nunca.
+19. **MEDIDAS CORPORAIS SÃO `body_*`, MÓDULO CENTRAL** (16-E). Criadas pela 16-E, consumidas
+    por Dieta **e** Treinos por `src/lib/body/`. **Nunca** `nutrition_measurement_*` nem
+    `training_measurement_*`, e nunca duas tabelas de peso corporal.
+    `nutrition_profiles.weight_kg` (16-A) é outra coisa: o peso do PERFIL, insumo do estimador.
+20. **DIA SEM REGISTRO NÃO É ZERO** (16-E). É a regra 1 do módulo aplicada ao TEMPO: série,
+    calendário e relatório devolvem `null`, o gráfico **interrompe** a linha
+    (`connectNulls={false}`) e a UI escreve "sem registro". Um dia com meta e **sem registro**
+    não entra na aderência média — "esqueci de anotar" não é "falhei na meta".
+21. **MÉDIA MÓVEL SÓ COM A JANELA CHEIA** (16-E). Sem dados suficientes a UI **omite** a linha
+    e explica, em vez de suavizar dois pontos e chamar de tendência.
+22. **AS FOTOS DE EVOLUÇÃO SÃO O DADO MAIS SENSÍVEL DO SISTEMA** (16-E). Bucket privado, nome
+    aleatório, pasta `{user_id}/…`, **URL assinada de 5 min gerada a cada leitura**, tipo e
+    tamanho validados **no servidor** sobre o arquivo real, e FK composta
+    `(attachment_id, user_id)` impedindo reivindicar anexo alheio. `storage_path` **não sai do
+    servidor**. Nunca URL pública, nunca link compartilhável.
+23. **SEM PRESCRIÇÃO TAMBÉM NAS MEDIDAS** (16-E). Sem "peso ideal", sem IMC classificatório,
+    sem alvo sugerido: a direção da meta é escolha do usuário. Consumo e corpo aparecem lado a
+    lado, **sem afirmar causalidade**.
+24. **RELATÓRIO DE PERÍODO PASSADO SAI DO SNAPSHOT, COM A META DA ÉPOCA** (16-E). `reports.ts`
+    entra por `dayTotals` e resolve `goalPeriodForDate` **dia a dia**. Editar um alimento ou a
+    meta hoje não pode mexer no relatório do mês passado.
 
 ## ⚠️ Armadilha do banco que passou por build, tsc e lint (não repita)
 
@@ -223,26 +277,30 @@ PostgREST não permite repetir — o `upsert` falha **só em runtime** (`42P10`)
 (`coalesce(...)`), como o de escopo de `nutrition_goal_items`. E no PostgREST,
 `.eq(coluna, null)` **não** casa com NULL: use `.is(coluna, null)`.
 
-## 📋 Pendências registradas da 16-A a 16-D (escopo consciente, não bugs)
+## 📋 Pendências registradas da 16-A a 16-E (escopo consciente, não bugs)
 
 | Item | Onde resolve |
 | --- | --- |
 | Medidas caseiras oficiais em massa (a TACO não publica) | Segunda fonte pelo mesmo pipeline; nada foi inventado |
 | Leitura de código de barras pela câmera | 16-F (campo, busca e cadastro manual já existem) |
 | Cards no dashboard geral, busca global, lançamento rápido, notificações | 16-F |
-| Exportação do catálogo em CSV | 16-E |
-| **Visão de mês do diário** (calendário com indicadores) — `?visao=mes` hoje cai na semana | 16-E |
+| ~~Exportação do catálogo em CSV~~ | ✅ **fechada na 16-E** (`csv-export.ts`) |
+| ~~**Visão de mês do diário**~~ | ✅ **fechada na 16-E** (`diary-month.ts`) |
 | ~~Montar os dias de um modelo pela interface~~ | ✅ **fechada na 16-C** |
 | ~~`updatePlannedMealInScope` sem escopo na UI de edição~~ | ✅ **fechada na 16-C** |
-| Relatório de micronutrientes por período (a **meta** de micro já funciona) | 16-E |
-| Relatório de "substituições mais realizadas" (o histórico já é gravado) | 16-E |
+| ~~Relatório de micronutrientes por período~~ | ✅ **fechada na 16-E** (com a coluna "dias incompletos") |
+| ~~Relatório de "substituições mais realizadas"~~ | ✅ **fechada na 16-E** |
 | **Upload** da foto de receita pela interface — a tabela `attachments` e o bucket já são LIDOS pela receita; falta o gatilho de envio | 16-F |
 | `reorderRecipeIngredients` existe e é testada pelo tipo, mas nenhuma tela a chama (arrastar ingrediente) | 16-F |
 | Busca global e lançamento rápido de receita/refeição-modelo | 16-F |
-| Relatório de gasto com mercado × financeiro (`actual_price_cents` já é gravado item a item) | 16-E |
+| ~~Relatório de gasto com mercado × financeiro~~ | ✅ **fechada na 16-E** (reusa `summarizeShoppingList`; virar lançamento continua sendo decisão do usuário) |
 | Notificação de item da despensa vencendo (a data já é gravada e exibida) | 16-F |
 | Gerenciar corredores de mercado pela interface — `saveMarketCategory`, `deleteMarketCategory` e `reorderMarketCategories` existem, mas nenhuma tela os chama (a semente cobre o uso normal) | 16-F |
 | Escolher a quantidade de cada receita ao gerar a lista por "receitas" (hoje entra 1 porção e o usuário ajusta no item) | 16-F |
+| Gerenciar tipos de medida pela interface — `saveMeasurementType`, `reorderMeasurementTypes` e `deleteMeasurementType` existem, mas nenhuma tela os chama (a semente dos 16 tipos cobre o uso normal) | 16-F |
+| Notificação de medição pendente e cards de evolução no dashboard geral | 16-F |
+| XLSX nos relatórios (o pacote `xlsx` já está no projeto; a 16-E entregou CSV, o padrão) | 16-F |
+| `src/lib/nutrition/calendar.ts` é consumido por `src/lib/body/` — se o acoplamento incomodar, **promova** a util central, nunca copie | Quando incomodar |
 
 ## 🔁 Como aplicar migrations neste projeto
 
@@ -288,7 +346,7 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
 
-Os testes existentes devem continuar passando (**1.297** ao fim da 17-C; as duas frentes
+Os testes existentes devem continuar passando (**1.472** ao fim da 16-E; as duas frentes
 acrescentam testes em paralelo, então **rode antes de citar um número**) — e acrescente testes
 para toda lógica pura nova.
 A suíte precisa passar em qualquer fuso — confira com `TZ=UTC npx vitest run`.
@@ -305,6 +363,9 @@ Smoke test: rotas privadas → 307 `/login`; `/api/cron/*` → 401 sem segredo.
   `schedule.ts`, `session-machine.ts`, `session-flow.ts`, `timers.ts`, `previous.ts`,
   `plates.ts`, `session-snapshot.ts`), `src/lib/actions/training-*.ts`,
   `src/components/training/*` (+ `session/`), `src/app/(app)/treinos/*`.
+- **Medidas corporais (CENTRAL, 16-E):** `src/lib/body/*` (`constants.ts`, `types.ts`,
+  `measurements.ts` puro, `queries.ts`), `src/lib/actions/body-measurements.ts`,
+  `src/lib/validators/body.ts`, `src/components/body/*`. **Consumido por Dieta e Treinos.**
 - **TO-DO:** `src/lib/todo/*` — referência de recorrência pura em `Date.UTC`.
 - **Financeiro/relatórios:** `src/lib/finance/*`, `src/lib/reports/*`.
 - **Preferências:** store `settings` (uma linha/usuário) — **estenda com chaves novas**,

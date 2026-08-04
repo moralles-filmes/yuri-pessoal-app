@@ -200,7 +200,7 @@ visual, textos, logotipos, telas ou assets de terceiros é copiado.**
 | 16-B | Metas, diário alimentar e planejamento | `PHASE_16_B_NUTRITION_DIARY_PLANNING.md` | ✅ Concluída |
 | 16-C | Receitas, refeições-modelo e substituições | `PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` | ✅ Concluída |
 | 16-D | Lista de compras e despensa | `PHASE_16_D_NUTRITION_SHOPPING_LIST.md` | ✅ Concluída |
-| 16-E | Medidas corporais, evolução e relatórios | `PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` | ⬜ |
+| 16-E | Medidas corporais, evolução e relatórios | `PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` | ✅ Concluída |
 | 16-F | Integrações, notificações e polimento | `PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` | ⬜ |
 
 **Dependências gerais:** Fases 01 (design system/app shell), 12 (dashboard geral), 13 (busca
@@ -222,6 +222,10 @@ global, lançamento rápido, notificações + Cron), 14 (`attachments`, buckets 
    separada de SELECT e de escrita). Duplicar cria cópia pessoal editável com referência
    à origem.
 6. **Água continua sendo do módulo Hábitos** (Fase 10). Dieta lê e exibe; não duplica.
+7. **As medidas corporais NÃO são de Dieta** (decidido em 2026-08-03, aplicado na 16-E em
+   2026-08-04). Elas nasceram como **módulo central `body_*`**, com código em `src/lib/body/`,
+   porque Treinos precisa exatamente do mesmo dado. **A 16-E CRIOU as 4 tabelas; a 17-E
+   CONSOME.** Nunca existem duas tabelas de peso corporal.
 
 **Critérios de aceite da fase completa:** os 40 itens listados na seção "Critérios de aceite
 gerais" do arquivo da Subfase F.
@@ -270,8 +274,12 @@ navegação interna própria) e 16 (padrão de base global imutável + cópia pe
 5. **Modelo é mutável; execução é imutável.** A sessão (17-C) grava **snapshot** do treino;
    editar o modelo nunca reescreve o passado.
 6. **Medidas corporais são um módulo central compartilhado (`body_*`)**, não tabelas de
-   Treinos nem de Dieta. Quem chegar primeiro (16-E ou 17-E) cria; o outro consome. **Nunca
-   existem duas tabelas de peso corporal.** Registrado na 17-E e anotado na 16-E.
+   Treinos nem de Dieta. **A 16-E chegou primeiro e CRIOU** as 4 tabelas em 2026-08-04
+   (`body_measurement_types`, `body_measurements`, `body_measurement_goals`,
+   `body_progress_photos`), com código em `src/lib/body/`. **A 17-E CONSOME** — lê e escreve
+   por `src/lib/body/queries.ts` e `src/lib/actions/body-measurements.ts`, e **não cria tabela
+   nenhuma**. `getLatestWeight()` já existe para a preparação da sessão pré-preencher o peso.
+   **Nunca existem duas tabelas de peso corporal.**
 7. **Ferramenta de organização e registro.** Sem diagnóstico, sem prescrição, sem garantia de
    resultado, sem sugestão de carga máxima e sem incentivo a treinar com dor.
 
