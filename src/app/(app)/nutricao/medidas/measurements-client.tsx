@@ -909,7 +909,7 @@ function MeasurementDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{editing ? "Editar medição" : "Registrar medição"}</DialogTitle>
           <DialogDescription>
@@ -1057,7 +1057,7 @@ function BatchDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Sessão de medidas</DialogTitle>
           <DialogDescription>
@@ -1195,7 +1195,7 @@ function GoalDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{editing ? "Editar meta" : "Definir meta"}</DialogTitle>
           <DialogDescription>

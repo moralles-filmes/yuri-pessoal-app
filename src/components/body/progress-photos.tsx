@@ -190,7 +190,7 @@ export function ProgressPhotos({
 
       {/* Visualização em tamanho cheio */}
       <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{viewing ? longDateLabel(viewing.takenOn) : ""}</DialogTitle>
             <DialogDescription>
@@ -315,7 +315,7 @@ function UploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Enviar foto de evolução</DialogTitle>
           <DialogDescription>
@@ -461,7 +461,7 @@ function CompareDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Comparar fotos</DialogTitle>
           <DialogDescription>

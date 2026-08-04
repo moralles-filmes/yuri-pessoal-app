@@ -235,7 +235,9 @@ export function ExercisesClient({
       />
 
       {selected.size > 0 && (
-        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-sm">
+        // `top-18` = 4.5rem: o Header do app é `sticky top-0 h-16`, então em `top-2` esta
+        // barra de seleção rolava para trás dele e as ações em massa ficavam inalcançáveis.
+        <div className="sticky top-18 z-10 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-sm">
           <span className="text-sm font-medium">
             {selected.size} {selected.size === 1 ? "selecionado" : "selecionados"}
           </span>

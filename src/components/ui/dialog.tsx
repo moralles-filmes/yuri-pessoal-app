@@ -65,7 +65,17 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          // O limite de largura do celular é `max-sm:` DE PROPÓSITO, e não `max-w-*` puro.
+          // `cn` usa `twMerge`: um `max-w-md` vindo do className do chamador cai no mesmo
+          // grupo de conflito e REMOVIA o limite da base — o diálogo virava 448px numa tela
+          // de 375px e, sendo `fixed` + `-translate-x-1/2`, vazava pelos dois lados sem
+          // scroll que alcançasse o conteúdo cortado. Com o prefixo, o limite fica em outro
+          // grupo do twMerge (sobrevive ao merge) e, no CSS gerado, a regra `max-sm:` sai
+          // depois das utilitárias sem prefixo — então ela vence abaixo de 40rem e não
+          // interfere em nada a partir de `sm`.
+          // Para crescer no desktop, o chamador usa `sm:max-w-*` (que substitui o
+          // `sm:max-w-sm` abaixo); `max-w-*` sem prefixo não tem efeito a partir de `sm`.
+          "fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none max-sm:max-w-[calc(100%-2rem)] sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         onInteractOutside={(event) => {
