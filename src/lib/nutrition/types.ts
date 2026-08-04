@@ -25,6 +25,11 @@ import type {
   PortionUnit,
   PreparationState,
   ProfileSex,
+  ShoppingItemStatus,
+  ShoppingListStatus,
+  ShoppingPriority,
+  ShoppingRecurrence,
+  ShoppingSourceKind,
   SubstitutionLevel,
   SubstitutionOptionKind,
   TemplateItemKind,
@@ -591,6 +596,105 @@ export type SubstitutionGroup = {
   /** Rótulo do item original, já resolvido para exibição. */
   originalLabel: string;
   options: SubstitutionOption[];
+};
+
+/* ═════════════════ Fase 16-D — Lista de compras e despensa ═════════════════ */
+
+/** Corredor de mercado. Dado do usuário, semeado na primeira leitura. */
+export type MarketCategory = {
+  id: string;
+  slug: string | null;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  position: number;
+};
+
+/**
+ * De onde veio uma parcela de um item da lista (regra 2 — rastreabilidade da origem).
+ *
+ * É SNAPSHOT: a refeição planejada pode ser editada ou apagada depois, e a lista que foi ao
+ * mercado precisa continuar explicando de onde saiu cada número.
+ */
+export type ShoppingOrigin = {
+  kind: "planejamento" | "receita" | "manual";
+  /** "Almoço · 05/08" ou o nome da receita. Congelado. */
+  label: string;
+  /** Data pura do dia planejado, quando houver. */
+  date: string | null;
+  recipeId: string | null;
+  plannedMealId: string | null;
+  /** O que ESTA origem pediu, na unidade em que pediu. */
+  quantity: number | null;
+  unit: string;
+};
+
+export type ShoppingListItem = {
+  id: string;
+  listId: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  /** Referências informativas: `on delete set null`. O que sustenta a linha é `label`. */
+  foodId: string | null;
+  recipeId: string | null;
+  label: string;
+  brand: string | null;
+  /** NULA = "a gosto"/sem quantidade definida. NUNCA zero. */
+  quantity: number | null;
+  unit: string;
+  consolidationKey: string | null;
+  /** Ajuste manual: regerar a lista não sobrescreve a quantidade deste item. */
+  quantityOverridden: boolean;
+  origins: ShoppingOrigin[];
+  /** Por que a linha ficou separada de outra do mesmo item (unidades incompatíveis). */
+  separateReason: string | null;
+  isManual: boolean;
+  status: ShoppingItemStatus;
+  priority: ShoppingPriority;
+  /** Centavos, como todo o financeiro. Nulo = não informado, nunca "custou zero". */
+  estimatedPriceCents: number | null;
+  actualPriceCents: number | null;
+  store: string | null;
+  note: string | null;
+  position: number;
+  purchasedAt: string | null;
+};
+
+export type ShoppingList = {
+  id: string;
+  name: string;
+  notes: string | null;
+  status: ShoppingListStatus;
+  sourceKind: ShoppingSourceKind;
+  sourceFrom: string | null;
+  sourceTo: string | null;
+  store: string | null;
+  recurrence: ShoppingRecurrence;
+  recurrenceKey: string | null;
+  /** Quando o desconto da despensa foi aplicado. Nulo = nunca (é opt-in). */
+  pantryAppliedAt: string | null;
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  items: ShoppingListItem[];
+};
+
+/**
+ * Item da despensa. Seis campos e ponto final — não é ERP de estoque.
+ *
+ * `quantity` nula = "tenho, mas não sei quanto" (não desconta); zero = "acabou", fato medido.
+ */
+export type PantryItem = {
+  id: string;
+  foodId: string | null;
+  label: string;
+  quantity: number | null;
+  unit: string;
+  expiresOn: string | null;
+  minQuantity: number | null;
+  note: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
 };
 
 /** Uma troca confirmada. Rótulos e diferença são CONGELADOS na gravação. */

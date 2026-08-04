@@ -5,7 +5,7 @@
 As 14 fases do roadmap original e a Fase 15 (TO-DO) estão concluídas. Em **2026-08-03** o
 usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**.
 
-**As Subfases 16-A, 16-B e 16-C estão concluídas e aplicadas no banco.** Crie um branch novo.
+**As Subfases 16-A, 16-B, 16-C e 16-D estão concluídas e aplicadas no banco.** Crie um branch novo.
 
 > ⚠️ **Há outra frente em paralelo.** Em 2026-08-03 também foi aberta a **Fase 17 — Módulo
 > Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a **17-A e a 17-B
@@ -20,18 +20,20 @@ usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 
 
 | Frente | Próxima subfase | Arquivo |
 | --- | --- | --- |
-| **Dieta e Alimentação** | **16-D** — Lista de compras e despensa | `docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md` |
+| **Dieta e Alimentação** | **16-E** — Medidas, fotos de evolução e relatórios | `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` |
 | **Treinos** | **17-C** — Preparação, sessão ao vivo, cronômetro e recuperação | `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md` |
 
-As duas são independentes até a Subfase E de cada uma, quando se encontram nas **medidas
-corporais compartilhadas (`body_*`)**. Faça **uma** por vez.
+⚠️ **As duas frentes SE ENCONTRAM AGORA.** A 16-E é a Subfase E da Dieta: é nela que as
+**medidas corporais compartilhadas (`body_*`)** entram. Quem chegar primeiro (16-E ou 17-E)
+**cria** as tabelas; o outro **consome**. **Nunca duas tabelas de peso corporal.** Faça **uma**
+subfase por vez.
 
 ---
 
-## ▶️ Frente Dieta: Subfase 16-D — Lista de compras e despensa
+## ▶️ Frente Dieta: Subfase 16-E — Medidas, fotos de evolução e relatórios
 
 **Arquivo da fase (leia inteiro antes de codar):**
-`docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md`
+`docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
 
 **Leitura obrigatória, nesta ordem:**
 1. `docs/project/PROJECT_BRIEFING.md` (Módulo 17 — Dieta e Alimentação)
@@ -40,38 +42,42 @@ corporais compartilhadas (`body_*`)**. Faça **uma** por vez.
 4. `docs/project/PROJECT_ROADMAP.md` (Fase 16, tabela das subfases)
 5. `docs/project/CURRENT_STATUS.md`
 6. `docs/handoff/LAST_PHASE_SUMMARY.md`
-7. `docs/phases/PHASE_16_A_…`, `PHASE_16_B_…` e
-   `PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` (o que já existe)
-8. `docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md` (o que você vai fazer)
+7. `docs/phases/PHASE_16_A_…` até `PHASE_16_D_NUTRITION_SHOPPING_LIST.md` (o que já existe)
+8. `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` (o que você vai fazer)
 
 **Código que você precisa entender antes de escrever qualquer linha:**
-`src/lib/nutrition/units.ts`, `calc.ts`, `snapshot.ts`, **`recipe.ts`**, `meal-template.ts`,
-`substitution.ts`, `diary.ts`, `goals.ts`, `plan-recurrence.ts`, `calendar.ts`, `constants.ts`,
-`types.ts`, `queries.ts`, `diary-queries.ts`, **`recipe-queries.ts`** e as actions
-`nutrition-{foods,diary,goals,plans,recipes,meal-templates,substitutions}.ts`.
+`src/lib/nutrition/calc.ts`, `snapshot.ts`, `diary.ts`, `goals.ts`, `calendar.ts`,
+**`shopping.ts`**, `constants.ts`, `types.ts`, `queries.ts`, `diary-queries.ts`,
+`recipe-queries.ts`, `shopping-queries.ts` e as actions
+`nutrition-{foods,diary,goals,plans,recipes,meal-templates,substitutions,shopping}.ts`.
+Para as fotos: `src/lib/actions/attachments.ts` e o bucket privado `attachments` (Fase 14).
 
-### ⛔ O ponto mais importante da 16-D
+### ⛔ Os dois pontos mais delicados da 16-E
 
-**A consolidação da lista NÃO PODE SOMAR UNIDADES INCOMPATÍVEIS.** É a mesma regra que já
-governa o módulo inteiro, aplicada a compras: 200 g de arroz + 1 xícara de arroz só viram uma
-linha se houver conversão real cadastrada. Sem ela, o item aparece **separado**, com o motivo —
-nunca convertido por estimativa.
+**1. AS FOTOS DE EVOLUÇÃO SÃO O DADO MAIS SENSÍVEL DO MÓDULO INTEIRO.**
+Bucket **privado**, **URL assinada de vida curta**, policy por pasta `{user_id}/…`, validação
+de tipo e de tamanho no servidor. **Nunca URL pública**, nunca link compartilhável, nunca nome
+de arquivo previsível. Reuse a tabela `attachments` + o bucket privado `attachments` (Fase 14),
+que a foto de receita (16-C) já usa — não crie um segundo mecanismo de upload.
 
-- Reuse `convertToBase` e `toBaseUnitValue` (`units.ts`). Massa converte com massa, volume com
-  volume; **g ↔ ml exige densidade**, e densidade presumida é dado inventado.
-- A lista sai do **planejamento** e das **receitas** (16-C): `nutrition_recipe_ingredients` já
-  guarda `grams_equivalent` resolvido, e `grams_equivalent` **nulo** significa "não deu para
-  converter" — trate como item separado, jamais como zero.
-- Item de receita no planejamento tem `item_kind = 'receita'` + `portion_unit`; a quantidade a
-  comprar sai de `recipePortionFactor` × os ingredientes da receita.
+**2. MEDIDAS CORPORAIS SÃO `body_*`, MÓDULO COMPARTILHADO COM A FASE 17.**
+Não crie `nutrition_body_*`. Quem chegar primeiro (16-E ou 17-E) **cria** as tabelas `body_*`;
+o outro **consome**. **Nunca existem duas tabelas de peso corporal** — antes de criar, confira
+no banco se a outra frente já criou. `nutrition_profiles.weight_kg` (16-A) é o peso do PERFIL,
+insumo do estimador de gasto energético: não é histórico de medida e não substitui `body_*`.
 
-### 📌 O que a 16-C deixou pronto para você
+### 📌 O que a 16-D deixou pronto para você
 
-- `recipe.ts` — totais, por porção, por 100 g, `recipePortionFactor`, perda/ganho no preparo.
-- `meal-template.ts` — `templateTotals` funciona tanto para refeição-modelo quanto para item
-  **planejado** (os dois compartilham o formato `CalcTemplateItem`).
-- `recipe-queries.ts` — `getRecipesWithTotals`, `getMealTemplatesWithTotals` e
-  `buildRecipeCalcContext` (carrega alimentos + medidas sem N+1).
+- `src/lib/nutrition/shopping.ts` — `summarizeShoppingList` já soma preços **em centavos** e
+  conta quantos itens estão **sem preço**. O relatório de gasto com mercado deve REUSAR isso,
+  não recontar: ausência de preço não é zero.
+- `nutrition_shopping_list_items.actual_price_cents` — o preço realmente pago, item a item. É a
+  matéria-prima do "gasto com mercado × financeiro". Virar lançamento financeiro é **decisão
+  explícita do usuário**, nunca automático.
+- `nutrition_market_categories` — corredores por usuário, já semeados na primeira leitura.
+- Pendências que caem na 16-E: relatório de micronutrientes por período, "substituições mais
+  realizadas", exportação do catálogo em CSV e a **visão de mês do diário** (`?visao=mes` hoje
+  cai na semana).
 
 ---
 
@@ -180,6 +186,21 @@ sessão ao vivo deve consumir só esse formato.
 12. **ÁGUA NÃO SE DUPLICA** — fonte de verdade é o módulo Hábitos (Fase 10).
 13. **SEM PRESCRIÇÃO.** Estimador é opcional, mostra a fórmula, se identifica como estimativa
     e exige confirmação.
+14. **A LISTA DE COMPRAS NÃO SOMA UNIDADES INCOMPATÍVEIS** (16-D). Mesma regra do módulo,
+    aplicada a compras: 200 g + 1 xícara só viram uma linha com conversão real cadastrada;
+    sem ela, linhas separadas com `separate_reason`. Massa com massa, volume com volume —
+    **g ↔ ml exige densidade**, e "un" é contagem, não massa. Tudo em
+    `src/lib/nutrition/shopping.ts`; não reimplemente a conta em outro lugar.
+15. **O AJUSTE MANUAL DA QUANTIDADE SOBREVIVE À REGERAÇÃO** (16-D). `quantity_overridden` +
+    `planRegeneration`. Item digitado à mão nunca é tocado por regeração, e o que o
+    planejamento não pede mais vira **obsoleto para confirmar**, nunca exclusão silenciosa.
+16. **O DESCONTO DA DESPENSA É OPT-IN E MOSTRADO ANTES** (16-D). Cobertura total **não zera** a
+    quantidade — o item vira `removido` ("não vou comprar") e volta com um toque. Na despensa,
+    `quantity` nula é "não sei quanto" (não desconta) e zero é "acabou": coisas diferentes.
+17. **A DESPENSA NÃO É ERP DE ESTOQUE** (16-D). Seis campos, sem movimentação/entrada/saída, e
+    marcar um item como comprado **não** dá baixa nela.
+18. **A LISTA NÃO TEM LINK PÚBLICO** (16-D) — ela conta o que a pessoa come e quanto gasta.
+    Exportar e imprimir sim; publicar, nunca.
 
 ## ⚠️ Armadilha do banco que passou por build, tsc e lint (não repita)
 
@@ -192,13 +213,21 @@ Os índices únicos que sustentam a idempotência da 16-B são **parciais**:
   where plan_day_id is not null and planned_date is not null;
 ```
 
+A 16-D acrescentou mais dois, pelo mesmo motivo:
+
+```sql
+… on nutrition_shopping_lists (user_id, recurrence_key) where recurrence_key is not null;
+… on nutrition_shopping_list_items (list_id, consolidation_key)
+  where consolidation_key is not null;
+```
+
 O Postgres **não infere índice parcial num `ON CONFLICT`** sem repetir o predicado, e o
 PostgREST não permite repetir — o `upsert` falha **só em runtime** (`42P10`). Use
 *select-then-insert/update* nesses casos. O mesmo vale para índices de **expressão**
 (`coalesce(...)`), como o de escopo de `nutrition_goal_items`. E no PostgREST,
 `.eq(coluna, null)` **não** casa com NULL: use `.is(coluna, null)`.
 
-## 📋 Pendências registradas da 16-A, 16-B e 16-C (escopo consciente, não bugs)
+## 📋 Pendências registradas da 16-A a 16-D (escopo consciente, não bugs)
 
 | Item | Onde resolve |
 | --- | --- |
@@ -214,6 +243,10 @@ PostgREST não permite repetir — o `upsert` falha **só em runtime** (`42P10`)
 | **Upload** da foto de receita pela interface — a tabela `attachments` e o bucket já são LIDOS pela receita; falta o gatilho de envio | 16-F |
 | `reorderRecipeIngredients` existe e é testada pelo tipo, mas nenhuma tela a chama (arrastar ingrediente) | 16-F |
 | Busca global e lançamento rápido de receita/refeição-modelo | 16-F |
+| Relatório de gasto com mercado × financeiro (`actual_price_cents` já é gravado item a item) | 16-E |
+| Notificação de item da despensa vencendo (a data já é gravada e exibida) | 16-F |
+| Gerenciar corredores de mercado pela interface — `saveMarketCategory`, `deleteMarketCategory` e `reorderMarketCategories` existem, mas nenhuma tela os chama (a semente cobre o uso normal) | 16-F |
+| Escolher a quantidade de cada receita ao gerar a lista por "receitas" (hoje entra 1 porção e o usuário ajusta no item) | 16-F |
 
 ## 🔁 Como aplicar migrations neste projeto
 
@@ -259,15 +292,17 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
 
-Os **1.073 testes** devem continuar passando — acrescente testes para toda lógica pura nova.
+Os testes existentes devem continuar passando (**1.132** ao fim da 16-D; as duas frentes
+acrescentam testes em paralelo, então **rode antes de citar um número**) — e acrescente testes
+para toda lógica pura nova.
 A suíte precisa passar em qualquer fuso — confira com `TZ=UTC npx vitest run`.
 Smoke test: rotas privadas → 307 `/login`; `/api/cron/*` → 401 sem segredo.
 
 ## 🗺️ Mapa rápido do que existe (reaproveitar, não reescrever)
 
 - **Dieta:** `src/lib/nutrition/*` (puro + queries; destaque para `snapshot.ts`, `calc.ts`,
-  `goals.ts`, `diary.ts`, `plan-recurrence.ts`, `calendar.ts`),
-  `src/lib/actions/nutrition-{foods,diary,goals,plans}.ts`,
+  `goals.ts`, `diary.ts`, `plan-recurrence.ts`, `calendar.ts`, **`shopping.ts`**),
+  `src/lib/actions/nutrition-{foods,diary,goals,plans,shopping}.ts`,
   `src/components/nutrition/*`, `src/app/(app)/nutricao/*`, `scripts/nutrition/*`,
   `data/nutrition/taco-4/*`.
 - **TO-DO:** `src/lib/todo/*` — referência de recorrência pura em `Date.UTC`.

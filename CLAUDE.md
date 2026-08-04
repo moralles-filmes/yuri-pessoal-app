@@ -14,10 +14,10 @@ As **14 fases do roadmap original** e a **Fase 15 — Módulo TO-DO** estão con
 
 | Fase | Módulo | Situação |
 | --- | --- | --- |
-| **16** | Dieta e Alimentação (`/nutricao`) | **16-A, 16-B e 16-C concluídas**; 16-D é a próxima |
+| **16** | Dieta e Alimentação (`/nutricao`) | **16-A, 16-B, 16-C e 16-D concluídas**; 16-E é a próxima |
 | **17** | Treinos (`/treinos`) | **17-A e 17-B concluídas**; 17-C é a próxima |
 
-Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Fora dessas fases, o projeto segue em modo manutenção/iteração. **89 tabelas** no banco (28 `nutrition_*`, 14 `training_*`).
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Fora dessas fases, o projeto segue em modo manutenção/iteração. **32 tabelas `nutrition_*`**; o total do banco muda a cada subfase das duas frentes — **conte antes de citar um número**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -38,7 +38,7 @@ O TO-DO usa tabelas `todo_*` próprias em vez de evoluir `tasks`/`projects`, por
 
 ## Módulo Dieta e Alimentação (Fase 16, em andamento)
 
-Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 submódulos. A **16-A** entregou schema, base nutricional, núcleo de cálculo e catálogo de alimentos; a **16-B** entregou metas com histórico datado, diário alimentar com snapshot imutável e planejamento com modelos de semana; a **16-C** entregou receitas (com rendimento e peso final informado), refeições-modelo e substituições com comparação explícita. Compras, medidas e integrações vêm nas subfases D–F (`docs/phases/PHASE_16_*`).
+Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 submódulos. A **16-A** entregou schema, base nutricional, núcleo de cálculo e catálogo de alimentos; a **16-B** entregou metas com histórico datado, diário alimentar com snapshot imutável e planejamento com modelos de semana; a **16-C** entregou receitas (com rendimento e peso final informado), refeições-modelo e substituições com comparação explícita; a **16-D** entregou lista de compras (gerada do planejamento, consolidada por família de unidade) e despensa. Medidas, relatórios e integrações vêm nas subfases E–F (`docs/phases/PHASE_16_*`).
 
 **Invariantes do módulo:**
 1. **Ausência de dado NÃO é zero.** `value_state` (`disponivel|traco|nao_disponivel|nao_aplicavel|em_revisao`) distingue "medido zero" de "não medido"; uma CHECK garante no banco. Toda soma propaga `exato|aproximado|parcial` e a UI mostra isso. Nunca `amount ?? 0` fora de `calc.ts`.
@@ -57,6 +57,9 @@ Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 sub
 14. **Receita e refeição-modelo entram no diário pelo MESMO caminho** (16-C): `buildRecipeEntrySnapshot` **chama** `buildDiaryEntrySnapshot`, e `entry_kind` aceita `receita`/`modelo`. Sem peso final, a receita só é registrada em porções — e `grams_equivalent`/`base_quantity`/`base_unit` ficam **nulos**, nunca zero.
 15. **A qualidade agregada viaja com o número** (16-C): `SnapshotNutrient`/`ComputedNutrient` têm `quality` opcional (só em valor somado) e `sumNutrient` o respeita — senão uma receita parcial entraria no dia como exata.
 16. **Substituir exige confirmação e grava histórico** (16-C). A tela mostra original × alternativa, diferença por macro, impacto no dia e o que resta da meta; o servidor **recalcula** antes de gravar. Nenhuma equivalência é afirmada; a ordem das alternativas é a prioridade **do usuário**. Adicionar o mesmo modelo duas vezes **não duplica** o consumo.
+17. **A lista de compras NÃO soma unidades incompatíveis** (16-D). 200 g de arroz + 1 xícara de arroz só viram uma linha com conversão real cadastrada; sem ela, linhas separadas com o motivo em `separate_reason`. Massa com massa, volume com volume — **g ↔ ml exige densidade**; `un` é contagem, não massa. Tudo em `src/lib/nutrition/shopping.ts` (reusa `toBaseUnitValue`); não reimplemente a decisão em outro lugar.
+18. **Origem congelada, ajuste manual preservado, nada some sozinho** (16-D). `origins` (jsonb) guarda de qual refeição/data/receita veio cada parcela; `quantity_overridden` sobrevive à regeração; item digitado à mão nunca é tocado; o que o planejamento não pede mais vira **obsoleto para confirmar**, não exclusão. Ação em massa não alcança registro fora do filtro atual (`selectionInScope`).
+19. **A despensa é opt-in e não é ERP de estoque** (16-D). Seis campos, sem movimentação; marcar comprado não dá baixa. O desconto é mostrado **antes** de aplicar e recalculado no servidor; cobertura total **não zera** a quantidade (o item vira `removido`). `quantity` nula = "não sei quanto" (não desconta); zero = "acabou". **A lista não tem link público** — exportar e imprimir sim.
 
 ## Módulo Treinos (Fase 17, em andamento)
 

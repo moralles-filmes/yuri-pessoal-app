@@ -8,7 +8,7 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A, 16-B e 16-C concluídas**; 16-D é a próxima |
+| **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A, 16-B, 16-C e 16-D concluídas**; 16-E é a próxima |
 | **17** | Treinos (`/treinos`) | A–F | **17-A e 17-B concluídas**; 17-C é a próxima |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
@@ -18,14 +18,14 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 > chegar primeiro (16-E ou 17-E) cria, o outro consome. Nunca duas tabelas de peso corporal.
 
 ## Fases atuais
-- **Fase 16-C — Dieta e Alimentação · Receitas, refeições-modelo e substituições → CONCLUÍDA ✅**
-  Arquivo: `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
+- **Fase 16-D — Dieta e Alimentação · Lista de compras e despensa → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md`
 - **Fase 17-B — Treinos · Programas, treinos-modelo e planejamento semanal → CONCLUÍDA ✅**
   Arquivo: `docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md`
 
 ## Próximas fases
-- **Subfase 16-D — Lista de compras.**
-  Arquivo: `docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md`
+- **Subfase 16-E — Medidas, fotos de evolução e relatórios.**
+  Arquivo: `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
 - **Subfase 17-C — Preparação, sessão ao vivo, cronômetro e recuperação.**
   Arquivo: `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md`
 
@@ -231,6 +231,94 @@ resíduo de teste.
 `npm run test:run` (**889 testes**), `npm run lint`, `npx tsc --noEmit` e `npm run build`
 passam. Nenhuma fase anterior foi tocada — as únicas alterações fora de `training`/`treinos`
 são a linha nova em `src/config/nav.ts` e a nota de decisão na 16-E.
+
+---
+
+## O que foi implementado na Subfase 16-D (lista de compras e despensa)
+
+A 16-B/16-C fizeram o sistema saber o que a pessoa **vai comer**. A 16-D transforma isso no que
+ela **precisa comprar**. É a tela mais **mobile-first** do módulo: usada em pé, no mercado, com
+uma mão. **4 tabelas novas** e **+59 testes puros** (`shopping.test.ts`).
+
+### A regra que a subfase existe para garantir
+
+**A consolidação não soma unidades incompatíveis.** É a mesma disciplina de `calc.ts` ("não
+analisado" não vira zero) aplicada a compras: 200 g de arroz + 1 xícara de arroz só viram **uma
+linha** quando existe conversão real cadastrada (a medida caseira daquele alimento, com o peso).
+Sem ela, viram **duas linhas**, com o motivo escrito na tela. Massa converte com massa, volume
+com volume — **g ↔ ml exigiria densidade**, e densidade presumida é dado inventado. "3 unidades
+de tomate" só vira gramas se alguém tiver dito quanto pesa aquele tomate.
+
+Quem decide o que soma com o quê é `src/lib/nutrition/shopping.ts` (puro): cada parcela cai num
+**balde** (`base:g`, `base:ml`, `un`, `medida:<rótulo>`, `sem_quantidade`) e só soma dentro do
+balde. Quando um mesmo item produz mais de um balde, **todas** as linhas recebem
+`separate_reason` — o usuário nunca vê duas linhas estranhas sem explicação.
+
+### Tabelas
+
+| Tabela | Papel |
+| --- | --- |
+| `nutrition_market_categories` | Corredores do mercado. **Dado do usuário**, semeado na primeira leitura (`ensureMarketCategories`, idempotente pelo unique parcial `(user_id, slug)`) com os 10 do enunciado. Não é taxonomia nutricional: "congelados" não é grupo alimentar. |
+| `nutrition_shopping_lists` | O documento. `recurrence_key` determinística por período; `pantry_applied_at`; total gasto **nunca materializado** (sai da soma dos itens). |
+| `nutrition_shopping_list_items` | O item. `origins` jsonb (procedência congelada), `consolidation_key`, `quantity_overridden`, `separate_reason`, preços em **centavos**. |
+| `nutrition_pantry_items` | A despensa, travada em **6 campos**. Sem movimentação, entrada, saída ou histórico. |
+
+Todas com RLS + FORCE RLS por `user_id = auth.uid()`, índice em `user_id` e trigger
+`updated_at`. Testadas pela role **`authenticated`** (não como `postgres`): outro usuário lê 0
+linhas nas quatro; o dono lê as dele; `WITH CHECK` recusa gravar em nome de terceiro.
+
+### As decisões que sustentam a subfase
+
+1. **A origem viaja congelada.** `origins` guarda de qual refeição, de qual data e de qual
+   receita veio cada parcela — snapshot, porque o planejamento pode ser editado depois e a
+   lista impressa que foi ao mercado precisa continuar explicando os números.
+2. **O ajuste manual sobrevive à regeração.** Mexer na quantidade marca `quantity_overridden`;
+   `planRegeneration` devolve `keepQuantity: true` e o recálculo atualiza origem e corredor,
+   **não** a quantidade. Quem comprou 2 kg porque o pacote é de 2 kg não quer ver 1,4 kg de
+   volta a cada regeração. Item digitado à mão nunca é tocado.
+3. **Nada some sozinho.** O que o planejamento não pede mais vira **lista de obsoletos** na
+   prévia; só é apagado com `remove_obsolete` explícito. A ação em massa oferecida primeiro é
+   marcar, não excluir.
+4. **Cobertura total da despensa não zera a quantidade.** O item vira `removido` ("não vou
+   comprar"), continua na lista e volta com um toque. Zerar afirmaria "preciso de 0 g de
+   arroz" — falso: eu preciso, só já tenho.
+5. **`quantity` NULA na despensa ≠ zero.** Nula é "tenho, mas não sei quanto" (não desconta, e
+   a tela diz por quê); zero é "acabou", um fato medido.
+6. **Ausência de preço não é zero.** O resumo conta `semPrecoEstimado`/`semPrecoReal` para a
+   tela dizer "R$ 84,20 em 12 de 19 itens" em vez de deixar o total parecer a compra inteira.
+7. **Sem link público**, e não é esquecimento: a lista conta o que a pessoa come e quanto gasta.
+   Exportar (.txt agrupado por corredor) e imprimir resolvem o caso real.
+8. **Corredor sugerido por observação, nunca inventado.** A sugestão vem do que o próprio
+   usuário já fez (a categoria que ele deu ao alimento antes, ou a da despensa). Não existe uma
+   tabela nossa dizendo que "iogurte é frios" — isso seria opinião sobre o mercado dele.
+
+### Lista recorrente não duplica (regra 6)
+
+`shoppingRecurrenceKey` é determinística: `semanal:<início da semana>`, `mensal:<AAAA-MM>`,
+`quinzenal:<âncora>` (ancorada em 05/01/1970, uma segunda-feira, para a mesma data cair sempre
+na mesma quinzena). Abrir a tela cinco vezes na mesma semana reencontra a **mesma** lista.
+
+> ⚠️ **A armadilha da 16-B se repetiria aqui.** Os índices únicos de `recurrence_key` e de
+> `consolidation_key` são **PARCIAIS** — o Postgres não os infere num `ON CONFLICT` e o
+> PostgREST não deixa repetir o predicado (42P10, **falha só em runtime**). Todo caminho da
+> 16-D usa *select-then-insert/update*. Verificado no banco: o `ON CONFLICT (user_id,
+> recurrence_key)` é recusado com `invalid_column_reference`, e o índice barra a duplicata.
+
+### Verificação
+`npm run lint`, `npx tsc --noEmit`, `npm run test:run` (**1.132 testes**, +59) e `npm run build`
+passam; a suíte também passa com `TZ=UTC`. Smoke test: `/nutricao/compras` → 307 `/login`;
+`/api/cron/*` → 401 sem segredo. `get_advisors` sem lints de schema. As 4 tabelas entraram em
+`src/app/api/export/route.ts`.
+
+### Pendências conscientes da 16-D
+
+| Item | Onde resolve |
+| --- | --- |
+| Relatório de gasto com mercado × financeiro | **16-E** (virar lançamento é decisão explícita do usuário) |
+| Notificação de item da despensa vencendo | **16-F** (a data já é gravada e exibida) |
+| Reordenar corredores de mercado pela interface (`reorderMarketCategories` existe e é chamável) | **16-F** |
+| Criar/renomear corredor pela interface (`saveMarketCategory`/`deleteMarketCategory` existem) | **16-F** |
+| Escolher a quantidade de cada receita ao gerar por "receitas" (hoje entra 1 porção e o usuário ajusta no item) | **16-F** |
 
 ---
 
@@ -692,8 +780,8 @@ de responsabilidades está documentada no arquivo da fase.
 | 16-A | Dieta e Alimentação · Fundação, cálculo e catálogo | ✅ Concluída |
 | 16-B | Dieta e Alimentação · Metas, diário e planejamento | ✅ Concluída |
 | 16-C | Dieta e Alimentação · Receitas, refeições e substituições | ✅ Concluída |
-| 16-D | Dieta e Alimentação · Lista de compras e despensa | ⬜ Próxima |
-| 16-E | Dieta e Alimentação · Medidas, evolução e relatórios | ⬜ |
+| 16-D | Dieta e Alimentação · Lista de compras e despensa | ✅ Concluída |
+| 16-E | Dieta e Alimentação · Medidas, evolução e relatórios | ⬜ Próxima |
 | 16-F | Dieta e Alimentação · Integrações e polimento | ⬜ |
 
 ## O que foi implementado na Fase 14 (Segurança, Responsividade & Polimento Final)
