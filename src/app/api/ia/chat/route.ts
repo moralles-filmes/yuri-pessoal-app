@@ -1,0 +1,235 @@
+/**
+ * Fase 18-A — IA · `POST /api/ia/chat`. **TRANSPORTE APENAS.**
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ A SEGUNDA EXCEÇÃO ARQUITETURAL DO PROJETO (a primeira foi o auth).                    ║
+ * ║                                                                                       ║
+ * ║ Todo o resto do sistema muta por Server Action. Este é um Route Handler porque Server ║
+ * ║ Action não serve para SSE contínuo — e só por isso. Ele NÃO tem regra de negócio:     ║
+ * ║ valida o transporte, chama `runChat` e traduz eventos em linhas SSE.                  ║
+ * ║                                                                                       ║
+ * ║ ⚠️ ISSO NÃO AUTORIZA CRIAR OUTROS ENDPOINTS.                                          ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * ═══════════════════════ POR QUE CHECAR ORIGIN À MÃO ═══════════════════════
+ *
+ * Route Handler **não herda** a proteção CSRF que o Next dá a Server Action. Sem a checagem
+ * abaixo, qualquer página na internet poderia disparar `fetch('/api/ia/chat')` com os
+ * cookies do usuário e gastar o orçamento dele. `Sec-Fetch-Site` cobre os navegadores
+ * modernos; `Origin` cobre o resto.
+ */
+
+import { NextResponse } from "next/server";
+import { authContext } from "@/lib/actions/helpers";
+import {
+  chatRequestSchema,
+  MAX_CHAT_BODY_BYTES,
+  MAX_CHAT_TEXT,
+} from "@/lib/validators/ai";
+import { ASSISTENTE_PESSOAL_ID } from "@/lib/ai/agents/registry";
+import { runChat, type ChatRunnerEvent } from "@/lib/ai/server/chat-runner";
+import {
+  AI_CRYPTO_NOT_CONFIGURED,
+  getCryptoReadiness,
+} from "@/lib/ai/server/crypto-readiness";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+/** Menor que o `maxDuration` da plataforma, para o encerramento ser NOSSO. */
+export const maxDuration = 60;
+
+/** Status HTTP por código de erro do runner. Tradução, não decisão. */
+const STATUS_POR_CODIGO: Record<string, number> = {
+  AI_NOT_AUTHENTICATED: 401,
+  AI_MESSAGE_EMPTY: 400,
+  AI_MESSAGE_TOO_LONG: 413,
+  AI_AGENT_NOT_ALLOWED: 400,
+  AI_CONVERSATION_NOT_AVAILABLE: 404,
+  AI_PROVIDER_NOT_AVAILABLE: 409,
+  AI_CREDENTIAL_NOT_AVAILABLE: 409,
+  AI_MODEL_NOT_AVAILABLE: 409,
+  AI_RATE_LIMITED: 429,
+  AI_ADMISSION_BUSY: 429,
+  AI_BUDGET_EXCEEDED_DAILY: 402,
+  AI_BUDGET_EXCEEDED_MONTHLY: 402,
+  [AI_CRYPTO_NOT_CONFIGURED]: 503,
+};
+
+export async function POST(request: Request) {
+  // ── 1. Sessão. `user_id` SÓ daqui — nunca do corpo ─────────────────────────────────
+  const ctx = await authContext();
+  if (!ctx) {
+    return NextResponse.json(
+      { error: "Sessão expirada. Faça login novamente.", code: "AI_NOT_AUTHENTICATED" },
+      { status: 401 },
+    );
+  }
+
+  // ── 2. CSRF explícito ──────────────────────────────────────────────────────────────
+  const csrf = verificarOrigem(request);
+  if (!csrf.ok) {
+    return NextResponse.json(
+      { error: "Origem não autorizada.", code: "AI_BAD_ORIGIN" },
+      { status: 403 },
+    );
+  }
+
+  // ── 3. Limite do CORPO, antes de ler o JSON ────────────────────────────────────────
+  const declarado = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declarado) && declarado > MAX_CHAT_BODY_BYTES) {
+    return NextResponse.json(
+      { error: "Corpo da requisição grande demais.", code: "AI_BODY_TOO_LARGE" },
+      { status: 413 },
+    );
+  }
+
+  const bruto = await request.text();
+  // `content-length` pode mentir ou faltar. Medir o que chegou de fato é o que vale.
+  if (Buffer.byteLength(bruto, "utf8") > MAX_CHAT_BODY_BYTES) {
+    return NextResponse.json(
+      { error: "Corpo da requisição grande demais.", code: "AI_BODY_TOO_LARGE" },
+      { status: 413 },
+    );
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(bruto);
+  } catch {
+    return NextResponse.json(
+      { error: "Corpo inválido.", code: "AI_BAD_BODY" },
+      { status: 400 },
+    );
+  }
+
+  // ── 4. Zod `.strict()`: campo a mais é 400 ─────────────────────────────────────────
+  // `user_id`, `owner_id`, `attachments`, `image`, `file` e `document` caem aqui — sem
+  // lista de proibidos, que alguém esqueceria de atualizar. Anexo é 18-D.
+  const parsed = chatRequestSchema.safeParse(json);
+  if (!parsed.success) {
+    const primeiro = parsed.error.issues[0];
+    const tamanho =
+      primeiro?.code === "too_big" && primeiro.path[0] === "text" ? 413 : 400;
+    return NextResponse.json(
+      {
+        error: primeiro?.message ?? "Requisição inválida.",
+        code: tamanho === 413 ? "AI_MESSAGE_TOO_LONG" : "AI_BAD_REQUEST",
+        limite: tamanho === 413 ? MAX_CHAT_TEXT : undefined,
+      },
+      { status: tamanho },
+    );
+  }
+
+  // ── 5. Cripto pronta? ──────────────────────────────────────────────────────────────
+  const readiness = getCryptoReadiness();
+  if (!readiness.ready) {
+    return NextResponse.json(
+      { error: readiness.message, code: AI_CRYPTO_NOT_CONFIGURED },
+      { status: 503 },
+    );
+  }
+
+  // ── 6. Streaming ───────────────────────────────────────────────────────────────────
+  //
+  // O PRIMEIRO evento do runner decide o formato da resposta: se for `error`, ainda dá
+  // tempo de devolver um JSON com status HTTP correto (que a tela sabe tratar). A partir do
+  // `start`, a resposta vira SSE e todo erro viaja como evento — cabeçalho já foi enviado.
+  const iterador = runChat({
+    userId: ctx.userId,
+    conversationId: parsed.data.conversationId ?? null,
+    text: parsed.data.text,
+    agentId: parsed.data.agentId ?? ASSISTENTE_PESSOAL_ID,
+    providerPreference: parsed.data.providerPreference ?? null,
+    modelPreference: parsed.data.modelPreference ?? null,
+    abortSignal: request.signal,
+    agora: new Date(),
+  })[Symbol.asyncIterator]();
+
+  const primeiro = await iterador.next();
+
+  if (primeiro.done) {
+    return NextResponse.json(
+      { error: "Não foi possível iniciar a resposta.", code: "AI_UNKNOWN" },
+      { status: 500 },
+    );
+  }
+
+  if (primeiro.value.type === "error") {
+    const evento = primeiro.value;
+    const status = STATUS_POR_CODIGO[evento.code] ?? 500;
+    const headers: Record<string, string> = {};
+    if (evento.retryAfterSeconds) {
+      headers["Retry-After"] = String(evento.retryAfterSeconds);
+    }
+    return NextResponse.json(
+      { error: evento.message, code: evento.code },
+      { status, headers },
+    );
+  }
+
+  const encoder = new TextEncoder();
+  const primeiroEvento = primeiro.value;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const enviar = (evento: ChatRunnerEvent) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(evento)}\n\n`));
+      };
+
+      try {
+        enviar(primeiroEvento);
+        for (;;) {
+          const passo = await iterador.next();
+          if (passo.done) break;
+          enviar(passo.value);
+        }
+      } catch {
+        // O runner já fechou o run no `finally` dele. Aqui só avisamos o navegador.
+        enviar({
+          type: "error",
+          code: "AI_STREAM_FAILED",
+          message: "A resposta foi interrompida.",
+        });
+      } finally {
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      }
+    },
+
+    async cancel() {
+      // O navegador fechou a aba. `return()` faz o `finally` do runner rodar, e ele fecha
+      // o run como cancelado — a reserva não fica presa esperando a reconciliação.
+      await iterador.return?.(undefined);
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      // Desliga o buffer de proxies que engoliriam o streaming.
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+/**
+ * `Sec-Fetch-Site` primeiro (é o sinal forte, o navegador não deixa forjar), `Origin`
+ * depois. Requisição sem nenhum dos dois é recusada: no fluxo real da aplicação sempre
+ * existe um deles, e aceitar a ausência transformaria a checagem em decoração.
+ */
+function verificarOrigem(request: Request): { ok: boolean } {
+  const site = request.headers.get("sec-fetch-site");
+  if (site) return { ok: site === "same-origin" || site === "same-site" };
+
+  const origin = request.headers.get("origin");
+  const host = request.headers.get("host");
+  if (!origin || !host) return { ok: false };
+
+  try {
+    return { ok: new URL(origin).host === host };
+  } catch {
+    return { ok: false };
+  }
+}

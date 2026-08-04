@@ -261,6 +261,38 @@ Perfil; preferência de tema; moeda padrão (BRL); formato de data brasileiro; c
 Poucos cliques para lançar; telas limpas; informação importante visível rápido; gráficos úteis (não decorativos); filtros claros; tabelas bonitas e legíveis; modais rápidos; feedback visual ao salvar/editar/excluir; **estados vazios** bonitos e explicativos; **loading skeletons**; responsividade real; boa experiência no celular.
 Componentes-chave: cards de resumo, tabelas com filtros, drawer/modal de lançamento, calendário, kanban, gráficos, badges de status, avatares/iniciais para pessoas, ícones por categoria, toasts de sucesso/erro, confirmações antes de excluir, empty states, skeleton loading, botões rápidos.
 
+### Módulo IA — Inteligência Artificial
+> Adicionado na **Fase 18**, fora do roadmap original. Rota: `/ia`. Prefixo `ai_*`.
+> Desenho completo em `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`.
+> *(Sem número: a numeração desta seção do briefing já tem colisão — "Módulo 16" e "Módulo 17"
+> aparecem duas vezes. Renumerar é tarefa avulsa própria.)*
+
+Assistente pessoal **integrada ao sistema inteiro**, não um chatbot genérico. Conversa sobre os
+dados reais dos módulos, analisa histórico, gera relatórios, encontra padrões, cria sugestões,
+exibe insights nos dashboards, executa ações por ferramentas seguras, interpreta imagens e
+documentos, usa agentes especializados por módulo e registra tudo que consultou ou modificou.
+
+**Quatro provedores:** OpenAI (exibido "ChatGPT/OpenAI"), Google Gemini, Anthropic Claude,
+xAI Grok — com provedor principal, provedor por agente e fallback entre compatíveis. Chaves,
+modelos e limites ficam no módulo de **Configurações**, nunca duplicados.
+
+**11 áreas do módulo:** Assistente geral · Conversas · Agentes especializados · Relatórios ·
+Insights · Automações · Ações realizadas · Memória · Arquivos · Consumo e custos ·
+Configurações rápidas.
+
+**A regra que governa tudo:** a IA **nunca** tem acesso irrestrito ao banco. Não executa SQL,
+não monta consulta, não recebe credencial de banco, não usa `service_role`, não altera registro
+fora dos serviços de domínio, não ignora RLS, não executa código e não cria ferramenta em
+runtime. Toda leitura e alteração passa por ferramentas com nome explícito, schema de entrada e
+saída, permissões, escopo de módulo, classificação de risco, validação no backend, verificação
+de propriedade, idempotência, auditoria e confirmação quando necessária. **O modelo decide qual
+ferramenta pedir; quem valida e executa é o backend.**
+
+**Não faz:** prescrição, diagnóstico, parecer jurídico ou tributário, recomendação de
+investimento como certeza, afirmação de causalidade sem evidência, nem alteração silenciosa de
+qualquer registro. As restrições dos módulos de Dieta e Treinos valem integralmente sobre o que
+a IA escreve.
+
 ---
 
 ## 7. Critérios gerais de aceite
@@ -282,5 +314,9 @@ Componentes-chave: cards de resumo, tabelas com filtros, drawer/modal de lançam
 - [ ] Receber **notificações** importantes.
 - [ ] Modo **dark** e **light**.
 - [ ] Sistema bonito, premium, responsivo e fácil de usar.
+- [ ] Conversar com a **IA** sobre os dados reais do sistema, com **fontes** rastreáveis.
+- [ ] IA **executa ações** só por ferramentas auditadas, com confirmação conforme o risco.
+- [ ] Chaves de IA **cifradas**, nunca devolvidas ao navegador nem visíveis em log.
+- [ ] **Consumo e custo** de IA visíveis, com limite diário e mensal.
 
 > **Lembrete final do briefing:** não é uma tela simples ou genérica. É um sistema pessoal acima da média, visual premium preto/branco/dourado, boa usabilidade e **lógica financeira bem feita**. Priorizar cartão, faturas, parcelamentos, terceiros e dashboard financeiro.

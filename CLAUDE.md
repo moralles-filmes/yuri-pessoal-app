@@ -15,9 +15,10 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | Fase | Módulo | Situação |
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
-| **17** | Treinos (`/treinos`) | **17-A a 17-E concluídas**; 17-F é a próxima (fecha a fase) |
+| **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅ (2026-08-04). **18-B é a próxima** |
 
-Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **33 tabelas `nutrition_*`** + **28 `training_*`** + **4 tabelas centrais `body_*`** (16-E, compartilhadas com Treinos); o total do banco muda a cada subfase das duas frentes — **conte antes de citar um número**.
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Conferido no banco em 2026-08-04, depois da 18-A: **119 tabelas** no `public` — **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **7 `ai_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O total muda a cada subfase — **conte antes de citar um número**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -111,6 +112,69 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 23. **FK COMPOSTA sempre que uma tabela apontar para outra dentro do mesmo usuário.** A RLS confere o `user_id` da **própria linha** e não alcança a linha apontada. Sem isso, um intruso ocupava a chave única `(scheduled_workout_id, provider)` da ponte da agenda e **impedia o dono de sincronizar** aquele dia. Mesma correção da 16-E nas fotos de evolução.
 24. **`getSessionHistory` aceita `client`/`userId`** para o Cron (service role, sem sessão) usar **a mesma leitura da tela**. Um segundo caminho de montagem do histórico faria o número da notificação divergir do número da tela.
 
+## Módulo Inteligência Artificial (Fase 18 — 18-A implementada)
+
+Rota `/ia`, tabelas `ai_*` (7), 6 subfases (A–F). A **18-A está pronta e verificada**
+(2026-08-04): contratos internos, 4 adapters, catálogo de modelos e tarifas versionado,
+credenciais cifradas, chat com streaming, medição por tentativa e orçamento com reserva.
+**A IA ainda NÃO lê nenhum registro do usuário** — leituras começam na 18-B. Desenho em
+`docs/superpowers/specs/2026-08-04-modulo-ia-design.md`; camadas em `PROJECT_ARCHITECTURE.md`.
+
+**As regras arquiteturais que valem daqui em diante:**
+
+1. **A IA nunca acessa o banco direto.** Sem SQL livre, sem consulta montada pelo modelo, sem
+   `service_role` no caminho da requisição, sem ferramenta criada em runtime. Toda leitura e
+   escrita passa pelo Tool Registry **estático**, com allowlist por agente — o modelo pede, o
+   backend valida e executa.
+2. **`user_id` sempre de `authContext()`**, nunca do modelo: não existe nos schemas de entrada
+   das ferramentas, e Zod `.strict()` rejeita campo a mais.
+3. **Nenhuma regra de negócio é reescrita.** As ferramentas reusam os serviços que os
+   formulários já usam; commands são extraídos **sob demanda na 18-C**, e `revalidatePath` fica
+   na casca da Server Action.
+4. **O SDK de IA vive só em `src/lib/ai/providers/`.** `core/` e o resto dependem de contratos
+   internos — garantido por ESLint, `server-only` e teste.
+5. **Dado é dado, nunca instrução.** Registro, resultado de ferramenta, documento e imagem
+   entram como bloco não confiável, jamais como mensagem de sistema.
+6. **⚠️ Exceção do streaming (a segunda do projeto, depois do auth):** o chat usa Route Handler
+   `POST /api/ia/chat` porque Server Action não serve para SSE contínuo. Ele é **transporte
+   apenas** — sem regra de negócio, com auth e Origin checados explicitamente (Route Handler
+   **não** herda a proteção CSRF que o Next dá a Server Action), e ferramenta nenhuma executa
+   nele sem passar pelo Tool Executor. **Isso não autoriza criar outros endpoints.**
+
+**Invariantes que a 18-A fixou no código e no banco:**
+
+7. **A chave de API nunca é gravada em claro.** Envelope AES-256-GCM: DEK por credencial,
+   embrulhada pela master key de `AI_MASTER_KEYS` — que vive **só no ambiente do servidor**.
+   O AAD `credential_id | owner_id | provider | key_version` amarra o ciphertext à linha: movê-lo
+   para outro dono ou provedor **falha**. Sem a master key, **só a IA para**; o resto do sistema
+   funciona normalmente. Chave curta não ganha padding, senha humana não vira master key.
+8. **A admissão de um chat é ATÔMICA e o commit vem ANTES da chamada externa.**
+   `ai_begin_chat_run` (`SECURITY INVOKER`, `search_path = ''`, `pg_advisory_xact_lock`
+   **transacional** por usuário) valida rate limit + orçamento e cria conversa + mensagem + run
+   + mensagem do assistente numa transação. **Nenhum lock ou transação sobrevive ao streaming.**
+   Timeout do lock é **429**, não 500.
+9. **O run é reserva financeira.** `consumo = Σ custo dos terminais + Σ reserva dos
+   não-terminais não vencidos`, e todo run está em **exatamente um** dos somatórios. A reserva
+   usa a tarifa do modelo **mais caro da cadeia de fallback autorizada** — fallback não ganha
+   reserva nova.
+10. **`ai_usage_events` é por TENTATIVA**, `UNIQUE (run_id, attempt_index)` + FK composta.
+    Idempotência é `INSERT` + `23505` (nunca select-then-insert). A policy de UPDATE exige
+    `status = 'started'`: **tentativa terminal é imutável no banco**, e não há policy de DELETE.
+11. **Ausência nunca é zero.** Provedor que não informa tokens → `estimated_cost` nulo +
+    `usage_availability`; total com alguma tentativa sem custo é exibido como **parcial**.
+12. **Moeda canônica USD, sem câmbio.** Custo de IA é estimativa, não é transação do usuário e
+    **não entra** nos relatórios de finanças.
+13. **Preço mora só em `core/pricing.ts`**, com `effective_from`/`effective_until` e
+    `verified_at` por entrada. **Modelo sem tarifa não é selecionável** — sem preço não há
+    reserva, e sem reserva o orçamento não protege nada.
+14. **Tool Registry NASCE VAZIO na 18-A**: nenhuma definição vai ao provedor, e tool call
+    inesperada encerra o run como `failed` com `UNEXPECTED_TOOL_CALL`, sem executar nada.
+15. **Trava de honestidade** — o assistente diz que não consulta seus registros e aponta o
+    módulo; **nunca inventa número**. É critério de aceite, com teste.
+16. ⚠️ **`no-restricted-imports` usa semântica de .gitignore**, não de caminho: padrão sem
+    barra casa com qualquer componente (o grupo `"ai"` bloqueava `@/lib/ai/**` inteiro). Pacote
+    vai em `paths`, não em `patterns`.
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -137,7 +201,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 1.694 testes em 2026-08-04 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 2.129 testes em 2026-08-04 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

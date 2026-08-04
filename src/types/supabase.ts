@@ -56,6 +56,527 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_conversations: {
+        Row: {
+          agent_id: string
+          archived_at: string | null
+          created_at: string
+          id: string
+          is_favorite: boolean
+          last_message_at: string | null
+          status: string
+          summary: string | null
+          summary_version: number | null
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          is_favorite?: boolean
+          last_message_at?: string | null
+          status?: string
+          summary?: string | null
+          summary_version?: number | null
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          is_favorite?: boolean
+          last_message_at?: string | null
+          status?: string
+          summary?: string | null
+          summary_version?: number | null
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_messages: {
+        Row: {
+          content: string
+          content_type: string
+          conversation_id: string
+          created_at: string
+          id: string
+          role: string
+          run_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          content_type?: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          role: string
+          run_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          content_type?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          run_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_messages_conversation_owner_fk"
+            columns: ["conversation_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "ai_messages_run_owner_fk"
+            columns: ["run_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_runs"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      ai_provider_configs: {
+        Row: {
+          advanced_model: string | null
+          created_at: string
+          daily_limit: number | null
+          default_model: string | null
+          display_name: string | null
+          economy_model: string | null
+          enabled: boolean
+          fallback_allowed: boolean
+          fallback_order: string[]
+          id: string
+          max_retries: number
+          monthly_limit: number | null
+          notes: string | null
+          provider: string
+          timeout_ms: number
+          updated_at: string
+          user_id: string
+          vision_model: string | null
+        }
+        Insert: {
+          advanced_model?: string | null
+          created_at?: string
+          daily_limit?: number | null
+          default_model?: string | null
+          display_name?: string | null
+          economy_model?: string | null
+          enabled?: boolean
+          fallback_allowed?: boolean
+          fallback_order?: string[]
+          id?: string
+          max_retries?: number
+          monthly_limit?: number | null
+          notes?: string | null
+          provider: string
+          timeout_ms?: number
+          updated_at?: string
+          user_id: string
+          vision_model?: string | null
+        }
+        Update: {
+          advanced_model?: string | null
+          created_at?: string
+          daily_limit?: number | null
+          default_model?: string | null
+          display_name?: string | null
+          economy_model?: string | null
+          enabled?: boolean
+          fallback_allowed?: boolean
+          fallback_order?: string[]
+          id?: string
+          max_retries?: number
+          monthly_limit?: number | null
+          notes?: string | null
+          provider?: string
+          timeout_ms?: number
+          updated_at?: string
+          user_id?: string
+          vision_model?: string | null
+        }
+        Relationships: []
+      }
+      ai_provider_credentials: {
+        Row: {
+          algorithm_version: number
+          auth_tag: string
+          ciphertext: string
+          created_at: string
+          dek_auth_tag: string
+          dek_iv: string
+          id: string
+          iv: string
+          key_version: number
+          last_four: string | null
+          last_validated_at: string | null
+          provider: string
+          status: string
+          test_count: number
+          test_window_started_at: string | null
+          updated_at: string
+          user_id: string
+          wrapped_dek: string
+        }
+        Insert: {
+          algorithm_version?: number
+          auth_tag: string
+          ciphertext: string
+          created_at?: string
+          dek_auth_tag: string
+          dek_iv: string
+          id: string
+          iv: string
+          key_version: number
+          last_four?: string | null
+          last_validated_at?: string | null
+          provider: string
+          status?: string
+          test_count?: number
+          test_window_started_at?: string | null
+          updated_at?: string
+          user_id: string
+          wrapped_dek: string
+        }
+        Update: {
+          algorithm_version?: number
+          auth_tag?: string
+          ciphertext?: string
+          created_at?: string
+          dek_auth_tag?: string
+          dek_iv?: string
+          id?: string
+          iv?: string
+          key_version?: number
+          last_four?: string | null
+          last_validated_at?: string | null
+          provider?: string
+          status?: string
+          test_count?: number
+          test_window_started_at?: string | null
+          updated_at?: string
+          user_id?: string
+          wrapped_dek?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_provider_credentials_config_fk"
+            columns: ["user_id", "provider"]
+            isOneToOne: true
+            referencedRelation: "ai_provider_configs"
+            referencedColumns: ["user_id", "provider"]
+          },
+        ]
+      }
+      ai_runs: {
+        Row: {
+          agent_id: string
+          assistant_message_id: string | null
+          attempt_count: number
+          cancel_reason: string | null
+          completed_at: string | null
+          completed_model: string | null
+          completed_provider: string | null
+          conversation_id: string
+          correlation_id: string
+          created_at: string
+          error_code: string | null
+          error_message_sanitized: string | null
+          fallback_count: number
+          id: string
+          last_heartbeat_at: string
+          lease_expires_at: string
+          prompt_version: string
+          reservation_currency: string
+          reservation_expires_at: string
+          reservation_rate_version: string
+          reserved_cost: number
+          selected_model: string
+          selected_provider: string
+          started_at: string
+          status: string
+          total_latency_ms: number | null
+          updated_at: string
+          user_id: string
+          user_message_id: string | null
+        }
+        Insert: {
+          agent_id: string
+          assistant_message_id?: string | null
+          attempt_count?: number
+          cancel_reason?: string | null
+          completed_at?: string | null
+          completed_model?: string | null
+          completed_provider?: string | null
+          conversation_id: string
+          correlation_id?: string
+          created_at?: string
+          error_code?: string | null
+          error_message_sanitized?: string | null
+          fallback_count?: number
+          id?: string
+          last_heartbeat_at?: string
+          lease_expires_at?: string
+          prompt_version: string
+          reservation_currency?: string
+          reservation_expires_at: string
+          reservation_rate_version: string
+          reserved_cost: number
+          selected_model: string
+          selected_provider: string
+          started_at?: string
+          status?: string
+          total_latency_ms?: number | null
+          updated_at?: string
+          user_id: string
+          user_message_id?: string | null
+        }
+        Update: {
+          agent_id?: string
+          assistant_message_id?: string | null
+          attempt_count?: number
+          cancel_reason?: string | null
+          completed_at?: string | null
+          completed_model?: string | null
+          completed_provider?: string | null
+          conversation_id?: string
+          correlation_id?: string
+          created_at?: string
+          error_code?: string | null
+          error_message_sanitized?: string | null
+          fallback_count?: number
+          id?: string
+          last_heartbeat_at?: string
+          lease_expires_at?: string
+          prompt_version?: string
+          reservation_currency?: string
+          reservation_expires_at?: string
+          reservation_rate_version?: string
+          reserved_cost?: number
+          selected_model?: string
+          selected_provider?: string
+          started_at?: string
+          status?: string
+          total_latency_ms?: number | null
+          updated_at?: string
+          user_id?: string
+          user_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_runs_assistant_message_owner_fk"
+            columns: ["assistant_message_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_messages"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "ai_runs_conversation_owner_fk"
+            columns: ["conversation_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "ai_runs_user_message_owner_fk"
+            columns: ["user_message_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_messages"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      ai_usage_events: {
+        Row: {
+          agent_id: string | null
+          attempt_index: number
+          attempt_type: string
+          cached_input_tokens: number | null
+          completed_at: string | null
+          conversation_id: string | null
+          created_at: string
+          currency: string
+          error_code: string | null
+          estimated_cost: number | null
+          id: string
+          input_tokens: number | null
+          latency_ms: number | null
+          model_id: string
+          output_tokens: number | null
+          pricing_version: string
+          provider: string
+          provider_request_id: string | null
+          rate_snapshot: Json
+          run_id: string
+          started_at: string
+          status: string
+          usage_availability: Json
+          user_id: string
+          was_fallback: boolean
+        }
+        Insert: {
+          agent_id?: string | null
+          attempt_index: number
+          attempt_type: string
+          cached_input_tokens?: number | null
+          completed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          currency?: string
+          error_code?: string | null
+          estimated_cost?: number | null
+          id?: string
+          input_tokens?: number | null
+          latency_ms?: number | null
+          model_id: string
+          output_tokens?: number | null
+          pricing_version: string
+          provider: string
+          provider_request_id?: string | null
+          rate_snapshot: Json
+          run_id: string
+          started_at?: string
+          status?: string
+          usage_availability?: Json
+          user_id: string
+          was_fallback?: boolean
+        }
+        Update: {
+          agent_id?: string | null
+          attempt_index?: number
+          attempt_type?: string
+          cached_input_tokens?: number | null
+          completed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          currency?: string
+          error_code?: string | null
+          estimated_cost?: number | null
+          id?: string
+          input_tokens?: number | null
+          latency_ms?: number | null
+          model_id?: string
+          output_tokens?: number | null
+          pricing_version?: string
+          provider?: string
+          provider_request_id?: string | null
+          rate_snapshot?: Json
+          run_id?: string
+          started_at?: string
+          status?: string
+          usage_availability?: Json
+          user_id?: string
+          was_fallback?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_events_run_owner_fk"
+            columns: ["run_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_runs"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      ai_user_preferences: {
+        Row: {
+          allow_body: boolean
+          allow_cross_module: boolean
+          allow_external_search: boolean
+          allow_fallback: boolean
+          allow_files: boolean
+          allow_finance: boolean
+          allow_memory: boolean
+          allow_nutrition: boolean
+          allow_training: boolean
+          budget_alert_level_reached: number
+          budget_block_on_limit: boolean
+          confirmation_mode: string
+          created_at: string
+          daily_budget: number | null
+          default_model: string | null
+          default_provider: string | null
+          id: string
+          monthly_budget: number | null
+          rate_limit_per_hour: number
+          rate_limit_per_minute: number
+          reservation_margin: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allow_body?: boolean
+          allow_cross_module?: boolean
+          allow_external_search?: boolean
+          allow_fallback?: boolean
+          allow_files?: boolean
+          allow_finance?: boolean
+          allow_memory?: boolean
+          allow_nutrition?: boolean
+          allow_training?: boolean
+          budget_alert_level_reached?: number
+          budget_block_on_limit?: boolean
+          confirmation_mode?: string
+          created_at?: string
+          daily_budget?: number | null
+          default_model?: string | null
+          default_provider?: string | null
+          id?: string
+          monthly_budget?: number | null
+          rate_limit_per_hour?: number
+          rate_limit_per_minute?: number
+          reservation_margin?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allow_body?: boolean
+          allow_cross_module?: boolean
+          allow_external_search?: boolean
+          allow_fallback?: boolean
+          allow_files?: boolean
+          allow_finance?: boolean
+          allow_memory?: boolean
+          allow_nutrition?: boolean
+          allow_training?: boolean
+          budget_alert_level_reached?: number
+          budget_block_on_limit?: boolean
+          confirmation_mode?: string
+          created_at?: string
+          daily_budget?: number | null
+          default_model?: string | null
+          default_provider?: string | null
+          id?: string
+          monthly_budget?: number | null
+          rate_limit_per_hour?: number
+          rate_limit_per_minute?: number
+          reservation_margin?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       attachments: {
         Row: {
           bucket_id: string
@@ -7636,6 +8157,28 @@ export type Database = {
     }
     Functions: {
       account_balance: { Args: { p_account_id: string }; Returns: number }
+      ai_begin_chat_run: {
+        Args: {
+          p_agent_id: string
+          p_conversation_id: string | null
+          p_prompt_version: string
+          p_reservation_rate_version: string
+          p_reservation_ttl_seconds?: number
+          p_reserved_cost: number
+          p_selected_model: string
+          p_selected_provider: string
+          p_title?: string | null
+          p_user_text: string
+        }
+        Returns: {
+          assistant_message_id: string
+          conversation_id: string
+          correlation_id: string
+          run_id: string
+          user_message_id: string
+        }[]
+      }
+      ai_reconcile_abandoned_runs: { Args: { p_limit?: number }; Returns: number }
       seed_default_categories: { Args: never; Returns: number }
     }
     Enums: {

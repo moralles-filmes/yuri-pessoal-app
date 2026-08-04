@@ -295,3 +295,65 @@ navegação interna própria) e 16 (padrão de base global imutável + cópia pe
 
 **Critérios de aceite da fase completa:** os **55 itens** listados na seção "Critérios de
 aceite gerais do módulo Treinos" do arquivo da Subfase F.
+
+---
+
+## Fase 18 — Módulo Inteligência Artificial (6 subfases)
+> **Fora do roadmap original.** Aberta em 2026-08-04, a pedido do usuário, com as Fases 16 e 17
+> já concluídas. Não substitui nem invalida nenhuma fase anterior. Quebrada em **6 subfases
+> sequenciais (A–F)**, cada uma com arquivo próprio.
+
+**Objetivo:** um módulo central em `/ia` que transforma a IA em **assistente pessoal integrada
+ao sistema inteiro** — conversar sobre os dados reais dos módulos, analisar histórico, gerar
+relatórios, encontrar padrões, exibir insights nos dashboards, executar ações por ferramentas
+seguras, interpretar imagens e documentos, usar agentes especializados por módulo, trabalhar
+com quatro provedores e registrar tudo que consultou ou modificou.
+
+**Provedores:** OpenAI (exibido "ChatGPT/OpenAI"), Google Gemini, Anthropic Claude, xAI Grok.
+
+| Subfase | Tema | Arquivo | Status |
+| --- | --- | --- | --- |
+| 18-A | Fundação, provedores e chat | `PHASE_18_A_AI_FOUNDATION_PROVIDERS_CHAT.md` | ✅ **CONCLUÍDA** (2026-08-04) |
+| 18-B | Contexto, ferramentas de leitura e agentes | `PHASE_18_B_AI_CONTEXT_READ_TOOLS_AGENTS.md` | ⬜ **Próxima** |
+| 18-C | Ações, aprovações, idempotência e auditoria | `PHASE_18_C_AI_ACTIONS_APPROVALS_AUDIT.md` | ⬜ |
+| 18-D | Visão, documentos e comprovantes | `PHASE_18_D_AI_VISION_DOCUMENTS_RECEIPTS.md` | ⬜ |
+| 18-E | Insights, relatórios e dashboards | `PHASE_18_E_AI_INSIGHTS_REPORTS_DASHBOARDS.md` | ⬜ |
+| 18-F | Memória, voz, integrações e polimento | `PHASE_18_F_AI_MEMORY_VOICE_INTEGRATIONS_POLISH.md` | ⬜ — **FECHA A FASE 18** |
+
+**Dependências gerais:** Fase 01 (design system/app shell), 12 (dashboard geral), 13 (busca
+global, lançamento rápido, notificações + Cron), 14 (`attachments`, buckets privados,
+`settings`, exportação), 15 (padrão de módulo com navegação interna própria), 16 e 17
+(módulos que a IA vai ler e, a partir da 18-C, escrever).
+
+**Decisões registradas antes de começar** (desenho completo em
+`docs/superpowers/specs/2026-08-04-modulo-ia-design.md`):
+
+1. **Rota `/ia`** (padrão pt-BR do projeto), prefixo de tabela `ai_*` (código/schema em
+   inglês, como `todo_*`/`nutrition_*`/`training_*`).
+2. **A IA nunca tem acesso irrestrito ao banco.** Sem SQL livre, sem consulta montada pelo
+   modelo, sem credencial de banco, sem `service_role`, sem alterar registro fora dos serviços
+   de domínio, sem ignorar RLS, sem executar código, sem criar ferramenta em runtime. Toda
+   leitura e escrita passa por uma camada controlada de ferramentas.
+3. **O modelo nunca vê nem fornece `user_id`.** Toda ferramenta executa sob `authContext()`.
+   Os schemas de entrada não têm `user_id`/`owner_id`; Zod `.strict()` rejeita campo a mais.
+4. **Tool Registry estático em código**, com allowlist por agente. Nível de risco 4 não é uma
+   checagem — é ausência de código.
+5. **Camada de provedores isolada.** Vercel AI SDK **só** em `src/lib/ai/providers/`; `core/`
+   e todo o resto dependem de contratos internos. Trocar de SDK não pode alcançar agentes,
+   ferramentas, contexto ou aprovação.
+6. **Chaves de API com envelope encryption** (AES-256-GCM, AAD, keyring versionado). A master
+   key existe só no ambiente do servidor, nunca no banco. RLS não substitui criptografia.
+7. **Streaming por Route Handler** (`/api/ia/chat`) — segunda exceção estrutural ao padrão
+   Server Action (a primeira foi o auth). Transporte apenas; a exceção não autoriza outros
+   endpoints.
+8. **Dado é dado, nunca instrução.** Registro, resultado de ferramenta, documento e imagem
+   entram por estrutura marcada como não confiável, nunca como mensagem de sistema.
+9. **Nenhuma regra de negócio é reescrita.** As ferramentas reusam os serviços que os
+   formulários já usam; commands são extraídos **sob demanda na 18-C**, só para as actions que
+   a IA realmente vai usar.
+10. **Ferramenta de organização e apoio.** Sem prescrição, sem diagnóstico, sem afirmar
+    causalidade, sem linguagem de culpa — as restrições das Fases 16 e 17 continuam valendo
+    integralmente sobre o que a IA escreve.
+
+**Critérios de aceite da fase completa:** os itens listados no arquivo da Subfase F, validados
+um a um na 18-F.

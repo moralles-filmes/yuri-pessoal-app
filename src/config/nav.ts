@@ -18,6 +18,7 @@ import {
   Bell,
   BarChart3,
   Settings,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
@@ -82,7 +83,12 @@ export const navSections: NavSection[] = [
   },
   {
     title: "Sistema",
-    items: [{ title: "Configurações", href: "/configuracoes", icon: Settings, phase: "Fase 14" }],
+    items: [
+      // Módulo central com navegação interna própria. Na Fase 18-A o assistente NÃO acessa
+      // nenhum registro do usuário — a integração com os módulos começa na 18-B.
+      { title: "Inteligência Artificial", href: "/ia", icon: Sparkles, phase: "Fase 18" },
+      { title: "Configurações", href: "/configuracoes", icon: Settings, phase: "Fase 14" },
+    ],
   },
 ];
 

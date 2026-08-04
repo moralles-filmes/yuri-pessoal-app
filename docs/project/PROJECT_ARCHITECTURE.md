@@ -778,3 +778,139 @@ que todo total da Dieta sai de `calc.ts`. Histórico, gráfico, recorde, visão 
 dashboards e relatórios (17-E)** consomem essa fonte; nenhum deles recalcula. Um teste de
 `dashboards.test.ts` compara os totais do dashboard com `aggregateSessions` chamado direto e
 exige igualdade — se alguém refizer a conta, ele quebra.
+
+---
+
+## Módulo Inteligência Artificial (Fase 18 — 18-A implementada, 6 subfases)
+
+> Rota `/ia`, tabelas `ai_*`. **A 18-A está implementada e verificada (2026-08-04)**: fundação,
+> quatro adapters, catálogos versionados, credenciais cifradas, chat com streaming, medição por
+> tentativa e orçamento com reserva. **A IA ainda não lê nenhum registro do usuário** — leituras
+> começam na 18-B. Desenho em `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`; execução
+> em `docs/phases/PHASE_18_A..F_*.md`.
+
+### A regra principal
+
+A IA **nunca** tem acesso irrestrito ao banco: não executa SQL, não monta consulta, não recebe
+credencial de banco, não usa `service_role`, não altera registro fora dos serviços de domínio,
+não chama rota interna sem validação, não ignora RLS, não executa código arbitrário, não cria
+ferramenta em runtime e não trata resposta textual como autorização para agir.
+
+Toda leitura e toda alteração passam por uma camada controlada de ferramentas com nome
+explícito, descrição, schema de entrada, schema de saída, permissões, escopo de módulo,
+classificação de risco, validação no backend, verificação de propriedade, idempotência,
+auditoria e confirmação quando necessária. **O modelo decide qual ferramenta pedir; quem valida
+e executa é o backend.**
+
+### As quatro travas
+
+1. **O modelo nunca vê nem fornece `user_id`.** Toda ferramenta executa sob `authContext()`.
+   `user_id`/`owner_id` não existem nos schemas de entrada; Zod `.strict()` rejeita.
+2. **Tool Registry estático em código**, com allowlist por agente. Nome desconhecido ou fora da
+   allowlist é rejeitado antes de executar, com auditoria. Não há caminho para criar ferramenta
+   em runtime — o "Nível 4 (bloquear)" é ausência de código, não uma checagem.
+3. **Dado é dado, nunca instrução.** Resultado de ferramenta, linha do banco, documento e
+   imagem entram por estrutura (papel de mensagem, bloco tipado, origem declarada, tamanho
+   limitado, campos podados) — **nunca** como mensagem de sistema, e nunca confiando só em
+   delimitador textual.
+4. **A chave de provedor nunca esteve no banco.** Envelope encryption AES-256-GCM com AAD
+   (`credential_id | owner_id | provider | key_version`) e keyring versionado; a master key
+   vive só em `AI_MASTER_KEYS`, no ambiente do servidor. RLS não substitui criptografia.
+
+### Camadas
+
+```txt
+src/lib/ai/core/       contratos internos — ZERO import de pacote de fornecedor
+src/lib/ai/providers/  ÚNICA camada que importa `ai` e `@ai-sdk/*`
+src/lib/ai/agents/     perfis + prompts versionados + prompt-base de segurança
+src/lib/ai/tools/      Tool Registry (nasce vazio na 18-A)
+src/lib/ai/context/    Context Engine (18-B)
+src/lib/ai/approval/   proposta → hash → confirmação (18-C)
+src/lib/ai/usage/      medição, reserva e orçamento (puro)
+src/lib/ai/security/   não confiável, sanitização, rate limit (puro)
+src/lib/ai/server/     'server-only': cripto, credenciais, chat-runner, reconciliação
+```
+
+A fronteira é **regra estática**, não convenção: ESLint `no-restricted-imports` por zona (pega
+alias), `server-only` (quebra o build se um módulo client alcançar `server/`) e um teste que
+varre import estático **e dinâmico** — porque `no-restricted-imports` não cobre
+`await import()`. Trocar o AI SDK no futuro não pode exigir mexer em agents, tools, context ou
+approval.
+
+### ⚠️ A exceção do streaming (segunda do projeto, depois do auth)
+
+O padrão dominante é **Server Component (lê) → Server Action (muta) → `revalidatePath`**. O
+chat abre exceção porque **Server Actions não servem para o streaming SSE contínuo** que ele
+exige. Regras da exceção:
+
+- `POST /api/ia/chat` (runtime nodejs) existe **somente como transporte**.
+- Regras de negócio continuam em serviços internos; o Route Handler não tem lógica de domínio.
+- Autenticação e autorização continuam obrigatórias — e o Route Handler **não herda a proteção
+  CSRF que o Next dá a Server Action**, por isso checa `Origin`/`Sec-Fetch-Site` explicitamente.
+- Ferramentas **não** executam dentro da camada de transporte sem passar pelo Tool Executor.
+- Provedor e modelo pedidos pelo cliente são **preferência**, nunca ordem: o backend confirma
+  registry, propriedade, credencial, catálogo, capacidade e orçamento.
+- **Esta exceção não autoriza criar outros endpoints arbitrários.**
+
+### Reutilização das regras de negócio
+
+As ferramentas são cascas finas sobre os serviços que os formulários já usam — nenhuma regra é
+reescrita. Levantamento de 2026-08-04 sobre as 44 actions: **0** usam `redirect()`; **3** usam
+`FormData` (`body-measurements`, `imports`, `nutrition-recipes`) e são Caso B; o padrão
+universal é `(input: unknown)` + Zod + `authContext()`; **41** usam `revalidatePath`.
+
+**`revalidatePath` sozinho não classifica uma action como acoplada à interface.** Commands
+compartilhados são extraídos **sob demanda na 18-C**, só para as actions que a IA realmente vai
+usar, e `revalidatePath` fica exclusivamente na casca da Server Action:
+
+```txt
+Formulário    → Server Action → Command compartilhado → Serviço de domínio → revalidatePath
+Tool Executor → Adapter       → MESMO Command         → MESMO serviço
+```
+
+A ferramenta **nunca** chama rota HTTP interna simulando o preenchimento de um formulário.
+Continuam fonte única, sem cópia: `invoice.ts`, parcelamentos, terceiros, `addDiaryEntry`,
+recorrência do TO-DO, conflitos de agenda, `session-machine.ts`.
+
+### Uso, custo e orçamento
+
+`ai_usage_events` é **por tentativa de chamada ao provedor**, não por run — um run pode ter
+retry, fallback de provedor e fallback de modelo, cada um com sua tarifa. Chave
+`UNIQUE (run_id, attempt_index)` + FK composta `(run_id, user_id)` → `ai_runs (id, user_id)`;
+insert primeiro e, em `23505`, lê a linha existente. Moeda canônica **USD** na 18-A, sem
+câmbio — custo de IA é estimativa, não é transação do módulo financeiro e não vira BRL.
+
+O `ai_run` é também **reserva financeira temporária** (`reserved_cost`,
+`reservation_expires_at`): o advisory lock resolve a corrida na quantidade de runs, mas não na
+de orçamento — duas requisições veriam o mesmo consumo confirmado enquanto a primeira ainda não
+gerou evento de uso. O início do run é atômico numa função `SECURITY INVOKER` com
+`SET search_path = ''`, que lê `auth.uid()` por conta própria e **não aceita `user_id`, limite,
+consumo nem contagem de janela vindos do cliente**.
+
+Fontes de verdade: `ai_runs` = estado e latência · `ai_usage_events` = tentativas, uso e custo ·
+`ai_messages` = conteúdo e estado da mensagem.
+
+### O que a implementação da 18-A acrescentou ao desenho
+
+1. **`ai_usage_events` é append-only COM PRECISÃO.** A tentativa nasce `started` e fecha em
+   `completed|failed|cancelled` — isso **é** um UPDATE, e o desenho original dizia "sem policy
+   de UPDATE". O que não pode existir é reescrita de linha **terminal**, então a policy ficou
+   `for update using (user_id = auth.uid() and status = 'started')`: o banco recusa qualquer
+   escrita numa tentativa encerrada, e **não há policy de DELETE**. Mais forte que a intenção
+   original — retificação de uso tardio virou impossível no banco, não só no código.
+2. **`patterns.group` do `no-restricted-imports` usa semântica de .gitignore**, não de caminho:
+   um padrão sem barra casa com qualquer componente. O grupo `"ai"` bloqueava `@/lib/ai/**`
+   inteiro. Pacote de fornecedor passou a entrar por `paths` (casamento exato).
+3. **`server-only` lança fora do bundle do Next.** Testar `credential-crypto` exigiu alias
+   **só no Vitest** (`src/test/server-only-stub.ts`); o `next build` continua com o pacote real,
+   e há teste conferindo que todo arquivo de `server/` importa a guarda.
+4. **Duas colunas a mais em `ai_provider_credentials`** (`test_window_started_at`,
+   `test_count`) para o rate limit do teste de conexão (6/h por provedor). Ficam ali, e não em
+   `ai_runs`, porque testar credencial **não é conversa**: não cria run, não gera evento de uso
+   e não entra no orçamento. Contador em memória não serviria — em serverless ele reinicia.
+5. **Tarifa por FAIXA existe de verdade** (a xAI cobra mais acima de 200k tokens de entrada).
+   A medição usa a faixa efetiva do consumo; a **reserva usa sempre a faixa cara**, porque ela
+   é a priori e tem de cobrir o pior caso.
+6. **Uma tarifa pode ter validade**: o Claude Sonnet 5 é promocional até 31/08/2026 e padrão a
+   partir de 01/09/2026. É o caso real que justifica `effective_from`/`effective_until` — sem
+   eles, a virada do mês faria o sistema calcular errado sem ninguém perceber.
