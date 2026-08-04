@@ -165,6 +165,16 @@ O padrão dominante em todo o app é **Server Component (lê) → Server Action 
 - **Leituras** (server-only) ficam em `src/lib/<domínio>/queries.ts`. Costumam fazer **uma** consulta ampla e derivar tudo em memória (evitar N+1).
 - **Mutações** ficam em `src/lib/actions/<domínio>.ts` (arquivos `"use server"`).
 
+**⛔ Regra que veio de um bug real: campo de TEXTO nunca é controlado pelo valor da URL.**
+Estado de filtro vive na URL — mas isso vale para clique (select, toggle, aba), não para
+digitação. Como as páginas de módulo são `force-dynamic`, gravar a cada tecla faz o Next
+buscar o RSC no servidor, e o `value` do input só atualiza quando a resposta volta: a letra
+atrasa, o cursor pula e digitar rápido **perde caractere**. Use `useUrlText`
+(`src/lib/forms/use-url-text.ts`): o texto responde local e alcança a URL depois da pausa,
+preservando link, voltar e recarregar. As decisões de sincronia são puras em `url-text-sync.ts`
+— inclusive a que distingue mudança **externa** (limpar filtros, voltar) do **eco atrasado da
+própria digitação**, que era o que devolvia texto velho ao campo.
+
 ### Contrato das Server Actions (siga à risca)
 Toda action segue o molde em `src/lib/actions/accounts.ts` + `src/lib/actions/helpers.ts`:
 1. `const ctx = await authContext(); if (!ctx) return notAuthed;` — pega `{ supabase, userId }`. **`user_id` SEMPRE vem de `auth.getUser()`, nunca do client.**
