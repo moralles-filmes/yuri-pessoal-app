@@ -879,7 +879,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Preferências do módulo e fontes nutricionais.",
     href: `${NUTRITION_BASE_PATH}/configuracoes`,
     icon: "settings",
-    status: "planejada",
+    status: "pronto",
     phase: "Subfase 16-F",
   },
 ];
