@@ -598,6 +598,161 @@ export const RECIPE_SORT_LABELS: Record<RecipeSort, string> = {
   tempo: "Mais rápidas",
 };
 
+/* ═════════════════ Fase 16-D — Lista de compras e despensa ═════════════════ */
+
+/**
+ * Status do DOCUMENTO. "Concluída" é um fato declarado ("terminei a compra"), não uma
+ * derivação de "todos os itens comprados" — dá para fechar a lista com item faltando, e
+ * fingir o contrário obrigaria a reabrir a lista sozinha quando um item voltasse a pendente.
+ */
+export const SHOPPING_LIST_STATUSES = ["ativa", "concluida", "arquivada"] as const;
+export type ShoppingListStatus = (typeof SHOPPING_LIST_STATUSES)[number];
+
+export const SHOPPING_LIST_STATUS_LABELS: Record<ShoppingListStatus, string> = {
+  ativa: "Ativa",
+  concluida: "Concluída",
+  arquivada: "Arquivada",
+};
+
+/** De onde a lista veio. Procedência, não vínculo vivo com o planejamento. */
+export const SHOPPING_SOURCE_KINDS = ["manual", "dia", "semana", "periodo", "receitas"] as const;
+export type ShoppingSourceKind = (typeof SHOPPING_SOURCE_KINDS)[number];
+
+export const SHOPPING_SOURCE_KIND_LABELS: Record<ShoppingSourceKind, string> = {
+  manual: "Criada à mão",
+  dia: "Gerada de um dia",
+  semana: "Gerada de uma semana",
+  periodo: "Gerada de um período",
+  receitas: "Gerada de receitas",
+};
+
+export const SHOPPING_RECURRENCES = ["nenhuma", "semanal", "quinzenal", "mensal"] as const;
+export type ShoppingRecurrence = (typeof SHOPPING_RECURRENCES)[number];
+
+export const SHOPPING_RECURRENCE_LABELS: Record<ShoppingRecurrence, string> = {
+  nenhuma: "Sem repetição",
+  semanal: "Toda semana",
+  quinzenal: "A cada 15 dias",
+  mensal: "Todo mês",
+};
+
+export const SHOPPING_RECURRENCE_HINTS: Record<ShoppingRecurrence, string> = {
+  nenhuma: "Uma lista avulsa, sem vínculo com um período.",
+  semanal: "Uma lista por semana. Abrir de novo na mesma semana reencontra a mesma lista.",
+  quinzenal: "Uma lista a cada duas semanas, contadas de forma fixa no calendário.",
+  mensal: "Uma lista por mês. Abrir de novo no mesmo mês reencontra a mesma lista.",
+};
+
+/**
+ * Status de um ITEM. `removido` significa "decidi não comprar" — o registro continua na lista,
+ * visível pelo filtro, e nada é apagado sem confirmação (regra 4 da subfase).
+ */
+export const SHOPPING_ITEM_STATUSES = [
+  "pendente",
+  "no_carrinho",
+  "comprado",
+  "indisponivel",
+  "removido",
+] as const;
+export type ShoppingItemStatus = (typeof SHOPPING_ITEM_STATUSES)[number];
+
+export const SHOPPING_ITEM_STATUS_LABELS: Record<ShoppingItemStatus, string> = {
+  pendente: "Pendente",
+  no_carrinho: "No carrinho",
+  comprado: "Comprado",
+  indisponivel: "Não encontrei",
+  removido: "Não vou comprar",
+};
+
+export const SHOPPING_ITEM_STATUS_HINTS: Record<ShoppingItemStatus, string> = {
+  pendente: "Ainda falta pegar.",
+  no_carrinho: "Já está no carrinho, mas a compra não terminou.",
+  comprado: "Comprado.",
+  indisponivel: "Não tinha na loja.",
+  removido: "Tirado da compra — o item continua na lista, só não entra na conta.",
+};
+
+/** Os status que ainda representam algo a comprar. */
+export const SHOPPING_OPEN_STATUSES: ShoppingItemStatus[] = ["pendente", "no_carrinho"];
+
+export const SHOPPING_PRIORITIES = ["baixa", "normal", "alta"] as const;
+export type ShoppingPriority = (typeof SHOPPING_PRIORITIES)[number];
+
+export const SHOPPING_PRIORITY_LABELS: Record<ShoppingPriority, string> = {
+  baixa: "Se der",
+  normal: "Normal",
+  alta: "Não pode faltar",
+};
+
+/**
+ * Unidades oferecidas nos formulários de compra e despensa.
+ *
+ * `un` é uma unidade de CONTAGEM, não de massa: 3 unidades de tomate não viram gramas sem uma
+ * medida caseira cadastrada com o peso daquele tomate. É exatamente essa distinção que a
+ * consolidação respeita (ver `shopping.ts`).
+ */
+export const SHOPPING_UNITS = ["g", "kg", "ml", "l", "un"] as const;
+export type ShoppingUnit = (typeof SHOPPING_UNITS)[number];
+
+export const SHOPPING_UNIT_LABELS: Record<ShoppingUnit, string> = {
+  g: "gramas (g)",
+  kg: "quilos (kg)",
+  ml: "mililitros (ml)",
+  l: "litros (L)",
+  un: "unidades",
+};
+
+/**
+ * Corredores de mercado semeados na primeira leitura (as dez do enunciado da subfase).
+ * NÃO entram por migration: são dado do usuário — ele renomeia, reordena e cria os seus —, e
+ * uma migration não sabe quais usuários existem. Idempotente pelo unique (user_id, slug).
+ */
+export const DEFAULT_MARKET_CATEGORIES: { slug: string; name: string; icon: string }[] = [
+  { slug: "hortifruti", name: "Hortifrúti", icon: "🥬" },
+  { slug: "carnes", name: "Carnes", icon: "🥩" },
+  { slug: "frios_laticinios", name: "Frios e laticínios", icon: "🧀" },
+  { slug: "graos_cereais", name: "Grãos e cereais", icon: "🌾" },
+  { slug: "padaria", name: "Padaria", icon: "🥖" },
+  { slug: "bebidas", name: "Bebidas", icon: "🧃" },
+  { slug: "suplementos", name: "Suplementos", icon: "💊" },
+  { slug: "congelados", name: "Congelados", icon: "🧊" },
+  { slug: "temperos", name: "Temperos", icon: "🧂" },
+  { slug: "outros", name: "Outros", icon: "🛒" },
+];
+
+/** Ordenações da lista de compras. O padrão é por corredor: é assim que se anda no mercado. */
+export const SHOPPING_SORTS = ["categoria", "nome", "prioridade", "status"] as const;
+export type ShoppingSort = (typeof SHOPPING_SORTS)[number];
+
+export const SHOPPING_SORT_LABELS: Record<ShoppingSort, string> = {
+  categoria: "Por corredor",
+  nome: "Nome (A–Z)",
+  prioridade: "Prioridade",
+  status: "Status",
+};
+
+/**
+ * ⚠️ Texto obrigatório na tela da despensa.
+ *
+ * O risco explícito da subfase é a despensa virar um controle de estoque: se manter o estoque
+ * atualizado custar mais trabalho do que evitar comprar açúcar duas vezes, ninguém usa.
+ */
+export const PANTRY_SCOPE_NOTE =
+  "A despensa é uma lista simples do que você já tem: item, quantidade, unidade, validade, estoque mínimo e observação. Não há entrada, saída nem histórico — marcar um item como comprado não dá baixa aqui. Você atualiza quando quiser.";
+
+/** Aviso exibido quando a quantidade da despensa não foi informada. */
+export const PANTRY_UNKNOWN_QUANTITY_NOTE =
+  "Sem quantidade informada não dá para descontar: “tenho, mas não sei quanto” é diferente de “tenho zero”. Informe a quantidade para este item entrar no desconto.";
+
+/**
+ * ⚠️ Compartilhar a lista por link público NÃO existe, e não é esquecimento.
+ *
+ * A lista de compras diz o que a pessoa come, quanto come e quanto gasta — é dado pessoal.
+ * Exportar e imprimir resolvem o caso real (levar a lista para alguém) sem publicar nada.
+ */
+export const SHOPPING_NO_PUBLIC_LINK_NOTE =
+  "A lista não tem link público: ela conta o que você come e quanto gasta. Para levar a lista a outra pessoa, exporte o arquivo ou imprima.";
+
 /* ───────────────────────────── Navegação interna ───────────────────────────── */
 export const NUTRITION_BASE_PATH = "/nutricao";
 
@@ -697,7 +852,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Gerada do planejamento, com despensa.",
     href: `${NUTRITION_BASE_PATH}/compras`,
     icon: "shopping-cart",
-    status: "proxima",
+    status: "pronto",
     phase: "Subfase 16-D",
   },
   {
@@ -706,7 +861,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Peso, medidas corporais e fotos privadas.",
     href: `${NUTRITION_BASE_PATH}/medidas`,
     icon: "ruler",
-    status: "planejada",
+    status: "proxima",
     phase: "Subfase 16-E",
   },
   {
@@ -818,3 +973,17 @@ export const asSubstitutionOptionKind = (v: unknown): SubstitutionOptionKind =>
 export const asRecipeSort = (v: unknown): RecipeSort => (includes(RECIPE_SORTS, v) ? v : "nome");
 export const asTotalQuality = (v: unknown): NutrientTotalQuality | null =>
   includes(NUTRIENT_TOTAL_QUALITIES, v) ? v : null;
+
+/* Fase 16-D */
+export const asShoppingListStatus = (v: unknown): ShoppingListStatus =>
+  includes(SHOPPING_LIST_STATUSES, v) ? v : "ativa";
+export const asShoppingSourceKind = (v: unknown): ShoppingSourceKind =>
+  includes(SHOPPING_SOURCE_KINDS, v) ? v : "manual";
+export const asShoppingRecurrence = (v: unknown): ShoppingRecurrence =>
+  includes(SHOPPING_RECURRENCES, v) ? v : "nenhuma";
+export const asShoppingItemStatus = (v: unknown): ShoppingItemStatus =>
+  includes(SHOPPING_ITEM_STATUSES, v) ? v : "pendente";
+export const asShoppingPriority = (v: unknown): ShoppingPriority =>
+  includes(SHOPPING_PRIORITIES, v) ? v : "normal";
+export const asShoppingSort = (v: unknown): ShoppingSort =>
+  includes(SHOPPING_SORTS, v) ? v : "categoria";

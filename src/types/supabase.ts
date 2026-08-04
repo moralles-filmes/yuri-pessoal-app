@@ -1669,6 +1669,42 @@ export type Database = {
           },
         ]
       }
+      nutrition_market_categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          name: string
+          position: number
+          slug: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name: string
+          position?: number
+          slug?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          position?: number
+          slug?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       nutrition_meal_template_items: {
         Row: {
           created_at: string
@@ -1921,6 +1957,73 @@ export type Database = {
           unit?: string
         }
         Relationships: []
+      }
+      nutrition_pantry_items: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          expires_on: string | null
+          food_id: string | null
+          id: string
+          label: string
+          min_quantity: number | null
+          note: string | null
+          quantity: number | null
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          expires_on?: string | null
+          food_id?: string | null
+          id?: string
+          label: string
+          min_quantity?: number | null
+          note?: string | null
+          quantity?: number | null
+          unit?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          expires_on?: string | null
+          food_id?: string | null
+          id?: string
+          label?: string
+          min_quantity?: number | null
+          note?: string | null
+          quantity?: number | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_pantry_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_market_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_pantry_items_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_pantry_items_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods_view"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       nutrition_plan_days: {
         Row: {
@@ -2431,6 +2534,180 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      nutrition_shopping_list_items: {
+        Row: {
+          actual_price_cents: number | null
+          brand: string | null
+          category_id: string | null
+          consolidation_key: string | null
+          created_at: string
+          estimated_price_cents: number | null
+          food_id: string | null
+          id: string
+          is_manual: boolean
+          label: string
+          list_id: string
+          note: string | null
+          origins: Json
+          position: number
+          priority: string
+          purchased_at: string | null
+          quantity: number | null
+          quantity_overridden: boolean
+          recipe_id: string | null
+          separate_reason: string | null
+          status: string
+          store: string | null
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_price_cents?: number | null
+          brand?: string | null
+          category_id?: string | null
+          consolidation_key?: string | null
+          created_at?: string
+          estimated_price_cents?: number | null
+          food_id?: string | null
+          id?: string
+          is_manual?: boolean
+          label: string
+          list_id: string
+          note?: string | null
+          origins?: Json
+          position?: number
+          priority?: string
+          purchased_at?: string | null
+          quantity?: number | null
+          quantity_overridden?: boolean
+          recipe_id?: string | null
+          separate_reason?: string | null
+          status?: string
+          store?: string | null
+          unit?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actual_price_cents?: number | null
+          brand?: string | null
+          category_id?: string | null
+          consolidation_key?: string | null
+          created_at?: string
+          estimated_price_cents?: number | null
+          food_id?: string | null
+          id?: string
+          is_manual?: boolean
+          label?: string
+          list_id?: string
+          note?: string | null
+          origins?: Json
+          position?: number
+          priority?: string
+          purchased_at?: string | null
+          quantity?: number | null
+          quantity_overridden?: boolean
+          recipe_id?: string | null
+          separate_reason?: string | null
+          status?: string
+          store?: string | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_shopping_list_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_market_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_shopping_list_items_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_shopping_list_items_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_foods_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_shopping_list_items_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_shopping_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_shopping_list_items_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_shopping_lists: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          pantry_applied_at: string | null
+          recurrence: string
+          recurrence_key: string | null
+          source_from: string | null
+          source_kind: string
+          source_to: string | null
+          status: string
+          store: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          pantry_applied_at?: string | null
+          recurrence?: string
+          recurrence_key?: string | null
+          source_from?: string | null
+          source_kind?: string
+          source_to?: string | null
+          status?: string
+          store?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          pantry_applied_at?: string | null
+          recurrence?: string
+          recurrence_key?: string | null
+          source_from?: string | null
+          source_kind?: string
+          source_to?: string | null
+          status?: string
+          store?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       nutrition_substitution_groups: {
         Row: {

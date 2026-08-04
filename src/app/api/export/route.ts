@@ -98,6 +98,14 @@ const EXPORT_TABLES: TableName[] = [
   "nutrition_substitution_groups",
   "nutrition_substitution_options",
   "nutrition_substitution_logs",
+  // Subfase 16-D — lista de compras e despensa. Os corredores de mercado são semeados na
+  // primeira leitura, mas o usuário renomeia e cria os dele: sem eles no backup, as listas
+  // restauradas voltariam todas em "Sem corredor". A despensa e o histórico de preço pago
+  // não são recriáveis por nada.
+  "nutrition_market_categories",
+  "nutrition_shopping_lists",
+  "nutrition_shopping_list_items",
+  "nutrition_pantry_items",
 ];
 
 /**
