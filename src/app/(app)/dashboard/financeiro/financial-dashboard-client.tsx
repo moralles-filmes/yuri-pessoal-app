@@ -192,8 +192,10 @@ export function DashboardClient({
         <Card className="overflow-hidden ring-1 ring-primary/25">
           <CardContent className="p-5">
             <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">
+              {/* `min-w-0`: mesma razão do StatCard — sem ele o texto empurra o ícone
+                  para fora e o `overflow-hidden` do Card corta o ícone pela metade. */}
+              <div className="min-w-0 space-y-1">
+                <p className="text-sm font-medium break-words text-muted-foreground">
                   Valor realmente meu · {monthYearLabel(mesSel)}
                 </p>
                 <p className="text-3xl font-semibold tracking-tight tabular-nums">

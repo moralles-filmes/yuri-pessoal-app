@@ -21,15 +21,18 @@ export function PageHeader({
         className,
       )}
     >
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+      {/* `min-w-0` + `break-words`: título longo (ou nome cadastrado pelo usuário, sem
+          espaço) não pode alargar a linha e empurrar as ações para fora da tela. */}
+      <div className="min-w-0 space-y-1">
+        <h1 className="text-xl font-semibold tracking-tight break-words sm:text-2xl">
           {title}
         </h1>
         {description && (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="text-sm break-words text-muted-foreground">{description}</p>
         )}
       </div>
-      {children && <div className="flex items-center gap-2">{children}</div>}
+      {/* `flex-wrap`: com três ou mais botões a linha quebra em vez de estourar no celular. */}
+      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </div>
   );
 }

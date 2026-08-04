@@ -14,15 +14,23 @@ import { cn } from "@/lib/utils";
 export function Sidebar({
   collapsed,
   onToggleCollapse,
+  hidden = false,
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
+  /** Escondida por completo (toggle no Header). Diferente de `collapsed`, que vira faixa. */
+  hidden?: boolean;
 }) {
   return (
     <aside
+      // Escondida: `w-0` + `overflow-hidden` em vez de desmontar, para a largura animar
+      // junto com o conteúdo. `aria-hidden` + `invisible` tiram do foco e do leitor de tela,
+      // senão os links continuariam tabuláveis dentro de uma coluna de largura zero.
+      aria-hidden={hidden || undefined}
+      inert={hidden || undefined}
       className={cn(
-        "sticky top-0 hidden h-svh shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-300 ease-in-out lg:flex",
-        collapsed ? "w-[4.75rem]" : "w-64",
+        "sticky top-0 hidden h-svh shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar transition-[width] duration-300 ease-in-out lg:flex",
+        hidden ? "w-0 border-r-0" : collapsed ? "w-[4.75rem]" : "w-64",
       )}
     >
       <div

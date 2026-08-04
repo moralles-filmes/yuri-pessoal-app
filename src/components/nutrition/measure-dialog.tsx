@@ -106,7 +106,9 @@ export function MeasureDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(28rem,calc(100vw-2rem))]">
+      {/* `sm:max-w-md` (28rem): ver nota em food-form-dialog — sem o prefixo o limite da
+          primitiva vencia e o diálogo não crescia no desktop. */}
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{measure ? "Editar medida" : "Nova medida caseira"}</DialogTitle>
           <DialogDescription>

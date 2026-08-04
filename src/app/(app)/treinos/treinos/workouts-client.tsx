@@ -308,7 +308,9 @@ export function WorkoutsClient({
       </div>
 
       {selected.size > 0 && (
-        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-sm">
+        // `top-18` = 4.5rem: mesma razão de exercises-client — em `top-2` a barra sumia
+        // atrás do Header (`sticky top-0 h-16`) ao rolar a lista.
+        <div className="sticky top-18 z-10 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-sm">
           <span className="text-sm font-medium">
             {selected.size} {selected.size === 1 ? "selecionado" : "selecionados"}
           </span>

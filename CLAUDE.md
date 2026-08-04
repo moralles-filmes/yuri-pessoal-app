@@ -172,6 +172,39 @@ O client trata `ActionResult` com toast (sonner) — mensagens de erro em pt-BR.
 1. **O schema tem de aceitar a própria saída.** Com `zodResolver`, o react-hook-form entrega ao `onSubmit` a saída **já transformada**, o formulário manda isso para a action e a action valida de novo com o **mesmo** schema. Logo `parse(parse(x))` precisa funcionar — todo helper `optional*` aceita `null` na entrada, não só `""`/ausente. Fixado em `src/lib/validators/round-trip.test.ts`; acrescente ali todo schema novo usado com resolver.
 2. **"Verifique os campos destacados" só vale se algum campo for destacado.** Use `mapServerFieldErrors` (`src/lib/forms/server-errors.ts`): erro de campo que existe na tela vira `setError`; erro de campo que a tela **não tem** sobe para o toast com o nome do campo. Descartar `fieldErrors` deixa o usuário sem saída.
 
+### Layout responsivo — 5 regras que vieram de bugs reais
+
+Todas saíram de defeitos que chegaram a **produção** e não aparecem no desktop de quem
+escreveu a tela. Detalhe e medições em `docs/fixes/RESPONSIVIDADE_MOBILE.md`.
+
+1. **`cn()` é `twMerge` — a classe do chamador REMOVE a da primitiva.** Não é soma: caem no
+   mesmo grupo de conflito e a de fora vence. Consequências que já morderam:
+   - Em `DialogContent`, **`max-w-*` sem prefixo não tem efeito de `sm` para cima** (o
+     `sm:max-w-sm` da base vence). Para o diálogo crescer no desktop use **`sm:max-w-lg`**.
+     O limite do celular já vem da primitiva — não repita.
+   - Limite que a primitiva **não pode** deixar ser sobrescrito vai com prefixo de variante
+     (`max-sm:max-w-[...]`): variante entra em outro grupo do twMerge e, no CSS gerado, sai
+     depois das utilitárias sem prefixo.
+2. **`min-w-0` em todo lado "texto" de flex que tenha irmão `shrink-0`** (ícone, badge,
+   botão). Item de flex tem `min-width: auto` e não encolhe abaixo do conteúdo: o texto
+   empurra o irmão para fora e, com `overflow-hidden` no card, ele é **cortado pela metade**.
+   `truncate` também resolve (traz `overflow-hidden`, que zera o mínimo automático).
+3. **Item de grid tem o mesmo `min-width: auto`, e `Button` é `whitespace-nowrap`.** Rótulo
+   longo em grade apertada não quebra e **empurra a página inteira na horizontal**. Em grade
+   de botões: menos colunas no celular (`grid-cols-3 sm:grid-cols-5`) ou `min-w-0` + `truncate`.
+4. **Densidade de card se decide pela largura DO CARD, não da viewport** — `@container` +
+   `@[13rem]:...`. Um card numa grade de 4 colunas tem ~115px num monitor de 1920; media
+   query não enxerga isso. Elemento decorativo (ícone) some, conteúdo fica.
+5. **O Header é `sticky top-0 z-30` com `h-16`.** Barra `sticky` dentro do conteúdo usa
+   **`top-16`** (ou `top-18` se quiser folga) — nunca `top-0`/`top-2`, senão ela escorrega
+   para trás do Header e o controle some ao rolar.
+
+**Como conferir sem depender de sessão:** gere o CSS com `npx @tailwindcss/cli` sobre um HTML
+de teste e tire screenshot com `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+--headless --screenshot --window-size=W,H`. Para dúvida de cascata, **procure a regra no CSS
+do bundle** e compare as posições — o minificador reescreve (`width >= 40rem` vira
+`min-width:40rem`), então grep por texto exato engana.
+
 ### Lógica pura + testes (regra forte do projeto)
 Regras de negócio críticas são **funções puras com datas/`now` injetados (sem `Date.now()`)** em `src/lib/<domínio>/*.ts`, cobertas por Vitest co-localizado (`*.test.ts`, ambiente `node`). O I/O (Supabase) fica separado em `queries.ts`/`actions`. Exemplos canônicos: `src/lib/finance/invoice.ts` (regra de fatura cartão), `installments.ts`, `src/lib/notifications/generate.ts` (idempotência por `dedupe_key`), streaks de hábitos/estudos, recorrência de tarefas/agenda. **Ao mexer numa regra, ajuste/adicione testes puros — não teste via banco.**
 

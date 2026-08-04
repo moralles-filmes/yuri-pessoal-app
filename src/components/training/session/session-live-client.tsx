@@ -584,7 +584,10 @@ function SessionHeader({
   isPaused: boolean;
 }) {
   return (
-    <div className="sticky top-0 z-10 -mx-1 rounded-2xl border bg-background/95 p-3 backdrop-blur sm:p-4">
+    // `top-16`: o Header do app é `sticky top-0` com `h-16`. Em `top-0` este cabeçalho
+    // escorregava para trás dele ao rolar — cronômetro e séries sumiam justamente na tela
+    // que se usa de pé, no celular. `z-20` o mantém acima do conteúdo e abaixo do Header.
+    <div className="sticky top-16 z-20 -mx-1 rounded-2xl border bg-background/95 p-3 backdrop-blur sm:p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{session.workoutName}</p>

@@ -167,7 +167,7 @@ export function ReportsClient({
       </PageHeader>
 
       {/* ── Filtros ── */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Field label="Período">
           <Select
             value={period}
@@ -260,7 +260,7 @@ export function ReportsClient({
                   </p>
                 )}
               </CardHeader>
-              <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <DeltaTile label="Treinos" delta={comparison.sessions} format={(v) => String(v)} />
                 <DeltaTile label="Volume" delta={comparison.volumeKg} format={formatVolumeKg} />
                 <DeltaTile label="Séries" delta={comparison.sets} format={(v) => String(v)} />
@@ -273,7 +273,7 @@ export function ReportsClient({
             </Card>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label="Aderência"
               value={
