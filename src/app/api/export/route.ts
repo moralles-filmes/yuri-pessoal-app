@@ -117,6 +117,44 @@ const EXPORT_TABLES: TableName[] = [
   "body_measurements",
   "body_measurement_goals",
   "body_progress_photos",
+  // Fase 17 — módulo Treinos. O vocabulário global (`training_muscle_groups`,
+  // `training_equipment`) e os 106 exercícios da BASE ficam de fora pelo mesmo motivo da TACO:
+  // não são dado do usuário e a migration os recria. Os exercícios PRÓPRIOS entram — o
+  // `.eq("user_id", …)` abaixo garante que só eles venham, já que `training_exercises` aceita
+  // `user_id` nulo para a base do sistema.
+  //
+  // ⚠️ A ordem importa na hora de restaurar: catálogo → modelos → planejamento → execução →
+  // derivados. As sessões (`training_sessions` e filhas) são o HISTÓRICO IMUTÁVEL do módulo —
+  // ficar de fora do backup significaria perder tudo o que foi treinado.
+  "training_preferences",
+  "training_exercises",
+  "training_exercise_muscles",
+  "training_exercise_alternatives",
+  "training_exercise_prefs",
+  "training_programs",
+  "training_workouts",
+  "training_program_workouts",
+  "training_workout_exercises",
+  "training_workout_sets",
+  "training_workout_alternatives",
+  "training_scheduled_workouts",
+  "training_locations",
+  "training_location_plates",
+  "training_sessions",
+  "training_session_exercises",
+  "training_session_sets",
+  "training_session_rests",
+  "training_session_pauses",
+  "training_session_events",
+  "training_session_substitutions",
+  "training_personal_records",
+  "training_progression_rules",
+  "training_progression_suggestions",
+  // Subfase 17-E — metas e o histórico delas. `training_goal_progress` é o que garante que
+  // alterar uma meta não reescreva o passado: sem ele no backup, a restauração perderia
+  // exatamente a informação que a tabela existe para preservar.
+  "training_goals",
+  "training_goal_progress",
 ];
 
 /**
