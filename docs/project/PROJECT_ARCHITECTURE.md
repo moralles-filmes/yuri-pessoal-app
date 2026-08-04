@@ -219,7 +219,7 @@ convivem com as antigas. **Não remover `/tarefas` sem antes migrar aqueles cinc
 
 ---
 
-## Módulo Dieta e Alimentação (Fase 16 — Subfases A, B e C concluídas)
+## Módulo Dieta e Alimentação (Fase 16 — Subfases A, B, C e D concluídas)
 
 Módulo central em `/nutricao`, com **navegação interna própria** (12 submódulos) no mesmo
 padrão do TO-DO. Segue o fluxo do resto do sistema: Server Component lê → Server Action muta
@@ -274,6 +274,20 @@ padrão do TO-DO. Segue o fluxo do resto do sistema: Server Component lê → Se
     alternativa, a diferença por macro, o impacto no dia e o que resta da meta; a diferença é
     **recalculada no servidor** antes de gravar. Nenhuma equivalência é afirmada, e a ordem
     das alternativas é a prioridade **do usuário** — não um ranking calculado.
+13. **A lista de compras NÃO soma unidades incompatíveis** (16-D). 200 g de arroz + 1 xícara de
+    arroz só viram uma linha com conversão real cadastrada; sem ela, linhas separadas com o
+    motivo em `separate_reason`. Massa com massa, volume com volume — **g ↔ ml exige
+    densidade**, e `un` é contagem, não massa. Toda a decisão mora em
+    `src/lib/nutrition/shopping.ts`, como todo total mora em `calc.ts`.
+14. **A origem do item viaja congelada e o ajuste manual sobrevive** (16-D). `origins` (jsonb)
+    guarda de qual refeição, data e receita veio cada parcela; `quantity_overridden` faz a
+    regeração atualizar origem e corredor **sem** reescrever a quantidade que o usuário
+    ajustou. O que o planejamento não pede mais vira **obsoleto para confirmar**, não exclusão.
+15. **O desconto da despensa é opt-in, mostrado antes e recalculado no servidor** (16-D).
+    Cobertura total **não zera** a quantidade: o item vira `removido` ("não vou comprar") e
+    continua na lista. Na despensa, `quantity` nula é "não sei quanto" (não desconta) e zero é
+    "acabou" — a mesma distinção do `value_state`. A despensa tem **6 campos** e não é ERP de
+    estoque: marcar comprado não dá baixa nela.
 
 ### Base nutricional
 **TACO 4ª edição (NEPA/UNICAMP, 2011)** — 597 alimentos, 21.147 valores. Obtida do XLSX
@@ -322,6 +336,17 @@ receita ou item livre — o discriminador estável é `item_kind`).
 `'receita'`/`'modelo'` em `entry_kind`; `nutrition_planned_meal_items` ganhou `item_kind`,
 `recipe_id`, `portion_unit` e `meal_template_id`.
 
+### Schema — 16-D (4 tabelas)
+`nutrition_market_categories` (corredores do mercado — **dado do usuário**, semeado na primeira
+leitura por `ensureMarketCategories()`, idempotente pelo unique parcial `(user_id, slug)`; não
+é taxonomia nutricional), `nutrition_shopping_lists` (`recurrence_key` determinística por
+período, `pantry_applied_at`), `nutrition_shopping_list_items` (`origins` jsonb,
+`consolidation_key`, `quantity_overridden`, `separate_reason`, preços em **centavos**) e
+`nutrition_pantry_items` (6 campos, sem movimentação).
+
+> O total gasto da lista **não é materializado**: sai de `summarizeShoppingList` na leitura, que
+> também conta quantos itens estão **sem preço** — ausência de preço não é zero.
+
 > Nenhum valor nutricional é materializado em receita ou modelo: o total sai de `recipe.ts` /
 > `meal-template.ts` a partir dos ingredientes e do catálogo atual. Materializar criaria uma
 > segunda verdade que envelheceria no primeiro ingrediente corrigido.
@@ -333,9 +358,11 @@ receita ou item livre — o discriminador estável é `item_kind`).
 > módulo.** O Postgres não infere índice parcial sem repetir o predicado, e o PostgREST não
 > permite repetir — o `upsert` falha **só em runtime** (`42P10`). Use
 > *select-then-insert/update* nos pontos idempotentes
-> (`nutrition_diary_entries.planned_item_id`, materialização de modelo) e delete-do-escopo +
-> insert em `nutrition_goal_items` (índice com `coalesce`). No PostgREST,
-> `.eq(coluna, null)` não casa com NULL — use `.is(coluna, null)`.
+> (`nutrition_diary_entries.planned_item_id`, materialização de modelo,
+> `nutrition_shopping_lists.recurrence_key` e
+> `nutrition_shopping_list_items.consolidation_key`) e delete-do-escopo + insert em
+> `nutrition_goal_items` (índice com `coalesce`). No PostgREST, `.eq(coluna, null)` não casa
+> com NULL — use `.is(coluna, null)`.
 
 ### Mapa de arquivos
 | Camada | Caminho |
@@ -353,18 +380,21 @@ receita ou item livre — o discriminador estável é `item_kind`).
 | **Receitas: total, porção, 100 g, rendimento (puro)** | `src/lib/nutrition/recipe.ts` + `recipe.test.ts` |
 | **Refeições-modelo e duplicação (puro)** | `src/lib/nutrition/meal-template.ts` + `meal-template.test.ts` |
 | **Substituições: diferença, tolerância, impacto (puro)** | `src/lib/nutrition/substitution.ts` + `substitution.test.ts` |
+| **Compras: consolidação, despensa, recorrência (puro)** | `src/lib/nutrition/shopping.ts` + `shopping.test.ts` |
 | Snapshot → colunas do diário | `src/lib/nutrition/entry-columns.ts` |
-| Leitura (server-only) | `src/lib/nutrition/queries.ts` · `diary-queries.ts` · `recipe-queries.ts` |
-| Validação Zod | `src/lib/validators/nutrition.ts` · `nutrition-diary.ts` · `nutrition-recipes.ts` |
-| Server Actions | `src/lib/actions/nutrition-{foods,diary,goals,plans,recipes,meal-templates,substitutions}.ts` |
+| Leitura (server-only) | `src/lib/nutrition/queries.ts` · `diary-queries.ts` · `recipe-queries.ts` · `shopping-queries.ts` |
+| Validação Zod | `src/lib/validators/nutrition.ts` · `nutrition-diary.ts` · `nutrition-recipes.ts` · `nutrition-shopping.ts` |
+| Server Actions | `src/lib/actions/nutrition-{foods,diary,goals,plans,recipes,meal-templates,substitutions,shopping}.ts` |
 | Rotas | `src/app/(app)/nutricao/` |
 | Componentes | `src/components/nutrition/` |
 | Pipeline da base | `scripts/nutrition/` · dados em `data/nutrition/taco-4/` |
 
-**Todo total do módulo sai de `calc.ts`.** As subfases D–F devem reusar, nunca reimplementar
+**Todo total do módulo sai de `calc.ts`.** As subfases E–F devem reusar, nunca reimplementar
 a conta — é o que garante que diário, receita e relatório concordem entre si. Na 16-C isso
 virou estrutura: `recipe.ts` chama `convertToBase` + `scaleNutrients` + `sumNutrients`, e
-`buildRecipeEntrySnapshot` chama `buildDiaryEntrySnapshot`.
+`buildRecipeEntrySnapshot` chama `buildDiaryEntrySnapshot`. Na 16-D o mesmo princípio ganhou um
+irmão em compras: **toda decisão sobre o que soma com o quê sai de `shopping.ts`**, que reusa
+`toBaseUnitValue` de `units.ts` — e se recusa a converter o que não tem conversão real.
 
 ---
 

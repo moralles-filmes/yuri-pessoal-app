@@ -199,7 +199,7 @@ visual, textos, logotipos, telas ou assets de terceiros é copiado.**
 | 16-A | Fundação, núcleo de cálculo e catálogo de alimentos | `PHASE_16_A_NUTRITION_FOUNDATION_FOODS.md` | ✅ Concluída |
 | 16-B | Metas, diário alimentar e planejamento | `PHASE_16_B_NUTRITION_DIARY_PLANNING.md` | ✅ Concluída |
 | 16-C | Receitas, refeições-modelo e substituições | `PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` | ✅ Concluída |
-| 16-D | Lista de compras e despensa | `PHASE_16_D_NUTRITION_SHOPPING_LIST.md` | ⬜ |
+| 16-D | Lista de compras e despensa | `PHASE_16_D_NUTRITION_SHOPPING_LIST.md` | ✅ Concluída |
 | 16-E | Medidas corporais, evolução e relatórios | `PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` | ⬜ |
 | 16-F | Integrações, notificações e polimento | `PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` | ⬜ |
 

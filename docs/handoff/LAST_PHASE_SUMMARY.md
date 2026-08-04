@@ -1,9 +1,68 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
 > ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
-> (16-A, 16-B e 16-C concluídas) e a **Fase 17 — Módulo Treinos** (17-A e 17-B concluídas).
-> Este arquivo tem o resumo das duas, na ordem em que foram concluídas — a mais recente
-> primeiro.
+> (16-A, 16-B, 16-C e 16-D concluídas) e a **Fase 17 — Módulo Treinos** (17-A e 17-B
+> concluídas). Este arquivo tem o resumo das duas, na ordem em que foram concluídas — a mais
+> recente primeiro.
+
+---
+
+## Subfase 16-D — Dieta e Alimentação · Lista de compras e despensa (2026-08-04) ✅
+
+Quarta das 6 subfases da **Fase 16**. A 16-B/16-C fizeram o sistema saber o que a pessoa **vai
+comer**; a 16-D transforma isso no que ela **precisa comprar**. É a tela mais **mobile-first**
+do módulo — usada em pé, no mercado, com uma mão. **4 tabelas novas, +59 testes puros.**
+
+### ⛔ A regra que a subfase existe para garantir
+**A CONSOLIDAÇÃO NÃO SOMA UNIDADES INCOMPATÍVEIS.** 200 g de arroz + 1 xícara de arroz só viram
+**uma linha** quando existe conversão real cadastrada (a medida caseira daquele alimento, com o
+peso). Sem ela: **duas linhas**, com o motivo escrito na tela. Massa converte com massa, volume
+com volume; **g ↔ ml exigiria densidade**, e densidade presumida é dado inventado. "2 unidades"
+nunca soma com "300 g".
+
+É a mesma disciplina de `calc.ts` ("não analisado" não vira zero) aplicada a compras. Quem
+decide é `src/lib/nutrition/shopping.ts` (puro): cada parcela cai num **balde** (`base:g`,
+`base:ml`, `un`, `medida:<rótulo>`, `sem_quantidade`) e só soma dentro do balde. Item que gerou
+mais de um balde recebe `separate_reason` em **todas** as linhas.
+
+### Tabelas
+`nutrition_market_categories` (corredores do mercado, semeados na primeira leitura — não é
+taxonomia nutricional), `nutrition_shopping_lists`, `nutrition_shopping_list_items`,
+`nutrition_pantry_items`. Todas com RLS + FORCE RLS, índice em `user_id` e trigger
+`updated_at`. **32 tabelas `nutrition_*`** no total.
+
+### Decisões de contrato
+1. **A origem viaja congelada** (`origins` jsonb): de qual refeição, de qual data e de qual
+   receita veio cada parcela. O planejamento pode mudar depois; a lista impressa continua
+   explicando os números.
+2. **O ajuste manual sobrevive à regeração.** `quantity_overridden` + `planRegeneration` →
+   origem e corredor são atualizados, a quantidade **não**.
+3. **Nada some sozinho.** O que o planejamento não pede mais vira lista de **obsoletos** na
+   prévia; só é apagado com escolha explícita.
+4. **Cobertura total da despensa não zera a quantidade** — o item vira `removido` ("não vou
+   comprar") e volta com um toque. Zerar afirmaria "preciso de 0 g de arroz".
+5. **`quantity` nula na despensa ≠ zero.** Nula é "tenho mas não sei quanto" (não desconta);
+   zero é "acabou", fato medido.
+6. **Despensa travada em 6 campos** — não é ERP de estoque; marcar comprado não dá baixa.
+7. **Ausência de preço não é zero**: o resumo conta quantos itens estão sem preço.
+8. **Sem link público** (dado pessoal). Exportar `.txt` agrupado por corredor e imprimir.
+
+### Lista recorrente não duplica
+`shoppingRecurrenceKey` é determinística por período (`semanal:<início da semana>`,
+`mensal:<AAAA-MM>`, `quinzenal:<âncora fixa no calendário>`), com aritmética em `Date.UTC`.
+
+> ⚠️ Os índices únicos de `recurrence_key` e `consolidation_key` são **PARCIAIS**: `ON CONFLICT`
+> falha só em runtime (42P10). Todo caminho usa *select-then-insert/update*. Confirmado no banco.
+
+### Verificação
+`lint` + `tsc` + `test:run` (**1.132 testes**) + `build` verdes, e a suíte passa com `TZ=UTC`.
+RLS testada pela role **`authenticated`**: outro usuário lê 0 linhas nas quatro tabelas, o dono
+lê as dele, e o `WITH CHECK` recusa gravar em nome de terceiro. Dados de teste removidos.
+
+### Pendências conscientes
+Gasto com mercado × financeiro → **16-E**. Notificação de validade da despensa, gerenciar
+corredores pela interface (as actions existem) e escolher a quantidade de cada receita ao gerar
+→ **16-F**.
 
 ---
 
