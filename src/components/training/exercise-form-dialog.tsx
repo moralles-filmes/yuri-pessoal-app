@@ -49,6 +49,7 @@ import {
   TRACKING_TYPE_LABELS,
   type TrackingType,
 } from "@/lib/training/constants";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 import { METRIC_FIELD_LABELS, fieldsForTracking } from "@/lib/training/tracking";
 import { trainingExerciseSchema } from "@/lib/validators/training";
 import {
@@ -58,6 +59,27 @@ import {
 import type { Equipment, ExerciseListItem, MuscleGroup } from "@/lib/training/types";
 
 const NONE = "__nenhum__";
+
+/** Os campos que ESTA tela mostra. Erro de campo fora daqui vai para o toast, não some. */
+const FORM_FIELDS = [
+  "name",
+  "alternative_name",
+  "description",
+  "primary_muscle_group_id",
+  "equipment_id",
+  "movement_pattern",
+  "exercise_type",
+  "tracking_type",
+  "laterality",
+  "instructions",
+  "tips",
+  "common_mistakes",
+  "notes",
+  "video_url",
+  "default_rest_seconds",
+  "default_increment_kg",
+  "secondary_muscles",
+] as const;
 
 type FormValues = {
   name: string;
@@ -168,7 +190,12 @@ export function ExerciseFormDialog({
     setSaving(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      // O servidor recusou: destaca o que dá para destacar e diz o resto em voz alta.
+      const mapped = mapServerFieldErrors(result.fieldErrors, FORM_FIELDS);
+      for (const { name, message } of mapped.toSet) {
+        form.setError(name as keyof FormValues, { type: "server", message });
+      }
+      toast.error(serverErrorMessage(result.error, mapped));
       return;
     }
     toast.success(isEditing ? "Exercício atualizado." : "Exercício criado.");
@@ -195,7 +222,7 @@ export function ExerciseFormDialog({
               <Input {...form.register("name")} placeholder="Supino reto com barra" autoFocus />
             </Field>
 
-            <Field label="Nome alternativo">
+            <Field label="Nome alternativo" error={form.formState.errors.alternative_name?.message}>
               <Input {...form.register("alternative_name")} placeholder="Supino horizontal" />
             </Field>
 
@@ -217,7 +244,7 @@ export function ExerciseFormDialog({
               </Select>
             </Field>
 
-            <Field label="Equipamento">
+            <Field label="Equipamento" error={form.formState.errors.equipment_id?.message}>
               <Select
                 value={values.equipment_id || NONE}
                 onValueChange={(value) =>
@@ -238,7 +265,7 @@ export function ExerciseFormDialog({
               </Select>
             </Field>
 
-            <Field label="Padrão de movimento">
+            <Field label="Padrão de movimento" error={form.formState.errors.movement_pattern?.message}>
               <Select
                 value={values.movement_pattern ?? "outros"}
                 onValueChange={(value) => form.setValue("movement_pattern", value)}
@@ -256,7 +283,7 @@ export function ExerciseFormDialog({
               </Select>
             </Field>
 
-            <Field label="Tipo de exercício">
+            <Field label="Tipo de exercício" error={form.formState.errors.exercise_type?.message}>
               <Select
                 value={values.exercise_type ?? "forca"}
                 onValueChange={(value) => form.setValue("exercise_type", value)}
@@ -274,7 +301,7 @@ export function ExerciseFormDialog({
               </Select>
             </Field>
 
-            <Field label="Lateralidade">
+            <Field label="Lateralidade" error={form.formState.errors.laterality?.message}>
               <Select
                 value={values.laterality ?? "bilateral"}
                 onValueChange={(value) => form.setValue("laterality", value)}
@@ -297,7 +324,7 @@ export function ExerciseFormDialog({
 
           {/* O contrato de medição, explicado antes de o usuário escolher. */}
           <div className="space-y-2">
-            <Field label="Tipo de acompanhamento">
+            <Field label="Tipo de acompanhamento" error={form.formState.errors.tracking_type?.message}>
               <Select
                 value={values.tracking_type ?? "peso_reps"}
                 onValueChange={(value) => form.setValue("tracking_type", value)}
@@ -415,14 +442,22 @@ export function ExerciseFormDialog({
           <Separator />
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Descanso padrão (segundos)" hint="Vazio usa o padrão do módulo.">
+            <Field
+              label="Descanso padrão (segundos)"
+              hint="Vazio usa o padrão do módulo."
+              error={form.formState.errors.default_rest_seconds?.message}
+            >
               <Input
                 {...form.register("default_rest_seconds")}
                 inputMode="numeric"
                 placeholder="90"
               />
             </Field>
-            <Field label="Incremento de carga (kg)" hint="Vazio usa o do equipamento.">
+            <Field
+              label="Incremento de carga (kg)"
+              hint="Vazio usa o do equipamento."
+              error={form.formState.errors.default_increment_kg?.message}
+            >
               <Input
                 {...form.register("default_increment_kg")}
                 inputMode="decimal"
@@ -430,13 +465,17 @@ export function ExerciseFormDialog({
               />
             </Field>
 
-            <Field label="Instruções de execução" className="sm:col-span-2">
+            <Field
+              label="Instruções de execução"
+              className="sm:col-span-2"
+              error={form.formState.errors.instructions?.message}
+            >
               <Textarea {...form.register("instructions")} rows={3} />
             </Field>
-            <Field label="Dicas">
+            <Field label="Dicas" error={form.formState.errors.tips?.message}>
               <Textarea {...form.register("tips")} rows={2} />
             </Field>
-            <Field label="Erros comuns">
+            <Field label="Erros comuns" error={form.formState.errors.common_mistakes?.message}>
               <Textarea {...form.register("common_mistakes")} rows={2} />
             </Field>
             <Field
@@ -447,7 +486,11 @@ export function ExerciseFormDialog({
             >
               <Input {...form.register("video_url")} placeholder="https://…" />
             </Field>
-            <Field label="Observações" className="sm:col-span-2">
+            <Field
+              label="Observações"
+              className="sm:col-span-2"
+              error={form.formState.errors.notes?.message}
+            >
               <Textarea {...form.register("notes")} rows={2} />
             </Field>
           </div>

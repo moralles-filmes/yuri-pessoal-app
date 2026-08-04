@@ -5,13 +5,24 @@ export const dateString = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida");
 
-/** Texto opcional: string vazia/ausente vira null. */
+/**
+ * Texto opcional: string vazia/ausente/null vira null.
+ *
+ * ⛔ **Aceitar `null` na ENTRADA não é detalhe — é o que torna o schema idempotente.**
+ * O `zodResolver` entrega ao `onSubmit` a saída JÁ TRANSFORMADA (é assim que o
+ * react-hook-form funciona), e o formulário manda exatamente isso para a Server Action,
+ * que valida de novo com o MESMO schema. Como a transformação emite `null`, um schema que
+ * só aceitasse `string | undefined` recusaria a própria saída: o usuário preenchia tudo,
+ * clicava em salvar e recebia "Verifique os campos destacados" sem campo nenhum destacado.
+ * Pior: campo opcional que nem aparece no formulário (`icon`) entrava como `null` e
+ * quebrava o salvamento SEMPRE. Coberto por `round-trip.test.ts`.
+ */
 export function optionalText(max = 1000) {
   return z
     .string()
     .trim()
     .max(max, `Máximo de ${max} caracteres`)
-    .optional()
+    .nullish()
     .transform((v) => (v && v.length ? v : null));
 }
 

@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 import { TRAINING_GOALS, TRAINING_GOAL_LABELS } from "@/lib/training/constants";
 import { workoutSchema } from "@/lib/validators/training-routines";
 import {
@@ -40,6 +41,17 @@ import type { TrainingProgram, TrainingWorkout } from "@/lib/training/types";
 import { Field } from "./field";
 
 const NONE = "__nenhum__";
+
+/** Os campos que ESTA tela mostra. Erro de campo fora daqui vai para o toast, não some. */
+const FORM_FIELDS = [
+  "name",
+  "short_name",
+  "description",
+  "goal",
+  "program_id",
+  "estimated_minutes",
+  "notes",
+] as const;
 
 type FormValues = {
   name: string;
@@ -104,7 +116,12 @@ export function WorkoutFormDialog({
     setSaving(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      // O servidor recusou: destaca o que dá para destacar e diz o resto em voz alta.
+      const mapped = mapServerFieldErrors(result.fieldErrors, FORM_FIELDS);
+      for (const { name, message } of mapped.toSet) {
+        form.setError(name as keyof FormValues, { type: "server", message });
+      }
+      toast.error(serverErrorMessage(result.error, mapped));
       return;
     }
     toast.success(isEditing ? "Treino atualizado." : "Treino criado. Agora monte os exercícios.");
@@ -133,11 +150,19 @@ export function WorkoutFormDialog({
               <Input {...form.register("name")} placeholder="Treino A — Peito e tríceps" autoFocus />
             </Field>
 
-            <Field label="Apelido curto" hint="Aparece no calendário. Ex.: A, B, Push.">
+            <Field
+              label="Apelido curto"
+              hint="Aparece no calendário. Ex.: A, B, Push."
+              error={form.formState.errors.short_name?.message}
+            >
               <Input {...form.register("short_name")} placeholder="A" maxLength={20} />
             </Field>
 
-            <Field label="Objetivo" hint="Organização sua, nunca prescrição.">
+            <Field
+              label="Objetivo"
+              hint="Organização sua, nunca prescrição."
+              error={form.formState.errors.goal?.message}
+            >
               <Select
                 value={values.goal ?? "personalizado"}
                 onValueChange={(value) => form.setValue("goal", value)}
@@ -155,7 +180,11 @@ export function WorkoutFormDialog({
               </Select>
             </Field>
 
-            <Field label="Programa" hint="Um treino pode ficar avulso e ser reaproveitado depois.">
+            <Field
+              label="Programa"
+              hint="Um treino pode ficar avulso e ser reaproveitado depois."
+              error={form.formState.errors.program_id?.message}
+            >
               <Select
                 value={values.program_id || NONE}
                 onValueChange={(value) =>
@@ -178,15 +207,27 @@ export function WorkoutFormDialog({
               </Select>
             </Field>
 
-            <Field label="Duração estimada (min)" hint="Vazio usa a estimativa calculada das séries.">
+            <Field
+              label="Duração estimada (min)"
+              hint="Vazio usa a estimativa calculada das séries."
+              error={form.formState.errors.estimated_minutes?.message}
+            >
               <Input {...form.register("estimated_minutes")} inputMode="numeric" placeholder="60" />
             </Field>
 
-            <Field label="Descrição" className="sm:col-span-2">
+            <Field
+              label="Descrição"
+              className="sm:col-span-2"
+              error={form.formState.errors.description?.message}
+            >
               <Textarea {...form.register("description")} rows={2} />
             </Field>
 
-            <Field label="Observações" className="sm:col-span-2">
+            <Field
+              label="Observações"
+              className="sm:col-span-2"
+              error={form.formState.errors.notes?.message}
+            >
               <Textarea {...form.register("notes")} rows={2} />
             </Field>
           </div>
