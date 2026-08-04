@@ -89,6 +89,49 @@ conscientes de cada uma estão em `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
 
 ---
 
+## Correção 2026-08-04 — a busca travava ao digitar, e o padrão estava em 5 telas
+
+**Sintoma relatado (Treinos):** digitar na busca "fica travando tudo e não sai o que digito,
+fica com delay". Junto vieram outros dois: filtrar por grupo muscular ao **adicionar exercício
+ao treino** trazia também os secundários, e escolher **alternativa/substituto** não tinha como
+digitar — só rolar o catálogo inteiro.
+
+**Causa do travamento, estrutural e não de uma tela só:** o campo era um input controlado cujo
+`value` vinha da **URL**. Cada tecla chamava `router.replace` e, como as páginas de módulo são
+`force-dynamic`, o Next buscava o RSC no servidor; o `searchParams` — e portanto o valor do
+campo — só voltava quando a resposta chegava. Digitando rápido, caractere se perdia.
+
+Estado de filtro na URL é o padrão do projeto e continua certo — mas vale para **clique**
+(select, toggle, aba), **não para digitação**.
+
+Atingia **5 telas**, em dois módulos: `treinos/exercicios`, `treinos/treinos`,
+`treinos/programas`, `treinos/historico` e `nutricao/alimentos`.
+
+**Correção:**
+- `src/lib/forms/use-url-text.ts` (`useUrlText`): o texto responde local e alcança a URL depois
+  de 300 ms de pausa, preservando link, botão voltar e recarregar.
+- `src/lib/forms/url-text-sync.ts` (puro, testado): decide quando o campo adota o valor da URL.
+  **Um furo pego pelo teste antes de ir para produção** — se o usuário seguisse digitando
+  enquanto a gravação anterior estava em voo, o eco atrasado devolvia o texto antigo ao campo,
+  exatamente o bug que a correção existe para eliminar. Por isso a decisão compara também com o
+  último valor que nós mandamos gravar, distinguindo **eco próprio** de **mudança externa**
+  (limpar filtros, voltar).
+- `exercisePickerFilters` (`src/lib/training/filters.ts`): o picker do treino filtra pelo grupo
+  **PRINCIPAL**. Ele espalhava `EMPTY_EXERCISE_FILTERS`, cujo padrão é `includeSecondary: true`,
+  e não tem o toggle que o catálogo tem — não havia como desligar. A decisão virou função
+  nomeada e testada em vez de um flag solto dentro do JSX.
+- `src/components/training/exercise-search-picker.tsx`: escolher alternativa/substituto passa a
+  ter busca, reusando `matchesSearch` da 17-A (nome, apelido, grupo, equipamento, termos em
+  qualquer ordem) — a mesma busca do catálogo, não um segundo mecanismo.
+
+A regra está registrada no `CLAUDE.md` ("campo de TEXTO nunca é controlado pelo valor da URL").
+
+**Verificação:** testes, lint, tsc, build e smoke test de rota em produção. ⚠️ **As três telas
+não foram exercitadas na aplicação rodando** — estão atrás do login e não havia sessão
+disponível; vale um clique antes de considerar 100% fechado.
+
+---
+
 ## O que foi implementado na Subfase 18-A (fundação, provedores e chat) — 2026-08-04
 
 A 18-A **para antes de encostar nos dados**, de propósito. O risco desta subfase nunca foi a
