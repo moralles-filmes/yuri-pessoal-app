@@ -259,7 +259,10 @@ export function FoodFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] w-[min(48rem,calc(100vw-2rem))] overflow-y-auto">
+      {/* `sm:max-w-3xl` (48rem): sem o prefixo, o `sm:max-w-sm` da primitiva vencia e o
+          formulário ficava espremido em 384px no desktop. O limite do celular vem da
+          própria primitiva. */}
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{food ? "Editar alimento" : "Novo alimento"}</DialogTitle>
           <DialogDescription>

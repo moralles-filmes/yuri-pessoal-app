@@ -147,14 +147,17 @@ export function RestPanel({
         ))}
       </div>
 
+      {/* `min-w-0` + `truncate`: "Pular descanso" em `text-base` mede ~150px e a célula
+          fica no limite num celular de 375px. Sem isso o `whitespace-nowrap` do Button
+          alargava o grid e a tela de descanso rolava na horizontal. */}
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <Button variant="outline" className="h-12 text-base" onClick={onSkip}>
+        <Button variant="outline" className="h-12 min-w-0 text-sm sm:text-base" onClick={onSkip}>
           <SkipForward className="size-4" />
-          Pular descanso
+          <span className="truncate">Pular descanso</span>
         </Button>
-        <Button className="h-12 text-base" onClick={onFinish}>
+        <Button className="h-12 min-w-0 text-sm sm:text-base" onClick={onFinish}>
           <Check className="size-4" />
-          Continuar
+          <span className="truncate">Continuar</span>
         </Button>
       </div>
     </div>

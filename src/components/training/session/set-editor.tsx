@@ -378,7 +378,11 @@ export function SetEditor({
       {difficultyScale === "simples" ? (
         <div>
           <Label className="text-xs text-muted-foreground">Como foi a série</Label>
-          <div className="mt-1.5 grid grid-cols-5 gap-1.5">
+          {/* 3 colunas no celular: `Button` é `whitespace-nowrap` e item de grid tem
+              `min-width: auto`, então em 5 colunas o rótulo "Muito difícil" não cabia na
+              célula (~57px numa tela de 375px) e alargava o grid, empurrando a página
+              inteira na horizontal. */}
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5 sm:grid-cols-5">
             {DIFFICULTY_LEVELS.map((level) => (
               <Button
                 key={level}

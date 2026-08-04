@@ -25,7 +25,11 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
+  // `max-w-full overflow-x-auto`: os gatilhos são `whitespace-nowrap`, então uma lista de
+  // abas com rótulos longos ("Grupos musculares", "Comparar datas") ficava mais larga que a
+  // tela e empurrava a PÁGINA inteira na horizontal. Com o clamp, o excesso rola dentro da
+  // própria lista de abas e o resto do layout fica no lugar.
+  "group/tabs-list inline-flex w-fit max-w-full items-center justify-center overflow-x-auto rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
   {
     variants: {
       variant: {
