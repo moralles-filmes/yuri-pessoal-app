@@ -18,7 +18,12 @@
  * discordarem entre si — que é exatamente o que a regra 3 do módulo proíbe.
  */
 import { scaleNutrients, type NutrientBag } from "./calc";
-import { CORE_NUTRIENTS, type BaseUnit, type PreparationState } from "./constants";
+import {
+  asTotalQuality,
+  CORE_NUTRIENTS,
+  type BaseUnit,
+  type PreparationState,
+} from "./constants";
 import { convertToBase, type ConversionFailureReason, type ConvertibleMeasure } from "./units";
 import type {
   DiaryEntrySnapshot,
@@ -74,14 +79,7 @@ export function buildDiaryEntrySnapshot(input: SnapshotInput): SnapshotResult {
 
   const scaled = scaleNutrients(food.nutrients, conversion.factor);
 
-  const nutrientsSnapshot: NutrientSnapshotBag = {};
-  for (const [code, value] of Object.entries(scaled)) {
-    nutrientsSnapshot[code] = {
-      amount: value.amount,
-      state: value.state,
-      method: value.method,
-    };
-  }
+  const nutrientsSnapshot: NutrientSnapshotBag = toSnapshotBag(scaled);
 
   return {
     ok: true,
@@ -111,11 +109,30 @@ export function buildDiaryEntrySnapshot(input: SnapshotInput): SnapshotResult {
 }
 
 /**
+ * `NutrientBag` (calc.ts) → jsonb do snapshot.
+ *
+ * A `quality` só existe em valor AGREGADO (receita, refeição-modelo — 16-C) e é congelada
+ * junto: sem ela, o total de uma receita parcial entraria no dia com cara de exato.
+ */
+export function toSnapshotBag(bag: NutrientBag): NutrientSnapshotBag {
+  const snapshot: NutrientSnapshotBag = {};
+  for (const [code, value] of Object.entries(bag)) {
+    snapshot[code] = {
+      amount: value.amount,
+      state: value.state,
+      method: value.method,
+      ...(value.quality && value.quality !== "exato" ? { quality: value.quality } : {}),
+    };
+  }
+  return snapshot;
+}
+
+/**
  * Valor para as colunas quentes. Só `disponivel` vira número: "traço" e "não disponível"
  * ficam nulos porque a coluna quente não tem onde guardar o estado, e um 0 ali seria lido
  * como medição. O estado completo continua no jsonb, que é de onde sai o total.
  */
-function hotValue(bag: NutrientSnapshotBag, code: string): number | null {
+export function hotValue(bag: NutrientSnapshotBag, code: string): number | null {
   const value = bag[code];
   if (!value || value.state !== "disponivel") return null;
   return value.amount;
@@ -138,6 +155,8 @@ export function snapshotToBag(snapshot: NutrientSnapshotBag): NutrientBag {
       amount: value.state === "disponivel" ? value.amount : null,
       state: value.state,
       method: value.method,
+      // Um item de receita parcial continua parcial dentro do total do dia.
+      ...(value.quality ? { quality: value.quality } : {}),
     };
   }
   return bag;
@@ -167,6 +186,8 @@ export function parseNutrientSnapshot(raw: unknown): NutrientSnapshotBag {
           ? Number(rawAmount)
           : null;
 
+    const quality = asTotalQuality(entry.quality);
+
     bag[code] = {
       // Valor sem número não pode ficar como "disponível": a incoerência viraria um total
       // que parece exato. Sem número, o estado honesto é "não disponível".
@@ -177,6 +198,8 @@ export function parseNutrientSnapshot(raw: unknown): NutrientSnapshotBag {
       method: (typeof entry.method === "string"
         ? entry.method
         : "desconhecido") as SnapshotNutrient["method"],
+      // Só valor agregado (receita/modelo) traz qualidade; "exato" é o default implícito.
+      ...(quality && quality !== "exato" ? { quality } : {}),
     };
   }
   return bag;

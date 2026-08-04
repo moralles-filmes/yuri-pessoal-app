@@ -8,8 +8,8 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A e 16-B concluídas**; 16-C é a próxima |
-| **17** | Treinos (`/treinos`) | A–F | **17-A concluída**; 17-B é a próxima |
+| **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A, 16-B e 16-C concluídas**; 16-D é a próxima |
+| **17** | Treinos (`/treinos`) | A–F | **17-A e 17-B concluídas**; 17-C é a próxima |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -18,16 +18,124 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 > chegar primeiro (16-E ou 17-E) cria, o outro consome. Nunca duas tabelas de peso corporal.
 
 ## Fases atuais
-- **Fase 16-B — Dieta e Alimentação · Metas, diário alimentar e planejamento → CONCLUÍDA ✅**
-  Arquivo: `docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md`
-- **Fase 17-A — Treinos · Fundação, vocabulário e catálogo de exercícios → CONCLUÍDA ✅**
-  Arquivo: `docs/phases/PHASE_17_A_TRAINING_FOUNDATION_EXERCISES.md`
+- **Fase 16-C — Dieta e Alimentação · Receitas, refeições-modelo e substituições → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
+- **Fase 17-B — Treinos · Programas, treinos-modelo e planejamento semanal → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md`
 
 ## Próximas fases
-- **Subfase 16-C — Receitas, refeições-modelo e substituições.**
-  Arquivo: `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
-- **Subfase 17-B — Programas, treinos-modelo e planejamento semanal.**
-  Arquivo: `docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md`
+- **Subfase 16-D — Lista de compras.**
+  Arquivo: `docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md`
+- **Subfase 17-C — Preparação, sessão ao vivo, cronômetro e recuperação.**
+  Arquivo: `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md`
+
+---
+
+## O que foi implementado na Subfase 17-B (Treinos — rotina e planejamento)
+
+A 17-A entregou o vocabulário e o catálogo: o sistema sabia o que é "Supino reto com barra".
+A 17-B entrega a camada que transforma exercícios soltos em **rotina** — treino-modelo,
+programa e planejamento semanal. **7 tabelas novas** e **+105 testes puros**.
+
+### A separação que define a subfase: **modelo é intenção; execução é fato consumado**
+
+Tudo que a 17-B constrói é o lado **mutável**. Nenhuma tabela desta subfase pode ser lida "ao
+vivo" por uma sessão passada — é por isso que **não existe coluna apontando para sessão** em
+nenhuma delas. A 17-C vai gravar um **snapshot** ao iniciar o treino, e é o snapshot que
+protege o histórico. O versionamento (`version` + `superseded_by` + `version_group_id`) existe
+para outra coisa: o usuário **comparar intenções** ("meu ABC de janeiro × o de maio").
+
+### `expandPlannedSets` — o contrato que a 17-C consome
+
+Existem dois jeitos de configurar séries: **uniforme** (`default_sets`: "4×8-12, 90s") e
+**série a série** (`training_workout_sets`: top set + back-off, pirâmide, drop set planejado).
+Se cada tela resolvesse os dois casos por conta própria, construtor, sessão e relatório
+discordariam sobre quantas séries o treino tem.
+
+`expandPlannedSets` devolve **sempre o mesmo formato** (`PlannedSet[]`) e é o único caminho.
+Regra: existindo ao menos uma linha configurada, ela é a verdade e `default_sets` vira só
+exibição; `null` numa série significa "herda do exercício", e a herança mora num lugar só.
+A função **usa a matriz de `tracking.ts`** para apagar o que não se aplica — um exercício de
+duração não carrega peso planejado, um assistido guarda assistência e não peso na barra.
+**Nenhuma segunda matriz de medição foi criada.**
+
+### Schema — 7 tabelas (RLS + FORCE RLS em todas)
+`training_programs`, `training_program_workouts`, `training_workouts`,
+`training_workout_exercises`, `training_workout_sets`, `training_workout_alternatives`,
+`training_scheduled_workouts`. **Total do projeto: 81 tabelas** (74 + 7). Security advisor:
+**0 lints de schema**.
+
+Decisões registradas:
+- **Junção programa↔treino, e não FK direta.** Um treino pode ser avulso ou compor mais de um
+  programa. `training_workouts.program_id` é só "programa de origem" (`set null`).
+- **Três colunas de carga planejada**, e isso não é redundância: `planned_weight_kg` (barra),
+  `planned_additional_weight_kg` (**soma**) e `planned_assistance_weight_kg` (**subtrai**).
+  Num campo só, cada tela teria de reinterpretar o sinal — e uma delas erraria, mostrando
+  progresso justamente na regressão.
+- **`exercise_id` é `on delete restrict`**: excluir um exercício em uso num treino não pode
+  removê-lo do treino em silêncio. A action conta os treinos e devolve a mensagem em pt-BR.
+- **`workout_id` do planejamento é `set null`, não cascade**: excluir um treino não apaga dias
+  planejados; a linha continua legível como "treino removido".
+- **`is_active` sem índice único**: mais de um programa em uso gera **aviso**, não erro de
+  banco. Índice único transformaria um aviso numa parede.
+- **Índice único parcial** garante no máximo **um marcador de descanso por dia**.
+
+### Status derivado, nunca gravado
+`training_scheduled_workouts.status` guarda só FATO (`planejado`, `concluido`,
+`nao_realizado`, `reagendado`, `cancelado`). **"Atrasado" e "hoje" nascem em
+`derivePlannedStatus(entry, hoje)`**, com `hoje` injetado pelo servidor em Brasília — mesma
+disciplina de `atrasada` no TO-DO e do status da fatura. Um desfecho gravado sempre vence a
+derivação: um treino marcado como não realizado ontem **não** é "atrasado", já tem resposta.
+
+**"Concluído" não é gravável por esta subfase.** Quem conclui um treino é a sessão ao vivo
+(17-C); permitir marcar "feito" à mão criaria histórico sem execução, e a 17-D teria de
+reconciliar dois "concluídos" que não significam a mesma coisa.
+
+### Lógica pura (+105 testes) — suíte de Treinos: 66 → **171**
+- `workout.ts` — `expandPlannedSets` (os dois formatos, herança, renumeração, máscara por
+  `tracking_type`), contagem de séries, séries por grupo muscular (**principal e secundário
+  contados à parte**, para uma remada não parecer treinar bíceps tanto quanto costas),
+  duração estimada (execução + descanso, **sem contar o descanso da última série**, com marca
+  de **parcial** quando falta alvo), validação de superset (contíguo × furado × sozinho),
+  ordem canônica e reordenação que nunca perde item.
+- `schedule.ts` — aritmética de data pura em `Date.UTC` (virada de mês, de ano e bissexto),
+  semana com primeiro dia configurável, status derivado, **rodízio A/B/C que avança por dia de
+  treino** (e não por dia de calendário, senão o ciclo quebra numa semana mais curta), ciclo de
+  N semanas com âncora, duplicação de semana, reagendamento preservando a **primeira** data
+  original, e aderência que **só conta o passado** (dia futuro não é falha; sem nada planejado
+  a taxa é `null`, e não 0%).
+
+### Interface
+- **`/treinos/programas`** — lista com filtros, criar/editar/duplicar/ativar/pausar/finalizar/
+  arquivar, composição do programa por arrastar (com alternativa por teclado), dias sugeridos
+  por treino e **exclusão que sempre pergunta o destino** dos treinos.
+- **`/treinos/treinos`** — lista com filtros combináveis, seleção múltipla, ações em massa,
+  mover de programa; **versões substituídas ficam escondidas por padrão** e voltam por filtro.
+- **`/treinos/treinos/[id]`** — construtor: arrastar exercícios, configurar séries (uniformes
+  ou uma a uma, com **pré-visualização pela própria `expandPlannedSets`**), agrupar superset,
+  definir alternativas do exercício naquele treino, salvar como nova versão.
+- **`/treinos/calendario`** — semana, mês e lista; arrastar para reagendar; gerar rotina por
+  dias da semana + rodízio; aplicar programa; duplicar semana; marcar descanso; registrar
+  justificativa. **Nada é sobrescrito em silêncio**: gerar e duplicar exigem escolher entre
+  preservar ou substituir, e "substituir" nunca alcança dia com desfecho gravado.
+- **`/treinos/hoje`** — treino do dia com grupos musculares, nº de exercícios, total de séries
+  e duração estimada, próximo treino e dias em aberto. **Sem "Iniciar treino"**: a tela diz
+  que o botão chega na 17-C, em vez de mostrar um controle que não faz nada.
+- **`/treinos`** — visão geral com a semana planejada. Continua **sem** volume, recorde e
+  evolução: não há sessão registrada até a 17-C.
+
+### Segurança — verificado no banco pela role `authenticated`
+Ver programa/treino/planejado de terceiro: **0 linhas**. Editar e excluir os três de terceiro:
+**0 linhas**. Inserir com `user_id` de terceiro nas três tabelas: **bloqueado**. Descanso com
+treino: **bloqueado**. Dois descansos no mesmo dia: **bloqueado**. `superset_group` inválido:
+**bloqueado**. Série duplicada: **bloqueado**. Excluir exercício em uso: **bloqueado**
+(`restrict`). Faixa de repetições invertida: **bloqueado**. Integridade reconferida: 106
+exercícios, 1 usuário, 0 resíduos de teste.
+
+### Verificação
+`npm run lint` (0 erros), `npx tsc --noEmit` (0 erros nos arquivos da 17-B), `npm run test:run`
+(**1073 testes**) e `npm run build` passam. Smoke test: rotas privadas → 307 `/login`;
+`/api/cron/*` → 401 sem segredo. Fora de `training`/`treinos`, nada foi tocado.
 
 ---
 
@@ -123,6 +231,119 @@ resíduo de teste.
 `npm run test:run` (**889 testes**), `npm run lint`, `npx tsc --noEmit` e `npm run build`
 passam. Nenhuma fase anterior foi tocada — as únicas alterações fora de `training`/`treinos`
 são a linha nova em `src/config/nav.ts` e a nota de decisão na 16-E.
+
+---
+
+## O que foi implementado na Subfase 16-C (receitas, refeições-modelo e substituições)
+
+A 16-B fez o sistema saber o que foi comido, item a item. A 16-C entrega as três abstrações
+que tornam o uso diário rápido — **receita**, **refeição-modelo** e **substituição** — sem
+abrir um segundo caminho de gravação. **Testes: +79 puros** (recipe, substitution e
+meal-template).
+
+### A regra que a subfase existe para garantir
+**O peso de uma comida pronta não se deduz somando os ingredientes crus.** Um refogado perde
+água, um bolo perde água e ganha volume, um feijão ganha água — a variação depende do fogo, do
+tempo e da panela. Por isso `nutrition_recipes.total_weight_g` é **informado** pelo usuário, e
+quando ele não existe o valor **"por 100 g" fica indisponível com explicação**, em vez de cair
+silenciosamente para a soma dos crus (que daria um número plausível e errado).
+
+O total da receita é a **soma dos ingredientes**; "por porção" é esse total dividido pelo
+rendimento — então **alterar o rendimento recalcula a porção sem mexer no total**.
+
+### ⛔ Receita e refeição-modelo entram no diário pelo MESMO caminho
+`buildRecipeEntrySnapshot` (recipe.ts) **chama** `buildDiaryEntrySnapshot` (16-B). Não existe
+segunda tabela, segunda fórmula nem segundo formato de snapshot. Consequências garantidas por
+construção: o total do dia soma o `nutrients_snapshot`; editar ou excluir a receita **não muda
+o que já foi comido**; e a qualidade do cálculo viaja junto do número.
+
+`nutrition_diary_entries.entry_kind` ganhou `'receita'` e `'modelo'` (o CHECK da 16-B já
+previa), e `nutrition_planned_meal_items` ganhou `item_kind` + `recipe_id` + `portion_unit`.
+O discriminador estável continua sendo a coluna de tipo, nunca a presença de uma FK — todas
+são `on delete set null`.
+
+### A qualidade agregada passou a viajar com o número
+Uma receita cujo ingrediente não tem fibra analisada tem total de fibra **parcial**. Antes da
+16-C não havia como dizer isso ao entrar no diário: o valor seria gravado como se fosse exato.
+Agora `SnapshotNutrient` e `ComputedNutrient` carregam um `quality` **opcional**, e
+`sumNutrient` o respeita (um agregado parcial conta como contribuinte **e** degrada o total).
+A mudança é aditiva: nenhum snapshot da 16-B tem o campo, e nada no comportamento anterior
+mudou.
+
+### Decisões registradas
+1. **Sem peso final, a receita só é registrada em PORÇÕES** — e aí `grams_equivalent`,
+   `base_quantity` e `base_unit` ficam **NULOS**. "Não sei quanto pesa" ≠ "pesa zero", então o
+   tipo `DiaryEntrySnapshot` foi alargado para aceitar nulo nessas três colunas.
+2. **Refeição-modelo aponta para a receita**, não copia os ingredientes: melhorar a receita
+   melhora o modelo. O congelamento continua acontecendo só no consumo.
+3. **Adicionar o mesmo modelo duas vezes não duplica** (`templateItemsToRegister`, puro e
+   testado). Repetir de propósito exige um interruptor explícito na tela — a idempotência é de
+   leitura, e não um índice único, porque um modelo vira VÁRIAS linhas no diário.
+4. **Dois modos de registrar um modelo**: detalhado (uma linha por item, ajustável depois) e
+   resumido (uma linha com o total). Os dois passam pelo mesmo snapshot.
+5. **Substituir é sempre confirmado.** A tela mostra original × alternativa, a diferença de
+   kcal/P/C/G/fibra, o impacto no total do dia e o que resta da meta. A diferença é
+   **recalculada no servidor** antes de gravar — o que o navegador exibiu é conferido, não
+   copiado.
+6. **Nenhuma equivalência é afirmada.** A ordem das alternativas é a **prioridade do usuário**,
+   não um ranking nutricional; a tolerância é preferência dele; "fora da tolerância" é aviso,
+   nunca impedimento. Nenhuma sugestão nasce de heurística nova.
+7. **Diferença desconhecida não é zero.** Se um lado não tem o nutriente medido, a comparação
+   fica "não dá para comparar" e o impacto no dia é marcado como **parcial**.
+8. **Duplicar não herda passado**: contagem de uso, último uso, favorito, arquivamento,
+   consumo registrado e logs de substituição ficam com o original.
+9. **No diário, a substituição regrava a MESMA linha** (`change_kind = 'substituido'`),
+   preservando o vínculo com o item planejado. No nível refeição, os itens antigos viram
+   `'removido'` (deixam de somar, continuam visíveis) e a refeição passa a `'substituida'` —
+   status que já existia na 16-B.
+
+### Schema — 8 tabelas novas + 2 alterações (0 lints de schema)
+`nutrition_recipe_categories` · `nutrition_recipes` · `nutrition_recipe_ingredients` ·
+`nutrition_meal_templates` · `nutrition_meal_template_items` ·
+`nutrition_substitution_groups` · `nutrition_substitution_options` ·
+`nutrition_substitution_logs`, mais as migrations que estendem `nutrition_diary_entries` e
+`nutrition_planned_meal_items`. Todas com RLS + FORCE RLS, índice em `user_id` e trigger
+`set_updated_at`. **A foto da receita reusa `attachments` + o bucket privado `attachments`** —
+nenhum bucket novo.
+
+### Pendências da 16-B fechadas aqui
+- **Montar os dias de um modelo de semana pela interface** (antes só criar e aplicar
+  funcionavam).
+- **Escopo na EDIÇÃO de refeição planejada** — `updatePlannedMealInScope` já existia e era
+  testada, mas a UI só expunha escopo na exclusão.
+
+### Efeito colateral necessário
+`/api/export` passou a incluir as **8 tabelas novas**. Tudo ali é conteúdo autoral do usuário
+(as receitas dele, os modelos dele, as trocas que ele fez) e **nada é recriado por migration**:
+ficar de fora do backup significaria perder para sempre.
+
+### Verificação
+`npm run test:run` **1.073** (58 arquivos; 79 novos desta subfase) · `npm run lint` limpo ·
+`npx tsc --noEmit` limpo · `npm run build` verde com as 12 rotas de `/nutricao`. Suíte passa em
+`TZ=UTC` e `TZ=Asia/Tokyo`. Smoke: rotas privadas → **307 `/login`**, `/login` → 200,
+`/api/cron/notifications` → **401**.
+
+**Verificações no banco pela role `authenticated`** (como `postgres` a RLS é ignorada e o teste
+não provaria nada): intruso **não lê, não edita e não apaga** em nenhuma das 8 tabelas; forjar
+`user_id` de outra pessoa é bloqueado pelo WITH CHECK; **8 CHECKs** rejeitam rendimento zero,
+peso final zero, item com alimento e receita ao mesmo tempo, item livre sem rótulo, grupo
+incoerente com o nível, tolerância negativa e log sem rótulo; `entry_kind = 'receita'` exige
+quantidade mas **aceita peso nulo** (porção sem peso final); `'alimento'` continua exigindo o
+snapshot completo. **Imutabilidade provada no banco real:** depois de editar a receita (nome,
+rendimento e peso) e **excluí-la**, o consumo registrado continuou com o nome de origem,
+276,75 kcal e a qualidade "parcial" congelada, com `recipe_id` nulo e `entry_kind` intacto; o
+histórico de substituição sobreviveu à exclusão do grupo. Todos os dados de teste foram
+removidos e o catálogo reconferido: **597 alimentos, 21.147 valores**.
+
+### Fora do escopo (registrado, não silenciado)
+| Item | Onde entra |
+| --- | --- |
+| Lista de compras a partir das receitas | **16-D** (a consolidação **não pode somar unidades incompatíveis**) |
+| Relatório de "substituições mais realizadas" | **16-E** |
+| Busca global e lançamento rápido de receita | **16-F** |
+| Upload da foto da receita pela interface (a tabela e o bucket já são lidos) | **16-F**, junto do upload de anexos |
+| Reordenar ingredientes arrastando (a action `reorderRecipeIngredients` existe) | **16-F** |
+| Sugestão automática de substituição por IA ou heurística nova | **Nunca** — a sugestão só usa o que o usuário cadastrou |
 
 ---
 
@@ -469,9 +690,9 @@ de responsabilidades está documentada no arquivo da fase.
 | 14 | Segurança, Responsividade & Polimento Final | ✅ Concluída |
 | 15 | Módulo TO-DO completo (fora do roadmap original) | ✅ Concluída |
 | 16-A | Dieta e Alimentação · Fundação, cálculo e catálogo | ✅ Concluída |
-| 16-B | Dieta e Alimentação · Metas, diário e planejamento | ⬜ Próxima |
-| 16-C | Dieta e Alimentação · Receitas, refeições e substituições | ⬜ |
-| 16-D | Dieta e Alimentação · Lista de compras e despensa | ⬜ |
+| 16-B | Dieta e Alimentação · Metas, diário e planejamento | ✅ Concluída |
+| 16-C | Dieta e Alimentação · Receitas, refeições e substituições | ✅ Concluída |
+| 16-D | Dieta e Alimentação · Lista de compras e despensa | ⬜ Próxima |
 | 16-E | Dieta e Alimentação · Medidas, evolução e relatórios | ⬜ |
 | 16-F | Dieta e Alimentação · Integrações e polimento | ⬜ |
 

@@ -45,6 +45,7 @@ import {
   indexNutrients,
   summarizeCatalog,
 } from "@/lib/nutrition/queries";
+import { getMealTemplates, getRecipes } from "@/lib/nutrition/recipe-queries";
 import { AdherenceBadge, GoalProgressBar } from "@/components/nutrition/goal-progress-bar";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
 
@@ -76,19 +77,33 @@ export default async function NutricaoPage() {
   };
   const week = weekDays(hoje);
 
-  const [meals, weekMealsList, planned, periods, water, foods, categories, nutrientValues, sources, nutrientList] =
-    await Promise.all([
-      getDiaryMeals(hoje, hoje),
-      getDiaryMeals(week[0], week[6]),
-      getPlannedMeals(hoje, hoje),
-      getGoalPeriods(),
-      getWaterForDate(hoje),
-      getFoods(),
-      getFoodCategories(),
-      getNutrientValueCount(),
-      getOfficialSources(),
-      getNutrientDefinitions(),
-    ]);
+  const [
+    meals,
+    weekMealsList,
+    planned,
+    periods,
+    water,
+    foods,
+    categories,
+    nutrientValues,
+    sources,
+    nutrientList,
+    recipes,
+    templates,
+  ] = await Promise.all([
+    getDiaryMeals(hoje, hoje),
+    getDiaryMeals(week[0], week[6]),
+    getPlannedMeals(hoje, hoje),
+    getGoalPeriods(),
+    getWaterForDate(hoje),
+    getFoods(),
+    getFoodCategories(),
+    getNutrientValueCount(),
+    getOfficialSources(),
+    getNutrientDefinitions(),
+    getRecipes(),
+    getMealTemplates(),
+  ]);
 
   const nutrients = indexNutrients(nutrientList);
   const catalog = summarizeCatalog(foods, categories, nutrientValues);
@@ -339,6 +354,64 @@ export default async function NutricaoPage() {
       </div>
 
       {/* ── Procedência da base (a licença da TACO exige a citação visível) ── */}
+      {/* ── Receitas e refeições-modelo (16-C) ── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Receitas e refeições-modelo</CardTitle>
+          <CardDescription>
+            O que você monta uma vez e reaproveita no dia a dia.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Receitas</p>
+            <p className="mt-0.5 text-lg font-semibold tabular-nums">
+              {recipes.filter((recipe) => !recipe.isArchived).length}
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {recipes.filter((recipe) => recipe.totalWeightG === null && !recipe.isArchived).length}{" "}
+              sem peso final informado — nelas o valor por 100 g fica indisponível.
+            </p>
+            <Link
+              href="/nutricao/receitas"
+              className="mt-2 inline-block text-xs text-primary underline-offset-4 hover:underline"
+            >
+              Ver receitas
+            </Link>
+          </div>
+
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Refeições-modelo</p>
+            <p className="mt-0.5 text-lg font-semibold tabular-nums">
+              {templates.filter((template) => !template.isArchived).length}
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Reúnem alimentos e receitas para lançar no dia com um clique.
+            </p>
+            <Link
+              href="/nutricao/refeicoes"
+              className="mt-2 inline-block text-xs text-primary underline-offset-4 hover:underline"
+            >
+              Ver refeições-modelo
+            </Link>
+          </div>
+
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Substituições</p>
+            <p className="mt-0.5 text-sm">
+              Alternativas que <strong>você</strong> cadastra, com a diferença nutricional na
+              tela antes de trocar.
+            </p>
+            <Link
+              href="/nutricao/substituicoes"
+              className="mt-2 inline-block text-xs text-primary underline-offset-4 hover:underline"
+            >
+              Ver substituições
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
       {sources.length > 0 && (
         <Card>
           <CardHeader className="pb-3">

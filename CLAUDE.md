@@ -14,10 +14,10 @@ As **14 fases do roadmap original** e a **Fase 15 — Módulo TO-DO** estão con
 
 | Fase | Módulo | Situação |
 | --- | --- | --- |
-| **16** | Dieta e Alimentação (`/nutricao`) | **16-A e 16-B concluídas**; 16-C é a próxima |
-| **17** | Treinos (`/treinos`) | **17-A concluída**; 17-B é a próxima |
+| **16** | Dieta e Alimentação (`/nutricao`) | **16-A, 16-B e 16-C concluídas**; 16-D é a próxima |
+| **17** | Treinos (`/treinos`) | **17-A e 17-B concluídas**; 17-C é a próxima |
 
-Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Fora dessas fases, o projeto segue em modo manutenção/iteração. **74 tabelas** no banco.
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Fora dessas fases, o projeto segue em modo manutenção/iteração. **89 tabelas** no banco (28 `nutrition_*`, 14 `training_*`).
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -38,7 +38,7 @@ O TO-DO usa tabelas `todo_*` próprias em vez de evoluir `tasks`/`projects`, por
 
 ## Módulo Dieta e Alimentação (Fase 16, em andamento)
 
-Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 submódulos. A **16-A** entregou schema, base nutricional, núcleo de cálculo e catálogo de alimentos; a **16-B** entregou metas com histórico datado, diário alimentar com snapshot imutável, planejamento com modelos de semana e a visão geral real. Receitas, substituições, compras, medidas e integrações vêm nas subfases C–F (`docs/phases/PHASE_16_*`).
+Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 submódulos. A **16-A** entregou schema, base nutricional, núcleo de cálculo e catálogo de alimentos; a **16-B** entregou metas com histórico datado, diário alimentar com snapshot imutável e planejamento com modelos de semana; a **16-C** entregou receitas (com rendimento e peso final informado), refeições-modelo e substituições com comparação explícita. Compras, medidas e integrações vêm nas subfases D–F (`docs/phases/PHASE_16_*`).
 
 **Invariantes do módulo:**
 1. **Ausência de dado NÃO é zero.** `value_state` (`disponivel|traco|nao_disponivel|nao_aplicavel|em_revisao`) distingue "medido zero" de "não medido"; uma CHECK garante no banco. Toda soma propaga `exato|aproximado|parcial` e a UI mostra isso. Nunca `amount ?? 0` fora de `calc.ts`.
@@ -53,21 +53,28 @@ Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 sub
 10. **Planejado ≠ consumido**; **`pendente` não existe no CHECK** (deriva de `planned_time` + agora); **a meta de um dia é a que valia nele** (`nutrition_goal_periods`); **nenhum escopo de edição do planejamento alcança o passado**.
 11. **`ON CONFLICT` não serve para os índices únicos parciais/de expressão deste módulo** — o Postgres não os infere e o `upsert` do PostgREST quebra **só em runtime** (`42P10`). Use select-then-insert/update. E `.eq(coluna, null)` não casa com NULL no PostgREST: use `.is(coluna, null)`.
 12. **Sem prescrição.** O estimador de gasto energético é opcional, mostra a fórmula, se identifica como estimativa e **nunca grava meta**.
+13. **O peso de uma comida pronta é INFORMADO, nunca deduzido** (16-C). `nutrition_recipes.total_weight_g` vem da balança do usuário; sem ele o "por 100 g" fica **indisponível com explicação**, em vez de cair para a soma dos ingredientes crus. Alterar o rendimento recalcula a porção **sem** mexer no total.
+14. **Receita e refeição-modelo entram no diário pelo MESMO caminho** (16-C): `buildRecipeEntrySnapshot` **chama** `buildDiaryEntrySnapshot`, e `entry_kind` aceita `receita`/`modelo`. Sem peso final, a receita só é registrada em porções — e `grams_equivalent`/`base_quantity`/`base_unit` ficam **nulos**, nunca zero.
+15. **A qualidade agregada viaja com o número** (16-C): `SnapshotNutrient`/`ComputedNutrient` têm `quality` opcional (só em valor somado) e `sumNutrient` o respeita — senão uma receita parcial entraria no dia como exata.
+16. **Substituir exige confirmação e grava histórico** (16-C). A tela mostra original × alternativa, diferença por macro, impacto no dia e o que resta da meta; o servidor **recalcula** antes de gravar. Nenhuma equivalência é afirmada; a ordem das alternativas é a prioridade **do usuário**. Adicionar o mesmo modelo duas vezes **não duplica** o consumo.
 
 ## Módulo Treinos (Fase 17, em andamento)
 
-Rota `/treinos`, tabelas `training_*`, navegação interna própria com 13 submódulos. A **17-A** entregou o vocabulário do domínio, o catálogo de exercícios (base autoral de 106 movimentos) e as preferências do módulo; programas/treinos-modelo, sessão ao vivo, histórico, metas/medidas e integrações vêm nas subfases B–F (`docs/phases/PHASE_17_*`).
+Rota `/treinos`, tabelas `training_*`, navegação interna própria com 13 submódulos. A **17-A** entregou o vocabulário do domínio, o catálogo de exercícios (base autoral de 106 movimentos) e as preferências do módulo; a **17-B** entregou programas, treinos-modelo com construtor, séries configuráveis, supersets, versionamento e planejamento semanal. Sessão ao vivo, histórico, metas/medidas e integrações vêm nas subfases C–F (`docs/phases/PHASE_17_*`).
 
 **Invariantes do módulo:**
 1. **`tracking_type` é um contrato de medição, não um rótulo.** Ele diz o que o exercício mede (peso×reps, reps, segundos, distância, calorias). `src/lib/training/tracking.ts` é a **única** matriz — formulário, treino-modelo, sessão, volume e relatório leem dali. É o que impede o módulo de somar quilos com segundos.
-2. **Assistência SUBTRAI carga; carga adicional soma.** Inverter o sinal mostraria progresso na regressão.
+2. **Assistência SUBTRAI carga; carga adicional soma.** Inverter o sinal mostraria progresso na regressão. Por isso a carga planejada tem **três colunas separadas** (`planned_weight_kg`, `planned_additional_weight_kg`, `planned_assistance_weight_kg`) — num campo só, alguma tela erraria o sinal.
 3. **Sem peso corporal do dia, a carga efetiva é INDISPONÍVEL, nunca zero.** Agregado incompleto é marcado como **parcial**, com o motivo — mesma disciplina do `value_state` da Dieta.
 4. **`user_id is null` = base do sistema, imutável.** Policies **separadas por comando** + três constraints amarrando `user_id is null` ⇔ `is_system_exercise` ⇔ `source='sistema'`. Favoritar/arquivar/apelidar grava em `training_exercise_prefs`; duplicar cria cópia com `origin_exercise_id`.
-5. **Modelo é mutável; execução é imutável.** A sessão (17-C) grava **snapshot** do treino; nenhuma leitura de histórico passa pelo modelo atual.
-6. **Nenhum asset de terceiros.** Base de exercícios autoral, sem imagem/vídeo/texto/dados copiados de apps de treino. Procedência em `data/training/exercise-base/ATTRIBUTION.md`; pipeline em `scripts/training/`.
-7. **Medidas corporais são `body_*`**, módulo central compartilhado com a Dieta. Quem chegar primeiro (16-E ou 17-E) cria; o outro consome. **Nunca duas tabelas de peso corporal.**
-8. **Sem prescrição, sem diagnóstico**, sem garantia de resultado, sem sugestão de carga máxima e sem incentivo a treinar com dor. Objetivo e nível de programa são organizacionais.
-9. **Todo agregado vai sair de `src/lib/training/metrics.ts` (17-D)** — como todo total da Dieta sai de `calc.ts`.
+5. **Modelo é mutável; execução é imutável.** A sessão (17-C) grava **snapshot** do treino; nenhuma leitura de histórico passa pelo modelo atual. Nenhuma tabela da 17-B tem coluna apontando para sessão, de propósito. O versionamento de treino (`version` + `superseded_by` + `version_group_id`) serve para **comparar intenções**, não para proteger histórico — e só é criado por escolha explícita do usuário.
+6. **`expandPlannedSets` (`src/lib/training/workout.ts`) é o formato ÚNICO de série planejada**, resolvendo tanto o caso uniforme (`default_sets`) quanto o configurado série a série (`training_workout_sets`). A 17-C consome só esse formato. Existindo linha configurada, ela é a verdade; `null` na série herda do exercício.
+7. **Status do planejamento é derivado na leitura.** `training_scheduled_workouts.status` grava só fato; **`atrasado` e `hoje` saem de `derivePlannedStatus(entry, hoje)`** com `hoje` injetado pelo servidor. **`concluido` não é gravável pela 17-B** — quem conclui um treino é a sessão (17-C).
+8. **Nenhuma exclusão silenciosa.** Excluir programa pergunta o destino dos treinos; excluir treino pergunta o destino do planejamento **futuro** (o passado nunca é alterado). Os schemas dessas ações **não têm valor padrão** para a escolha. No banco: `exercise_id` do treino é `on delete restrict`; `workout_id` do planejamento é `on delete set null`.
+9. **Nenhum asset de terceiros.** Base de exercícios autoral, sem imagem/vídeo/texto/dados copiados de apps de treino. Procedência em `data/training/exercise-base/ATTRIBUTION.md`; pipeline em `scripts/training/`.
+10. **Medidas corporais são `body_*`**, módulo central compartilhado com a Dieta. Quem chegar primeiro (16-E ou 17-E) cria; o outro consome. **Nunca duas tabelas de peso corporal.**
+11. **Sem prescrição, sem diagnóstico**, sem garantia de resultado, sem sugestão de carga máxima e sem incentivo a treinar com dor. Objetivo e nível de programa são organizacionais.
+12. **Todo agregado vai sair de `src/lib/training/metrics.ts` (17-D)** — como todo total da Dieta sai de `calc.ts`.
 
 ## Leitura obrigatória antes de mexer no código
 
@@ -95,7 +102,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa, 889 testes)
+npm run test:run       # vitest run (suíte completa; 1.073 testes em 2026-08-04)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos
@@ -161,7 +168,7 @@ Testes de fuso não podem depender do `TZ` da máquina: use instantes absolutos 
 - `src/lib/supabase/service.ts` — **service role, SERVER-ONLY**. Usado **só** pelo Vercel Cron (`/api/cron/notifications`), que não tem sessão. Ignora RLS → **toda** query carrega `user_id` explícito. Nunca importar em código client.
 
 ### Segurança / multi-tenant (single-user na prática)
-- **RLS + FORCE RLS em todas as tabelas** (34 até a Fase 14, 13 do TO-DO, 20 da Fase 16), policies `using (user_id = auth.uid()) with check (...)`. Auth nativo do Supabase (`auth.users`).
+- **RLS + FORCE RLS em todas as tabelas** (34 até a Fase 14, 13 do TO-DO, 28 da Fase 16, 7+ da Fase 17), policies `using (user_id = auth.uid()) with check (...)`. Auth nativo do Supabase (`auth.users`).
 - **Proteção de rotas** em `src/lib/supabase/proxy-session.ts`: tudo exige sessão exceto `PUBLIC_PATHS` (`/login`, `/cadastro`, `/auth`, `/recuperar-senha`, `/api/cron`). `/api/cron/*` é público para o proxy mas protegido por `CRON_SECRET` (Bearer) na própria rota.
 - O app **degrada com elegância sem chaves**: sem credenciais Supabase o proxy só segue adiante; integrações Google e Cron só "ligam" quando suas env vars existem (ver `src/config/env.ts` e `.env.local.example`).
 

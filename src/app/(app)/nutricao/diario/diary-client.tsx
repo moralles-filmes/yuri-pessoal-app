@@ -23,13 +23,16 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Check,
+  ChefHat,
   ChevronLeft,
   ChevronRight,
   Clock,
   Droplets,
   MoreHorizontal,
   Plus,
+  Repeat,
   Trash2,
+  Utensils,
   UtensilsCrossed,
   X,
 } from "lucide-react";
@@ -119,12 +122,44 @@ import {
   setDiaryMealStatus,
   updateDiaryEntryQuantity,
 } from "@/lib/actions/nutrition-diary";
+import {
+  addMealTemplateToDiary,
+  addRecipeToDiary,
+} from "@/lib/actions/nutrition-meal-templates";
+import { applySubstitution } from "@/lib/actions/nutrition-substitutions";
 import { AdherenceBadge, GoalProgressBar } from "@/components/nutrition/goal-progress-bar";
 import {
   FoodPickerDialog,
   type PickerMeasure,
 } from "@/components/nutrition/food-picker-dialog";
+import {
+  RecipePickerDialog,
+  type PickerRecipe,
+} from "@/components/nutrition/recipe-picker-dialog";
+import {
+  SubstitutionCompareDialog,
+  type CompareTarget,
+} from "@/components/nutrition/substitution-compare-dialog";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
+import type { SubstitutionGroupWithTotals } from "@/lib/nutrition/recipe-queries";
+import { snapshotToBag } from "@/lib/nutrition/snapshot";
+import { sumNutrients } from "@/lib/nutrition/calc";
+import {
+  TEMPLATE_REGISTER_MODE_HINTS,
+  TEMPLATE_REGISTER_MODE_LABELS,
+  TEMPLATE_REGISTER_MODES,
+  type TemplateRegisterMode,
+} from "@/lib/nutrition/constants";
+import { Switch } from "@/components/ui/switch";
+
+/** Refeição-modelo, reduzida ao que o diário precisa mostrar. */
+export type DiaryTemplate = {
+  id: string;
+  name: string;
+  itemCount: number;
+  isArchived: boolean;
+  totals: Record<string, NutrientTotal>;
+};
 
 type WaterDay = { habitId: string; name: string; unit: string; target: number; value: number; done: boolean };
 
@@ -144,6 +179,10 @@ export type DiaryClientProps = {
   foodNames: [string, string][];
   nutrients: Record<string, NutrientDefinition>;
   water: WaterDay | null;
+  /* ── 16-C ── */
+  recipes: PickerRecipe[];
+  templates: DiaryTemplate[];
+  substitutionGroups: SubstitutionGroupWithTotals[];
 };
 
 export function DiaryClient(props: DiaryClientProps) {
@@ -203,9 +242,65 @@ export function DiaryClient(props: DiaryClientProps) {
 
   /* ── Diálogos ── */
   const [pickerMealId, setPickerMealId] = React.useState<string | null>(null);
+  const [recipeMealId, setRecipeMealId] = React.useState<string | null>(null);
+  const [templateMealId, setTemplateMealId] = React.useState<string | null>(null);
   const [freeMealId, setFreeMealId] = React.useState<string | null>(null);
   const [newMealOpen, setNewMealOpen] = React.useState(false);
   const [editEntry, setEditEntry] = React.useState<{ id: string; label: string; quantity: number } | null>(null);
+  const [substituting, setSubstituting] = React.useState<
+    (CompareTarget & { diaryMealId: string; diaryEntryId: string | null }) | null
+  >(null);
+
+  /**
+   * Grupos de substituição por item original.
+   *
+   * A sugestão SÓ usa o que o usuário já cadastrou (regra 6): se não há grupo para aquele
+   * alimento/receita, o botão "Substituir" nem aparece. Nada é inferido por semelhança.
+   */
+  const groupsByFood = React.useMemo(() => {
+    const map = new Map<string, SubstitutionGroupWithTotals>();
+    for (const group of props.substitutionGroups) {
+      if (!group.isActive) continue;
+      if (group.foodId) map.set(`food:${group.foodId}`, group);
+      if (group.recipeId) map.set(`recipe:${group.recipeId}`, group);
+      if (group.mealTemplateId) map.set(`template:${group.mealTemplateId}`, group);
+    }
+    return map;
+  }, [props.substitutionGroups]);
+
+  const mealGroups = React.useMemo(
+    () => props.substitutionGroups.filter((group) => group.isActive && group.groupKind === "refeicao"),
+    [props.substitutionGroups],
+  );
+
+  /** Monta o alvo da comparação a partir de um item já registrado. */
+  function openSubstitution(
+    meal: DiaryMeal,
+    entry: DiaryMeal["entries"][number] | null,
+    group: SubstitutionGroupWithTotals,
+  ) {
+    const originalTotals = entry
+      ? sumNutrients([snapshotToBag(entry.nutrientsSnapshot)])
+      : sumNutrients(
+          meal.entries.filter(entryCounts).map((item) => snapshotToBag(item.nutrientsSnapshot)),
+        );
+
+    setSubstituting({
+      diaryMealId: meal.id,
+      diaryEntryId: entry?.id ?? null,
+      originalLabel: entry?.foodNameSnapshot ?? `${meal.title || meal.mealTypeName} (refeição inteira)`,
+      originalTotals,
+      originalQuantity: entry?.quantity ?? null,
+      originalMeasureLabel: entry?.measureLabel ?? null,
+      options: group.options,
+      optionTotals: group.optionTotals,
+      tolerances: group.tolerances,
+      groupId: group.id,
+      dayTotals: totals,
+      dayTargets: targets,
+      level: entry ? "alimento" : "refeicao",
+    });
+  }
 
   return (
     <div className="space-y-5">
@@ -404,9 +499,14 @@ export function DiaryClient(props: DiaryClientProps) {
                   nutrients={props.nutrients}
                   pending={pending}
                   onAddFood={() => setPickerMealId(meal.id)}
+                  onAddRecipe={() => setRecipeMealId(meal.id)}
+                  onAddTemplate={() => setTemplateMealId(meal.id)}
                   onAddFree={() => setFreeMealId(meal.id)}
                   onEditEntry={setEditEntry}
                   onRun={run}
+                  groupsByFood={groupsByFood}
+                  mealGroups={mealGroups}
+                  onSubstitute={openSubstitution}
                 />
               ))}
             </div>
@@ -436,6 +536,94 @@ export function DiaryClient(props: DiaryClientProps) {
             router.refresh();
           } else {
             toast.error(result.error ?? "Não foi possível registrar.");
+          }
+        }}
+      />
+
+      <RecipePickerDialog
+        open={recipeMealId !== null}
+        onOpenChange={(open) => !open && setRecipeMealId(null)}
+        recipes={props.recipes}
+        title="Registrar receita"
+        description="O valor é calculado a partir dos ingredientes AGORA e congelado neste registro. Editar a receita depois não muda o que já foi comido."
+        onConfirm={async (picked) => {
+          const result = await addRecipeToDiary({
+            diary_meal_id: recipeMealId,
+            recipe_id: picked.recipeId,
+            quantity: picked.quantity,
+            portion_unit: picked.portionUnit,
+            notes: picked.notes,
+          });
+          if (result.ok) {
+            toast.success("Receita registrada.");
+            setRecipeMealId(null);
+            router.refresh();
+          } else {
+            toast.error(result.error ?? "Não foi possível registrar.");
+          }
+        }}
+      />
+
+      <TemplatePickerDialog
+        open={templateMealId !== null}
+        onOpenChange={(open) => !open && setTemplateMealId(null)}
+        templates={props.templates}
+        onConfirm={async (payload) => {
+          const result = await addMealTemplateToDiary({
+            diary_meal_id: templateMealId,
+            template_id: payload.templateId,
+            mode: payload.mode,
+            force: payload.force,
+          });
+          if (!result.ok) {
+            toast.error(result.error ?? "Não foi possível adicionar.");
+            return;
+          }
+          if (result.data.registrados === 0 && result.data.jaRegistrado) {
+            // A não-duplicação é dita com todas as letras, em vez de "nada aconteceu".
+            toast.warning(
+              "Esta refeição-modelo já foi registrada nesta refeição. Marque “adicionar mesmo assim” se você comeu de novo.",
+            );
+            return;
+          }
+          toast.success(
+            `${result.data.registrados} item${result.data.registrados === 1 ? "" : "ns"} registrado${result.data.registrados === 1 ? "" : "s"}.`,
+          );
+          if (result.data.falhas.length > 0) toast.warning(result.data.falhas.join(" "));
+          setTemplateMealId(null);
+          router.refresh();
+        }}
+      />
+
+      <SubstitutionCompareDialog
+        target={substituting}
+        nutrients={props.nutrients}
+        onOpenChange={(open) => !open && setSubstituting(null)}
+        onConfirm={async ({ option, reason }) => {
+          if (!substituting) return;
+          const result = await applySubstitution({
+            diary_entry_id: substituting.diaryEntryId ?? undefined,
+            diary_meal_id: substituting.diaryMealId,
+            applied_on: props.date,
+            level: substituting.level,
+            group_id: substituting.groupId ?? undefined,
+            option_id: option.id,
+            replacement_kind: option.optionKind,
+            replacement_food_id: option.foodId ?? undefined,
+            replacement_recipe_id: option.recipeId ?? undefined,
+            replacement_meal_template_id: option.mealTemplateId ?? undefined,
+            replacement_label: option.label,
+            replacement_quantity: option.quantity ?? 1,
+            replacement_measure_id: option.measureId ?? undefined,
+            replacement_portion_unit: option.portionUnit ?? undefined,
+            reason: reason ?? undefined,
+          });
+          if (result.ok) {
+            toast.success("Substituição registrada no diário e no histórico.");
+            setSubstituting(null);
+            router.refresh();
+          } else {
+            toast.error(result.error ?? "Não foi possível substituir.");
           }
         }}
       />
@@ -506,9 +694,14 @@ function MealCard({
   nutrients,
   pending,
   onAddFood,
+  onAddRecipe,
+  onAddTemplate,
   onAddFree,
   onEditEntry,
   onRun,
+  groupsByFood,
+  mealGroups,
+  onSubstitute,
 }: {
   meal: DiaryMeal;
   now: NowContext;
@@ -519,9 +712,18 @@ function MealCard({
   nutrients: Record<string, NutrientDefinition>;
   pending: boolean;
   onAddFood: () => void;
+  onAddRecipe: () => void;
+  onAddTemplate: () => void;
   onAddFree: () => void;
   onEditEntry: (entry: { id: string; label: string; quantity: number }) => void;
   onRun: (action: () => Promise<{ ok: boolean; error?: string }>, success: string) => void;
+  groupsByFood: Map<string, SubstitutionGroupWithTotals>;
+  mealGroups: SubstitutionGroupWithTotals[];
+  onSubstitute: (
+    meal: DiaryMeal,
+    entry: DiaryMeal["entries"][number] | null,
+    group: SubstitutionGroupWithTotals,
+  ) => void;
 }) {
   const state = effectiveMealStatus(meal, now);
   const totals = mealTotals(meal.entries);
@@ -673,6 +875,24 @@ function MealCard({
                       ? "—"
                       : `${roundForDisplay(entry.energyKcal, 0).toLocaleString("pt-BR")} kcal`}
                   </span>
+                  {/* Só aparece quando EXISTE um grupo cadastrado para este item (regra 6). */}
+                  {(() => {
+                    const group =
+                      (entry.foodId ? groupsByFood.get(`food:${entry.foodId}`) : undefined) ??
+                      (entry.recipeId ? groupsByFood.get(`recipe:${entry.recipeId}`) : undefined);
+                    if (!group || !entryCounts(entry)) return null;
+                    return (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        disabled={pending}
+                        onClick={() => onSubstitute(meal, entry, group)}
+                      >
+                        Substituir
+                      </Button>
+                    );
+                  })()}
                   {entry.entryKind === "alimento" && (
                     <Button
                       variant="ghost"
@@ -755,9 +975,35 @@ function MealCard({
             <Plus className="size-4" />
             Alimento
           </Button>
+          <Button variant="outline" size="sm" onClick={onAddRecipe} disabled={pending}>
+            <ChefHat className="size-4" />
+            Receita
+          </Button>
+          <Button variant="outline" size="sm" onClick={onAddTemplate} disabled={pending}>
+            <Utensils className="size-4" />
+            Refeição-modelo
+          </Button>
           <Button variant="ghost" size="sm" onClick={onAddFree} disabled={pending}>
             Item sem valor nutricional
           </Button>
+          {/* Substituir a refeição INTEIRA — só com grupo de nível "refeição" cadastrado. */}
+          {mealGroups.length > 0 && meal.entries.some(entryCounts) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" disabled={pending}>
+                  <Repeat className="size-4" />
+                  Substituir a refeição
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                {mealGroups.map((group) => (
+                  <DropdownMenuItem key={group.id} onClick={() => onSubstitute(meal, null, group)}>
+                    {group.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Totais da refeição, com os macros e a qualidade de cada um. */}
@@ -1126,6 +1372,147 @@ function FreeEntryDialog({
             }}
           >
             {saving ? "Salvando…" : "Registrar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Escolher uma refeição-modelo para registrar.
+ *
+ * Dois modos: DETALHADO (cada item vira uma linha, e você pode ajustar depois) e RESUMIDO
+ * (uma linha só com o total). O interruptor "adicionar mesmo assim" existe porque a ação é
+ * idempotente por padrão — clicar duas vezes não dobra a refeição.
+ */
+function TemplatePickerDialog({
+  open,
+  onOpenChange,
+  templates,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  templates: DiaryTemplate[];
+  onConfirm: (payload: {
+    templateId: string;
+    mode: TemplateRegisterMode;
+    force: boolean;
+  }) => Promise<void>;
+}) {
+  const active = templates.filter((template) => !template.isArchived && template.itemCount > 0);
+  const [templateId, setTemplateId] = React.useState("");
+  const [mode, setMode] = React.useState<TemplateRegisterMode>("detalhado");
+  const [force, setForce] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+
+  const [lastOpen, setLastOpen] = React.useState(open);
+  if (open !== lastOpen) {
+    setLastOpen(open);
+    if (open) {
+      setTemplateId(active[0]?.id ?? "");
+      setMode("detalhado");
+      setForce(false);
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Registrar refeição-modelo</DialogTitle>
+          <DialogDescription>
+            Os valores são congelados agora. Adicionar o mesmo modelo duas vezes na mesma
+            refeição não duplica o consumo.
+          </DialogDescription>
+        </DialogHeader>
+
+        {active.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            Nenhuma refeição-modelo com itens. Monte uma em Refeições-modelo.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="template-pick">Refeição-modelo</Label>
+              <select
+                id="template-pick"
+                value={templateId}
+                onChange={(event) => setTemplateId(event.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {active.map((template) => {
+                  const energia = template.totals[CORE_NUTRIENTS.energia];
+                  return (
+                    <option key={template.id} value={template.id}>
+                      {template.name} — {template.itemCount} item
+                      {template.itemCount === 1 ? "" : "ns"}
+                      {energia
+                        ? ` · ${roundForDisplay(energia.amount, 0).toLocaleString("pt-BR")} kcal`
+                        : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Como registrar</Label>
+              {TEMPLATE_REGISTER_MODES.map((value) => (
+                <label
+                  key={value}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
+                    mode === value ? "border-primary/40 bg-primary/5" : "hover:bg-accent/50",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="template-mode"
+                    value={value}
+                    checked={mode === value}
+                    onChange={() => setMode(value)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">
+                      {TEMPLATE_REGISTER_MODE_LABELS[value]}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      {TEMPLATE_REGISTER_MODE_HINTS[value]}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <span>
+                <span className="text-sm font-medium">Adicionar mesmo assim</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Use só se você comeu este modelo mais de uma vez nesta refeição.
+                </span>
+              </span>
+              <Switch checked={force} onCheckedChange={setForce} />
+            </label>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={!templateId || saving}
+            onClick={async () => {
+              setSaving(true);
+              await onConfirm({ templateId, mode, force });
+              setSaving(false);
+            }}
+          >
+            {saving ? "Registrando…" : "Registrar"}
           </Button>
         </DialogFooter>
       </DialogContent>

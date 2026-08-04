@@ -27,9 +27,9 @@ import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers"
 import { hojeISO } from "@/lib/format";
 import { NUTRITION_BASE_PATH } from "@/lib/nutrition/constants";
 import { getFoodSnapshotInput } from "@/lib/nutrition/diary-queries";
+import { snapshotColumns } from "@/lib/nutrition/entry-columns";
 import { buildDiaryEntrySnapshot } from "@/lib/nutrition/snapshot";
 import { CONVERSION_FAILURE_MESSAGES } from "@/lib/nutrition/units";
-import type { DiaryEntrySnapshot } from "@/lib/nutrition/types";
 import {
   confirmPlannedMealSchema,
   diaryEntryQuantitySchema,
@@ -58,30 +58,6 @@ async function ownsMeal(ctx: Ctx, mealId: string): Promise<boolean> {
     .eq("id", mealId)
     .maybeSingle();
   return Boolean(data);
-}
-
-/** Colunas do snapshot, prontas para o insert. */
-function snapshotColumns(snapshot: DiaryEntrySnapshot) {
-  return {
-    food_name_snapshot: snapshot.foodNameSnapshot,
-    preparation_state_snapshot: snapshot.preparationStateSnapshot,
-    brand_snapshot: snapshot.brandSnapshot,
-    quantity: snapshot.quantity,
-    measure_label: snapshot.measureLabel,
-    grams_equivalent: snapshot.gramsEquivalent,
-    base_quantity: snapshot.baseQuantity,
-    base_unit: snapshot.baseUnit,
-    source_id_snapshot: snapshot.sourceIdSnapshot,
-    source_name_snapshot: snapshot.sourceNameSnapshot,
-    source_version_snapshot: snapshot.sourceVersionSnapshot,
-    source_food_code_snapshot: snapshot.sourceFoodCodeSnapshot,
-    nutrients_snapshot: snapshot.nutrientsSnapshot,
-    energy_kcal: snapshot.energyKcal,
-    protein_g: snapshot.proteinG,
-    carb_g: snapshot.carbG,
-    fat_g: snapshot.fatG,
-    fiber_g: snapshot.fiberG,
-  };
 }
 
 /**

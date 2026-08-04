@@ -5,11 +5,11 @@
 As 14 fases do roadmap original e a Fase 15 (TO-DO) estão concluídas. Em **2026-08-03** o
 usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**.
 
-**As Subfases 16-A e 16-B estão concluídas e aplicadas no banco.** Crie um branch novo.
+**As Subfases 16-A, 16-B e 16-C estão concluídas e aplicadas no banco.** Crie um branch novo.
 
 > ⚠️ **Há outra frente em paralelo.** Em 2026-08-03 também foi aberta a **Fase 17 — Módulo
-> Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a 17-A
-> concluída. As duas fases convivem no mesmo repositório e no mesmo banco. Antes de mexer em
+> Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a **17-A e a 17-B
+> concluídas**. As duas fases convivem no mesmo repositório e no mesmo banco. Antes de mexer em
 > `docs/project/PROJECT_ROADMAP.md`, `CURRENT_STATUS.md` ou `src/types/supabase.ts`, **leia o
 > arquivo primeiro e edite de forma pontual** — sobrescrever levaria embora o trabalho da
 > outra frente. Ponto de contato entre elas: **medidas corporais são `body_*`**, um módulo
@@ -20,18 +20,18 @@ usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 
 
 | Frente | Próxima subfase | Arquivo |
 | --- | --- | --- |
-| **Dieta e Alimentação** | **16-C** — Receitas, refeições-modelo e substituições | `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` |
-| **Treinos** | **17-B** — Programas, treinos-modelo e planejamento semanal | `docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` |
+| **Dieta e Alimentação** | **16-D** — Lista de compras e despensa | `docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md` |
+| **Treinos** | **17-C** — Preparação, sessão ao vivo, cronômetro e recuperação | `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md` |
 
 As duas são independentes até a Subfase E de cada uma, quando se encontram nas **medidas
 corporais compartilhadas (`body_*`)**. Faça **uma** por vez.
 
 ---
 
-## ▶️ Frente Dieta: Subfase 16-C — Receitas, refeições-modelo e substituições
+## ▶️ Frente Dieta: Subfase 16-D — Lista de compras e despensa
 
 **Arquivo da fase (leia inteiro antes de codar):**
-`docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md`
+`docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md`
 
 **Leitura obrigatória, nesta ordem:**
 1. `docs/project/PROJECT_BRIEFING.md` (Módulo 17 — Dieta e Alimentação)
@@ -40,34 +40,48 @@ corporais compartilhadas (`body_*`)**. Faça **uma** por vez.
 4. `docs/project/PROJECT_ROADMAP.md` (Fase 16, tabela das subfases)
 5. `docs/project/CURRENT_STATUS.md`
 6. `docs/handoff/LAST_PHASE_SUMMARY.md`
-7. `docs/phases/PHASE_16_A_NUTRITION_FOUNDATION_FOODS.md` e
-   `PHASE_16_B_NUTRITION_DIARY_PLANNING.md` (o que já existe)
-8. `docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` (o que você vai fazer)
+7. `docs/phases/PHASE_16_A_…`, `PHASE_16_B_…` e
+   `PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` (o que já existe)
+8. `docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md` (o que você vai fazer)
 
 **Código que você precisa entender antes de escrever qualquer linha:**
-`src/lib/nutrition/units.ts`, `calc.ts`, **`snapshot.ts`**, `diary.ts`, `goals.ts`,
-`plan-recurrence.ts`, `calendar.ts`, `constants.ts`, `types.ts`, `queries.ts`,
-`diary-queries.ts` e as actions `nutrition-{foods,diary,goals,plans}.ts`.
+`src/lib/nutrition/units.ts`, `calc.ts`, `snapshot.ts`, **`recipe.ts`**, `meal-template.ts`,
+`substitution.ts`, `diary.ts`, `goals.ts`, `plan-recurrence.ts`, `calendar.ts`, `constants.ts`,
+`types.ts`, `queries.ts`, `diary-queries.ts`, **`recipe-queries.ts`** e as actions
+`nutrition-{foods,diary,goals,plans,recipes,meal-templates,substitutions}.ts`.
 
-### ⛔ O ponto mais importante da 16-C
+### ⛔ O ponto mais importante da 16-D
 
-**Receita e refeição-modelo viram itens do diário REUSANDO `buildDiaryEntrySnapshot`.**
-Não crie um segundo caminho de gravação. O contrato já está pronto para isso:
+**A consolidação da lista NÃO PODE SOMAR UNIDADES INCOMPATÍVEIS.** É a mesma regra que já
+governa o módulo inteiro, aplicada a compras: 200 g de arroz + 1 xícara de arroz só viram uma
+linha se houver conversão real cadastrada. Sem ela, o item aparece **separado**, com o motivo —
+nunca convertido por estimativa.
 
-- `nutrition_diary_entries.entry_kind` tem CHECK `in ('alimento','livre')` — **acrescente
-  `'receita'` e `'modelo'` a esse CHECK** numa migration, em vez de inventar outra tabela.
-- `nutrition_planned_meal_items` hoje só aponta para `food_id`; a 16-C precisa acrescentar a
-  origem receita/modelo (coluna + CHECK), como está registrado no comentário da migration.
-- O snapshot de uma receita deve congelar os nutrientes **da receita naquele momento**, pelo
-  mesmo `scaleNutrients`/`convertToBase`. Editar a receita depois não pode mudar o passado —
-  é a mesma regra do alimento, e já existe teste de referência em `snapshot.test.ts`.
+- Reuse `convertToBase` e `toBaseUnitValue` (`units.ts`). Massa converte com massa, volume com
+  volume; **g ↔ ml exige densidade**, e densidade presumida é dado inventado.
+- A lista sai do **planejamento** e das **receitas** (16-C): `nutrition_recipe_ingredients` já
+  guarda `grams_equivalent` resolvido, e `grams_equivalent` **nulo** significa "não deu para
+  converter" — trate como item separado, jamais como zero.
+- Item de receita no planejamento tem `item_kind = 'receita'` + `portion_unit`; a quantidade a
+  comprar sai de `recipePortionFactor` × os ingredientes da receita.
+
+### 📌 O que a 16-C deixou pronto para você
+
+- `recipe.ts` — totais, por porção, por 100 g, `recipePortionFactor`, perda/ganho no preparo.
+- `meal-template.ts` — `templateTotals` funciona tanto para refeição-modelo quanto para item
+  **planejado** (os dois compartilham o formato `CalcTemplateItem`).
+- `recipe-queries.ts` — `getRecipesWithTotals`, `getMealTemplatesWithTotals` e
+  `buildRecipeCalcContext` (carrega alimentos + medidas sem N+1).
 
 ---
 
-## ▶️ Frente Treinos: Subfase 17-B — Programas, treinos-modelo e planejamento semanal
+## ▶️ Frente Treinos: Subfase 17-C — Preparação, sessão ao vivo, cronômetro e recuperação
 
 **Arquivo da fase (leia inteiro antes de codar):**
-`docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md`
+`docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md`
+
+> É **a subfase mais importante do módulo** — a tela que o usuário abre suado, com uma mão só,
+> num celular, com Wi-Fi ruim, no meio da academia.
 
 **Leitura obrigatória, nesta ordem:**
 1. `docs/project/PROJECT_RULES.md`
@@ -75,14 +89,42 @@ Não crie um segundo caminho de gravação. O contrato já está pronto para iss
 3. `docs/project/PROJECT_ROADMAP.md` (Fase 17, tabela das subfases)
 4. `docs/project/CURRENT_STATUS.md`
 5. `docs/handoff/LAST_PHASE_SUMMARY.md`
-6. `docs/phases/PHASE_17_A_TRAINING_FOUNDATION_EXERCISES.md` (o que já existe)
-7. `docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` (o que você vai fazer)
-8. `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md` — **leia mesmo sem implementar**: a 17-B
-   precisa entregar o modelo no formato que a sessão vai congelar.
+6. `docs/phases/PHASE_17_A_TRAINING_FOUNDATION_EXERCISES.md` e
+   `PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` (o que já existe)
+7. `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md` (o que você vai fazer)
+8. `docs/phases/PHASE_16_B_NUTRITION_DIARY_PLANNING.md` — referência de **snapshot imutável**
+   (`nutrition_diary_entries`): mesmo princípio, outro domínio.
 
 **Código que você precisa entender antes de escrever qualquer linha:**
-`src/lib/training/tracking.ts`, `constants.ts`, `types.ts`, `filters.ts`, `queries.ts` e
-`src/lib/actions/training-exercises.ts`.
+`src/lib/training/tracking.ts`, **`workout.ts` (`expandPlannedSets`)**, **`schedule.ts`**,
+`constants.ts`, `types.ts`, `queries.ts`, `routine-queries.ts` e as actions
+`src/lib/actions/training-{exercises,programs,workouts,schedule}.ts`.
+
+### ⛔ O que você recebe pronto e NÃO deve reimplementar
+
+| Já existe | Onde |
+| --- | --- |
+| **Formato único de série planejada** (`PlannedSet[]`) | `expandPlannedSets`, em `src/lib/training/workout.ts` |
+| Matriz de medição (quais campos cada exercício usa) | `src/lib/training/tracking.ts` |
+| Validação de superset (contiguidade) | `validateSupersets`, em `workout.ts` |
+| Status derivado do planejado (`atrasado`/`hoje`) | `derivePlannedStatus`, em `schedule.ts` |
+| Duração estimada e séries por grupo muscular | `summarizeWorkout`, em `workout.ts` |
+
+### ⛔ A regra inegociável da 17-C
+
+**Ao iniciar a sessão, CONGELE tudo isso num snapshot** (`training_sessions.workout_snapshot`
++ linhas próprias de exercício e série) e **nunca mais leia o modelo** para renderizar uma
+sessão passada. `workout_id` e `exercise_id` continuam gravados como referência informativa
+(`on delete set null`), jamais como fonte de leitura.
+
+Teste explícito exigido: **editar o treino-modelo depois e conferir que a sessão registrada não
+mudou**.
+
+### 🧭 Dois pontos de contato que a 17-B deixou preparados
+- `training_scheduled_workouts` **não tem** coluna apontando para sessão, de propósito. Quem
+  cria a referência é a 17-C, do lado dela.
+- O status `concluido` já existe no CHECK do planejamento, mas **a 17-B nunca o grava**: é a
+  sessão que conclui um dia planejado. Não existe "concluído manual" para reconciliar.
 
 ### ⛔ Invariantes do módulo Treinos que NÃO podem ser quebradas
 
@@ -156,7 +198,7 @@ PostgREST não permite repetir — o `upsert` falha **só em runtime** (`42P10`)
 (`coalesce(...)`), como o de escopo de `nutrition_goal_items`. E no PostgREST,
 `.eq(coluna, null)` **não** casa com NULL: use `.is(coluna, null)`.
 
-## 📋 Pendências registradas da 16-A e da 16-B (escopo consciente, não bugs)
+## 📋 Pendências registradas da 16-A, 16-B e 16-C (escopo consciente, não bugs)
 
 | Item | Onde resolve |
 | --- | --- |
@@ -165,9 +207,13 @@ PostgREST não permite repetir — o `upsert` falha **só em runtime** (`42P10`)
 | Cards no dashboard geral, busca global, lançamento rápido, notificações | 16-F |
 | Exportação do catálogo em CSV | 16-E |
 | **Visão de mês do diário** (calendário com indicadores) — `?visao=mes` hoje cai na semana | 16-E |
-| **Montar os dias de um modelo pela interface** (criar e aplicar já funcionam) | 16-C |
-| `updatePlannedMealInScope` existe e é testada; a UI só expõe escopo na **exclusão** | 16-C |
+| ~~Montar os dias de um modelo pela interface~~ | ✅ **fechada na 16-C** |
+| ~~`updatePlannedMealInScope` sem escopo na UI de edição~~ | ✅ **fechada na 16-C** |
 | Relatório de micronutrientes por período (a **meta** de micro já funciona) | 16-E |
+| Relatório de "substituições mais realizadas" (o histórico já é gravado) | 16-E |
+| **Upload** da foto de receita pela interface — a tabela `attachments` e o bucket já são LIDOS pela receita; falta o gatilho de envio | 16-F |
+| `reorderRecipeIngredients` existe e é testada pelo tipo, mas nenhuma tela a chama (arrastar ingrediente) | 16-F |
+| Busca global e lançamento rápido de receita/refeição-modelo | 16-F |
 
 ## 🔁 Como aplicar migrations neste projeto
 
@@ -198,8 +244,9 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 
 ## ⛔ Invariantes gerais do projeto (bloqueantes)
 
-- **RLS + FORCE RLS em TODAS as tabelas** (hoje **74**: 67 + 7 de `training_*`). Teste pelo client SDK autenticado ou
-  trocando de role no SQL — o SQL editor como `postgres` ignora RLS.
+- **RLS + FORCE RLS em TODAS as tabelas** (conte no banco antes de citar um número: as duas
+  frentes criam tabelas em paralelo). Teste pelo client SDK autenticado ou trocando de role no
+  SQL — o SQL editor como `postgres` ignora RLS e o teste passaria sem provar nada.
 - **Zod no servidor** em toda Server Action; `user_id` sempre de `auth.getUser()`.
 - **Nenhum `service_role` no client** — só `src/lib/supabase/service.ts` e o Cron.
 - **pt-BR / BRL**, datas BR, **dark/light** e responsividade reais em tudo.
@@ -212,8 +259,7 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
 
-Os **889 testes** (823 de Dieta e anteriores + 66 de Treinos) devem continuar passando —
-acrescente testes para toda lógica pura nova.
+Os **1.073 testes** devem continuar passando — acrescente testes para toda lógica pura nova.
 A suíte precisa passar em qualquer fuso — confira com `TZ=UTC npx vitest run`.
 Smoke test: rotas privadas → 307 `/login`; `/api/cron/*` → 401 sem segredo.
 

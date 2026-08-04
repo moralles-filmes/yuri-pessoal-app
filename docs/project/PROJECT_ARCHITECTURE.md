@@ -219,7 +219,7 @@ convivem com as antigas. **Não remover `/tarefas` sem antes migrar aqueles cinc
 
 ---
 
-## Módulo Dieta e Alimentação (Fase 16 — Subfases A e B concluídas)
+## Módulo Dieta e Alimentação (Fase 16 — Subfases A, B e C concluídas)
 
 Módulo central em `/nutricao`, com **navegação interna própria** (12 submódulos) no mesmo
 padrão do TO-DO. Segue o fluxo do resto do sistema: Server Component lê → Server Action muta
@@ -257,6 +257,23 @@ padrão do TO-DO. Segue o fluxo do resto do sistema: Server Component lê → Se
    sobrescrever o alvo — senão o relatório do mês passado mudaria sozinho.
 8. **A água é do módulo Hábitos** (F10). Dieta lê `habits`/`habit_logs` da categoria `agua` e
    linka; não existe tabela de água aqui.
+9. **O peso de uma comida pronta é INFORMADO, nunca deduzido** (16-C).
+   `nutrition_recipes.total_weight_g` vem da balança do usuário; sem ele o valor "por 100 g"
+   fica **indisponível com explicação**. Cair para a soma dos ingredientes crus daria um
+   número plausível e errado — o preparo perde e ganha água de formas que dependem do fogo,
+   do tempo e da panela.
+10. **Receita e refeição-modelo entram no diário pelo MESMO caminho** (16-C).
+    `buildRecipeEntrySnapshot` **chama** `buildDiaryEntrySnapshot`; `entry_kind` ganhou
+    `'receita'` e `'modelo'`. Um segundo caminho de gravação faria diário, receita e relatório
+    discordarem sobre a mesma comida.
+11. **A qualidade agregada viaja com o número** (16-C). `SnapshotNutrient` e
+    `ComputedNutrient` têm um `quality` **opcional**, preenchido só em valor somado (receita,
+    modelo), e `sumNutrient` o respeita. Sem ele, uma receita parcial entraria no total do dia
+    com cara de exata.
+12. **Substituir exige confirmação e grava histórico** (16-C). A tela mostra original ×
+    alternativa, a diferença por macro, o impacto no dia e o que resta da meta; a diferença é
+    **recalculada no servidor** antes de gravar. Nenhuma equivalência é afirmada, e a ordem
+    das alternativas é a prioridade **do usuário** — não um ranking calculado.
 
 ### Base nutricional
 **TACO 4ª edição (NEPA/UNICAMP, 2011)** — 597 alimentos, 21.147 valores. Obtida do XLSX
@@ -292,6 +309,26 @@ primeira leitura por `ensureMealTypes()`, idempotente pelo unique `(user_id, slu
 `nutrition_plan_days`, `nutrition_planned_meals` (âncora dupla: `planned_date` **ou**
 `plan_day_id`), `nutrition_planned_meal_items`.
 
+### Schema — 16-C (8 tabelas + 2 alterações)
+**Receitas:** `nutrition_recipe_categories` (serve a receitas E refeições-modelo),
+`nutrition_recipes` (rendimento + `total_weight_g` informado), `nutrition_recipe_ingredients`
+(sem snapshot: a receita é modelo mutável).
+**Refeições-modelo:** `nutrition_meal_templates`, `nutrition_meal_template_items` (alimento,
+receita ou item livre — o discriminador estável é `item_kind`).
+**Substituições:** `nutrition_substitution_groups` (item original + tolerâncias por macro),
+`nutrition_substitution_options` (alternativas, com a prioridade do usuário),
+`nutrition_substitution_logs` (histórico congelado; todas as FKs `on delete set null`).
+**Alterações:** `nutrition_diary_entries` ganhou `recipe_id`, `meal_template_id` e os valores
+`'receita'`/`'modelo'` em `entry_kind`; `nutrition_planned_meal_items` ganhou `item_kind`,
+`recipe_id`, `portion_unit` e `meal_template_id`.
+
+> Nenhum valor nutricional é materializado em receita ou modelo: o total sai de `recipe.ts` /
+> `meal-template.ts` a partir dos ingredientes e do catálogo atual. Materializar criaria uma
+> segunda verdade que envelheceria no primeiro ingrediente corrigido.
+
+> A **foto da receita** reusa a tabela `attachments` + o bucket privado `attachments`
+> (`{user_id}/…`, Fase 14) — nenhum bucket novo.
+
 > ⚠️ **`ON CONFLICT` não funciona com os índices únicos parciais e de expressão deste
 > módulo.** O Postgres não infere índice parcial sem repetir o predicado, e o PostgREST não
 > permite repetir — o `upsert` falha **só em runtime** (`42P10`). Use
@@ -313,19 +350,25 @@ primeira leitura por `ensureMealTypes()`, idempotente pelo unique `(user_id, slu
 | **Metas, progresso e aderência (puro)** | `src/lib/nutrition/goals.ts` + `goals.test.ts` |
 | **Diário: totais, status, planejado × consumido (puro)** | `src/lib/nutrition/diary.ts` + `diary.test.ts` |
 | **Recorrência do planejamento (puro)** | `src/lib/nutrition/plan-recurrence.ts` + `plan-recurrence.test.ts` |
-| Leitura (server-only) | `src/lib/nutrition/queries.ts` · `diary-queries.ts` |
-| Validação Zod | `src/lib/validators/nutrition.ts` · `nutrition-diary.ts` |
-| Server Actions | `src/lib/actions/nutrition-{foods,diary,goals,plans}.ts` |
+| **Receitas: total, porção, 100 g, rendimento (puro)** | `src/lib/nutrition/recipe.ts` + `recipe.test.ts` |
+| **Refeições-modelo e duplicação (puro)** | `src/lib/nutrition/meal-template.ts` + `meal-template.test.ts` |
+| **Substituições: diferença, tolerância, impacto (puro)** | `src/lib/nutrition/substitution.ts` + `substitution.test.ts` |
+| Snapshot → colunas do diário | `src/lib/nutrition/entry-columns.ts` |
+| Leitura (server-only) | `src/lib/nutrition/queries.ts` · `diary-queries.ts` · `recipe-queries.ts` |
+| Validação Zod | `src/lib/validators/nutrition.ts` · `nutrition-diary.ts` · `nutrition-recipes.ts` |
+| Server Actions | `src/lib/actions/nutrition-{foods,diary,goals,plans,recipes,meal-templates,substitutions}.ts` |
 | Rotas | `src/app/(app)/nutricao/` |
 | Componentes | `src/components/nutrition/` |
 | Pipeline da base | `scripts/nutrition/` · dados em `data/nutrition/taco-4/` |
 
-**Todo total do módulo sai de `calc.ts`.** As subfases B–F devem reusar, nunca reimplementar
-a conta — é o que garante que diário, receita e relatório concordem entre si.
+**Todo total do módulo sai de `calc.ts`.** As subfases D–F devem reusar, nunca reimplementar
+a conta — é o que garante que diário, receita e relatório concordem entre si. Na 16-C isso
+virou estrutura: `recipe.ts` chama `convertToBase` + `scaleNutrients` + `sumNutrients`, e
+`buildRecipeEntrySnapshot` chama `buildDiaryEntrySnapshot`.
 
 ---
 
-## Módulo Treinos (Fase 17 — Subfase A concluída)
+## Módulo Treinos (Fase 17 — Subfases A e B concluídas)
 
 Módulo central em `/treinos`, com **navegação interna própria** (13 submódulos) no mesmo
 padrão do TO-DO e da Dieta. Segue o fluxo do resto do sistema: Server Component lê → Server
@@ -375,11 +418,53 @@ parecem detalhe e não são, ambas cobertas por teste:
 7. **Ferramenta de organização e registro.** Sem diagnóstico, sem prescrição, sem garantia de
    resultado, sem sugestão de carga máxima e sem incentivo a treinar com dor.
 
-### Schema (7 tabelas na 17-A)
-`training_muscle_groups`, `training_equipment`, `training_exercises`,
+### `expandPlannedSets` é o contrato de série planejada (17-B)
+
+Um exercício do treino-modelo pode ter séries **uniformes** (`default_sets`: "4×8-12, 90s") ou
+configuradas **uma a uma** (`training_workout_sets`: top set + back-off, pirâmide, drop set).
+`src/lib/training/workout.ts` resolve os dois casos num **formato único** — `PlannedSet[]` — e
+é o único caminho. Regras que moram só ali:
+
+- existindo ao menos uma linha configurada, **ela é a verdade** e `default_sets` vira exibição;
+- `null` numa série significa **"herda do exercício"**, e a herança acontece num lugar só;
+- a numeração é reescrita 1..N (buraco na numeração salva não vira buraco na sessão);
+- os campos que o `tracking_type` não usa viram `null`, **pela matriz de `tracking.ts`** — não
+  há segunda matriz de medição no módulo.
+
+**A sessão ao vivo (17-C) consome só esse formato** e não precisa saber que existem dois
+jeitos de configurar séries.
+
+### Carga planejada em três colunas (17-B)
+`planned_weight_kg` (barra/máquina), `planned_additional_weight_kg` (**soma**: cinto, colete) e
+`planned_assistance_weight_kg` (**subtrai**: barra assistida). Guardar os três num campo só
+obrigaria cada tela a reinterpretar o sinal a partir do `tracking_type` — e uma delas erraria,
+mostrando "progresso" justamente na regressão. A conta continua saindo de `effectiveLoadKg`.
+
+### Status derivado do planejamento (17-B)
+`training_scheduled_workouts.status` grava só FATO (`planejado`, `concluido`, `nao_realizado`,
+`reagendado`, `cancelado`). **"Atrasado" e "hoje" nascem em `derivePlannedStatus(entry, hoje)`**
+com o `hoje` injetado pelo servidor (`hojeISO()`, Brasília) — nunca são persistidos, como
+`atrasada` no TO-DO e o status da fatura. Desfecho gravado sempre vence a derivação.
+**"Concluído" não é gravável pela 17-B**: quem conclui um treino é a sessão (17-C).
+
+### Nenhuma exclusão silenciosa (17-B)
+Excluir programa pergunta o destino dos treinos (manter avulsos / mover / excluir junto);
+excluir treino-modelo pergunta o destino do planejamento **futuro** (manter como "treino
+removido" / trocar por outro / remover). O planejamento **passado nunca é alterado**. Os
+schemas Zod dessas ações **não têm valor padrão** para a escolha: esquecer o campo vira erro de
+validação, não perda de dado. No banco, `exercise_id` do treino é `on delete restrict` e
+`workout_id` do planejamento é `on delete set null`.
+
+### Schema (14 tabelas: 7 na 17-A + 7 na 17-B)
+**17-A** — `training_muscle_groups`, `training_equipment`, `training_exercises`,
 `training_exercise_muscles` (secundários, com trigger que impede repetir o principal),
 `training_exercise_alternatives` (relação dirigida, do usuário), `training_exercise_prefs`
 e `training_preferences` (uma linha por usuário).
+
+**17-B** — `training_programs`, `training_program_workouts` (junção, e não FK direta: um treino
+pode ser avulso ou compor vários programas), `training_workouts` (com `version` +
+`superseded_by` + `version_group_id`), `training_workout_exercises`, `training_workout_sets`,
+`training_workout_alternatives` e `training_scheduled_workouts` (data pura + hora em `time`).
 
 ### Mapa de arquivos
 | Camada | Caminho |
@@ -388,9 +473,11 @@ e `training_preferences` (uma linha por usuário).
 | Tipos de domínio | `src/lib/training/types.ts` |
 | **Contrato de medição (puro)** | `src/lib/training/tracking.ts` + `tracking.test.ts` |
 | **Filtro/ordenação/URL (puro)** | `src/lib/training/filters.ts` + `filters.test.ts` |
-| Leitura (server-only) | `src/lib/training/queries.ts` |
-| Validação Zod | `src/lib/validators/training.ts` |
-| Server Actions | `src/lib/actions/training-{exercises,preferences}.ts` |
+| **Treino-modelo: `expandPlannedSets`, superset, duração (puro)** | `src/lib/training/workout.ts` + `workout.test.ts` |
+| **Planejamento: recorrência, rodízio, status derivado (puro)** | `src/lib/training/schedule.ts` + `schedule.test.ts` |
+| Leitura (server-only) | `src/lib/training/queries.ts` · `routine-queries.ts` |
+| Validação Zod | `src/lib/validators/training.ts` · `training-routines.ts` |
+| Server Actions | `src/lib/actions/training-{exercises,preferences,programs,workouts,schedule}.ts` |
 | Rotas | `src/app/(app)/treinos/` |
 | Componentes | `src/components/training/` |
 | Pipeline da base | `scripts/training/` · dados em `data/training/exercise-base/` |
