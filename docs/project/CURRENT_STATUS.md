@@ -191,6 +191,18 @@ significa ligado, salvo nos tipos que nascem desligados.
 | Quantidade por receita na lista | Campo de **porções** por receita; antes toda receita entrava com 1, o que subestimava a compra de uma receita de 4 porções |
 | XLSX | Uma aba por seção, `xlsx` por **import dinâmico** (a biblioteca não entra no bundle de quem não exporta). O CSV continua sendo o padrão |
 
+### Tela de Configurações do módulo (entregue na correção pós-16-F)
+
+`/nutricao/configuracoes` era o 12º submódulo e continuava **placeholder** na primeira
+entrega da 16-F — foi construída em seguida. Ela fecha as três gestões que existiam com action
+pronta e **nenhuma tela chamando**: tipos de refeição (16-B), categorias de receita (16-C) e
+etiquetas de alimento (16-A) — o mesmo padrão dos corredores de mercado e dos tipos de medida.
+
+Excluir tipo de refeição já usado é **recusado pelo servidor**, com a contagem de usos e a
+alternativa (desativar): o histórico do diário nunca é apagado por tabela. E a **citação da
+TACO aparece por extenso** na tela — é exigência da licença, e deixá-la só num arquivo do
+repositório não cumpre a exigência para quem usa o sistema.
+
 ### Segurança verificada no banco (role `authenticated`)
 
 **24 tentativas indevidas, 24 bloqueadas.** O intruso lê **0 linhas** em receita, anexo de foto,
