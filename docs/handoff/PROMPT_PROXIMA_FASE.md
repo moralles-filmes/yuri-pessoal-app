@@ -15,7 +15,7 @@
 ```text
 Você vai continuar o projeto "Sistema Pessoal Yuri" (já iniciado, faseado e documentado).
 
->>> FASE A IMPLEMENTAR: Subfase 17-B — docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md <<<
+>>> FASE A IMPLEMENTAR: Subfase 17-C — docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md <<<
 (edite SOMENTE a linha acima ao trocar de fase — o resto continua igual)
 
 NÃO comece a codar antes de ler a documentação. Leia, nesta ordem:
@@ -70,8 +70,7 @@ do arquivo que o próximo agente deve abrir.
 
 | Subfase | Linha para colar |
 | --- | --- |
-| 17-B | `Subfase 17-B — docs/phases/PHASE_17_B_TRAINING_ROUTINES_PROGRAMS.md` |
-| 17-C | `Subfase 17-C — docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md` |
+| 17-C | `Subfase 17-C — docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md` ← **próxima** |
 | 17-D | `Subfase 17-D — docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` |
 | 17-E | `Subfase 17-E — docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` |
 | 17-F | `Subfase 17-F — docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` |
@@ -80,8 +79,7 @@ do arquivo que o próximo agente deve abrir.
 
 | Subfase | Linha para colar |
 | --- | --- |
-| 16-C | `Subfase 16-C — docs/phases/PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` |
-| 16-D | `Subfase 16-D — docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md` |
+| 16-D | `Subfase 16-D — docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md` ← **próxima** |
 | 16-E | `Subfase 16-E — docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` |
 | 16-F | `Subfase 16-F — docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` |
 
