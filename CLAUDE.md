@@ -15,7 +15,7 @@ As **14 fases do roadmap original** e a **Fase 15 — Módulo TO-DO** estão con
 | Fase | Módulo | Situação |
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | **16-A a 16-E concluídas**; 16-F é a próxima (fecha a fase) |
-| **17** | Treinos (`/treinos`) | **17-A, 17-B e 17-C concluídas**; 17-D é a próxima |
+| **17** | Treinos (`/treinos`) | **17-A a 17-D concluídas**; 17-E é a próxima |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Fora dessas fases, o projeto segue em modo manutenção/iteração. **32 tabelas `nutrition_*`** + **4 tabelas centrais `body_*`** (16-E, compartilhadas com Treinos); o total do banco muda a cada subfase das duas frentes — **conte antes de citar um número**.
 
@@ -67,7 +67,7 @@ Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 sub
 
 ## Módulo Treinos (Fase 17, em andamento)
 
-Rota `/treinos`, tabelas `training_*`, navegação interna própria com 13 submódulos. A **17-A** entregou o vocabulário do domínio, o catálogo de exercícios (base autoral de 106 movimentos) e as preferências do módulo; a **17-B** entregou programas, treinos-modelo com construtor, séries configuráveis, supersets, versionamento e planejamento semanal; a **17-C** entregou a sessão ao vivo — preparação, snapshot congelado, cronômetro por timestamp, fila local e finalização com revisão. Histórico/volume, metas/medidas e integrações vêm nas subfases D–F (`docs/phases/PHASE_17_*`).
+Rota `/treinos`, tabelas `training_*`, navegação interna própria com 13 submódulos. A **17-A** entregou o vocabulário do domínio, o catálogo de exercícios (base autoral de 106 movimentos) e as preferências do módulo; a **17-B** entregou programas, treinos-modelo com construtor, séries configuráveis, supersets, versionamento e planejamento semanal; a **17-C** entregou a sessão ao vivo — preparação, snapshot congelado, cronômetro por timestamp, fila local e finalização com revisão; a **17-D** entregou histórico navegável, volume transparente, recordes consolidados, 1RM estimado e sugestão de progressão. Metas/medidas e integrações vêm nas subfases E–F (`docs/phases/PHASE_17_*`).
 
 **Invariantes do módulo:**
 1. **`tracking_type` é um contrato de medição, não um rótulo.** Ele diz o que o exercício mede (peso×reps, reps, segundos, distância, calorias). `src/lib/training/tracking.ts` é a **única** matriz — formulário, treino-modelo, sessão, volume e relatório leem dali. É o que impede o módulo de somar quilos com segundos.
@@ -81,11 +81,14 @@ Rota `/treinos`, tabelas `training_*`, navegação interna própria com 13 subm�
 9. **Nenhum asset de terceiros.** Base de exercícios autoral, sem imagem/vídeo/texto/dados copiados de apps de treino. Procedência em `data/training/exercise-base/ATTRIBUTION.md`; pipeline em `scripts/training/`.
 10. **Medidas corporais são `body_*`**, módulo central compartilhado com a Dieta. **A 16-E CRIOU as 4 tabelas (2026-08-04); a 17-E CONSOME** por `src/lib/body/queries.ts` e `src/lib/actions/body-measurements.ts` — sem criar nada. `getLatestWeight()` já existe para a sessão pré-preencher o peso. **Nunca duas tabelas de peso corporal.**
 11. **Sem prescrição, sem diagnóstico**, sem garantia de resultado, sem sugestão de carga máxima e sem incentivo a treinar com dor. Objetivo e nível de programa são organizacionais.
-12. **Todo agregado vai sair de `src/lib/training/metrics.ts` (17-D)** — como todo total da Dieta sai de `calc.ts`. `training_session_sets.is_personal_record` é só um **marcador** de candidato; a consolidação é da 17-D.
+12. **Todo agregado sai de `src/lib/training/metrics.ts`** (17-D) — como todo total da Dieta sai de `calc.ts`. Cada `tracking_type` acumula na SUA unidade; a **regra de contagem** (aquecimento dentro/fora, unilateral em `por_lado`/`soma_dos_lados`/`serie_completa`) aparece na tela ao lado do número, e agregado incompleto é **parcial** com o motivo. Drop set soma os blocos e conta como **uma** série. Dashboards e relatórios (17-E) **consomem**, não recalculam.
 13. **O fluxo da sessão sai de `session-flow.ts`** (17-C): concluir a 3ª de 4 séries leva para a **4ª série**, não para outro exercício; superset alterna A1→B1→A2→B2. E o estado sai de `session-machine.ts` — nenhuma action grava `status` direto.
 14. **Cronômetro nasce de timestamp, nunca de contagem local** (`timers.ts`, `agora` injetado). Tempo ativo = total − **união** de pausas e descansos. Só um descanso ativo e só uma sessão em execução — índices únicos parciais garantem no banco.
 15. **Toda gravação de série carrega `client_mutation_id`** (uuid do dispositivo, unique por sessão), e a action confere se já foi aplicada **antes** de aplicar: clique duplo, retry da fila e duas abas convergem para uma linha.
-16. **Não prometemos offline.** Não há service worker; o que existe é fila local + reenvio em ordem + status de sincronização sempre visível. A sessão em execução vive no servidor, então fechar a aba e reabrir recupera tudo.
+16. **Recorde é consolidado, não marcador** (17-D). `training_session_sets.is_personal_record` é só candidato; a verdade é `training_personal_records`, consolidada por `record_key` com a marca anterior preservada. **Empate não gera recorde novo**, e excluir uma sessão **recalcula** (o segundo melhor assume, com a data dele).
+17. **1RM é estimativa**, com a fórmula visível e escolhível; 1 repetição devolve o próprio peso, e acima de 12 repetições a UI avisa e o valor **não vira recorde**. Nada no módulo sugere carga máxima.
+18. **Progressão nunca é aplicada sozinha** (17-D): a regra é do usuário, avaliada sobre as últimas N sessões (N ≥ 2), com motivo em pt-BR; aceitar é a única escrita da 17-D no treino-modelo. **Dor registrada bloqueia sempre**, e o bloqueio não é configurável.
+19. **Não prometemos offline.** Não há service worker; o que existe é fila local + reenvio em ordem + status de sincronização sempre visível. A sessão em execução vive no servidor, então fechar a aba e reabrir recupera tudo.
 
 ## Leitura obrigatória antes de mexer no código
 
@@ -113,7 +116,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 1.297 testes em 2026-08-04)
+npm run test:run       # vitest run (suíte completa; 1.630 testes em 2026-08-04 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos
@@ -184,7 +187,7 @@ Testes de fuso não podem depender do `TZ` da máquina: use instantes absolutos 
 - `src/lib/supabase/service.ts` — **service role, SERVER-ONLY**. Usado **só** pelo Vercel Cron (`/api/cron/notifications`), que não tem sessão. Ignora RLS → **toda** query carrega `user_id` explícito. Nunca importar em código client.
 
 ### Segurança / multi-tenant (single-user na prática)
-- **RLS + FORCE RLS em todas as tabelas** (34 até a Fase 14, 13 do TO-DO, 28 da Fase 16, 7+ da Fase 17), policies `using (user_id = auth.uid()) with check (...)`. Auth nativo do Supabase (`auth.users`).
+- **RLS + FORCE RLS em todas as tabelas** (34 até a Fase 14, 13 do TO-DO, 32 da Fase 16, 26 da Fase 17 — **conte antes de citar um número**), policies `using (user_id = auth.uid()) with check (...)`. Auth nativo do Supabase (`auth.users`).
 - **Proteção de rotas** em `src/lib/supabase/proxy-session.ts`: tudo exige sessão exceto `PUBLIC_PATHS` (`/login`, `/cadastro`, `/auth`, `/recuperar-senha`, `/api/cron`). `/api/cron/*` é público para o proxy mas protegido por `CRON_SECRET` (Bearer) na própria rota.
 - O app **degrada com elegância sem chaves**: sem credenciais Supabase o proxy só segue adiante; integrações Google e Cron só "ligam" quando suas env vars existem (ver `src/config/env.ts` e `.env.local.example`).
 

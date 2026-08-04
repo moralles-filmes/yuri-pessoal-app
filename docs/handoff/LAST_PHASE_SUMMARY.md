@@ -1,87 +1,109 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
 > ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
-> (16-A a **16-E** concluídas) e a **Fase 17 — Módulo Treinos** (17-A, 17-B e 17-C concluídas).
+> ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
+> (16-A a **16-E** concluídas) e a **Fase 17 — Módulo Treinos** (17-A a **17-D** concluídas).
 > Este arquivo tem o resumo das duas, na ordem em que foram concluídas — a mais recente
 > primeiro.
 
 ---
 
-## Subfase 16-E — Dieta · Medidas corporais, fotos de evolução e relatórios (2026-08-04) ✅
+## Subfase 17-D — Treinos · Histórico, volume, recordes e progressão (2026-08-04) ✅
 
-Quinta das 6 subfases da **Fase 16**. É a subfase que carrega a decisão arquitetural que as
-duas frentes esperavam. **4 tabelas novas (+1 migration de constraint), +151 testes puros.**
+Quarta das 6 subfases da **Fase 17**. A 17-C fez o sistema **acumular** sessões; a 17-D
+transforma esse acúmulo em **leitura útil**. **3 tabelas novas, +158 testes puros** (suíte:
+1321 → 1479).
 
-### ⛔ A 16-E CRIOU `body_*`. A 17-E CONSOME.
+### ⛔ A regra que a subfase existe para garantir
 
-Conferido no banco em 2026-08-04 (MCP `list_tables`): a estrutura **não existia**. A 16-E
-chegou primeiro e criou o **módulo central de medidas corporais**, com prefixo `body_*` e
-código em `src/lib/body/` — **não** `nutrition_measurement_*`:
+**NÃO SOMAR O QUE NÃO SE SOMA.** Um minuto de prancha, 12 repetições de flexão e 100 kg × 8 no
+supino não têm denominador comum. Um app que joga tudo num "volume" único produz um gráfico
+bonito e sem significado.
 
-`body_measurement_types` (16 tipos semeados na 1ª leitura), `body_measurements`,
-`body_measurement_goals`, `body_progress_photos`.
+`src/lib/training/metrics.ts` é para os Treinos o que `calc.ts` é para a Dieta: **todo** número
+agregado sai dali, e cada `tracking_type` acumula na SUA unidade, declarada em `tracking.ts`
+(kg · repetições · segundos · distância · calorias). Histórico, gráfico, recorde, visão geral e —
+na 17-E — dashboards e relatórios usam a mesma função.
 
-**A 17-E não deve criar tabela nenhuma.** Deve chamar `src/lib/body/queries.ts` e
-`src/lib/actions/body-measurements.ts`. Já pronto para ela: **`getLatestWeight(upTo?)`**, para
-a preparação da sessão pré-preencher o peso corporal (hoje digitado na hora) — devolvendo
-`null` quando não há registro, porque **sem peso a carga efetiva é indisponível, nunca zero**.
+### Arquivos criados
 
-### ⛔ As fotos: cinco travas, e a que só o teste revelou
+**Migrations (3):** `20260805100000_training_personal_records.sql`,
+`…100100_training_progression_rules.sql`, `…100200_training_progression_suggestions.sql`.
 
-Reuso da tabela `attachments` + bucket **privado** `attachments` (Fase 14) — nenhum segundo
-mecanismo de upload.
+**Lógica pura (5 arquivos + 5 de teste):** `src/lib/training/metrics.ts` (+44),
+`one-rm.ts` (+24), `records.ts` (+30), `progression.ts` (+26), `history.ts` (+27).
 
-1. O **binário passa pelo servidor** (Server Action com `FormData`), para tipo e tamanho serem
-   validados **de verdade** no servidor, sobre o `File` real.
-2. **Nome aleatório** (`crypto.randomUUID`); o nome do cliente é descartado.
-3. Pasta **sempre** `{auth.getUser().id}/…`.
-4. Falha ao gravar o metadado **remove o arquivo** — nada de órfão anônimo no bucket.
-5. **FK COMPOSTA `(attachment_id, user_id) → attachments(id, user_id)`.**
+**Servidor:** `src/lib/training/history-queries.ts` (leitura ampla do histórico, recordes,
+regras e sugestões), `src/lib/training/records-sync.ts` (I/O da consolidação),
+`src/lib/validators/training-history.ts`, `src/lib/actions/training-history.ts`.
 
-A quinta apareceu no teste pela role `authenticated`: a RLS sozinha aceitava
-`body_progress_photos(user_id = B, attachment_id = <anexo de A>)`, porque a policy confere o
-`user_id` da **própria linha** e nada sabe sobre o anexo apontado. Não vazava — a leitura junta
-`attachments`, cuja RLS bloqueia B — mas **depender de um JOIN para não vazar foto de corpo é
-fino demais**. Agora é 23503 no banco.
+**Interface:** `src/app/(app)/treinos/historico/{page,history-client,loading}.tsx`,
+`historico/[id]/{page,session-detail-client}.tsx`,
+`exercicios/[id]/{page,exercise-history-client}.tsx`,
+`recordes/records-client.tsx`, `evolucao/evolution-client.tsx` e
+`src/components/training/{metrics-summary,training-charts,progression-rule-dialog}.tsx`.
 
-Leitura só por **URL assinada de 5 min**, gerada a cada acesso. `storage_path` **não sai do
-servidor**: `SignedProgressPhoto` nem tem o campo.
+**Alterados:** `src/lib/training/constants.ts` (histórico, recordes e evolução viraram
+"pronto"), `src/lib/actions/training-sessions.ts` (`finishSession` consolida recordes e avalia
+progressão), `src/components/training/exercise-detail-sheet.tsx` (link para o histórico do
+exercício), `src/app/(app)/treinos/page.tsx` (últimos 30 dias, reais),
+`treinos/configuracoes/preferences-client.tsx` (as preferências de volume passaram a valer),
+`src/lib/validators/round-trip.test.ts` (+6) e `src/types/supabase.ts` (regenerado — **só
+adição**, nada da Dieta foi tocado).
 
-> ⚠️ **A FK composta obrigou a abandonar o embed do PostgREST.** `getProgressPhotos` faz duas
-> consultas e junta em memória: embed sobre FK composta dependeria de inferência do PostgREST e
-> quebraria **só em runtime** — a família do 42P10 que a 16-B documentou.
+### Decisões técnicas registradas
 
-### A regra que atravessa a subfase: **buraco não é zero**
+1. **Ausência de dado não é zero.** Sem peso corporal na sessão, a série de peso corporal fica de
+   fora do volume e o total do período é marcado **parcial**, com o motivo por extenso. Mesma
+   disciplina do `value_state` da Dieta.
+2. **A regra de contagem viaja com o número.** Toda tela que mostra volume mostra também
+   aquecimento dentro/fora e a regra do unilateral (`volumeRuleLabel`).
+3. **Unilateral em três regras**, e a diferença é o que o número REGISTRADO significa:
+   `por_lado` (2 séries, valores dobrados), `soma_dos_lados` (1 série, dobrados) e
+   `serie_completa` (1 série, o valor já é a série inteira). Com os lados gravados separadamente,
+   o trabalho executado soma nas três — muda só a contagem de séries.
+4. **Drop set soma os blocos e conta como UMA série.**
+5. **1RM é estimativa**, com fórmula visível e escolhível. 1 repetição devolve o próprio peso (é
+   medida); acima de 12 repetições vem **com aviso** e **não vira recorde**. Nada sugere carga
+   máxima.
+6. **Empate não gera recorde novo**; a marca anterior fica em `previous_value`.
+7. **Excluir sessão recalcula pelo MESMO caminho da finalização** (`rebuildRecords`): o segundo
+   melhor assume com a data dele. Valor que cai limpa `previous_value` — afirmar uma marca que o
+   histórico não sustenta seria inventar.
+8. **Progressão nunca é aplicada sozinha e dor bloqueia sempre** (bloqueio não configurável).
+   Aceitar é a única escrita da 17-D no treino-modelo.
+9. **Gráfico nunca é a única leitura do dado**: todo gráfico tem tabela equivalente dobrável.
+10. **Nenhuma métrica materializada** — volume, tonelagem e 1RM continuam derivados na leitura.
 
-`value_state` (16-A) aplicado ao **tempo**. Série devolve `null` no dia sem medição, o gráfico
-usa `connectNulls={false}` (a linha interrompe), o calendário mostra "—" e a média móvel só
-aparece com a janela cheia. O eixo não começa em zero.
+### Armadilha do banco (a mesma da Dieta, em outro domínio)
+O índice de deduplicação das sugestões é **PARCIAL** (`where status in ('pendente','ignorada')`).
+`ON CONFLICT` não infere índice parcial e falharia **só em runtime** (42P10) — por isso a
+gravação é *select-then-insert*. Verificado no banco: a mesma proposta é recusada enquanto
+pendente e **pode voltar** depois de aceita (a carga subiu e desceu de novo é caso legítimo).
 
-Um caso que os testes pegaram: dia **com meta e sem registro** entrava na aderência média como
-**0%** — "esqueci de anotar" virava "falhei na meta". Corrigido **no código**, com teste.
-
-### Relatórios: snapshot e meta da época
-
-`buildDailyReports` entra por `dayTotals` (16-B), que soma `nutrients_snapshot` — nenhum
-parâmetro de `reports.ts` aceita alimento do catálogo para somar consumo. E cada dia resolve a
-**própria** meta com `goalPeriodForDate`: 1.800 kcal dá 100% em janeiro (meta 1.800) e 72% em
-março (meta 2.500), no mesmo relatório.
-
-### Pendências fechadas
-Micronutrientes por período (com a coluna "dias incompletos"), "substituições mais realizadas",
-gasto com mercado (**reusando `summarizeShoppingList`**, nunca recontando), exportação em CSV e
-a **visão de mês do diário** (`?visao=mes` caía na semana).
+### Segurança verificada no banco (role `authenticated`)
+**10 tentativas indevidas bloqueadas**: forjar recorde com `user_id` alheio, recorde geral com
+`exercise_id`, `previous_value` maior que `value`, `record_key` duplicada, regra com 1 sessão,
+incremento fixo sem valor, regra de exercício sem alvo, segunda regra global, sugestão decidida
+sem `decided_at` e `dedupe_key` repetida com sugestão pendente. Intruso lê/edita/exclui **0
+linhas** nas três tabelas; o dono lê e escreve o que é dele. **0 resíduo** de teste; catálogo
+intacto (106 exercícios).
 
 ### Verificação
-`lint` + `tsc` + `test:run` (**1.472 testes**, de 1.321) + `build` verdes, e a suíte passa em
-`TZ=UTC`. RLS testada pela role **`authenticated`**: B lê 0 linhas nas 4 tabelas, em
-`attachments` e em `storage.objects`; todas as escritas em nome alheio são bloqueadas. Dados de
-teste removidos. `get_advisors`: 0 lints de schema.
+`npm run lint`, `npx tsc --noEmit`, `npm run test:run` (**1479 testes**, de 1321) e
+`npm run build` passam. Suíte verde também em `TZ=UTC`. Smoke: `/treinos/historico`,
+`/treinos/recordes`, `/treinos/evolucao` e `/treinos/exercicios/[id]` → **307 `/login`**;
+`/login` → 200; `/api/cron/*` → **401**. `get_advisors`: 0 lints de schema. **109 tabelas** no
+projeto (26 `training_*`).
 
-### Pendências conscientes
-Gerenciar tipos de medida pela interface (as actions existem), notificação de medição pendente,
-cards de evolução no dashboard e XLSX → **16-F**. Integração com balança → **não planejado**
-(`source` já prevê o campo).
+### Pendências registradas (escopo consciente, não bugs)
+| Item | Onde resolve |
+| --- | --- |
+| Metas, medidas corporais `body_*`, dashboards e relatórios por período | 17-E |
+| Exportação dos relatórios | 17-E |
+| **Notificação de novo recorde** (a detecção já acontece; `syncPersonalRecords` devolve `highlights`) | 17-F |
+| Busca global, lançamento rápido e card no dashboard geral | 17-F |
+| Comparar com outros usuários ou normas populacionais | **Nunca** — o sistema é single-user e não faz comparação normativa |
 
 ---
 
@@ -191,6 +213,84 @@ locais padrão, anilha repetida) — **todas bloqueadas**. 0 resíduo de teste n
 | Metas, medidas corporais `body_*`, dashboards | 17-E |
 | Notificação, agenda, TO-DO, hábitos, PWA/service worker | 17-F |
 | Reordenar exercício **arrastando** na sessão (as setas ↑ ↓, "fazer agora" e "para o fim" já funcionam) | 17-F |
+
+---
+
+## Subfase 16-E — Dieta · Medidas corporais, fotos de evolução e relatórios (2026-08-04) ✅
+
+Quinta das 6 subfases da **Fase 16**. É a subfase que carrega a decisão arquitetural que as
+duas frentes esperavam. **4 tabelas novas (+1 migration de constraint), +151 testes puros.**
+
+### ⛔ A 16-E CRIOU `body_*`. A 17-E CONSOME.
+
+Conferido no banco em 2026-08-04 (MCP `list_tables`): a estrutura **não existia**. A 16-E
+chegou primeiro e criou o **módulo central de medidas corporais**, com prefixo `body_*` e
+código em `src/lib/body/` — **não** `nutrition_measurement_*`:
+
+`body_measurement_types` (16 tipos semeados na 1ª leitura), `body_measurements`,
+`body_measurement_goals`, `body_progress_photos`.
+
+**A 17-E não deve criar tabela nenhuma.** Deve chamar `src/lib/body/queries.ts` e
+`src/lib/actions/body-measurements.ts`. Já pronto para ela: **`getLatestWeight(upTo?)`**, para
+a preparação da sessão pré-preencher o peso corporal (hoje digitado na hora) — devolvendo
+`null` quando não há registro, porque **sem peso a carga efetiva é indisponível, nunca zero**.
+
+### ⛔ As fotos: cinco travas, e a que só o teste revelou
+
+Reuso da tabela `attachments` + bucket **privado** `attachments` (Fase 14) — nenhum segundo
+mecanismo de upload.
+
+1. O **binário passa pelo servidor** (Server Action com `FormData`), para tipo e tamanho serem
+   validados **de verdade** no servidor, sobre o `File` real.
+2. **Nome aleatório** (`crypto.randomUUID`); o nome do cliente é descartado.
+3. Pasta **sempre** `{auth.getUser().id}/…`.
+4. Falha ao gravar o metadado **remove o arquivo** — nada de órfão anônimo no bucket.
+5. **FK COMPOSTA `(attachment_id, user_id) → attachments(id, user_id)`.**
+
+A quinta apareceu no teste pela role `authenticated`: a RLS sozinha aceitava
+`body_progress_photos(user_id = B, attachment_id = <anexo de A>)`, porque a policy confere o
+`user_id` da **própria linha** e nada sabe sobre o anexo apontado. Não vazava — a leitura junta
+`attachments`, cuja RLS bloqueia B — mas **depender de um JOIN para não vazar foto de corpo é
+fino demais**. Agora é 23503 no banco.
+
+Leitura só por **URL assinada de 5 min**, gerada a cada acesso. `storage_path` **não sai do
+servidor**: `SignedProgressPhoto` nem tem o campo.
+
+> ⚠️ **A FK composta obrigou a abandonar o embed do PostgREST.** `getProgressPhotos` faz duas
+> consultas e junta em memória: embed sobre FK composta dependeria de inferência do PostgREST e
+> quebraria **só em runtime** — a família do 42P10 que a 16-B documentou.
+
+### A regra que atravessa a subfase: **buraco não é zero**
+
+`value_state` (16-A) aplicado ao **tempo**. Série devolve `null` no dia sem medição, o gráfico
+usa `connectNulls={false}` (a linha interrompe), o calendário mostra "—" e a média móvel só
+aparece com a janela cheia. O eixo não começa em zero.
+
+Um caso que os testes pegaram: dia **com meta e sem registro** entrava na aderência média como
+**0%** — "esqueci de anotar" virava "falhei na meta". Corrigido **no código**, com teste.
+
+### Relatórios: snapshot e meta da época
+
+`buildDailyReports` entra por `dayTotals` (16-B), que soma `nutrients_snapshot` — nenhum
+parâmetro de `reports.ts` aceita alimento do catálogo para somar consumo. E cada dia resolve a
+**própria** meta com `goalPeriodForDate`: 1.800 kcal dá 100% em janeiro (meta 1.800) e 72% em
+março (meta 2.500), no mesmo relatório.
+
+### Pendências fechadas
+Micronutrientes por período (com a coluna "dias incompletos"), "substituições mais realizadas",
+gasto com mercado (**reusando `summarizeShoppingList`**, nunca recontando), exportação em CSV e
+a **visão de mês do diário** (`?visao=mes` caía na semana).
+
+### Verificação
+`lint` + `tsc` + `test:run` (**1.472 testes**, de 1.321) + `build` verdes, e a suíte passa em
+`TZ=UTC`. RLS testada pela role **`authenticated`**: B lê 0 linhas nas 4 tabelas, em
+`attachments` e em `storage.objects`; todas as escritas em nome alheio são bloqueadas. Dados de
+teste removidos. `get_advisors`: 0 lints de schema.
+
+### Pendências conscientes
+Gerenciar tipos de medida pela interface (as actions existem), notificação de medição pendente,
+cards de evolução no dashboard e XLSX → **16-F**. Integração com balança → **não planejado**
+(`source` já prevê o campo).
 
 ---
 

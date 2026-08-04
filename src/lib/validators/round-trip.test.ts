@@ -33,6 +33,12 @@ import {
   trainingExerciseSchema,
   trainingExerciseUpdateSchema,
 } from "@/lib/validators/training";
+import {
+  deleteSessionSchema,
+  progressionRuleSchema,
+  progressionRuleUpdateSchema,
+  suggestionDecisionSchema,
+} from "@/lib/validators/training-history";
 
 const UUID = "11111111-2222-4333-8444-555555555555";
 
@@ -181,5 +187,73 @@ describe("exercício: o formulário de 'Novo exercício' salva", () => {
   it("continua exigindo o grupo muscular principal", () => {
     const semGrupo = { ...doFormulario, primary_muscle_group_id: "" };
     expect(trainingExerciseSchema.safeParse(semGrupo).success).toBe(false);
+  });
+});
+
+/* ───────────────────────── Fase 17-D — regra de progressão ───────────────────────── */
+
+describe("regra de progressão (17-D)", () => {
+  const doFormulario = {
+    name: "Progressão do supino",
+    scope: "exercicio",
+    exercise_id: UUID,
+    muscle_group_id: "",
+    min_sessions: 2,
+    require_top_of_range: true,
+    require_all_working_sets: true,
+    require_no_failure: true,
+    max_rir: "",
+    max_rpe: "",
+    max_difficulty: "adequada",
+    increment_mode: "incremento_minimo",
+    increment_kg: "",
+    increment_percent: "",
+    is_active: true,
+    notes: "",
+  };
+
+  it("passa no servidor com os opcionais em branco", () => {
+    const { noServidor } = roundTrip(progressionRuleSchema, doFormulario);
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+  });
+
+  it("vale também para a edição", () => {
+    const { noServidor } = roundTrip(progressionRuleUpdateSchema, { ...doFormulario, id: UUID });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+  });
+
+  it("escopo de exercício sem exercício escolhido destaca o campo certo", () => {
+    const parsed = progressionRuleSchema.safeParse({ ...doFormulario, exercise_id: "" });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.flatten().fieldErrors.exercise_id).toBeTruthy();
+    }
+  });
+
+  it("incremento fixo sem valor destaca o campo do incremento", () => {
+    const parsed = progressionRuleSchema.safeParse({
+      ...doFormulario,
+      increment_mode: "fixo",
+      increment_kg: "",
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.flatten().fieldErrors.increment_kg).toBeTruthy();
+    }
+  });
+
+  it("menos de 2 sessões é recusado — uma série isolada nunca gera sugestão", () => {
+    expect(progressionRuleSchema.safeParse({ ...doFormulario, min_sessions: 1 }).success).toBe(false);
+  });
+
+  it("a decisão sobre uma sugestão não tem valor padrão", () => {
+    expect(suggestionDecisionSchema.safeParse({ id: UUID }).success).toBe(false);
+    expect(suggestionDecisionSchema.safeParse({ id: UUID, decision: "aceitar" }).success).toBe(true);
+  });
+
+  it("excluir uma sessão exige confirmação explícita", () => {
+    expect(deleteSessionSchema.safeParse({ id: UUID }).success).toBe(false);
+    expect(deleteSessionSchema.safeParse({ id: UUID, confirm: false }).success).toBe(false);
+    expect(deleteSessionSchema.safeParse({ id: UUID, confirm: true }).success).toBe(true);
   });
 });

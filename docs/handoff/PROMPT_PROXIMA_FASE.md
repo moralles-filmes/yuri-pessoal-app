@@ -15,7 +15,7 @@
 ```text
 Você vai continuar o projeto "Sistema Pessoal Yuri" (já iniciado, faseado e documentado).
 
->>> FASE A IMPLEMENTAR: Subfase 16-F — docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md <<<
+>>> FASE A IMPLEMENTAR: Subfase 17-E — docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md <<<
 (edite SOMENTE a linha acima ao trocar de fase — o resto continua igual)
 
 NÃO comece a codar antes de ler a documentação. Leia, nesta ordem:
@@ -84,14 +84,17 @@ do arquivo que o próximo agente deve abrir.
 | Subfase | Linha para colar |
 | --- | --- |
 | 17-C | ✅ concluída (`PHASE_17_C_TRAINING_LIVE_SESSION.md`) |
-| 17-D | `Subfase 17-D — docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` ← **próxima** |
-| 17-E | `Subfase 17-E — docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` |
+| 17-D | ✅ concluída (`PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`) |
+| 17-E | `Subfase 17-E — docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` ← **próxima** |
 | 17-F | `Subfase 17-F — docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` |
 
-> ⛔ **Aviso central para a 17-D:** leia sempre o **snapshot** da sessão, nunca o modelo atual.
-> Se um gráfico mudar porque o usuário renomeou um exercício ou editou o treino, a 17-C foi
-> violada. `training_session_sets.is_personal_record` é só um **marcador** de candidato — a
-> consolidação de recordes é trabalho da 17-D, em `src/lib/training/metrics.ts`.
+> ⛔ **Os dois avisos centrais para a 17-E:**
+> **1.** `src/lib/training/metrics.ts` é a fonte ÚNICA de todo agregado do módulo (volume,
+> séries, repetições, tempo, distância, frequência, distribuição por grupo). Os dashboards
+> **consomem** — se refizerem a conta, vão discordar do histórico e o usuário verá dois números
+> diferentes para a mesma semana. Faltando um agregado, acrescente **em `metrics.ts`**.
+> **2.** As medidas corporais **já existem**: a 16-E criou as 4 tabelas `body_*` e o código em
+> `src/lib/body/`. A 17-E **consome** e não cria tabela nenhuma.
 
 ### Fase 16 — Dieta e Alimentação (`/nutricao`)
 

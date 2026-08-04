@@ -9,7 +9,7 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A a 16-E concluídas**; 16-F é a próxima (fecha a fase) |
-| **17** | Treinos (`/treinos`) | A–F | **17-A, 17-B e 17-C concluídas**; 17-D é a próxima |
+| **17** | Treinos (`/treinos`) | A–F | **17-A a 17-D concluídas**; 17-E é a próxima |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -23,15 +23,15 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 ## Fases atuais
 - **Fase 16-E — Dieta e Alimentação · Medidas corporais, fotos de evolução e relatórios → CONCLUÍDA ✅**
   Arquivo: `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
-- **Fase 17-C — Treinos · Preparação, sessão ao vivo, cronômetro e recuperação → CONCLUÍDA ✅**
-  Arquivo: `docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md`
+- **Fase 17-D — Treinos · Histórico, volume, recordes e progressão → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`
 
 ## Próximas fases
 - **Subfase 16-F — Integrações, notificações e polimento** (fecha a Fase 16; precisa validar
   os **40 critérios de aceite gerais** listados no próprio arquivo).
   Arquivo: `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md`
-- **Subfase 17-D — Histórico, volume, recordes e progressão.**
-  Arquivo: `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`
+- **Subfase 17-E — Metas, medidas corporais compartilhadas e dashboards.**
+  Arquivo: `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`
 
 ---
 
@@ -207,6 +207,87 @@ Atingia três telas em produção: **Novo treino** e **Novo programa** (17-B) e 
 
 Provado no banco (role `authenticated`): insert de treino com o payload exato do schema
 corrigido, lido de volta pelo próprio usuário, em transação revertida — 0 resíduo.
+
+---
+
+## O que foi implementado na Subfase 17-D (Treinos — histórico, volume, recordes e progressão)
+
+A subfase que transforma o acúmulo de sessões em **leitura útil**. **3 tabelas novas** e
+**+158 testes puros** (suíte: 1321 → 1479).
+
+### ⛔ A regra que a subfase existe para garantir: NÃO SOMAR O QUE NÃO SE SOMA
+
+Um minuto de prancha, 12 repetições de flexão e 100 kg × 8 no supino não têm denominador comum.
+Um app que joga tudo num número único de "volume" produz um gráfico bonito e sem significado.
+
+`src/lib/training/metrics.ts` é para os Treinos o que `calc.ts` é para a Dieta: **todo** número
+agregado do módulo sai dali, e cada `tracking_type` acumula na SUA unidade, declarada em
+`tracking.ts` (kg · repetições · segundos · distância · calorias). Histórico, gráfico, recorde,
+visão geral e — na 17-E — dashboards e relatórios usam a mesma função, que é o que garante que
+concordem entre si.
+
+### As decisões de contrato
+
+1. **Ausência de dado não é zero.** Sem peso corporal registrado na sessão, a carga efetiva de um
+   exercício de peso corporal é INDISPONÍVEL: a série fica de fora e o total do período é marcado
+   como **parcial**, com o motivo por extenso. `partialExplanation` monta a frase e a UI é
+   obrigada a exibir. Mesma disciplina do `value_state` da Dieta.
+2. **A regra de contagem viaja com o número.** Toda tela que mostra volume mostra também
+   `volumeRuleLabel(...)`: aquecimento dentro ou fora, e como o unilateral está sendo contado.
+3. **Unilateral tem três regras, e a diferença é o que o número REGISTRADO significa.**
+   `por_lado` (2 séries, valores dobrados), `soma_dos_lados` (1 série, valores dobrados) e
+   `serie_completa` (1 série, o valor registrado já é a série inteira). Com os lados gravados
+   separadamente, o trabalho executado soma nas três — o que muda é só a contagem de séries.
+4. **Drop set soma os blocos e conta como UMA série.** Contar cada queda como série inflaria a
+   série semanal por grupo muscular.
+5. **1RM é estimativa**, com a fórmula visível e escolhível (Epley, Brzycki, Lombardi, Lander).
+   Série de 1 repetição devolve o próprio peso — é medida, não estimativa. Acima de 12 repetições
+   o número vem **com aviso**, e nunca vira recorde. **O sistema não sugere carga máxima.**
+6. **Empate não gera recorde novo.** A consolidação é por `record_key` (id do exercício ou, na
+   falta dele, o NOME congelado) e preserva a marca anterior em `previous_value`.
+7. **Excluir uma sessão recalcula os recordes.** O caminho é o mesmo da finalização —
+   `rebuildRecords` reconstrói do histórico e o segundo melhor assume, com a data dele. Quando o
+   valor CAI, `previous_value` é limpo: afirmar uma marca que o histórico já não sustenta seria
+   inventar.
+8. **Progressão nunca é aplicada sozinha, e dor bloqueia sempre.** A regra é escrita pelo
+   usuário, avaliada sobre as últimas N sessões (N ≥ 2, com CHECK no banco), gera um motivo em
+   pt-BR e nasce `pendente`. Aceitar grava a nova carga no treino-modelo (a única escrita no
+   modelo em toda a 17-D) preservando o valor anterior na sugestão; ignorar impede que a mesma
+   proposta reapareça. `progression_enabled` desliga o recurso inteiro.
+9. **Gráfico nunca é a única leitura do dado.** Todo gráfico tem tabela equivalente dobrável.
+
+### Schema — 3 tabelas (projeto: 109 tabelas, 26 `training_*`, 0 lints de schema)
+`training_personal_records` (recorde consolidado + marca anterior),
+`training_progression_rules` (a regra do usuário) e `training_progression_suggestions`
+(a sugestão, com `basis` congelado e `dedupe_key`).
+
+> **Nenhuma métrica é materializada.** Volume, tonelagem e 1RM continuam derivados na leitura —
+> materializar criaria a segunda verdade que a view `nutrition_foods_view` evita na Dieta. O
+> recorde é diferente: guarda um FATO datado e a marca que ele superou.
+
+> ⚠️ O índice de deduplicação das sugestões é **PARCIAL**
+> (`where status in ('pendente','ignorada')`): `ON CONFLICT` não infere índice parcial e falharia
+> só em runtime (42P10). A gravação é *select-then-insert*, como nos pontos idempotentes da Dieta.
+
+### Telas
+`/treinos/historico` (lista · semana · mês · calendário · linha do tempo, 14 filtros combináveis,
+agrupamento e ação em massa que **não alcança nada fora do filtro atual**),
+`/treinos/historico/[id]` (detalhe com ordem planejada × executada, substituições, linha do tempo
+e comparação com a sessão anterior / a melhor / a média das últimas quatro),
+`/treinos/exercicios/[id]` (resumo, melhores marcas, evolução e todas as séries),
+`/treinos/recordes` e `/treinos/evolucao` (desempenho + progressão). A visão geral do módulo
+passou a mostrar os últimos 30 dias — e diz quando não há treino no período, em vez de exibir
+"0 kg" com cara de resultado.
+
+### Verificação
+`npm run lint`, `npx tsc --noEmit`, `npm run test:run` (**1479 testes**, de 1321) e
+`npm run build` passam; a suíte também passa em `TZ=UTC`. Smoke: rotas da 17-D → **307 `/login`**,
+`/login` → 200, `/api/cron/notifications` → **401**. No banco, pela role `authenticated`:
+**10 tentativas indevidas bloqueadas** (forja de `user_id`, escopo incoerente, marca anterior
+maior que a atual, `record_key` duplicada, regra com 1 sessão, incremento fixo sem valor, regra
+de exercício sem alvo, segunda regra global, sugestão decidida sem data e `dedupe_key` repetida
+com sugestão pendente) e o dono lendo/escrevendo o que é dele. Dados de teste removidos: 0
+resíduos, catálogo intacto (106 exercícios).
 
 ---
 

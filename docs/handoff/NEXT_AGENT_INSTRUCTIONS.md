@@ -1,6 +1,6 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-## 📌 Estado atual — Fase 16 (Dieta e Alimentação) em andamento
+## 📌 Estado atual — duas frentes em andamento (Dieta e Treinos)
 
 As 14 fases do roadmap original e a Fase 15 (TO-DO) estão concluídas. Em **2026-08-03** o
 usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 subfases (A–F)**.
@@ -8,8 +8,8 @@ usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 
 **As Subfases 16-A a 16-E estão concluídas e aplicadas no banco.** Crie um branch novo.
 
 > ⚠️ **Há outra frente em paralelo.** Em 2026-08-03 também foi aberta a **Fase 17 — Módulo
-> Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a **17-A, a 17-B e
-> a 17-C concluídas**. As duas fases convivem no mesmo repositório e no mesmo banco. Antes de mexer em
+> Treinos** (`/treinos`, tabelas `training_*`, `docs/phases/PHASE_17_*`), com a **17-A, a 17-B, a
+> 17-C e a 17-D concluídas**. As duas fases convivem no mesmo repositório e no mesmo banco. Antes de mexer em
 > `docs/project/PROJECT_ROADMAP.md`, `CURRENT_STATUS.md` ou `src/types/supabase.ts`, **leia o
 > arquivo primeiro e edite de forma pontual** — sobrescrever levaria embora o trabalho da
 > outra frente.
@@ -23,7 +23,7 @@ usuário abriu a **Fase 16 — Módulo Dieta e Alimentação**, dividida em **6 
 | Frente | Próxima subfase | Arquivo |
 | --- | --- | --- |
 | **Dieta e Alimentação** | **16-F** — Integrações, notificações e polimento (**fecha a Fase 16**) | `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` |
-| **Treinos** | **17-D** — Histórico, volume, recordes e progressão | `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` |
+| **Treinos** | **17-E** — Metas, medidas corporais e dashboards | `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` |
 
 Faça **uma** subfase por vez.
 
@@ -114,82 +114,94 @@ Para as integrações: `src/lib/notifications/*` (`dedupe_key` + Cron), `src/lib
 - **`uploadProgressPhoto`** (`src/lib/actions/body-measurements.ts`) — o padrão de upload com
   validação real no servidor. **A foto de receita deve seguir exatamente esse caminho.**
 
-## ▶️ Frente Treinos: Subfase 17-D — Histórico, volume, recordes e progressão
+## ▶️ Frente Treinos: Subfase 17-E — Metas, medidas corporais e dashboards
 
 **Arquivo da fase (leia inteiro antes de codar):**
-`docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`
+`docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`
 
 **Leitura obrigatória, nesta ordem:**
 1. `docs/project/PROJECT_RULES.md`
-2. `docs/project/PROJECT_ARCHITECTURE.md` (seção "Módulo Treinos", em especial "A sessão ao vivo")
+2. `docs/project/PROJECT_ARCHITECTURE.md` (seção "Módulo Treinos", em especial
+   "Histórico, volume e recordes (17-D)")
 3. `docs/project/PROJECT_ROADMAP.md` (Fase 17, tabela das subfases)
 4. `docs/project/CURRENT_STATUS.md`
 5. `docs/handoff/LAST_PHASE_SUMMARY.md`
-6. `docs/phases/PHASE_17_A_…`, `PHASE_17_B_…` e `PHASE_17_C_TRAINING_LIVE_SESSION.md`
-7. `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` (o que você vai fazer)
+6. `docs/phases/PHASE_17_A_…` até `PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`
+7. `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` (o que você vai fazer)
 
 **Código que você precisa entender antes de escrever qualquer linha:**
-`src/lib/training/tracking.ts`, `workout.ts` (`expandPlannedSets`), **`session-snapshot.ts`**,
-**`session-machine.ts`** (`deriveExerciseStatus`, `isSetDone`), `session-flow.ts`, `timers.ts`,
-**`previous.ts`**, `plates.ts`, `constants.ts`, `types.ts`, **`session-queries.ts`** e as actions
-`src/lib/actions/training-{sessions,locations,workouts,schedule}.ts`.
+**`src/lib/training/metrics.ts`** (a fonte única dos agregados), `one-rm.ts`, `records.ts`,
+`progression.ts`, `history.ts`, `tracking.ts`, `workout.ts`, `schedule.ts`,
+**`history-queries.ts`**, `records-sync.ts`, `session-queries.ts` e as actions
+`src/lib/actions/training-{sessions,history,workouts,schedule}.ts`.
 
-### ⛔ A regra que você NÃO pode quebrar
+### ⛔ As duas regras que você NÃO pode quebrar
 
-**LEIA SEMPRE O SNAPSHOT, NUNCA O MODELO ATUAL.** A sessão congelou tudo ao iniciar: nome do
-treino, nome do exercício, `tracking_type`, lateralidade, séries previstas e cargas planejadas
-estão em `training_session_exercises` / `training_session_sets` e em
-`training_sessions.workout_snapshot`. `session-queries.ts` **não tem uma única referência a
-`training_workouts`** — mantenha assim.
+**1. OS DASHBOARDS CONSOMEM `metrics.ts` — NUNCA RECALCULAM.**
+Volume, séries, repetições, tempo, frequência, distribuição por grupo muscular e recordes já
+saem de lá, com a regra do usuário aplicada (aquecimento dentro/fora, contagem do unilateral) e
+com a **qualidade** (`exato | parcial`) junto do número. Um dashboard que refizer a conta vai
+discordar do histórico na primeira diferença de arredondamento — e o usuário vai ver dois
+números diferentes para a mesma semana. Se faltar um agregado, **acrescente em `metrics.ts`**.
 
-Se um gráfico de evolução mudar porque o usuário renomeou um exercício ou editou o treino, a
-17-C foi violada. Existe teste no banco provando que hoje isso não acontece (editar e até
-**excluir** o modelo não muda a sessão registrada) — não crie o caminho de volta.
+**2. AS MEDIDAS CORPORAIS JÁ EXISTEM — A 16-E CRIOU, VOCÊ CONSOME.**
+Não crie `training_body_*` nem tabela nenhuma de medida: as 4 tabelas `body_*` e o código em
+`src/lib/body/` são de 2026-08-04 (ver a seção **"PARA A 17-E"** no topo deste arquivo). O peso
+corporal da sessão (`training_sessions.body_weight_kg`, 17-C) é o valor USADO naquele treino,
+congelado — **não** é histórico de medida: a preparação passa a pré-preencher a partir de
+`getLatestWeight()`, mas o que ficar gravado na sessão continua sendo o daquele dia.
 
-### 📌 O que a 17-C deixou pronto para você
+### 📌 O que a 17-D deixou pronto para você
 
 | Já existe | Onde |
 | --- | --- |
-| Snapshot congelado + leitura por sessão | `session-snapshot.ts`, `session-queries.ts` |
-| `deriveExerciseStatus`, `isSetDone`, `isSetResolved` | `session-machine.ts` |
-| Tempos (total, ativo, pausado, descanso) por timestamp | `timers.ts` (`sessionTimes`) |
-| "Última vez", melhor marca e comparação | `previous.ts` |
-| `getExerciseHistory(exerciseIds)` — séries já executadas, sem tocar no modelo | `session-queries.ts` |
-| `getRecentSessions(limit)` — lista leve, sem carregar séries | `session-queries.ts` |
-| Carga efetiva com sinal correto (assistência subtrai) | `tracking.ts` (`effectiveLoadKg`) |
+| Todo agregado (volume, séries, reps, tempo, distância, por grupo/semana/mês/programa) | `metrics.ts` |
+| Qualidade `exato | parcial` + motivo por extenso | `metrics.ts` (`partialExplanation`) |
+| Frequência: dias treinados, semanas, sequência atual e maior sequência | `metrics.ts` (`frequencyMetrics`) |
+| 1RM estimado nas 4 fórmulas, com faixa de validade | `one-rm.ts` |
+| Recordes consolidados + marca anterior + recálculo | `records.ts` · `records-sync.ts` |
+| Sugestão de progressão com motivo, aceitar/ignorar | `progression.ts` · `training-history.ts` |
+| Filtro/agrupamento/comparação entre sessões | `history.ts` |
+| Leitura ampla do histórico (uma consulta por entidade) | `history-queries.ts` (`getSessionHistory`) |
+| Gráficos com tabela equivalente (acessibilidade) | `src/components/training/training-charts.tsx` |
+| Cards de resumo com aviso de parcial e regra vigente | `src/components/training/metrics-summary.tsx` |
 
-### 🧭 Três avisos concretos da 17-C para a 17-D
+### 🧭 Três avisos concretos da 17-D para a 17-E
 
-1. **`training_session_sets.is_personal_record` é só um MARCADOR** gravado no calor da sessão.
-   A consolidação, a desduplicação e o histórico de recordes são **seu** trabalho.
-2. **Séries com unidades diferentes NUNCA se somam.** `tracking.ts` diz em que unidade cada
-   exercício acumula volume (`kg`, `reps`, `segundos`, `distancia`, `calorias`, `nenhum`).
-   A revisão da 17-C já soma tonelagem só das séries com carga calculável e **marca o total como
-   parcial** quando alguma fica de fora — repita essa disciplina em todo agregado.
-3. **`src/lib/training/metrics.ts` é seu**, e deve ser para a 17-D o que `calc.ts` é para a
-   Dieta: **todo** número agregado do módulo (volume, 1RM estimado, frequência, recorde) sai de
-   lá. Histórico, gráfico, dashboard e relatório precisam concordar entre si.
+1. **`syncPersonalRecords` devolve `highlights`** — os recordes novos e superados daquela
+   execução. É exatamente o gancho da notificação de recorde (17-F): a detecção já existe, falta
+   só notificar **uma vez**.
+2. **O índice de deduplicação das sugestões é PARCIAL.** `ON CONFLICT` não o infere e falha só em
+   runtime (42P10). Toda gravação ali é select-then-insert.
+3. **A relação entre treino e dieta é de LEITURA.** Se a 17-E cruzar treino com alimentação,
+   leia o módulo Dieta pelas funções dele (`calc.ts`) — não recalcule nutriente aqui, do mesmo
+   jeito que a Dieta não deve recalcular volume.
 
 ### ⛔ Invariantes do módulo Treinos que NÃO podem ser quebradas
 
 1. **`tracking.ts` É A ÚNICA MATRIZ DE MEDIÇÃO.** Reimplementá-la faz o módulo somar quilos com
    segundos.
-2. **ASSISTÊNCIA SUBTRAI CARGA, CARGA ADICIONAL SOMA.** Já testado; não inverta o sinal.
-3. **SEM PESO CORPORAL, A CARGA EFETIVA É INDISPONÍVEL — NUNCA ZERO.** Agregado incompleto é
-   marcado como parcial, com o motivo. O peso do dia está em `training_sessions.body_weight_kg`.
-4. **A BASE DO SISTEMA É IMUTÁVEL** (`user_id is null`, policies separadas por comando).
-5. **MODELO É MUTÁVEL; EXECUÇÃO É IMUTÁVEL.** Ver a regra em destaque acima.
-6. **STATUS DERIVADO NA LEITURA.** `atrasado`/`hoje` do planejamento e `parcial`/`concluido` do
+2. **`metrics.ts` É A ÚNICA FONTE DE AGREGADO** (17-D). Histórico, gráfico, recorde, dashboard e
+   relatório precisam concordar entre si.
+3. **ASSISTÊNCIA SUBTRAI CARGA, CARGA ADICIONAL SOMA.** Já testado; não inverta o sinal.
+4. **SEM PESO CORPORAL, A CARGA EFETIVA É INDISPONÍVEL — NUNCA ZERO.** Agregado incompleto é
+   marcado como **parcial**, com o motivo.
+5. **A BASE DO SISTEMA É IMUTÁVEL** (`user_id is null`, policies separadas por comando).
+6. **MODELO É MUTÁVEL; EXECUÇÃO É IMUTÁVEL.** `session-queries.ts` e `history-queries.ts` **não
+   leem `training_workouts`** — mantenha assim. Se um gráfico mudar porque o usuário renomeou um
+   exercício, a 17-C/17-D foi violada.
+7. **STATUS DERIVADO NA LEITURA.** `atrasado`/`hoje` do planejamento e `parcial`/`concluido` do
    exercício da sessão são derivados, nunca gravados.
-7. **NENHUMA EXCLUSÃO SILENCIOSA.** Descartar sessão exige confirmação reforçada (digitar a
-   palavra); excluir programa/treino pergunta o destino do que dependia dele.
-8. **NENHUM ASSET DE TERCEIROS** — nem imagem, nem vídeo, nem som (o bipe do descanso é gerado
-   por Web Audio de propósito).
-9. **SEM PRESCRIÇÃO.** Nada de sugerir carga máxima, diagnosticar dor ou prometer resultado.
-   Dor registrada gera aviso neutro e **nenhuma sugestão de aumento de carga**.
-10. **DATA PURA `'yyyy-MM-dd'`** para o dia (`session_date`, `scheduled_date`); instante é
-    `timestamptz` e se lê com `dateInSaoPaulo`/`timeInSaoPaulo`. Aritmética em `Date.UTC` nas
-    funções puras, `hojeISO()` no servidor. **Nunca `toISOString().slice(0,10)`.**
+8. **NENHUMA EXCLUSÃO SILENCIOSA.** Excluir sessão exige confirmação **e recalcula os recordes**;
+   excluir programa/treino pergunta o destino do que dependia dele.
+9. **NENHUM ASSET DE TERCEIROS.**
+10. **SEM PRESCRIÇÃO.** Nada de sugerir carga máxima, diagnosticar dor ou prometer resultado.
+    **Dor registrada bloqueia qualquer sugestão de aumento**, e o bloqueio não é configurável.
+11. **1RM É ESTIMATIVA**, com a fórmula visível; fora da faixa de validade a UI avisa e o valor
+    **não vira recorde**.
+12. **DATA PURA `'yyyy-MM-dd'`** para o dia; instante é `timestamptz` e se lê com
+    `dateInSaoPaulo`/`timeInSaoPaulo`. Aritmética em `Date.UTC`, `hojeISO()` no servidor.
+    **Nunca `toISOString().slice(0,10)`.**
 
 ---
 
@@ -346,7 +358,7 @@ Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
 npm run lint && npx tsc --noEmit && npm run test:run && npm run build
 ```
 
-Os testes existentes devem continuar passando (**1.472** ao fim da 16-E; as duas frentes
+Os testes existentes devem continuar passando (**1.630** com a 16-E e a 17-D integradas; as duas frentes
 acrescentam testes em paralelo, então **rode antes de citar um número**) — e acrescente testes
 para toda lógica pura nova.
 A suíte precisa passar em qualquer fuso — confira com `TZ=UTC npx vitest run`.

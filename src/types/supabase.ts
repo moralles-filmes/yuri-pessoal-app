@@ -168,6 +168,62 @@ export type Database = {
           },
         ]
       }
+      body_measurement_goals: {
+        Row: {
+          created_at: string
+          direction: string
+          id: string
+          note: string | null
+          start_value: number | null
+          starts_on: string
+          status: string
+          target_date: string | null
+          target_value: number
+          type_id: string
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          id?: string
+          note?: string | null
+          start_value?: number | null
+          starts_on: string
+          status?: string
+          target_date?: string | null
+          target_value: number
+          type_id: string
+          unit: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          id?: string
+          note?: string | null
+          start_value?: number | null
+          starts_on?: string
+          status?: string
+          target_date?: string | null
+          target_value?: number
+          type_id?: string
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_measurement_goals_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "body_measurement_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       body_measurement_types: {
         Row: {
           category: string
@@ -265,62 +321,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "body_measurements_type_id_fkey"
-            columns: ["type_id"]
-            isOneToOne: false
-            referencedRelation: "body_measurement_types"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      body_measurement_goals: {
-        Row: {
-          created_at: string
-          direction: string
-          id: string
-          note: string | null
-          start_value: number | null
-          starts_on: string
-          status: string
-          target_date: string | null
-          target_value: number
-          type_id: string
-          unit: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          direction: string
-          id?: string
-          note?: string | null
-          start_value?: number | null
-          starts_on: string
-          status?: string
-          target_date?: string | null
-          target_value: number
-          type_id: string
-          unit: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          direction?: string
-          id?: string
-          note?: string | null
-          start_value?: number | null
-          starts_on?: string
-          status?: string
-          target_date?: string | null
-          target_value?: number
-          type_id?: string
-          unit?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "body_measurement_goals_type_id_fkey"
             columns: ["type_id"]
             isOneToOne: false
             referencedRelation: "body_measurement_types"
@@ -5483,6 +5483,100 @@ export type Database = {
           },
         ]
       }
+      training_personal_records: {
+        Row: {
+          achieved_on: string
+          created_at: string
+          exercise_id: string | null
+          exercise_name_snapshot: string | null
+          id: string
+          notes: string | null
+          one_rm_formula: string | null
+          previous_achieved_on: string | null
+          previous_value: number | null
+          record_key: string
+          record_type: string
+          reference_weight_kg: number | null
+          reps: number | null
+          scope: string
+          session_id: string | null
+          session_set_id: string | null
+          unit: string
+          updated_at: string
+          user_id: string
+          value: number
+          weight_kg: number | null
+        }
+        Insert: {
+          achieved_on: string
+          created_at?: string
+          exercise_id?: string | null
+          exercise_name_snapshot?: string | null
+          id?: string
+          notes?: string | null
+          one_rm_formula?: string | null
+          previous_achieved_on?: string | null
+          previous_value?: number | null
+          record_key: string
+          record_type: string
+          reference_weight_kg?: number | null
+          reps?: number | null
+          scope?: string
+          session_id?: string | null
+          session_set_id?: string | null
+          unit: string
+          updated_at?: string
+          user_id: string
+          value: number
+          weight_kg?: number | null
+        }
+        Update: {
+          achieved_on?: string
+          created_at?: string
+          exercise_id?: string | null
+          exercise_name_snapshot?: string | null
+          id?: string
+          notes?: string | null
+          one_rm_formula?: string | null
+          previous_achieved_on?: string | null
+          previous_value?: number | null
+          record_key?: string
+          record_type?: string
+          reference_weight_kg?: number | null
+          reps?: number | null
+          scope?: string
+          session_id?: string | null
+          session_set_id?: string | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+          value?: number
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_personal_records_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_personal_records_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "training_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_personal_records_session_set_id_fkey"
+            columns: ["session_set_id"]
+            isOneToOne: false
+            referencedRelation: "training_session_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       training_preferences: {
         Row: {
           auto_advance: string
@@ -5665,6 +5759,194 @@ export type Database = {
           weekly_frequency?: number | null
         }
         Relationships: []
+      }
+      training_progression_rules: {
+        Row: {
+          created_at: string
+          exercise_id: string | null
+          id: string
+          increment_kg: number | null
+          increment_mode: string
+          increment_percent: number | null
+          is_active: boolean
+          max_difficulty: string | null
+          max_rir: number | null
+          max_rpe: number | null
+          min_sessions: number
+          muscle_group_id: string | null
+          name: string
+          notes: string | null
+          position: number
+          require_all_working_sets: boolean
+          require_no_failure: boolean
+          require_top_of_range: boolean
+          scope: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exercise_id?: string | null
+          id?: string
+          increment_kg?: number | null
+          increment_mode?: string
+          increment_percent?: number | null
+          is_active?: boolean
+          max_difficulty?: string | null
+          max_rir?: number | null
+          max_rpe?: number | null
+          min_sessions?: number
+          muscle_group_id?: string | null
+          name: string
+          notes?: string | null
+          position?: number
+          require_all_working_sets?: boolean
+          require_no_failure?: boolean
+          require_top_of_range?: boolean
+          scope?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exercise_id?: string | null
+          id?: string
+          increment_kg?: number | null
+          increment_mode?: string
+          increment_percent?: number | null
+          is_active?: boolean
+          max_difficulty?: string | null
+          max_rir?: number | null
+          max_rpe?: number | null
+          min_sessions?: number
+          muscle_group_id?: string | null
+          name?: string
+          notes?: string | null
+          position?: number
+          require_all_working_sets?: boolean
+          require_no_failure?: boolean
+          require_top_of_range?: boolean
+          scope?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_progression_rules_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_progression_rules_muscle_group_id_fkey"
+            columns: ["muscle_group_id"]
+            isOneToOne: false
+            referencedRelation: "training_muscle_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_progression_suggestions: {
+        Row: {
+          basis: Json
+          created_at: string
+          decided_at: string | null
+          decision_notes: string | null
+          dedupe_key: string
+          exercise_id: string | null
+          exercise_name_snapshot: string
+          id: string
+          kind: string
+          previous_value: number | null
+          reason: string
+          rule_id: string | null
+          status: string
+          suggested_on: string
+          suggested_value: number
+          unit: string
+          updated_at: string
+          user_id: string
+          workout_exercise_id: string | null
+          workout_id: string | null
+          workout_name_snapshot: string | null
+        }
+        Insert: {
+          basis?: Json
+          created_at?: string
+          decided_at?: string | null
+          decision_notes?: string | null
+          dedupe_key: string
+          exercise_id?: string | null
+          exercise_name_snapshot: string
+          id?: string
+          kind?: string
+          previous_value?: number | null
+          reason: string
+          rule_id?: string | null
+          status?: string
+          suggested_on: string
+          suggested_value: number
+          unit: string
+          updated_at?: string
+          user_id: string
+          workout_exercise_id?: string | null
+          workout_id?: string | null
+          workout_name_snapshot?: string | null
+        }
+        Update: {
+          basis?: Json
+          created_at?: string
+          decided_at?: string | null
+          decision_notes?: string | null
+          dedupe_key?: string
+          exercise_id?: string | null
+          exercise_name_snapshot?: string
+          id?: string
+          kind?: string
+          previous_value?: number | null
+          reason?: string
+          rule_id?: string | null
+          status?: string
+          suggested_on?: string
+          suggested_value?: number
+          unit?: string
+          updated_at?: string
+          user_id?: string
+          workout_exercise_id?: string | null
+          workout_id?: string | null
+          workout_name_snapshot?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_progression_suggestions_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_progression_suggestions_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "training_progression_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_progression_suggestions_workout_exercise_id_fkey"
+            columns: ["workout_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_workout_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_progression_suggestions_workout_id_fkey"
+            columns: ["workout_id"]
+            isOneToOne: false
+            referencedRelation: "training_workouts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       training_scheduled_workouts: {
         Row: {

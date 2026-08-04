@@ -223,7 +223,7 @@ export function TrainingPreferencesClient({
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-base">Volume e progressão</CardTitle>
             <Badge variant="secondary" className="text-[10px]">
-              Passa a valer na 17-D
+              Em uso desde a 17-D
             </Badge>
           </div>
           <CardDescription>
@@ -234,6 +234,7 @@ export function TrainingPreferencesClient({
         <CardContent className="space-y-4">
           <FieldSelect
             label="Exercício unilateral"
+            hint="Vale para o histórico, os recordes e os gráficos. A regra vigente aparece junto de cada total."
             value={values.unilateralVolumeRule}
             onChange={(value) =>
               set("unilateralVolumeRule", value as TrainingPreferences["unilateralVolumeRule"])
