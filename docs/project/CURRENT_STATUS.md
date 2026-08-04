@@ -31,6 +31,36 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 
 ---
 
+## Correção 2026-08-04 — o schema recusava a própria saída (bug de produção)
+
+**Sintoma:** "Novo treino" mostrava `Verifique os campos destacados.` e **não salvava nunca**,
+mesmo com todos os campos preenchidos, sem destacar campo algum.
+
+**Causa, estrutural e não de um formulário só:** o `zodResolver` entrega ao `onSubmit` a saída
+**já transformada**; o formulário manda isso para a Server Action; a action valida de novo com o
+**mesmo** schema. `optionalText` transformava `""`/ausente em `null` mas só aceitava
+`string | undefined` — recusava o que ele mesmo produzia. Como `icon` é opcional e **nem aparece
+no formulário**, chegava `null` na segunda passada e derrubava o salvamento **sempre**.
+
+Atingia três telas em produção: **Novo treino** e **Novo programa** (17-B) e **Novo exercício**
+(17-A). A Dieta não era afetada — `food-form-dialog` monta o payload a partir de
+`form.getValues()` (valores crus), não da saída do resolver.
+
+**Correção:**
+- `optionalText` passa a aceitar `null` (`.nullish()`), ficando idempotente — vale para os 23
+  arquivos de validador que o usam.
+- `src/lib/validators/round-trip.test.ts` fixa a propriedade `parse(parse(x))`. Sem a correção,
+  10 dos 14 testes falham. **Todo schema novo usado com `zodResolver` deve entrar ali.**
+- `src/lib/forms/server-errors.ts` (puro, testado): erro de campo que existe na tela vira
+  `setError` e fica visível; erro de campo que a tela não tem sobe para o toast **com o nome do
+  campo**. A mensagem "campos destacados" tinha virado mentira — foi isso que tornou o bug
+  indiagnosticável. Os 26 campos dos três formulários passaram a exibir o próprio erro.
+
+Provado no banco (role `authenticated`): insert de treino com o payload exato do schema
+corrigido, lido de volta pelo próprio usuário, em transação revertida — 0 resíduo.
+
+---
+
 ## O que foi implementado na Subfase 17-C (Treinos — sessão ao vivo)
 
 A subfase mais importante do módulo: a tela que o usuário abre suado, com uma mão, no celular,
