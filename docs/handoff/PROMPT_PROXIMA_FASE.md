@@ -15,7 +15,7 @@
 ```text
 Você vai continuar o projeto "Sistema Pessoal Yuri" (já iniciado, faseado e documentado).
 
->>> FASE A IMPLEMENTAR: Subfase 17-C — docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md <<<
+>>> FASE A IMPLEMENTAR: Subfase 17-D — docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md <<<
 (edite SOMENTE a linha acima ao trocar de fase — o resto continua igual)
 
 NÃO comece a codar antes de ler a documentação. Leia, nesta ordem:
@@ -37,6 +37,10 @@ Implemente AGORA apenas a fase indicada acima, seguindo o arquivo da fase e as r
   banco. Ao editar PROJECT_ROADMAP.md, CURRENT_STATUS.md, NEXT_AGENT_INSTRUCTIONS.md,
   src/types/supabase.ts e src/config/nav.ts, LEIA ANTES e edite de forma pontual —
   sobrescrever leva embora o trabalho da outra frente.
+- CRIE UMA BRANCH para a fase a partir de origin/main e CONFIRME com
+  `git branch --show-current` ANTES de cada commit. As duas frentes usam a mesma pasta e a
+  outra pode trocar a branch no meio do trabalho: já aconteceu de uma fase inteira ser
+  commitada na branch da outra frente e o push subir uma branch vazia.
 - Migrations em supabase/migrations/ (idempotentes, timestamp YYYYMMDDHHMMSS) com RLS +
   FORCE RLS por user_id = auth.uid() em TODAS as tabelas; índice em user_id; trigger
   updated_at. Nunca confie em user_id vindo do client — sempre auth.getUser().
@@ -49,6 +53,15 @@ Implemente AGORA apenas a fase indicada acima, seguindo o arquivo da fase e as r
 - Next.js 16: proxy.ts (não middleware.ts); cookies()/headers() e params são async.
 - React Compiler ativo: use useWatch/Controller, nunca form.watch(); nada de setState em
   useEffect (ajuste de estado durante o render é o padrão adotado).
+- FORMULÁRIO COM zodResolver (duas regras que vieram de um bug que travou o salvamento em
+  produção sem destacar campo nenhum):
+  1. O SCHEMA TEM DE ACEITAR A PRÓPRIA SAÍDA. O react-hook-form entrega ao onSubmit a saída
+     JÁ TRANSFORMADA, o formulário manda isso para a action e a action revalida com o MESMO
+     schema — logo parse(parse(x)) precisa funcionar. Acrescente o schema novo em
+     src/lib/validators/round-trip.test.ts.
+  2. Nunca descarte os fieldErrors da action: use mapServerFieldErrors
+     (src/lib/forms/server-errors.ts) e passe `error` para TODO campo. "Verifique os campos
+     destacados" só pode aparecer se algum campo for destacado de fato.
 - Verificação obrigatória antes de declarar pronto:
   npm run lint && npx tsc --noEmit && npm run test:run && npm run build
   Mais um smoke test: rotas privadas → 307 /login; /api/cron/* → 401 sem segredo.
@@ -70,10 +83,15 @@ do arquivo que o próximo agente deve abrir.
 
 | Subfase | Linha para colar |
 | --- | --- |
-| 17-C | `Subfase 17-C — docs/phases/PHASE_17_C_TRAINING_LIVE_SESSION.md` ← **próxima** |
-| 17-D | `Subfase 17-D — docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` |
+| 17-C | ✅ concluída (`PHASE_17_C_TRAINING_LIVE_SESSION.md`) |
+| 17-D | `Subfase 17-D — docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md` ← **próxima** |
 | 17-E | `Subfase 17-E — docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` |
 | 17-F | `Subfase 17-F — docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` |
+
+> ⛔ **Aviso central para a 17-D:** leia sempre o **snapshot** da sessão, nunca o modelo atual.
+> Se um gráfico mudar porque o usuário renomeou um exercício ou editou o treino, a 17-C foi
+> violada. `training_session_sets.is_personal_record` é só um **marcador** de candidato — a
+> consolidação de recordes é trabalho da 17-D, em `src/lib/training/metrics.ts`.
 
 ### Fase 16 — Dieta e Alimentação (`/nutricao`)
 
