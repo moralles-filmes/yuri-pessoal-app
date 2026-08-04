@@ -201,7 +201,12 @@ visual, textos, logotipos, telas ou assets de terceiros é copiado.**
 | 16-C | Receitas, refeições-modelo e substituições | `PHASE_16_C_NUTRITION_MEALS_RECIPES_SUBSTITUTIONS.md` | ✅ Concluída |
 | 16-D | Lista de compras e despensa | `PHASE_16_D_NUTRITION_SHOPPING_LIST.md` | ✅ Concluída |
 | 16-E | Medidas corporais, evolução e relatórios | `PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` | ✅ Concluída |
-| 16-F | Integrações, notificações e polimento | `PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` | ⬜ |
+| 16-F | Integrações, notificações e polimento | `PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` | ✅ Concluída |
+
+> ## ✅ **FASE 16 CONCLUÍDA** (2026-08-04)
+> As 6 subfases estão entregues e os **40 critérios de aceite gerais foram validados um a um**
+> na 16-F (ver `docs/handoff/LAST_PHASE_SUMMARY.md`). **40 de 40 atendidos.**
+> A frente Dieta entra em **manutenção/iteração**; não há 16-G.
 
 **Dependências gerais:** Fases 01 (design system/app shell), 12 (dashboard geral), 13 (busca
 global, lançamento rápido, notificações + Cron), 14 (`attachments`, buckets privados,

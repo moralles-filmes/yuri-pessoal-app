@@ -10,11 +10,11 @@ Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gas
 
 ## Estado do projeto
 
-As **14 fases do roadmap original** e a **Fase 15 — Módulo TO-DO** estão concluídas. Desde **2026-08-03** correm **duas frentes de módulo grande, em paralelo**, cada uma dividida em 6 subfases (A–F):
+As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO** e a **Fase 16 — Dieta e Alimentação** estão concluídas. Desde **2026-08-03** correram **duas frentes de módulo grande, em paralelo**, cada uma dividida em 6 subfases (A–F):
 
 | Fase | Módulo | Situação |
 | --- | --- | --- |
-| **16** | Dieta e Alimentação (`/nutricao`) | **16-A a 16-E concluídas**; 16-F é a próxima (fecha a fase) |
+| **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | **17-A a 17-D concluídas**; 17-E é a próxima |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Fora dessas fases, o projeto segue em modo manutenção/iteração. **32 tabelas `nutrition_*`** + **4 tabelas centrais `body_*`** (16-E, compartilhadas com Treinos); o total do banco muda a cada subfase das duas frentes — **conte antes de citar um número**.
@@ -36,7 +36,7 @@ O TO-DO usa tabelas `todo_*` próprias em vez de evoluir `tasks`/`projects`, por
 
 **Envio ao Google Agenda** (`src/lib/todo/calendar-sync.ts` + `google-event.ts`): opt-in por `google_integrations.todo_sync_enabled`; sentido único (tarefa → evento); tarefa recorrente **não vira RRULE** — só a ocorrência atual, movida a cada conclusão; excluir tarefa chama `removeTaskFromGoogle` **antes** do delete (a ponte `todo_calendar_sync` é `on delete cascade`); falha do Google nunca derruba a ação.
 
-## Módulo Dieta e Alimentação (Fase 16, em andamento)
+## Módulo Dieta e Alimentação (Fase 16, CONCLUÍDA)
 
 Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 submódulos. A **16-A** entregou schema, base nutricional, núcleo de cálculo e catálogo de alimentos; a **16-B** entregou metas com histórico datado, diário alimentar com snapshot imutável e planejamento com modelos de semana; a **16-C** entregou receitas (com rendimento e peso final informado), refeições-modelo e substituições com comparação explícita; a **16-D** entregou lista de compras (gerada do planejamento, consolidada por família de unidade) e despensa; a **16-E** entregou o **módulo central de medidas corporais `body_*`** (que ela CRIOU e a 17-E consome), fotos privadas de evolução, relatórios por período e a visão de mês do diário. Integrações e polimento vêm na 16-F (`docs/phases/PHASE_16_*`).
 
@@ -64,6 +64,14 @@ Rota `/nutricao`, tabelas `nutrition_*`, navegação interna própria com 12 sub
 21. **As fotos de evolução são o dado mais sensível do sistema** (16-E). Bucket privado reusado da Fase 14, nome aleatório, pasta `{user_id}/…`, **URL assinada de 5 min gerada a cada leitura**, tipo e tamanho validados **no servidor** sobre o arquivo real, e FK composta `(attachment_id, user_id)` impedindo reivindicar anexo alheio. `storage_path` não sai do servidor. Essa FK composta **impede o embed do PostgREST** — `getProgressPhotos` faz duas consultas de propósito.
 22. **Relatório de período passado sai do SNAPSHOT, com a meta da época** (16-E). `reports.ts` entra por `dayTotals` e resolve `goalPeriodForDate` dia a dia. Sem prescrição também nas medidas: sem "peso ideal", sem IMC classificatório, e consumo × corpo lado a lado **sem afirmar causalidade**.
 23. **A despensa é opt-in e não é ERP de estoque** (16-D). Seis campos, sem movimentação; marcar comprado não dá baixa. O desconto é mostrado **antes** de aplicar e recalculado no servidor; cobertura total **não zera** a quantidade (o item vira `removido`). `quantity` nula = "não sei quanto" (não desconta); zero = "acabou". **A lista não tem link público** — exportar e imprimir sim.
+
+**Invariantes acrescentadas pela 16-F (integrações):**
+24. **`filterByPrefs` é o ÚNICO ponto onde a preferência de notificação decide** (`src/lib/notifications/generate.ts`, chamado pelo Cron). Até a 16-F, `settings.notification_prefs` era salvo e **nunca lido**. Filtrar num lugar só é o que impede um tipo novo de escapar da preferência por esquecimento de quem o escreveu. `notificationEnabled` tem semântica de **opt-in** para os tipos em `NOTIFICATION_OPT_IN_TYPES` (ausente = DESLIGADO).
+25. **Notificação de Dieta informa, nunca repreende.** Um teste varre um vocabulário proibido em todo título e descrição gerados por `src/lib/notifications/nutrition.ts`; nenhuma é `high`/`urgent`, e todas oferecem um caminho. Chaves de dedupe **semanais** onde um aviso diário viraria cobrança. Passar da meta **não** gera aviso.
+26. **`src/lib/search/nutrition-links.ts` é a fonte única dos deep-links do módulo** (busca global e notificações). A **despensa não é rota própria** — é `?aba=despensa` de `/nutricao/compras`; um link direto vira 404.
+27. **O registro rápido entra pelo caminho oficial.** `quickAddDiaryEntry` só resolve a refeição do dia e delega para `addDiaryEntry`/`addMealTemplateToDiary`: o snapshot nasce idêntico ao do registro normal. Nunca monte snapshot fora de `snapshot.ts`.
+28. **`src/lib/settings/export-tables.ts` é ponto de contato entre as duas frentes.** A lista do backup saiu da rota e virou módulo puro testado (nenhum token, nenhuma view). Ao acrescentar tabelas, **some a sua seção**, não reescreva a do outro.
+29. **Foto de receita segue a disciplina das fotos de evolução** (16-E): bucket privado, validação do arquivo real no servidor, nome aleatório, pasta `{user_id}/…` e **URL assinada de 5 min gerada a cada leitura**. `storage_path` **não sai do servidor**.
 
 ## Módulo Treinos (Fase 17, em andamento)
 
@@ -116,7 +124,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 1.630 testes em 2026-08-04 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 1.694 testes em 2026-08-04 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

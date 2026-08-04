@@ -1,10 +1,188 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
 > ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
-> ⚠️ **Duas frentes correm em paralelo desde 2026-08-03**: a **Fase 16 — Dieta e Alimentação**
-> (16-A a **16-E** concluídas) e a **Fase 17 — Módulo Treinos** (17-A a **17-D** concluídas).
+> (✅ **CONCLUÍDA** — 16-A a 16-F, com os 40 critérios validados) e a **Fase 17 — Módulo
+> Treinos** (17-A a **17-D** concluídas; a 17-E é a próxima).
 > Este arquivo tem o resumo das duas, na ordem em que foram concluídas — a mais recente
 > primeiro.
+
+---
+
+## Subfase 16-F — Dieta · Integrações, notificações e polimento (2026-08-04) ✅ **FECHA A FASE 16**
+
+Sexta e última subfase da **Fase 16**. As anteriores entregaram um módulo completo e **isolado**;
+a 16-F o liga ao dashboard, à busca global, ao lançamento rápido, às notificações, ao TO-DO e à
+agenda — e valida os **40 critérios de aceite gerais**. **Nenhuma tabela nova; +64 testes puros**
+(suíte: 1.630 → 1.694).
+
+### ⛔ A regra que a subfase existe para garantir
+
+**INTEGRAR, NÃO REIMPLEMENTAR.** Um card de dashboard que refizesse a soma do dia discordaria do
+diário na primeira diferença de arredondamento, e o usuário veria **dois números para a mesma
+refeição**. Toda tela nova aqui é casca sobre lógica já testada:
+
+- o card consome `buildDailyReports` (16-E) e `summarizeType` (16-E) — não soma nutriente;
+- o lançamento rápido chama `addDiaryEntry`/`addMealTemplateToDiary` — não monta snapshot;
+- as notificações usam `effectiveMealStatus` (16-B) — não derivam status próprio;
+- a foto de receita copia o caminho de `uploadProgressPhoto` (16-E) — sem segundo mecanismo.
+
+`quickAddDiaryEntry` **só resolve a refeição do dia** e delega. É o que garante que o registro
+rápido nasça com a mesma procedência do registro normal.
+
+### Arquivos criados
+
+**Lógica pura + testes:** `src/lib/notifications/nutrition.ts` (+37),
+`src/lib/search/nutrition-links.ts` (+6), `src/lib/reports/xlsx.ts` (+5),
+`src/lib/settings/export-tables.ts` (+8), `src/lib/dashboard/cards.test.ts` (+8).
+
+**Servidor:** `src/lib/notifications/nutrition-cron.ts` (leitura do módulo para o Cron),
+`src/lib/actions/nutrition-quick-add.ts`, `src/lib/actions/nutrition-integrations.ts`.
+
+**Interface:** `src/components/dashboard/general/nutrition-card.tsx`,
+`src/components/nutrition/{barcode-scanner-dialog,market-categories-dialog,schedule-meal-dialog}.tsx`,
+`src/components/body/measurement-types-dialog.tsx`.
+
+### Arquivos alterados
+
+`src/lib/notifications/{constants,generate,cron}.ts` · `src/lib/settings/constants.ts` ·
+`src/lib/dashboard/{cards,types,queries}.ts` · `src/lib/search/{types,queries}.ts` ·
+`src/lib/nutrition/{constants,types,diary,recipe-queries}.ts` ·
+`src/lib/actions/nutrition-recipes.ts` · `src/lib/validators/nutrition-recipes.ts` ·
+`src/app/api/export/route.ts` · `src/components/quick-add/quick-add.tsx` ·
+`src/components/{search,notifications,dashboard}/*-meta.*` ·
+`src/components/nutrition/{food-filters,food-form-dialog,recipe-detail-sheet,shopping-generate-dialog}.tsx` ·
+as páginas e clients de `/nutricao/{alimentos,receitas,refeicoes,planejamento,compras,medidas,relatorios}`.
+
+### Decisões técnicas registradas
+
+1. **A lacuna da Fase 13 que só apareceu agora:** `settings.notification_prefs` era **salvo e
+   nunca lido** — o Cron gerava tudo. `filterByPrefs` (puro, testado) roda entre a geração e a
+   gravação e vale para **todos** os tipos, inclusive os das fases anteriores. Filtrar num lugar
+   só impede um tipo novo de escapar da preferência por esquecimento.
+2. **Semântica de OPT-IN** (`NOTIFICATION_OPT_IN_TYPES`): ausente = ligado, salvo nos tipos que
+   nascem desligados. `nutrition_goal_close` é o único: avisar sem ser pedido sobre o quanto a
+   pessoa ainda "pode" comer é lido como cobrança.
+3. **Sem linguagem de culpa, travado por TESTE.** Um vocabulário proibido é varrido em todo
+   título e descrição gerados. Nenhuma notificação da Dieta é `high` ou `urgent` — nada aqui é
+   emergência — e toda uma oferece um caminho (link), em vez de só constatar.
+4. **Chaves semanais onde um aviso diário viraria cobrança.** Lista de compras aberta há um mês
+   gera 1 aviso por semana, não 30. **Passar da meta não gera aviso nenhum.**
+5. **Minutos "agora" saem de `timeInSaoPaulo`, não de `getHours()`.** Na Vercel (UTC) o almoço
+   "atrasaria" às 9h da manhã.
+6. **O card nasce no FIM de `DASH_CARD_IDS`** — é o que faz `normalizeLayout` anexá-lo sem
+   empurrar nada que o usuário já tinha posicionado. Provado por teste sobre um layout salvo
+   pré-16-F, com ordem personalizada e card oculto.
+7. **A foto da receita passou a ser lida por URL assinada de 5 min.** Até a 16-E ela expunha
+   `storage_path` no payload do cliente — inconsistente com a disciplina das fotos de evolução.
+   Agora `storagePath` **não existe** no tipo que desce para o navegador.
+8. **Reordenar tem DUAS formas: arrasto e setas ↑↓.** Uma lista reordenável só por arrasto é
+   inacessível — e reordenar é justamente o valor do recurso (corredor de mercado é a ordem em
+   que a pessoa anda pelo mercado).
+9. **`xlsx` por import dinâmico**, dentro do handler do clique: a biblioteca inteira no bundle
+   de quem nunca exporta faria todo mundo pagar por um botão. O CSV continua sendo o padrão.
+10. **`EXPORT_TABLES` virou módulo puro** para o backup poder ser testado: nenhum token, 31
+    tabelas `nutrition_*` + 4 `body_*`, nenhuma view, nenhuma duplicata.
+
+### ⚠️ Duas armadilhas registradas (não repita)
+
+**1. Um `insert … select` bloqueado pela RLS insere zero linhas SEM LANÇAR ERRO.** No teste de
+segurança isso passa por "não bloqueado" e produz um falso positivo tranquilizador. Refaça com
+`values()` explícito e um id real — é o que exercita o `WITH CHECK` de verdade.
+
+**2. A despensa NÃO é rota própria.** É `?aba=despensa` de `/nutricao/compras`. Um link para
+`/nutricao/despensa` manda a notificação de validade para um 404. Por isso os deep-links vivem
+num módulo puro (`src/lib/search/nutrition-links.ts`) com teste de contrato.
+
+### ⚠️ Incidente de processo (registrado para o próximo agente)
+
+**A frente de Treinos trocou a branch no meio do trabalho.** O diretório saiu de
+`feat/nutricao-16f-integracoes` para `feat/treinos-fase-17e`, com dois commits da 17-E aplicados.
+O trabalho da 16-F estava **não commitado** e sobreviveu, mas o `src/app/api/export/route.ts` já
+reconstruído havia capturado as 31 tabelas `training_*` da 17-E. Resolução: `git stash` → voltar
+para a branch certa → **reconstruir `export-tables.ts` a partir do `main`**, sem nenhuma tabela
+`training_*`. Confirmado: a branch da 16-F tem **1.694** testes (1.630 do `main` + 64) e **zero**
+arquivo de Treinos. **Confirme `git branch --show-current` antes de cada commit.**
+
+`src/lib/settings/export-tables.ts` é agora um **ponto de contato entre as duas frentes** — a
+17-E acrescenta as `training_*` ali. Ao mexer, ACRESCENTE a sua seção sem reescrever a do outro.
+
+### Segurança verificada no banco (role `authenticated`)
+
+**24 tentativas indevidas, 24 bloqueadas.** Intruso lê **0 linhas** em receita alheia
+(deep-link `?receita=`), anexo de foto de receita, alimento próprio alheio (busca global),
+medidas, fotos de evolução, listas, despensa, notificações e `settings`; **enxerga** os 597
+alimentos da base (comportamento desejado) mas **não edita nem exclui** nenhum; não forja anexo
+(42501) nem notificação (42501) em nome de terceiro; não cria refeição com `user_id` alheio
+(42501) nem usa `meal_type_id` de terceiro (23503); não adiciona item na lista de A (23502);
+ação em massa alcança **0** linhas alheias; `storage.objects` devolve 0. **0 resíduo** de teste;
+catálogo reconferido (597 alimentos, 21.147 valores). `get_advisors`: **0 lints de schema**.
+
+### Verificação
+`npm run lint` limpo · `npx tsc --noEmit` limpo · `npm run test:run` **1.694** (de 1.630) ·
+`npm run build` verde com as 12 rotas de `/nutricao`. Suíte passa em `TZ=UTC`.
+Smoke: rotas privadas → **307 `/login`**, `/login` → 200, `/api/cron/notifications` → **401**.
+**111 tabelas** no projeto, **0 sem RLS**. Nenhuma migration (a 16-F não criou tabela).
+
+---
+
+## ✅ Os 40 critérios de aceite da Fase 16 — veredito item a item
+
+**40 de 40 atendidos.** Nenhum aceite silencioso: cada item foi conferido no código, no banco ou
+na suíte, e a evidência está na coluna à direita.
+
+| # | Critério | Veredito | Onde |
+| --- | --- | --- | --- |
+| 1 | Existe uma aba central "Dieta e Alimentação" | ✅ | `src/config/nav.ts` → `/nutricao` |
+| 2 | Os submódulos estão organizados dentro dela | ✅ | `NUTRITION_SECTIONS`: **12 seções, todas `pronto`** |
+| 3 | Consigo configurar metas | ✅ | `/nutricao/metas` (16-B), meta vigente por data |
+| 4 | Consigo visualizar calorias e nutrientes do dia | ✅ | `/nutricao/diario` + card do dashboard (16-F) |
+| 5 | Consigo visualizar refeições do dia e da semana | ✅ | `/nutricao/diario` (dia/semana/**mês**, 16-E) |
+| 6 | Consigo planejar refeições | ✅ | `/nutricao/planejamento` (16-B/16-C) |
+| 7 | Consigo registrar o que realmente consumi | ✅ | `addDiaryEntry` + lançamento rápido (16-F) |
+| 8 | Consigo editar quantidades | ✅ | `updateDiaryEntryQuantity` (16-B) |
+| 9 | Consigo marcar refeição como não consumida | ✅ | `setDiaryMealStatus` (16-B) |
+| 10 | Consigo substituir uma refeição | ✅ | `/nutricao/substituicoes` (16-C) |
+| 11 | Consigo substituir um alimento | ✅ | idem, nível `alimento` |
+| 12 | Consigo comparar nutricionalmente uma substituição | ✅ | `substitution-compare-dialog`; servidor **recalcula** |
+| 13 | Consigo cadastrar alimentos | ✅ | `food-form-dialog` + scanner de código (16-F) |
+| 14 | Existe uma base brasileira útil e verificável | ✅ | TACO 4ª ed. — **597 alimentos, 21.147 valores** (reconferido) |
+| 15 | Os alimentos possuem fonte registrada | ✅ | `nutrition_food_sources` + `ATTRIBUTION.md` |
+| 16 | Consigo usar medidas caseiras | ✅ | `nutrition_food_measures` + seletor no lançamento rápido |
+| 17 | Consigo cadastrar receitas | ✅ | `/nutricao/receitas` (16-C) + **foto** (16-F) |
+| 18 | Os nutrientes da receita são calculados | ✅ | `getRecipesWithTotals` → `calc.ts`, no servidor |
+| 19 | Consigo criar refeições-modelo | ✅ | `/nutricao/refeicoes` (16-C) |
+| 20 | Consigo duplicar refeições, receitas e planejamentos | ✅ | `duplicateRecipe`, `duplicateMealTemplate`, `duplicatePlannedWeek` |
+| 21 | Consigo excluir em massa onde aplicável | ✅ | `bulkRecipeAction`, `bulkShoppingItems`, `deleteMeasurements` — e a auditoria provou que a ação em massa **respeita o dono** |
+| 22 | Consigo filtrar todos os submódulos | ✅ | `filters.ts` (alimentos), busca/filtro em receitas, modelos, compras, medidas e relatórios |
+| 23 | Consigo gerar lista de compras | ✅ | 16-D + **quantidade por receita** (16-F) |
+| 24 | A lista consolida itens corretamente | ✅ | `shopping.ts`: **não soma unidades incompatíveis**; `separate_reason` |
+| 25 | Consigo registrar medidas | ✅ | `/nutricao/medidas` + lançamento rápido (16-F) |
+| 26 | Consigo acompanhar evolução | ✅ | gráfico com `connectNulls={false}` + **tabela equivalente** |
+| 27 | Fotos de evolução são privadas | ✅ | bucket privado, URL assinada de 5 min, FK composta; auditoria: intruso lê **0** |
+| 28 | O histórico não muda quando um alimento é editado | ✅ | `nutrients_snapshot`; provado no banco na 16-B e reconferido |
+| 29 | O dashboard principal recebe os cards do módulo | ✅ | card `dieta` + **8 testes** de `normalizeLayout` |
+| 30 | O buscador global encontra os registros | ✅ | 5 tipos novos + **teste de contrato dos deep-links** |
+| 31 | O lançamento rápido permite registrar alimentação | ✅ | 4 tipos; grava pelo **caminho oficial** |
+| 32 | As notificações funcionam sem duplicidade | ✅ | 8 famílias; rodar 2× e 3× **não duplica** (testado) |
+| 33 | O módulo funciona em modo dark e light | ✅ | só tokens do design system; nenhuma cor fixa nova |
+| 34 | O módulo funciona no celular | ✅ | scanner mobile-first, alvos de toque `h-11`, grids responsivos |
+| 35 | As políticas RLS estão funcionando | ✅ | **24/24 bloqueios** pela role `authenticated`; **0 tabelas sem RLS** |
+| 36 | Os cálculos possuem testes | ✅ | **1.694** testes, verdes também em `TZ=UTC` |
+| 37 | Nenhuma funcionalidade anterior foi quebrada | ✅ | os 1.630 do `main` continuam passando; lint/tsc/build verdes |
+| 38 | A documentação foi atualizada | ✅ | este arquivo + `CURRENT_STATUS.md` + `PROJECT_ROADMAP.md` + `CLAUDE.md` |
+| 39 | O handoff foi preenchido | ✅ | `NEXT_AGENT_INSTRUCTIONS.md` + `PROMPT_PROXIMA_FASE.md` |
+| 40 | O próximo agente recebeu o caminho exato da próxima subfase | ✅ | **não há 16-G**: a frente Dieta entra em manutenção. O caminho entregue é o da frente Treinos: `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` |
+
+### Pendências conscientes da Fase 16 inteira (escopo, não bugs)
+
+| Item | Por quê |
+| --- | --- |
+| Medidas caseiras oficiais em massa | A TACO não publica. Entra por segunda fonte, pelo mesmo pipeline — nada foi inventado |
+| Base externa de código de barras (consultar produto pelo EAN) | **Fora de escopo por decisão de produto**: dado nutricional de fonte não verificada não entra. O scanner identifica o código; os valores continuam sendo do usuário ou da base |
+| Canais externos de notificação (push/e-mail) | Fora do escopo do sistema inteiro; só com infraestrutura real de envio |
+| Integração com balança | Não planejado (`body_measurements.source` já prevê o campo) |
+| Prescrição/diagnóstico nutricional | **Nunca** — decisão de produto |
+| Comparar com outros usuários ou normas populacionais | **Nunca** — o sistema é single-user |
 
 ---
 

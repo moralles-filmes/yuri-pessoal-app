@@ -8,7 +8,7 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A a 16-E concluídas**; 16-F é a próxima (fecha a fase) |
+| **16** | Dieta e Alimentação (`/nutricao`) | A–F | ✅ **FASE CONCLUÍDA** (16-A a 16-F). Em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | A–F | **17-A a 17-D concluídas**; 17-E é a próxima |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
@@ -21,17 +21,109 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 > peso corporal.
 
 ## Fases atuais
-- **Fase 16-E — Dieta e Alimentação · Medidas corporais, fotos de evolução e relatórios → CONCLUÍDA ✅**
-  Arquivo: `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
+- **Fase 16-F — Dieta e Alimentação · Integrações, notificações e polimento → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md`
+  **Ela FECHA a Fase 16:** os 40 critérios de aceite gerais foram validados um a um —
+  **40 de 40 atendidos** (o veredito item a item está em `docs/handoff/LAST_PHASE_SUMMARY.md`).
 - **Fase 17-D — Treinos · Histórico, volume, recordes e progressão → CONCLUÍDA ✅**
   Arquivo: `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`
 
 ## Próximas fases
-- **Subfase 16-F — Integrações, notificações e polimento** (fecha a Fase 16; precisa validar
-  os **40 critérios de aceite gerais** listados no próprio arquivo).
-  Arquivo: `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md`
+- **Frente Dieta: NÃO HÁ PRÓXIMA SUBFASE.** A Fase 16 está concluída e o módulo entra em
+  **manutenção/iteração**. Melhorias entram como tarefa avulsa, não como subfase.
 - **Subfase 17-E — Metas, medidas corporais compartilhadas e dashboards.**
   Arquivo: `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`
+
+---
+
+## O que foi implementado na Subfase 16-F (integrações, notificações e polimento) — FECHA A FASE 16
+
+A 16-A a 16-E entregaram um módulo que funciona de ponta a ponta, mas **isolado**. A 16-F o
+liga ao resto do sistema e faz a passada final de acessibilidade, performance e segurança.
+
+### ⛔ A regra que a subfase existe para garantir: INTEGRAR, NÃO REIMPLEMENTAR
+
+Toda tela nova aqui é **casca** sobre coisa que já existe e já é testada. Um card de dashboard
+que refizesse a soma do dia discordaria do diário na primeira diferença de arredondamento — e o
+usuário veria dois números para a mesma refeição. Por construção:
+
+| Onde | Consome | Nunca faz |
+| --- | --- | --- |
+| Card do dashboard | `reports.ts` (`buildDailyReports`), `diary.ts`, `body/measurements.ts` | Somar nutriente |
+| Lançamento rápido | `addDiaryEntry`, `addMealTemplateToDiary`, `saveMeasurement`, `saveShoppingItem` | Montar snapshot |
+| Notificações | `effectiveMealStatus`, `calendar.ts` | Derivar status próprio |
+| Foto de receita | O caminho de `uploadProgressPhoto` (16-E) | Um segundo mecanismo de upload |
+
+`quickAddDiaryEntry` **só resolve a refeição do dia** (acha ou cria a linha de diário) e delega:
+o snapshot do registro rápido nasce idêntico ao do registro normal, com a mesma procedência.
+
+### As 8 famílias de notificação (+37 testes)
+
+`src/lib/notifications/nutrition.ts` — PURO, com `hoje` e `minutosAgora` injetados. Entram pelo
+mesmo gerador (`generateNotifications`), então `dedupe_key` e Cron continuam sendo um caminho só.
+
+| Família | Dispara quando | Chave |
+| --- | --- | --- |
+| `nutrition_meal_upcoming` | Faltam ≤ 60 min para uma refeição planejada de hoje | por refeição + data |
+| `nutrition_meal_missing` | Passou da tolerância de 45 min (16-B) e não há item | por refeição + data |
+| `nutrition_plan_week` | A semana que vem começa em ≤ 2 dias e está vazia | por semana |
+| `nutrition_shopping_pending` | Lista ativa com itens a pegar | **por semana** |
+| `nutrition_pantry_expiring` | Validade em ≤ 5 dias (ou vencida) | por item + validade |
+| `nutrition_measurement_due` | ≥ 7 dias sem medir um tipo acompanhado | **por semana** |
+| `nutrition_goal_close` | Consumo entre 85% e 100% da meta — **OPT-IN** | por nutriente + dia |
+| `nutrition_food_review` | Alimento do usuário sem fonte ou em revisão | por alimento + motivo + mês |
+
+**Três decisões que são regra, não ajuste:**
+
+1. **Sem linguagem de culpa, travado por TESTE.** Um vocabulário proibido ("falhou", "de novo",
+   "você não", "esqueceu", "exagerou"…) é varrido em todo título e descrição gerados. Este
+   módulo trata de comida e de corpo: o custo de errar o tom é alto.
+2. **Chaves SEMANAIS onde um aviso diário viraria cobrança.** Lista de compras aberta há um mês
+   gera **1** aviso por semana, não 30.
+3. **Passar da meta NÃO gera aviso.** A família só existe na aproximação; repreender depois não
+   é papel do sistema.
+
+### A lacuna da Fase 13 que a 16-F fechou
+
+`settings.notification_prefs` era **salvo e nunca lido**: o Cron gerava tudo, independentemente
+da preferência. Agora `filterByPrefs` (puro, testado) roda entre a geração e a gravação — e vale
+para **todos** os tipos, inclusive os das fases anteriores. Filtrar num lugar só é o que impede
+um tipo novo de escapar da preferência por esquecimento de quem o escreveu.
+
+`notificationEnabled` ganhou semântica de **opt-in** (`NOTIFICATION_OPT_IN_TYPES`): ausente
+significa ligado, salvo nos tipos que nascem desligados.
+
+### Pendências acumuladas de A a E, fechadas
+
+| Item | Como |
+| --- | --- |
+| Código de barras pela **câmera** | `BarcodeDetector` NATIVA — nenhum asset de terceiros, nenhuma base externa consultada. Permissão negada, câmera ocupada e navegador sem suporte viram **estado de erro escrito**; a entrada manual nunca some. O código lido só preenche o campo: quem confirma os dados é o usuário |
+| **Upload** da foto de receita | Cópia exata do caminho de `uploadProgressPhoto` (16-E), com as 5 travas. A leitura passou a devolver **URL assinada de 5 min** — `storage_path` não sai mais do servidor |
+| **Arrastar** ingrediente | `reorderRecipeIngredients` ganhou gatilho: arrasto (mouse) **+ setas ↑↓** (teclado e leitor de tela) |
+| Corredores de mercado | Diálogo com criar, renomear, reordenar e excluir (excluir agrupa em "Sem corredor", não apaga item) |
+| Tipos de medida | Diálogo com criar, reordenar e excluir — a exclusão **pergunta o destino do histórico**, sem opção pré-selecionada |
+| Quantidade por receita na lista | Campo de **porções** por receita; antes toda receita entrava com 1, o que subestimava a compra de uma receita de 4 porções |
+| XLSX | Uma aba por seção, `xlsx` por **import dinâmico** (a biblioteca não entra no bundle de quem não exporta). O CSV continua sendo o padrão |
+
+### Segurança verificada no banco (role `authenticated`)
+
+**24 tentativas indevidas, 24 bloqueadas.** O intruso lê **0 linhas** em receita, anexo de foto,
+alimento próprio alheio, medidas, fotos de evolução, listas, despensa, notificações e `settings`;
+não edita nem exclui a base do sistema (597 alimentos intactos); não forja anexo nem notificação
+em nome de terceiro (42501); não cria refeição com `user_id` alheio (42501) nem usa
+`meal_type_id` de terceiro (23503); ação em massa alcança **0** linhas alheias; `storage.objects`
+devolve 0. **0 resíduo** de teste; catálogo reconferido (597 alimentos, 21.147 valores).
+
+> ⚠️ Uma armadilha de TESTE, registrada: um `insert … select` cujo `select` é bloqueado pela RLS
+> insere **zero linhas sem lançar erro** — e passa por "não bloqueado". O teste foi refeito com
+> `values()` explícito e um id real, que é o que exercita o `WITH CHECK` de verdade.
+
+### Verificação
+`npm run lint`, `npx tsc --noEmit`, `npm run test:run` (**1.694 testes**, de 1.630) e
+`npm run build` passam. Suíte verde também em `TZ=UTC`. Smoke: `/dashboard`, `/nutricao`,
+`/nutricao/relatorios`, `/nutricao/medidas`, `/nutricao/compras` → **307 `/login`**;
+`/login` → 200; `/api/cron/notifications` → **401**. `get_advisors`: **0 lints de schema**.
+**111 tabelas** no projeto, **0 sem RLS**. **Nenhuma migration** — a 16-F não criou tabela.
 
 ---
 
