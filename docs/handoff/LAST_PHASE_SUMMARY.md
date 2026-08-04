@@ -134,7 +134,7 @@ na suíte, e a evidência está na coluna à direita.
 | # | Critério | Veredito | Onde |
 | --- | --- | --- | --- |
 | 1 | Existe uma aba central "Dieta e Alimentação" | ✅ | `src/config/nav.ts` → `/nutricao` |
-| 2 | Os submódulos estão organizados dentro dela | ✅ | `NUTRITION_SECTIONS`: **12 seções, todas `pronto`** |
+| 2 | Os submódulos estão organizados dentro dela | ✅ | `NUTRITION_SECTIONS`: **12 seções, todas `pronto`** — ver a correção registrada abaixo |
 | 3 | Consigo configurar metas | ✅ | `/nutricao/metas` (16-B), meta vigente por data |
 | 4 | Consigo visualizar calorias e nutrientes do dia | ✅ | `/nutricao/diario` + card do dashboard (16-F) |
 | 5 | Consigo visualizar refeições do dia e da semana | ✅ | `/nutricao/diario` (dia/semana/**mês**, 16-E) |
@@ -173,6 +173,30 @@ na suíte, e a evidência está na coluna à direita.
 | 38 | A documentação foi atualizada | ✅ | este arquivo + `CURRENT_STATUS.md` + `PROJECT_ROADMAP.md` + `CLAUDE.md` |
 | 39 | O handoff foi preenchido | ✅ | `NEXT_AGENT_INSTRUCTIONS.md` + `PROMPT_PROXIMA_FASE.md` |
 | 40 | O próximo agente recebeu o caminho exato da próxima subfase | ✅ | **não há 16-G**: a frente Dieta entra em manutenção. O caminho entregue é o da frente Treinos: `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` |
+
+### ⚠️ Correção pós-entrega: o critério 2 foi marcado ✅ cedo demais
+
+Na primeira validação, `/nutricao/configuracoes` ainda era um **placeholder** com o texto
+"Esta seção ainda não foi construída" e `status: "planejada"`, `phase: "Subfase 16-F"` — ou
+seja, era escopo desta subfase e não tinha sido entregue. O critério 2 foi dado como atendido
+com base num comando de verificação **defeituoso**: um `grep … | paste - - | grep -v pronto`
+que pareava as linhas erradas e devolvia vazio, o que foi lido como "nenhuma seção pendente".
+
+**Como foi corrigido:** a tela foi construída (`configuracoes/{page,settings-client}.tsx`) e o
+status virou `pronto`. A conferência passou a extrair `slug` + `status` com uma regex que casa
+os dois no mesmo registro, e a imprimir seção a seção — um vazio agora significa vazio.
+
+**Lição registrada:** uma verificação que devolve vazio precisa provar que rodou. Contar as
+linhas encontradas (12 de 12) é diferente de não encontrar nada.
+
+**O que a tela entrega** (fecha três gestões que existiam sem interface nenhuma):
+- **Tipos de refeição** (16-B) — criar, renomear, reordenar, ativar/desativar e excluir.
+  Excluir é RECUSADO pelo servidor quando já houve uso, com a contagem e a alternativa.
+- **Categorias de receita** (16-C) e **etiquetas de alimento** (16-A) — `on delete set null`:
+  a tela diz o que acontece antes de confirmar.
+- **Fontes nutricionais** com a **citação da TACO por extenso** — é exigência da licença, e
+  deixá-la só num arquivo do repositório não cumpre a exigência para quem usa o sistema.
+- Resumo do catálogo e atalhos para corredores, tipos de medida, metas e notificações.
 
 ### Pendências conscientes da Fase 16 inteira (escopo, não bugs)
 
