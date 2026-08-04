@@ -77,6 +77,7 @@ import {
 import {
   CHANGE_KIND_LABELS,
   CORE_NUTRIENTS,
+  DIARY_VIEW_LABELS,
   EFFECTIVE_MEAL_STATUS_HINTS,
   EFFECTIVE_MEAL_STATUS_LABELS,
   MACRO_ORDER,
@@ -84,6 +85,9 @@ import {
   MEAL_STATUS_LABELS,
   type MealStatus,
 } from "@/lib/nutrition/constants";
+// 16-E — visão de mês do diário (a pendência que `?visao=mes` carregava desde a 16-B).
+import { buildMonthView } from "@/lib/nutrition/diary-month";
+import { DiaryMonthView } from "@/components/nutrition/diary-month-view";
 import {
   comparePlannedVsConsumed,
   dayTotals,
@@ -167,8 +171,9 @@ export type DiaryClientProps = {
   date: string;
   hoje: string;
   minutosAgora: number;
-  view: "dia" | "semana";
+  view: "dia" | "semana" | "mes";
   meals: DiaryMeal[];
+  /** Refeições do intervalo da visão atual (semana OU grade do mês). Vazio na visão de dia. */
   weekMeals: DiaryMeal[];
   planned: PlannedMeal[];
   mealTypes: MealType[];
@@ -202,6 +207,19 @@ export function DiaryClient(props: DiaryClientProps) {
   const plannedById = React.useMemo(
     () => new Map(props.planned.map((meal) => [meal.id, meal])),
     [props.planned],
+  );
+
+  /**
+   * Calendário do mês (16-E). Toda a decisão — inclusive "dia sem registro NÃO é zero" e
+   * "cada dia usa a meta que valia nele" — vive em `buildMonthView`, puro e testado.
+   * Só é montado na visão de mês: nas outras, `weekMeals` nem carrega o intervalo.
+   */
+  const monthView = React.useMemo(
+    () =>
+      buildMonthView(props.date, props.weekMeals, props.planned, props.periods, now, {
+        dayKinds: new Map(),
+      }),
+    [props.date, props.weekMeals, props.planned, props.periods, now],
   );
 
   const orderedMeals = React.useMemo(() => sortMealsByTime(props.meals), [props.meals]);
@@ -352,7 +370,7 @@ export function DiaryClient(props: DiaryClientProps) {
             </Button>
           )}
           <div className="flex rounded-lg border p-0.5">
-            {(["dia", "semana"] as const).map((view) => (
+            {(["dia", "semana", "mes"] as const).map((view) => (
               <button
                 key={view}
                 type="button"
@@ -364,14 +382,19 @@ export function DiaryClient(props: DiaryClientProps) {
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {view === "dia" ? "Dia" : "Semana"}
+                {DIARY_VIEW_LABELS[view]}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {props.view === "semana" ? (
+      {props.view === "mes" ? (
+        <DiaryMonthView
+          view={monthView}
+          onPickDay={(day) => goTo({ date: day, view: "dia" })}
+        />
+      ) : props.view === "semana" ? (
         <WeekView
           date={props.date}
           hoje={props.hoje}

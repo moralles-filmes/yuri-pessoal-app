@@ -15,7 +15,7 @@
 ```text
 Você vai continuar o projeto "Sistema Pessoal Yuri" (já iniciado, faseado e documentado).
 
->>> FASE A IMPLEMENTAR: Subfase 17-D — docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md <<<
+>>> FASE A IMPLEMENTAR: Subfase 16-F — docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md <<<
 (edite SOMENTE a linha acima ao trocar de fase — o resto continua igual)
 
 NÃO comece a codar antes de ler a documentação. Leia, nesta ordem:
@@ -98,14 +98,20 @@ do arquivo que o próximo agente deve abrir.
 | Subfase | Linha para colar |
 | --- | --- |
 | 16-D | ✅ concluída (`PHASE_16_D_NUTRITION_SHOPPING_LIST.md`) |
-| 16-E | `Subfase 16-E — docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` ← **próxima** |
-| 16-F | `Subfase 16-F — docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` |
+| 16-E | ✅ concluída (`PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`) |
+| 16-F | `Subfase 16-F — docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` ← **próxima (FECHA a Fase 16)** |
 
-> ⚠️ **A 16-E é onde as duas frentes se encontram.** As **medidas corporais são `body_*`**, um
-> módulo central compartilhado: quem chegar primeiro (16-E ou 17-E) **cria**, o outro
-> **consome** — nunca duas tabelas de peso corporal. E as **fotos de evolução são o dado mais
-> sensível do módulo**: bucket privado, URL assinada de vida curta, policy por pasta
-> `{user_id}/…`, nunca URL pública.
+> ✅ **O encontro das duas frentes já aconteceu (2026-08-04).** A **16-E CRIOU** o módulo
+> central `body_*` (4 tabelas + `src/lib/body/`); a **17-E CONSOME** e **não cria tabela
+> nenhuma** — `getLatestWeight()` já está pronto para a preparação da sessão pré-preencher o
+> peso. Nunca duas tabelas de peso corporal.
+>
+> ⚠️ **A 16-F FECHA a Fase 16** e precisa validar os **40 critérios de aceite gerais** do
+> próprio arquivo — não só os seus. Ela também fecha as pendências acumuladas de A a E
+> (código de barras pela câmera, upload da foto de receita, arrastar ingrediente, busca global,
+> lançamento rápido, cards no dashboard, notificação de despensa vencendo, corredores de
+> mercado e tipos de medida pela interface, quantidade por receita na lista). A lista completa
+> está em `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
 
 ### Fases do roadmap original (todas concluídas — referência histórica)
 

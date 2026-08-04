@@ -367,11 +367,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "body_progress_photos_attachment_id_fkey"
-            columns: ["attachment_id"]
+            foreignKeyName: "body_progress_photos_attachment_owner_fkey"
+            columns: ["attachment_id", "user_id"]
             isOneToOne: false
             referencedRelation: "attachments"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }

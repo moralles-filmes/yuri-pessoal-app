@@ -1,6 +1,18 @@
 # Fase 16-E — Dieta e Alimentação · Medidas corporais, evolução e relatórios
 
 > Quinta das **6 subfases** da Fase 16. **Depende das 16-A a 16-D concluídas.**
+>
+> ## ✅ CONCLUÍDA em 2026-08-04
+>
+> **A 16-E CRIOU o módulo central `body_*`** — conferido no banco antes (a estrutura não
+> existia). As 4 tabelas (`body_measurement_types`, `body_measurements`,
+> `body_measurement_goals`, `body_progress_photos`) + a FK composta de dono da foto estão
+> aplicadas, com código em `src/lib/body/`. **A 17-E deve CONSUMIR, não recriar.**
+>
+> Entregue: medidas com histórico datado e metas, fotos privadas com comparação antes/depois,
+> relatórios por período (incluindo micronutrientes, substituições mais realizadas e gasto com
+> mercado), exportação em CSV e a visão de mês do diário. Resumo em
+> `docs/handoff/LAST_PHASE_SUMMARY.md` e `docs/project/CURRENT_STATUS.md`.
 
 ## Contexto
 

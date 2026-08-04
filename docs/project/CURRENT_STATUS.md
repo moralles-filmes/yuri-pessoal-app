@@ -8,26 +8,175 @@ As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluíd
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A, 16-B, 16-C e 16-D concluídas**; 16-E é a próxima |
-| **17** | Treinos (`/treinos`) | A–F | **17-A, 17-B, 17-C e 17-D concluídas**; 17-E é a próxima |
+| **16** | Dieta e Alimentação (`/nutricao`) | A–F | **16-A a 16-E concluídas**; 16-F é a próxima (fecha a fase) |
+| **17** | Treinos (`/treinos`) | A–F | **17-A a 17-D concluídas**; 17-E é a próxima |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
 > **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
-> Ponto de contato: **medidas corporais são `body_*`**, módulo central compartilhado; quem
-> chegar primeiro (16-E ou 17-E) cria, o outro consome. Nunca duas tabelas de peso corporal.
+>
+> ✅ **PONTO DE CONTATO RESOLVIDO (2026-08-04):** as medidas corporais `body_*` **foram
+> CRIADAS pela 16-E**. A **17-E CONSOME** — lê e escreve por `src/lib/body/queries.ts` e
+> `src/lib/actions/body-measurements.ts`, e **não cria tabela nenhuma**. Nunca duas tabelas de
+> peso corporal.
 
 ## Fases atuais
-- **Fase 16-D — Dieta e Alimentação · Lista de compras e despensa → CONCLUÍDA ✅**
-  Arquivo: `docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md`
+- **Fase 16-E — Dieta e Alimentação · Medidas corporais, fotos de evolução e relatórios → CONCLUÍDA ✅**
+  Arquivo: `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
 - **Fase 17-D — Treinos · Histórico, volume, recordes e progressão → CONCLUÍDA ✅**
   Arquivo: `docs/phases/PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`
 
 ## Próximas fases
-- **Subfase 16-E — Medidas, fotos de evolução e relatórios.**
-  Arquivo: `docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`
+- **Subfase 16-F — Integrações, notificações e polimento** (fecha a Fase 16; precisa validar
+  os **40 critérios de aceite gerais** listados no próprio arquivo).
+  Arquivo: `docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md`
 - **Subfase 17-E — Metas, medidas corporais compartilhadas e dashboards.**
   Arquivo: `docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`
+
+---
+
+## O que foi implementado na Subfase 16-E (medidas corporais, fotos e relatórios)
+
+A 16-A a 16-D fizeram o sistema saber **o que entra**. A 16-E fecha o ciclo com **o que muda** —
+e carrega a decisão arquitetural que as duas frentes esperavam.
+
+### ⛔ A 16-E CRIOU o módulo central `body_*` — a 17-E CONSOME
+
+Levantamento no banco em **2026-08-04** (MCP `list_tables`): a estrutura **não existia**. A 16-E
+chegou primeiro e criou as **4 tabelas centrais**, com código em `src/lib/body/`:
+
+| Tabela | Papel |
+| --- | --- |
+| `body_measurement_types` | Os 16 tipos (peso, %GC, massa muscular, cintura, abdômen, quadril, peitoral, pescoço, braço/antebraço/coxa/panturrilha D e E) + personalizados |
+| `body_measurements` | O registro: data pura, hora, valor, unidade **congelada**, condição, `source` |
+| `body_measurement_goals` | Meta por tipo, com direção, partida, alvo e prazo |
+| `body_progress_photos` | Metadado da foto privada (o binário fica no bucket) |
+
+**O prefixo não é de Dieta.** Peso interessa aos dois módulos, e duas tabelas seriam dois
+gráficos discordando sobre quanto o usuário pesa. A **17-E não deve criar nada** — deve chamar
+`src/lib/body/queries.ts` e `src/lib/actions/body-measurements.ts`. `getLatestWeight(upTo?)` já
+existe para a preparação da sessão pré-preencher o peso (hoje digitado na hora).
+
+### ⛔ As fotos de evolução — o dado mais sensível do sistema
+
+Reuso total do mecanismo da Fase 14: tabela `attachments` + bucket **privado** `attachments`,
+o mesmo que a foto de receita (16-C) usa. **Nenhum segundo mecanismo de upload.**
+
+Cinco travas, e nenhuma delas é redundante:
+
+1. **O binário passa pelo SERVIDOR.** A Server Action recebe `FormData` com o `File` real —
+   deixar o navegador subir direto seria mais rápido, mas "validar tipo e tamanho no servidor"
+   viraria uma frase sem implementação.
+2. **MIME e bytes conferidos no servidor** (`photoFileSchema`), sobre o arquivo, não sobre a
+   extensão do nome. Arquivo vazio é recusado à parte.
+3. **Nome aleatório** (`crypto.randomUUID`) — o nome enviado pelo cliente é descartado. Bucket
+   privado com nome previsível ainda é um convite.
+4. **Pasta sempre `{auth.getUser().id}/…`**, nunca um caminho vindo do formulário.
+5. **FK COMPOSTA `(attachment_id, user_id) → attachments(id, user_id)`.** Descoberta durante o
+   teste pela role `authenticated`: a RLS sozinha permitia a linha
+   `body_progress_photos(user_id = B, attachment_id = <anexo de A>)`, porque a policy confere o
+   `user_id` da própria linha e nada sabe sobre o anexo apontado. Não vazava (a leitura junta
+   `attachments`, cuja RLS bloqueia B) — mas depender do comportamento de um JOIN para não vazar
+   foto de corpo é fino demais. Agora é impossível, não improvável.
+
+**Leitura só por URL assinada de 5 minutos**, gerada no servidor a cada acesso (mais curta que
+os 10 min dos anexos de tarefa, de propósito). `storage_path` **não sai do servidor** — o tipo
+`SignedProgressPhoto` sequer tem o campo. Sem link público, sem link compartilhável.
+
+> ⚠️ **A FK composta obrigou a abandonar o embed do PostgREST.** `getProgressPhotos` faz duas
+> consultas e junta em memória, em vez de `select("...,attachments(...)")`: um embed sobre FK
+> composta dependeria de inferência do PostgREST e quebraria **só em runtime** — a mesma família
+> de armadilha do `ON CONFLICT` com índice parcial (42P10) que a 16-B documentou.
+
+### Lógica pura (+151 testes) — suíte total: 1.321 → **1.472**
+
+| Arquivo | Responsabilidade |
+| --- | --- |
+| `src/lib/body/measurements.ts` (69 testes) | Diferença absoluta e percentual, comparação entre datas, série temporal, média móvel, progresso e status de meta |
+| `src/lib/nutrition/reports.ts` (54 testes) | Agregação por período do SNAPSHOT, micronutrientes, rankings, gasto com mercado, planejado × consumido |
+| `src/lib/nutrition/diary-month.ts` (28 testes) | Visão de mês do diário |
+
+### A regra que atravessa a subfase inteira: **buraco não é zero**
+
+Um gráfico que despenca para zero na semana em que a pessoa não se pesou afirma que ela pesou
+zero. É o `value_state` da 16-A aplicado ao **tempo**:
+
+- `buildSeries` devolve `value: null` no dia sem medição, e o gráfico usa `connectNulls={false}`
+  — a linha **interrompe** em vez de passar por cima do buraco;
+- o calendário do mês mostra "—", nunca "0 kcal";
+- a **média móvel só aparece com a janela cheia**; abaixo disso a UI omite a linha e explica,
+  em vez de suavizar 2 pontos e chamar de tendência;
+- o eixo do gráfico **não começa em zero** (2 kg num eixo de 0–80 vira linha reta).
+
+Um caso que os testes pegaram: um dia **com meta e sem registro** estava entrando na aderência
+média como **0%** — ou seja, "esqueci de anotar" virava "falhei na meta". Corrigido no código
+(não no teste), com teste dedicado.
+
+### Relatórios — as duas regras que já valiam, agora aplicadas ao período
+
+1. **O relatório de um período passado sai do SNAPSHOT.** `buildDailyReports` entra por
+   `dayTotals` (16-B), que soma `nutrients_snapshot`. Não existe um parâmetro sequer em
+   `reports.ts` que aceite alimento do catálogo para somar consumo.
+2. **A meta de um dia é a que valia NELE.** Cada dia resolve o próprio período com
+   `goalPeriodForDate`. Teste dedicado: o mesmo consumo de 1.800 kcal dá 100% em janeiro
+   (meta 1.800) e 72% em março (meta 2.500).
+
+A qualidade viaja com o número: dia parcial torna o período parcial, e **dividir não melhora o
+dado** — a média de um período parcial continua parcial.
+
+**Duas médias, rotuladas:** por dia de calendário e por dia registrado. Elas respondem
+perguntas diferentes, e oferecer só uma sem dizer qual esconderia a diferença entre "não comi"
+e "não anotei".
+
+### Pendências fechadas nesta subfase
+
+| Item | Como ficou |
+| --- | --- |
+| Relatório de micronutrientes por período | Aba própria, com a coluna **"dias incompletos"** que impede a leitura ingênua do total |
+| "Substituições mais realizadas" | Ranking do histórico da 16-C, com rótulos congelados e sem afirmar equivalência |
+| Gasto com mercado × financeiro | **Reusa `summarizeShoppingList`** (16-D), não reconta. Virar lançamento é **decisão explícita** do usuário — a tela só aponta para `/transacoes` |
+| Exportação do catálogo em CSV | `csv-export.ts` reusa `toCsv`/`downloadCsv` (Fase 14). **Célula vazia ≠ zero**, e a citação da TACO viaja com o arquivo |
+| **Visão de mês do diário** | `?visao=mes` deixou de cair na semana: calendário com energia, meta do dia, pendências e tabela textual equivalente |
+
+### Sem prescrição, sem diagnóstico, sem causalidade
+
+Não há "peso ideal", faixa de IMC com juízo de valor nem alvo sugerido. A direção da meta
+(`reduzir`/`aumentar`/`manter`) é **escolha do usuário**. Consumo e corpo aparecem **lado a
+lado**, com o aviso de que correlação não é causa — nenhum cálculo de correlação é feito.
+A comparação entre datas **avisa quando as condições diferem** (jejum × pós-treino), porque
+parte da diferença pode ser contexto, não corpo.
+
+### Acessibilidade
+
+**Gráfico nunca é a única forma de ler o dado:** toda série tem tabela textual equivalente,
+cada célula do calendário tem `aria-label` com a leitura completa, e a barra de progresso da
+meta tem `role="progressbar"` com os valores.
+
+### Segurança — verificado no banco pela role `authenticated`
+
+Dois usuários de teste. Como B: **0 linhas** nas 4 tabelas, em `attachments` e em
+`storage.objects` — inclusive consultando o caminho exato do arquivo de A. Bloqueados (42501):
+gravar medição/tipo em nome de A, e enviar arquivo para a pasta de A. Bloqueado (23503, FK
+composta): reivindicar anexo de A. `UPDATE`/`DELETE` nas linhas de A alcançam **0 linhas**.
+**0 resíduo de teste no banco.** `get_advisors`: 0 lints de schema.
+
+### Verificação
+
+`npm run lint`, `npx tsc --noEmit`, `npm run test:run` (**1.472 testes**, de 1.321) e
+`npm run build` passam. Suíte verde também em `TZ=UTC`. Smoke test: `/nutricao/medidas`,
+`/nutricao/relatorios`, `/nutricao/diario?visao=mes` e `/api/export` → **307** `/login`;
+`/api/cron/*` → **401**.
+
+### Pendências registradas (escopo consciente, não bugs)
+
+| Item | Onde resolve |
+| --- | --- |
+| Gerenciar tipos de medida pela interface (`saveMeasurementType`, `reorderMeasurementTypes`, `deleteMeasurementType` existem e são testados pelo tipo; a semente dos 16 cobre o uso normal) | **16-F** |
+| Notificação de medição semanal pendente | **16-F** |
+| Cards de evolução no dashboard geral | **16-F** |
+| XLSX nos relatórios (o `xlsx` já está no projeto; a 16-E entregou CSV, que é o padrão) | **16-F** |
+| `src/lib/nutrition/calendar.ts` é consumido por `src/lib/body/` — se o acoplamento incomodar, **promover** a util central, nunca copiar | Quando incomodar |
+| Integração com balança/wearable | **Não planejado.** `body_measurements.source` já prevê o campo |
 
 ---
 

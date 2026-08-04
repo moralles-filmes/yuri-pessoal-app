@@ -861,7 +861,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Peso, medidas corporais e fotos privadas.",
     href: `${NUTRITION_BASE_PATH}/medidas`,
     icon: "ruler",
-    status: "proxima",
+    status: "pronto",
     phase: "Subfase 16-E",
   },
   {
@@ -870,7 +870,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Consumo por período e evolução.",
     href: `${NUTRITION_BASE_PATH}/relatorios`,
     icon: "bar-chart-3",
-    status: "planejada",
+    status: "pronto",
     phase: "Subfase 16-E",
   },
   {
