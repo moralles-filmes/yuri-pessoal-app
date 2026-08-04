@@ -194,8 +194,8 @@ export function TrainingSectionPlaceholder({ slug }: { slug: string }) {
         {section.phase}
       </Badge>
       <p className="mt-4 max-w-md text-xs text-muted-foreground">
-        Esta seção ainda não foi construída. O catálogo de exercícios e as preferências do
-        módulo já estão prontos e são a base dela.
+        Esta seção ainda não foi construída. O catálogo de exercícios, os treinos-modelo, os
+        programas e o planejamento semanal já estão prontos e são a base dela.
       </p>
     </div>
   );

@@ -265,6 +265,196 @@ export const WEEKDAY_LABELS = [
   "Sábado",
 ] as const;
 
+export const WEEKDAY_SHORT_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
+
+/* ═══════════════════════ Fase 17-B — Programas, treinos e planejamento ═══════════════════════ */
+
+/* ─────────────────────────── Objetivo (ORGANIZACIONAL) ───────────────────────────
+ * ATENÇÃO: objetivo e nível servem para o usuário ACHAR e ORGANIZAR o que é dele. Não são
+ * prescrição, não são recomendação profissional e não prometem resultado — nenhuma tela pode
+ * apresentá-los como tal.
+ */
+export const TRAINING_GOALS = [
+  "hipertrofia",
+  "forca",
+  "resistencia_muscular",
+  "condicionamento",
+  "manutencao",
+  "retorno",
+  "personalizado",
+] as const;
+export type TrainingGoal = (typeof TRAINING_GOALS)[number];
+
+export const TRAINING_GOAL_LABELS: Record<TrainingGoal, string> = {
+  hipertrofia: "Hipertrofia",
+  forca: "Força",
+  resistencia_muscular: "Resistência muscular",
+  condicionamento: "Condicionamento",
+  manutencao: "Manutenção",
+  retorno: "Retorno ao treino",
+  personalizado: "Personalizado",
+};
+
+export const TRAINING_LEVELS = [
+  "iniciante",
+  "intermediario",
+  "avancado",
+  "nao_informado",
+] as const;
+export type TrainingLevel = (typeof TRAINING_LEVELS)[number];
+
+export const TRAINING_LEVEL_LABELS: Record<TrainingLevel, string> = {
+  iniciante: "Iniciante",
+  intermediario: "Intermediário",
+  avancado: "Avançado",
+  nao_informado: "Não informado",
+};
+
+/* ─────────────────────────────── Status do programa ─────────────────────────────── */
+export const PROGRAM_STATUSES = [
+  "rascunho",
+  "ativo",
+  "pausado",
+  "finalizado",
+  "arquivado",
+] as const;
+export type ProgramStatus = (typeof PROGRAM_STATUSES)[number];
+
+export const PROGRAM_STATUS_LABELS: Record<ProgramStatus, string> = {
+  rascunho: "Rascunho",
+  ativo: "Ativo",
+  pausado: "Pausado",
+  finalizado: "Finalizado",
+  arquivado: "Arquivado",
+};
+
+/* ────────────────────────────── Status do treino-modelo ────────────────────────────── */
+export const WORKOUT_STATUSES = ["rascunho", "ativo", "arquivado"] as const;
+export type WorkoutStatus = (typeof WORKOUT_STATUSES)[number];
+
+export const WORKOUT_STATUS_LABELS: Record<WorkoutStatus, string> = {
+  rascunho: "Rascunho",
+  ativo: "Ativo",
+  arquivado: "Arquivado",
+};
+
+/* ───────────────────────────────── Tipo de série (11) ─────────────────────────────────
+ * Descreve a INTENÇÃO daquela série. A sessão (17-C) congela isto no snapshot e o volume
+ * (17-D) usa para separar aquecimento de série de trabalho.
+ */
+export const SET_TYPES = [
+  "aquecimento",
+  "preparatoria",
+  "trabalho",
+  "top_set",
+  "back_off",
+  "drop_set",
+  "falha",
+  "amrap",
+  "isometrica",
+  "assistida",
+  "personalizada",
+] as const;
+export type SetType = (typeof SET_TYPES)[number];
+
+export const SET_TYPE_LABELS: Record<SetType, string> = {
+  aquecimento: "Aquecimento",
+  preparatoria: "Preparatória",
+  trabalho: "Trabalho",
+  top_set: "Top set",
+  back_off: "Back-off",
+  drop_set: "Drop set",
+  falha: "Até a falha",
+  amrap: "AMRAP",
+  isometrica: "Isométrica",
+  assistida: "Assistida",
+  personalizada: "Personalizada",
+};
+
+/* ─────────────────────────────────── Técnica (11) ─────────────────────────────────── */
+export const SET_TECHNIQUES = [
+  "superset",
+  "bi_set",
+  "tri_set",
+  "circuito",
+  "drop_set",
+  "rest_pause",
+  "cluster",
+  "piramide_crescente",
+  "piramide_decrescente",
+  "serie_unilateral",
+  "personalizada",
+] as const;
+export type SetTechnique = (typeof SET_TECHNIQUES)[number];
+
+export const SET_TECHNIQUE_LABELS: Record<SetTechnique, string> = {
+  superset: "Superset",
+  bi_set: "Bi-set",
+  tri_set: "Tri-set",
+  circuito: "Circuito",
+  drop_set: "Drop set",
+  rest_pause: "Rest-pause",
+  cluster: "Cluster",
+  piramide_crescente: "Pirâmide crescente",
+  piramide_decrescente: "Pirâmide decrescente",
+  serie_unilateral: "Série unilateral",
+  personalizada: "Personalizada",
+};
+
+/* ─────────────────────────── Planejamento: status GRAVADO ───────────────────────────
+ * Só FATO entra aqui. "Atrasado" e "em andamento" NÃO existem no banco — são derivados de
+ * data + agora na leitura (`derivePlannedStatus`, em schedule.ts), exatamente como `atrasada`
+ * no TO-DO e o status da fatura de cartão.
+ */
+export const SCHEDULE_STATUSES = [
+  "planejado",
+  "concluido",
+  "nao_realizado",
+  "reagendado",
+  "cancelado",
+] as const;
+export type ScheduleStatus = (typeof SCHEDULE_STATUSES)[number];
+
+export const SCHEDULE_STATUS_LABELS: Record<ScheduleStatus, string> = {
+  planejado: "Planejado",
+  concluido: "Concluído",
+  nao_realizado: "Não realizado",
+  reagendado: "Reagendado",
+  cancelado: "Cancelado",
+};
+
+/** Status APRESENTADO. Acrescenta o que é derivado e nunca gravado. */
+export const DERIVED_SCHEDULE_STATUSES = [
+  ...SCHEDULE_STATUSES,
+  "hoje",
+  "atrasado",
+] as const;
+export type DerivedScheduleStatus = (typeof DERIVED_SCHEDULE_STATUSES)[number];
+
+export const DERIVED_SCHEDULE_STATUS_LABELS: Record<DerivedScheduleStatus, string> = {
+  ...SCHEDULE_STATUS_LABELS,
+  hoje: "Hoje",
+  atrasado: "Atrasado",
+};
+
+export const SCHEDULE_ENTRY_KINDS = ["treino", "descanso"] as const;
+export type ScheduleEntryKind = (typeof SCHEDULE_ENTRY_KINDS)[number];
+
+export const SCHEDULE_ENTRY_KIND_LABELS: Record<ScheduleEntryKind, string> = {
+  treino: "Treino",
+  descanso: "Descanso",
+};
+
+export const SCHEDULE_SOURCES = ["manual", "recorrencia", "duplicacao", "programa"] as const;
+export type ScheduleSource = (typeof SCHEDULE_SOURCES)[number];
+
+export const SCHEDULE_SOURCE_LABELS: Record<ScheduleSource, string> = {
+  manual: "Criado à mão",
+  recorrencia: "Gerado por recorrência",
+  duplicacao: "Semana duplicada",
+  programa: "Aplicado de um programa",
+};
+
 /* ─────────────────────────── Navegação interna do módulo ───────────────────────────
  * 13 submódulos. Os que ainda não existem aparecem com a subfase em que chegam — o link
  * funciona e abre uma tela honesta, em vez de sumir do menu ou fingir que funciona.
@@ -315,7 +505,7 @@ export const TRAINING_SECTIONS: TrainingSection[] = [
     description: "O treino programado para hoje e o próximo.",
     href: `${TRAINING_BASE_PATH}/hoje`,
     icon: "calendar-check",
-    status: "proxima",
+    status: "pronto",
     phase: "Subfase 17-B",
   },
   {
@@ -324,7 +514,7 @@ export const TRAINING_SECTIONS: TrainingSection[] = [
     description: "Modelos reutilizáveis com exercícios, séries e descansos.",
     href: `${TRAINING_BASE_PATH}/treinos`,
     icon: "clipboard-list",
-    status: "proxima",
+    status: "pronto",
     phase: "Subfase 17-B",
   },
   {
@@ -333,7 +523,7 @@ export const TRAINING_SECTIONS: TrainingSection[] = [
     description: "ABC, Push/Pull/Legs, Upper/Lower e os seus.",
     href: `${TRAINING_BASE_PATH}/programas`,
     icon: "layers",
-    status: "proxima",
+    status: "pronto",
     phase: "Subfase 17-B",
   },
   {
@@ -342,7 +532,7 @@ export const TRAINING_SECTIONS: TrainingSection[] = [
     description: "Planejamento semanal, mensal e consistência.",
     href: `${TRAINING_BASE_PATH}/calendario`,
     icon: "calendar-range",
-    status: "proxima",
+    status: "pronto",
     phase: "Subfase 17-B",
   },
   {
@@ -351,7 +541,7 @@ export const TRAINING_SECTIONS: TrainingSection[] = [
     description: "O treino acontecendo, série por série.",
     href: `${TRAINING_BASE_PATH}/sessao`,
     icon: "timer",
-    status: "planejada",
+    status: "proxima",
     phase: "Subfase 17-C",
   },
   {
@@ -423,3 +613,17 @@ export const asDifficultyScale = asEnum(DIFFICULTY_SCALES, "simples");
 export const asAutoAdvanceMode = asEnum(AUTO_ADVANCE_MODES, "avisar");
 export const asUnilateralVolumeRule = asEnum(UNILATERAL_VOLUME_RULES, "soma_dos_lados");
 export const asOneRmFormula = asEnum(ONE_RM_FORMULAS, "epley");
+
+/* Fase 17-B */
+export const asTrainingGoal = asEnum(TRAINING_GOALS, "personalizado");
+export const asTrainingLevel = asEnum(TRAINING_LEVELS, "nao_informado");
+export const asProgramStatus = asEnum(PROGRAM_STATUSES, "rascunho");
+export const asWorkoutStatus = asEnum(WORKOUT_STATUSES, "ativo");
+export const asSetType = asEnum(SET_TYPES, "trabalho");
+export const asScheduleStatus = asEnum(SCHEDULE_STATUSES, "planejado");
+export const asScheduleEntryKind = asEnum(SCHEDULE_ENTRY_KINDS, "treino");
+export const asScheduleSource = asEnum(SCHEDULE_SOURCES, "manual");
+
+/** Técnica é opcional: `null` continua `null` em vez de virar um valor inventado. */
+export const asSetTechnique = (value: string | null | undefined): SetTechnique | null =>
+  SET_TECHNIQUES.includes(value as SetTechnique) ? (value as SetTechnique) : null;
