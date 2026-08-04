@@ -30,8 +30,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { TRACKING_TYPE_LABELS } from "@/lib/training/constants";
-import { applyExerciseFilters } from "@/lib/training/filters";
-import { EMPTY_EXERCISE_FILTERS, type ExerciseListItem, type MuscleGroup } from "@/lib/training/types";
+import { applyExerciseFilters, exercisePickerFilters } from "@/lib/training/filters";
+import type { ExerciseListItem, MuscleGroup } from "@/lib/training/types";
 import { addExercisesToWorkout } from "@/lib/actions/training-workouts";
 
 const ALL = "__todos__";
@@ -70,14 +70,14 @@ export function ExercisePickerDialog({
     }
   }
 
+  // O grupo muscular aqui é o PRINCIPAL, e só ele — a regra e o porquê vivem em
+  // `exercisePickerFilters`, testada em `filters.test.ts`.
   const visible = React.useMemo(
     () =>
-      applyExerciseFilters(exercises, {
-        ...EMPTY_EXERCISE_FILTERS,
-        search,
-        muscleGroupId: groupId,
-        onlyFavorites,
-      }),
+      applyExerciseFilters(
+        exercises,
+        exercisePickerFilters({ search, muscleGroupId: groupId, onlyFavorites }),
+      ),
     [exercises, search, groupId, onlyFavorites],
   );
 

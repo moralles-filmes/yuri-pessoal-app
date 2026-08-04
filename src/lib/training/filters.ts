@@ -129,6 +129,28 @@ export function applyExerciseFilters(
   return [...sorted].sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
 }
 
+/**
+ * Filtros do diálogo que escolhe exercícios para o treino (17-B).
+ *
+ * ⛔ AQUI O GRUPO MUSCULAR É O PRINCIPAL, E SÓ ELE. O catálogo tem um toggle para alcançar os
+ * secundários; este diálogo não tem. Espalhar `EMPTY_EXERCISE_FILTERS` — cujo padrão é
+ * incluí-los — fazia "Peito" trazer todo exercício que usa peito de apoio, sem o usuário ter
+ * como desligar. A decisão mora aqui, nomeada e testada, em vez de solta dentro do JSX.
+ */
+export function exercisePickerFilters(input: {
+  search: string;
+  muscleGroupId: string | null;
+  onlyFavorites: boolean;
+}): ExerciseFilterState {
+  return {
+    ...EMPTY_EXERCISE_FILTERS,
+    search: input.search,
+    muscleGroupId: input.muscleGroupId,
+    includeSecondary: false,
+    onlyFavorites: input.onlyFavorites,
+  };
+}
+
 /** Quantos filtros estão ativos (para o botão "Limpar" mostrar o número). */
 export function countActiveFilters(filters: ExerciseFilterState): number {
   let count = 0;

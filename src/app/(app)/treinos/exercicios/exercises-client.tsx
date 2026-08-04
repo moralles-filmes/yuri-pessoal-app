@@ -42,6 +42,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { cn } from "@/lib/utils";
 import { TRACKING_TYPE_LABELS } from "@/lib/training/constants";
+import { useUrlText } from "@/lib/forms/use-url-text";
 import {
   applyExerciseFilters,
   filtersFromParams,
@@ -80,9 +81,19 @@ export function ExercisesClient({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const filters = React.useMemo(
+  const urlFilters = React.useMemo(
     () => filtersFromParams(Object.fromEntries(searchParams.entries())),
     [searchParams],
+  );
+
+  // A busca é local e só depois alcança a URL: controlada pela URL, a página é `force-dynamic`
+  // e cada tecla esperava uma ida ao servidor para aparecer no campo.
+  const [search, setSearch] = useUrlText(urlFilters.search, (value) =>
+    commitFilters({ ...urlFilters, search: value }),
+  );
+  const filters = React.useMemo(
+    () => ({ ...urlFilters, search }),
+    [urlFilters, search],
   );
 
   const visible = React.useMemo(
@@ -109,10 +120,19 @@ export function ExercisesClient({
 
   const detail = detailId ? (exercises.find((item) => item.id === detailId) ?? null) : null;
 
-  function updateFilters(patch: Partial<ExerciseFilterState>) {
-    const next = { ...filters, ...patch };
+  function commitFilters(next: ExerciseFilterState) {
     const params = new URLSearchParams(paramsFromFilters(next));
     router.replace(params.toString() ? `?${params}` : "?", { scroll: false });
+  }
+
+  function updateFilters(patch: Partial<ExerciseFilterState>) {
+    // Digitar não vai à URL agora — `useUrlText` grava depois da pausa. Os demais filtros são
+    // clique único e vão direto, senão o resultado demoraria a aparecer sem motivo.
+    if (patch.search !== undefined && Object.keys(patch).length === 1) {
+      setSearch(patch.search);
+      return;
+    }
+    commitFilters({ ...filters, ...patch });
   }
 
   function toggleSelected(id: string) {

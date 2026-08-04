@@ -3,6 +3,7 @@ import {
   applyExerciseFilters,
   countActiveFilters,
   countByMuscleGroup,
+  exercisePickerFilters,
   filterExercises,
   filtersFromParams,
   hasActiveFilters,
@@ -177,6 +178,29 @@ describe("filtros", () => {
       includeSecondary: false,
     });
     expect(result).toHaveLength(0);
+  });
+
+  it("o picker do treino filtra pelo grupo PRINCIPAL, nunca pelos secundários", () => {
+    // O diálogo de adicionar exercício ao treino não tem o toggle que o catálogo tem. Se ele
+    // voltar a herdar o padrão (`includeSecondary: true`), escolher um grupo traz de novo todo
+    // exercício que apenas recruta aquele músculo como secundário.
+    const filters = exercisePickerFilters({
+      search: "",
+      muscleGroupId: "g-lombar",
+      onlyFavorites: false,
+    });
+    expect(filters.includeSecondary).toBe(false);
+    expect(filterExercises(ALL, filters)).toHaveLength(0);
+  });
+
+  it("o picker do treino não arrasta arquivados nem favoritos por engano", () => {
+    const filters = exercisePickerFilters({
+      search: "",
+      muscleGroupId: null,
+      onlyFavorites: false,
+    });
+    expect(filters.showArchived).toBe(false);
+    expect(filters.onlyFavorites).toBe(false);
   });
 
   it("filtra por equipamento, categoria, padrão, medição, tipo e lateralidade", () => {
