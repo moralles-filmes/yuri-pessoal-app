@@ -594,13 +594,15 @@ export async function generateShoppingList(
   }
 
   for (const update of plan.toUpdate) {
-    const payload = generatedPayload(update.item, 0);
-    // O ajuste manual do usuário vence o recálculo (regra 2).
-    const { position: _ignored, ...rest } = payload;
-    void _ignored;
-    const patch = update.keepQuantity
-      ? { ...rest, quantity: undefined, unit: undefined }
-      : rest;
+    // `position` não entra: a ordem é do usuário, e regerar não pode embaralhar a lista.
+    const { position: _position, quantity, unit, ...rest } = generatedPayload(update.item, 0);
+    void _position;
+
+    // ⛔ REGRA 2: o ajuste manual do usuário vence o recálculo. Com `keepQuantity`, quantidade
+    // e unidade simplesmente NÃO fazem parte do patch — origem, corredor e rótulo são
+    // atualizados, o número que ele digitou fica.
+    const patch = update.keepQuantity ? rest : { ...rest, quantity, unit };
+
     const { error } = await ctx.supabase
       .from("nutrition_shopping_list_items")
       .update(patch)
@@ -679,6 +681,9 @@ async function applyPantryToList(ctx: Ctx, listId: string): Promise<number> {
     (item) => item.status === "pendente" || item.status === "no_carrinho",
   );
 
+  // `consolidationKey` recebe o ID DA LINHA de propósito: aqui a prévia é sobre itens que já
+  // existem na lista (e um deles pode ter sido criado à mão, sem chave de consolidação), então
+  // a identidade que precisa voltar em cada patch é a da linha, não a da consolidação.
   const preview = previewPantryDiscount(
     abertos.map((item) => ({
       consolidationKey: item.id,
