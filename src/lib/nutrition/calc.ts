@@ -23,7 +23,7 @@
  *    Nada de arredondar valor intermediário. `roundForDisplay` existe para a UI e só deve ser
  *    chamado na última etapa, com as casas decimais que o próprio nutriente define.
  */
-import type { NutrientMethod, NutrientValueState } from "./constants";
+import type { NutrientMethod, NutrientTotalQuality, NutrientValueState } from "./constants";
 import type { FoodNutrientValue, NutrientDefinition } from "./types";
 
 /* ───────────────────────────── Tipos ───────────────────────────── */
@@ -35,9 +35,16 @@ export type ComputedNutrient = {
   amount: number | null;
   state: NutrientValueState;
   method: NutrientMethod;
+  /**
+   * Só existe em valor JÁ AGREGADO (16-C): uma receita ou uma refeição-modelo é a soma de
+   * vários itens, e essa soma tem uma qualidade própria. Sem este campo, um total parcial de
+   * receita entraria no dia como se fosse exato — a mentira que a regra 1 do módulo proíbe.
+   * Ausente = valor de item simples, cuja qualidade sai só do `state`.
+   */
+  quality?: NutrientTotalQuality;
 };
 
-export type NutrientTotalQuality = "exato" | "aproximado" | "parcial";
+export type { NutrientTotalQuality };
 
 export type NutrientTotal = {
   code: string;
@@ -46,9 +53,13 @@ export type NutrientTotal = {
   quality: NutrientTotalQuality;
   /** Quantos itens contribuíram com valor publicado. */
   contributing: number;
-  /** Quantos itens eram "traço". */
+  /** Quantos itens eram "traço" — ou eram agregados de qualidade "aproximado" (16-C). */
   trace: number;
-  /** Quantos itens não tinham o valor (não analisado / em reavaliação). */
+  /**
+   * Quantos itens degradaram o total para PARCIAL: os que não tinham o valor (não analisado /
+   * em reavaliação) e os agregados que já vinham parciais (receita com ingrediente sem o
+   * nutriente).
+   */
   missing: number;
 };
 
@@ -63,13 +74,21 @@ export type NutrientBag = Record<string, ComputedNutrient>;
  */
 export function scaleNutrient(value: FoodNutrientValue, factor: number): ComputedNutrient {
   if (value.state !== "disponivel" || value.amount === null || !Number.isFinite(factor)) {
-    return { code: value.code, amount: null, state: value.state, method: value.method };
+    return {
+      code: value.code,
+      amount: null,
+      state: value.state,
+      method: value.method,
+      ...(value.quality ? { quality: value.quality } : {}),
+    };
   }
   return {
     code: value.code,
     amount: value.amount * factor,
     state: "disponivel",
     method: value.method,
+    // Escalar não melhora a qualidade: metade de um total parcial continua parcial.
+    ...(value.quality ? { quality: value.quality } : {}),
   };
 }
 
@@ -105,6 +124,12 @@ export function sumNutrient(bags: NutrientBag[], code: string): NutrientTotal {
       case "disponivel":
         amount += value.amount ?? 0;
         contributing += 1;
+        // Item JÁ AGREGADO (receita, refeição-modelo): ele tem número, mas o número pode ser
+        // um piso. A degradação é contada aqui para a qualidade do total não mentir — sem
+        // isso, uma receita com um ingrediente sem fibra analisada entraria no dia como se a
+        // fibra fosse exata. `contributing` continua subindo porque o valor CONTRIBUI.
+        if (value.quality === "parcial") missing += 1;
+        else if (value.quality === "aproximado") trace += 1;
         break;
       case "traco":
         // Presente, porém abaixo do limite de quantificação: entra como 0 e marca o total

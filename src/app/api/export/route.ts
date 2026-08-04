@@ -87,6 +87,17 @@ const EXPORT_TABLES: TableName[] = [
   "nutrition_planned_meal_items",
   "nutrition_diary_meals",
   "nutrition_diary_entries",
+  // Subfase 16-C — receitas, refeições-modelo e substituições. Tudo aqui é conteúdo autoral
+  // do usuário (as receitas dele, os modelos dele, as trocas que ele fez): nada é recriado
+  // por migration, então ficar de fora do backup significaria perder para sempre.
+  "nutrition_recipe_categories",
+  "nutrition_recipes",
+  "nutrition_recipe_ingredients",
+  "nutrition_meal_templates",
+  "nutrition_meal_template_items",
+  "nutrition_substitution_groups",
+  "nutrition_substitution_options",
+  "nutrition_substitution_logs",
 ];
 
 /**

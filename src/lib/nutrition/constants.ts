@@ -43,6 +43,14 @@ export const NUTRIENT_VALUE_STATE_HINTS: Record<NutrientValueState, string> = {
   em_revisao: "A fonte informa que as análises deste alimento estão sendo reavaliadas.",
 };
 
+/* ───────────────────────────── Qualidade de um TOTAL ─────────────────────────────
+ * Mora aqui (e não em calc.ts) porque `types.ts` também precisa dela e calc.ts já importa de
+ * types.ts — declarar nos dois lados criaria um ciclo. `calc.ts` reexporta o tipo, então todo
+ * o código que já importava `NutrientTotalQuality` de lá continua igual.
+ */
+export const NUTRIENT_TOTAL_QUALITIES = ["exato", "aproximado", "parcial"] as const;
+export type NutrientTotalQuality = (typeof NUTRIENT_TOTAL_QUALITIES)[number];
+
 /* ───────────────────────────── Método / qualidade ───────────────────────────── */
 export const NUTRIENT_METHODS = [
   "analitico",
@@ -467,6 +475,129 @@ export const PLAN_EDIT_SCOPE_HINTS: Record<PlanEditScope, string> = {
     "Altera o modelo e reaplica nas datas futuras. Dias já passados continuam como foram planejados.",
 };
 
+/* ═════════════ Fase 16-C — Receitas, refeições-modelo e substituições ═════════════ */
+
+/**
+ * O que a linha do diário é. `entry_kind` é o discriminador ESTÁVEL: `food_id`, `recipe_id` e
+ * `meal_template_id` são todos `on delete set null` e podem virar nulos sem que o registro
+ * deixe de ser o que era.
+ */
+export const DIARY_ENTRY_KINDS = ["alimento", "livre", "receita", "modelo"] as const;
+export type DiaryEntryKind = (typeof DIARY_ENTRY_KINDS)[number];
+
+export const DIARY_ENTRY_KIND_LABELS: Record<DiaryEntryKind, string> = {
+  alimento: "Alimento",
+  livre: "Item sem valor nutricional",
+  receita: "Receita",
+  modelo: "Refeição-modelo",
+};
+
+/** Como a quantidade de uma RECEITA é expressa. */
+export const PORTION_UNITS = ["porcao", "peso"] as const;
+export type PortionUnit = (typeof PORTION_UNITS)[number];
+
+export const PORTION_UNIT_LABELS: Record<PortionUnit, string> = {
+  porcao: "Porções",
+  peso: "Gramas do preparo pronto",
+};
+
+/**
+ * Registrar receita em GRAMAS exige o peso final informado — sem ele não existe conversão
+ * possível entre "uma porção" e "150 g", e inventar uma seria estimar (proibido).
+ */
+export const PORTION_UNIT_HINTS: Record<PortionUnit, string> = {
+  porcao: "A receita rende um número de porções; a quantidade é contada nelas.",
+  peso: "Disponível apenas quando você informa o peso final preparado da receita.",
+};
+
+/** Tipos de item de refeição-modelo e de item planejado. */
+export const TEMPLATE_ITEM_KINDS = ["alimento", "receita", "livre"] as const;
+export type TemplateItemKind = (typeof TEMPLATE_ITEM_KINDS)[number];
+
+export const TEMPLATE_ITEM_KIND_LABELS: Record<TemplateItemKind, string> = {
+  alimento: "Alimento",
+  receita: "Receita",
+  livre: "Item livre",
+};
+
+/** Os dois níveis de substituição previstos pela subfase. */
+export const SUBSTITUTION_LEVELS = ["alimento", "refeicao"] as const;
+export type SubstitutionLevel = (typeof SUBSTITUTION_LEVELS)[number];
+
+export const SUBSTITUTION_LEVEL_LABELS: Record<SubstitutionLevel, string> = {
+  alimento: "Alimento",
+  refeicao: "Refeição inteira",
+};
+
+export const SUBSTITUTION_LEVEL_HINTS: Record<SubstitutionLevel, string> = {
+  alimento: "Trocar um item por outro dentro de uma refeição.",
+  refeicao: "Trocar uma refeição inteira (receita ou refeição-modelo) por outra.",
+};
+
+export const SUBSTITUTION_OPTION_KINDS = ["alimento", "receita", "modelo", "livre"] as const;
+export type SubstitutionOptionKind = (typeof SUBSTITUTION_OPTION_KINDS)[number];
+
+export const SUBSTITUTION_OPTION_KIND_LABELS: Record<SubstitutionOptionKind, string> = {
+  alimento: "Alimento",
+  receita: "Receita",
+  modelo: "Refeição-modelo",
+  livre: "Item livre",
+};
+
+/**
+ * Os macros que a comparação de substituição exibe, na ordem da tela.
+ * Exatamente os cinco pedidos pela subfase: kcal, proteína, carboidrato, gordura e fibra.
+ */
+export const SUBSTITUTION_COMPARE_NUTRIENTS = [
+  CORE_NUTRIENTS.energia,
+  CORE_NUTRIENTS.proteina,
+  CORE_NUTRIENTS.carboidrato,
+  CORE_NUTRIENTS.lipidios,
+  CORE_NUTRIENTS.fibra,
+] as const;
+
+/**
+ * ⚠️ Texto obrigatório em toda tela de substituição.
+ *
+ * A regra 5 da subfase proíbe afirmar equivalência: o app compara números que o próprio
+ * usuário cadastrou. Fica como constante única para a frase nunca ser reescrita "mais
+ * animada" em uma tela e virar recomendação.
+ */
+export const SUBSTITUTION_DISCLAIMER =
+  "A comparação mostra apenas a diferença entre os números cadastrados. O sistema não afirma que os itens são equivalentes nem recomenda a troca — a decisão é sua, e nada é substituído sem a sua confirmação.";
+
+/** Aviso exibido quando a receita não tem peso final e "por 100 g" fica indisponível. */
+export const RECIPE_NO_WEIGHT_HINT =
+  "Informe o peso final preparado (a receita pronta, pesada) para ver os valores por 100 g e poder registrar em gramas. Sem ele, o valor por 100 g não é calculado — estimar a perda de água do preparo seria inventar dado.";
+
+/** Modo de registro de uma refeição-modelo no diário. */
+export const TEMPLATE_REGISTER_MODES = ["detalhado", "resumido"] as const;
+export type TemplateRegisterMode = (typeof TEMPLATE_REGISTER_MODES)[number];
+
+export const TEMPLATE_REGISTER_MODE_LABELS: Record<TemplateRegisterMode, string> = {
+  detalhado: "Detalhar os itens",
+  resumido: "Registrar como um item só",
+};
+
+export const TEMPLATE_REGISTER_MODE_HINTS: Record<TemplateRegisterMode, string> = {
+  detalhado:
+    "Cada alimento e cada receita do modelo vira uma linha no diário, e você pode ajustar item a item.",
+  resumido:
+    "Uma única linha com o total do modelo. Mais rápido, mas sem detalhe para editar depois.",
+};
+
+/* ───────────────────────────── Ordenação de receitas e modelos ───────────────────────────── */
+export const RECIPE_SORTS = ["nome", "recentes", "mais_usadas", "calorias_desc", "tempo"] as const;
+export type RecipeSort = (typeof RECIPE_SORTS)[number];
+
+export const RECIPE_SORT_LABELS: Record<RecipeSort, string> = {
+  nome: "Nome (A–Z)",
+  recentes: "Usadas recentemente",
+  mais_usadas: "Mais usadas",
+  calorias_desc: "Mais calóricas (por porção)",
+  tempo: "Mais rápidas",
+};
+
 /* ───────────────────────────── Navegação interna ───────────────────────────── */
 export const NUTRITION_BASE_PATH = "/nutricao";
 
@@ -539,7 +670,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Refeições-modelo reutilizáveis.",
     href: `${NUTRITION_BASE_PATH}/refeicoes`,
     icon: "utensils",
-    status: "planejada",
+    status: "pronto",
     phase: "Subfase 16-C",
   },
   {
@@ -548,7 +679,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Preparações com rendimento e cálculo por porção.",
     href: `${NUTRITION_BASE_PATH}/receitas`,
     icon: "chef-hat",
-    status: "planejada",
+    status: "pronto",
     phase: "Subfase 16-C",
   },
   {
@@ -557,7 +688,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Alternativas com comparação nutricional.",
     href: `${NUTRITION_BASE_PATH}/substituicoes`,
     icon: "repeat",
-    status: "planejada",
+    status: "pronto",
     phase: "Subfase 16-C",
   },
   {
@@ -566,7 +697,7 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
     description: "Gerada do planejamento, com despensa.",
     href: `${NUTRITION_BASE_PATH}/compras`,
     icon: "shopping-cart",
-    status: "planejada",
+    status: "proxima",
     phase: "Subfase 16-D",
   },
   {
@@ -672,3 +803,18 @@ export const asPlanningView = (v: unknown): PlanningView =>
   includes(PLANNING_VIEWS, v) ? v : "dia";
 export const asPlanEditScope = (v: unknown): PlanEditScope =>
   includes(PLAN_EDIT_SCOPES, v) ? v : "somente_este_dia";
+
+/* Fase 16-C */
+export const asDiaryEntryKind = (v: unknown): DiaryEntryKind =>
+  includes(DIARY_ENTRY_KINDS, v) ? v : "alimento";
+export const asPortionUnit = (v: unknown): PortionUnit | null =>
+  includes(PORTION_UNITS, v) ? v : null;
+export const asTemplateItemKind = (v: unknown): TemplateItemKind =>
+  includes(TEMPLATE_ITEM_KINDS, v) ? v : "alimento";
+export const asSubstitutionLevel = (v: unknown): SubstitutionLevel =>
+  includes(SUBSTITUTION_LEVELS, v) ? v : "alimento";
+export const asSubstitutionOptionKind = (v: unknown): SubstitutionOptionKind =>
+  includes(SUBSTITUTION_OPTION_KINDS, v) ? v : "alimento";
+export const asRecipeSort = (v: unknown): RecipeSort => (includes(RECIPE_SORTS, v) ? v : "nome");
+export const asTotalQuality = (v: unknown): NutrientTotalQuality | null =>
+  includes(NUTRIENT_TOTAL_QUALITIES, v) ? v : null;

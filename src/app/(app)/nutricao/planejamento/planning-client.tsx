@@ -19,10 +19,12 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CalendarRange,
+  ChefHat,
   ChevronLeft,
   ChevronRight,
   Copy,
   LayoutGrid,
+  Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -40,11 +42,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { cn } from "@/lib/utils";
-import { roundForDisplay, sumNutrients, type NutrientTotal } from "@/lib/nutrition/calc";
+import { roundForDisplay, type NutrientTotal } from "@/lib/nutrition/calc";
 import {
   addDaysIso,
   longDateLabel,
@@ -62,7 +65,8 @@ import {
   WEEKDAY_SHORT_LABELS,
   type PlanEditScope,
 } from "@/lib/nutrition/constants";
-import { plannedItemBag, sortMealsByTime, type PlannedFoodData } from "@/lib/nutrition/diary";
+import { sortMealsByTime, type PlannedFoodData } from "@/lib/nutrition/diary";
+import { templateTotals, type TemplateCalcContext } from "@/lib/nutrition/meal-template";
 import { countMaterialization, describeCycle } from "@/lib/nutrition/plan-recurrence";
 import type {
   FoodListItem,
@@ -73,17 +77,25 @@ import type {
 import {
   applyPlanToPeriod,
   copyPlannedDay,
+  deletePlanDay,
   deletePlannedMealInScope,
   duplicatePlannedWeek,
   deletePlannedMealItem,
+  savePlanDay,
   savePlannedMeal,
   savePlannedMealItem,
   saveNutritionPlan,
+  updatePlannedMealInScope,
 } from "@/lib/actions/nutrition-plans";
+import { addRecipeToPlannedMeal } from "@/lib/actions/nutrition-meal-templates";
 import {
   FoodPickerDialog,
   type PickerMeasure,
 } from "@/components/nutrition/food-picker-dialog";
+import {
+  RecipePickerDialog,
+  type PickerRecipe,
+} from "@/components/nutrition/recipe-picker-dialog";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
 
 export type PlanningClientProps = {
@@ -97,6 +109,8 @@ export type PlanningClientProps = {
   foods: FoodListItem[];
   measures: [string, PickerMeasure[]][];
   foodData: [string, PlannedFoodData][];
+  /** 16-C: receitas com o total já calculado no servidor. */
+  recipes: PickerRecipe[];
 };
 
 export function PlanningClient(props: PlanningClientProps) {
@@ -117,9 +131,21 @@ export function PlanningClient(props: PlanningClientProps) {
   );
 
   const [pickerMealId, setPickerMealId] = React.useState<string | null>(null);
+  const [recipeMealId, setRecipeMealId] = React.useState<string | null>(null);
   const [newMealOpen, setNewMealOpen] = React.useState(false);
-  const [scopeDialog, setScopeDialog] = React.useState<{ meal: PlannedMeal; action: "excluir" } | null>(null);
+  // A 16-B só expunha escopo na EXCLUSÃO; a 16-C expõe também na edição, que é o que
+  // `updatePlannedMealInScope` (já existente e testada) sempre soube fazer.
+  const [scopeDialog, setScopeDialog] = React.useState<{
+    meal: PlannedMeal;
+    action: "excluir" | "editar";
+  } | null>(null);
+  const [editPatch, setEditPatch] = React.useState<{ time: string; title: string }>({
+    time: "",
+    title: "",
+  });
   const [applyOpen, setApplyOpen] = React.useState<NutritionPlan | null>(null);
+  // Pendência da 16-B fechada aqui: montar os dias do modelo pela interface.
+  const [daysPlanId, setDaysPlanId] = React.useState<string | null>(null);
   const [planDialog, setPlanDialog] = React.useState(false);
   const [copyOpen, setCopyOpen] = React.useState(false);
 
@@ -142,24 +168,46 @@ export function PlanningClient(props: PlanningClientProps) {
     });
   }
 
+  /**
+   * Contexto de cálculo do planejado: alimentos, medidas e receitas.
+   *
+   * O plano usa o catálogo ATUAL (é intenção sobre o futuro), ao contrário do consumo, que sai
+   * do snapshot. Alimentos e receitas somam pelo MESMO caminho — `templateTotals` — para o
+   * planejamento e a refeição-modelo nunca discordarem sobre a mesma comida.
+   */
+  const calcContext: TemplateCalcContext = React.useMemo(
+    () => ({
+      foods: foodData,
+      measures: measureById,
+      recipes: new Map(
+        props.recipes.map((recipe) => [
+          recipe.id,
+          {
+            servings: recipe.servings,
+            totalWeightG: recipe.totalWeightG,
+            totals: recipe.totals,
+          },
+        ]),
+      ),
+    }),
+    [foodData, measureById, props.recipes],
+  );
+
   /** Total planejado de um conjunto de refeições, usando o catálogo ATUAL. */
   function totalsFor(meals: PlannedMeal[]): Record<string, NutrientTotal> {
-    return sumNutrients(
-      meals.flatMap((meal) =>
-        meal.items.map((item) =>
-          plannedItemBag(
-            item,
-            item.foodId ? (foodData.get(item.foodId) ?? null) : null,
-            item.measureId ? (measureById.get(item.measureId) ?? null) : null,
-          ),
-        ),
-      ),
-    );
+    return templateTotals(
+      meals.flatMap((meal) => meal.items),
+      calcContext,
+    ).totals;
   }
 
   const foodNames = React.useMemo(
     () => new Map(props.foods.map((food) => [food.id, food.name])),
     [props.foods],
+  );
+  const recipeNames = React.useMemo(
+    () => new Map(props.recipes.map((recipe) => [recipe.id, recipe.name])),
+    [props.recipes],
   );
 
   const dayMeals = React.useMemo(() => sortMealsByTime(props.meals), [props.meals]);
@@ -258,6 +306,7 @@ export function PlanningClient(props: PlanningClientProps) {
           pending={pending}
           onApply={setApplyOpen}
           onCreate={() => setPlanDialog(true)}
+          onEditDays={(plan) => setDaysPlanId(plan.id)}
         />
       ) : props.view === "semana" ? (
         <WeekPlanning
@@ -306,7 +355,16 @@ export function PlanningClient(props: PlanningClientProps) {
                   foodNames={foodNames}
                   totals={totalsFor([meal])}
                   pending={pending}
+                  recipeNames={recipeNames}
                   onAddItem={() => setPickerMealId(meal.id)}
+                  onAddRecipe={() => setRecipeMealId(meal.id)}
+                  onEdit={() => {
+                    setEditPatch({
+                      time: meal.plannedTime ? meal.plannedTime.slice(0, 5) : "",
+                      title: meal.title ?? "",
+                    });
+                    setScopeDialog({ meal, action: "editar" });
+                  }}
                   onDelete={() => setScopeDialog({ meal, action: "excluir" })}
                   onRemoveItem={(itemId) =>
                     run(() => deletePlannedMealItem(itemId), "Item removido do plano.")
@@ -366,9 +424,32 @@ export function PlanningClient(props: PlanningClientProps) {
       <ScopeDialog
         target={scopeDialog}
         hoje={props.hoje}
+        patch={editPatch}
+        onPatchChange={setEditPatch}
         onOpenChange={(open) => !open && setScopeDialog(null)}
         onConfirm={async (scope) => {
           if (!scopeDialog) return;
+
+          if (scopeDialog.action === "editar") {
+            const result = await updatePlannedMealInScope(
+              { planned_meal_id: scopeDialog.meal.id, scope },
+              {
+                planned_time: editPatch.time || null,
+                title: editPatch.title.trim() || null,
+              },
+            );
+            if (result.ok) {
+              toast.success(
+                `${result.data.afetadas} refeição${result.data.afetadas > 1 ? "ões" : ""} atualizada${result.data.afetadas > 1 ? "s" : ""}. Nada do passado foi alterado.`,
+              );
+              setScopeDialog(null);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível salvar.");
+            }
+            return;
+          }
+
           const result = await deletePlannedMealInScope({
             planned_meal_id: scopeDialog.meal.id,
             scope,
@@ -381,6 +462,42 @@ export function PlanningClient(props: PlanningClientProps) {
             router.refresh();
           } else {
             toast.error(result.error ?? "Não foi possível excluir.");
+          }
+        }}
+      />
+
+      <ModelDaysSheet
+        plan={props.plans.find((plan) => plan.id === daysPlanId) ?? null}
+        mealTypes={props.mealTypes}
+        foodNames={foodNames}
+        recipeNames={recipeNames}
+        pending={pending}
+        onOpenChange={(open) => !open && setDaysPlanId(null)}
+        onRun={run}
+        onAddFood={(mealId) => setPickerMealId(mealId)}
+        onAddRecipe={(mealId) => setRecipeMealId(mealId)}
+      />
+
+      <RecipePickerDialog
+        open={recipeMealId !== null}
+        onOpenChange={(open) => !open && setRecipeMealId(null)}
+        recipes={props.recipes}
+        title="Planejar receita"
+        description="O plano aponta para a receita como ela está hoje. O congelamento acontece só no registro do consumo."
+        onConfirm={async (picked) => {
+          const result = await addRecipeToPlannedMeal({
+            planned_meal_id: recipeMealId,
+            recipe_id: picked.recipeId,
+            quantity: picked.quantity,
+            portion_unit: picked.portionUnit,
+            notes: picked.notes,
+          });
+          if (result.ok) {
+            toast.success("Receita planejada.");
+            setRecipeMealId(null);
+            router.refresh();
+          } else {
+            toast.error(result.error ?? "Não foi possível planejar.");
           }
         }}
       />
@@ -449,17 +566,23 @@ export function PlanningClient(props: PlanningClientProps) {
 function PlannedMealCard({
   meal,
   foodNames,
+  recipeNames,
   totals,
   pending,
   onAddItem,
+  onAddRecipe,
+  onEdit,
   onDelete,
   onRemoveItem,
 }: {
   meal: PlannedMeal;
   foodNames: Map<string, string>;
+  recipeNames: Map<string, string>;
   totals: Record<string, NutrientTotal>;
   pending: boolean;
   onAddItem: () => void;
+  onAddRecipe: () => void;
+  onEdit: () => void;
   onDelete: () => void;
   onRemoveItem: (itemId: string) => void;
 }) {
@@ -495,6 +618,15 @@ function PlannedMealCard({
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Editar refeição planejada"
+            disabled={pending}
+            onClick={onEdit}
+          >
+            <Pencil className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             aria-label="Excluir refeição planejada"
             disabled={pending}
             onClick={onDelete}
@@ -514,7 +646,16 @@ function PlannedMealCard({
                 <div className="min-w-0">
                   <p className="truncate text-sm">
                     {item.customLabel ??
-                      (item.foodId ? (foodNames.get(item.foodId) ?? "Alimento removido do catálogo") : "Item")}
+                      (item.itemKind === "receita"
+                        ? (item.recipeId ? recipeNames.get(item.recipeId) : null) ?? "Receita removida"
+                        : item.foodId
+                          ? (foodNames.get(item.foodId) ?? "Alimento removido do catálogo")
+                          : "Item")}
+                    {item.itemKind === "receita" && (
+                      <Badge variant="secondary" className="ms-2 text-[10px]">
+                        Receita
+                      </Badge>
+                    )}
                     {item.isOptional && (
                       <Badge variant="outline" className="ms-2 text-[10px]">
                         Opcional
@@ -542,10 +683,16 @@ function PlannedMealCard({
           </ul>
         )}
 
-        <Button variant="outline" size="sm" onClick={onAddItem} disabled={pending}>
-          <Plus className="size-4" />
-          Item
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={onAddItem} disabled={pending}>
+            <Plus className="size-4" />
+            Alimento
+          </Button>
+          <Button variant="outline" size="sm" onClick={onAddRecipe} disabled={pending}>
+            <ChefHat className="size-4" />
+            Receita
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -624,11 +771,13 @@ function ModelsView({
   pending,
   onApply,
   onCreate,
+  onEditDays,
 }: {
   plans: NutritionPlan[];
   pending: boolean;
   onApply: (plan: NutritionPlan) => void;
   onCreate: () => void;
+  onEditDays: (plan: NutritionPlan) => void;
 }) {
   if (plans.length === 0) {
     return (
@@ -693,15 +842,21 @@ function ModelsView({
                 </ul>
               )}
 
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={pending || plan.days.length === 0}
-                onClick={() => onApply(plan)}
-              >
-                <CalendarRange className="size-4" />
-                Aplicar a um período
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" disabled={pending} onClick={() => onEditDays(plan)}>
+                  <Pencil className="size-4" />
+                  Montar dias
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pending || plan.days.length === 0}
+                  onClick={() => onApply(plan)}
+                >
+                  <CalendarRange className="size-4" />
+                  Aplicar a um período
+                </Button>
+              </div>
               {plan.days.length === 0 && (
                 <p className="text-[11px] text-muted-foreground">
                   Monte os dias do modelo antes de aplicá-lo.
@@ -818,11 +973,15 @@ function NewPlannedMealDialog({
 function ScopeDialog({
   target,
   hoje,
+  patch,
+  onPatchChange,
   onOpenChange,
   onConfirm,
 }: {
-  target: { meal: PlannedMeal; action: "excluir" } | null;
+  target: { meal: PlannedMeal; action: "excluir" | "editar" } | null;
   hoje: string;
+  patch: { time: string; title: string };
+  onPatchChange: (patch: { time: string; title: string }) => void;
   onOpenChange: (open: boolean) => void;
   onConfirm: (scope: PlanEditScope) => Promise<void>;
 }) {
@@ -837,18 +996,43 @@ function ScopeDialog({
   }
 
   const isSeries = Boolean(target?.meal.planDayId);
+  const isEdit = target?.action === "editar";
 
   return (
     <Dialog open={target !== null} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Excluir refeição planejada</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Editar refeição planejada" : "Excluir refeição planejada"}
+          </DialogTitle>
           <DialogDescription>
             {isSeries
-              ? "Esta refeição veio de um modelo. Escolha até onde a exclusão deve chegar — datas passadas nunca são alteradas."
-              : "Esta refeição é avulsa, então só ela será excluída."}
+              ? `Esta refeição veio de um modelo. Escolha até onde ${isEdit ? "a alteração" : "a exclusão"} deve chegar — datas passadas nunca são alteradas.`
+              : `Esta refeição é avulsa, então só ela será ${isEdit ? "alterada" : "excluída"}.`}
           </DialogDescription>
         </DialogHeader>
+
+        {isEdit && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="scope-time">Horário previsto</Label>
+              <Input
+                id="scope-time"
+                type="time"
+                value={patch.time}
+                onChange={(event) => onPatchChange({ ...patch, time: event.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="scope-title">Título (opcional)</Label>
+              <Input
+                id="scope-title"
+                value={patch.title}
+                onChange={(event) => onPatchChange({ ...patch, title: event.target.value })}
+              />
+            </div>
+          </div>
+        )}
 
         {isSeries && (
           <div className="space-y-2">
@@ -889,7 +1073,7 @@ function ScopeDialog({
             Cancelar
           </Button>
           <Button
-            variant="destructive"
+            variant={isEdit ? "default" : "destructive"}
             disabled={saving}
             onClick={async () => {
               setSaving(true);
@@ -897,7 +1081,7 @@ function ScopeDialog({
               setSaving(false);
             }}
           >
-            {saving ? "Excluindo…" : "Excluir"}
+            {saving ? (isEdit ? "Salvando…" : "Excluindo…") : isEdit ? "Salvar" : "Excluir"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1224,5 +1408,328 @@ function CopyDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ═══════════════════════════ Montar os dias do modelo ═══════════════════════════ */
+
+/**
+ * Pendência da 16-B fechada na 16-C: até aqui o modelo de semana podia ser CRIADO e APLICADO,
+ * mas os seus dias só existiam se fossem inseridos direto no banco.
+ *
+ * Um dia do modelo NÃO tem data — ele é a receita da semana ("toda segunda-feira"). Aplicar o
+ * modelo materializa esses dias em datas concretas, e a partir daí as duas coisas são
+ * independentes: editar o modelo depois não reescreve o que já foi planejado.
+ */
+function ModelDaysSheet({
+  plan,
+  mealTypes,
+  foodNames,
+  recipeNames,
+  pending,
+  onOpenChange,
+  onRun,
+  onAddFood,
+  onAddRecipe,
+}: {
+  plan: NutritionPlan | null;
+  mealTypes: MealType[];
+  foodNames: Map<string, string>;
+  recipeNames: Map<string, string>;
+  pending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onRun: (action: () => Promise<{ ok: boolean; error?: string }>, success: string) => void;
+  onAddFood: (mealId: string) => void;
+  onAddRecipe: (mealId: string) => void;
+}) {
+  const [weekIndex, setWeekIndex] = React.useState(0);
+
+  const seen = plan?.id ?? null;
+  const [lastSeen, setLastSeen] = React.useState(seen);
+  if (seen !== lastSeen) {
+    setLastSeen(seen);
+    setWeekIndex(0);
+  }
+
+  if (!plan) return null;
+
+  const daysOfWeek = plan.days.filter((day) => day.weekIndex === weekIndex);
+  const dayByWeekday = new Map(daysOfWeek.map((day) => [day.weekday, day]));
+  const activeTypes = mealTypes.filter((type) => type.isActive);
+
+  return (
+    <Sheet open={plan !== null} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+        <SheetHeader>
+          <SheetTitle className="pr-6 text-left">Dias de “{plan.name}”</SheetTitle>
+        </SheetHeader>
+
+        <div className="space-y-4 px-4 pb-8">
+          <p className="text-xs text-muted-foreground">
+            Um dia do modelo não tem data: ele descreve o que você come naquele dia da semana.
+            Aplicar o modelo cria refeições com data concreta, e elas ficam independentes daqui.
+          </p>
+
+          {plan.cycleWeeks > 1 && (
+            <div className="flex rounded-lg border p-0.5">
+              {Array.from({ length: plan.cycleWeeks }, (_, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => setWeekIndex(index)}
+                  className={cn(
+                    "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                    weekIndex === index
+                      ? "bg-primary/10 text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Semana {index + 1}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {/* Domingo(0) … sábado(6), na ordem da semana brasileira começando na segunda. */}
+            {[1, 2, 3, 4, 5, 6, 0].map((weekday) => {
+              const day = dayByWeekday.get(weekday);
+              return (
+                <Card key={weekday}>
+                  <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                    <CardTitle className="text-sm">{WEEKDAY_SHORT_LABELS[weekday]}</CardTitle>
+                    {day ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => {
+                          if (
+                            !confirm(
+                              "Remover este dia do modelo? As refeições já materializadas em datas concretas continuam onde estão.",
+                            )
+                          ) {
+                            return;
+                          }
+                          onRun(() => deletePlanDay(day.id), "Dia removido do modelo.");
+                        }}
+                      >
+                        <Trash2 className="size-3.5" />
+                        Remover
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() =>
+                          onRun(
+                            () =>
+                              savePlanDay({
+                                plan_id: plan.id,
+                                week_index: weekIndex,
+                                weekday,
+                              }),
+                            "Dia adicionado ao modelo.",
+                          )
+                        }
+                      >
+                        <Plus className="size-3.5" />
+                        Usar este dia
+                      </Button>
+                    )}
+                  </CardHeader>
+
+                  {day && (
+                    <CardContent className="space-y-2">
+                      {day.meals.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Nenhuma refeição neste dia do modelo.
+                        </p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {sortMealsByTime(day.meals).map((meal) => (
+                            <li key={meal.id} className="rounded-lg border p-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="min-w-0 truncate text-sm">
+                                  {meal.mealTypeIcon && <span aria-hidden>{meal.mealTypeIcon} </span>}
+                                  {meal.title || meal.mealTypeName}
+                                  {meal.plannedTime && (
+                                    <span className="ms-1.5 text-xs text-muted-foreground">
+                                      {shortTime(meal.plannedTime)}
+                                    </span>
+                                  )}
+                                </p>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-7 shrink-0"
+                                  aria-label="Excluir refeição do modelo"
+                                  disabled={pending}
+                                  onClick={() =>
+                                    onRun(
+                                      () =>
+                                        deletePlannedMealInScope({
+                                          planned_meal_id: meal.id,
+                                          scope: "todo_o_modelo",
+                                        }),
+                                      "Refeição removida do modelo.",
+                                    )
+                                  }
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              </div>
+
+                              {meal.items.length > 0 && (
+                                <ul className="mt-1 space-y-0.5">
+                                  {meal.items.map((item) => (
+                                    <li
+                                      key={item.id}
+                                      className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+                                    >
+                                      <span className="min-w-0 truncate">
+                                        {item.customLabel ??
+                                          (item.itemKind === "receita"
+                                            ? (item.recipeId ? recipeNames.get(item.recipeId) : null) ??
+                                              "Receita removida"
+                                            : item.foodId
+                                              ? (foodNames.get(item.foodId) ?? "Alimento removido")
+                                              : "Item")}
+                                        {item.quantity !== null &&
+                                          ` — ${item.quantity.toLocaleString("pt-BR")}${item.measureLabel ? ` × ${item.measureLabel}` : ""}`}
+                                      </span>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-6 shrink-0"
+                                        aria-label="Remover item"
+                                        disabled={pending}
+                                        onClick={() =>
+                                          onRun(
+                                            () => deletePlannedMealItem(item.id),
+                                            "Item removido.",
+                                          )
+                                        }
+                                      >
+                                        <Trash2 className="size-3" />
+                                      </Button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  disabled={pending}
+                                  onClick={() => onAddFood(meal.id)}
+                                >
+                                  <Plus className="size-3.5" />
+                                  Alimento
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  disabled={pending}
+                                  onClick={() => onAddRecipe(meal.id)}
+                                >
+                                  <ChefHat className="size-3.5" />
+                                  Receita
+                                </Button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <AddModelMealForm
+                        mealTypes={activeTypes}
+                        pending={pending}
+                        onAdd={(mealTypeId, time) =>
+                          onRun(
+                            () =>
+                              savePlannedMeal({
+                                plan_id: plan.id,
+                                plan_day_id: day.id,
+                                meal_type_id: mealTypeId,
+                                planned_time: time || null,
+                              }),
+                            "Refeição adicionada ao modelo.",
+                          )
+                        }
+                      />
+                    </CardContent>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/** Linha compacta para acrescentar uma refeição a um dia do modelo. */
+function AddModelMealForm({
+  mealTypes,
+  pending,
+  onAdd,
+}: {
+  mealTypes: MealType[];
+  pending: boolean;
+  onAdd: (mealTypeId: string, time: string) => void;
+}) {
+  const [mealTypeId, setMealTypeId] = React.useState(mealTypes[0]?.id ?? "");
+  const [time, setTime] = React.useState(
+    mealTypes[0]?.defaultTime ? mealTypes[0].defaultTime.slice(0, 5) : "",
+  );
+
+  return (
+    <div className="flex flex-wrap items-end gap-2 border-t pt-2">
+      <div className="min-w-[9rem] flex-1 space-y-1">
+        <Label className="text-[11px]">Refeição</Label>
+        <select
+          value={mealTypeId}
+          onChange={(event) => {
+            setMealTypeId(event.target.value);
+            const type = mealTypes.find((t) => t.id === event.target.value);
+            setTime(type?.defaultTime ? type.defaultTime.slice(0, 5) : "");
+          }}
+          aria-label="Tipo de refeição"
+          className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {mealTypes.map((type) => (
+            <option key={type.id} value={type.id}>
+              {type.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="w-24 space-y-1">
+        <Label className="text-[11px]">Horário</Label>
+        <Input
+          type="time"
+          value={time}
+          onChange={(event) => setTime(event.target.value)}
+          aria-label="Horário previsto"
+          className="h-8 text-xs"
+        />
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-8"
+        disabled={pending || !mealTypeId}
+        onClick={() => onAdd(mealTypeId, time)}
+      >
+        <Plus className="size-3.5" />
+        Refeição
+      </Button>
+    </div>
   );
 }

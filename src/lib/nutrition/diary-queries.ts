@@ -18,13 +18,16 @@ import {
   asBaseUnit,
   asChangeKind,
   asDayKind,
+  asDiaryEntryKind,
   asGoalType,
   asMealStatus,
   asMethod,
   asActivityLevel,
   asGoalDirection,
+  asPortionUnit,
   asPreparationState,
   asProfileSex,
+  asTemplateItemKind,
   asValueState,
   DEFAULT_MEAL_TYPES,
 } from "./constants";
@@ -183,12 +186,14 @@ export async function getGoalPeriods(): Promise<GoalPeriod[]> {
 /* ═══════════════════════════ Diário ═══════════════════════════ */
 
 const ENTRY_SELECT =
-  "id,diary_meal_id,food_id,entry_kind,planned_item_id,change_kind,changed_at,food_name_snapshot,preparation_state_snapshot,brand_snapshot,quantity,measure_label,grams_equivalent,base_quantity,base_unit,source_id_snapshot,source_name_snapshot,source_version_snapshot,source_food_code_snapshot,nutrients_snapshot,energy_kcal,protein_g,carb_g,fat_g,fiber_g,notes,position";
+  "id,diary_meal_id,food_id,recipe_id,meal_template_id,entry_kind,planned_item_id,change_kind,changed_at,food_name_snapshot,preparation_state_snapshot,brand_snapshot,quantity,measure_label,grams_equivalent,base_quantity,base_unit,source_id_snapshot,source_name_snapshot,source_version_snapshot,source_food_code_snapshot,nutrients_snapshot,energy_kcal,protein_g,carb_g,fat_g,fiber_g,notes,position";
 
 type EntryRow = {
   id: string;
   diary_meal_id: string;
   food_id: string | null;
+  recipe_id: string | null;
+  meal_template_id: string | null;
   entry_kind: string;
   planned_item_id: string | null;
   change_kind: string;
@@ -220,7 +225,9 @@ function mapEntry(row: EntryRow): DiaryEntry {
     id: row.id,
     diaryMealId: row.diary_meal_id,
     foodId: row.food_id,
-    entryKind: row.entry_kind === "livre" ? "livre" : "alimento",
+    recipeId: row.recipe_id,
+    mealTemplateId: row.meal_template_id,
+    entryKind: asDiaryEntryKind(row.entry_kind),
     plannedItemId: row.planned_item_id,
     changeKind: asChangeKind(row.change_kind),
     changedAt: row.changed_at,
@@ -233,9 +240,11 @@ function mapEntry(row: EntryRow): DiaryEntry {
     // preenchimento estrutural — ele nunca é somado, porque `nutrientsSnapshot` está vazio.
     quantity: num(row.quantity) ?? 0,
     measureLabel: row.measure_label,
-    gramsEquivalent: num(row.grams_equivalent) ?? 0,
-    baseQuantity: num(row.base_quantity) ?? 100,
-    baseUnit: asBaseUnit(row.base_unit),
+    // NULO é preservado: uma receita registrada em porções sem peso final não tem equivalente
+    // em gramas, e um 0 aqui afirmaria que a porção não pesa nada (16-C).
+    gramsEquivalent: num(row.grams_equivalent),
+    baseQuantity: num(row.base_quantity),
+    baseUnit: row.base_unit ? asBaseUnit(row.base_unit) : null,
     sourceIdSnapshot: row.source_id_snapshot,
     sourceNameSnapshot: row.source_name_snapshot,
     sourceVersionSnapshot: row.source_version_snapshot,
@@ -318,7 +327,7 @@ export async function getDiaryMeals(from: string, to: string): Promise<DiaryMeal
 const PLANNED_MEAL_SELECT =
   "id,plan_id,plan_day_id,planned_date,meal_type_id,planned_time,title,notes,position";
 const PLANNED_ITEM_SELECT =
-  "id,planned_meal_id,food_id,custom_label,quantity,measure_id,measure_label,is_optional,notes,position";
+  "id,planned_meal_id,item_kind,food_id,recipe_id,meal_template_id,custom_label,quantity,measure_id,measure_label,portion_unit,is_optional,notes,position";
 
 type PlannedMealRow = {
   id: string;
@@ -353,11 +362,15 @@ async function attachItems(
     const item: PlannedMealItem = {
       id: row.id,
       plannedMealId: row.planned_meal_id,
+      itemKind: asTemplateItemKind(row.item_kind),
       foodId: row.food_id,
+      recipeId: row.recipe_id,
+      mealTemplateId: row.meal_template_id,
       customLabel: row.custom_label,
       quantity: num(row.quantity),
       measureId: row.measure_id,
       measureLabel: row.measure_label,
+      portionUnit: asPortionUnit(row.portion_unit),
       isOptional: row.is_optional,
       notes: row.notes,
       position: row.position,
