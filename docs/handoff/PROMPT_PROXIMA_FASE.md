@@ -79,9 +79,15 @@ do arquivo que o próximo agente deve abrir.
 
 | Subfase | Linha para colar |
 | --- | --- |
-| 16-D | `Subfase 16-D — docs/phases/PHASE_16_D_NUTRITION_SHOPPING_LIST.md` ← **próxima** |
-| 16-E | `Subfase 16-E — docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` |
+| 16-D | ✅ concluída (`PHASE_16_D_NUTRITION_SHOPPING_LIST.md`) |
+| 16-E | `Subfase 16-E — docs/phases/PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md` ← **próxima** |
 | 16-F | `Subfase 16-F — docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` |
+
+> ⚠️ **A 16-E é onde as duas frentes se encontram.** As **medidas corporais são `body_*`**, um
+> módulo central compartilhado: quem chegar primeiro (16-E ou 17-E) **cria**, o outro
+> **consome** — nunca duas tabelas de peso corporal. E as **fotos de evolução são o dado mais
+> sensível do módulo**: bucket privado, URL assinada de vida curta, policy por pasta
+> `{user_id}/…`, nunca URL pública.
 
 ### Fases do roadmap original (todas concluídas — referência histórica)
 
