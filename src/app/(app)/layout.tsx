@@ -1,5 +1,9 @@
 import { cookies } from "next/headers";
-import { AppShell, SIDEBAR_COOKIE } from "@/components/layout/app-shell";
+import {
+  AppShell,
+  SIDEBAR_COOKIE,
+  SIDEBAR_HIDDEN_COOKIE,
+} from "@/components/layout/app-shell";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getUnreadCount } from "@/lib/notifications/queries";
 import { getDisplayName } from "@/lib/settings/queries";
@@ -22,6 +26,7 @@ export default async function AppLayout({
     getDisplayName(),
   ]);
   const collapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "true";
+  const sidebarHidden = cookieStore.get(SIDEBAR_HIDDEN_COOKIE)?.value === "true";
 
   return (
     <AppShell
@@ -29,6 +34,7 @@ export default async function AppLayout({
       displayName={displayName}
       unreadCount={unreadCount}
       defaultCollapsed={collapsed}
+      defaultHidden={sidebarHidden}
     >
       {children}
     </AppShell>

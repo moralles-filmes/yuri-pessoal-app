@@ -294,7 +294,7 @@ export default async function TreinosPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Treinos"
             value={String(dashboard.metrics.sessionCount)}
@@ -534,7 +534,7 @@ export default async function TreinosPage() {
       </Card>
 
       {/* ═══ Catálogo e rotina ═══ */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Treinos-modelo"
           value={String(routines.workouts)}

@@ -107,6 +107,65 @@ desapareciam justamente durante o treino.
 
 ---
 
+---
+
+## 5. Segunda rodada — ícone do `StatCard` cortado e sidebar escondível
+
+### O ícone cortado
+
+Reportado com captura: nos dashboards de Treinos os ícones dos cards apareciam **cortados
+pela metade** na borda direita.
+
+Mesmo mecanismo do item 2, em outro lugar. O `StatCard` é um flex row `texto | ícone`, o
+ícone é `shrink-0` e o bloco de texto **não tinha `min-w-0`** — item de flex não encolhe
+abaixo do conteúdo. O texto empurrava o ícone para fora e o `overflow-hidden` do `Card` o
+aparava.
+
+Reproduzido no Chrome headless com o CSS real do projeto, variando só a largura do card:
+
+| largura do card | antes |
+| --- | --- |
+| 105px | ícone sumiu por completo |
+| 115px | sobrou uma lasca |
+| 130px | metade do ícone |
+| 150px+ | inteiro |
+
+Numa grade `lg:grid-cols-4` com a sidebar aberta em 1024px cada card fica com ~167px — e em
+janelas menores, bem menos. Daí o defeito aparecer num monitor grande.
+
+**`min-w-0` sozinho não bastou.** Ele impede o corte, mas aí o rótulo é que apanha: com
+`break-words` "Exercícios disponíveis" virava `Ex / er / cíc / ios / dis / po`. Trocar um
+defeito por outro.
+
+A saída foi **container query**: `@container` no Card e `@[13rem]:grid` no ícone. Quem decide
+mostrar o ícone é a largura **do card**, não a da viewport — media query não enxerga que um
+card numa grade de 4 colunas tem 115px num monitor de 1920. Abaixo de 13rem o ícone sai de
+cena e o rótulo fica legível; a partir daí ele volta. O ícone é decorativo (o rótulo ao lado
+já diz o que o número é), então sumir não custa informação.
+
+Complemento: as grades de 4 colunas de Treinos passaram de `lg:grid-cols-4` para
+`xl:grid-cols-4`. Entre 1024px e 1280px agora são 2 colunas largas em vez de 4 espremidas.
+
+O mesmo padrão foi corrigido no card destacado do dashboard financeiro.
+
+### Esconder e trazer de volta a sidebar
+
+Passam a existir **dois estados independentes**, ambos em cookie:
+
+| estado | cookie | controle |
+| --- | --- | --- |
+| `collapsed` — vira faixa de ícones | `yuri:sidebar-collapsed` | botão no rodapé da sidebar |
+| `hidden` — some por completo | `yuri:sidebar-hidden` | botão no Header |
+
+O controle de esconder mora no **Header** por um motivo prático: escondida, a sidebar não
+teria onde abrigar o botão de voltar.
+
+Escondida ela vira `w-0` + `overflow-hidden` em vez de desmontar, para a largura animar junto
+com o conteúdo — e recebe `aria-hidden` + `inert`, senão os links seguiriam tabuláveis dentro
+de uma coluna de largura zero.
+
+---
+
 ## Verificação
 
 `npm run test:run` (83 arquivos, 1.846 testes) · `npm run lint` · `npx tsc --noEmit` ·
