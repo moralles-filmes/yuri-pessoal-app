@@ -75,8 +75,16 @@ const refDaSessao = (id: string): ToolRef => ({
   rota: `/treinos/historico/${id}`,
 });
 
-/** As MESMAS opções que a tela usa. Sem isto, o número da IA e o da tela divergem. */
-const opcoesDe = (prefs: TrainingPreferences): MetricOptions => ({
+/**
+ * As MESMAS opções que a tela usa. Sem isto, o número da IA e o da tela divergem.
+ *
+ * ⚠️ O retorno é `Required<MetricOptions>`, não `MetricOptions`. Todo campo de `MetricOptions`
+ * é opcional, então com o tipo frouxo uma opção NOVA em `metrics.ts` passaria a existir para a
+ * tela e continuaria caindo no default aqui — sem erro de compilação, sem teste vermelho, e com
+ * a IA relatando um número diferente do que o usuário vê. Foi exatamente assim que
+ * `unilateralRule` divergiu. Com `Required`, acrescentar um campo lá quebra o `tsc` aqui.
+ */
+const opcoesDe = (prefs: TrainingPreferences): Required<MetricOptions> => ({
   includeWarmup: prefs.countWarmupInVolume,
   unilateralRule: prefs.unilateralVolumeRule,
 });
