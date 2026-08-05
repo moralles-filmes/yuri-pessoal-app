@@ -58,6 +58,15 @@ export type ToolDescriptor = {
   readonly timeoutMs: number;
   /** Teto de registros devolvidos. Zero não é "sem limite" — é incoerente. */
   readonly maxRecords: number;
+  /**
+   * Como se chamam os `itens` desta ferramenta, em pt-BR e no plural.
+   *
+   * Existe porque a poda do executor precisa NOMEAR o que cortou. "Mostrando 50 de 51
+   * registros" ao lado de `contagem: 1` faz o modelo entender "50 de 51 treinos" — e o que
+   * foi podado eram os exercícios de um treino só. Rótulo genérico em texto que o modelo lê
+   * vira número errado na resposta.
+   */
+  readonly itemLabel: string;
   readonly requiresConfirmation: boolean;
   readonly idempotent: boolean;
 };
@@ -108,6 +117,9 @@ export function emptyToolOutput(observacao: string): ToolOutput {
  */
 export function isToolDescriptorCoherent(tool: ToolDescriptor): boolean {
   if (tool.maxRecords < 1) return false;
+  // Sem rótulo, a mensagem de poda só saberia dizer "registros" — e a poda de exercícios de
+  // um treino viraria "50 de 51 treinos" na leitura do modelo.
+  if (tool.itemLabel.trim() === "") return false;
   if (tool.kind === "escrita") {
     return tool.requiresConfirmation && tool.risk >= 2;
   }

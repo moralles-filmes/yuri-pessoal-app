@@ -59,6 +59,18 @@ describe("integridade do registry (18-B)", () => {
     }
   });
 
+  /**
+   * O rótulo entra na mensagem de poda, que o MODELO lê. "Mostrando 50 de 51 registros" ao
+   * lado de `contagem: 1` vira "50 de 51 treinos" na resposta — quando o que foi podado eram
+   * os exercícios de um treino só. Rótulo genérico em texto que o modelo lê é número errado.
+   */
+  it("toda ferramenta nomeia os próprios itens, e nenhuma diz apenas 'registros'", () => {
+    for (const t of AI_TOOL_REGISTRY) {
+      expect(t.itemLabel.trim(), t.name).not.toBe("");
+      expect(t.itemLabel, t.name).not.toBe("registros");
+    }
+  });
+
   it("nenhuma descrição de ferramenta usa linguagem de prescrição ou de culpa", () => {
     const PROIBIDO = [
       "você deveria",

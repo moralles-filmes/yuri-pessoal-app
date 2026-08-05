@@ -39,6 +39,8 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     requiredPermission: "allow_training",
     timeoutMs: 8_000,
     maxRecords: 50,
+    // Os `itens` desta ferramenta são os EXERCÍCIOS de um treino só — não treinos.
+    itemLabel: "exercícios do treino",
     requiresConfirmation: false,
     idempotent: true,
   },
@@ -66,7 +68,10 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     allowedAgents: ["treinos"],
     requiredPermission: "allow_training",
     timeoutMs: 12_000,
+    // 200 é o teto de LISTA; quem manda de verdade num período longo é o orçamento de
+    // caracteres do bloco não confiável, aplicado no executor (`MAX_UNTRUSTED_CHARS`).
     maxRecords: 200,
+    itemLabel: "sessões de treino",
     requiresConfirmation: false,
     idempotent: true,
   },
@@ -94,6 +99,7 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     requiredPermission: "allow_training",
     timeoutMs: 8_000,
     maxRecords: 100,
+    itemLabel: "recordes",
     requiresConfirmation: false,
     idempotent: true,
   },

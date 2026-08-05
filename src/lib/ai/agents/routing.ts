@@ -70,8 +70,12 @@ const PALAVRAS: Record<string, readonly string[]> = {
  * caracteres combinantes literais: literais correm o risco de chegar corrompidos por
  * cópia/colagem entre editores e encodings, e o bug some no próprio código-fonte sem
  * lançar erro nenhum — a regex só deixa de casar.
+ *
+ * EXPORTADA porque o filtro por nome de exercício das ferramentas de Treinos precisa da
+ * mesma normalização: sem ela, "triceps" não casa "Tríceps" e a resposta afirma que não há
+ * recorde onde há. Duas normalizações diferentes dariam dois resultados para a mesma busca.
  */
-function normalizar(texto: string): string {
+export function normalizarTexto(texto: string): string {
   return texto
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -79,7 +83,7 @@ function normalizar(texto: string): string {
 }
 
 function moduloPeloTexto(texto: string): string | null {
-  const normal = normalizar(texto);
+  const normal = normalizarTexto(texto);
   for (const [modulo, palavras] of Object.entries(PALAVRAS)) {
     for (const palavra of palavras) {
       const regex = new RegExp(`(^|[^a-z0-9])${palavra}([^a-z0-9]|$)`);

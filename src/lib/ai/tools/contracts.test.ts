@@ -18,6 +18,7 @@ const LEITURA: ToolDescriptor = {
   requiredPermission: "allow_training",
   timeoutMs: 8000,
   maxRecords: 50,
+  itemLabel: "registros",
   requiresConfirmation: false,
   idempotent: true,
 };

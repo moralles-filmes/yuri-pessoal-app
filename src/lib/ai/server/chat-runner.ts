@@ -383,7 +383,12 @@ export async function* runChat(
           maxOutputTokens: alvo.model.outputCapTokens,
           timeoutMs: config.timeoutMs,
           abortSignal: signal,
-          // Registry VAZIO na 18-A: nenhuma definição é enviada ao provedor.
+          // ⚠️ O registry DEIXOU DE SER VAZIO na 18-B: um agente com allowlist (hoje,
+          // `treinos`) já manda definição ao provedor daqui. Mas o LAÇO DE FERRAMENTAS —
+          // executar a chamada e devolver o `tool-result` ao modelo — só chega na Task 10.
+          // Até lá, todo evento de tool call cai no ramo `UNEXPECTED_TOOL_CALL` abaixo e
+          // encerra o run como `failed`: `agentId: "treinos"` QUEBRA o chat. É por isso
+          // que esta branch não pode ser mesclada entre a Task 7 e a Task 10.
           tools: toolDefinitionsFor(agent.allowedTools),
         });
 

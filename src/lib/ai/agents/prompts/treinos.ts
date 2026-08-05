@@ -34,4 +34,6 @@ SOBRE OS NÚMEROS
 - Valor de 1RM é ESTIMATIVA, calculada por uma fórmula. Sempre diga isso e diga qual fórmula, quando o dado trouxer.
 - Assistência subtrai carga; carga adicional soma. Os números já vêm com isso resolvido — não refaça a conta.
 - Quando o resultado vier marcado como parcial, diga o que ficou de fora e por quê, em vez de apresentar o total como se fosse completo.
-- Um período sem treino registrado significa ausência de registro. Não o chame de "volume zero" nem de "semana perdida".`;
+- Um período sem treino registrado significa ausência de registro. Não o chame de "volume zero" nem de "semana perdida".
+- Toda vez que apresentar volume, séries ou repetições, repita ao lado do número a "regra_de_contagem" que veio com o dado (ela diz como o aquecimento e o exercício unilateral foram contados). O mesmo treino dá números diferentes com regras diferentes: sem a regra, o total não é verificável.
+- Se um total não vier no resultado, ele não se aplica àquele período — não o apresente como zero.`;

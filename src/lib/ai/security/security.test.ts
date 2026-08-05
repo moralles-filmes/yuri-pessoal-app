@@ -132,6 +132,60 @@ describe("18-B. argumento de ferramenta sanitizado para o banco", () => {
     expect(() => sanitizedJson(ciclico)).not.toThrow();
     expect(typeof sanitizedJson(ciclico)).toBe("object");
   });
+
+  /**
+   * ⚠️ `saida["__proto__"] = valor` NÃO cria propriedade: dispara o setter de
+   * `Object.prototype` e a chave DESAPARECE do resultado. Numa auditoria de argumento vindo
+   * do modelo, é justamente a chave que mais interessa que sumiria — sem erro, sem log, sem
+   * nada. `JSON.parse` cria `__proto__` como propriedade PRÓPRIA, então este caso chega
+   * mesmo: basta o provedor devolver esse JSON.
+   */
+  it("a chave __proto__ SOBREVIVE à sanitização em vez de sumir", () => {
+    const doModelo = JSON.parse('{"__proto__":{"api_key":"sk-ant-api03-Segredo123456"},"dias":7}');
+
+    const saida = sanitizedJson(doModelo);
+    const cru = JSON.stringify(saida);
+
+    expect(Object.keys(saida)).toContain("__proto__");
+    expect(saida.dias).toBe(7);
+    expect(cru).not.toContain("Segredo123456");
+    // E o protótipo global continua intacto: nada foi poluído no caminho.
+    expect(({} as Record<string, unknown>).api_key).toBeUndefined();
+  });
+
+  /**
+   * "Já visto" não é "está no caminho atual". Sem remover o nó ao sair dele, o MESMO objeto
+   * em dois ramos — sem ciclo nenhum — virava "[não serializável]" no segundo. O que precisa
+   * ser barrado é o ciclo, não a repetição.
+   */
+  it("o mesmo objeto em dois ramos aparece nos dois — só ciclo é barrado", () => {
+    const repetido = { exercicio: "supino" };
+
+    const saida = sanitizedJson({ p: repetido, q: repetido });
+
+    expect(saida).toEqual({ p: { exercicio: "supino" }, q: { exercicio: "supino" } });
+  });
+
+  /**
+   * A âncora de ponta a ponta deixava passar os nomes REAIS de campo de credencial:
+   * `x-api-key` é o cabeçalho da Anthropic, `access_token` o do OAuth, `client_secret` o do
+   * Google, e `pwd` é abreviação corriqueira.
+   */
+  it("nome de campo composto também é reconhecido como sensível", () => {
+    const saida = sanitizedJson({
+      "x-api-key": "sk-ant-api03-Um",
+      access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9Dois",
+      client_secret: "GOCSPX-Tres",
+      pwd: "Quatro",
+      exercicio: "supino",
+    });
+    const cru = JSON.stringify(saida);
+
+    for (const valor of ["sk-ant-api03-Um", "Dois", "GOCSPX-Tres", "Quatro"]) {
+      expect(cru, valor).not.toContain(valor);
+    }
+    expect(cru).toContain("supino");
+  });
 });
 
 describe("73/76. dado externo é DADO, nunca instrução", () => {

@@ -14,18 +14,31 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MetricSession, MetricSet } from "@/lib/training/metrics";
 import type { PersonalRecord } from "@/lib/training/history-queries";
+import { DEFAULT_TRAINING_PREFERENCES, type TrainingPreferences } from "@/lib/training/types";
 import { diffDaysIso } from "@/lib/training/schedule";
 
 let historicoFalso: MetricSession[] = [];
 let recordesFalsos: PersonalRecord[] = [];
-let ultimaFaixa: { from?: string | null; to?: string | null; limit?: number } | null = null;
+let ultimaFaixa: {
+  from?: string | null;
+  to?: string | null;
+  days?: number;
+  limit?: number;
+} | null = null;
+let prefsFalsas: TrainingPreferences = DEFAULT_TRAINING_PREFERENCES;
 
 vi.mock("@/lib/training/history-queries", () => ({
-  getSessionHistory: async (range: { from?: string; to?: string; limit?: number } = {}) => {
+  getSessionHistory: async (
+    range: { from?: string; to?: string; days?: number; limit?: number } = {},
+  ) => {
     ultimaFaixa = range;
     return range.limit ? historicoFalso.slice(0, range.limit) : historicoFalso;
   },
   getPersonalRecords: async () => recordesFalsos,
+}));
+
+vi.mock("@/lib/training/queries", () => ({
+  getTrainingPreferences: async () => prefsFalsas,
 }));
 
 const { getLastWorkout, getVolume, getRecords } = await import("./training");
@@ -139,6 +152,108 @@ const SESSAO_C: MetricSession = {
   ],
 };
 
+/**
+ * SESSÃO D — 05/08, peso corporal 80 kg. Existe para SEPARAR as duas preferências, uma de
+ * cada vez. Os padrões do banco coincidem com os do código — é por isso que o defeito de
+ * ignorar `MetricOptions` passou por toda a suíte anterior sem falhar nenhuma vez.
+ *
+ *   Rosca unilateral (peso_reps, unilateral_alternado, Bíceps): 1 × 10 reps × 30 kg
+ *     · soma_dos_lados (padrão): 1 série · 20 reps · 30×10×2 = 600 kg
+ *     · serie_completa:          1 série · 10 reps · 30×10×1 = 300 kg
+ *   Supino reto (peso_reps, bilateral, Peito): aquecimento 10 × 20 kg + trabalho 10 × 60 kg
+ *     · aquecimento fora (padrão): 1 série · 10 reps ·             600 kg
+ *     · aquecimento incluído:      2 séries · 20 reps · 200 + 600 = 800 kg
+ *
+ *   PADRÃO:                1200 kg · 2 séries · 30 reps
+ *   serie_completa:         900 kg · 2 séries · 20 reps
+ *   aquecimento incluído:  1400 kg · 3 séries · 40 reps
+ */
+const SESSAO_D: MetricSession = {
+  id: "s4",
+  sessionDate: "2026-08-05",
+  status: "concluida",
+  workoutId: null,
+  workoutName: "Treino D",
+  programId: null,
+  programName: null,
+  bodyWeightKg: 80,
+  totalSeconds: 2400,
+  activeSeconds: 2000,
+  exercises: [
+    {
+      id: "s4-e1",
+      exerciseId: null,
+      exerciseName: "Rosca unilateral",
+      trackingType: "peso_reps",
+      laterality: "unilateral_alternado",
+      muscleGroup: "Bíceps",
+      countsInVolume: true,
+      sets: [serie(1, 10, 30)],
+    },
+    {
+      id: "s4-e2",
+      exerciseId: null,
+      exerciseName: "Supino reto",
+      trackingType: "peso_reps",
+      laterality: "bilateral",
+      muscleGroup: "Peito",
+      countsInVolume: true,
+      sets: [
+        { ...serie(1, 10, 20), setType: "aquecimento", isWarmup: true },
+        serie(2, 10, 60),
+      ],
+    },
+  ],
+};
+
+/**
+ * SESSÃO E — 06/08, treino de esteira. NENHUMA série acumula em kg.
+ *   Corrida (distancia_duracao): 5000 m em 1800 s
+ *   Bike (calorias): 250 kcal
+ * Volume em kg: NÃO SE APLICA — não é zero. É a invariante 21 da 17-E no agregado.
+ */
+const SESSAO_E: MetricSession = {
+  id: "s5",
+  sessionDate: "2026-08-06",
+  status: "concluida",
+  workoutId: null,
+  workoutName: "Cardio",
+  programId: null,
+  programName: null,
+  bodyWeightKg: 80,
+  totalSeconds: 2000,
+  activeSeconds: 1900,
+  exercises: [
+    {
+      id: "s5-e1",
+      exerciseId: null,
+      exerciseName: "Corrida na esteira",
+      trackingType: "distancia_duracao",
+      laterality: "bilateral",
+      muscleGroup: "Pernas",
+      countsInVolume: true,
+      sets: [
+        {
+          ...serie(1, 0, null),
+          reps: null,
+          distanceM: 5000,
+          durationSeconds: 1800,
+        },
+      ],
+    },
+    {
+      id: "s5-e2",
+      exerciseId: null,
+      exerciseName: "Bicicleta ergométrica",
+      trackingType: "calorias",
+      laterality: "bilateral",
+      muscleGroup: "Pernas",
+      countsInVolume: true,
+      sets: [{ ...serie(1, 0, null), reps: null, calories: 250 }],
+    },
+  ],
+};
+
 function recorde(over: Partial<PersonalRecord>): PersonalRecord {
   return {
     id: "r1",
@@ -168,6 +283,7 @@ beforeEach(() => {
   historicoFalso = [];
   recordesFalsos = [];
   ultimaFaixa = null;
+  prefsFalsas = DEFAULT_TRAINING_PREFERENCES;
 });
 
 /* ═══════════════════════════ Último treino ═══════════════════════════ */
@@ -386,5 +502,173 @@ describe("training.get_records", () => {
     const saida = await getRecords({});
 
     expect(saida.refs).toEqual([]);
+  });
+
+  // O nome do exercício vem do catálogo COM acento; o modelo repete o que o usuário digitou,
+  // e usuário digita sem acento. Sem normalizar, a ferramenta afirmaria que não há recorde de
+  // tríceps para quem tem — pior que não responder.
+  it("o filtro ignora acento: 'triceps' encontra 'Tríceps testa'", async () => {
+    recordesFalsos = [recorde({ id: "r4", exerciseName: "Tríceps testa" })];
+
+    const saida = await getRecords({ exercicio: "triceps" });
+
+    expect(saida.contagem).toBe(1);
+    expect(saida.itens[0]).toMatchObject({ exercicio: "Tríceps testa" });
+  });
+});
+
+/* ═══════════════════════════ As preferências do usuário ═══════════════════════════
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ O NÚMERO DA IA TEM DE ACOMPANHAR A PREFERÊNCIA, COMO O DA TELA ACOMPANHA.             ║
+ * ║                                                                                       ║
+ * ║ Estes testes exercitam preferência NÃO PADRÃO. Com os padrões, um adapter que ignora  ║
+ * ║ `MetricOptions` dá exatamente o mesmo resultado de um que as respeita — e foi assim    ║
+ * ║ que o defeito atravessou a suíte inteira. Os totais continuam literais calculados à    ║
+ * ║ mão no comentário da SESSÃO D.                                                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+
+const COM_SERIE_COMPLETA: TrainingPreferences = {
+  ...DEFAULT_TRAINING_PREFERENCES,
+  unilateralVolumeRule: "serie_completa",
+};
+
+const COM_AQUECIMENTO: TrainingPreferences = {
+  ...DEFAULT_TRAINING_PREFERENCES,
+  countWarmupInVolume: true,
+};
+
+describe("as ferramentas usam as MESMAS opções de métrica que a tela", () => {
+  it("padrão do sistema: 1200 kg, 2 séries, 30 repetições", async () => {
+    historicoFalso = [SESSAO_D];
+
+    const saida = await getLastWorkout();
+
+    expect(saida.agregados.volume_kg).toBe(1200);
+    expect(saida.agregados.series).toBe(2);
+    expect(saida.agregados.repeticoes).toBe(30);
+  });
+
+  it("regra unilateral 'serie_completa' derruba o volume para 900 kg — não são 1200", async () => {
+    historicoFalso = [SESSAO_D];
+    prefsFalsas = COM_SERIE_COMPLETA;
+
+    const saida = await getLastWorkout();
+
+    expect(saida.agregados.volume_kg).toBe(900);
+    expect(saida.agregados.repeticoes).toBe(20);
+    expect(saida.agregados.series).toBe(2);
+  });
+
+  it("contar aquecimento no volume sobe para 1400 kg e para 3 séries", async () => {
+    historicoFalso = [SESSAO_D];
+    prefsFalsas = COM_AQUECIMENTO;
+
+    const saida = await getLastWorkout();
+
+    expect(saida.agregados.volume_kg).toBe(1400);
+    expect(saida.agregados.series).toBe(3);
+    expect(saida.agregados.series_de_aquecimento).toBe(1);
+    expect(saida.agregados.repeticoes).toBe(40);
+  });
+
+  it("o período agregado obedece à preferência tanto quanto o treino isolado", async () => {
+    historicoFalso = [SESSAO_D];
+    prefsFalsas = COM_SERIE_COMPLETA;
+
+    const saida = await getVolume({ dias: 7 });
+
+    expect(saida.agregados.volume_kg).toBe(900);
+    expect(saida.agregados.volume_por_grupo_muscular).toEqual({ Bíceps: 300, Peito: 600 });
+  });
+
+  // Invariante 12 da Fase 17: a regra de contagem aparece AO LADO do número. Sem ela, 900 e
+  // 1200 são o mesmo treino e nenhum dos dois é verificável.
+  it("a REGRA DE CONTAGEM viaja junto do número, e muda com a preferência", async () => {
+    historicoFalso = [SESSAO_D];
+
+    const padrao = await getLastWorkout();
+    expect(padrao.agregados.regra_de_contagem).toBe(
+      "Somar os dois lados numa série · aquecimento fora do volume",
+    );
+
+    prefsFalsas = COM_SERIE_COMPLETA;
+    const completa = await getLastWorkout();
+    expect(completa.agregados.regra_de_contagem).toBe(
+      "Contar a série completa uma vez · aquecimento fora do volume",
+    );
+
+    prefsFalsas = COM_AQUECIMENTO;
+    const comAquecimento = await getVolume({ dias: 7 });
+    expect(comAquecimento.agregados.regra_de_contagem).toBe(
+      "Somar os dois lados numa série · aquecimento incluído do volume",
+    );
+  });
+});
+
+/* ═══════════════════════ Ausência de dado não é zero (no agregado) ═══════════════════════ */
+
+describe("nenhum total é apresentado como zero quando a unidade não se aplica", () => {
+  it("treino só de cardio NÃO relata volume_kg — relata distância e calorias", async () => {
+    historicoFalso = [SESSAO_E];
+
+    const saida = await getLastWorkout();
+
+    expect(saida.agregados.volume_kg).toBeUndefined();
+    expect(saida.agregados.distancia_m).toBe(5000);
+    expect(saida.agregados.calorias).toBe(250);
+    expect(saida.agregados.segundos_sob_tensao).toBe(1800);
+    expect(saida.agregados.unidades).toEqual(
+      expect.arrayContaining(["distancia", "calorias"]),
+    );
+  });
+
+  it("período só de cardio também não inventa volume zero", async () => {
+    historicoFalso = [SESSAO_E];
+
+    const saida = await getVolume({ dias: 7 });
+
+    expect(saida.agregados.volume_kg).toBeUndefined();
+    expect(saida.agregados.distancia_m).toBe(5000);
+  });
+
+  // A frase do "parcial" é a MESMA da tela (`partialExplanation`, 17-D). Um texto próprio
+  // aqui faria a IA explicar o parcial com outras palavras — divergência da mesma família
+  // que a das opções de métrica.
+  it("a ressalva do parcial é a frase do módulo, não um texto do adapter", async () => {
+    historicoFalso = [SESSAO_C];
+
+    const saida = await getLastWorkout();
+
+    expect(saida.completude).toBe("parcial");
+    expect(saida.motivo_incompleto).toContain("1 série");
+    expect(saida.motivo_incompleto).toContain("Registre o peso corporal");
+  });
+});
+
+/* ═══════════════════════ A janela do "último treino" ═══════════════════════ */
+
+describe("training.get_last_workout — a janela consultada", () => {
+  // `limit: 1` corta o RESULTADO, não a janela. Com os 365 dias padrão de
+  // `getSessionHistory`, quem parou de treinar há mais de um ano recebia "não há treino
+  // registrado" — afirmação falsa sobre o próprio registro.
+  it("procura MUITO além de um ano — 365 dias não é 'o histórico'", async () => {
+    historicoFalso = [SESSAO_A];
+
+    await getLastWorkout();
+
+    expect(ultimaFaixa?.limit).toBe(1);
+    expect(ultimaFaixa?.days ?? 0).toBeGreaterThanOrEqual(3650);
+  });
+
+  it("o caso vazio DECLARA a janela consultada, em vez de afirmar que nunca houve treino", async () => {
+    historicoFalso = [];
+
+    const saida = await getLastWorkout();
+
+    expect(saida.contagem).toBe(0);
+    expect(saida.observacao).toContain("janela consultada");
+    expect(saida.observacao).toContain("10 anos");
   });
 });

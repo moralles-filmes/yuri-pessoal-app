@@ -54,6 +54,13 @@ function especificadores(codigo: string): string[] {
  * `.from()` neste arquivo") — e a saída seria arrumar a documentação em vez do código.
  * Só bloco `/* … *\/` e linha que COMEÇA com `//` ou `*`: cortar `//` no meio da linha
  * mutilaria uma URL e poderia esconder uma chamada real depois dela.
+ *
+ * ⚠️ HONESTIDADE SOBRE O QUE ISTO É: uma varredura LÉXICA, não um parser. Um literal de
+ * string que contenha `/*` faz o corte de bloco engolir código real até o próximo `*\/`,
+ * e a partir daí uma chamada de banco passaria despercebida. Não vale escrever um parser
+ * de TypeScript aqui: a rede de baixo (`chamaBanco`) cobre também a forma indireta
+ * `supabase["from"](…)`, e a fronteira de verdade é o `no-restricted-imports` mais a
+ * revisão — este teste é a terceira camada, não a única.
  */
 function semComentarios(codigo: string): string {
   return codigo
@@ -61,6 +68,22 @@ function semComentarios(codigo: string): string {
     .split("\n")
     .filter((linha) => !/^\s*(\/\/|\*)/.test(linha))
     .join("\n");
+}
+
+/**
+ * Acesso ao banco em qualquer das duas formas. `supabase.from(...)` é a que se escreve;
+ * `supabase["from"](...)` é a que escapa de um grep ingênuo — e é justamente a que alguém
+ * usaria para contornar este teste.
+ */
+function chamaBanco(codigo: string): string[] {
+  const achados: string[] = [];
+  for (const metodo of ["from", "select"]) {
+    const ponto = new RegExp(`\\.${metodo}\\(`);
+    const colchete = new RegExp(`\\[\\s*["'\`]${metodo}["'\`]\\s*\\]`);
+    if (ponto.test(codigo)) achados.push(`.${metodo}(`);
+    else if (colchete.test(codigo)) achados.push(`["${metodo}"](`);
+  }
+  return achados;
 }
 
 const ehPacoteDeFornecedor = (spec: string) =>
@@ -171,9 +194,15 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
    * exceção. Um `import` de `@/lib/training/...` dentro de `chat-runner.ts`, de `core/` ou
    * de qualquer outro lugar continua sendo violação, porque seria uma leitura de dado do
    * usuário fora do Tool Registry, sem guard, sem teto e sem auditoria.
+   *
+   * `actions` está na lista pela metade de ESCRITA da mesma invariante — que é o escopo da
+   * 18-C. Sem ele, um `import { criarSessao } from "@/lib/actions/training"` dentro de
+   * `core/` passaria por tudo: escrita sem confirmação, sem `requiresConfirmation`, sem
+   * Approval Engine e sem linha em `ai_tool_calls`.
    */
-  it("query de módulo só é importada por tools/adapters/ — a única porta de leitura", () => {
+  it("query e action de módulo só são importadas por tools/adapters/ — a única porta", () => {
     const modulos = [
+      "actions",
       "finance",
       "todo",
       "tasks",
@@ -222,8 +251,9 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
       if (arquivo.endsWith(".test.ts")) continue;
       if (path.basename(arquivo) === "audit.ts") continue;
       const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
-      if (/\.from\(/.test(codigo)) violacoes.push(`${path.relative(SRC, arquivo)} → .from(`);
-      if (/\.select\(/.test(codigo)) violacoes.push(`${path.relative(SRC, arquivo)} → .select(`);
+      for (const achado of chamaBanco(codigo)) {
+        violacoes.push(`${path.relative(SRC, arquivo)} → ${achado}`);
+      }
     }
 
     expect(violacoes).toEqual([]);

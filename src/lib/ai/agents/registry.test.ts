@@ -31,7 +31,13 @@ import { isToolDescriptorCoherent } from "@/lib/ai/tools/contracts";
 describe("registry de agentes", () => {
   // Era "a 18-A tem UM agente". A 18-B acrescentou o especialista de Treinos; o que o teste
   // protegia — a lista é ESTÁTICA e fechada, e o Assistente Pessoal é o ponto de entrada —
-  // continua valendo e continua verificado.
+  // continua valendo. "Fechada" só é VERIFICADO se a lista esperada estiver escrita aqui:
+  // unicidade e formato de id passam igual com um agente novo entrando sem ninguém decidir.
+  // Acrescentar agente é, de propósito, uma edição deliberada deste teste.
+  it("a lista de agentes é fechada — exatamente estes, nesta ordem", () => {
+    expect(AI_AGENT_REGISTRY.map((a) => a.id)).toEqual([ASSISTENTE_PESSOAL_ID, "treinos"]);
+  });
+
   it("o Assistente Pessoal é o ponto de entrada, e cada agente tem id único", () => {
     expect(AI_AGENT_REGISTRY[0].id).toBe(ASSISTENTE_PESSOAL_ID);
     const ids = AI_AGENT_REGISTRY.map((a) => a.id);
@@ -198,6 +204,7 @@ describe("74. o Tool Registry é a única porta", () => {
         requiredPermission: "allow_finance",
         timeoutMs: 5000,
         maxRecords: 50,
+        itemLabel: "registros",
         requiresConfirmation: false,
         idempotent: true,
       }),
@@ -217,6 +224,7 @@ describe("74. o Tool Registry é a única porta", () => {
         requiredPermission: "allow_finance",
         timeoutMs: 5000,
         maxRecords: 50,
+        itemLabel: "registros",
         requiresConfirmation: false,
         idempotent: true,
       }),

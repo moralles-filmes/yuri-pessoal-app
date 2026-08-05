@@ -9,11 +9,17 @@
  * ║ A ORDEM DAS CHECAGENS NÃO É ESTILO:                                                    ║
  * ║  1. registry   — o nome existe?                                                        ║
  * ║  2. allowlist  — este agente pode ver esta ferramenta? (antes de tudo o mais, para a   ║
- * ║                  mensagem de erro não revelar nada sobre uma ferramenta que ele nem    ║
- * ║                  deveria saber que existe)                                             ║
+ * ║                  mensagem de erro não revelar se ela é de escrita nem se a flag do     ║
+ * ║                  usuário está ligada)                                                  ║
  * ║  3. coerência  — o descriptor faz sentido?                                             ║
  * ║  4. kind       — escrita continua indisponível na 18-B                                 ║
  * ║  5. permissão  — a flag `allow_*` do usuário está ligada?                              ║
+ * ║                                                                                       ║
+ * ║ A ORDEM SOZINHA NÃO BASTA. Ela decide QUAL motivo sai; o que chega ao modelo é o       ║
+ * ║ motivo PÚBLICO (`PUBLIC_REJECTION_CODE`), e "não existe" e "existe mas não é sua"      ║
+ * ║ saem com código e texto IDÊNTICOS. Com códigos distintos, bastava o modelo chamar      ║
+ * ║ nome por nome e comparar as respostas para mapear ferramentas de outros agentes. O     ║
+ * ║ motivo verdadeiro continua inteiro na auditoria, que é onde ele serve para algo.       ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
  * A validação Zod da ENTRADA não mora aqui: o schema Zod vive junto do adapter, que é
@@ -40,11 +46,14 @@ export type ToolRejectionReason =
  * O texto que volta AO MODELO como `tool-result` de erro. Ele é lido pelo modelo e pode
  * chegar ao usuário, então: pt-BR, sem jargão, sem nome de coluna, sem stack.
  */
+const INDISPONIVEL =
+  "Esta ferramenta não está disponível. Responda sem ela e diga o que não conseguiu consultar.";
+
 export const REJECTION_MESSAGE: Record<ToolRejectionReason, string> = {
-  TOOL_UNKNOWN:
-    "Esta ferramenta não existe. Responda sem ela e diga o que não conseguiu consultar.",
-  TOOL_NOT_ALLOWED_FOR_AGENT:
-    "Esta ferramenta não está disponível para o assistente atual. Responda sem ela.",
+  // ⚠️ MESMO TEXTO de propósito — ver o cabeçalho. Um texto diferente para "não existe" e
+  // para "existe e não é sua" é um oráculo: 20 chamadas mapeiam o registry inteiro.
+  TOOL_UNKNOWN: INDISPONIVEL,
+  TOOL_NOT_ALLOWED_FOR_AGENT: INDISPONIVEL,
   TOOL_INCOHERENT:
     "Esta ferramenta está indisponível por uma inconsistência de configuração. Responda sem ela.",
   TOOL_WRITE_DISABLED:
@@ -57,6 +66,25 @@ export const REJECTION_MESSAGE: Record<ToolRejectionReason, string> = {
     "A consulta demorou demais e foi interrompida. Diga que não conseguiu obter o dado.",
   TOOL_FAILED:
     "A consulta falhou. Diga que não conseguiu obter o dado — não estime um valor.",
+};
+
+/**
+ * O código que o MODELO vê. `TOOL_INDISPONIVEL` cobre os dois motivos que, juntos,
+ * revelariam a existência de uma ferramenta de outro agente. Os demais são informativos e
+ * ajudam o modelo a agir certo (revisar argumento, não repetir a chamada, apontar as
+ * preferências) sem contar nada que ele já não pudesse deduzir da própria chamada.
+ *
+ * A auditoria grava o `ToolRejectionReason` verdadeiro — nada se perde, só não vaza.
+ */
+export const PUBLIC_REJECTION_CODE: Record<ToolRejectionReason, string> = {
+  TOOL_UNKNOWN: "TOOL_INDISPONIVEL",
+  TOOL_NOT_ALLOWED_FOR_AGENT: "TOOL_INDISPONIVEL",
+  TOOL_INCOHERENT: "TOOL_INCOHERENT",
+  TOOL_WRITE_DISABLED: "TOOL_WRITE_DISABLED",
+  TOOL_PERMISSION_DENIED: "TOOL_PERMISSION_DENIED",
+  TOOL_INVALID_INPUT: "TOOL_INVALID_INPUT",
+  TOOL_TIMEOUT: "TOOL_TIMEOUT",
+  TOOL_FAILED: "TOOL_FAILED",
 };
 
 export type GuardInput = {

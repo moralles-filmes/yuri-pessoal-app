@@ -18,11 +18,33 @@ import "server-only";
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { sanitizedJson } from "@/lib/ai/security/redact";
+import { safeLogFields, sanitizedJson } from "@/lib/ai/security/redact";
+import { aiError } from "@/lib/ai/core/errors";
 import type { ToolRef } from "./contracts";
 import type { ToolRejectionReason } from "./guard";
 
 export type ToolCallStatus = "executada" | "rejeitada" | "falhou" | "timeout";
+
+/**
+ * ⚠️ **`supabase-js` NÃO LANÇA em erro de banco** — ele devolve `{ data: null, error }`.
+ *
+ * Ignorar o `error` (ou confiar num `try/catch` em volta) faz toda falha de auditoria
+ * desaparecer em silêncio: RLS negando a linha, coluna fora do CHECK, FK apontando para run
+ * de outro usuário — nada disso apareceria, e a trilha de auditoria ficaria incompleta sem
+ * ninguém saber. Auditoria que falha calada é pior que auditoria ausente, porque a tela de
+ * "Ver dados usados" continuaria parecendo completa.
+ *
+ * O log leva SÓ classe, código e correlação (`safeLogFields`): nunca a mensagem do banco,
+ * que traz nome de tabela, de coluna e às vezes valor de linha.
+ */
+function registrarFalha(code: string, correlationId: string, error: { code?: string } | null): void {
+  console.error("[ia][auditoria] falha ao gravar", {
+    ...safeLogFields(aiError("ERRO_TEMPORARIO", code), correlationId),
+    // O `code` do Postgres é um SQLSTATE de 5 caracteres (ex.: `42501`, `23505`). É o que
+    // permite distinguir RLS de violação de constraint sem carregar nenhum dado da linha.
+    sqlstate: error?.code ?? "desconhecido",
+  });
+}
 
 export async function startStep(input: {
   runId: string;
@@ -31,7 +53,7 @@ export async function startStep(input: {
   kind: "modelo" | "ferramentas";
 }): Promise<string | null> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("ai_run_steps")
     .insert({
       run_id: input.runId,
@@ -42,6 +64,7 @@ export async function startStep(input: {
     })
     .select("id")
     .single();
+  if (error) registrarFalha("AUDIT_STEP_INSERT_FAILED", input.runId, error);
   return data?.id ?? null;
 }
 
@@ -54,7 +77,7 @@ export async function closeStep(input: {
   const supabase = await createClient();
   // `.eq("status", "started")` não é redundante com a policy: é o que torna o fechamento
   // idempotente — reexecutar não reescreve um passo que já terminou.
-  await supabase
+  const { error } = await supabase
     .from("ai_run_steps")
     .update({
       status: input.status,
@@ -64,6 +87,7 @@ export async function closeStep(input: {
     .eq("id", input.stepId)
     .eq("user_id", input.userId)
     .eq("status", "started");
+  if (error) registrarFalha("AUDIT_STEP_CLOSE_FAILED", input.stepId, error);
 }
 
 export async function recordToolCall(input: {
@@ -81,7 +105,7 @@ export async function recordToolCall(input: {
   refs: readonly ToolRef[];
 }): Promise<void> {
   const supabase = await createClient();
-  await supabase.from("ai_tool_calls").insert({
+  const { error } = await supabase.from("ai_tool_calls").insert({
     run_id: input.runId,
     user_id: input.userId,
     step_id: input.stepId,
@@ -96,4 +120,5 @@ export async function recordToolCall(input: {
     duration_ms: Math.max(0, input.durationMs),
     refs: [...input.refs],
   });
+  if (error) registrarFalha("AUDIT_TOOL_CALL_INSERT_FAILED", input.runId, error);
 }

@@ -11,10 +11,19 @@ import "server-only";
  */
 
 import { AI_TOOL_REGISTRY } from "./registry";
-import { guardToolCall, REJECTION_MESSAGE, type ToolRejectionReason } from "./guard";
+import {
+  guardToolCall,
+  PUBLIC_REJECTION_CODE,
+  REJECTION_MESSAGE,
+  type ToolRejectionReason,
+} from "./guard";
 import { TOOL_EXECUTORS } from "./executors";
-import { wrapUntrusted, type UntrustedBlock } from "@/lib/ai/security/untrusted";
-import type { ToolPermission, ToolOutput } from "./contracts";
+import {
+  MAX_UNTRUSTED_CHARS,
+  wrapUntrusted,
+  type UntrustedBlock,
+} from "@/lib/ai/security/untrusted";
+import type { ToolDescriptor, ToolPermission, ToolOutput } from "./contracts";
 import { recordToolCall, type ToolCallStatus } from "./audit";
 
 export type ToolCallRequest = {
@@ -41,8 +50,12 @@ export type ToolExecution = {
 };
 
 /**
- * O erro que volta ao modelo carrega o CÓDIGO e a nossa mensagem — nunca o texto do erro
- * original. Mensagem de banco traz nome de tabela, de coluna e às vezes valor de linha.
+ * O erro que volta ao modelo carrega o código PÚBLICO e a nossa mensagem — nunca o texto do
+ * erro original. Mensagem de banco traz nome de tabela, de coluna e às vezes valor de linha.
+ *
+ * O código público (`PUBLIC_REJECTION_CODE`) existe porque o motivo interno também é um
+ * canal: "não existe" e "existe mas não é deste agente" com códigos distintos deixariam o
+ * modelo mapear o registry por sondagem. A auditoria recebe o motivo verdadeiro.
  */
 function erro(
   call: ToolCallRequest,
@@ -54,11 +67,78 @@ function erro(
     toolName: call.toolName,
     isError: true,
     block: wrapUntrusted("resultado_de_ferramenta", call.toolName, {
-      erro: reason,
+      erro: PUBLIC_REJECTION_CODE[reason],
       mensagem,
     }),
     recordsRead: 0,
   };
+}
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ DUAS PODAS, E AS DUAS TÊM DE APARECER NO `motivo_incompleto`.                         ║
+ * ║                                                                                       ║
+ * ║  1. `maxRecords` do descriptor — o teto de LISTA, auditável num lugar só.             ║
+ * ║  2. `MAX_UNTRUSTED_CHARS` — o teto do ENVELOPE. Sem ele, `wrapUntrusted` cortava a    ║
+ * ║     string serializada no meio de um token JSON: o modelo recebia `truncated: true`    ║
+ * ║     mas `completude` continuava "exato", e ele relatava um total de um período cujos   ║
+ * ║     últimos registros ele nunca viu.                                                   ║
+ * ║                                                                                       ║
+ * ║ ⚠️ O motivo da poda CONCATENA com o do adapter, nunca o substitui. Espalhar            ║
+ * ║ `...(excedeu ? {...} : {})` depois de `...saida` apagava a ressalva de "sem peso       ║
+ * ║ corporal do dia" toda vez que a lista também estourasse o teto.                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * A medida do orçamento é `JSON.stringify(saida).length` — exatamente a que `wrapUntrusted`
+ * usa para decidir cortar. Medir outra coisa deixaria a poda e o corte em desacordo.
+ */
+export function podarSaida(saida: ToolOutput, tool: ToolDescriptor): ToolOutput {
+  const doAdapter = saida.motivo_incompleto ? [saida.motivo_incompleto] : [];
+  const total = saida.itens.length;
+
+  const montar = (n: number, motivoDaPoda: string | null): ToolOutput => {
+    const motivos = [...doAdapter, ...(motivoDaPoda ? [motivoDaPoda] : [])];
+    const juntos = motivos.join(" ");
+    return {
+      ...saida,
+      itens: saida.itens.slice(0, n),
+      refs: saida.refs.slice(0, n),
+      completude: motivoDaPoda ? "parcial" : saida.completude,
+      ...(juntos ? { motivo_incompleto: juntos } : {}),
+    };
+  };
+
+  const cabe = (candidato: ToolOutput) =>
+    JSON.stringify(candidato).length <= MAX_UNTRUSTED_CHARS;
+
+  const teto = Math.min(total, tool.maxRecords);
+  const motivoDoTeto =
+    total > tool.maxRecords
+      ? `Mostrando ${tool.maxRecords} de ${total} ${tool.itemLabel}.`
+      : null;
+
+  const podadoPeloTeto = montar(teto, motivoDoTeto);
+  if (cabe(podadoPeloTeto)) return podadoPeloTeto;
+
+  // Não coube no envelope: procura o MAIOR prefixo que cabe. A mensagem do orçamento
+  // substitui a do teto porque ela já nomeia um corte menor sobre o mesmo total.
+  const motivoDoOrcamento = (n: number) =>
+    `Mostrando ${n} de ${total} ${tool.itemLabel}: o restante não coube no limite de tamanho da resposta.`;
+
+  let baixo = 0;
+  let alto = teto;
+  let melhor = 0;
+  while (baixo <= alto) {
+    const meio = Math.floor((baixo + alto) / 2);
+    if (cabe(montar(meio, motivoDoOrcamento(meio)))) {
+      melhor = meio;
+      baixo = meio + 1;
+    } else {
+      alto = meio - 1;
+    }
+  }
+
+  return montar(melhor, motivoDoOrcamento(melhor));
 }
 
 export async function executeTool(
@@ -87,9 +167,11 @@ export async function executeTool(
       durationMs: Date.now() - inicio,
       refs: saida?.refs ?? [],
     }).catch(() => {
-      // Falha ao AUDITAR não pode derrubar a resposta do usuário — mas também não pode
-      // passar em silêncio para sempre. O erro já foi sanitizado pelo cliente Supabase; o
-      // que importa aqui é não transformar um problema de escrita em falha do chat.
+      // ⚠️ Este `catch` NÃO cobre erro de banco: `supabase-js` devolve `{ error }` em vez de
+      // lançar, e quem trata isso (com log operacional) é o próprio `audit.ts`. O que sobra
+      // para cá é o que ainda PODE lançar antes da query — `createClient()`, que abre os
+      // cookies da requisição. Falha de auditoria não derruba a resposta do usuário, mas
+      // também não passa calada: o log sai de `audit.ts`.
     });
 
   const veredito = guardToolCall({
@@ -130,20 +212,9 @@ export async function executeTool(
       }),
     ]);
 
-    // Teto de registros aplicado AQUI, depois da query e antes do modelo: o descriptor é a
-    // fonte do limite, não o adapter — assim o teto é auditável num lugar só.
-    const excedeu = saida.itens.length > tool.maxRecords;
-    const podada: ToolOutput = {
-      ...saida,
-      itens: saida.itens.slice(0, tool.maxRecords),
-      refs: saida.refs.slice(0, tool.maxRecords),
-      ...(excedeu
-        ? {
-            completude: "parcial" as const,
-            motivo_incompleto: `Mostrando ${tool.maxRecords} de ${saida.itens.length} registros.`,
-          }
-        : {}),
-    };
+    // Poda aplicada AQUI, depois da query e antes do modelo: o descriptor é a fonte do
+    // limite, não o adapter — assim o teto é auditável num lugar só.
+    const podada = podarSaida(saida, tool);
 
     await auditar("executada", null, podada, tool.version);
 

@@ -100,7 +100,13 @@ export type SanitizedJson =
   | { [chave: string]: SanitizedJson | undefined }
   | SanitizedJson[];
 
-const CHAVE_SENSIVEL = /^(api[_-]?key|authorization|token|secret|password|senha)$/i;
+/**
+ * Nome de campo que denuncia segredo. A âncora vale para o PEDAÇO da chave, não para a chave
+ * inteira: ancorada de ponta a ponta, ela deixava passar `x-api-key`, `access_token`,
+ * `client_secret` e `pwd` — todos nomes reais de cabeçalho e de campo de credencial.
+ */
+const CHAVE_SENSIVEL =
+  /(^|[_.-])(api[_-]?key|apikey|authorization|auth|bearer|token|secret|senha|password|passwd|pwd|credential|credentials|cookie|session[_-]?id|private[_-]?key)([_.-]|$)/i;
 const PROFUNDIDADE_MAXIMA = 8;
 const NAO_SERIALIZAVEL = "[não serializável]";
 
@@ -108,10 +114,21 @@ const NAO_SERIALIZAVEL = "[não serializável]";
  * A varredura é feita CAMPO A CAMPO, não sobre o JSON serializado: aplicar as regex ao texto
  * do JSON quebra o próprio JSON (o padrão `"api_key": "…"` engole as aspas do valor), e um
  * `JSON.parse` que falha viraria auditoria perdida.
+ *
+ * ⚠️ Duas armadilhas de JavaScript que já custaram dado de auditoria aqui:
+ *
+ *  1. **`saida[chave] = …` com `chave === "__proto__"`** não cria propriedade: dispara o
+ *     setter de `Object.prototype` e a chave SOME do resultado. Justo a chave que mais
+ *     interessa numa auditoria de argumento vindo do modelo. Por isso o acumulador é
+ *     `Object.create(null)` — objeto sem protótipo não tem setter para disparar.
+ *  2. **`WeakSet` de "já visto" ≠ "está no caminho atual".** Sem remover o nó ao sair dele,
+ *     `{p: obj, q: obj}` — o MESMO objeto em dois ramos, sem ciclo nenhum — devolvia o
+ *     segundo ramo como "[não serializável]". O que precisa ser barrado é o ciclo, não a
+ *     repetição.
  */
 function varrer(
   valor: unknown,
-  vistos: WeakSet<object>,
+  emCurso: WeakSet<object>,
   nivel: number,
 ): SanitizedJson | undefined {
   if (typeof valor === "string") return redactSecrets(valor);
@@ -120,23 +137,27 @@ function varrer(
   if (typeof valor !== "object") return undefined;
 
   if (nivel >= PROFUNDIDADE_MAXIMA) return NAO_SERIALIZAVEL;
-  if (vistos.has(valor as object)) return NAO_SERIALIZAVEL;
-  vistos.add(valor as object);
+  if (emCurso.has(valor as object)) return NAO_SERIALIZAVEL;
+  emCurso.add(valor as object);
 
-  if (Array.isArray(valor)) {
-    return valor.map((item) => varrer(item, vistos, nivel + 1) ?? null);
-  }
-
-  const saida: { [chave: string]: SanitizedJson | undefined } = {};
-  for (const [chave, item] of Object.entries(valor as Record<string, unknown>)) {
-    if (CHAVE_SENSIVEL.test(chave)) {
-      saida[chave] = REDACTED;
-      continue;
+  try {
+    if (Array.isArray(valor)) {
+      return valor.map((item) => varrer(item, emCurso, nivel + 1) ?? null);
     }
-    const limpo = varrer(item, vistos, nivel + 1);
-    if (limpo !== undefined) saida[chave] = limpo;
+
+    const saida = Object.create(null) as { [chave: string]: SanitizedJson | undefined };
+    for (const [chave, item] of Object.entries(valor as Record<string, unknown>)) {
+      if (CHAVE_SENSIVEL.test(chave)) {
+        saida[chave] = REDACTED;
+        continue;
+      }
+      const limpo = varrer(item, emCurso, nivel + 1);
+      if (limpo !== undefined) saida[chave] = limpo;
+    }
+    return saida;
+  } finally {
+    emCurso.delete(valor as object);
   }
-  return saida;
 }
 
 export function sanitizedJson(value: unknown): {
