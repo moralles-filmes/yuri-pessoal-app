@@ -24,7 +24,10 @@ create table if not exists public.ai_run_steps (
   user_id       uuid not null references auth.users(id) on delete cascade,
   run_id        uuid not null,
 
-  step_index    integer not null check (step_index >= 0),
+  -- Base 1, igual a `ai_usage_events.attempt_index` — não há razão para o passo ser 0-based
+  -- enquanto a tentativa é 1-based; alinhar evita off-by-one em quem correlacionar "passo 2"
+  -- com "tentativa 2" na tela de auditoria.
+  step_index    integer not null check (step_index >= 1),
   kind          text not null check (kind in ('modelo','ferramentas')),
   status        text not null default 'started'
                   check (status in ('started','completed','failed','cancelled')),
@@ -42,6 +45,10 @@ create table if not exists public.ai_run_steps (
 
 create unique index if not exists ai_run_steps_id_user_uidx
   on public.ai_run_steps (id, user_id);
+-- Alvo da FK composta de `ai_tool_calls`, que amarra step_id E run_id ao MESMO passo —
+-- ver o comentário junto de `ai_tool_calls_step_owner_fk` mais abaixo.
+create unique index if not exists ai_run_steps_id_run_user_uidx
+  on public.ai_run_steps (id, run_id, user_id);
 create unique index if not exists ai_run_steps_run_index_uidx
   on public.ai_run_steps (run_id, step_index, kind);
 create index if not exists ai_run_steps_user_idx
@@ -64,8 +71,10 @@ create policy "ai_run_steps_select" on public.ai_run_steps
 drop policy if exists "ai_run_steps_insert" on public.ai_run_steps;
 create policy "ai_run_steps_insert" on public.ai_run_steps
   for insert with check (user_id = auth.uid());
-drop policy if exists "ai_run_steps_update" on public.ai_run_steps;
-create policy "ai_run_steps_update" on public.ai_run_steps
+-- Nome no espírito de `ai_usage_events_close_attempt` (18-A): a policy só existe para FECHAR
+-- um passo `started`, nunca para reabrir ou reescrever um terminal.
+drop policy if exists "ai_run_steps_close_step" on public.ai_run_steps;
+create policy "ai_run_steps_close_step" on public.ai_run_steps
   for update using (user_id = auth.uid() and status = 'started')
   with check (user_id = auth.uid());
 
@@ -96,8 +105,13 @@ create table if not exists public.ai_tool_calls (
 
   status               text not null
                          check (status in ('executada','rejeitada','falhou','timeout')),
-  -- Preenchido só quando status <> 'executada'. Vocabulário de `tools/guard.ts`.
-  rejection_reason     text,
+  -- Preenchido só quando status <> 'executada'. Vocabulário EXATO de
+  -- `ToolRejectionReason` em `src/lib/ai/tools/guard.ts` — as duas listas têm de concordar.
+  rejection_reason     text
+                         check (rejection_reason is null or rejection_reason in (
+                           'TOOL_UNKNOWN','TOOL_NOT_ALLOWED_FOR_AGENT','TOOL_INCOHERENT',
+                           'TOOL_WRITE_DISABLED','TOOL_PERMISSION_DENIED','TOOL_INVALID_INPUT',
+                           'TOOL_TIMEOUT','TOOL_FAILED')),
 
   records_read         integer check (records_read is null or records_read >= 0),
   duration_ms          integer check (duration_ms is null or duration_ms >= 0),
@@ -109,7 +123,13 @@ create table if not exists public.ai_tool_calls (
   constraint ai_tool_calls_rejection_requires_reason
     check (status = 'executada' or rejection_reason is not null),
   constraint ai_tool_calls_executed_has_no_reason
-    check (status <> 'executada' or rejection_reason is null)
+    check (status <> 'executada' or rejection_reason is null),
+  -- Mesma disciplina de `ai_usage_events_availability_is_object` (18-A): o shape do jsonb
+  -- é parte do contrato, não confiança na disciplina de quem grava.
+  constraint ai_tool_calls_arguments_is_object
+    check (jsonb_typeof(arguments_sanitized) = 'object'),
+  constraint ai_tool_calls_refs_is_array
+    check (jsonb_typeof(refs) = 'array')
 );
 
 create unique index if not exists ai_tool_calls_id_user_uidx
@@ -131,10 +151,17 @@ alter table public.ai_tool_calls
   foreign key (run_id, user_id) references public.ai_runs (id, user_id)
   on delete cascade;
 
+-- ⚠️ NÃO É SÓ "(step_id, user_id)". Duas FKs compostas independentes — uma para `run_id`,
+-- outra para `step_id` — não impedem que a linha grave um `run_id` e um `step_id` de PASSOS
+-- DIFERENTES (ex.: run A com o step de um run B do mesmo usuário). Como a tabela é imutável
+-- e de auditoria, essa divergência não tem correção depois de gravada. A FK carrega também
+-- `run_id`, contra o índice único `(id, run_id, user_id)` de `ai_run_steps`: o banco só aceita
+-- a linha se o passo referenciado pertencer AO MESMO run — e a leitura por `run_id` continua
+-- direta, sem join extra.
 alter table public.ai_tool_calls drop constraint if exists ai_tool_calls_step_owner_fk;
 alter table public.ai_tool_calls
   add constraint ai_tool_calls_step_owner_fk
-  foreign key (step_id, user_id) references public.ai_run_steps (id, user_id)
+  foreign key (step_id, run_id, user_id) references public.ai_run_steps (id, run_id, user_id)
   on delete cascade;
 
 alter table public.ai_tool_calls enable row level security;
@@ -160,6 +187,14 @@ comment on column public.ai_tool_calls.refs is
 -- Um passo do laço é uma NOVA chamada paga ao provedor, e não é PRIMARY, nem RETRY, nem
 -- FALLBACK. Sem este valor, ou se grava mentira (e o painel de consumo passa a relatar
 -- retries que nunca houve), ou o INSERT estoura SÓ EM RUNTIME.
+--
+-- ⚠️ HABILITAR TOOL_STEP NÃO RELAXA `ai_usage_events_one_active_uidx` (18-A):
+--     UNIQUE (run_id) WHERE status = 'started'
+-- Continua havendo, por desenho, NO MÁXIMO uma tentativa `started` por run a qualquer
+-- momento. Quem escrever o laço de ferramentas TEM de fechar a tentativa do passo N
+-- (`completed`/`failed`/`cancelled`) ANTES de inserir a tentativa TOOL_STEP do passo N+1 —
+-- inserir a próxima com a anterior ainda `started` estoura `23505` só em runtime, no meio
+-- de uma conversa em produção.
 
 alter table public.ai_usage_events
   drop constraint if exists ai_usage_events_attempt_type_check;
