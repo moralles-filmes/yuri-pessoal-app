@@ -20,6 +20,7 @@ import {
   promptVersionOf,
 } from "./registry";
 import { SECURITY_PROMPT, SECURITY_PROMPT_VERSION } from "./security-prompt";
+import { AGENT_PERMISSION } from "./routing";
 import {
   AI_TOOL_REGISTRY,
   toolDefinitionsFor,
@@ -28,19 +29,50 @@ import {
 import { isToolDescriptorCoherent } from "@/lib/ai/tools/contracts";
 
 describe("registry de agentes", () => {
-  it("a 18-A tem UM agente, e ele é o Assistente Pessoal", () => {
-    expect(AI_AGENT_REGISTRY).toHaveLength(1);
+  // Era "a 18-A tem UM agente". A 18-B acrescentou o especialista de Treinos; o que o teste
+  // protegia — a lista é ESTÁTICA e fechada, e o Assistente Pessoal é o ponto de entrada —
+  // continua valendo e continua verificado.
+  it("o Assistente Pessoal é o ponto de entrada, e cada agente tem id único", () => {
     expect(AI_AGENT_REGISTRY[0].id).toBe(ASSISTENTE_PESSOAL_ID);
+    const ids = AI_AGENT_REGISTRY.map((a) => a.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const agente of AI_AGENT_REGISTRY) {
+      expect(agente.id, agente.label).toMatch(/^[a-z][a-z0-9-]*$/);
+      expect(agente.prompt.length).toBeGreaterThan(100);
+      expect(agente.promptVersion).not.toBe("");
+    }
   });
 
   it("agente desconhecido não é resolvido — `agent_id` é texto, não autorização", () => {
     expect(findAgent("financeiro")).toBeNull();
     expect(findAgent("")).toBeNull();
+    expect(findAgent("TREINOS")).toBeNull();
     expect(findAgent(ASSISTENTE_PESSOAL_ID)).not.toBeNull();
   });
 
-  it("74. o agente da 18-A não tem NENHUMA ferramenta autorizada", () => {
-    expect(AI_AGENT_REGISTRY[0].allowedTools).toEqual([]);
+  // Era "74. o agente da 18-A não tem NENHUMA ferramenta autorizada".
+  // O ORQUESTRADOR continua sem ferramenta própria: quem lê Treinos é o especialista.
+  it("74. o orquestrador não tem ferramenta própria", () => {
+    const orquestrador = AI_AGENT_REGISTRY.find((a) => a.id === ASSISTENTE_PESSOAL_ID);
+    expect(orquestrador?.allowedTools).toEqual([]);
+  });
+
+  // O roteador escolhe por id. Um id que não exista no registry só falharia em runtime, na
+  // admissão do chat — e a mensagem do usuário morreria sem explicação.
+  it("todo agente que o roteador pode escolher existe no registry", () => {
+    for (const id of [ASSISTENTE_PESSOAL_ID, ...Object.keys(AGENT_PERMISSION)]) {
+      expect(findAgent(id), id).not.toBeNull();
+    }
+  });
+
+  it("só o orquestrador existe sem flag; todo especialista tem a sua", () => {
+    for (const agente of AI_AGENT_REGISTRY) {
+      if (agente.id === ASSISTENTE_PESSOAL_ID) {
+        expect(AGENT_PERMISSION[agente.id]).toBeUndefined();
+        continue;
+      }
+      expect(AGENT_PERMISSION[agente.id], agente.id).toBeDefined();
+    }
   });
 });
 
@@ -122,16 +154,29 @@ describe("prompt de sistema", () => {
   });
 });
 
-describe("74. Tool Registry NASCE VAZIO", () => {
-  it("o registry está vazio na 18-A", () => {
-    expect(AI_TOOL_REGISTRY).toEqual([]);
+describe("74. o Tool Registry é a única porta", () => {
+  // Era "o registry está vazio na 18-A". Deixou de ser verdade — mas o que o teste
+  // protegia era que NADA entra sem ser leitura declarada, e isso continua verificado.
+  it("o registry tem ferramentas, e TODAS são de leitura", () => {
+    expect(AI_TOOL_REGISTRY.length).toBeGreaterThan(0);
+    for (const t of AI_TOOL_REGISTRY) expect(t.kind).toBe("leitura");
   });
 
-  it("nenhuma definição é enviada ao provedor, com qualquer allowlist", () => {
+  it("agente sem allowlist não recebe definição NENHUMA", () => {
     expect(toolDefinitionsFor([])).toEqual([]);
     // Nome na allowlist que não existe no registry NÃO vira ferramenta: não há caminho
     // para uma ferramenta nascer de um nome.
     expect(toolDefinitionsFor(["finance.create_transaction", "qualquer_coisa"])).toEqual([]);
+  });
+
+  it("a definição enviada ao provedor leva só nome, descrição e schema de entrada", () => {
+    const definicoes = toolDefinitionsFor(["training.get_volume"]);
+    expect(definicoes).toHaveLength(1);
+    expect(Object.keys(definicoes[0]).sort()).toEqual([
+      "description",
+      "inputSchema",
+      "name",
+    ]);
   });
 
   it("75. o código do run para tool call inesperada é estável", () => {

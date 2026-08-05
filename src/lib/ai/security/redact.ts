@@ -75,6 +75,80 @@ export function sanitizedForStorage(error: AiError): string {
 }
 
 /**
+ * Fase 18-B — o que pode ir para uma coluna `jsonb` de auditoria (hoje,
+ * `ai_tool_calls.arguments_sanitized`).
+ *
+ * Mora AQUI, e não dentro de `tools/`, porque este arquivo é o único caminho de saída
+ * sanitizada do módulo: uma segunda sanitização local nasceria desatualizada no dia em que
+ * um padrão novo entrasse em `PADROES_DE_SEGREDO`.
+ *
+ * Duas garantias, as duas exigidas pelo banco e pela disciplina do módulo:
+ *  • Devolve SEMPRE um objeto — a constraint `jsonb_typeof(...) = 'object'` recusa escalar.
+ *  • O argumento veio do MODELO. Ele passa pela mesma varredura do erro, porque nada impede
+ *    o usuário de colar uma chave na conversa e o modelo de repeti-la num argumento.
+ */
+/**
+ * O mesmo formato de `Json` dos tipos gerados do Supabase, declarado AQUI para a camada de
+ * segurança não depender do arquivo gerado. A compatibilidade é estrutural: o retorno de
+ * `sanitizedJson` entra direto numa coluna `jsonb`.
+ */
+export type SanitizedJson =
+  | string
+  | number
+  | boolean
+  | null
+  | { [chave: string]: SanitizedJson | undefined }
+  | SanitizedJson[];
+
+const CHAVE_SENSIVEL = /^(api[_-]?key|authorization|token|secret|password|senha)$/i;
+const PROFUNDIDADE_MAXIMA = 8;
+const NAO_SERIALIZAVEL = "[não serializável]";
+
+/**
+ * A varredura é feita CAMPO A CAMPO, não sobre o JSON serializado: aplicar as regex ao texto
+ * do JSON quebra o próprio JSON (o padrão `"api_key": "…"` engole as aspas do valor), e um
+ * `JSON.parse` que falha viraria auditoria perdida.
+ */
+function varrer(
+  valor: unknown,
+  vistos: WeakSet<object>,
+  nivel: number,
+): SanitizedJson | undefined {
+  if (typeof valor === "string") return redactSecrets(valor);
+  if (typeof valor === "number") return Number.isFinite(valor) ? valor : null;
+  if (typeof valor === "boolean" || valor === null) return valor;
+  if (typeof valor !== "object") return undefined;
+
+  if (nivel >= PROFUNDIDADE_MAXIMA) return NAO_SERIALIZAVEL;
+  if (vistos.has(valor as object)) return NAO_SERIALIZAVEL;
+  vistos.add(valor as object);
+
+  if (Array.isArray(valor)) {
+    return valor.map((item) => varrer(item, vistos, nivel + 1) ?? null);
+  }
+
+  const saida: { [chave: string]: SanitizedJson | undefined } = {};
+  for (const [chave, item] of Object.entries(valor as Record<string, unknown>)) {
+    if (CHAVE_SENSIVEL.test(chave)) {
+      saida[chave] = REDACTED;
+      continue;
+    }
+    const limpo = varrer(item, vistos, nivel + 1);
+    if (limpo !== undefined) saida[chave] = limpo;
+  }
+  return saida;
+}
+
+export function sanitizedJson(value: unknown): {
+  [chave: string]: SanitizedJson | undefined;
+} {
+  const limpo = varrer(value, new WeakSet(), 0);
+  if (limpo === null || limpo === undefined) return {};
+  if (typeof limpo !== "object" || Array.isArray(limpo)) return { valor: limpo };
+  return limpo;
+}
+
+/**
  * O que pode ir para log operacional. NÃO inclui a mensagem: só classe, código e
  * correlação — o suficiente para investigar, insuficiente para vazar.
  */

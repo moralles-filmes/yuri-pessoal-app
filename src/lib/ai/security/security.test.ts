@@ -17,6 +17,7 @@ import {
   safeLogFields,
   safeUserMessage,
   sanitizedForStorage,
+  sanitizedJson,
 } from "./redact";
 import {
   MAX_UNTRUSTED_CHARS,
@@ -95,6 +96,41 @@ describe("mensagem de erro que chega ao usuário", () => {
       "retryable",
     ]);
     expect(JSON.stringify(campos)).not.toContain("provedor");
+  });
+});
+
+/**
+ * Fase 18-B — o que a auditoria de ferramentas grava em `arguments_sanitized`. O argumento
+ * vem do MODELO: pode ser qualquer coisa, inclusive uma chave colada por engano pelo usuário
+ * na conversa. Ele passa pela MESMA varredura do erro — sanitizar num lugar só é o que
+ * impede um caminho de saída esquecido.
+ */
+describe("18-B. argumento de ferramenta sanitizado para o banco", () => {
+  it("é sempre um OBJETO — a coluna jsonb exige, e escalar viraria erro de constraint", () => {
+    expect(sanitizedJson({ dias: 7 })).toEqual({ dias: 7 });
+    expect(sanitizedJson(null)).toEqual({});
+    expect(sanitizedJson(undefined)).toEqual({});
+    expect(sanitizedJson("texto solto")).toEqual({ valor: "texto solto" });
+    expect(sanitizedJson(42)).toEqual({ valor: 42 });
+    expect(sanitizedJson([1, 2])).toEqual({ valor: [1, 2] });
+  });
+
+  it("mascara segredo em qualquer profundidade, na chave e no valor", () => {
+    const saida = sanitizedJson({
+      exercicio: "supino",
+      dentro: { api_key: "sk-ant-api03-SegredoAquiOk123", nota: "use sk-proj-AbcdefGhijkl123" },
+    });
+    const cru = JSON.stringify(saida);
+    expect(cru).not.toContain("SegredoAquiOk123");
+    expect(cru).not.toContain("AbcdefGhijkl123");
+    expect(cru).toContain("supino");
+  });
+
+  it("valor não serializável não derruba a auditoria", () => {
+    const ciclico: Record<string, unknown> = { a: 1 };
+    ciclico.eu = ciclico;
+    expect(() => sanitizedJson(ciclico)).not.toThrow();
+    expect(typeof sanitizedJson(ciclico)).toBe("object");
   });
 });
 

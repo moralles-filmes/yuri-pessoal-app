@@ -76,6 +76,34 @@ describe("guardToolCall", () => {
     expect(r).toMatchObject({ ok: false, reason: "TOOL_PERMISSION_DENIED" });
   });
 
+  // Uma flag AUSENTE não é uma flag ligada. `allow_training` que nunca foi gravado chega
+  // como `undefined`, e `undefined` tem de negar tanto quanto `false` — senão o padrão de
+  // um usuário que nunca abriu as preferências seria "tudo autorizado".
+  it("rejeita quando a chave da permissão nem existe no objeto", () => {
+    const semTreinos = { allow_finance: true } as unknown as Record<ToolPermission, boolean>;
+    const r = guardToolCall({
+      ...base,
+      permissions: semTreinos,
+      toolName: "training.get_records",
+    });
+    expect(r).toMatchObject({ ok: false, reason: "TOOL_PERMISSION_DENIED" });
+  });
+
+  // "Truthy" não basta: só o booleano `true` autoriza. Um `"true"` vindo de coluna de texto
+  // ou um `1` vindo de jsonb passariam por `if (permissao)`.
+  it("valor apenas truthy não autoriza — a permissão é o booleano true", () => {
+    const quaseLigado = {
+      ...TUDO_LIGADO,
+      allow_training: "true",
+    } as unknown as Record<ToolPermission, boolean>;
+    const r = guardToolCall({
+      ...base,
+      permissions: quaseLigado,
+      toolName: "training.get_records",
+    });
+    expect(r).toMatchObject({ ok: false, reason: "TOOL_PERMISSION_DENIED" });
+  });
+
   it("rejeita ESCRITA mesmo com tudo ligado — a 18-B é só leitura", () => {
     const r = guardToolCall({
       ...base,

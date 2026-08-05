@@ -47,6 +47,22 @@ function especificadores(codigo: string): string[] {
   return encontrados;
 }
 
+/**
+ * Remove comentários antes de procurar chamada de banco.
+ *
+ * Sem isto o teste acusaria o PRÓPRIO cabeçalho que documenta a proibição ("nenhum
+ * `.from()` neste arquivo") — e a saída seria arrumar a documentação em vez do código.
+ * Só bloco `/* … *\/` e linha que COMEÇA com `//` ou `*`: cortar `//` no meio da linha
+ * mutilaria uma URL e poderia esconder uma chamada real depois dela.
+ */
+function semComentarios(codigo: string): string {
+  return codigo
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .filter((linha) => !/^\s*(\/\/|\*)/.test(linha))
+    .join("\n");
+}
+
 const ehPacoteDeFornecedor = (spec: string) =>
   spec === "ai" || spec.startsWith("ai/") || spec.startsWith("@ai-sdk/");
 
@@ -149,7 +165,14 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
     expect(semGuarda).toEqual([]);
   });
 
-  it("nenhuma query de módulo (finance, todo, nutrition, training…) é importada por src/lib/ai/", () => {
+  /**
+   * A 18-A não lia NADA dos módulos. A 18-B abriu a primeira leitura — e abriu por UMA
+   * porta só: `tools/adapters/`. O teste não deixou de valer; ele passou a nomear a
+   * exceção. Um `import` de `@/lib/training/...` dentro de `chat-runner.ts`, de `core/` ou
+   * de qualquer outro lugar continua sendo violação, porque seria uma leitura de dado do
+   * usuário fora do Tool Registry, sem guard, sem teto e sem auditoria.
+   */
+  it("query de módulo só é importada por tools/adapters/ — a única porta de leitura", () => {
     const modulos = [
       "finance",
       "todo",
@@ -164,10 +187,12 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
       "reports",
       "import",
     ];
+    const adapters = path.join(RAIZ, "tools", "adapters");
     const violacoes: string[] = [];
 
     for (const arquivo of listarArquivos(RAIZ)) {
       if (arquivo.endsWith(".test.ts")) continue;
+      if (arquivo.startsWith(adapters)) continue;
       const codigo = fs.readFileSync(arquivo, "utf8");
       for (const spec of especificadores(codigo)) {
         for (const modulo of modulos) {
@@ -178,8 +203,37 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
       }
     }
 
-    // A 18-A não lê NADA dos módulos. A primeira leitura é 18-B, e vai entrar por
-    // ferramentas registradas — não por import direto de `queries.ts`.
     expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ AS FERRAMENTAS NÃO REIMPLEMENTAM QUERY DE MÓDULO (18-B).                            ║
+   * ║                                                                                     ║
+   * ║ Uma segunda leitura discordaria da primeira no primeiro campo novo — e o número que ║
+   * ║ a IA relata deixaria de bater com o número que o usuário vê na tela. `audit.ts` é a ║
+   * ║ ÚNICA exceção: ele grava a auditoria do próprio módulo de IA.                       ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("nenhum .from() nem select() em src/lib/ai/tools/, exceto a auditoria", () => {
+    const violacoes: string[] = [];
+
+    for (const arquivo of listarArquivos(path.join(RAIZ, "tools"))) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      if (path.basename(arquivo) === "audit.ts") continue;
+      const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
+      if (/\.from\(/.test(codigo)) violacoes.push(`${path.relative(SRC, arquivo)} → .from(`);
+      if (/\.select\(/.test(codigo)) violacoes.push(`${path.relative(SRC, arquivo)} → .select(`);
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  it("audit.ts é a exceção DECLARADA — e não escreve em tabela de módulo do usuário", () => {
+    const codigo = fs.readFileSync(path.join(RAIZ, "tools", "audit.ts"), "utf8");
+    const tabelas = [...codigo.matchAll(/\.from\(\s*["']([^"']+)["']/g)].map((m) => m[1]);
+
+    expect(tabelas.length).toBeGreaterThan(0);
+    for (const tabela of tabelas) expect(tabela, tabela).toMatch(/^ai_/);
   });
 });

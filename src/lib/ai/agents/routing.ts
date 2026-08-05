@@ -19,9 +19,12 @@
  */
 
 import type { ToolPermission } from "@/lib/ai/tools/contracts";
-import { ASSISTENTE_PESSOAL_ID } from "./registry";
+import { ASSISTENTE_PESSOAL_ID, TREINOS_AGENT_ID } from "./registry";
 
-export const TREINOS_AGENT_ID = "treinos";
+// O id do agente mora em `registry.ts`, junto do perfil. Reexportado aqui por conveniência
+// de quem já importa o roteador — DUAS declarações do mesmo texto virariam divergência no
+// dia em que uma delas mudasse, e o roteador passaria a apontar para um agente inexistente.
+export { TREINOS_AGENT_ID };
 
 /** Cada especialista tem EXATAMENTE uma flag de admissão. O orquestrador não tem: ele
  * existe sempre, e sem nenhuma flag ligada simplesmente não recebe ferramenta alguma. */
