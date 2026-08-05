@@ -39,7 +39,7 @@ import { getTrainingPreferences } from "@/lib/training/queries";
 import { addDaysIso } from "@/lib/training/schedule";
 import type { TrainingPreferences } from "@/lib/training/types";
 import type { VolumeUnit } from "@/lib/training/tracking";
-import { normalizarTexto } from "@/lib/ai/agents/routing";
+import { normalizarTexto } from "@/lib/ai/core/text";
 import { hojeISO } from "@/lib/format";
 import { emptyToolOutput, type ToolOutput, type ToolRef } from "../contracts";
 
@@ -82,10 +82,31 @@ const opcoesDe = (prefs: TrainingPreferences): MetricOptions => ({
 });
 
 /**
- * O total só entra quando a UNIDADE dele está presente no agregado — ou quando o valor é
- * diferente de zero. Um período só de corrida tem `units: ["distancia"]`: relatar
- * `volume_kg: 0` ali levaria o modelo a dizer "seu volume foi 0 kg" para quem correu 20 km,
- * exatamente o "ausência vira zero" que a invariante 21 da 17-E proíbe.
+ * Quais totais entram no agregado — a MESMA decisão que a tela toma. `metrics-summary.tsx`
+ * testa `totals.units.includes("kg")` para decidir se o card de Volume aparece; aqui vale o
+ * mesmo, com uma folga a mais (`|| valor !== 0`) para o caso inverso: total diferente de zero
+ * nunca é escondido por a unidade não ter sido declarada.
+ *
+ * Um período só de corrida tem `units: ["distancia"]`: relatar `volume_kg: 0` ali levaria o
+ * modelo a dizer "seu volume foi 0 kg" para quem correu 20 km, exatamente o "ausência vira
+ * zero" que a invariante 21 da 17-E proíbe.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⚠️ O CASO LIMITE DA INVARIANTE 3, DECIDIDO DE PROPÓSITO: O ZERO PASSA.                 ║
+ * ║                                                                                       ║
+ * ║ Um treino só de barra fixa SEM peso corporal do dia tem `units: ["kg"]` (houve série  ║
+ * ║ elegível de unidade kg) e `volumeKg: 0` (nenhuma pôde contribuir). Aqui o zero PASSA — ║
+ * ║ e é o que a tela também mostra: "0 kg" com o selo "Parcial — veja o motivo abaixo".   ║
+ * ║                                                                                       ║
+ * ║ "Sem peso corporal do dia, a carga efetiva é INDISPONÍVEL, nunca zero" é honrada pelo ║
+ * ║ TRIO que viaja junto com esse número — `completude: "parcial"` + `motivo_incompleto`  ║
+ * ║ (a frase do próprio módulo) + `agregados.lacunas` (`sem_peso_corporal`) — e não por    ║
+ * ║ esconder o campo. Esconder faria a IA relatar um treino que a tela mostra, o que é     ║
+ * ║ justamente o defeito que esta fase mais evita.                                         ║
+ * ║                                                                                       ║
+ * ║ Se a tela um dia deixar de mostrar o zero, ESTE PONTO MUDA JUNTO — há teste dos dois  ║
+ * ║ lados fixando a paridade.                                                              ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 function totaisReportaveis(totals: MetricTotals): Record<string, number> {
   const entra = (unidade: VolumeUnit, valor: number) =>

@@ -19,6 +19,7 @@
  */
 
 import type { ToolPermission } from "@/lib/ai/tools/contracts";
+import { normalizarTexto } from "@/lib/ai/core/text";
 import { ASSISTENTE_PESSOAL_ID, TREINOS_AGENT_ID } from "./registry";
 
 // O id do agente mora em `registry.ts`, junto do perfil. Reexportado aqui por conveniência
@@ -63,25 +64,14 @@ const PALAVRAS: Record<string, readonly string[]> = {
 };
 
 /**
- * Tira acento SEM mudar o comprimento, e baixa a caixa.
+ * A busca por palavra do roteador precisa da fronteira; o filtro por nome de exercício das
+ * ferramentas de Treinos precisa de substring. ⚠️ NÃO É A MESMA BUSCA — o que os dois
+ * compartilham é só o preparo do texto, que por isso mora num módulo neutro
+ * (`@/lib/ai/core/text`) e não aqui: `agents/` não é dono da normalização, é cliente dela.
  *
- * ⚠️ O intervalo dos caracteres combinantes (U+0300–U+036F, diacríticos que o NFD separa
- * da letra-base) é escrito com escape Unicode explícito (`\u0300-\u036f`), nunca com os
- * caracteres combinantes literais: literais correm o risco de chegar corrompidos por
- * cópia/colagem entre editores e encodings, e o bug some no próprio código-fonte sem
- * lançar erro nenhum — a regex só deixa de casar.
- *
- * EXPORTADA porque o filtro por nome de exercício das ferramentas de Treinos precisa da
- * mesma normalização: sem ela, "triceps" não casa "Tríceps" e a resposta afirma que não há
- * recorde onde há. Duas normalizações diferentes dariam dois resultados para a mesma busca.
+ * Uma normalização própria em cada lado daria dois resultados para a mesma palavra —
+ * "triceps" casando no roteador e não no filtro.
  */
-export function normalizarTexto(texto: string): string {
-  return texto
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
 function moduloPeloTexto(texto: string): string | null {
   const normal = normalizarTexto(texto);
   for (const [modulo, palavras] of Object.entries(PALAVRAS)) {

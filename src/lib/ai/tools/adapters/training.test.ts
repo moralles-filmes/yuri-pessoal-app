@@ -645,6 +645,49 @@ describe("nenhum total é apresentado como zero quando a unidade não se aplica"
     expect(saida.motivo_incompleto).toContain("1 série");
     expect(saida.motivo_incompleto).toContain("Registre o peso corporal");
   });
+
+  /**
+   * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ O CASO LIMITE DA INVARIANTE 3, FIXADO DE PROPÓSITO: O ZERO PASSA — COM O TRIO JUNTO. ║
+   * ║                                                                                       ║
+   * ║ Um treino só de barra fixa SEM peso corporal do dia tem `units: ["kg"]` (houve série  ║
+   * ║ elegível de unidade kg) e `volumeKg: 0` (nenhuma pôde contribuir). Este é o único     ║
+   * ║ ponto do adapter em que um zero atravessa, e ele atravessa porque a TELA mostra o     ║
+   * ║ mesmo: `metrics-summary.tsx` decide o card de Volume por `totals.units.includes("kg")`║
+   * ║ e escreve "0 kg" com o selo "Parcial — veja o motivo abaixo".                          ║
+   * ║                                                                                       ║
+   * ║ "Sem peso corporal do dia, a carga efetiva é INDISPONÍVEL, nunca zero" é honrada pelo ║
+   * ║ que VIAJA JUNTO do número, não por esconder o campo. Este teste falha nas duas        ║
+   * ║ direções: se alguém remover o zero (a IA passaria a divergir da tela) OU se alguém    ║
+   * ║ remover qualquer peça da ressalva (o zero viraria afirmação de volume zero).           ║
+   * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("sem peso corporal, o zero passa — mas nunca sozinho", async () => {
+    historicoFalso = [SESSAO_C];
+
+    const saida = await getLastWorkout();
+
+    // Paridade com a tela: o campo existe e vale 0, como o card "0 kg".
+    expect(saida.agregados.volume_kg).toBe(0);
+    expect(saida.agregados.unidades).toEqual(["kg"]);
+    // E as TRÊS peças da ressalva, que são o que impede o 0 de ser lido como fato medido.
+    expect(saida.completude).toBe("parcial");
+    expect(saida.motivo_incompleto).toBeTruthy();
+    expect(saida.agregados.lacunas).toEqual([{ reason: "sem_peso_corporal", sets: 1 }]);
+  });
+
+  // O contraste que separa "medido zero" de "não se aplica": no cardio a unidade kg nunca
+  // aparece em `units`, e aí o campo NÃO existe — não é 0.
+  it("o zero de barra fixa e a ausência do cardio são coisas diferentes", async () => {
+    historicoFalso = [SESSAO_C];
+    const semPeso = await getLastWorkout();
+
+    historicoFalso = [SESSAO_E];
+    const cardio = await getLastWorkout();
+
+    expect(Object.hasOwn(semPeso.agregados, "volume_kg")).toBe(true);
+    expect(Object.hasOwn(cardio.agregados, "volume_kg")).toBe(false);
+  });
 });
 
 /* ═══════════════════════ A janela do "último treino" ═══════════════════════ */

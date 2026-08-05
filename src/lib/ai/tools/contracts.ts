@@ -89,11 +89,38 @@ export type ToolRef = {
 export type ToolOutput = {
   readonly periodo: { readonly de: string; readonly ate: string } | null;
   readonly contagem: number;
+  /**
+   * A qualidade do AGREGADO — dos números em `agregados`, sobre o período inteiro. Quem a
+   * define é o adapter (invariantes 3 e 12 da Fase 17: sem peso corporal do dia a carga
+   * efetiva é indisponível, e agregado incompleto é parcial com o motivo).
+   */
   readonly completude: "exato" | "parcial";
+  /** O motivo de `completude: "parcial"`. Fala do TOTAL, nunca da lista. */
   readonly motivo_incompleto?: string;
   readonly agregados: Readonly<Record<string, unknown>>;
   readonly itens: readonly unknown[];
   readonly refs: readonly ToolRef[];
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ A LISTA foi encurtada — E SÓ A LISTA. CAMPO SEPARADO DE `completude`, DE PROPÓSITO. ║
+   * ║                                                                                     ║
+   * ║ Enquanto o corte de lista virava `completude: "parcial"`, o modelo lia "o total está ║
+   * ║ incompleto" onde o total estava correto: os agregados são calculados sobre o período ║
+   * ║ INTEIRO, antes de qualquer poda. Com o orçamento de caracteres isso ficou frequente  ║
+   * ║ (97 de 400 sessões numa medição), e o prompt manda "quando o resultado vier marcado  ║
+   * ║ como parcial, diga o que ficou de fora" — ou seja, o modelo passaria a hedgear um    ║
+   * ║ número certo.                                                                        ║
+   * ║                                                                                     ║
+   * ║ Quem preenche é o EXECUTOR (`podarSaida`), nunca o adapter: o teto de lista é do     ║
+   * ║ descriptor, e o orçamento é do envelope.                                             ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  readonly itens_truncados?: {
+    readonly mostrando: number;
+    readonly de: number;
+    /** Em pt-BR, nomeando os itens e dizendo POR QUE foram cortados. */
+    readonly motivo: string;
+  };
   /** Texto curto em pt-BR para o caso vazio. Nunca substitui um número. */
   readonly observacao?: string;
 };

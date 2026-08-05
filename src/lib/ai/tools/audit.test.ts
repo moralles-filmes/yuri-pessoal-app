@@ -102,6 +102,7 @@ describe("auditoria — erro de banco é lido e registrado", () => {
     resposta = { data: null, error: ERRO_DO_BANCO };
 
     await closeStep({
+      runId: "run-1",
       stepId: "step-1",
       userId: "user-1",
       status: "completed",
@@ -109,6 +110,46 @@ describe("auditoria — erro de banco é lido e registrado", () => {
     });
 
     expect(JSON.stringify(logs[0])).toContain("AUDIT_STEP_CLOSE_FAILED");
+  });
+
+  /**
+   * As três funções deste arquivo correlacionam pelo RUN. `closeStep` era a única que punha
+   * o `stepId` em `correlation_id`: procurando o run no log operacional, a linha do
+   * fechamento não aparecia junto das outras duas.
+   */
+  it("as três gravações correlacionam pelo MESMO campo — o run", async () => {
+    resposta = { data: null, error: ERRO_DO_BANCO };
+
+    await startStep({ runId: "run-9", userId: "u", stepIndex: 1, kind: "ferramentas" });
+    await closeStep({
+      runId: "run-9",
+      stepId: "step-1",
+      userId: "u",
+      status: "failed",
+      durationMs: 1,
+    });
+    await recordToolCall({
+      runId: "run-9",
+      userId: "u",
+      stepId: "step-1",
+      toolName: "training.get_volume",
+      toolVersion: "1",
+      providerCallId: null,
+      argumentos: {},
+      status: "falhou",
+      rejectionReason: null,
+      recordsRead: null,
+      durationMs: 1,
+      refs: [],
+    });
+
+    expect(logs).toHaveLength(3);
+    for (const linha of logs) {
+      expect(
+        (linha[1] as { correlation_id: string }).correlation_id,
+        JSON.stringify(linha),
+      ).toBe("run-9");
+    }
   });
 
   // A mensagem do Postgres traz nome de tabela, de coluna e às vezes valor de linha. O que

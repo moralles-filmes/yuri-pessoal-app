@@ -186,6 +186,40 @@ describe("18-B. argumento de ferramenta sanitizado para o banco", () => {
     }
     expect(cru).toContain("supino");
   });
+
+  /**
+   * ⚠️ `session_id` NÃO é segredo neste contexto — é o identificador do registro que a
+   * ferramenta leu. `ai_tool_calls.arguments_sanitized` existe justamente para mostrar QUAL
+   * registro foi lido; redigir esse argumento cegaria a auditoria sem proteger nada. Uma
+   * ferramenta da 18-C com argumento `session_id` teria o valor gravado como `[removido]`.
+   *
+   * `session_token` e `session_key` continuam entrando: esses são credencial.
+   */
+  it("session_id de argumento SOBREVIVE — a auditoria existe para mostrar qual registro foi lido", () => {
+    const saida = sanitizedJson({
+      session_id: "9f1b2c3d-0000-4a5b-8c7d-1e2f3a4b5c6d",
+      sessionId: "abc-123",
+      "training.session_id": "def-456",
+      exercicio: "supino",
+    });
+
+    expect(saida.session_id).toBe("9f1b2c3d-0000-4a5b-8c7d-1e2f3a4b5c6d");
+    expect(saida.sessionId).toBe("abc-123");
+    expect(saida["training.session_id"]).toBe("def-456");
+  });
+
+  it("mas session_token e session_key continuam sendo redigidos", () => {
+    const saida = sanitizedJson({
+      session_token: "valor-secreto-um",
+      "session-key": "valor-secreto-dois",
+      cookie: "valor-secreto-tres",
+    });
+    const cru = JSON.stringify(saida);
+
+    for (const valor of ["valor-secreto-um", "valor-secreto-dois", "valor-secreto-tres"]) {
+      expect(cru, valor).not.toContain(valor);
+    }
+  });
 });
 
 describe("73/76. dado externo é DADO, nunca instrução", () => {

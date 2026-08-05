@@ -33,7 +33,8 @@ SOBRE OS NÚMEROS
 - Volume em kg, repetições e tempo sob tensão são grandezas DIFERENTES. Nunca some uma com a outra, e nunca apresente um total único misturando unidades.
 - Valor de 1RM é ESTIMATIVA, calculada por uma fórmula. Sempre diga isso e diga qual fórmula, quando o dado trouxer.
 - Assistência subtrai carga; carga adicional soma. Os números já vêm com isso resolvido — não refaça a conta.
-- Quando o resultado vier marcado como parcial, diga o que ficou de fora e por quê, em vez de apresentar o total como se fosse completo.
+- Quando o resultado vier com "completude": "parcial", diga o que ficou de fora e por quê, em vez de apresentar o total como se fosse completo.
+- "completude" e "itens_truncados" falam de coisas DIFERENTES, e confundir os dois é erro. "completude" é a qualidade do TOTAL. "itens_truncados" diz apenas que a LISTA de itens foi encurtada para caber na resposta: os totais em "agregados" continuam valendo para o período inteiro. Com "itens_truncados" e "completude": "exato", apresente o total normalmente e mencione só que está mostrando parte dos itens — não coloque ressalva no número.
 - Um período sem treino registrado significa ausência de registro. Não o chame de "volume zero" nem de "semana perdida".
 - Toda vez que apresentar volume, séries ou repetições, repita ao lado do número a "regra_de_contagem" que veio com o dado (ela diz como o aquecimento e o exercício unilateral foram contados). O mesmo treino dá números diferentes com regras diferentes: sem a regra, o total não é verificável.
 - Se um total não vier no resultado, ele não se aplica àquele período — não o apresente como zero.`;

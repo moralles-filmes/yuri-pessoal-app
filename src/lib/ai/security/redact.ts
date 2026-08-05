@@ -104,9 +104,23 @@ export type SanitizedJson =
  * Nome de campo que denuncia segredo. A âncora vale para o PEDAÇO da chave, não para a chave
  * inteira: ancorada de ponta a ponta, ela deixava passar `x-api-key`, `access_token`,
  * `client_secret` e `pwd` — todos nomes reais de cabeçalho e de campo de credencial.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⚠️ `session_id` FICA DE FORA DE PROPÓSITO — NÃO "CONSERTE" DE VOLTA.                   ║
+ * ║                                                                                       ║
+ * ║ `session_token` e `session_key` continuam entrando: são credencial. Mas `session_id`  ║
+ * ║ cru, aqui, é IDENTIFICADOR DE REGISTRO DO USUÁRIO, não segredo — uma ferramenta com   ║
+ * ║ argumento `session_id` (18-C) teria o argumento gravado como `[removido]` em          ║
+ * ║ `ai_tool_calls.arguments_sanitized`, e essa coluna existe justamente para mostrar     ║
+ * ║ QUAL registro foi lido. Redigir ali não protege nada e cega a auditoria.               ║
+ * ║                                                                                       ║
+ * ║ O cookie de sessão, que é o caso legítimo de preocupação, já é pego por `cookie` e    ║
+ * ║ por `authorization` — e o valor, se for JWT ou `Bearer …`, cai nos padrões de          ║
+ * ║ `PADROES_DE_SEGREDO` independentemente do nome do campo.                               ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 const CHAVE_SENSIVEL =
-  /(^|[_.-])(api[_-]?key|apikey|authorization|auth|bearer|token|secret|senha|password|passwd|pwd|credential|credentials|cookie|session[_-]?id|private[_-]?key)([_.-]|$)/i;
+  /(^|[_.-])(api[_-]?key|apikey|authorization|auth|bearer|token|secret|senha|password|passwd|pwd|credential|credentials|cookie|session[_-]?(?:token|key)|private[_-]?key)([_.-]|$)/i;
 const PROFUNDIDADE_MAXIMA = 8;
 const NAO_SERIALIZAVEL = "[não serializável]";
 

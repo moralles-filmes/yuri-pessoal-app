@@ -68,7 +68,13 @@ export async function startStep(input: {
   return data?.id ?? null;
 }
 
+/**
+ * `runId` só existe aqui para o LOG: a correlação das três funções deste arquivo é o run, e
+ * era a única que passava `stepId` no campo `correlation_id`. Duas correlações diferentes
+ * para a mesma requisição fazem a busca no log operacional perder metade das linhas.
+ */
 export async function closeStep(input: {
+  runId: string;
   stepId: string;
   userId: string;
   status: "completed" | "failed" | "cancelled";
@@ -87,7 +93,7 @@ export async function closeStep(input: {
     .eq("id", input.stepId)
     .eq("user_id", input.userId)
     .eq("status", "started");
-  if (error) registrarFalha("AUDIT_STEP_CLOSE_FAILED", input.stepId, error);
+  if (error) registrarFalha("AUDIT_STEP_CLOSE_FAILED", input.runId, error);
 }
 
 export async function recordToolCall(input: {

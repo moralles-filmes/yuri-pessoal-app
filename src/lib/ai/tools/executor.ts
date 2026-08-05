@@ -76,54 +76,85 @@ function erro(
 
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
- * ║ DUAS PODAS, E AS DUAS TÊM DE APARECER NO `motivo_incompleto`.                         ║
+ * ║ DUAS PODAS DE LISTA — E NENHUMA DELAS MEXE EM `completude`.                           ║
  * ║                                                                                       ║
  * ║  1. `maxRecords` do descriptor — o teto de LISTA, auditável num lugar só.             ║
  * ║  2. `MAX_UNTRUSTED_CHARS` — o teto do ENVELOPE. Sem ele, `wrapUntrusted` cortava a    ║
  * ║     string serializada no meio de um token JSON: o modelo recebia `truncated: true`    ║
- * ║     mas `completude` continuava "exato", e ele relatava um total de um período cujos   ║
- * ║     últimos registros ele nunca viu.                                                   ║
+ * ║     e nenhuma ressalva, e relatava um total de um período cujos últimos registros ele  ║
+ * ║     nunca viu.                                                                         ║
  * ║                                                                                       ║
- * ║ ⚠️ O motivo da poda CONCATENA com o do adapter, nunca o substitui. Espalhar            ║
- * ║ `...(excedeu ? {...} : {})` depois de `...saida` apagava a ressalva de "sem peso       ║
- * ║ corporal do dia" toda vez que a lista também estourasse o teto.                        ║
+ * ║ ⚠️ AS DUAS FALAM DA LISTA, NÃO DO TOTAL. Os agregados foram calculados sobre o período ║
+ * ║ INTEIRO, antes de qualquer poda: marcar o resultado como `completude: "parcial"` só    ║
+ * ║ porque a lista encolheu fazia o modelo hedgear um número correto. Por isso a poda      ║
+ * ║ escreve em `itens_truncados` e NÃO TOCA em `completude` nem em `motivo_incompleto` —   ║
+ * ║ esses dois são do adapter, e a ressalva dele ("sem peso corporal do dia") sobrevive    ║
+ * ║ inteira porque ninguém escreve por cima.                                               ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
  * A medida do orçamento é `JSON.stringify(saida).length` — exatamente a que `wrapUntrusted`
  * usa para decidir cortar. Medir outra coisa deixaria a poda e o corte em desacordo.
  */
+
+/**
+ * O caso em que nem a saída SEM ITEM NENHUM cabe no envelope: a parte não-item (`agregados`,
+ * `motivo_incompleto`) já estoura sozinha. Nenhuma das três ferramentas de hoje chega perto,
+ * mas uma quarta com `agregados` gordo reintroduziria o corte no meio do JSON — que é o
+ * defeito que o orçamento existe para eliminar. Aqui é melhor não entregar nada e DIZER
+ * isso do que entregar um objeto cortado ao meio.
+ */
+const GRANDE_DEMAIS =
+  "O resultado é grande demais para ser enviado: nem os totais couberam no limite de tamanho da resposta. Nada foi omitido em silêncio — nenhum número deste resultado chegou até você. Peça um período menor ou um filtro mais específico.";
+
 export function podarSaida(saida: ToolOutput, tool: ToolDescriptor): ToolOutput {
-  const doAdapter = saida.motivo_incompleto ? [saida.motivo_incompleto] : [];
   const total = saida.itens.length;
 
-  const montar = (n: number, motivoDaPoda: string | null): ToolOutput => {
-    const motivos = [...doAdapter, ...(motivoDaPoda ? [motivoDaPoda] : [])];
-    const juntos = motivos.join(" ");
-    return {
-      ...saida,
-      itens: saida.itens.slice(0, n),
-      refs: saida.refs.slice(0, n),
-      completude: motivoDaPoda ? "parcial" : saida.completude,
-      ...(juntos ? { motivo_incompleto: juntos } : {}),
-    };
-  };
+  /**
+   * `refs` só pode ser fatiado por POSIÇÃO quando é 1:1 com `itens`. Não é sempre:
+   *  • `get_last_workout` tem 1 ref (a sessão) e N itens (os exercícios) — podar até n = 0
+   *    apagaria o único link do "Ver dados usados" enquanto os agregados continuam sendo
+   *    relatados;
+   *  • `get_records` monta `refs` de `recordes.filter(r => r.sessionId)` — com um recorde
+   *    sem sessão, o índice k de `refs` deixa de ser o k de `itens` e o `slice` guardaria um
+   *    subconjunto que não corresponde aos itens mantidos.
+   * Comprimento igual é a única evidência de correspondência posicional que este ponto tem;
+   * sem ela, `refs` fica INTEIRO (ele é pequeno, e a rastreabilidade da Task 12 depende dele).
+   */
+  const refsPorPosicao = saida.refs.length === total;
+
+  const montar = (n: number, motivoDaPoda: string | null): ToolOutput => ({
+    ...saida,
+    itens: saida.itens.slice(0, n),
+    refs: refsPorPosicao ? saida.refs.slice(0, n) : saida.refs,
+    ...(motivoDaPoda
+      ? { itens_truncados: { mostrando: n, de: total, motivo: motivoDaPoda } }
+      : {}),
+  });
 
   const cabe = (candidato: ToolOutput) =>
     JSON.stringify(candidato).length <= MAX_UNTRUSTED_CHARS;
 
   const teto = Math.min(total, tool.maxRecords);
-  const motivoDoTeto =
-    total > tool.maxRecords
-      ? `Mostrando ${tool.maxRecords} de ${total} ${tool.itemLabel}.`
-      : null;
+  const excedeuTeto = total > tool.maxRecords;
+  const motivoDoTeto = excedeuTeto
+    ? `Mostrando ${tool.maxRecords} de ${total} ${tool.itemLabel}: o teto da ferramenta é ${tool.maxRecords}. Os totais em \`agregados\` cobrem o período inteiro.`
+    : null;
 
   const podadoPeloTeto = montar(teto, motivoDoTeto);
   if (cabe(podadoPeloTeto)) return podadoPeloTeto;
 
-  // Não coube no envelope: procura o MAIOR prefixo que cabe. A mensagem do orçamento
-  // substitui a do teto porque ela já nomeia um corte menor sobre o mesmo total.
+  /**
+   * Não coube no envelope: procura o MAIOR prefixo que cabe.
+   *
+   * A mensagem nomeia AS DUAS CAUSAS quando as duas atuaram. Atribuir todo o corte ao
+   * tamanho, com o teto tendo cortado antes, é impreciso na direção errada: sugere que a
+   * ferramenta poderia devolver `total` itens numa resposta menor, quando o teto do
+   * descriptor a impediria de qualquer forma.
+   */
   const motivoDoOrcamento = (n: number) =>
-    `Mostrando ${n} de ${total} ${tool.itemLabel}: o restante não coube no limite de tamanho da resposta.`;
+    excedeuTeto
+      ? `Mostrando ${n} de ${total} ${tool.itemLabel}: o teto da ferramenta é ${tool.maxRecords} e o restante não coube no limite de tamanho da resposta. Os totais em \`agregados\` cobrem o período inteiro.`
+      : `Mostrando ${n} de ${total} ${tool.itemLabel}: o restante não coube no limite de tamanho da resposta. Os totais em \`agregados\` cobrem o período inteiro.`;
 
   let baixo = 0;
   let alto = teto;
@@ -138,7 +169,21 @@ export function podarSaida(saida: ToolOutput, tool: ToolDescriptor): ToolOutput 
     }
   }
 
-  return montar(melhor, motivoDoOrcamento(melhor));
+  const final = montar(melhor, motivoDoOrcamento(melhor));
+  if (cabe(final)) return final;
+
+  // Nem `montar(0, …)` coube. Aqui os AGREGADOS caem junto — e por isso, e só por isso,
+  // `completude` vira "parcial": o total realmente não chegou ao modelo.
+  return {
+    periodo: saida.periodo,
+    contagem: saida.contagem,
+    completude: "parcial",
+    motivo_incompleto: GRANDE_DEMAIS,
+    agregados: {},
+    itens: [],
+    refs: [],
+    itens_truncados: { mostrando: 0, de: total, motivo: GRANDE_DEMAIS },
+  };
 }
 
 export async function executeTool(

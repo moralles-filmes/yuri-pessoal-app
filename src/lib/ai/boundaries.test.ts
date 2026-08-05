@@ -259,6 +259,33 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
     expect(violacoes).toEqual([]);
   });
 
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ A NORMALIZAÇÃO DE TEXTO É UMA SÓ, E MORA EM CAMADA NEUTRA.                          ║
+   * ║                                                                                     ║
+   * ║ Dois consumidores a usam por motivos DIFERENTES — o roteador procura palavra com    ║
+   * ║ fronteira, o filtro de recordes procura substring em nome de exercício. Não é a     ║
+   * ║ mesma busca; é o mesmo PREPARO do texto. Uma segunda declaração faria "triceps"     ║
+   * ║ casar num lado e não no outro, e a resposta afirmaria que não há recorde onde há.   ║
+   * ║                                                                                     ║
+   * ║ Ela também não pode morar em `agents/`: `tools/adapters/` importar do roteador       ║
+   * ║ acopla a leitura de dado à seleção de agente, que não têm nada em comum.            ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("normalizarTexto é declarada UMA vez, e em core/", () => {
+    const declaracoes: string[] = [];
+
+    for (const arquivo of listarArquivos(RAIZ)) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      if (/function\s+normalizarTexto\s*\(/.test(codigo)) {
+        declaracoes.push(path.relative(SRC, arquivo).replace(/\\/g, "/"));
+      }
+    }
+
+    expect(declaracoes).toEqual(["lib/ai/core/text.ts"]);
+  });
+
   it("audit.ts é a exceção DECLARADA — e não escreve em tabela de módulo do usuário", () => {
     const codigo = fs.readFileSync(path.join(RAIZ, "tools", "audit.ts"), "utf8");
     const tabelas = [...codigo.matchAll(/\.from\(\s*["']([^"']+)["']/g)].map((m) => m[1]);

@@ -56,6 +56,24 @@ describe("coerência do descriptor", () => {
   it("recusa ferramenta sem teto de registros", () => {
     expect(isToolDescriptorCoherent({ ...LEITURA, maxRecords: 0 })).toBe(false);
   });
+
+  /**
+   * O par negativo do teto. Sem ele, remover a checagem de `itemLabel` da coerência não
+   * quebrava teste nenhum — e um descriptor com rótulo vazio faria a poda dizer "Mostrando
+   * 50 de 51 ." ao modelo, que é pior que dizer "registros".
+   *
+   * String em branco conta como ausente: `"   "` no rótulo produz exatamente a mesma frase
+   * mutilada que `""`.
+   */
+  it("recusa ferramenta sem RÓTULO para os itens", () => {
+    expect(isToolDescriptorCoherent({ ...LEITURA, itemLabel: "" })).toBe(false);
+    expect(isToolDescriptorCoherent({ ...LEITURA, itemLabel: "   " })).toBe(false);
+    expect(isToolDescriptorCoherent({ ...LEITURA, itemLabel: "\n\t" })).toBe(false);
+  });
+
+  it("aceita rótulo com espaço em volta, desde que haja rótulo", () => {
+    expect(isToolDescriptorCoherent({ ...LEITURA, itemLabel: " recordes " })).toBe(true);
+  });
 });
 
 describe("saída vazia", () => {

@@ -225,8 +225,18 @@ describe("executeTool — nada roda sem passar pelo guard", () => {
   });
 });
 
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ `completude` FALA DO TOTAL; `itens_truncados` FALA DA LISTA.                          ║
+ * ║                                                                                       ║
+ * ║ Enquanto o corte de lista virava `completude: "parcial"`, o modelo lia "este total    ║
+ * ║ está incompleto" para um total calculado sobre o período INTEIRO — e o prompt manda    ║
+ * ║ dizer o que ficou de fora, ou seja, ele hedgearia um número certo. Com o orçamento de ║
+ * ║ caracteres o caso deixou de ser raro (97 de 400 sessões numa medição).                 ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
 describe("executeTool — teto de registros", () => {
-  it("poda pelo maxRecords do DESCRIPTOR e declara que a lista está parcial", async () => {
+  it("poda pelo maxRecords do DESCRIPTOR e declara a lista truncada", async () => {
     respostaDaFerramenta = async () => saidaCom(5);
 
     const r = await executeTool(ctx, chamada());
@@ -234,8 +244,19 @@ describe("executeTool — teto de registros", () => {
 
     expect(saida.itens).toHaveLength(2);
     expect(saida.refs).toHaveLength(2);
-    expect(saida.completude).toBe("parcial");
-    expect(saida.motivo_incompleto).toContain("2 de 5");
+    expect(saida.itens_truncados).toMatchObject({ mostrando: 2, de: 5 });
+  });
+
+  // ⚠️ A separação inteira depende disto: cortar a LISTA não pode alterar a qualidade do
+  // TOTAL. Os agregados foram calculados antes da poda, sobre o período inteiro.
+  it("cortar a lista NÃO torna o total parcial", async () => {
+    respostaDaFerramenta = async () => saidaCom(5);
+
+    const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
+
+    expect(saida.completude).toBe("exato");
+    expect(saida.motivo_incompleto).toBeUndefined();
+    expect(saida.agregados).toEqual({ volume_kg: 1080 });
   });
 
   // "Mostrando 50 de 51 registros" ao lado de `contagem: 1` faz o modelo relatar "50 de 51
@@ -244,19 +265,31 @@ describe("executeTool — teto de registros", () => {
     respostaDaFerramenta = async () => saidaCom(5);
 
     const r = await executeTool(ctx, chamada());
+    const motivo = (r.block.content as ToolOutput).itens_truncados?.motivo ?? "";
 
-    expect((r.block.content as ToolOutput).motivo_incompleto).toBe(
-      "Mostrando 2 de 5 sessões de treino.",
-    );
+    expect(motivo).toContain("Mostrando 2 de 5 sessões de treino");
+    expect(motivo).not.toContain("registros");
   });
 
-  it("lista dentro do teto não vira parcial", async () => {
+  // O teto é do descriptor: dizer que "não coube no tamanho" quando quem cortou foi o teto
+  // sugere que a ferramenta devolveria os 5 numa resposta menor. Ela não devolveria.
+  it("corte só pelo teto ATRIBUI ao teto, não ao tamanho da resposta", async () => {
+    respostaDaFerramenta = async () => saidaCom(5);
+
+    const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
+
+    expect(saida.itens_truncados?.motivo).toContain("teto da ferramenta é 2");
+    expect(saida.itens_truncados?.motivo).not.toContain("limite de tamanho");
+  });
+
+  it("lista dentro do teto não declara truncamento nenhum", async () => {
     respostaDaFerramenta = async () => saidaCom(2);
 
-    const r = await executeTool(ctx, chamada());
+    const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
 
-    expect((r.block.content as ToolOutput).completude).toBe("exato");
-    expect((r.block.content as ToolOutput).motivo_incompleto).toBeUndefined();
+    expect(saida.completude).toBe("exato");
+    expect(saida.itens_truncados).toBeUndefined();
+    expect(saida.motivo_incompleto).toBeUndefined();
   });
 
   /**
@@ -264,7 +297,7 @@ describe("executeTool — teto de registros", () => {
    * 1 item com teto 2 — nunca entrava no ramo que dizia estar testando, e passava com uma
    * implementação que apagava a ressalva do adapter.
    */
-  it("a ressalva do adapter SOBREVIVE à poda — os dois motivos aparecem", async () => {
+  it("a ressalva do adapter SOBREVIVE à poda, e continua falando só do total", async () => {
     respostaDaFerramenta = async () => ({
       ...saidaCom(5),
       completude: "parcial" as const,
@@ -275,11 +308,75 @@ describe("executeTool — teto de registros", () => {
     const saida = r.block.content as ToolOutput;
 
     expect(saida.itens).toHaveLength(2);
+    // O do adapter, intacto: a poda não escreve por cima nem concatena o próprio motivo nele.
     expect(saida.completude).toBe("parcial");
-    // O do adapter…
-    expect(saida.motivo_incompleto).toContain("peso corporal");
-    // …e o da poda. Perder qualquer um dos dois é apresentar como completo o que não é.
-    expect(saida.motivo_incompleto).toContain("2 de 5 sessões de treino");
+    expect(saida.motivo_incompleto).toBe("Séries sem peso corporal ficaram de fora.");
+    // …e o da lista, no campo dele. Perder qualquer um dos dois é apresentar como completo
+    // o que não é.
+    expect(saida.itens_truncados?.motivo).toContain("2 de 5 sessões de treino");
+  });
+});
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ `refs` NEM SEMPRE É 1:1 COM `itens` — E FATIAR POR POSIÇÃO QUEBRA O "VER DADOS USADOS".║
+ * ║                                                                                       ║
+ * ║  • `get_last_workout`: 1 ref (a sessão) e N itens (os exercícios do treino).          ║
+ * ║  • `get_records`: `refs` é `recordes.filter(r => r.sessionId)` — com um recorde sem   ║
+ * ║    sessão, o índice k de `refs` deixa de ser o k de `itens`.                          ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("executeTool — refs e a rastreabilidade", () => {
+  const umaRef = (id: string) => ({
+    tipo: "sessao_de_treino",
+    id,
+    rota: `/treinos/historico/${id}`,
+  });
+
+  it("com refs 1:1, o corte da lista corta as refs junto", async () => {
+    respostaDaFerramenta = async () => saidaCom(5);
+
+    const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
+
+    expect(saida.itens).toHaveLength(2);
+    expect(saida.refs).toEqual([umaRef("s1"), umaRef("s2")]);
+  });
+
+  /**
+   * A forma do `get_last_workout`: 1 ref (a sessão) e N itens (os exercícios). Aqui o
+   * orçamento derruba a lista até ZERO — e é exatamente aí que fatiar por posição apagaria o
+   * ÚNICO link do "Ver dados usados", enquanto os agregados daquele treino continuam sendo
+   * relatados. O usuário perderia a conferência do número que a IA acabou de dizer.
+   */
+  it("a ref única SOBREVIVE mesmo quando a lista é cortada até zero", async () => {
+    respostaDaFerramenta = async () => ({
+      ...saidaCom(5),
+      itens: Array.from({ length: 5 }, (_, i) => ({ n: i + 1, texto: "x".repeat(9000) })),
+      refs: [umaRef("s1")],
+    });
+
+    const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
+
+    expect(saida.itens).toEqual([]);
+    expect(saida.refs).toEqual([umaRef("s1")]);
+  });
+
+  /**
+   * A forma do `get_records`: `refs` é `recordes.filter(r => r.sessionId)`. Com 5 recordes e
+   * 3 com sessão vinculada, o índice k de `refs` NÃO é o k de `itens` — um `slice(0, 2)`
+   * guardaria duas refs que não correspondem aos dois itens mantidos, e o "Ver dados usados"
+   * apontaria para a sessão errada.
+   */
+  it("refs em cardinalidade diferente da dos itens não é fatiada por posição", async () => {
+    respostaDaFerramenta = async () => ({
+      ...saidaCom(5),
+      refs: [umaRef("r1"), umaRef("r3"), umaRef("r5")],
+    });
+
+    const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
+
+    expect(saida.itens).toHaveLength(2);
+    expect(saida.refs).toEqual([umaRef("r1"), umaRef("r3"), umaRef("r5")]);
   });
 });
 
@@ -309,14 +406,62 @@ describe("executeTool — orçamento de caracteres do bloco não confiável", ()
     expect(saida.itens.length).toBeLessThan(2);
   });
 
-  it("o corte por tamanho vira PARCIAL com o motivo, nunca um total mudo", async () => {
+  it("o corte por tamanho é declarado com o motivo, nunca um total mudo", async () => {
     respostaDaFerramenta = async () => saidaGorda(2);
 
     const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
 
+    expect(saida.itens_truncados?.motivo).toContain("não coube no limite de tamanho");
+    expect(saida.itens_truncados?.motivo).toContain("sessões de treino");
+    // …e o TOTAL continua exato: os agregados vieram do período inteiro.
+    expect(saida.completude).toBe("exato");
+    expect(saida.agregados).toEqual({ volume_kg: 1080 });
+  });
+
+  /**
+   * Quando o teto JÁ cortou (5 → 2) e o tamanho cortou de novo (2 → 0/1), atribuir todo o
+   * corte ao tamanho sugere que a ferramenta devolveria as 5 numa resposta menor. O teto do
+   * descriptor a impediria de qualquer forma — a mensagem tem de nomear as duas causas.
+   */
+  it("quando teto E tamanho cortaram, a mensagem nomeia as DUAS causas", async () => {
+    respostaDaFerramenta = async () => ({
+      ...saidaCom(5),
+      itens: Array.from({ length: 5 }, (_, i) => ({ n: i + 1, texto: "x".repeat(5000) })),
+    });
+
+    const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
+
+    expect(saida.itens_truncados?.de).toBe(5);
+    expect(saida.itens_truncados?.motivo).toContain("teto da ferramenta é 2");
+    expect(saida.itens_truncados?.motivo).toContain("não coube no limite de tamanho");
+  });
+
+  /**
+   * ⚠️ O caso em que nem a saída SEM ITEM NENHUM cabe: a parte não-item (`agregados`,
+   * `motivo_incompleto`) estoura sozinha. As três ferramentas de hoje não chegam perto, mas
+   * uma quarta com `agregados` gordo reintroduziria o corte no meio do JSON — e o modelo
+   * receberia um objeto mutilado achando que recebeu o resultado.
+   *
+   * Aqui `completude` vira "parcial" com razão: os agregados também caíram.
+   */
+  it("se nem os agregados couberem, o resultado é EXPLICITAMENTE recusado", async () => {
+    respostaDaFerramenta = async () => ({
+      ...saidaCom(3),
+      agregados: { volume_kg: 1080, detalhe: "y".repeat(9000) },
+    });
+
+    const r = await executeTool(ctx, chamada());
+    const saida = r.block.content as ToolOutput;
+
+    expect(r.block.truncated).toBe(false);
+    expect(JSON.stringify(saida).length).toBeLessThanOrEqual(MAX_UNTRUSTED_CHARS);
+    expect(saida.itens).toEqual([]);
+    expect(saida.agregados).toEqual({});
     expect(saida.completude).toBe("parcial");
-    expect(saida.motivo_incompleto).toContain("não coube no limite de tamanho");
-    expect(saida.motivo_incompleto).toContain("sessões de treino");
+    expect(saida.motivo_incompleto).toContain("grande demais");
+    expect(saida.itens_truncados).toMatchObject({ mostrando: 0, de: 3 });
+    // E nenhum pedaço do agregado gigante vaza cortado ao meio.
+    expect(JSON.stringify(saida)).not.toContain("yyyy");
   });
 
   it("saída que cabe no envelope não é tocada pelo orçamento", async () => {
@@ -325,6 +470,7 @@ describe("executeTool — orçamento de caracteres do bloco não confiável", ()
     const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
 
     expect(saida.itens).toHaveLength(2);
+    expect(saida.itens_truncados).toBeUndefined();
     expect(saida.motivo_incompleto).toBeUndefined();
   });
 });
