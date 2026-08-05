@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { AiRate } from "@/lib/ai/core/pricing";
+import { MAX_TOOL_STEPS, TOKENS_POR_RESULTADO_DE_FERRAMENTA } from "@/lib/ai/tools/limits";
 import { computeReservation, estimarTokensDeEntrada, MARGEM_PADRAO } from "./reservation";
 import { round6 } from "./meter";
 
@@ -143,5 +144,58 @@ describe("estimativa de tokens de entrada", () => {
     const curto = estimarTokensDeEntrada("oi");
     const longo = estimarTokensDeEntrada("oi".repeat(1_000));
     expect(longo).toBeGreaterThan(curto);
+  });
+});
+
+describe("reserva com passos de ferramenta (18-B)", () => {
+  // Reusa a fábrica `tarifa()` já definida acima — evita `as unknown as` para montar um AiRate.
+  const TARIFA_UNICA: readonly AiRate[] = [tarifa("10", "30", "m")];
+
+  const comum = {
+    rates: TARIFA_UNICA,
+    tokensEntradaEstimados: 1000,
+    tetoDeSaida: 1000,
+    maxRetries: 0,
+    maxFallbacks: 0,
+    margem: 1,
+  };
+
+  it("sem passos, o valor é idêntico ao da 18-A (compatibilidade)", () => {
+    const semCampo = computeReservation(comum);
+    const comZero = computeReservation({ ...comum, maxToolSteps: 0 });
+    expect(comZero.valorUsd).toBe(semCampo.valorUsd);
+  });
+
+  it("cada passo acrescenta uma chamada E o contexto que ela carrega", () => {
+    const um = computeReservation({ ...comum, maxToolSteps: 1 });
+    const zero = computeReservation({ ...comum, maxToolSteps: 0 });
+
+    // Passo 0: 1000 entrada + 1000 saída. Passo 1: (1000 + tokens do resultado) + 1000 saída.
+    const esperado =
+      (1000 / 1e6) * 10 + (1000 / 1e6) * 30 +
+      ((1000 + TOKENS_POR_RESULTADO_DE_FERRAMENTA) / 1e6) * 10 + (1000 / 1e6) * 30;
+
+    expect(um.valorUsd).toBeCloseTo(esperado, 6);
+    expect(um.valorUsd).toBeGreaterThan(zero.valorUsd);
+  });
+
+  it("cresce de forma monótona até o teto do módulo", () => {
+    let anterior = 0;
+    for (let passos = 0; passos <= MAX_TOOL_STEPS; passos += 1) {
+      const v = computeReservation({ ...comum, maxToolSteps: passos }).valorUsd;
+      expect(v).toBeGreaterThan(anterior);
+      anterior = v;
+    }
+  });
+
+  it("a explicação em pt-BR menciona os passos de ferramenta", () => {
+    const r = computeReservation({ ...comum, maxToolSteps: 2 });
+    expect(r.explicacao).toContain("2 passos de ferramenta");
+  });
+
+  it("retries e fallbacks continuam multiplicando o total", () => {
+    const simples = computeReservation({ ...comum, maxToolSteps: 2 });
+    const comRetry = computeReservation({ ...comum, maxToolSteps: 2, maxRetries: 1 });
+    expect(comRetry.valorUsd).toBeCloseTo(simples.valorUsd * 2, 5);
   });
 });
