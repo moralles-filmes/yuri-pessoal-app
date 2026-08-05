@@ -283,9 +283,59 @@ export type Database = {
           {
             foreignKeyName: "ai_provider_credentials_config_fk"
             columns: ["user_id", "provider"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "ai_provider_configs"
             referencedColumns: ["user_id", "provider"]
+          },
+        ]
+      }
+      ai_run_steps: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          duration_ms: number | null
+          id: string
+          kind: string
+          run_id: string
+          started_at: string
+          status: string
+          step_index: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          kind: string
+          run_id: string
+          started_at?: string
+          status?: string
+          step_index: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          kind?: string
+          run_id?: string
+          started_at?: string
+          status?: string
+          step_index?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_run_steps_run_owner_fk"
+            columns: ["run_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_runs"
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }
@@ -407,6 +457,72 @@ export type Database = {
           },
         ]
       }
+      ai_tool_calls: {
+        Row: {
+          arguments_sanitized: Json
+          created_at: string
+          duration_ms: number | null
+          id: string
+          provider_call_id: string | null
+          records_read: number | null
+          refs: Json
+          rejection_reason: string | null
+          run_id: string
+          status: string
+          step_id: string
+          tool_name: string
+          tool_version: string
+          user_id: string
+        }
+        Insert: {
+          arguments_sanitized?: Json
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          provider_call_id?: string | null
+          records_read?: number | null
+          refs?: Json
+          rejection_reason?: string | null
+          run_id: string
+          status: string
+          step_id: string
+          tool_name: string
+          tool_version: string
+          user_id: string
+        }
+        Update: {
+          arguments_sanitized?: Json
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          provider_call_id?: string | null
+          records_read?: number | null
+          refs?: Json
+          rejection_reason?: string | null
+          run_id?: string
+          status?: string
+          step_id?: string
+          tool_name?: string
+          tool_version?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_tool_calls_run_owner_fk"
+            columns: ["run_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_runs"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "ai_tool_calls_step_owner_fk"
+            columns: ["step_id", "run_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_run_steps"
+            referencedColumns: ["id", "run_id", "user_id"]
+          },
+        ]
+      }
       ai_usage_events: {
         Row: {
           agent_id: string | null
@@ -502,13 +618,18 @@ export type Database = {
       ai_user_preferences: {
         Row: {
           allow_body: boolean
+          allow_calendar: boolean
           allow_cross_module: boolean
           allow_external_search: boolean
           allow_fallback: boolean
           allow_files: boolean
           allow_finance: boolean
+          allow_habits: boolean
           allow_memory: boolean
           allow_nutrition: boolean
+          allow_studies: boolean
+          allow_tasks: boolean
+          allow_todo: boolean
           allow_training: boolean
           budget_alert_level_reached: number
           budget_block_on_limit: boolean
@@ -527,13 +648,18 @@ export type Database = {
         }
         Insert: {
           allow_body?: boolean
+          allow_calendar?: boolean
           allow_cross_module?: boolean
           allow_external_search?: boolean
           allow_fallback?: boolean
           allow_files?: boolean
           allow_finance?: boolean
+          allow_habits?: boolean
           allow_memory?: boolean
           allow_nutrition?: boolean
+          allow_studies?: boolean
+          allow_tasks?: boolean
+          allow_todo?: boolean
           allow_training?: boolean
           budget_alert_level_reached?: number
           budget_block_on_limit?: boolean
@@ -552,13 +678,18 @@ export type Database = {
         }
         Update: {
           allow_body?: boolean
+          allow_calendar?: boolean
           allow_cross_module?: boolean
           allow_external_search?: boolean
           allow_fallback?: boolean
           allow_files?: boolean
           allow_finance?: boolean
+          allow_habits?: boolean
           allow_memory?: boolean
           allow_nutrition?: boolean
+          allow_studies?: boolean
+          allow_tasks?: boolean
+          allow_todo?: boolean
           allow_training?: boolean
           budget_alert_level_reached?: number
           budget_block_on_limit?: boolean
@@ -5632,6 +5763,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "training_calendar_sync_owner_fk"
+            columns: ["scheduled_workout_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "training_scheduled_workouts"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
             foreignKeyName: "training_calendar_sync_scheduled_workout_id_fkey"
             columns: ["scheduled_workout_id"]
             isOneToOne: false
@@ -6401,6 +6539,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "habits"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_preferences_habit_owner_fk"
+            columns: ["habit_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "habits"
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }
@@ -8157,17 +8302,18 @@ export type Database = {
     }
     Functions: {
       account_balance: { Args: { p_account_id: string }; Returns: number }
+      ai_agent_is_allowed: { Args: { p_agent_id: string }; Returns: boolean }
       ai_begin_chat_run: {
         Args: {
           p_agent_id: string
-          p_conversation_id: string | null
+          p_conversation_id: string
           p_prompt_version: string
           p_reservation_rate_version: string
           p_reservation_ttl_seconds?: number
           p_reserved_cost: number
           p_selected_model: string
           p_selected_provider: string
-          p_title?: string | null
+          p_title?: string
           p_user_text: string
         }
         Returns: {
@@ -8178,7 +8324,10 @@ export type Database = {
           user_message_id: string
         }[]
       }
-      ai_reconcile_abandoned_runs: { Args: { p_limit?: number }; Returns: number }
+      ai_reconcile_abandoned_runs: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
       seed_default_categories: { Args: never; Returns: number }
     }
     Enums: {
