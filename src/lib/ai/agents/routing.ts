@@ -48,9 +48,9 @@ const AGENTE_DO_MODULO: Record<string, string> = {
 const PALAVRAS: Record<string, readonly string[]> = {
   training: [
     "treino", "treinos", "treinar", "treinei", "malhar", "academia",
-    "serie", "series", "repeticao", "repeticoes", "carga", "volume",
+    "serie", "series", "repeticao", "repeticoes", "repeticao maxima", "carga", "volume",
     "exercicio", "exercicios", "agachamento", "supino", "levantamento",
-    "recorde", "recordes", "1rm", "rm", "musculacao", "sessao de treino",
+    "recorde", "recordes", "1rm", "musculacao", "sessao de treino",
   ],
   finance: [
     "cartao", "cartoes", "fatura", "faturas", "gastei", "gasto", "gastos",

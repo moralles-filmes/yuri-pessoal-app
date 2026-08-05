@@ -93,4 +93,28 @@ describe("routeAgent", () => {
     expect(acentuada.agentId).toBe(base.agentId);
     expect(base.agentId).toBe(TREINOS_AGENT_ID);
   });
+
+  // Regressão: "rm" isolado (2 letras) casava como token solto em qualquer texto —
+  // "rm -rf", "RM" de empresa/pessoa, "rm de matrícula" — nada disso é sobre treino.
+  it("gatilho curto e ambíguo não captura texto fora do domínio de treino", () => {
+    const frases = [
+      "vou rodar rm -rf no servidor",
+      "qual o RM dela?",
+      "empresa RM Sistemas",
+      "preciso saber meu rm de matricula",
+    ];
+    for (const texto of frases) {
+      const r = routeAgent({ texto, pageContext: null, permissions: LIGADO });
+      expect(r.agentId).toBe(ASSISTENTE_PESSOAL_ID);
+    }
+  });
+
+  it("1RM continua reconhecido como treino, mesmo depois de remover o 'rm' isolado", () => {
+    const r = routeAgent({
+      texto: "meu 1rm de supino subiu",
+      pageContext: null,
+      permissions: LIGADO,
+    });
+    expect(r.agentId).toBe(TREINOS_AGENT_ID);
+  });
 });
