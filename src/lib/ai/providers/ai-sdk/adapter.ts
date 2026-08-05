@@ -127,37 +127,92 @@ function saidaDeFerramenta(output: unknown, isError: boolean): SaidaDeFerramenta
   return isError ? { type: "error-json", value: valor } : { type: "json", value: valor };
 }
 
-function partesDeTexto(p: AiContentPart): TextPart[] {
-  return p.type === "text" ? [{ type: "text", text: p.text }] : [];
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ NENHUMA PARTE SOME EM SILÊNCIO.                                                       ║
+ * ║                                                                                       ║
+ * ║ Esta é a ÚNICA tradução entre o nosso contrato e os quatro provedores. Uma parte que  ║
+ * ║ o papel de destino não representa não pode virar `[]`: um `tool-result` perdido deixa ║
+ * ║ um `tool_use` sem par, e a Anthropic responde 400 ("tool_use ids found without        ║
+ * ║ tool_result blocks") — um erro que aparece longe da causa e custa uma tarde.          ║
+ * ║                                                                                       ║
+ * ║ `ERRO_PERMANENTE` é a classe certa: `fallback.ts` responde `parar`, e é isso mesmo —  ║
+ * ║ prompt malformado falharia IGUAL nos quatro provedores, então tentar outro só queima  ║
+ * ║ tempo e dinheiro. A mensagem é própria porque a padrão da classe ("o provedor         ║
+ * ║ recusou") seria mentira: nenhuma chamada externa chegou a acontecer.                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+function erroDeTraducao(code: string, detalhe: string): AiError {
+  return aiError(
+    "ERRO_PERMANENTE",
+    code,
+    `Não foi possível montar esta conversa para o provedor: ${detalhe}. ` +
+      "Nenhuma chamada foi enviada e nada foi consumido.",
+  );
+}
+
+/**
+ * Sinal INTERNO de tradução impossível. Nasce e morre dentro de `toModelMessages` — o que
+ * escapa dali é sempre um `Result`, nunca uma exceção. É só para os quatro pontos de recusa
+ * não terem de devolver `Result` cada um e poluir a leitura da tradução.
+ */
+class ParteNaoRepresentavel extends Error {
+  constructor(readonly aiErro: AiError) {
+    super(aiErro.code);
+    this.name = "ParteNaoRepresentavel";
+  }
+}
+
+function recusar(code: string, detalhe: string): never {
+  throw new ParteNaoRepresentavel(erroDeTraducao(code, detalhe));
+}
+
+/** `user` aceita texto (e mídia, que o contrato ainda não tem). Nunca ferramenta. */
+function partesDeTexto(p: AiContentPart, i: number): TextPart[] {
+  if (p.type === "text") return [{ type: "text", text: p.text }];
+  recusar(
+    "USER_PART_NOT_REPRESENTABLE",
+    `a mensagem ${i} é do usuário e traz uma parte "${p.type}", que o papel user não aceita`,
+  );
 }
 
 /** O assistente pode carregar texto E pedidos de ferramenta na mesma mensagem. */
-function partesDoAssistente(p: AiContentPart): Array<TextPart | ToolCallPart> {
+function partesDoAssistente(p: AiContentPart, i: number): Array<TextPart | ToolCallPart> {
   if (p.type === "text") return [{ type: "text", text: p.text }];
   if (p.type === "tool-call") {
     return [
       { type: "tool-call", toolCallId: p.callId, toolName: p.toolName, input: p.input },
     ];
   }
-  return [];
+  // O SDK até aceitaria `tool-result` aqui — mas só no caso de ferramenta executada PELO
+  // provedor, que nós não fazemos. No nosso contrato o resultado pertence ao papel `tool`.
+  recusar(
+    "ASSISTANT_TOOL_RESULT_NOT_ALLOWED",
+    `a mensagem ${i} é do assistente e traz um "tool-result"; resultado de ferramenta pertence ao papel tool`,
+  );
 }
 
-function partesDeResultado(p: AiContentPart): ToolResultPart[] {
-  if (p.type !== "tool-result") return [];
-  return [
-    {
-      type: "tool-result",
-      toolCallId: p.callId,
-      toolName: p.toolName,
-      output: saidaDeFerramenta(p.output, p.isError),
-    },
-  ];
+function partesDeResultado(p: AiContentPart, i: number): ToolResultPart[] {
+  if (p.type === "tool-result") {
+    return [
+      {
+        type: "tool-result",
+        toolCallId: p.callId,
+        toolName: p.toolName,
+        output: saidaDeFerramenta(p.output, p.isError),
+      },
+    ];
+  }
+  recusar(
+    "TOOL_PART_NOT_REPRESENTABLE",
+    `a mensagem ${i} é do papel tool e traz uma parte "${p.type}"; esse papel só carrega resultados`,
+  );
 }
 
-function textoDe(content: string | readonly AiContentPart[]): string {
-  if (typeof content === "string") return content;
-  return content.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("");
-}
+/** O que sai da tradução: prompt pronto ou erro tipado. Nunca uma exceção solta. */
+type PromptTraduzido =
+  | { readonly ok: true; readonly messages: ModelMessage[] }
+  | { readonly ok: false; readonly error: AiError };
 
 /**
  * Contrato interno → `ModelMessage` do SDK.
@@ -166,38 +221,72 @@ function textoDe(content: string | readonly AiContentPart[]): string {
  * é texto puro, e migrá-lo para partes não traria nada. As partes existem para o que o texto
  * não representa — o pedido de ferramenta do assistente e o resultado que volta.
  *
- * Cada papel é montado no SEU formato porque o SDK não os trata igual: `system` só aceita
- * string, `user` não aceita `tool-call`, e o papel `tool` é uma lista de resultados, nunca
- * texto solto. Um `as ModelMessage` genérico esconderia esses três contratos diferentes.
+ * Cada papel é montado no SEU formato porque o SDK não os trata igual: `user` não aceita
+ * `tool-call`, e o papel `tool` é uma lista de resultados, nunca texto solto. Um
+ * `as ModelMessage` genérico esconderia esses contratos diferentes.
  */
-function toModelMessages(messages: readonly AiMessage[]): ModelMessage[] {
-  return messages.map((m): ModelMessage => {
-    if (m.role === "tool") {
+function toModelMessages(messages: readonly AiMessage[]): PromptTraduzido {
+  try {
+    const traduzidas = messages.map((m, i): ModelMessage => {
+      // ⚠️ `standardizePrompt` do SDK LANÇA `InvalidPromptError` se qualquer mensagem tiver
+      // `role: 'system'` (e `streamText` não passa `allowSystemInMessages`). Não é uma
+      // mensagem ignorada — é a requisição inteira perdida. E filtrar em silêncio seria pior
+      // aqui do que em qualquer outro papel: instrução no histórico é exatamente o vetor que
+      // a regra "dado é dado, nunca instrução" existe para barrar. O prompt de sistema tem um
+      // caminho próprio (`AiRequest.system`); qualquer outro é bug ou tentativa de injeção, e
+      // os dois merecem barulho.
+      if (m.role === "system") {
+        recusar(
+          "SYSTEM_MESSAGE_NOT_ALLOWED",
+          `a mensagem ${i} tem papel "system"; o prompt de sistema viaja em AiRequest.system, separado do histórico`,
+        );
+      }
+
+      if (m.role === "tool") {
+        if (typeof m.content === "string") {
+          recusar(
+            "TOOL_MESSAGE_NOT_A_LIST",
+            `a mensagem ${i} é do papel tool e veio como texto; esse papel é sempre uma lista de resultados`,
+          );
+        }
+        const content = m.content.flatMap((p) => partesDeResultado(p, i));
+        // Mensagem `tool` vazia é 400 garantido na Anthropic. Como nada mais é descartado em
+        // silêncio, chegar aqui vazio só é possível se quem chamou mandou a lista vazia.
+        if (content.length === 0) {
+          recusar(
+            "TOOL_MESSAGE_EMPTY",
+            `a mensagem ${i} é do papel tool e não tem nenhum resultado`,
+          );
+        }
+        return { role: "tool", content };
+      }
+
+      if (m.role === "user") {
+        return {
+          role: "user",
+          content:
+            typeof m.content === "string"
+              ? m.content
+              : m.content.flatMap((p) => partesDeTexto(p, i)),
+        };
+      }
+
       return {
-        role: "tool",
-        content: typeof m.content === "string" ? [] : m.content.flatMap(partesDeResultado),
+        role: "assistant",
+        content:
+          typeof m.content === "string"
+            ? m.content
+            : m.content.flatMap((p) => partesDoAssistente(p, i)),
       };
-    }
+    });
 
-    // Na prática o prompt de sistema viaja em `AiRequest.system`, separado — este ramo existe
-    // só para o papel continuar representável sem virar um caso especial em quem chama.
-    if (m.role === "system") {
-      return { role: "system", content: textoDe(m.content) };
+    return { ok: true, messages: traduzidas };
+  } catch (erro) {
+    if (erro instanceof ParteNaoRepresentavel) {
+      return { ok: false, error: erro.aiErro };
     }
-
-    if (m.role === "user") {
-      return {
-        role: "user",
-        content: typeof m.content === "string" ? m.content : m.content.flatMap(partesDeTexto),
-      };
-    }
-
-    return {
-      role: "assistant",
-      content:
-        typeof m.content === "string" ? m.content : m.content.flatMap(partesDoAssistente),
-    };
-  });
+    throw erro;
+  }
 }
 
 /**
@@ -249,10 +338,19 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
         // prompt de tool use, que custa tokens por nada.
         const temFerramentas = request.tools.length > 0;
 
+        // A tradução acontece ANTES da chamada, e um prompt que o SDK recusaria vira evento
+        // `error` aqui — sem sair para a rede, sem gastar token e sem deixar o run pendurado.
+        const prompt = toModelMessages(request.messages);
+        if (!prompt.ok) {
+          terminou = true;
+          yield { type: "error", error: prompt.error };
+          return;
+        }
+
         const resultado = streamText({
           model: config.buildModel(request.model),
           system: request.system,
-          messages: toModelMessages(request.messages),
+          messages: prompt.messages,
           // Teto EXPLÍCITO em toda chamada. Sem ele não há reserva possível.
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
