@@ -33,6 +33,12 @@ vi.mock("ai", () => ({
       },
     };
   },
+  /**
+   * O `jsonSchema` real do SDK só EMBRULHA o JSON Schema num objeto validável — não valida
+   * nada aqui. O mock mantém o formato para o teste poder inspecionar o que foi descrito ao
+   * provedor sem carregar o pacote de verdade.
+   */
+  jsonSchema: (schema: unknown) => ({ jsonSchema: schema }),
 }));
 
 const fabricaFalsa = () => (modelId: string) => ({ modelId });
@@ -222,6 +228,158 @@ describe("erros e encerramentos anômalos", () => {
     ];
     const eventos = await coletar(createProviderClient("openai", "k").streamText(PEDIDO));
     expect(eventos.map((e) => e.type)).toEqual(["delta", "finish"]);
+  });
+});
+
+describe("ferramentas (18-B)", () => {
+  const COM_FERRAMENTA: AiRequest = {
+    ...PEDIDO,
+    tools: [
+      {
+        name: "training.get_records",
+        description: "Recordes pessoais.",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      },
+    ],
+  };
+
+  it("envia a definição ao provedor, com o schema", async () => {
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    const client = createProviderClient("openai", "chave");
+    await coletar(client.streamText(COM_FERRAMENTA));
+
+    const tools = opcoesRecebidas?.tools as Record<string, unknown>;
+    expect(Object.keys(tools)).toEqual(["training.get_records"]);
+  });
+
+  // A trava desta subfase: quem executa somos NÓS, fora do SDK.
+  it("NUNCA envia `execute` — a execução não acontece dentro do SDK", async () => {
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    const client = createProviderClient("openai", "chave");
+    await coletar(client.streamText(COM_FERRAMENTA));
+
+    const tools = opcoesRecebidas?.tools as Record<string, Record<string, unknown>>;
+    expect(tools["training.get_records"].execute).toBeUndefined();
+    expect(opcoesRecebidas?.stopWhen).toBeUndefined();
+  });
+
+  it("sem ferramentas, o campo nem é enviado", async () => {
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    const client = createProviderClient("openai", "chave");
+    await coletar(client.streamText(PEDIDO));
+    expect(opcoesRecebidas?.tools).toBeUndefined();
+  });
+
+  it("o evento tool-call carrega os argumentos do modelo", async () => {
+    partesDoSdk = [
+      {
+        type: "tool-call",
+        toolName: "training.get_records",
+        toolCallId: "call-1",
+        input: { escopo: "geral" },
+      },
+      { type: "finish", finishReason: "tool-calls", totalUsage: USO_COMPLETO },
+    ];
+    const client = createProviderClient("anthropic", "chave");
+    const eventos = await coletar(client.streamText(COM_FERRAMENTA));
+
+    expect(eventos[0]).toEqual({
+      type: "tool-call",
+      toolName: "training.get_records",
+      callId: "call-1",
+      input: { escopo: "geral" },
+    });
+  });
+
+  it("traduz o histórico com partes: tool-call do assistente e tool-result do papel tool", async () => {
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    const client = createProviderClient("gemini", "chave");
+    await coletar(
+      client.streamText({
+        ...COM_FERRAMENTA,
+        messages: [
+          { role: "user", content: "meus recordes?" },
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool-call",
+                callId: "call-1",
+                toolName: "training.get_records",
+                input: {},
+              },
+            ],
+          },
+          {
+            role: "tool",
+            content: [
+              {
+                type: "tool-result",
+                callId: "call-1",
+                toolName: "training.get_records",
+                output: { contagem: 2 },
+                isError: false,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const messages = opcoesRecebidas?.messages as Array<Record<string, unknown>>;
+    expect(messages[1]).toEqual({
+      role: "assistant",
+      content: [
+        {
+          type: "tool-call",
+          toolCallId: "call-1",
+          toolName: "training.get_records",
+          input: {},
+        },
+      ],
+    });
+    expect(messages[2]).toEqual({
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "call-1",
+          toolName: "training.get_records",
+          output: { type: "json", value: { contagem: 2 } },
+        },
+      ],
+    });
+  });
+
+  it("resultado de erro vai como error-json, não como texto solto", async () => {
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    const client = createProviderClient("xai", "chave");
+    await coletar(
+      client.streamText({
+        ...COM_FERRAMENTA,
+        messages: [
+          {
+            role: "tool",
+            content: [
+              {
+                type: "tool-result",
+                callId: "c",
+                toolName: "t",
+                output: { erro: "não autorizado" },
+                isError: true,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const messages = opcoesRecebidas?.messages as Array<Record<string, unknown>>;
+    const conteudo = (messages[0].content as Array<Record<string, unknown>>)[0];
+    expect(conteudo.output).toEqual({
+      type: "error-json",
+      value: { erro: "não autorizado" },
+    });
   });
 });
 

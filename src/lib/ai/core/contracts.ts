@@ -33,18 +33,44 @@ export const AI_PROVIDER_LABEL: Record<AiProviderId, string> = {
 
 // ───────────────────────────── Entrada ─────────────────────────────
 
-export type AiRole = "system" | "user" | "assistant";
+/**
+ * `system` permanece no tipo mesmo sem uso direto: o prompt de sistema viaja em
+ * `AiRequest.system`, separado do histórico, justamente para que dado recuperado nunca
+ * possa ser confundido com instrução.
+ */
+export type AiRole = "system" | "user" | "assistant" | "tool";
+
+/**
+ * Fase 18-B — partes tipadas. `string` continua aceito de propósito: o histórico gravado em
+ * `ai_messages` é texto, e `getHistoryForPrompt` continua funcionando sem alteração.
+ */
+export type AiContentPart =
+  | { readonly type: "text"; readonly text: string }
+  | {
+      readonly type: "tool-call";
+      readonly callId: string;
+      readonly toolName: string;
+      readonly input: unknown;
+    }
+  | {
+      readonly type: "tool-result";
+      readonly callId: string;
+      readonly toolName: string;
+      readonly output: unknown;
+      /** Rejeição e falha voltam ao modelo como erro EXPLÍCITO, nunca como resultado vazio. */
+      readonly isError: boolean;
+    };
 
 export type AiMessage = {
   readonly role: AiRole;
-  readonly content: string;
+  readonly content: string | readonly AiContentPart[];
 };
 
 /**
- * Definição de ferramenta. O TIPO existe desde a 18-A porque ele faz parte do contrato —
- * mas o registry NASCE VAZIO e `AiRequest.tools` é sempre `[]` nesta subfase. Ter o tipo
- * pronto e a lista vazia é diferente de não ter o conceito: é o que permite a 18-C acrescentar
- * execução sem reescrever a fronteira.
+ * Definição de ferramenta. O TIPO existe desde a 18-A; a partir da 18-B a lista pode vir
+ * preenchida — mas o que segue ao provedor é só a DESCRIÇÃO (nome, texto e JSON Schema).
+ * Não existe campo para uma função de execução aqui, e isso é proposital: quem executa é o
+ * Tool Executor, em código nosso, depois de validar. O fornecedor nunca roda nada.
  */
 export type AiToolDefinition = {
   readonly name: string;
@@ -66,7 +92,11 @@ export type AiRequest = {
   readonly temperature?: number;
   readonly timeoutMs: number;
   readonly abortSignal?: AbortSignal;
-  /** 18-A: SEMPRE vazio. Nenhuma definição é enviada ao provedor. */
+  /**
+   * Allowlist do agente, resolvida ANTES da chamada. Vazia = o campo `tools` nem é enviado
+   * ao provedor (mandar `{}` faria alguns incluírem o system prompt de tool use, que custa
+   * tokens por nada).
+   */
   readonly tools: readonly AiToolDefinition[];
 };
 
@@ -121,11 +151,20 @@ export type AiStreamEvent =
   /** Pedaço de texto. É o único evento que a 18-A repassa ao navegador. */
   | { readonly type: "delta"; readonly text: string }
   /**
-   * O provedor decidiu chamar uma ferramenta. Na 18-A isso NÃO PODE ACONTECER (nenhuma
-   * definição é enviada). Se acontecer, o chat-runner encerra o run como `failed` com
-   * `UNEXPECTED_TOOL_CALL` — não executa, não interpreta e não deixa seguir.
+   * O provedor decidiu chamar uma ferramenta. O adapter apenas REPASSA o pedido, com os
+   * argumentos crus do modelo — nunca executa. Quem decide é o chat-runner: ferramenta que
+   * não foi oferecida encerra o run como `failed` com `UNEXPECTED_TOOL_CALL`; ferramenta
+   * oferecida é validada e executada pelo Tool Executor, em código nosso.
+   *
+   * `input` é `unknown` de propósito: é texto do modelo até que o Zod da ferramenta diga o
+   * contrário. Tratá-lo como já validado seria confiar no que o modelo escreveu.
    */
-  | { readonly type: "tool-call"; readonly toolName: string; readonly callId: string }
+  | {
+      readonly type: "tool-call";
+      readonly toolName: string;
+      readonly callId: string;
+      readonly input: unknown;
+    }
   | {
       readonly type: "finish";
       readonly finishReason: AiFinishReason;
