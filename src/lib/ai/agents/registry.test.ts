@@ -1,16 +1,26 @@
 /**
- * Fase 18-A — IA · Agentes, Tool Registry e a TRAVA DE HONESTIDADE.
+ * Fase 18-A/18-B — IA · Agentes, Tool Registry e a TRAVA DE HONESTIDADE.
  *
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
  * ║ CRITÉRIO 78 — a trava de honestidade é critério de aceite, não boa vontade esperada   ║
- * ║ do modelo. O prompt tem de DIZER, com todas as letras, que o assistente não consulta  ║
- * ║ registro nenhum nesta versão, e tem de proibir explicitamente inventar número.        ║
+ * ║ do modelo. Ela MUDOU DE FORMA na 18-B, e a mudança é o ponto:                          ║
+ * ║                                                                                       ║
+ * ║ a v1 mandava o prompt DIZER que o assistente não consulta registro nenhum. A 18-B fez ║
+ * ║ a IA ler Treinos — então essa frase virou mentira, e um prompt que nega o que o        ║
+ * ║ sistema faz é tão desonesto quanto um que inventa número. A v2 amarra a resposta ao    ║
+ * ║ que as FERRAMENTAS devolveram nesta conversa.                                          ║
+ * ║                                                                                       ║
+ * ║ O que NÃO enfraqueceu, e continua verificado aqui: proibir inventar/estimar/inferir   ║
+ * ║ número, apontar o módulo em vez de responder às cegas, e os exemplos de tom certo ×    ║
+ * ║ errado (é o que impede o palpite disfarçado de dado).                                  ║
  * ║                                                                                       ║
  * ║ ⚠️ Isto testa o CONTRATO do prompt, não a obediência do modelo. A garantia real é     ║
- * ║ estrutural: sem ferramenta registrada, não há como consultar coisa alguma.            ║
+ * ║ estrutural: registry estático, allowlist por agente e permissão por módulo.            ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   AI_AGENT_REGISTRY,
@@ -125,11 +135,25 @@ describe("prompt de sistema", () => {
     expect(prompt).toContain("não prescreve");
   });
 
-  it("78. TRAVA DE HONESTIDADE — declara que não consulta registro nenhum", () => {
-    expect(prompt).toContain("NÃO tem acesso aos registros do usuário");
-    expect(prompt).toContain("não consegue consultar saldo, fatura, transação");
+  // ⚠️ A v1 exigia aqui, LITERALMENTE, "NÃO tem acesso aos registros do usuário" e "não
+  // consegue consultar saldo, fatura, transação". As duas frases falavam do SISTEMA, e o
+  // sistema passou a ler Treinos: mantê-las seria fixar uma mentira por teste. A v2 diz a
+  // verdade e a diz de forma mais restritiva — o que vale não é o que o sistema alcança, é
+  // o que ESTA conversa devolveu.
+  it("78. TRAVA DE HONESTIDADE — a resposta só pode nascer do que a ferramenta devolveu", () => {
+    expect(prompt).toContain(
+      "Você só sabe sobre a vida do usuário o que as ferramentas devolveram NESTA conversa",
+    );
+    expect(prompt).toContain("NUNCA inventa, estima nem infere");
     expect(prompt).toContain("NÃO INVENTE O NÚMERO");
-    expect(prompt).toContain("NUNCA inventa um número");
+  });
+
+  it("78. o orquestrador declara o que NÃO consultou, sem negar o que o sistema faz", () => {
+    // Verdadeiro e verificável: o perfil do orquestrador tem `allowedTools: []`.
+    expect(prompt).toContain("Neste papel você não recebeu nenhuma ferramenta de leitura");
+    // E as duas afirmações da v1 que a 18-B tornou falsas não podem voltar.
+    expect(prompt).not.toContain("NÃO tem acesso aos registros do usuário");
+    expect(prompt).not.toContain("Nesta versão você NÃO tem acesso");
   });
 
   it("78. proíbe também o disfarce do palpite — hipótese apresentada como dado", () => {
@@ -150,6 +174,11 @@ describe("prompt de sistema", () => {
   it("78. traz o exemplo do tom certo E do errado", () => {
     expect(prompt).toContain("Resposta certa");
     expect(prompt).toContain("Resposta ERRADA");
+    // DOIS pares, não um. O segundo cobre o caso que a 18-B criou: módulo que o sistema
+    // sabe ler, cuja leitura não estava autorizada nesta conversa. Com um par só, o exemplo
+    // ensinaria apenas o caso "ninguém lê isso" — que deixou de ser o único.
+    expect(prompt.match(/Resposta ERRADA/g)).toHaveLength(2);
+    expect(prompt).toContain("preferências de IA");
   });
 
   it("pede pt-BR, BRL e data brasileira", () => {
@@ -157,6 +186,230 @@ describe("prompt de sistema", () => {
     expect(prompt).toContain("reais (R$)");
     expect(prompt).toContain("dd/mm/aaaa");
     expect(prompt).toContain("Brasília");
+  });
+});
+
+describe("prompt-base v2 — o que o modelo pode fazer com o resultado da ferramenta", () => {
+  it("a versão do prompt-base subiu junto com o texto", () => {
+    // Duas respostas produzidas por textos diferentes não podem ficar indistinguíveis em
+    // `ai_runs.prompt_version`.
+    expect(SECURITY_PROMPT_VERSION).toBe("seguranca-v2");
+  });
+
+  it("item 3 — ferramenta não se inventa, e recusa se declara", () => {
+    expect(SECURITY_PROMPT).toContain(
+      "Você não cria ferramenta, não adivinha o nome de uma, e não descreve o resultado de uma que não usou",
+    );
+    expect(SECURITY_PROMPT).toContain(
+      "Se uma ferramenta for recusada, diga o que não conseguiu consultar",
+    );
+  });
+
+  it("8-A — o cálculo é do backend; o modelo repete, não recalcula", () => {
+    expect(SECURITY_PROMPT).toContain("Você não faz contas sobre os dados");
+    expect(SECURITY_PROMPT).toContain("não os recalcule");
+    expect(SECURITY_PROMPT).toContain("não os arredonde");
+    // Invariante 12 da Fase 17: a regra de contagem viaja COM o número. Ela existe no
+    // resultado desde a Task 7; sem esta linha o modelo a receberia e a descartaria.
+    expect(SECURITY_PROMPT).toContain("repita a regra ao lado do número");
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 8-B — `completude` e `itens_truncados` são COISAS DIFERENTES.                        ║
+   * ║                                                                                     ║
+   * ║ O plano da Task 9 mandava escrever "quando vier `completude: parcial`, diga que o    ║
+   * ║ dado está incompleto" e parava aí. Isso é anterior à Task 7, que SEPAROU os dois     ║
+   * ║ campos justamente porque o corte de lista virava "o total está incompleto" na        ║
+   * ║ resposta — hedge num número correto. Escrever o item 8-B sem a distinção reintroduz  ║
+   * ║ no prompt o defeito que o contrato acabou de consertar.                              ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("8-B — total parcial ganha ressalva; lista encurtada NÃO", () => {
+    expect(SECURITY_PROMPT).toContain(
+      '"completude" e "itens_truncados" falam de coisas DIFERENTES',
+    );
+    expect(SECURITY_PROMPT).toContain("diz que o TOTAL ficou incompleto");
+    expect(SECURITY_PROMPT).toContain("a LISTA de exemplos foi encurtada");
+    expect(SECURITY_PROMPT).toContain(
+      'os totais em "agregados" continuam valendo para o período inteiro',
+    );
+    expect(SECURITY_PROMPT).toContain("apresente o número sem ressalva");
+  });
+
+  it("nenhum prompt manda ressalvar um total por causa de lista encurtada", () => {
+    // A trava vale para o base E para todo perfil: quem nomear `itens_truncados` tem de
+    // dizer, no mesmo texto, que os agregados continuam valendo.
+    const textos = [SECURITY_PROMPT, ...AI_AGENT_REGISTRY.map((a) => a.prompt)];
+    let citaram = 0;
+    for (const texto of textos) {
+      if (!texto.includes("itens_truncados")) continue;
+      citaram += 1;
+      expect(texto).toContain("continuam valendo");
+    }
+    // Se ninguém citar, o laço acima passa sem verificar nada.
+    expect(citaram).toBeGreaterThanOrEqual(2);
+  });
+
+  it("8-C — a resposta cita o período e quantos registros entraram na conta", () => {
+    expect(SECURITY_PROMPT).toContain("diga de onde vieram");
+    expect(SECURITY_PROMPT).toContain("quantos registros entraram na conta");
+  });
+
+  /**
+   * Um prompt que nomeia um campo inexistente manda o modelo procurar o que nunca vai
+   * chegar — e ensina, de quebra, a improvisar quando não acha. O teste vai nos DOIS
+   * sentidos: campo citado tem de existir na saída real, e a lista de campos citados é
+   * fixa (nome novo no prompt não passa despercebido).
+   */
+  it("todo campo que o prompt-base nomeia existe mesmo na saída das ferramentas", () => {
+    const RAIZ = path.resolve(__dirname, "..", "..", "..", "..");
+    const fontes = [
+      path.join("src", "lib", "ai", "tools", "contracts.ts"),
+      path.join("src", "lib", "ai", "tools", "adapters", "training.ts"),
+    ]
+      .map((relativo) => fs.readFileSync(path.join(RAIZ, relativo), "utf8"))
+      .join("\n");
+
+    // `exato` e `parcial` são VALORES de `completude`, não nomes de campo.
+    const VALORES = new Set(["exato", "parcial"]);
+    const citados = [
+      ...new Set([...SECURITY_PROMPT.matchAll(/"([a-z_]+)"/g)].map((m) => m[1])),
+    ]
+      .filter((token) => !VALORES.has(token))
+      .sort();
+
+    expect(citados).toEqual(
+      [
+        "agregados",
+        "completude",
+        "contagem",
+        "itens_truncados",
+        "motivo_incompleto",
+        "periodo",
+        "regra_de_contagem",
+      ].sort(),
+    );
+
+    for (const campo of citados) {
+      expect(
+        new RegExp(`(^|[^a-z_])${campo}\\??:`, "m").test(fontes),
+        `o prompt-base cita "${campo}", que nenhuma ferramenta devolve`,
+      ).toBe(true);
+    }
+  });
+});
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ VOCABULÁRIO PROIBIDO — o alvo é o USO PRESCRITIVO, não a palavra solta.                ║
+ * ║                                                                                       ║
+ * ║ ⚠️ NÃO "conserte" isto varrendo `buildSystemPrompt(agente)`: o prompt-base contém, de  ║
+ * ║ propósito, "não dá diagnóstico médico" — a palavra em forma NEGADA, que é exatamente   ║
+ * ║ o comportamento desejado e que outro teste deste arquivo EXIGE. Varrer o prompt        ║
+ * ║ montado reprovaria todos os agentes por uma proibição bem escrita.                     ║
+ * ║                                                                                       ║
+ * ║ Por isso são duas travas: o PERFIL não nomeia esses termos (não tem por que); o BASE   ║
+ * ║ pode nomeá-los, desde que sempre negados na mesma frase.                               ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("nenhum prompt prescreve, diagnostica ou culpa", () => {
+  const VOCABULARIO_PROIBIDO = [
+    "você deveria treinar",
+    "peso ideal",
+    "você falhou",
+    "faltou",
+    "preguiça",
+    "carga máxima",
+    "diagnóstico",
+    "prescrevo",
+    "garanto que",
+  ];
+
+  const NEGACOES = ["não ", "nunca ", "nem ", "jamais "];
+
+  /** Ocorrências do termo SEM negação na mesma sentença. Vazio = todo uso é proibitivo. */
+  function usosNaoProibitivos(texto: string, termo: string): string[] {
+    const alvo = texto.toLowerCase();
+    const achados: string[] = [];
+    for (let i = alvo.indexOf(termo); i !== -1; i = alvo.indexOf(termo, i + termo.length)) {
+      const inicio = Math.max(alvo.lastIndexOf(".", i) + 1, alvo.lastIndexOf("\n", i) + 1);
+      const sentenca = alvo.slice(inicio, i);
+      if (!NEGACOES.some((negacao) => sentenca.includes(negacao))) {
+        achados.push(texto.slice(inicio, i + termo.length).trim());
+      }
+    }
+    return achados;
+  }
+
+  it("a varredura reprova um uso prescritivo de verdade", () => {
+    // Sem este teste, um `usosNaoProibitivos` que devolvesse sempre `[]` aprovaria tudo.
+    expect(usosNaoProibitivos("Dou um diagnóstico quando faz sentido.", "diagnóstico")).toHaveLength(1);
+    expect(usosNaoProibitivos("Você não dá diagnóstico médico.", "diagnóstico")).toEqual([]);
+    // Negação em frase ANTERIOR não vale — tem de estar na mesma sentença.
+    expect(
+      usosNaoProibitivos("Você não inventa número. Dou diagnóstico.", "diagnóstico"),
+    ).toHaveLength(1);
+  });
+
+  it("nenhum PERFIL de agente nomeia esses termos", () => {
+    for (const agente of AI_AGENT_REGISTRY) {
+      const texto = agente.prompt.toLowerCase();
+      for (const termo of VOCABULARIO_PROIBIDO) {
+        expect(texto, `${agente.id}: ${termo}`).not.toContain(termo);
+      }
+    }
+  });
+
+  it("no prompt-base, esses termos só aparecem negados", () => {
+    for (const termo of VOCABULARIO_PROIBIDO) {
+      expect(usosNaoProibitivos(SECURITY_PROMPT, termo), termo).toEqual([]);
+    }
+  });
+
+  it("nenhum perfil afirma uma ausência de acesso que a 18-B tornou falsa", () => {
+    for (const agente of AI_AGENT_REGISTRY) {
+      const texto = agente.prompt.toLowerCase();
+      expect(texto, agente.id).not.toContain("não tem acesso aos registros");
+      expect(texto, agente.id).not.toContain("não tem acesso aos seus registros");
+    }
+  });
+});
+
+/**
+ * A duplicação da lista de agentes (TypeScript + SQL) é PROPOSITAL — `ai_begin_chat_run`
+ * pode ser chamada direto, sem passar pelo Route Handler. Mas duplicação sem guarda vira
+ * divergência: um agente novo no TS e esquecido no SQL só falharia em runtime, na admissão,
+ * e a mensagem do usuário morreria sem explicação.
+ */
+describe("a lista de agentes do RPC concorda com o registry", () => {
+  const RAIZ = path.resolve(__dirname, "..", "..", "..", "..");
+  const sql = fs.readFileSync(
+    path.join(RAIZ, "supabase", "migrations", "20260808100000_ai_tool_audit.sql"),
+    "utf8",
+  );
+  const bloco = sql.match(/create or replace function public\.ai_agent_is_allowed[\s\S]*?\$\$;/)?.[0] ?? "";
+
+  it("o corpo da função foi encontrado no SQL", () => {
+    // Sem esta guarda, renomear a função faria `bloco` virar "" e o teste abaixo passaria
+    // por vacuidade — a divergência que ele existe para pegar entraria despercebida.
+    expect(bloco).not.toBe("");
+    expect(bloco).toContain("p_agent_id in (");
+  });
+
+  it("todo agente do registry é aceito pelo RPC", () => {
+    for (const agente of AI_AGENT_REGISTRY) {
+      expect(bloco, `agente ${agente.id} ausente no SQL`).toContain(`'${agente.id}'`);
+    }
+  });
+
+  it("o RPC não aceita agente que o registry não conhece", () => {
+    const noSql = [...bloco.matchAll(/'([a-z][a-z0-9-]*)'/g)].map((m) => m[1]);
+    expect(noSql.length).toBeGreaterThan(0);
+    const conhecidos = new Set(AI_AGENT_REGISTRY.map((a) => a.id));
+    for (const id of noSql) {
+      expect(conhecidos.has(id), `SQL aceita "${id}", que não existe no registry`).toBe(true);
+    }
   });
 });
 

@@ -169,8 +169,11 @@ credenciais cifradas, chat com streaming, medição por tentativa e orçamento c
     reserva, e sem reserva o orçamento não protege nada.
 14. **Tool Registry NASCE VAZIO na 18-A**: nenhuma definição vai ao provedor, e tool call
     inesperada encerra o run como `failed` com `UNEXPECTED_TOOL_CALL`, sem executar nada.
-15. **Trava de honestidade** — o assistente diz que não consulta seus registros e aponta o
-    módulo; **nunca inventa número**. É critério de aceite, com teste.
+15. **Trava de honestidade** — **reescrita na 18-B** (prompt-base `seguranca-v2`): a v1 mandava
+    o prompt afirmar que o assistente não consulta registro nenhum, e isso virou mentira quando
+    a IA passou a ler Treinos. Agora o assistente **só sabe o que as ferramentas devolveram
+    naquela conversa**, aponta o módulo quando não devolveram e **nunca inventa, estima nem
+    infere número**. É critério de aceite, com teste.
 16. ⚠️ **`no-restricted-imports` usa semântica de .gitignore**, não de caminho: padrão sem
     barra casa com qualquer componente (o grupo `"ai"` bloqueava `@/lib/ai/**` inteiro). Pacote
     vai em `paths`, não em `patterns`.
