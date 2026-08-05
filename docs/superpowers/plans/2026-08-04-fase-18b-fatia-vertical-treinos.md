@@ -645,15 +645,20 @@ Em `src/lib/ai/usage/reservation.ts`, acrescentar o campo ao `ReservationInput`:
 E substituir o cálculo de `base`/`valorUsd` (linhas 82-88) por:
 
 ```ts
-  // Cada passo do laço é uma chamada paga, e o contexto CRESCE: o resultado da ferramenta
-  // do passo anterior entra na entrada do próximo. Somar passo a passo é o único jeito de a
-  // reserva não subestimar — e importar o número de tokens de `tools/limits.ts` mantém a
-  // aritmética de custo num lugar só, como manda a regra de `calc.ts` na Dieta.
+  // Cada passo do laço é uma chamada paga, e o contexto CRESCE: os resultados das
+  // ferramentas do passo anterior entram na entrada do próximo. Somar passo a passo é o
+  // único jeito de a reserva não subestimar — e importar os números de `tools/limits.ts`
+  // mantém a aritmética de custo num lugar só, como manda a regra de `calc.ts` na Dieta.
+  //
+  // ⚠️ MAX_TOOLS_POR_PASSO NÃO PODE FALTAR AQUI. Um passo executa até 4 ferramentas em
+  // paralelo, e CADA UMA vira um bloco `wrapUntrusted` próprio no contexto seguinte.
+  // Somar um bloco só por passo subestima a reserva em até 2,5× — foi o defeito que a
+  // revisão da Task 3 pegou, e ele passou pela suíte porque os testes espelhavam a fórmula.
   const passos = Math.max(0, input.maxToolSteps ?? 0);
+  const tokensPorPasso = MAX_TOOLS_POR_PASSO * TOKENS_POR_RESULTADO_DE_FERRAMENTA;
   let base = 0;
   for (let i = 0; i <= passos; i += 1) {
-    const entradaDoPasso =
-      input.tokensEntradaEstimados + i * TOKENS_POR_RESULTADO_DE_FERRAMENTA;
+    const entradaDoPasso = input.tokensEntradaEstimados + i * tokensPorPasso;
     base +=
       (entradaDoPasso / 1_000_000) * piorEntrada +
       (input.tetoDeSaida / 1_000_000) * piorSaida;
@@ -674,8 +679,26 @@ E acrescentar ao fim da `explicacao`:
 O import no topo do arquivo:
 
 ```ts
-import { TOKENS_POR_RESULTADO_DE_FERRAMENTA } from "@/lib/ai/tools/limits";
+import {
+  MAX_TOOLS_POR_PASSO,
+  TOKENS_POR_RESULTADO_DE_FERRAMENTA,
+} from "@/lib/ai/tools/limits";
 ```
+
+> ⚠️ **Os testes acima espelham a fórmula da implementação** — recalculam com as mesmas
+> constantes e as mesmas operações, então continuariam passando com a fórmula errada. Foi
+> assim que a primeira versão desta task passou pela suíte subestimando a reserva em 2,5×.
+> Acrescente **dois** testes que não espelham:
+>
+> 1. **Valor literal**, com a conta à mão no comentário e o número esperado escrito como
+>    literal — nada de recalcular com as constantes dentro do teste.
+> 2. **Desigualdade contra um modelo independente**: monte o custo chamada a chamada num laço
+>    próprio do teste, com `MAX_TOOLS_POR_PASSO` blocos por passo, e afirme
+>    `expect(reserva).toBeGreaterThanOrEqual(piorCaso)`. Esse é o que protege a invariante se
+>    alguém mexer nas constantes depois.
+>
+> Confira que o teste 1 falha ao reverter a multiplicação por `MAX_TOOLS_POR_PASSO`. Se não
+> falhar, ele não serve.
 
 > ⚠️ `limits.ts` importa `CARACTERES_POR_TOKEN` de `reservation.ts` e `reservation.ts` importa `TOKENS_POR_RESULTADO_DE_FERRAMENTA` de `limits.ts` — **ciclo**. Resolva movendo `CARACTERES_POR_TOKEN` e `estimarTokensDeEntrada` para `src/lib/ai/usage/tokens.ts` e re-exportando de `reservation.ts` para não quebrar os importadores existentes (`chat-runner.ts` importa `estimarTokensDeEntrada`). Rode `npx tsc --noEmit` para confirmar que o ciclo sumiu.
 
@@ -843,7 +866,8 @@ const PALAVRAS: Record<string, readonly string[]> = {
     "treino", "treinos", "treinar", "treinei", "malhar", "academia",
     "serie", "series", "repeticao", "repeticoes", "carga", "volume",
     "exercicio", "exercicios", "agachamento", "supino", "levantamento",
-    "recorde", "recordes", "1rm", "rm", "musculacao", "sessao de treino",
+    "recorde", "recordes", "1rm", "repeticao maxima", "musculacao",
+    "sessao de treino",
   ],
 };
 
@@ -851,7 +875,10 @@ const PALAVRAS: Record<string, readonly string[]> = {
 function normalizar(texto: string): string {
   return texto
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    // Escapes explícitos: o intervalo escrito com caracteres combinantes literais se
+    // corrompe ao copiar, e o resultado é uma normalização que silenciosamente não
+    // normaliza nada.
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 }
 
@@ -1559,7 +1586,15 @@ Mostrar **os dois arquivos** ao usuário e aguardar aprovação explícita. Depo
 - [ ] **Step 4: Conferir advisors e regenerar tipos**
 
 MCP `get_advisors` (type `security` e `performance`).
-Expected: **0 lints de schema** referentes às tabelas novas.
+Expected: **nenhuma CATEGORIA de lint nova**.
+
+> ⚠️ "0 lints" é inatingível e o critério estava errado. Medido em 2026-08-04, o projeto já
+> tem **169 `auth_rls_initplan`** e **101 `unindexed_foreign_keys`**, incluindo todas as
+> tabelas `ai_*` da 18-A — porque o projeto inteiro usa `auth.uid()` puro nas policies. As
+> tabelas novas vão somar lints dessas MESMAS categorias, e isso é **consistência, não
+> defeito**. O que importa é não aparecer categoria nova (ex.: `security_definer_view`,
+> `rls_disabled_in_public`). **Não mude o estilo de policy só nestas duas tabelas para
+> tentar zerar o contador** — isso trocaria um número cosmético por uma inconsistência real.
 
 MCP `generate_typescript_types` → sobrescrever `src/types/supabase.ts`.
 
