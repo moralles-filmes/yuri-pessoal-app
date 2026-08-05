@@ -22,11 +22,26 @@ export const MAX_TOOL_STEPS = 3;
 export const MAX_TOOLS_POR_PASSO = 4;
 
 /**
- * Quanto um resultado de ferramenta acrescenta ao contexto do passo seguinte, em tokens.
- * Determinístico porque `wrapUntrusted` já corta em `MAX_UNTRUSTED_CHARS` — não é chute.
+ * Folga para o que `renderUntrusted()` (`security/untrusted.ts`) acrescenta ALÉM do
+ * `content` do bloco: o preâmbulo fixo de aviso (4 linhas), a linha `origem: <ferramenta>` e
+ * as chaves do envelope JSON (`untrusted`, `source`, `truncated`, `content`). Medido chamando
+ * a função real com um bloco no teto de `MAX_UNTRUSTED_CHARS`: ~379 caracteres com uma origem
+ * de 1 caractere, ~437 com uma origem de 59 — o nome de ferramenta do registry estático é
+ * sempre curto. 600 é uma folga confortável acima do pior caso medido, para não depender de
+ * remedir toda vez que o texto do preâmbulo mudar uma palavra.
+ */
+export const OVERHEAD_RENDER_UNTRUSTED_CHARS = 600;
+
+/**
+ * Quanto UM resultado de ferramenta acrescenta ao contexto do passo seguinte, em tokens.
+ * Determinístico porque `wrapUntrusted` já corta o `content` em `MAX_UNTRUSTED_CHARS` — não é
+ * chute — e o envelope inteiro (preâmbulo + JSON) é coberto por `OVERHEAD_RENDER_UNTRUSTED_CHARS`.
+ * Um passo pode disparar até `MAX_TOOLS_POR_PASSO` ferramentas em paralelo, cada uma virando um
+ * bloco `wrapUntrusted` separado — é responsabilidade de quem soma (`usage/reservation.ts`)
+ * multiplicar por `MAX_TOOLS_POR_PASSO`, não deste número, que é o custo de UM bloco.
  */
 export const TOKENS_POR_RESULTADO_DE_FERRAMENTA = Math.ceil(
-  MAX_UNTRUSTED_CHARS / CARACTERES_POR_TOKEN,
+  (MAX_UNTRUSTED_CHARS + OVERHEAD_RENDER_UNTRUSTED_CHARS) / CARACTERES_POR_TOKEN,
 );
 
 /** Aviso que acompanha a resposta quando o laço foi interrompido pelo teto. */

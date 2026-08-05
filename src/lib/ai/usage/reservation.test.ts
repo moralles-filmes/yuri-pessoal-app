@@ -9,7 +9,11 @@
 
 import { describe, expect, it } from "vitest";
 import type { AiRate } from "@/lib/ai/core/pricing";
-import { MAX_TOOL_STEPS, TOKENS_POR_RESULTADO_DE_FERRAMENTA } from "@/lib/ai/tools/limits";
+import {
+  MAX_TOOL_STEPS,
+  MAX_TOOLS_POR_PASSO,
+  TOKENS_POR_RESULTADO_DE_FERRAMENTA,
+} from "@/lib/ai/tools/limits";
 import { computeReservation, estimarTokensDeEntrada, MARGEM_PADRAO } from "./reservation";
 import { round6 } from "./meter";
 
@@ -166,14 +170,17 @@ describe("reserva com passos de ferramenta (18-B)", () => {
     expect(comZero.valorUsd).toBe(semCampo.valorUsd);
   });
 
-  it("cada passo acrescenta uma chamada E o contexto que ela carrega", () => {
+  it("cada passo acrescenta uma chamada E o contexto de ATÉ MAX_TOOLS_POR_PASSO ferramentas", () => {
     const um = computeReservation({ ...comum, maxToolSteps: 1 });
     const zero = computeReservation({ ...comum, maxToolSteps: 0 });
 
-    // Passo 0: 1000 entrada + 1000 saída. Passo 1: (1000 + tokens do resultado) + 1000 saída.
+    // Passo 0: 1000 entrada + 1000 saída. Passo 1: um passo pode ter disparado até
+    // MAX_TOOLS_POR_PASSO ferramentas em paralelo — cada uma vira o SEU bloco no contexto,
+    // não um só (achado da revisão: contar um bloco por passo subestima o pior caso 2,5×).
     const esperado =
       (1000 / 1e6) * 10 + (1000 / 1e6) * 30 +
-      ((1000 + TOKENS_POR_RESULTADO_DE_FERRAMENTA) / 1e6) * 10 + (1000 / 1e6) * 30;
+      ((1000 + MAX_TOOLS_POR_PASSO * TOKENS_POR_RESULTADO_DE_FERRAMENTA) / 1e6) * 10 +
+      (1000 / 1e6) * 30;
 
     expect(um.valorUsd).toBeCloseTo(esperado, 6);
     expect(um.valorUsd).toBeGreaterThan(zero.valorUsd);
@@ -197,5 +204,50 @@ describe("reserva com passos de ferramenta (18-B)", () => {
     const simples = computeReservation({ ...comum, maxToolSteps: 2 });
     const comRetry = computeReservation({ ...comum, maxToolSteps: 2, maxRetries: 1 });
     expect(comRetry.valorUsd).toBeCloseTo(simples.valorUsd * 2, 5);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────────────
+  // Os testes acima RECALCULAM com as mesmas constantes e as mesmas operações da
+  // implementação — continuariam verdes mesmo com a fórmula contando só UM bloco de
+  // ferramenta por passo em vez de MAX_TOOLS_POR_PASSO (o Critical que a revisão achou).
+  // Os dois testes abaixo existem para não repetir esse erro: um literal calculado à mão,
+  // fora da implementação, e uma desigualdade contra um modelo de custo montado do zero.
+  // ─────────────────────────────────────────────────────────────────────────────────────
+
+  it("valor literal no teto do módulo — conta à mão, sem reusar a fórmula da implementação", () => {
+    // maxToolSteps = MAX_TOOL_STEPS (3). TOKENS_POR_RESULTADO_DE_FERRAMENTA = 2867 (18-B,
+    // ver tools/limits.ts: ceil((8000 + 600) / 3)). MAX_TOOLS_POR_PASSO = 4, então cada
+    // passo soma 4 × 2867 = 11.468 tokens ao que entra no passo seguinte:
+    //
+    //   passo 0: entrada 1.000                → 1.000×10 + 1.000×30 (em US$/M) = 0,04000
+    //   passo 1: entrada 1.000 + 1×11.468     = 12.468  → 0,12468 + 0,03 = 0,15468
+    //   passo 2: entrada 1.000 + 2×11.468     = 23.936  → 0,23936 + 0,03 = 0,26936
+    //   passo 3: entrada 1.000 + 3×11.468     = 35.404  → 0,35404 + 0,03 = 0,38404
+    //
+    // soma = 0,04000 + 0,15468 + 0,26936 + 0,38404 = 0,84808 (multiplicador 1, margem 1).
+    const r = computeReservation({ ...comum, maxToolSteps: MAX_TOOL_STEPS });
+    expect(r.valorUsd).toBeCloseTo(0.848080, 6);
+  });
+
+  it("cobre um modelo de custo real montado do zero no teste (chamada a chamada, sem atalho)", () => {
+    const passos = MAX_TOOL_STEPS;
+    const r = computeReservation({ ...comum, maxToolSteps: passos });
+
+    // Simula o pior caso de verdade: em CADA passo, até MAX_TOOLS_POR_PASSO ferramentas
+    // rodam e cada uma acrescenta o SEU bloco `wrapUntrusted` ao contexto do passo seguinte
+    // — sem usar o laço de `computeReservation`, só a definição do problema.
+    let custoRealDoPiorCaso = 0;
+    let tokensNoContexto = comum.tokensEntradaEstimados;
+    for (let passo = 0; passo <= passos; passo += 1) {
+      custoRealDoPiorCaso +=
+        (tokensNoContexto / 1e6) * 10 + (comum.tetoDeSaida / 1e6) * 30;
+      for (let ferramenta = 0; ferramenta < MAX_TOOLS_POR_PASSO; ferramenta += 1) {
+        tokensNoContexto += TOKENS_POR_RESULTADO_DE_FERRAMENTA;
+      }
+    }
+
+    // Esta é a invariante que protege o orçamento: a reserva nunca fica abaixo do pior
+    // caso real, mesmo se alguém mudar as constantes de `tools/limits.ts` depois.
+    expect(r.valorUsd).toBeGreaterThanOrEqual(custoRealDoPiorCaso);
   });
 });

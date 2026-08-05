@@ -28,7 +28,7 @@
  */
 
 import { worstCaseRatePair, type AiRate } from "@/lib/ai/core/pricing";
-import { TOKENS_POR_RESULTADO_DE_FERRAMENTA } from "@/lib/ai/tools/limits";
+import { MAX_TOOLS_POR_PASSO, TOKENS_POR_RESULTADO_DE_FERRAMENTA } from "@/lib/ai/tools/limits";
 import { ceil6 } from "./meter";
 // `CARACTERES_POR_TOKEN` e `estimarTokensDeEntrada` moraram aqui na 18-A. A 18-B precisou de
 // `tools/limits.ts` importando a constante de caracteres-por-token, e este arquivo precisou de
@@ -78,15 +78,20 @@ export function computeReservation(input: ReservationInput): Reservation {
     if (par.output > piorSaida) piorSaida = par.output;
   }
 
-  // Cada passo do laço é uma chamada paga, e o contexto CRESCE: o resultado da ferramenta
-  // do passo anterior entra na entrada do próximo. Somar passo a passo é o único jeito de a
-  // reserva não subestimar — e importar o número de tokens de `tools/limits.ts` mantém a
-  // aritmética de custo num lugar só, como manda a regra de `calc.ts` na Dieta.
+  // Cada passo do laço é uma chamada paga, e o contexto CRESCE: o resultado de CADA
+  // ferramenta do passo anterior entra na entrada do próximo. Um passo pode disparar até
+  // `MAX_TOOLS_POR_PASSO` ferramentas em paralelo (`tools/limits.ts`), e cada uma vira o SEU
+  // PRÓPRIO bloco `wrapUntrusted` no contexto — não um só. Contar um bloco por passo em vez de
+  // até `MAX_TOOLS_POR_PASSO` é exatamente o jeito de a reserva subestimar o pior caso real.
+  // Somar passo a passo, multiplicando pelo teto de ferramentas por passo, é o único jeito de
+  // não furar — e importar os números de `tools/limits.ts` mantém a aritmética de custo num
+  // lugar só, como manda a regra de `calc.ts` na Dieta.
   const passos = Math.max(0, input.maxToolSteps ?? 0);
   let base = 0;
   for (let i = 0; i <= passos; i += 1) {
     const entradaDoPasso =
-      input.tokensEntradaEstimados + i * TOKENS_POR_RESULTADO_DE_FERRAMENTA;
+      input.tokensEntradaEstimados +
+      i * MAX_TOOLS_POR_PASSO * TOKENS_POR_RESULTADO_DE_FERRAMENTA;
     base +=
       (entradaDoPasso / 1_000_000) * piorEntrada +
       (input.tetoDeSaida / 1_000_000) * piorSaida;
