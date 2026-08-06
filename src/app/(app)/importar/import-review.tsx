@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowLeftRight,
   Ban,
@@ -55,6 +56,10 @@ import {
 } from "@/lib/import/constants";
 import { totaisPorStatus } from "@/lib/import/totals";
 import {
+  coberturaDaFatura,
+  type CoberturaFatura,
+} from "@/lib/import/cobertura";
+import {
   cancelImportBatch,
   commitImport,
   remapImportBatch,
@@ -77,11 +82,14 @@ export function ImportReview({
   rows,
   categories,
   people,
+  today,
 }: {
   batch: ImportBatchWithTarget;
   rows: ImportRowWithRelations[];
   categories: Categoria[];
   people: PersonOption[];
+  /** 'yyyy-MM-dd' de hoje, vindo do servidor (o fuso do aparelho não decide nada aqui). */
+  today: string;
 }) {
   const router = useRouter();
   const isCancelado = batch.status === "cancelado";
@@ -189,7 +197,17 @@ export function ImportReview({
       </Card>
 
       {batch.origem === "cartao" && (
-        <FaturaCompetencia batch={batch} isDone={isDone} />
+        <FaturaCompetencia
+          batch={batch}
+          isDone={isDone}
+          cobertura={coberturaDaFatura({
+            datas: rows.map((r) => r.data_norm),
+            competencia: batch.competencia_fatura,
+            diaFechamento: batch.card?.dia_fechamento,
+            diaVencimento: batch.card?.dia_vencimento,
+            hoje: today,
+          })}
+        />
       )}
 
       {isDone ? (
@@ -344,9 +362,11 @@ function formatCompetencia(competencia: string): string {
 function FaturaCompetencia({
   batch,
   isDone,
+  cobertura,
 }: {
   batch: ImportBatchWithTarget;
   isDone: boolean;
+  cobertura: CoberturaFatura | null;
 }) {
   const router = useRouter();
   const [saving, setSaving] = React.useState(false);
@@ -374,45 +394,65 @@ function FaturaCompetencia({
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-2">
-          <CalendarClock className="mt-0.5 size-4 shrink-0 text-primary" />
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Fatura de destino</span>
-            <span className="text-xs text-muted-foreground">
-              {isDone
-                ? "Mês em que as linhas (incl. parcelas) entraram."
-                : "Mês desta fatura. As parcelas entram a partir dele — confira antes de importar."}
-            </span>
-            {!isDone && !batch.competencia_fatura && (
-              <span className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                Não detectamos o mês automaticamente — selecione para as parcelas
-                caírem na fatura certa.
-              </span>
-            )}
-          </div>
-        </div>
-        {isDone ? (
-          <span className="text-sm font-semibold">
-            {batch.competencia_fatura
-              ? formatCompetencia(batch.competencia_fatura)
-              : "—"}
-          </span>
-        ) : (
-          <div className="flex items-center gap-2">
-            {saving && (
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-            )}
-            <input
-              type="month"
-              aria-label="Mês da fatura"
-              value={value}
-              disabled={saving}
-              onChange={(e) => change(e.target.value)}
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 [color-scheme:light] dark:[color-scheme:dark]"
-            />
+      <CardContent className="flex flex-col gap-3 p-4">
+        {/* Arquivo que termina antes do fechamento importa fatura incompleta — e isso não
+            aparece em nenhum outro lugar, porque a revisão só consegue conferir o que ESTÁ
+            no arquivo. Foi assim que uma fatura entrou R$ 7,96 menor que a do banco. */}
+        {cobertura && (
+          <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs ring-1 ring-amber-500/20">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="min-w-0 text-amber-700 dark:text-amber-400">
+              O arquivo vai até <strong>{formatDate(cobertura.ultimaData)}</strong>,
+              mas esta fatura só fecha em{" "}
+              <strong>{formatDate(cobertura.dataFechamento)}</strong> —{" "}
+              {cobertura.diasDescobertos} dia(s) sem cobertura. Compras desse período
+              não estão no arquivo e{" "}
+              {isDone ? "podem não ter entrado" : "não vão entrar"} na fatura. Se o
+              total não bater com o do banco, exporte o arquivo de novo depois do
+              fechamento.
+            </div>
           </div>
         )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2">
+            <CalendarClock className="mt-0.5 size-4 shrink-0 text-primary" />
+            <div className="flex min-w-0 flex-col">
+              <span className="text-sm font-medium">Fatura de destino</span>
+              <span className="text-xs text-muted-foreground">
+                {isDone
+                  ? "Mês em que as linhas (incl. parcelas) entraram."
+                  : "Mês desta fatura. As parcelas entram a partir dele — confira antes de importar."}
+              </span>
+              {!isDone && !batch.competencia_fatura && (
+                <span className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Não detectamos o mês automaticamente — selecione para as
+                  parcelas caírem na fatura certa.
+                </span>
+              )}
+            </div>
+          </div>
+          {isDone ? (
+            <span className="text-sm font-semibold">
+              {batch.competencia_fatura
+                ? formatCompetencia(batch.competencia_fatura)
+                : "—"}
+            </span>
+          ) : (
+            <div className="flex shrink-0 items-center gap-2">
+              {saving && (
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              )}
+              <input
+                type="month"
+                aria-label="Mês da fatura"
+                value={value}
+                disabled={saving}
+                onChange={(e) => change(e.target.value)}
+                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 [color-scheme:light] dark:[color-scheme:dark]"
+              />
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

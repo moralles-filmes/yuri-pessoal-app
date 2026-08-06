@@ -103,6 +103,33 @@ fatura"*. Agora:
 - a revisão mostra um aviso âmbar com **quanto ainda não entrou na fatura** e um botão
   **"Importar pendentes"**.
 
+## Terceira rodada: o arquivo pode não cobrir a fatura inteira
+
+A fatura importada fechou **R$ 7,96 abaixo** da fatura do banco (3.754,73 × 3.762,69) — e
+**o sistema estava certo em tudo**:
+
+- o parse batia centavo a centavo com o arquivo (soma dos `TRNAMT` crus: compras 3.940,61,
+  créditos 3.556,50);
+- o total da fatura batia com a soma das linhas importadas;
+- as duas compras suspeitas de duplicidade estavam ambas lá.
+
+O que faltava estava **fora do sistema**: o OFX exportado ia até **25/06**, mas a fatura só
+fechou em **04/07** — a compra de 03/07 (`Ifd*Ifood Club`, R$ 7,95) nunca esteve no arquivo. O
+resto (R$ 0,01) é arredondamento de parcela.
+
+Nenhuma tela tinha como mostrar isso: **a revisão só consegue conferir o que está no arquivo**,
+e o que não está não aparece em lugar nenhum. Por isso a revisão passou a comparar a última
+data do arquivo com o fechamento da fatura de destino (`src/lib/import/cobertura.ts`, puro,
+`hoje` injetado):
+
+> O arquivo vai até 25/06/2026, mas esta fatura só fecha em 04/07/2026 — 9 dia(s) sem
+> cobertura. Compras desse período não estão no arquivo e não vão entrar na fatura.
+
+**Quando NÃO avisa** (um aviso sem base é pior que nenhum): fatura ainda **aberta** — arquivo
+parcial é o esperado, e avisar seria ruído em toda importação em andamento; intervalo menor que
+`MIN_DIAS_AVISO` (2 dias) — ninguém compra todo dia, e a última compra cair na véspera do
+fechamento é normal; sem competência confirmada, sem os dias do cartão ou sem data válida.
+
 ## Limpeza dos dados afetados
 
 As 48 transações erradas ficaram **órfãs** (o lote que as criou tinha sido excluído, e
