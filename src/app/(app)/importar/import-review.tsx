@@ -84,7 +84,9 @@ export function ImportReview({
   people: PersonOption[];
 }) {
   const router = useRouter();
-  const isDone = batch.status === "importado" || batch.status === "cancelado";
+  const isCancelado = batch.status === "cancelado";
+  const isImportado = batch.status === "importado";
+  const isDone = isImportado || isCancelado;
 
   const counts = rows.reduce<Record<string, number>>((acc, r) => {
     acc[r.status] = (acc[r.status] ?? 0) + 1;
@@ -95,6 +97,10 @@ export function ImportReview({
   // Total monetário do que será criado: enquanto revisa, soma das linhas "para importar"
   // (ignoradas e duplicadas fora); depois de importado, soma do que de fato entrou.
   const totais = totaisPorStatus(rows, isDone ? "importada" : "para_importar");
+  // Lote já importado pode ter linha destravada depois ("não é duplicidade"): ela ainda não
+  // está na fatura, e o total acima — que soma as importadas — não a conta. Mostrar o pendente
+  // ao lado é o que impede o usuário de achar que a fatura já fechou.
+  const pendentes = isImportado ? totaisPorStatus(rows, "para_importar") : null;
   const temReceitas = totais.receitas > 0;
   // Em fatura de cartão, "receita" significa estorno/crédito (reduz a fatura).
   const creditoLabel = batch.origem === "cartao" ? "Estornos" : "Receitas";
@@ -167,6 +173,18 @@ export function ImportReview({
               </span>
             </div>
           )}
+
+          {pendentes && pendentes.count > 0 && (
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-lg bg-amber-500/10 px-3 py-2 text-xs ring-1 ring-amber-500/20">
+              <span className="text-amber-700 dark:text-amber-400">
+                {pendentes.count} linha(s) marcada(s) para importar ainda{" "}
+                <strong>não entraram</strong> nesta fatura.
+              </span>
+              <span className="font-semibold tabular-nums text-amber-700 dark:text-amber-400">
+                {formatCurrency(pendentes.liquido)}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -177,15 +195,35 @@ export function ImportReview({
       {isDone ? (
         <>
           <ResultBanner status={batch.status} importadas={counts["importada"] ?? 0} />
-          {(counts["importada"] ?? 0) > 0 && (
-            <div className="flex justify-end">
-              <UndoButton
-                batchId={batch.id}
-                importadas={counts["importada"] ?? 0}
-                onDone={() => router.refresh()}
-              />
+          {/* Lote importado ainda aceita uma segunda rodada: só as linhas `para_importar`
+              entram, então destravar uma duplicada depois do commit tem para onde ir. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            {isImportado && paraImportar > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {paraImportar} linha(s) foram marcadas para importar depois desta
+                importação. Importe-as para entrarem na fatura.
+              </p>
+            ) : (
+              <span />
+            )}
+            <div className="flex items-center gap-2">
+              {(counts["importada"] ?? 0) > 0 && (
+                <UndoButton
+                  batchId={batch.id}
+                  importadas={counts["importada"] ?? 0}
+                  onDone={() => router.refresh()}
+                />
+              )}
+              {isImportado && paraImportar > 0 && (
+                <ImportButton
+                  batchId={batch.id}
+                  paraImportar={paraImportar}
+                  onDone={() => router.refresh()}
+                  label="Importar pendentes"
+                />
+              )}
             </div>
-          )}
+          </div>
         </>
       ) : (
         <>
@@ -222,8 +260,9 @@ export function ImportReview({
                 <th className="px-3 py-2 text-right font-medium">Valor</th>
                 <th className="px-3 py-2 font-medium">Categoria</th>
                 <th className="px-3 py-2 font-medium">Status</th>
-                {!isDone && <th className="px-3 py-2 font-medium">Ações</th>}
-                {isDone && <th className="px-3 py-2 font-medium">Lançamento</th>}
+                <th className="px-3 py-2 font-medium">
+                  {isCancelado ? "Lançamento" : "Ações"}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -233,7 +272,7 @@ export function ImportReview({
                   row={r}
                   categories={categories}
                   people={people}
-                  isDone={isDone}
+                  loteCancelado={isCancelado}
                   origem={batch.origem}
                   onChanged={() => router.refresh()}
                 />
@@ -592,10 +631,12 @@ function ImportButton({
   batchId,
   paraImportar,
   onDone,
+  label = "Importar",
 }: {
   batchId: string;
   paraImportar: number;
   onDone: () => void;
+  label?: string;
 }) {
   async function run() {
     const res = await commitImport(batchId);
@@ -612,13 +653,13 @@ function ImportButton({
   return (
     <ConfirmDialog
       title="Importar lançamentos"
-      description={`Criar ${paraImportar} lançamento(s) a partir das linhas marcadas para importar. Duplicatas e linhas ignoradas não entram.`}
-      confirmLabel="Importar"
+      description={`Criar ${paraImportar} lançamento(s) a partir das linhas marcadas para importar. Duplicatas e linhas ignoradas não entram, e o que já foi importado não é recriado.`}
+      confirmLabel={label}
       loadingLabel="Importando…"
       onConfirm={run}
       trigger={
         <Button disabled={paraImportar === 0}>
-          <Upload /> Importar
+          <Upload /> {label}
         </Button>
       }
     />
@@ -745,14 +786,14 @@ function RowLine({
   row,
   categories,
   people,
-  isDone,
+  loteCancelado,
   origem,
   onChanged,
 }: {
   row: ImportRowWithRelations;
   categories: Categoria[];
   people: PersonOption[];
-  isDone: boolean;
+  loteCancelado: boolean;
   origem: "cartao" | "conta";
   onChanged: () => void;
 }) {
@@ -769,6 +810,11 @@ function RowLine({
     }
   }
 
+  // A linha que virou lançamento é imutável; as demais continuam editáveis mesmo com o lote já
+  // importado — é o que dá saída para "isto não é duplicidade" descoberto depois do commit.
+  const jaImportada = row.status === "importada" || row.transaction != null;
+  const editavel = !loteCancelado && !jaImportada;
+
   // Só oferece "importar parcelado" quando há parcela FUTURA a gerar: cartão, DESPESA (estorno
   // não é parcelável — o commit manda crédito direto para a fatura), total > 1 e a linha não é
   // a última (k < N). Numa 3/3 não há o que parcelar — já é a última parcela.
@@ -778,7 +824,7 @@ function RowLine({
     (row.parcelas_total ?? 0) > 1 &&
     (row.parcela ?? 0) < (row.parcelas_total ?? 0);
   const isOpenForEdit =
-    !isDone && (row.status === "para_importar" || row.status === "duplicada");
+    editavel && (row.status === "para_importar" || row.status === "duplicada");
   // Divisão na importação (Fase 05+06): só despesa com valor, enquanto editável.
   const podeDividir = isOpenForEdit && row.tipo === "despesa" && row.valor != null;
   const isShared = row.classificacao !== "pessoal";
@@ -810,7 +856,7 @@ function RowLine({
                 total={row.parcelas_total}
               />
               {podeParcelar &&
-                !isDone &&
+                editavel &&
                 (row.import_as === "parcelamento" ? (
                   // Marcado como parcelamento: chip com "×" para cancelar fácil (reverte p/ avulso).
                   <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 pr-1 pl-2 text-[11px] text-primary ring-1 ring-primary/20">
@@ -878,7 +924,7 @@ function RowLine({
         </div>
       </td>
       <td className="px-3 py-2">
-        {isDone ? (
+        {!editavel ? (
           <span className="text-xs text-muted-foreground">
             {row.categoria?.name ?? "—"}
           </span>
@@ -906,7 +952,7 @@ function RowLine({
       <td className="px-3 py-2">
         <ImportRowStatusBadge status={row.status} />
       </td>
-      {!isDone ? (
+      {editavel ? (
         <td className="px-3 py-2">
           <div className="flex items-center gap-1">
             {podeDividir && (

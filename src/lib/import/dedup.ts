@@ -38,14 +38,29 @@ export function chaveComposta(
  * `ignorada` (ex.: pagamento da fatura auto-ignorado no mapeamento) são mantidas como estão.
  * `existingKeys` é o conjunto de chaves compostas das transações já existentes do alvo
  * (montado no servidor com `chaveComposta`).
+ *
+ * ⚠️ **O identificador do arquivo (FITID do OFX) MANDA nos dois sentidos** — regra que veio de
+ * dois falsos positivos reais numa mesma fatura (2026-08-06):
+ *
+ * - Duas compras iguais no mesmo dia (mesma loja, mesmo valor) **não são duplicata** quando
+ *   trazem FITID diferente: o arquivo já afirmou que são transações distintas, e a chave
+ *   composta sozinha não tem como saber disso.
+ * - Mesmo FITID **não basta** para acusar duplicata: o Nubank reusa o identificador entre o
+ *   "Crédito de parcelamento de compra" e a 1ª parcela — valores e sentidos diferentes, mesmo
+ *   FITID. Só é duplicata quando a chave composta também bate.
+ *
+ * Contra o que já existe no sistema (`existingKeys`) a chave composta continua sozinha: as
+ * transações não guardam o identificador do arquivo de origem.
  */
 export function detectarDuplicados(
   rows: NormalizedRow[],
   existingKeys: Set<string>,
   targetId: string | null,
 ): NormalizedRow[] {
-  const vistasComposta = new Set<string>();
-  const vistasIdent = new Set<string>();
+  // composta → identificador da 1ª linha que a ocupou (null = linha sem identificador).
+  const vistasComposta = new Map<string, string | null>();
+  // identificador → composta da 1ª linha que o usou.
+  const vistasIdent = new Map<string, string | null>();
 
   return rows.map((r) => {
     if (r.status === "erro" || r.status === "ignorada") return r;
@@ -67,7 +82,9 @@ export function detectarDuplicados(
         motivo: "Já existe um lançamento idêntico no sistema.",
       };
     }
-    if (ident && vistasIdent.has(ident)) {
+    // Mesmo identificador só acusa duplicata se a linha for de fato a mesma (chave composta
+    // igual) — senão é o FITID reaproveitado pelo banco entre lançamentos diferentes.
+    if (ident && vistasIdent.has(ident) && vistasIdent.get(ident) === composta) {
       return {
         ...r,
         status: "duplicada" as const,
@@ -75,15 +92,25 @@ export function detectarDuplicados(
       };
     }
     if (composta && vistasComposta.has(composta)) {
-      return {
-        ...r,
-        status: "duplicada" as const,
-        motivo: "Linha repetida no arquivo.",
-      };
+      const identAnterior = vistasComposta.get(composta) ?? null;
+      // Identificadores diferentes = o arquivo afirma que são duas transações distintas.
+      // Sem identificador em uma das duas não dá para afirmar nada: mantém o aviso, que o
+      // usuário resolve na revisão.
+      const distintasPeloIdentificador =
+        ident != null && identAnterior != null && ident !== identAnterior;
+      if (!distintasPeloIdentificador) {
+        return {
+          ...r,
+          status: "duplicada" as const,
+          motivo: "Linha repetida no arquivo.",
+        };
+      }
     }
 
-    if (composta) vistasComposta.add(composta);
-    if (ident) vistasIdent.add(ident);
+    if (composta && !vistasComposta.has(composta)) {
+      vistasComposta.set(composta, ident);
+    }
+    if (ident && !vistasIdent.has(ident)) vistasIdent.set(ident, composta);
     return { ...r, status: "para_importar" as const, motivo: null };
   });
 }
