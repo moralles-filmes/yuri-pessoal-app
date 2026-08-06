@@ -44,6 +44,12 @@ export type ToolExecution = {
   readonly callId: string;
   readonly toolName: string;
   readonly isError: boolean;
+  /**
+   * O MESMO vocabulário que foi para a auditoria. O laço precisa dele para a tela poder
+   * dizer "a consulta demorou demais" em vez de "rejeitada" — deduzir isso de `isError`
+   * transformaria timeout e falha em recusa, que é outra coisa e assusta à toa.
+   */
+  readonly status: ToolCallStatus;
   /** O bloco NÃO CONFIÁVEL que volta ao modelo. Nunca o objeto cru. */
   readonly block: UntrustedBlock;
   readonly recordsRead: number;
@@ -61,11 +67,13 @@ function erro(
   call: ToolCallRequest,
   reason: ToolRejectionReason,
   mensagem: string,
+  status: ToolCallStatus = "rejeitada",
 ): ToolExecution {
   return {
     callId: call.callId,
     toolName: call.toolName,
     isError: true,
+    status,
     block: wrapUntrusted("resultado_de_ferramenta", call.toolName, {
       erro: PUBLIC_REJECTION_CODE[reason],
       mensagem,
@@ -267,6 +275,7 @@ export async function executeTool(
       callId: call.callId,
       toolName: call.toolName,
       isError: false,
+      status: "executada",
       block: wrapUntrusted("resultado_de_ferramenta", tool.name, podada),
       recordsRead: podada.contagem,
     };
@@ -279,8 +288,8 @@ export async function executeTool(
       tool.version,
     );
     return timeout
-      ? erro(call, "TOOL_TIMEOUT", REJECTION_MESSAGE.TOOL_TIMEOUT)
-      : erro(call, "TOOL_FAILED", REJECTION_MESSAGE.TOOL_FAILED);
+      ? erro(call, "TOOL_TIMEOUT", REJECTION_MESSAGE.TOOL_TIMEOUT, "timeout")
+      : erro(call, "TOOL_FAILED", REJECTION_MESSAGE.TOOL_FAILED, "falhou");
   } finally {
     // Sem isto, uma ferramenta rápida deixaria o processo com um timer pendurado até o
     // prazo do descriptor — em teste, a suíte fica presa esperando o event loop esvaziar.

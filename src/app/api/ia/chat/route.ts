@@ -26,7 +26,6 @@ import {
   MAX_CHAT_BODY_BYTES,
   MAX_CHAT_TEXT,
 } from "@/lib/validators/ai";
-import { ASSISTENTE_PESSOAL_ID } from "@/lib/ai/agents/registry";
 import { runChat, type ChatRunnerEvent } from "@/lib/ai/server/chat-runner";
 import {
   AI_CRYPTO_NOT_CONFIGURED,
@@ -138,7 +137,10 @@ export async function POST(request: Request) {
     userId: ctx.userId,
     conversationId: parsed.data.conversationId ?? null,
     text: parsed.data.text,
-    agentId: parsed.data.agentId ?? ASSISTENTE_PESSOAL_ID,
+    // ⚠️ PREFERÊNCIA, não decisão: quem escolhe o agente é `routeAgent`, no servidor, com as
+    // flags `allow_*` do usuário na mão. `null` (o caso de hoje — a tela não manda o campo) é
+    // "não pedi nenhum", que é diferente de "pedi o orquestrador".
+    agentId: parsed.data.agentId ?? null,
     providerPreference: parsed.data.providerPreference ?? null,
     modelPreference: parsed.data.modelPreference ?? null,
     abortSignal: request.signal,

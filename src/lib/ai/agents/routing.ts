@@ -29,12 +29,12 @@ export { TREINOS_AGENT_ID };
 
 /** Cada especialista tem EXATAMENTE uma flag de admissão. O orquestrador não tem: ele
  * existe sempre, e sem nenhuma flag ligada simplesmente não recebe ferramenta alguma. */
-export const AGENT_PERMISSION: Record<string, ToolPermission> = {
+export const AGENT_PERMISSION: Record<string, ToolPermission | undefined> = {
   [TREINOS_AGENT_ID]: "allow_training",
 };
 
 /** Módulo (o mesmo vocabulário de `ToolDescriptor.module`) → agente especializado. */
-const AGENTE_DO_MODULO: Record<string, string> = {
+const AGENTE_DO_MODULO: Record<string, string | undefined> = {
   training: TREINOS_AGENT_ID,
 };
 
@@ -49,6 +49,17 @@ const AGENTE_DO_MODULO: Record<string, string> = {
  * não existe, e a mensagem cai no orquestrador em vez de ser arrastada para Treinos só
  * porque a página aberta era `/treinos`.
  */
+/**
+ * Os únicos ids que uma preferência do cliente pode alcançar. Sai do MESMO lugar de onde
+ * saem os destinos do roteamento — uma segunda lista escrita à mão divergiria no dia em que
+ * um especialista novo entrasse, e o agente pedido pela tela deixaria de ser honrado sem
+ * ninguém entender por quê.
+ */
+const AGENTES_CONHECIDOS: readonly string[] = [
+  ASSISTENTE_PESSOAL_ID,
+  ...Object.values(AGENTE_DO_MODULO).filter((id): id is string => id !== undefined),
+];
+
 const PALAVRAS: Record<string, readonly string[]> = {
   training: [
     "treino", "treinos", "treinar", "treinei", "malhar", "academia",
@@ -83,50 +94,115 @@ function moduloPeloTexto(texto: string): string | null {
   return null;
 }
 
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ OS MOTIVOS SÃO UMA LISTA FECHADA, E ISSO É REQUISITO DE SEGURANÇA — NÃO ARRUMAÇÃO.    ║
+ * ║                                                                                       ║
+ * ║ A Task 10 INJETA `RoutingDecision.motivo` no prompt de sistema, para o orquestrador   ║
+ * ║ poder dizer a verdade sobre por que a pergunta chegou a ele. Texto que entra em prompt ║
+ * ║ de sistema não pode ter origem em nada que o usuário (ou o modelo) escreva: seria a    ║
+ * ║ porta de injeção que a regra "dado é dado, nunca instrução" existe para fechar.        ║
+ * ║                                                                                       ║
+ * ║ Com a união abaixo, o compilador impede que qualquer outra string vire motivo, e       ║
+ * ║ `blocoDeContextoDeRoteamento` confere a lista DE NOVO em runtime.                      ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export const ROUTING_MOTIVOS = {
+  SEM_MODULO: "Nenhum módulo específico identificado na pergunta.",
+  SEM_ESPECIALISTA: "Ainda não há assistente especializado para este módulo.",
+  SEM_PERMISSAO: "Leitura não autorizada para este módulo nas preferências de IA.",
+  PELO_TEXTO: "A pergunta menciona este módulo.",
+  PELO_CONTEXTO: "O contexto da página aberta indica este módulo.",
+  ESCOLHIDO: "O assistente foi escolhido na tela.",
+} as const;
+
+export type RoutingMotivo = (typeof ROUTING_MOTIVOS)[keyof typeof ROUTING_MOTIVOS];
+
+const MOTIVOS_CONHECIDOS: readonly string[] = Object.values(ROUTING_MOTIVOS);
+
 export type RoutingInput = {
   readonly texto: string;
   readonly pageContext: { readonly modulo: string } | null;
   readonly permissions: Readonly<Partial<Record<ToolPermission, boolean>>>;
+  /**
+   * O agente que o cliente PEDIU. É preferência, nunca autorização: um agente cuja flag
+   * está desligada não é honrado, e um id que não existe no registry é ignorado — quem
+   * decide continua sendo esta função. Ausente é o caso normal (a tela não escolhe).
+   */
+  readonly preferido?: string | null;
 };
 
 export type RoutingDecision = {
   readonly agentId: string;
   /** Em pt-BR: a tela mostra por que aquele assistente respondeu. */
-  readonly motivo: string;
+  readonly motivo: RoutingMotivo;
 };
 
+/** Sem flag mapeada, o agente não exige autorização de módulo (é o caso do orquestrador). */
+function autorizado(
+  agentId: string,
+  permissions: RoutingInput["permissions"],
+): boolean {
+  const flag = AGENT_PERMISSION[agentId];
+  return flag === undefined || permissions[flag] === true;
+}
+
 export function routeAgent(input: RoutingInput): RoutingDecision {
+  // Escolha explícita vem antes do texto: se o usuário abriu o assistente de Treinos, é com
+  // ele que quer falar. Um id que não está nesta lista NÃO vira agente — a lista é o
+  // registry, nunca o que o cliente escreveu.
+  const preferido = input.preferido ?? null;
+  if (preferido !== null && AGENTES_CONHECIDOS.includes(preferido)) {
+    return autorizado(preferido, input.permissions)
+      ? { agentId: preferido, motivo: ROUTING_MOTIVOS.ESCOLHIDO }
+      : { agentId: ASSISTENTE_PESSOAL_ID, motivo: ROUTING_MOTIVOS.SEM_PERMISSAO };
+  }
+
   const doTexto = moduloPeloTexto(input.texto);
   const doContexto = input.pageContext?.modulo ?? null;
 
   const modulo = doTexto ?? doContexto;
   if (!modulo) {
-    return {
-      agentId: ASSISTENTE_PESSOAL_ID,
-      motivo: "Nenhum módulo específico identificado na pergunta.",
-    };
+    return { agentId: ASSISTENTE_PESSOAL_ID, motivo: ROUTING_MOTIVOS.SEM_MODULO };
   }
 
   const agentId = AGENTE_DO_MODULO[modulo];
   if (!agentId) {
-    return {
-      agentId: ASSISTENTE_PESSOAL_ID,
-      motivo: "Ainda não há assistente especializado para este módulo.",
-    };
+    return { agentId: ASSISTENTE_PESSOAL_ID, motivo: ROUTING_MOTIVOS.SEM_ESPECIALISTA };
   }
 
-  const flag = AGENT_PERMISSION[agentId];
-  if (input.permissions[flag] !== true) {
-    return {
-      agentId: ASSISTENTE_PESSOAL_ID,
-      motivo: "Leitura não autorizada para este módulo nas preferências de IA.",
-    };
+  if (!autorizado(agentId, input.permissions)) {
+    return { agentId: ASSISTENTE_PESSOAL_ID, motivo: ROUTING_MOTIVOS.SEM_PERMISSAO };
   }
 
   return {
     agentId,
-    motivo: doTexto
-      ? "A pergunta menciona este módulo."
-      : "O contexto da página aberta indica este módulo.",
+    motivo: doTexto ? ROUTING_MOTIVOS.PELO_TEXTO : ROUTING_MOTIVOS.PELO_CONTEXTO,
   };
+}
+
+/**
+ * O motivo do roteamento, pronto para ser CONCATENADO ao prompt de sistema.
+ *
+ * Por que isto é seguro: o texto devolvido é montado só com constantes deste arquivo, e a
+ * checagem contra `MOTIVOS_CONHECIDOS` é a segunda barreira (a primeira é o tipo). Um motivo
+ * fora da lista devolve string vazia — nada é injetado — em vez de repassar texto de origem
+ * desconhecida para dentro da instrução do agente.
+ *
+ * Por que no SISTEMA e não numa mensagem: isto é um fato do NOSSO roteador, não um dado do
+ * usuário nem resultado de ferramenta. Dado recuperado continua entrando exclusivamente por
+ * `wrapUntrusted`, em papel `tool`/`user` — essa fronteira não se move.
+ */
+export function blocoDeContextoDeRoteamento(motivo: string): string {
+  if (!MOTIVOS_CONHECIDOS.includes(motivo)) return "";
+  return [
+    "",
+    "---",
+    "",
+    "CONTEXTO DESTA EXECUÇÃO (fato do sistema, não fala do usuário)",
+    "",
+    `Por que esta conversa chegou a você: ${motivo}`,
+    "",
+    "Use esse fato quando precisar explicar por que respondeu você. Não invente outra causa e não afirme nada além do que está escrito acima.",
+  ].join("\n");
 }

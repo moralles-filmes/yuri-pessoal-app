@@ -7,6 +7,7 @@
  */
 
 import type { AiProviderId } from "./core/contracts";
+import type { ToolPermission } from "./tools/contracts";
 
 export type CredentialStatus = "nao_validada" | "valida" | "invalida";
 export type ConversationStatus = "ativa" | "arquivada";
@@ -50,6 +51,12 @@ export type AiPreferencesView = {
   readonly reservationMargin: number;
   readonly rateLimitPerMinute: number;
   readonly rateLimitPerHour: number;
+  /**
+   * As flags `allow_*` por módulo (18-B). **Chave AUSENTE é DESLIGADA**, nunca "ainda não
+   * sei": o guard lê `!== true`, e é assim que uma coluna que não veio na consulta deixa de
+   * autorizar leitura em vez de autorizá-la por omissão.
+   */
+  readonly permissions: Readonly<Record<ToolPermission, boolean>>;
 };
 
 export type ConversationListItem = {

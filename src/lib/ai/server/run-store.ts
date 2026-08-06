@@ -284,7 +284,13 @@ async function fecharRun(
 
 // ─────────────────────────── Tentativas ───────────────────────────
 
-export type AttemptType = "PRIMARY" | "RETRY" | "FALLBACK";
+/**
+ * `TOOL_STEP` (18-B) é a chamada ao modelo que CONTINUA o laço depois de uma ferramenta —
+ * não é repetição (`RETRY`) nem troca de provedor (`FALLBACK`). Ela é uma linha própria
+ * porque é uma chamada paga própria: medir a resposta inteira como uma tentativa só
+ * esconderia o custo do laço, que é justamente o que a reserva por passos existe para cobrir.
+ */
+export type AttemptType = "PRIMARY" | "RETRY" | "FALLBACK" | "TOOL_STEP";
 
 export type StartAttemptInput = {
   readonly runId: string;

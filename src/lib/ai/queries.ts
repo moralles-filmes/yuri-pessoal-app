@@ -19,6 +19,7 @@ import {
 } from "./usage/budget";
 import { round6, sumRunCost } from "./usage/meter";
 import type { ProviderConfigView } from "./core/router";
+import type { ToolPermission } from "./tools/contracts";
 import type {
   AiPreferencesView,
   ConversationDetail,
@@ -115,6 +116,23 @@ export async function getRouterConfigs(
   }));
 }
 
+/**
+ * Nenhuma leitura de módulo autorizada. É o padrão do usuário SEM linha em
+ * `ai_user_preferences` — e tem de ser exatamente este: um `undefined` no lugar de `false`
+ * daria "não sei" onde a resposta certa é "não".
+ */
+const SEM_PERMISSAO: Record<ToolPermission, boolean> = {
+  allow_finance: false,
+  allow_nutrition: false,
+  allow_training: false,
+  allow_body: false,
+  allow_todo: false,
+  allow_calendar: false,
+  allow_tasks: false,
+  allow_habits: false,
+  allow_studies: false,
+};
+
 const PREFS_PADRAO: AiPreferencesView = {
   defaultProvider: null,
   defaultModel: null,
@@ -127,6 +145,7 @@ const PREFS_PADRAO: AiPreferencesView = {
   reservationMargin: 1.15,
   rateLimitPerMinute: 10,
   rateLimitPerHour: 120,
+  permissions: SEM_PERMISSAO,
 };
 
 export async function getAiPreferences(userId: string): Promise<AiPreferencesView> {
@@ -134,7 +153,7 @@ export async function getAiPreferences(userId: string): Promise<AiPreferencesVie
   const { data } = await supabase
     .from("ai_user_preferences")
     .select(
-      "default_provider, default_model, confirmation_mode, allow_fallback, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
+      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -153,6 +172,19 @@ export async function getAiPreferences(userId: string): Promise<AiPreferencesVie
     reservationMargin: data.reservation_margin,
     rateLimitPerMinute: data.rate_limit_per_minute,
     rateLimitPerHour: data.rate_limit_per_hour,
+    // `=== true` e não `?? false`: coluna ausente, nula ou de tipo inesperado vira DESLIGADA.
+    // Autorização de leitura nunca sai de coerção.
+    permissions: {
+      allow_finance: data.allow_finance === true,
+      allow_nutrition: data.allow_nutrition === true,
+      allow_training: data.allow_training === true,
+      allow_body: data.allow_body === true,
+      allow_todo: data.allow_todo === true,
+      allow_calendar: data.allow_calendar === true,
+      allow_tasks: data.allow_tasks === true,
+      allow_habits: data.allow_habits === true,
+      allow_studies: data.allow_studies === true,
+    },
   };
 }
 
