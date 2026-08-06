@@ -382,15 +382,21 @@ export async function updateImportRow(
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
   const d = parsed.data;
 
+  // Trava por LINHA, não pelo lote: a linha que já virou lançamento é imutável, mas as que
+  // ficaram de fora (duplicada/ignorada/erro) seguem editáveis mesmo depois do lote importado —
+  // senão marcar "não é duplicidade" depois da importação não teria como chegar à fatura.
   const { data: row } = await ctx.supabase
     .from("import_rows")
-    .select("id, import_batch_id, import_batches(status)")
+    .select("id, status, transaction_id, import_batches(status)")
     .eq("id", rowId)
     .maybeSingle();
   if (!row) return dbError("Linha não encontrada.");
   const batchStatus = (row.import_batches as { status?: string } | null)?.status;
-  if (batchStatus === "importado" || batchStatus === "cancelado") {
-    return dbError("Este lote já foi finalizado.");
+  if (batchStatus === "cancelado") return dbError("Este lote foi cancelado.");
+  if (row.status === "importada" || row.transaction_id) {
+    return dbError(
+      "Esta linha já virou lançamento. Edite o lançamento em Financeiro, ou desfaça a importação do lote.",
+    );
   }
 
   const update: {
@@ -443,13 +449,16 @@ export async function setImportRowSplit(
 
   const { data: row } = await ctx.supabase
     .from("import_rows")
-    .select("id, tipo, import_batches(status)")
+    .select("id, tipo, status, transaction_id, import_batches(status)")
     .eq("id", rowId)
     .maybeSingle();
   if (!row) return dbError("Linha não encontrada.");
   const batchStatus = (row.import_batches as { status?: string } | null)?.status;
-  if (batchStatus === "importado" || batchStatus === "cancelado") {
-    return dbError("Este lote já foi finalizado.");
+  if (batchStatus === "cancelado") return dbError("Este lote foi cancelado.");
+  if (row.status === "importada" || row.transaction_id) {
+    return dbError(
+      "Esta linha já virou lançamento. Ajuste a divisão em Financeiro, ou desfaça a importação do lote.",
+    );
   }
   if (parsed.data.classificacao !== "pessoal" && row.tipo !== "despesa") {
     return dbError("Só é possível dividir despesas.");
@@ -533,13 +542,13 @@ export async function commitImport(
     .eq("id", batchId)
     .maybeSingle();
   if (!batch) return dbError("Lote não encontrado.");
-  if (batch.status === "importado") {
-    return dbError("Este lote já foi importado.");
-  }
   if (batch.status === "cancelado") {
     return dbError("Este lote foi cancelado.");
   }
 
+  // Rodar de novo num lote já importado é seguro e às vezes necessário: só entram as linhas
+  // `para_importar`, então a linha que o usuário destravou depois ("não é duplicidade") alcança
+  // a fatura sem recriar nada — as já importadas ficaram com outro status.
   const { data: rows } = await ctx.supabase
     .from("import_rows")
     .select(
@@ -548,6 +557,10 @@ export async function commitImport(
     .eq("import_batch_id", batchId)
     .eq("status", "para_importar")
     .order("linha_index", { ascending: true });
+
+  if ((rows ?? []).length === 0) {
+    return dbError("Não há linhas marcadas para importar neste lote.");
+  }
 
   // Competência-âncora da fatura de cartão: TODAS as linhas do arquivo pertencem à fatura sendo
   // importada — parcela "k" cai nela, "k+1, k+2…" nos meses seguintes; última parcela e à vista

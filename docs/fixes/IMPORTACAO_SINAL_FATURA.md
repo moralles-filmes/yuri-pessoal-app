@@ -66,6 +66,43 @@ Daí saem os três sintomas:
 > "desfazer" explícito o usuário fica sem saída: a dedup passa a acusar os lançamentos que ele
 > queria substituir.
 
+## Segunda rodada (mesmo dia): a duplicidade que não era, e a linha sem saída
+
+Dois falsos positivos de deduplicação apareceram na primeira fatura importada pelo fluxo já
+corrigido — os dois vinham de tratar **chave composta** e **identificador (FITID)** como
+evidências independentes:
+
+| Caso real (OFX Nubank) | O que acontecia | Por quê |
+| --- | --- | --- |
+| Duas compras `Vmt*Gil & Par` de R$ 18,95 no mesmo dia, **FITIDs diferentes** | a 2ª virava `duplicada` | a chave composta (data+valor+descrição+cartão) é idêntica, e ninguém olhava o FITID |
+| `Crédito de parcelamento de compra` (R$ 185,88, crédito) e `Parcelamento de Compra … 1/3` (R$ 67,19, compra), **mesmo FITID** | o crédito virava `duplicada` | o Nubank **reusa o FITID** entre o crédito e a 1ª parcela |
+
+**O identificador do arquivo manda nos dois sentidos** (`detectarDuplicados`):
+
+- FITIDs **diferentes** ⇒ não é duplicata, mesmo com a chave composta idêntica — o arquivo já
+  afirmou que são transações distintas.
+- FITID **igual** só acusa duplicata quando a **chave composta também bate** — senão é
+  identificador reaproveitado entre lançamentos diferentes.
+- Sem identificador em uma das linhas não dá para afirmar nada: mantém o aviso, que o usuário
+  resolve na revisão.
+
+Contra o que **já existe no sistema** a chave composta continua sozinha: `transactions` não
+guarda o identificador do arquivo de origem.
+
+### E a linha que ficou de fora depois do commit
+
+Marcar "não é duplicidade" **depois** de importar não tinha para onde ir: `updateImportRow` e
+`commitImport` recusavam qualquer lote `importado`, então a linha nunca chegava à fatura — que
+é exatamente o relato *"se eu coloquei que não é duplicidade, precisa contar no valor da
+fatura"*. Agora:
+
+- a trava é **por linha**, não pelo lote: a linha que já virou lançamento é imutável (aponta
+  para editar em Financeiro ou desfazer o lote), as demais seguem editáveis;
+- `commitImport` **roda de novo** num lote importado — ele só processa `status =
+  'para_importar'`, então nada é recriado;
+- a revisão mostra um aviso âmbar com **quanto ainda não entrou na fatura** e um botão
+  **"Importar pendentes"**.
+
 ## Limpeza dos dados afetados
 
 As 48 transações erradas ficaram **órfãs** (o lote que as criou tinha sido excluído, e
