@@ -3,8 +3,10 @@ import {
   applyMapping,
   autoDetectMapping,
   detectHeaderRow,
+  detectarSinalNegativoDespesa,
   ehPagamentoFatura,
 } from "@/lib/import/mapping";
+import { OFX_HEADERS, parseOfx } from "@/lib/import/ofx";
 import type { NormalizeOptions, ParsedTable } from "@/lib/import/types";
 
 const categorias = [
@@ -13,7 +15,15 @@ const categorias = [
   { id: "c-saude", name: "Saúde" },
 ];
 
+/** Fatura em planilha/CSV: compra positiva, estorno negativo. */
 const cartaoOpts: NormalizeOptions = {
+  origem: "cartao",
+  sinalNegativoDespesa: false,
+  categorias,
+};
+
+/** Fatura em OFX: compra negativa (TRNAMT < 0), crédito positivo. */
+const cartaoOfxOpts: NormalizeOptions = {
   origem: "cartao",
   sinalNegativoDespesa: true,
   categorias,
@@ -179,5 +189,97 @@ describe("applyMapping — estornos/créditos na fatura de cartão", () => {
     expect(rows[2].status).toBe("ignorada");
     expect(rows[2].motivo).toBeTruthy();
     expect(rows[2].valorCentavos).toBe(330103);
+  });
+});
+
+describe("detectarSinalNegativoDespesa", () => {
+  it("planilha de fatura (compra positiva, estorno negativo) → false", () => {
+    const table: ParsedTable = {
+      headers: ["Data", "Lançamento", "Valor"],
+      rows: [
+        ["21/06/2026", "Supermercado", "R$ 152,35"],
+        ["20/06/2026", "Posto Shell", "R$ 210,00"],
+        ["15/06/2026", "Apple.com/bill", "R$ -5,14"],
+        ["01/06/2026", "Pagamento Efetuado", "R$ -3.301,03"],
+      ],
+    };
+    expect(
+      detectarSinalNegativoDespesa(table, autoDetectMapping(table.headers)),
+    ).toBe(false);
+  });
+
+  it("OFX de cartão (compra negativa, pagamento positivo) → true", () => {
+    const table: ParsedTable = {
+      headers: [...OFX_HEADERS],
+      rows: [
+        ["20260625", "-77.98", "Fazenda do Bolo", "", "1", "DEBIT"],
+        ["20260624", "-14.90", "Dl *99 Ride", "", "2", "DEBIT"],
+        ["20260620", "-135.33", "Cobasi", "", "3", "DEBIT"],
+        // O pagamento da fatura anterior é UMA linha com magnitude parecida com a soma de
+        // todas as compras: por isso a decisão é por contagem de linhas, não por soma.
+        ["20260610", "228.21", "Pagamento recebido", "", "4", "CREDIT"],
+      ],
+    };
+    expect(
+      detectarSinalNegativoDespesa(table, autoDetectMapping(table.headers)),
+    ).toBe(true);
+  });
+
+  it("empate e coluna de valor não mapeada caem na convenção da planilha (false)", () => {
+    const table: ParsedTable = {
+      headers: ["Data", "Lançamento", "Valor"],
+      rows: [
+        ["21/06/2026", "A", "10,00"],
+        ["22/06/2026", "B", "-10,00"],
+      ],
+    };
+    expect(
+      detectarSinalNegativoDespesa(table, autoDetectMapping(table.headers)),
+    ).toBe(false);
+    expect(detectarSinalNegativoDespesa(table, {})).toBe(false);
+  });
+});
+
+describe("applyMapping — fatura em OFX (compra com sinal negativo)", () => {
+  // Regressão do bug real: com a convenção invertida, TODA a fatura entrava como estorno
+  // (receita), a fatura ficava com total NEGATIVO, e a linha perdia parcelamento e divisão.
+  const ofx = `
+    <STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260622000000[-3:BRT]<TRNAMT>-16.89
+      <FITID>a1<NAME>Mercado*Mercadolivre - Parcela 1/4</STMTTRN>
+    <STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260619000000[-3:BRT]<TRNAMT>-139.00
+      <FITID>a2<NAME>Academia Bauru Fitness</STMTTRN>
+    <STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260615000000[-3:BRT]<TRNAMT>5.14
+      <FITID>a3<NAME>Estorno Apple.com/bill</STMTTRN>
+    <STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260610000000[-3:BRT]<TRNAMT>3301.03
+      <FITID>a4<NAME>Pagamento recebido</STMTTRN>
+  `;
+  const table = parseOfx(ofx);
+  const mapping = autoDetectMapping(table.headers);
+  const rows = applyMapping(table, mapping, {
+    ...cartaoOfxOpts,
+    sinalNegativoDespesa: detectarSinalNegativoDespesa(table, mapping),
+  });
+
+  it("compra com TRNAMT negativo é DESPESA, com magnitude positiva", () => {
+    expect(rows[1].tipo).toBe("despesa");
+    expect(rows[1].valorCentavos).toBe(13900);
+    expect(rows[1].descricao).toBe("Academia Bauru Fitness");
+  });
+
+  it("preserva a parcela da compra parcelada (que o estorno perderia)", () => {
+    expect(rows[0].tipo).toBe("despesa");
+    expect(rows[0].parcela).toBe(1);
+    expect(rows[0].parcelasTotal).toBe(4);
+  });
+
+  it("crédito positivo é estorno (receita)", () => {
+    expect(rows[2].tipo).toBe("receita");
+    expect(rows[2].valorCentavos).toBe(514);
+    expect(rows[2].status).toBe("pendente");
+  });
+
+  it("pagamento da fatura continua auto-ignorado (agora do lado positivo)", () => {
+    expect(rows[3].status).toBe("ignorada");
+    expect(rows[3].motivo).toBeTruthy();
   });
 });

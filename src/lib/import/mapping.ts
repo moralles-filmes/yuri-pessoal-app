@@ -83,6 +83,40 @@ function cell(raw: string[], idx: number | undefined): string | null {
 }
 
 /**
+ * Descobre a CONVENÇÃO DE SINAL do arquivo: true quando valores negativos são as saídas
+ * (compras/despesas) e positivos são os créditos.
+ *
+ * Faturas de cartão não têm convenção única — e assumir uma delas foi um bug real: o OFX
+ * (padrão do Nubank e da maioria dos bancos) traz COMPRA com `TRNAMT` negativo e crédito
+ * positivo, enquanto o CSV/XLSX de fatura (Itaú, Nubank) traz compra positiva e estorno
+ * negativo. Com a convenção errada, a fatura inteira entrava como estorno e o total ficava
+ * NEGATIVO.
+ *
+ * O critério é a CONTAGEM de linhas, não a soma: numa fatura a maioria das linhas é compra,
+ * enquanto o pagamento da fatura anterior — uma única linha — tem magnitude parecida com a
+ * soma de todas as compras e empataria uma decisão por valor. Pelo mesmo motivo o pagamento
+ * fica FORA da amostra: ele é a linha de crédito garantida de toda fatura e envenenaria a
+ * contagem num arquivo curto. Empate ou arquivo sem sinal devolve `false` (positivo =
+ * despesa), que é a convenção das planilhas de fatura.
+ */
+export function detectarSinalNegativoDespesa(
+  table: ParsedTable,
+  mapping: ColumnMapping,
+): boolean {
+  if (mapping.valor == null) return false;
+  let negativos = 0;
+  let positivos = 0;
+  for (const raw of table.rows) {
+    const v = parseValorCentavos(cell(raw, mapping.valor));
+    if (v == null || v === 0) continue;
+    if (ehPagamentoFatura(cell(raw, mapping.descricao))) continue;
+    if (v < 0) negativos++;
+    else positivos++;
+  }
+  return negativos > positivos;
+}
+
+/**
  * True quando a descrição de uma linha de fatura é claramente o PAGAMENTO da fatura (anterior),
  * e não um lançamento a importar. Só faz sentido aplicar a valores NEGATIVOS (créditos), para não
  * confundir com uma compra que por acaso cite "pagamento". O texto é normalizado (sem acento,
@@ -112,9 +146,9 @@ function resolverCategoria(
 
 /**
  * Aplica o mapeamento a cada linha de dados, produzindo `NormalizedRow[]`. Linhas com data ou
- * valor inválidos saem com status 'erro' (com motivo claro). O `tipo` é derivado da origem:
- * cartão → sempre despesa (magnitude); conta → despesa/receita pelo sinal (convenção do lote).
- * A deduplicação é aplicada DEPOIS (dedup.ts) sobre estas linhas.
+ * valor inválidos saem com status 'erro' (com motivo claro). O `tipo` sai da convenção de sinal
+ * do lote (`sinalNegativoDespesa`) — em fatura, detectada do arquivo; o valor é sempre gravado
+ * em magnitude. A deduplicação é aplicada DEPOIS (dedup.ts) sobre estas linhas.
  */
 export function applyMapping(
   table: ParsedTable,
@@ -180,26 +214,24 @@ export function applyMapping(
     }
 
     const magnitude = Math.abs(valorAssinado);
-    let tipo: "despesa" | "receita";
-    if (options.origem === "cartao") {
-      // Fatura de cartão: compras são despesas; valor NEGATIVO é crédito — estorno (receita, que
-      // reduz a fatura) ou o pagamento da fatura anterior (não é lançamento → auto-ignora). O
-      // estorno entra como receita vinculada à fatura no commit (subtrai do total_atual).
-      tipo = valorAssinado < 0 ? "receita" : "despesa";
-      if (valorAssinado < 0 && ehPagamentoFatura(descricao)) {
-        return {
-          ...base,
-          valorCentavos: magnitude,
-          tipo,
-          status: "ignorada",
-          motivo: "Pagamento da fatura — não é um lançamento.",
-        };
-      }
-    } else {
-      const ehDespesa = options.sinalNegativoDespesa
-        ? valorAssinado < 0
-        : valorAssinado > 0;
-      tipo = ehDespesa ? "despesa" : "receita";
+    // A convenção de sinal vale para as DUAS origens (ver detectarSinalNegativoDespesa):
+    // em fatura ela é detectada do próprio arquivo; em extrato vem do lote.
+    const ehDespesa = options.sinalNegativoDespesa
+      ? valorAssinado < 0
+      : valorAssinado > 0;
+    const tipo: "despesa" | "receita" = ehDespesa ? "despesa" : "receita";
+
+    // Fatura de cartão: o lado CRÉDITO é estorno (receita, que reduz a fatura) ou o pagamento
+    // da fatura anterior — este não é lançamento, então auto-ignora. O estorno entra como
+    // receita vinculada à fatura no commit (subtrai do total_atual).
+    if (options.origem === "cartao" && !ehDespesa && ehPagamentoFatura(descricao)) {
+      return {
+        ...base,
+        valorCentavos: magnitude,
+        tipo,
+        status: "ignorada",
+        motivo: "Pagamento da fatura — não é um lançamento.",
+      };
     }
 
     return { ...base, valorCentavos: magnitude, tipo };
