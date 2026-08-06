@@ -29,6 +29,11 @@ import {
 } from "@/lib/import/mapping";
 import { chaveComposta, detectarDuplicados } from "@/lib/import/dedup";
 import {
+  marcarParcelasJaLancadas,
+  type ParcelaLancada,
+} from "@/lib/import/parcelas-lancadas";
+import { descricaoBaseParcela } from "@/lib/import/normalize";
+import {
   escalarPartesParcelado,
   planejarImportParcelado,
 } from "@/lib/import/parcelamento";
@@ -123,6 +128,41 @@ async function existingKeysFor(
     if (k) set.add(k);
   }
   return set;
+}
+
+/**
+ * Parcelas ATIVAS já lançadas no cartão, para reconhecer na fatura do mês seguinte a compra que
+ * já entrou como parcelamento (ver `parcelas-lancadas.ts`). As parcelas vivem em
+ * `transaction_installments` — fora do alcance de `existingKeysFor`, que só lê `transactions`.
+ *
+ * `status = 'ativa'` de propósito: parcela cancelada não ocupa mais a fatura, então não pode
+ * bloquear a importação da linha correspondente.
+ */
+async function parcelasLancadasFor(
+  ctx: AuthContext,
+  cardId: string,
+): Promise<ParcelaLancada[]> {
+  const { data } = await ctx.supabase
+    .from("transaction_installments")
+    .select(
+      "numero, total_parcelas, valor, data_competencia, parent:transactions!transaction_installments_parent_transaction_id_fkey(description)",
+    )
+    .eq("card_id", cardId)
+    .eq("status", "ativa")
+    .limit(5000);
+
+  return (data ?? []).map((p) => {
+    const parent = p.parent as { description: string | null } | null;
+    const descricao = parent?.description ?? "";
+    return {
+      numero: p.numero,
+      totalParcelas: p.total_parcelas,
+      valorCentavos: reaisParaCentavos(p.valor),
+      competencia: p.data_competencia,
+      descricaoBase: descricaoBaseParcela(descricao),
+      descricaoOriginal: descricao,
+    };
+  });
 }
 
 /** Converte NormalizedRow[] em linhas para insert em import_rows. */
@@ -238,16 +278,29 @@ export async function parseImportFile(
     sinalNegativoDespesa,
     categorias,
   });
-  const existingKeys = await existingKeysFor(ctx, d.origem, targetId);
-  const deduped = detectarDuplicados(normalized, existingKeys, targetId);
-  const duplicadas = deduped.filter((r) => r.status === "duplicada").length;
-
   // Fatura de cartão: detecta a competência (das compras à vista) para ancorar parcelas e
-  // últimas parcelas na fatura certa. O usuário confirma/ajusta na revisão.
+  // últimas parcelas na fatura certa. O usuário confirma/ajusta na revisão. Vem ANTES da dedup
+  // porque a conferência contra parcelamentos já lançados precisa dela; o resultado é o mesmo,
+  // pois `detectarCompetenciaFatura` só lê data e total de parcelas — campos que a dedup não toca.
   const competenciaFatura =
     d.origem === "cartao" && d.credit_card_id
-      ? await detectarCompetenciaLote(ctx, d.credit_card_id, deduped)
+      ? await detectarCompetenciaLote(ctx, d.credit_card_id, normalized)
       : null;
+
+  const existingKeys = await existingKeysFor(ctx, d.origem, targetId);
+  const deduped = detectarDuplicados(normalized, existingKeys, targetId);
+  // Segundo passe: a linha já coberta por uma parcela ativa deste cartão (a compra que o mês
+  // anterior lançou como parcelamento) entraria duplicada — a dedup não a vê, pois as parcelas
+  // não estão em `transactions`.
+  const conferidas =
+    d.origem === "cartao" && d.credit_card_id
+      ? marcarParcelasJaLancadas(
+          deduped,
+          await parcelasLancadasFor(ctx, d.credit_card_id),
+          competenciaFatura,
+        )
+      : deduped;
+  const duplicadas = conferidas.filter((r) => r.status === "duplicada").length;
 
   const { data: batch, error: batchErr } = await ctx.supabase
     .from("import_batches")
@@ -260,7 +313,7 @@ export async function parseImportFile(
       account_id: d.origem === "conta" ? d.account_id : null,
       sinal_negativo_despesa: sinalNegativoDespesa,
       status: "revisando",
-      total_linhas: deduped.length,
+      total_linhas: conferidas.length,
       total_duplicadas: duplicadas,
       competencia_fatura: competenciaFatura,
       column_mapping: { headers: table.headers, fields },
@@ -273,7 +326,7 @@ export async function parseImportFile(
 
   const { error: rowsErr } = await ctx.supabase
     .from("import_rows")
-    .insert(toRowInserts(ctx.userId, batch.id, deduped));
+    .insert(toRowInserts(ctx.userId, batch.id, conferidas));
   if (rowsErr) {
     await ctx.supabase.from("import_batches").delete().eq("id", batch.id);
     return dbError("Não foi possível salvar as linhas do arquivo.");
@@ -336,19 +389,28 @@ export async function remapImportBatch(
     sinalNegativoDespesa: parsed.data.sinal_negativo_despesa,
     categorias,
   });
-  const existingKeys = await existingKeysFor(ctx, origem, targetId);
-  const deduped = detectarDuplicados(normalized, existingKeys, targetId);
-
-  // Remap recalcula tudo (datas/valores/parcelas) → re-detecta a competência da fatura.
+  // Remap recalcula tudo (datas/valores/parcelas) → re-detecta a competência da fatura. Assim
+  // como no parse, vem antes da dedup para alimentar a conferência de parcelamentos.
   const competenciaFatura =
     origem === "cartao"
-      ? await detectarCompetenciaLote(ctx, targetId, deduped)
+      ? await detectarCompetenciaLote(ctx, targetId, normalized)
       : null;
+
+  const existingKeys = await existingKeysFor(ctx, origem, targetId);
+  const deduped = detectarDuplicados(normalized, existingKeys, targetId);
+  const conferidas =
+    origem === "cartao"
+      ? marcarParcelasJaLancadas(
+          deduped,
+          await parcelasLancadasFor(ctx, targetId),
+          competenciaFatura,
+        )
+      : deduped;
 
   await ctx.supabase.from("import_rows").delete().eq("import_batch_id", batchId);
   const { error: insErr } = await ctx.supabase
     .from("import_rows")
-    .insert(toRowInserts(ctx.userId, batchId, deduped));
+    .insert(toRowInserts(ctx.userId, batchId, conferidas));
   if (insErr) return dbError("Não foi possível aplicar o mapeamento.");
 
   await ctx.supabase
@@ -356,8 +418,8 @@ export async function remapImportBatch(
     .update({
       status: "revisando",
       sinal_negativo_despesa: parsed.data.sinal_negativo_despesa,
-      total_linhas: deduped.length,
-      total_duplicadas: deduped.filter((r) => r.status === "duplicada").length,
+      total_linhas: conferidas.length,
+      total_duplicadas: conferidas.filter((r) => r.status === "duplicada").length,
       competencia_fatura: competenciaFatura,
       column_mapping: { headers, fields },
     })
