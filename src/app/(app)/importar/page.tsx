@@ -9,6 +9,7 @@ import {
   getImportRows,
   getPeopleForSelect,
 } from "@/lib/finance/queries";
+import { hojeISO } from "@/lib/format";
 import { ImportUpload } from "./import-upload";
 import { ImportHistory } from "./import-history";
 import { ImportReview } from "./import-review";
@@ -48,6 +49,7 @@ export default async function ImportarPage({
               color: c.color,
             }))}
             people={people}
+            today={hojeISO()}
           />
         </div>
       );

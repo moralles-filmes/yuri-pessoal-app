@@ -360,8 +360,11 @@ export async function getReceivablesByStatements(
 
 /* ───────────────────── Fase 06 — Importação (Excel/CSV/OFX) ───────────────────── */
 
+// `dia_fechamento`/`dia_vencimento` entram porque a revisão compara a última data do arquivo
+// com o fechamento da fatura de destino (ver `coberturaDaFatura`) — arquivo que termina antes
+// do fechamento importa fatura incompleta, e isso não aparece em nenhum outro lugar.
 const IMPORT_BATCH_SELECT =
-  "*, card:credit_cards(id,nome,cor,bandeira), account:accounts(id,name)";
+  "*, card:credit_cards(id,nome,cor,bandeira,dia_fechamento,dia_vencimento), account:accounts(id,name)";
 
 /** Lotes de importação (histórico), do mais recente ao mais antigo, com o alvo resolvido. */
 export async function getImportBatches(): Promise<ImportBatchWithTarget[]> {

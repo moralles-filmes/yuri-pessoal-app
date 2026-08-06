@@ -258,7 +258,10 @@ export type ImportRowRow = Omit<
 
 /** Lote com o alvo (cartão/conta) resolvido para exibição. */
 export type ImportBatchWithTarget = ImportBatchRow & {
-  card: Pick<CreditCardRow, "id" | "nome" | "cor" | "bandeira"> | null;
+  card: Pick<
+    CreditCardRow,
+    "id" | "nome" | "cor" | "bandeira" | "dia_fechamento" | "dia_vencimento"
+  > | null;
   account: Pick<AccountRow, "id" | "name"> | null;
 };
 

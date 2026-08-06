@@ -23,7 +23,12 @@ export type CategoriaLookup = { id: string; name: string };
 /** Opções de normalização (origem do lote + convenção de sinal + categorias do usuário). */
 export type NormalizeOptions = {
   origem: "cartao" | "conta";
-  /** Em extrato de conta, valores negativos são despesas (true) ou receitas (false). */
+  /**
+   * Convenção de sinal do ARQUIVO: valores negativos são as saídas (true) ou as entradas
+   * (false). Em extrato de conta quem escolhe é o usuário no upload; em fatura de cartão é
+   * detectada do próprio arquivo (`detectarSinalNegativoDespesa`) — OFX traz compra negativa,
+   * planilha traz compra positiva — e continua editável na revisão.
+   */
   sinalNegativoDespesa: boolean;
   categorias: CategoriaLookup[];
 };
