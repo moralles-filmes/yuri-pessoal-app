@@ -16,6 +16,7 @@ import type { MetricSession, MetricSet } from "@/lib/training/metrics";
 import type { PersonalRecord } from "@/lib/training/history-queries";
 import { DEFAULT_TRAINING_PREFERENCES, type TrainingPreferences } from "@/lib/training/types";
 import { diffDaysIso } from "@/lib/training/schedule";
+import { SECURITY_PROMPT } from "@/lib/ai/agents/security-prompt";
 
 let historicoFalso: MetricSession[] = [];
 let recordesFalsos: PersonalRecord[] = [];
@@ -713,5 +714,118 @@ describe("training.get_last_workout — a janela consultada", () => {
     expect(saida.contagem).toBe(0);
     expect(saida.observacao).toContain("janela consultada");
     expect(saida.observacao).toContain("10 anos");
+  });
+});
+
+/* ═════════ O prompt-base só pode prometer o que os agregados REALMENTE trazem ═════════ */
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ O item 8-A dizia "somas, médias, contagens e comparações já vêm prontas em            ║
+ * ║ `agregados`". As três ferramentas não calculam UMA média nem UMA comparação — e o     ║
+ * ║ mesmo item PROÍBE combinar resultados entre si. "Minha média de volume por sessão?"   ║
+ * ║ ficava sem saída: o número prometido não chega e a conta está vedada, então o modelo  ║
+ * ║ improvisa.                                                                            ║
+ * ║                                                                                       ║
+ * ║ Conferir só que os NOMES citados existem não pega isto: "agregados" existe. Este      ║
+ * ║ teste lê a promessa do prompt, lista o que ela promete, e exige que CADA categoria    ║
+ * ║ prometida tenha uma chave real correspondente na saída das ferramentas. É o texto      ║
+ * ║ amarrado ao conteúdo, não ao vocabulário.                                              ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("o item 8-A promete exatamente o que as ferramentas calculam", () => {
+  /** Toda chave de `agregados` que as três ferramentas produzem sobre as fixtures. */
+  async function chavesReais(): Promise<string[]> {
+    historicoFalso = [SESSAO_A, SESSAO_B, SESSAO_C, SESSAO_D, SESSAO_E];
+    recordesFalsos = [recorde({})];
+
+    const saidas = [await getLastWorkout(), await getVolume({ dias: 30 }), await getRecords({})];
+    return [...new Set(saidas.flatMap((s) => Object.keys(s.agregados)))].sort();
+  }
+
+  /**
+   * Cada categoria que o prompt pode prometer, e como se prova que ela existe de verdade.
+   * As listas são LITERAIS de propósito: derivá-las da saída faria o teste concordar com
+   * qualquer coisa que a ferramenta devolvesse.
+   */
+  const SOMAS = new Set([
+    "volume_kg",
+    "repeticoes",
+    "segundos_sob_tensao",
+    "distancia_m",
+    "calorias",
+    "duracao_total_segundos",
+    "duracao_ativa_segundos",
+  ]);
+  const CONTAGENS = new Set([
+    "series",
+    "series_de_trabalho",
+    "series_de_aquecimento",
+    "sessoes",
+    "dias_com_treino",
+    "total_de_recordes",
+  ]);
+  const MEDIA = /m[ée]dia/;
+  const COMPARACAO = /(compara|varia|delta|diferen|percentual|evolu|tendenc)/;
+
+  const CATEGORIAS: Record<string, (chaves: string[]) => boolean> = {
+    somas: (chaves) => chaves.some((c) => SOMAS.has(c)),
+    contagens: (chaves) => chaves.some((c) => CONTAGENS.has(c)),
+    médias: (chaves) => chaves.some((c) => MEDIA.test(c)),
+    comparações: (chaves) => chaves.some((c) => COMPARACAO.test(c)),
+    variações: (chaves) => chaves.some((c) => COMPARACAO.test(c)),
+    percentuais: (chaves) => chaves.some((c) => COMPARACAO.test(c)),
+  };
+
+  it("tudo que 8-A promete tem chave correspondente na saída real", async () => {
+    const promessa = SECURITY_PROMPT.match(
+      /O sistema calcula ([^.]+?) e as entrega prontas no campo "agregados"/,
+    );
+    // Se a frase for reescrita, este teste tem de ser reescrito junto — silêncio aqui
+    // significaria promessa nenhuma verificada.
+    expect(promessa, "a frase da promessa do 8-A não foi encontrada no prompt-base").not.toBeNull();
+
+    const prometidas = (promessa as RegExpMatchArray)[1]
+      .split(/,| e /)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    expect(prometidas.length).toBeGreaterThan(0);
+
+    const chaves = await chavesReais();
+
+    for (const categoria of prometidas) {
+      const prova = CATEGORIAS[categoria];
+      expect(
+        prova,
+        `8-A promete "${categoria}", que este teste não sabe verificar — descreva a categoria aqui`,
+      ).toBeDefined();
+      expect(
+        prova(chaves),
+        `8-A promete "${categoria}", mas nenhuma ferramenta devolve um agregado desses`,
+      ).toBe(true);
+    }
+  });
+
+  it("e 8-D só pode negar médias e comparações enquanto elas não existirem", async () => {
+    const chaves = await chavesReais();
+
+    // Se um adapter passar a calcular média ou comparação, o 8-D vira mentira e precisa ser
+    // reescrito — este teste é o aviso.
+    expect(chaves.filter((c) => MEDIA.test(c))).toEqual([]);
+    expect(chaves.filter((c) => COMPARACAO.test(c))).toEqual([]);
+    expect(SECURITY_PROMPT).toContain(
+      "Médias, comparações entre dois períodos, variações e percentuais de evolução não são calculados por nenhuma ferramenta",
+    );
+  });
+
+  it("a diferença entre duas marcas de um recorde NÃO vem pronta", async () => {
+    // "Quanto eu melhorei no supino?" é a pergunta que expõe o buraco: `valor` e
+    // `marca_anterior` chegam, o delta não. Sem o ramo negativo do 8-D, o modelo subtrai.
+    recordesFalsos = [recorde({})];
+
+    const saida = await getRecords({});
+
+    expect(saida.itens[0]).toMatchObject({ valor: 100, marca_anterior: 95 });
+    expect(Object.keys(saida.agregados)).toEqual(["total_de_recordes"]);
   });
 });

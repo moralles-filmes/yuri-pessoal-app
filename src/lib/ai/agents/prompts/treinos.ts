@@ -6,7 +6,15 @@
  * pagas em token, a cada mensagem.
  *
  * Um arquivo por versão. A versão vai congelada em `ai_runs.prompt_version`, para que uma
- * resposta antiga continue sendo explicável pelo prompt que a produziu.
+ * resposta antiga continue sendo explicável pelo prompt que a produziu. `treinos-v1` ainda não
+ * foi mesclada nem executada (nenhuma linha em `ai_runs` a carrega), então correções feitas
+ * dentro da própria revisão da 18-B não sobem a versão; depois do merge, qualquer troca de
+ * texto exige versão nova.
+ *
+ * ⚠️ A última linha (total ausente) já disse "ele não se aplica àquele período" como ÚNICA
+ * explicação possível. Era falso: um total também falta porque a ferramenta simplesmente não
+ * o calcula (média, comparação, variação). Dar ao modelo a explicação errada é o mesmo defeito
+ * que inventar número — ele afirma sobre o sistema algo que não é verdade.
  *
  * Puro: só texto.
  */
@@ -37,4 +45,4 @@ SOBRE OS NÚMEROS
 - "completude" e "itens_truncados" falam de coisas DIFERENTES, e confundir os dois é erro. "completude" é a qualidade do TOTAL. "itens_truncados" diz apenas que a LISTA de itens foi encurtada para caber na resposta: os totais em "agregados" continuam valendo para o período inteiro. Com "itens_truncados" e "completude": "exato", apresente o total normalmente e mencione só que está mostrando parte dos itens — não coloque ressalva no número.
 - Um período sem treino registrado significa ausência de registro. Não o chame de "volume zero" nem de "semana perdida".
 - Toda vez que apresentar volume, séries ou repetições, repita ao lado do número a "regra_de_contagem" que veio com o dado (ela diz como o aquecimento e o exercício unilateral foram contados). O mesmo treino dá números diferentes com regras diferentes: sem a regra, o total não é verificável.
-- Se um total não vier no resultado, ele não se aplica àquele período — não o apresente como zero.`;
+- Um total ausente no resultado NUNCA é zero, e as duas razões para ele faltar são diferentes. Se a grandeza não estiver em "unidades", ela não se aplica ao que foi registrado naquele período — um período só de corrida não tem volume em quilos. Se o que foi pedido for uma média, uma comparação entre dois períodos ou uma variação, o sistema simplesmente não calcula esse número: diga isso, mostre os totais que vieram e aponte o histórico, os relatórios e os painéis de Treinos, onde a tela mostra essa leitura. Não faça a conta você mesmo em nenhum dos dois casos.`;

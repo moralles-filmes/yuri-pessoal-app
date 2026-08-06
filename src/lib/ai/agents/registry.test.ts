@@ -30,6 +30,8 @@ import {
   promptVersionOf,
 } from "./registry";
 import { SECURITY_PROMPT, SECURITY_PROMPT_VERSION } from "./security-prompt";
+import { ASSISTENTE_PESSOAL_PROMPT } from "./prompts/assistente-pessoal";
+import { TREINOS_PROMPT } from "./prompts/treinos";
 import { AGENT_PERMISSION } from "./routing";
 import {
   AI_TOOL_REGISTRY,
@@ -156,6 +158,37 @@ describe("prompt de sistema", () => {
     expect(prompt).not.toContain("Nesta versão você NÃO tem acesso");
   });
 
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ O ORQUESTRADOR NÃO SABE POR QUE A PERGUNTA CHEGOU ATÉ ELE — e não pode fingir que    ║
+   * ║ sabe. Afirmar a causa é a mesma classe de defeito que inventar número.                ║
+   * ║                                                                                     ║
+   * ║ Hoje o agente vem do CLIENTE (`api/ia/chat/route.ts`), então a pergunta pode ter     ║
+   * ║ caído aqui só por ser o padrão da tela, com `allow_training` LIGADA. E mesmo depois  ║
+   * ║ da Task 10 o orquestrador continua sendo o destino de "nenhum módulo reconhecido no  ║
+   * ║ texto" (`routing.ts`). Dizer "a leitura desse módulo é ligada por você" como          ║
+   * ║ EXPLICAÇÃO manda o usuário ligar uma preferência que já está ligada.                  ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("78. o orquestrador não deduz POR QUE a pergunta chegou até ele", () => {
+    // O perfil montado no registry é ESTE texto — senão o resto do teste julgaria um
+    // arquivo que ninguém usa.
+    expect(agente.prompt).toBe(ASSISTENTE_PESSOAL_PROMPT);
+    // O que ele pode afirmar: só o que é verificável do lugar onde está.
+    expect(prompt).toContain("Você não sabe por que esta pergunta chegou até você");
+    expect(prompt).toContain("Não afirme a causa");
+    expect(prompt).toContain("afirme só o que é verificável daqui");
+    // E as deduções que a redação anterior fazia não podem voltar, em nenhuma das três
+    // ocorrências (parágrafo, passo 3 e exemplo de tom).
+    expect(prompt).not.toContain("é porque nenhuma leitura estava disponível");
+    expect(prompt).not.toContain("a leitura dele não está ligada");
+    expect(prompt).not.toContain("nesta conversa ela não estava disponível");
+    // O passo 3 continua APONTANDO as preferências (isso não enfraqueceu) — mas sem
+    // afirmar em que estado elas estão.
+    expect(prompt).toContain("sem afirmar que ela está ligada nem que está desligada");
+    expect(prompt).toContain("preferências de IA");
+  });
+
   it("78. proíbe também o disfarce do palpite — hipótese apresentada como dado", () => {
     // "provavelmente uns R$ 300" e "assumindo que você gastou X" são as duas formas mais
     // comuns de inventar sem parecer que inventou.
@@ -212,6 +245,61 @@ describe("prompt-base v2 — o que o modelo pode fazer com o resultado da ferram
     // Invariante 12 da Fase 17: a regra de contagem viaja COM o número. Ela existe no
     // resultado desde a Task 7; sem esta linha o modelo a receberia e a descartaria.
     expect(SECURITY_PROMPT).toContain("repita a regra ao lado do número");
+  });
+
+  /**
+   * "Não os arredonde" sem exceção alcançava a apresentação: `duracao_ativa_segundos` e
+   * `segundos_sob_tensao` chegam em SEGUNDOS, e dizer "1h30" é aritmética. Sem a licença
+   * explícita, o modelo reporta "5400 segundos" — obediente e ilegível.
+   */
+  it("8-A — trocar a unidade para ler é permitido; refazer a conta não", () => {
+    expect(SECURITY_PROMPT).toContain("Trocar a unidade de um número");
+    expect(SECURITY_PROMPT).toContain("não conta como refazer a conta");
+    expect(SECURITY_PROMPT).toContain("5400 segundos");
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 8-D — O RAMO NEGATIVO. Sem ele, 8-A era uma armadilha.                              ║
+   * ║                                                                                     ║
+   * ║ 8-A promete que o número vem pronto e proíbe combinar resultados. "Minha média de    ║
+   * ║ volume por sessão?" não tem saída nesse par de regras: nenhum agregado traz média, e ║
+   * ║ calcular está proibido. O modelo então improvisa — que é o defeito que a fase toda   ║
+   * ║ existe para impedir.                                                                 ║
+   * ║                                                                                     ║
+   * ║ E as duas causas de um total ausente PRECISAM ser separadas: "não se aplica àquela   ║
+   * ║ unidade" (invariante 21 da 17-E) × "não é calculado pela ferramenta". Explicar a     ║
+   * ║ segunda com a primeira é afirmar sobre o sistema algo que não é verdade.             ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("8-D — número que não veio pronto tem DUAS causas, e nenhuma delas é fazer a conta", () => {
+    // Causa 1: a grandeza não se aplica ao registro — e o campo que prova isso é nomeado.
+    expect(SECURITY_PROMPT).toContain("não se aplica ao que foi registrado");
+    expect(SECURITY_PROMPT).toContain('a lista "unidades" mostra quais se aplicam');
+    expect(SECURITY_PROMPT).toContain("o número não existe, não é zero");
+    // Causa 2: o sistema não calcula aquilo — dito com todas as letras, e com o que fazer.
+    expect(SECURITY_PROMPT).toContain("o sistema não calcula aquilo");
+    expect(SECURITY_PROMPT).toContain("diga que o sistema não calcula esse número");
+    expect(SECURITY_PROMPT).toContain("aponte a tela do módulo");
+    // E o fechamento que impede a saída fácil.
+    expect(SECURITY_PROMPT).toContain("Em nenhum dos dois casos você faz a conta");
+  });
+
+  it("8-C — período só é citado quando existe", () => {
+    // `periodo` é null em `get_records` e em `emptyToolOutput`. Um "diga o período" sem
+    // condição manda o modelo produzir um período que a ferramenta não devolveu.
+    expect(SECURITY_PROMPT).toContain("quando houver período");
+    expect(SECURITY_PROMPT).toContain("não ganha um período inventado");
+  });
+
+  it("o perfil de Treinos explica o total ausente pelas DUAS causas, não por uma só", () => {
+    // A redação anterior — "se um total não vier no resultado, ele não se aplica àquele
+    // período" — dava ao modelo uma explicação FALSA para uma métrica que o sistema
+    // simplesmente não calcula.
+    expect(TREINOS_PROMPT).not.toContain("ele não se aplica àquele período");
+    expect(TREINOS_PROMPT).toContain('Se a grandeza não estiver em "unidades"');
+    expect(TREINOS_PROMPT).toContain("o sistema simplesmente não calcula esse número");
+    expect(TREINOS_PROMPT).toContain("Não faça a conta você mesmo");
   });
 
   /**
@@ -288,6 +376,7 @@ describe("prompt-base v2 — o que o modelo pode fazer com o resultado da ferram
         "motivo_incompleto",
         "periodo",
         "regra_de_contagem",
+        "unidades",
       ].sort(),
     );
 
@@ -328,12 +417,30 @@ describe("nenhum prompt prescreve, diagnostica ou culpa", () => {
 
   const NEGACOES = ["não ", "nunca ", "nem ", "jamais "];
 
-  /** Ocorrências do termo SEM negação na mesma sentença. Vazio = todo uso é proibitivo. */
+  /**
+   * Separadores do trecho considerado. Não é um segmentador de sentenças de verdade: é o
+   * texto ENTRE o separador anterior e o termo. A vírgula, o ponto e vírgula e os dois
+   * pontos entram porque a negação de uma oração não vale para a seguinte — "se ele não
+   * quiser, informe o peso ideal" tem "não" antes do termo e é um uso prescritivo.
+   */
+  const SEPARADORES = [".", "\n", ",", ";", ":"];
+
+  /**
+   * Ocorrências do termo SEM negação no mesmo trecho. Vazio = todo uso é proibitivo.
+   *
+   * ⚠️ LIMITE CONHECIDO, e é por isso que ele tem teste próprio: o trecho considerado é só o
+   * texto ANTES do termo, sem análise gramatical. Uma negação que não se refira ao termo,
+   * dentro do mesmo trecho e sem pontuação entre as duas ("você não quer isso e informe o
+   * peso ideal"), branqueia um uso prescritivo. Os erros na direção oposta — negação legítima
+   * separada por vírgula que passa a reprovar — são fail-safe: obrigam a reescrever a frase,
+   * nunca deixam passar prescrição. Se alguém trocar isto por um segmentador melhor, os
+   * casos abaixo dizem exatamente o que mudou.
+   */
   function usosNaoProibitivos(texto: string, termo: string): string[] {
     const alvo = texto.toLowerCase();
     const achados: string[] = [];
     for (let i = alvo.indexOf(termo); i !== -1; i = alvo.indexOf(termo, i + termo.length)) {
-      const inicio = Math.max(alvo.lastIndexOf(".", i) + 1, alvo.lastIndexOf("\n", i) + 1);
+      const inicio = Math.max(...SEPARADORES.map((sep) => alvo.lastIndexOf(sep, i) + 1));
       const sentenca = alvo.slice(inicio, i);
       if (!NEGACOES.some((negacao) => sentenca.includes(negacao))) {
         achados.push(texto.slice(inicio, i + termo.length).trim());
@@ -350,6 +457,30 @@ describe("nenhum prompt prescreve, diagnostica ou culpa", () => {
     expect(
       usosNaoProibitivos("Você não inventa número. Dou diagnóstico.", "diagnóstico"),
     ).toHaveLength(1);
+  });
+
+  it("negação de OUTRA oração não branqueia o uso prescritivo", () => {
+    // O caso que a revisão executou e viu passar antes da vírgula virar separador.
+    expect(
+      usosNaoProibitivos("Se ele não quiser, informe o peso ideal dele.", "peso ideal"),
+    ).toHaveLength(1);
+    expect(
+      usosNaoProibitivos("Nunca prometa nada; informe a carga máxima dele.", "carga máxima"),
+    ).toHaveLength(1);
+    // E a negação legítima com vírgula ANTES do termo continua sendo aceita — o separador
+    // não pode transformar toda proibição bem escrita em falso positivo.
+    expect(
+      usosNaoProibitivos("Você organiza, explica e não dá diagnóstico médico.", "diagnóstico"),
+    ).toEqual([]);
+  });
+
+  it("o LIMITE do segmentador está documentado, não escondido", () => {
+    // Sem pontuação entre a negação e o termo, o uso prescritivo PASSA. Isto é um limite
+    // conhecido e aceito (os erros na outra direção seriam fail-safe). Se alguém melhorar a
+    // função, este teste falha — e a melhora entra de propósito, não por acidente.
+    expect(
+      usosNaoProibitivos("Você não quer isso e informe o peso ideal dele.", "peso ideal"),
+    ).toEqual([]);
   });
 
   it("nenhum PERFIL de agente nomeia esses termos", () => {
