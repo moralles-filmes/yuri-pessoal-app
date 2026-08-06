@@ -545,20 +545,36 @@ export function StatementsClient({
                           }
                           return (
                             <div className="rounded-lg border border-dashed p-3">
-                              <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-                                Quem paga esta fatura · terceiros{" "}
-                                {formatCurrency(terceiros)}
-                              </p>
+                              {/* O valor do título é o TOTAL da fatura: com a minha parte listada
+                                  junto dos terceiros, as linhas somam o cabeçalho e a conta fecha
+                                  na tela. O total só de terceiros continua na linha resumida do
+                                  card, acima. */}
+                              <div className="mb-1.5 flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
+                                <span className="min-w-0 truncate">
+                                  Quem paga esta fatura
+                                </span>
+                                <span className="shrink-0 tabular-nums">
+                                  {formatCurrency(s.total_atual)}
+                                </span>
+                              </div>
                               <div className="space-y-1">
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="min-w-0 truncate">
+                                    Minha parte
+                                  </span>
+                                  <span className="shrink-0 font-medium tabular-nums">
+                                    {formatCurrency(meu)}
+                                  </span>
+                                </div>
                                 {[...byPerson.entries()].map(([id, p]) => (
                                   <div
                                     key={id}
-                                    className="flex items-center justify-between text-xs"
+                                    className="flex items-center justify-between gap-2 text-xs"
                                   >
-                                    <span className="truncate text-muted-foreground">
+                                    <span className="min-w-0 truncate text-muted-foreground">
                                       {p.nome}
                                     </span>
-                                    <span className="font-medium tabular-nums">
+                                    <span className="shrink-0 font-medium tabular-nums">
                                       {formatCurrency(p.valor)}
                                     </span>
                                   </div>

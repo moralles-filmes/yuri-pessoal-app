@@ -145,6 +145,26 @@ export function parseDataIso(input: string | null | undefined): string | null {
   return null;
 }
 
+/** Padrão de parcela: "3/12", "PARC 03/12", "(1/10)", "Parcela 1 de 4" (formato do Itaú). */
+const MARCA_PARCELA = /(\d{1,3})\s*(?:\/|\bde\b)\s*(\d{1,3})/i;
+
+/**
+ * Acha a marcação de parcela no texto, devolvendo os números E o trecho casado (para quem
+ * precisa REMOVER a marcação). Só considera parcelamento quando N > 1 e 1 <= k <= N — é o que
+ * impede "POSTO 24/7" e "Loja De Bauru" de virarem parcela.
+ */
+function acharMarcaParcela(
+  s: string,
+): { parcela: number; total: number; texto: string; index: number } | null {
+  const m = s.match(MARCA_PARCELA);
+  if (!m || m.index == null) return null;
+  const parcela = Number(m[1]);
+  const total = Number(m[2]);
+  if (!Number.isInteger(parcela) || !Number.isInteger(total)) return null;
+  if (total <= 1 || parcela < 1 || parcela > total) return null;
+  return { parcela, total, texto: m[0], index: m.index };
+}
+
 /**
  * Extrai a parcela de um texto (descrição ou coluna de parcela). Aceita "k/N" ("3/12",
  * "PARC 03/12", "(1/10)") e "k de N" ("Parcela 1 de 4" — formato do Itaú). Só considera
@@ -154,12 +174,31 @@ export function parseParcela(
   input: string | null | undefined,
 ): { parcela: number; total: number } | null {
   if (input == null) return null;
+  const achado = acharMarcaParcela(String(input));
+  return achado ? { parcela: achado.parcela, total: achado.total } : null;
+}
+
+/**
+ * Remove a marcação de parcela ("5/12", "Parcela 1 de 4") da descrição, preservando o resto do
+ * texto. Só remove quando o padrão é parcela VÁLIDA — "POSTO 24/7" sai intacto. Texto sem
+ * marcação volta como veio.
+ */
+export function removerMarcaParcela(input: string | null | undefined): string {
+  if (input == null) return "";
   const s = String(input);
-  const m = s.match(/(\d{1,3})\s*(?:\/|\bde\b)\s*(\d{1,3})/i);
-  if (!m) return null;
-  const parcela = Number(m[1]);
-  const total = Number(m[2]);
-  if (!Number.isInteger(parcela) || !Number.isInteger(total)) return null;
-  if (total <= 1 || parcela < 1 || parcela > total) return null;
-  return { parcela, total };
+  const achado = acharMarcaParcela(s);
+  if (!achado) return s;
+  return `${s.slice(0, achado.index)} ${s.slice(achado.index + achado.texto.length)}`
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Descrição comparável entre MESES: a marcação de parcela sai ANTES da normalização, senão
+ * `normalizarDescricao` transformaria "5/12" em "5 12" e a mesma compra pareceria diferente a
+ * cada fatura. É o que permite reconhecer, em agosto, a compra que julho lançou como
+ * parcelamento (ver `parcelas-lancadas.ts`).
+ */
+export function descricaoBaseParcela(input: string | null | undefined): string {
+  return normalizarDescricao(removerMarcaParcela(input));
 }
