@@ -83,7 +83,7 @@ export function ImportHistory({
                 </Button>
                 <DeleteConfirmDialog
                   title="Excluir lote de importação"
-                  description="Remove o registro do lote e suas linhas. As transações já importadas NÃO são apagadas."
+                  description="Remove o registro do lote e suas linhas. As transações já importadas NÃO são apagadas — se quiser removê-las, abra o lote e use 'Desfazer importação' antes de excluí-lo."
                   successMessage="Lote excluído."
                   onConfirm={async () => {
                     const res = await deleteImportBatch(b.id);

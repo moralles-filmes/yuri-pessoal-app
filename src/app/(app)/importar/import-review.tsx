@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   Ban,
   CalendarClock,
   Check,
@@ -13,6 +14,7 @@ import {
   Loader2,
   RotateCcw,
   Settings2,
+  Undo2,
   Upload,
   Users,
   X,
@@ -57,6 +59,7 @@ import {
   commitImport,
   remapImportBatch,
   setImportBatchCompetencia,
+  undoImportBatch,
   updateImportRow,
 } from "@/lib/actions/imports";
 import type {
@@ -172,7 +175,18 @@ export function ImportReview({
       )}
 
       {isDone ? (
-        <ResultBanner status={batch.status} importadas={counts["importada"] ?? 0} />
+        <>
+          <ResultBanner status={batch.status} importadas={counts["importada"] ?? 0} />
+          {(counts["importada"] ?? 0) > 0 && (
+            <div className="flex justify-end">
+              <UndoButton
+                batchId={batch.id}
+                importadas={counts["importada"] ?? 0}
+                onDone={() => router.refresh()}
+              />
+            </div>
+          )}
+        </>
       ) : (
         <>
           <MappingEditor batch={batch} />
@@ -477,18 +491,30 @@ function MappingEditor({ batch }: { batch: ImportBatchWithTarget }) {
               ))}
             </div>
 
-            {batch.origem === "conta" && (
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card/40 p-3">
+            {/* Convenção de sinal do arquivo. Em fatura ela é detectada na importação (OFX traz
+                compra negativa; planilha traz compra positiva) e fica aqui para corrigir se a
+                detecção errar — com a convenção invertida a fatura inteira vira estorno. */}
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card/40 p-3">
+              <div className="flex min-w-0 flex-col">
                 <Label htmlFor="map-sinal" className="text-xs">
-                  Valores negativos são despesas
+                  {batch.origem === "cartao"
+                    ? "Valores negativos são compras"
+                    : "Valores negativos são despesas"}
                 </Label>
-                <Switch
-                  id="map-sinal"
-                  checked={sinal}
-                  onCheckedChange={setSinal}
-                />
+                {batch.origem === "cartao" && (
+                  <span className="text-xs text-muted-foreground">
+                    Detectado do arquivo. Ligado para OFX (compra negativa); desligado
+                    para planilha de fatura (compra positiva, estorno negativo).
+                  </span>
+                )}
               </div>
-            )}
+              <Switch
+                id="map-sinal"
+                checked={sinal}
+                onCheckedChange={setSinal}
+                className="shrink-0"
+              />
+            </div>
 
             <p className="text-xs text-muted-foreground">
               Reaplicar o mapeamento recalcula valores, categorias e duplicados —
@@ -599,6 +625,48 @@ function ImportButton({
   );
 }
 
+/**
+ * Desfaz a importação: apaga os lançamentos criados por este lote e devolve as linhas para
+ * revisão. Existe porque, sem ele, corrigir uma importação errada exigia caçar lançamento por
+ * lançamento — e reimportar acusava os próprios lançamentos como duplicata.
+ */
+function UndoButton({
+  batchId,
+  importadas,
+  onDone,
+}: {
+  batchId: string;
+  importadas: number;
+  onDone: () => void;
+}) {
+  async function run() {
+    const res = await undoImportBatch(batchId);
+    if (res.ok) {
+      toast.success(
+        `${res.data.removidas} lançamento(s) removido(s). O lote voltou para revisão.`,
+      );
+      onDone();
+    } else {
+      toast.error(res.error);
+    }
+  }
+  return (
+    <ConfirmDialog
+      title="Desfazer importação"
+      description={`Os ${importadas} lançamento(s) criados por este lote serão APAGADOS (com parcelas, divisões e recebíveis pendentes), e as linhas voltam para revisão. Edições feitas neles depois da importação também se perdem. Fatura já paga ou recebível já cobrado bloqueiam a operação.`}
+      confirmLabel="Desfazer importação"
+      loadingLabel="Desfazendo…"
+      variant="destructive"
+      onConfirm={run}
+      trigger={
+        <Button variant="outline">
+          <Undo2 /> Desfazer importação
+        </Button>
+      }
+    />
+  );
+}
+
 function CancelButton({
   batchId,
   onDone,
@@ -632,6 +700,47 @@ function CancelButton({
   );
 }
 
+/**
+ * Rótulo do sentido da linha (compra/estorno em fatura; despesa/receita em extrato) com um
+ * clique para inverter enquanto a linha é editável. `tipo` é o que decide o caminho de gravação
+ * no commit — estorno vai para a fatura como crédito, sem parcelamento e sem divisão.
+ */
+function SentidoLinha({
+  tipo,
+  origem,
+  editavel,
+  disabled,
+  onToggle,
+}: {
+  tipo: "despesa" | "receita";
+  origem: "cartao" | "conta";
+  editavel: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const labels =
+    origem === "cartao"
+      ? { despesa: "Compra", receita: "Estorno" }
+      : { despesa: "Despesa", receita: "Receita" };
+  const label = labels[tipo];
+  const outro = labels[tipo === "despesa" ? "receita" : "despesa"];
+
+  if (!editavel) {
+    return <span className="text-[11px] text-muted-foreground">{label}</span>;
+  }
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onToggle}
+      title={`Trocar para ${outro.toLowerCase()}`}
+      className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] text-muted-foreground ring-1 ring-border transition-colors hover:bg-muted disabled:opacity-50"
+    >
+      <ArrowLeftRight className="size-3" /> {label}
+    </button>
+  );
+}
+
 function RowLine({
   row,
   categories,
@@ -660,10 +769,12 @@ function RowLine({
     }
   }
 
-  // Só oferece "importar parcelado" quando há parcela FUTURA a gerar: cartão, total > 1 e a
-  // linha não é a última (k < N). Numa 3/3 não há o que parcelar — já é a última parcela.
+  // Só oferece "importar parcelado" quando há parcela FUTURA a gerar: cartão, DESPESA (estorno
+  // não é parcelável — o commit manda crédito direto para a fatura), total > 1 e a linha não é
+  // a última (k < N). Numa 3/3 não há o que parcelar — já é a última parcela.
   const podeParcelar =
     origem === "cartao" &&
+    row.tipo === "despesa" &&
     (row.parcelas_total ?? 0) > 1 &&
     (row.parcela ?? 0) < (row.parcelas_total ?? 0);
   const isOpenForEdit =
@@ -737,16 +848,34 @@ function RowLine({
           )}
         </div>
       </td>
-      <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
-        <span
-          className={cn(
-            row.tipo === "receita"
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-foreground",
+      <td className="px-3 py-2 text-right whitespace-nowrap">
+        <div className="flex flex-col items-end gap-0.5">
+          <span
+            className={cn(
+              "tabular-nums",
+              row.tipo === "receita"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-foreground",
+            )}
+          >
+            {row.tipo === "receita" ? "−" : ""}
+            {row.valor != null ? formatCurrency(row.valor) : "—"}
+          </span>
+          {/* Sentido da linha, sempre visível e corrigível: um arquivo com convenção de sinal
+              fora do padrão fazia compra virar estorno sem que a tela desse saída. Estorno não
+              é parcelável nem divisível — por isso trocar aqui reabre as duas opções. */}
+          {row.tipo && (
+            <SentidoLinha
+              tipo={row.tipo}
+              origem={origem}
+              editavel={isOpenForEdit}
+              disabled={busy}
+              onToggle={() =>
+                patch({ tipo: row.tipo === "despesa" ? "receita" : "despesa" })
+              }
+            />
           )}
-        >
-          {row.valor != null ? formatCurrency(row.valor) : "—"}
-        </span>
+        </div>
       </td>
       <td className="px-3 py-2">
         {isDone ? (

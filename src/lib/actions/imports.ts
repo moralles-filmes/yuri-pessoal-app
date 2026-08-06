@@ -22,7 +22,11 @@ import {
   updateImportRowSchema,
 } from "@/lib/validators/import";
 import { splitSchema } from "@/lib/validators/split";
-import { autoDetectMapping, applyMapping } from "@/lib/import/mapping";
+import {
+  autoDetectMapping,
+  applyMapping,
+  detectarSinalNegativoDespesa,
+} from "@/lib/import/mapping";
 import { chaveComposta, detectarDuplicados } from "@/lib/import/dedup";
 import {
   escalarPartesParcelado,
@@ -221,9 +225,17 @@ export async function parseImportFile(
     .select("id, name");
   const categorias = (cats ?? []).map((c) => ({ id: c.id, name: c.name }));
 
+  // Fatura de cartão não tem convenção de sinal única (OFX traz compra negativa; planilha traz
+  // compra positiva), então ela é DETECTADA do arquivo — assumir uma delas fazia a fatura
+  // inteira entrar como estorno. Em extrato de conta quem decide continua sendo o usuário.
+  const sinalNegativoDespesa =
+    d.origem === "cartao"
+      ? detectarSinalNegativoDespesa(table, fields)
+      : d.sinal_negativo_despesa;
+
   const normalized = applyMapping(table, fields, {
     origem: d.origem,
-    sinalNegativoDespesa: d.sinal_negativo_despesa,
+    sinalNegativoDespesa,
     categorias,
   });
   const existingKeys = await existingKeysFor(ctx, d.origem, targetId);
@@ -246,7 +258,7 @@ export async function parseImportFile(
       origem: d.origem,
       credit_card_id: d.origem === "cartao" ? d.credit_card_id : null,
       account_id: d.origem === "conta" ? d.account_id : null,
-      sinal_negativo_despesa: d.sinal_negativo_despesa,
+      sinal_negativo_despesa: sinalNegativoDespesa,
       status: "revisando",
       total_linhas: deduped.length,
       total_duplicadas: duplicadas,
@@ -715,6 +727,120 @@ export async function commitImport(
 
   revalidateFinance();
   return { ok: true, data: { importadas, falhas } };
+}
+
+/** 'yyyy-MM-01' → "07/2026" (para as mensagens de bloqueio do desfazer). */
+function competenciaLabel(competencia: string | null): string {
+  if (!competencia) return "—";
+  const [y, m] = competencia.split("-");
+  return `${m}/${y}`;
+}
+
+/**
+ * DESFAZ a importação: apaga os lançamentos que ESTE lote criou (`import_rows.transaction_id`)
+ * e devolve as linhas para revisão, permitindo corrigir e importar de novo sem que a
+ * deduplicação acuse os próprios lançamentos como duplicata.
+ *
+ * Nada some sozinho e nada some pela metade:
+ * - fatura já paga bloqueia (apagar lançamento de fatura paga deixaria o pagamento sem lastro);
+ * - recebível já cobrado/pago bloqueia (dinheiro de terceiro já movimentado);
+ * - lançamento editado à mão depois da importação é apagado junto — é o que o usuário pediu ao
+ *   desfazer o lote, e o aviso na tela diz isso antes de confirmar.
+ *
+ * O delete das transações cascateia parcelas (`transaction_installments`), divisão
+ * (`shared_expenses`) e os recebíveis pendentes; `import_rows.transaction_id` é `set null`.
+ */
+export async function undoImportBatch(
+  batchId: string,
+): Promise<ActionResult<{ removidas: number }>> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const { data: batch } = await ctx.supabase
+    .from("import_batches")
+    .select("id, status")
+    .eq("id", batchId)
+    .maybeSingle();
+  if (!batch) return dbError("Lote não encontrado.");
+
+  const { data: rows } = await ctx.supabase
+    .from("import_rows")
+    .select("id, transaction_id")
+    .eq("import_batch_id", batchId)
+    .not("transaction_id", "is", null);
+
+  const txIds = (rows ?? [])
+    .map((r) => r.transaction_id)
+    .filter((id): id is string => !!id);
+  if (txIds.length === 0) {
+    return dbError("Este lote não criou lançamentos para desfazer.");
+  }
+
+  // Faturas alcançadas: a do próprio lançamento (à vista/estorno) e as das parcelas geradas.
+  const { data: txs } = await ctx.supabase
+    .from("transactions")
+    .select("id, statement_id")
+    .in("id", txIds);
+  const { data: parcelas } = await ctx.supabase
+    .from("transaction_installments")
+    .select("statement_id")
+    .in("parent_transaction_id", txIds);
+
+  const statementIds = [
+    ...new Set(
+      [
+        ...(txs ?? []).map((t) => t.statement_id),
+        ...(parcelas ?? []).map((p) => p.statement_id),
+      ].filter((id): id is string => !!id),
+    ),
+  ];
+
+  if (statementIds.length > 0) {
+    const { data: pagas } = await ctx.supabase
+      .from("card_statements")
+      .select("competencia")
+      .in("id", statementIds)
+      .not("pago_em", "is", null);
+    if ((pagas ?? []).length > 0) {
+      const meses = (pagas ?? [])
+        .map((s) => competenciaLabel(s.competencia))
+        .join(", ");
+      return dbError(
+        `Fatura já paga (${meses}). Desfaça o pagamento em Faturas antes de desfazer a importação.`,
+      );
+    }
+  }
+
+  const { data: recs } = await ctx.supabase
+    .from("receivables")
+    .select("id, status")
+    .in("transaction_id", txIds)
+    .in("status", ["cobrado", "pago"]);
+  if ((recs ?? []).length > 0) {
+    return dbError(
+      `Há ${(recs ?? []).length} recebível(is) já cobrado(s) ou pago(s) nestes lançamentos. Acerte-os em A Receber antes de desfazer.`,
+    );
+  }
+
+  const { error } = await ctx.supabase
+    .from("transactions")
+    .delete()
+    .in("id", txIds);
+  if (error) return dbError("Não foi possível remover os lançamentos do lote.");
+
+  // As linhas voltam para revisão (o que estava ignorado/duplicado continua como estava).
+  await ctx.supabase
+    .from("import_rows")
+    .update({ status: "para_importar", transaction_id: null, motivo: null })
+    .eq("import_batch_id", batchId)
+    .eq("status", "importada");
+  await ctx.supabase
+    .from("import_batches")
+    .update({ status: "revisando", total_importadas: 0 })
+    .eq("id", batchId);
+
+  revalidateFinance();
+  return { ok: true, data: { removidas: txIds.length } };
 }
 
 /**

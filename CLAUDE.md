@@ -291,6 +291,7 @@ Regras de negócio críticas são **funções puras com datas/`now` injetados (s
 
 Padrões recorrentes que valem entender lendo o código:
 - **"Status derivado na leitura, nunca gravado":** fatura, `tasks.status='atrasada'`, cursos atrasados — todos calculados na leitura a partir de datas. Não persista esses estados.
+- **Sinal de arquivo importado é DADO, não convenção** (bug real, 2026-08-06): OFX de cartão traz **compra negativa** (`TRNAMT < 0`, `TRNTYPE=DEBIT`); planilha/CSV de fatura traz compra **positiva**. Assumir uma delas fazia a fatura inteira entrar como **estorno** (total negativo) e a linha perder parcelamento e divisão. A convenção é detectada do arquivo (`detectarSinalNegativoDespesa`, por contagem de linhas e **sem** a linha de pagamento), gravada no lote e **corrigível na revisão** — junto com o sentido de cada linha. Detalhe em `docs/fixes/IMPORTACAO_SINAL_FATURA.md`.
 - **Dinheiro em centavos (integer)** no financeiro; formatação centralizada em `src/lib/format.ts` (`Intl.NumberFormat('pt-BR')`, `date-fns` com `ptBR`).
 - **Datas locais pt-BR** (`'yyyy-MM-dd'` puro) em logs/streaks/heatmaps para evitar drift de UTC ("virar o dia").
 
