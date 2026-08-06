@@ -22,20 +22,17 @@
  * ║                                                                                       ║
  * ║ A primeira redação da v2 dizia "se a pergunta chegou até você, é porque nenhuma        ║
  * ║ leitura estava disponível — ou o módulo não tem assistente, ou a leitura não está      ║
- * ║ ligada". Falso hoje e depois:                                                          ║
- * ║  • hoje `routeAgent` não está ligado a nada — o agente vem do CLIENTE                  ║
- * ║    (`api/ia/chat/route.ts`: `agentId ?? ASSISTENTE_PESSOAL_ID`), então a pergunta pode ║
- * ║    ter caído aqui só por ser o padrão da tela, com `allow_training` ligada;            ║
- * ║  • depois de cabeado (Task 10), o orquestrador continua sendo o destino de "nenhum     ║
- * ║    módulo reconhecido no texto" — "quantos quilos eu levantei ontem?" não casa palavra ║
- * ║    nenhuma de `PALAVRAS.training`.                                                     ║
- * ║ Nos dois casos o usuário ouviria "ligue a leitura nas preferências" e iria ligar uma   ║
- * ║ preferência que já está ligada. O prompt afirma só o que é verificável DAQUI: neste    ║
- * ║ papel não há ferramenta de leitura.                                                    ║
+ * ║ ligada". Falso: o orquestrador também é o destino de "nenhum módulo reconhecido no     ║
+ * ║ texto" — "quantos quilos eu levantei ontem?" não casa palavra nenhuma de               ║
+ * ║ `PALAVRAS.training` —, e continua sendo o agente pedido quando o cliente pede.         ║
+ * ║ O usuário ouviria "ligue a leitura nas preferências" e iria ligar uma preferência que  ║
+ * ║ já está ligada. Este texto afirma só o que é verificável DAQUI: neste papel não há     ║
+ * ║ ferramenta de leitura.                                                                 ║
  * ║                                                                                       ║
- * ║ O fato que falta ao modelo já existe e já está em pt-BR: `RoutingDecision.motivo`      ║
- * ║ (`agents/routing.ts`). Injetá-lo como contexto resolve isto de verdade — e é da Task   ║
- * ║ 10, dona do chat-runner.                                                               ║
+ * ║ ✅ RESOLVIDO NA TASK 10, e FORA do prompt: o chat-runner concatena o motivo verdadeiro ║
+ * ║ (`RoutingDecision.motivo`, `agents/routing.ts`) ao prompt de sistema, num bloco de     ║
+ * ║ contexto. O modelo recebe o fato em vez de adivinhar a causa — e este texto continua   ║
+ * ║ correto, porque nunca afirmou nenhuma.                                                 ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
  * A versão vai congelada em `ai_runs.prompt_version`, para que uma resposta antiga continue
