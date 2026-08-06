@@ -1,7 +1,7 @@
 # Aviso de parcelamento já lançado na importação de fatura — Design
 
 **Data:** 2026-08-06
-**Status:** Aprovado (aguardando revisão do spec)
+**Status:** ✅ Implementado (2026-08-06)
 **Origem:** relato do usuário — "importa a fatura de julho, marca a compra como parcelamento;
 ao importar a fatura de agosto o sistema não avisa que aquela compra já está lançada, e o valor
 entra duplicado".

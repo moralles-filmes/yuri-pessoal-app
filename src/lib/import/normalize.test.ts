@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  descricaoBaseParcela,
   normalizarDescricao,
   parseDataIso,
   parseParcela,
   parseValorCentavos,
+  removerMarcaParcela,
 } from "@/lib/import/normalize";
 
 describe("parseValorCentavos", () => {
@@ -116,5 +118,38 @@ describe("normalizarDescricao", () => {
       "supermercado sao joao",
     );
     expect(normalizarDescricao(null)).toBe("");
+  });
+});
+
+describe("removerMarcaParcela", () => {
+  it("tira a marcação k/N da descrição", () => {
+    expect(removerMarcaParcela("NETSHOES 5/12")).toBe("NETSHOES");
+    expect(removerMarcaParcela("PARC 03/12 LOJA")).toBe("PARC LOJA");
+  });
+
+  it("tira a marcação 'k de N' (formato Itaú)", () => {
+    expect(removerMarcaParcela("MAGALU Parcela 1 de 4")).toBe(
+      "MAGALU Parcela",
+    );
+  });
+
+  it("não mexe em texto sem marcação de parcela válida", () => {
+    expect(removerMarcaParcela("POSTO 24/7")).toBe("POSTO 24/7");
+    expect(removerMarcaParcela("Mercado")).toBe("Mercado");
+    expect(removerMarcaParcela(null)).toBe("");
+  });
+});
+
+describe("descricaoBaseParcela", () => {
+  it("faz parcelas da MESMA compra colapsarem no mesmo texto", () => {
+    // É isto que permite reconhecer, na fatura de agosto, a compra que julho
+    // já lançou como parcelamento.
+    expect(descricaoBaseParcela("NETSHOES 5/12")).toBe("netshoes");
+    expect(descricaoBaseParcela("NETSHOES 6/12")).toBe("netshoes");
+  });
+
+  it("mantém compras distintas distintas", () => {
+    expect(descricaoBaseParcela("POSTO 24/7")).toBe("posto 24 7");
+    expect(descricaoBaseParcela("MERCADO SÃO JOÃO")).toBe("mercado sao joao");
   });
 });
