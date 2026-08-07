@@ -2,13 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import {
-  Controller,
-  useFieldArray,
-  useForm,
-  useWatch,
-} from "react-hook-form";
-import { Plus, Trash2 } from "lucide-react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -33,6 +27,11 @@ import {
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/financeiro/money-input";
 import { InstallmentBadge } from "@/components/financeiro/badges";
+import {
+  SplitEditor,
+  usableSplitParts,
+  type SplitPartValue,
+} from "@/components/financeiro/split-editor";
 import { applyFieldErrors } from "@/components/financeiro/form-utils";
 import {
   createTransaction,
@@ -41,7 +40,6 @@ import {
 } from "@/lib/actions/transactions";
 import { createInstallmentPurchase } from "@/lib/actions/installments";
 import {
-  centavosParaReais,
   formatCurrency,
   formatDate,
   parseCurrencyToNumber,
@@ -53,20 +51,14 @@ import {
   planejarParcelamento,
   type ParcelaPlano,
 } from "@/lib/finance/installments";
-import { dividirDespesa, type ParteDivisao } from "@/lib/finance/split";
 import {
-  CLASSIFICACAO_LABELS,
-  CLASSIFICACOES,
   PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
-  SPLIT_TYPE_LABELS,
-  SPLIT_TYPES,
   TRANSACTION_STATUSES,
   TRANSACTION_STATUS_LABELS,
   TRANSACTION_TYPES,
   TRANSACTION_TYPE_LABELS,
   type Classificacao,
-  type SplitType,
   type TransactionStatus,
   type TransactionType,
 } from "@/lib/finance/constants";
@@ -86,13 +78,6 @@ type CardOption = {
   dia_vencimento: number;
 };
 type PersonOption = { id: string; nome: string };
-
-type SplitPartValue = {
-  person_id: string;
-  tipo: SplitType;
-  valor: string;
-  percentual: string;
-};
 
 type FormValues = {
   type: TransactionType;
@@ -179,13 +164,6 @@ export function TransactionFormDialog({
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ defaultValues: defaults(transaction) });
 
-  const {
-    fields: partFields,
-    append: appendPart,
-    remove: removePart,
-    replace: replaceParts,
-  } = useFieldArray({ control, name: "parts" });
-
   // Ao abrir, reseta com os defaults; numa edição de despesa JÁ dividida, carrega as partes
   // gravadas (shared_expenses) para pré-preencher a divisão (Fase 05 — divisão na edição).
   React.useEffect(() => {
@@ -196,12 +174,12 @@ export function TransactionFormDialog({
     getTransactionSplit(transaction.id).then((res) => {
       if (!active || !res.ok) return;
       setValue("classificacao", res.data.classificacao);
-      replaceParts(res.data.parts);
+      setValue("parts", res.data.parts);
     });
     return () => {
       active = false;
     };
-  }, [open, transaction, reset, setValue, replaceParts]);
+  }, [open, transaction, reset, setValue]);
 
   const type = useWatch({ control, name: "type" });
   const categoryId = useWatch({ control, name: "category_id" });
@@ -212,17 +190,14 @@ export function TransactionFormDialog({
   const parcelado = useWatch({ control, name: "parcelado" });
   const qtdParcelas = useWatch({ control, name: "qtd_parcelas" });
   const overrideUltima = useWatch({ control, name: "override_ultima" });
-  const classificacao = useWatch({ control, name: "classificacao" });
-  const parts = useWatch({ control, name: "parts" });
   const isTransfer = type === "transferencia";
   const isCard = !isTransfer && paymentMethod === "cartao_credito";
   // Parcelamento só na criação (edição de parcelamento é feita em /parcelamentos).
   const canParcelar = !isEdit && isCard;
   const isParcelado = canParcelar && parcelado;
   // Divisão de gastos (Fase 05): em despesa, na criação OU na edição de despesa simples.
-  // Compra parcelada já criada é gerida em /parcelamentos, então não dividimos aqui.
+  // Compra parcelada já criada é gerida em /parcelamentos (mesmo núcleo no servidor).
   const canSplit = type === "despesa" && !(isEdit && transaction?.parcelado);
-  const isShared = canSplit && classificacao !== "pessoal";
 
   const selectedCardObj = cards.find((c) => c.id === cardId);
   const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(purchaseDate);
@@ -276,41 +251,6 @@ export function TransactionFormDialog({
     }
   }
 
-  // Preview reativo da divisão (minha parte × cada terceiro). Lógica pura — idêntica ao
-  // servidor (dividirDespesa). Sem useMemo: o React Compiler do projeto memoiza.
-  const nomePessoa = (id: string) =>
-    people.find((p) => p.id === id)?.nome ?? "Pessoa";
-  let splitPreview: {
-    minhaParteCentavos: number;
-    partesTerceiros: { personId: string; valorCentavos: number }[];
-  } | null = null;
-  let splitError = false;
-  if (isShared) {
-    const totalCentavos = reaisParaCentavos(parseCurrencyToNumber(amount));
-    const partes: ParteDivisao[] = (parts ?? [])
-      .filter((p) => p.person_id)
-      .map((p) =>
-        p.tipo === "valor"
-          ? {
-              personId: p.person_id,
-              tipo: "valor",
-              valorCentavos: reaisParaCentavos(parseCurrencyToNumber(p.valor)),
-            }
-          : {
-              personId: p.person_id,
-              tipo: "percentual",
-              percentual: parseCurrencyToNumber(p.percentual),
-            },
-      );
-    if (totalCentavos > 0 && partes.length > 0) {
-      try {
-        splitPreview = dividirDespesa(totalCentavos, partes);
-      } catch {
-        splitError = true;
-      }
-    }
-  }
-
   const availableSubs = React.useMemo(
     () =>
       categoryId && categoryId !== NONE
@@ -326,14 +266,12 @@ export function TransactionFormDialog({
     }
     return {
       classificacao: values.classificacao,
-      parts: values.parts
-        .filter((p) => p.person_id)
-        .map((p) => ({
-          person_id: p.person_id,
-          tipo: p.tipo,
-          valor: p.tipo === "valor" ? p.valor : "",
-          percentual: p.tipo === "percentual" ? p.percentual : "",
-        })),
+      parts: usableSplitParts(values.parts).map((p) => ({
+        person_id: p.person_id,
+        tipo: p.tipo,
+        valor: p.tipo === "valor" ? p.valor : "",
+        percentual: p.tipo === "percentual" ? p.percentual : "",
+      })),
     };
   }
 
@@ -792,200 +730,27 @@ export function TransactionFormDialog({
           )}
 
           {canSplit && (
-            <div className="space-y-3 rounded-xl border border-border bg-card/40 p-3">
-              <div className="space-y-1.5">
-                <Label>Classificação</Label>
-                <Controller
-                  control={control}
-                  name="classificacao"
-                  render={({ field }) => (
-                    <Select
-                      value={field.value}
-                      onValueChange={(v) => {
-                        field.onChange(v);
-                        if (v === "pessoal") {
-                          setValue("parts", []);
-                        } else if ((parts ?? []).length === 0) {
-                          appendPart({
-                            person_id: "",
-                            tipo: "valor",
-                            valor: "",
-                            percentual: "",
-                          });
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CLASSIFICACOES.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {CLASSIFICACAO_LABELS[c]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Sua parte real é o que sobra depois dos terceiros — valores de
-                  terceiros não entram no seu gasto pessoal.
-                </p>
-              </div>
-
-              {isShared &&
-                (people.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Nenhuma pessoa cadastrada. Cadastre em A Receber → Pessoas.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {partFields.map((f, idx) => {
-                      const tipo = parts?.[idx]?.tipo ?? "valor";
-                      return (
-                        <div
-                          key={f.id}
-                          className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_8rem_8rem_auto] sm:items-end"
-                        >
-                          <div className="space-y-1">
-                            <Label className="text-xs">Pessoa</Label>
-                            <Controller
-                              control={control}
-                              name={`parts.${idx}.person_id`}
-                              render={({ field }) => (
-                                <Select
-                                  value={field.value}
-                                  onValueChange={field.onChange}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Selecione" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {people.map((p) => (
-                                      <SelectItem key={p.id} value={p.id}>
-                                        {p.nome}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Tipo</Label>
-                            <Controller
-                              control={control}
-                              name={`parts.${idx}.tipo`}
-                              render={({ field }) => (
-                                <Select
-                                  value={field.value}
-                                  onValueChange={field.onChange}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {SPLIT_TYPES.map((t) => (
-                                      <SelectItem key={t} value={t}>
-                                        {SPLIT_TYPE_LABELS[t]}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">
-                              {tipo === "valor" ? "Valor" : "%"}
-                            </Label>
-                            {tipo === "valor" ? (
-                              <Controller
-                                control={control}
-                                name={`parts.${idx}.valor`}
-                                render={({ field }) => (
-                                  <MoneyInput
-                                    value={field.value}
-                                    onValueChange={field.onChange}
-                                  />
-                                )}
-                              />
-                            ) : (
-                              <Input
-                                type="number"
-                                min={0}
-                                max={100}
-                                step="0.01"
-                                inputMode="decimal"
-                                {...register(`parts.${idx}.percentual`)}
-                              />
-                            )}
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Remover pessoa"
-                            onClick={() => removePart(idx)}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      );
-                    })}
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        appendPart({
-                          person_id: "",
-                          tipo: "valor",
-                          valor: "",
-                          percentual: "",
-                        })
-                      }
-                    >
-                      <Plus /> Adicionar pessoa
-                    </Button>
-
-                    {splitError && (
-                      <p className="text-xs text-destructive">
-                        A divisão não fecha: a soma dos terceiros passou do total
-                        ou os percentuais somam mais de 100%.
-                      </p>
+            <div className="rounded-xl border border-border bg-card/40 p-3">
+              <Controller
+                control={control}
+                name="parts"
+                render={({ field: partsField }) => (
+                  <Controller
+                    control={control}
+                    name="classificacao"
+                    render={({ field: classField }) => (
+                      <SplitEditor
+                        classificacao={classField.value}
+                        onClassificacaoChange={classField.onChange}
+                        parts={partsField.value ?? []}
+                        onPartsChange={partsField.onChange}
+                        totalReais={parseCurrencyToNumber(amount)}
+                        people={people}
+                      />
                     )}
-
-                    {splitPreview && (
-                      <div className="space-y-1 rounded-lg bg-muted/40 p-2 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">Minha parte</span>
-                          <span className="font-medium tabular-nums text-foreground">
-                            {formatCurrency(
-                              centavosParaReais(splitPreview.minhaParteCentavos),
-                            )}
-                          </span>
-                        </div>
-                        {splitPreview.partesTerceiros.map((t) => (
-                          <div
-                            key={t.personId}
-                            className="flex items-center justify-between text-muted-foreground"
-                          >
-                            <span className="truncate">
-                              {nomePessoa(t.personId)}
-                            </span>
-                            <span className="tabular-nums">
-                              {formatCurrency(centavosParaReais(t.valorCentavos))}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  />
+                )}
+              />
             </div>
           )}
 

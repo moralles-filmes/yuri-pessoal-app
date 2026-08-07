@@ -10,6 +10,7 @@ import {
   CreditCard,
   Layers,
   Trash2,
+  Users,
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,10 +28,12 @@ import { StatCard } from "@/components/shared/stat-card";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import {
   CategoryPill,
+  ClassificacaoBadge,
   InstallmentBadge,
   InstallmentPurchaseStatusBadge,
   InstallmentStatusBadge,
 } from "@/components/financeiro/badges";
+import { InstallmentSplitDialog } from "./installment-split-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { statusEfetivo } from "@/lib/finance/invoice";
 import {
@@ -70,6 +73,9 @@ type ParcelaView = {
   statusParcela: InstallmentStatus;
 };
 
+/** Quanto uma pessoa paga — no parcelamento inteiro ou numa parcela. */
+type ParteDePessoa = { personId: string; nome: string; valor: number };
+
 type Derived = {
   parcelas: ParcelaView[];
   pagasCount: number;
@@ -81,6 +87,15 @@ type Derived = {
   status: InstallmentPurchaseStatus;
   primeira: string | null;
   ultima: string | null;
+  /** Soma das parcelas ativas — a base divisível (≠ valor_total quando há cancelada). */
+  totalAtivo: number;
+  ativasCount: number;
+  /** Parte de cada terceiro no parcelamento inteiro, e a minha (o resto). */
+  terceiros: ParteDePessoa[];
+  terceirosTotal: number;
+  meu: number;
+  /** Parte dos terceiros em CADA parcela, por `installment_id`. */
+  terceirosPorParcela: Map<string, ParteDePessoa[]>;
 };
 
 function derive(
@@ -123,6 +138,30 @@ function derive(
     .map((x) => x.inst.statement?.competencia ?? x.inst.data_competencia)
     .filter(Boolean) as string[];
 
+  // Quem paga o quê sai dos RECEBÍVEIS, não das `shared_expenses`: o recebível é a cobrança
+  // que de fato existe por parcela, e é ele que a fatura e /terceiros somam. `shared` entra só
+  // para resolver o NOME de cada pessoa (a parte total dela pode incluir parcela cancelada).
+  const nomePorPessoa = new Map(
+    (p.shared ?? []).map((s) => [s.person_id, s.person?.nome ?? "Pessoa"]),
+  );
+  const nome = (id: string) => nomePorPessoa.get(id) ?? "Pessoa";
+
+  const porPessoa = new Map<string, number>();
+  const terceirosPorParcela = new Map<string, ParteDePessoa[]>();
+  for (const r of p.receivables ?? []) {
+    porPessoa.set(r.person_id, (porPessoa.get(r.person_id) ?? 0) + r.valor);
+    if (!r.installment_id) continue;
+    const arr = terceirosPorParcela.get(r.installment_id) ?? [];
+    arr.push({ personId: r.person_id, nome: nome(r.person_id), valor: r.valor });
+    terceirosPorParcela.set(r.installment_id, arr);
+  }
+
+  const terceiros: ParteDePessoa[] = [...porPessoa.entries()]
+    .map(([personId, valor]) => ({ personId, nome: nome(personId), valor }))
+    .sort((a, b) => b.valor - a.valor);
+  const terceirosTotal = terceiros.reduce((acc, t) => acc + t.valor, 0);
+  const totalAtivo = ativas.reduce((acc, x) => acc + x.inst.valor, 0);
+
   return {
     parcelas,
     pagasCount: pagas.length,
@@ -134,6 +173,12 @@ function derive(
     status,
     primeira: datas.length ? datas[0] : null,
     ultima: datas.length ? datas[datas.length - 1] : null,
+    totalAtivo,
+    ativasCount: ativas.length,
+    terceiros,
+    terceirosTotal,
+    meu: totalAtivo - terceirosTotal,
+    terceirosPorParcela,
   };
 }
 
@@ -141,6 +186,7 @@ export function InstallmentsClient({
   purchases,
   cards,
   categories,
+  people,
   today,
   selectedCardId,
   selectedCategoryId,
@@ -149,6 +195,7 @@ export function InstallmentsClient({
   purchases: InstallmentPurchaseWithRelations[];
   cards: Option[];
   categories: Option[];
+  people: { id: string; nome: string }[];
   today: string;
   selectedCardId: string | null;
   selectedCategoryId: string | null;
@@ -317,6 +364,9 @@ export function InstallmentsClient({
                           {p.description || "Compra parcelada"}
                         </span>
                         <InstallmentPurchaseStatusBadge status={d.status} />
+                        {p.classificacao !== "pessoal" && (
+                          <ClassificacaoBadge value={p.classificacao} />
+                        )}
                       </div>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         {p.card && (
@@ -343,6 +393,24 @@ export function InstallmentsClient({
                         {d.canceladasCount > 0 &&
                           ` · ${d.canceladasCount} cancelada(s)`}
                       </p>
+                      {d.terceiros.length > 0 && (
+                        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span>
+                            meu{" "}
+                            <span className="font-medium text-foreground tabular-nums">
+                              {formatCurrency(d.meu)}
+                            </span>
+                          </span>
+                          {d.terceiros.map((t) => (
+                            <span key={t.personId} className="min-w-0">
+                              <span className="truncate">{t.nome}</span>{" "}
+                              <span className="font-medium text-foreground tabular-nums">
+                                {formatCurrency(t.valor)}
+                              </span>
+                            </span>
+                          ))}
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
@@ -355,6 +423,31 @@ export function InstallmentsClient({
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
+                        {d.ativasCount > 0 && (
+                          <InstallmentSplitDialog
+                            parentId={p.id}
+                            descricao={p.description ?? ""}
+                            classificacao={p.classificacao}
+                            totalAtivoReais={d.totalAtivo}
+                            valorTotalReais={total}
+                            qtdParcelasAtivas={d.ativasCount}
+                            people={people}
+                            trigger={
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Dividir com terceiros"
+                                className={
+                                  d.terceiros.length > 0
+                                    ? "text-primary"
+                                    : "text-muted-foreground hover:text-primary"
+                                }
+                              >
+                                <Users />
+                              </Button>
+                            }
+                          />
+                        )}
                         {d.status === "ativo" && d.podeCancelar && (
                           <DeleteConfirmDialog
                             title="Cancelar parcelas futuras"
@@ -413,41 +506,69 @@ export function InstallmentsClient({
                         const comp =
                           pv.inst.statement?.competencia ??
                           pv.inst.data_competencia;
+                        const partes =
+                          d.terceirosPorParcela.get(pv.inst.id) ?? [];
                         return (
                           <div
                             key={pv.inst.id}
-                            className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2"
+                            className="flex flex-col gap-1 rounded-lg bg-muted/40 px-3 py-2"
                           >
-                            <div className="flex min-w-0 items-center gap-2">
-                              <InstallmentBadge
-                                numero={pv.inst.numero}
-                                total={pv.inst.total_parcelas}
-                              />
-                              <div className="min-w-0 text-xs text-muted-foreground">
-                                {comp && (
-                                  <span className="capitalize">
-                                    {mesAnoLabel(comp)}
-                                  </span>
-                                )}
-                                {pv.inst.statement && (
-                                  <span>
-                                    {" "}
-                                    · vence{" "}
-                                    {formatDate(
-                                      pv.inst.statement.data_vencimento,
-                                    )}
-                                  </span>
-                                )}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <InstallmentBadge
+                                  numero={pv.inst.numero}
+                                  total={pv.inst.total_parcelas}
+                                />
+                                <div className="min-w-0 text-xs text-muted-foreground">
+                                  {comp && (
+                                    <span className="capitalize">
+                                      {mesAnoLabel(comp)}
+                                    </span>
+                                  )}
+                                  {pv.inst.statement && (
+                                    <span>
+                                      {" "}
+                                      · vence{" "}
+                                      {formatDate(
+                                        pv.inst.statement.data_vencimento,
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <InstallmentStatusBadge
+                                  status={pv.statusParcela}
+                                />
+                                <span className="text-sm font-medium tabular-nums">
+                                  {formatCurrency(pv.inst.valor)}
+                                </span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <InstallmentStatusBadge
-                                status={pv.statusParcela}
-                              />
-                              <span className="text-sm font-medium tabular-nums">
-                                {formatCurrency(pv.inst.valor)}
-                              </span>
-                            </div>
+                            {partes.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-1 text-[11px] text-muted-foreground">
+                                <span>
+                                  meu{" "}
+                                  <span className="font-medium tabular-nums text-foreground">
+                                    {formatCurrency(
+                                      pv.inst.valor -
+                                        partes.reduce(
+                                          (acc, t) => acc + t.valor,
+                                          0,
+                                        ),
+                                    )}
+                                  </span>
+                                </span>
+                                {partes.map((t) => (
+                                  <span key={t.personId} className="min-w-0">
+                                    <span className="truncate">{t.nome}</span>{" "}
+                                    <span className="font-medium tabular-nums text-foreground">
+                                      {formatCurrency(t.valor)}
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

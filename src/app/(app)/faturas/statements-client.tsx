@@ -93,6 +93,69 @@ function nextDayISO(iso: string): string {
   return toDateInputValue(new Date(y, m - 1, d + 1));
 }
 
+/** Quem paga uma parte de um item da fatura. */
+type ParteDoItem = { personId: string; nome: string; valor: number };
+
+/**
+ * Linha "meu X · Fulano Y" de UM item da fatura. O rodapé da fatura já dizia quem paga o
+ * total; isto responde a pergunta que faltava — de quem é ESTA compra.
+ */
+function PartesDoItem({
+  total,
+  partes,
+}: {
+  total: number;
+  partes: ParteDoItem[];
+}) {
+  if (partes.length === 0) return null;
+  const terceiros = partes.reduce((acc, p) => acc + p.valor, 0);
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+      <span>
+        meu{" "}
+        <span className="font-medium tabular-nums text-foreground">
+          {formatCurrency(total - terceiros)}
+        </span>
+      </span>
+      {partes.map((p) => (
+        <span key={p.personId} className="min-w-0">
+          <span className="truncate">{p.nome}</span>{" "}
+          <span className="font-medium tabular-nums text-foreground">
+            {formatCurrency(p.valor)}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Agrupa recebíveis por uma chave do item (transação ou parcela), somando por pessoa. */
+function partesPorItem(
+  receivables: ReceivableWithPerson[],
+  chave: (r: ReceivableWithPerson) => string | null,
+): Map<string, ParteDoItem[]> {
+  const porItem = new Map<string, Map<string, ParteDoItem>>();
+  for (const r of receivables) {
+    const k = chave(r);
+    if (!k) continue;
+    const pessoas = porItem.get(k) ?? new Map<string, ParteDoItem>();
+    const atual = pessoas.get(r.person_id) ?? {
+      personId: r.person_id,
+      nome: r.person?.nome ?? "Pessoa",
+      valor: 0,
+    };
+    atual.valor += r.valor;
+    pessoas.set(r.person_id, atual);
+    porItem.set(k, pessoas);
+  }
+  return new Map(
+    [...porItem.entries()].map(([k, pessoas]) => [
+      k,
+      [...pessoas.values()].sort((a, b) => b.valor - a.valor),
+    ]),
+  );
+}
+
 export function StatementsClient({
   cards,
   statements,
@@ -183,6 +246,20 @@ export function StatementsClient({
     }
     return map;
   }, [receivables]);
+
+  // ...e agrupados por ITEM, para dizer de quem é cada compra da fatura. Uma parcela tem
+  // `installment_id`; um lançamento à vista, só `transaction_id` — por isso duas chaves.
+  const partesPorParcela = React.useMemo(
+    () => partesPorItem(receivables, (r) => r.installment_id),
+    [receivables],
+  );
+  const partesPorTransacao = React.useMemo(
+    () =>
+      partesPorItem(receivables, (r) =>
+        r.installment_id ? null : r.transaction_id,
+      ),
+    [receivables],
+  );
 
   // Monta a lista de faturas a exibir: faturas reais + ciclos atual/próximo (virtuais
   // quando ainda não têm lançamentos), depois aplica filtros de mês e status.
@@ -479,6 +556,10 @@ export function StatementsClient({
                                 />
                               )}
                             </div>
+                            <PartesDoItem
+                              total={t.amount}
+                              partes={partesPorTransacao.get(t.id) ?? []}
+                            />
                           </div>
                           <div className="flex items-center gap-2">
                             <span
@@ -522,8 +603,12 @@ export function StatementsClient({
                                 />
                               </div>
                             )}
+                            <PartesDoItem
+                              total={it.valor}
+                              partes={partesPorParcela.get(it.id) ?? []}
+                            />
                           </div>
-                          <span className="text-sm font-medium tabular-nums">
+                          <span className="shrink-0 text-sm font-medium tabular-nums">
                             {formatCurrency(it.valor)}
                           </span>
                         </div>

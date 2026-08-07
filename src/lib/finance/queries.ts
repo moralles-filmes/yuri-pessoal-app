@@ -30,6 +30,14 @@ import type {
 const TX_SELECT =
   "*, account:accounts!transactions_account_id_fkey(id,name,color), transfer_account:accounts!transactions_transfer_account_id_fkey(id,name), category:categories(id,name,color,icon), subcategory:subcategories(id,name), card:credit_cards(id,nome,cor,bandeira), statement:card_statements!transactions_statement_id_fkey(id,pago_em)";
 
+/**
+ * Partes da divisão com o nome de cada pessoa — o que faz a lista dizer DE QUEM é o gasto, e
+ * não só "meu R$ X". Fica fora do `TX_SELECT` base de propósito: `getTransactionsRange` varre
+ * até 2000 linhas para relatórios/dashboard, que agregam por valor e não precisam de nome.
+ */
+const TX_SHARED_EMBED =
+  ", shared:shared_expenses!shared_expenses_transaction_id_fkey(person_id,valor,person:people(id,nome))";
+
 export async function getAccounts(): Promise<AccountWithBalance[]> {
   const supabase = await createClient();
   const { data } = await supabase
@@ -100,7 +108,7 @@ export async function getTransactions(
   const supabase = await createClient();
   let query = supabase
     .from("transactions")
-    .select(TX_SELECT)
+    .select(TX_SELECT + TX_SHARED_EMBED)
     .order("competence_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(500);
@@ -278,8 +286,16 @@ export async function getStatements(
 
 /* ───────────────────────────── Fase 04 — Parcelamentos ───────────────────────────── */
 
+// `shared` = a parte TOTAL de cada pessoa na compra (com o nome); `receivables` = a parte
+// dela em CADA parcela. Os dois são precisos: o card mostra o total por pessoa e a lista
+// expandida mostra quanto daquela parcela é de quem.
+//
+// ⚠️ Os dois embeds levam a FK EXPLÍCITA. `receivables` alcança `transactions` por dois
+// caminhos (direto por `transaction_id` e via `shared_expenses`/`transaction_installments`),
+// e ambiguidade de embedding do PostgREST só estoura em RUNTIME — como o `42P10` do
+// `ON CONFLICT` que a Fase 16 documentou.
 const INSTALLMENT_PURCHASE_SELECT =
-  "*, card:credit_cards(id,nome,cor,bandeira,dia_fechamento,dia_vencimento), category:categories(id,name,color,icon), installments:transaction_installments(*, statement:card_statements(id,competencia,data_fechamento,data_vencimento,pago_em))";
+  "*, card:credit_cards(id,nome,cor,bandeira,dia_fechamento,dia_vencimento), category:categories(id,name,color,icon), installments:transaction_installments(*, statement:card_statements(id,competencia,data_fechamento,data_vencimento,pago_em)), shared:shared_expenses!shared_expenses_transaction_id_fkey(person_id,valor,person:people(id,nome)), receivables!receivables_transaction_id_fkey(id,installment_id,person_id,valor,status)";
 
 export type InstallmentPurchaseFilters = {
   cardId?: string;

@@ -6,12 +6,20 @@ import {
   installmentPurchaseSchema,
 } from "@/lib/validators/installment";
 import { splitSchema } from "@/lib/validators/split";
-import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
+import {
+  authContext,
+  dbError,
+  invalid,
+  notAuthed,
+  type AuthContext,
+} from "@/lib/actions/helpers";
 import { getOrCreateStatementByFatura } from "@/lib/finance/statements";
 import { planejarParcelamento } from "@/lib/finance/installments";
 import { applySplitParcelado } from "@/lib/finance/split-persist";
+import { reapplySplit } from "@/lib/finance/split-reapply";
 import { statusEfetivo } from "@/lib/finance/invoice";
 import { centavosParaReais, hojeISO, reaisParaCentavos } from "@/lib/format";
+import type { Classificacao } from "@/lib/finance/constants";
 import type { ActionResult } from "@/types/finance";
 
 function revalidateInstallments() {
@@ -179,9 +187,84 @@ export async function createInstallmentPurchase(
 }
 
 /**
+ * Divisão de uma compra parcelada JÁ CRIADA: troca o terceiro, refaz as partes ou remove a
+ * divisão. Delega ao núcleo único (`reapplySplit`) — é o MESMO código que decide a divisão de
+ * um lançamento à vista, então as duas telas não podem divergir de regra.
+ *
+ * A base da divisão é a soma das parcelas ATIVAS, não `valor_total`: com parcela cancelada os
+ * dois divergem, e distribuir sobre o total contratado quebraria a invariante de
+ * `distribuirTerceirosPorParcela` (Σ terceiros ≤ Σ parcelas).
+ *
+ * Alcança as parcelas de faturas já fechadas ou pagas de propósito — é o caso de quem
+ * importou a fatura e só depois percebeu que a compra era de um terceiro. O que protege o
+ * histórico é a recusa quando já existe recebível cobrado/pago, não a data da fatura.
+ */
+export async function updateInstallmentSplit(
+  parentId: string,
+  input: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const split = splitSchema.safeParse(input);
+  if (!split.success) return invalid(split.error.flatten().fieldErrors);
+
+  const { data: parent } = await ctx.supabase
+    .from("transactions")
+    .select("id, classificacao, card_id")
+    .eq("id", parentId)
+    .eq("parcelado", true)
+    .maybeSingle();
+  if (!parent) return dbError("Compra parcelada não encontrada.");
+
+  const { data: parcelas } = await ctx.supabase
+    .from("transaction_installments")
+    .select("id, statement_id, valor")
+    .eq("parent_transaction_id", parentId)
+    .eq("status", "ativa");
+  if (!parcelas || parcelas.length === 0) {
+    return dbError(
+      "Este parcelamento não tem parcelas ativas para dividir.",
+    );
+  }
+
+  const parcelasBase = parcelas.map((p) => ({
+    installmentId: p.id,
+    statementId: p.statement_id,
+    cardId: parent.card_id,
+    valorCentavos: reaisParaCentavos(p.valor),
+  }));
+  const totalCentavos = parcelasBase.reduce(
+    (acc, p) => acc + p.valorCentavos,
+    0,
+  );
+
+  const res = await reapplySplit(ctx, {
+    transactionId: parentId,
+    totalCentavos,
+    // Esta ação nunca muda o valor da compra: a base de antes é a mesma de agora, e a
+    // comparação recai sobre as partes (que é o que o usuário está de fato editando).
+    totalCentavosAtual: totalCentavos,
+    classificacaoAtual: parent.classificacao as Classificacao,
+    classificacaoNova: split.data.classificacao,
+    parts: split.data.parts,
+    mode: { kind: "parcelado", parcelas: parcelasBase },
+  });
+  if (!res.ok) return dbError(res.error);
+
+  revalidateInstallments();
+  return { ok: true, data: { id: parentId } };
+}
+
+/**
  * Cancela as parcelas FUTURAS (ainda em faturas ABERTAS) de um parcelamento, marcando-as
  * como `cancelada`. NÃO toca em parcelas de faturas fechadas/pagas (já efetivadas). A view
  * de fatura exclui parcelas canceladas do total, então elas saem das faturas abertas.
+ *
+ * ⚠️ Cancelar a parcela tem de cancelar a COBRANÇA dela. Sem isso, um parcelamento dividido
+ * deixava o terceiro devendo por parcelas que não existem mais — o valor continuava somando
+ * em "Quem paga esta fatura" e em /terceiros. Recebível já cobrado/pago não é apagado: aí a
+ * ação inteira é recusada, em vez de tirar a parcela da fatura e deixar a cobrança órfã.
  */
 export async function cancelInstallmentFuture(
   parentId: string,
@@ -223,17 +306,77 @@ export async function cancelInstallmentFuture(
     );
   }
 
+  const ids = cancelaveis.map((p) => p.id);
+
+  // Recebíveis das parcelas que vão sumir da fatura. `cobrado`/`pago` barra a ação inteira:
+  // o acerto com a pessoa é decisão dela, não efeito colateral de um cancelamento.
+  const { data: recebiveis } = await ctx.supabase
+    .from("receivables")
+    .select("id, status")
+    .in("installment_id", ids);
+  if (
+    (recebiveis ?? []).some(
+      (r) => r.status === "cobrado" || r.status === "pago",
+    )
+  ) {
+    return dbError(
+      "Há recebíveis cobrados ou pagos nas parcelas futuras. Acerte-os em A Receber antes de cancelar.",
+    );
+  }
+
   const { error } = await ctx.supabase
     .from("transaction_installments")
     .update({ status: "cancelada" })
-    .in(
-      "id",
-      cancelaveis.map((p) => p.id),
-    );
+    .in("id", ids);
   if (error) return dbError("Não foi possível cancelar as parcelas futuras.");
+
+  if ((recebiveis ?? []).length > 0) {
+    await ctx.supabase.from("receivables").delete().in("installment_id", ids);
+    await recomputeParentValorPessoal(ctx, parentId);
+  }
 
   revalidateInstallments();
   return { ok: true, data: undefined };
+}
+
+/**
+ * Regrava `valor_pessoal` do pai como (Σ parcelas ativas − Σ recebíveis restantes), depois de
+ * o conjunto de parcelas mudar. Não recalcula a divisão: as partes gravadas em
+ * `shared_expenses` continuam sendo o que o usuário informou — só a MINHA parte, que é sempre
+ * derivada, precisa acompanhar. Sem nenhum recebível a despesa volta a ser inteiramente minha.
+ */
+async function recomputeParentValorPessoal(
+  ctx: AuthContext,
+  parentId: string,
+): Promise<void> {
+  const { data: ativas } = await ctx.supabase
+    .from("transaction_installments")
+    .select("valor")
+    .eq("parent_transaction_id", parentId)
+    .eq("status", "ativa");
+  const { data: recs } = await ctx.supabase
+    .from("receivables")
+    .select("valor")
+    .eq("transaction_id", parentId);
+
+  const totalCentavos = (ativas ?? []).reduce(
+    (acc, p) => acc + reaisParaCentavos(p.valor),
+    0,
+  );
+  const terceirosCentavos = (recs ?? []).reduce(
+    (acc, r) => acc + reaisParaCentavos(r.valor),
+    0,
+  );
+
+  await ctx.supabase
+    .from("transactions")
+    .update({
+      valor_pessoal:
+        terceirosCentavos > 0
+          ? centavosParaReais(totalCentavos - terceirosCentavos)
+          : null,
+    })
+    .eq("id", parentId);
 }
 
 /**

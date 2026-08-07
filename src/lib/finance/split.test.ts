@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  decidirReaplicacao,
   distribuirTerceirosPorParcela,
   dividirDespesa,
+  mesmaDivisaoCentavos,
   sharedExpensesToFormParts,
   validarDivisao,
   somaTerceiros,
@@ -193,5 +195,112 @@ describe("sharedExpensesToFormParts", () => {
       ])[0].valor,
     ).toBe("1234,5");
     expect(sharedExpensesToFormParts([])).toEqual([]);
+  });
+});
+
+describe("mesmaDivisaoCentavos", () => {
+  it("ignora a ordem das chaves e distingue valor e conjunto", () => {
+    const a = new Map([
+      ["p1", 100],
+      ["p2", 200],
+    ]);
+    expect(mesmaDivisaoCentavos(a, new Map([["p2", 200], ["p1", 100]]))).toBe(true);
+    expect(mesmaDivisaoCentavos(a, new Map([["p1", 100], ["p2", 201]]))).toBe(false);
+    expect(mesmaDivisaoCentavos(a, new Map([["p1", 100]]))).toBe(false);
+    expect(mesmaDivisaoCentavos(new Map(), new Map())).toBe(true);
+  });
+});
+
+describe("decidirReaplicacao", () => {
+  const base = {
+    classificacaoAtual: "compartilhada",
+    classificacaoNova: "compartilhada",
+    totalCentavosAtual: 50000,
+    totalCentavosNovo: 50000,
+    divisaoAtual: new Map([["p1", 25000]]),
+    divisaoNova: new Map([["p1", 25000]]),
+    temRecebivelFechado: false,
+  };
+
+  it("pessoal → pessoal não faz nada (nunca houve divisão)", () => {
+    expect(
+      decidirReaplicacao({
+        ...base,
+        classificacaoAtual: "pessoal",
+        classificacaoNova: "pessoal",
+        divisaoAtual: new Map(),
+        divisaoNova: new Map(),
+      }),
+    ).toEqual({ acao: "nada" });
+  });
+
+  it("divisão idêntica não é reaplicada (editar descrição não mexe em recebível)", () => {
+    expect(decidirReaplicacao(base)).toEqual({ acao: "nada" });
+  });
+
+  it("trocar a PESSOA mantendo o valor conta como mudança", () => {
+    expect(
+      decidirReaplicacao({ ...base, divisaoNova: new Map([["p2", 25000]]) }),
+    ).toEqual({ acao: "reaplicar" });
+  });
+
+  it("mudar só o TOTAL conta como mudança, mesmo com as mesmas pessoas", () => {
+    // 50% de R$500 = 25000; de R$600 = 30000. O mapa novo já vem resolvido.
+    expect(
+      decidirReaplicacao({
+        ...base,
+        totalCentavosNovo: 60000,
+        divisaoNova: new Map([["p1", 30000]]),
+      }),
+    ).toEqual({ acao: "reaplicar" });
+  });
+
+  it("mudar só a CLASSIFICAÇÃO (terceiro ↔ compartilhada) reaplica", () => {
+    expect(
+      decidirReaplicacao({ ...base, classificacaoNova: "terceiro" }),
+    ).toEqual({ acao: "reaplicar" });
+  });
+
+  it("virar pessoal manda LIMPAR", () => {
+    expect(
+      decidirReaplicacao({
+        ...base,
+        classificacaoNova: "pessoal",
+        divisaoNova: new Map(),
+      }),
+    ).toEqual({ acao: "limpar" });
+  });
+
+  it("recebível cobrado/pago BLOQUEIA qualquer mudança, inclusive limpar", () => {
+    const mudanca = decidirReaplicacao({
+      ...base,
+      divisaoNova: new Map([["p2", 25000]]),
+      temRecebivelFechado: true,
+    });
+    expect(mudanca.acao).toBe("bloqueado");
+
+    const limpeza = decidirReaplicacao({
+      ...base,
+      classificacaoNova: "pessoal",
+      divisaoNova: new Map(),
+      temRecebivelFechado: true,
+    });
+    expect(limpeza.acao).toBe("bloqueado");
+  });
+
+  it("recebível cobrado/pago NÃO bloqueia quando nada mudou", () => {
+    expect(
+      decidirReaplicacao({ ...base, temRecebivelFechado: true }),
+    ).toEqual({ acao: "nada" });
+  });
+
+  it("dividir uma despesa que era pessoal reaplica", () => {
+    expect(
+      decidirReaplicacao({
+        ...base,
+        classificacaoAtual: "pessoal",
+        divisaoAtual: new Map(),
+      }),
+    ).toEqual({ acao: "reaplicar" });
   });
 });
