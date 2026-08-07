@@ -28,7 +28,9 @@ import { AI_TOOL_REGISTRY } from "@/lib/ai/tools/registry";
 import {
   AGENDA_AGENT_ID,
   ASSISTENTE_PESSOAL_ID,
+  DIETA_AGENT_ID,
   ESTUDOS_AGENT_ID,
+  FINANCEIRO_AGENT_ID,
   HABITOS_AGENT_ID,
   TAREFAS_AGENT_ID,
   TODO_AGENT_ID,
@@ -45,6 +47,8 @@ export {
   ESTUDOS_AGENT_ID,
   AGENDA_AGENT_ID,
   TAREFAS_AGENT_ID,
+  FINANCEIRO_AGENT_ID,
+  DIETA_AGENT_ID,
 };
 
 /** Cada especialista tem EXATAMENTE uma flag de admissão. O orquestrador não tem: ele
@@ -56,6 +60,8 @@ export const AGENT_PERMISSION: Record<string, ToolPermission | undefined> = {
   [ESTUDOS_AGENT_ID]: "allow_studies",
   [AGENDA_AGENT_ID]: "allow_calendar",
   [TAREFAS_AGENT_ID]: "allow_tasks",
+  [FINANCEIRO_AGENT_ID]: "allow_finance",
+  [DIETA_AGENT_ID]: "allow_nutrition",
 };
 
 /**
@@ -73,6 +79,15 @@ const AGENTE_DO_MODULO: Record<string, string | undefined> = {
   studies: ESTUDOS_AGENT_ID,
   calendar: AGENDA_AGENT_ID,
   tasks: TAREFAS_AGENT_ID,
+  finance: FINANCEIRO_AGENT_ID,
+  nutrition: DIETA_AGENT_ID,
+  /**
+   * ⚠️ `body` aponta para TREINOS, e não para Dieta, embora os dois agentes tenham as
+   * ferramentas. A escolha é arbitrária por natureza — o dado é o mesmo e a permissão
+   * exigida (`allow_body`) também. Treinos ficou porque é quem consome peso corporal como
+   * insumo (o peso da sessão, desde a 17-E), então é o destino em que a conversa tende a
+   * continuar. Quem estiver na tela de medidas cai aqui pelo contexto de qualquer forma.
+   */
   body: TREINOS_AGENT_ID,
 };
 
@@ -170,6 +185,22 @@ const PALAVRAS: Record<string, readonly string[]> = {
     "peso corporal", "meu peso", "pesei", "emagreci", "engordei",
     "medida corporal", "medidas corporais", "cintura", "quadril",
     "circunferencia", "gordura corporal", "massa magra",
+  ],
+  /**
+   * ⚠️ "meta" e "metas" NÃO entram aqui: elas existem em Dieta, Treinos e TO-DO, e um empate
+   * em toda pergunta sobre meta jogaria tudo no orquestrador. O mesmo vale para "caloria",
+   * que é do domínio de Dieta mas também aparece em Treinos (gasto calórico do exercício) —
+   * lá ela é uma unidade de medição, aqui é o assunto, e as palavras específicas de comida
+   * resolvem sem ambiguidade.
+   */
+  nutrition: [
+    "dieta", "alimentacao", "comi", "comer", "refeicao", "refeicoes",
+    "almoco", "jantar", "cafe da manha", "lanche",
+    // ⚠️ "gordura" SOZINHA ficaria de fora de propósito: ela casaria dentro de "gordura
+    // corporal", que é de `body`, e toda pergunta sobre composição corporal viraria empate.
+    // "lipidios" e "gorduras" (plural) não têm essa sobreposição.
+    "caloria", "calorias", "proteina", "carboidrato", "lipidios", "gorduras",
+    "macros", "nutricao", "diario alimentar", "receita", "receitas",
   ],
 };
 
@@ -380,6 +411,10 @@ const DESCRICAO_DA_PAGINA = {
   "/tarefas": "a tela de Tarefas (o módulo da Fase 09, que não é o TO-DO)",
   "/rotinas": "a tela de Rotinas",
   "/nutricao/medidas": "a tela de medidas corporais",
+  "/financeiro": "a tela de Finanças",
+  "/faturas": "a tela de faturas de cartão",
+  "/nutricao": "a visão geral de Dieta e Alimentação",
+  "/nutricao/diario": "o diário alimentar",
 } as const satisfies Record<RotaComContexto, string>;
 
 /**

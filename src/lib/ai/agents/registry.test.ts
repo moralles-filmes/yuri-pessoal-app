@@ -63,6 +63,9 @@ describe("registry de agentes", () => {
       // 18-C · Lote 2
       "agenda",
       "tarefas",
+      // 18-C · Lote 3 — com estes dois, os nove módulos têm leitura.
+      "financeiro",
+      "dieta",
     ]);
   });
 
@@ -78,9 +81,13 @@ describe("registry de agentes", () => {
   });
 
   it("agente desconhecido não é resolvido — `agent_id` é texto, não autorização", () => {
-    expect(findAgent("financeiro")).toBeNull();
+    // ⚠️ 18-C: `"financeiro"` deixou de servir de exemplo — ele EXISTE agora. O caso continua
+    // sendo o mesmo (id que não está no registry não vira agente), com um id que de fato não
+    // existe, mais a caixa alta e o vazio, que nunca existirão.
+    expect(findAgent("administrador")).toBeNull();
     expect(findAgent("")).toBeNull();
     expect(findAgent("TREINOS")).toBeNull();
+    expect(findAgent("FINANCEIRO")).toBeNull();
     expect(findAgent(ASSISTENTE_PESSOAL_ID)).not.toBeNull();
   });
 

@@ -20,6 +20,8 @@ import * as studies from "./adapters/studies";
 import * as calendar from "./adapters/calendar";
 import * as tasks from "./adapters/tasks";
 import * as body from "./adapters/body";
+import * as finance from "./adapters/finance";
+import * as nutrition from "./adapters/nutrition";
 
 export type ToolExecutorEntry = {
   readonly schema: ZodType;
@@ -94,5 +96,31 @@ export const TOOL_EXECUTORS: Readonly<Record<string, ToolExecutorEntry>> = {
   "body.get_series": {
     schema: body.getSeriesInput,
     run: body.getSeries as (input: never) => Promise<ToolOutput>,
+  },
+
+  // ───────────────────────────── 18-C · Lote 3 ─────────────────────────────
+  "finance.get_balances": {
+    schema: finance.getBalancesInput,
+    run: finance.getBalances as (input: never) => Promise<ToolOutput>,
+  },
+  "finance.get_spending": {
+    schema: finance.getSpendingInput,
+    run: finance.getSpending as (input: never) => Promise<ToolOutput>,
+  },
+  "finance.get_invoice": {
+    schema: finance.getInvoiceInput,
+    run: finance.getInvoice as (input: never) => Promise<ToolOutput>,
+  },
+  "nutrition.get_day": {
+    schema: nutrition.getDayInput,
+    run: nutrition.getDay as (input: never) => Promise<ToolOutput>,
+  },
+  "nutrition.get_period": {
+    schema: nutrition.getPeriodInput,
+    run: nutrition.getPeriod as (input: never) => Promise<ToolOutput>,
+  },
+  "nutrition.get_goals": {
+    schema: nutrition.getGoalsInput,
+    run: nutrition.getGoals as (input: never) => Promise<ToolOutput>,
   },
 };

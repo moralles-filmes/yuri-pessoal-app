@@ -26,6 +26,8 @@ import { HABITOS_PROMPT, HABITOS_PROMPT_VERSION } from "./prompts/habitos";
 import { ESTUDOS_PROMPT, ESTUDOS_PROMPT_VERSION } from "./prompts/estudos";
 import { AGENDA_PROMPT, AGENDA_PROMPT_VERSION } from "./prompts/agenda";
 import { TAREFAS_PROMPT, TAREFAS_PROMPT_VERSION } from "./prompts/tarefas";
+import { FINANCEIRO_PROMPT, FINANCEIRO_PROMPT_VERSION } from "./prompts/financeiro";
+import { DIETA_PROMPT, DIETA_PROMPT_VERSION } from "./prompts/dieta";
 import { SECURITY_PROMPT, SECURITY_PROMPT_VERSION } from "./security-prompt";
 
 export type AiAgentProfile = {
@@ -50,6 +52,8 @@ export const HABITOS_AGENT_ID = "habitos";
 export const ESTUDOS_AGENT_ID = "estudos";
 export const AGENDA_AGENT_ID = "agenda";
 export const TAREFAS_AGENT_ID = "tarefas";
+export const FINANCEIRO_AGENT_ID = "financeiro";
+export const DIETA_AGENT_ID = "dieta";
 
 export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
   {
@@ -138,6 +142,39 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
     prompt: TAREFAS_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
     allowedTools: ["tasks.get_pending", "tasks.get_routines_today"],
+  },
+  {
+    id: FINANCEIRO_AGENT_ID,
+    label: "Financeiro",
+    description:
+      "Consulta suas finanças: saldo das contas, resumo do mês e faturas de cartão. Só lê — não lança, não paga e não altera nada.",
+    promptVersion: FINANCEIRO_PROMPT_VERSION,
+    prompt: FINANCEIRO_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: [
+      "finance.get_balances",
+      "finance.get_spending",
+      "finance.get_invoice",
+    ],
+  },
+  {
+    id: DIETA_AGENT_ID,
+    label: "Dieta e Alimentação",
+    description:
+      "Consulta seu registro alimentar: consumo do dia, do período e as metas. Só lê — não registra nem altera nada.",
+    promptVersion: DIETA_PROMPT_VERSION,
+    prompt: DIETA_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: [
+      "nutrition.get_day",
+      "nutrition.get_period",
+      "nutrition.get_goals",
+      // ⚠️ As MESMAS duas ferramentas do agente de Treinos, não cópias: `body_*` é módulo
+      // central, e uma segunda ferramenta para o mesmo dado daria duas respostas para o
+      // mesmo fato. Elas exigem `allow_body`, que é separada de `allow_nutrition`.
+      "body.get_latest",
+      "body.get_series",
+    ],
   },
 ];
 

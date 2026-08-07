@@ -113,7 +113,9 @@ describe("POST /api/ia/chat — contexto da página", () => {
    * conferisse "não contém o UUID" deixaria o inglês passar; foi o que aconteceu.
    */
   const RECUSADOS: ReadonlyArray<readonly [string, unknown, string]> = [
-    ["rota fora da lista", { rota: "/financeiro" }, "Página de contexto não reconhecida."],
+    // 18-C: `/financeiro` entrou na allowlist de contexto. `/relatorios` é uma rota REAL do
+    // app que continua fora dela — o caso que importa é "existe no sistema, não é contexto".
+    ["rota fora da lista", { rota: "/relatorios" }, "Página de contexto não reconhecida."],
     [
       "rota de um registro",
       { rota: `/treinos/historico/${UUID}` },

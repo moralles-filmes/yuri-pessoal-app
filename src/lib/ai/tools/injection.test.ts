@@ -128,8 +128,10 @@ describe("injeção vinda de conteúdo de registro", () => {
       "calendar",
       "tasks",
       // `body` é módulo CENTRAL, sem agente próprio: as ferramentas dele ficam na allowlist
-      // dos agentes que já consomem o dado (Treinos; Dieta no Lote 3) e exigem `allow_body`.
+      // dos agentes que já consomem o dado (Treinos e Dieta) e exigem `allow_body`.
       "body",
+      "finance",
+      "nutrition",
     ];
     for (const t of AI_TOOL_REGISTRY) {
       expect(DECLARADOS, t.name).toContain(t.module);

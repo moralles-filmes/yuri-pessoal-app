@@ -88,6 +88,10 @@ export const ROTULO_DA_ROTA_DE_CONTEXTO = {
   "/tarefas": "Tarefas",
   "/rotinas": "Rotinas",
   "/nutricao/medidas": "Medidas corporais",
+  "/financeiro": "Financeiro",
+  "/faturas": "Faturas",
+  "/nutricao": "Dieta e Alimentação",
+  "/nutricao/diario": "Diário alimentar",
 } as const satisfies Record<RotaComContexto, string>;
 
 /**
@@ -116,13 +120,13 @@ export const ROTULO_DA_ROTA_DE_CONTEXTO = {
  * ║ derivado de `toolsForPermission` sobre o registry real: publicar ferramenta de um     ║
  * ║ módulo novo **deixa a suíte vermelha** até este texto citá-lo.                         ║
  * ║                                                                                       ║
- * ║ ⚠️ O teste garante que os módulos COM ferramenta apareçam; ele não sabe verificar a    ║
- * ║ segunda metade da frase. Por isso ela enumera o que NÃO existe em vez de afirmar um   ║
- * ║ conjunto fechado — e some quando o Lote 3 publicar Financeiro e Dieta.                 ║
+ * ║ ⚠️ A frase de "ainda não lê X" SUMIU no Lote 3, como estava previsto: com os nove      ║
+ * ║ módulos publicados, não sobrou nada para enumerar do lado de fora. A parte que o teste ║
+ * ║ não sabe verificar deixou de existir, e o que ficou é só o que ele cobre.              ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 export const AVISO_SEM_ACESSO =
-  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Nesta versão ele lê Treinos, TO-DO, Hábitos, Estudos, Agenda, Tarefas e Rotinas e Medidas corporais — ainda não lê finanças nem dieta — e não cria nem altera nada.";
+  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Ele pode ler Financeiro, Dieta e Alimentação, Treinos, Medidas corporais, TO-DO, Agenda, Tarefas e Rotinas, Hábitos e Estudos — cada um com a sua chave — e não cria nem altera nada.";
 
 /**
  * A versão curta da mesma regra, para a descrição da página. Afirma a REGRA, nunca o estado:
@@ -208,6 +212,13 @@ export const ROTULO_DA_FERRAMENTA: Record<string, string> = {
   "tasks.get_routines_today": "Rotinas · situação de hoje",
   "body.get_latest": "Medidas · últimas medições",
   "body.get_series": "Medidas · histórico de uma medida",
+  // 18-C · Lote 3
+  "finance.get_balances": "Financeiro · saldo das contas",
+  "finance.get_spending": "Financeiro · resumo do mês",
+  "finance.get_invoice": "Financeiro · faturas de cartão",
+  "nutrition.get_day": "Dieta · consumo do dia",
+  "nutrition.get_period": "Dieta · consumo do período",
+  "nutrition.get_goals": "Dieta · metas nutricionais",
 };
 
 /** Ferramenta desconhecida (registry antigo, linha de auditoria de outra versão). */

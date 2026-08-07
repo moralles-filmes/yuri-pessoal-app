@@ -289,7 +289,8 @@ describe("blocoDeContextoDeRoteamento", () => {
   it("rota fora da allowlist não acrescenta nada — nem chave herdada do protótipo", () => {
     const base = blocoDeContextoDeRoteamento(ROUTING_MOTIVOS.PELO_TEXTO);
     for (const rota of [
-      "/financeiro",
+      // 18-C: `/financeiro` entrou na allowlist; `/relatorios` continua fora dela.
+      "/relatorios",
       "/treinos/",
       "constructor",
       "__proto__",
@@ -428,8 +429,11 @@ describe("body: módulo sem agente próprio", () => {
     expect(permissaoDoModulo("body")).toBe("allow_body");
     expect(permissaoDoModulo("training")).toBe("allow_training");
     expect(permissaoDoModulo("calendar")).toBe("allow_calendar");
-    // Módulo sem ferramenta nenhuma não tem permissão derivável.
-    expect(permissaoDoModulo("finance")).toBeNull();
+    expect(permissaoDoModulo("finance")).toBe("allow_finance");
+    expect(permissaoDoModulo("nutrition")).toBe("allow_nutrition");
+    // Módulo sem ferramenta nenhuma não tem permissão derivável — e é isso que faz a função
+    // ser DERIVADA de verdade: ela não sabe nada que o registry não diga.
+    expect(permissaoDoModulo("modulo_que_nao_existe")).toBeNull();
   });
 
   it("pergunta sobre peso corporal chega ao agente de Treinos com allow_body ligada", () => {
