@@ -120,7 +120,17 @@ describe("injeção vinda de conteúdo de registro", () => {
   it("todo módulo do registry é um dos declarados, e cada um tem agente e permissão", () => {
     expect(AI_TOOL_REGISTRY.length).toBeGreaterThan(0);
 
-    const DECLARADOS = ["training", "todo", "habits", "studies"];
+    const DECLARADOS = [
+      "training",
+      "todo",
+      "habits",
+      "studies",
+      "calendar",
+      "tasks",
+      // `body` é módulo CENTRAL, sem agente próprio: as ferramentas dele ficam na allowlist
+      // dos agentes que já consomem o dado (Treinos; Dieta no Lote 3) e exigem `allow_body`.
+      "body",
+    ];
     for (const t of AI_TOOL_REGISTRY) {
       expect(DECLARADOS, t.name).toContain(t.module);
       expect(t.allowedAgents.length, `${t.name} sem agente autorizado`).toBeGreaterThan(0);

@@ -38,7 +38,11 @@ import {
   toolDefinitionsFor,
   UNEXPECTED_TOOL_CALL,
 } from "@/lib/ai/tools/registry";
-import { isToolDescriptorCoherent } from "@/lib/ai/tools/contracts";
+import {
+  isToolDescriptorCoherent,
+  TOOL_PERMISSIONS,
+  type ToolPermission,
+} from "@/lib/ai/tools/contracts";
 
 describe("registry de agentes", () => {
   // Era "a 18-A tem UM agente". A 18-B acrescentou o especialista de Treinos; o que o teste
@@ -56,6 +60,9 @@ describe("registry de agentes", () => {
       "todo",
       "habitos",
       "estudos",
+      // 18-C · Lote 2
+      "agenda",
+      "tarefas",
     ]);
   });
 
@@ -584,15 +591,35 @@ describe("74. o Tool Registry é a única porta", () => {
     for (const t of AI_TOOL_REGISTRY) expect(t.kind).toBe("leitura");
   });
 
+  // 18-C: `toolDefinitionsFor` passou a receber as permissões do usuário. Este objeto liga
+  // TUDO de propósito — os casos abaixo são sobre a allowlist, não sobre a flag.
+  const TUDO: Partial<Record<ToolPermission, boolean>> = Object.fromEntries(
+    TOOL_PERMISSIONS.map((p) => [p, true]),
+  );
+
   it("agente sem allowlist não recebe definição NENHUMA", () => {
-    expect(toolDefinitionsFor([])).toEqual([]);
+    expect(toolDefinitionsFor([], TUDO)).toEqual([]);
     // Nome na allowlist que não existe no registry NÃO vira ferramenta: não há caminho
     // para uma ferramenta nascer de um nome.
-    expect(toolDefinitionsFor(["finance.create_transaction", "qualquer_coisa"])).toEqual([]);
+    expect(
+      toolDefinitionsFor(["finance.create_transaction", "qualquer_coisa"], TUDO),
+    ).toEqual([]);
+  });
+
+  /**
+   * A flag desligada não oferece a ferramenta ao provedor — e o guard continua recusando a
+   * execução de qualquer jeito. São duas barreiras para dois problemas: esta evita queimar
+   * passo do laço; a do guard é a de segurança.
+   */
+  it("permissão desligada não gera definição, mesmo com a ferramenta na allowlist", () => {
+    expect(
+      toolDefinitionsFor(["training.get_volume"], { allow_training: false }),
+    ).toEqual([]);
+    expect(toolDefinitionsFor(["training.get_volume"], {})).toEqual([]);
   });
 
   it("a definição enviada ao provedor leva só nome, descrição e schema de entrada", () => {
-    const definicoes = toolDefinitionsFor(["training.get_volume"]);
+    const definicoes = toolDefinitionsFor(["training.get_volume"], TUDO);
     expect(definicoes).toHaveLength(1);
     expect(Object.keys(definicoes[0]).sort()).toEqual([
       "description",

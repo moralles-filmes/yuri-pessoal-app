@@ -24,6 +24,8 @@ import { TREINOS_PROMPT, TREINOS_PROMPT_VERSION } from "./prompts/treinos";
 import { TODO_PROMPT, TODO_PROMPT_VERSION } from "./prompts/todo";
 import { HABITOS_PROMPT, HABITOS_PROMPT_VERSION } from "./prompts/habitos";
 import { ESTUDOS_PROMPT, ESTUDOS_PROMPT_VERSION } from "./prompts/estudos";
+import { AGENDA_PROMPT, AGENDA_PROMPT_VERSION } from "./prompts/agenda";
+import { TAREFAS_PROMPT, TAREFAS_PROMPT_VERSION } from "./prompts/tarefas";
 import { SECURITY_PROMPT, SECURITY_PROMPT_VERSION } from "./security-prompt";
 
 export type AiAgentProfile = {
@@ -46,6 +48,8 @@ export const TREINOS_AGENT_ID = "treinos";
 export const TODO_AGENT_ID = "todo";
 export const HABITOS_AGENT_ID = "habitos";
 export const ESTUDOS_AGENT_ID = "estudos";
+export const AGENDA_AGENT_ID = "agenda";
+export const TAREFAS_AGENT_ID = "tarefas";
 
 export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
   {
@@ -71,6 +75,18 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
       "training.get_last_workout",
       "training.get_volume",
       "training.get_records",
+      /**
+       * ⚠️ 18-C · Lote 2 — as medidas corporais entram AQUI porque `body_*` é módulo central
+       * sem tela própria, e Treinos já é seu consumidor desde a 17-E (`getLatestWeight`
+       * pré-preenche o peso da sessão). A permissão exigida continua sendo `allow_body`, que
+       * é separada de `allow_training`: ligar Treinos NÃO libera as medidas.
+       *
+       * O agente de Dieta entra nesta mesma dupla no Lote 3 — e ele não duplica a ferramenta,
+       * só acrescenta o próprio id em `allowedAgents`. Duas tabelas de peso corporal nunca; e
+       * duas FERRAMENTAS para o mesmo dado, pelo mesmo motivo, também não.
+       */
+      "body.get_latest",
+      "body.get_series",
     ],
   },
   {
@@ -102,6 +118,26 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
     prompt: ESTUDOS_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
     allowedTools: ["studies.get_courses", "studies.get_study_time"],
+  },
+  {
+    id: AGENDA_AGENT_ID,
+    label: "Agenda",
+    description:
+      "Consulta seus compromissos: os próximos e os de um dia específico. Só lê — não cria, não altera e não cancela nada.",
+    promptVersion: AGENDA_PROMPT_VERSION,
+    prompt: AGENDA_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: ["calendar.get_upcoming", "calendar.get_day"],
+  },
+  {
+    id: TAREFAS_AGENT_ID,
+    label: "Tarefas e Rotinas",
+    description:
+      "Consulta o módulo legado de tarefas e as rotinas com check-in diário — que NÃO é o TO-DO. Só lê.",
+    promptVersion: TAREFAS_PROMPT_VERSION,
+    prompt: TAREFAS_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: ["tasks.get_pending", "tasks.get_routines_today"],
   },
 ];
 

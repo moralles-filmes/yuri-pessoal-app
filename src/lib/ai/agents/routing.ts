@@ -22,10 +22,15 @@ import type { ToolPermission } from "@/lib/ai/tools/contracts";
 // `import type`: some na compilação, então não há ciclo em runtime com `validators/ai`.
 import type { RotaComContexto } from "@/lib/validators/ai";
 import { normalizarTexto } from "@/lib/ai/core/text";
+// Valor, não só tipo: a permissão que cada MÓDULO exige é DERIVADA do registry (ver
+// `permissaoDoModulo`). `tools/registry.ts` é camada pura, então não há ciclo nem I/O.
+import { AI_TOOL_REGISTRY } from "@/lib/ai/tools/registry";
 import {
+  AGENDA_AGENT_ID,
   ASSISTENTE_PESSOAL_ID,
   ESTUDOS_AGENT_ID,
   HABITOS_AGENT_ID,
+  TAREFAS_AGENT_ID,
   TODO_AGENT_ID,
   TREINOS_AGENT_ID,
 } from "./registry";
@@ -33,7 +38,14 @@ import {
 // O id do agente mora em `registry.ts`, junto do perfil. Reexportado aqui por conveniência
 // de quem já importa o roteador — DUAS declarações do mesmo texto virariam divergência no
 // dia em que uma delas mudasse, e o roteador passaria a apontar para um agente inexistente.
-export { TREINOS_AGENT_ID, TODO_AGENT_ID, HABITOS_AGENT_ID, ESTUDOS_AGENT_ID };
+export {
+  TREINOS_AGENT_ID,
+  TODO_AGENT_ID,
+  HABITOS_AGENT_ID,
+  ESTUDOS_AGENT_ID,
+  AGENDA_AGENT_ID,
+  TAREFAS_AGENT_ID,
+};
 
 /** Cada especialista tem EXATAMENTE uma flag de admissão. O orquestrador não tem: ele
  * existe sempre, e sem nenhuma flag ligada simplesmente não recebe ferramenta alguma. */
@@ -42,15 +54,45 @@ export const AGENT_PERMISSION: Record<string, ToolPermission | undefined> = {
   [TODO_AGENT_ID]: "allow_todo",
   [HABITOS_AGENT_ID]: "allow_habits",
   [ESTUDOS_AGENT_ID]: "allow_studies",
+  [AGENDA_AGENT_ID]: "allow_calendar",
+  [TAREFAS_AGENT_ID]: "allow_tasks",
 };
 
-/** Módulo (o mesmo vocabulário de `ToolDescriptor.module`) → agente especializado. */
+/**
+ * Módulo (o mesmo vocabulário de `ToolDescriptor.module`) → agente especializado.
+ *
+ * ⚠️ `body` é o caso que quebra a simetria "1 módulo = 1 agente = 1 flag": ele é MÓDULO
+ * CENTRAL, sem tela e sem agente próprios, e o mesmo dado aparece em Dieta e em Treinos.
+ * O destino é o agente de Treinos (que já consome peso corporal desde a 17-E), mas a
+ * permissão exigida continua sendo `allow_body` — ver `permissaoDoModulo`.
+ */
 const AGENTE_DO_MODULO: Record<string, string | undefined> = {
   training: TREINOS_AGENT_ID,
   todo: TODO_AGENT_ID,
   habits: HABITOS_AGENT_ID,
   studies: ESTUDOS_AGENT_ID,
+  calendar: AGENDA_AGENT_ID,
+  tasks: TAREFAS_AGENT_ID,
+  body: TREINOS_AGENT_ID,
 };
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ A PERMISSÃO É DO MÓDULO PEDIDO, NÃO DO AGENTE QUE ATENDE — e é DERIVADA do registry.  ║
+ * ║                                                                                       ║
+ * ║ Enquanto cada agente servia um módulo só, `AGENT_PERMISSION` bastava. `body` desfaz    ║
+ * ║ isso: quem atende é o agente de Treinos, mas exigir `allow_training` de quem pergunta  ║
+ * ║ o próprio peso recusaria a leitura de alguém que ligou `allow_body` e só ela — e o     ║
+ * ║ inverso deixaria a pergunta cair no orquestrador, que não tem ferramenta nenhuma.      ║
+ * ║                                                                                       ║
+ * ║ Derivar do registry em vez de escrever uma segunda tabela é o que impede as duas de    ║
+ * ║ divergirem: a permissão que o roteador exige é, por construção, a MESMA que o guard    ║
+ * ║ vai exigir da ferramenta depois.                                                       ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export function permissaoDoModulo(modulo: string): ToolPermission | null {
+  return AI_TOOL_REGISTRY.find((t) => t.module === modulo)?.requiredPermission ?? null;
+}
 
 /**
  * Palavras que indicam o módulo. Acentos são removidos na comparação, então escreva sem
@@ -99,6 +141,35 @@ const PALAVRAS: Record<string, readonly string[]> = {
     "estudo", "estudos", "estudar", "estudei", "curso", "cursos",
     "aula", "aulas", "licao", "licoes", "materia", "materias",
     "vocabulario", "idioma", "idiomas",
+  ],
+  calendar: [
+    "agenda", "compromisso", "compromissos", "evento", "eventos",
+    "reuniao", "reunioes", "calendario", "agendado", "marcado",
+    "consulta medica", "aniversario",
+  ],
+  /**
+   * ⚠️ "tarefa" e "tarefas" NÃO ESTÃO AQUI, e a ausência é decisão de produto.
+   *
+   * Elas pertencem ao vocabulário de `todo`, que é o gerenciador PRINCIPAL de execução do
+   * sistema (CLAUDE.md). Repeti-las aqui faria toda pergunta sobre tarefa empatar 1 a 1 e
+   * cair no orquestrador — trocando um roteamento certo na maioria dos casos por nenhum
+   * roteamento em todos. O módulo da Fase 09 é alcançado pelo que ele tem de exclusivo (as
+   * rotinas com check-in), pelo contexto da página `/tarefas`, ou pela escolha na tela; e o
+   * prompt do TO-DO manda lembrar que o outro módulo existe quando a busca não achar.
+   */
+  tasks: [
+    "rotina", "rotinas", "check-in", "checkin diario", "tarefas antigas",
+    "modulo antigo de tarefas",
+  ],
+  /**
+   * ⚠️ "peso" sozinho NÃO entra: ele é ambíguo com a carga do treino ("qual peso eu fiz no
+   * supino"), e um empate em toda pergunta de treino seria pior que não rotear. As entradas
+   * são as formas que só significam corpo.
+   */
+  body: [
+    "peso corporal", "meu peso", "pesei", "emagreci", "engordei",
+    "medida corporal", "medidas corporais", "cintura", "quadril",
+    "circunferencia", "gordura corporal", "massa magra",
   ],
 };
 
@@ -210,13 +281,21 @@ export type RoutingDecision = {
   readonly motivo: RoutingMotivo;
 };
 
-/** Sem flag mapeada, o agente não exige autorização de módulo (é o caso do orquestrador). */
+/**
+ * Sem flag mapeada, o agente não exige autorização de módulo (é o caso do orquestrador).
+ *
+ * `modulo` é opcional porque o caminho da ESCOLHA EXPLÍCITA na tela não tem módulo: ali o
+ * usuário pediu o agente, não o assunto, e a flag que vale é a do agente. Quando o módulo é
+ * conhecido, ele manda — ver `permissaoDoModulo`.
+ */
 function autorizado(
   agentId: string,
   permissions: RoutingInput["permissions"],
+  modulo?: string,
 ): boolean {
-  const flag = AGENT_PERMISSION[agentId];
-  return flag === undefined || permissions[flag] === true;
+  const flag =
+    (modulo ? permissaoDoModulo(modulo) : null) ?? AGENT_PERMISSION[agentId];
+  return flag === undefined || flag === null || permissions[flag] === true;
 }
 
 export function routeAgent(input: RoutingInput): RoutingDecision {
@@ -267,7 +346,7 @@ export function routeAgent(input: RoutingInput): RoutingDecision {
     return { agentId: ASSISTENTE_PESSOAL_ID, motivo: ROUTING_MOTIVOS.SEM_ESPECIALISTA };
   }
 
-  if (!autorizado(agentId, input.permissions)) {
+  if (!autorizado(agentId, input.permissions, modulo)) {
     return { agentId: ASSISTENTE_PESSOAL_ID, motivo: ROUTING_MOTIVOS.SEM_PERMISSAO };
   }
 
@@ -297,6 +376,10 @@ const DESCRICAO_DA_PAGINA = {
   "/todo": "a tela do TO-DO",
   "/habitos": "a tela de Hábitos",
   "/estudos": "a tela de Estudos",
+  "/agenda": "a tela da Agenda",
+  "/tarefas": "a tela de Tarefas (o módulo da Fase 09, que não é o TO-DO)",
+  "/rotinas": "a tela de Rotinas",
+  "/nutricao/medidas": "a tela de medidas corporais",
 } as const satisfies Record<RotaComContexto, string>;
 
 /**

@@ -273,6 +273,163 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     requiresConfirmation: false,
     idempotent: true,
   },
+
+  // ───────────────────────────── 18-C · Lote 2 · Agenda ─────────────────────────────
+  {
+    name: "calendar.get_upcoming",
+    version: "1",
+    module: "calendar",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "Os próximos compromissos da agenda, com recorrências já expandidas pelo sistema. Informe `dias` para o horizonte; o padrão é 14. Datas e horários vêm no fuso de Brasília — use exatamente como vieram.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dias: {
+          type: "integer",
+          minimum: 1,
+          maximum: 180,
+          description: "Horizonte em dias a partir de agora. Padrão: 14.",
+        },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["agenda"],
+    requiredPermission: "allow_calendar",
+    timeoutMs: 10_000,
+    maxRecords: 60,
+    itemLabel: "compromissos",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+  {
+    name: "calendar.get_day",
+    version: "1",
+    module: "calendar",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "Os compromissos de um dia específico (formato AAAA-MM-DD; ausente = hoje), com recorrências já expandidas. Dia sem compromisso é ausência de evento cadastrado — diga isso em vez de afirmar que o dia está livre para outros fins.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        data: {
+          type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          description: "Data no formato AAAA-MM-DD. Ausente: hoje.",
+        },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["agenda"],
+    requiredPermission: "allow_calendar",
+    timeoutMs: 10_000,
+    maxRecords: 60,
+    itemLabel: "compromissos",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+
+  // ─────────────────────── 18-C · Lote 2 · Tarefas e Rotinas ───────────────────────
+  {
+    name: "tasks.get_pending",
+    version: "1",
+    module: "tasks",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "Tarefas abertas do módulo TAREFAS E ROTINAS (Fase 09, rota /tarefas) — que NÃO é o TO-DO: são dados separados. Já vêm ordenadas como na tela (atrasadas primeiro) e com o status de atraso calculado na leitura. Sempre diga de qual dos dois módulos o número veio.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: { type: "object" },
+    allowedAgents: ["tarefas"],
+    requiredPermission: "allow_tasks",
+    timeoutMs: 10_000,
+    maxRecords: 80,
+    itemLabel: "tarefas",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+  {
+    name: "tasks.get_routines_today",
+    version: "1",
+    module: "tasks",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "As rotinas ativas e o check-in de hoje, com sequência e aderência de 7 dias. Rotina que não cai hoje NÃO é pendência, e rotina de hoje ainda não feita não é falha — o dia está em andamento. Taxa nula significa que não houve dia agendado, não 0%.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: { type: "object" },
+    allowedAgents: ["tarefas"],
+    requiredPermission: "allow_tasks",
+    timeoutMs: 10_000,
+    maxRecords: 60,
+    itemLabel: "rotinas",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+
+  // ─────────────────── 18-C · Lote 2 · Medidas corporais (módulo central) ───────────────
+  // ⚠️ SEM AGENTE PRÓPRIO: `body_*` não tem rota nem módulo de tela — o mesmo dado aparece
+  // em Dieta e em Treinos. A allowlist é dos dois agentes (o de Dieta entra no Lote 3), e a
+  // permissão exigida é `allow_body`. O guard confere a permissão da FERRAMENTA, não a do
+  // agente, então um agente de Treinos com `allow_training` ligada e `allow_body` desligada
+  // continua sem alcançar estas duas.
+  {
+    name: "body.get_latest",
+    version: "1",
+    module: "body",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "A medição mais recente de cada tipo de medida corporal configurado (peso, circunferências etc.), com a data. Tipos nunca medidos são listados à parte: ausência de medição NÃO é zero, e não entra em conta nenhuma. Relate o valor sem julgá-lo: não diga qual valor seria o correto e não classifique o resultado.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: { type: "object" },
+    allowedAgents: ["treinos"],
+    requiredPermission: "allow_body",
+    timeoutMs: 8_000,
+    maxRecords: 40,
+    itemLabel: "medidas",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+  {
+    name: "body.get_series",
+    version: "1",
+    module: "body",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "O histórico de uma medida corporal num período (informe parte do nome, ex.: peso, cintura). A variação vem calculada entre a primeira e a última medição REGISTRADAS; com uma medição só ela vem nula — isso é 'sem base', nunca variação zero. Não calcule médias nem tendências por conta própria.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        medida: {
+          type: "string",
+          maxLength: 60,
+          description: "Parte do nome da medida (ex.: peso, cintura, braço).",
+        },
+        dias: {
+          type: "integer",
+          minimum: 2,
+          maximum: 730,
+          description: "Tamanho da janela em dias, terminando hoje. Padrão: 90.",
+        },
+      },
+      required: ["medida"],
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["treinos"],
+    requiredPermission: "allow_body",
+    timeoutMs: 10_000,
+    maxRecords: 120,
+    itemLabel: "medições",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
 ];
 
 export function findTool(name: string): ToolDescriptor | null {
@@ -299,17 +456,35 @@ export function toolsForPermission(
 }
 
 /**
- * As definições que vão para o provedor, dada a allowlist do agente.
+ * As definições que vão para o provedor, dada a allowlist do agente e as permissões do usuário.
  *
  * Repare na ordem: a allowlist do agente é aplicada sobre o registry, e o registry é a fonte.
  * Um nome na allowlist que não exista no registry simplesmente não vira ferramenta — não há
  * caminho para uma ferramenta nascer de um nome.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⚠️ `permissions` ENTROU NA 18-C, E NÃO É REDUNDANTE COM O GUARD.                       ║
+ * ║                                                                                       ║
+ * ║ O guard continua sendo a decisão de SEGURANÇA, na execução — nada aqui o substitui, e  ║
+ * ║ uma ferramenta oferecida por engano continuaria sendo recusada lá. Este filtro resolve ║
+ * ║ outro problema: o que o modelo VÊ.                                                     ║
+ * ║                                                                                       ║
+ * ║ Um agente pode ter na allowlist ferramentas de módulos com permissões DIFERENTES — o   ║
+ * ║ de Treinos tem as três de `training` (`allow_training`) e as duas de `body`            ║
+ * ║ (`allow_body`). Oferecer uma ferramenta que a flag do usuário vai recusar faz o modelo ║
+ * ║ pedi-la, gastar um dos 3 passos por tentativa e receber uma negativa — a cada pergunta.║
+ * ║ Não oferecer o que não pode ser executado é o que mantém o laço útil.                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 export function toolDefinitionsFor(
   allowedToolNames: readonly string[],
+  permissions: Readonly<Partial<Record<ToolPermission, boolean>>>,
 ): AiToolDefinition[] {
   return AI_TOOL_REGISTRY.filter(
-    (t) => allowedToolNames.includes(t.name) && isToolDescriptorCoherent(t),
+    (t) =>
+      allowedToolNames.includes(t.name) &&
+      isToolDescriptorCoherent(t) &&
+      permissions[t.requiredPermission] === true,
   ).map((t) => ({
     name: t.name,
     description: t.description,

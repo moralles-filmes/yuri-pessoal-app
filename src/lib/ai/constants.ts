@@ -84,6 +84,10 @@ export const ROTULO_DA_ROTA_DE_CONTEXTO = {
   "/todo": "TO-DO",
   "/habitos": "Hábitos",
   "/estudos": "Estudos",
+  "/agenda": "Agenda",
+  "/tarefas": "Tarefas",
+  "/rotinas": "Rotinas",
+  "/nutricao/medidas": "Medidas corporais",
 } as const satisfies Record<RotaComContexto, string>;
 
 /**
@@ -118,7 +122,7 @@ export const ROTULO_DA_ROTA_DE_CONTEXTO = {
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 export const AVISO_SEM_ACESSO =
-  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Nesta versão ele lê Treinos, TO-DO, Hábitos e Estudos — ainda não lê finanças, dieta, agenda nem medidas corporais — e não cria nem altera nada.";
+  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Nesta versão ele lê Treinos, TO-DO, Hábitos, Estudos, Agenda, Tarefas e Rotinas e Medidas corporais — ainda não lê finanças nem dieta — e não cria nem altera nada.";
 
 /**
  * A versão curta da mesma regra, para a descrição da página. Afirma a REGRA, nunca o estado:
@@ -197,6 +201,13 @@ export const ROTULO_DA_FERRAMENTA: Record<string, string> = {
   "habits.get_streaks": "Hábitos · sequências e consistência",
   "studies.get_courses": "Estudos · cursos",
   "studies.get_study_time": "Estudos · tempo de estudo",
+  // 18-C · Lote 2
+  "calendar.get_upcoming": "Agenda · próximos compromissos",
+  "calendar.get_day": "Agenda · compromissos do dia",
+  "tasks.get_pending": "Tarefas · pendentes",
+  "tasks.get_routines_today": "Rotinas · situação de hoje",
+  "body.get_latest": "Medidas · últimas medições",
+  "body.get_series": "Medidas · histórico de uma medida",
 };
 
 /** Ferramenta desconhecida (registry antigo, linha de auditoria de outra versão). */

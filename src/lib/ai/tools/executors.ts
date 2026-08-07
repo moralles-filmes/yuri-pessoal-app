@@ -17,6 +17,9 @@ import * as training from "./adapters/training";
 import * as todo from "./adapters/todo";
 import * as habits from "./adapters/habits";
 import * as studies from "./adapters/studies";
+import * as calendar from "./adapters/calendar";
+import * as tasks from "./adapters/tasks";
+import * as body from "./adapters/body";
 
 export type ToolExecutorEntry = {
   readonly schema: ZodType;
@@ -65,5 +68,31 @@ export const TOOL_EXECUTORS: Readonly<Record<string, ToolExecutorEntry>> = {
   "studies.get_study_time": {
     schema: studies.getStudyTimeInput,
     run: studies.getStudyTime as (input: never) => Promise<ToolOutput>,
+  },
+
+  // ───────────────────────────── 18-C · Lote 2 ─────────────────────────────
+  "calendar.get_upcoming": {
+    schema: calendar.getUpcomingInput,
+    run: calendar.getUpcoming as (input: never) => Promise<ToolOutput>,
+  },
+  "calendar.get_day": {
+    schema: calendar.getDayInput,
+    run: calendar.getDay as (input: never) => Promise<ToolOutput>,
+  },
+  "tasks.get_pending": {
+    schema: tasks.getPendingInput,
+    run: tasks.getPending as (input: never) => Promise<ToolOutput>,
+  },
+  "tasks.get_routines_today": {
+    schema: tasks.getRoutinesTodayInput,
+    run: tasks.getRoutinesToday as (input: never) => Promise<ToolOutput>,
+  },
+  "body.get_latest": {
+    schema: body.getLatestInput,
+    run: body.getLatest as (input: never) => Promise<ToolOutput>,
+  },
+  "body.get_series": {
+    schema: body.getSeriesInput,
+    run: body.getSeries as (input: never) => Promise<ToolOutput>,
   },
 };

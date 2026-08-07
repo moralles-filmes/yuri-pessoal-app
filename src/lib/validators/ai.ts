@@ -78,6 +78,13 @@ export const ROTAS_COM_CONTEXTO = [
   "/todo",
   "/habitos",
   "/estudos",
+  // 18-C · Lote 2
+  "/agenda",
+  "/tarefas",
+  "/rotinas",
+  // ⚠️ `/nutricao/medidas` mapeia para o módulo `body`, não para `nutrition`: a tela mora
+  // dentro de Dieta, mas o dado é do módulo central `body_*` e a permissão é `allow_body`.
+  "/nutricao/medidas",
 ] as const;
 
 export type RotaComContexto = (typeof ROTAS_COM_CONTEXTO)[number];
@@ -88,6 +95,9 @@ export const MODULOS_COM_CONTEXTO = [
   "todo",
   "habits",
   "studies",
+  "calendar",
+  "tasks",
+  "body",
 ] as const;
 
 export type ModuloComContexto = (typeof MODULOS_COM_CONTEXTO)[number];
@@ -103,6 +113,10 @@ const MODULO_DA_ROTA = {
   "/todo": "todo",
   "/habitos": "habits",
   "/estudos": "studies",
+  "/agenda": "calendar",
+  "/tarefas": "tasks",
+  "/rotinas": "tasks",
+  "/nutricao/medidas": "body",
 } as const satisfies Record<RotaComContexto, ModuloComContexto>;
 
 /** O contexto como o runner o consome. Montado NO SERVIDOR, a partir da rota validada. */

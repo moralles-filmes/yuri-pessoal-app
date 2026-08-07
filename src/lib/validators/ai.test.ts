@@ -260,9 +260,28 @@ describe("pageContext (18-B) — o contexto da página", () => {
     expect(contextoDaRota("/habitos")).toEqual({ rota: "/habitos", modulo: "habits" });
     expect(contextoDaRota("/estudos")).toEqual({ rota: "/estudos", modulo: "studies" });
 
+    // 18-C · Lote 2. `/rotinas` e `/tarefas` caem no MESMO módulo (são duas telas da Fase
+    // 09), e `/nutricao/medidas` cai em `body` — a tela mora dentro de Dieta, mas o dado é
+    // do módulo central e a permissão é `allow_body`.
+    expect(contextoDaRota("/agenda")).toEqual({ rota: "/agenda", modulo: "calendar" });
+    expect(contextoDaRota("/tarefas")).toEqual({ rota: "/tarefas", modulo: "tasks" });
+    expect(contextoDaRota("/rotinas")).toEqual({ rota: "/rotinas", modulo: "tasks" });
+    expect(contextoDaRota("/nutricao/medidas")).toEqual({
+      rota: "/nutricao/medidas",
+      modulo: "body",
+    });
+
     // Se uma rota entrar na lista sem par aqui, é este número que acusa.
-    expect(ROTAS_COM_CONTEXTO).toHaveLength(6);
-    expect(MODULOS_COM_CONTEXTO).toEqual(["training", "todo", "habits", "studies"]);
+    expect(ROTAS_COM_CONTEXTO).toHaveLength(10);
+    expect(MODULOS_COM_CONTEXTO).toEqual([
+      "training",
+      "todo",
+      "habits",
+      "studies",
+      "calendar",
+      "tasks",
+      "body",
+    ]);
   });
 
   /**
