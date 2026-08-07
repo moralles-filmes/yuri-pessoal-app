@@ -15,9 +15,9 @@ import {
   getOrCreateStatementForCompetencia,
   resolveOrCreateStatement,
 } from "@/lib/finance/statements";
-import { applySplit, toPartesDivisao } from "@/lib/finance/split-persist";
+import { applySplit } from "@/lib/finance/split-persist";
+import { reapplySplit } from "@/lib/finance/split-reapply";
 import {
-  dividirDespesa,
   sharedExpensesToFormParts,
   type SharedExpenseLike,
   type SplitFormPart,
@@ -243,141 +243,30 @@ export async function updateTransaction(
 
   if (error) return dbError("Não foi possível atualizar o lançamento.");
 
-  // Divisão na edição (Fase 05): só em despesa NÃO parcelada (parcelados são geridos em
-  // /parcelamentos). Re-aplica a divisão APENAS quando ela muda — assim editar só descrição/
-  // categoria/data de um gasto já dividido não mexe nos recebíveis. A "minha parte" é sempre
-  // derivada (valor_pessoal). Reusa applySplit (mesma matemática da criação).
+  // Divisão na edição (Fase 05): só em despesa NÃO parcelada — a divisão de compra parcelada
+  // é editada em /parcelamentos, por `updateInstallmentSplit`, que chama o MESMO núcleo.
+  // Re-aplica apenas quando a divisão muda, então editar só descrição/categoria/data de um
+  // gasto já dividido não encosta nos recebíveis. A "minha parte" é sempre derivada.
   if (!existing.parcelado) {
-    const splitErr = await reapplySplitOnEdit(ctx, {
+    const split = splitSchema.safeParse(input);
+    if (!split.success) return invalid(split.error.flatten().fieldErrors);
+
+    const res = await reapplySplit(ctx, {
       transactionId: id,
-      type: d.type,
-      amountReais: d.amount,
-      statementId,
-      cardId,
-      input,
-      existingClassificacao: existing.classificacao as Classificacao,
-      existingAmountReais: existing.amount,
+      totalCentavos: reaisParaCentavos(d.amount),
+      totalCentavosAtual: reaisParaCentavos(existing.amount),
+      classificacaoAtual: existing.classificacao as Classificacao,
+      // Só despesa é divisível; receita/transferência/ajuste voltam a pessoal.
+      classificacaoNova:
+        d.type === "despesa" ? split.data.classificacao : "pessoal",
+      parts: d.type === "despesa" ? split.data.parts : [],
+      mode: { kind: "avista", statementId, cardId },
     });
-    if (splitErr) return splitErr;
+    if (!res.ok) return dbError(res.error);
   }
 
   revalidateTransactions();
   return { ok: true, data: { id } };
-}
-
-/** True se dois mapas pessoa→centavos têm exatamente as mesmas chaves e valores. */
-function mesmaDivisaoCentavos(
-  a: Map<string, number>,
-  b: Map<string, number>,
-): boolean {
-  if (a.size !== b.size) return false;
-  for (const [k, v] of a) if (b.get(k) !== v) return false;
-  return true;
-}
-
-/**
- * Substitui a divisão de uma despesa na edição quando ela realmente mudou (classificação, total
- * ou partes). Bloqueia se já houver recebível cobrado/pago (protege o histórico). Devolve um
- * ActionResult de erro quando deve abortar, ou null em sucesso/no-op.
- */
-async function reapplySplitOnEdit(
-  ctx: AuthContext,
-  args: {
-    transactionId: string;
-    type: string;
-    amountReais: number;
-    statementId: string | null;
-    cardId: string | null;
-    input: unknown;
-    existingClassificacao: Classificacao;
-    existingAmountReais: number;
-  },
-): Promise<ActionResult<{ id: string }> | null> {
-  const split = splitSchema.safeParse(args.input);
-  if (!split.success) return invalid(split.error.flatten().fieldErrors);
-
-  const wantShared =
-    args.type === "despesa" && split.data.classificacao !== "pessoal";
-  const newClassificacao: Classificacao = wantShared
-    ? split.data.classificacao
-    : "pessoal";
-
-  const { data: shares } = await ctx.supabase
-    .from("shared_expenses")
-    .select("person_id, valor")
-    .eq("transaction_id", args.transactionId);
-  const hadShared = (shares ?? []).length > 0;
-  if (!wantShared && !hadShared) return null; // pessoal → pessoal: nada a fazer
-
-  const totalCentavos = reaisParaCentavos(args.amountReais);
-  const incomingMap = new Map<string, number>();
-  if (wantShared) {
-    try {
-      const resultado = dividirDespesa(
-        totalCentavos,
-        toPartesDivisao(split.data.parts),
-      );
-      for (const t of resultado.partesTerceiros) {
-        incomingMap.set(t.personId, t.valorCentavos);
-      }
-    } catch (e) {
-      return dbError((e as Error).message);
-    }
-  }
-  const existingMap = new Map(
-    (shares ?? []).map((s) => [s.person_id, reaisParaCentavos(s.valor)]),
-  );
-
-  const unchanged =
-    newClassificacao === args.existingClassificacao &&
-    reaisParaCentavos(args.existingAmountReais) === totalCentavos &&
-    mesmaDivisaoCentavos(existingMap, incomingMap);
-  if (unchanged) return null;
-
-  // A divisão vai mudar: protege recebíveis já cobrados/pagos.
-  const { data: recs } = await ctx.supabase
-    .from("receivables")
-    .select("status")
-    .eq("transaction_id", args.transactionId);
-  if ((recs ?? []).some((r) => r.status === "cobrado" || r.status === "pago")) {
-    return dbError(
-      "Esta divisão já tem recebíveis cobrados ou pagos. Acerte-os em A Receber antes de alterar a divisão.",
-    );
-  }
-
-  // Limpa a divisão anterior (receivables primeiro pela FK) e re-aplica.
-  await ctx.supabase
-    .from("receivables")
-    .delete()
-    .eq("transaction_id", args.transactionId);
-  await ctx.supabase
-    .from("shared_expenses")
-    .delete()
-    .eq("transaction_id", args.transactionId);
-
-  if (wantShared) {
-    const res = await applySplit(ctx, {
-      transactionId: args.transactionId,
-      totalCentavos,
-      statementId: args.statementId,
-      cardId: args.cardId,
-      parts: split.data.parts,
-    });
-    if (!res.ok) return dbError(res.error);
-    await ctx.supabase
-      .from("transactions")
-      .update({
-        classificacao: newClassificacao,
-        valor_pessoal: centavosParaReais(res.minhaParteCentavos),
-      })
-      .eq("id", args.transactionId);
-  } else {
-    await ctx.supabase
-      .from("transactions")
-      .update({ classificacao: "pessoal", valor_pessoal: null })
-      .eq("id", args.transactionId);
-  }
-  return null;
 }
 
 /**

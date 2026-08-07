@@ -11,32 +11,15 @@ import type { AuthContext } from "@/lib/actions/helpers";
 import {
   distribuirTerceirosPorParcela,
   dividirDespesa,
-  type ParteDivisao,
+  toPartesDivisao,
   type ResultadoDivisao,
 } from "@/lib/finance/split";
-import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
+import { centavosParaReais } from "@/lib/format";
 import type { SplitPartInput } from "@/lib/validators/split";
 
 export type SplitPersistResult =
   | { ok: true; minhaParteCentavos: number }
   | { ok: false; error: string };
-
-/** Converte as partes do client (reais/%) em ParteDivisao (centavos), na MESMA ordem. */
-export function toPartesDivisao(parts: SplitPartInput[]): ParteDivisao[] {
-  return parts.map((p) =>
-    p.tipo === "valor"
-      ? {
-          personId: p.person_id,
-          tipo: "valor",
-          valorCentavos: reaisParaCentavos(p.valor ?? 0),
-        }
-      : {
-          personId: p.person_id,
-          tipo: "percentual",
-          percentual: p.percentual ?? 0,
-        },
-  );
-}
 
 /** Insere as `shared_expenses` (1 por pessoa) e devolve person_id → shared_expense_id. */
 async function inserirSharedExpenses(

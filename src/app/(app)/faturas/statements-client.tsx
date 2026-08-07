@@ -37,6 +37,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import {
   CategoryPill,
+  ClassificacaoBadge,
   InstallmentBadge,
   StatementStatusBadge,
 } from "@/components/financeiro/badges";
@@ -45,6 +46,7 @@ import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
 import {
   STATEMENT_STATUSES,
   STATEMENT_STATUS_LABELS,
+  type Classificacao,
 } from "@/lib/finance/constants";
 import {
   markStatementPaid,
@@ -91,6 +93,82 @@ function monthYearLabel(competencia: string): string {
 function nextDayISO(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return toDateInputValue(new Date(y, m - 1, d + 1));
+}
+
+/** Quem paga uma parte de um item da fatura. */
+type ParteDoItem = { personId: string; nome: string; valor: number };
+
+/**
+ * "Compartilhada · meu X · Fulano Y" de UM item da fatura. O rodapé da fatura já dizia quem
+ * paga o total; isto responde a pergunta que faltava — de quem é ESTA compra.
+ *
+ * A classificação é LIDA da transação (da compra-pai, no caso da parcela), nunca deduzida do
+ * valor: minha parte zero não prova que a compra é toda de terceiro, e resto de centavo numa
+ * compra de terceiro não a torna compartilhada.
+ *
+ * Sendo 100% de terceiro, o "meu R$ 0,00" é omitido — a badge já disse.
+ */
+function PartesDoItem({
+  total,
+  partes,
+  classificacao,
+}: {
+  total: number;
+  partes: ParteDoItem[];
+  classificacao: Classificacao | null;
+}) {
+  const isShared = classificacao != null && classificacao !== "pessoal";
+  if (partes.length === 0 && !isShared) return null;
+  const terceiros = partes.reduce((acc, p) => acc + p.valor, 0);
+  const meu = total - terceiros;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+      {isShared && <ClassificacaoBadge value={classificacao} />}
+      {meu !== 0 && partes.length > 0 && (
+        <span>
+          meu{" "}
+          <span className="font-medium tabular-nums text-foreground">
+            {formatCurrency(meu)}
+          </span>
+        </span>
+      )}
+      {partes.map((p) => (
+        <span key={p.personId} className="min-w-0">
+          <span className="truncate">{p.nome}</span>{" "}
+          <span className="font-medium tabular-nums text-foreground">
+            {formatCurrency(p.valor)}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Agrupa recebíveis por uma chave do item (transação ou parcela), somando por pessoa. */
+function partesPorItem(
+  receivables: ReceivableWithPerson[],
+  chave: (r: ReceivableWithPerson) => string | null,
+): Map<string, ParteDoItem[]> {
+  const porItem = new Map<string, Map<string, ParteDoItem>>();
+  for (const r of receivables) {
+    const k = chave(r);
+    if (!k) continue;
+    const pessoas = porItem.get(k) ?? new Map<string, ParteDoItem>();
+    const atual = pessoas.get(r.person_id) ?? {
+      personId: r.person_id,
+      nome: r.person?.nome ?? "Pessoa",
+      valor: 0,
+    };
+    atual.valor += r.valor;
+    pessoas.set(r.person_id, atual);
+    porItem.set(k, pessoas);
+  }
+  return new Map(
+    [...porItem.entries()].map(([k, pessoas]) => [
+      k,
+      [...pessoas.values()].sort((a, b) => b.valor - a.valor),
+    ]),
+  );
 }
 
 export function StatementsClient({
@@ -183,6 +261,20 @@ export function StatementsClient({
     }
     return map;
   }, [receivables]);
+
+  // ...e agrupados por ITEM, para dizer de quem é cada compra da fatura. Uma parcela tem
+  // `installment_id`; um lançamento à vista, só `transaction_id` — por isso duas chaves.
+  const partesPorParcela = React.useMemo(
+    () => partesPorItem(receivables, (r) => r.installment_id),
+    [receivables],
+  );
+  const partesPorTransacao = React.useMemo(
+    () =>
+      partesPorItem(receivables, (r) =>
+        r.installment_id ? null : r.transaction_id,
+      ),
+    [receivables],
+  );
 
   // Monta a lista de faturas a exibir: faturas reais + ciclos atual/próximo (virtuais
   // quando ainda não têm lançamentos), depois aplica filtros de mês e status.
@@ -479,6 +571,11 @@ export function StatementsClient({
                                 />
                               )}
                             </div>
+                            <PartesDoItem
+                              total={t.amount}
+                              partes={partesPorTransacao.get(t.id) ?? []}
+                              classificacao={t.classificacao}
+                            />
                           </div>
                           <div className="flex items-center gap-2">
                             <span
@@ -522,8 +619,13 @@ export function StatementsClient({
                                 />
                               </div>
                             )}
+                            <PartesDoItem
+                              total={it.valor}
+                              partes={partesPorParcela.get(it.id) ?? []}
+                              classificacao={it.parent?.classificacao ?? null}
+                            />
                           </div>
-                          <span className="text-sm font-medium tabular-nums">
+                          <span className="shrink-0 text-sm font-medium tabular-nums">
                             {formatCurrency(it.valor)}
                           </span>
                         </div>

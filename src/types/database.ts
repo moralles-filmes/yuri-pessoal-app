@@ -132,6 +132,16 @@ export type RecurringTransactionRow = Omit<
   generated_status: GeneratedStatus;
 };
 
+/**
+ * Parte de uma pessoa na divisão, com o nome resolvido — é o que permite a tela dizer DE QUEM
+ * é o gasto, e não apenas "meu R$ X". `valor` é a parte já resolvida (reais).
+ */
+export type SplitShareWithPerson = {
+  person_id: string;
+  valor: number;
+  person: Pick<PersonRow, "id" | "nome"> | null;
+};
+
 /** Lançamento já com as relações resolvidas (para listas e detalhes). */
 export type TransactionWithRelations = TransactionRow & {
   account: Pick<AccountRow, "id" | "name" | "color"> | null;
@@ -141,6 +151,11 @@ export type TransactionWithRelations = TransactionRow & {
   card: Pick<CreditCardRow, "id" | "nome" | "cor" | "bandeira"> | null;
   // Fatura do lançamento de cartão — permite derivar pago/em-aberto na leitura.
   statement: Pick<CardStatementRow, "id" | "pago_em"> | null;
+  /**
+   * Divisão com terceiros. OPCIONAL porque só as leituras de tela a pedem: as varreduras de
+   * relatório/dashboard agregam por valor e não carregam nomes de pessoas à toa.
+   */
+  shared?: SplitShareWithPerson[];
 };
 
 /* ───────────────────────────── Fase 04 — Parcelamentos ───────────────────────────── */
@@ -171,12 +186,24 @@ export type InstallmentPurchaseWithRelations = TransactionRow & {
   > | null;
   category: Pick<CategoryRow, "id" | "name" | "color" | "icon"> | null;
   installments: InstallmentWithStatement[];
+  /** Parte TOTAL de cada pessoa na compra (com o nome). */
+  shared?: SplitShareWithPerson[];
+  /** Parte de cada pessoa em CADA parcela — o que a lista expandida mostra linha a linha. */
+  receivables?: {
+    id: string;
+    installment_id: string | null;
+    person_id: string;
+    valor: number;
+    status: ReceivableStatus;
+  }[];
 };
 
 /** Item de parcela exibido dentro de uma fatura (tela /faturas). */
 export type StatementInstallmentItem = TransactionInstallmentRow & {
   parent:
     | (Pick<TransactionRow, "id" | "description"> & {
+        /** Da compra-pai: a parcela herda o rateio, não o declara. */
+        classificacao: Classificacao | null;
         category: Pick<CategoryRow, "id" | "name" | "color"> | null;
       })
     | null;

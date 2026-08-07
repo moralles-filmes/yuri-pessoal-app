@@ -19,11 +19,45 @@
 
 import { dividirParcelas } from "@/lib/finance/installments";
 import type { SplitType } from "@/lib/finance/constants";
+import { reaisParaCentavos } from "@/lib/format";
 
 /** Parte de UM terceiro: informada por valor (centavos) ou por percentual (0..100) do total. */
 export type ParteDivisao =
   | { personId: string; tipo: "valor"; valorCentavos: number }
   | { personId: string; tipo: "percentual"; percentual: number };
+
+/**
+ * A parte como ela viaja FORA do núcleo: valor em REAIS. É a forma que o formulário produz
+ * (`SplitPartInput`) e a mesma que a revisão da importação guarda em `import_rows.split_parts`
+ * (`ImportSplitPart`) — por isso o tipo é estrutural, e não o de um dos dois.
+ */
+export type ParteEmReais = {
+  person_id: string;
+  tipo: SplitType;
+  valor?: number | null;
+  percentual?: number | null;
+};
+
+/**
+ * Converte as partes em reais/% para `ParteDivisao` (centavos), na MESMA ordem. Mora aqui, no
+ * núcleo puro, porque a tela de revisão da importação PREVÊ a divisão e o servidor a GRAVA:
+ * duas conversões diferentes fariam o número previsto discordar do número lançado.
+ */
+export function toPartesDivisao(parts: ParteEmReais[]): ParteDivisao[] {
+  return parts.map((p) =>
+    p.tipo === "valor"
+      ? {
+          personId: p.person_id,
+          tipo: "valor",
+          valorCentavos: reaisParaCentavos(p.valor ?? 0),
+        }
+      : {
+          personId: p.person_id,
+          tipo: "percentual",
+          percentual: p.percentual ?? 0,
+        },
+  );
+}
 
 /** Resultado da divisão: minha parte (resto) + a parte resolvida de cada terceiro. */
 export type ResultadoDivisao = {
@@ -142,6 +176,73 @@ export function distribuirTerceirosPorParcela(
   }
 
   return m;
+}
+
+/* ─────────────────────── Reaplicação da divisão numa EDIÇÃO ─────────────────────── */
+
+/**
+ * O que fazer com a divisão gravada quando o usuário salva uma edição. Único ponto de decisão
+ * — o mesmo para gasto à vista e para compra parcelada, que só diferem em COMO distribuir.
+ *
+ *  - `nada`      — a divisão não mudou; não encoste nos recebíveis. É o que faz editar só a
+ *                  descrição/categoria de um gasto dividido não reescrever nada.
+ *  - `bloqueado` — a divisão mudaria, mas já existe recebível cobrado/pago. Recusa: o
+ *                  histórico de cobrança é do usuário, não nosso para reescrever.
+ *  - `limpar`    — a despesa virou pessoal; apaga divisão e recebíveis.
+ *  - `reaplicar` — apaga e regrava com os novos valores.
+ */
+export type DecisaoReaplicacao =
+  | { acao: "nada" }
+  | { acao: "bloqueado"; motivo: string }
+  | { acao: "limpar" }
+  | { acao: "reaplicar" };
+
+export const MOTIVO_RECEBIVEL_FECHADO =
+  "Esta divisão já tem recebíveis cobrados ou pagos. Acerte-os em A Receber antes de alterar a divisão.";
+
+/** True se dois mapas pessoa→centavos têm exatamente as mesmas chaves e valores. */
+export function mesmaDivisaoCentavos(
+  a: Map<string, number>,
+  b: Map<string, number>,
+): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) if (b.get(k) !== v) return false;
+  return true;
+}
+
+/**
+ * Decide o destino da divisão numa edição. PURA — recebe os dois retratos (o gravado e o que
+ * está sendo salvo) já resolvidos em centavos e devolve a ação. Note que `divisaoNova` vem
+ * VAZIA quando a despesa virou pessoal, e que a comparação inclui o TOTAL: mudar só o valor
+ * da compra muda a parte de quem foi informado por percentual, ainda que as pessoas sejam as
+ * mesmas.
+ */
+export function decidirReaplicacao(args: {
+  classificacaoAtual: string;
+  classificacaoNova: string;
+  totalCentavosAtual: number;
+  totalCentavosNovo: number;
+  divisaoAtual: Map<string, number>;
+  divisaoNova: Map<string, number>;
+  temRecebivelFechado: boolean;
+}): DecisaoReaplicacao {
+  const querDividir = args.divisaoNova.size > 0;
+  const tinhaDivisao = args.divisaoAtual.size > 0;
+
+  // Pessoal → pessoal: não há nada gravado nem a gravar.
+  if (!querDividir && !tinhaDivisao) return { acao: "nada" };
+
+  const igual =
+    args.classificacaoNova === args.classificacaoAtual &&
+    args.totalCentavosNovo === args.totalCentavosAtual &&
+    mesmaDivisaoCentavos(args.divisaoAtual, args.divisaoNova);
+  if (igual) return { acao: "nada" };
+
+  if (args.temRecebivelFechado) {
+    return { acao: "bloqueado", motivo: MOTIVO_RECEBIVEL_FECHADO };
+  }
+
+  return querDividir ? { acao: "reaplicar" } : { acao: "limpar" };
 }
 
 /** Parte da divisão na forma que o formulário consome (strings pt-BR/numérica). */

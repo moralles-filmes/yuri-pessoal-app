@@ -4,6 +4,7 @@ import {
   getCategories,
   getCreditCards,
   getInstallmentPurchases,
+  getPeopleForSelect,
 } from "@/lib/finance/queries";
 import { hojeISO } from "@/lib/format";
 import { InstallmentsClient } from "./installments-client";
@@ -24,10 +25,11 @@ export default async function ParcelamentosPage({
   const cardId = str(sp.card);
   const categoryId = str(sp.category);
 
-  const [purchases, cards, categories] = await Promise.all([
+  const [purchases, cards, categories, people] = await Promise.all([
     getInstallmentPurchases({ cardId, categoryId }),
     getCreditCards(),
     getCategories(),
+    getPeopleForSelect(),
   ]);
 
   const today = hojeISO();
@@ -42,6 +44,7 @@ export default async function ParcelamentosPage({
         purchases={purchases}
         cards={cards.map((c) => ({ id: c.id, name: c.nome }))}
         categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+        people={people}
         today={today}
         selectedCardId={cardId ?? null}
         selectedCategoryId={categoryId ?? null}

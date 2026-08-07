@@ -294,6 +294,8 @@ function TransactionCard({
                 color={t.category.color}
               />
             )}
+            {/* Quem paga o quê. Até agora a lista dizia só "meu R$ X" — quem era o
+                terceiro só aparecia abrindo o formulário. */}
             {t.classificacao !== "pessoal" &&
               t.valor_pessoal != null && (
                 <span>
@@ -303,6 +305,14 @@ function TransactionCard({
                   </span>
                 </span>
               )}
+            {(t.shared ?? []).map((s) => (
+              <span key={s.person_id} className="min-w-0">
+                <span className="truncate">{s.person?.nome ?? "Pessoa"}</span>{" "}
+                <span className="font-medium text-foreground">
+                  {formatCurrency(s.valor)}
+                </span>
+              </span>
+            ))}
           </>
         )}
       </div>

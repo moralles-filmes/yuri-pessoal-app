@@ -46,7 +46,7 @@ import { ImportBatchStatusBadge, ImportRowStatusBadge } from "./import-badges";
 import { ImportRowSplitDialog } from "./import-split-dialog";
 import { InstallmentBadge } from "@/components/financeiro/badges";
 import { CLASSIFICACAO_LABELS } from "@/lib/finance/constants";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { centavosParaReais, formatCurrency, formatDate } from "@/lib/format";
 import {
   IMPORT_FORMAT_LABELS,
   IMPORT_ORIGEM_LABELS,
@@ -55,6 +55,11 @@ import {
   type MappingField,
 } from "@/lib/import/constants";
 import { totaisPorStatus } from "@/lib/import/totals";
+import {
+  divisaoDaLinha,
+  divisaoPorStatus,
+  type DivisaoDoLote,
+} from "@/lib/import/split-totals";
 import {
   coberturaDaFatura,
   type CoberturaFatura,
@@ -109,6 +114,9 @@ export function ImportReview({
   // está na fatura, e o total acima — que soma as importadas — não a conta. Mostrar o pendente
   // ao lado é o que impede o usuário de achar que a fatura já fechou.
   const pendentes = isImportado ? totaisPorStatus(rows, "para_importar") : null;
+  // Quanto do total acima é meu e quanto é de cada pessoa. Mesmo status do total: a quebra
+  // sempre descreve o número que está do lado dela, nunca outro conjunto de linhas.
+  const divisao = divisaoPorStatus(rows, isDone ? "importada" : "para_importar");
   const temReceitas = totais.receitas > 0;
   // Em fatura de cartão, "receita" significa estorno/crédito (reduz a fatura).
   const creditoLabel = batch.origem === "cartao" ? "Estornos" : "Receitas";
@@ -181,6 +189,8 @@ export function ImportReview({
               </span>
             </div>
           )}
+
+          <DivisaoDoLoteLinha divisao={divisao} people={people} />
 
           {pendentes && pendentes.count > 0 && (
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-lg bg-amber-500/10 px-3 py-2 text-xs ring-1 ring-amber-500/20">
@@ -300,6 +310,106 @@ export function ImportReview({
         </div>
       </Card>
     </div>
+  );
+}
+
+/** Nome da pessoa pelo id; sem cadastro casado, um rótulo neutro em vez do uuid cru. */
+function nomeDaPessoa(people: PersonOption[], personId: string): string {
+  return people.find((p) => p.id === personId)?.nome ?? "Pessoa";
+}
+
+/**
+ * Quebra do total do lote em "meu × cada pessoa". Só aparece havendo terceiro — num lote
+ * inteiramente pessoal a linha repetiria o total logo acima dela.
+ */
+function DivisaoDoLoteLinha({
+  divisao,
+  people,
+}: {
+  divisao: DivisaoDoLote;
+  people: PersonOption[];
+}) {
+  if (!divisao.temTerceiros && !divisao.parcial) return null;
+  return (
+    <div className="space-y-1">
+      {divisao.temTerceiros && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+          <span className="min-w-0">
+            meu{" "}
+            <span className="font-medium tabular-nums text-foreground">
+              {formatCurrency(divisao.meu)}
+            </span>
+          </span>
+          {divisao.porPessoa.map((p) => (
+            <span key={p.personId} className="min-w-0">
+              <span className="truncate">{nomeDaPessoa(people, p.personId)}</span>{" "}
+              <span className="font-medium tabular-nums text-foreground">
+                {formatCurrency(p.valor)}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+      {divisao.parcial && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          {divisao.naoResolvidas} linha(s) com divisão que não fecha com o próprio
+          valor ficaram <strong>fora desta conta</strong>. Abra a divisão da linha
+          para corrigir.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Divisão de UMA linha, ao lado da badge de classificação. Fica na coluna Descrição, e não na
+ * de Valor: aquela é estreita e alinhada à direita, e nome de pessoa ali empurra a tabela na
+ * horizontal (regra 3 de responsividade). Em "de terceiro" o "meu R$ 0,00" é omitido — a badge
+ * já disse, e o zero só ocuparia espaço.
+ */
+function DivisaoDaLinhaResumo({
+  row,
+  people,
+}: {
+  row: ImportRowWithRelations;
+  people: PersonOption[];
+}) {
+  const d = divisaoDaLinha({
+    status: row.status,
+    valor: row.valor,
+    tipo: row.tipo,
+    classificacao: row.classificacao,
+    split_parts: row.split_parts,
+  });
+
+  if (!d.ok) {
+    return (
+      <span className="text-[11px] text-amber-700 dark:text-amber-400">
+        Divisão não fecha com o valor da linha.
+      </span>
+    );
+  }
+  if (d.partes.length === 0) return null;
+
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+      {d.meuCentavos !== 0 && (
+        <span className="min-w-0">
+          meu{" "}
+          <span className="font-medium tabular-nums text-foreground">
+            {formatCurrency(centavosParaReais(d.meuCentavos))}
+          </span>
+        </span>
+      )}
+      {d.partes.map((p) => (
+        <span key={p.personId} className="min-w-0">
+          <span className="truncate">{nomeDaPessoa(people, p.personId)}</span>{" "}
+          <span className="font-medium tabular-nums text-foreground">
+            {formatCurrency(centavosParaReais(p.valorCentavos))}
+          </span>
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -925,8 +1035,12 @@ function RowLine({
             </span>
           )}
           {isShared && (
-            <span className="inline-flex w-fit items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary ring-1 ring-primary/20">
-              <Users className="size-3" /> {CLASSIFICACAO_LABELS[row.classificacao]}
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary ring-1 ring-primary/20">
+                <Users className="size-3" />{" "}
+                {CLASSIFICACAO_LABELS[row.classificacao]}
+              </span>
+              <DivisaoDaLinhaResumo row={row} people={people} />
             </span>
           )}
           {row.motivo && (

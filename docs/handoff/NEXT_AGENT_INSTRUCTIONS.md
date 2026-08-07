@@ -225,6 +225,30 @@ O veredito item a item dos 55 critérios da Fase 17 e dos 40 da Fase 16 está em
 suíte verde também em `TZ=UTC`, smoke (rotas privadas → 307 `/login`; `/api/cron/*` → 401) e,
 se mexer em RLS, teste pela role `authenticated` em transação com **rollback**.
 
+### ⛔ A divisão com terceiros tem UM núcleo (2026-08-07) — não escreva o segundo
+
+`decidirReaplicacao` (puro, `src/lib/finance/split.ts`) decide **se** a divisão mudou, **se**
+pode ser mexida e **para onde** vai; `reapplySplit` (`src/lib/finance/split-reapply.ts`) faz o
+I/O e só troca o modo de distribuir (`applySplit` à vista × `applySplitParcelado` parcelado).
+`updateTransaction` e `updateInstallmentSplit` chamam os dois. Antes disso a regra estava
+escrita duas vezes, e a compra parcelada simplesmente não podia ser redividida.
+
+Três coisas que parecem detalhe e não são:
+
+1. **A base do parcelado é a soma das parcelas ATIVAS, nunca `valor_total`.** Com parcela
+   cancelada os dois divergem, e distribuir sobre o total contratado quebra a invariante de
+   `distribuirTerceirosPorParcela` (Σ terceiros ≤ Σ parcelas).
+2. **Cancelar parcela cancela a COBRANÇA dela.** `cancelInstallmentFuture` apaga os
+   `receivables` `pendente` das parcelas canceladas e recalcula `valor_pessoal`; recebível
+   `cobrado`/`pago` recusa a ação inteira. Sem isso o terceiro devia por parcela inexistente.
+3. **Alterar divisão alcança fatura fechada/paga de propósito** — quem importou a fatura e só
+   depois viu que a compra era de terceiro precisa corrigir o passado. O que protege o
+   histórico é a recusa por recebível `cobrado`/`pago`, não a data da fatura.
+
+Os embeds de `shared_expenses`/`receivables` em `queries.ts` levam **FK explícita**:
+`receivables` alcança `transactions` por mais de um caminho, e ambiguidade de embedding do
+PostgREST só estoura em runtime.
+
 ---
 
 ## ✅ O que a 17-F entregou (e você vai encontrar ligado)
