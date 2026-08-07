@@ -34,6 +34,7 @@ import {
   blocoDeContextoDeRoteamento,
   routeAgent,
 } from "@/lib/ai/agents/routing";
+import type { ToolCallStatus } from "@/lib/ai/tools/audit";
 import { toolDefinitionsFor, UNEXPECTED_TOOL_CALL } from "@/lib/ai/tools/registry";
 import { MAX_TOOL_STEPS } from "@/lib/ai/tools/limits";
 import { textoDasMensagens } from "@/lib/ai/core/text";
@@ -94,7 +95,13 @@ export type ChatRunnerEvent =
   | {
       readonly type: "tool";
       readonly toolName: string;
-      readonly status: "executada" | "rejeitada" | "falhou" | "timeout";
+      /**
+       * O MESMO vocabulário de `ai_tool_calls.status` (`tools/audit.ts`), não uma cópia dele:
+       * repetir os literais aqui deixaria um status novo entrar na auditoria sem que o `tsc`
+       * apontasse a tela desatualizada. `import type` é apagado na compilação — nada de
+       * `server-only` chega ao bundle por causa desta linha.
+       */
+      readonly status: ToolCallStatus;
       readonly registros: number;
     }
   | {
@@ -326,6 +333,17 @@ export async function* runChat(
   let ultimoHeartbeat = inicioMs;
 
   /**
+   * ⚠️ O `step_index` é DO RUN, e o run é um só: `beginChatRun` já rodou, e retry e fallback
+   * continuam dentro dele. Como `ai_run_steps_run_index_uidx` é `UNIQUE (run_id, step_index,
+   * kind)`, um contador que vivesse dentro de `runToolLoop` reiniciaria a cada tentativa e a
+   * segunda colidiria em `23505` — `startStep` devolveria `null` e a regra "sem trilha, sem
+   * leitura" bloquearia TODA leitura depois do primeiro retry. Por isso o contador mora aqui,
+   * ao lado de `attemptIndex`, e atravessa a cadeia inteira.
+   */
+  let stepIndex = 0;
+  const proximoStepIndex = () => (stepIndex += 1);
+
+  /**
    * `completed_provider`/`completed_model` significam "quem EFETIVAMENTE CONCLUIU" — por
    * isso ficam nulos quando o run falha ou é cancelado. Gravar ali o último provedor
    * tentado faria a tela dizer "respondido por X" numa resposta que nunca existiu.
@@ -528,6 +546,7 @@ export async function* runChat(
           },
           mensagensIniciais: mensagens,
           ferramentasOferecidas: nomesOferecidos,
+          proximoStepIndex,
           chamarModelo,
         })) {
           if (evento.type === "delta") {

@@ -72,6 +72,17 @@ export type ToolLoopInput = {
    * resolvida contra o registry). Qualquer outro nome que volte é chamada inesperada.
    */
   readonly ferramentasOferecidas: readonly string[];
+  /**
+   * O próximo `step_index` DO RUN — não do laço.
+   *
+   * ⚠️ `ai_run_steps_run_index_uidx` é `UNIQUE (run_id, step_index, kind)`, e o `run_id` é UM
+   * SÓ para toda a cadeia de tentativas: `beginChatRun` roda uma vez, antes do retry e do
+   * fallback. Um índice que reinicia a cada volta do laço faz a segunda tentativa inserir
+   * `(run, 1, 'modelo')` que já existe → `23505` → `startStep` devolve `null` (ele loga e não
+   * lança) → "sem trilha, sem leitura" bloqueia a execução de TODA leitura depois do primeiro
+   * retry. Por isso quem numera é o dono do run, e o laço só pede o próximo.
+   */
+  readonly proximoStepIndex: () => number;
   readonly chamarModelo: (
     mensagens: readonly AiMessage[],
     passo: number,
@@ -90,9 +101,21 @@ export async function* runToolLoop(
     let texto = "";
 
     // `step_index` é base 1 no banco (CHECK `step_index >= 1`), e o índice é o mesmo para os
-    // dois `kind` do passo — a unicidade é `(run_id, step_index, kind)`.
-    const indice = passo + 1;
+    // dois `kind` do passo — a unicidade é `(run_id, step_index, kind)`. Quem conta é o run.
+    const indice = input.proximoStepIndex();
 
+    /**
+     * ⚠️ ASSIMETRIA DELIBERADA — falhar ao abrir ESTE passo não bloqueia nada, e falhar ao
+     * abrir o de `ferramentas` (mais abaixo) bloqueia tudo.
+     *
+     * O passo `modelo` não lê registro nenhum do usuário: ele registra que houve uma chamada
+     * ao provedor. O passo `ferramentas` é o que ampara a LEITURA — `ai_tool_calls.step_id` é
+     * NOT NULL, então sem ele a consulta aconteceria sem trilha. Derrubar a conversa inteira
+     * por causa de uma linha de auditoria da chamada ao modelo seria trocar um buraco na
+     * trilha por um sistema que não responde; o inverso, executar leitura sem registro, é
+     * exatamente o que a subfase existe para impedir. A regra em uma frase: **sem trilha, sem
+     * LEITURA** — não "sem trilha, sem resposta".
+     */
     const stepModelo = await startStep({
       runId: input.ctxBase.runId,
       userId: input.ctxBase.userId,
@@ -102,43 +125,56 @@ export async function* runToolLoop(
     const inicioModelo = Date.now();
 
     let inesperada: string | null = null;
+    /**
+     * ⚠️ Falso enquanto o `for await` abaixo não chegar ao fim POR CONTA PRÓPRIA. Quando o
+     * consumidor abandona este gerador (o chat-runner dá `break` no evento `error` do
+     * provedor, ou o navegador fecha a aba), o JS chama `.return()` no ponto do `yield` — que
+     * está DENTRO do `for await`. Sem o `finally`, o passo ficaria `started` para sempre:
+     * `ai_reconcile_abandoned_runs` só toca `ai_runs` e `ai_usage_events`, e não há policy de
+     * DELETE em `ai_run_steps`. O `finally` de um async generator roda no `.return()`, e é o
+     * que faz a queda da aba fechar o passo também.
+     */
+    let modeloTerminouSozinho = false;
 
-    for await (const evento of input.chamarModelo(mensagens, passo)) {
-      if (evento.type === "delta") {
-        texto += evento.text;
-        yield { type: "delta", text: evento.text };
-        continue;
-      }
-      if (evento.type === "tool-call") {
-        if (!oferecidas.has(evento.toolName)) {
-          inesperada = evento.toolName;
-          break;
+    try {
+      for await (const evento of input.chamarModelo(mensagens, passo)) {
+        if (evento.type === "delta") {
+          texto += evento.text;
+          yield { type: "delta", text: evento.text };
+          continue;
         }
-        chamadas.push({
-          callId: evento.callId,
-          toolName: evento.toolName,
-          input: evento.input,
-        });
-        partesDoAssistente.push({
-          type: "tool-call",
-          callId: evento.callId,
-          toolName: evento.toolName,
-          input: evento.input,
-        });
-        continue;
+        if (evento.type === "tool-call") {
+          if (!oferecidas.has(evento.toolName)) {
+            inesperada = evento.toolName;
+            break;
+          }
+          chamadas.push({
+            callId: evento.callId,
+            toolName: evento.toolName,
+            input: evento.input,
+          });
+          partesDoAssistente.push({
+            type: "tool-call",
+            callId: evento.callId,
+            toolName: evento.toolName,
+            input: evento.input,
+          });
+          continue;
+        }
+        // `finish` e `error` são do chat-runner: ele fecha estado, mede uso e decide fallback.
+        yield { type: "passthrough", evento };
       }
-      // `finish` e `error` são do chat-runner: ele fecha estado, mede uso e decide fallback.
-      yield { type: "passthrough", evento };
-    }
-
-    if (stepModelo) {
-      await closeStep({
-        runId: input.ctxBase.runId,
-        stepId: stepModelo,
-        userId: input.ctxBase.userId,
-        status: inesperada ? "failed" : "completed",
-        durationMs: Date.now() - inicioModelo,
-      });
+      modeloTerminouSozinho = true;
+    } finally {
+      if (stepModelo) {
+        await closeStep({
+          runId: input.ctxBase.runId,
+          stepId: stepModelo,
+          userId: input.ctxBase.userId,
+          status: modeloTerminouSozinho && !inesperada ? "completed" : "failed",
+          durationMs: Date.now() - inicioModelo,
+        });
+      }
     }
 
     if (inesperada) {
@@ -155,6 +191,8 @@ export async function* runToolLoop(
       return;
     }
 
+    // O outro lado da assimetria explicada no passo `modelo`: ESTE é o que ampara a leitura,
+    // e sem ele nada roda.
     const stepFerramentas = await startStep({
       runId: input.ctxBase.runId,
       userId: input.ctxBase.userId,

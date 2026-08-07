@@ -172,13 +172,39 @@ vi.mock("@/lib/ai/tools/executors", () => ({
   },
 }));
 
+/**
+ * ⚠️ ESTE DUPLO MODELA A CHAVE ÚNICA — é a mesma disciplina do bloco de medição acima.
+ *
+ * `ai_run_steps_run_index_uidx` é `UNIQUE (run_id, step_index, kind)`, e `run_id` é UM SÓ para
+ * toda a cadeia de tentativas (`beginChatRun` roda antes do laço de retry/fallback). Chave
+ * repetida é `23505`, e `audit.ts` LOGA E DEVOLVE `null` em vez de lançar — daí o laço
+ * bloqueia a leitura ("sem trilha, sem leitura"). Um duplo que devolvesse id novo para
+ * qualquer entrada tornaria esse defeito invisível, que foi exatamente o que aconteceu.
+ */
+const passosDoRun: { stepIndex: number; kind: string; stepId: string | null }[] = [];
+const passosFechados: { stepId: string; status: string }[] = [];
+const chavesDePasso = new Set<string>();
+
 vi.mock("@/lib/ai/tools/audit", () => ({
-  startStep: async () => "step-x",
-  closeStep: async () => {},
+  startStep: async (input: { runId: string; stepIndex: number; kind: string }) => {
+    const chave = `${input.runId}|${input.stepIndex}|${input.kind}`;
+    if (chavesDePasso.has(chave)) {
+      passosDoRun.push({ stepIndex: input.stepIndex, kind: input.kind, stepId: null });
+      return null;
+    }
+    chavesDePasso.add(chave);
+    const stepId = `step-${chavesDePasso.size}`;
+    passosDoRun.push({ stepIndex: input.stepIndex, kind: input.kind, stepId });
+    return stepId;
+  },
+  closeStep: async (input: { stepId: string; status: string }) => {
+    passosFechados.push({ stepId: input.stepId, status: input.status });
+  },
   recordToolCall: async () => {},
 }));
 
 const { runChat } = await import("./chat-runner");
+const { AVISO_SEM_AUDITORIA } = await import("./tool-loop");
 
 // ─────────────────────────── Fixtures ───────────────────────────
 
@@ -196,6 +222,17 @@ const FINISH: AiStreamEvent = {
     },
   },
   providerRequestId: "req",
+};
+
+/** Um 5xx do provedor no meio do stream: transitório, logo `decideFallback` manda repetir. */
+const ERRO_TEMPORARIO: AiStreamEvent = {
+  type: "error",
+  error: {
+    class: "ERRO_TEMPORARIO",
+    code: "PROVIDER_5XX",
+    message: "O provedor teve uma falha temporária.",
+    retryable: true,
+  },
 };
 
 const pedeVolume = (callId = "call-1"): AiStreamEvent => ({
@@ -229,6 +266,9 @@ beforeEach(() => {
   systemsRecebidos.length = 0;
   ferramentasRecebidas.length = 0;
   ferramentaRodou.length = 0;
+  passosDoRun.length = 0;
+  passosFechados.length = 0;
+  chavesDePasso.clear();
   respostasPorChamada = [];
   permissoes = { allow_training: true };
   reservaGravada = 0;
@@ -386,6 +426,60 @@ describe("runChat — o que a resposta DECLARA", () => {
       eventos.some((e) => e.type === "delta" && String(e.text).includes("limite de passos")),
     ).toBe(true);
     expect(statusDoRun).toBe("completed");
+  });
+
+  it("depois de um RETRY a IA continua lendo — a numeração do passo é do RUN", async () => {
+    // O provedor cai no meio da primeira tentativa; `decideFallback` manda repetir a mesma
+    // chamada (`maxRetries: 1`). O `run_id` é O MESMO — e a numeração do passo tem de
+    // continuar de onde parou, senão `UNIQUE (run_id, step_index, kind)` recusa a linha, a
+    // trilha some e o laço se recusa a ler. Era o CRITICAL da review 1.
+    respostasPorChamada = [
+      [{ type: "delta", text: "deixa eu ver" }, ERRO_TEMPORARIO],
+      [pedeVolume("c1"), FINISH],
+      [{ type: "delta", text: "Foram 12480 kg." }, FINISH],
+    ];
+
+    const eventos = await rodar();
+
+    // A leitura ACONTECEU na tentativa que sobreviveu.
+    expect(ferramentaRodou).toEqual([{ dias: 7 }]);
+    expect(eventos).toContainEqual({
+      type: "tool",
+      toolName: "training.get_volume",
+      status: "executada",
+      registros: 3,
+    });
+    // E o usuário NÃO ouviu que a consulta foi bloqueada por falta de trilha.
+    expect(textoGravado).not.toContain(AVISO_SEM_AUDITORIA);
+    expect(statusDoRun).toBe("completed");
+
+    // Nenhum passo foi recusado pela chave única, e a numeração é contínua no run.
+    expect(passosDoRun.every((p) => p.stepId !== null)).toBe(true);
+    expect(passosDoRun.map((p) => `${p.stepIndex}:${p.kind}`)).toEqual([
+      "1:modelo", // tentativa 1, que morreu
+      "2:modelo", // o retry — e NÃO "1:modelo" de novo
+      "2:ferramentas",
+      "3:modelo",
+    ]);
+  });
+
+  it("passo do modelo não fica `started` quando o provedor falha no meio", async () => {
+    // `ai_reconcile_abandoned_runs` não menciona `ai_run_steps`, e não há policy de DELETE:
+    // passo que o laço não fechar fica "em andamento" para sempre.
+    respostasPorChamada = [
+      [{ type: "delta", text: "deixa eu ver" }, ERRO_TEMPORARIO],
+      [{ type: "delta", text: "consegui agora" }, FINISH],
+    ];
+
+    await rodar();
+
+    const abertos = passosDoRun
+      .map((p) => p.stepId)
+      .filter((id): id is string => id !== null);
+    expect(abertos).toHaveLength(2);
+    expect(passosFechados.map((p) => p.stepId).sort()).toEqual([...abertos].sort());
+    // O da tentativa que caiu fecha como `failed`; o da que respondeu, como `completed`.
+    expect(passosFechados.map((p) => p.status)).toEqual(["failed", "completed"]);
   });
 
   it("ferramenta que não foi oferecida encerra o run como falha", async () => {

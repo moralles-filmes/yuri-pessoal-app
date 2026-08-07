@@ -51,6 +51,16 @@ const passosFechados: LinhaDePasso[] = [];
 const chamadasAuditadas: Record<string, unknown>[] = [];
 let stepInsertFalha = false;
 let proximoStep = 0;
+/**
+ * ⚠️ O DUPLO MODELA A CONSTRAINT, e não só a assinatura.
+ *
+ * `ai_run_steps_run_index_uidx` é `UNIQUE (run_id, step_index, kind)`. Um duplo que devolve
+ * id novo para qualquer entrada esconde exatamente a classe de defeito que a Task 6 já tinha
+ * antecipado para `ai_usage_events`: a chave repetida vira `23505`, `startStep` LOGA E
+ * DEVOLVE `null` (`audit.ts` não lança), e daí em diante o laço se recusa a ler. Aqui a chave
+ * repetida devolve `null` pelo mesmo motivo que o banco devolveria.
+ */
+const chavesDePasso = new Set<string>();
 
 vi.mock("@/lib/ai/tools/audit", () => ({
   startStep: async (input: {
@@ -59,6 +69,9 @@ vi.mock("@/lib/ai/tools/audit", () => ({
     kind: string;
   }): Promise<string | null> => {
     if (stepInsertFalha) return null;
+    const chave = `${input.runId}|${input.stepIndex}|${input.kind}`;
+    if (chavesDePasso.has(chave)) return null;
+    chavesDePasso.add(chave);
     proximoStep += 1;
     const id = `step-${proximoStep}`;
     passosAbertos.push({ ...input, stepId: id });
@@ -94,6 +107,13 @@ const CTX_BASE = {
 };
 
 const OFERECIDAS = ["training.get_volume"];
+
+/**
+ * O contador do RUN, como o chat-runner o mantém: ele sobrevive a várias execuções do laço
+ * (retry/fallback), porque `run_id` é um só. Cada teste começa com um run novo.
+ */
+let indiceDoRun = 0;
+const proximoStepIndex = () => (indiceDoRun += 1);
 
 const FINISH: AiStreamEvent = {
   type: "finish",
@@ -142,8 +162,10 @@ beforeEach(() => {
   passosAbertos.length = 0;
   passosFechados.length = 0;
   chamadasAuditadas.length = 0;
+  chavesDePasso.clear();
   stepInsertFalha = false;
   proximoStep = 0;
+  indiceDoRun = 0;
   saidaDaFerramenta = async () => SAIDA;
 });
 
@@ -161,6 +183,7 @@ describe("runToolLoop — o smoke ponta a ponta", () => {
         ctxBase: CTX_BASE,
         mensagensIniciais: [{ role: "user", content: "quanto de volume essa semana?" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -230,6 +253,7 @@ describe("runToolLoop — o smoke ponta a ponta", () => {
         ctxBase: CTX_BASE,
         mensagensIniciais: [{ role: "user", content: "volume?" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -269,6 +293,7 @@ describe("runToolLoop — o smoke ponta a ponta", () => {
         ctxBase: CTX_BASE,
         mensagensIniciais: [{ role: "user", content: "bom dia" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -292,6 +317,7 @@ describe("runToolLoop — dado é dado, nunca instrução", () => {
         ctxBase: CTX_BASE,
         mensagensIniciais: [{ role: "user", content: "volume?" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -312,6 +338,7 @@ describe("runToolLoop — dado é dado, nunca instrução", () => {
         ctxBase: CTX_BASE,
         mensagensIniciais: [{ role: "user", content: "volume?" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -341,6 +368,7 @@ describe("runToolLoop — dado é dado, nunca instrução", () => {
         ctxBase: CTX_BASE,
         mensagensIniciais: [{ role: "user", content: "volume?" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -374,6 +402,7 @@ describe("runToolLoop — as recusas", () => {
         ctxBase: CTX_BASE,
         mensagensIniciais: [{ role: "user", content: "quanto gastei?" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -400,6 +429,7 @@ describe("runToolLoop — as recusas", () => {
         ctxBase: { ...CTX_BASE, permissions: { allow_training: false } },
         mensagensIniciais: [{ role: "user", content: "volume?" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -444,6 +474,7 @@ describe("runToolLoop — as recusas", () => {
           ctxBase: CTX_BASE,
           mensagensIniciais: [{ role: "user", content: "volume?" }],
           ferramentasOferecidas: OFERECIDAS,
+          proximoStepIndex,
           chamarModelo,
         }),
       );
@@ -475,6 +506,7 @@ describe("runToolLoop — os tetos", () => {
         ctxBase: CTX_BASE,
         mensagensIniciais: [{ role: "user", content: "volume?" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -500,6 +532,7 @@ describe("runToolLoop — os tetos", () => {
         ctxBase: CTX_BASE,
         mensagensIniciais: [{ role: "user", content: "volume?" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -535,6 +568,7 @@ describe("runToolLoop — sem trilha, sem leitura", () => {
         ctxBase: CTX_BASE,
         mensagensIniciais: [{ role: "user", content: "volume?" }],
         ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
         chamarModelo,
       }),
     );
@@ -544,5 +578,141 @@ describe("runToolLoop — sem trilha, sem leitura", () => {
     expect(eventos).toContainEqual({ type: "aviso", texto: AVISO_SEM_AUDITORIA });
     // O laço parou: o modelo não foi chamado de novo com resultado nenhum.
     expect(recebido).toHaveLength(1);
+  });
+
+  /**
+   * ⚠️ O DEFEITO QUE O DUPLO SEM CONSTRAINT ESCONDIA (review 1, CRITICAL).
+   *
+   * `run_id` é o mesmo em toda a cadeia de tentativas. Rodar o laço duas vezes com a numeração
+   * reiniciada colide em `UNIQUE (run_id, step_index, kind)`, e a colisão não aparece como
+   * erro: vira `null`, que vira "sem trilha, sem leitura". O usuário só via a IA parar de
+   * consultar depois de qualquer retry.
+   */
+  it("segunda execução do laço no MESMO run continua a numeração e ainda lê", async () => {
+    const primeira = modeloDeMentira([
+      [pedeVolume("c1"), FINISH],
+      [{ type: "delta", text: "fim" }, FINISH],
+    ]);
+    await coletar(
+      runToolLoop({
+        ctxBase: CTX_BASE,
+        mensagensIniciais: [{ role: "user", content: "volume?" }],
+        ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
+        chamarModelo: primeira.chamarModelo,
+      }),
+    );
+
+    // O retry: MESMO run, MESMO contador — é o chat-runner que o mantém entre as tentativas.
+    const segunda = modeloDeMentira([
+      [pedeVolume("c2"), FINISH],
+      [{ type: "delta", text: "fim" }, FINISH],
+    ]);
+    const eventos = await coletar(
+      runToolLoop({
+        ctxBase: CTX_BASE,
+        mensagensIniciais: [{ role: "user", content: "volume?" }],
+        ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
+        chamarModelo: segunda.chamarModelo,
+      }),
+    );
+
+    // Nenhum passo foi recusado pela chave única, e nenhuma leitura foi bloqueada.
+    expect(eventos).not.toContainEqual({ type: "aviso", texto: AVISO_SEM_AUDITORIA });
+    expect(argumentosRecebidos).toHaveLength(2);
+    expect(passosAbertos.map((p) => `${p.stepIndex}:${p.kind}`)).toEqual([
+      "1:modelo",
+      "1:ferramentas",
+      "2:modelo",
+      "3:modelo",
+      "3:ferramentas",
+      "4:modelo",
+    ]);
+  });
+});
+
+describe("runToolLoop — nenhum passo fica `started` para sempre", () => {
+  /**
+   * ⚠️ `ai_reconcile_abandoned_runs` toca `ai_runs` e `ai_usage_events` — e NÃO menciona
+   * `ai_run_steps`. Não há policy de DELETE. Passo que o laço não fechar fica "em andamento"
+   * no banco até o fim dos tempos, e a tela da Task 12 o mostraria assim.
+   */
+  it("consumidor que abandona o gerador no meio ainda fecha o passo do modelo", async () => {
+    const { chamarModelo } = modeloDeMentira([
+      [{ type: "delta", text: "começando" }, FINISH],
+    ]);
+
+    // Exatamente o que o chat-runner faz no evento `error` do provedor: `break` no meio do
+    // `for await`, que chama `.return()` no gerador enquanto ele está suspenso NUM `yield`.
+    for await (const primeiro of runToolLoop({
+      ctxBase: CTX_BASE,
+      mensagensIniciais: [{ role: "user", content: "volume?" }],
+      ferramentasOferecidas: OFERECIDAS,
+      proximoStepIndex,
+      chamarModelo,
+    })) {
+      expect(primeiro).toEqual({ type: "delta", text: "começando" });
+      break;
+    }
+
+    expect(passosAbertos).toHaveLength(1);
+    expect(passosFechados).toHaveLength(1);
+    expect(passosFechados[0].stepId).toBe(passosAbertos[0].stepId);
+    // `failed`, não `completed`: a chamada não chegou ao fim.
+    expect(passosFechados[0].status).toBe("failed");
+  });
+
+  it("erro do provedor no meio do stream também fecha o passo do modelo", async () => {
+    const erro: AiStreamEvent = {
+      type: "error",
+      error: {
+        class: "ERRO_TEMPORARIO",
+        code: "PROVIDER_5XX",
+        message: "O provedor teve uma falha temporária.",
+        retryable: true,
+      },
+    };
+    const { chamarModelo } = modeloDeMentira([
+      [{ type: "delta", text: "deixa eu ver" }, erro],
+    ]);
+
+    const gerador = runToolLoop({
+      ctxBase: CTX_BASE,
+      mensagensIniciais: [{ role: "user", content: "volume?" }],
+      ferramentasOferecidas: OFERECIDAS,
+      proximoStepIndex,
+      chamarModelo,
+    });
+
+    for await (const e of gerador) {
+      if ((e as { type: string }).type === "passthrough") break;
+    }
+
+    expect(passosFechados).toHaveLength(1);
+    expect(passosFechados[0].status).toBe("failed");
+  });
+
+  it("exceção dentro da chamada ao modelo fecha o passo e propaga", async () => {
+    const chamarModelo = () =>
+      (async function* (): AsyncGenerator<AiStreamEvent> {
+        yield { type: "delta", text: "oi" };
+        throw new Error("a conexão caiu");
+      })();
+
+    await expect(
+      coletar(
+        runToolLoop({
+          ctxBase: CTX_BASE,
+          mensagensIniciais: [{ role: "user", content: "volume?" }],
+          ferramentasOferecidas: OFERECIDAS,
+          proximoStepIndex,
+          chamarModelo,
+        }),
+      ),
+    ).rejects.toThrow("a conexão caiu");
+
+    expect(passosFechados).toHaveLength(1);
+    expect(passosFechados[0].status).toBe("failed");
   });
 });
