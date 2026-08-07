@@ -235,7 +235,12 @@ export async function* runChat(
   // (uma de seis constantes de `agents/routing.ts`), nunca texto do usuário nem resultado de
   // ferramenta: sem esse fato, o orquestrador não tem como dizer a verdade sobre por que a
   // pergunta chegou a ele, e a alternativa seria deixá-lo adivinhar.
-  const system = buildSystemPrompt(agent) + blocoDeContextoDeRoteamento(decisao.motivo);
+  // A rota vai junto: ela diz QUAL tela o usuário tinha aberto, o que inclina a escolha da
+  // ferramenta. Continua sendo fato do sistema — `blocoDeContextoDeRoteamento` a converte
+  // numa descrição de allowlist e ignora o que não estiver nela.
+  const system =
+    buildSystemPrompt(agent) +
+    blocoDeContextoDeRoteamento(decisao.motivo, input.pageContext?.rota ?? null);
   const historico = input.conversationId
     ? await getHistoryForPrompt(input.userId, input.conversationId)
     : [];

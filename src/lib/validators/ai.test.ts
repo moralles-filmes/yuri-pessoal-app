@@ -21,7 +21,6 @@ import {
   aiProviderConfigSchema,
   chatRequestSchema,
   contextoDaRota,
-  isRotaComContexto,
   MAX_CHAT_TEXT,
   MODULOS_COM_CONTEXTO,
   pageContextSchema,
@@ -315,20 +314,28 @@ describe("pageContext (18-B) — o contexto da página", () => {
     expect(new Set(ROTAS_COM_CONTEXTO).size).toBe(ROTAS_COM_CONTEXTO.length);
   });
 
-  it("isRotaComContexto só aceita o que está na lista", () => {
-    for (const rota of ROTAS_COM_CONTEXTO) expect(isRotaComContexto(rota)).toBe(true);
+  /**
+   * As chaves herdadas de `Object.prototype` merecem caso próprio: `ROTAS_COM_CONTEXTO` é
+   * um array e `includes` não se engana, mas quem CONSOME a rota faz busca por chave
+   * (`DESCRICAO_DA_PAGINA`, em `agents/routing.ts`). Se `"constructor"` chegasse até lá
+   * num objeto sem `Object.hasOwn`, a busca devolveria uma função em vez de `undefined`.
+   * Aqui a barreira é anterior: nenhuma delas passa pelo schema.
+   */
+  it("o schema recusa chave herdada de Object.prototype como rota", () => {
     for (const valor of [
       "/treinos/",
       "/financeiro",
-      undefined,
-      null,
-      42,
-      { rota: "/treinos" },
-      ["/treinos"],
       "constructor",
       "__proto__",
+      "toString",
+      "hasOwnProperty",
+      42,
+      null,
     ]) {
-      expect(isRotaComContexto(valor), String(valor)).toBe(false);
+      expect(
+        pageContextSchema.safeParse({ rota: valor }).success,
+        String(valor),
+      ).toBe(false);
     }
   });
 });

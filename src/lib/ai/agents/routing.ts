@@ -19,6 +19,8 @@
  */
 
 import type { ToolPermission } from "@/lib/ai/tools/contracts";
+// `import type`: some na compilação, então não há ciclo em runtime com `validators/ai`.
+import type { RotaComContexto } from "@/lib/validators/ai";
 import { normalizarTexto } from "@/lib/ai/core/text";
 import { ASSISTENTE_PESSOAL_ID, TREINOS_AGENT_ID } from "./registry";
 
@@ -182,6 +184,25 @@ export function routeAgent(input: RoutingInput): RoutingDecision {
 }
 
 /**
+ * A descrição de cada página que pode virar contexto — o que o agente lê no lugar do
+ * caminho cru.
+ *
+ * ⚠️ `satisfies Record<RotaComContexto, string>` é o que impede as duas listas de divergirem:
+ * uma rota nova em `ROTAS_COM_CONTEXTO` sem entrada aqui é erro de compilação, não uma rota
+ * que chega ao roteador e some antes do prompt.
+ *
+ * ⛔ E é uma ALLOWLIST, não um formatador. O que entra no prompt é o texto escrito aqui,
+ * escolhido por igualdade exata da chave; a rota que veio do pedido nunca é interpolada.
+ * Mesma disciplina de `MOTIVOS_CONHECIDOS` — e a razão é a mesma: o bloco vai em papel de
+ * SISTEMA, onde nada de origem externa pode entrar.
+ */
+const DESCRICAO_DA_PAGINA = {
+  "/treinos": "a visão geral de Treinos",
+  "/treinos/historico": "o histórico de sessões de Treinos",
+  "/treinos/recordes": "os recordes de Treinos",
+} as const satisfies Record<RotaComContexto, string>;
+
+/**
  * O motivo do roteamento, pronto para ser CONCATENADO ao prompt de sistema.
  *
  * Por que isto é seguro: o texto devolvido é montado só com constantes deste arquivo, e a
@@ -192,9 +213,21 @@ export function routeAgent(input: RoutingInput): RoutingDecision {
  * Por que no SISTEMA e não numa mensagem: isto é um fato do NOSSO roteador, não um dado do
  * usuário nem resultado de ferramenta. Dado recuperado continua entrando exclusivamente por
  * `wrapUntrusted`, em papel `tool`/`user` — essa fronteira não se move.
+ *
+ * `rota` é opcional e diz QUAL PÁGINA o usuário estava vendo. Ela existe para inclinar a
+ * escolha da ferramenta (quem está nos recordes provavelmente pergunta sobre recordes) e
+ * para NADA ALÉM DISSO: a última linha do bloco proíbe explicitamente concluir qualquer
+ * coisa sobre os registros a partir da página, porque a página é uma tela aberta, não um
+ * dado. Sem essa linha, "ele está nos recordes" viraria "ele tem recordes" — que é
+ * exatamente a invenção que a trava de honestidade existe para impedir.
  */
-export function blocoDeContextoDeRoteamento(motivo: string): string {
+export function blocoDeContextoDeRoteamento(motivo: string, rota?: string | null): string {
   if (!MOTIVOS_CONHECIDOS.includes(motivo)) return "";
+
+  const pagina = Object.hasOwn(DESCRICAO_DA_PAGINA, rota ?? "")
+    ? DESCRICAO_DA_PAGINA[rota as RotaComContexto]
+    : null;
+
   return [
     "",
     "---",
@@ -202,6 +235,14 @@ export function blocoDeContextoDeRoteamento(motivo: string): string {
     "CONTEXTO DESTA EXECUÇÃO (fato do sistema, não fala do usuário)",
     "",
     `Por que esta conversa chegou a você: ${motivo}`,
+    ...(pagina
+      ? [
+          "",
+          `A tela que o usuário tinha aberto ao perguntar: ${pagina}.`,
+          "",
+          "Isso indica o assunto que ele provavelmente quer — use para escolher por onde começar a consultar. Não é um dado sobre os registros dele: a tela estar aberta não diz que existe registro ali, nem quanto, nem quando. Só o que as ferramentas devolverem diz isso.",
+        ]
+      : []),
     "",
     "Use esse fato quando precisar explicar por que respondeu você. Não invente outra causa e não afirme nada além do que está escrito acima.",
   ].join("\n");

@@ -209,6 +209,7 @@ vi.mock("@/lib/ai/tools/audit", () => ({
 }));
 
 const { runChat } = await import("./chat-runner");
+type ChatRunnerInput = Parameters<typeof runChat>[0];
 const { AVISO_SEM_AUDITORIA } = await import("./tool-loop");
 
 // ─────────────────────────── Fixtures ───────────────────────────
@@ -247,7 +248,13 @@ const pedeVolume = (callId = "call-1"): AiStreamEvent => ({
   input: { dias: 7 },
 });
 
-const ENTRADA = {
+/**
+ * ⚠️ Tipada como `ChatRunnerInput`, não inferida do literal. Com a inferência, `rodar`
+ * aceitava só os campos escritos AQUI — um campo opcional novo do runner (foi o caso de
+ * `pageContext`) só aparecia como erro de `tsc`, e nunca em `vitest`, que não checa tipo.
+ * Amarrar no contrato faz o compilador acompanhar o runner sozinho.
+ */
+const ENTRADA: ChatRunnerInput = {
   userId: "user-1",
   conversationId: null,
   text: "qual foi meu volume de treino essa semana?",
@@ -258,7 +265,7 @@ const ENTRADA = {
   agora: new Date("2026-08-06T15:00:00Z"),
 };
 
-async function rodar(entrada: Partial<typeof ENTRADA> = {}) {
+async function rodar(entrada: Partial<ChatRunnerInput> = {}) {
   const eventos: Record<string, unknown>[] = [];
   for await (const e of runChat({ ...ENTRADA, ...entrada })) {
     eventos.push(e as unknown as Record<string, unknown>);
@@ -338,6 +345,46 @@ describe("runChat — o laço integrado", () => {
 
     expect(systemsRecebidos[0]).toContain("CONTEXTO DESTA EXECUÇÃO");
     expect(systemsRecebidos[0]).toContain("A pergunta menciona este módulo.");
+  });
+
+  /**
+   * ⚠️ O ELO QUE FALTAVA. `routing.test.ts` prova que o bloco sabe descrever cada rota, e
+   * `route.test.ts` prova que a rota chega ao runner — mas nenhum dos dois pega o runner
+   * ESQUECENDO de repassá-la a `blocoDeContextoDeRoteamento`. Sem este teste o argumento
+   * podia ser removido e a suíte inteira continuava verde (conferido por mutação).
+   */
+  it("a PÁGINA aberta chega ao prompt de sistema, descrita, não como caminho", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar({
+      pageContext: { rota: "/treinos/recordes", modulo: "training" },
+    });
+
+    expect(systemsRecebidos[0]).toContain("os recordes de Treinos");
+    expect(systemsRecebidos[0]).not.toContain("/treinos/recordes");
+  });
+
+  it("cada página produz um prompt DIFERENTE — três opções, três consequências", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+    await rodar({ pageContext: { rota: "/treinos/historico", modulo: "training" } });
+    const doHistorico = systemsRecebidos[0];
+
+    systemsRecebidos.length = 0;
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+    await rodar({ pageContext: { rota: "/treinos/recordes", modulo: "training" } });
+    const dosRecordes = systemsRecebidos[0];
+
+    expect(doHistorico).toContain("o histórico de sessões de Treinos");
+    expect(dosRecordes).toContain("os recordes de Treinos");
+    expect(doHistorico).not.toBe(dosRecordes);
+  });
+
+  it("sem página, o prompt não ganha linha nenhuma sobre tela aberta", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar();
+
+    expect(systemsRecebidos[0]).not.toContain("tela que o usuário");
   });
 });
 

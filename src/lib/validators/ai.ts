@@ -99,12 +99,13 @@ export function contextoDaRota(rota: RotaComContexto): {
   return { rota, modulo: MODULO_DA_ROTA[rota] };
 }
 
-/** Para validar um valor de origem desconhecida (parâmetro de URL, por exemplo). */
-export function isRotaComContexto(valor: unknown): valor is RotaComContexto {
-  return (
-    typeof valor === "string" && (ROTAS_COM_CONTEXTO as readonly string[]).includes(valor)
-  );
-}
+/*
+ * ⛔ NÃO há um `isRotaComContexto` aqui, e a ausência é a mesma decisão que deixou
+ * `registroId` de fora: ele existiu por um commit, prometendo no docblock servir para
+ * "validar um parâmetro de URL", e nenhuma rota do projeto lê rota de query string. Era
+ * função fantasma — e `pageContextSchema.safeParse({ rota }).success` já responde a mesma
+ * pergunta. Ele volta JUNTO do link "Perguntar à IA" que o justificar.
+ */
 
 export const pageContextSchema = z
   .object({
