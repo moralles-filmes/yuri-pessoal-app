@@ -47,7 +47,16 @@ describe("registry de agentes", () => {
   // unicidade e formato de id passam igual com um agente novo entrando sem ninguém decidir.
   // Acrescentar agente é, de propósito, uma edição deliberada deste teste.
   it("a lista de agentes é fechada — exatamente estes, nesta ordem", () => {
-    expect(AI_AGENT_REGISTRY.map((a) => a.id)).toEqual([ASSISTENTE_PESSOAL_ID, "treinos"]);
+    // Escrito à mão, e é isso que dá valor ao teste: derivar do registry provaria só que o
+    // registry é igual a si mesmo. Agente novo mexe aqui, no MESMO commit.
+    expect(AI_AGENT_REGISTRY.map((a) => a.id)).toEqual([
+      ASSISTENTE_PESSOAL_ID,
+      "treinos",
+      // 18-C · Lote 1
+      "todo",
+      "habitos",
+      "estudos",
+    ]);
   });
 
   it("o Assistente Pessoal é o ponto de entrada, e cada agente tem id único", () => {
@@ -515,15 +524,38 @@ describe("nenhum prompt prescreve, diagnostica ou culpa", () => {
  */
 describe("a lista de agentes do RPC concorda com o registry", () => {
   const RAIZ = path.resolve(__dirname, "..", "..", "..", "..");
-  const sql = fs.readFileSync(
-    path.join(RAIZ, "supabase", "migrations", "20260808100000_ai_tool_audit.sql"),
-    "utf8",
-  );
-  const bloco = sql.match(/create or replace function public\.ai_agent_is_allowed[\s\S]*?\$\$;/)?.[0] ?? "";
+  const DIR = path.join(RAIZ, "supabase", "migrations");
+  const DEFINICAO = /create or replace function public\.ai_agent_is_allowed[\s\S]*?\$\$;/;
+
+  /**
+   * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ ⚠️ A DEFINIÇÃO VIGENTE É A DA ÚLTIMA MIGRATION QUE A REESCREVE — NÃO A DE UM ARQUIVO  ║
+   * ║ FIXO.                                                                                 ║
+   * ║                                                                                       ║
+   * ║ A versão da 18-B lia `20260808100000_ai_tool_audit.sql` pelo nome. Enquanto só existia ║
+   * ║ uma definição isso funcionava; no instante em que a 18-C acrescentou agentes por       ║
+   * ║ `create or replace` numa migration nova, o teste passou a comparar o registry com uma  ║
+   * ║ definição HISTÓRICA — e ficaria vermelho para sempre, com o banco correto. Um teste    ║
+   * ║ que reprova o estado certo é abandonado, e aí não protege mais nada.                   ║
+   * ║                                                                                       ║
+   * ║ Ordem lexicográfica = ordem cronológica, porque o nome começa com `YYYYMMDDHHMMSS`.    ║
+   * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  const arquivos = fs
+    .readdirSync(DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .filter((f) => DEFINICAO.test(fs.readFileSync(path.join(DIR, f), "utf8")));
+
+  const vigente = arquivos.at(-1);
+  const bloco = vigente
+    ? (fs.readFileSync(path.join(DIR, vigente), "utf8").match(DEFINICAO)?.[0] ?? "")
+    : "";
 
   it("o corpo da função foi encontrado no SQL", () => {
     // Sem esta guarda, renomear a função faria `bloco` virar "" e o teste abaixo passaria
     // por vacuidade — a divergência que ele existe para pegar entraria despercebida.
+    expect(arquivos.length).toBeGreaterThan(0);
     expect(bloco).not.toBe("");
     expect(bloco).toContain("p_agent_id in (");
   });

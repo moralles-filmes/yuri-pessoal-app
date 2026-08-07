@@ -73,12 +73,22 @@ export const ROTAS_COM_CONTEXTO = [
   "/treinos",
   "/treinos/historico",
   "/treinos/recordes",
+  // 18-C · Lote 1. Cada uma destas é a tela ÚNICA do seu módulo — não há rota por registro
+  // aqui, pela mesma razão registrada acima.
+  "/todo",
+  "/habitos",
+  "/estudos",
 ] as const;
 
 export type RotaComContexto = (typeof ROTAS_COM_CONTEXTO)[number];
 
 /** Mesmo vocabulário de `ToolDescriptor.module` — quem entra aqui tem ferramenta lá. */
-export const MODULOS_COM_CONTEXTO = ["training"] as const;
+export const MODULOS_COM_CONTEXTO = [
+  "training",
+  "todo",
+  "habits",
+  "studies",
+] as const;
 
 export type ModuloComContexto = (typeof MODULOS_COM_CONTEXTO)[number];
 
@@ -90,6 +100,9 @@ const MODULO_DA_ROTA = {
   "/treinos": "training",
   "/treinos/historico": "training",
   "/treinos/recordes": "training",
+  "/todo": "todo",
+  "/habitos": "habits",
+  "/estudos": "studies",
 } as const satisfies Record<RotaComContexto, ModuloComContexto>;
 
 /** O contexto como o runner o consome. Montado NO SERVIDOR, a partir da rota validada. */

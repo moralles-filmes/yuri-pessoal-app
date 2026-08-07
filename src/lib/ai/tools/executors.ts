@@ -14,6 +14,9 @@ import "server-only";
 import type { ZodType } from "zod";
 import type { ToolOutput } from "./contracts";
 import * as training from "./adapters/training";
+import * as todo from "./adapters/todo";
+import * as habits from "./adapters/habits";
+import * as studies from "./adapters/studies";
 
 export type ToolExecutorEntry = {
   readonly schema: ZodType;
@@ -32,5 +35,35 @@ export const TOOL_EXECUTORS: Readonly<Record<string, ToolExecutorEntry>> = {
   "training.get_records": {
     schema: training.getRecordsInput,
     run: training.getRecords as (input: never) => Promise<ToolOutput>,
+  },
+
+  // ───────────────────────────── 18-C · Lote 1 ─────────────────────────────
+  "todo.get_agenda": {
+    schema: todo.getAgendaInput,
+    run: todo.getAgenda as (input: never) => Promise<ToolOutput>,
+  },
+  "todo.search_tasks": {
+    schema: todo.searchTasksInput,
+    run: todo.searchTasks as (input: never) => Promise<ToolOutput>,
+  },
+  "todo.get_projects": {
+    schema: todo.getProjectsInput,
+    run: todo.getProjects as (input: never) => Promise<ToolOutput>,
+  },
+  "habits.get_today": {
+    schema: habits.getTodayInput,
+    run: habits.getToday as (input: never) => Promise<ToolOutput>,
+  },
+  "habits.get_streaks": {
+    schema: habits.getStreaksInput,
+    run: habits.getStreaks as (input: never) => Promise<ToolOutput>,
+  },
+  "studies.get_courses": {
+    schema: studies.getCoursesInput,
+    run: studies.getCourses as (input: never) => Promise<ToolOutput>,
+  },
+  "studies.get_study_time": {
+    schema: studies.getStudyTimeInput,
+    run: studies.getStudyTime as (input: never) => Promise<ToolOutput>,
   },
 };

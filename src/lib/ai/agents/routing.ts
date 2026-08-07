@@ -22,22 +22,34 @@ import type { ToolPermission } from "@/lib/ai/tools/contracts";
 // `import type`: some na compilação, então não há ciclo em runtime com `validators/ai`.
 import type { RotaComContexto } from "@/lib/validators/ai";
 import { normalizarTexto } from "@/lib/ai/core/text";
-import { ASSISTENTE_PESSOAL_ID, TREINOS_AGENT_ID } from "./registry";
+import {
+  ASSISTENTE_PESSOAL_ID,
+  ESTUDOS_AGENT_ID,
+  HABITOS_AGENT_ID,
+  TODO_AGENT_ID,
+  TREINOS_AGENT_ID,
+} from "./registry";
 
 // O id do agente mora em `registry.ts`, junto do perfil. Reexportado aqui por conveniência
 // de quem já importa o roteador — DUAS declarações do mesmo texto virariam divergência no
 // dia em que uma delas mudasse, e o roteador passaria a apontar para um agente inexistente.
-export { TREINOS_AGENT_ID };
+export { TREINOS_AGENT_ID, TODO_AGENT_ID, HABITOS_AGENT_ID, ESTUDOS_AGENT_ID };
 
 /** Cada especialista tem EXATAMENTE uma flag de admissão. O orquestrador não tem: ele
  * existe sempre, e sem nenhuma flag ligada simplesmente não recebe ferramenta alguma. */
 export const AGENT_PERMISSION: Record<string, ToolPermission | undefined> = {
   [TREINOS_AGENT_ID]: "allow_training",
+  [TODO_AGENT_ID]: "allow_todo",
+  [HABITOS_AGENT_ID]: "allow_habits",
+  [ESTUDOS_AGENT_ID]: "allow_studies",
 };
 
 /** Módulo (o mesmo vocabulário de `ToolDescriptor.module`) → agente especializado. */
 const AGENTE_DO_MODULO: Record<string, string | undefined> = {
   training: TREINOS_AGENT_ID,
+  todo: TODO_AGENT_ID,
+  habits: HABITOS_AGENT_ID,
+  studies: ESTUDOS_AGENT_ID,
 };
 
 /**
@@ -74,6 +86,20 @@ const PALAVRAS: Record<string, readonly string[]> = {
     "financas", "financeiro", "dinheiro", "parcelamento", "parcelas",
     "conta", "contas", "transacao", "transacoes",
   ],
+  todo: [
+    "tarefa", "tarefas", "todo", "to-do", "afazer", "afazeres",
+    "pendencia", "pendencias", "checklist", "projeto", "projetos",
+    "etiqueta", "etiquetas", "subtarefa", "subtarefas", "caixa de entrada",
+  ],
+  habits: [
+    "habito", "habitos", "sequencia", "sequencias", "streak",
+    "agua", "consistencia", "check-in", "checkin",
+  ],
+  studies: [
+    "estudo", "estudos", "estudar", "estudei", "curso", "cursos",
+    "aula", "aulas", "licao", "licoes", "materia", "materias",
+    "vocabulario", "idioma", "idiomas",
+  ],
 };
 
 /**
@@ -85,15 +111,52 @@ const PALAVRAS: Record<string, readonly string[]> = {
  * Uma normalização própria em cada lado daria dois resultados para a mesma palavra —
  * "triceps" casando no roteador e não no filtro.
  */
-function moduloPeloTexto(texto: string): string | null {
+function casamentosPorModulo(texto: string): Map<string, number> {
   const normal = normalizarTexto(texto);
+  const contagem = new Map<string, number>();
   for (const [modulo, palavras] of Object.entries(PALAVRAS)) {
+    let n = 0;
     for (const palavra of palavras) {
       const regex = new RegExp(`(^|[^a-z0-9])${palavra}([^a-z0-9]|$)`);
-      if (regex.test(normal)) return modulo;
+      if (regex.test(normal)) n += 1;
     }
+    if (n > 0) contagem.set(modulo, n);
   }
-  return null;
+  return contagem;
+}
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ O DESEMPATE É EXPLÍCITO — E ISSO É CORREÇÃO DE DEFEITO, NÃO ARRUMAÇÃO.                ║
+ * ║                                                                                       ║
+ * ║ A versão da 18-B devolvia O PRIMEIRO módulo que casasse, na ORDEM DE DECLARAÇÃO do     ║
+ * ║ objeto `PALAVRAS`. Com dois vocabulários ninguém percebe; com nove, a ordem em que     ║
+ * ║ alguém escreveu as chaves vira o critério de roteamento — e há colisão real e          ║
+ * ║ frequente: "conta" (banco), "meta" (dieta/treino/todo), "serie" (treino/todo           ║
+ * ║ recorrente), "aula" (estudos/agenda), "projeto" (TO-DO/Tarefas).                        ║
+ * ║                                                                                       ║
+ * ║ Agora vence quem tiver MAIS palavras distintas casadas. Empate no topo NÃO escolhe o   ║
+ * ║ primeiro: devolve ambiguidade, e quem decide o que fazer com ela é `routeAgent`.       ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export type ModuloPeloTexto =
+  | { readonly tipo: "nenhum" }
+  | { readonly tipo: "modulo"; readonly modulo: string }
+  | { readonly tipo: "ambiguo"; readonly modulos: readonly string[] };
+
+export function moduloPeloTexto(texto: string): ModuloPeloTexto {
+  const contagem = casamentosPorModulo(texto);
+  if (contagem.size === 0) return { tipo: "nenhum" };
+
+  const maior = Math.max(...contagem.values());
+  // Ordenado para o resultado ser estável entre execuções — a lista aparece em mensagem.
+  const empatados = [...contagem.entries()]
+    .filter(([, n]) => n === maior)
+    .map(([modulo]) => modulo)
+    .sort();
+
+  if (empatados.length === 1) return { tipo: "modulo", modulo: empatados[0] };
+  return { tipo: "ambiguo", modulos: empatados };
 }
 
 /**
@@ -111,6 +174,13 @@ function moduloPeloTexto(texto: string): string | null {
  */
 export const ROUTING_MOTIVOS = {
   SEM_MODULO: "Nenhum módulo específico identificado na pergunta.",
+  /**
+   * ⚠️ Motivo NOVO na 18-C. Existe porque a alternativa era escolher o primeiro módulo da
+   * ordem de declaração — o que, com nove vocabulários, é sortear. Cair no orquestrador com
+   * a ambiguidade declarada deixa o assistente PERGUNTAR de qual módulo se trata, em vez de
+   * responder com confiança sobre o módulo errado.
+   */
+  AMBIGUO: "A pergunta menciona mais de um módulo, e nenhum deles se destacou.",
   SEM_ESPECIALISTA: "Ainda não há assistente especializado para este módulo.",
   SEM_PERMISSAO: "Leitura não autorizada para este módulo nas preferências de IA.",
   PELO_TEXTO: "A pergunta menciona este módulo.",
@@ -163,7 +233,31 @@ export function routeAgent(input: RoutingInput): RoutingDecision {
   const doTexto = moduloPeloTexto(input.texto);
   const doContexto = input.pageContext?.modulo ?? null;
 
-  const modulo = doTexto ?? doContexto;
+  let modulo: string | null;
+  let porTexto: boolean;
+
+  if (doTexto.tipo === "modulo") {
+    modulo = doTexto.modulo;
+    porTexto = true;
+  } else if (doTexto.tipo === "ambiguo") {
+    /**
+     * A PÁGINA ABERTA desempata — e só ela. É um fato do nosso sistema (a rota vem de uma
+     * lista estática validada no servidor), não texto do usuário, então usá-la aqui não abre
+     * caminho para ninguém escolher a allowlist. Mas ela só vale se for UM DOS EMPATADOS:
+     * usar a página para eleger um módulo que a pergunta nem mencionou seria trocar um chute
+     * por outro.
+     */
+    if (doContexto !== null && doTexto.modulos.includes(doContexto)) {
+      modulo = doContexto;
+      porTexto = false;
+    } else {
+      return { agentId: ASSISTENTE_PESSOAL_ID, motivo: ROUTING_MOTIVOS.AMBIGUO };
+    }
+  } else {
+    modulo = doContexto;
+    porTexto = false;
+  }
+
   if (!modulo) {
     return { agentId: ASSISTENTE_PESSOAL_ID, motivo: ROUTING_MOTIVOS.SEM_MODULO };
   }
@@ -179,7 +273,7 @@ export function routeAgent(input: RoutingInput): RoutingDecision {
 
   return {
     agentId,
-    motivo: doTexto ? ROUTING_MOTIVOS.PELO_TEXTO : ROUTING_MOTIVOS.PELO_CONTEXTO,
+    motivo: porTexto ? ROUTING_MOTIVOS.PELO_TEXTO : ROUTING_MOTIVOS.PELO_CONTEXTO,
   };
 }
 
@@ -200,6 +294,9 @@ const DESCRICAO_DA_PAGINA = {
   "/treinos": "a visão geral de Treinos",
   "/treinos/historico": "o histórico de sessões de Treinos",
   "/treinos/recordes": "os recordes de Treinos",
+  "/todo": "a tela do TO-DO",
+  "/habitos": "a tela de Hábitos",
+  "/estudos": "a tela de Estudos",
 } as const satisfies Record<RotaComContexto, string>;
 
 /**

@@ -81,6 +81,9 @@ export const ROTULO_DA_ROTA_DE_CONTEXTO = {
   "/treinos": "Treinos · visão geral",
   "/treinos/historico": "Treinos · histórico",
   "/treinos/recordes": "Treinos · recordes",
+  "/todo": "TO-DO",
+  "/habitos": "Hábitos",
+  "/estudos": "Estudos",
 } as const satisfies Record<RotaComContexto, string>;
 
 /**
@@ -91,13 +94,31 @@ export const ROTULO_DA_ROTA_DE_CONTEXTO = {
  * Registry estava vazio; deixou de ser quando as três leituras de Treinos entraram nele.
  * Um aviso de honestidade que mente é pior que nenhum.
  *
- * O texto de agora é verdadeiro nos DOIS estados — com `allow_training` desligada (o padrão
- * do banco) e ligada — porque afirma a regra, não o estado: nada é lido sem autorização
- * explícita por módulo, e não existe escrita. Quem acrescentar ferramenta de um módulo novo
- * precisa mexer aqui no MESMO commit.
+ * O texto de agora é verdadeiro nos DOIS estados — com as flags desligadas (o padrão do
+ * banco) e ligadas — porque afirma a regra, não o estado: nada é lido sem autorização
+ * explícita por módulo, e não existe escrita.
+ *
+ * ⚠️ **Atualizado na 18-C** (Lote 1: TO-DO, Hábitos e Estudos entraram).
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ A LISTA DE MÓDULOS FICA, E QUEM A MANTÉM VIVA É UM TESTE — NÃO A BOA MEMÓRIA DE       ║
+ * ║ QUEM EDITAR ISTO DEPOIS.                                                               ║
+ * ║                                                                                       ║
+ * ║ A tentação, ao ver este texto envelhecer pela segunda vez, é tirar os nomes e deixar  ║
+ * ║ só a regra ("o que você autorizar"). Seria pior: o usuário lê este aviso ANTES da     ║
+ * ║ primeira mensagem, e "os módulos que você autorizar" não responde a pergunta que ele  ║
+ * ║ tem, que é *quais existem*. O que impede o texto de mentir é                           ║
+ * ║ `constants.test.ts` → "todo módulo com ferramenta publicada é NOMEADO no aviso",      ║
+ * ║ derivado de `toolsForPermission` sobre o registry real: publicar ferramenta de um     ║
+ * ║ módulo novo **deixa a suíte vermelha** até este texto citá-lo.                         ║
+ * ║                                                                                       ║
+ * ║ ⚠️ O teste garante que os módulos COM ferramenta apareçam; ele não sabe verificar a    ║
+ * ║ segunda metade da frase. Por isso ela enumera o que NÃO existe em vez de afirmar um   ║
+ * ║ conjunto fechado — e some quando o Lote 3 publicar Financeiro e Dieta.                 ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 export const AVISO_SEM_ACESSO =
-  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Nesta versão existem apenas leituras de Treinos — ele não vê finanças, tarefas, agenda nem dieta — e não cria nem altera nada.";
+  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Nesta versão ele lê Treinos, TO-DO, Hábitos e Estudos — ainda não lê finanças, dieta, agenda nem medidas corporais — e não cria nem altera nada.";
 
 /**
  * A versão curta da mesma regra, para a descrição da página. Afirma a REGRA, nunca o estado:
@@ -168,6 +189,14 @@ export const ROTULO_DA_FERRAMENTA: Record<string, string> = {
   "training.get_last_workout": "Treinos · último treino",
   "training.get_volume": "Treinos · totais do período",
   "training.get_records": "Treinos · recordes",
+  // 18-C · Lote 1
+  "todo.get_agenda": "TO-DO · agenda de tarefas",
+  "todo.search_tasks": "TO-DO · busca de tarefas",
+  "todo.get_projects": "TO-DO · projetos",
+  "habits.get_today": "Hábitos · situação de hoje",
+  "habits.get_streaks": "Hábitos · sequências e consistência",
+  "studies.get_courses": "Estudos · cursos",
+  "studies.get_study_time": "Estudos · tempo de estudo",
 };
 
 /** Ferramenta desconhecida (registry antigo, linha de auditoria de outra versão). */

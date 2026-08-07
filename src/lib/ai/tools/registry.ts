@@ -107,6 +107,172 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     requiresConfirmation: false,
     idempotent: true,
   },
+
+  // ───────────────────────────── 18-C · Lote 1 · TO-DO ─────────────────────────────
+  {
+    name: "todo.get_agenda",
+    version: "1",
+    module: "todo",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "O que está atrasado, o que é para hoje e o que vem nos próximos dias no TO-DO, com os totais já contados pelo sistema. Informe `dias` para a janela dos próximos; o padrão é 7. O status de atraso é calculado na leitura — não faça essa conta.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dias: {
+          type: "integer",
+          minimum: 1,
+          maximum: 90,
+          description: "Janela dos próximos dias, a partir de amanhã. Padrão: 7.",
+        },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["todo"],
+    requiredPermission: "allow_todo",
+    timeoutMs: 10_000,
+    maxRecords: 100,
+    itemLabel: "tarefas",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+  {
+    name: "todo.search_tasks",
+    version: "1",
+    module: "todo",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "Procura tarefas do TO-DO por texto no título ou na descrição. A busca do módulo diferencia acentos — se não achar, diga isso em vez de afirmar que a tarefa não existe. Concluídas só entram com `incluir_concluidas`.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        texto: {
+          type: "string",
+          maxLength: 120,
+          description: "Trecho do título ou da descrição.",
+        },
+        incluir_concluidas: {
+          type: "boolean",
+          description: "Incluir tarefas já concluídas ou canceladas. Padrão: false.",
+        },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["todo"],
+    requiredPermission: "allow_todo",
+    timeoutMs: 10_000,
+    maxRecords: 60,
+    itemLabel: "tarefas",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+  {
+    name: "todo.get_projects",
+    version: "1",
+    module: "todo",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "Os projetos ativos do TO-DO com as contagens de tarefas abertas, atrasadas e concluídas de cada um, já somadas pelo sistema.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: { type: "object" },
+    allowedAgents: ["todo"],
+    requiredPermission: "allow_todo",
+    timeoutMs: 8_000,
+    maxRecords: 60,
+    itemLabel: "projetos",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+
+  // ──────────────────────────── 18-C · Lote 1 · Hábitos ────────────────────────────
+  {
+    name: "habits.get_today",
+    version: "1",
+    module: "habits",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "Os hábitos ativos e a situação de hoje: quais caem hoje, quais já foram concluídos e quanto falta para a meta do dia. Um hábito que não cai hoje NÃO é uma falha, e um hábito de hoje ainda não feito não é uma falha — o dia está em andamento. A água também é registrada aqui.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: { type: "object" },
+    allowedAgents: ["habitos"],
+    requiredPermission: "allow_habits",
+    timeoutMs: 8_000,
+    maxRecords: 60,
+    itemLabel: "hábitos",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+  {
+    name: "habits.get_streaks",
+    version: "1",
+    module: "habits",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "Sequências atuais e recordes de cada hábito, mais a consistência de 7 e 30 dias já calculada. Quando a taxa vier nula, não havia dia agendado na janela — isso não é 0% de conclusão, e dizer que é seria falso.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: { type: "object" },
+    allowedAgents: ["habitos"],
+    requiredPermission: "allow_habits",
+    timeoutMs: 10_000,
+    maxRecords: 60,
+    itemLabel: "hábitos",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+
+  // ──────────────────────────── 18-C · Lote 1 · Estudos ────────────────────────────
+  {
+    name: "studies.get_courses",
+    version: "1",
+    module: "studies",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "Os cursos com progresso, aulas concluídas, minutos estudados e próxima aula. Curso atrasado vem com o MOTIVO do atraso — passou da data-alvo é diferente de ficar dias sem estudar. Use `apenas_em_andamento` quando a pergunta for sobre o que está sendo estudado agora.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        apenas_em_andamento: {
+          type: "boolean",
+          description: "Trazer só os cursos em andamento. Padrão: false (traz todos).",
+        },
+      },
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["estudos"],
+    requiredPermission: "allow_studies",
+    timeoutMs: 10_000,
+    maxRecords: 60,
+    itemLabel: "cursos",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
+  {
+    name: "studies.get_study_time",
+    version: "1",
+    module: "studies",
+    kind: "leitura",
+    risk: 1,
+    description:
+      "Tempo de estudo da semana e do mês, sequência de dias e a série semanal de minutos, já somados pelo sistema. Zero minutos aqui é medição real (não houve sessão), não ausência de dado.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: { type: "object" },
+    allowedAgents: ["estudos"],
+    requiredPermission: "allow_studies",
+    timeoutMs: 10_000,
+    maxRecords: 60,
+    itemLabel: "semanas",
+    requiresConfirmation: false,
+    idempotent: true,
+  },
 ];
 
 export function findTool(name: string): ToolDescriptor | null {

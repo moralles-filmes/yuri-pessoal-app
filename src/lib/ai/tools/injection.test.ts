@@ -106,9 +106,28 @@ describe("injeção vinda de conteúdo de registro", () => {
     expect(r.message).toBe(REJECTION_MESSAGE.TOOL_PERMISSION_DENIED);
   });
 
-  it("nenhum nome do registry pertence a outro módulo que não Treinos, nesta subfase", () => {
+  /**
+   * O teste da 18-B travava o registry em `module === "training"`. Isso não era uma regra de
+   * segurança — era o inventário daquela subfase escrito como asserção, e ele reprova toda
+   * subfase seguinte por construção.
+   *
+   * O que de fato precisa ser garantido é que **todo módulo do registry tenha um agente que
+   * o alcance e uma permissão que o autorize**: um módulo órfão publicaria ferramenta que
+   * nenhum agente pode pedir (ruído no prompt, ferramenta morta) ou — pior — uma ferramenta
+   * cuja flag `allow_*` ninguém consegue ligar. A lista abaixo é escrita à mão, para módulo
+   * novo passar por aqui conscientemente.
+   */
+  it("todo módulo do registry é um dos declarados, e cada um tem agente e permissão", () => {
     expect(AI_TOOL_REGISTRY.length).toBeGreaterThan(0);
-    for (const t of AI_TOOL_REGISTRY) expect(t.module, t.name).toBe("training");
+
+    const DECLARADOS = ["training", "todo", "habits", "studies"];
+    for (const t of AI_TOOL_REGISTRY) {
+      expect(DECLARADOS, t.name).toContain(t.module);
+      expect(t.allowedAgents.length, `${t.name} sem agente autorizado`).toBeGreaterThan(0);
+      expect(TOOL_PERMISSIONS, `${t.name}: permissão fora da lista`).toContain(
+        t.requiredPermission,
+      );
+    }
   });
 
   it("nenhuma ferramenta desta subfase é de escrita — e a de escrita seria barrada", () => {

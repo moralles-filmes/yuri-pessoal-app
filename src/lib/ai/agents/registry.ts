@@ -21,6 +21,9 @@ import {
   ASSISTENTE_PESSOAL_PROMPT_VERSION,
 } from "./prompts/assistente-pessoal";
 import { TREINOS_PROMPT, TREINOS_PROMPT_VERSION } from "./prompts/treinos";
+import { TODO_PROMPT, TODO_PROMPT_VERSION } from "./prompts/todo";
+import { HABITOS_PROMPT, HABITOS_PROMPT_VERSION } from "./prompts/habitos";
+import { ESTUDOS_PROMPT, ESTUDOS_PROMPT_VERSION } from "./prompts/estudos";
 import { SECURITY_PROMPT, SECURITY_PROMPT_VERSION } from "./security-prompt";
 
 export type AiAgentProfile = {
@@ -40,6 +43,9 @@ export type AiAgentProfile = {
 
 export const ASSISTENTE_PESSOAL_ID = "assistente-pessoal";
 export const TREINOS_AGENT_ID = "treinos";
+export const TODO_AGENT_ID = "todo";
+export const HABITOS_AGENT_ID = "habitos";
+export const ESTUDOS_AGENT_ID = "estudos";
 
 export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
   {
@@ -66,6 +72,36 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
       "training.get_volume",
       "training.get_records",
     ],
+  },
+  {
+    id: TODO_AGENT_ID,
+    label: "TO-DO",
+    description:
+      "Consulta suas tarefas: o que está atrasado, o que é para hoje, o que vem a seguir e os projetos. Só lê — não altera nada.",
+    promptVersion: TODO_PROMPT_VERSION,
+    prompt: TODO_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: ["todo.get_agenda", "todo.search_tasks", "todo.get_projects"],
+  },
+  {
+    id: HABITOS_AGENT_ID,
+    label: "Hábitos",
+    description:
+      "Consulta seus hábitos: a situação de hoje, as sequências e a consistência. Só lê — não altera nada.",
+    promptVersion: HABITOS_PROMPT_VERSION,
+    prompt: HABITOS_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: ["habits.get_today", "habits.get_streaks"],
+  },
+  {
+    id: ESTUDOS_AGENT_ID,
+    label: "Estudos",
+    description:
+      "Consulta seus cursos e o tempo de estudo: progresso, próxima aula e sequência de dias. Só lê — não altera nada.",
+    promptVersion: ESTUDOS_PROMPT_VERSION,
+    prompt: ESTUDOS_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: ["studies.get_courses", "studies.get_study_time"],
   },
 ];
 

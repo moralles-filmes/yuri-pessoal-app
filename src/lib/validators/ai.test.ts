@@ -255,9 +255,14 @@ describe("pageContext (18-B) — o contexto da página", () => {
       rota: "/treinos/recordes",
       modulo: "training",
     });
+    // 18-C · Lote 1 — as três telas únicas dos módulos novos.
+    expect(contextoDaRota("/todo")).toEqual({ rota: "/todo", modulo: "todo" });
+    expect(contextoDaRota("/habitos")).toEqual({ rota: "/habitos", modulo: "habits" });
+    expect(contextoDaRota("/estudos")).toEqual({ rota: "/estudos", modulo: "studies" });
+
     // Se uma rota entrar na lista sem par aqui, é este número que acusa.
-    expect(ROTAS_COM_CONTEXTO).toHaveLength(3);
-    expect(MODULOS_COM_CONTEXTO).toEqual(["training"]);
+    expect(ROTAS_COM_CONTEXTO).toHaveLength(6);
+    expect(MODULOS_COM_CONTEXTO).toEqual(["training", "todo", "habits", "studies"]);
   });
 
   /**
