@@ -187,6 +187,11 @@ const chavesDePasso = new Set<string>();
 
 vi.mock("@/lib/ai/tools/audit", () => ({
   startStep: async (input: { runId: string; stepIndex: number; kind: string }) => {
+    // `check (step_index >= 1)` da migration — o duplo recusa o que o banco recusaria.
+    if (input.stepIndex < 1) {
+      passosDoRun.push({ stepIndex: input.stepIndex, kind: input.kind, stepId: null });
+      return null;
+    }
     const chave = `${input.runId}|${input.stepIndex}|${input.kind}`;
     if (chavesDePasso.has(chave)) {
       passosDoRun.push({ stepIndex: input.stepIndex, kind: input.kind, stepId: null });

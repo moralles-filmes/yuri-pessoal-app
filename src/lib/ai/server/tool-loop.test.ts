@@ -69,6 +69,10 @@ vi.mock("@/lib/ai/tools/audit", () => ({
     kind: string;
   }): Promise<string | null> => {
     if (stepInsertFalha) return null;
+    // `check (step_index >= 1)` da migration. Sem isto, uma numeração base 0 só seria pega
+    // pelas asserções explícitas de sequência — a mesma cegueira que deixou o índice por
+    // tentativa passar: duplo permissivo torna o defeito invisível na consequência.
+    if (input.stepIndex < 1) return null;
     const chave = `${input.runId}|${input.stepIndex}|${input.kind}`;
     if (chavesDePasso.has(chave)) return null;
     chavesDePasso.add(chave);

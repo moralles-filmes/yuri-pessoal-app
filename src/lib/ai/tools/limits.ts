@@ -15,7 +15,16 @@
 import { MAX_UNTRUSTED_CHARS } from "@/lib/ai/security/untrusted";
 import { CARACTERES_POR_TOKEN } from "@/lib/ai/usage/tokens";
 
-/** Passos de FERRAMENTA por run. `1 + MAX_TOOL_STEPS` chamadas ao modelo, no pior caso. */
+/**
+ * Passos de FERRAMENTA por TENTATIVA — não por run. Uma tentativa custa, no pior caso,
+ * `1 + MAX_TOOL_STEPS` chamadas ao modelo; o run inteiro custa isso vezes o número de
+ * tentativas: `(1 + maxRetries + maxFallbacks) × (1 + MAX_TOOL_STEPS)`.
+ *
+ * O laço reinicia a contagem de passos a cada tentativa (o que reinicia é o `passo`, nunca o
+ * `step_index`, que é do run — ver `server/tool-loop.ts`). `computeReservation` já reserva
+ * nessa mesma base: soma as chamadas do laço e DEPOIS multiplica pelas tentativas. Ler "por
+ * run" aqui e ajustar a constante por esse número faria a reserva e o comportamento divergirem.
+ */
 export const MAX_TOOL_STEPS = 3;
 
 /** Ferramentas executadas em UM passo. Duas leituras em paralelo é normal; vinte não é. */

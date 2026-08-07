@@ -133,6 +133,11 @@ export async function* runToolLoop(
      * `ai_reconcile_abandoned_runs` só toca `ai_runs` e `ai_usage_events`, e não há policy de
      * DELETE em `ai_run_steps`. O `finally` de um async generator roda no `.return()`, e é o
      * que faz a queda da aba fechar o passo também.
+     *
+     * ⚠️ O que o `finally` NÃO cobre: a morte do processo (timeout da plataforma, deploy no
+     * meio do stream). Ali não roda JS nenhum, e `ai_reconcile_abandoned_runs` continua sem
+     * tocar `ai_run_steps`. Sobra passo `started` sob run terminal — a tela de rastreabilidade
+     * não pode ler isso como "em andamento": quem manda é o status do RUN.
      */
     let modeloTerminouSozinho = false;
 
@@ -167,13 +172,22 @@ export async function* runToolLoop(
       modeloTerminouSozinho = true;
     } finally {
       if (stepModelo) {
-        await closeStep({
-          runId: input.ctxBase.runId,
-          stepId: stepModelo,
-          userId: input.ctxBase.userId,
-          status: modeloTerminouSozinho && !inesperada ? "completed" : "failed",
-          durationMs: Date.now() - inicioModelo,
-        });
+        // Lançar DAQUI sobrescreveria o erro real da tentativa: este `finally` roda enquanto a
+        // exceção do provedor sobe, e o `catch` do chat-runner registraria `STREAM_FAILED` no
+        // lugar do `PROVIDER_5XX` que de fato aconteceu — diagnóstico errado no log, sobre o
+        // caminho em que mais se precisa dele. `closeStep` já é escrito para não lançar (lê
+        // `{ error }` e loga); o que ainda pode escapar é o `await createClient()` dentro dele.
+        try {
+          await closeStep({
+            runId: input.ctxBase.runId,
+            stepId: stepModelo,
+            userId: input.ctxBase.userId,
+            status: modeloTerminouSozinho && !inesperada ? "completed" : "failed",
+            durationMs: Date.now() - inicioModelo,
+          });
+        } catch {
+          // Engolido de propósito, e só aqui: a falha de trilha não pode mascarar a falha real.
+        }
       }
     }
 
