@@ -39,11 +39,20 @@ registra.** Nunca as três coisas na mesma etapa.
 | --- | --- |
 | Action atual · Módulo · Ferramenta futura · Tipo (leitura/escrita) · Caso A ou B · Command a extrair · Serviço de domínio reutilizado · Nível de risco · Confirmação necessária · Idempotência necessária · Efeito de cache · Testes necessários |
 
+➡ **Entregue em `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`** (2026-08-07), com uma coluna a
+mais que este cabeçalho previa: **o teto de linhas da leitura reutilizada**, que na maioria dos
+casos é invisível para quem chama e faria um total parcial ser apresentado como completo.
+
 ### Extração sob demanda (decisão registrada)
 
-Levantamento de 2026-08-04 sobre as 44 actions: **0** usam `redirect()`; **3** usam `FormData`
+> ⚠️ **NÚMERO CORRIGIDO EM 2026-08-07.** "As 44 actions" contava **arquivos**, não funções — o que
+> se percebe pelo próprio sinal ao lado ("3 usam `FormData`" são 3 *arquivos*). Recontagem no
+> repositório: **49 arquivos** em `src/lib/actions/` (fora `helpers.ts`) e **410 funções**
+> `export async function`. Os sinais de acoplamento continuam valendo e foram reconferidos.
+
+Levantamento reconferido em 2026-08-07: **0** arquivos usam `redirect()`; **3** usam `FormData`
 (`body-measurements`, `imports`, `nutrition-recipes`) e são **Caso B**; o padrão universal é
-`(input: unknown)` + Zod + `authContext()`; **41** usam `revalidatePath`.
+`(input: unknown)` + Zod + `authContext()`.
 
 **`revalidatePath` sozinho não classifica como Caso B.** Uma action é **Caso A adaptável**
 quando recebe input estruturado, usa Zod, usa `authContext()`, não recebe `FormData`, não
@@ -65,22 +74,39 @@ agenda, `session-machine.ts`.
 
 ### Níveis de risco
 
-| Nível | O quê | Confirmação |
-| --- | --- | --- |
-| **0** | Leitura, consulta, análise, relatório | Nenhuma |
-| **1** | Criação reversível de baixo impacto (tarefa simples, anotação, check-in de hábito) | Simplificada, conforme preferência |
-| **2** | Alteração relevante (transação, alteração de valor, evento, reagendamento, refeição consumida, treino passado) | **Pré-visualização + confirmação, por padrão** |
-| **3** | Destrutiva ou externa (exclusão, exclusão em massa, cancelar evento sincronizado, alterar série recorrente, envio externo, substituir planejamento inteiro) | **Reforçada** |
-| **4** | Não permitida (excluir sem escopo, SQL, revelar segredo, alterar dado de outro usuário, desativar segurança, contornar RLS) | **Bloqueada — ausência de código** |
+> ⚠️ **CORRIGIDO EM 2026-08-07.** A versão anterior desta tabela numerava de **0 a 4**, e o
+> código da 18-A já tinha fixado `NIVEIS_DE_RISCO = [1,2,3,4,5]` (`tools/contracts.ts`) — com as
+> três leituras de Treinos usando `risk: 1`. Eram duas escalas para a mesma coisa, deslocadas de
+> um. **A escala do código venceu** (renumerar o enum reabriria 18-A e 18-B por estética), e a
+> coluna "doc anterior" fica registrada só para leitura de commits antigos.
+
+| Nível (código) | doc anterior | O quê | Confirmação |
+| --- | --- | --- | --- |
+| **1** | 0 | Leitura, consulta, análise, relatório | Nenhuma |
+| **2** | 1 | Criação reversível de baixo impacto (tarefa simples, anotação, check-in de hábito) | **Sim** — simplificada na tela |
+| **3** | 2 | Alteração relevante (transação, alteração de valor, evento, reagendamento, refeição consumida, treino passado) | **Sim** — pré-visualização + confirmação |
+| **4** | 3 | Destrutiva ou externa (exclusão, exclusão em massa, cancelar evento sincronizado, alterar série recorrente, envio externo, substituir planejamento inteiro) | **Reforçada** |
+| **5** | 4 | Não permitida (excluir sem escopo, SQL, revelar segredo, alterar dado de outro usuário, desativar segurança, contornar RLS) | **Bloqueada — ausência de código** |
+
+Ferramenta que toque **dinheiro, dado de saúde ou histórico consolidado** tem `risk >= 3`,
+declarado no descriptor — nunca deduzido do nome do módulo, que é adivinhação.
 
 ### Modos de confirmação
 
-**Seguro** confirma toda escrita. **Equilibrado** executa automaticamente só o que é simples e
-claramente reversível. **Rápido** executa ações de baixo risco previamente autorizadas.
+> ⛔ **DECISÃO DO DONO, 2026-08-07: a 18-C NÃO implementa auto-execução.**
+> `ai_user_preferences.confirmation_mode` continua sendo lido e gravado, e o modo escolhe **o
+> quanto a tela pergunta** — não *se* ela pergunta. **Toda escrita confirma, em qualquer modo, em
+> qualquer nível.** Uma subfase futura que queira ligar auto-execução precisa de decisão explícita
+> registrada no spec; não pode se apoiar em "já estava previsto aqui".
 
-**Mesmo no modo Rápido, sempre exige confirmação:** transação financeira · exclusão · alteração
-em massa · cancelamento · convite · evento externo · mudança em recorrência inteira · alteração
-de credencial · ação que afete dado de saúde ou histórico consolidado · ação irreversível.
+Os três modos ficam **declarados** para quando isso for revisto: **Seguro** confirma toda escrita;
+**Equilibrado** executaria automaticamente só o simples e claramente reversível; **Rápido**
+executaria ações de baixo risco previamente autorizadas.
+
+**Em qualquer cenário futuro, sempre exige confirmação:** transação financeira · exclusão ·
+alteração em massa · cancelamento · convite · evento externo · mudança em recorrência inteira ·
+alteração de credencial · ação que afete dado de saúde ou histórico consolidado · ação
+irreversível.
 
 ### Vínculo da confirmação
 
