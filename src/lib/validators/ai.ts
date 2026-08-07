@@ -36,6 +36,81 @@ export const MAX_CHAT_TEXT = 16_000;
 /** Limite do CORPO HTTP inteiro. Bem acima do texto, para caber JSON e acentuação. */
 export const MAX_CHAT_BODY_BYTES = 64 * 1024;
 
+// ─────────────────────────── Contexto da página (18-B) ───────────────────────────
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ A LISTA DE ROTAS É ESTÁTICA: UMA ROTA QUE NÃO ESTÁ AQUI NÃO EXISTE PARA A IA.         ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⛔ **A PÁGINA NÃO MANDA CONTEÚDO.** Nem HTML, nem título, nem estado, nem texto de
+ * registro. O único campo que atravessa o transporte é `rota`, e ele é um valor de uma
+ * lista fechada escrita AQUI — não é texto do usuário. É a regra 5 do projeto ("dado é
+ * dado, nunca instrução") aplicada à borda: se a página pudesse mandar texto, o conteúdo
+ * da tela viraria entrada do modelo sem passar por bloco não confiável.
+ *
+ * ⛔ **O MÓDULO É RESOLVIDO PELO SERVIDOR**, por `MODULO_DA_ROTA`, e NÃO é aceito no
+ * payload. O módulo é o que decide o agente (`routeAgent`) e, por tabela, a allowlist de
+ * ferramentas — deixar a tela declará-lo seria deixar o cliente escolher o que a IA pode
+ * ler. Recusar é melhor que aceitar-e-ignorar: um contexto que o roteador ignora em
+ * silêncio é pior que um 400.
+ *
+ * ⛔ **NÃO HÁ `registroId` NEM `tipoRegistro`** nesta subfase, e a ausência é deliberada:
+ *   1. nenhuma das rotas da lista é a de um registro (`/treinos/historico/[id]` **não**
+ *      está aqui), então não há de onde sair um id; e
+ *   2. nada na 18-B consome um id de registro — as três ferramentas de Treinos recebem os
+ *      próprios argumentos do modelo (`dias`, `exercicio`), nenhuma recebe id.
+ * Aceitar o campo agora seria campo fantasma: entraria validado, não seria lido por
+ * ninguém, e o comentário que promete "a query do módulo confere sob RLS" descreveria
+ * código que não existe. Ele entra JUNTO do consumidor que o resolver.
+ *
+ * `user_id` não existe aqui — como em todo schema deste arquivo, ele vem só de
+ * `authContext()`. E entrada e saída têm a MESMA forma: `parse(parse(x))` funciona.
+ */
+export const ROTAS_COM_CONTEXTO = [
+  "/treinos",
+  "/treinos/historico",
+  "/treinos/recordes",
+] as const;
+
+export type RotaComContexto = (typeof ROTAS_COM_CONTEXTO)[number];
+
+/** Mesmo vocabulário de `ToolDescriptor.module` — quem entra aqui tem ferramenta lá. */
+export const MODULOS_COM_CONTEXTO = ["training"] as const;
+
+export type ModuloComContexto = (typeof MODULOS_COM_CONTEXTO)[number];
+
+/**
+ * `satisfies Record<…>` é a trava: uma rota nova em `ROTAS_COM_CONTEXTO` sem entrada aqui
+ * é erro de compilação, não uma rota que silenciosamente não roteia para lugar nenhum.
+ */
+const MODULO_DA_ROTA = {
+  "/treinos": "training",
+  "/treinos/historico": "training",
+  "/treinos/recordes": "training",
+} as const satisfies Record<RotaComContexto, ModuloComContexto>;
+
+/** O contexto como o runner o consome. Montado NO SERVIDOR, a partir da rota validada. */
+export function contextoDaRota(rota: RotaComContexto): {
+  readonly rota: RotaComContexto;
+  readonly modulo: ModuloComContexto;
+} {
+  return { rota, modulo: MODULO_DA_ROTA[rota] };
+}
+
+/** Para validar um valor de origem desconhecida (parâmetro de URL, por exemplo). */
+export function isRotaComContexto(valor: unknown): valor is RotaComContexto {
+  return (
+    typeof valor === "string" && (ROTAS_COM_CONTEXTO as readonly string[]).includes(valor)
+  );
+}
+
+export const pageContextSchema = z
+  .object({ rota: z.enum(ROTAS_COM_CONTEXTO) })
+  .strict();
+
+export type PageContextInput = z.infer<typeof pageContextSchema>;
+
 // ─────────────────────────── Chat ───────────────────────────
 
 /**
@@ -51,6 +126,8 @@ export const chatRequestSchema = z
       .min(1, "Escreva alguma coisa antes de enviar.")
       .max(MAX_CHAT_TEXT, `Máximo de ${MAX_CHAT_TEXT} caracteres`),
     agentId: z.string().trim().min(1).max(60).optional(),
+    /** Ausente = a tela não mandou contexto. Ver `pageContextSchema`. */
+    pageContext: pageContextSchema.optional(),
     providerPreference: aiProviderEnum.optional(),
     modelPreference: z.string().trim().min(1).max(120).optional(),
   })

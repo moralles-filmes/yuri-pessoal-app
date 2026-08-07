@@ -23,6 +23,7 @@ import { NextResponse } from "next/server";
 import { authContext } from "@/lib/actions/helpers";
 import {
   chatRequestSchema,
+  contextoDaRota,
   MAX_CHAT_BODY_BYTES,
   MAX_CHAT_TEXT,
 } from "@/lib/validators/ai";
@@ -141,6 +142,13 @@ export async function POST(request: Request) {
     // flags `allow_*` do usuário na mão. `null` (o caso de hoje — a tela não manda o campo) é
     // "não pedi nenhum", que é diferente de "pedi o orquestrador".
     agentId: parsed.data.agentId ?? null,
+    // ⚠️ Do contexto da página, SÓ A ROTA atravessa o transporte — e ela vem de uma lista
+    // estática, não de texto da tela. O MÓDULO é resolvido aqui, no servidor: é ele que
+    // decide o agente e, por tabela, a allowlist de ferramentas. Se a tela pudesse
+    // declará-lo, o cliente escolheria o que a IA pode ler.
+    pageContext: parsed.data.pageContext
+      ? contextoDaRota(parsed.data.pageContext.rota)
+      : null,
     providerPreference: parsed.data.providerPreference ?? null,
     modelPreference: parsed.data.modelPreference ?? null,
     abortSignal: request.signal,

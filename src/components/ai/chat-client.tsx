@@ -23,10 +23,22 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { AI_PROVIDER_LABEL, type AiProviderId } from "@/lib/ai/core/contracts";
-import { AVISO_SEM_ACESSO } from "@/lib/ai/constants";
-import { MAX_CHAT_TEXT } from "@/lib/validators/ai";
+import { AVISO_SEM_ACESSO, ROTULO_DA_ROTA_DE_CONTEXTO } from "@/lib/ai/constants";
+import {
+  MAX_CHAT_TEXT,
+  ROTAS_COM_CONTEXTO,
+  type RotaComContexto,
+} from "@/lib/validators/ai";
 import type { ConversationMessage, MessageRunInfo } from "@/lib/ai/types";
 
 type Evento =
@@ -52,7 +64,17 @@ type Bolha = {
   provider?: AiProviderId | null;
   model?: string | null;
   erro?: string | null;
+  /**
+   * A rota enviada como contexto NESTE envio. É o que a tela sabe: que MANDOU o contexto —
+   * quem decide se ele foi usado é o servidor. Por isso o selo diz "enviada com", não
+   * "usou". Nada disso é persistido na 18-B, então recarregar a página não o traz de volta:
+   * a rastreabilidade que sobrevive ao recarregamento é a da Task 12.
+   */
+  contexto?: RotaComContexto | null;
 };
+
+/** Valor do item "sem contexto" do Select — `Select` do Radix não aceita valor vazio. */
+const SEM_CONTEXTO = "nenhum";
 
 export type ChatClientProps = {
   readonly conversationId: string | null;
@@ -91,6 +113,13 @@ export function ChatClient({
 
   const [texto, setTexto] = React.useState("");
   const [enviando, setEnviando] = React.useState(false);
+  /**
+   * Contexto da página — **desligado por padrão**, como toda integração deste projeto.
+   * Estado LOCAL do componente, não da URL: a regra de não controlar campo pela URL vale
+   * para digitação, e esta é uma escolha por clique — mas a página é `force-dynamic`, e
+   * gravar na URL faria um round-trip de RSC por clique sem nenhum ganho de link.
+   */
+  const [contexto, setContexto] = React.useState<RotaComContexto | null>(null);
   const [conversa, setConversa] = React.useState<string | null>(conversationId);
   const abortRef = React.useRef<AbortController | null>(null);
   const fimRef = React.useRef<HTMLDivElement | null>(null);
@@ -127,6 +156,7 @@ export function ChatClient({
         role: "assistant",
         content: "",
         status: "streaming",
+        contexto,
       },
     ]);
     setTexto("");
@@ -142,6 +172,9 @@ export function ChatClient({
         body: JSON.stringify({
           ...(conversa ? { conversationId: conversa } : {}),
           text: conteudo,
+          // Só a ROTA, e só quando o usuário escolheu uma. Nada do conteúdo da tela sai
+          // daqui — título, estado e registro ficam onde estão. O módulo é do servidor.
+          ...(contexto ? { pageContext: { rota: contexto } } : {}),
         }),
         signal: controller.signal,
       });
@@ -289,14 +322,23 @@ export function ChatClient({
               )}
 
               {/* QUEM RESPONDEU aparece — em especial quando houve fallback. */}
-              {b.role === "assistant" && b.provider && b.status !== "streaming" && (
+              {b.role === "assistant" && (b.provider || b.contexto) && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <Badge variant="outline" className="text-[11px] font-normal">
-                    {AI_PROVIDER_LABEL[b.provider]}
-                  </Badge>
-                  {b.model && (
+                  {b.provider && b.status !== "streaming" && (
+                    <Badge variant="outline" className="text-[11px] font-normal">
+                      {AI_PROVIDER_LABEL[b.provider]}
+                    </Badge>
+                  )}
+                  {b.model && b.status !== "streaming" && (
                     <Badge variant="outline" className="text-[11px] font-normal">
                       {b.model}
+                    </Badge>
+                  )}
+                  {/* "enviada com", não "usou": quem decide o que fazer com o contexto é o
+                      servidor, e a tela não tem como afirmar mais do que sabe. */}
+                  {b.contexto && (
+                    <Badge variant="outline" className="text-[11px] font-normal">
+                      enviada com o contexto de {ROTULO_DA_ROTA_DE_CONTEXTO[b.contexto]}
                     </Badge>
                   )}
                 </div>
@@ -308,6 +350,45 @@ export function ChatClient({
       </div>
 
       <div className="sticky bottom-0 space-y-2 border-t bg-background pt-3">
+        {/*
+          CONTEXTO DA PÁGINA — desligado por padrão. O que sai daqui é UMA ROTA de uma lista
+          estática do servidor; nunca o que está escrito na tela.
+        */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Label
+            htmlFor="contexto-da-pagina"
+            className="shrink-0 text-xs text-muted-foreground"
+          >
+            Contexto
+          </Label>
+          <Select
+            value={contexto ?? SEM_CONTEXTO}
+            onValueChange={(v) =>
+              setContexto(v === SEM_CONTEXTO ? null : (v as RotaComContexto))
+            }
+            disabled={!podeConversar || enviando}
+          >
+            <SelectTrigger
+              id="contexto-da-pagina"
+              className="h-9 w-full min-w-0 sm:w-[15rem]"
+              aria-label="Página que dá contexto à conversa"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SEM_CONTEXTO}>Sem contexto de página</SelectItem>
+              {ROTAS_COM_CONTEXTO.map((rota) => (
+                <SelectItem key={rota} value={rota}>
+                  {ROTULO_DA_ROTA_DE_CONTEXTO[rota]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+            O assistente recebe só o endereço da página — nada do que está escrito nela.
+          </p>
+        </div>
+
         <Textarea
           value={texto}
           onChange={(e) => setTexto(e.target.value.slice(0, MAX_CHAT_TEXT))}

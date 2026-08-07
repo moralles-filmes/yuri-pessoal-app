@@ -4,6 +4,8 @@
  * Puro. Importável por componente client — não há nada de servidor aqui.
  */
 
+import type { RotaComContexto } from "@/lib/validators/ai";
+
 export type AiSection = {
   readonly slug: string;
   readonly title: string;
@@ -66,6 +68,19 @@ export function formatUsdOrUnavailable(valor: number | null): string {
 /** O aviso de moeda, escrito uma vez e reusado — a tela nunca deixa isso implícito. */
 export const AVISO_MOEDA =
   "Valores em dólar (USD) e estimados pelo sistema a partir das tarifas publicadas pelos provedores. Não é a cobrança oficial deles, e não há conversão para reais.";
+
+/**
+ * Fase 18-B — o rótulo de cada rota que pode virar contexto da conversa.
+ *
+ * `satisfies Record<RotaComContexto, string>` obriga a cadastrar o rótulo no MESMO commit
+ * em que uma rota entra na lista estática — senão a tela mostraria um caminho cru, ou pior,
+ * `undefined`. A lista em si é de `@/lib/validators/ai`: aqui mora só a apresentação.
+ */
+export const ROTULO_DA_ROTA_DE_CONTEXTO = {
+  "/treinos": "Treinos · visão geral",
+  "/treinos/historico": "Treinos · histórico",
+  "/treinos/recordes": "Treinos · recordes",
+} as const satisfies Record<RotaComContexto, string>;
 
 /** O aviso do que a 18-A NÃO faz. Honestidade é critério de aceite, não gentileza. */
 export const AVISO_SEM_ACESSO =
