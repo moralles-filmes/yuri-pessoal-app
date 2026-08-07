@@ -202,6 +202,8 @@ export type InstallmentPurchaseWithRelations = TransactionRow & {
 export type StatementInstallmentItem = TransactionInstallmentRow & {
   parent:
     | (Pick<TransactionRow, "id" | "description"> & {
+        /** Da compra-pai: a parcela herda o rateio, não o declara. */
+        classificacao: Classificacao | null;
         category: Pick<CategoryRow, "id" | "name" | "color"> | null;
       })
     | null;

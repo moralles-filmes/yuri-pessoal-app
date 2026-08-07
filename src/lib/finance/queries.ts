@@ -344,7 +344,10 @@ export async function getStatementInstallmentItems(
   const { data } = await supabase
     .from("transaction_installments")
     .select(
-      "*, parent:transactions!transaction_installments_parent_transaction_id_fkey(id,description,category:categories(id,name,color))",
+      // `classificacao` vem do PAI porque é dele que a divisão é: a parcela herda o rateio,
+      // não o declara. É o que deixa a fatura dizer "Compartilhada"/"De terceiro" item a item
+      // sem deduzir do valor (minha parte zero não prova que a compra é toda de terceiro).
+      "*, parent:transactions!transaction_installments_parent_transaction_id_fkey(id,description,classificacao,category:categories(id,name,color))",
     )
     .in("statement_id", statementIds)
     .neq("status", "cancelada")

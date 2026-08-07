@@ -19,11 +19,45 @@
 
 import { dividirParcelas } from "@/lib/finance/installments";
 import type { SplitType } from "@/lib/finance/constants";
+import { reaisParaCentavos } from "@/lib/format";
 
 /** Parte de UM terceiro: informada por valor (centavos) ou por percentual (0..100) do total. */
 export type ParteDivisao =
   | { personId: string; tipo: "valor"; valorCentavos: number }
   | { personId: string; tipo: "percentual"; percentual: number };
+
+/**
+ * A parte como ela viaja FORA do núcleo: valor em REAIS. É a forma que o formulário produz
+ * (`SplitPartInput`) e a mesma que a revisão da importação guarda em `import_rows.split_parts`
+ * (`ImportSplitPart`) — por isso o tipo é estrutural, e não o de um dos dois.
+ */
+export type ParteEmReais = {
+  person_id: string;
+  tipo: SplitType;
+  valor?: number | null;
+  percentual?: number | null;
+};
+
+/**
+ * Converte as partes em reais/% para `ParteDivisao` (centavos), na MESMA ordem. Mora aqui, no
+ * núcleo puro, porque a tela de revisão da importação PREVÊ a divisão e o servidor a GRAVA:
+ * duas conversões diferentes fariam o número previsto discordar do número lançado.
+ */
+export function toPartesDivisao(parts: ParteEmReais[]): ParteDivisao[] {
+  return parts.map((p) =>
+    p.tipo === "valor"
+      ? {
+          personId: p.person_id,
+          tipo: "valor",
+          valorCentavos: reaisParaCentavos(p.valor ?? 0),
+        }
+      : {
+          personId: p.person_id,
+          tipo: "percentual",
+          percentual: p.percentual ?? 0,
+        },
+  );
+}
 
 /** Resultado da divisão: minha parte (resto) + a parte resolvida de cada terceiro. */
 export type ResultadoDivisao = {

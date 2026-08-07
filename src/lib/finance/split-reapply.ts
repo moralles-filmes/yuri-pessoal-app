@@ -18,9 +18,12 @@ import type { AuthContext } from "@/lib/actions/helpers";
 import {
   applySplit,
   applySplitParcelado,
-  toPartesDivisao,
 } from "@/lib/finance/split-persist";
-import { decidirReaplicacao, dividirDespesa } from "@/lib/finance/split";
+import {
+  decidirReaplicacao,
+  dividirDespesa,
+  toPartesDivisao,
+} from "@/lib/finance/split";
 import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
 import type { Classificacao } from "@/lib/finance/constants";
 import type { SplitPartInput } from "@/lib/validators/split";

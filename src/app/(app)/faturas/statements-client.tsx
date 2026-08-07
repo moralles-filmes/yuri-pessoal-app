@@ -37,6 +37,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import {
   CategoryPill,
+  ClassificacaoBadge,
   InstallmentBadge,
   StatementStatusBadge,
 } from "@/components/financeiro/badges";
@@ -45,6 +46,7 @@ import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
 import {
   STATEMENT_STATUSES,
   STATEMENT_STATUS_LABELS,
+  type Classificacao,
 } from "@/lib/finance/constants";
 import {
   markStatementPaid,
@@ -97,26 +99,39 @@ function nextDayISO(iso: string): string {
 type ParteDoItem = { personId: string; nome: string; valor: number };
 
 /**
- * Linha "meu X · Fulano Y" de UM item da fatura. O rodapé da fatura já dizia quem paga o
- * total; isto responde a pergunta que faltava — de quem é ESTA compra.
+ * "Compartilhada · meu X · Fulano Y" de UM item da fatura. O rodapé da fatura já dizia quem
+ * paga o total; isto responde a pergunta que faltava — de quem é ESTA compra.
+ *
+ * A classificação é LIDA da transação (da compra-pai, no caso da parcela), nunca deduzida do
+ * valor: minha parte zero não prova que a compra é toda de terceiro, e resto de centavo numa
+ * compra de terceiro não a torna compartilhada.
+ *
+ * Sendo 100% de terceiro, o "meu R$ 0,00" é omitido — a badge já disse.
  */
 function PartesDoItem({
   total,
   partes,
+  classificacao,
 }: {
   total: number;
   partes: ParteDoItem[];
+  classificacao: Classificacao | null;
 }) {
-  if (partes.length === 0) return null;
+  const isShared = classificacao != null && classificacao !== "pessoal";
+  if (partes.length === 0 && !isShared) return null;
   const terceiros = partes.reduce((acc, p) => acc + p.valor, 0);
+  const meu = total - terceiros;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-      <span>
-        meu{" "}
-        <span className="font-medium tabular-nums text-foreground">
-          {formatCurrency(total - terceiros)}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+      {isShared && <ClassificacaoBadge value={classificacao} />}
+      {meu !== 0 && partes.length > 0 && (
+        <span>
+          meu{" "}
+          <span className="font-medium tabular-nums text-foreground">
+            {formatCurrency(meu)}
+          </span>
         </span>
-      </span>
+      )}
       {partes.map((p) => (
         <span key={p.personId} className="min-w-0">
           <span className="truncate">{p.nome}</span>{" "}
@@ -559,6 +574,7 @@ export function StatementsClient({
                             <PartesDoItem
                               total={t.amount}
                               partes={partesPorTransacao.get(t.id) ?? []}
+                              classificacao={t.classificacao}
                             />
                           </div>
                           <div className="flex items-center gap-2">
@@ -606,6 +622,7 @@ export function StatementsClient({
                             <PartesDoItem
                               total={it.valor}
                               partes={partesPorParcela.get(it.id) ?? []}
+                              classificacao={it.parent?.classificacao ?? null}
                             />
                           </div>
                           <span className="shrink-0 text-sm font-medium tabular-nums">
