@@ -282,6 +282,42 @@ describe("executeTool — teto de registros", () => {
     expect(saida.itens_truncados?.motivo).not.toContain("limite de tamanho");
   });
 
+  /**
+   * ⚠️ A frase do teto afirmava, SEMPRE, que "os totais em `agregados` cobrem o período
+   * inteiro". Isso é falso justamente quando o adapter já devolveu `completude: "parcial"` —
+   * seriam duas afirmações opostas no mesmo resultado, e esta é a que o modelo lê por último.
+   *
+   * O corte de LISTA (teto) e o total incompleto são coisas separadas de propósito; este
+   * ponto só repassa a segunda, nunca a contradiz.
+   */
+  it("com o total PARCIAL, a frase do teto não promete o período inteiro", async () => {
+    respostaDaFerramenta = async () => ({
+      ...saidaCom(5),
+      completude: "parcial" as const,
+      motivo_incompleto: "A janela tem mais treinos que o teto da consulta.",
+    });
+
+    const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
+    const motivo = saida.itens_truncados?.motivo ?? "";
+
+    expect(motivo).toContain("teto da ferramenta é 2");
+    expect(motivo).toContain("NÃO cobrem o período inteiro");
+    // E o motivo do adapter sobrevive: quem explica o total é ele, não este ponto.
+    expect(saida.motivo_incompleto).toBe(
+      "A janela tem mais treinos que o teto da consulta.",
+    );
+  });
+
+  it("com o total EXATO, a frase do teto continua garantindo o período inteiro", async () => {
+    respostaDaFerramenta = async () => saidaCom(5);
+
+    const saida = (await executeTool(ctx, chamada())).block.content as ToolOutput;
+
+    expect(saida.itens_truncados?.motivo).toContain(
+      "Os totais em `agregados` cobrem o período inteiro.",
+    );
+  });
+
   it("lista dentro do teto não declara truncamento nenhum", async () => {
     respostaDaFerramenta = async () => saidaCom(2);
 

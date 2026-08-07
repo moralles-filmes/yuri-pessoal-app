@@ -130,7 +130,8 @@ export async function* runToolLoop(
      * consumidor abandona este gerador (o chat-runner dá `break` no evento `error` do
      * provedor, ou o navegador fecha a aba), o JS chama `.return()` no ponto do `yield` — que
      * está DENTRO do `for await`. Sem o `finally`, o passo ficaria `started` para sempre:
-     * `ai_reconcile_abandoned_runs` só toca `ai_runs` e `ai_usage_events`, e não há policy de
+     * `ai_reconcile_abandoned_runs` **não toca `ai_run_steps`** (ela mexe em `ai_runs`,
+     * `ai_usage_events` e `ai_messages` — conferido na migration), e não há policy de
      * DELETE em `ai_run_steps`. O `finally` de um async generator roda no `.return()`, e é o
      * que faz a queda da aba fechar o passo também.
      *

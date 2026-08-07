@@ -61,6 +61,25 @@ export const getRecordsInput = z
 const JANELA_PADRAO_DIAS = 7;
 
 /**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ O TETO DE LINHAS DA CONSULTA PRECISA SER VISÍVEL AQUI — SENÃO ELE MENTE EM SILÊNCIO.  ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * `getSessionHistory` corta em 500 sessões por padrão. Chamando sem `limit`, uma janela com
+ * mais que isso volta truncada **sem nenhum sinal**: `aggregateSessions` soma só as 500 mais
+ * recentes e o resultado sairia com `completude: "exato"` — um total parcial apresentado como
+ * completo, que é exatamente a mentira que esta subfase existe para impedir.
+ *
+ * Por isso pedimos `TETO + 1`: a linha extra não é usada em nada além de **provar que o teto
+ * foi atingido**. Sem ela, 500 devolvidas são indistinguíveis de "existem exatamente 500".
+ *
+ * O valor está repetido aqui de propósito, e não importado: `SESSION_LIMIT` não é exportado
+ * por `history-queries.ts`, e passar o `limit` explicitamente é o que dá a esta camada o
+ * controle sobre a própria honestidade. O teste amarra os dois.
+ */
+const TETO_SESSOES_DA_JANELA = 500;
+
+/**
  * A janela do "último treino". O `limit: 1` do histórico corta o RESULTADO, não a janela:
  * sem isto, `getSessionHistory` volta só 365 dias e quem parou de treinar há mais de um ano
  * receberia "não há treino registrado" — afirmação falsa sobre o registro do usuário. O
@@ -199,10 +218,15 @@ export async function getVolume(input: { dias?: number }): Promise<ToolOutput> {
   // Janela INCLUSIVA nos dois extremos: 7 dias terminando hoje é de hoje-6 até hoje.
   const de = addDaysIso(ate, -(dias - 1));
 
-  const [prefs, sessoes] = await Promise.all([
+  const [prefs, encontradas] = await Promise.all([
     getTrainingPreferences(),
-    getSessionHistory({ from: de, to: ate }),
+    getSessionHistory({ from: de, to: ate, limit: TETO_SESSOES_DA_JANELA + 1 }),
   ]);
+
+  // A 501ª só serve de prova de que há mais; ela não entra na soma, para o total ser sempre
+  // "as N mais recentes" e não variar conforme a linha extra tenha vindo ou não.
+  const saturou = encontradas.length > TETO_SESSOES_DA_JANELA;
+  const sessoes = saturou ? encontradas.slice(0, TETO_SESSOES_DA_JANELA) : encontradas;
 
   if (sessoes.length === 0) {
     return {
@@ -217,11 +241,19 @@ export async function getVolume(input: { dias?: number }): Promise<ToolOutput> {
   const options = opcoesDe(prefs);
   const p = aggregateSessions(sessoes, options);
 
+  // Duas causas independentes de total incompleto: séries que não convertem em kg (a
+  // `ressalva` de sempre) e a janela ter mais treinos que o teto da consulta. A segunda
+  // vence na mensagem porque é a que afeta TODOS os números, não só o volume.
+  const motivoDoTeto = saturou
+    ? `O período tem mais de ${TETO_SESSOES_DA_JANELA} treinos registrados e a consulta traz os ${TETO_SESSOES_DA_JANELA} mais recentes: estes totais cobrem essa parte, não o período inteiro. Peça uma janela menor para um número que feche.`
+    : null;
+
   return {
     periodo: { de, ate },
     contagem: p.sessionCount,
-    completude: p.totals.quality === "exato" ? "exato" : "parcial",
+    completude: !saturou && p.totals.quality === "exato" ? "exato" : "parcial",
     ...ressalva(p.totals),
+    ...(motivoDoTeto ? { motivo_incompleto: motivoDoTeto } : {}),
     agregados: {
       sessoes: p.sessionCount,
       dias_com_treino: p.trainedDays.length,
@@ -280,8 +312,15 @@ export async function getRecords(input: { exercicio?: string }): Promise<ToolOut
       marca_anterior: r.previousValue,
       marca_anterior_em: r.previousAchievedOn,
     })),
-    refs: recordes
-      .filter((r) => r.sessionId)
-      .map((r) => refDaSessao(r.sessionId as string)),
+    /**
+     * ⚠️ DEDUPLICADO por id de sessão, e não é detalhe de estilo: dois recordes distintos
+     * podem ter sido batidos NO MESMO TREINO ("1RM supino" e "peso máximo supino" na mesma
+     * sessão). Sem o `Set`, a mesma referência sai duas vezes — a tela lista o mesmo link
+     * repetido em "Ver dados usados" e o React recebe duas chaves iguais (`tipo-id`).
+     * `contagem` continua sendo o número de RECORDES; `refs` é para onde ir, não quantos são.
+     */
+    refs: [
+      ...new Set(recordes.map((r) => r.sessionId).filter(Boolean) as string[]),
+    ].map(refDaSessao),
   };
 }

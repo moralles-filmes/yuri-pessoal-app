@@ -20,7 +20,8 @@
  *
  * ⚠️ **Passo `started` NÃO é "em andamento".** `ai_run_steps` não é lido aqui, e o motivo é
  * concreto: quando o processo morre (timeout de plataforma, deploy no meio do stream) sobra
- * passo aberto sob run terminal, e `ai_reconcile_abandoned_runs` não toca `ai_run_steps`. Quem
+ * passo aberto sob run terminal, e `ai_reconcile_abandoned_runs` **não toca `ai_run_steps`**
+ * (ela reconcilia `ai_runs`, `ai_usage_events` e `ai_messages`, e só). Quem
  * responde "ainda está rodando?" é o STATUS DO RUN — ver `execucaoEmAndamento`.
  */
 

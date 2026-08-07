@@ -376,6 +376,54 @@ describe("training.get_volume", () => {
     expect(saida.periodo).not.toBeNull();
   });
 
+  /* ─────────── O teto de linhas da consulta ─────────── */
+
+  /**
+   * ⚠️ O DEFEITO QUE ESTES TRÊS TESTES FECHAM: `getSessionHistory` corta em 500 sessões por
+   * padrão. Chamado sem `limit`, o adapter recebia a janela truncada **sem sinal nenhum**,
+   * somava só as 500 mais recentes e devolvia `completude: "exato"` — total parcial
+   * apresentado como completo, que é a mentira que a subfase inteira existe para impedir.
+   *
+   * Por que pedir 501: 500 devolvidas são indistinguíveis de "existem exatamente 500". A
+   * linha extra não entra em conta nenhuma; ela só prova que há mais.
+   */
+  const TETO = 500;
+
+  /** N sessões distintas, todas iguais à A (1080 kg, 2 séries, 12 reps cada). */
+  const muitasSessoes = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ ...SESSAO_A, id: `sessao-${i}` }));
+
+  it("pede UMA sessão a mais que o teto — senão o teto é indistinguível do total", async () => {
+    historicoFalso = muitasSessoes(3);
+
+    await getVolume({ dias: 365 });
+
+    expect(ultimaFaixa?.limit).toBe(TETO + 1);
+  });
+
+  it("janela ACIMA do teto vira PARCIAL, e o motivo diz que não cobre o período", async () => {
+    historicoFalso = muitasSessoes(TETO + 1);
+
+    const saida = await getVolume({ dias: 365 });
+
+    expect(saida.completude).toBe("parcial");
+    expect(saida.motivo_incompleto).toContain("não o período inteiro");
+    // A 501ª NÃO entra na soma: o total é sempre "as 500 mais recentes".
+    expect(saida.contagem).toBe(TETO);
+    // 500 × 1080 kg = 540.000 — escrito à mão, não derivado do código.
+    expect(saida.agregados.volume_kg).toBe(540_000);
+  });
+
+  it("janela EXATAMENTE no teto continua EXATA — o corte não é presumido", async () => {
+    historicoFalso = muitasSessoes(TETO);
+
+    const saida = await getVolume({ dias: 365 });
+
+    expect(saida.completude).toBe("exato");
+    expect(saida.motivo_incompleto).toBeUndefined();
+    expect(saida.contagem).toBe(TETO);
+  });
+
   it("a janela pedida é a janela consultada, e ela termina hoje", async () => {
     historicoFalso = [SESSAO_A];
 
@@ -503,6 +551,25 @@ describe("training.get_records", () => {
     const saida = await getRecords({});
 
     expect(saida.refs).toEqual([]);
+  });
+
+  /**
+   * Dois recordes batidos NO MESMO TREINO é caso comum, não exótico: "1RM supino" e "peso
+   * máximo supino" saem do mesmo dia. Sem deduplicar, a tela lista o mesmo link duas vezes
+   * em "Ver dados usados" e o React recebe duas chaves iguais (`tipo-id`).
+   */
+  it("dois recordes da MESMA sessão viram UMA referência", async () => {
+    recordesFalsos = [
+      recorde({ recordKey: "supino:1rm", sessionId: "sessao-x" }),
+      recorde({ recordKey: "supino:peso", sessionId: "sessao-x" }),
+      recorde({ recordKey: "agacho:1rm", sessionId: "sessao-y" }),
+    ];
+
+    const saida = await getRecords({});
+
+    // 3 recordes, 2 sessões: a contagem é de RECORDES, `refs` é para onde ir.
+    expect(saida.contagem).toBe(3);
+    expect(saida.refs.map((r) => r.id)).toEqual(["sessao-x", "sessao-y"]);
   });
 
   // O nome do exercício vem do catálogo COM acento; o modelo repete o que o usuário digitou,

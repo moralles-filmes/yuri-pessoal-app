@@ -83,8 +83,12 @@ export async function closeStep(input: {
   durationMs: number;
 }): Promise<void> {
   const supabase = await createClient();
-  // `.eq("status", "started")` não é redundante com a policy: é o que torna o fechamento
-  // idempotente — reexecutar não reescreve um passo que já terminou.
+  // `.eq("status", "started")` É redundante com a policy `ai_run_steps_close_step`, cujo
+  // `USING` já traz `status = 'started'` (migration `20260808100000`, linha 78) — e fica
+  // assim de propósito. Ele é a defesa que sobrevive a alguém afrouxar a policy, e é o que
+  // torna a intenção legível aqui: o fechamento é IDEMPOTENTE, reexecutar não reescreve um
+  // passo que já terminou. O que não vale é a versão anterior deste comentário, que afirmava
+  // não-redundância — nesta branch, comentário que afirma um fato errado já custou caro.
   const { error } = await supabase
     .from("ai_run_steps")
     .update({

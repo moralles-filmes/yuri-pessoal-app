@@ -144,8 +144,23 @@ export function podarSaida(saida: ToolOutput, tool: ToolDescriptor): ToolOutput 
 
   const teto = Math.min(total, tool.maxRecords);
   const excedeuTeto = total > tool.maxRecords;
+  /**
+   * ⚠️ A segunda frase é CONDICIONAL, e a condição é o `completude` que o ADAPTER decidiu.
+   *
+   * Prometer "os totais cobrem o período inteiro" incondicionalmente é falso justamente no
+   * caso em que o adapter já avisou o contrário — a consulta saturou o próprio teto de
+   * linhas e agregou só uma parte da janela. Seriam duas afirmações opostas no mesmo
+   * resultado, e a que o modelo lê por último é esta.
+   *
+   * A distinção que a fase inteira defende: o TETO DA FERRAMENTA encurta a LISTA e não
+   * mexe no total; um total incompleto é outro assunto, mora em `completude` +
+   * `motivo_incompleto`, e este ponto só o repassa.
+   */
   const motivoDoTeto = excedeuTeto
-    ? `Mostrando ${tool.maxRecords} de ${total} ${tool.itemLabel}: o teto da ferramenta é ${tool.maxRecords}. Os totais em \`agregados\` cobrem o período inteiro.`
+    ? `Mostrando ${tool.maxRecords} de ${total} ${tool.itemLabel}: o teto da ferramenta é ${tool.maxRecords}. ` +
+      (saida.completude === "exato"
+        ? "Os totais em `agregados` cobrem o período inteiro."
+        : "Os totais em `agregados` NÃO cobrem o período inteiro — o motivo está em `motivo_incompleto`.")
     : null;
 
   const podadoPeloTeto = montar(teto, motivoDoTeto);
