@@ -7,9 +7,9 @@ import "server-only";
  * ║ A ORDEM ABAIXO NÃO É ESTILO. Cada passo existe porque o anterior o torna possível.    ║
  * ║                                                                                       ║
  * ║  1. keyring pronto?      → sem cripto, nenhuma credencial é aberta                    ║
- * ║  2. agente no registry   → `agent_id` do cliente é texto, não autorização              ║
- * ║  3. rota resolvida       → provedor/modelo do cliente são PREFERÊNCIA                  ║
- * ║  4. reserva calculada    → precisa da cadeia de fallback JÁ resolvida                  ║
+ * ║  2. preferências         → as flags `allow_*` decidem QUEM pode responder              ║
+ * ║  3. agente pelo roteador → `agent_id` do cliente é PREFERÊNCIA, não autorização        ║
+ * ║  4. rota + reserva       → precisa da cadeia de fallback JÁ resolvida                  ║
  * ║  5. admissão atômica     → COMMITA aqui, antes de qualquer chamada externa             ║
  * ║  6. tentativas           → cada uma é uma linha própria em `ai_usage_events`           ║
  * ║  7. fechamento           → condicional ao estado; `finally` e reconciliador convivem   ║
@@ -30,7 +30,14 @@ import type { AiModelEntry } from "@/lib/ai/core/models";
 import { type AiRate, PRICING_VERSION, rateFor } from "@/lib/ai/core/pricing";
 import { routeRequest } from "@/lib/ai/core/router";
 import { buildSystemPrompt, findAgent, promptVersionOf } from "@/lib/ai/agents/registry";
+import {
+  blocoDeContextoDeRoteamento,
+  routeAgent,
+} from "@/lib/ai/agents/routing";
+import type { ToolCallStatus } from "@/lib/ai/tools/audit";
 import { toolDefinitionsFor, UNEXPECTED_TOOL_CALL } from "@/lib/ai/tools/registry";
+import { MAX_TOOL_STEPS } from "@/lib/ai/tools/limits";
+import { textoDasMensagens } from "@/lib/ai/core/text";
 import { safeUserMessage } from "@/lib/ai/security/redact";
 import { computeAttemptCost } from "@/lib/ai/usage/meter";
 import {
@@ -61,6 +68,7 @@ import {
   type AttemptType,
   type BeginRunErrorCode,
 } from "./run-store";
+import { runToolLoop } from "./tool-loop";
 
 export type ChatRunnerEvent =
   | {
@@ -80,6 +88,22 @@ export type ChatRunnerEvent =
       readonly model: string;
       readonly motivo: string;
     }
+  /**
+   * Uma ferramenta foi executada (ou recusada) DENTRO desta resposta. A tela mostra o que
+   * foi consultado — leitura de dado do usuário nunca acontece em silêncio.
+   */
+  | {
+      readonly type: "tool";
+      readonly toolName: string;
+      /**
+       * O MESMO vocabulário de `ai_tool_calls.status` (`tools/audit.ts`), não uma cópia dele:
+       * repetir os literais aqui deixaria um status novo entrar na auditoria sem que o `tsc`
+       * apontasse a tela desatualizada. `import type` é apagado na compilação — nada de
+       * `server-only` chega ao bundle por causa desta linha.
+       */
+      readonly status: ToolCallStatus;
+      readonly registros: number;
+    }
   | {
       readonly type: "done";
       readonly finishReason: string;
@@ -97,7 +121,13 @@ export type ChatRunnerInput = {
   readonly userId: string;
   readonly conversationId: string | null;
   readonly text: string;
-  readonly agentId: string;
+  /**
+   * PREFERÊNCIA do cliente. Quem decide é `routeAgent`, com as flags do usuário na mão.
+   * `null` = nenhum agente pedido — o que NÃO é o mesmo que pedir o orquestrador.
+   */
+  readonly agentId: string | null;
+  /** A página aberta, quando o usuário autoriza enviá-la (Task 11). */
+  readonly pageContext?: { readonly rota: string; readonly modulo: string } | null;
   readonly providerPreference?: string | null;
   readonly modelPreference?: string | null;
   readonly abortSignal: AbortSignal;
@@ -145,8 +175,24 @@ export async function* runChat(
     return;
   }
 
-  // ── 2. Agente do registry ESTÁTICO ─────────────────────────────────────────────────
-  const agent = findAgent(input.agentId);
+  // ── 2. Preferências e configurações ────────────────────────────────────────────────
+  //
+  // Vêm ANTES do agente porque a escolha do agente depende das flags `allow_*`: o
+  // especialista de um módulo cuja leitura não está autorizada simplesmente não existe para
+  // esta mensagem, e a pergunta cai no orquestrador.
+  const [configs, prefs] = await Promise.all([
+    getRouterConfigs(input.userId),
+    getAiPreferences(input.userId),
+  ]);
+
+  // ── 3. Agente escolhido pelo SERVIDOR, no registry ESTÁTICO ────────────────────────
+  const decisao = routeAgent({
+    texto: input.text,
+    pageContext: input.pageContext ?? null,
+    permissions: prefs.permissions,
+    preferido: input.agentId,
+  });
+  const agent = findAgent(decisao.agentId);
   if (!agent) {
     yield {
       type: "error",
@@ -155,12 +201,6 @@ export async function* runChat(
     };
     return;
   }
-
-  // ── 3. Rota decidida pelo SERVIDOR ─────────────────────────────────────────────────
-  const [configs, prefs] = await Promise.all([
-    getRouterConfigs(input.userId),
-    getAiPreferences(input.userId),
-  ]);
 
   const hoje = dateInSaoPaulo(input.agora);
 
@@ -190,7 +230,17 @@ export async function* runChat(
   ];
 
   // ── 4. Prompt e reserva ────────────────────────────────────────────────────────────
-  const system = buildSystemPrompt(agent);
+  //
+  // O motivo do roteamento entra no prompt de SISTEMA — e só ele. É fato do nosso roteador
+  // (uma de seis constantes de `agents/routing.ts`), nunca texto do usuário nem resultado de
+  // ferramenta: sem esse fato, o orquestrador não tem como dizer a verdade sobre por que a
+  // pergunta chegou a ele, e a alternativa seria deixá-lo adivinhar.
+  // A rota vai junto: ela diz QUAL tela o usuário tinha aberto, o que inclina a escolha da
+  // ferramenta. Continua sendo fato do sistema — `blocoDeContextoDeRoteamento` a converte
+  // numa descrição de allowlist e ignora o que não estiver nela.
+  const system =
+    buildSystemPrompt(agent) +
+    blocoDeContextoDeRoteamento(decisao.motivo, input.pageContext?.rota ?? null);
   const historico = input.conversationId
     ? await getHistoryForPrompt(input.userId, input.conversationId)
     : [];
@@ -215,8 +265,17 @@ export async function* runChat(
     return;
   }
 
+  // As definições que VÃO ao provedor. Resolvidas uma vez: elas são a régua da chamada
+  // inesperada (o que não foi oferecido não pode voltar) e o que decide se há laço.
+  const definicoes = toolDefinitionsFor(agent.allowedTools);
+  const nomesOferecidos = definicoes.map((d) => d.name);
+
   // A estimativa é sobre o prompt JÁ MONTADO, nunca sobre o texto cru do usuário.
-  const promptMontado = system + mensagens.map((m) => m.content).join("\n");
+  //
+  // ⚠️ `textoDasMensagens`, e não `map(m => m.content).join()`: `content` virou união na
+  // 18-B, e concatenar partes direto produz `[object Object]` — 15 caracteres no lugar de um
+  // bloco inteiro. A reserva ficaria menor que o custo, sem erro nenhum.
+  const promptMontado = system + textoDasMensagens(mensagens);
   const reserva = computeReservation({
     rates: tarifas,
     tokensEntradaEstimados: estimarTokensDeEntrada(promptMontado),
@@ -224,6 +283,9 @@ export async function* runChat(
     maxRetries: config.maxRetries,
     maxFallbacks: Math.max(0, alvos.length - 1),
     margem: prefs.reservationMargin,
+    // Só reserva passos se o agente TEM ferramenta oferecida. Sem ferramenta não há laço, e
+    // reservar passos que não vão acontecer bloquearia orçamento à toa.
+    maxToolSteps: definicoes.length > 0 ? MAX_TOOL_STEPS : 0,
   });
 
   // ── 5. ADMISSÃO ATÔMICA — o commit acontece aqui, antes de qualquer chamada externa ──
@@ -276,6 +338,17 @@ export async function* runChat(
   let ultimoHeartbeat = inicioMs;
 
   /**
+   * ⚠️ O `step_index` é DO RUN, e o run é um só: `beginChatRun` já rodou, e retry e fallback
+   * continuam dentro dele. Como `ai_run_steps_run_index_uidx` é `UNIQUE (run_id, step_index,
+   * kind)`, um contador que vivesse dentro de `runToolLoop` reiniciaria a cada tentativa e a
+   * segunda colidiria em `23505` — `startStep` devolveria `null` e a regra "sem trilha, sem
+   * leitura" bloquearia TODA leitura depois do primeiro retry. Por isso o contador mora aqui,
+   * ao lado de `attemptIndex`, e atravessa a cadeia inteira.
+   */
+  let stepIndex = 0;
+  const proximoStepIndex = () => (stepIndex += 1);
+
+  /**
    * `completed_provider`/`completed_model` significam "quem EFETIVAMENTE CONCLUIU" — por
    * isso ficam nulos quando o run falha ou é cancelado. Gravar ali o último provedor
    * tentado faria a tela dizer "respondido por X" numa resposta que nunca existiu.
@@ -308,6 +381,26 @@ export async function* runChat(
       if (tipo === "FALLBACK") fallbackCount += 1;
 
       if (attemptIndex > 1) {
+        /**
+         * ╔════════════════════════════════════════════════════════════════════════════════╗
+         * ║ TENTATIVA NOVA COMEÇA COM O TEXTO ZERADO — E A TELA FAZ O MESMO NO `switch`.    ║
+         * ║                                                                                 ║
+         * ║ Sem isto, a narração da tentativa que falhou ficava colada na da seguinte: o    ║
+         * ║ acumulador atravessava o retry e o fallback, e era ele que ia para              ║
+         * ║ `heartbeatAndPersist` e para `completeRun`. A resposta gravada virava a mistura ║
+         * ║ de duas respostas — e nenhuma leitura da conversa depois disso conseguiria      ║
+         * ║ separá-las.                                                                      ║
+         * ║                                                                                 ║
+         * ║ ⚠️ Zerar SÓ AQUI é essencial: o passo TOOL_STEP também incrementa `attemptIndex`,║
+         * ║ mas ele é a MESMA resposta continuando depois de uma ferramenta, não uma        ║
+         * ║ tentativa nova — e não passa por este ponto (ele vive dentro de `chamarModelo`).║
+         * ║                                                                                 ║
+         * ║ ⚠️ E zerar só no servidor seria pior que não zerar: o `router.refresh()` do fim  ║
+         * ║ do envio releria o texto novo e APAGARIA da tela algo que o usuário já tinha    ║
+         * ║ lido. Por isso `chat-client.tsx` limpa a bolha no mesmo evento.                  ║
+         * ╚════════════════════════════════════════════════════════════════════════════════╝
+         */
+        texto = "";
         yield {
           type: "switch",
           provider: alvo.provider,
@@ -374,20 +467,113 @@ export async function* runChat(
       let finishReason = "unknown";
       let toolCallInesperada = false;
 
-      try {
-        const client = createProviderClient(alvo.provider, chave.value);
-        const stream = client.streamText({
-          model: alvo.model.id,
-          system,
-          messages: mensagens,
-          maxOutputTokens: alvo.model.outputCapTokens,
-          timeoutMs: config.timeoutMs,
-          abortSignal: signal,
-          // Registry VAZIO na 18-A: nenhuma definição é enviada ao provedor.
-          tools: toolDefinitionsFor(agent.allowedTools),
-        });
+      /**
+       * ╔════════════════════════════════════════════════════════════════════════════════╗
+       * ║ CADA CHAMADA AO MODELO É UMA TENTATIVA PRÓPRIA — E SÓ UMA FICA ABERTA.          ║
+       * ║                                                                                 ║
+       * ║ `ai_usage_events_one_active_uidx` é `UNIQUE (run_id) WHERE status = 'started'`. ║
+       * ║ Abrir a tentativa do passo N+1 com a do passo N ainda aberta é `23505` EM        ║
+       * ║ RUNTIME — nenhum teste de unidade da medição pega isso, porque a trava é do      ║
+       * ║ banco. Por isso o fechamento acontece AQUI, num ponto só, e é a primeira coisa   ║
+       * ║ que `chamarModelo` faz antes de abrir a seguinte.                                ║
+       * ╚════════════════════════════════════════════════════════════════════════════════╝
+       */
+      let aberta: { id: string; inicio: number } | null = {
+        id: tentativa.id,
+        inicio: inicioTentativa,
+      };
 
-        for await (const evento of stream as AsyncIterable<AiStreamEvent>) {
+      const fecharTentativaAberta = async (
+        status: "completed" | "failed" | "cancelled",
+        errorCode: string | null,
+      ) => {
+        if (!aberta) return;
+        const atual = aberta;
+        aberta = null;
+        await closeAttempt({
+          attemptId: atual.id,
+          userId: input.userId,
+          status,
+          usage: usoFinal,
+          rate: tarifa,
+          latencyMs: Date.now() - atual.inicio,
+          providerRequestId,
+          errorCode,
+        });
+        if (usoFinal) {
+          const parcial = computeAttemptCost(usoFinal, tarifa);
+          if (parcial.totalUsd !== null) custoAcumulado += parcial.totalUsd;
+        }
+        usoFinal = null;
+        providerRequestId = null;
+      };
+
+      /**
+       * A chamada ao provedor, uma por passo do laço. O passo 0 usa a tentativa já aberta
+       * (PRIMARY/RETRY/FALLBACK); os seguintes abrem uma tentativa `TOOL_STEP` — que é o que
+       * mantém a medição por CHAMADA, e não por resposta.
+       */
+      const chamarModelo = (
+        msgs: readonly AiMessage[],
+        passo: number,
+      ): AsyncIterable<AiStreamEvent> =>
+        (async function* () {
+          if (passo > 0) {
+            await fecharTentativaAberta("completed", null);
+            attemptIndex += 1;
+            const nova = await startAttempt({
+              runId: run.runId,
+              userId: input.userId,
+              conversationId: run.conversationId,
+              agentId: agent.id,
+              attemptIndex,
+              attemptType: "TOOL_STEP",
+              provider: alvo.provider,
+              modelId: alvo.model.id,
+              rate: tarifa,
+            });
+            if (!nova) {
+              yield {
+                type: "error",
+                error: aiError(
+                  "ERRO_PERMANENTE",
+                  "ATTEMPT_NOT_RECORDED",
+                  "Não foi possível registrar a continuação da execução. A resposta foi interrompida.",
+                ),
+              };
+              return;
+            }
+            aberta = { id: nova.id, inicio: Date.now() };
+            concluiu = false;
+          }
+
+          const client = createProviderClient(alvo.provider, chave.value);
+          yield* client.streamText({
+            model: alvo.model.id,
+            system,
+            messages: msgs,
+            maxOutputTokens: alvo.model.outputCapTokens,
+            timeoutMs: config.timeoutMs,
+            abortSignal: signal,
+            // O laço executa SÓ o que passou pela allowlist do agente e pelo guard. O que
+            // não está aqui não foi oferecido — e voltar assim mesmo encerra o run.
+            tools: definicoes,
+          });
+        })();
+
+      try {
+        for await (const evento of runToolLoop({
+          ctxBase: {
+            runId: run.runId,
+            userId: input.userId,
+            agent: { id: agent.id, allowedTools: agent.allowedTools },
+            permissions: prefs.permissions,
+          },
+          mensagensIniciais: mensagens,
+          ferramentasOferecidas: nomesOferecidos,
+          proximoStepIndex,
+          chamarModelo,
+        })) {
           if (evento.type === "delta") {
             if (texto === "") await markStreaming(run.runId, input.userId);
             texto += evento.text;
@@ -408,9 +594,29 @@ export async function* runChat(
             continue;
           }
 
-          if (evento.type === "tool-call") {
-            // NÃO PODE ACONTECER na 18-A. Não executamos, não interpretamos como ferramenta
-            // válida e não deixamos o run seguir como se nada tivesse ocorrido.
+          if (evento.type === "tool") {
+            yield {
+              type: "tool",
+              toolName: evento.toolName,
+              status: evento.status,
+              registros: evento.registros,
+            };
+            continue;
+          }
+
+          if (evento.type === "aviso") {
+            // O corte NÃO é silencioso: ele entra na resposta que o usuário lê e na
+            // mensagem que fica gravada. Uma resposta interrompida apresentada como
+            // completa é a mesma família de mentira que a subfase inteira combate.
+            const trecho = texto === "" ? evento.texto : `\n\n${evento.texto}`;
+            texto += trecho;
+            yield { type: "delta", text: trecho };
+            continue;
+          }
+
+          if (evento.type === "tool-call-inesperada") {
+            // Não executamos, não interpretamos como ferramenta válida e não deixamos o run
+            // seguir como se nada tivesse ocorrido.
             toolCallInesperada = true;
             erroDaTentativa = aiError(
               "ERRO_PERMANENTE",
@@ -420,16 +626,18 @@ export async function* runChat(
             break;
           }
 
-          if (evento.type === "finish") {
-            usoFinal = evento.usage;
-            providerRequestId = evento.providerRequestId;
-            finishReason = evento.finishReason;
+          const doProvedor = evento.evento;
+
+          if (doProvedor.type === "finish") {
+            usoFinal = doProvedor.usage;
+            providerRequestId = doProvedor.providerRequestId;
+            finishReason = doProvedor.finishReason;
             concluiu = true;
-            break;
+            continue;
           }
 
-          if (evento.type === "error") {
-            erroDaTentativa = evento.error;
+          if (doProvedor.type === "error") {
+            erroDaTentativa = doProvedor.error;
             break;
           }
         }
@@ -445,20 +653,9 @@ export async function* runChat(
         dispose();
       }
 
-      const latencia = Date.now() - inicioTentativa;
-
       // ── Cancelamento do usuário (ou queda do cliente, que é idêntica) ───────────────
       if (input.abortSignal.aborted) {
-        await closeAttempt({
-          attemptId: tentativa.id,
-          userId: input.userId,
-          status: "cancelled",
-          usage: usoFinal,
-          rate: tarifa,
-          latencyMs: latencia,
-          providerRequestId,
-          errorCode: "CANCELLED",
-        });
+        await fecharTentativaAberta("cancelled", "CANCELLED");
         await cancelRun(contexto(), "Cancelado pelo usuário ou queda da conexão.");
         fechado = true;
         return;
@@ -466,16 +663,7 @@ export async function* runChat(
 
       // ── Sucesso ────────────────────────────────────────────────────────────────────
       if (concluiu && !erroDaTentativa) {
-        await closeAttempt({
-          attemptId: tentativa.id,
-          userId: input.userId,
-          status: "completed",
-          usage: usoFinal,
-          rate: tarifa,
-          latencyMs: latencia,
-          providerRequestId,
-          errorCode: null,
-        });
+        await fecharTentativaAberta("completed", null);
         await completeRun(contexto(true));
         fechado = true;
         yield {
@@ -492,21 +680,10 @@ export async function* runChat(
         erroDaTentativa ??
         aiError("ERRO_TEMPORARIO", "NO_FINISH", "A resposta terminou sem conclusão.");
 
-      await closeAttempt({
-        attemptId: tentativa.id,
-        userId: input.userId,
-        status: erro.class === "CANCELADO_PELO_USUARIO" ? "cancelled" : "failed",
-        usage: usoFinal,
-        rate: tarifa,
-        latencyMs: latencia,
-        providerRequestId,
-        errorCode: erro.code,
-      });
-
-      if (usoFinal) {
-        const parcial = computeAttemptCost(usoFinal, tarifa);
-        if (parcial.totalUsd !== null) custoAcumulado += parcial.totalUsd;
-      }
+      await fecharTentativaAberta(
+        erro.class === "CANCELADO_PELO_USUARIO" ? "cancelled" : "failed",
+        erro.code,
+      );
 
       // Tool call inesperada NÃO tem recuperação: encerra o run, ponto.
       if (toolCallInesperada) {

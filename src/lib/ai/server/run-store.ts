@@ -79,7 +79,14 @@ export async function beginChatRun(
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("ai_begin_chat_run", {
-    p_conversation_id: input.conversationId,
+    // O tipo gerado (18-B) é MAIS ESTRITO que o banco: `p_conversation_id` não tem `default`
+    // no SQL, então PRECISA ser enviado — omitir a chave faz o PostgREST não achar a função.
+    // Só que em PL/pgSQL todo parâmetro aceita NULL, e aqui NULL É SIGNIFICATIVO: é assim que
+    // se pede uma conversa NOVA (a função ramifica em `if p_conversation_id is not null`).
+    // O gerador não expressa "obrigatório, mas aceita null" — daí o cast estreito. Se um dia
+    // o SQL ganhar `default null` neste parâmetro (precisaria de nova migration), o tipo vira
+    // opcional e este cast pode sair.
+    p_conversation_id: input.conversationId as unknown as string,
     p_agent_id: input.agentId,
     p_prompt_version: input.promptVersion,
     p_user_text: input.userText,
@@ -88,7 +95,9 @@ export async function beginChatRun(
     p_reserved_cost: input.reservedCost,
     p_reservation_rate_version: input.reservationRateVersion,
     p_reservation_ttl_seconds: input.reservationTtlSeconds,
-    p_title: input.title,
+    // `p_title` TEM `default null` no SQL: omitir a chave (via `?? undefined`) faz o
+    // PostgREST usar o default — sem cast, e com o mesmo comportamento de passar null.
+    p_title: input.title ?? undefined,
   });
 
   if (error) {
@@ -275,7 +284,13 @@ async function fecharRun(
 
 // ─────────────────────────── Tentativas ───────────────────────────
 
-export type AttemptType = "PRIMARY" | "RETRY" | "FALLBACK";
+/**
+ * `TOOL_STEP` (18-B) é a chamada ao modelo que CONTINUA o laço depois de uma ferramenta —
+ * não é repetição (`RETRY`) nem troca de provedor (`FALLBACK`). Ela é uma linha própria
+ * porque é uma chamada paga própria: medir a resposta inteira como uma tentativa só
+ * esconderia o custo do laço, que é justamente o que a reserva por passos existe para cobrir.
+ */
+export type AttemptType = "PRIMARY" | "RETRY" | "FALLBACK" | "TOOL_STEP";
 
 export type StartAttemptInput = {
   readonly runId: string;

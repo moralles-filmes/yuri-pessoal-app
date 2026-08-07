@@ -11,6 +11,11 @@
  * As chaves de NOTIFICAÇÃO não moram aqui: vão para `settings.notification_prefs`, porque
  * `filterByPrefs` é o único ponto do sistema onde preferência de notificação decide
  * (invariante 24 da 16-F). O sino da IA só entra na 18-F.
+ *
+ * ⚠️ **A 18-B acrescentou as nove flags `allow_*`.** Elas são a AUTORIZAÇÃO DE LEITURA por
+ * módulo — o que `guardToolCall` exige antes de qualquer ferramenta rodar. Nascem desligadas
+ * no banco e continuam desligadas aqui: nada nesta action liga uma flag por omissão, porque o
+ * schema as exige todas e a tela manda o estado completo.
  */
 
 import { revalidatePath } from "next/cache";
@@ -56,6 +61,21 @@ export async function saveAiPreferences(
   const { error } = await ctx.supabase.from("ai_user_preferences").upsert(
     {
       user_id: ctx.userId,
+      /**
+       * As nove autorizações de leitura (18-B). Vão CAMPO A CAMPO, não por espalhamento do
+       * objeto validado: um `...dados.permissions` faria qualquer chave nova do schema virar
+       * coluna do `upsert` sem ninguém revisar o mapeamento, e uma chave que não existe na
+       * tabela derruba a gravação INTEIRA — inclusive orçamento e limites.
+       */
+      allow_finance: dados.permissions.allow_finance,
+      allow_nutrition: dados.permissions.allow_nutrition,
+      allow_training: dados.permissions.allow_training,
+      allow_body: dados.permissions.allow_body,
+      allow_todo: dados.permissions.allow_todo,
+      allow_calendar: dados.permissions.allow_calendar,
+      allow_tasks: dados.permissions.allow_tasks,
+      allow_habits: dados.permissions.allow_habits,
+      allow_studies: dados.permissions.allow_studies,
       default_provider: dados.defaultProvider,
       default_model: dados.defaultModel,
       confirmation_mode: dados.confirmationMode,

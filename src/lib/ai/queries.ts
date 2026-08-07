@@ -19,6 +19,13 @@ import {
 } from "./usage/budget";
 import { round6, sumRunCost } from "./usage/meter";
 import type { ProviderConfigView } from "./core/router";
+import type { ToolCallStatus, ToolPermission } from "./tools/contracts";
+import {
+  parseArgumentos,
+  parseRefs,
+  type RunSources,
+  type ToolCallRecord,
+} from "./tools/sources";
 import type {
   AiPreferencesView,
   ConversationDetail,
@@ -115,6 +122,23 @@ export async function getRouterConfigs(
   }));
 }
 
+/**
+ * Nenhuma leitura de módulo autorizada. É o padrão do usuário SEM linha em
+ * `ai_user_preferences` — e tem de ser exatamente este: um `undefined` no lugar de `false`
+ * daria "não sei" onde a resposta certa é "não".
+ */
+const SEM_PERMISSAO: Record<ToolPermission, boolean> = {
+  allow_finance: false,
+  allow_nutrition: false,
+  allow_training: false,
+  allow_body: false,
+  allow_todo: false,
+  allow_calendar: false,
+  allow_tasks: false,
+  allow_habits: false,
+  allow_studies: false,
+};
+
 const PREFS_PADRAO: AiPreferencesView = {
   defaultProvider: null,
   defaultModel: null,
@@ -127,6 +151,7 @@ const PREFS_PADRAO: AiPreferencesView = {
   reservationMargin: 1.15,
   rateLimitPerMinute: 10,
   rateLimitPerHour: 120,
+  permissions: SEM_PERMISSAO,
 };
 
 export async function getAiPreferences(userId: string): Promise<AiPreferencesView> {
@@ -134,7 +159,7 @@ export async function getAiPreferences(userId: string): Promise<AiPreferencesVie
   const { data } = await supabase
     .from("ai_user_preferences")
     .select(
-      "default_provider, default_model, confirmation_mode, allow_fallback, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
+      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -153,6 +178,19 @@ export async function getAiPreferences(userId: string): Promise<AiPreferencesVie
     reservationMargin: data.reservation_margin,
     rateLimitPerMinute: data.rate_limit_per_minute,
     rateLimitPerHour: data.rate_limit_per_hour,
+    // `=== true` e não `?? false`: coluna ausente, nula ou de tipo inesperado vira DESLIGADA.
+    // Autorização de leitura nunca sai de coerção.
+    permissions: {
+      allow_finance: data.allow_finance === true,
+      allow_nutrition: data.allow_nutrition === true,
+      allow_training: data.allow_training === true,
+      allow_body: data.allow_body === true,
+      allow_todo: data.allow_todo === true,
+      allow_calendar: data.allow_calendar === true,
+      allow_tasks: data.allow_tasks === true,
+      allow_habits: data.allow_habits === true,
+      allow_studies: data.allow_studies === true,
+    },
   };
 }
 
@@ -321,6 +359,71 @@ export async function getHistoryForPrompt(
   }
 
   return saida.reverse();
+}
+
+/** Teto da trilha lida de uma vez. Uma conversa de 500 mensagens não vira 5.000 linhas na tela. */
+const MAX_TOOL_CALLS_POR_LEITURA = 500;
+
+/**
+ * As FONTES de cada resposta: o que foi consultado, quanto foi encontrado e para onde apontar.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ POR RUN**S**, NÃO POR RUN. O plano previa `getRunSources(userId, runId)`; a tela que a ║
+ * ║ consome é a da CONVERSA, que tem uma execução por mensagem do assistente — uma consulta ║
+ * ║ por run seria N+1 exatamente onde o projeto o proíbe. A assinatura recebe a lista e     ║
+ * ║ devolve indexado por `run_id`, no mesmo formato de `ConversationDetail.runs`.           ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⛔ **`ai_run_steps` NÃO é lido aqui, e a ausência é deliberada.** Um passo `started` sob run
+ * terminal é resíduo de processo morto (timeout de plataforma, deploy no meio do stream): o
+ * `finally` do laço não roda e `ai_reconcile_abandoned_runs` não toca `ai_run_steps`. Lê-lo
+ * como "em andamento" faria a tela mostrar execuções eternas. Quem responde isso é o status do
+ * RUN, que a tela já tem (`MessageRunInfo.status` → `execucaoEmAndamento`).
+ *
+ * Colunas EXPLÍCITAS, como todo este arquivo. `arguments_sanitized` e `refs` já saem do banco
+ * como `jsonb` e passam por parsers puros — o `refs` vira `href`, então é validado antes.
+ */
+export async function getRunSources(
+  userId: string,
+  runIds: readonly string[],
+): Promise<Record<string, RunSources>> {
+  if (runIds.length === 0) return {};
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ai_tool_calls")
+    .select(
+      "run_id, tool_name, tool_version, status, rejection_reason, records_read, duration_ms, refs, arguments_sanitized, created_at",
+    )
+    .eq("user_id", userId)
+    .in("run_id", [...runIds])
+    .order("created_at", { ascending: true })
+    .limit(MAX_TOOL_CALLS_POR_LEITURA);
+
+  const porRun: Record<string, RunSources> = {};
+
+  for (const linha of data ?? []) {
+    const chamada: ToolCallRecord = {
+      toolName: linha.tool_name,
+      toolVersion: linha.tool_version,
+      status: linha.status as ToolCallStatus,
+      rejectionReason: linha.rejection_reason,
+      // `null` continua `null`: rejeição, falha e timeout não leram nada, e "nada" não é zero.
+      recordsRead: linha.records_read,
+      durationMs: linha.duration_ms,
+      refs: parseRefs(linha.refs),
+      argumentos: parseArgumentos(linha.arguments_sanitized),
+      createdAt: linha.created_at,
+    };
+
+    const atual = porRun[linha.run_id];
+    porRun[linha.run_id] = {
+      runId: linha.run_id,
+      chamadas: atual ? [...atual.chamadas, chamada] : [chamada],
+    };
+  }
+
+  return porRun;
 }
 
 // ─────────────────────────── Consumo ───────────────────────────

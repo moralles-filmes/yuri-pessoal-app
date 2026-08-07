@@ -15,7 +15,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅ concluída (2026-08-04); **18-B é a próxima** |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅ (2026-08-04) e 18-B ✅ (2026-08-07); **18-C é a próxima** |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -43,22 +43,26 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 ## Próximas fases
 
-**Fase 18-B — IA · Contexto, ferramentas de leitura e agentes.**
-Arquivo: `docs/phases/PHASE_18_B_AI_CONTEXT_READ_TOOLS_AGENTS.md`
+**Fase 18-C — IA · Ações, aprovações, idempotência e auditoria.**
 Desenho validado: `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`
 
-A **18-A foi implementada e verificada em 2026-08-04** (detalhe em
-`docs/handoff/LAST_PHASE_SUMMARY.md`). Ela entregou a fundação inteira — contratos internos,
-quatro adapters, catálogos versionados, credenciais cifradas, chat com streaming, medição por
-tentativa e orçamento com reserva — **sem que a IA leia um único registro do usuário**. Essa
-ordem é proposital: a camada de segurança precisa existir, estar testada e ser difícil de furar
-**antes** da primeira leitura, e é isso que a 18-B começa a fazer.
+A **18-A** (2026-08-04) entregou a fundação inteira — contratos internos, quatro adapters,
+catálogos versionados, credenciais cifradas, chat com streaming, medição por tentativa e
+orçamento com reserva — **sem que a IA leia um único registro**. Essa ordem foi proposital: a
+camada de segurança precisava existir, estar testada e ser difícil de furar **antes** da
+primeira leitura. A **18-B** (2026-08-07) fez essa primeira leitura, com três ferramentas de
+Treinos e nada mais.
+
+A **18-C é a primeira subfase de ESCRITA**, e muda a natureza do risco: até aqui o pior caso
+de um defeito era a IA dizer um número errado; a partir dela, é a IA **alterar um registro**.
+A primeira entrega dela, porém, não é a escrita — é a **matriz de ferramentas de LEITURA** dos
+7 módulos restantes, replicando o molde de Treinos.
 
 | Subfase | Tema | Status |
 | --- | --- | --- |
 | 18-A | Fundação, provedores e chat | ✅ **CONCLUÍDA** (2026-08-04) |
-| 18-B | Contexto, ferramentas de leitura e agentes | ⬜ **Próxima** |
-| 18-C | Ações, aprovações, idempotência e auditoria | ⬜ |
+| 18-B | Contexto, ferramentas de leitura e agentes | ✅ **CONCLUÍDA** (2026-08-07) |
+| 18-C | Ações, aprovações, idempotência e auditoria | ⬜ **Próxima** |
 | 18-D | Visão, documentos e comprovantes | ⬜ |
 | 18-E | Insights, relatórios e dashboards | ⬜ |
 | 18-F | Memória, voz, integrações e polimento | ⬜ — fecha a fase |
@@ -158,6 +162,56 @@ disponível; vale um clique antes de considerar 100% fechado.
 
 ---
 
+## O que foi implementado na Subfase 18-B (contexto, leitura e agentes) — 2026-08-07
+
+**A 18-B é a subfase em que a IA passou a ler dado real do usuário** — três ferramentas, todas
+de Treinos, todas de leitura. Nenhuma escrita existe, e o guard recusa por
+`TOOL_WRITE_DISABLED`.
+
+| Entrega | O que é |
+| --- | --- |
+| 3 ferramentas de Treinos | último treino, totais do período, recordes — reusando os serviços que as telas já usam |
+| Laço de ferramentas próprio | as definições vão ao provedor **sem `execute`**; quem valida e executa é o Tool Executor |
+| Roteamento por agente | `routeAgent` escolhe por texto ou contexto de página; a flag `allow_*` vence sempre |
+| Contexto de página | só a ROTA, de lista estática; o módulo é resolvido no servidor |
+| Auditoria por chamada | `ai_tool_calls` + `ai_run_steps` (2 tabelas novas) |
+| Rastreabilidade na tela | chips por resposta, com "Ver dados usados" abrindo os registros |
+| 9 chaves de autorização | `/ia/configuracoes`; todas nascem desligadas |
+
+### As decisões que valem para as próximas subfases
+
+**A IA nunca decide o que pode ler.** O modelo pede; o backend valida contra um registry
+estático, com allowlist por agente, e só então executa. `user_id` vem sempre de
+`authContext()` — não existe nos schemas de entrada, e `.strict()` recusa campo a mais.
+
+**A auditoria guarda o PEDIDO, nunca o RESULTADO.** Gravar o conteúdo devolvido seria uma
+segunda cópia dos dados pessoais dentro do módulo de IA. Consequência que a tela respeita: ela
+**não afirma** nem que o dado estava completo nem que estava incompleto, porque não tem como
+saber — e diz isso em vez de fingir.
+
+**Todo texto que descreve o que a IA não faz é datado.** O prompt-base da 18-A mandava o
+assistente afirmar que não consultava registro nenhum; isso virou mentira no instante em que
+as leituras de Treinos entraram no registry. Corrigido em `seguranca-v2`, e o aviso da tela
+junto. Os textos de agora afirmam a **regra** (nada é lido sem autorização por módulo, e não
+há escrita), não o estado — para não vencerem de novo.
+
+**O contexto da página é só o endereço.** A tela não manda conteúdo: nem HTML, nem título, nem
+estado, nem texto de registro. Se pudesse, o que está na sua tela viraria entrada do modelo sem
+passar pelo bloco de dado não confiável, que é a defesa central da subfase.
+
+### Verificação
+
+`npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm run test:run` **2.512 testes / 121 arquivos** ✅ ·
+suíte verde também em **`TZ=UTC`** ✅ · `npm run build` ✅.
+Smoke: rotas privadas → 307 `/login`; `/api/cron/*` sem segredo → 401.
+
+⚠️ **Limite da verificação:** o chat **não foi exercitado com credencial real de provedor** —
+exige chave e `AI_MASTER_KEYS`. E o projeto **não tem infraestrutura de teste de componente**
+(`environment: "node"`, zero `.test.tsx`), então a fiação da tela é verificada por varredura do
+código-fonte, não por DOM.
+
+---
+
 ## O que foi implementado na Subfase 18-A (fundação, provedores e chat) — 2026-08-04
 
 A 18-A **para antes de encostar nos dados**, de propósito. O risco desta subfase nunca foi a
@@ -220,6 +274,10 @@ dinâmico** — `no-restricted-imports` não enxerga `await import()`. Conferido
 passou para `paths` (casamento exato). Registrado no comentário do `eslint.config.mjs`.
 
 ### Trava de honestidade — critério de aceite, não boa vontade do modelo
+
+> ⚠️ **O parágrafo abaixo descreve a 18-A e FOI SUPERADO PELA 18-B.** Ele fica aqui como
+> registro histórico. O prompt-base foi reescrito (`seguranca-v2`) porque afirmar "não consulto
+> registro nenhum" virou mentira quando a IA passou a ler Treinos — ver a seção da 18-B.
 
 O assistente da 18-A **não consulta nenhum registro** e o prompt diz isso com todas as letras,
 aponta o módulo onde o dado está e proíbe explicitamente inventar número (inclusive as duas

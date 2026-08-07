@@ -23,10 +23,10 @@ import { NextResponse } from "next/server";
 import { authContext } from "@/lib/actions/helpers";
 import {
   chatRequestSchema,
+  contextoDaRota,
   MAX_CHAT_BODY_BYTES,
   MAX_CHAT_TEXT,
 } from "@/lib/validators/ai";
-import { ASSISTENTE_PESSOAL_ID } from "@/lib/ai/agents/registry";
 import { runChat, type ChatRunnerEvent } from "@/lib/ai/server/chat-runner";
 import {
   AI_CRYPTO_NOT_CONFIGURED,
@@ -54,6 +54,30 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   AI_BUDGET_EXCEEDED_MONTHLY: 402,
   [AI_CRYPTO_NOT_CONFIGURED]: 503,
 };
+
+/**
+ * A mensagem de validação que o USUÁRIO vai ler, sempre em pt-BR.
+ *
+ * ⚠️ O `error` desta resposta não fica no log: `chat-client.tsx` o joga direto num `toast`.
+ * O Zod escreve em inglês por padrão, então `issues[0].message` só serve quando o schema
+ * definiu a mensagem — e `chatRequestSchema` define uma para cada campo.
+ *
+ * Sobram os dois códigos que o schema NÃO consegue traduzir e que dependem só da forma do
+ * JSON, nunca de um campo nosso:
+ *  - `unrecognized_keys` — `.strict()` do Zod 4.4 ignora o `error` passado a ele (conferido);
+ *  - `invalid_type` — JSON com o tipo errado (`text: 123`), que nenhum `.min()` alcança.
+ *
+ * Nenhum dos dois ecoa o valor recusado: chave e conteúdo vieram do cliente, e devolvê-los
+ * é refletir entrada não confiável de volta na tela sem necessidade nenhuma.
+ */
+function mensagemEmPortugues(issue: { code: string; message: string } | undefined): string {
+  if (!issue) return "Requisição inválida.";
+  if (issue.code === "unrecognized_keys") {
+    return "O pedido trouxe um campo que o servidor não aceita.";
+  }
+  if (issue.code === "invalid_type") return "Pedido em formato inválido.";
+  return issue.message;
+}
 
 export async function POST(request: Request) {
   // ── 1. Sessão. `user_id` SÓ daqui — nunca do corpo ─────────────────────────────────
@@ -112,7 +136,7 @@ export async function POST(request: Request) {
       primeiro?.code === "too_big" && primeiro.path[0] === "text" ? 413 : 400;
     return NextResponse.json(
       {
-        error: primeiro?.message ?? "Requisição inválida.",
+        error: mensagemEmPortugues(primeiro),
         code: tamanho === 413 ? "AI_MESSAGE_TOO_LONG" : "AI_BAD_REQUEST",
         limite: tamanho === 413 ? MAX_CHAT_TEXT : undefined,
       },
@@ -138,7 +162,17 @@ export async function POST(request: Request) {
     userId: ctx.userId,
     conversationId: parsed.data.conversationId ?? null,
     text: parsed.data.text,
-    agentId: parsed.data.agentId ?? ASSISTENTE_PESSOAL_ID,
+    // ⚠️ PREFERÊNCIA, não decisão: quem escolhe o agente é `routeAgent`, no servidor, com as
+    // flags `allow_*` do usuário na mão. `null` (o caso de hoje — a tela não manda o campo) é
+    // "não pedi nenhum", que é diferente de "pedi o orquestrador".
+    agentId: parsed.data.agentId ?? null,
+    // ⚠️ Do contexto da página, SÓ A ROTA atravessa o transporte — e ela vem de uma lista
+    // estática, não de texto da tela. O MÓDULO é resolvido aqui, no servidor: é ele que
+    // decide o agente e, por tabela, a allowlist de ferramentas. Se a tela pudesse
+    // declará-lo, o cliente escolheria o que a IA pode ler.
+    pageContext: parsed.data.pageContext
+      ? contextoDaRota(parsed.data.pageContext.rota)
+      : null,
     providerPreference: parsed.data.providerPreference ?? null,
     modelPreference: parsed.data.modelPreference ?? null,
     abortSignal: request.signal,

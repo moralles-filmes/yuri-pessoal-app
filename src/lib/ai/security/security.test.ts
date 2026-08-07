@@ -17,6 +17,7 @@ import {
   safeLogFields,
   safeUserMessage,
   sanitizedForStorage,
+  sanitizedJson,
 } from "./redact";
 import {
   MAX_UNTRUSTED_CHARS,
@@ -95,6 +96,129 @@ describe("mensagem de erro que chega ao usuário", () => {
       "retryable",
     ]);
     expect(JSON.stringify(campos)).not.toContain("provedor");
+  });
+});
+
+/**
+ * Fase 18-B — o que a auditoria de ferramentas grava em `arguments_sanitized`. O argumento
+ * vem do MODELO: pode ser qualquer coisa, inclusive uma chave colada por engano pelo usuário
+ * na conversa. Ele passa pela MESMA varredura do erro — sanitizar num lugar só é o que
+ * impede um caminho de saída esquecido.
+ */
+describe("18-B. argumento de ferramenta sanitizado para o banco", () => {
+  it("é sempre um OBJETO — a coluna jsonb exige, e escalar viraria erro de constraint", () => {
+    expect(sanitizedJson({ dias: 7 })).toEqual({ dias: 7 });
+    expect(sanitizedJson(null)).toEqual({});
+    expect(sanitizedJson(undefined)).toEqual({});
+    expect(sanitizedJson("texto solto")).toEqual({ valor: "texto solto" });
+    expect(sanitizedJson(42)).toEqual({ valor: 42 });
+    expect(sanitizedJson([1, 2])).toEqual({ valor: [1, 2] });
+  });
+
+  it("mascara segredo em qualquer profundidade, na chave e no valor", () => {
+    const saida = sanitizedJson({
+      exercicio: "supino",
+      dentro: { api_key: "sk-ant-api03-SegredoAquiOk123", nota: "use sk-proj-AbcdefGhijkl123" },
+    });
+    const cru = JSON.stringify(saida);
+    expect(cru).not.toContain("SegredoAquiOk123");
+    expect(cru).not.toContain("AbcdefGhijkl123");
+    expect(cru).toContain("supino");
+  });
+
+  it("valor não serializável não derruba a auditoria", () => {
+    const ciclico: Record<string, unknown> = { a: 1 };
+    ciclico.eu = ciclico;
+    expect(() => sanitizedJson(ciclico)).not.toThrow();
+    expect(typeof sanitizedJson(ciclico)).toBe("object");
+  });
+
+  /**
+   * ⚠️ `saida["__proto__"] = valor` NÃO cria propriedade: dispara o setter de
+   * `Object.prototype` e a chave DESAPARECE do resultado. Numa auditoria de argumento vindo
+   * do modelo, é justamente a chave que mais interessa que sumiria — sem erro, sem log, sem
+   * nada. `JSON.parse` cria `__proto__` como propriedade PRÓPRIA, então este caso chega
+   * mesmo: basta o provedor devolver esse JSON.
+   */
+  it("a chave __proto__ SOBREVIVE à sanitização em vez de sumir", () => {
+    const doModelo = JSON.parse('{"__proto__":{"api_key":"sk-ant-api03-Segredo123456"},"dias":7}');
+
+    const saida = sanitizedJson(doModelo);
+    const cru = JSON.stringify(saida);
+
+    expect(Object.keys(saida)).toContain("__proto__");
+    expect(saida.dias).toBe(7);
+    expect(cru).not.toContain("Segredo123456");
+    // E o protótipo global continua intacto: nada foi poluído no caminho.
+    expect(({} as Record<string, unknown>).api_key).toBeUndefined();
+  });
+
+  /**
+   * "Já visto" não é "está no caminho atual". Sem remover o nó ao sair dele, o MESMO objeto
+   * em dois ramos — sem ciclo nenhum — virava "[não serializável]" no segundo. O que precisa
+   * ser barrado é o ciclo, não a repetição.
+   */
+  it("o mesmo objeto em dois ramos aparece nos dois — só ciclo é barrado", () => {
+    const repetido = { exercicio: "supino" };
+
+    const saida = sanitizedJson({ p: repetido, q: repetido });
+
+    expect(saida).toEqual({ p: { exercicio: "supino" }, q: { exercicio: "supino" } });
+  });
+
+  /**
+   * A âncora de ponta a ponta deixava passar os nomes REAIS de campo de credencial:
+   * `x-api-key` é o cabeçalho da Anthropic, `access_token` o do OAuth, `client_secret` o do
+   * Google, e `pwd` é abreviação corriqueira.
+   */
+  it("nome de campo composto também é reconhecido como sensível", () => {
+    const saida = sanitizedJson({
+      "x-api-key": "sk-ant-api03-Um",
+      access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9Dois",
+      client_secret: "GOCSPX-Tres",
+      pwd: "Quatro",
+      exercicio: "supino",
+    });
+    const cru = JSON.stringify(saida);
+
+    for (const valor of ["sk-ant-api03-Um", "Dois", "GOCSPX-Tres", "Quatro"]) {
+      expect(cru, valor).not.toContain(valor);
+    }
+    expect(cru).toContain("supino");
+  });
+
+  /**
+   * ⚠️ `session_id` NÃO é segredo neste contexto — é o identificador do registro que a
+   * ferramenta leu. `ai_tool_calls.arguments_sanitized` existe justamente para mostrar QUAL
+   * registro foi lido; redigir esse argumento cegaria a auditoria sem proteger nada. Uma
+   * ferramenta da 18-C com argumento `session_id` teria o valor gravado como `[removido]`.
+   *
+   * `session_token` e `session_key` continuam entrando: esses são credencial.
+   */
+  it("session_id de argumento SOBREVIVE — a auditoria existe para mostrar qual registro foi lido", () => {
+    const saida = sanitizedJson({
+      session_id: "9f1b2c3d-0000-4a5b-8c7d-1e2f3a4b5c6d",
+      sessionId: "abc-123",
+      "training.session_id": "def-456",
+      exercicio: "supino",
+    });
+
+    expect(saida.session_id).toBe("9f1b2c3d-0000-4a5b-8c7d-1e2f3a4b5c6d");
+    expect(saida.sessionId).toBe("abc-123");
+    expect(saida["training.session_id"]).toBe("def-456");
+  });
+
+  it("mas session_token e session_key continuam sendo redigidos", () => {
+    const saida = sanitizedJson({
+      session_token: "valor-secreto-um",
+      "session-key": "valor-secreto-dois",
+      cookie: "valor-secreto-tres",
+    });
+    const cru = JSON.stringify(saida);
+
+    for (const valor of ["valor-secreto-um", "valor-secreto-dois", "valor-secreto-tres"]) {
+      expect(cru, valor).not.toContain(valor);
+    }
   });
 });
 

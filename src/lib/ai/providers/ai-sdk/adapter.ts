@@ -17,12 +17,24 @@
  *    NUNCA zero.
  */
 
-import { streamText, type LanguageModel, type ToolSet } from "ai";
+import {
+  streamText,
+  jsonSchema,
+  type LanguageModel,
+  type ModelMessage,
+  type TextPart,
+  type ToolCallPart,
+  type ToolResultPart,
+  type ToolSet,
+} from "ai";
 import type {
+  AiContentPart,
+  AiMessage,
   AiProviderClient,
   AiProviderId,
   AiRequest,
   AiStreamEvent,
+  AiToolDefinition,
   AiUsage,
   AiFinishReason,
 } from "@/lib/ai/core/contracts";
@@ -90,6 +102,217 @@ function normalizeFinishReason(reason: unknown): AiFinishReason {
   }
 }
 
+// ───────────────────── Contrato interno → prompt do SDK (18-B) ─────────────────────
+
+/**
+ * Os tipos do SDK derivados do PRÓPRIO SDK, em vez de reescritos aqui. `ToolResultOutput` e
+ * `JSONValue` não são reexportados por `ai`, e copiá-los à mão criaria uma segunda verdade que
+ * silenciosamente diverge na próxima atualização.
+ */
+type SaidaDeFerramenta = ToolResultPart["output"];
+type ValorJson = Extract<SaidaDeFerramenta, { type: "json" }>["value"];
+
+/**
+ * Resultado de ferramenta → `output` do SDK.
+ *
+ * ⚠️ A regra que não pode afrouxar: rejeição e falha chegam ao modelo COMO ERRO
+ * (`error-json`). Se um erro entrasse como resultado normal, o modelo trataria a recusa como
+ * dado e responderia com base em nada — que é exatamente o defeito que esta fase existe para
+ * impedir.
+ */
+function saidaDeFerramenta(output: unknown, isError: boolean): SaidaDeFerramenta {
+  // Único estreitamento do arquivo: `core/` guarda a saída como `unknown` de propósito (não
+  // conhece o SDK), e o SDK exige `JSONValue`. O valor já veio serializável do Tool Executor.
+  const valor = output as ValorJson;
+  return isError ? { type: "error-json", value: valor } : { type: "json", value: valor };
+}
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ NENHUMA PARTE SOME EM SILÊNCIO.                                                       ║
+ * ║                                                                                       ║
+ * ║ Esta é a ÚNICA tradução entre o nosso contrato e os quatro provedores. Uma parte que  ║
+ * ║ o papel de destino não representa não pode virar `[]`: um `tool-result` perdido deixa ║
+ * ║ um `tool_use` sem par, e a Anthropic responde 400 ("tool_use ids found without        ║
+ * ║ tool_result blocks") — um erro que aparece longe da causa e custa uma tarde.          ║
+ * ║                                                                                       ║
+ * ║ `ERRO_PERMANENTE` é a classe certa: `fallback.ts` responde `parar`, e é isso mesmo —  ║
+ * ║ prompt malformado falharia IGUAL nos quatro provedores, então tentar outro só queima  ║
+ * ║ tempo e dinheiro. A mensagem é própria porque a padrão da classe ("o provedor         ║
+ * ║ recusou") seria mentira: nenhuma chamada externa chegou a acontecer.                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+function erroDeTraducao(code: string, detalhe: string): AiError {
+  return aiError(
+    "ERRO_PERMANENTE",
+    code,
+    `Não foi possível montar esta conversa para o provedor: ${detalhe}. ` +
+      "Nenhuma chamada foi enviada e nada foi consumido.",
+  );
+}
+
+/**
+ * Sinal INTERNO de tradução impossível. Nasce e morre dentro de `toModelMessages` — o que
+ * escapa dali é sempre um `Result`, nunca uma exceção. É só para os quatro pontos de recusa
+ * não terem de devolver `Result` cada um e poluir a leitura da tradução.
+ */
+class ParteNaoRepresentavel extends Error {
+  constructor(readonly aiErro: AiError) {
+    super(aiErro.code);
+    this.name = "ParteNaoRepresentavel";
+  }
+}
+
+function recusar(code: string, detalhe: string): never {
+  throw new ParteNaoRepresentavel(erroDeTraducao(code, detalhe));
+}
+
+/** `user` aceita texto (e mídia, que o contrato ainda não tem). Nunca ferramenta. */
+function partesDeTexto(p: AiContentPart, i: number): TextPart[] {
+  if (p.type === "text") return [{ type: "text", text: p.text }];
+  recusar(
+    "USER_PART_NOT_REPRESENTABLE",
+    `a mensagem ${i} é do usuário e traz uma parte "${p.type}", que o papel user não aceita`,
+  );
+}
+
+/** O assistente pode carregar texto E pedidos de ferramenta na mesma mensagem. */
+function partesDoAssistente(p: AiContentPart, i: number): Array<TextPart | ToolCallPart> {
+  if (p.type === "text") return [{ type: "text", text: p.text }];
+  if (p.type === "tool-call") {
+    return [
+      { type: "tool-call", toolCallId: p.callId, toolName: p.toolName, input: p.input },
+    ];
+  }
+  // O SDK até aceitaria `tool-result` aqui — mas só no caso de ferramenta executada PELO
+  // provedor, que nós não fazemos. No nosso contrato o resultado pertence ao papel `tool`.
+  recusar(
+    "ASSISTANT_TOOL_RESULT_NOT_ALLOWED",
+    `a mensagem ${i} é do assistente e traz um "tool-result"; resultado de ferramenta pertence ao papel tool`,
+  );
+}
+
+function partesDeResultado(p: AiContentPart, i: number): ToolResultPart[] {
+  if (p.type === "tool-result") {
+    return [
+      {
+        type: "tool-result",
+        toolCallId: p.callId,
+        toolName: p.toolName,
+        output: saidaDeFerramenta(p.output, p.isError),
+      },
+    ];
+  }
+  recusar(
+    "TOOL_PART_NOT_REPRESENTABLE",
+    `a mensagem ${i} é do papel tool e traz uma parte "${p.type}"; esse papel só carrega resultados`,
+  );
+}
+
+/** O que sai da tradução: prompt pronto ou erro tipado. Nunca uma exceção solta. */
+type PromptTraduzido =
+  | { readonly ok: true; readonly messages: ModelMessage[] }
+  | { readonly ok: false; readonly error: AiError };
+
+/**
+ * Contrato interno → `ModelMessage` do SDK.
+ *
+ * `content` como `string` continua valendo de propósito: o histórico gravado em `ai_messages`
+ * é texto puro, e migrá-lo para partes não traria nada. As partes existem para o que o texto
+ * não representa — o pedido de ferramenta do assistente e o resultado que volta.
+ *
+ * Cada papel é montado no SEU formato porque o SDK não os trata igual: `user` não aceita
+ * `tool-call`, e o papel `tool` é uma lista de resultados, nunca texto solto. Um
+ * `as ModelMessage` genérico esconderia esses contratos diferentes.
+ */
+function toModelMessages(messages: readonly AiMessage[]): PromptTraduzido {
+  try {
+    const traduzidas = messages.map((m, i): ModelMessage => {
+      // ⚠️ `standardizePrompt` do SDK LANÇA `InvalidPromptError` se qualquer mensagem tiver
+      // `role: 'system'` (e `streamText` não passa `allowSystemInMessages`). Não é uma
+      // mensagem ignorada — é a requisição inteira perdida. E filtrar em silêncio seria pior
+      // aqui do que em qualquer outro papel: instrução no histórico é exatamente o vetor que
+      // a regra "dado é dado, nunca instrução" existe para barrar. O prompt de sistema tem um
+      // caminho próprio (`AiRequest.system`); qualquer outro é bug ou tentativa de injeção, e
+      // os dois merecem barulho.
+      if (m.role === "system") {
+        recusar(
+          "SYSTEM_MESSAGE_NOT_ALLOWED",
+          `a mensagem ${i} tem papel "system"; o prompt de sistema viaja em AiRequest.system, separado do histórico`,
+        );
+      }
+
+      if (m.role === "tool") {
+        if (typeof m.content === "string") {
+          recusar(
+            "TOOL_MESSAGE_NOT_A_LIST",
+            `a mensagem ${i} é do papel tool e veio como texto; esse papel é sempre uma lista de resultados`,
+          );
+        }
+        const content = m.content.flatMap((p) => partesDeResultado(p, i));
+        // Mensagem `tool` vazia é 400 garantido na Anthropic. Como nada mais é descartado em
+        // silêncio, chegar aqui vazio só é possível se quem chamou mandou a lista vazia.
+        if (content.length === 0) {
+          recusar(
+            "TOOL_MESSAGE_EMPTY",
+            `a mensagem ${i} é do papel tool e não tem nenhum resultado`,
+          );
+        }
+        return { role: "tool", content };
+      }
+
+      if (m.role === "user") {
+        return {
+          role: "user",
+          content:
+            typeof m.content === "string"
+              ? m.content
+              : m.content.flatMap((p) => partesDeTexto(p, i)),
+        };
+      }
+
+      return {
+        role: "assistant",
+        content:
+          typeof m.content === "string"
+            ? m.content
+            : m.content.flatMap((p) => partesDoAssistente(p, i)),
+      };
+    });
+
+    return { ok: true, messages: traduzidas };
+  } catch (erro) {
+    if (erro instanceof ParteNaoRepresentavel) {
+      return { ok: false, error: erro.aiErro };
+    }
+    throw erro;
+  }
+}
+
+/**
+ * Definições → `ToolSet`, SEM `execute`.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ NENHUMA FERRAMENTA GANHA `execute`. Sem ele, o SDK descreve a ferramenta ao provedor, ║
+ * ║ emite o evento `tool-call` e PARA. Quem valida e executa é o nosso Tool Executor.     ║
+ * ║ Passar `execute` faria a execução acontecer dentro do fornecedor, no meio do stream — ║
+ * ║ e `providers/` deixaria de ser só tradução. Pelo mesmo motivo `stopWhen` não é usado: ║
+ * ║ o laço de ferramentas é NOSSO.                                                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+function toToolSet(tools: readonly AiToolDefinition[]): ToolSet {
+  const set: ToolSet = {};
+  for (const t of tools) {
+    set[t.name] = {
+      description: t.description,
+      // `core/` guarda o schema como `unknown` porque não pode conhecer o SDK; aqui ele
+      // reencontra o tipo. `jsonSchema` não valida a entrada — quem valida é o Tool Executor.
+      inputSchema: jsonSchema(t.inputSchema as Parameters<typeof jsonSchema>[0]),
+    };
+  }
+  return set;
+}
+
 export type AdapterConfig = {
   readonly provider: AiProviderId;
   /** O modelo já construído pelo adapter específico do provedor. */
@@ -110,19 +333,24 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
       let terminou = false;
 
       try {
-        // ⚠️ `tools` vem do contrato e na 18-A é SEMPRE vazio. Quando vazio, o campo nem é
-        // enviado: mandar `tools: {}` faria alguns provedores incluírem o system prompt de
-        // tool use, que custa tokens por nada.
+        // ⚠️ `tools` vem do contrato já resolvido pela allowlist do agente. Quando vazio, o
+        // campo nem é enviado: mandar `tools: {}` faria alguns provedores incluírem o system
+        // prompt de tool use, que custa tokens por nada.
         const temFerramentas = request.tools.length > 0;
-        const toolSet: ToolSet = {};
+
+        // A tradução acontece ANTES da chamada, e um prompt que o SDK recusaria vira evento
+        // `error` aqui — sem sair para a rede, sem gastar token e sem deixar o run pendurado.
+        const prompt = toModelMessages(request.messages);
+        if (!prompt.ok) {
+          terminou = true;
+          yield { type: "error", error: prompt.error };
+          return;
+        }
 
         const resultado = streamText({
           model: config.buildModel(request.model),
           system: request.system,
-          messages: request.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          messages: prompt.messages,
           // Teto EXPLÍCITO em toda chamada. Sem ele não há reserva possível.
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
@@ -131,7 +359,9 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
           // `ai_usage_events`). Deixar o SDK repetir por conta própria produziria chamadas
           // pagas que o nosso medidor nunca veria.
           maxRetries: 0,
-          ...(temFerramentas ? { tools: toolSet } : {}),
+          // `stopWhen` NÃO é usado: o laço de ferramentas é nosso, e cada volta precisa
+          // passar pelo Tool Executor e virar uma linha de medição.
+          ...(temFerramentas ? { tools: toToolSet(request.tools) } : {}),
         });
 
         for await (const parte of resultado.fullStream) {
@@ -141,13 +371,16 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
               break;
 
             case "tool-call":
-              // Não pode acontecer na 18-A: nenhuma definição foi enviada. Repassamos o
-              // evento e quem decide o que fazer é o chat-runner — que encerra o run como
-              // `failed` com UNEXPECTED_TOOL_CALL, sem executar nada.
+              // O SDK PARA aqui, porque a ferramenta não tem `execute`. O adapter só repassa
+              // o pedido com os argumentos crus — nunca executa e nunca interpreta. Quem
+              // decide é o chat-runner: ferramenta que não foi oferecida encerra o run como
+              // `failed` com UNEXPECTED_TOOL_CALL; oferecida, o laço a executa pelo Tool
+              // Executor, que valida a entrada antes de qualquer coisa.
               yield {
                 type: "tool-call",
                 toolName: String(parte.toolName ?? "desconhecida"),
                 callId: String(parte.toolCallId ?? ""),
+                input: parte.input ?? {},
               };
               break;
 

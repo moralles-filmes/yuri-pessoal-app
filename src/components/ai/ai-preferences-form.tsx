@@ -32,7 +32,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { AI_PROVIDER_LABEL, type AiProviderId } from "@/lib/ai/core/contracts";
 import { activeModelsFor } from "@/lib/ai/core/models";
-import { AVISO_MOEDA } from "@/lib/ai/constants";
+import { AVISO_MOEDA, ROTULO_DA_PERMISSAO } from "@/lib/ai/constants";
+import { TOOL_PERMISSIONS, type ToolPermission } from "@/lib/ai/tools/contracts";
+import { toolsForPermission } from "@/lib/ai/tools/registry";
 import { saveAiPreferences } from "@/lib/actions/ai-preferences";
 import type { AiPreferencesView, ProviderCardView } from "@/lib/ai/types";
 
@@ -49,6 +51,9 @@ export function AiPreferencesForm({
   const [salvando, setSalvando] = React.useState(false);
 
   const [form, setForm] = React.useState({
+    // Cópia rasa do que veio do servidor: `getAiPreferences` já garante `false` para chave
+    // ausente, nula ou de tipo inesperado. Nada aqui completa buraco por conta própria.
+    permissions: { ...prefs.permissions },
     defaultProvider: prefs.defaultProvider ?? NENHUM,
     defaultModel: prefs.defaultModel ?? NENHUM,
     confirmationMode: prefs.confirmationMode,
@@ -70,6 +75,7 @@ export function AiPreferencesForm({
   async function salvar() {
     setSalvando(true);
     const r = await saveAiPreferences({
+      permissions: form.permissions,
       defaultProvider: form.defaultProvider === NENHUM ? null : form.defaultProvider,
       defaultModel: form.defaultModel === NENHUM ? null : form.defaultModel,
       confirmationMode: form.confirmationMode,
@@ -144,6 +150,34 @@ export function AiPreferencesForm({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        </div>
+
+        {/* ── Leituras autorizadas ──────────────────────────────────────────────────── */}
+        <div className="space-y-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-medium">Leituras autorizadas</h3>
+            <p className="text-xs text-muted-foreground">
+              O assistente só consulta um módulo se a chave dele estiver ligada aqui. Todas
+              nascem desligadas, valem só para <strong>leitura</strong> e podem ser
+              desligadas a qualquer momento — nesta versão a IA não cria nem altera nada.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {TOOL_PERMISSIONS.map((chave) => (
+              <PermissaoLinha
+                key={chave}
+                chave={chave}
+                ligada={form.permissions[chave]}
+                onChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    permissions: { ...f.permissions, [chave]: v },
+                  }))
+                }
+              />
+            ))}
           </div>
         </div>
 
@@ -283,5 +317,63 @@ export function AiPreferencesForm({
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Uma autorização de leitura.
+ *
+ * ⚠️ **A chave de um módulo SEM ferramenta fica desabilitada, e a tela diz por quê.** Ligá-la
+ * não liberaria nada: `guardToolCall` só consulta a flag depois de encontrar a ferramenta no
+ * registry, então uma flag sem ferramenta correspondente é exatamente o botão fantasma que a
+ * subfase proíbe. Quem responde "tem ferramenta?" é `toolsForPermission`, DERIVADO do registry
+ * — no dia em que a 18-C acrescentar a primeira leitura de Finanças, a chave se habilita
+ * sozinha, com a lista real do que ela passa a permitir.
+ *
+ * Responsividade: o lado do texto é `min-w-0` porque o irmão (`Switch`) é `shrink-0` — sem
+ * isso a frase longa empurra o controle para fora do card.
+ */
+function PermissaoLinha({
+  chave,
+  ligada,
+  onChange,
+}: {
+  chave: ToolPermission;
+  ligada: boolean;
+  onChange: (valor: boolean) => void;
+}) {
+  const rotulo = ROTULO_DA_PERMISSAO[chave];
+  const ferramentas = toolsForPermission(chave);
+  const disponivel = ferramentas.length > 0;
+  const id = `pref-${chave}`;
+
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-lg border p-3">
+      <div className="min-w-0 space-y-1">
+        <Label htmlFor={id} className="block">
+          {rotulo.titulo}
+        </Label>
+        <p className="text-xs text-muted-foreground">{rotulo.frase}</p>
+        {disponivel ? (
+          <p className="text-xs text-muted-foreground">
+            Consultas disponíveis:{" "}
+            {ferramentas.map((f) => f.itemLabel).join(" · ")}.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Ainda não existe consulta deste módulo nesta versão — a chave se habilita quando
+            a primeira for publicada.
+          </p>
+        )}
+      </div>
+      <Switch
+        id={id}
+        checked={ligada}
+        onCheckedChange={onChange}
+        disabled={!disponivel}
+        aria-label={`Autorizar leitura de ${rotulo.titulo}`}
+        className="mt-0.5 shrink-0"
+      />
+    </div>
   );
 }

@@ -23,10 +23,29 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { AI_PROVIDER_LABEL, type AiProviderId } from "@/lib/ai/core/contracts";
-import { AVISO_SEM_ACESSO } from "@/lib/ai/constants";
-import { MAX_CHAT_TEXT } from "@/lib/validators/ai";
+import { AVISO_SEM_ACESSO, ROTULO_DA_ROTA_DE_CONTEXTO } from "@/lib/ai/constants";
+import {
+  MAX_CHAT_TEXT,
+  ROTAS_COM_CONTEXTO,
+  type RotaComContexto,
+} from "@/lib/validators/ai";
+import type { ToolCallStatus } from "@/lib/ai/tools/contracts";
+import { execucaoEmAndamento, type RunSources } from "@/lib/ai/tools/sources";
+import {
+  SourceChips,
+  SourceChipsAoVivo,
+  type FerramentaAoVivo,
+} from "@/components/ai/source-chips";
 import type { ConversationMessage, MessageRunInfo } from "@/lib/ai/types";
 
 type Evento =
@@ -41,6 +60,12 @@ type Evento =
     }
   | { type: "delta"; text: string }
   | { type: "switch"; provider: AiProviderId; model: string; motivo: string }
+  /**
+   * Uma consulta aconteceu (ou foi recusada) DENTRO desta resposta. O runner emite este
+   * evento desde a Task 10; até aqui a tela o descartava em silêncio — leitura de dado do
+   * usuário passando despercebida é exatamente o oposto do que a subfase promete.
+   */
+  | { type: "tool"; toolName: string; status: ToolCallStatus; registros: number }
   | { type: "done"; finishReason: string; provider: AiProviderId; model: string }
   | { type: "error"; code: string; message: string; retryAfterSeconds?: number };
 
@@ -52,12 +77,39 @@ type Bolha = {
   provider?: AiProviderId | null;
   model?: string | null;
   erro?: string | null;
+  /** A execução que produziu esta bolha — a chave da trilha durável de `ai_tool_calls`. */
+  runId?: string | null;
+  /**
+   * As consultas vistas AO VIVO, do evento SSE `tool`. Some no recarregamento, e é isso
+   * mesmo: quem sobrevive é `ai_tool_calls`, lido pelo servidor. Aqui é só o que a tela
+   * presenciou nesta sessão.
+   */
+  ferramentas?: FerramentaAoVivo[];
+  /**
+   * A rota enviada como contexto NESTE envio. É o que a tela sabe: que MANDOU o contexto —
+   * quem decide se ele foi usado é o servidor. Por isso o selo diz "enviada com", não "usou".
+   *
+   * ⚠️ **LIMITE DECLARADO, não disfarçado:** o contexto de página NÃO é persistido em lugar
+   * nenhum — nem `ai_runs` nem `ai_conversations` têm coluna para ele, e a 18-B não abre
+   * migration nova. A rastreabilidade durável desta subfase é a de FERRAMENTAS
+   * (`ai_tool_calls` → `SourceChips`), e ela não cobre este selo: recarregar a página o
+   * apaga. Persistir o contexto exige coluna, e coluna exige decisão de esquema.
+   */
+  contexto?: RotaComContexto | null;
 };
+
+/** Valor do item "sem contexto" do Select — `Select` do Radix não aceita valor vazio. */
+const SEM_CONTEXTO = "nenhum";
 
 export type ChatClientProps = {
   readonly conversationId: string | null;
   readonly initialMessages: readonly ConversationMessage[];
   readonly runs: Readonly<Record<string, MessageRunInfo>>;
+  /**
+   * A trilha durável, indexada por `runId` (`getRunSources`). Vazia na página de conversa
+   * nova — ali ainda não há execução gravada, e o que a tela mostra é o que ela presenciou.
+   */
+  readonly sources?: Readonly<Record<string, RunSources>>;
   /** Quando falso, o formulário fica desabilitado com a explicação na tela. */
   readonly podeConversar: boolean;
   readonly motivoBloqueio: string | null;
@@ -67,6 +119,7 @@ export function ChatClient({
   conversationId,
   initialMessages,
   runs,
+  sources = {},
   podeConversar,
   motivoBloqueio,
 }: ChatClientProps) {
@@ -85,12 +138,20 @@ export function ChatClient({
           provider: run?.provider ?? null,
           model: run?.model ?? null,
           erro: run?.errorMessage ?? null,
+          runId: m.runId,
         };
       }),
   );
 
   const [texto, setTexto] = React.useState("");
   const [enviando, setEnviando] = React.useState(false);
+  /**
+   * Contexto da página — **desligado por padrão**, como toda integração deste projeto.
+   * Estado LOCAL do componente, não da URL: a regra de não controlar campo pela URL vale
+   * para digitação, e esta é uma escolha por clique — mas a página é `force-dynamic`, e
+   * gravar na URL faria um round-trip de RSC por clique sem nenhum ganho de link.
+   */
+  const [contexto, setContexto] = React.useState<RotaComContexto | null>(null);
   const [conversa, setConversa] = React.useState<string | null>(conversationId);
   const abortRef = React.useRef<AbortController | null>(null);
   const fimRef = React.useRef<HTMLDivElement | null>(null);
@@ -127,6 +188,7 @@ export function ChatClient({
         role: "assistant",
         content: "",
         status: "streaming",
+        contexto,
       },
     ]);
     setTexto("");
@@ -142,6 +204,9 @@ export function ChatClient({
         body: JSON.stringify({
           ...(conversa ? { conversationId: conversa } : {}),
           text: conteudo,
+          // Só a ROTA, e só quando o usuário escolheu uma. Nada do conteúdo da tela sai
+          // daqui — título, estado e registro ficam onde estão. O módulo é do servidor.
+          ...(contexto ? { pageContext: { rota: contexto } } : {}),
         }),
         signal: controller.signal,
       });
@@ -165,7 +230,13 @@ export function ChatClient({
           setBolhas((atual) =>
             atual.map((b) =>
               b.id === idProvisorioAssistente
-                ? { ...b, id: e.assistantMessageId, provider: e.provider, model: e.model }
+                ? {
+                    ...b,
+                    id: e.assistantMessageId,
+                    provider: e.provider,
+                    model: e.model,
+                    runId: e.runId,
+                  }
                 : b.id === idProvisorioUsuario
                   ? { ...b, id: `${e.runId}-user` }
                   : b,
@@ -178,11 +249,50 @@ export function ChatClient({
               i === atual.length - 1 ? { ...b, content: b.content + t } : b,
             ),
           ),
+        /**
+         * ╔════════════════════════════════════════════════════════════════════════════════╗
+         * ║ TENTATIVA NOVA COMEÇA COM A BOLHA LIMPA — e o servidor zera o texto no MESMO    ║
+         * ║ instante (`chat-runner.ts`, junto do `yield` deste evento).                     ║
+         * ║                                                                                 ║
+         * ║ Até aqui `onDelta` concatenava tudo na mesma bolha e este handler só trocava o  ║
+         * ║ selo: a narração da tentativa que FALHOU ficava colada na da seguinte, e a      ║
+         * ║ resposta gravada era essa mistura. Corrigir só o servidor seria pior — o        ║
+         * ║ `router.refresh()` do fim do envio releria o texto novo e apagaria da tela algo ║
+         * ║ que o usuário já tinha lido. Os dois lados, ou nenhum.                           ║
+         * ║                                                                                 ║
+         * ║ As consultas caem junto: o laço recomeça no passo 0 a cada tentativa, então as  ║
+         * ║ ferramentas rodam de novo e os chips da tentativa anterior virariam duplicata.  ║
+         * ╚════════════════════════════════════════════════════════════════════════════════╝
+         */
         onSwitch: (e) =>
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
-                ? { ...b, provider: e.provider, model: e.model }
+                ? {
+                    ...b,
+                    provider: e.provider,
+                    model: e.model,
+                    content: "",
+                    ferramentas: [],
+                  }
+                : b,
+            ),
+          ),
+        onTool: (e) =>
+          setBolhas((atual) =>
+            atual.map((b, i) =>
+              i === atual.length - 1
+                ? {
+                    ...b,
+                    ferramentas: [
+                      ...(b.ferramentas ?? []),
+                      {
+                        toolName: e.toolName,
+                        status: e.status,
+                        registros: e.registros,
+                      },
+                    ],
+                  }
                 : b,
             ),
           ),
@@ -289,18 +399,54 @@ export function ChatClient({
               )}
 
               {/* QUEM RESPONDEU aparece — em especial quando houve fallback. */}
-              {b.role === "assistant" && b.provider && b.status !== "streaming" && (
+              {/*
+                A condição externa tem de casar EXATAMENTE com a união das internas, senão
+                sobra um `<div>` vazio ocupando `mt-2` + `gap`. Foi o que aconteceu quando ela
+                virou `(b.provider || b.contexto)`: `onStart` grava o `provider` enquanto o
+                status ainda é `"streaming"`, então no fluxo padrão (contexto desligado) a
+                bolha ganhava 8px de altura vazia durante toda a resposta.
+              */}
+              {b.role === "assistant" &&
+                (b.contexto || ((b.provider || b.model) && b.status !== "streaming")) && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <Badge variant="outline" className="text-[11px] font-normal">
-                    {AI_PROVIDER_LABEL[b.provider]}
-                  </Badge>
-                  {b.model && (
+                  {b.provider && b.status !== "streaming" && (
+                    <Badge variant="outline" className="text-[11px] font-normal">
+                      {AI_PROVIDER_LABEL[b.provider]}
+                    </Badge>
+                  )}
+                  {b.model && b.status !== "streaming" && (
                     <Badge variant="outline" className="text-[11px] font-normal">
                       {b.model}
                     </Badge>
                   )}
+                  {/* "enviada com", não "usou": quem decide o que fazer com o contexto é o
+                      servidor, e a tela não tem como afirmar mais do que sabe. */}
+                  {b.contexto && (
+                    <Badge variant="outline" className="text-[11px] font-normal">
+                      enviada com o contexto de {ROTULO_DA_ROTA_DE_CONTEXTO[b.contexto]}
+                    </Badge>
+                  )}
                 </div>
               )}
+
+              {/*
+                DE ONDE VEIO A RESPOSTA. A trilha DURÁVEL (`ai_tool_calls`) vence a de sessão:
+                ela tem argumentos e `refs`, e sobrevive ao recarregamento. Os chips ao vivo
+                cobrem a janela em que a resposta ainda está sendo escrita e nada foi relido
+                do servidor — não é redundância, é o mesmo fato com duas fontes de tempo.
+              */}
+              {b.role === "assistant" &&
+                (fontesDaBolha(b, sources) ? (
+                  <SourceChips
+                    fontes={fontesDaBolha(b, sources)}
+                    emAndamento={emAndamentoDaBolha(b, runs)}
+                  />
+                ) : (
+                  <SourceChipsAoVivo
+                    ferramentas={b.ferramentas ?? []}
+                    emAndamento={b.status === "streaming"}
+                  />
+                ))}
             </div>
           </div>
         ))}
@@ -308,6 +454,45 @@ export function ChatClient({
       </div>
 
       <div className="sticky bottom-0 space-y-2 border-t bg-background pt-3">
+        {/*
+          CONTEXTO DA PÁGINA — desligado por padrão. O que sai daqui é UMA ROTA de uma lista
+          estática do servidor; nunca o que está escrito na tela.
+        */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Label
+            htmlFor="contexto-da-pagina"
+            className="shrink-0 text-xs text-muted-foreground"
+          >
+            Contexto
+          </Label>
+          <Select
+            value={contexto ?? SEM_CONTEXTO}
+            onValueChange={(v) =>
+              setContexto(v === SEM_CONTEXTO ? null : (v as RotaComContexto))
+            }
+            disabled={!podeConversar || enviando}
+          >
+            <SelectTrigger
+              id="contexto-da-pagina"
+              className="h-9 w-full min-w-0 sm:w-[15rem]"
+              aria-label="Página que dá contexto à conversa"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SEM_CONTEXTO}>Sem contexto de página</SelectItem>
+              {ROTAS_COM_CONTEXTO.map((rota) => (
+                <SelectItem key={rota} value={rota}>
+                  {ROTULO_DA_ROTA_DE_CONTEXTO[rota]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+            O assistente recebe só o endereço da página — nada do que está escrito nela.
+          </p>
+        </div>
+
         <Textarea
           value={texto}
           onChange={(e) => setTexto(e.target.value.slice(0, MAX_CHAT_TEXT))}
@@ -363,6 +548,30 @@ export function ChatClient({
   );
 }
 
+/** A trilha gravada desta bolha, quando o servidor já a leu. */
+function fontesDaBolha(
+  bolha: Bolha,
+  sources: Readonly<Record<string, RunSources>>,
+): RunSources | undefined {
+  return bolha.runId ? sources[bolha.runId] : undefined;
+}
+
+/**
+ * "Ainda está consultando?" sai do STATUS DO RUN — nunca de um passo `started`.
+ *
+ * Quando o processo morre (timeout da plataforma, deploy no meio do stream) sobra passo aberto
+ * em `ai_run_steps` sob um run já terminal, e `ai_reconcile_abandoned_runs` não toca essa
+ * tabela. Uma tela que lesse o passo mostraria "consultando…" para sempre.
+ */
+function emAndamentoDaBolha(
+  bolha: Bolha,
+  runs: Readonly<Record<string, MessageRunInfo>>,
+): boolean {
+  if (bolha.status === "streaming") return true;
+  const run = bolha.runId ? runs[bolha.runId] : undefined;
+  return run ? execucaoEmAndamento(run.status) : false;
+}
+
 /**
  * Consome o SSE. O parser acumula por linha em vez de assumir que cada `read()` traz um
  * evento inteiro — um chunk de rede pode cortar um JSON no meio, e aí `JSON.parse` quebraria
@@ -374,6 +583,7 @@ async function consumirSse(
     onStart: (e: Extract<Evento, { type: "start" }>) => void;
     onDelta: (texto: string) => void;
     onSwitch: (e: Extract<Evento, { type: "switch" }>) => void;
+    onTool: (e: Extract<Evento, { type: "tool" }>) => void;
     onDone: (e: Extract<Evento, { type: "done" }>) => void;
     onError: (e: Extract<Evento, { type: "error" }>) => void;
   },
@@ -413,6 +623,9 @@ async function consumirSse(
           break;
         case "switch":
           handlers.onSwitch(evento);
+          break;
+        case "tool":
+          handlers.onTool(evento);
           break;
         case "done":
           handlers.onDone(evento);

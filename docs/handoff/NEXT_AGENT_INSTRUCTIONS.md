@@ -1,18 +1,44 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-## 🎯 PRÓXIMA FASE: 18-B — IA · Contexto, ferramentas de leitura e agentes
+## 🎯 PRÓXIMA FASE: 18-C — IA · Ações, aprovações, idempotência e auditoria
 
-**Arquivo a abrir:** `docs/phases/PHASE_18_B_AI_CONTEXT_READ_TOOLS_AGENTS.md`
 **Desenho validado (leia ANTES):** `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`
-**O que já existe:** `docs/handoff/LAST_PHASE_SUMMARY.md` → seção **Fase 18-A**
+**O que já existe:** `docs/handoff/LAST_PHASE_SUMMARY.md` → seções **18-A** e **18-B**
 
-A **18-A foi implementada e verificada em 2026-08-04**: fundação, quatro adapters, catálogos
-versionados, credenciais cifradas, chat com streaming, medição por tentativa e orçamento com
-reserva. **A IA ainda não lê um único registro do usuário** — é exatamente isso que a 18-B
-começa a mudar, e por isso ela é a subfase mais delicada da fase inteira.
+A **18-A** (2026-08-04) entregou a fundação sem ler nada. A **18-B** (2026-08-07) abriu a
+primeira leitura de dado real: 3 ferramentas de Treinos, laço de ferramentas próprio,
+roteamento por agente, contexto de página, auditoria por chamada e rastreabilidade na tela.
 
-⚠️ **A 18-B exige autorização explícita do usuário.** Não comece a implementar por encontrar
+**A 18-C é a primeira subfase de ESCRITA** — e por isso é a mais perigosa da fase. Até aqui,
+o pior caso de um defeito era a IA dizer um número errado. A partir da 18-C, o pior caso é ela
+**alterar o registro de alguém**. Duas consequências práticas:
+
+- **Nenhuma ferramenta de escrita existe hoje**, e o guard já recusa por
+  `TOOL_WRITE_DISABLED`. Ligar isso é decisão do dono, não descoberta de agente.
+- **A primeira entrega da 18-C é a MATRIZ DE FERRAMENTAS** dos 7 módulos restantes (leitura),
+  não a escrita. Replicar o padrão de Treinos em Financeiro, Dieta, TO-DO, Agenda, Tarefas,
+  Hábitos e Estudos é trabalho mecânico e já tem molde: `tools/registry.ts` +
+  `tools/adapters/training.ts` + `tools/adapters/training.test.ts`.
+
+⚠️ **A 18-C exige autorização explícita do usuário.** Não comece a implementar por encontrar
 este arquivo.
+
+### O que a 18-B deixou pronto (reuse, não reescreva)
+
+| Precisa de… | Use |
+| --- | --- |
+| Declarar uma ferramenta nova | `tools/registry.ts` (estático) + `tools/contracts.ts` |
+| Ler dado sem reescrever regra | `tools/adapters/training.ts` — o molde: chama o serviço que a tela já usa |
+| Validar quem pode chamar o quê | `tools/guard.ts` (ordem de checagem fixa) |
+| Executar e podar a saída | `tools/executor.ts` |
+| O laço de passos | `server/tool-loop.ts` — **teto por TENTATIVA**, não por run |
+| Escolher o agente | `agents/routing.ts` — a flag `allow_*` vence sempre |
+| Gravar a trilha | `tools/audit.ts` → `ai_tool_calls` (o PEDIDO, nunca o resultado) |
+| Montar a trilha para a tela | `tools/sources.ts` + `components/ai/source-chips.tsx` |
+
+**Ferramenta nova exige, no mesmo commit:** rótulo em `ROTULO_DA_FERRAMENTA`
+(`lib/ai/constants.ts` — há teste sobre o registry real), frase da permissão em
+`ROTULO_DA_PERMISSAO`, e `refs` com rota interna que passe por `rotaInternaAceita`.
 
 ### O que a 18-A deixou pronto para você usar (não reescreva nada disto)
 
@@ -49,14 +75,45 @@ este arquivo.
    de 12 h**. Rodar a reconciliação **antes de reservar novo run** é o que impede um run
    travado de bloquear a próxima conversa e prender orçamento.
 9. **Sem master key, só a IA para** — o resto do sistema continua funcionando.
-10. **Trava de honestidade:** o assistente da 18-A **não tem acesso aos dados** e deve dizer
-    isso, não inventar número. É critério de aceite.
+10. ~~**Trava de honestidade:** o assistente da 18-A **não tem acesso aos dados** e deve dizer
+    isso, não inventar número.~~ ⚠️ **REESCRITA NA 18-B** (prompt-base `seguranca-v2`): a
+    versão acima virou MENTIRA no instante em que a IA passou a ler Treinos. A trava continua
+    sendo critério de aceite, mas o que ela afirma mudou — o assistente **só sabe o que as
+    ferramentas devolveram naquela conversa**, aponta o módulo quando não devolveram, e nunca
+    inventa, estima nem infere número. **Lição para a 18-C: todo texto que descreve o que a IA
+    não faz é datado.** Ao acrescentar ferramenta, releia `agents/security-prompt.ts`,
+    `AVISO_SEM_ACESSO` e `RESUMO_DO_ASSISTENTE` (`lib/ai/constants.ts`) — os três afirmam a
+    REGRA, não o estado, exatamente para não vencerem de novo.
 
 ### O que continua bloqueado depois da 18-B
 
 Escrita, propostas e confirmações (18-C) · imagens e documentos, **inclusive qualquer upload**
 (18-D) · insights e dashboards (18-E) · memória, voz, automações, botão flutuante,
 **sino/notificações** e busca global (18-F).
+
+### As armadilhas que a 18-B encontrou — todas custaram uma rodada de revisão
+
+1. **Teste que espelha a implementação não prova nada.** Seis ocorrências numa subfase só. Um
+   `satisfies Record<…>` já garante coerência entre duas listas: um teste que só reconfere isso
+   **não tem como falhar sem o `tsc` falhar antes**. Prefira valor escrito à mão, com a
+   aritmética no comentário. E toda lista estática que aponta para o mundo real (rota, arquivo)
+   precisa de um teste que **confira no disco** — o compilador nunca vê isso.
+2. **Duplo de teste que não modela restrição do banco esconde defeito.** Foi a causa raiz do
+   único CRITICAL da subfase: com os duplos cegos ao `UNIQUE`, o bug de índice ficava invisível
+   na consequência (a IA parava de ler) e só as asserções explícitas de sequência mordiam.
+3. **`vitest` não checa tipo — rode `npx tsc --noEmit` sempre.** Helper de teste tipado por
+   inferência do literal (`Partial<typeof ENTRADA>`) aceita menos campos que a função real:
+   testes verdes com o `tsc` vermelho. Amarre no contrato.
+4. **Cobrir as duas pontas não cobre o elo entre elas.** O runner podia parar de repassar a
+   rota ao prompt e a suíte inteira continuava verde — um teste provava o bloco, outro provava
+   a borda, nenhum provava o meio.
+5. **Mutação: confira por md5 que ela ENTROU no arquivo antes de acreditar num verde.** O
+   working tree é todo CRLF (`core.autocrlf=true`) e substituição multi-linha falha em silêncio.
+   Isso aconteceu duas vezes, e nas duas o "verde" era falso.
+6. **Toda trava de segurança escrita como lista de proibidos vai ser furada.** `parseRefs`
+   recusava `//` e deixava passar `/\`, que o parser de URL resolve idêntico. Escreva a
+   allowlist — e, quando a garantia depende de um parser, **pergunte ao parser no teste** em
+   vez de confiar na sua leitura da especificação.
 
 ### As três armadilhas que a 18-A encontrou e você vai reencontrar
 
@@ -320,8 +377,17 @@ curl -X POST "https://api.supabase.com/v1/projects/yjvnlbjvippefvzgrxxw/database
 Registre o arquivo em `supabase_migrations.schema_migrations` depois, para o ledger bater com
 o repositório. **Nunca imprima o token.**
 
-Depois de qualquer migration: `get_advisors` com **0 lints de schema** e
-**regenere `src/types/supabase.ts`** (MCP `generate_typescript_types`).
+Depois de qualquer migration: rode `get_advisors` e **regenere `src/types/supabase.ts`**
+(MCP `generate_typescript_types`).
+
+⚠️ **O critério NÃO é "saída vazia".** A redação anterior — "`get_advisors` com 0 lints de
+schema" — se lê como se a ferramenta devesse devolver nada, e ela nunca devolve: em
+2026-08-07 há **1 lint de segurança**, `auth_leaked_password_protection`, que é um **botão do
+painel de Auth** (proteção contra senha vazada, checagem no HaveIBeenPwned) e **não tem
+migration que o resolva**. Um critério inatingível é pior que nenhum, porque ensina a ignorar
+a saída inteira. O critério real é: **nenhum lint NOVO cujo alvo seja uma tabela ou função sua**
+— RLS faltando, `search_path` mutável, policy permissiva demais. Compare com a execução
+anterior em vez de esperar zero.
 
 ## ⛔ Invariantes gerais do projeto (bloqueantes)
 

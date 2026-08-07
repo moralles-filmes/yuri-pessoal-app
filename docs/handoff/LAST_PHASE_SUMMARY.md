@@ -1,9 +1,66 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-> 🟡 **ÚLTIMA SUBFASE CONCLUÍDA: 18-A — IA · Fundação, provedores e chat (2026-08-04).**
-> Antes dela, as duas frentes grandes: **Fase 16 — Dieta e Alimentação** (16-A a 16-F, 40 de 40
-> critérios) e **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55). Este arquivo tem os
-> resumos na ordem inversa de conclusão — o mais recente primeiro.
+> 🟡 **ÚLTIMA SUBFASE CONCLUÍDA: 18-B — IA · Contexto, ferramentas de leitura e agentes
+> (2026-08-07).** Antes dela, a 18-A (2026-08-04) e as duas frentes grandes: **Fase 16 — Dieta
+> e Alimentação** (16-A a 16-F, 40 de 40 critérios) e **Fase 17 — Módulo Treinos** (17-A a
+> 17-F, 55 de 55). Este arquivo tem os resumos na ordem inversa de conclusão — o mais recente
+> primeiro.
+
+---
+
+## Fase 18-B — IA · Contexto, ferramentas de leitura e agentes (2026-08-07) ✅ **IMPLEMENTADA E VERIFICADA**
+
+**É a subfase em que a IA passou a ler dado real.** Três ferramentas, todas de Treinos, todas
+de leitura. Nenhuma ferramenta de escrita existe — o guard recusa por `TOOL_WRITE_DISABLED`.
+
+### O que foi entregue
+
+| # | Entrega | Onde |
+| --- | --- | --- |
+| 1 | 3 ferramentas de Treinos (último treino, totais, recordes) | `lib/ai/tools/adapters/training.ts` |
+| 2 | Tool Registry estático + guard com ordem de checagem fixa | `tools/registry.ts` · `tools/guard.ts` |
+| 3 | Executor com poda por orçamento de caracteres | `tools/executor.ts` |
+| 4 | Laço de ferramentas próprio, teto de 3 passos por tentativa | `server/tool-loop.ts` |
+| 5 | Roteamento determinístico por agente | `agents/routing.ts` |
+| 6 | Contexto de página (só a rota; módulo no servidor) | `validators/ai.ts` · `api/ia/chat/route.ts` |
+| 7 | Auditoria por chamada e por passo | `ai_tool_calls` · `ai_run_steps` |
+| 8 | Rastreabilidade na tela, com "Ver dados usados" | `components/ai/source-chips.tsx` |
+| 9 | 9 chaves de autorização por módulo, todas desligadas | `/ia/configuracoes` |
+
+### Os defeitos que a revisão pegou — e o que cada um ensinou
+
+| Severidade | Defeito | Lição |
+| --- | --- | --- |
+| **CRITICAL** | `step_index` reiniciava por tentativa com `run_id` igual → `23505` → "sem trilha, sem leitura" bloqueava tudo. **Depois de qualquer retry, a IA parava de ler** e respondia com a mensagem de falha de auditoria, com o run fechando como `completed` | Duplo de teste que não modela restrição do banco esconde o defeito **na consequência** |
+| IMPORTANT | O número da IA divergia do da tela: os adapters não liam as preferências de contagem de volume | Default do banco coincidir com default do código faz o teste passar e a tela discordar |
+| IMPORTANT | A regra de contagem não viajava junto com o número (invariante 12 da Fase 17) | Agregado sem a regra ao lado é número sem significado |
+| IMPORTANT | Passo de modelo ficava `started` para sempre quando o provedor errava | `.return()` de gerador suspende antes do `closeStep`; precisa de `try/finally` |
+| IMPORTANT | Erro de validação chegava **em inglês** direto no toast | O `error` do Zod é texto de usuário quando o cliente o exibe cru |
+| IMPORTANT | O aviso da tela ainda dizia que o assistente não vê treinos | **Todo texto que descreve o que a IA não faz é datado** |
+| IMPORTANT | `parseRefs` recusava `//` e deixava passar `/\` — o parser de URL resolve os dois igual | Trava escrita como lista de proibidos vai ser furada; escreva a allowlist |
+
+**O padrão que dominou a subfase:** testes que espelham a implementação. Seis ocorrências. As
+contramedidas adotadas — e que valem para a 18-C — estão em `NEXT_AGENT_INSTRUCTIONS.md`,
+seção "As armadilhas que a 18-B encontrou".
+
+### Verificação
+
+`npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm run test:run` **2.512 testes / 121 arquivos** ✅ ·
+**`TZ=UTC`** ✅ · `npm run build` ✅. Smoke: rotas privadas → 307 `/login`; `/api/cron/*` sem
+segredo → 401.
+
+⚠️ **Limites da verificação, declarados:** o chat **não foi exercitado com credencial real de
+provedor** (exige chave e `AI_MASTER_KEYS`); e o projeto **não tem infraestrutura de teste de
+componente** (`environment: "node"`, zero `.test.tsx`), então o contrato entre runner e tela é
+verificado por varredura do código-fonte (`lib/ai/chat-events.test.ts`), não por DOM.
+
+### Pendências conscientes
+
+- O **contexto de página não é persistido** — o selo some ao recarregar. Persistir exige coluna.
+- Chamadas que excedem `MAX_TOOLS_POR_PASSO` voltam ao modelo como erro pareado mas **não viram
+  linha em `ai_tool_calls`** (não há `rejection_reason` para "limite por passo" no CHECK).
+- `attemptCount` passou a contar os `TOOL_STEP`: significa "chamadas ao modelo", não "tentativas
+  de recuperação".
 
 ---
 

@@ -16,9 +16,9 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅ (2026-08-04). **18-B é a próxima** |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅ (2026-08-04), 18-B ✅ (2026-08-07). **18-C é a próxima** |
 
-Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Conferido no banco em 2026-08-04, depois da 18-A: **119 tabelas** no `public` — **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **7 `ai_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O total muda a cada subfase — **conte antes de citar um número**.
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Conferido no banco em 2026-08-04, depois da 18-A: **119 tabelas** no `public` — **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **7 `ai_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). A 18-B somou **2 `ai_*`** (`ai_run_steps`, `ai_tool_calls`), então são **9** — mas o total do `public` **não foi reconferido no banco**. O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -112,13 +112,20 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 23. **FK COMPOSTA sempre que uma tabela apontar para outra dentro do mesmo usuário.** A RLS confere o `user_id` da **própria linha** e não alcança a linha apontada. Sem isso, um intruso ocupava a chave única `(scheduled_workout_id, provider)` da ponte da agenda e **impedia o dono de sincronizar** aquele dia. Mesma correção da 16-E nas fotos de evolução.
 24. **`getSessionHistory` aceita `client`/`userId`** para o Cron (service role, sem sessão) usar **a mesma leitura da tela**. Um segundo caminho de montagem do histórico faria o número da notificação divergir do número da tela.
 
-## Módulo Inteligência Artificial (Fase 18 — 18-A implementada)
+## Módulo Inteligência Artificial (Fase 18 — 18-A e 18-B implementadas)
 
-Rota `/ia`, tabelas `ai_*` (7), 6 subfases (A–F). A **18-A está pronta e verificada**
-(2026-08-04): contratos internos, 4 adapters, catálogo de modelos e tarifas versionado,
-credenciais cifradas, chat com streaming, medição por tentativa e orçamento com reserva.
-**A IA ainda NÃO lê nenhum registro do usuário** — leituras começam na 18-B. Desenho em
-`docs/superpowers/specs/2026-08-04-modulo-ia-design.md`; camadas em `PROJECT_ARCHITECTURE.md`.
+Rota `/ia`, tabelas `ai_*` (9), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
+internos, 4 adapters, catálogo de modelos e tarifas versionado, credenciais cifradas, chat com
+streaming, medição por tentativa e orçamento com reserva — **sem ler um único registro**. A
+**18-B** (2026-08-07) abriu a primeira leitura: 3 ferramentas de Treinos, laço de ferramentas
+próprio, roteamento por agente, contexto de página, auditoria por chamada e rastreabilidade
+na tela. Desenho em `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`; camadas em
+`PROJECT_ARCHITECTURE.md`.
+
+⚠️ **A IA lê Treinos, e SÓ se `allow_training` estiver ligada** (nasce `false` no banco;
+a chave está em `/ia/configuracoes` desde a 18-B). Os outros 8 módulos não têm ferramenta
+nenhuma — a chave deles aparece **desabilitada**, com o motivo, e se habilita sozinha quando
+a 18-C publicar a primeira leitura. Nenhuma ferramenta de ESCRITA existe.
 
 **As regras arquiteturais que valem daqui em diante:**
 
@@ -169,11 +176,61 @@ credenciais cifradas, chat com streaming, medição por tentativa e orçamento c
     reserva, e sem reserva o orçamento não protege nada.
 14. **Tool Registry NASCE VAZIO na 18-A**: nenhuma definição vai ao provedor, e tool call
     inesperada encerra o run como `failed` com `UNEXPECTED_TOOL_CALL`, sem executar nada.
-15. **Trava de honestidade** — o assistente diz que não consulta seus registros e aponta o
-    módulo; **nunca inventa número**. É critério de aceite, com teste.
+15. **Trava de honestidade** — **reescrita na 18-B** (prompt-base `seguranca-v2`): a v1 mandava
+    o prompt afirmar que o assistente não consulta registro nenhum, e isso virou mentira quando
+    a IA passou a ler Treinos. Agora o assistente **só sabe o que as ferramentas devolveram
+    naquela conversa**, aponta o módulo quando não devolveram e **nunca inventa, estima nem
+    infere número**. É critério de aceite, com teste.
 16. ⚠️ **`no-restricted-imports` usa semântica de .gitignore**, não de caminho: padrão sem
     barra casa com qualquer componente (o grupo `"ai"` bloqueava `@/lib/ai/**` inteiro). Pacote
     vai em `paths`, não em `patterns`.
+
+**Invariantes acrescentadas pela 18-B (primeira leitura de dado real):**
+
+17. **O LAÇO DE FERRAMENTAS É NOSSO.** As ferramentas vão ao provedor **sem `execute`**: o SDK
+    emite o `tool-call` e para. Quem valida e executa é o Tool Executor, em
+    `src/lib/ai/server/tool-loop.ts`. Teto de **3 passos por TENTATIVA** (não por run — o run
+    inteiro custa `(1 + maxRetries + maxFallbacks) × (1 + MAX_TOOL_STEPS)`, e `computeReservation`
+    reserva nessa mesma base). Estourado o teto, a resposta **declara o corte** — número
+    apresentado como completo depois de laço interrompido é a mentira que a subfase combate.
+18. **`step_index` é DO RUN, nunca do laço.** `ai_run_steps` tem `UNIQUE (run_id, step_index,
+    kind)` e o `run_id` é o mesmo em toda a cadeia de retry/fallback. Reiniciar a contagem por
+    tentativa dava `23505` → `startStep` devolve `null` → **"sem trilha, sem leitura"** bloqueia
+    a execução, e depois de qualquer retry a IA parava de ler e respondia com a mensagem de
+    falha de auditoria, com o run fechando como `completed`. `TOOL_STEP` é o 4º tipo de tentativa.
+19. **A flag `allow_*` VENCE o roteador.** `routeAgent` resolve o agente por texto ou contexto
+    de página, mas `autorizado()` exige a permissão do módulo; sem ela a pergunta cai no
+    orquestrador com `SEM_PERMISSAO`. O `agentId` do cliente é **preferência, nunca autorização**.
+20. **A auditoria guarda o PEDIDO, nunca o RESULTADO.** `ai_tool_calls` grava ferramenta,
+    `arguments_sanitized`, `records_read`, `refs` e desfecho — jamais o conteúdo devolvido, que
+    seria uma segunda cópia dos dados pessoais dentro do módulo de IA. Consequência que a tela
+    respeita: `completude` (do adapter) e `itens_truncados` (do executor) **não existem** lá, e
+    a trilha não afirma nem que o dado estava completo nem que estava incompleto.
+    ⚠️ **`records_read` é `ToolOutput.contagem` — quantos EXISTEM, não quantos chegaram ao
+    modelo.** Com a poda por orçamento de caracteres os dois divergem de propósito; por isso o
+    rótulo da tela é "registros encontrados".
+21. **O contexto da página é SÓ a rota, de uma lista estática, e o módulo é resolvido no
+    servidor.** A tela não manda conteúdo — nem HTML, nem título, nem estado, nem texto de
+    registro. Aceitar `modulo` do cliente seria deixá-lo escolher a allowlist de ferramentas.
+    A descrição de cada rota que entra no prompt é **allowlist por igualdade exata de chave**
+    (com `Object.hasOwn`), nunca interpolação — e o bloco declara que a tela aberta **não é
+    dado sobre os registros**, senão "ele está nos recordes" viraria "ele tem recordes".
+22. **`refs` é o único campo da IA que vira `href`**, e a coluna é `jsonb` livre numa tabela
+    imutável. `rotaInternaAceita` (`tools/sources.ts`) é **allowlist, não lista de proibidos**:
+    recusar só `//` deixava passar `/\`, que o parser de URL resolve idêntico
+    (`new URL("/\\evil.com", base).origin` sai do domínio), e `/<tab>/evil.com` atravessava
+    qualquer checagem de prefixo porque o parser descarta tab/CR/LF antes de resolver.
+23. **Tentativa nova começa com o TEXTO ZERADO, nos dois lados** — servidor no evento `switch`
+    e cliente ao recebê-lo. `TOOL_STEP` é exceção declarada (é a mesma resposta continuando).
+    Corrigir só um dos lados reintroduz o defeito ao contrário: o `router.refresh()` apagaria
+    da tela um texto que o usuário já tinha visto.
+24. **`toolsForPermission` decide se a chave `allow_*` é clicável.** Derivado do registry, não
+    de uma lista escrita à mão de "módulos prontos" — que ficaria para trás nos dois sentidos
+    (botão que não liga nada, ou ferramenta pronta sem chave para ligá-la).
+25. ⚠️ **O projeto não tem infraestrutura de teste de componente** (`environment: "node"`, zero
+    `.test.tsx`). Enquanto for assim, o contrato entre runner e tela é verificado por varredura
+    do código-fonte (`src/lib/ai/chat-events.test.ts`): **evento SSE novo exige `case` na tela,
+    ou a suíte fica vermelha**. Foi assim que o evento `tool` deixou de ser ignorado em silêncio.
 
 ## Leitura obrigatória antes de mexer no código
 
@@ -201,7 +258,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 2.129 testes em 2026-08-04 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 2.512 testes em 2026-08-07 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

@@ -28,24 +28,18 @@
  */
 
 import { worstCaseRatePair, type AiRate } from "@/lib/ai/core/pricing";
+import { MAX_TOOLS_POR_PASSO, TOKENS_POR_RESULTADO_DE_FERRAMENTA } from "@/lib/ai/tools/limits";
 import { ceil6 } from "./meter";
+// `CARACTERES_POR_TOKEN` e `estimarTokensDeEntrada` moraram aqui na 18-A. A 18-B precisou de
+// `tools/limits.ts` importando a constante de caracteres-por-token, e este arquivo precisou de
+// `tools/limits.ts` para os passos do laço — as duas dependências juntas seriam um CICLO. A
+// saída foi mover as duas definições para `usage/tokens.ts` (uma folha sem dependência de
+// volta) e reexportar aqui, para que `chat-runner.ts` e qualquer outro importador existente
+// continuem funcionando sem mudar uma linha.
+export { CARACTERES_POR_TOKEN, estimarTokensDeEntrada } from "./tokens";
 
 /** Margem padrão. Documentada, ajustável em `ai_user_preferences.reservation_margin`. */
 export const MARGEM_PADRAO = 1.15;
-
-/**
- * Heurística de tokens de entrada, sobre o PROMPT JÁ MONTADO (system + histórico + a
- * mensagem), nunca sobre o texto cru do usuário.
- *
- * ~3 caracteres por token é deliberadamente pessimista: a média em português fica perto de
- * 4, e os tokenizadores mais novos produzem mais tokens para o mesmo texto. Subestimar aqui
- * fura a reserva; superestimar só a torna um pouco mais folgada.
- */
-export const CARACTERES_POR_TOKEN = 3;
-
-export function estimarTokensDeEntrada(promptMontado: string): number {
-  return Math.ceil(promptMontado.length / CARACTERES_POR_TOKEN);
-}
 
 export type ReservationInput = {
   /** Tarifas do modelo selecionado E de toda a cadeia de fallback autorizada. */
@@ -56,6 +50,11 @@ export type ReservationInput = {
   readonly maxRetries: number;
   readonly maxFallbacks: number;
   readonly margem: number;
+  /**
+   * Passos de FERRAMENTA previstos (18-B). Ausente ou 0 reproduz exatamente a fórmula da
+   * 18-A — é o que mantém os testes e o comportamento anteriores intactos.
+   */
+  readonly maxToolSteps?: number;
 };
 
 export type Reservation = {
@@ -79,9 +78,24 @@ export function computeReservation(input: ReservationInput): Reservation {
     if (par.output > piorSaida) piorSaida = par.output;
   }
 
-  const base =
-    (input.tokensEntradaEstimados / 1_000_000) * piorEntrada +
-    (input.tetoDeSaida / 1_000_000) * piorSaida;
+  // Cada passo do laço é uma chamada paga, e o contexto CRESCE: o resultado de CADA
+  // ferramenta do passo anterior entra na entrada do próximo. Um passo pode disparar até
+  // `MAX_TOOLS_POR_PASSO` ferramentas em paralelo (`tools/limits.ts`), e cada uma vira o SEU
+  // PRÓPRIO bloco `wrapUntrusted` no contexto — não um só. Contar um bloco por passo em vez de
+  // até `MAX_TOOLS_POR_PASSO` é exatamente o jeito de a reserva subestimar o pior caso real.
+  // Somar passo a passo, multiplicando pelo teto de ferramentas por passo, é o único jeito de
+  // não furar — e importar os números de `tools/limits.ts` mantém a aritmética de custo num
+  // lugar só, como manda a regra de `calc.ts` na Dieta.
+  const passos = Math.max(0, input.maxToolSteps ?? 0);
+  let base = 0;
+  for (let i = 0; i <= passos; i += 1) {
+    const entradaDoPasso =
+      input.tokensEntradaEstimados +
+      i * MAX_TOOLS_POR_PASSO * TOKENS_POR_RESULTADO_DE_FERRAMENTA;
+    base +=
+      (entradaDoPasso / 1_000_000) * piorEntrada +
+      (input.tetoDeSaida / 1_000_000) * piorSaida;
+  }
 
   const multiplicador = 1 + Math.max(0, input.maxRetries) + Math.max(0, input.maxFallbacks);
   const margem = input.margem > 0 ? input.margem : MARGEM_PADRAO;
@@ -96,7 +110,8 @@ export function computeReservation(input: ReservationInput): Reservation {
     explicacao:
       `Reserva de US$ ${valorUsd.toFixed(6)}: ${input.tokensEntradaEstimados} tokens de entrada estimados ` +
       `e teto de ${input.tetoDeSaida} de saída, pela tarifa do modelo mais caro autorizado ` +
-      `(US$ ${piorEntrada}/M entrada e US$ ${piorSaida}/M saída), × ${multiplicador} tentativas × margem ${margem}.`,
+      `(US$ ${piorEntrada}/M entrada e US$ ${piorSaida}/M saída), × ${multiplicador} tentativas × margem ${margem}` +
+      (passos > 0 ? `, cobrindo ${passos} passos de ferramenta.` : "."),
   };
 }
 

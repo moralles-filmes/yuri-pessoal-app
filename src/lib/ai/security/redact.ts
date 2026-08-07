@@ -75,6 +75,115 @@ export function sanitizedForStorage(error: AiError): string {
 }
 
 /**
+ * Fase 18-B — o que pode ir para uma coluna `jsonb` de auditoria (hoje,
+ * `ai_tool_calls.arguments_sanitized`).
+ *
+ * Mora AQUI, e não dentro de `tools/`, porque este arquivo é o único caminho de saída
+ * sanitizada do módulo: uma segunda sanitização local nasceria desatualizada no dia em que
+ * um padrão novo entrasse em `PADROES_DE_SEGREDO`.
+ *
+ * Duas garantias, as duas exigidas pelo banco e pela disciplina do módulo:
+ *  • Devolve SEMPRE um objeto — a constraint `jsonb_typeof(...) = 'object'` recusa escalar.
+ *  • O argumento veio do MODELO. Ele passa pela mesma varredura do erro, porque nada impede
+ *    o usuário de colar uma chave na conversa e o modelo de repeti-la num argumento.
+ */
+/**
+ * O mesmo formato de `Json` dos tipos gerados do Supabase, declarado AQUI para a camada de
+ * segurança não depender do arquivo gerado. A compatibilidade é estrutural: o retorno de
+ * `sanitizedJson` entra direto numa coluna `jsonb`.
+ */
+export type SanitizedJson =
+  | string
+  | number
+  | boolean
+  | null
+  | { [chave: string]: SanitizedJson | undefined }
+  | SanitizedJson[];
+
+/**
+ * Nome de campo que denuncia segredo. A âncora vale para o PEDAÇO da chave, não para a chave
+ * inteira: ancorada de ponta a ponta, ela deixava passar `x-api-key`, `access_token`,
+ * `client_secret` e `pwd` — todos nomes reais de cabeçalho e de campo de credencial.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⚠️ `session_id` FICA DE FORA DE PROPÓSITO — NÃO "CONSERTE" DE VOLTA.                   ║
+ * ║                                                                                       ║
+ * ║ `session_token` e `session_key` continuam entrando: são credencial. Mas `session_id`  ║
+ * ║ cru, aqui, é IDENTIFICADOR DE REGISTRO DO USUÁRIO, não segredo — uma ferramenta com   ║
+ * ║ argumento `session_id` (18-C) teria o argumento gravado como `[removido]` em          ║
+ * ║ `ai_tool_calls.arguments_sanitized`, e essa coluna existe justamente para mostrar     ║
+ * ║ QUAL registro foi lido. Redigir ali não protege nada e cega a auditoria.               ║
+ * ║                                                                                       ║
+ * ║ O cookie de sessão, que é o caso legítimo de preocupação, já é pego por `cookie` e    ║
+ * ║ por `authorization` — e o valor, se for JWT ou `Bearer …`, cai nos padrões de          ║
+ * ║ `PADROES_DE_SEGREDO` independentemente do nome do campo.                               ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+const CHAVE_SENSIVEL =
+  /(^|[_.-])(api[_-]?key|apikey|authorization|auth|bearer|token|secret|senha|password|passwd|pwd|credential|credentials|cookie|session[_-]?(?:token|key)|private[_-]?key)([_.-]|$)/i;
+const PROFUNDIDADE_MAXIMA = 8;
+const NAO_SERIALIZAVEL = "[não serializável]";
+
+/**
+ * A varredura é feita CAMPO A CAMPO, não sobre o JSON serializado: aplicar as regex ao texto
+ * do JSON quebra o próprio JSON (o padrão `"api_key": "…"` engole as aspas do valor), e um
+ * `JSON.parse` que falha viraria auditoria perdida.
+ *
+ * ⚠️ Duas armadilhas de JavaScript que já custaram dado de auditoria aqui:
+ *
+ *  1. **`saida[chave] = …` com `chave === "__proto__"`** não cria propriedade: dispara o
+ *     setter de `Object.prototype` e a chave SOME do resultado. Justo a chave que mais
+ *     interessa numa auditoria de argumento vindo do modelo. Por isso o acumulador é
+ *     `Object.create(null)` — objeto sem protótipo não tem setter para disparar.
+ *  2. **`WeakSet` de "já visto" ≠ "está no caminho atual".** Sem remover o nó ao sair dele,
+ *     `{p: obj, q: obj}` — o MESMO objeto em dois ramos, sem ciclo nenhum — devolvia o
+ *     segundo ramo como "[não serializável]". O que precisa ser barrado é o ciclo, não a
+ *     repetição.
+ */
+function varrer(
+  valor: unknown,
+  emCurso: WeakSet<object>,
+  nivel: number,
+): SanitizedJson | undefined {
+  if (typeof valor === "string") return redactSecrets(valor);
+  if (typeof valor === "number") return Number.isFinite(valor) ? valor : null;
+  if (typeof valor === "boolean" || valor === null) return valor;
+  if (typeof valor !== "object") return undefined;
+
+  if (nivel >= PROFUNDIDADE_MAXIMA) return NAO_SERIALIZAVEL;
+  if (emCurso.has(valor as object)) return NAO_SERIALIZAVEL;
+  emCurso.add(valor as object);
+
+  try {
+    if (Array.isArray(valor)) {
+      return valor.map((item) => varrer(item, emCurso, nivel + 1) ?? null);
+    }
+
+    const saida = Object.create(null) as { [chave: string]: SanitizedJson | undefined };
+    for (const [chave, item] of Object.entries(valor as Record<string, unknown>)) {
+      if (CHAVE_SENSIVEL.test(chave)) {
+        saida[chave] = REDACTED;
+        continue;
+      }
+      const limpo = varrer(item, emCurso, nivel + 1);
+      if (limpo !== undefined) saida[chave] = limpo;
+    }
+    return saida;
+  } finally {
+    emCurso.delete(valor as object);
+  }
+}
+
+export function sanitizedJson(value: unknown): {
+  [chave: string]: SanitizedJson | undefined;
+} {
+  const limpo = varrer(value, new WeakSet(), 0);
+  if (limpo === null || limpo === undefined) return {};
+  if (typeof limpo !== "object" || Array.isArray(limpo)) return { valor: limpo };
+  return limpo;
+}
+
+/**
  * O que pode ir para log operacional. NÃO inclui a mensagem: só classe, código e
  * correlação — o suficiente para investigar, insuficiente para vazar.
  */
