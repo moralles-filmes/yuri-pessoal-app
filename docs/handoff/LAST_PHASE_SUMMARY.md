@@ -1,10 +1,134 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-> 🟡 **ÚLTIMA SUBFASE CONCLUÍDA: 18-B — IA · Contexto, ferramentas de leitura e agentes
-> (2026-08-07).** Antes dela, a 18-A (2026-08-04) e as duas frentes grandes: **Fase 16 — Dieta
-> e Alimentação** (16-A a 16-F, 40 de 40 critérios) e **Fase 17 — Módulo Treinos** (17-A a
-> 17-F, 55 de 55). Este arquivo tem os resumos na ordem inversa de conclusão — o mais recente
-> primeiro.
+> 🟡 **EM ANDAMENTO: 18-C — IA · Ações, aprovações, idempotência e auditoria (2026-08-07).**
+> Os **Blocos 1, 2 e 3 estão concluídos**: a leitura dos nove módulos e o **Approval Engine**.
+> A escrita foi autorizada pelo dono em 2026-08-07 e, ainda assim, **nenhuma escrita é
+> possível** — o registry de commands nasce vazio, como o Tool Registry nasceu na 18-A.
+> Antes dela, a 18-B (2026-08-07), a 18-A (2026-08-04) e as
+> duas frentes grandes: **Fase 16 — Dieta e Alimentação** (16-A a 16-F, 40 de 40 critérios) e
+> **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55). Este arquivo tem os resumos na ordem
+> inversa de conclusão — o mais recente primeiro.
+
+---
+
+## Fase 18-C — IA · Ações, aprovações e auditoria (2026-08-07) 🟡 **BLOCOS 1–3 CONCLUÍDOS**
+
+**Desenho:** `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`
+**Matriz (entregável de abertura):** `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`
+
+### O que está pronto — e o que NÃO está
+
+| Bloco | Entrega | Situação |
+| --- | --- | --- |
+| 0 | Matriz das actions + matriz de ferramentas | ✅ |
+| 1 | **19 ferramentas de LEITURA** nos 7 módulos restantes, em 3 lotes | ✅ |
+| 2 | 7 agentes especialistas, roteador com desempate, rotas de contexto | ✅ |
+| — | **🚧 AUTORIZAÇÃO DO DONO PARA A ESCRITA** | ✅ **concedida em 2026-08-07** |
+| 3 | **Approval Engine**: 3 tabelas + chaves `allow_write_*`, hash do EFEITO, prazo, uso único, revalidação | ✅ |
+| 4–6 | Commands · tela de ações · desfazer | ⛔ não iniciado |
+
+⛔ **NENHUMA ESCRITA É POSSÍVEL, E SÃO TRÊS TRAVAS INDEPENDENTES:** nenhum descriptor
+`kind: "escrita"` no registry; as cinco chaves `allow_write_*` nascendo `false`; e o **registry
+de commands VAZIO** em `approval/execute.ts`. Uma proposta íntegra, confirmada e no prazo para
+em `COMMAND_DESCONHECIDO` **sem sequer reservar vaga de execução** — há teste.
+
+O registry passou de 3 para **22 ferramentas** (as 3 de Treinos da 18-B + 19 novas), e o
+registry de agentes de 2 para **9** (orquestrador + 8 especialistas). Os **nove módulos** do
+sistema têm leitura, cada um atrás da sua flag `allow_*`, todas nascendo desligadas.
+
+### As decisões que este bloco teve de tomar
+
+| # | Decisão | Por quê |
+| --- | --- | --- |
+| 1 | **A escrita NÃO vai acontecer dentro do run** | A ferramenta só cria proposta; a execução é Server Action comum. Torna "cancelar o streaming não desfaz ação confirmada" verdadeiro por construção |
+| 2 | **`body_*` não ganha agente próprio** | Módulo central sem tela. Fica na allowlist de Treinos **e** Dieta, exigindo `allow_body` — o que quebrou o "1 módulo = 1 agente = 1 flag" e fez a permissão passar a ser resolvida **pelo módulo**, derivada do registry |
+| 3 | **Desempate explícito no roteador** | Até a 18-B ele devolvia o primeiro módulo da ordem de declaração. Com nove vocabulários, isso é sortear |
+| 4 | **`"tarefa"` fica só com o TO-DO** | Repeti-la no módulo da Fase 09 faria toda pergunta sobre tarefa empatar e cair no orquestrador |
+| 5 | **`toolDefinitionsFor` recebe as permissões** | Um agente pode ter ferramentas de módulos com flags diferentes; oferecer o que a flag recusa queima um dos 3 passos por tentativa |
+| 6 | **`nutrition.get_period` não calcula média** | Dividir por dias sem registro diria que quem registrou 3 dias comeu metade do que comeu |
+
+### Os defeitos que a suíte pegou — e o que cada um ensinou
+
+| Defeito | Lição |
+| --- | --- |
+| O prompt de Hábitos **citava** as frases proibidas para proibi-las | O teste de vocabulário varre o texto inteiro e não distingue uso negado — e está certo: a frase literal no contexto a torna mais provável. **Descreva a conduta, não a cite** |
+| O teste do RPC lia uma migration **fixa pelo nome** | Com a definição vigente numa migration nova, ele ficaria vermelho para sempre com o banco correto. Passou a procurar a última que define a função |
+| `AVISO_SEM_ACESSO` envelheceu pela segunda e pela terceira vez | A lista de módulos fica; quem a mantém viva é o teste derivado do registry, não a memória de quem edita |
+| Fixtures com cor e campo inexistentes (`"cinza"`, `amount` em vez de `targetAmount`) | **Vitest não checa tipo.** `as unknown as` no teste esconde o erro do `tsc` |
+| Um `cd` deixou o `cwd` preso em `src/app/(app)` | `tsc` e `vitest` "passaram" sem rodar nada. **Verde sem execução é o pior verde** |
+
+### Verificação
+
+`npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm run test:run` **2.662 testes / 130 arquivos** ✅ ·
+**`TZ=UTC`** ✅ · `npm run build` ✅. Três migrations aplicadas e conferidas no banco
+(`ai_agent_is_allowed`); `get_advisors` sem nenhum lint novo.
+
+⚠️ **Limites da verificação, declarados:** o chat **não foi exercitado com credencial real de
+provedor**; as telas **não foram abertas na aplicação rodando**; e o projeto continua sem
+infraestrutura de teste de componente.
+
+### Testes de mutação executados (a contramedida da 18-B)
+
+Três, todos confirmados por `md5` de que a mutação entrou no arquivo antes de acreditar no
+resultado: status derivado do TO-DO → 1 teste vermelho; desempate do roteador → 4 vermelhos;
+leitura de instante em Brasília → 1 vermelho em `TZ=UTC`.
+
+---
+
+### Bloco 3 — o Approval Engine (2026-08-07)
+
+**O motor da escrita, com o registry de commands vazio.** A regra que organiza tudo:
+
+```txt
+A IA PROPÕE  ·  O USUÁRIO CONFIRMA  ·  O BACKEND EXECUTA E REGISTRA
+Nunca as três coisas na mesma etapa. Nunca duas delas no mesmo processo.
+```
+
+| Camada | Arquivo | Papel |
+| --- | --- | --- |
+| Puro | `approval/canonical.ts` | Serialização canônica versionada + sha256 do EFEITO |
+| Puro | `approval/state.ts` | Estado derivado, prazo, uso único, revalidação |
+| Puro | `approval/contracts.ts` | Previsão, allowlist de campos tocados, coerência do command |
+| I/O · **dentro** do run | `approval/proposals.ts` | Grava a INTENÇÃO. Nada é escrito em módulo do usuário |
+| I/O · **fora** do run | `approval/execute.ts` | Decisão do dono + execução. `ACTION_COMMANDS` **vazio** |
+
+**As decisões deste bloco, e o que cada uma evita:**
+
+| # | Decisão | Por quê |
+| --- | --- | --- |
+| 1 | **Sem coluna `status` na proposta** | Pendente/expirada/recusada/confirmada/executada saem de `expires_at` + aprovação + execução. Estado gravado vira segunda verdade que diverge da primeira no primeiro erro de transição |
+| 2 | **A FK da aprovação CARREGA o hash** | `(proposal_id, user_id, confirmed_hash)` → `(id, user_id, effect_hash)`: o banco recusa confirmação de uma previsão diferente da que foi lida, sem depender de ninguém lembrar de comparar |
+| 3 | **O prazo é default do BANCO** | O servidor não envia `expires_at`; o CHECK limita a 1 hora. Janela vinda de aritmética de data em JS é janela de replay esperando um bug de fuso |
+| 4 | **Claim-first** | A vaga é reservada antes de escrever. Erra para "pode não ter acontecido", **nunca** para "pode ter acontecido duas vezes" — o lançamento em dobro é o bug que este projeto já teve em produção |
+| 5 | **`ai_action_executions` SEM FK para aprovação/proposta** | `ai_conversations` tem policy de DELETE; com a cadeia completa, apagar um chat apagaria por cascade o registro de que a IA lançou uma transação. Sem a FK, os índices de idempotência passam a ser emparelhados com `user_id`, senão a chave é ocupável (17-F) |
+| 6 | **Duas chaves para escrever** (`allow_*` + `allow_write_*`) | Propor começa por resolver de qual registro se fala, e isso é ler. Consequência: desligar a leitura desliga a escrita junto |
+| 7 | **`GuardMode` sem valor padrão** | Um ponto novo do código não herda permissão de escrita por omissão — é assim que uma trava dessas se perde |
+| 8 | **`changed_fields` limita a FORMA, não o nome** | Escalar de até 200 caracteres. Anexo, URL assinada, texto longo e chave caem sem que ninguém precise tê-los previsto; lista de nomes proibidos fura no primeiro campo novo |
+
+**O que a descoberta do `DELETE` em `ai_conversations` mudou.** A decisão 5 não estava no
+spec: ela nasceu de olhar as policies da 18-A. Sem ela, "Ações realizadas pela IA" (Bloco 5)
+seria uma tela que mente por omissão — e a omissão seria invisível.
+
+**Um defeito que a suíte pegou:** o fixture de escrita do `guard.test.ts` da 18-B ficou
+**incoerente** quando `isToolDescriptorCoherent` subiu. O guard continuava rejeitando — só que
+por `TOOL_INCOHERENT`, e o teste, que só conferia `ok === false`, seguiria verde sem nunca
+chegar à checagem de permissão de escrita. **Verde pelo motivo errado é o pior tipo de verde.**
+
+**Verificação do Bloco 3:** `npm run lint` ✅ (0 erros) · `npx tsc --noEmit` ✅ ·
+`npm run test:run` **2.804 testes / 136 arquivos** ✅ · **`TZ=UTC`** ✅ · `npm run build` ✅.
+Quatro migrations aplicadas via MCP e conferidas com `execute_sql` (RLS, FORCE RLS, policies e
+as 22 constraints); `get_advisors` sem lint novo. Banco reconferido: **124 tabelas** no
+`public`, **12 `ai_*`**.
+
+**Quatro mutações, todas confirmadas por `md5`:** índice de uso único vira não-único → 1
+vermelho; a FK deixa de carregar o hash → 1 vermelho; alguém acrescenta a FK da execução "por
+consistência" → 1 vermelho; o laço importa `approval/execute.ts` → **2** vermelhos (as duas
+travas de fronteira, uma de cada lado).
+
+⚠️ **Limite declarado:** o motor **não foi exercitado de ponta a ponta contra o banco real** —
+não há command para executar, e a Server Action que o chamaria é do Bloco 4. O que foi provado
+contra o banco são as **estruturas** (constraints, policies, índices); o comportamento foi
+provado por teste com duplo.
 
 ---
 

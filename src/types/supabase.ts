@@ -56,6 +56,185 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_action_approvals: {
+        Row: {
+          confirmed_hash: string
+          created_at: string
+          decided_at: string
+          decision: string
+          id: string
+          origem: string
+          proposal_id: string
+          user_id: string
+        }
+        Insert: {
+          confirmed_hash: string
+          created_at?: string
+          decided_at?: string
+          decision: string
+          id?: string
+          origem?: string
+          proposal_id: string
+          user_id: string
+        }
+        Update: {
+          confirmed_hash?: string
+          created_at?: string
+          decided_at?: string
+          decision?: string
+          id?: string
+          origem?: string
+          proposal_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_action_approvals_proposal_owner_fk"
+            columns: ["proposal_id", "user_id", "confirmed_hash"]
+            isOneToOne: false
+            referencedRelation: "ai_action_proposals"
+            referencedColumns: ["id", "user_id", "effect_hash"]
+          },
+        ]
+      }
+      ai_action_executions: {
+        Row: {
+          approval_id: string
+          changed_fields: Json
+          command: string
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          finished_at: string | null
+          id: string
+          idempotency_key: string
+          items: Json
+          proposal_id: string
+          started_at: string
+          status: string
+          target_id: string | null
+          target_route: string | null
+          undetailed_change: boolean
+          undoes_execution_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          approval_id: string
+          changed_fields?: Json
+          command: string
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key: string
+          items?: Json
+          proposal_id: string
+          started_at?: string
+          status?: string
+          target_id?: string | null
+          target_route?: string | null
+          undetailed_change?: boolean
+          undoes_execution_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          approval_id?: string
+          changed_fields?: Json
+          command?: string
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string
+          items?: Json
+          proposal_id?: string
+          started_at?: string
+          status?: string
+          target_id?: string | null
+          target_route?: string | null
+          undetailed_change?: boolean
+          undoes_execution_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_action_proposals: {
+        Row: {
+          command: string
+          conversation_id: string
+          created_at: string
+          effect_hash: string
+          expires_at: string
+          id: string
+          module: string
+          payload: Json
+          preview: Json
+          resolved_entities: Json
+          risk: number
+          run_id: string
+          tool_call_id: string
+          tool_name: string
+          tool_version: string
+          user_id: string
+        }
+        Insert: {
+          command: string
+          conversation_id: string
+          created_at?: string
+          effect_hash: string
+          expires_at?: string
+          id?: string
+          module: string
+          payload?: Json
+          preview?: Json
+          resolved_entities?: Json
+          risk: number
+          run_id: string
+          tool_call_id: string
+          tool_name: string
+          tool_version: string
+          user_id: string
+        }
+        Update: {
+          command?: string
+          conversation_id?: string
+          created_at?: string
+          effect_hash?: string
+          expires_at?: string
+          id?: string
+          module?: string
+          payload?: Json
+          preview?: Json
+          resolved_entities?: Json
+          risk?: number
+          run_id?: string
+          tool_call_id?: string
+          tool_name?: string
+          tool_version?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_action_proposals_run_owner_fk"
+            columns: ["run_id", "conversation_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_runs"
+            referencedColumns: ["id", "conversation_id", "user_id"]
+          },
+          {
+            foreignKeyName: "ai_action_proposals_tool_call_owner_fk"
+            columns: ["tool_call_id", "run_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_tool_calls"
+            referencedColumns: ["id", "run_id", "user_id"]
+          },
+        ]
+      }
       ai_conversations: {
         Row: {
           agent_id: string
@@ -631,6 +810,11 @@ export type Database = {
           allow_tasks: boolean
           allow_todo: boolean
           allow_training: boolean
+          allow_write_calendar: boolean
+          allow_write_finance: boolean
+          allow_write_habits: boolean
+          allow_write_nutrition: boolean
+          allow_write_todo: boolean
           budget_alert_level_reached: number
           budget_block_on_limit: boolean
           confirmation_mode: string
@@ -661,6 +845,11 @@ export type Database = {
           allow_tasks?: boolean
           allow_todo?: boolean
           allow_training?: boolean
+          allow_write_calendar?: boolean
+          allow_write_finance?: boolean
+          allow_write_habits?: boolean
+          allow_write_nutrition?: boolean
+          allow_write_todo?: boolean
           budget_alert_level_reached?: number
           budget_block_on_limit?: boolean
           confirmation_mode?: string
@@ -691,6 +880,11 @@ export type Database = {
           allow_tasks?: boolean
           allow_todo?: boolean
           allow_training?: boolean
+          allow_write_calendar?: boolean
+          allow_write_finance?: boolean
+          allow_write_habits?: boolean
+          allow_write_nutrition?: boolean
+          allow_write_todo?: boolean
           budget_alert_level_reached?: number
           budget_block_on_limit?: boolean
           confirmation_mode?: string

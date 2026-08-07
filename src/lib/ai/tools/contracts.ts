@@ -58,6 +58,43 @@ export const TOOL_PERMISSIONS = [
 ] as const;
 export type ToolPermission = (typeof TOOL_PERMISSIONS)[number];
 
+/**
+ * Fase 18-C — A SEGUNDA chave, e ela é de ESCRITA.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ESCREVER NUM MÓDULO EXIGE AS DUAS CHAVES: a de leitura E a de escrita.                ║
+ * ║                                                                                       ║
+ * ║ Não é redundância. Propor uma escrita começa lendo — resolver "a tarefa do mercado"    ║
+ * ║ para um id é uma consulta —, e autorizar a IA a alterar um módulo que ela não pode nem ║
+ * ║ ler descreveria um estado que não existe. A implicação prática é a que importa: quem   ║
+ * ║ desliga a leitura de um módulo desliga a escrita dele junto, sem ter de lembrar.       ║
+ * ║                                                                                       ║
+ * ║ Só existem as chaves dos módulos que TÊM ação de escrita prevista (matriz do Bloco 0). ║
+ * ║ Uma chave sem ferramenta que a honre seria um botão que não liga nada — o mesmo        ║
+ * ║ defeito que `toolsForPermission` (invariante 24 da 18-B) existe para não cometer.      ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export const TOOL_WRITE_PERMISSIONS = [
+  "allow_write_todo",
+  "allow_write_habits",
+  "allow_write_calendar",
+  "allow_write_nutrition",
+  "allow_write_finance",
+] as const;
+export type ToolWritePermission = (typeof TOOL_WRITE_PERMISSIONS)[number];
+
+/**
+ * O que a ferramenta TOCA — declarado, nunca deduzido do nome do módulo.
+ *
+ * Deduzir seria adivinhação: `nutrition.get_day` e `nutrition.registrar_consumo` estão no
+ * mesmo módulo e não têm o mesmo peso, e uma ferramenta de Treinos que gravasse peso
+ * corporal tocaria dado de saúde sem ter "saude" em lugar nenhum do nome. Este campo é o
+ * que faz `isToolDescriptorCoherent` exigir risco ≥ 3 de quem mexe com dinheiro, saúde ou
+ * histórico consolidado (§3.1 do design da 18-C).
+ */
+export const SENSIBILIDADES = ["dinheiro", "saude", "historico_consolidado"] as const;
+export type Sensibilidade = (typeof SENSIBILIDADES)[number];
+
 export type ToolDescriptor = {
   readonly name: string;
   readonly version: string;
@@ -85,6 +122,31 @@ export type ToolDescriptor = {
   readonly itemLabel: string;
   readonly requiresConfirmation: boolean;
   readonly idempotent: boolean;
+
+  /**
+   * 18-C · Só para `kind: "escrita"`. A chave `allow_write_*` que o dono precisa ter ligado,
+   * ALÉM da `requiredPermission` de leitura do mesmo módulo.
+   *
+   * Opcional no TIPO e obrigatória de FATO: sem ela, `isToolDescriptorCoherent` recusa a
+   * ferramenta de escrita, e o guard a rejeita antes de qualquer execução. Torná-la
+   * obrigatória no tipo faria as 22 leituras existentes declararem `undefined` por escrito —
+   * ruído que esconderia a única declaração que importa.
+   */
+  readonly requiredWritePermission?: ToolWritePermission;
+
+  /**
+   * 18-C · Só para `kind: "escrita"`. O que a ferramenta toca. `[]` é uma declaração válida
+   * ("não toca nada disso"); `undefined` numa ferramenta de escrita é omissão, e omissão é
+   * incoerência — não silêncio consentido.
+   */
+  readonly sensibilidades?: readonly Sensibilidade[];
+
+  /**
+   * 18-C · Só para `kind: "escrita"`. O command que EXECUTA, resolvido num mapa fechado
+   * fora do laço. Fica aqui como declaração; o descriptor não despacha nada, e nome que não
+   * exista no mapa é recusado na execução.
+   */
+  readonly command?: string;
 };
 
 /** Uma referência a um registro real, para o "Ver dados usados". */
@@ -157,14 +219,45 @@ export function emptyToolOutput(observacao: string): ToolOutput {
  * Escrita sem confirmação nunca é coerente; leitura COM confirmação também não, porque
  * criaria na 18-C um caminho de aprovação que ninguém exercitou. E `maxRecords` zero
  * significaria "sem teto", que é justamente o que a subfase existe para impedir.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ A TRAVA SUBIU NA 18-C (§3.1 do design), E O QUE ELA GANHOU É ESPECÍFICO.              ║
+ * ║                                                                                       ║
+ * ║ Até aqui, "escrita exige confirmação e risco ≥ 2" só dizia, traduzido, que escrita não ║
+ * ║ é leitura — nada que o próprio `kind` já não dissesse. As três exigências novas são as ║
+ * ║ que de fato recusam um descriptor mal declarado, e recusam ANTES de qualquer execução: ║
+ * ║                                                                                       ║
+ * ║  • `requiredWritePermission` — sem ela não há chave para o dono ligar, e a ferramenta  ║
+ * ║    seria autorizada só pela chave de LEITURA do módulo;                                ║
+ * ║  • `sensibilidades` declarada (mesmo vazia) — omissão não vira "não toca nada";        ║
+ * ║  • risco ≥ 3 quando toca dinheiro, saúde ou histórico consolidado — é o que impede     ║
+ * ║    "lançar transação" de nascer com o mesmo peso de "criar tarefa".                    ║
+ * ║                                                                                       ║
+ * ║ E `command`: sem ele a proposta não teria o que executar, e o defeito só apareceria    ║
+ * ║ depois de o dono confirmar — o pior momento possível para descobrir.                   ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 export function isToolDescriptorCoherent(tool: ToolDescriptor): boolean {
   if (tool.maxRecords < 1) return false;
   // Sem rótulo, a mensagem de poda só saberia dizer "registros" — e a poda de exercícios de
   // um treino viraria "50 de 51 treinos" na leitura do modelo.
   if (tool.itemLabel.trim() === "") return false;
+
   if (tool.kind === "escrita") {
-    return tool.requiresConfirmation && tool.risk >= 2;
+    if (!tool.requiresConfirmation) return false;
+    if (tool.risk < 2) return false;
+    if (!tool.requiredWritePermission) return false;
+    if (!tool.command || tool.command.trim() === "") return false;
+    if (tool.sensibilidades === undefined) return false;
+    if (tool.sensibilidades.length > 0 && tool.risk < 3) return false;
+    return true;
   }
-  return !tool.requiresConfirmation;
+
+  // Leitura NÃO declara nenhum dos três: declarar chave de escrita, sensibilidade ou command
+  // numa leitura é sinal de que o `kind` está errado — e o `kind` é o que o guard consulta.
+  if (tool.requiresConfirmation) return false;
+  if (tool.requiredWritePermission !== undefined) return false;
+  if (tool.command !== undefined) return false;
+  if (tool.sensibilidades !== undefined) return false;
+  return true;
 }

@@ -108,6 +108,7 @@ const CTX_BASE = {
   userId: "user-1",
   agent: { id: "treinos", allowedTools: ["training.get_volume"] },
   permissions: { allow_training: true },
+  writePermissions: {},
 };
 
 const OFERECIDAS = ["training.get_volume"];

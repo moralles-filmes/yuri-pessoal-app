@@ -318,10 +318,35 @@ describe("runChat — o laço integrado", () => {
 
     // O cliente não pediu agente nenhum (`agentId: null`, o caso real de hoje): quem levou
     // a pergunta para o especialista foi o roteador, lendo o texto e a flag do usuário.
+    /**
+     * ⚠️ SÓ AS TRÊS DE TREINO, e é isso que o caso prova desde a 18-C.
+     *
+     * O agente de Treinos também tem `body.get_latest` e `body.get_series` na allowlist (as
+     * medidas corporais são módulo central e ele já as consome desde a 17-E). Mas este
+     * cenário liga apenas `allow_training`, e `toolDefinitionsFor` filtra por permissão: o
+     * que a flag do usuário recusaria não é oferecido ao provedor. Sem esse filtro, o modelo
+     * pediria a ferramenta de medidas e queimaria um dos 3 passos por tentativa para receber
+     * uma negativa — a cada pergunta.
+     */
     expect(ferramentasRecebidas[0]).toEqual([
       "training.get_last_workout",
       "training.get_volume",
       "training.get_records",
+    ]);
+  });
+
+  it("com allow_body ligada, as medidas corporais entram na mesma allowlist", async () => {
+    permissoes = { allow_training: true, allow_body: true };
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar();
+
+    expect(ferramentasRecebidas[0]).toEqual([
+      "training.get_last_workout",
+      "training.get_volume",
+      "training.get_records",
+      "body.get_latest",
+      "body.get_series",
     ]);
   });
 

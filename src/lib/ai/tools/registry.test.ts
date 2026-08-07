@@ -116,7 +116,9 @@ describe("integridade do registry (18-B)", () => {
   });
 
   it("um nome na allowlist que não existe no registry não vira ferramenta", () => {
-    expect(toolDefinitionsFor(["training.nao_existe"])).toEqual([]);
+    // Permissões todas ligadas: o caso é sobre o NOME, não sobre a flag (18-C).
+    const tudo = Object.fromEntries(TOOL_PERMISSIONS.map((p) => [p, true]));
+    expect(toolDefinitionsFor(["training.nao_existe"], tudo)).toEqual([]);
     expect(findTool("training.nao_existe")).toBeNull();
   });
 });

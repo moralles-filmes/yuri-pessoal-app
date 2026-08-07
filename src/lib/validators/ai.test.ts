@@ -115,8 +115,11 @@ describe("pageContext (18-B) — o contexto da página", () => {
   // a rota de um registro, a mesma rota com barra final, com maiúscula e com query.
   const ROTAS_RECUSADAS = [
     "/admin/tudo",
-    "/financeiro",
-    "/nutricao",
+    // ⚠️ 18-C: `/financeiro` e `/nutricao` SAÍRAM desta lista porque agora estão na
+    // allowlist. Foram trocadas por rotas reais do sistema que continuam fora dela — o caso
+    // que importa é "rota que existe no app mas não é contexto de IA", e essas ainda são.
+    "/relatorios",
+    "/parcelamentos",
     `/treinos/historico/${UUID}`,
     "/treinos/",
     "/Treinos",
@@ -255,9 +258,51 @@ describe("pageContext (18-B) — o contexto da página", () => {
       rota: "/treinos/recordes",
       modulo: "training",
     });
+    // 18-C · Lote 1 — as três telas únicas dos módulos novos.
+    expect(contextoDaRota("/todo")).toEqual({ rota: "/todo", modulo: "todo" });
+    expect(contextoDaRota("/habitos")).toEqual({ rota: "/habitos", modulo: "habits" });
+    expect(contextoDaRota("/estudos")).toEqual({ rota: "/estudos", modulo: "studies" });
+
+    // 18-C · Lote 2. `/rotinas` e `/tarefas` caem no MESMO módulo (são duas telas da Fase
+    // 09), e `/nutricao/medidas` cai em `body` — a tela mora dentro de Dieta, mas o dado é
+    // do módulo central e a permissão é `allow_body`.
+    expect(contextoDaRota("/agenda")).toEqual({ rota: "/agenda", modulo: "calendar" });
+    expect(contextoDaRota("/tarefas")).toEqual({ rota: "/tarefas", modulo: "tasks" });
+    expect(contextoDaRota("/rotinas")).toEqual({ rota: "/rotinas", modulo: "tasks" });
+    expect(contextoDaRota("/nutricao/medidas")).toEqual({
+      rota: "/nutricao/medidas",
+      modulo: "body",
+    });
+
+    // 18-C · Lote 3. ⚠️ `/nutricao` e `/nutricao/diario` são `nutrition`; só
+    // `/nutricao/medidas` é `body` — a tela mora dentro de Dieta, o dado é do módulo central.
+    expect(contextoDaRota("/financeiro")).toEqual({
+      rota: "/financeiro",
+      modulo: "finance",
+    });
+    expect(contextoDaRota("/faturas")).toEqual({ rota: "/faturas", modulo: "finance" });
+    expect(contextoDaRota("/nutricao")).toEqual({
+      rota: "/nutricao",
+      modulo: "nutrition",
+    });
+    expect(contextoDaRota("/nutricao/diario")).toEqual({
+      rota: "/nutricao/diario",
+      modulo: "nutrition",
+    });
+
     // Se uma rota entrar na lista sem par aqui, é este número que acusa.
-    expect(ROTAS_COM_CONTEXTO).toHaveLength(3);
-    expect(MODULOS_COM_CONTEXTO).toEqual(["training"]);
+    expect(ROTAS_COM_CONTEXTO).toHaveLength(14);
+    expect(MODULOS_COM_CONTEXTO).toEqual([
+      "training",
+      "todo",
+      "habits",
+      "studies",
+      "calendar",
+      "tasks",
+      "body",
+      "finance",
+      "nutrition",
+    ]);
   });
 
   /**
@@ -326,7 +371,7 @@ describe("pageContext (18-B) — o contexto da página", () => {
   it("o schema recusa chave herdada de Object.prototype como rota", () => {
     for (const valor of [
       "/treinos/",
-      "/financeiro",
+      "/relatorios",
       "constructor",
       "__proto__",
       "toString",

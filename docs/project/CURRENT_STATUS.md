@@ -15,7 +15,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅ (2026-08-04) e 18-B ✅ (2026-08-07); **18-C é a próxima** |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅ e 18-B ✅; **18-C com a leitura dos 9 módulos e o Approval Engine concluídos — nenhuma escrita é possível ainda (registry de commands VAZIO)** |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -55,14 +55,33 @@ Treinos e nada mais.
 
 A **18-C é a primeira subfase de ESCRITA**, e muda a natureza do risco: até aqui o pior caso
 de um defeito era a IA dizer um número errado; a partir dela, é a IA **alterar um registro**.
-A primeira entrega dela, porém, não é a escrita — é a **matriz de ferramentas de LEITURA** dos
-7 módulos restantes, replicando o molde de Treinos.
+A primeira entrega dela, porém, não era a escrita — era a **matriz de ferramentas de LEITURA**
+dos 7 módulos restantes, replicando o molde de Treinos. **Essa parte está concluída**
+(2026-08-07): o registry tem **22 ferramentas** e **9 agentes**, e os nove módulos do sistema
+são consultáveis, cada um atrás da sua flag `allow_*`.
+
+✅ **O gate da escrita foi autorizado pelo dono em 2026-08-07, e o Bloco 3 (Approval Engine)
+está concluído** — mas **nenhuma escrita é possível ainda**, e isso é o desenho, não uma
+pendência. O motor inteiro existe: 3 tabelas novas (`ai_action_proposals`,
+`ai_action_approvals`, `ai_action_executions`), hash canônico do EFEITO, prazo de 10 minutos
+vindo do banco, uso único por índice, revalidação por recálculo, e as cinco chaves
+`allow_write_*`. O que impede a escrita são **três travas independentes**: nenhum descriptor
+`kind: "escrita"` no registry, as cinco chaves nascendo `false`, e o **registry de commands
+VAZIO** em `src/lib/ai/approval/execute.ts` — exatamente como o Tool Registry nasceu vazio na
+18-A. Uma proposta íntegra, confirmada e no prazo para em `COMMAND_DESCONHECIDO`, sem sequer
+reservar vaga de execução.
+
+⏳ **O que falta:** Bloco 4 (commands um a um, em ordem crescente de risco — `criarTarefaTodo`
+primeiro, `lancarTransacao` por último) → Bloco 5 (tela "Ações realizadas pela IA" + desfazer
+declarado por command) → Bloco 6 (documentação e verificação final). Decisões em
+`docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`; matriz em
+`docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`.
 
 | Subfase | Tema | Status |
 | --- | --- | --- |
 | 18-A | Fundação, provedores e chat | ✅ **CONCLUÍDA** (2026-08-04) |
 | 18-B | Contexto, ferramentas de leitura e agentes | ✅ **CONCLUÍDA** (2026-08-07) |
-| 18-C | Ações, aprovações, idempotência e auditoria | ⬜ **Próxima** |
+| 18-C | Ações, aprovações, idempotência e auditoria | 🟡 **EM ANDAMENTO** — leitura ✅ (Bloco 1–2), Approval Engine ✅ (Bloco 3); faltam commands, tela e desfazer |
 | 18-D | Visão, documentos e comprovantes | ⬜ |
 | 18-E | Insights, relatórios e dashboards | ⬜ |
 | 18-F | Memória, voz, integrações e polimento | ⬜ — fecha a fase |

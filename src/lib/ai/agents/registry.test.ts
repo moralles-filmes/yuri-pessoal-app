@@ -38,7 +38,11 @@ import {
   toolDefinitionsFor,
   UNEXPECTED_TOOL_CALL,
 } from "@/lib/ai/tools/registry";
-import { isToolDescriptorCoherent } from "@/lib/ai/tools/contracts";
+import {
+  isToolDescriptorCoherent,
+  TOOL_PERMISSIONS,
+  type ToolPermission,
+} from "@/lib/ai/tools/contracts";
 
 describe("registry de agentes", () => {
   // Era "a 18-A tem UM agente". A 18-B acrescentou o especialista de Treinos; o que o teste
@@ -47,7 +51,22 @@ describe("registry de agentes", () => {
   // unicidade e formato de id passam igual com um agente novo entrando sem ninguém decidir.
   // Acrescentar agente é, de propósito, uma edição deliberada deste teste.
   it("a lista de agentes é fechada — exatamente estes, nesta ordem", () => {
-    expect(AI_AGENT_REGISTRY.map((a) => a.id)).toEqual([ASSISTENTE_PESSOAL_ID, "treinos"]);
+    // Escrito à mão, e é isso que dá valor ao teste: derivar do registry provaria só que o
+    // registry é igual a si mesmo. Agente novo mexe aqui, no MESMO commit.
+    expect(AI_AGENT_REGISTRY.map((a) => a.id)).toEqual([
+      ASSISTENTE_PESSOAL_ID,
+      "treinos",
+      // 18-C · Lote 1
+      "todo",
+      "habitos",
+      "estudos",
+      // 18-C · Lote 2
+      "agenda",
+      "tarefas",
+      // 18-C · Lote 3 — com estes dois, os nove módulos têm leitura.
+      "financeiro",
+      "dieta",
+    ]);
   });
 
   it("o Assistente Pessoal é o ponto de entrada, e cada agente tem id único", () => {
@@ -62,9 +81,13 @@ describe("registry de agentes", () => {
   });
 
   it("agente desconhecido não é resolvido — `agent_id` é texto, não autorização", () => {
-    expect(findAgent("financeiro")).toBeNull();
+    // ⚠️ 18-C: `"financeiro"` deixou de servir de exemplo — ele EXISTE agora. O caso continua
+    // sendo o mesmo (id que não está no registry não vira agente), com um id que de fato não
+    // existe, mais a caixa alta e o vazio, que nunca existirão.
+    expect(findAgent("administrador")).toBeNull();
     expect(findAgent("")).toBeNull();
     expect(findAgent("TREINOS")).toBeNull();
+    expect(findAgent("FINANCEIRO")).toBeNull();
     expect(findAgent(ASSISTENTE_PESSOAL_ID)).not.toBeNull();
   });
 
@@ -515,15 +538,38 @@ describe("nenhum prompt prescreve, diagnostica ou culpa", () => {
  */
 describe("a lista de agentes do RPC concorda com o registry", () => {
   const RAIZ = path.resolve(__dirname, "..", "..", "..", "..");
-  const sql = fs.readFileSync(
-    path.join(RAIZ, "supabase", "migrations", "20260808100000_ai_tool_audit.sql"),
-    "utf8",
-  );
-  const bloco = sql.match(/create or replace function public\.ai_agent_is_allowed[\s\S]*?\$\$;/)?.[0] ?? "";
+  const DIR = path.join(RAIZ, "supabase", "migrations");
+  const DEFINICAO = /create or replace function public\.ai_agent_is_allowed[\s\S]*?\$\$;/;
+
+  /**
+   * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ ⚠️ A DEFINIÇÃO VIGENTE É A DA ÚLTIMA MIGRATION QUE A REESCREVE — NÃO A DE UM ARQUIVO  ║
+   * ║ FIXO.                                                                                 ║
+   * ║                                                                                       ║
+   * ║ A versão da 18-B lia `20260808100000_ai_tool_audit.sql` pelo nome. Enquanto só existia ║
+   * ║ uma definição isso funcionava; no instante em que a 18-C acrescentou agentes por       ║
+   * ║ `create or replace` numa migration nova, o teste passou a comparar o registry com uma  ║
+   * ║ definição HISTÓRICA — e ficaria vermelho para sempre, com o banco correto. Um teste    ║
+   * ║ que reprova o estado certo é abandonado, e aí não protege mais nada.                   ║
+   * ║                                                                                       ║
+   * ║ Ordem lexicográfica = ordem cronológica, porque o nome começa com `YYYYMMDDHHMMSS`.    ║
+   * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  const arquivos = fs
+    .readdirSync(DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .filter((f) => DEFINICAO.test(fs.readFileSync(path.join(DIR, f), "utf8")));
+
+  const vigente = arquivos.at(-1);
+  const bloco = vigente
+    ? (fs.readFileSync(path.join(DIR, vigente), "utf8").match(DEFINICAO)?.[0] ?? "")
+    : "";
 
   it("o corpo da função foi encontrado no SQL", () => {
     // Sem esta guarda, renomear a função faria `bloco` virar "" e o teste abaixo passaria
     // por vacuidade — a divergência que ele existe para pegar entraria despercebida.
+    expect(arquivos.length).toBeGreaterThan(0);
     expect(bloco).not.toBe("");
     expect(bloco).toContain("p_agent_id in (");
   });
@@ -552,15 +598,35 @@ describe("74. o Tool Registry é a única porta", () => {
     for (const t of AI_TOOL_REGISTRY) expect(t.kind).toBe("leitura");
   });
 
+  // 18-C: `toolDefinitionsFor` passou a receber as permissões do usuário. Este objeto liga
+  // TUDO de propósito — os casos abaixo são sobre a allowlist, não sobre a flag.
+  const TUDO: Partial<Record<ToolPermission, boolean>> = Object.fromEntries(
+    TOOL_PERMISSIONS.map((p) => [p, true]),
+  );
+
   it("agente sem allowlist não recebe definição NENHUMA", () => {
-    expect(toolDefinitionsFor([])).toEqual([]);
+    expect(toolDefinitionsFor([], TUDO)).toEqual([]);
     // Nome na allowlist que não existe no registry NÃO vira ferramenta: não há caminho
     // para uma ferramenta nascer de um nome.
-    expect(toolDefinitionsFor(["finance.create_transaction", "qualquer_coisa"])).toEqual([]);
+    expect(
+      toolDefinitionsFor(["finance.create_transaction", "qualquer_coisa"], TUDO),
+    ).toEqual([]);
+  });
+
+  /**
+   * A flag desligada não oferece a ferramenta ao provedor — e o guard continua recusando a
+   * execução de qualquer jeito. São duas barreiras para dois problemas: esta evita queimar
+   * passo do laço; a do guard é a de segurança.
+   */
+  it("permissão desligada não gera definição, mesmo com a ferramenta na allowlist", () => {
+    expect(
+      toolDefinitionsFor(["training.get_volume"], { allow_training: false }),
+    ).toEqual([]);
+    expect(toolDefinitionsFor(["training.get_volume"], {})).toEqual([]);
   });
 
   it("a definição enviada ao provedor leva só nome, descrição e schema de entrada", () => {
-    const definicoes = toolDefinitionsFor(["training.get_volume"]);
+    const definicoes = toolDefinitionsFor(["training.get_volume"], TUDO);
     expect(definicoes).toHaveLength(1);
     expect(Object.keys(definicoes[0]).sort()).toEqual([
       "description",

@@ -21,6 +21,13 @@ import {
   ASSISTENTE_PESSOAL_PROMPT_VERSION,
 } from "./prompts/assistente-pessoal";
 import { TREINOS_PROMPT, TREINOS_PROMPT_VERSION } from "./prompts/treinos";
+import { TODO_PROMPT, TODO_PROMPT_VERSION } from "./prompts/todo";
+import { HABITOS_PROMPT, HABITOS_PROMPT_VERSION } from "./prompts/habitos";
+import { ESTUDOS_PROMPT, ESTUDOS_PROMPT_VERSION } from "./prompts/estudos";
+import { AGENDA_PROMPT, AGENDA_PROMPT_VERSION } from "./prompts/agenda";
+import { TAREFAS_PROMPT, TAREFAS_PROMPT_VERSION } from "./prompts/tarefas";
+import { FINANCEIRO_PROMPT, FINANCEIRO_PROMPT_VERSION } from "./prompts/financeiro";
+import { DIETA_PROMPT, DIETA_PROMPT_VERSION } from "./prompts/dieta";
 import { SECURITY_PROMPT, SECURITY_PROMPT_VERSION } from "./security-prompt";
 
 export type AiAgentProfile = {
@@ -40,6 +47,13 @@ export type AiAgentProfile = {
 
 export const ASSISTENTE_PESSOAL_ID = "assistente-pessoal";
 export const TREINOS_AGENT_ID = "treinos";
+export const TODO_AGENT_ID = "todo";
+export const HABITOS_AGENT_ID = "habitos";
+export const ESTUDOS_AGENT_ID = "estudos";
+export const AGENDA_AGENT_ID = "agenda";
+export const TAREFAS_AGENT_ID = "tarefas";
+export const FINANCEIRO_AGENT_ID = "financeiro";
+export const DIETA_AGENT_ID = "dieta";
 
 export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
   {
@@ -57,7 +71,9 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
     id: TREINOS_AGENT_ID,
     label: "Treinos",
     description:
-      "Consulta seu histórico de treino: último treino, totais do período e recordes. Só lê — não altera nada.",
+      // ⚠️ Atualizada na 18-C junto com a allowlist: ela ganhou as medidas corporais, e uma
+      // descrição que não as cita mente para o usuário sobre o que a chave dele libera.
+      "Consulta seu histórico de treino (último treino, totais do período, recordes) e, com a autorização de medidas, o peso e as circunferências registradas. Só lê — não altera nada.",
     promptVersion: TREINOS_PROMPT_VERSION,
     prompt: TREINOS_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
@@ -65,6 +81,101 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
       "training.get_last_workout",
       "training.get_volume",
       "training.get_records",
+      /**
+       * ⚠️ 18-C · Lote 2 — as medidas corporais entram AQUI porque `body_*` é módulo central
+       * sem tela própria, e Treinos já é seu consumidor desde a 17-E (`getLatestWeight`
+       * pré-preenche o peso da sessão). A permissão exigida continua sendo `allow_body`, que
+       * é separada de `allow_training`: ligar Treinos NÃO libera as medidas.
+       *
+       * O agente de Dieta entra nesta mesma dupla no Lote 3 — e ele não duplica a ferramenta,
+       * só acrescenta o próprio id em `allowedAgents`. Duas tabelas de peso corporal nunca; e
+       * duas FERRAMENTAS para o mesmo dado, pelo mesmo motivo, também não.
+       */
+      "body.get_latest",
+      "body.get_series",
+    ],
+  },
+  {
+    id: TODO_AGENT_ID,
+    label: "TO-DO",
+    description:
+      "Consulta suas tarefas: o que está atrasado, o que é para hoje, o que vem a seguir e os projetos. Só lê — não altera nada.",
+    promptVersion: TODO_PROMPT_VERSION,
+    prompt: TODO_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: ["todo.get_agenda", "todo.search_tasks", "todo.get_projects"],
+  },
+  {
+    id: HABITOS_AGENT_ID,
+    label: "Hábitos",
+    description:
+      "Consulta seus hábitos: a situação de hoje, as sequências e a consistência. Só lê — não altera nada.",
+    promptVersion: HABITOS_PROMPT_VERSION,
+    prompt: HABITOS_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: ["habits.get_today", "habits.get_streaks"],
+  },
+  {
+    id: ESTUDOS_AGENT_ID,
+    label: "Estudos",
+    description:
+      "Consulta seus cursos e o tempo de estudo: progresso, próxima aula e sequência de dias. Só lê — não altera nada.",
+    promptVersion: ESTUDOS_PROMPT_VERSION,
+    prompt: ESTUDOS_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: ["studies.get_courses", "studies.get_study_time"],
+  },
+  {
+    id: AGENDA_AGENT_ID,
+    label: "Agenda",
+    description:
+      "Consulta seus compromissos: os próximos e os de um dia específico. Só lê — não cria, não altera e não cancela nada.",
+    promptVersion: AGENDA_PROMPT_VERSION,
+    prompt: AGENDA_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: ["calendar.get_upcoming", "calendar.get_day"],
+  },
+  {
+    id: TAREFAS_AGENT_ID,
+    label: "Tarefas e Rotinas",
+    description:
+      "Consulta o módulo legado de tarefas e as rotinas com check-in diário — que NÃO é o TO-DO. Só lê.",
+    promptVersion: TAREFAS_PROMPT_VERSION,
+    prompt: TAREFAS_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: ["tasks.get_pending", "tasks.get_routines_today"],
+  },
+  {
+    id: FINANCEIRO_AGENT_ID,
+    label: "Financeiro",
+    description:
+      "Consulta suas finanças: saldo das contas, resumo do mês e faturas de cartão. Só lê — não lança, não paga e não altera nada.",
+    promptVersion: FINANCEIRO_PROMPT_VERSION,
+    prompt: FINANCEIRO_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: [
+      "finance.get_balances",
+      "finance.get_spending",
+      "finance.get_invoice",
+    ],
+  },
+  {
+    id: DIETA_AGENT_ID,
+    label: "Dieta e Alimentação",
+    description:
+      "Consulta seu registro alimentar (consumo do dia, do período e as metas) e, com a autorização de medidas, o peso e as circunferências. Só lê — não registra nem altera nada.",
+    promptVersion: DIETA_PROMPT_VERSION,
+    prompt: DIETA_PROMPT,
+    requiredCapabilities: ["texto", "streaming"],
+    allowedTools: [
+      "nutrition.get_day",
+      "nutrition.get_period",
+      "nutrition.get_goals",
+      // ⚠️ As MESMAS duas ferramentas do agente de Treinos, não cópias: `body_*` é módulo
+      // central, e uma segunda ferramenta para o mesmo dado daria duas respostas para o
+      // mesmo fato. Elas exigem `allow_body`, que é separada de `allow_nutrition`.
+      "body.get_latest",
+      "body.get_series",
     ],
   },
 ];

@@ -74,6 +74,94 @@ describe("coerência do descriptor", () => {
   it("aceita rótulo com espaço em volta, desde que haja rótulo", () => {
     expect(isToolDescriptorCoherent({ ...LEITURA, itemLabel: " recordes " })).toBe(true);
   });
+
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // 18-C — A trava subiu (§3.1 do design)
+  // ══════════════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Até a 18-B, "escrita exige confirmação e risco ≥ 2" só dizia, traduzido, que escrita não
+   * é leitura — nada que o próprio `kind` já não dissesse. As exigências abaixo são as que
+   * de fato recusam um descriptor mal declarado, ANTES de qualquer execução.
+   */
+  const ESCRITA: ToolDescriptor = {
+    ...LEITURA,
+    name: "todo.criar_tarefa",
+    module: "todo",
+    kind: "escrita",
+    risk: 2,
+    requiredPermission: "allow_todo",
+    requiredWritePermission: "allow_write_todo",
+    command: "criarTarefaTodo",
+    sensibilidades: [],
+    requiresConfirmation: true,
+    idempotent: false,
+  };
+
+  it("aceita a escrita completamente declarada", () => {
+    expect(isToolDescriptorCoherent(ESCRITA)).toBe(true);
+  });
+
+  /**
+   * ⛔ Sem chave de escrita, a ferramenta seria autorizada só pela chave de LEITURA do
+   * módulo — e o dono teria ligado a consulta, não a alteração.
+   */
+  it("recusa escrita sem requiredWritePermission", () => {
+    const semChave = { ...ESCRITA };
+    delete (semChave as { requiredWritePermission?: unknown }).requiredWritePermission;
+    expect(isToolDescriptorCoherent(semChave)).toBe(false);
+  });
+
+  /**
+   * ⛔ Sem command, a proposta não teria o que executar — e o defeito apareceria depois de o
+   * dono confirmar, que é o pior momento possível para descobrir.
+   */
+  it("recusa escrita sem command", () => {
+    const semCommand = { ...ESCRITA };
+    delete (semCommand as { command?: unknown }).command;
+    expect(isToolDescriptorCoherent(semCommand)).toBe(false);
+    expect(isToolDescriptorCoherent({ ...ESCRITA, command: "  " })).toBe(false);
+  });
+
+  /**
+   * ⛔ A DISTINÇÃO QUE DÁ NOME À REGRA: `[]` é uma DECLARAÇÃO ("não toca dinheiro, saúde nem
+   * histórico consolidado"); `undefined` é OMISSÃO. Tratar omissão como declaração faria
+   * "lançar transação" nascer sem sensibilidade só porque ninguém escreveu o campo.
+   */
+  it("sensibilidades vazia é declaração; ausente é omissão", () => {
+    expect(isToolDescriptorCoherent({ ...ESCRITA, sensibilidades: [] })).toBe(true);
+    const omissa = { ...ESCRITA };
+    delete (omissa as { sensibilidades?: unknown }).sensibilidades;
+    expect(isToolDescriptorCoherent(omissa)).toBe(false);
+  });
+
+  /**
+   * ⛔ O CASO QUE A REGRA EXISTE PARA IMPEDIR: "lançar transação" nascendo com o mesmo peso
+   * de "criar tarefa". Quem toca dinheiro, saúde ou histórico consolidado é risco ≥ 3.
+   */
+  it.each(["dinheiro", "saude", "historico_consolidado"] as const)(
+    "quem toca %s não pode ter risco 2",
+    (sensibilidade) => {
+      expect(
+        isToolDescriptorCoherent({ ...ESCRITA, sensibilidades: [sensibilidade], risk: 2 }),
+      ).toBe(false);
+      expect(
+        isToolDescriptorCoherent({ ...ESCRITA, sensibilidades: [sensibilidade], risk: 3 }),
+      ).toBe(true);
+    },
+  );
+
+  /**
+   * A recíproca: uma LEITURA que declara chave de escrita, command ou sensibilidade tem o
+   * `kind` errado — e `kind` é justamente o que o guard consulta para decidir se admite.
+   */
+  it.each([
+    ["requiredWritePermission", { requiredWritePermission: "allow_write_todo" as const }],
+    ["command", { command: "criarTarefaTodo" }],
+    ["sensibilidades", { sensibilidades: [] }],
+  ])("recusa LEITURA que declara %s", (_nome, extra) => {
+    expect(isToolDescriptorCoherent({ ...LEITURA, ...extra })).toBe(false);
+  });
 });
 
 describe("saída vazia", () => {

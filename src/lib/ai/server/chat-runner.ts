@@ -267,7 +267,10 @@ export async function* runChat(
 
   // As definições que VÃO ao provedor. Resolvidas uma vez: elas são a régua da chamada
   // inesperada (o que não foi oferecido não pode voltar) e o que decide se há laço.
-  const definicoes = toolDefinitionsFor(agent.allowedTools);
+  // ⚠️ As permissões entram AQUI desde a 18-C: um agente pode ter na allowlist ferramentas de
+  // módulos com flags diferentes (o de Treinos tem `training` e `body`), e oferecer o que a
+  // flag vai recusar queima um passo do laço por pergunta. O guard segue decidindo na execução.
+  const definicoes = toolDefinitionsFor(agent.allowedTools, prefs.permissions);
   const nomesOferecidos = definicoes.map((d) => d.name);
 
   // A estimativa é sobre o prompt JÁ MONTADO, nunca sobre o texto cru do usuário.
@@ -568,6 +571,7 @@ export async function* runChat(
             userId: input.userId,
             agent: { id: agent.id, allowedTools: agent.allowedTools },
             permissions: prefs.permissions,
+            writePermissions: prefs.writePermissions,
           },
           mensagensIniciais: mensagens,
           ferramentasOferecidas: nomesOferecidos,
