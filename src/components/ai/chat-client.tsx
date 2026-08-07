@@ -322,7 +322,15 @@ export function ChatClient({
               )}
 
               {/* QUEM RESPONDEU aparece — em especial quando houve fallback. */}
-              {b.role === "assistant" && (b.provider || b.contexto) && (
+              {/*
+                A condição externa tem de casar EXATAMENTE com a união das internas, senão
+                sobra um `<div>` vazio ocupando `mt-2` + `gap`. Foi o que aconteceu quando ela
+                virou `(b.provider || b.contexto)`: `onStart` grava o `provider` enquanto o
+                status ainda é `"streaming"`, então no fluxo padrão (contexto desligado) a
+                bolha ganhava 8px de altura vazia durante toda a resposta.
+              */}
+              {b.role === "assistant" &&
+                (b.contexto || ((b.provider || b.model) && b.status !== "streaming")) && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   {b.provider && b.status !== "streaming" && (
                     <Badge variant="outline" className="text-[11px] font-normal">

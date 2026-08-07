@@ -18,7 +18,8 @@ import { AI_PROVIDERS } from "@/lib/ai/core/contracts";
  * `src/lib/validators/round-trip.test.ts` — os schemas usados com `zodResolver` estão lá.
  */
 
-export const aiProviderEnum = z.enum(AI_PROVIDERS);
+/** A mensagem em pt-BR fica AQUI para valer em todo schema que reusar o enum. */
+export const aiProviderEnum = z.enum(AI_PROVIDERS, { error: "Provedor não reconhecido." });
 
 /** Modelo: id do catálogo. O texto livre é limitado, mas quem VALIDA é o catálogo. */
 const modelId = z
@@ -106,7 +107,14 @@ export function isRotaComContexto(valor: unknown): valor is RotaComContexto {
 }
 
 export const pageContextSchema = z
-  .object({ rota: z.enum(ROTAS_COM_CONTEXTO) })
+  .object({
+    // A mensagem em pt-BR é obrigatória, não decorativa: o `error` do Zod chega CRU ao
+    // `toast` da tela (`route.ts` devolve `issues[0].message`, `chat-client.tsx` mostra).
+    // Sem ela o usuário leria `Invalid option: expected one of "/treinos"|…` em inglês —
+    // e este é o primeiro campo que a interface de fato envia, então é o primeiro que pode
+    // ficar defasado (aba antiga aberta depois de a lista de rotas mudar).
+    rota: z.enum(ROTAS_COM_CONTEXTO, { error: "Página de contexto não reconhecida." }),
+  })
   .strict();
 
 export type PageContextInput = z.infer<typeof pageContextSchema>;
@@ -125,11 +133,21 @@ export const chatRequestSchema = z
       .trim()
       .min(1, "Escreva alguma coisa antes de enviar.")
       .max(MAX_CHAT_TEXT, `Máximo de ${MAX_CHAT_TEXT} caracteres`),
-    agentId: z.string().trim().min(1).max(60).optional(),
+    agentId: z
+      .string()
+      .trim()
+      .min(1, "Assistente inválido.")
+      .max(60, "Assistente inválido.")
+      .optional(),
     /** Ausente = a tela não mandou contexto. Ver `pageContextSchema`. */
     pageContext: pageContextSchema.optional(),
     providerPreference: aiProviderEnum.optional(),
-    modelPreference: z.string().trim().min(1).max(120).optional(),
+    modelPreference: z
+      .string()
+      .trim()
+      .min(1, "Modelo inválido.")
+      .max(120, "Modelo inválido.")
+      .optional(),
   })
   .strict();
 

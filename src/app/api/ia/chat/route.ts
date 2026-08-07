@@ -55,6 +55,30 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   [AI_CRYPTO_NOT_CONFIGURED]: 503,
 };
 
+/**
+ * A mensagem de validação que o USUÁRIO vai ler, sempre em pt-BR.
+ *
+ * ⚠️ O `error` desta resposta não fica no log: `chat-client.tsx` o joga direto num `toast`.
+ * O Zod escreve em inglês por padrão, então `issues[0].message` só serve quando o schema
+ * definiu a mensagem — e `chatRequestSchema` define uma para cada campo.
+ *
+ * Sobram os dois códigos que o schema NÃO consegue traduzir e que dependem só da forma do
+ * JSON, nunca de um campo nosso:
+ *  - `unrecognized_keys` — `.strict()` do Zod 4.4 ignora o `error` passado a ele (conferido);
+ *  - `invalid_type` — JSON com o tipo errado (`text: 123`), que nenhum `.min()` alcança.
+ *
+ * Nenhum dos dois ecoa o valor recusado: chave e conteúdo vieram do cliente, e devolvê-los
+ * é refletir entrada não confiável de volta na tela sem necessidade nenhuma.
+ */
+function mensagemEmPortugues(issue: { code: string; message: string } | undefined): string {
+  if (!issue) return "Requisição inválida.";
+  if (issue.code === "unrecognized_keys") {
+    return "O pedido trouxe um campo que o servidor não aceita.";
+  }
+  if (issue.code === "invalid_type") return "Pedido em formato inválido.";
+  return issue.message;
+}
+
 export async function POST(request: Request) {
   // ── 1. Sessão. `user_id` SÓ daqui — nunca do corpo ─────────────────────────────────
   const ctx = await authContext();
@@ -112,7 +136,7 @@ export async function POST(request: Request) {
       primeiro?.code === "too_big" && primeiro.path[0] === "text" ? 413 : 400;
     return NextResponse.json(
       {
-        error: primeiro?.message ?? "Requisição inválida.",
+        error: mensagemEmPortugues(primeiro),
         code: tamanho === 413 ? "AI_MESSAGE_TOO_LONG" : "AI_BAD_REQUEST",
         limite: tamanho === 413 ? MAX_CHAT_TEXT : undefined,
       },

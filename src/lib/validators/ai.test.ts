@@ -237,12 +237,26 @@ describe("pageContext (18-B) — o contexto da página", () => {
     expect(pageContextSchema.parse(soContexto)).toEqual(soContexto);
   });
 
-  it("o módulo sai da ROTA, e é um dos módulos com contexto", () => {
-    for (const rota of ROTAS_COM_CONTEXTO) {
-      const ctx = contextoDaRota(rota);
-      expect(ctx.rota).toBe(rota);
-      expect(MODULOS_COM_CONTEXTO as readonly string[]).toContain(ctx.modulo);
-    }
+  /**
+   * ⚠️ Pares ESCRITOS À MÃO, um por rota. A versão anterior deste teste comparava
+   * `ctx.modulo` contra `MODULOS_COM_CONTEXTO` — e `MODULO_DA_ROTA` é
+   * `satisfies Record<RotaComContexto, ModuloComContexto>`, então a asserção não tinha como
+   * falhar sem o `tsc` falhar antes. Teste derivado do próprio código não prova mapeamento
+   * nenhum: prova que o TypeScript funciona.
+   */
+  it("cada rota mapeia para o módulo escrito à mão aqui", () => {
+    expect(contextoDaRota("/treinos")).toEqual({ rota: "/treinos", modulo: "training" });
+    expect(contextoDaRota("/treinos/historico")).toEqual({
+      rota: "/treinos/historico",
+      modulo: "training",
+    });
+    expect(contextoDaRota("/treinos/recordes")).toEqual({
+      rota: "/treinos/recordes",
+      modulo: "training",
+    });
+    // Se uma rota entrar na lista sem par aqui, é este número que acusa.
+    expect(ROTAS_COM_CONTEXTO).toHaveLength(3);
+    expect(MODULOS_COM_CONTEXTO).toEqual(["training"]);
   });
 
   /**
@@ -276,13 +290,20 @@ describe("pageContext (18-B) — o contexto da página", () => {
     }
   });
 
-  it("toda rota tem rótulo em pt-BR para a tela", () => {
+  /**
+   * O `satisfies Record<RotaComContexto, string>` já garante que EXISTE rótulo para cada
+   * rota — comparar os conjuntos de chaves aqui seria repetir o compilador. O que ele não
+   * garante é que o rótulo seja legível: `""` e `"/treinos"` passam pelo tipo e chegam à
+   * tela. Por isso os textos vêm escritos à mão.
+   */
+  it("o rótulo de cada rota é o texto em pt-BR que a tela mostra", () => {
+    expect(ROTULO_DA_ROTA_DE_CONTEXTO["/treinos"]).toBe("Treinos · visão geral");
+    expect(ROTULO_DA_ROTA_DE_CONTEXTO["/treinos/historico"]).toBe("Treinos · histórico");
+    expect(ROTULO_DA_ROTA_DE_CONTEXTO["/treinos/recordes"]).toBe("Treinos · recordes");
+    // Nenhum rótulo é o caminho cru: isso seria um `undefined` disfarçado chegando à tela.
     for (const rota of ROTAS_COM_CONTEXTO) {
-      expect(ROTULO_DA_ROTA_DE_CONTEXTO[rota]).toBeTruthy();
+      expect(ROTULO_DA_ROTA_DE_CONTEXTO[rota]).not.toBe(rota);
     }
-    expect(Object.keys(ROTULO_DA_ROTA_DE_CONTEXTO).sort()).toEqual(
-      [...ROTAS_COM_CONTEXTO].sort(),
-    );
   });
 
   it("as rotas são caminhos absolutos, sem query, sem barra final e sem duplicidade", () => {

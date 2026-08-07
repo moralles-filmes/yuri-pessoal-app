@@ -105,16 +105,44 @@ describe("POST /api/ia/chat — contexto da página", () => {
    * O par que importa: pedido inválido não vira 500 e NÃO CHEGA ao runner. Nenhuma consulta
    * acontece, então não há como devolver dado de terceiro nem erro cru de banco.
    */
-  const RECUSADOS: ReadonlyArray<readonly [string, unknown]> = [
-    ["rota fora da lista", { rota: "/financeiro" }],
-    ["rota de um registro", { rota: `/treinos/historico/${UUID}` }],
-    ["módulo declarado pelo cliente", { rota: "/treinos", modulo: "finance" }],
-    ["registroId de outro usuário", { rota: "/treinos", registroId: UUID }],
-    ["conteúdo da tela", { rota: "/treinos", titulo: "Treino A" }],
-    ["user_id no contexto", { rota: "/treinos", user_id: UUID }],
+  /**
+   * ⚠️ A MENSAGEM É ESCRITA À MÃO em cada caso, e não por preciosismo: `route.ts` devolve
+   * este texto no corpo, e `chat-client.tsx` o joga direto num `toast.error`. É texto de
+   * usuário, então tem de estar em pt-BR — e o Zod escreve em inglês por padrão
+   * (`Invalid option: expected one of …`, `Unrecognized key: "modulo"`). Um teste que só
+   * conferisse "não contém o UUID" deixaria o inglês passar; foi o que aconteceu.
+   */
+  const RECUSADOS: ReadonlyArray<readonly [string, unknown, string]> = [
+    ["rota fora da lista", { rota: "/financeiro" }, "Página de contexto não reconhecida."],
+    [
+      "rota de um registro",
+      { rota: `/treinos/historico/${UUID}` },
+      "Página de contexto não reconhecida.",
+    ],
+    [
+      "módulo declarado pelo cliente",
+      { rota: "/treinos", modulo: "finance" },
+      "O pedido trouxe um campo que o servidor não aceita.",
+    ],
+    [
+      "registroId de outro usuário",
+      { rota: "/treinos", registroId: UUID },
+      "O pedido trouxe um campo que o servidor não aceita.",
+    ],
+    [
+      "conteúdo da tela",
+      { rota: "/treinos", titulo: "Treino A" },
+      "O pedido trouxe um campo que o servidor não aceita.",
+    ],
+    [
+      "user_id no contexto",
+      { rota: "/treinos", user_id: UUID },
+      "O pedido trouxe um campo que o servidor não aceita.",
+    ],
+    ["contexto que não é objeto", "/treinos", "Pedido em formato inválido."],
   ];
 
-  for (const [nome, pageContext] of RECUSADOS) {
+  for (const [nome, pageContext, mensagem] of RECUSADOS) {
     it(`400 e NENHUMA execução: ${nome}`, async () => {
       const resposta = await POST(pedir({ text: "oi", pageContext }));
       expect(resposta.status).toBe(400);
@@ -122,8 +150,11 @@ describe("POST /api/ia/chat — contexto da página", () => {
 
       const corpo = (await resposta.json()) as { code?: string; error?: string };
       expect(corpo.code).toBe("AI_BAD_REQUEST");
-      // Erro em pt-BR e sem eco do valor recusado.
+      expect(corpo.error).toBe(mensagem);
+      // E o valor recusado NÃO volta na resposta: veio do cliente, e refleti-lo na tela
+      // não ajuda ninguém a corrigir o pedido.
       expect(corpo.error ?? "").not.toContain(UUID);
+      expect(corpo.error ?? "").not.toContain("Treino A");
     });
   }
 

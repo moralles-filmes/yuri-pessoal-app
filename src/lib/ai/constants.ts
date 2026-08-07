@@ -82,6 +82,18 @@ export const ROTULO_DA_ROTA_DE_CONTEXTO = {
   "/treinos/recordes": "Treinos · recordes",
 } as const satisfies Record<RotaComContexto, string>;
 
-/** O aviso do que a 18-A NÃO faz. Honestidade é critério de aceite, não gentileza. */
+/**
+ * O aviso do que o assistente NÃO faz. Honestidade é critério de aceite, não gentileza.
+ *
+ * ⚠️ **Reescrito na 18-B, e pelo mesmo motivo que o prompt-base virou `seguranca-v2`.** O
+ * texto da 18-A dizia que o assistente "não vê treinos". Isso era verdade enquanto o Tool
+ * Registry estava vazio; deixou de ser quando as três leituras de Treinos entraram nele.
+ * Um aviso de honestidade que mente é pior que nenhum.
+ *
+ * O texto de agora é verdadeiro nos DOIS estados — com `allow_training` desligada (o padrão
+ * do banco) e ligada — porque afirma a regra, não o estado: nada é lido sem autorização
+ * explícita por módulo, e não existe escrita. Quem acrescentar ferramenta de um módulo novo
+ * precisa mexer aqui no MESMO commit.
+ */
 export const AVISO_SEM_ACESSO =
-  "Nesta versão o assistente não consulta seus registros: ele não vê finanças, tarefas, agenda, dieta nem treinos, e não cria nem altera nada.";
+  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Nesta versão existem apenas leituras de Treinos — ele não vê finanças, tarefas, agenda nem dieta — e não cria nem altera nada.";
