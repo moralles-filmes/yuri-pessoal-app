@@ -27,6 +27,7 @@ import {
   aiPreferencesSchema,
   aiProviderConfigSchema,
 } from "@/lib/validators/ai";
+import { TOOL_PERMISSIONS } from "@/lib/ai/tools/contracts";
 import {
   programSchema,
   programUpdateSchema,
@@ -459,6 +460,10 @@ describe("Fase 18-A — schemas de IA aceitam a própria saída", () => {
     expect(config.noServidor.success, fieldErrors(config.noServidor.error)).toBe(true);
 
     const prefs = roundTrip(aiPreferencesSchema, {
+      // Derivado de `TOOL_PERMISSIONS` de propósito: uma permissão nova entra no schema e
+      // entra AQUI no mesmo instante. Um objeto literal ficaria para trás e o teste passaria
+      // a provar a ida e volta de um formulário que não existe mais.
+      permissions: Object.fromEntries(TOOL_PERMISSIONS.map((p) => [p, false])),
       defaultModel: "",
       confirmationMode: "seguro",
       allowFallback: false,

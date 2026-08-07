@@ -381,6 +381,26 @@ export async function* runChat(
       if (tipo === "FALLBACK") fallbackCount += 1;
 
       if (attemptIndex > 1) {
+        /**
+         * ╔════════════════════════════════════════════════════════════════════════════════╗
+         * ║ TENTATIVA NOVA COMEÇA COM O TEXTO ZERADO — E A TELA FAZ O MESMO NO `switch`.    ║
+         * ║                                                                                 ║
+         * ║ Sem isto, a narração da tentativa que falhou ficava colada na da seguinte: o    ║
+         * ║ acumulador atravessava o retry e o fallback, e era ele que ia para              ║
+         * ║ `heartbeatAndPersist` e para `completeRun`. A resposta gravada virava a mistura ║
+         * ║ de duas respostas — e nenhuma leitura da conversa depois disso conseguiria      ║
+         * ║ separá-las.                                                                      ║
+         * ║                                                                                 ║
+         * ║ ⚠️ Zerar SÓ AQUI é essencial: o passo TOOL_STEP também incrementa `attemptIndex`,║
+         * ║ mas ele é a MESMA resposta continuando depois de uma ferramenta, não uma        ║
+         * ║ tentativa nova — e não passa por este ponto (ele vive dentro de `chamarModelo`).║
+         * ║                                                                                 ║
+         * ║ ⚠️ E zerar só no servidor seria pior que não zerar: o `router.refresh()` do fim  ║
+         * ║ do envio releria o texto novo e APAGARIA da tela algo que o usuário já tinha    ║
+         * ║ lido. Por isso `chat-client.tsx` limpa a bolha no mesmo evento.                  ║
+         * ╚════════════════════════════════════════════════════════════════════════════════╝
+         */
+        texto = "";
         yield {
           type: "switch",
           provider: alvo.provider,

@@ -26,6 +26,22 @@ export type NivelDeRisco = (typeof NIVEIS_DE_RISCO)[number];
 export type ToolKind = "leitura" | "escrita";
 
 /**
+ * O desfecho de uma chamada de ferramenta — o MESMO vocabulário de `ai_tool_calls.status`.
+ *
+ * Mora aqui, e não em `audit.ts`, porque `audit.ts` é `server-only` e a tela de
+ * rastreabilidade precisa do tipo. Um `import type` de um módulo `server-only` até some na
+ * compilação, mas basta alguém trocá-lo por um import de valor para o bundle do navegador
+ * receber o cliente do Supabase inteiro — e o erro aparecer só no build.
+ */
+export const TOOL_CALL_STATUSES = [
+  "executada",
+  "rejeitada",
+  "falhou",
+  "timeout",
+] as const;
+export type ToolCallStatus = (typeof TOOL_CALL_STATUSES)[number];
+
+/**
  * A chave de `ai_user_preferences` que autoriza a ferramenta. Uma por ferramenta: duas
  * chaves para o mesmo dado dariam duas respostas diferentes para o mesmo fato.
  */

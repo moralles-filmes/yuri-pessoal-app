@@ -22,7 +22,11 @@
  */
 
 import type { AiToolDefinition } from "@/lib/ai/core/contracts";
-import { isToolDescriptorCoherent, type ToolDescriptor } from "./contracts";
+import {
+  isToolDescriptorCoherent,
+  type ToolDescriptor,
+  type ToolPermission,
+} from "./contracts";
 
 export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
@@ -107,6 +111,25 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
 
 export function findTool(name: string): ToolDescriptor | null {
   return AI_TOOL_REGISTRY.find((t) => t.name === name) ?? null;
+}
+
+/**
+ * As ferramentas que uma flag `allow_*` de fato libera — DERIVADO do registry, nunca uma
+ * segunda lista.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ É o que impede a tela de preferências de virar botão fantasma. Ligar `allow_finance`   ║
+ * ║ hoje não libera nada: não existe ferramenta de Finanças. Uma lista escrita à mão de    ║
+ * ║ "módulos prontos" ficaria para trás no dia em que a 18-C acrescentasse a primeira —    ║
+ * ║ e a tela continuaria dizendo "ainda não" sobre uma leitura que já funciona.            ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export function toolsForPermission(
+  permission: ToolPermission,
+): readonly ToolDescriptor[] {
+  return AI_TOOL_REGISTRY.filter(
+    (t) => t.requiredPermission === permission && isToolDescriptorCoherent(t),
+  );
 }
 
 /**

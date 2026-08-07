@@ -534,6 +534,55 @@ describe("runChat — o que a resposta DECLARA", () => {
     expect(passosFechados.map((p) => p.status)).toEqual(["failed", "completed"]);
   });
 
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ A NARRAÇÃO DA TENTATIVA QUE FALHOU NÃO ENTRA NA RESPOSTA DA SEGUINTE.                ║
+   * ║                                                                                     ║
+   * ║ O acumulador de texto atravessava retry e fallback, e era ele que ia para            ║
+   * ║ `heartbeatAndPersist` e `completeRun`: a mensagem gravada virava a colagem de duas   ║
+   * ║ respostas, sem nada que as separasse depois. A tela faz o mesmo corte no evento      ║
+   * ║ `switch` — corrigir só aqui faria o `router.refresh()` apagar da tela um texto que o ║
+   * ║ usuário já tinha lido.                                                               ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("RETRY começa com o texto zerado — a resposta gravada é só a que venceu", async () => {
+    respostasPorChamada = [
+      [{ type: "delta", text: "Vou olhar seus tre" }, ERRO_TEMPORARIO],
+      [{ type: "delta", text: "Foram 12480 kg." }, FINISH],
+    ];
+
+    const eventos = await rodar();
+
+    expect(statusDoRun).toBe("completed");
+    expect(textoGravado).toBe("Foram 12480 kg.");
+    expect(textoGravado).not.toContain("Vou olhar seus tre");
+
+    // O usuário VIU os dois trechos — o corte é anunciado pelo evento `switch`, que é onde
+    // a tela limpa a bolha. Nenhum delta é escondido dele.
+    expect(eventos.filter((e) => e.type === "delta").map((e) => e.text)).toEqual([
+      "Vou olhar seus tre",
+      "Foram 12480 kg.",
+    ]);
+    expect(eventos.some((e) => e.type === "switch")).toBe(true);
+  });
+
+  /**
+   * ⚠️ O contraponto que impede a correção acima de virar defeito: `TOOL_STEP` também
+   * incrementa `attemptIndex`, mas é a MESMA resposta continuando depois de uma ferramenta.
+   * Zerar ali apagaria o que o assistente escreveu ANTES de consultar.
+   */
+  it("passo de ferramenta NÃO zera o texto — é a mesma resposta continuando", async () => {
+    respostasPorChamada = [
+      [{ type: "delta", text: "Deixa eu consultar. " }, pedeVolume(), FINISH],
+      [{ type: "delta", text: "Foram 12480 kg." }, FINISH],
+    ];
+
+    await rodar();
+
+    expect(statusDoRun).toBe("completed");
+    expect(textoGravado).toBe("Deixa eu consultar. Foram 12480 kg.");
+  });
+
   it("ferramenta que não foi oferecida encerra o run como falha", async () => {
     permissoes = { allow_training: false };
     respostasPorChamada = [

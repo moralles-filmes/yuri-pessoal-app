@@ -20,10 +20,12 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { safeLogFields, sanitizedJson } from "@/lib/ai/security/redact";
 import { aiError } from "@/lib/ai/core/errors";
-import type { ToolRef } from "./contracts";
+import type { ToolCallStatus, ToolRef } from "./contracts";
 import type { ToolRejectionReason } from "./guard";
 
-export type ToolCallStatus = "executada" | "rejeitada" | "falhou" | "timeout";
+// O tipo mora em `contracts.ts` (puro) porque a tela de rastreabilidade também precisa dele,
+// e este arquivo é `server-only`. Reexportado para não quebrar quem já importa daqui.
+export type { ToolCallStatus };
 
 /**
  * ⚠️ **`supabase-js` NÃO LANÇA em erro de banco** — ele devolve `{ data: null, error }`.

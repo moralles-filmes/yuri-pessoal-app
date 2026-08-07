@@ -8,9 +8,15 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { isToolDescriptorCoherent } from "./contracts";
-import { AI_TOOL_REGISTRY, findTool, toolDefinitionsFor } from "./registry";
+import { isToolDescriptorCoherent, TOOL_PERMISSIONS } from "./contracts";
+import {
+  AI_TOOL_REGISTRY,
+  findTool,
+  toolDefinitionsFor,
+  toolsForPermission,
+} from "./registry";
 import { AI_AGENT_REGISTRY } from "@/lib/ai/agents/registry";
+import { ROTULO_DA_FERRAMENTA, rotuloDaFerramenta } from "@/lib/ai/constants";
 
 describe("integridade do registry (18-B)", () => {
   it("toda ferramenta é de LEITURA — a 18-B não tem escrita", () => {
@@ -131,5 +137,72 @@ describe("registry ↔ executores", () => {
     for (const nome of Object.keys(TOOL_EXECUTORS)) {
       expect(nomes.has(nome), nome).toBe(true);
     }
+  });
+});
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ A TELA PRECISA SABER NOMEAR O QUE FOI CONSULTADO.                                     ║
+ * ║                                                                                       ║
+ * ║ `ROTULO_DA_FERRAMENTA` é `Record<string, string>` porque `ToolDescriptor.name` é       ║
+ * ║ `string` — não há união fechada para um `satisfies` travar, como em                    ║
+ * ║ `ROTULO_DA_ROTA_DE_CONTEXTO`. Então a cobertura é conferida AQUI, sobre o registry     ║
+ * ║ real: ferramenta nova sem rótulo apareceria na trilha como `training.get_algo`, que é  ║
+ * ║ o identificador interno vazando para o usuário.                                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("rótulos de apresentação (18-B)", () => {
+  it("toda ferramenta do registry tem rótulo em pt-BR", () => {
+    for (const t of AI_TOOL_REGISTRY) {
+      const rotulo = ROTULO_DA_FERRAMENTA[t.name];
+      expect(rotulo, t.name).toBeDefined();
+      expect(rotulo, t.name).not.toBe("");
+      // O rótulo não pode ser o próprio identificador: isso é o fallback, não um rótulo.
+      expect(rotulo, t.name).not.toBe(t.name);
+    }
+  });
+
+  it("nenhum rótulo sobra apontando para ferramenta que não existe mais", () => {
+    const nomes = new Set(AI_TOOL_REGISTRY.map((t) => t.name));
+    for (const nome of Object.keys(ROTULO_DA_FERRAMENTA)) {
+      expect(nomes.has(nome), nome).toBe(true);
+    }
+  });
+
+  it("ferramenta desconhecida cai no identificador, sem quebrar a tela", () => {
+    expect(rotuloDaFerramenta("modulo.que_saiu_do_registry")).toBe(
+      "modulo.que_saiu_do_registry",
+    );
+  });
+});
+
+/**
+ * `toolsForPermission` é o que decide se a chave de um módulo é clicável na tela de
+ * preferências. Uma lista escrita à mão de "módulos prontos" ficaria para trás no dia em que
+ * a primeira leitura de outro módulo entrasse — e a tela continuaria dizendo "ainda não".
+ */
+describe("toolsForPermission — o que cada flag `allow_*` de fato libera", () => {
+  it("allow_training libera exatamente as ferramentas de Treinos do registry", () => {
+    const nomes = toolsForPermission("allow_training").map((t) => t.name);
+    expect(nomes).toEqual(
+      AI_TOOL_REGISTRY.filter((t) => t.requiredPermission === "allow_training").map(
+        (t) => t.name,
+      ),
+    );
+    expect(nomes.length).toBeGreaterThan(0);
+  });
+
+  it("permissão sem ferramenta nenhuma devolve lista vazia — a chave é botão fantasma", () => {
+    for (const p of TOOL_PERMISSIONS) {
+      const tem = AI_TOOL_REGISTRY.some((t) => t.requiredPermission === p);
+      expect(toolsForPermission(p).length > 0, p).toBe(tem);
+    }
+  });
+
+  it("descriptor incoerente NÃO conta como leitura disponível", () => {
+    // `maxRecords: 0` é incoerente (zero não é "sem limite"), e uma ferramenta incoerente é
+    // rejeitada pelo guard — habilitar a chave por causa dela prometeria o que não roda.
+    const incoerentes = AI_TOOL_REGISTRY.filter((t) => !isToolDescriptorCoherent(t));
+    expect(incoerentes).toEqual([]);
   });
 });

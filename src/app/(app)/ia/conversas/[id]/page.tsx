@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChatClient } from "@/components/ai/chat-client";
 import { getCurrentUser } from "@/lib/supabase/server";
-import { getConversation, getRouterConfigs } from "@/lib/ai/queries";
+import { getConversation, getRouterConfigs, getRunSources } from "@/lib/ai/queries";
 import { usableProviders } from "@/lib/ai/core/router";
 import { formatUsdOrUnavailable } from "@/lib/ai/constants";
 import { cryptoProblemMessage } from "@/lib/ai/server/crypto-readiness";
@@ -40,6 +40,10 @@ export default async function ConversaPage({
   ]);
 
   if (!detalhe) notFound();
+
+  // A trilha de leitura de cada execução da conversa. UMA consulta para todas as execuções —
+  // uma por run seria N+1 na tela que mais tem runs.
+  const fontes = await getRunSources(user.id, Object.keys(detalhe.runs));
 
   const problemaCripto = cryptoProblemMessage();
   const prontos = usableProviders(configs);
@@ -85,6 +89,7 @@ export default async function ConversaPage({
         conversationId={detalhe.conversation.id}
         initialMessages={detalhe.messages}
         runs={detalhe.runs}
+        sources={fontes}
         podeConversar={motivoBloqueio === null}
         motivoBloqueio={motivoBloqueio}
       />

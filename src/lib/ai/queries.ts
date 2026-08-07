@@ -19,7 +19,13 @@ import {
 } from "./usage/budget";
 import { round6, sumRunCost } from "./usage/meter";
 import type { ProviderConfigView } from "./core/router";
-import type { ToolPermission } from "./tools/contracts";
+import type { ToolCallStatus, ToolPermission } from "./tools/contracts";
+import {
+  parseArgumentos,
+  parseRefs,
+  type RunSources,
+  type ToolCallRecord,
+} from "./tools/sources";
 import type {
   AiPreferencesView,
   ConversationDetail,
@@ -353,6 +359,71 @@ export async function getHistoryForPrompt(
   }
 
   return saida.reverse();
+}
+
+/** Teto da trilha lida de uma vez. Uma conversa de 500 mensagens não vira 5.000 linhas na tela. */
+const MAX_TOOL_CALLS_POR_LEITURA = 500;
+
+/**
+ * As FONTES de cada resposta: o que foi consultado, quanto foi encontrado e para onde apontar.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ POR RUN**S**, NÃO POR RUN. O plano previa `getRunSources(userId, runId)`; a tela que a ║
+ * ║ consome é a da CONVERSA, que tem uma execução por mensagem do assistente — uma consulta ║
+ * ║ por run seria N+1 exatamente onde o projeto o proíbe. A assinatura recebe a lista e     ║
+ * ║ devolve indexado por `run_id`, no mesmo formato de `ConversationDetail.runs`.           ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⛔ **`ai_run_steps` NÃO é lido aqui, e a ausência é deliberada.** Um passo `started` sob run
+ * terminal é resíduo de processo morto (timeout de plataforma, deploy no meio do stream): o
+ * `finally` do laço não roda e `ai_reconcile_abandoned_runs` não toca `ai_run_steps`. Lê-lo
+ * como "em andamento" faria a tela mostrar execuções eternas. Quem responde isso é o status do
+ * RUN, que a tela já tem (`MessageRunInfo.status` → `execucaoEmAndamento`).
+ *
+ * Colunas EXPLÍCITAS, como todo este arquivo. `arguments_sanitized` e `refs` já saem do banco
+ * como `jsonb` e passam por parsers puros — o `refs` vira `href`, então é validado antes.
+ */
+export async function getRunSources(
+  userId: string,
+  runIds: readonly string[],
+): Promise<Record<string, RunSources>> {
+  if (runIds.length === 0) return {};
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ai_tool_calls")
+    .select(
+      "run_id, tool_name, tool_version, status, rejection_reason, records_read, duration_ms, refs, arguments_sanitized, created_at",
+    )
+    .eq("user_id", userId)
+    .in("run_id", [...runIds])
+    .order("created_at", { ascending: true })
+    .limit(MAX_TOOL_CALLS_POR_LEITURA);
+
+  const porRun: Record<string, RunSources> = {};
+
+  for (const linha of data ?? []) {
+    const chamada: ToolCallRecord = {
+      toolName: linha.tool_name,
+      toolVersion: linha.tool_version,
+      status: linha.status as ToolCallStatus,
+      rejectionReason: linha.rejection_reason,
+      // `null` continua `null`: rejeição, falha e timeout não leram nada, e "nada" não é zero.
+      recordsRead: linha.records_read,
+      durationMs: linha.duration_ms,
+      refs: parseRefs(linha.refs),
+      argumentos: parseArgumentos(linha.arguments_sanitized),
+      createdAt: linha.created_at,
+    };
+
+    const atual = porRun[linha.run_id];
+    porRun[linha.run_id] = {
+      runId: linha.run_id,
+      chamadas: atual ? [...atual.chamadas, chamada] : [chamada],
+    };
+  }
+
+  return porRun;
 }
 
 // ─────────────────────────── Consumo ───────────────────────────

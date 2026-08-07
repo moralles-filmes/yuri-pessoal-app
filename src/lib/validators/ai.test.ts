@@ -10,13 +10,15 @@
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { AI_TOOL_REGISTRY } from "@/lib/ai/tools/registry";
 import { ROTULO_DA_ROTA_DE_CONTEXTO } from "@/lib/ai/constants";
+import { TOOL_PERMISSIONS } from "@/lib/ai/tools/contracts";
 import {
   aiCredentialSchema,
+  aiPermissionsSchema,
   aiPreferencesSchema,
   aiProviderConfigSchema,
   chatRequestSchema,
@@ -397,6 +399,7 @@ describe("aceitar a própria saída (round-trip)", () => {
 
   it("aiPreferencesSchema", () => {
     const entrada = {
+      permissions: Object.fromEntries(TOOL_PERMISSIONS.map((p) => [p, false])),
       defaultProvider: undefined,
       defaultModel: "",
       confirmationMode: "seguro",
@@ -426,5 +429,86 @@ describe("aceitar a própria saída (round-trip)", () => {
     if (!primeira.success) return;
     expect(primeira.data.title).toBe("Minha conversa");
     expect(renameConversationSchema.safeParse(primeira.data).success).toBe(true);
+  });
+});
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ Fase 18-B — AS NOVE AUTORIZAÇÕES DE LEITURA                                           ║
+ * ║                                                                                       ║
+ * ║ A pergunta destes testes é a mesma de `queries.test.ts`: o que acontece quando NÃO SE  ║
+ * ║ SABE? Na LEITURA, a resposta é "desligado". Na ESCRITA — que é o que este schema faz —  ║
+ * ║ a resposta tem de ser RECUSAR: gravar um objeto incompleto num `upsert` faria o banco   ║
+ * ║ aplicar o padrão da coluna por cima de uma autorização que o usuário já tinha dado.     ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("18-B — aiPermissionsSchema", () => {
+  const TODAS_DESLIGADAS = Object.fromEntries(
+    TOOL_PERMISSIONS.map((p) => [p, false]),
+  ) as Record<string, boolean>;
+
+  it("aceita o objeto completo, e o devolve intacto", () => {
+    const r = aiPermissionsSchema.safeParse({
+      ...TODAS_DESLIGADAS,
+      allow_training: true,
+    });
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data.allow_training).toBe(true);
+    expect(r.data.allow_finance).toBe(false);
+  });
+
+  it("chave FALTANDO é erro — não vira `false` por omissão", () => {
+    for (const ausente of TOOL_PERMISSIONS) {
+      const parcial = { ...TODAS_DESLIGADAS };
+      delete parcial[ausente];
+      expect(aiPermissionsSchema.safeParse(parcial).success, ausente).toBe(false);
+    }
+  });
+
+  it("chave a mais é erro — `.strict()`, como todo schema deste arquivo", () => {
+    const r = aiPermissionsSchema.safeParse({
+      ...TODAS_DESLIGADAS,
+      allow_cross_module: true,
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("valor não booleano NÃO é coagido — `\"false\"` ligaria a leitura", () => {
+    for (const valor of ["true", "false", 1, 0, null]) {
+      const r = aiPermissionsSchema.safeParse({
+        ...TODAS_DESLIGADAS,
+        allow_training: valor,
+      });
+      expect(r.success, String(valor)).toBe(false);
+    }
+  });
+
+  it("a mensagem de erro sai em pt-BR", () => {
+    const r = aiPermissionsSchema.safeParse({
+      ...TODAS_DESLIGADAS,
+      allow_training: "sim",
+    });
+    expect(r.success).toBe(false);
+    if (r.success) return;
+    expect(r.error.issues[0]?.message).toBe("Autorização de leitura inválida.");
+  });
+
+  /**
+   * ⚠️ O buraco que o `tsc` NÃO fecha: a action grava as colunas CAMPO A CAMPO (de propósito
+   * — um espalhamento do objeto validado mandaria qualquer chave nova para o `upsert` sem
+   * revisão, e uma chave que não existe na tabela derruba a gravação inteira, inclusive
+   * orçamento e limites). O preço é que uma permissão nova em `TOOL_PERMISSIONS` passaria a
+   * ser exigida pelo schema, aceita pelo formulário… e simplesmente não gravada. Nenhum tipo
+   * reclama disso. Este teste reclama.
+   */
+  it("toda permissão do schema chega ao `upsert` da action", () => {
+    const fonte = readFileSync(
+      path.join(process.cwd(), "src", "lib", "actions", "ai-preferences.ts"),
+      "utf8",
+    );
+    for (const p of TOOL_PERMISSIONS) {
+      expect(fonte, p).toContain(`${p}: dados.permissions.${p},`);
+    }
   });
 });

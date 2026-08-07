@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { optionalText } from "@/lib/validators/shared";
 import { AI_PROVIDERS } from "@/lib/ai/core/contracts";
+import { TOOL_PERMISSIONS, type ToolPermission } from "@/lib/ai/tools/contracts";
 
 /**
  * Fase 18-A — IA · Schemas Zod.
@@ -219,8 +220,34 @@ export const aiProviderRefSchema = z.object({ provider: aiProviderEnum }).strict
 
 // ─────────────────────────── Preferências ───────────────────────────
 
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ AS FLAGS `allow_*` — A AUTORIZAÇÃO DE LEITURA POR MÓDULO.                             ║
+ * ║                                                                                       ║
+ * ║ A forma sai de `TOOL_PERMISSIONS`, a MESMA lista que `guardToolCall` consulta e que    ║
+ * ║ `getAiPreferences` devolve. Escrever as nove chaves à mão aqui criaria uma segunda     ║
+ * ║ lista: uma permissão nova entraria no registry, o guard passaria a exigi-la e este     ║
+ * ║ schema continuaria recusando o campo — só em runtime, ao salvar.                       ║
+ * ║                                                                                       ║
+ * ║ Todas são OBRIGATÓRIAS: a tela manda o estado completo. Campo ausente seria "não sei"  ║
+ * ║ num lugar onde a única resposta segura é "não", e o `upsert` gravaria o padrão da       ║
+ * ║ coluna por cima de uma autorização que o usuário já tinha dado.                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+const permissionShape = Object.fromEntries(
+  TOOL_PERMISSIONS.map((chave) => [
+    chave,
+    z.boolean({ error: "Autorização de leitura inválida." }),
+  ]),
+) as { [K in ToolPermission]: z.ZodBoolean };
+
+export const aiPermissionsSchema = z.object(permissionShape).strict();
+
+export type AiPermissionsInput = z.infer<typeof aiPermissionsSchema>;
+
 export const aiPreferencesSchema = z
   .object({
+    permissions: aiPermissionsSchema,
     defaultProvider: aiProviderEnum
       .nullish()
       .transform((v) => (v === undefined ? null : v)),
