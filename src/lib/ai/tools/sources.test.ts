@@ -63,6 +63,13 @@ describe("parseRefs — o único campo desta tela que vira navegação", () => {
     "treinos/historico/abc",
     "",
     "  /treinos",
+    // ⚠️ Os quatro abaixo COMEÇAM com uma barra só e passariam por qualquer checagem de
+    // prefixo — e o parser de URL os resolve para fora do domínio do mesmo jeito. Ver a
+    // tabela no teste seguinte, que é onde isso está provado em vez de afirmado.
+    "/\\exemplo.com/roubo",
+    "/\t/exemplo.com/roubo",
+    "/\r\n/exemplo.com/roubo",
+    "/treinos\\..\\exemplo.com",
   ];
 
   for (const rota of ROTAS_RECUSADAS) {
@@ -70,6 +77,44 @@ describe("parseRefs — o único campo desta tela que vira navegação", () => {
       expect(parseRefs([{ tipo: "sessao_de_treino", id: "abc", rota }])).toEqual([]);
     });
   }
+
+  /**
+   * ⚠️ ESTE TESTE NÃO CONFIA NA NOSSA LEITURA DA ESPECIFICAÇÃO — ele PERGUNTA AO PARSER.
+   *
+   * A trava anterior recusava `//` e deixava passar `/\`, porque "começa com uma barra só"
+   * parece seguro. O parser de URL discorda: os dois caem no mesmo estado e saem do domínio.
+   * Enumerar as formas ruins é uma corrida que se perde, então o que se afirma aqui é o
+   * critério positivo — quem sai do domínio é recusado, e quem fica é aceito.
+   */
+  it("nenhuma rota aceita resolve para fora do domínio (perguntado ao parser de URL)", () => {
+    const BASE = "https://app.exemplo.com.br";
+    const CANDIDATAS = [
+      "/treinos/historico/abc",
+      "/treinos/recordes",
+      "//exemplo.com/roubo",
+      "/\\exemplo.com/roubo",
+      "/\t/exemplo.com/roubo",
+      "/\r\n/exemplo.com/roubo",
+      "/treinos\\..\\exemplo.com",
+      "https://exemplo.com/roubo",
+    ];
+
+    for (const rota of CANDIDATAS) {
+      const aceita =
+        parseRefs([{ tipo: "sessao_de_treino", id: "abc", rota }]).length === 1;
+      const saiDoDominio = new URL(rota, BASE).origin !== BASE;
+
+      // A implicação que importa: aceita ⇒ não sai do domínio.
+      expect(aceita && saiDoDominio, `${JSON.stringify(rota)} aceita e saindo`).toBe(false);
+    }
+
+    // E a contraprova de que o teste não passa por vacuidade: alguma É aceita.
+    expect(
+      CANDIDATAS.filter(
+        (rota) => parseRefs([{ tipo: "s", id: "a", rota }]).length === 1,
+      ),
+    ).toEqual(["/treinos/historico/abc", "/treinos/recordes"]);
+  });
 
   it("descarta o que não tem a forma de referência, sem derrubar o resto", () => {
     const entrada = [

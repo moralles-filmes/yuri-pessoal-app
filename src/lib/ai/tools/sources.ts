@@ -118,10 +118,38 @@ export function versaoVisivel(toolVersion: string): string | null {
  * ║ Hoje quem o escreve é o adapter (código nosso), mas a coluna é `jsonb` livre e a       ║
  * ║ tabela é imutável: uma linha malformada — de um adapter futuro, de um `refs` gravado   ║
  * ║ com `javascript:` ou `https://…` — ficaria lá para sempre virando link a cada leitura. ║
- * ║ Aceitamos SÓ caminho interno absoluto (`/…`), e nunca `//` (que o navegador trata      ║
- * ║ como protocolo-relativo e sai do domínio). O que não casa é descartado, não corrigido. ║
+ * ║ Aceitamos SÓ caminho interno absoluto (`/…`). O que não casa é descartado, nunca       ║
+ * ║ corrigido: adivinhar a intenção de uma referência malformada é como se cria um redirect ║
+ * ║ aberto sem perceber.                                                                   ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ **A REGRA É ALLOWLIST, NÃO LISTA DE PROIBIDOS**, e isso não é preferência de estilo:
+ * a versão anterior recusava `//` (protocolo-relativo) e deixava passar `/\`, que o parser
+ * de URL resolve EXATAMENTE igual — `new URL("/\\evil.com", "https://app…")` devolve
+ * `https://evil.com/`, conferido. O mesmo vale para a barra invertida em qualquer posição:
+ * ela não tem uso nenhum numa rota interna do Next. Enumerar as formas ruins é uma corrida
+ * que se perde; enumerar a forma boa, não.
  */
+
+/**
+ * Caminho interno aceitável: começa com UMA barra, o segundo caractere não é separador, e
+ * não há barra invertida nem espaço/controle em lugar nenhum. A última condição importa
+ * porque o parser de URL DESCARTA tab, CR e LF antes de resolver — `"/\tx"` vira `/x`
+ * (conferido), então `"/<tab>/evil.com"` atravessaria qualquer checagem de prefixo.
+ *
+ * Escrito com comparação de caractere em vez de regex: uma classe de faixa de controle
+ * dispara `no-control-regex`, e desligar a regra para reintroduzir justamente a classe que
+ * ela vigia seria o pior dos dois mundos.
+ */
+export function rotaInternaAceita(rota: string): boolean {
+  if (!rota.startsWith("/")) return false;
+  if (rota.startsWith("//") || rota.startsWith("/\\")) return false;
+  for (const caractere of rota) {
+    if (caractere === "\\" || caractere <= " ") return false;
+  }
+  return true;
+}
+
 export function parseRefs(valor: unknown): ToolRef[] {
   if (!Array.isArray(valor)) return [];
 
@@ -133,7 +161,7 @@ export function parseRefs(valor: unknown): ToolRef[] {
     if (typeof tipo !== "string" || typeof id !== "string" || typeof rota !== "string") {
       continue;
     }
-    if (!rota.startsWith("/") || rota.startsWith("//")) continue;
+    if (!rotaInternaAceita(rota)) continue;
     if (tipo.trim() === "" || id.trim() === "") continue;
     saida.push({ tipo, id, rota });
   }
