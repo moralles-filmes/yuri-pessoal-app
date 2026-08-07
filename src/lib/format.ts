@@ -85,6 +85,26 @@ export function formatDateWith(
   }
 }
 
+const DIA_EXTENSO = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "short",
+  day: "numeric",
+  month: "long",
+});
+
+/**
+ * Rótulo de um dia do extrato a partir de uma DATA PURA: "ter., 28 de julho".
+ *
+ * A data pura vira uma "data de grade" (meia-noite construída componente a componente, no
+ * fuso local) só para o `Intl` saber o dia da semana — nunca um instante. Passar
+ * 'yyyy-MM-dd' direto para `new Date()` o interpretaria como UTC e, em Brasília, mostraria
+ * o dia anterior.
+ */
+export function diaExtenso(dataPura: string): string {
+  if (!isDatePura(dataPura)) return "";
+  const [y, m, d] = dataPura.split("-").map(Number);
+  return DIA_EXTENSO.format(new Date(y, m - 1, d));
+}
+
 /** Gera iniciais (até 2 letras) a partir de um nome ou e-mail. */
 export function getInitials(nameOrEmail?: string | null): string {
   if (!nameOrEmail) return "U";
