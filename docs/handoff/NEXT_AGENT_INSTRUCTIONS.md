@@ -1,27 +1,29 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-## 🎯 PRÓXIMA FASE: 18-C — IA · Ações, aprovações, idempotência e auditoria
+## 🎯 EM ANDAMENTO: 18-C — IA · Ações, aprovações, idempotência e auditoria
 
-**Desenho validado (leia ANTES):** `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`
-**O que já existe:** `docs/handoff/LAST_PHASE_SUMMARY.md` → seções **18-A** e **18-B**
+**Desenho da fase (leia ANTES):** `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`
+**Desenho da 18-C, com as decisões:** `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`
+**A matriz (entregável de abertura):** `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`
+**O que já existe:** `docs/handoff/LAST_PHASE_SUMMARY.md` → seções **18-A**, **18-B** e **18-C**
 
-A **18-A** (2026-08-04) entregou a fundação sem ler nada. A **18-B** (2026-08-07) abriu a
-primeira leitura de dado real: 3 ferramentas de Treinos, laço de ferramentas próprio,
-roteamento por agente, contexto de página, auditoria por chamada e rastreabilidade na tela.
+### ⏳ ONDE A 18-C PAROU, E POR QUÊ
 
-**A 18-C é a primeira subfase de ESCRITA** — e por isso é a mais perigosa da fase. Até aqui,
-o pior caso de um defeito era a IA dizer um número errado. A partir da 18-C, o pior caso é ela
-**alterar o registro de alguém**. Duas consequências práticas:
+O **Bloco 1 está concluído**: os **nove módulos** do sistema têm ferramentas de LEITURA
+(22 no registry, 9 agentes), cada um atrás da sua flag `allow_*`, todas nascendo desligadas.
 
-- **Nenhuma ferramenta de escrita existe hoje**, e o guard já recusa por
-  `TOOL_WRITE_DISABLED`. Ligar isso é decisão do dono, não descoberta de agente.
-- **A primeira entrega da 18-C é a MATRIZ DE FERRAMENTAS** dos 7 módulos restantes (leitura),
-  não a escrita. Replicar o padrão de Treinos em Financeiro, Dieta, TO-DO, Agenda, Tarefas,
-  Hábitos e Estudos é trabalho mecânico e já tem molde: `tools/registry.ts` +
-  `tools/adapters/training.ts` + `tools/adapters/training.test.ts`.
+**A escrita NÃO começou, e não deve começar sem autorização explícita do dono.** Este é um
+gate declarado no plano aprovado, não um esquecimento. Nenhuma ferramenta de escrita existe;
+o guard recusa por `TOOL_WRITE_DISABLED`.
 
-⚠️ **A 18-C exige autorização explícita do usuário.** Não comece a implementar por encontrar
-este arquivo.
+O que falta, em ordem: Approval Engine (3 migrations, hash do EFEITO, prazo curto, uso único,
+revalidação na execução) → commands extraídos um a um, em ordem crescente de risco → tela
+"Ações realizadas pela IA" → desfazer declarado por command.
+
+⚠️ **Leia a §3 do spec da 18-C antes de escrever a primeira linha do Bloco 3.** As seis
+decisões que estão lá (a escrita fora do run, o hash do efeito, a idempotência derivada da
+aprovação, o snapshot restrito, o desfazer por command, o desempate do roteador) foram
+validadas com o dono e mudam o desenho em relação ao que `PHASE_18_C_*.md` sugeria.
 
 ### O que a 18-B deixou pronto (reuse, não reescreva)
 
@@ -90,6 +92,25 @@ este arquivo.
 Escrita, propostas e confirmações (18-C) · imagens e documentos, **inclusive qualquer upload**
 (18-D) · insights e dashboards (18-E) · memória, voz, automações, botão flutuante,
 **sino/notificações** e busca global (18-F).
+
+### As armadilhas que a 18-C acrescentou à lista
+
+1. **Proibição em prompt é DESCRITA, nunca CITADA.** O teste de vocabulário proibido varre o
+   texto inteiro do perfil e não distingue uso negado (só o prompt-base tem essa folga). E ele
+   está certo: a frase literal no contexto a torna mais provável de sair, não menos.
+2. **Teste que lê arquivo do disco precisa achar a versão VIGENTE, não um nome fixo.** O teste
+   do RPC lia `20260808100000_ai_tool_audit.sql` pelo nome; com a definição da função numa
+   migration nova, ele ficaria vermelho para sempre **com o banco correto** — e um teste que
+   reprova o estado certo é abandonado.
+3. **`cd` no shell persiste entre chamadas.** Um `cd src/app/(app)` deixou `tsc` e `vitest`
+   "passando" sem rodar arquivo nenhum. **Confira o `pwd` antes de acreditar num verde.**
+4. **`as unknown as` em fixture de teste desliga o `tsc` justamente onde ele ajudaria.** Duas
+   fixtures desta subfase tinham campo inexistente (`"cinza"` como cor, `amount` no lugar de
+   `targetAmount`) e só a asserção pegou.
+5. **Ao acrescentar módulo ao roteador, procure a colisão ANTES.** "meta" existe em três
+   módulos, "gordura" casaria dentro de "gordura corporal", "tarefa" é do TO-DO e não da Fase
+   09. Palavra ambígua no vocabulário não erra o roteamento: ela o **desliga**, jogando tudo no
+   orquestrador.
 
 ### As armadilhas que a 18-B encontrou — todas custaram uma rodada de revisão
 

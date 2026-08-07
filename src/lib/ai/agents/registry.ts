@@ -71,7 +71,9 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
     id: TREINOS_AGENT_ID,
     label: "Treinos",
     description:
-      "Consulta seu histórico de treino: último treino, totais do período e recordes. Só lê — não altera nada.",
+      // ⚠️ Atualizada na 18-C junto com a allowlist: ela ganhou as medidas corporais, e uma
+      // descrição que não as cita mente para o usuário sobre o que a chave dele libera.
+      "Consulta seu histórico de treino (último treino, totais do período, recordes) e, com a autorização de medidas, o peso e as circunferências registradas. Só lê — não altera nada.",
     promptVersion: TREINOS_PROMPT_VERSION,
     prompt: TREINOS_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
@@ -161,7 +163,7 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
     id: DIETA_AGENT_ID,
     label: "Dieta e Alimentação",
     description:
-      "Consulta seu registro alimentar: consumo do dia, do período e as metas. Só lê — não registra nem altera nada.",
+      "Consulta seu registro alimentar (consumo do dia, do período e as metas) e, com a autorização de medidas, o peso e as circunferências. Só lê — não registra nem altera nada.",
     promptVersion: DIETA_PROMPT_VERSION,
     prompt: DIETA_PROMPT,
     requiredCapabilities: ["texto", "streaming"],

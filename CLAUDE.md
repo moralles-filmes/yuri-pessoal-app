@@ -16,7 +16,7 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅ (2026-08-04), 18-B ✅ (2026-08-07). **18-C é a próxima** |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅ e 18-B ✅. **18-C: leitura concluída, ESCRITA aguardando autorização do dono** |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Conferido no banco em 2026-08-04, depois da 18-A: **119 tabelas** no `public` — **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **7 `ai_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). A 18-B somou **2 `ai_*`** (`ai_run_steps`, `ai_tool_calls`), então são **9** — mas o total do `public` **não foi reconferido no banco**. O número muda a cada subfase: **conte antes de citar**.
 
@@ -112,20 +112,28 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 23. **FK COMPOSTA sempre que uma tabela apontar para outra dentro do mesmo usuário.** A RLS confere o `user_id` da **própria linha** e não alcança a linha apontada. Sem isso, um intruso ocupava a chave única `(scheduled_workout_id, provider)` da ponte da agenda e **impedia o dono de sincronizar** aquele dia. Mesma correção da 16-E nas fotos de evolução.
 24. **`getSessionHistory` aceita `client`/`userId`** para o Cron (service role, sem sessão) usar **a mesma leitura da tela**. Um segundo caminho de montagem do histórico faria o número da notificação divergir do número da tela.
 
-## Módulo Inteligência Artificial (Fase 18 — 18-A e 18-B implementadas)
+## Módulo Inteligência Artificial (Fase 18 — 18-A, 18-B e o Bloco 1 da 18-C)
 
 Rota `/ia`, tabelas `ai_*` (9), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
 internos, 4 adapters, catálogo de modelos e tarifas versionado, credenciais cifradas, chat com
 streaming, medição por tentativa e orçamento com reserva — **sem ler um único registro**. A
 **18-B** (2026-08-07) abriu a primeira leitura: 3 ferramentas de Treinos, laço de ferramentas
 próprio, roteamento por agente, contexto de página, auditoria por chamada e rastreabilidade
-na tela. Desenho em `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`; camadas em
-`PROJECT_ARCHITECTURE.md`.
+na tela. A **18-C** (2026-08-07, em andamento) estendeu a leitura aos outros 8 módulos —
+**22 ferramentas no registry, 9 agentes** — e **parou no gate da escrita**. Desenhos em
+`docs/superpowers/specs/2026-08-04-modulo-ia-design.md` e
+`docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`; matriz em
+`docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`; camadas em `PROJECT_ARCHITECTURE.md`.
 
-⚠️ **A IA lê Treinos, e SÓ se `allow_training` estiver ligada** (nasce `false` no banco;
-a chave está em `/ia/configuracoes` desde a 18-B). Os outros 8 módulos não têm ferramenta
-nenhuma — a chave deles aparece **desabilitada**, com o motivo, e se habilita sozinha quando
-a 18-C publicar a primeira leitura. Nenhuma ferramenta de ESCRITA existe.
+⚠️ **A IA lê os NOVE módulos, e cada um SÓ se a sua flag `allow_*` estiver ligada** — todas
+nascem `false` no banco, e as chaves estão em `/ia/configuracoes`. **Nenhuma ferramenta de
+ESCRITA existe**; o guard recusa por `TOOL_WRITE_DISABLED`, e ligar isso é decisão do dono.
+
+⚠️ **`body_*` é o módulo que quebra a simetria "1 módulo = 1 agente = 1 flag".** Ele não tem
+tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos agentes de
+**Treinos e de Dieta** e exigem `allow_body` — separada de `allow_training` e de
+`allow_nutrition`. Por isso o roteador resolve a permissão **pelo módulo pedido**
+(`permissaoDoModulo`, derivada do registry), não pela flag do agente que atende.
 
 **As regras arquiteturais que valem daqui em diante:**
 
@@ -232,6 +240,37 @@ a 18-C publicar a primeira leitura. Nenhuma ferramenta de ESCRITA existe.
     do código-fonte (`src/lib/ai/chat-events.test.ts`): **evento SSE novo exige `case` na tela,
     ou a suíte fica vermelha**. Foi assim que o evento `tool` deixou de ser ignorado em silêncio.
 
+**Invariantes acrescentadas pelo Bloco 1 da 18-C (a leitura dos nove módulos):**
+
+26. **A PERMISSÃO É DO MÓDULO PEDIDO, NÃO DO AGENTE QUE ATENDE** — e é derivada do registry
+    (`permissaoDoModulo`), nunca de uma segunda tabela. `body_*` obrigou isso: quem atende é o
+    agente de Treinos, mas a flag exigida é `allow_body`. Usar a flag do agente recusaria quem
+    ligou só as medidas; ignorá-la mandaria a pergunta a um agente que o guard barraria depois.
+27. **O roteador DESEMPATA por contagem, e empate cai no orquestrador declarando ambiguidade**
+    (`AMBIGUO`). Até a 18-B ele devolvia o primeiro módulo da **ordem de declaração** do objeto
+    de vocabulários — invisível com dois módulos, sorteio com nove. A página aberta desempata,
+    mas **só quando é um dos módulos empatados**. E palavra ambígua não entra no vocabulário:
+    "meta" (três módulos), "gordura" (casaria dentro de "gordura corporal") e "tarefa" (é do
+    TO-DO, não do módulo da Fase 09) ficaram de fora **de propósito** — palavra ambígua não
+    erra o roteamento, ela o **desliga**, jogando tudo no orquestrador.
+28. **`toolDefinitionsFor` recebe as permissões do usuário.** Não substitui o guard (que
+    continua decidindo na execução): resolve outro problema, o de **o que o modelo vê**. Um
+    agente pode ter ferramentas de módulos com flags diferentes, e oferecer o que a flag vai
+    recusar faz o modelo pedi-la e queimar um dos 3 passos por tentativa — a cada pergunta.
+29. **Toda ferramenta que agrega sobre leitura com TETO precisa tornar o teto visível.**
+    `getTodoTasks` corta em 5000, `getTasks` e `getCalendarEvents` em 2000, `getTransactions`
+    em 500 — nenhum visível para quem chama. Onde a API aceita `limit`, peça **teto + 1** (a
+    linha extra só prova saturação); onde não aceita, compare o tamanho do retorno com o teto e
+    marque **parcial**. Errar para "pode faltar coisa" é o único erro aceitável aqui.
+30. **Proibição em prompt é DESCRITA, nunca CITADA.** O teste de vocabulário proibido varre o
+    texto inteiro do perfil e **não distingue uso negado** — e está certo, porque a frase
+    literal no contexto a torna mais provável de sair. Vale para os 8 prompts de agente.
+31. **Nenhum adapter reimplementa a agregação do módulo.** Financeiro entra por
+    `getFinanceCardData`/`getInvoicesCardData` (que entram por `resumoMes`); Dieta por
+    `dayTotals`/`rangeTotals` (que entram por `calc.ts`); Treinos por `metrics.ts`. E a
+    **qualidade viaja com o número**: em Dieta a `completude` sai da PIOR qualidade entre os
+    nutrientes, e nutriente ausente **não vira zero** — ele simplesmente não é relatado.
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -258,7 +297,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 2.512 testes em 2026-08-07 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 2.662 testes em 2026-08-07 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

@@ -1,10 +1,71 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-> 🟡 **ÚLTIMA SUBFASE CONCLUÍDA: 18-B — IA · Contexto, ferramentas de leitura e agentes
-> (2026-08-07).** Antes dela, a 18-A (2026-08-04) e as duas frentes grandes: **Fase 16 — Dieta
-> e Alimentação** (16-A a 16-F, 40 de 40 critérios) e **Fase 17 — Módulo Treinos** (17-A a
-> 17-F, 55 de 55). Este arquivo tem os resumos na ordem inversa de conclusão — o mais recente
-> primeiro.
+> 🟡 **EM ANDAMENTO: 18-C — IA · Ações, aprovações, idempotência e auditoria (2026-08-07).**
+> O **Bloco 1 (leitura) está concluído**; a **escrita ainda não começou** — ela aguarda
+> autorização explícita do dono. Antes dela, a 18-B (2026-08-07), a 18-A (2026-08-04) e as
+> duas frentes grandes: **Fase 16 — Dieta e Alimentação** (16-A a 16-F, 40 de 40 critérios) e
+> **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55). Este arquivo tem os resumos na ordem
+> inversa de conclusão — o mais recente primeiro.
+
+---
+
+## Fase 18-C — IA · Ações, aprovações e auditoria (2026-08-07) 🟡 **BLOCO 1 CONCLUÍDO**
+
+**Desenho:** `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`
+**Matriz (entregável de abertura):** `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`
+
+### O que está pronto — e o que NÃO está
+
+| Bloco | Entrega | Situação |
+| --- | --- | --- |
+| 0 | Matriz das actions + matriz de ferramentas | ✅ |
+| 1 | **19 ferramentas de LEITURA** nos 7 módulos restantes, em 3 lotes | ✅ |
+| 2 | 7 agentes especialistas, roteador com desempate, rotas de contexto | ✅ |
+| — | **🚧 AUTORIZAÇÃO DO DONO PARA A ESCRITA** | ⏳ **bloqueante** |
+| 3–6 | Approval Engine · commands · tela de ações · desfazer | ⛔ não iniciado |
+
+**Nenhuma ferramenta de escrita existe.** O guard segue recusando por `TOOL_WRITE_DISABLED`.
+
+O registry passou de 3 para **22 ferramentas** (as 3 de Treinos da 18-B + 19 novas), e o
+registry de agentes de 2 para **9** (orquestrador + 8 especialistas). Os **nove módulos** do
+sistema têm leitura, cada um atrás da sua flag `allow_*`, todas nascendo desligadas.
+
+### As decisões que este bloco teve de tomar
+
+| # | Decisão | Por quê |
+| --- | --- | --- |
+| 1 | **A escrita NÃO vai acontecer dentro do run** | A ferramenta só cria proposta; a execução é Server Action comum. Torna "cancelar o streaming não desfaz ação confirmada" verdadeiro por construção |
+| 2 | **`body_*` não ganha agente próprio** | Módulo central sem tela. Fica na allowlist de Treinos **e** Dieta, exigindo `allow_body` — o que quebrou o "1 módulo = 1 agente = 1 flag" e fez a permissão passar a ser resolvida **pelo módulo**, derivada do registry |
+| 3 | **Desempate explícito no roteador** | Até a 18-B ele devolvia o primeiro módulo da ordem de declaração. Com nove vocabulários, isso é sortear |
+| 4 | **`"tarefa"` fica só com o TO-DO** | Repeti-la no módulo da Fase 09 faria toda pergunta sobre tarefa empatar e cair no orquestrador |
+| 5 | **`toolDefinitionsFor` recebe as permissões** | Um agente pode ter ferramentas de módulos com flags diferentes; oferecer o que a flag recusa queima um dos 3 passos por tentativa |
+| 6 | **`nutrition.get_period` não calcula média** | Dividir por dias sem registro diria que quem registrou 3 dias comeu metade do que comeu |
+
+### Os defeitos que a suíte pegou — e o que cada um ensinou
+
+| Defeito | Lição |
+| --- | --- |
+| O prompt de Hábitos **citava** as frases proibidas para proibi-las | O teste de vocabulário varre o texto inteiro e não distingue uso negado — e está certo: a frase literal no contexto a torna mais provável. **Descreva a conduta, não a cite** |
+| O teste do RPC lia uma migration **fixa pelo nome** | Com a definição vigente numa migration nova, ele ficaria vermelho para sempre com o banco correto. Passou a procurar a última que define a função |
+| `AVISO_SEM_ACESSO` envelheceu pela segunda e pela terceira vez | A lista de módulos fica; quem a mantém viva é o teste derivado do registry, não a memória de quem edita |
+| Fixtures com cor e campo inexistentes (`"cinza"`, `amount` em vez de `targetAmount`) | **Vitest não checa tipo.** `as unknown as` no teste esconde o erro do `tsc` |
+| Um `cd` deixou o `cwd` preso em `src/app/(app)` | `tsc` e `vitest` "passaram" sem rodar nada. **Verde sem execução é o pior verde** |
+
+### Verificação
+
+`npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm run test:run` **2.662 testes / 130 arquivos** ✅ ·
+**`TZ=UTC`** ✅ · `npm run build` ✅. Três migrations aplicadas e conferidas no banco
+(`ai_agent_is_allowed`); `get_advisors` sem nenhum lint novo.
+
+⚠️ **Limites da verificação, declarados:** o chat **não foi exercitado com credencial real de
+provedor**; as telas **não foram abertas na aplicação rodando**; e o projeto continua sem
+infraestrutura de teste de componente.
+
+### Testes de mutação executados (a contramedida da 18-B)
+
+Três, todos confirmados por `md5` de que a mutação entrou no arquivo antes de acreditar no
+resultado: status derivado do TO-DO → 1 teste vermelho; desempate do roteador → 4 vermelhos;
+leitura de instante em Brasília → 1 vermelho em `TZ=UTC`.
 
 ---
 

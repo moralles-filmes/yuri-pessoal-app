@@ -15,7 +15,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅ (2026-08-04) e 18-B ✅ (2026-08-07); **18-C é a próxima** |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅ e 18-B ✅; **18-C com a leitura dos 9 módulos concluída e a ESCRITA aguardando autorização do dono** |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -55,14 +55,23 @@ Treinos e nada mais.
 
 A **18-C é a primeira subfase de ESCRITA**, e muda a natureza do risco: até aqui o pior caso
 de um defeito era a IA dizer um número errado; a partir dela, é a IA **alterar um registro**.
-A primeira entrega dela, porém, não é a escrita — é a **matriz de ferramentas de LEITURA** dos
-7 módulos restantes, replicando o molde de Treinos.
+A primeira entrega dela, porém, não era a escrita — era a **matriz de ferramentas de LEITURA**
+dos 7 módulos restantes, replicando o molde de Treinos. **Essa parte está concluída**
+(2026-08-07): o registry tem **22 ferramentas** e **9 agentes**, e os nove módulos do sistema
+são consultáveis, cada um atrás da sua flag `allow_*`.
+
+⏳ **A 18-C está parada no gate da escrita, por decisão do dono.** Nenhuma ferramenta de
+escrita existe; o guard recusa por `TOOL_WRITE_DISABLED`. O que falta: Approval Engine (3
+migrations, hash do EFEITO, prazo curto, uso único, revalidação na execução) → commands
+extraídos um a um, em ordem crescente de risco → tela "Ações realizadas pela IA" → desfazer.
+Decisões em `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`; matriz em
+`docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`.
 
 | Subfase | Tema | Status |
 | --- | --- | --- |
 | 18-A | Fundação, provedores e chat | ✅ **CONCLUÍDA** (2026-08-04) |
 | 18-B | Contexto, ferramentas de leitura e agentes | ✅ **CONCLUÍDA** (2026-08-07) |
-| 18-C | Ações, aprovações, idempotência e auditoria | ⬜ **Próxima** |
+| 18-C | Ações, aprovações, idempotência e auditoria | 🟡 **EM ANDAMENTO** — leitura ✅, escrita aguardando autorização |
 | 18-D | Visão, documentos e comprovantes | ⬜ |
 | 18-E | Insights, relatórios e dashboards | ⬜ |
 | 18-F | Memória, voz, integrações e polimento | ⬜ — fecha a fase |
