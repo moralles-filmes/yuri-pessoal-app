@@ -44,3 +44,6 @@ next-env.d.ts
 
 # supabase cli (cache local)
 supabase/.temp
+
+# claude code — permissões desta máquina, com caminhos absolutos. Não é do projeto.
+.claude/settings.local.json
