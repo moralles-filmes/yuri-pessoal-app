@@ -9,21 +9,53 @@
 
 ### ⏳ ONDE A 18-C PAROU, E POR QUÊ
 
-O **Bloco 1 está concluído**: os **nove módulos** do sistema têm ferramentas de LEITURA
-(22 no registry, 9 agentes), cada um atrás da sua flag `allow_*`, todas nascendo desligadas.
+**Blocos 1, 2 e 3 concluídos** (2026-08-07):
 
-**A escrita NÃO começou, e não deve começar sem autorização explícita do dono.** Este é um
-gate declarado no plano aprovado, não um esquecimento. Nenhuma ferramenta de escrita existe;
-o guard recusa por `TOOL_WRITE_DISABLED`.
+- **1–2 · leitura.** Os **nove módulos** têm ferramentas de LEITURA (22 no registry, 9
+  agentes), cada um atrás da sua flag `allow_*`, todas nascendo desligadas.
+- **3 · Approval Engine.** O dono autorizou a escrita, e o motor está pronto: 3 tabelas
+  (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`) + a migration das
+  chaves `allow_write_*`, hash canônico do EFEITO, prazo de 10 min **do banco**, uso único
+  por índice, revalidação por recálculo, e as travas de fronteira testadas.
 
-O que falta, em ordem: Approval Engine (3 migrations, hash do EFEITO, prazo curto, uso único,
-revalidação na execução) → commands extraídos um a um, em ordem crescente de risco → tela
-"Ações realizadas pela IA" → desfazer declarado por command.
+⛔ **E MESMO ASSIM NENHUMA ESCRITA É POSSÍVEL — de propósito.** São três travas independentes:
+nenhum descriptor `kind: "escrita"` no registry, as cinco chaves `allow_write_*` nascendo
+`false`, e o **registry de commands VAZIO** (`ACTION_COMMANDS` em `approval/execute.ts`), do
+mesmo jeito que o Tool Registry nasceu vazio na 18-A. Uma proposta íntegra, confirmada e no
+prazo para em `COMMAND_DESCONHECIDO` **sem sequer reservar vaga de execução** — há teste.
 
-⚠️ **Leia a §3 do spec da 18-C antes de escrever a primeira linha do Bloco 3.** As seis
-decisões que estão lá (a escrita fora do run, o hash do efeito, a idempotência derivada da
-aprovação, o snapshot restrito, o desfazer por command, o desempate do roteador) foram
-validadas com o dono e mudam o desenho em relação ao que `PHASE_18_C_*.md` sugeria.
+**O Bloco 4 é o primeiro em que a IA passa a alterar dado real.** Ordem crescente de risco,
+um command por vez, com teste de equivalência contra o formulário:
+`criarTarefaTodo` → `concluirTarefaTodo` → `registrarHabito` → `reagendarTarefaTodo` →
+`criarEvento` → `registrarConsumo` → **`lancarTransacao` por último**.
+
+⚠️ **Duas coisas que o Bloco 4 vai ter de decidir, e que o Bloco 3 deixou marcadas no código:**
+
+1. `boundaries.test.ts` proíbe `src/lib/ai/` de importar serviço de módulo fora de
+   `tools/adapters/`. Os commands vão precisar disso — a regra "nenhuma regra de negócio é
+   reescrita" exige. Abrir uma **segunda porta declarada** (`approval/commands/`) é a
+   decisão certa; **apagar o teste não é a mesma coisa**, e é o atalho que vai parecer fácil.
+2. O teste `"nasce VAZIO na 18-C · Bloco 3"` fica vermelho no primeiro command. Editá-lo é
+   parte do trabalho, e é assim que se pretende: acrescentar um command não deve ser algo que
+   se faz sem notar.
+
+⚠️ **Leia a §3 do spec da 18-C.** As seis decisões que estão lá (a escrita fora do run, o hash
+do efeito, a idempotência derivada da aprovação, o snapshot restrito, o desfazer por command,
+o desempate do roteador) foram validadas com o dono e mudam o desenho em relação ao que
+`PHASE_18_C_*.md` sugeria.
+
+### O que o Bloco 3 deixou pronto (reuse, não reescreva)
+
+| Precisa de… | Use |
+| --- | --- |
+| Gravar a intenção de uma escrita, DENTRO do run | `approval/proposals.ts` → `criarProposta` |
+| Calcular o hash do efeito | `approval/proposals.ts` → `hashDe` (**nunca** monte o efeito por fora) |
+| Decidir prazo, uso único, hash e command | `approval/state.ts` → `admitirExecucao` (puro, `agora` injetado) |
+| Detectar que o mundo mudou | `approval/state.ts` → `revalidarEfeito` |
+| Derivar o estado para a tela | `approval/state.ts` → `derivarEstadoDaProposta` |
+| Registrar a decisão do dono | `approval/execute.ts` → `registrarDecisao` |
+| Executar, FORA do run | `approval/execute.ts` → `executarAcaoAprovada` (só a partir de `src/lib/actions/`) |
+| Filtrar o que vai para a auditoria | `approval/contracts.ts` → `filtrarCamposTocados` |
 
 ### O que a 18-B deixou pronto (reuse, não reescreva)
 

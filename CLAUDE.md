@@ -16,9 +16,9 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅ e 18-B ✅. **18-C: leitura concluída, ESCRITA aguardando autorização do dono** |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅. **18-C: leitura (Bloco 1–2) ✅ e Approval Engine (Bloco 3) ✅ — nenhuma escrita é possível ainda: o registry de commands está VAZIO** |
 
-Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. Conferido no banco em 2026-08-04, depois da 18-A: **119 tabelas** no `public` — **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **7 `ai_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). A 18-B somou **2 `ai_*`** (`ai_run_steps`, `ai_tool_calls`), então são **9** — mas o total do `public` **não foi reconferido no banco**. O número muda a cada subfase: **conte antes de citar**.
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -112,22 +112,29 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 23. **FK COMPOSTA sempre que uma tabela apontar para outra dentro do mesmo usuário.** A RLS confere o `user_id` da **própria linha** e não alcança a linha apontada. Sem isso, um intruso ocupava a chave única `(scheduled_workout_id, provider)` da ponte da agenda e **impedia o dono de sincronizar** aquele dia. Mesma correção da 16-E nas fotos de evolução.
 24. **`getSessionHistory` aceita `client`/`userId`** para o Cron (service role, sem sessão) usar **a mesma leitura da tela**. Um segundo caminho de montagem do histórico faria o número da notificação divergir do número da tela.
 
-## Módulo Inteligência Artificial (Fase 18 — 18-A, 18-B e o Bloco 1 da 18-C)
+## Módulo Inteligência Artificial (Fase 18 — 18-A, 18-B e os Blocos 1–3 da 18-C)
 
-Rota `/ia`, tabelas `ai_*` (9), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
+Rota `/ia`, tabelas `ai_*` (12), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
 internos, 4 adapters, catálogo de modelos e tarifas versionado, credenciais cifradas, chat com
 streaming, medição por tentativa e orçamento com reserva — **sem ler um único registro**. A
 **18-B** (2026-08-07) abriu a primeira leitura: 3 ferramentas de Treinos, laço de ferramentas
 próprio, roteamento por agente, contexto de página, auditoria por chamada e rastreabilidade
 na tela. A **18-C** (2026-08-07, em andamento) estendeu a leitura aos outros 8 módulos —
-**22 ferramentas no registry, 9 agentes** — e **parou no gate da escrita**. Desenhos em
+**22 ferramentas no registry, 9 agentes** (Bloco 1–2) — e, depois da autorização do dono,
+entregou o **Approval Engine** (Bloco 3): 3 tabelas novas, hash canônico do efeito, prazo,
+uso único e revalidação. Desenhos em
 `docs/superpowers/specs/2026-08-04-modulo-ia-design.md` e
 `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`; matriz em
 `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`; camadas em `PROJECT_ARCHITECTURE.md`.
 
 ⚠️ **A IA lê os NOVE módulos, e cada um SÓ se a sua flag `allow_*` estiver ligada** — todas
-nascem `false` no banco, e as chaves estão em `/ia/configuracoes`. **Nenhuma ferramenta de
-ESCRITA existe**; o guard recusa por `TOOL_WRITE_DISABLED`, e ligar isso é decisão do dono.
+nascem `false` no banco, e as chaves estão em `/ia/configuracoes`.
+
+⚠️ **NENHUMA ESCRITA É POSSÍVEL AINDA, e são TRÊS travas independentes:** nenhum descriptor
+com `kind: "escrita"` no registry; as cinco chaves `allow_write_*` nascendo `false`; e o
+**registry de commands VAZIO** em `src/lib/ai/approval/execute.ts` — uma proposta íntegra,
+confirmada e no prazo ainda para em `COMMAND_DESCONHECIDO`. Ligar o primeiro command é o
+Bloco 4, e é decisão do dono.
 
 ⚠️ **`body_*` é o módulo que quebra a simetria "1 módulo = 1 agente = 1 flag".** Ele não tem
 tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos agentes de
@@ -271,6 +278,52 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     **qualidade viaja com o número**: em Dieta a `completude` sai da PIOR qualidade entre os
     nutrientes, e nutriente ausente **não vira zero** — ele simplesmente não é relatado.
 
+**Invariantes acrescentadas pelo Bloco 3 da 18-C (o Approval Engine):**
+
+32. ⛔ **A ESCRITA NÃO ACONTECE DENTRO DO RUN.** Dentro do laço, a ferramenta grava uma linha
+    em `ai_action_proposals` (`approval/proposals.ts`) e devolve o id ao modelo — nenhum
+    módulo do usuário é tocado. Quem executa é `approval/execute.ts`, chamado por uma Server
+    Action **fora** do streaming. É o que torna *"cancelar o streaming não desfaz ação
+    confirmada"* verdadeiro **por construção**, e não uma checagem que alguém pode esquecer.
+    Dois testes de fronteira provam que nada em `src/lib/ai/` alcança `execute.ts` e que só
+    `src/lib/actions/` pode alcançá-lo.
+33. **Escrever num módulo exige DUAS chaves:** `allow_*` (leitura) **e** `allow_write_*`
+    (escrita) — porque propor começa por resolver de qual registro se fala, e isso é ler. São
+    **cinco** chaves, só dos módulos com ação prevista; chave sem ferramenta é botão que não
+    liga nada. E `GuardMode` **não tem valor padrão**: um ponto novo do código não herda
+    permissão de escrita por omissão.
+34. **O hash cobre o EFEITO, não os argumentos** (`approval/canonical.ts`). A proposta é
+    imutável; quem muda é o mundo. Serialização canônica com **prefixo de versão** (mudar a
+    regra invalida hash antigo em vez de arriscar colidir), chaves ordenadas, array na ordem,
+    NFC, `-0` → `0`, e `NaN`/`Date`/`BigInt` **recusados** em vez de convertidos. A previsão é
+    serializada **uma vez só**, e o mesmo objeto vai para o hash e para a coluna.
+35. **Nenhum estado da proposta é gravado.** `ai_action_proposals` **não tem coluna `status`**:
+    pendente/expirada/recusada/confirmada/executando/executada/falhou/parcial saem de
+    `expires_at` + a linha de aprovação + a linha de execução (`approval/state.ts`, `agora`
+    injetado). A precedência é **execução > decisão > prazo** — uma ação executada às 9h59
+    não pode ser relatada como "expirada" às 10h01.
+36. **As travas moram no BANCO, não em `if`.** Uso único = `unique (proposal_id)`; hash certo =
+    a **FK composta `(proposal_id, user_id, confirmed_hash)` → `(id, user_id, effect_hash)`**,
+    que torna impossível gravar confirmação de uma previsão diferente da que foi lida; prazo =
+    default `now() + 10 min` **do banco** (o servidor não envia a coluna), com CHECK limitando
+    a 1 hora. As três são varridas por teste de migration, com mutação confirmada.
+37. **Claim-first, e o erro é declarado.** A vaga em `ai_action_executions` é reservada
+    (`executando`) **antes** de chamar o command. Queda no meio deixa `executando` e bloqueia
+    nova tentativa: erra para *"pode não ter acontecido"*, **nunca** para *"pode ter
+    acontecido duas vezes"* — o lançamento em dobro é o bug que este projeto já teve.
+    `idempotency_key = "ai:" + approval_id`, derivada no servidor; `client_mutation_id` (17-C)
+    **não se aplica**, porque um uuid vindo do modelo muda a cada retry.
+38. ⚠️ **`ai_action_executions` NÃO tem FK para aprovação nem proposta, DE PROPÓSITO.**
+    `ai_conversations` tem policy de DELETE; com a cadeia completa, apagar uma conversa
+    apagaria por cascade o registro de que a IA lançou uma transação. Proposta e aprovação são
+    artefatos do chat e somem com ele; **a execução sobrevive**. Sem a FK, a chave única seria
+    ocupável (17-F) — por isso os índices de idempotência são emparelhados com `user_id`.
+39. **`changed_fields` limita a FORMA, não o nome** (§3.6 — exceção declarada à invariante 20).
+    Só escalar de até 200 caracteres, dentro da allowlist estática do command. Anexo, URL
+    assinada, texto longo e chave são recusados **sem que ninguém precise tê-los previsto** —
+    uma lista de nomes proibidos fura no primeiro campo novo. Campo omitido vira
+    `undetailed_change`, e **nem o nome dele** é registrado.
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -297,7 +350,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 2.662 testes em 2026-08-07 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 2.804 testes / 136 arquivos em 2026-08-07 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

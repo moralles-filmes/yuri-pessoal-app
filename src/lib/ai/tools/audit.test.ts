@@ -75,13 +75,27 @@ const chamadaDeFerramenta = () =>
   });
 
 describe("auditoria — erro de banco é lido e registrado", () => {
-  it("insert de ai_tool_calls que falha não lança, mas DEIXA RASTRO", async () => {
+  /**
+   * ⚠️ 18-C: `recordToolCall` passou a devolver o ID da linha, e o `null` daqui não é
+   * detalhe de assinatura. `ai_action_proposals.tool_call_id` é NOT NULL com FK composta
+   * para `ai_tool_calls`: sem id não há proposta. A regra "sem trilha, sem leitura" da 18-B
+   * ganha a metade que faltava — **sem trilha, sem PROPOSTA** —, e ela só funciona porque a
+   * falha devolve `null` em vez de um id inventado.
+   */
+  it("insert de ai_tool_calls que falha não lança, devolve null e DEIXA RASTRO", async () => {
     resposta = { data: null, error: ERRO_DO_BANCO };
 
-    await expect(chamadaDeFerramenta()).resolves.toBeUndefined();
+    await expect(chamadaDeFerramenta()).resolves.toBeNull();
 
     expect(logs).toHaveLength(1);
     expect(JSON.stringify(logs[0])).toContain("AUDIT_TOOL_CALL_INSERT_FAILED");
+  });
+
+  it("insert que dá certo devolve o id da linha — é dele que a proposta pendura", async () => {
+    resposta = { data: { id: "tool-call-1" }, error: null };
+
+    await expect(chamadaDeFerramenta()).resolves.toBe("tool-call-1");
+    expect(logs).toHaveLength(0);
   });
 
   it("abrir o passo que falha registra a falha e devolve null, em vez de um id inventado", async () => {

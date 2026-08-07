@@ -571,6 +571,7 @@ export async function* runChat(
             userId: input.userId,
             agent: { id: agent.id, allowedTools: agent.allowedTools },
             permissions: prefs.permissions,
+            writePermissions: prefs.writePermissions,
           },
           mensagensIniciais: mensagens,
           ferramentasOferecidas: nomesOferecidos,

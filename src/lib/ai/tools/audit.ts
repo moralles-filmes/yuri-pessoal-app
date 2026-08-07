@@ -102,6 +102,16 @@ export async function closeStep(input: {
   if (error) registrarFalha("AUDIT_STEP_CLOSE_FAILED", input.runId, error);
 }
 
+/**
+ * Devolve o id da linha gravada — `null` se a auditoria falhou.
+ *
+ * ⚠️ 18-C: NÃO É CONVENIÊNCIA. `ai_action_proposals.tool_call_id` é NOT NULL e tem FK
+ * composta para cá, então uma proposta só existe se a chamada que a originou tiver sido
+ * registrada. Sem este retorno, a ferramenta de escrita teria de RE-CONSULTAR a própria
+ * linha que acabou de gravar (por run + nome + tempo, que não é chave de nada) — ou, pior,
+ * gravar a proposta sem o vínculo. A regra "sem trilha, sem leitura" da 18-B ganha aqui a
+ * metade que faltava: **sem trilha, sem PROPOSTA**.
+ */
 export async function recordToolCall(input: {
   runId: string;
   userId: string;
@@ -115,9 +125,9 @@ export async function recordToolCall(input: {
   recordsRead: number | null;
   durationMs: number;
   refs: readonly ToolRef[];
-}): Promise<void> {
+}): Promise<string | null> {
   const supabase = await createClient();
-  const { error } = await supabase.from("ai_tool_calls").insert({
+  const { data, error } = await supabase.from("ai_tool_calls").insert({
     run_id: input.runId,
     user_id: input.userId,
     step_id: input.stepId,
@@ -131,6 +141,9 @@ export async function recordToolCall(input: {
     records_read: input.recordsRead,
     duration_ms: Math.max(0, input.durationMs),
     refs: [...input.refs],
-  });
+  })
+    .select("id")
+    .single();
   if (error) registrarFalha("AUDIT_TOOL_CALL_INSERT_FAILED", input.runId, error);
+  return data?.id ?? null;
 }

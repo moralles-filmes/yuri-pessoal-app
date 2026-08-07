@@ -91,6 +91,7 @@ const ctx = {
   stepId: "step-1",
   agent: { id: "treinos", allowedTools: ["training.get_volume"] },
   permissions: { allow_training: true } as Partial<Record<ToolPermission, boolean>>,
+  writePermissions: {},
 };
 
 const chamada = (input: unknown = {}) => ({

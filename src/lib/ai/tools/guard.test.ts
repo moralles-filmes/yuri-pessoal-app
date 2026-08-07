@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { ToolDescriptor, ToolPermission } from "./contracts";
-import { guardToolCall, REJECTION_MESSAGE } from "./guard";
+import type {
+  ToolDescriptor,
+  ToolPermission,
+  ToolWritePermission,
+} from "./contracts";
+import { guardToolCall, REJECTION_MESSAGE, PUBLIC_REJECTION_CODE } from "./guard";
 
 const TREINOS: ToolDescriptor = {
   name: "training.get_records",
@@ -20,23 +24,56 @@ const TREINOS: ToolDescriptor = {
   idempotent: true,
 };
 
+/**
+ * ⚠️ ESTE DESCRIPTOR É COERENTE — e é o que faz o teste valer alguma coisa.
+ *
+ * Até a 18-B, o fixture de escrita não declarava chave de escrita nem command, e passou a
+ * ser INCOERENTE quando `isToolDescriptorCoherent` subiu na 18-C. Um fixture incoerente
+ * ainda faria o guard rejeitar — só que por `TOOL_INCOHERENT`, e a suíte continuaria verde
+ * enquanto a checagem de permissão de escrita, que é a que se quer provar, nunca rodava.
+ *
+ * Ele não corresponde a nenhuma ferramenta real: nenhuma escrita existe no registry da 18-C.
+ */
 const ESCRITA: ToolDescriptor = {
   ...TREINOS,
-  name: "training.create_session",
+  name: "todo.criar_tarefa",
+  module: "todo",
   kind: "escrita",
-  risk: 3,
+  risk: 2,
+  requiredPermission: "allow_todo",
+  requiredWritePermission: "allow_write_todo",
+  command: "criarTarefaTodo",
+  sensibilidades: [],
   requiresConfirmation: true,
   idempotent: false,
 };
 
 const TUDO_LIGADO = Object.fromEntries(
-  ["allow_training", "allow_finance"].map((k) => [k, true]),
+  ["allow_training", "allow_finance", "allow_todo"].map((k) => [k, true]),
 ) as Record<ToolPermission, boolean>;
+
+const ESCRITA_LIGADA: Record<ToolWritePermission, boolean> = {
+  allow_write_todo: true,
+  allow_write_habits: true,
+  allow_write_calendar: true,
+  allow_write_nutrition: true,
+  allow_write_finance: true,
+};
+
+const ESCRITA_DESLIGADA: Record<ToolWritePermission, boolean> = {
+  allow_write_todo: false,
+  allow_write_habits: false,
+  allow_write_calendar: false,
+  allow_write_nutrition: false,
+  allow_write_finance: false,
+};
 
 const base = {
   registry: [TREINOS, ESCRITA],
   agent: { id: "treinos", allowedTools: ["training.get_records"] },
   permissions: TUDO_LIGADO,
+  modo: "proposta" as const,
+  writePermissions: ESCRITA_DESLIGADA,
 };
 
 describe("guardToolCall", () => {
@@ -52,7 +89,7 @@ describe("guardToolCall", () => {
   });
 
   it("rejeita ferramenta que existe mas está fora da allowlist do agente", () => {
-    const r = guardToolCall({ ...base, toolName: "training.create_session" });
+    const r = guardToolCall({ ...base, toolName: "todo.criar_tarefa" });
     expect(r).toMatchObject({ ok: false, reason: "TOOL_NOT_ALLOWED_FOR_AGENT" });
   });
 
@@ -63,7 +100,7 @@ describe("guardToolCall", () => {
     const r = guardToolCall({
       ...base,
       agent: { id: "treinos", allowedTools: [] },
-      toolName: "training.create_session",
+      toolName: "todo.criar_tarefa",
     });
     expect(r).toMatchObject({ ok: false, reason: "TOOL_NOT_ALLOWED_FOR_AGENT" });
   });
@@ -105,15 +142,6 @@ describe("guardToolCall", () => {
     expect(r).toMatchObject({ ok: false, reason: "TOOL_PERMISSION_DENIED" });
   });
 
-  it("rejeita ESCRITA mesmo com tudo ligado — a 18-B é só leitura", () => {
-    const r = guardToolCall({
-      ...base,
-      agent: { id: "treinos", allowedTools: ["training.create_session"] },
-      toolName: "training.create_session",
-    });
-    expect(r).toMatchObject({ ok: false, reason: "TOOL_WRITE_DISABLED" });
-  });
-
   it("rejeita descriptor incoerente antes de executar", () => {
     const r = guardToolCall({
       ...base,
@@ -129,5 +157,101 @@ describe("guardToolCall", () => {
       expect(texto).not.toMatch(/user_id|sql|select|undefined|stack/i);
       expect(motivo).toMatch(/^TOOL_/);
     }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // 18-C — A ESCRITA
+  // ══════════════════════════════════════════════════════════════════════════════════════
+
+  const comEscrita = {
+    ...base,
+    agent: { id: "todo", allowedTools: ["todo.criar_tarefa"] },
+    toolName: "todo.criar_tarefa",
+  };
+
+  it("rejeita escrita quando a chave allow_write_* está DESLIGADA", () => {
+    const r = guardToolCall(comEscrita);
+    expect(r).toMatchObject({ ok: false, reason: "TOOL_WRITE_DISABLED" });
+  });
+
+  /**
+   * ⛔ A CHAVE DE LEITURA VEM PRIMEIRO — e este é o caso que prova que ela não é decorativa.
+   *
+   * Com a escrita ligada e a leitura desligada, a resposta certa é NEGAR. Um guard que
+   * checasse só a chave de escrita deixaria a IA alterar um módulo que o dono não autorizou
+   * nem a consultar — e ela precisa consultar para propor.
+   */
+  it("escrita ligada NÃO supre a leitura desligada", () => {
+    const r = guardToolCall({
+      ...comEscrita,
+      permissions: { ...TUDO_LIGADO, allow_todo: false },
+      writePermissions: ESCRITA_LIGADA,
+    });
+    expect(r).toMatchObject({ ok: false, reason: "TOOL_PERMISSION_DENIED" });
+  });
+
+  it("admite escrita só com as DUAS chaves ligadas e em modo proposta", () => {
+    const r = guardToolCall({ ...comEscrita, writePermissions: ESCRITA_LIGADA });
+    expect(r.ok).toBe(true);
+  });
+
+  /**
+   * ⛔ O MODO É A TRAVA ARQUITETURAL: escrita só passa no laço da conversa, e ali ela vira
+   * PROPOSTA. Qualquer outro ponto que chame o guard declara `somente_leitura` e não
+   * consegue admitir escrita nem com todas as chaves ligadas.
+   */
+  it("recusa escrita fora do modo proposta, mesmo com tudo ligado", () => {
+    const r = guardToolCall({
+      ...comEscrita,
+      modo: "somente_leitura",
+      writePermissions: ESCRITA_LIGADA,
+    });
+    expect(r).toMatchObject({ ok: false, reason: "TOOL_WRITE_OUT_OF_BAND" });
+  });
+
+  it("leitura continua passando em modo somente_leitura", () => {
+    const r = guardToolCall({
+      ...base,
+      modo: "somente_leitura",
+      toolName: "training.get_records",
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  /**
+   * O motivo interno distingue os dois; o código PÚBLICO não. Contar ao modelo que existe
+   * "um modo em que essa ferramenta rodaria" é informação que ele não tem como usar bem — e
+   * que ele repetiria ao usuário.
+   */
+  it("o modo errado sai ao modelo como TOOL_INCOHERENT, não como recusa de escrita", () => {
+    expect(PUBLIC_REJECTION_CODE.TOOL_WRITE_OUT_OF_BAND).toBe("TOOL_INCOHERENT");
+    expect(PUBLIC_REJECTION_CODE.TOOL_WRITE_DISABLED).toBe("TOOL_WRITE_DISABLED");
+  });
+
+  /**
+   * ⚠️ Escrita SEM chave de escrita declarada no descriptor não pode virar "autorizada pela
+   * chave de leitura". Ela cai antes, na coerência.
+   */
+  it("escrita sem requiredWritePermission é INCOERENTE, nunca admitida", () => {
+    const semChave = { ...ESCRITA };
+    delete (semChave as { requiredWritePermission?: unknown }).requiredWritePermission;
+    const r = guardToolCall({
+      ...comEscrita,
+      registry: [semChave],
+      writePermissions: ESCRITA_LIGADA,
+    });
+    expect(r).toMatchObject({ ok: false, reason: "TOOL_INCOHERENT" });
+  });
+
+  /**
+   * A frase antiga ("esta versão do assistente só consulta informações") era verdadeira
+   * enquanto NENHUMA escrita existia. Com a escrita ligável por módulo, ela vira mentira —
+   * exatamente como a trava de honestidade v1 virou na 18-B. Este teste é o que impede
+   * alguém de reintroduzi-la.
+   */
+  it("a mensagem de escrita desligada NÃO afirma que o assistente não altera nada", () => {
+    const texto = REJECTION_MESSAGE.TOOL_WRITE_DISABLED;
+    expect(texto).toMatch(/não autorizou/i);
+    expect(texto).not.toMatch(/só consulta|apenas consulta|não cria, altera nem apaga/i);
   });
 });

@@ -23,7 +23,12 @@ import {
   wrapUntrusted,
   type UntrustedBlock,
 } from "@/lib/ai/security/untrusted";
-import type { ToolDescriptor, ToolPermission, ToolOutput } from "./contracts";
+import type {
+  ToolDescriptor,
+  ToolPermission,
+  ToolWritePermission,
+  ToolOutput,
+} from "./contracts";
 import { recordToolCall, type ToolCallStatus } from "./audit";
 
 export type ToolCallRequest = {
@@ -38,6 +43,12 @@ export type ToolExecutionContext = {
   readonly stepId: string;
   readonly agent: { readonly id: string; readonly allowedTools: readonly string[] };
   readonly permissions: Readonly<Partial<Record<ToolPermission, boolean>>>;
+  /**
+   * 18-C — As chaves `allow_write_*`. Enquanto nenhuma ferramenta de escrita existir, este
+   * objeto é lido e não decide nada; ele existe porque o guard exige o campo, e exigir o
+   * campo é o que impede um caminho novo de herdar permissão de escrita por omissão.
+   */
+  readonly writePermissions: Readonly<Partial<Record<ToolWritePermission, boolean>>>;
 };
 
 export type ToolExecution = {
@@ -247,6 +258,22 @@ export async function executeTool(
     registry: AI_TOOL_REGISTRY,
     agent: ctx.agent,
     permissions: ctx.permissions as Record<ToolPermission, boolean>,
+    /**
+     * ⚠️ `"proposta"` E NÃO `"somente_leitura"`, mesmo sem nenhuma ferramenta de escrita
+     * existir hoje.
+     *
+     * Este é o laço da conversa, e é exatamente aqui que a escrita da 18-C deve ser
+     * admitida — em modo proposta, que grava uma linha em `ai_action_proposals` e não toca
+     * módulo nenhum. Declarar o modo errado agora faria a primeira ferramenta de escrita
+     * ser recusada por `TOOL_WRITE_OUT_OF_BAND` e alguém "consertar" isso no lugar mais
+     * fácil, que seria afrouxar o guard.
+     *
+     * O que continua impedindo qualquer escrita, hoje, são três coisas independentes:
+     * nenhum descriptor com `kind: "escrita"`, nenhuma chave `allow_write_*` ligada, e o
+     * registry de commands vazio em `approval/execute.ts`.
+     */
+    modo: "proposta",
+    writePermissions: ctx.writePermissions,
   });
 
   if (!veredito.ok) {

@@ -57,6 +57,8 @@ describe("injeção vinda de conteúdo de registro", () => {
       // Todas as flags LIGADAS de propósito: a recusa não pode depender de o usuário ter
       // deixado alguma desligada. Ela vem de a ferramenta não existir para este agente.
       permissions: TUDO_LIGADO,
+      modo: "proposta",
+      writePermissions: {},
     });
     expect(r.ok).toBe(false);
   });
@@ -72,6 +74,8 @@ describe("injeção vinda de conteúdo de registro", () => {
       registry: AI_TOOL_REGISTRY,
       agent: AGENTE_TREINOS,
       permissions: TUDO_LIGADO,
+      modo: "proposta",
+      writePermissions: {},
     });
     const deOutroAgente = guardToolCall({
       toolName: "training.get_volume",
@@ -79,6 +83,8 @@ describe("injeção vinda de conteúdo de registro", () => {
       // Um agente que existe e NÃO tem a ferramenta na allowlist.
       agent: { id: "assistente-pessoal", allowedTools: [] },
       permissions: TUDO_LIGADO,
+      modo: "proposta",
+      writePermissions: {},
     });
 
     expect(inexistente.ok).toBe(false);
@@ -99,6 +105,8 @@ describe("injeção vinda de conteúdo de registro", () => {
       registry: AI_TOOL_REGISTRY,
       agent: AGENTE_TREINOS,
       permissions: { ...TUDO_LIGADO, allow_training: false },
+      modo: "proposta",
+      writePermissions: {},
     });
     expect(r.ok).toBe(false);
     if (r.ok) return;
@@ -142,18 +150,45 @@ describe("injeção vinda de conteúdo de registro", () => {
     }
   });
 
-  it("nenhuma ferramenta desta subfase é de escrita — e a de escrita seria barrada", () => {
+  /**
+   * ⚠️ REESCRITO NA 18-C, E O QUE MUDOU IMPORTA.
+   *
+   * O teste da 18-B montava um descriptor de escrita improvisado e conferia só `ok === false`.
+   * Com a trava de coerência de 18-C, esse descriptor passou a ser recusado por INCOERÊNCIA —
+   * e o teste continuaria verde sem nunca chegar à checagem de permissão de escrita, que é a
+   * que protege o dado. Um verde por outro motivo é o pior tipo de verde.
+   *
+   * Agora são duas afirmações, com os motivos escritos:
+   *  1. o registry da 18-C não tem NENHUMA ferramenta de escrita;
+   *  2. uma ferramenta de escrita BEM DECLARADA é barrada pela chave desligada — que é o
+   *     estado de todo mundo, porque `allow_write_*` nasce `false` no banco.
+   */
+  it("nenhuma ferramenta desta subfase é de escrita — e uma escrita bem declarada é barrada pela chave", () => {
     for (const t of AI_TOOL_REGISTRY) expect(t.kind, t.name).toBe("leitura");
+
+    const bemDeclarada = {
+      ...AI_TOOL_REGISTRY[0],
+      name: "training.fake_write",
+      kind: "escrita" as const,
+      risk: 2 as const,
+      requiredWritePermission: "allow_write_todo" as const,
+      command: "commandInexistente",
+      sensibilidades: [],
+      requiresConfirmation: true,
+    };
 
     const escrita = guardToolCall({
       toolName: "training.fake_write",
-      registry: [
-        { ...AI_TOOL_REGISTRY[0], name: "training.fake_write", kind: "escrita" as const },
-      ],
+      registry: [bemDeclarada],
       agent: { id: AGENTE_TREINOS.id, allowedTools: ["training.fake_write"] },
       permissions: TUDO_LIGADO,
+      modo: "proposta",
+      // O estado real de qualquer usuário: as cinco chaves de escrita nascem `false`.
+      writePermissions: {},
     });
     expect(escrita.ok).toBe(false);
+    if (escrita.ok) return;
+    expect(escrita.reason).toBe("TOOL_WRITE_DISABLED");
   });
 
   /**

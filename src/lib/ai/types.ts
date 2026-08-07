@@ -7,7 +7,7 @@
  */
 
 import type { AiProviderId } from "./core/contracts";
-import type { ToolPermission } from "./tools/contracts";
+import type { ToolPermission, ToolWritePermission } from "./tools/contracts";
 
 export type CredentialStatus = "nao_validada" | "valida" | "invalida";
 export type ConversationStatus = "ativa" | "arquivada";
@@ -57,6 +57,12 @@ export type AiPreferencesView = {
    * autorizar leitura em vez de autorizá-la por omissão.
    */
   readonly permissions: Readonly<Record<ToolPermission, boolean>>;
+  /**
+   * As flags `allow_write_*` (18-C). Mesma disciplina de `permissions`, e um campo à parte
+   * porque a decisão é à parte: nenhuma leitura consulta este objeto, e nenhuma escrita
+   * passa só com o outro — escrever num módulo exige a chave de leitura E a de escrita.
+   */
+  readonly writePermissions: Readonly<Record<ToolWritePermission, boolean>>;
 };
 
 export type ConversationListItem = {

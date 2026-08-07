@@ -19,7 +19,11 @@ import {
 } from "./usage/budget";
 import { round6, sumRunCost } from "./usage/meter";
 import type { ProviderConfigView } from "./core/router";
-import type { ToolCallStatus, ToolPermission } from "./tools/contracts";
+import type {
+  ToolCallStatus,
+  ToolPermission,
+  ToolWritePermission,
+} from "./tools/contracts";
 import {
   parseArgumentos,
   parseRefs,
@@ -139,6 +143,19 @@ const SEM_PERMISSAO: Record<ToolPermission, boolean> = {
   allow_studies: false,
 };
 
+/**
+ * A mesma disciplina de `SEM_PERMISSAO`, para a ESCRITA (18-C). Um usuário sem linha em
+ * `ai_user_preferences` não autorizou nada — e "não autorizou" aqui pesa mais, porque o que
+ * está do outro lado não é ler um número, é alterar um registro dele.
+ */
+const SEM_ESCRITA: Record<ToolWritePermission, boolean> = {
+  allow_write_todo: false,
+  allow_write_habits: false,
+  allow_write_calendar: false,
+  allow_write_nutrition: false,
+  allow_write_finance: false,
+};
+
 const PREFS_PADRAO: AiPreferencesView = {
   defaultProvider: null,
   defaultModel: null,
@@ -152,6 +169,7 @@ const PREFS_PADRAO: AiPreferencesView = {
   rateLimitPerMinute: 10,
   rateLimitPerHour: 120,
   permissions: SEM_PERMISSAO,
+  writePermissions: SEM_ESCRITA,
 };
 
 export async function getAiPreferences(userId: string): Promise<AiPreferencesView> {
@@ -159,7 +177,7 @@ export async function getAiPreferences(userId: string): Promise<AiPreferencesVie
   const { data } = await supabase
     .from("ai_user_preferences")
     .select(
-      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
+      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -190,6 +208,16 @@ export async function getAiPreferences(userId: string): Promise<AiPreferencesVie
       allow_tasks: data.allow_tasks === true,
       allow_habits: data.allow_habits === true,
       allow_studies: data.allow_studies === true,
+    },
+    // Mesmo `=== true` da leitura, e aqui ele importa ainda mais: a coerção que
+    // transformasse um `null` em "ligado" autorizaria a IA a propor alteração num módulo
+    // que o dono nunca liberou.
+    writePermissions: {
+      allow_write_todo: data.allow_write_todo === true,
+      allow_write_habits: data.allow_write_habits === true,
+      allow_write_calendar: data.allow_write_calendar === true,
+      allow_write_nutrition: data.allow_write_nutrition === true,
+      allow_write_finance: data.allow_write_finance === true,
     },
   };
 }

@@ -199,6 +199,12 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
    * 18-C. Sem ele, um `import { criarSessao } from "@/lib/actions/training"` dentro de
    * `core/` passaria por tudo: escrita sem confirmação, sem `requiresConfirmation`, sem
    * Approval Engine e sem linha em `ai_tool_calls`.
+   *
+   * ⚠️ NOTA PARA O BLOCO 4: os commands vão precisar dos serviços de domínio — é a regra
+   * "nenhuma regra de negócio é reescrita". Isso exige uma SEGUNDA porta declarada aqui
+   * (`approval/commands/`), do mesmo jeito que `tools/adapters/` foi declarada na 18-B.
+   * Abrir a porta é uma decisão; APAGAR ESTE TESTE não é a mesma coisa, e é o atalho que
+   * alguém com pressa vai considerar.
    */
   it("query e action de módulo só são importadas por tools/adapters/ — a única porta", () => {
     const modulos = [
@@ -284,6 +290,104 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
     }
 
     expect(declaracoes).toEqual(["lib/ai/core/text.ts"]);
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 18-C — A ESCRITA NÃO ACONTECE DENTRO DO RUN. TRAVA FÍSICA, NÃO CONVENÇÃO.           ║
+   * ║                                                                                     ║
+   * ║   DENTRO do run  → `approval/proposals.ts` grava a INTENÇÃO                          ║
+   * ║   FORA do run    → Server Action → `approval/execute.ts` → command → domínio         ║
+   * ║                                                                                     ║
+   * ║ Um critério de aceite da fase é "cancelar o streaming não desfaz ação confirmada".  ║
+   * ║ Com o executor fora do alcance do laço, isso é verdadeiro POR CONSTRUÇÃO — não é    ║
+   * ║ uma checagem que alguém pode esquecer de escrever. Este teste é o que mantém assim. ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("nada em src/lib/ai/ alcança approval/execute.ts — o laço não chega ao executor", () => {
+    const oExecutor = path.join(RAIZ, "approval", "execute.ts");
+    const violacoes: string[] = [];
+
+    for (const arquivo of listarArquivos(RAIZ)) {
+      if (arquivo === oExecutor) continue;
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      for (const spec of especificadores(codigo)) {
+        if (/(^|\/)approval\/execute$/.test(spec) || spec === "./execute") {
+          violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
+        }
+      }
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * A outra metade: quem PODE alcançá-lo. Na 18-C, só uma Server Action — que é onde o
+   * `revalidatePath` mora e onde a proteção CSRF do Next vale (o Route Handler do chat não
+   * a herda, e é por isso que ele não pode ser a porta da execução).
+   */
+  it("approval/execute.ts só é alcançado a partir de src/lib/actions/", () => {
+    const permitido = path.join(SRC, "lib", "actions");
+    const violacoes: string[] = [];
+
+    for (const arquivo of listarArquivos(SRC)) {
+      if (arquivo.startsWith(permitido)) continue;
+      if (arquivo.startsWith(path.join(RAIZ, "approval"))) continue;
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      for (const spec of especificadores(codigo)) {
+        if (spec.includes("approval/execute")) {
+          violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
+        }
+      }
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * `approval/` fala com o banco — mas só com as tabelas do PRÓPRIO módulo de IA. Uma
+   * escrita direta numa tabela de módulo do usuário aqui pularia o serviço de domínio, e com
+   * ele todas as regras que o formulário aplica: fatura, parcelamento, recorrência,
+   * snapshot imutável. É a mesma disciplina que vale para `tools/audit.ts`.
+   */
+  it("approval/ só toca tabelas ai_*", () => {
+    const violacoes: string[] = [];
+
+    for (const arquivo of listarArquivos(path.join(RAIZ, "approval"))) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
+      for (const m of codigo.matchAll(/\.from\(\s*["']([^"']+)["']/g)) {
+        if (!m[1].startsWith("ai_")) violacoes.push(`${path.relative(SRC, arquivo)} → ${m[1]}`);
+      }
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * Os dois arquivos de `approval/` que fazem I/O carregam `server-only`; os puros, não.
+   * A distinção importa: `state.ts` e `canonical.ts` decidem prazo, uso único e hash, e
+   * precisam ser testáveis sem banco — uma trava intestável é uma trava que ninguém sabe
+   * se funciona.
+   */
+  it("em approval/, quem fala com o banco importa server-only e quem é puro não", () => {
+    const errados: string[] = [];
+
+    for (const arquivo of listarArquivos(path.join(RAIZ, "approval"))) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      const fazIO = /@\/lib\/supabase\/server/.test(codigo);
+      const declara = /import\s+["']server-only["']/.test(codigo);
+      if (fazIO !== declara) {
+        errados.push(
+          `${path.relative(SRC, arquivo)} (I/O: ${fazIO}, server-only: ${declara})`,
+        );
+      }
+    }
+
+    expect(errados).toEqual([]);
   });
 
   it("audit.ts é a exceção DECLARADA — e não escreve em tabela de módulo do usuário", () => {
