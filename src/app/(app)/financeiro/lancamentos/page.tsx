@@ -2,6 +2,7 @@ import {
   getAccounts,
   getCategories,
   getCreditCards,
+  getDailyBalances,
   getPeopleForSelect,
   getSubcategories,
   getTransactions,
@@ -40,9 +41,19 @@ export default async function LancamentosPage({
       getPeopleForSelect(),
     ]);
 
+  // Saldo de cada dia visível (extrato). Depende dos dias que a lista trouxe, então vem
+  // depois dela. Devolve null quando não há saldo a mostrar (filtro de cartão, lista vazia).
+  const dailyBalances = await getDailyBalances({
+    accountId: filters.accountId,
+    cardId: filters.cardId,
+    dias: transactions.map((t) => t.competence_date),
+  });
+
   return (
     <TransactionsClient
       transactions={transactions}
+      dailyBalances={dailyBalances}
+      balanceScope={filters.accountId ? "conta" : "todas"}
       accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
       categories={categories.map((c) => ({
         id: c.id,

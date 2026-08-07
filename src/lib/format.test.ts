@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   dateInSaoPaulo,
+  diaExtenso,
   formatCurrency,
   formatDate,
   formatDateWith,
@@ -130,6 +131,24 @@ describe("fuso de Brasília — instantes nunca são lidos em UTC", () => {
     const instante = saoPauloWallClockToInstant("2026-07-19", "23:45");
     expect(toDateTimeLocalInSaoPaulo(instante)).toBe("2026-07-19T23:45");
     expect(dateInSaoPaulo(instante)).toBe("2026-07-19");
+  });
+});
+
+describe("diaExtenso — rótulo do dia no extrato", () => {
+  it("traz dia da semana, dia e mês por extenso", () => {
+    // 2026-07-28 é uma terça-feira.
+    expect(norm(diaExtenso("2026-07-28"))).toBe("ter., 28 de julho");
+  });
+
+  it("não desloca o dia (data pura nunca é lida como instante UTC)", () => {
+    // 'yyyy-MM-dd' em `new Date()` seria meia-noite UTC = 21h do dia anterior em Brasília.
+    expect(norm(diaExtenso("2026-01-01"))).toBe("qui., 1 de janeiro");
+    expect(norm(diaExtenso("2026-03-01"))).toBe("dom., 1 de março");
+  });
+
+  it("devolve vazio para o que não é data pura", () => {
+    expect(diaExtenso("")).toBe("");
+    expect(diaExtenso("2026-07-28T10:00:00Z")).toBe("");
   });
 });
 

@@ -89,6 +89,32 @@ conscientes de cada uma estão em `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
 
 ---
 
+## Melhoria 2026-08-06 — saldo por dia na lista de lançamentos (extrato)
+
+`/financeiro/lancamentos` deixou de ser uma pilha plana: agora é **agrupada por dia**, com o
+saldo do fim de cada dia no cabeçalho — como o extrato do banco. Desenho completo em
+`docs/superpowers/specs/2026-08-06-saldo-diario-lancamentos-design.md`.
+
+**As quatro decisões que valem lembrar:**
+
+1. **O saldo é de CONTA. Cartão não entra.** Compra de cartão não tem `account_id` e não move
+   dinheiro; quem move é o pagamento da fatura (`transferencia` com destino nulo). Com filtro de
+   cartão ligado o cabeçalho mostra só a data — **ausência de saldo, não saldo zero**.
+2. **O saldo ignora os filtros de categoria/tipo/status, de propósito.** A lista encolhe, o saldo
+   continua verdadeiro. Por isso `getDailyBalances` busca a própria janela em vez de somar as
+   linhas que a tela recebeu.
+3. **Mesma regra de `account_balance`:** só `pago`/`recebido` entram, então o extrato bate com o
+   saldo de `/financeiro/contas` e com o card "Saldo total". A tabela de sinais existe em dois
+   lugares (`account_balance_before` no SQL, `efeitoNoSaldo` no TS) — os dois se citam em
+   comentário, e o cruzamento das duas sobre julho/2026 (138 lançamentos, 29 dias) bateu em todos.
+4. **Sem `Date` em data pura.** O agrupamento compara `'yyyy-MM-dd'` como texto; só o rótulo do
+   cabeçalho (`diaExtenso`) constrói data de grade local.
+
+**Verificação:** 2397 testes, lint, tsc e build. ⚠️ **A tela não foi aberta na aplicação
+rodando** (atrás do login, sem sessão disponível) — vale um clique antes de dar por fechado.
+
+---
+
 ## Correção 2026-08-04 — a busca travava ao digitar, e o padrão estava em 5 telas
 
 **Sintoma relatado (Treinos):** digitar na busca "fica travando tudo e não sai o que digito,

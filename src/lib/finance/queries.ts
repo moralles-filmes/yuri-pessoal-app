@@ -4,6 +4,11 @@
  */
 import { createClient } from "@/lib/supabase/server";
 import { toDateInputValue } from "@/lib/format";
+import { SETTLED_STATUSES } from "@/lib/finance/constants";
+import {
+  saldosPorDia,
+  type MovimentoDeSaldo,
+} from "@/lib/finance/daily-balance";
 import type {
   AccountWithBalance,
   BillRow,
@@ -115,6 +120,85 @@ export async function getTransactions(
 
   const { data } = await query;
   return (data ?? []) as unknown as TransactionWithRelations[];
+}
+
+export type DailyBalanceFilters = {
+  /** Conta filtrada. Ausente = todas as contas somadas. */
+  accountId?: string;
+  /** Cartão filtrado. Presente = não há saldo a mostrar (cartão não move conta). */
+  cardId?: string;
+  /** Dias visíveis na lista ('yyyy-MM-dd'), em qualquer ordem. */
+  dias: string[];
+};
+
+/**
+ * Saldo de conta no fim de cada dia visível da lista de lançamentos (extrato).
+ *
+ * Devolve `null` quando não existe saldo a exibir: filtro de cartão ligado (compra de cartão
+ * não move conta — quem move é o pagamento da fatura) ou lista vazia.
+ *
+ * **O saldo ignora os demais filtros de propósito.** Com um filtro de categoria ou tipo a
+ * lista encolhe, mas o saldo continua sendo o saldo VERDADEIRO da(s) conta(s) naquele dia —
+ * por isso a janela é buscada aqui, e não derivada das linhas que a tela recebeu.
+ *
+ * Duas idas ao banco: o saldo de abertura (um escalar, via `account_balance_before`) e os
+ * movimentos da janela. A acumulação dia a dia é pura (`saldosPorDia`).
+ */
+export async function getDailyBalances(
+  filters: DailyBalanceFilters,
+): Promise<Record<string, number> | null> {
+  if (filters.cardId) return null;
+
+  const dias = [...new Set(filters.dias)].sort();
+  if (dias.length === 0) return null;
+
+  const from = dias[0];
+  const to = dias[dias.length - 1];
+  const escopo = filters.accountId ?? null;
+
+  const supabase = await createClient();
+
+  let movimentosQuery = supabase
+    .from("transactions")
+    .select(
+      "competence_date,type,status,amount,account_id,transfer_account_id",
+    )
+    .gte("competence_date", from)
+    .lte("competence_date", to)
+    .in("status", SETTLED_STATUSES)
+    .limit(5000);
+
+  // Espelha o join de `account_balance_before`: só entra o que toca alguma conta.
+  movimentosQuery = escopo
+    ? movimentosQuery.or(
+        `account_id.eq.${escopo},transfer_account_id.eq.${escopo}`,
+      )
+    : movimentosQuery.or(
+        "account_id.not.is.null,transfer_account_id.not.is.null",
+      );
+
+  const [aberturaRes, movimentosRes] = await Promise.all([
+    supabase.rpc("account_balance_before", {
+      // Os tipos gerados não expressam argumento nulável: `null` aqui é o escopo válido
+      // "todas as contas somadas", que a própria função SQL trata (`p_account_id is null`).
+      p_account_id: escopo as unknown as string,
+      p_date: from,
+    }),
+    movimentosQuery,
+  ]);
+
+  // Sem saldo de abertura não há extrato: um saldo que começa do zero seria mentira.
+  if (aberturaRes.error || aberturaRes.data == null) return null;
+  if (movimentosRes.error) return null;
+
+  const saldos = saldosPorDia({
+    abertura: Number(aberturaRes.data),
+    escopo,
+    dias,
+    movimentos: (movimentosRes.data ?? []) as unknown as MovimentoDeSaldo[],
+  });
+
+  return Object.fromEntries(saldos);
 }
 
 export type TransactionRangeFilters = {

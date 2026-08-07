@@ -8157,6 +8157,10 @@ export type Database = {
     }
     Functions: {
       account_balance: { Args: { p_account_id: string }; Returns: number }
+      account_balance_before: {
+        Args: { p_account_id: string; p_date: string }
+        Returns: number
+      }
       ai_begin_chat_run: {
         Args: {
           p_agent_id: string
