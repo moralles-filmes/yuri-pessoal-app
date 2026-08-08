@@ -59,7 +59,7 @@
 
 > ## ✅ O BLOCO 4 FECHOU (2026-08-07) — A IA ESCREVE
 >
-> **6 ferramentas de escrita, 13 commands, 5 chaves — todas desligadas de fábrica.**
+> **7 ferramentas de escrita, 13 commands, 5 chaves — todas desligadas de fábrica.**
 > `todo.criar_tarefa` · `todo.concluir_tarefa` · `todo.reagendar_tarefa` · `habits.registrar` ·
 > `calendar.criar_evento` · `nutrition.registrar_consumo` · `finance.lancar_transacao`.
 >

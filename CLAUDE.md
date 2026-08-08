@@ -16,7 +16,7 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, **18-C ✅ (2026-08-08, blocos 1–6)**: a IA escreve em 6 ferramentas e 13 commands, sempre com confirmação do dono, e `/ia/acoes` mostra o que foi feito com desfazer. Próxima: **18-D** |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, **18-C ✅ (2026-08-08, blocos 1–6)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono, e `/ia/acoes` mostra o que foi feito com desfazer. Próxima: **18-D** |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). Reconferido no banco em **2026-08-08**: continua **124 / 12**. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
@@ -122,7 +122,7 @@ próprio, roteamento por agente, contexto de página, auditoria por chamada e ra
 na tela. A **18-C** (concluída em 2026-08-08, seis blocos) estendeu a leitura aos outros 8
 módulos — **22 ferramentas no registry, 9 agentes** (Blocos 1–2) — e, depois da autorização do
 dono, entregou o **Approval Engine** (Bloco 3: 3 tabelas novas, hash canônico do efeito, prazo,
-uso único e revalidação), a **escrita** (Bloco 4: 6 ferramentas e 13 commands) e a tela
+uso único e revalidação), a **escrita** (Bloco 4: 7 ferramentas e 13 commands) e a tela
 **`/ia/acoes`** com o desfazer (Bloco 5). Desenhos em
 `docs/superpowers/specs/2026-08-04-modulo-ia-design.md` e
 `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`; matriz em
@@ -131,8 +131,10 @@ uso único e revalidação), a **escrita** (Bloco 4: 6 ferramentas e 13 commands
 ⚠️ **A IA lê os NOVE módulos, e cada um SÓ se a sua flag `allow_*` estiver ligada** — todas
 nascem `false` no banco, e as chaves estão em `/ia/configuracoes`.
 
-⚠️ **A ESCRITA EXISTE DESDE O BLOCO 4 (2026-08-07), e continua DESLIGADA de fábrica.** São
-**6 ferramentas de escrita** e **13 commands**; as cinco chaves `allow_write_*` nascem `false`
+⚠️ **A ESCRITA EXISTE DESDE O BLOCO 4 (2026-08-07), e continua DESLIGADA de fábrica.** O
+registry tem **29 ferramentas — 22 de leitura e 7 de escrita** (contado em 2026-08-08; a
+redação anterior dizia "6" e a própria tabela abaixo já listava sete linhas) e **13 commands**;
+as cinco chaves `allow_write_*` nascem `false`
 no banco e cada uma só é clicável junto com a chave de leitura do mesmo módulo. Nenhuma ação é
 aplicada sem o dono confirmar na tela, uma de cada vez, com prazo de 10 minutos.
 
