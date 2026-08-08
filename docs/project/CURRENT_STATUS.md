@@ -15,7 +15,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅ e **18-C ✅ (2026-08-08)** — leitura dos 9 módulos, Approval Engine, 6 ferramentas de escrita, 13 commands, tela de ações e desfazer; tudo atrás de chaves que nascem desligadas. Próxima: **18-D** |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅ e **18-C ✅ (2026-08-08)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações e desfazer; tudo atrás de chaves que nascem desligadas. Próxima: **18-D** |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -57,8 +57,10 @@ A **18-C é a primeira subfase de ESCRITA**, e muda a natureza do risco: até aq
 de um defeito era a IA dizer um número errado; a partir dela, é a IA **alterar um registro**.
 A primeira entrega dela, porém, não era a escrita — era a **matriz de ferramentas de LEITURA**
 dos 7 módulos restantes, replicando o molde de Treinos. **Essa parte está concluída**
-(2026-08-07): o registry tem **22 ferramentas** e **9 agentes**, e os nove módulos do sistema
-são consultáveis, cada um atrás da sua flag `allow_*`.
+(2026-08-07): os Blocos 1–2 levaram o registry a **22 ferramentas de leitura** e **9 agentes**,
+e os nove módulos do sistema são consultáveis, cada um atrás da sua flag `allow_*`. *Com as
+escritas do Bloco 4, o registry passou a ter **29 ferramentas — 22 de leitura e 7 de escrita**
+(contado em 2026-08-08).*
 
 ✅ **O gate da escrita foi autorizado pelo dono em 2026-08-07, e o Bloco 3 (Approval Engine)
 está concluído** — mas **nenhuma escrita é possível ainda**, e isso é o desenho, não uma
@@ -277,7 +279,7 @@ risco que a matriz fixou, cada uma com teste de equivalência contra o formulár
 
 | Entrega | O que é |
 | --- | --- |
-| 6 ferramentas de escrita | TO-DO (3), Hábitos, Agenda, Dieta, Financeiro — todas `requiresConfirmation` |
+| 7 ferramentas de escrita | TO-DO (3), Hábitos, Agenda, Dieta, Financeiro — todas `requiresConfirmation` |
 | 13 commands | 7 de ação + 6 de **desfazer**, estes últimos **sem ferramenta** |
 | 5 `services.ts` extraídos | `todo`, `habits`, `calendar`, `nutrition`, `finance` — a action virou casca |
 | 1 migration | `todo_completions.completion_source` passou a aceitar `'ia'` (nenhuma tabela nova) |

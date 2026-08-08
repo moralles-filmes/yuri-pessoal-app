@@ -142,7 +142,7 @@ As sete linhas estão **implementadas**, na ordem acima. O que mudou em relaçã
 | Previsto | Entregue | Por quê |
 | --- | --- | --- |
 | 7 commands | **13** | Cada `undo` é um command PRÓPRIO — passa pelo mesmo Approval Engine, com proposta, hash e execução próprios. Um atalho que revertesse sem confirmação seria a única escrita do sistema sem o dono decidindo. |
-| 7 ferramentas | **6** | Os `undo` **não têm ferramenta**: o modelo não pode propor exclusão, reabertura, apagamento nem cancelamento. Quem os alcança é o botão de desfazer da tela. |
+| 7 ferramentas | **7** (e nenhuma para os `undo`) | A previsão bateu: uma ferramenta por linha de ação. O que NÃO existe é ferramenta para os inversos — o modelo não pode propor exclusão, reabertura, apagamento nem cancelamento. Quem os alcança é o botão de desfazer da tela. *(A redação anterior desta célula dizia "6"; contado no registry em 2026-08-08 são **7 de escrita**, num total de 29.)* |
 | Linha 8 (excluir) risco 4, fora | **Continua fora** | O que existe é o desfazer de uma execução que a própria IA acabou de fazer — nunca "apague o lançamento X" dito em linguagem natural. |
 
 **Três decisões que a implementação obrigou a tomar, e que não estavam no plano:**
