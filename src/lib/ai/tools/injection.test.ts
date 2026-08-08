@@ -158,13 +158,22 @@ describe("injeção vinda de conteúdo de registro", () => {
    * e o teste continuaria verde sem nunca chegar à checagem de permissão de escrita, que é a
    * que protege o dado. Um verde por outro motivo é o pior tipo de verde.
    *
-   * Agora são duas afirmações, com os motivos escritos:
-   *  1. o registry da 18-C não tem NENHUMA ferramenta de escrita;
-   *  2. uma ferramenta de escrita BEM DECLARADA é barrada pela chave desligada — que é o
-   *     estado de todo mundo, porque `allow_write_*` nasce `false` no banco.
+   * ⚠️ REVISADO OUTRA VEZ NO BLOCO 4. A primeira afirmação era "o registry não tem nenhuma
+   * ferramenta de escrita", e caiu junto com o gate — o TO-DO tem duas. No lugar dela entrou
+   * a que de fato protege o dado hoje: **toda escrita do registry real depende de uma chave
+   * `allow_write_*`, e nenhuma delas é a chave de leitura do módulo.**
+   *
+   * A segunda afirmação continua igual, e é a mais importante: uma ferramenta de escrita BEM
+   * DECLARADA é barrada pela chave desligada — que é o estado de todo mundo, porque
+   * `allow_write_*` nasce `false` no banco.
    */
-  it("nenhuma ferramenta desta subfase é de escrita — e uma escrita bem declarada é barrada pela chave", () => {
-    for (const t of AI_TOOL_REGISTRY) expect(t.kind, t.name).toBe("leitura");
+  it("toda escrita do registry exige chave própria — e uma escrita bem declarada é barrada por ela", () => {
+    for (const t of AI_TOOL_REGISTRY.filter((x) => x.kind === "escrita")) {
+      expect(t.requiredWritePermission, t.name).toBeDefined();
+      // A chave de escrita nunca pode ser a de leitura: seriam a mesma decisão com dois nomes.
+      expect(String(t.requiredWritePermission), t.name).not.toBe(String(t.requiredPermission));
+      expect(String(t.requiredWritePermission), t.name).toMatch(/^allow_write_/);
+    }
 
     const bemDeclarada = {
       ...AI_TOOL_REGISTRY[0],

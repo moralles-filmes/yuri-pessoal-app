@@ -1,16 +1,17 @@
 /**
- * Fase 18-C · Bloco 3 — IA · O Action Executor.
+ * Fase 18-C · Blocos 3 e 4 — IA · O Action Executor.
  *
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
- * ║ O QUE ESTE ARQUIVO PROVA NESTA SUBFASE: QUE NADA EXECUTA.                             ║
+ * ║ O QUE ESTE ARQUIVO PROVAVA NO BLOCO 3: QUE NADA EXECUTAVA.                            ║
+ * ║ O QUE ELE PROVA NO BLOCO 4: QUE SÓ EXECUTA O QUE ESTÁ NOMEADO AQUI.                   ║
  * ║                                                                                       ║
- * ║ O motor inteiro existe — vínculo, prazo, uso único, revalidação por recálculo — e o    ║
- * ║ registry de commands está VAZIO, exatamente como o Tool Registry nasceu vazio na 18-A. ║
- * ║ Uma proposta íntegra, confirmada, dentro do prazo e com o hash certo ainda assim para  ║
- * ║ em `COMMAND_DESCONHECIDO`, e nenhum `insert` de execução acontece.                     ║
+ * ║ O registry de commands deixou de estar vazio, e os testes de bijeção e coerência que   ║
+ * ║ eram vacuosos passaram a rodar de verdade — era exatamente para isto que tinham sido   ║
+ * ║ escritos antes de existir o que verificar.                                             ║
  * ║                                                                                       ║
- * ║ Os testes de bijeção e coerência abaixo estão escritos para o Bloco 4: eles são        ║
- * ║ vacuosos hoje e ficam vermelhos no dia em que o primeiro command entrar torto.         ║
+ * ║ As garantias que permanecem, e que os casos abaixo exercitam: proposta sem command     ║
+ * ║ conhecido não reserva vaga; hash que não bate com o recálculo não executa; e os        ║
+ * ║ commands de DESFAZER não são propostos pelo modelo, porque não têm ferramenta.         ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 
@@ -60,18 +61,99 @@ beforeEach(() => {
 
 describe("registry de commands", () => {
   /**
-   * ⛔ A ASSERÇÃO QUE FECHA O BLOCO 3. Ela vira vermelha no primeiro command do Bloco 4 —
-   * e é assim que se pretende: acrescentar um command é uma decisão que passa por editar
-   * este teste, de propósito, e não algo que se faz sem notar.
+   * ⛔ A ASSERÇÃO QUE FECHAVA O BLOCO 3 ERA `ACTION_COMMANDS === []`, E ELA CAIU AQUI.
+   *
+   * Ela existia para que acrescentar um command fosse uma decisão VISÍVEL, e não algo que se
+   * faz sem notar — e cumpriu esse papel: editar esta lista foi o gesto que abriu o Bloco 4.
+   * O que ficou no lugar é a lista NOMEADA. Um command novo continua obrigando a mexer aqui;
+   * a diferença é que agora o teste diz quais existem, e um que apareça sem passar por esta
+   * linha deixa a suíte vermelha do mesmo jeito.
+   *
+   * ⚠️ Ordem crescente de risco, como a matriz manda. `lancarTransacao` é o último a entrar.
    */
-  it("nasce VAZIO na 18-C · Bloco 3 — nenhuma escrita é possível", () => {
-    expect(ACTION_COMMANDS).toEqual([]);
-    expect(nomesDeCommands()).toEqual([]);
+  it("os commands ligados são exatamente os declarados — nenhum a mais", () => {
+    expect(nomesDeCommands()).toEqual([
+      "criarTarefaTodo",
+      "excluirTarefaTodo",
+      "concluirTarefaTodo",
+      "reabrirTarefaTodo",
+      "reagendarTarefaTodo",
+      "registrarHabito",
+      "desfazerHabito",
+      "criarEvento",
+      "excluirEvento",
+      "registrarConsumo",
+      "desfazerConsumo",
+      "lancarTransacao",
+      "excluirTransacao",
+    ]);
+  });
+
+  /**
+   * ⛔ SEIS DOS TREZE COMMANDS NÃO TÊM FERRAMENTA, E A AUSÊNCIA É A TRAVA.
+   *
+   * Os cinco `undo` só são alcançados pelo botão de desfazer da tela, sobre algo que a própria
+   * IA fez. O modelo não tem como propô-los: não existe entrada deles em
+   * `PROPOSTAS_POR_FERRAMENTA`, e sem entrada não há chamada.
+   *
+   * Este teste falha se alguém publicar uma ferramenta para um deles — que é uma decisão de
+   * risco 4 e está fora da 18-C (Parte 3 da matriz). Vale em especial para os dois últimos:
+   * `excluirEvento` apaga um registro que, com o Google conectado, some também do calendário
+   * externo do dono; e `desfazerConsumo` apaga uma linha de histórico de saúde.
+   */
+  it("os commands de DESFAZER não são propostos pelo modelo", async () => {
+    const { PROPOSTAS_POR_FERRAMENTA } = await import("./commands/previews");
+    const comandosComFerramenta = new Set(
+      AI_TOOL_REGISTRY.filter((t) => t.kind === "escrita").map((t) => t.command),
+    );
+
+    for (const semFerramenta of [
+      "excluirTarefaTodo",
+      "reabrirTarefaTodo",
+      "desfazerHabito",
+      "excluirEvento",
+      "desfazerConsumo",
+      "excluirTransacao",
+    ]) {
+      expect(findCommand(semFerramenta), semFerramenta).not.toBeNull();
+      expect(comandosComFerramenta.has(semFerramenta), semFerramenta).toBe(false);
+    }
+    // E a bijeção do outro lado: nenhuma receita de proposta sem ferramenta correspondente.
+    const nomesDeFerramenta = new Set(AI_TOOL_REGISTRY.map((t) => t.name));
+    for (const nome of Object.keys(PROPOSTAS_POR_FERRAMENTA)) {
+      expect(nomesDeFerramenta.has(nome), nome).toBe(true);
+    }
+  });
+
+  /**
+   * ⛔ E o que CONTINUA fora. Escrito por nome, e não por ausência: "não há command de pagar
+   * fatura" é uma afirmação que ninguém testa; esta falha no dia em que houver.
+   *
+   * ⚠️ A lista mudou de conteúdo no Bloco 4 e não de propósito. Ela guardava os sete commands
+   * da subfase enquanto eles não existiam; os sete entraram, na ordem crescente de risco que a
+   * matriz fixa, e o que ficou aqui é a PARTE 3 dela — as ações de risco 4, que exigem uma
+   * decisão do dono que ainda não foi tomada.
+   *
+   * As cinco têm em comum o mesmo traço: alteram ou apagam um registro que já existe, ou
+   * movem dinheiro, a partir de um alvo que o modelo resolveria por semelhança de texto.
+   */
+  it("as ações de risco 4 continuam fora da 18-C", () => {
+    for (const proibido of [
+      "pagarFatura",
+      "criarParcelamento",
+      "dividirComTerceiro",
+      "editarTransacao",
+      "transferirEntreContas",
+    ]) {
+      expect(findCommand(proibido), proibido).toBeNull();
+      expect(commandExecutavel(proibido), proibido).toBeNull();
+    }
   });
 
   it("nome desconhecido não vira command", () => {
-    expect(findCommand("lancarTransacao")).toBeNull();
-    expect(commandExecutavel("lancarTransacao")).toBeNull();
+    expect(findCommand("qualquerCoisa")).toBeNull();
+    expect(commandExecutavel("qualquerCoisa")).toBeNull();
+    expect(ACTION_COMMANDS.length).toBeGreaterThan(0);
   });
 
   it("todo command declarado é coerente — e um incoerente é tratado como inexistente", () => {
@@ -88,7 +170,7 @@ describe("registry de commands", () => {
   /**
    * A bijeção que o Bloco 4 precisa: uma ferramenta de escrita que aponte para um command
    * inexistente só falharia DEPOIS de o dono confirmar — o pior momento possível para
-   * descobrir. Hoje não há ferramenta de escrita, e o laço abaixo não roda.
+   * descobrir. O laço era vacuoso no Bloco 3 e passou a rodar sobre as quatro escritas reais.
    */
   it("toda ferramenta de escrita aponta para um command que existe", () => {
     for (const t of AI_TOOL_REGISTRY) {
@@ -99,14 +181,15 @@ describe("registry de commands", () => {
   });
 });
 
-describe("executarAcaoAprovada — com o registry vazio", () => {
+describe("executarAcaoAprovada", () => {
   /**
-   * ⛔ O CAMINHO FELIZ INTEIRO, E ELE PARA MESMO ASSIM.
+   * ⛔ O CAMINHO FELIZ INTEIRO, COM UM COMMAND QUE NÃO EXISTE MAIS.
    *
    * Proposta existente, do usuário, dentro do prazo, com o hash que a tela devolveu, e uma
-   * aprovação `confirmada`. Sem command, nada executa — e, o que mais importa, NENHUM
-   * `insert` chega a `ai_action_executions`: a vaga não é reservada por uma ação que não
-   * tem como acontecer.
+   * aprovação `confirmada`. O command foi removido do registry desde que a proposta nasceu —
+   * é o que acontece num deploy entre propor e confirmar. Nada executa, e o que mais importa:
+   * NENHUM `insert` chega a `ai_action_executions`. A vaga não é reservada por uma ação que
+   * não tem como acontecer.
    */
   it("recusa a proposta íntegra por COMMAND_DESCONHECIDO, sem reservar vaga", async () => {
     respostas = {
@@ -115,7 +198,7 @@ describe("executarAcaoAprovada — com o registry vazio", () => {
           id: "p-1",
           tool_name: "todo.criar_tarefa",
           tool_version: "1",
-          command: "criarTarefaTodo",
+          command: "commandQueSaiuDoRegistry",
           payload: { titulo: "x" },
           effect_hash: HASH,
           expires_at: VENCE_DEPOIS,
@@ -134,6 +217,44 @@ describe("executarAcaoAprovada — com o registry vazio", () => {
     });
 
     expect(r).toMatchObject({ ok: false, motivo: "COMMAND_DESCONHECIDO" });
+    expect(inserts).toEqual([]);
+  });
+
+  /**
+   * ⛔ E O CASO QUE DÁ NOME À §3.4, agora com um command DE VERDADE no registry.
+   *
+   * Tudo válido — proposta, dono, prazo, confirmação, command existente — e o `effect_hash`
+   * gravado não é o que a previsão produz agora. O executor recalcula, vê a divergência e
+   * recusa **sem reservar vaga e sem chamar `executar`**. É a diferença entre "a proposta é
+   * imutável" e "o efeito dela é garantido": quem muda é o mundo.
+   */
+  it("hash gravado que não bate com o recálculo NÃO executa e NÃO reserva vaga", async () => {
+    respostas = {
+      ai_action_proposals: {
+        data: {
+          id: "p-1",
+          tool_name: "todo.criar_tarefa",
+          tool_version: "1",
+          command: "criarTarefaTodo",
+          payload: { titulo: "Comprar pão" },
+          // Um hash sintático válido que não corresponde a previsão nenhuma.
+          effect_hash: HASH,
+          expires_at: VENCE_DEPOIS,
+        },
+        error: null,
+      },
+      ai_action_approvals: { data: { id: "a-1", decision: "confirmada" }, error: null },
+      ai_action_executions: { data: null, error: null },
+    };
+
+    const r = await executarAcaoAprovada({
+      userId: "u-1",
+      proposalId: "p-1",
+      hashDaTela: HASH,
+      agora: AGORA,
+    });
+
+    expect(r).toMatchObject({ ok: false, motivo: "EFEITO_MUDOU" });
     expect(inserts).toEqual([]);
   });
 

@@ -249,6 +249,57 @@ export async function getCreditCards(): Promise<CreditCardRow[]> {
   return (data ?? []) as CreditCardRow[];
 }
 
+/**
+ * A fatura de um cartão numa competência — ou `null` quando ela ainda não existe.
+ *
+ * ⚠️ 18-C · Bloco 4 — "ainda não existe" é uma resposta legítima e importante: a fatura só é
+ * criada quando o primeiro lançamento cai nela. Quem pergunta (a previsão do command) precisa
+ * distinguir "não existe, logo está aberta" de "existe e está paga".
+ */
+export async function getStatementByCompetencia(
+  cardId: string,
+  competencia: string,
+): Promise<{ data_fechamento: string; data_vencimento: string; pago_em: string | null } | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("card_statements")
+    .select("data_fechamento, data_vencimento, pago_em")
+    .eq("card_id", cardId)
+    .eq("competencia", competencia)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/** Os dias de fechamento e vencimento de um cartão — o que `resolverFatura` precisa. */
+export async function getCardBillingDays(
+  cardId: string,
+): Promise<{ dia_fechamento: number; dia_vencimento: number } | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("credit_cards")
+    .select("dia_fechamento, dia_vencimento")
+    .eq("id", cardId)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/** Uma transação pelo id, com o mínimo para identificá-la numa tela de confirmação. */
+export async function getTransactionById(id: string): Promise<{
+  id: string;
+  description: string | null;
+  amount: number;
+  type: string;
+  transfer_group_id: string | null;
+} | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("transactions")
+    .select("id, description, amount, type, transfer_group_id")
+    .eq("id", id)
+    .maybeSingle();
+  return data ?? null;
+}
+
 export type StatementFilters = {
   cardId?: string;
   month?: string; // 'yyyy-MM' (filtra pela competência)

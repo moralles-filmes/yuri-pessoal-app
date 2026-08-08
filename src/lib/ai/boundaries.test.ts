@@ -200,13 +200,19 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
    * `core/` passaria por tudo: escrita sem confirmação, sem `requiresConfirmation`, sem
    * Approval Engine e sem linha em `ai_tool_calls`.
    *
-   * ⚠️ NOTA PARA O BLOCO 4: os commands vão precisar dos serviços de domínio — é a regra
-   * "nenhuma regra de negócio é reescrita". Isso exige uma SEGUNDA porta declarada aqui
-   * (`approval/commands/`), do mesmo jeito que `tools/adapters/` foi declarada na 18-B.
-   * Abrir a porta é uma decisão; APAGAR ESTE TESTE não é a mesma coisa, e é o atalho que
-   * alguém com pressa vai considerar.
+   * ⚠️ **BLOCO 4 — A SEGUNDA PORTA FOI ABERTA, E A NOTA FICA COMO REGISTRO.**
+   *
+   * Os commands precisam dos serviços de domínio: é a regra "nenhuma regra de negócio é
+   * reescrita". A decisão que a nota antecipava foi tomada — `approval/commands/` entrou na
+   * lista, como `tools/adapters/` entrou na 18-B. O teste não foi apagado; ele passou a
+   * nomear DUAS exceções, e nenhuma terceira.
+   *
+   * ⛔ `@/lib/actions/` CONTINUA FECHADO PARA AS DUAS PORTAS, e isso é deliberado: uma
+   * Server Action carrega `revalidatePath` dentro, e um command que revalidasse estaria
+   * preso ao Next, fora de teste, e furando a regra de que a invalidação mora na casca.
+   * Command chama SERVIÇO (`@/lib/todo/services`), nunca action.
    */
-  it("query e action de módulo só são importadas por tools/adapters/ — a única porta", () => {
+  it("query e action de módulo só entram pelas DUAS portas declaradas", () => {
     const modulos = [
       "actions",
       "finance",
@@ -223,22 +229,102 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
       "import",
     ];
     const adapters = path.join(RAIZ, "tools", "adapters");
+    const commands = path.join(RAIZ, "approval", "commands");
     const violacoes: string[] = [];
 
     for (const arquivo of listarArquivos(RAIZ)) {
       if (arquivo.endsWith(".test.ts")) continue;
-      if (arquivo.startsWith(adapters)) continue;
+      const naPorta = arquivo.startsWith(adapters) || arquivo.startsWith(commands);
       const codigo = fs.readFileSync(arquivo, "utf8");
       for (const spec of especificadores(codigo)) {
         for (const modulo of modulos) {
-          if (spec.startsWith(`@/lib/${modulo}/`)) {
-            violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
-          }
+          if (!spec.startsWith(`@/lib/${modulo}/`)) continue;
+          // `@/lib/actions/` é fechado até para as portas — ver o docblock.
+          if (naPorta && modulo !== "actions") continue;
+          violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
         }
       }
     }
 
     expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 18-C · BLOCO 4 — O RUN NÃO ALCANÇA UMA FUNÇÃO QUE ESCREVE. TRANSITIVAMENTE.         ║
+   * ║                                                                                     ║
+   * ║ O Bloco 3 provou que o laço não importa `approval/execute.ts`. O Bloco 4 quase       ║
+   * ║ desfez isso sem querer: propor exige `parse` e `prever`, que moram no command — e    ║
+   * ║ importar o objeto `Command` inteiro faria o Tool Executor passar a SEGURAR           ║
+   * ║ `executar`. Nada o chamaria, mas a garantia teria caído de "não alcança" para        ║
+   * ║ "não chama".                                                                         ║
+   * ║                                                                                     ║
+   * ║ Por isso cada command é partido: `<modulo>-preview.ts` (só lê) e `<modulo>.ts` (a    ║
+   * ║ metade que escreve). O executor importa `commands/previews`, e o teste abaixo é o    ║
+   * ║ que mantém assim.                                                                    ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("tools/ só alcança commands/previews — nunca o registry com `executar`", () => {
+    const violacoes: string[] = [];
+
+    for (const arquivo of listarArquivos(path.join(RAIZ, "tools"))) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      for (const spec of especificadores(codigo)) {
+        if (!spec.includes("approval/commands")) continue;
+        if (spec.endsWith("approval/commands/previews")) continue;
+        violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
+      }
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * A outra metade da mesma trava: a pasta que o run ALCANÇA não pode importar um serviço de
+   * escrita. Sem isto, bastaria `previews.ts` (ou um `*-preview.ts`) puxar `todo/services` e
+   * a partição viraria decoração — os arquivos continuariam dois, e o grafo de imports, um.
+   */
+  it("o lado PREVIEW dos commands não importa serviço de escrita", () => {
+    const commands = path.join(RAIZ, "approval", "commands");
+    const violacoes: string[] = [];
+
+    for (const arquivo of listarArquivos(commands)) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const base = path.basename(arquivo);
+      const ehLadoLeitura = base === "previews.ts" || base.endsWith("-preview.ts");
+      if (!ehLadoLeitura) continue;
+
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      for (const spec of especificadores(codigo)) {
+        if (/@\/lib\/[a-z-]+\/services$/.test(spec) || spec.includes("/services/")) {
+          violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
+        }
+      }
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * ⛔ `executar` É CHAMADO EM UM LUGAR SÓ.
+   *
+   * Os dois testes acima cuidam do grafo de imports; este cuida do que sobra: alguém escrever
+   * `command.executar(...)` num arquivo que já tenha o command na mão por outro motivo. É
+   * varredura léxica, é fraca, e é a terceira camada — não a única.
+   */
+  it("`.executar(` só aparece em approval/execute.ts", () => {
+    const chamadas: string[] = [];
+
+    for (const arquivo of listarArquivos(SRC)) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
+      if (/\.executar\s*\(/.test(codigo)) {
+        chamadas.push(path.relative(SRC, arquivo).replace(/\\/g, "/"));
+      }
+    }
+
+    expect(chamadas).toEqual(["lib/ai/approval/execute.ts"]);
   });
 
   /**
@@ -374,9 +460,18 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
    */
   it("em approval/, quem fala com o banco importa server-only e quem é puro não", () => {
     const errados: string[] = [];
+    const commands = path.join(RAIZ, "approval", "commands");
 
     for (const arquivo of listarArquivos(path.join(RAIZ, "approval"))) {
       if (arquivo.endsWith(".test.ts")) continue;
+      /**
+       * `commands/` é exceção DECLARADA, e por um motivo diferente do de `state.ts`: os
+       * commands não abrem client nenhum (quem faz isso são as queries e os serviços do
+       * módulo, que já são `server-only`), mas alcançam código de servidor por import. Eles
+       * declaram `server-only` porque PRECISAM — a regra deles é a do bloco abaixo: todos
+       * declaram, sem exceção.
+       */
+      if (arquivo.startsWith(commands)) continue;
       const codigo = fs.readFileSync(arquivo, "utf8");
       const fazIO = /@\/lib\/supabase\/server/.test(codigo);
       const declara = /import\s+["']server-only["']/.test(codigo);
@@ -388,6 +483,25 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
     }
 
     expect(errados).toEqual([]);
+  });
+
+  /**
+   * Todo arquivo de `approval/commands/` alcança serviço ou query de módulo, que são
+   * `server-only`. Sem a marca, um import descuidado a partir de um componente client daria
+   * erro só no build — e depois de o bundle já ter sido montado com o cliente do Supabase.
+   */
+  it("todo arquivo de approval/commands/ importa `server-only`", () => {
+    const semGuarda: string[] = [];
+
+    for (const arquivo of listarArquivos(path.join(RAIZ, "approval", "commands"))) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      if (!/import\s+["']server-only["']/.test(codigo)) {
+        semGuarda.push(path.relative(SRC, arquivo));
+      }
+    }
+
+    expect(semGuarda).toEqual([]);
   });
 
   it("audit.ts é a exceção DECLARADA — e não escreve em tabela de módulo do usuário", () => {

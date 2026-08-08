@@ -46,6 +46,7 @@ import {
   SourceChipsAoVivo,
   type FerramentaAoVivo,
 } from "@/components/ai/source-chips";
+import { ProposalCard, type PropostaNaTela } from "@/components/ai/proposal-card";
 import type { ConversationMessage, MessageRunInfo } from "@/lib/ai/types";
 
 type Evento =
@@ -66,6 +67,13 @@ type Evento =
    * usuário passando despercebida é exatamente o oposto do que a subfase promete.
    */
   | { type: "tool"; toolName: string; status: ToolCallStatus; registros: number }
+  /**
+   * 18-C — uma ALTERAÇÃO foi preparada e aguarda a decisão do dono. Nada foi escrito.
+   *
+   * É o único evento que traz o `effect_hash`, e ele não passa pelo modelo em momento nenhum:
+   * o hash é a prova de que a confirmação vale para a previsão que está desenhada na tela.
+   */
+  | { type: "proposta"; proposta: PropostaNaTela }
   | { type: "done"; finishReason: string; provider: AiProviderId; model: string }
   | { type: "error"; code: string; message: string; retryAfterSeconds?: number };
 
@@ -85,6 +93,15 @@ type Bolha = {
    * presenciou nesta sessão.
    */
   ferramentas?: FerramentaAoVivo[];
+  /**
+   * As alterações que ESTA resposta preparou e que aguardam decisão (18-C).
+   *
+   * ⚠️ LIMITE DECLARADO: elas vivem só nesta sessão de tela, como os chips ao vivo. O que
+   * sobrevive ao recarregamento é a linha em `ai_action_proposals` — e a tela que a lê é a
+   * do Bloco 5. Recarregar agora esconde o cartão; a proposta continua lá, válida pelos 10
+   * minutos dela, e nada foi aplicado. O cartão sumir NÃO executa e NÃO cancela.
+   */
+  propostas?: PropostaNaTela[];
   /**
    * A rota enviada como contexto NESTE envio. É o que a tela sabe: que MANDOU o contexto —
    * quem decide se ele foi usado é o servidor. Por isso o selo diz "enviada com", não "usou".
@@ -274,6 +291,22 @@ export function ChatClient({
                     model: e.model,
                     content: "",
                     ferramentas: [],
+                    /**
+                     * ⛔ AS PROPOSTAS CAEM JUNTO, E ESTA É A LINHA MAIS IMPORTANTE DO BLOCO.
+                     *
+                     * O laço recomeça do passo 0 a cada tentativa: a ferramenta de escrita
+                     * roda de novo e grava uma SEGUNDA linha em `ai_action_proposals`, com
+                     * outro id e outro hash. Mantendo o cartão anterior, o dono veria dois
+                     * cartões propondo a mesma coisa — e confirmar os dois criaria DUAS
+                     * tarefas. A aprovação de uso único não impede isso: são propostas
+                     * distintas, cada uma com a sua aprovação, e o banco está certo em
+                     * aceitar as duas.
+                     *
+                     * A proposta órfã não é cancelada nem executada: ela expira sozinha em 10
+                     * minutos sem ter tocado em nada. Perder um cartão de tela é o erro
+                     * barato; lançar duas vezes é o caro, e é o bug que este projeto já teve.
+                     */
+                    propostas: [],
                   }
                 : b,
             ),
@@ -293,6 +326,14 @@ export function ChatClient({
                       },
                     ],
                   }
+                : b,
+            ),
+          ),
+        onProposta: (e) =>
+          setBolhas((atual) =>
+            atual.map((b, i) =>
+              i === atual.length - 1
+                ? { ...b, propostas: [...(b.propostas ?? []), e.proposta] }
                 : b,
             ),
           ),
@@ -447,6 +488,15 @@ export function ChatClient({
                     emAndamento={b.status === "streaming"}
                   />
                 ))}
+
+              {/*
+                O QUE AGUARDA A SUA DECISÃO. Fica depois da resposta e dos chips de propósito:
+                o dono lê o que o assistente diz, vê de onde veio, e só então decide.
+              */}
+              {b.role === "assistant" &&
+                (b.propostas ?? []).map((p) => (
+                  <ProposalCard key={p.id} proposta={p} />
+                ))}
             </div>
           </div>
         ))}
@@ -584,6 +634,7 @@ async function consumirSse(
     onDelta: (texto: string) => void;
     onSwitch: (e: Extract<Evento, { type: "switch" }>) => void;
     onTool: (e: Extract<Evento, { type: "tool" }>) => void;
+    onProposta: (e: Extract<Evento, { type: "proposta" }>) => void;
     onDone: (e: Extract<Evento, { type: "done" }>) => void;
     onError: (e: Extract<Evento, { type: "error" }>) => void;
   },
@@ -626,6 +677,9 @@ async function consumirSse(
           break;
         case "tool":
           handlers.onTool(evento);
+          break;
+        case "proposta":
+          handlers.onProposta(evento);
           break;
         case "done":
           handlers.onDone(evento);

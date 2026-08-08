@@ -15,24 +15,22 @@ import "server-only";
  * ║ esquece.                                                                               ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
- * ⚠️ O REGISTRY DE COMMANDS NASCE VAZIO, exatamente como o Tool Registry nasceu na 18-A.
- *    O motor inteiro existe, é testável e não pode executar nada: `admitirExecucao` recusa
- *    todo command por `COMMAND_DESCONHECIDO`. Ligar o primeiro é decisão do dono, e é o
- *    Bloco 4.
+ * ⚠️ O REGISTRY DE COMMANDS NASCEU VAZIO no Bloco 3 e DEIXOU DE ESTAR no Bloco 4 — ele mora
+ *    em `commands/index.ts`, e é lá que a decisão de dar um poder novo à IA se toma. Este
+ *    arquivo continua não conhecendo nenhum serviço de domínio: ele orquestra, não escreve.
  */
 
 import { createClient } from "@/lib/supabase/server";
 import { safeLogFields } from "@/lib/ai/security/redact";
 import { aiError } from "@/lib/ai/core/errors";
 import { rotaInternaAceita } from "@/lib/ai/tools/sources";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/supabase";
 import { hashDe } from "./proposals";
+import { ACTION_COMMANDS, findCommand, nomesDeCommands } from "./commands";
 import {
   filtrarCamposTocados,
   isCommandCoherent,
-  type CommandDescriptor,
-  type EfeitoProposto,
+  type Command,
+  type CommandContext,
   type ResultadoDoCommand,
   type ResultadoDoItem,
   type ValorDeCampo,
@@ -46,48 +44,8 @@ import {
   type StatusDaExecucao,
 } from "./state";
 
-export type CommandContext = {
-  readonly supabase: SupabaseClient<Database>;
-  readonly userId: string;
-};
-
-/**
- * Um command é o par {prever, executar} sobre o MESMO serviço de domínio que o formulário
- * usa. As duas metades vivem juntas de propósito:
- *
- * A previsão exibida na tela e o efeito recalculado na execução TÊM de sair do mesmo código.
- * Fossem dois lugares, divergiriam no primeiro campo acrescentado a um deles — e a
- * revalidação passaria a recusar propostas legítimas (ou, na direção pior, a aprovar uma
- * previsão que não é a que o dono leu).
- */
-export type Command = CommandDescriptor & {
-  /** Revalida o payload que voltou do `jsonb`. Zod `.strict()`, como na entrada. */
-  readonly parse: (payload: unknown) => { ok: true; valor: unknown } | { ok: false };
-  readonly prever: (ctx: CommandContext, payload: unknown) => Promise<EfeitoProposto>;
-  readonly executar: (
-    ctx: CommandContext,
-    payload: unknown,
-    idempotencyKey: string,
-  ) => Promise<ResultadoDoCommand>;
-};
-
-/**
- * ⛔ VAZIO NA 18-C · BLOCO 3. Ver o cabeçalho.
- *
- * Nenhum nome aqui significa: nenhuma ferramenta de escrita pode ser coerente (o descriptor
- * exige `command`), nenhuma proposta pode ser admitida, e este arquivo não tem caminho até
- * nenhum serviço de domínio. O Bloco 4 acrescenta um de cada vez, em ordem crescente de
- * risco, com teste de equivalência contra o formulário.
- */
-export const ACTION_COMMANDS: readonly Command[] = [];
-
-export function nomesDeCommands(): readonly string[] {
-  return ACTION_COMMANDS.map((c) => c.name);
-}
-
-export function findCommand(name: string): Command | null {
-  return ACTION_COMMANDS.find((c) => c.name === name) ?? null;
-}
+export type { Command, CommandContext };
+export { ACTION_COMMANDS, findCommand, nomesDeCommands };
 
 /** Um command incoerente é tratado como inexistente — nunca executado "mesmo assim". */
 export function commandExecutavel(name: string): Command | null {

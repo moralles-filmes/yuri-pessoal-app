@@ -29,6 +29,10 @@ import { NUTRITION_BASE_PATH } from "@/lib/nutrition/constants";
 import { getFoodSnapshotInput } from "@/lib/nutrition/diary-queries";
 import { snapshotColumns } from "@/lib/nutrition/entry-columns";
 import { buildDiaryEntrySnapshot } from "@/lib/nutrition/snapshot";
+import {
+  excluirConsumoDoDiario,
+  registrarConsumoNoDiario,
+} from "@/lib/nutrition/services";
 import { CONVERSION_FAILURE_MESSAGES } from "@/lib/nutrition/units";
 import {
   confirmPlannedMealSchema,
@@ -173,6 +177,12 @@ export async function deleteDiaryMeal(mealId: string): Promise<ActionResult> {
 
 /* ═══════════════════════════ Itens consumidos (SNAPSHOT) ═══════════════════════════ */
 
+/**
+ * ⚠️ 18-C · Bloco 4 — a gravação saiu daqui e virou `nutrition/services.ts`. O que sobrou é a
+ * casca: auth, Zod, serviço e `revalidatePath`. O command `registrarConsumo` chama o MESMO
+ * serviço, então o snapshot da IA nasce idêntico ao do formulário — que é a invariante 27 do
+ * módulo estendida a um terceiro caminho.
+ */
 export async function addDiaryEntry(input: unknown): Promise<ActionResult<{ id: string }>> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
@@ -181,54 +191,19 @@ export async function addDiaryEntry(input: unknown): Promise<ActionResult<{ id: 
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
   const data = parsed.data;
 
-  if (!(await ownsMeal(ctx, data.diary_meal_id))) return dbError("Refeição não encontrada.");
-
-  // O catálogo é lido AQUI, no servidor. Nada de nutriente vindo do navegador.
-  const source = await getFoodSnapshotInput(data.food_id, data.measure_id);
-  if (!source) return dbError("Alimento não encontrado.");
-
-  const built = buildDiaryEntrySnapshot({
-    food: source.food,
-    quantity: data.quantity,
-    measure: source.measure,
+  const r = await registrarConsumoNoDiario(ctx, {
+    diaryMealId: data.diary_meal_id,
+    foodId: data.food_id,
+    quantidade: data.quantity,
+    measureId: data.measure_id,
+    plannedItemId: data.planned_item_id,
+    changeKind: data.change_kind,
+    notes: data.notes,
   });
-  // Conversão impossível é erro explícito com a mensagem certa — nunca uma estimativa.
-  if (!built.ok) return dbError(CONVERSION_FAILURE_MESSAGES[built.reason]);
+  if (!r.ok) return dbError(r.erro);
 
-  const { count } = await ctx.supabase
-    .from("nutrition_diary_entries")
-    .select("id", { count: "exact", head: true })
-    .eq("diary_meal_id", data.diary_meal_id);
-
-  const { data: created, error } = await ctx.supabase
-    .from("nutrition_diary_entries")
-    .insert({
-      user_id: ctx.userId,
-      diary_meal_id: data.diary_meal_id,
-      food_id: data.food_id,
-      entry_kind: "alimento",
-      planned_item_id: data.planned_item_id,
-      change_kind: data.change_kind,
-      changed_at: data.planned_item_id ? new Date().toISOString() : null,
-      notes: data.notes,
-      position: count ?? 0,
-      ...snapshotColumns(built.snapshot),
-    })
-    .select("id")
-    .single();
-  if (error || !created) {
-    // O unique parcial (user_id, diary_meal_id, planned_item_id) é o que impede duplicar ao
-    // confirmar a mesma refeição duas vezes.
-    return dbError(
-      error?.code === "23505"
-        ? "Este item do planejamento já foi registrado nesta refeição."
-        : "Não foi possível registrar o consumo.",
-    );
-  }
-
-  await touchFoodUsage(ctx, data.food_id);
   revalidateDiary();
-  return { ok: true, data: { id: created.id } };
+  return { ok: true, data: { id: r.id } };
 }
 
 /**
@@ -337,8 +312,8 @@ export async function deleteDiaryEntry(entryId: string): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { error } = await ctx.supabase.from("nutrition_diary_entries").delete().eq("id", entryId);
-  if (error) return dbError("Não foi possível excluir o item.");
+  const r = await excluirConsumoDoDiario(ctx, entryId);
+  if (!r.ok) return dbError(r.erro);
 
   revalidateDiary();
   return { ok: true, data: undefined };

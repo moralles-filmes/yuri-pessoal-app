@@ -35,6 +35,7 @@ import {
   routeAgent,
 } from "@/lib/ai/agents/routing";
 import type { ToolCallStatus } from "@/lib/ai/tools/audit";
+import type { PropostaParaATela } from "@/lib/ai/tools/executor";
 import { toolDefinitionsFor, UNEXPECTED_TOOL_CALL } from "@/lib/ai/tools/registry";
 import { MAX_TOOL_STEPS } from "@/lib/ai/tools/limits";
 import { textoDasMensagens } from "@/lib/ai/core/text";
@@ -104,6 +105,17 @@ export type ChatRunnerEvent =
       readonly status: ToolCallStatus;
       readonly registros: number;
     }
+  /**
+   * 18-C · Bloco 4 — uma alteração foi PREPARADA e aguarda a confirmação do dono. Nada foi
+   * escrito em módulo nenhum. A tela desenha o cartão com a previsão e os dois botões; quem
+   * executa é uma Server Action, fora deste streaming.
+   *
+   * ⚠️ Cancelar a resposta agora NÃO cancela a proposta: ela é uma linha gravada, com prazo
+   * próprio de 10 minutos. E confirmar depois NÃO depende deste stream estar vivo — é
+   * exatamente essa separação que torna "cancelar o streaming não desfaz ação confirmada"
+   * verdadeiro por construção.
+   */
+  | { readonly type: "proposta"; readonly proposta: PropostaParaATela }
   | {
       readonly type: "done";
       readonly finishReason: string;
@@ -270,7 +282,11 @@ export async function* runChat(
   // ⚠️ As permissões entram AQUI desde a 18-C: um agente pode ter na allowlist ferramentas de
   // módulos com flags diferentes (o de Treinos tem `training` e `body`), e oferecer o que a
   // flag vai recusar queima um passo do laço por pergunta. O guard segue decidindo na execução.
-  const definicoes = toolDefinitionsFor(agent.allowedTools, prefs.permissions);
+  const definicoes = toolDefinitionsFor(
+    agent.allowedTools,
+    prefs.permissions,
+    prefs.writePermissions,
+  );
   const nomesOferecidos = definicoes.map((d) => d.name);
 
   // A estimativa é sobre o prompt JÁ MONTADO, nunca sobre o texto cru do usuário.
@@ -568,6 +584,9 @@ export async function* runChat(
         for await (const evento of runToolLoop({
           ctxBase: {
             runId: run.runId,
+            // A conversa vem de `beginChatRun` (a admissão atômica), nunca do cliente: é ela
+            // que a FK composta de `ai_action_proposals` confere contra o run e o dono.
+            conversationId: run.conversationId,
             userId: input.userId,
             agent: { id: agent.id, allowedTools: agent.allowedTools },
             permissions: prefs.permissions,
@@ -605,6 +624,11 @@ export async function* runChat(
               status: evento.status,
               registros: evento.registros,
             };
+            continue;
+          }
+
+          if (evento.type === "proposta") {
+            yield { type: "proposta", proposta: evento.proposta };
             continue;
           }
 

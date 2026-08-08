@@ -32,9 +32,23 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { AI_PROVIDER_LABEL, type AiProviderId } from "@/lib/ai/core/contracts";
 import { activeModelsFor } from "@/lib/ai/core/models";
-import { AVISO_MOEDA, ROTULO_DA_PERMISSAO } from "@/lib/ai/constants";
-import { TOOL_PERMISSIONS, type ToolPermission } from "@/lib/ai/tools/contracts";
-import { toolsForPermission } from "@/lib/ai/tools/registry";
+import {
+  AVISO_DA_ESCRITA,
+  AVISO_MOEDA,
+  ROTULO_DA_PERMISSAO,
+  ROTULO_DA_PERMISSAO_DE_ESCRITA,
+} from "@/lib/ai/constants";
+import {
+  TOOL_PERMISSIONS,
+  TOOL_WRITE_PERMISSIONS,
+  type ToolPermission,
+  type ToolWritePermission,
+} from "@/lib/ai/tools/contracts";
+import {
+  permissaoDeLeituraDaEscrita,
+  toolsForPermission,
+  toolsForWritePermission,
+} from "@/lib/ai/tools/registry";
 import { saveAiPreferences } from "@/lib/actions/ai-preferences";
 import type { AiPreferencesView, ProviderCardView } from "@/lib/ai/types";
 
@@ -54,6 +68,7 @@ export function AiPreferencesForm({
     // Cópia rasa do que veio do servidor: `getAiPreferences` já garante `false` para chave
     // ausente, nula ou de tipo inesperado. Nada aqui completa buraco por conta própria.
     permissions: { ...prefs.permissions },
+    writePermissions: { ...prefs.writePermissions },
     defaultProvider: prefs.defaultProvider ?? NENHUM,
     defaultModel: prefs.defaultModel ?? NENHUM,
     confirmationMode: prefs.confirmationMode,
@@ -76,6 +91,7 @@ export function AiPreferencesForm({
     setSalvando(true);
     const r = await saveAiPreferences({
       permissions: form.permissions,
+      writePermissions: form.writePermissions,
       defaultProvider: form.defaultProvider === NENHUM ? null : form.defaultProvider,
       defaultModel: form.defaultModel === NENHUM ? null : form.defaultModel,
       confirmationMode: form.confirmationMode,
@@ -160,7 +176,7 @@ export function AiPreferencesForm({
             <p className="text-xs text-muted-foreground">
               O assistente só consulta um módulo se a chave dele estiver ligada aqui. Todas
               nascem desligadas, valem só para <strong>leitura</strong> e podem ser
-              desligadas a qualquer momento — nesta versão a IA não cria nem altera nada.
+              desligadas a qualquer momento. Alterar exige uma segunda chave, logo abaixo.
             </p>
           </div>
 
@@ -174,6 +190,36 @@ export function AiPreferencesForm({
                   setForm((f) => ({
                     ...f,
                     permissions: { ...f.permissions, [chave]: v },
+                  }))
+                }
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* ── Alterações autorizadas (18-C) ─────────────────────────────────────────── */}
+        <div className="space-y-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-medium">Alterações autorizadas</h3>
+            <p className="text-xs text-muted-foreground">{AVISO_DA_ESCRITA}</p>
+          </div>
+
+          <div className="space-y-3">
+            {TOOL_WRITE_PERMISSIONS.map((chave) => (
+              <PermissaoDeEscritaLinha
+                key={chave}
+                chave={chave}
+                ligada={form.writePermissions[chave]}
+                /**
+                 * ⚠️ A chave de escrita depende da de LEITURA — e a tela mostra isso em vez de
+                 * deixar o usuário ligar algo que o guard vai recusar depois. Propor uma
+                 * alteração começa por resolver de qual registro se fala, e isso é ler.
+                 */
+                permissions={form.permissions}
+                onChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    writePermissions: { ...f.writePermissions, [chave]: v },
                   }))
                 }
               />
@@ -372,6 +418,72 @@ function PermissaoLinha({
         onCheckedChange={onChange}
         disabled={!disponivel}
         aria-label={`Autorizar leitura de ${rotulo.titulo}`}
+        className="mt-0.5 shrink-0"
+      />
+    </div>
+  );
+}
+
+/**
+ * Uma autorização de ESCRITA (18-C · Bloco 4).
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ DUAS CONDIÇÕES PARA A CHAVE FICAR CLICÁVEL, E AS DUAS SÃO DERIVADAS.                  ║
+ * ║                                                                                       ║
+ * ║  1. existir ferramenta de escrita do módulo (`toolsForWritePermission`) — senão é      ║
+ * ║     botão fantasma, o mesmo defeito do lado da leitura;                                ║
+ * ║  2. a chave de LEITURA do módulo estar ligada — porque o guard exige as duas, e ligar  ║
+ * ║     só esta descreveria um estado que não existe. A dependência sai do próprio          ║
+ * ║     descriptor (`permissaoDeLeituraDaEscrita`), nunca de uma tabela paralela.           ║
+ * ║                                                                                       ║
+ * ║ Quando falta a leitura, a tela DIZ qual chave ligar antes — desabilitar em silêncio    ║
+ * ║ deixaria a pessoa clicando num controle morto sem saber o que fazer.                    ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+function PermissaoDeEscritaLinha({
+  chave,
+  ligada,
+  permissions,
+  onChange,
+}: {
+  chave: ToolWritePermission;
+  ligada: boolean;
+  permissions: Readonly<Record<ToolPermission, boolean>>;
+  onChange: (valor: boolean) => void;
+}) {
+  const rotulo = ROTULO_DA_PERMISSAO_DE_ESCRITA[chave];
+  const ferramentas = toolsForWritePermission(chave);
+  const leitura = permissaoDeLeituraDaEscrita(chave);
+  const temFerramenta = ferramentas.length > 0;
+  const leituraLigada = leitura !== null && permissions[leitura] === true;
+  const disponivel = temFerramenta && leituraLigada;
+  const id = `pref-${chave}`;
+
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-lg border p-3">
+      <div className="min-w-0 space-y-1">
+        <Label htmlFor={id} className="block">
+          {rotulo.titulo}
+        </Label>
+        <p className="text-xs text-muted-foreground">{rotulo.frase}</p>
+        {!temFerramenta ? (
+          <p className="text-xs text-muted-foreground">
+            Ainda não existe alteração deste módulo nesta versão — a chave se habilita quando
+            a primeira for publicada.
+          </p>
+        ) : !leituraLigada ? (
+          <p className="text-xs text-amber-600 dark:text-amber-500">
+            Ligue antes a leitura de {leitura ? ROTULO_DA_PERMISSAO[leitura].titulo : "—"}:
+            preparar uma alteração começa por consultar o registro.
+          </p>
+        ) : null}
+      </div>
+      <Switch
+        id={id}
+        checked={ligada}
+        onCheckedChange={onChange}
+        disabled={!disponivel}
+        aria-label={`Autorizar alterações em ${rotulo.titulo}`}
         className="mt-0.5 shrink-0"
       />
     </div>

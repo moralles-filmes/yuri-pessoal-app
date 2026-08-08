@@ -87,6 +87,7 @@ function saidaCom(itens: number): ToolOutput {
 
 const ctx = {
   runId: "run-1",
+  conversationId: "conv-1",
   userId: "user-1",
   stepId: "step-1",
   agent: { id: "treinos", allowedTools: ["training.get_volume"] },

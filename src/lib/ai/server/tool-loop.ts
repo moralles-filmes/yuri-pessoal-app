@@ -31,6 +31,7 @@ import {
 } from "@/lib/ai/tools/limits";
 import {
   executeTool,
+  type PropostaParaATela,
   type ToolCallRequest,
   type ToolExecutionContext,
 } from "@/lib/ai/tools/executor";
@@ -56,6 +57,15 @@ export type ToolLoopEvent =
     }
   /** Texto que o USUÁRIO precisa ver junto da resposta. Vai para a mensagem do assistente. */
   | { readonly type: "aviso"; readonly texto: string }
+  /**
+   * 18-C · Bloco 4 — uma ferramenta de ESCRITA preparou uma alteração e parou. NADA foi
+   * escrito no módulo do usuário; o que existe é uma linha em `ai_action_proposals`.
+   *
+   * Este evento é o ÚNICO caminho pelo qual o `effect_hash` chega ao navegador — ele não vai
+   * ao modelo. É a prova de que o dono confirmou a previsão que leu, e o banco a confere pela
+   * FK composta `(proposal_id, user_id, confirmed_hash)`.
+   */
+  | { readonly type: "proposta"; readonly proposta: PropostaParaATela }
   /**
    * O provedor pediu uma ferramenta que NÃO foi oferecida nesta chamada. Não executamos,
    * não interpretamos e não seguimos: quem decide o que fazer é o chat-runner, que encerra
@@ -247,6 +257,10 @@ export async function* runToolLoop(
         status: r.status,
         registros: r.recordsRead,
       };
+      // A proposta sai DEPOIS do evento `tool` da mesma chamada, de propósito: a tela desenha
+      // primeiro "consultado/preparado" e só então o cartão de confirmação, na ordem em que
+      // as coisas aconteceram.
+      if (r.proposta) yield { type: "proposta", proposta: r.proposta };
     }
 
     // O turno do assistente precisa ir junto, com TODAS as tool-calls, senão o provedor

@@ -10,6 +10,7 @@ import "server-only";
  * exatamente o que a subfase existe para impedir.
  */
 
+import { createClient } from "@/lib/supabase/server";
 import { AI_TOOL_REGISTRY } from "./registry";
 import {
   guardToolCall,
@@ -18,6 +19,17 @@ import {
   type ToolRejectionReason,
 } from "./guard";
 import { TOOL_EXECUTORS } from "./executors";
+/**
+ * ⚠️ `commands/previews` E NÃO `commands/index`.
+ *
+ * O primeiro só tem `parse` e `prever`; o segundo tem `executar`. Importar o registry inteiro
+ * aqui faria o laço da conversa passar a SEGURAR a função que escreve — e a garantia da
+ * subfase deixaria de ser "o run não alcança a escrita" para virar "o run não chama a
+ * escrita", que é mais fraco e se esquece. Há teste de fronteira sobre esta linha.
+ */
+import { propostaDaFerramenta } from "@/lib/ai/approval/commands/previews";
+import { criarProposta } from "@/lib/ai/approval/proposals";
+import { EfeitoImpossivel, type EfeitoProposto } from "@/lib/ai/approval/contracts";
 import {
   MAX_UNTRUSTED_CHARS,
   wrapUntrusted,
@@ -39,6 +51,13 @@ export type ToolCallRequest = {
 
 export type ToolExecutionContext = {
   readonly runId: string;
+  /**
+   * 18-C · Bloco 4 — `ai_action_proposals` tem FK COMPOSTA
+   * `(run_id, conversation_id, user_id) → ai_runs`: a proposta não é gravável sem a conversa
+   * certa. Passá-la aqui é o que impede o executor de ter de descobri-la com uma consulta —
+   * e uma consulta a mais seria uma segunda fonte para um fato que quem chama já tem.
+   */
+  readonly conversationId: string;
   readonly userId: string;
   readonly stepId: string;
   readonly agent: { readonly id: string; readonly allowedTools: readonly string[] };
@@ -64,6 +83,28 @@ export type ToolExecution = {
   /** O bloco NÃO CONFIÁVEL que volta ao modelo. Nunca o objeto cru. */
   readonly block: UntrustedBlock;
   readonly recordsRead: number;
+  /**
+   * 18-C · Bloco 4 — a proposta que ESTA chamada gravou, quando a ferramenta é de escrita.
+   *
+   * ⚠️ Ela sobe até a TELA por um caminho diferente do bloco que vai ao modelo, e os dois
+   * conteúdos são diferentes de propósito: o modelo recebe o id e a frase "aguardando
+   * confirmação"; o dono recebe a previsão completa e o `hash`. O hash NUNCA vai ao modelo —
+   * ele é a prova de que o dono confirmou a previsão que LEU, e um modelo que o tivesse
+   * poderia recitá-lo num texto que outra ferramenta lesse depois.
+   */
+  readonly proposta?: PropostaParaATela;
+};
+
+/** O que a tela precisa para desenhar o cartão de confirmação. Nada além disso. */
+export type PropostaParaATela = {
+  readonly id: string;
+  readonly effectHash: string;
+  readonly expiresAt: string;
+  readonly toolName: string;
+  readonly risco: number;
+  readonly resumo: string;
+  readonly linhas: readonly { readonly rotulo: string; readonly valor: string }[];
+  readonly ressalvas: readonly string[];
 };
 
 /**
@@ -122,6 +163,18 @@ function erro(
  * defeito que o orçamento existe para eliminar. Aqui é melhor não entregar nada e DIZER
  * isso do que entregar um objeto cortado ao meio.
  */
+/**
+ * 18-C · Bloco 4 — as duas frases do caminho de escrita que precisam ser DECLARADAS.
+ *
+ * Nos dois casos o mundo do usuário está intacto e a frase diz isso, porque a alternativa
+ * (um "não foi possível" seco) deixaria o modelo livre para supor que talvez tenha sido.
+ */
+const AVISO_SEM_TRILHA_NA_PROPOSTA =
+  "A alteração NÃO foi preparada: não foi possível registrar o pedido na trilha de auditoria, e nenhuma proposta existe sem registro. Nada foi criado nem alterado.";
+
+const AVISO_PROPOSTA_NAO_GRAVADA =
+  "A alteração NÃO foi preparada: a proposta não pôde ser gravada, então não há o que o usuário confirme. Nada foi criado nem alterado.";
+
 const GRANDE_DEMAIS =
   "O resultado é grande demais para ser enviado: nem os totais couberam no limite de tamanho da resposta. Nada foi omitido em silêncio — nenhum número deste resultado chegou até você. Peça um período menor ou um filtro mais específico.";
 
@@ -251,6 +304,11 @@ export async function executeTool(
       // para cá é o que ainda PODE lançar antes da query — `createClient()`, que abre os
       // cookies da requisição. Falha de auditoria não derruba a resposta do usuário, mas
       // também não passa calada: o log sai de `audit.ts`.
+      //
+      // ⚠️ 18-C: o `null` deixou de ser descartável. O caminho de LEITURA ignora o retorno
+      // (a leitura já aconteceu); o de ESCRITA depende dele, porque
+      // `ai_action_proposals.tool_call_id` é NOT NULL — **sem trilha, sem proposta**.
+      return null;
     });
 
   const veredito = guardToolCall({
@@ -284,6 +342,162 @@ export async function executeTool(
   }
 
   const tool = veredito.tool;
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ O RAMO DE ESCRITA. ELE NÃO ESCREVE NO MÓDULO DO USUÁRIO — LEIA DE CIMA PARA BAIXO.  ║
+   * ║                                                                                     ║
+   * ║   1. valida a entrada com o MESMO Zod que o command usará na execução                ║
+   * ║   2. `prever` — resolve as entidades e monta o efeito. Só LÊ.                        ║
+   * ║   3. audita a chamada e EXIGE o id da linha (sem trilha, sem proposta)               ║
+   * ║   4. grava UMA linha em `ai_action_proposals` — tabela do módulo de IA               ║
+   * ║   5. devolve ao modelo o id e "aguardando confirmação"                               ║
+   * ║                                                                                     ║
+   * ║ Nenhum passo toca `todo_tasks`, `transactions` ou qualquer tabela do usuário. Quem   ║
+   * ║ executa é `approval/execute.ts`, a partir de uma Server Action, FORA deste processo. ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  if (tool.kind === "escrita") {
+    const receita = propostaDaFerramenta(tool.name);
+    if (!receita) {
+      // Registry e mapa de propostas fora de sincronia. Há teste de bijeção; chegando aqui em
+      // produção, é rejeição — nunca "propõe assim mesmo".
+      await auditar("rejeitada", "TOOL_UNKNOWN", null, tool.version);
+      return erro(call, "TOOL_UNKNOWN", REJECTION_MESSAGE.TOOL_UNKNOWN);
+    }
+
+    const validada = receita.parse(call.input ?? {});
+    if (!validada.ok) {
+      await auditar("rejeitada", "TOOL_INVALID_INPUT", null, tool.version);
+      return erro(call, "TOOL_INVALID_INPUT", REJECTION_MESSAGE.TOOL_INVALID_INPUT);
+    }
+
+    let efeito: EfeitoProposto;
+    let relogioDaPrevisao: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const supabase = await createClient();
+      efeito = await Promise.race([
+        receita.prever({ supabase, userId: ctx.userId }, validada.valor),
+        new Promise<never>((_, reject) => {
+          relogioDaPrevisao = setTimeout(
+            () => reject(new Error("TOOL_TIMEOUT")),
+            tool.timeoutMs,
+          );
+        }),
+      ]);
+    } catch (e) {
+      /**
+       * `EfeitoImpossivel` não é falha do sistema: é o mundo dizendo que o pedido não faz
+       * sentido (o projeto não existe, a tarefa foi excluída, o nome casa com três coisas).
+       * O motivo em pt-BR volta ao modelo INTEIRO, porque é ele que o dono vai ler na
+       * resposta — e um "não foi possível" genérico deixaria a pessoa sem saber o que corrigir.
+       */
+      if (e instanceof EfeitoImpossivel) {
+        await auditar("falhou", "TOOL_FAILED", null, tool.version);
+        return {
+          callId: call.callId,
+          toolName: call.toolName,
+          isError: true,
+          status: "falhou",
+          block: wrapUntrusted("resultado_de_ferramenta", tool.name, {
+            erro: "EFEITO_IMPOSSIVEL",
+            mensagem: e.motivo,
+            nada_foi_alterado: true,
+          }),
+          recordsRead: 0,
+        };
+      }
+      const timeout = e instanceof Error && e.message === "TOOL_TIMEOUT";
+      await auditar(
+        timeout ? "timeout" : "falhou",
+        timeout ? "TOOL_TIMEOUT" : "TOOL_FAILED",
+        null,
+        tool.version,
+      );
+      return timeout
+        ? erro(call, "TOOL_TIMEOUT", REJECTION_MESSAGE.TOOL_TIMEOUT, "timeout")
+        : erro(call, "TOOL_FAILED", REJECTION_MESSAGE.TOOL_FAILED, "falhou");
+    } finally {
+      if (relogioDaPrevisao) clearTimeout(relogioDaPrevisao);
+    }
+
+    /**
+     * A auditoria vem ANTES da proposta, e o `await` é obrigatório: `tool_call_id` é NOT NULL
+     * com FK composta para `ai_tool_calls`. É a regra "sem trilha, sem leitura" da 18-B
+     * ganhando a metade que faltava — **sem trilha, sem PROPOSTA**.
+     *
+     * `recordsRead` vai `null` de propósito: "quantos registros existem" não quer dizer nada
+     * numa escrita, e zero seria lido como "não encontrou nada".
+     */
+    const toolCallId = await recordToolCall({
+      runId: ctx.runId,
+      userId: ctx.userId,
+      stepId: ctx.stepId,
+      toolName: call.toolName,
+      toolVersion: tool.version,
+      providerCallId: call.callId,
+      argumentos: call.input,
+      status: "executada",
+      rejectionReason: null,
+      recordsRead: null,
+      durationMs: Date.now() - inicio,
+      refs: efeito.entidades,
+    }).catch(() => null);
+
+    if (!toolCallId) {
+      return erro(call, "TOOL_FAILED", AVISO_SEM_TRILHA_NA_PROPOSTA, "falhou");
+    }
+
+    const gravada = await criarProposta({
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      runId: ctx.runId,
+      toolCallId,
+      toolName: tool.name,
+      toolVersion: tool.version,
+      module: tool.module,
+      risk: tool.risk,
+      efeito,
+    });
+
+    if (!gravada) {
+      return erro(call, "TOOL_FAILED", AVISO_PROPOSTA_NAO_GRAVADA, "falhou");
+    }
+
+    return {
+      callId: call.callId,
+      toolName: call.toolName,
+      isError: false,
+      status: "executada",
+      /**
+       * ⚠️ O QUE O MODELO RECEBE É DELIBERADAMENTE POBRE: id, resumo e ressalvas. Sem hash
+       * (é a prova do que o dono LEU) e sem os campos resolvidos em detalhe — o modelo não
+       * precisa deles para dizer "preparei, confirme na tela", e tudo que ele recebe pode
+       * acabar recitado no texto da resposta.
+       */
+      block: wrapUntrusted("resultado_de_ferramenta", tool.name, {
+        proposta_id: gravada.id,
+        situacao: "aguardando_confirmacao_do_usuario",
+        nada_foi_alterado: true,
+        resumo: efeito.previsao.resumo,
+        ressalvas: efeito.previsao.ressalvas,
+        mensagem:
+          "A proposta foi preparada e está na tela do usuário, aguardando a confirmação dele. NADA foi criado ou alterado. Diga isso — não afirme que a ação foi feita.",
+      }),
+      recordsRead: 0,
+      proposta: {
+        id: gravada.id,
+        effectHash: gravada.effectHash,
+        expiresAt: gravada.expiresAt,
+        toolName: tool.name,
+        risco: tool.risk,
+        resumo: efeito.previsao.resumo,
+        linhas: efeito.previsao.linhas,
+        ressalvas: efeito.previsao.ressalvas,
+      },
+    };
+  }
+
   const entrada = TOOL_EXECUTORS[tool.name];
   if (!entrada) {
     // Registry e executores fora de sincronia. Há teste para isso; se chegar aqui em

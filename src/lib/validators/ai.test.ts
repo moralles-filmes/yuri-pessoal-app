@@ -15,12 +15,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { AI_TOOL_REGISTRY } from "@/lib/ai/tools/registry";
 import { ROTULO_DA_ROTA_DE_CONTEXTO } from "@/lib/ai/constants";
-import { TOOL_PERMISSIONS } from "@/lib/ai/tools/contracts";
+import { TOOL_PERMISSIONS, TOOL_WRITE_PERMISSIONS } from "@/lib/ai/tools/contracts";
 import {
   aiCredentialSchema,
   aiPermissionsSchema,
   aiPreferencesSchema,
   aiProviderConfigSchema,
+  aiWritePermissionsSchema,
   chatRequestSchema,
   contextoDaRota,
   MAX_CHAT_TEXT,
@@ -445,6 +446,7 @@ describe("aceitar a própria saída (round-trip)", () => {
   it("aiPreferencesSchema", () => {
     const entrada = {
       permissions: Object.fromEntries(TOOL_PERMISSIONS.map((p) => [p, false])),
+      writePermissions: Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((p) => [p, false])),
       defaultProvider: undefined,
       defaultModel: "",
       confirmationMode: "seguro",
@@ -554,6 +556,82 @@ describe("18-B — aiPermissionsSchema", () => {
     );
     for (const p of TOOL_PERMISSIONS) {
       expect(fonte, p).toContain(`${p}: dados.permissions.${p},`);
+    }
+  });
+});
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ 18-C · Bloco 4 — `aiWritePermissionsSchema`. As mesmas regras, e uma a mais.          ║
+ * ║                                                                                       ║
+ * ║ A que se acrescenta é a que vale o teste: **escrita sem a leitura do mesmo módulo é    ║
+ * ║ derrubada na ACTION, não só desabilitada na tela.** Um POST montado à mão gravaria     ║
+ * ║ `allow_write_todo = true` com `allow_todo = false` — estado que o guard recusa na      ║
+ * ║ execução, mas que a tela de preferências passaria a exibir como "autorizado". Estado   ║
+ * ║ impossível gravado é pior que estado impossível recusado.                              ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("18-C — aiWritePermissionsSchema", () => {
+  const TODAS_DESLIGADAS = Object.fromEntries(
+    TOOL_WRITE_PERMISSIONS.map((p) => [p, false]),
+  ) as Record<string, boolean>;
+
+  it("chave FALTANDO é erro — não vira `false` por omissão", () => {
+    for (const ausente of TOOL_WRITE_PERMISSIONS) {
+      const parcial = { ...TODAS_DESLIGADAS };
+      delete parcial[ausente];
+      expect(aiWritePermissionsSchema.safeParse(parcial).success, ausente).toBe(false);
+    }
+  });
+
+  it("chave a mais é erro, e uma chave de LEITURA aqui também é", () => {
+    expect(
+      aiWritePermissionsSchema.safeParse({ ...TODAS_DESLIGADAS, allow_write_inventada: true })
+        .success,
+    ).toBe(false);
+    // Misturar os dois objetos apagaria a fronteira entre as duas decisões.
+    expect(
+      aiWritePermissionsSchema.safeParse({ ...TODAS_DESLIGADAS, allow_todo: true }).success,
+    ).toBe(false);
+  });
+
+  it("valor não booleano NÃO é coagido", () => {
+    for (const valor of ["true", "false", 1, 0, null]) {
+      const r = aiWritePermissionsSchema.safeParse({
+        ...TODAS_DESLIGADAS,
+        allow_write_todo: valor,
+      });
+      expect(r.success, String(valor)).toBe(false);
+    }
+  });
+
+  it("a mensagem de erro sai em pt-BR e fala de ALTERAÇÃO", () => {
+    const r = aiWritePermissionsSchema.safeParse({
+      ...TODAS_DESLIGADAS,
+      allow_write_todo: "sim",
+    });
+    expect(r.success).toBe(false);
+    if (r.success) return;
+    expect(r.error.issues[0]?.message).toBe("Autorização de alteração inválida.");
+  });
+
+  /**
+   * ⛔ A TRAVA QUE O `tsc` NÃO PEGA, e a razão de ela ser varrida no código-fonte: cada chave
+   * de escrita tem de chegar ao `upsert` **conjugada com a leitura do módulo**. Um
+   * `allow_write_todo: dados.writePermissions.allow_write_todo` sozinho compilaria, passaria
+   * em todo teste de tipo, e gravaria o estado impossível.
+   */
+  it("toda chave de escrita chega ao `upsert` conjugada com a leitura do módulo", () => {
+    const fonte = readFileSync(
+      path.join(process.cwd(), "src", "lib", "actions", "ai-preferences.ts"),
+      "utf8",
+    ).replace(/\s+/g, " ");
+
+    for (const p of TOOL_WRITE_PERMISSIONS) {
+      const leitura = p.replace("allow_write_", "allow_");
+      expect(fonte, p).toContain(
+        `${p}: dados.writePermissions.${p} && dados.permissions.${leitura},`,
+      );
     }
   });
 });

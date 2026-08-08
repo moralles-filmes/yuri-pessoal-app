@@ -18,9 +18,28 @@ import {
   todoTaskSchema,
 } from "@/lib/validators/todo";
 import { hojeISO } from "@/lib/format";
-import { addDaysIso, materializeNext } from "@/lib/todo/recurrence";
+import { addDaysIso } from "@/lib/todo/recurrence";
 import { logActivity, logActivityBulk, pick } from "@/lib/todo/activity";
 import { removeTaskFromGoogle, syncTaskToGoogle } from "@/lib/todo/calendar-sync";
+/**
+ * ⚠️ 18-C · Bloco 4 — O MIOLO DAS ESCRITAS QUE A IA ALCANÇA MORA EM `todo/services.ts`.
+ *
+ * Esta action passou a ser casca: `authContext` + Zod + serviço + `revalidatePath`. O command
+ * `criarTarefaTodo` chama exatamente o mesmo serviço, sem a casca — é o que faz "nenhuma
+ * regra de negócio é reescrita" ser um fato do código, e não uma promessa. Mexer na regra
+ * aqui em cima do serviço (em vez de dentro dele) reabre a divergência que a extração fechou.
+ */
+import {
+  buildRecurrenceRow,
+  carregarTarefaComRegra,
+  concluirTarefaNoTodo,
+  criarTarefaNoTodo,
+  nextPosition,
+  reabrirTarefaNoTodo,
+  reagendarTarefaNoTodo,
+  syncLabels,
+  syncRecurrence,
+} from "@/lib/todo/services";
 import type { ActionResult } from "@/types/finance";
 import type { TodoSeriesScope } from "@/lib/todo/constants";
 
@@ -32,153 +51,6 @@ function revalidateTodo() {
   revalidatePath("/dashboard");
 }
 
-/* ───────────────────────────── Helpers internos ───────────────────────────── */
-
-type Ctx = NonNullable<Awaited<ReturnType<typeof authContext>>>;
-
-/** Próxima `position` livre dentro do escopo (fim da lista). */
-async function nextPosition(
-  ctx: Ctx,
-  projectId: string | null,
-  sectionId: string | null,
-): Promise<number> {
-  let query = ctx.supabase
-    .from("todo_tasks")
-    .select("position")
-    .order("position", { ascending: false })
-    .limit(1);
-
-  query = projectId ? query.eq("project_id", projectId) : query.is("project_id", null);
-  query = sectionId ? query.eq("section_id", sectionId) : query.is("section_id", null);
-
-  const { data } = await query.maybeSingle();
-  return (data?.position ?? -1) + 1;
-}
-
-/** Reescreve as etiquetas de uma tarefa (remove as que saíram, insere as que entraram). */
-async function syncLabels(ctx: Ctx, taskId: string, labelIds: string[]) {
-  const { data: current } = await ctx.supabase
-    .from("todo_task_labels")
-    .select("label_id")
-    .eq("task_id", taskId);
-
-  const currentIds = new Set((current ?? []).map((r) => r.label_id));
-  const nextIds = new Set(labelIds);
-
-  const toRemove = [...currentIds].filter((id) => !nextIds.has(id));
-  const toAdd = [...nextIds].filter((id) => !currentIds.has(id));
-
-  if (toRemove.length) {
-    await ctx.supabase
-      .from("todo_task_labels")
-      .delete()
-      .eq("task_id", taskId)
-      .in("label_id", toRemove);
-  }
-  if (toAdd.length) {
-    await ctx.supabase.from("todo_task_labels").insert(
-      toAdd.map((labelId) => ({ task_id: taskId, label_id: labelId, user_id: ctx.userId })),
-    );
-  }
-}
-
-/** Colunas de `todo_recurrences` gravadas a partir do formulário. */
-type RecurrenceRow = {
-  frequency: string;
-  interval_count: number;
-  days_of_week: number[] | null;
-  day_of_month: number | null;
-  month_of_year: number | null;
-  week_of_month: number | null;
-  business_day_rule: string | null;
-  recurrence_mode: string;
-  starts_on: string | null;
-  ends_on: string | null;
-  max_occurrences: number | null;
-  is_paused: boolean;
-};
-
-/** Cria/atualiza/remove a recorrência 1:1 da tarefa. */
-async function syncRecurrence(ctx: Ctx, taskId: string, rule: RecurrenceRow | null) {
-  if (!rule) {
-    await ctx.supabase.from("todo_recurrences").delete().eq("task_id", taskId);
-    return;
-  }
-  // `upsert` pela unique (task_id) mantém `occurrences_created` sob controle da action
-  // de conclusão — aqui só a REGRA muda.
-  await ctx.supabase
-    .from("todo_recurrences")
-    .upsert({ ...rule, task_id: taskId, user_id: ctx.userId }, { onConflict: "task_id" });
-}
-
-/** Recorrência já validada pelo Zod (shape de `todoRecurrenceSchema`). */
-type ParsedRecurrence = NonNullable<TodoTaskParsed["recurrence"]>;
-type TodoTaskParsed = ReturnType<typeof todoTaskSchema.parse>;
-
-/** Converte a recorrência validada nas colunas da tabela. */
-function buildRecurrenceRow(recurrence: ParsedRecurrence | null): RecurrenceRow | null {
-  if (!recurrence) return null;
-  return {
-    frequency: recurrence.frequency,
-    interval_count: recurrence.interval_count,
-    days_of_week: recurrence.days_of_week,
-    day_of_month: recurrence.day_of_month,
-    month_of_year: recurrence.month_of_year,
-    week_of_month: recurrence.week_of_month,
-    business_day_rule: recurrence.business_day_rule,
-    recurrence_mode: recurrence.recurrence_mode,
-    starts_on: recurrence.starts_on,
-    ends_on: recurrence.ends_on,
-    max_occurrences: recurrence.max_occurrences,
-    is_paused: recurrence.is_paused,
-  };
-}
-
-/** Linha crua de `todo_recurrences` como o embed a devolve. */
-type RawRecurrenceRow = RecurrenceRow & { id: string; occurrences_created: number };
-
-/** Carrega a tarefa + regra de recorrência (já no formato do módulo puro). */
-async function loadTaskWithRule(ctx: Ctx, taskId: string) {
-  const { data } = await ctx.supabase
-    .from("todo_tasks")
-    .select(
-      `id, title, status, scheduled_date, deadline_at, project_id, section_id,
-       parent_task_id, priority, position, completed_at, series_id,
-       recurrence:todo_recurrences(*)`,
-    )
-    .eq("id", taskId)
-    .maybeSingle();
-
-  if (!data) return null;
-
-  const embed = (data as { recurrence?: RawRecurrenceRow | RawRecurrenceRow[] | null })
-    .recurrence;
-  const raw = (Array.isArray(embed) ? embed[0] : embed) ?? null;
-
-  const rule = raw
-    ? {
-        frequency: raw.frequency as "diaria" | "semanal" | "mensal" | "anual",
-        intervalCount: raw.interval_count,
-        daysOfWeek: raw.days_of_week,
-        dayOfMonth: raw.day_of_month,
-        monthOfYear: raw.month_of_year,
-        weekOfMonth: raw.week_of_month,
-        businessDayRule: raw.business_day_rule as
-          | "primeiro_dia_util"
-          | "ultimo_dia_util"
-          | "apenas_dias_uteis"
-          | null,
-        mode: raw.recurrence_mode as "fixo" | "apos_conclusao",
-        startsOn: raw.starts_on,
-        endsOn: raw.ends_on,
-        maxOccurrences: raw.max_occurrences,
-        occurrencesCreated: raw.occurrences_created,
-        isPaused: raw.is_paused,
-      }
-    : null;
-
-  return { task: data, rule, recurrenceId: raw?.id };
-}
 
 /* ───────────────────────────── Criação ───────────────────────────── */
 
@@ -191,39 +63,12 @@ export async function createTodoTask(
 
   const parsed = todoQuickTaskSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
-  const d = parsed.data;
 
-  const position = await nextPosition(ctx, d.project_id, d.section_id);
+  const resultado = await criarTarefaNoTodo(ctx, parsed.data);
+  if (!resultado.ok) return dbError(resultado.erro);
 
-  const { data, error } = await ctx.supabase
-    .from("todo_tasks")
-    .insert({
-      user_id: ctx.userId,
-      title: d.title,
-      project_id: d.project_id,
-      section_id: d.section_id,
-      parent_task_id: d.parent_task_id,
-      scheduled_date: d.scheduled_date,
-      scheduled_time: d.scheduled_time,
-      deadline_at: d.deadline_at,
-      is_all_day: !d.scheduled_time,
-      priority: d.priority,
-      position,
-      source: "manual",
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) return dbError("Não foi possível criar a tarefa.");
-
-  if (d.label_ids.length) await syncLabels(ctx, data.id, d.label_ids);
-  const rule = buildRecurrenceRow(d.recurrence);
-  if (rule) await syncRecurrence(ctx, data.id, rule);
-
-  await logActivity(ctx.supabase, ctx.userId, data.id, "criada", null, { title: d.title });
-  await syncTaskToGoogle(ctx, data.id);
   revalidateTodo();
-  return { ok: true, data: { id: data.id } };
+  return { ok: true, data: { id: resultado.id } };
 }
 
 /* ───────────────────────────── Atualização ───────────────────────────── */
@@ -324,82 +169,11 @@ export async function completeTodoTask(
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const loaded = await loadTaskWithRule(ctx, id);
-  if (!loaded) return dbError("Tarefa não encontrada.");
-  const { task, rule } = loaded;
+  const r = await concluirTarefaNoTodo(ctx, id, hojeISO(), { cascade, source });
+  if (!r.ok) return dbError(r.erro);
 
-  const today = hojeISO();
-  const scheduledFor = task.scheduled_date ?? today;
-
-  // Idempotência: a unique key rejeita a segunda conclusão da mesma ocorrência.
-  await ctx.supabase
-    .from("todo_completions")
-    .upsert(
-      {
-        user_id: ctx.userId,
-        task_id: id,
-        scheduled_for: scheduledFor,
-        completion_source: source,
-      },
-      { onConflict: "user_id,task_id,scheduled_for", ignoreDuplicates: true },
-    );
-
-  if (cascade) {
-    await ctx.supabase
-      .from("todo_tasks")
-      .update({ status: "concluida", completed_at: new Date().toISOString() })
-      .eq("parent_task_id", id)
-      .in("status", ["pendente", "em_andamento"]);
-  }
-
-  // Recorrente e ativa → avança para a próxima ocorrência.
-  if (rule && !rule.isPaused) {
-    const next = materializeNext(
-      rule,
-      { scheduledDate: task.scheduled_date, deadlineAt: task.deadline_at },
-      today,
-    );
-
-    if (next) {
-      const { error } = await ctx.supabase
-        .from("todo_tasks")
-        .update({
-          scheduled_date: next.scheduledDate,
-          deadline_at: next.deadlineAt,
-          status: "pendente",
-          completed_at: null,
-        })
-        .eq("id", id);
-      if (error) return dbError("Não foi possível avançar a recorrência.");
-
-      await ctx.supabase
-        .from("todo_recurrences")
-        .update({ occurrences_created: (rule.occurrencesCreated ?? 0) + 1 })
-        .eq("task_id", id);
-
-      await logActivity(ctx.supabase, ctx.userId, id, "concluida", null, {
-        scheduled_for: scheduledFor,
-        next: next.scheduledDate,
-      });
-      // A linha avançou para a próxima ocorrência: move o MESMO evento no Google.
-      await syncTaskToGoogle(ctx, id);
-      revalidateTodo();
-      return { ok: true, data: { recurred: true, nextDate: next.scheduledDate } };
-    }
-    // Série encerrada (passou de `until`/`max_occurrences`) → conclui de vez.
-  }
-
-  const { error } = await ctx.supabase
-    .from("todo_tasks")
-    .update({ status: "concluida", completed_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) return dbError("Não foi possível concluir a tarefa.");
-
-  await logActivity(ctx.supabase, ctx.userId, id, "concluida", null, {
-    scheduled_for: scheduledFor,
-  });
   revalidateTodo();
-  return { ok: true, data: { recurred: false, nextDate: null } };
+  return { ok: true, data: { recurred: r.recurred, nextDate: r.nextDate } };
 }
 
 /**
@@ -413,57 +187,9 @@ export async function reopenTodoTask(id: string): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const loaded = await loadTaskWithRule(ctx, id);
-  if (!loaded) return dbError("Tarefa não encontrada.");
-  const { rule } = loaded;
+  const r = await reabrirTarefaNoTodo(ctx, id);
+  if (!r.ok) return dbError(r.erro);
 
-  if (rule) {
-    const { data: last } = await ctx.supabase
-      .from("todo_completions")
-      .select("id, scheduled_for")
-      .eq("task_id", id)
-      .order("scheduled_for", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (last) {
-      await ctx.supabase.from("todo_completions").delete().eq("id", last.id);
-      await ctx.supabase
-        .from("todo_recurrences")
-        .update({
-          occurrences_created: Math.max(0, (rule.occurrencesCreated ?? 0) - 1),
-        })
-        .eq("task_id", id);
-
-      const { error } = await ctx.supabase
-        .from("todo_tasks")
-        .update({
-          status: "pendente",
-          completed_at: null,
-          scheduled_date: last.scheduled_for,
-        })
-        .eq("id", id);
-      if (error) return dbError("Não foi possível reabrir a tarefa.");
-
-      await logActivity(ctx.supabase, ctx.userId, id, "reaberta", null, {
-        scheduled_for: last.scheduled_for,
-      });
-      await syncTaskToGoogle(ctx, id);
-      revalidateTodo();
-      return { ok: true, data: undefined };
-    }
-  }
-
-  // Não recorrente (ou sem histórico): reabertura simples.
-  await ctx.supabase.from("todo_completions").delete().eq("task_id", id);
-  const { error } = await ctx.supabase
-    .from("todo_tasks")
-    .update({ status: "pendente", completed_at: null })
-    .eq("id", id);
-  if (error) return dbError("Não foi possível reabrir a tarefa.");
-
-  await logActivity(ctx.supabase, ctx.userId, id, "reaberta");
-  await syncTaskToGoogle(ctx, id);
   revalidateTodo();
   return { ok: true, data: undefined };
 }
@@ -529,7 +255,7 @@ export async function deleteTodoTask(
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const loaded = await loadTaskWithRule(ctx, id);
+  const loaded = await carregarTarefaComRegra(ctx, id);
   if (!loaded) return dbError("Tarefa não encontrada.");
 
   if (loaded.rule && scope === "ocorrencia") {
@@ -643,17 +369,9 @@ export async function rescheduleTodoTask(
     return invalid({ scheduled_date: ["Data inválida"] });
   }
 
-  const { error } = await ctx.supabase
-    .from("todo_tasks")
-    .update({ scheduled_date: dateIso })
-    .eq("id", id);
-  if (error) return dbError("Não foi possível reagendar a tarefa.");
+  const resultado = await reagendarTarefaNoTodo(ctx, id, dateIso);
+  if (!resultado.ok) return dbError(resultado.erro);
 
-  await logActivity(ctx.supabase, ctx.userId, id, "data_alterada", null, {
-    scheduled_date: dateIso,
-  });
-  // Tirar a data remove o evento; trocar a data move o evento existente.
-  await syncTaskToGoogle(ctx, id);
   revalidateTodo();
   return { ok: true, data: undefined };
 }

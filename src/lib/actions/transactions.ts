@@ -1,6 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { transactionSchema } from "@/lib/validators/transaction";
 import { splitSchema } from "@/lib/validators/split";
@@ -11,18 +10,15 @@ import {
   notAuthed,
   type AuthContext,
 } from "@/lib/actions/helpers";
-import {
-  getOrCreateStatementForCompetencia,
-  resolveOrCreateStatement,
-} from "@/lib/finance/statements";
-import { applySplit } from "@/lib/finance/split-persist";
+import { resolveOrCreateStatement } from "@/lib/finance/statements";
 import { reapplySplit } from "@/lib/finance/split-reapply";
+import { criarTransacao } from "@/lib/finance/services";
 import {
   sharedExpensesToFormParts,
   type SharedExpenseLike,
   type SplitFormPart,
 } from "@/lib/finance/split";
-import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
+import { reaisParaCentavos } from "@/lib/format";
 import type { ActionResult } from "@/types/finance";
 import {
   TRANSACTION_STATUSES,
@@ -39,124 +35,26 @@ function revalidateTransactions() {
   revalidatePath("/terceiros");
 }
 
+/**
+ * ⚠️ 18-C · Bloco 4 — a criação saiu daqui e virou `finance/services.ts`. O que sobrou é a
+ * casca: auth, serviço e `revalidatePath`. O command `lancarTransacao` chama o MESMO serviço,
+ * então um lançamento da IA nasce idêntico a um lançamento do formulário — inclusive na
+ * resolução de fatura, que é onde um segundo caminho erraria primeiro.
+ *
+ * A validação continua sendo a do schema; ela só mudou de lugar (o serviço a faz, porque a
+ * divisão é lida do MESMO objeto cru por um segundo schema).
+ */
 export async function createTransaction(
   input: unknown,
 ): Promise<ActionResult<{ id: string }>> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const parsed = transactionSchema.safeParse(input);
-  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
-  const d = parsed.data;
-
-  if (d.type === "transferencia") {
-    // UMA linha por transferência: `public.account_balance` já deriva os dois lados da
-    // mesma linha (-amount na conta de origem `account_id`, +amount no destino
-    // `transfer_account_id`). Gravar as duas pernas espelhadas fazia os efeitos se
-    // anularem e o saldo das contas não mudava. `transfer_group_id` continua marcando
-    // a linha como transferência (usado em update/delete/status).
-    const { data, error } = await ctx.supabase
-      .from("transactions")
-      .insert({
-        user_id: ctx.userId,
-        type: "transferencia" as const,
-        payment_method: "transferencia" as const,
-        account_id: d.account_id,
-        transfer_account_id: d.transfer_account_id,
-        transfer_group_id: randomUUID(),
-        amount: d.amount,
-        purchase_date: d.purchase_date,
-        competence_date: d.competence_date,
-        description: d.description,
-        notes: d.notes,
-        tags: d.tags,
-        status: d.status,
-        category_id: null,
-        subcategory_id: null,
-      })
-      .select("id")
-      .single();
-    if (error || !data) {
-      return dbError("Não foi possível registrar a transferência.");
-    }
-    revalidateTransactions();
-    return { ok: true, data: { id: data.id } };
-  }
-
-  // Compra no cartão (Fase 03): resolve/cria a fatura e vincula statement_id. Na importação,
-  // `statement_competencia` força a fatura sendo importada (evita derivar de uma data antiga).
-  let cardId: string | null = null;
-  let statementId: string | null = null;
-  if (
-    d.type === "despesa" &&
-    d.payment_method === "cartao_credito" &&
-    d.card_id
-  ) {
-    cardId = d.card_id;
-    statementId = d.statement_competencia
-      ? await getOrCreateStatementForCompetencia(
-          ctx,
-          d.card_id,
-          d.statement_competencia,
-        )
-      : await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
-    if (!statementId) return dbError("Não foi possível resolver a fatura do cartão.");
-  }
-
-  // Divisão (Fase 05): só faz sentido em despesa; demais tipos ficam 'pessoal'.
-  const split = splitSchema.safeParse(input);
-  if (!split.success) return invalid(split.error.flatten().fieldErrors);
-  const isShared = d.type === "despesa" && split.data.classificacao !== "pessoal";
-  const classificacao = isShared ? split.data.classificacao : "pessoal";
-
-  const { data, error } = await ctx.supabase
-    .from("transactions")
-    .insert({
-      user_id: ctx.userId,
-      type: d.type,
-      payment_method: d.payment_method,
-      account_id: d.account_id,
-      transfer_account_id: null,
-      card_id: cardId,
-      statement_id: statementId,
-      category_id: d.category_id,
-      subcategory_id: d.subcategory_id,
-      amount: d.amount,
-      purchase_date: d.purchase_date,
-      competence_date: d.competence_date,
-      description: d.description,
-      notes: d.notes,
-      tags: d.tags,
-      status: d.status,
-      classificacao,
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) return dbError("Não foi possível salvar o lançamento.");
-
-  // Grava a divisão (shared_expenses + receivables) e deriva o valor_pessoal. Quase-atômico:
-  // se a divisão falhar, remove a transação para não deixar gasto sem divisão consistente.
-  if (isShared) {
-    const res = await applySplit(ctx, {
-      transactionId: data.id,
-      totalCentavos: reaisParaCentavos(d.amount),
-      statementId,
-      cardId,
-      parts: split.data.parts,
-    });
-    if (!res.ok) {
-      await ctx.supabase.from("transactions").delete().eq("id", data.id);
-      return dbError(res.error);
-    }
-    await ctx.supabase
-      .from("transactions")
-      .update({ valor_pessoal: centavosParaReais(res.minhaParteCentavos) })
-      .eq("id", data.id);
-  }
+  const r = await criarTransacao(ctx, input);
+  if (!r.ok) return r.fieldErrors ? invalid(r.fieldErrors) : dbError(r.erro);
 
   revalidateTransactions();
-  return { ok: true, data: { id: data.id } };
+  return { ok: true, data: { id: r.id } };
 }
 
 export async function updateTransaction(
