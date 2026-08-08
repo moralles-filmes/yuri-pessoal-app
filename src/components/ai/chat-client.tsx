@@ -97,9 +97,10 @@ type Bolha = {
    * As alterações que ESTA resposta preparou e que aguardam decisão (18-C).
    *
    * ⚠️ LIMITE DECLARADO: elas vivem só nesta sessão de tela, como os chips ao vivo. O que
-   * sobrevive ao recarregamento é a linha em `ai_action_proposals` — e a tela que a lê é a
-   * do Bloco 5. Recarregar agora esconde o cartão; a proposta continua lá, válida pelos 10
-   * minutos dela, e nada foi aplicado. O cartão sumir NÃO executa e NÃO cancela.
+   * sobrevive ao recarregamento é a linha em `ai_action_proposals` — e desde o Bloco 5 há
+   * onde lê-la: a tela `/ia/acoes`, que mostra a proposta ainda pendente com os mesmos botões de
+   * confirmar e recusar. Recarregar aqui esconde o cartão; a proposta continua lá, válida
+   * pelos 10 minutos dela, e nada foi aplicado. O cartão sumir NÃO executa e NÃO cancela.
    */
   propostas?: PropostaNaTela[];
   /**

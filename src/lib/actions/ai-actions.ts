@@ -26,6 +26,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { authContext, invalid, notAuthed } from "@/lib/actions/helpers";
 import { executarAcaoAprovada, registrarDecisao } from "@/lib/ai/approval/execute";
+import { prepararDesfazer, type PropostaDeDesfazer } from "@/lib/ai/approval/undo";
 import type { StatusDaExecucao } from "@/lib/ai/approval/state";
 import type { ActionResult } from "@/types/finance";
 
@@ -94,6 +95,7 @@ export async function confirmarAcaoDaIa(
    */
   for (const rota of execucao.revalidar) revalidatePath(rota);
   revalidatePath("/ia");
+  revalidatePath("/ia/acoes");
 
   return {
     ok: true,
@@ -129,5 +131,47 @@ export async function recusarAcaoDaIa(input: unknown): Promise<ActionResult> {
   if (!decisao.ok) return { ok: false, error: decisao.mensagem };
 
   revalidatePath("/ia");
+  revalidatePath("/ia/acoes");
   return { ok: true, data: undefined };
+}
+
+/**
+ * 18-C · Bloco 5 — PREPARA o desfazer de uma execução. Não desfaz nada.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ POR QUE SÃO DOIS CLIQUES, E NÃO UM.                                                   ║
+ * ║                                                                                       ║
+ * ║ Esta action grava uma PROPOSTA e devolve a previsão do que o desfazer vai fazer. Quem ║
+ * ║ executa é `confirmarAcaoDaIa` — a MESMA porta de qualquer outra alteração, com o mesmo ║
+ * ║ hash, o mesmo prazo de 10 minutos, o mesmo uso único e a mesma revalidação.            ║
+ * ║                                                                                       ║
+ * ║ Um desfazer de um clique só seria a única escrita do sistema sem o dono ler o que vai  ║
+ * ║ acontecer — e o inverso de uma ação não é inofensivo: ele exclui tarefa, apaga registro ║
+ * ║ de diário e cancela compromisso que já foi para o Google.                               ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ A entrada é o id da EXECUÇÃO, e só. Qual command inverso rodar, com que payload e sobre
+ * qual registro é decidido no servidor, a partir do que a execução registrou — nada disso vem
+ * do cliente, pela mesma razão que `user_id` não vem.
+ */
+const desfazerSchema = z.object({ executionId: z.uuid() }).strict();
+
+export async function prepararDesfazerDaIa(
+  input: unknown,
+): Promise<ActionResult<PropostaDeDesfazer>> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = desfazerSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const r = await prepararDesfazer({
+    userId: ctx.userId,
+    executionId: parsed.data.executionId,
+  });
+  if (!r.ok) return { ok: false, error: r.mensagem };
+
+  // Sem `revalidatePath` aqui: nada mudou nos módulos, e a proposta ainda está por decidir. A
+  // invalidação acontece quando ela for confirmada — em `confirmarAcaoDaIa`.
+  return { ok: true, data: r.proposta };
 }

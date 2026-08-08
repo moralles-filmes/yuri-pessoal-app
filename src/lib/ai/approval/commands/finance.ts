@@ -17,7 +17,7 @@ import "server-only";
  */
 
 import { criarTransacao, excluirTransacaoSimples } from "@/lib/finance/services";
-import type { Command } from "../contracts";
+import { desfazerPeloId, type Command } from "../contracts";
 import {
   excluirTransacaoEntrada,
   lancarTransacaoEntrada,
@@ -53,7 +53,11 @@ export const lancarTransacao: Command = {
    * `tags` não entram em allowlist nenhuma.
    */
   camposAuditaveis: ["type", "amount", "description", "purchase_date", "account_or_card"],
-  undo: "excluirTransacao",
+  desfazer: {
+    kind: "command",
+    command: "excluirTransacao",
+    payload: desfazerPeloId("transacao_id"),
+  },
 
   parse: parseComTransacao(lancarTransacaoEntrada),
   prever: (_ctx, payload) => preverLancarTransacao(payload),
@@ -110,7 +114,11 @@ export const excluirTransacao: Command = {
     "/dashboard",
   ],
   camposAuditaveis: ["description"],
-  undo: null,
+  desfazer: {
+    kind: "nao-ha",
+    porque:
+      "O lançamento foi excluído. Lançar de novo é uma ação, com a sua própria confirmação — e a fatura em que a nova compra cairia seria resolvida com a data de hoje, não com a da original.",
+  },
 
   parse: parseComTransacao(excluirTransacaoEntrada),
   prever: (_ctx, payload) => preverExcluirTransacao(payload),

@@ -16,9 +16,9 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅. **18-C: Blocos 1–4 ✅ — a IA passou a ESCREVER, em 6 ferramentas e 13 commands, sempre com confirmação do dono** |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, **18-C ✅ (2026-08-08, blocos 1–6)**: a IA escreve em 6 ferramentas e 13 commands, sempre com confirmação do dono, e `/ia/acoes` mostra o que foi feito com desfazer. Próxima: **18-D** |
 
-Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`), e o número continua 124. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). Reconferido no banco em **2026-08-08**: continua **124 / 12**. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -112,17 +112,18 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 23. **FK COMPOSTA sempre que uma tabela apontar para outra dentro do mesmo usuário.** A RLS confere o `user_id` da **própria linha** e não alcança a linha apontada. Sem isso, um intruso ocupava a chave única `(scheduled_workout_id, provider)` da ponte da agenda e **impedia o dono de sincronizar** aquele dia. Mesma correção da 16-E nas fotos de evolução.
 24. **`getSessionHistory` aceita `client`/`userId`** para o Cron (service role, sem sessão) usar **a mesma leitura da tela**. Um segundo caminho de montagem do histórico faria o número da notificação divergir do número da tela.
 
-## Módulo Inteligência Artificial (Fase 18 — 18-A, 18-B e os Blocos 1–3 da 18-C)
+## Módulo Inteligência Artificial (Fase 18 — 18-A, 18-B e a 18-C inteira)
 
 Rota `/ia`, tabelas `ai_*` (12), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
 internos, 4 adapters, catálogo de modelos e tarifas versionado, credenciais cifradas, chat com
 streaming, medição por tentativa e orçamento com reserva — **sem ler um único registro**. A
 **18-B** (2026-08-07) abriu a primeira leitura: 3 ferramentas de Treinos, laço de ferramentas
 próprio, roteamento por agente, contexto de página, auditoria por chamada e rastreabilidade
-na tela. A **18-C** (2026-08-07, em andamento) estendeu a leitura aos outros 8 módulos —
-**22 ferramentas no registry, 9 agentes** (Bloco 1–2) — e, depois da autorização do dono,
-entregou o **Approval Engine** (Bloco 3): 3 tabelas novas, hash canônico do efeito, prazo,
-uso único e revalidação. Desenhos em
+na tela. A **18-C** (concluída em 2026-08-08, seis blocos) estendeu a leitura aos outros 8
+módulos — **22 ferramentas no registry, 9 agentes** (Blocos 1–2) — e, depois da autorização do
+dono, entregou o **Approval Engine** (Bloco 3: 3 tabelas novas, hash canônico do efeito, prazo,
+uso único e revalidação), a **escrita** (Bloco 4: 6 ferramentas e 13 commands) e a tela
+**`/ia/acoes`** com o desfazer (Bloco 5). Desenhos em
 `docs/superpowers/specs/2026-08-04-modulo-ia-design.md` e
 `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`; matriz em
 `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`; camadas em `PROJECT_ARCHITECTURE.md`.
@@ -147,8 +148,9 @@ aplicada sem o dono confirmar na tela, uma de cada vez, com prazo de 10 minutos.
 
 ⛔ **Os seis `undo` NÃO estão no Tool Registry, e a ausência é a trava:** o modelo não tem como
 propor exclusão, reabertura, apagamento de registro, cancelamento de compromisso nem exclusão
-de lançamento. Quem os alcança é o botão de desfazer da tela, sobre uma execução que a própria
-IA acabou de fazer. Excluir por pedido em linguagem natural é risco 4 e está fora da 18-C.
+de lançamento. Quem os alcança é o botão de desfazer de **`/ia/acoes`** (Bloco 5), sobre uma
+execução que a própria IA fez — e mesmo ali o botão **propõe**, não executa. Excluir por pedido
+em linguagem natural é risco 4 e está fora da 18-C.
 
 ⚠️ **`body_*` é o módulo que quebra a simetria "1 módulo = 1 agente = 1 flag".** Ele não tem
 tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos agentes de
@@ -386,6 +388,47 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     do registry) é quem decide se a chave é clicável — as cinco têm ferramenta desde o Bloco 4,
     com teste que fica vermelho se alguma ficar órfã.
 
+**Invariantes acrescentadas pelo Bloco 5 da 18-C (a tela de ações e o desfazer):**
+
+48. ⛔ **O BOTÃO DE DESFAZER NÃO DESFAZ — ELE PROPÕE.** `prepararDesfazerDaIa` grava uma
+    proposta com `origem = 'desfazer'` e devolve a previsão do inverso; quem executa é
+    `confirmarAcaoDaIa`, **a mesma porta de qualquer outra alteração**, com o mesmo hash, o
+    mesmo prazo de 10 min, o mesmo uso único e a mesma revalidação. Um desfazer de um clique só
+    seria a única escrita do sistema sem o dono ler o que vai acontecer — e o inverso não é
+    inofensivo: ele exclui tarefa, apaga registro de diário e cancela compromisso que já foi
+    para o Google.
+49. **`ComoDesfazer` É UMA UNIÃO, e é ela que impede a tela de ficar muda.** `{kind:"command",
+    command, payload}` ou `{kind:"nao-ha", porque}` — nunca `undo: string | null` com um texto
+    opcional ao lado, que tornaria representável o estado *"sem desfazer e sem explicação"*.
+    `isCommandCoherent` recusa inverso inexistente, inverso apontando para si mesmo e "não há"
+    sem motivo.
+50. ⚠️ **O INVERSO RECEBE O QUE A EXECUÇÃO REGISTROU, NUNCA O PAYLOAD ORIGINAL.** `target_id` +
+    `changed_fields`, e só. O payload mora na proposta, que some com a conversa (invariante 38);
+    apoiar o desfazer nele o quebraria justamente para quem limpou o chat. **Consequência:**
+    campo que o inverso precise além do id **tem de estar na allowlist §3.6** do command
+    original — é o caso de `log_date` em `registrarHabito`, e há teste que fica vermelho se ele
+    sair de lá.
+51. **A PROPOSTA DE DESFAZER NÃO NASCE DE TOOL CALL, e isso é uma segunda FORMA declarada, não
+    um afrouxamento.** `ai_action_proposals.origem` (`ferramenta` | `desfazer`) discrimina um
+    CHECK que exige cada forma **por inteiro**: `ferramenta` ⇒ conversa + run + tool call
+    presentes e `undoes_execution_id` nulo; `desfazer` ⇒ o contrário. "Proposta de ferramenta
+    sempre nasce de uma tool call" continua provado pelo banco. `undoes_execution_id` **não
+    entra no hash** (o payload do inverso já carrega o alvo); quem o protege é a FK composta
+    `(undoes_execution_id, user_id)` e o `ai_action_executions_undoes_user_uidx` — que fica na
+    tabela de EXECUÇÕES, porque recusar um desfazer não pode impedir de pedi-lo de novo.
+52. ⛔ **`executando` NÃO É SUCESSO NEM FALHA — NA TELA TAMBÉM.** Rótulo *"sem desfecho
+    registrado"*, filtro **"Precisam de atenção"** (nunca "Aplicadas") e desfazer recusado com
+    o motivo escrito. É o claim-first do Bloco 3 chegando à interface: erra para *"pode não ter
+    acontecido"*.
+53. **A TELA LISTA AS DUAS PONTAS, e a execução órfã aparece.** `/ia/acoes` é a UNIÃO de
+    propostas e execuções: a execução cuja proposta caiu com a conversa aparece marcada como
+    *sem trilha*. Listar só propostas desfaria na prática a decisão de `ai_action_executions`
+    não ter FK — e a omissão seria invisível.
+54. **`approval/queries.ts` NÃO ENRIQUECE A LINHA COM O REGISTRO ATUAL.** O que a tela mostra é
+    o que a ação FEZ (previsão confirmada + campos tocados), não o estado de agora. Ir buscar o
+    registro no módulo daria uma tela mais bonita e uma auditoria pior — e `approval/` continua
+    tocando só `ai_*`.
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -412,7 +455,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 2.804 testes / 136 arquivos em 2026-08-07 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.019 testes / 145 arquivos em 2026-08-08 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

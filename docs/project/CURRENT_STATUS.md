@@ -1,6 +1,6 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-08-04**.
+> Atualizado ao final de **cada** fase. Última atualização: **2026-08-08** (18-C concluída).
 
 ## Estado
 As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluídas. Em
@@ -15,7 +15,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅ e 18-B ✅; **18-C com leitura dos 9 módulos, Approval Engine e ESCRITA concluídos — 6 ferramentas de escrita e 13 commands, todos atrás de chaves que nascem desligadas** |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅ e **18-C ✅ (2026-08-08)** — leitura dos 9 módulos, Approval Engine, 6 ferramentas de escrita, 13 commands, tela de ações e desfazer; tudo atrás de chaves que nascem desligadas. Próxima: **18-D** |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -71,9 +71,9 @@ VAZIO** em `src/lib/ai/approval/execute.ts` — exatamente como o Tool Registry 
 18-A. Uma proposta íntegra, confirmada e no prazo para em `COMMAND_DESCONHECIDO`, sem sequer
 reservar vaga de execução.
 
-⏳ **O que falta:** Bloco 4 (commands um a um, em ordem crescente de risco — `criarTarefaTodo`
-primeiro, `lancarTransacao` por último) → Bloco 5 (tela "Ações realizadas pela IA" + desfazer
-declarado por command) → Bloco 6 (documentação e verificação final). Decisões em
+✅ **A 18-C ESTÁ CONCLUÍDA (2026-08-08).** Os seis blocos fecharam: leitura dos nove módulos
+(1–2), Approval Engine (3), commands e escrita (4), **tela "Ações realizadas pela IA" com
+desfazer (5)** e documentação + verificação final (6). Decisões em
 `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`; matriz em
 `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`.
 
@@ -81,7 +81,7 @@ declarado por command) → Bloco 6 (documentação e verificação final). Decis
 | --- | --- | --- |
 | 18-A | Fundação, provedores e chat | ✅ **CONCLUÍDA** (2026-08-04) |
 | 18-B | Contexto, ferramentas de leitura e agentes | ✅ **CONCLUÍDA** (2026-08-07) |
-| 18-C | Ações, aprovações, idempotência e auditoria | 🟡 **EM ANDAMENTO** — leitura ✅ (1–2), Approval Engine ✅ (3), **commands e escrita ✅ (4)**; falta o histórico de ações na tela |
+| 18-C | Ações, aprovações, idempotência e auditoria | ✅ **CONCLUÍDA** (2026-08-08) — blocos 1 a 6 |
 | 18-D | Visão, documentos e comprovantes | ⬜ |
 | 18-E | Insights, relatórios e dashboards | ⬜ |
 | 18-F | Memória, voz, integrações e polimento | ⬜ — fecha a fase |
@@ -178,6 +178,95 @@ A regra está registrada no `CLAUDE.md` ("campo de TEXTO nunca é controlado pel
 **Verificação:** testes, lint, tsc, build e smoke test de rota em produção. ⚠️ **As três telas
 não foram exercitadas na aplicação rodando** — estão atrás do login e não havia sessão
 disponível; vale um clique antes de considerar 100% fechado.
+
+---
+
+## O que foi implementado nos Blocos 5 e 6 da 18-C (a tela de ações e o desfazer) — 2026-08-08
+
+**A 18-C fecha aqui.** O Bloco 4 deu à IA o poder de preparar alterações; o Bloco 5 deu ao dono
+o lugar onde ver o que foi feito com os dados dele — e desfazer, quando existe inverso.
+
+| Entrega | O que é |
+| --- | --- |
+| Tela `/ia/acoes` | 5º item da navegação do módulo, **antes** de "Consumo": o que a IA fez importa mais que quanto custou |
+| `approval/history.ts` (puro) | Une as três fontes, deriva o estado de cada linha com `agora` injetado e decide a disponibilidade do desfazer |
+| `approval/queries.ts` | Três consultas, só em `ai_*`, com teto **declarado na tela** (100) |
+| `approval/undo.ts` + `prepararDesfazerDaIa` | Prepara a proposta do inverso. **Não desfaz nada** |
+| 1 migration | `ai_action_proposals` ganhou `origem` + `undoes_execution_id`. **Nenhuma tabela nova** |
+| Contrato `ComoDesfazer` | Substituiu `undo: string \| null` no descriptor do command |
+
+### ⛔ A decisão central do bloco: o desfazer PASSA PELO MESMO MOTOR
+
+O botão não desfaz — ele **propõe**. Clicar em "Desfazer" grava uma linha em
+`ai_action_proposals`, mostra a previsão do inverso e espera a confirmação; quem executa é
+`confirmarAcaoDaIa`, a mesma porta de qualquer outra alteração, com o mesmo hash, o mesmo prazo
+de 10 minutos, o mesmo uso único e a mesma revalidação. Um desfazer de um clique só seria a
+única escrita do sistema sem o dono ler o que vai acontecer — e o inverso não é inofensivo: ele
+exclui tarefa, apaga registro de diário e cancela compromisso que já foi para o Google.
+
+### A migration, e por que ela afrouxa três colunas sem afrouxar a garantia
+
+`ai_action_proposals` exigia `conversation_id`, `run_id` e `tool_call_id` — porque toda proposta
+nascia de uma tool call. A proposta de desfazer não nasce: ela vem do botão. E ela **não pode**
+depender da conversa continuar existindo, porque `ai_action_executions` foi deixada sem FK
+justamente para sobreviver à exclusão dela (invariante 38): o dono veria a execução na tela e o
+botão de desfazer dela pararia de funcionar, sem nada no desenho explicando por quê.
+
+As três colunas passaram a ser opcionais **na coluna** e obrigatórias **no CHECK**:
+`ai_action_proposals_origem_coerente` exige cada uma das duas formas por inteiro
+(`origem='ferramenta'` ⇒ as três presentes e `undoes_execution_id` nulo; `origem='desfazer'` ⇒
+o contrário). "Proposta de ferramenta sempre nasce de uma tool call" continua provado pelo banco.
+
+### `ComoDesfazer`: uma união, e não dois campos opcionais
+
+O descriptor dizia `undo: string | null`. Com a explicação do "por que não há" num campo ao
+lado, o estado *"sem desfazer e sem explicação"* seria representável — e a tela esconderia o
+botão em silêncio, que é exatamente o que a §3.7 proíbe. Agora:
+
+```txt
+{ kind: "command", command, payload: (fatos) => ValorCanonico | null }   ou
+{ kind: "nao-ha", porque: string }
+```
+
+`isCommandCoherent` recusa inverso inexistente, inverso apontando para si mesmo e "não há" sem
+motivo. E `payload` é PURO: ele monta a entrada do inverso a partir de `target_id` +
+`changed_fields` — nunca do payload original, que some com a conversa.
+
+> ⚠️ **O acoplamento que ninguém veria:** `desfazerHabito` precisa do DIA, e o dia só chega até
+> ele porque `log_date` está na allowlist §3.6 de `registrarHabito`. Tirá-lo de lá "por ser
+> detalhe de auditoria" quebraria o botão — em runtime, e só no clique. Há teste sobre isso.
+
+### O que a tela se recusa a fazer
+
+- **Não chama de sucesso nem de falha uma execução `executando`.** Ela reservou a vaga e não
+  registrou o desfecho (claim-first do Bloco 3): o rótulo é *"sem desfecho registrado"*, a linha
+  fica em "Precisam de atenção" — **nunca** em "Aplicadas" — e o desfazer é recusado com o
+  motivo escrito.
+- **Não esconde execução cuja conversa foi apagada.** Ela aparece marcada como *sem trilha*.
+  Omiti-la desfaria, na prática, a decisão de não pôr FK em `ai_action_executions`.
+- **Não esconde o botão sem dizer por quê** — a explicação vem do descriptor do command.
+- **Não vai buscar o registro atual no módulo** para "enriquecer" a linha: mostra-se o que a
+  ação FEZ, não o estado de agora. `approval/` continua tocando só `ai_*`.
+- **Não apresenta a janela como "tudo":** com 100 linhas, declara o teto.
+
+### O texto datado que envelheceu pela terceira vez (Bloco 6)
+
+`AVISO_SEM_ACESSO` dizia que a chave de escrita *"hoje existe só para o TO-DO"*. Isso já nasceu
+falso: o mesmo commit do Bloco 4 publicou escrita em cinco módulos. O teste que existia cobria
+só a metade de LEITURA da frase. Agora a enumeração da ESCRITA também é derivada do registry
+(`toolsForWritePermission` + `Intl.ListFormat` em pt-BR): publicar a primeira escrita de outro
+módulo deixa a suíte vermelha até o aviso citá-lo.
+
+### Verificação (Blocos 5 e 6)
+
+`npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm run test:run` ✅ **145 arquivos / 3.019 testes** ·
+`TZ=UTC npx vitest run` ✅ · `npm run build` ✅ · smoke (rotas privadas → 307 `/login`,
+`/api/cron/*` → 401) ✅ · `get_advisors` sem lint novo (só o `auth_leaked_password_protection`
+pré-existente, que é botão de painel). **Duas mutações confirmadas por md5**: inverter a
+precedência de `derivarEstadoDaProposta` (9 testes vermelhos, incluindo a execução órfã virando
+"expirada") e tirar `data` da montagem do desfazer do hábito (o Zod do inverso recusou).
+
+**O total de tabelas no `public` continua 124** — a migration só acrescentou colunas.
 
 ---
 

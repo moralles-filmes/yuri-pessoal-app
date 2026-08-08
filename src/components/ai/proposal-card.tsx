@@ -43,6 +43,15 @@ export type PropostaNaTela = {
   readonly effectHash: string;
   readonly expiresAt: string;
   readonly toolName: string;
+  /**
+   * 18-C · Bloco 5 — o rótulo já resolvido, quando quem monta o cartão sabe nomeá-lo melhor.
+   *
+   * A proposta de DESFAZER não nasce de ferramenta nenhuma (ela nasce do botão da tela), então
+   * `toolName` vale `tela.desfazer` e `rotuloDaFerramenta` cairia no identificador cru. Pôr
+   * esse nome no mapa de ferramentas seria pior: há teste — e ele está certo — exigindo que
+   * todo rótulo de lá aponte para uma ferramenta REAL do registry.
+   */
+  readonly rotulo?: string;
   readonly risco: number;
   readonly resumo: string;
   readonly linhas: readonly { readonly rotulo: string; readonly valor: string }[];
@@ -165,7 +174,7 @@ export function ProposalCard({ proposta }: { readonly proposta: PropostaNaTela }
         <ShieldQuestion className="size-4 shrink-0 text-primary" />
         <span className="min-w-0 flex-1 font-medium">Confirmar antes de aplicar</span>
         <Badge variant="outline" className="text-[11px] font-normal">
-          {rotuloDaFerramenta(proposta.toolName)}
+          {proposta.rotulo ?? rotuloDaFerramenta(proposta.toolName)}
         </Badge>
       </div>
 

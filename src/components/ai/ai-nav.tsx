@@ -13,6 +13,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Gauge,
+  History,
   MessageSquare,
   MessagesSquare,
   Settings,
@@ -25,6 +26,7 @@ import { AI_SECTIONS, type AiSection } from "@/lib/ai/constants";
 const ICONS: Record<string, LucideIcon> = {
   "message-square": MessageSquare,
   "messages-square": MessagesSquare,
+  history: History,
   gauge: Gauge,
   settings: Settings,
 };

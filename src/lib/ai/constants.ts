@@ -5,6 +5,9 @@
  */
 
 import type { RotaComContexto } from "@/lib/validators/ai";
+// `import type` de um módulo PURO (`approval/state.ts` não tem `server-only`): apagado na
+// compilação, então nada de servidor entra no bundle do cliente por causa desta linha.
+import type { EstadoDaProposta } from "@/lib/ai/approval/state";
 import type {
   ToolCallStatus,
   ToolPermission,
@@ -34,6 +37,17 @@ export const AI_SECTIONS: readonly AiSection[] = [
     href: "/ia/conversas",
     icon: "messages-square",
     description: "Histórico das suas conversas.",
+  },
+  /**
+   * 18-C · Bloco 5. Entra ANTES de "Consumo" de propósito: o que a IA fez com os dados do
+   * dono importa mais que quanto ela custou, e a ordem da navegação é uma afirmação sobre isso.
+   */
+  {
+    slug: "acoes",
+    title: "Ações",
+    href: "/ia/acoes",
+    icon: "history",
+    description: "O que a IA preparou, o que você decidiu e o que foi aplicado.",
   },
   {
     slug: "consumo",
@@ -141,8 +155,18 @@ export const ROTULO_DA_ROTA_DE_CONTEXTO = {
  * existir uma. Publicar a primeira escrita de outro módulo deixa a suíte vermelha até este
  * texto contá-lo.
  */
+/**
+ * ⚠️ **QUARTA REESCRITA — 18-C · Bloco 5.** A terceira dizia que a chave de escrita "hoje
+ * existe só para o TO-DO", e isso durou um commit: o Bloco 4 entregou os cinco módulos de uma
+ * vez. O teste que existia só cobria a parte de LEITURA da frase, e a metade nova envelheceu
+ * livre — a mesma armadilha, na mesma linha, pela terceira vez.
+ *
+ * Agora a enumeração da ESCRITA também é derivada do registry por `constants.test.ts`
+ * (`toolsForWritePermission` + `Intl.ListFormat` em pt-BR): publicar a primeira escrita de
+ * outro módulo, ou remover a última de um, deixa a suíte vermelha até este texto acompanhar.
+ */
 export const AVISO_SEM_ACESSO =
-  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Ele pode ler Financeiro, Dieta e Alimentação, Treinos, Medidas corporais, TO-DO, Agenda, Tarefas e Rotinas, Hábitos e Estudos — cada um com a sua chave. Para ALTERAR algo ele precisa de uma segunda chave, que hoje existe só para o TO-DO: ele prepara a alteração, mostra exatamente o que vai mudar, e nada acontece até você confirmar aqui na tela.";
+  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Ele pode ler Financeiro, Dieta e Alimentação, Treinos, Medidas corporais, TO-DO, Agenda, Tarefas e Rotinas, Hábitos e Estudos — cada um com a sua chave. Para ALTERAR algo ele precisa de uma segunda chave, e há chave de alteração para TO-DO, Hábitos, Agenda, Dieta e Alimentação e Financeiro: ele prepara a alteração, mostra exatamente o que vai mudar, e nada acontece até você confirmar na tela.";
 
 /**
  * A versão curta da mesma regra, para a descrição da página. Afirma a REGRA, nunca o estado:
@@ -297,6 +321,69 @@ export const ROTULO_DA_FERRAMENTA: Record<string, string> = {
 export function rotuloDaFerramenta(nome: string): string {
   return ROTULO_DA_FERRAMENTA[nome] ?? nome;
 }
+
+/**
+ * 18-C · Bloco 5 — o nome de cada COMMAND na tela de ações.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ NÃO É O MESMO MAPA DE `ROTULO_DA_FERRAMENTA`, e a diferença tem consequência.         ║
+ * ║                                                                                       ║
+ * ║ Ferramenta e command não são 1 para 1: seis dos treze commands **não têm ferramenta**  ║
+ * ║ (os desfazer), e é assim que o modelo fica impedido de propô-los. Um mapa só forçaria  ║
+ * ║ a inventar nome de ferramenta para eles — justamente o que a ausência protege.         ║
+ * ║                                                                                       ║
+ * ║ E o verbo aqui é o do FATO CONSUMADO ("Tarefa criada"), não o de preparo: esta tela    ║
+ * ║ fala do que já foi decidido, não do que está sendo proposto.                            ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * A cobertura é garantida por TESTE, sobre `ACTION_COMMANDS` — command novo sem rótulo deixa
+ * a suíte vermelha, e a tela nunca mostra `criarTarefaTodo` cru para o dono.
+ */
+export const ROTULO_DO_COMMAND: Record<string, string> = {
+  criarTarefaTodo: "TO-DO · criar tarefa",
+  excluirTarefaTodo: "TO-DO · excluir tarefa",
+  concluirTarefaTodo: "TO-DO · concluir tarefa",
+  reabrirTarefaTodo: "TO-DO · reabrir tarefa",
+  reagendarTarefaTodo: "TO-DO · mudar a data da tarefa",
+  registrarHabito: "Hábitos · registrar o dia",
+  desfazerHabito: "Hábitos · apagar o registro do dia",
+  criarEvento: "Agenda · criar compromisso",
+  excluirEvento: "Agenda · excluir compromisso",
+  registrarConsumo: "Dieta · registrar no diário",
+  desfazerConsumo: "Dieta · remover do diário",
+  lancarTransacao: "Financeiro · lançar transação",
+  excluirTransacao: "Financeiro · excluir lançamento",
+};
+
+/** Command desconhecido (linha de auditoria feita por uma versão anterior do sistema). */
+export function rotuloDoCommand(nome: string): string {
+  return ROTULO_DO_COMMAND[nome] ?? nome;
+}
+
+/**
+ * O rótulo de cada estado da tela de ações — o vocabulário do DONO, não o do banco.
+ *
+ * ⚠️ `executando` é o único que não afirma desfecho, e a redação é deliberada: a linha
+ * reservou a vaga e não voltou (claim-first do Bloco 3). "Em andamento" seria otimista demais
+ * e "falhou" seria falso; o que a tela sabe é que o desfecho não foi registrado.
+ */
+export const ROTULO_DO_ESTADO_DA_ACAO = {
+  pendente: "aguardando você",
+  expirada: "prazo encerrado",
+  recusada: "recusada por você",
+  confirmada: "confirmada",
+  executando: "sem desfecho registrado",
+  executada: "aplicada",
+  falhou: "falhou",
+  parcial: "aplicada em parte",
+} as const satisfies Record<EstadoDaProposta, string>;
+
+/**
+ * O aviso da tela de ações. Ele diz as três coisas que a tela PODE afirmar, e nenhuma que ela
+ * não pode — mesma disciplina de `AVISO_DA_TRILHA`.
+ */
+export const AVISO_DAS_ACOES =
+  "Nenhuma linha aqui foi aplicada sem você confirmar. O estado de cada uma é calculado na leitura, a partir do prazo, da sua decisão e do que a execução registrou — nada disso é gravado como situação.";
 
 /** O desfecho de cada chamada, do ponto de vista de QUEM LÊ — não do log. */
 export const ROTULO_DO_STATUS_DE_FERRAMENTA = {

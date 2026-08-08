@@ -18,6 +18,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  desfazerPeloId,
   filtrarCamposTocados,
   isCommandCoherent,
   TAMANHO_MAX_DO_CAMPO,
@@ -110,14 +111,22 @@ describe("filtrarCamposTocados", () => {
 });
 
 describe("isCommandCoherent", () => {
+  const SEM_DESFAZER = {
+    kind: "nao-ha",
+    porque: "A tarefa foi apagada e não volta com o mesmo id.",
+  } as const;
+
   const BOM: CommandDescriptor = {
     name: "criarTarefaTodo",
     module: "todo",
     risk: 2,
     revalidar: ["/todo"],
     camposAuditaveis: ALLOWLIST,
-    undo: null,
+    desfazer: SEM_DESFAZER,
   };
+
+  const COM_DESFAZER = (command: string) =>
+    ({ kind: "command", command, payload: desfazerPeloId("tarefa_id") }) as const;
 
   it("aceita o command bem declarado", () => {
     expect(isCommandCoherent(BOM, ["criarTarefaTodo"])).toBe(true);
@@ -153,22 +162,64 @@ describe("isCommandCoherent", () => {
   });
 
   /**
-   * ⛔ `undo` apontando para um nome inexistente é o defeito que só apareceria no CLIQUE: o
+   * ⛔ Desfazer apontando para um nome inexistente é o defeito que só apareceria no CLIQUE: o
    * botão de desfazer aparece na tela, o dono clica, e nada acontece — depois de a ação
    * original já ter alterado o registro dele.
    */
-  it("recusa undo que aponta para command inexistente", () => {
-    expect(isCommandCoherent({ ...BOM, undo: "excluirTarefaTodo" }, ["criarTarefaTodo"])).toBe(
-      false,
-    );
+  it("recusa desfazer que aponta para command inexistente", () => {
+    expect(
+      isCommandCoherent({ ...BOM, desfazer: COM_DESFAZER("excluirTarefaTodo") }, [
+        "criarTarefaTodo",
+      ]),
+    ).toBe(false);
   });
 
-  it("aceita undo que existe no mapa", () => {
+  it("aceita desfazer que existe no mapa", () => {
     expect(
-      isCommandCoherent({ ...BOM, undo: "excluirTarefaTodo" }, [
+      isCommandCoherent({ ...BOM, desfazer: COM_DESFAZER("excluirTarefaTodo") }, [
         "criarTarefaTodo",
         "excluirTarefaTodo",
       ]),
     ).toBe(true);
+  });
+
+  /**
+   * ⛔ 18-C · BLOCO 5 — SEM DESFAZER **EXIGE** EXPLICAÇÃO.
+   *
+   * É o que a §3.7 manda: quando não há inverso, a tela mostra o porquê no lugar do botão. Com
+   * o texto opcional, o estado "sem desfazer e sem explicação" seria representável — e a tela
+   * ficaria muda, que é indistinguível de um esquecimento do sistema.
+   */
+  it("recusa 'não há desfazer' sem dizer por quê", () => {
+    expect(
+      isCommandCoherent({ ...BOM, desfazer: { kind: "nao-ha", porque: "   " } }, [
+        "criarTarefaTodo",
+      ]),
+    ).toBe(false);
+  });
+
+  /** Um desfazer que aponta para si mesmo entraria em laço na tela: desfazer do desfazer. */
+  it("recusa desfazer que aponta para o próprio command", () => {
+    expect(
+      isCommandCoherent({ ...BOM, desfazer: COM_DESFAZER("criarTarefaTodo") }, [
+        "criarTarefaTodo",
+      ]),
+    ).toBe(false);
+  });
+});
+
+/**
+ * `desfazerPeloId` é o caso comum — e o que importa nele é o `null`: sem alvo, a tela diz que
+ * não dá para desfazer, em vez de propor um inverso com id adivinhado.
+ */
+describe("desfazerPeloId", () => {
+  it("monta a entrada do inverso a partir do alvo da execução", () => {
+    expect(desfazerPeloId("tarefa_id")({ targetId: "abc", changedFields: {} })).toEqual({
+      tarefa_id: "abc",
+    });
+  });
+
+  it("sem alvo não monta nada", () => {
+    expect(desfazerPeloId("tarefa_id")({ targetId: null, changedFields: {} })).toBeNull();
   });
 });

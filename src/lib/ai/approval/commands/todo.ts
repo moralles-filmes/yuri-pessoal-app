@@ -30,7 +30,7 @@ import {
   reagendarTarefaNoTodo,
 } from "@/lib/todo/services";
 import { hojeISO } from "@/lib/format";
-import type { Command } from "../contracts";
+import { desfazerPeloId, type Command } from "../contracts";
 import {
   carregarTarefa,
   concluirTarefaEntrada,
@@ -77,7 +77,11 @@ export const criarTarefaTodo: Command = {
     "priority",
     "project_id",
   ],
-  undo: "excluirTarefaTodo",
+  desfazer: {
+    kind: "command",
+    command: "excluirTarefaTodo",
+    payload: desfazerPeloId("tarefa_id"),
+  },
 
   parse: parseCom(criarTarefaEntrada),
   prever: (_ctx, payload) => preverCriarTarefa(payload),
@@ -127,9 +131,13 @@ export const excluirTarefaTodo: Command = {
   risk: 3,
   revalidar: ["/todo", "/dashboard"],
   camposAuditaveis: ["title"],
-  // Não há desfazer do desfazer: a tarefa apagada não volta com o mesmo id, e um "undo" que
-  // recriasse outra linha mentiria sobre o que aconteceu.
-  undo: null,
+  // Não há desfazer do desfazer: a tarefa apagada não volta com o mesmo id, e recriar outra
+  // linha mentiria sobre o que aconteceu. A tela mostra a frase abaixo no lugar do botão.
+  desfazer: {
+    kind: "nao-ha",
+    porque:
+      "A tarefa foi apagada. Recriá-la geraria outra linha, com outro id e sem o histórico da primeira — uma tarefa nova se passando pela que existia.",
+  },
 
   parse: parseCom(excluirTarefaEntrada),
   prever: (_ctx, payload) => preverExcluirTarefa(payload),
@@ -161,7 +169,11 @@ export const concluirTarefaTodo: Command = {
   risk: 2,
   revalidar: ["/todo", "/dashboard"],
   camposAuditaveis: ["status", "scheduled_for", "next_scheduled_date", "recurred"],
-  undo: "reabrirTarefaTodo",
+  desfazer: {
+    kind: "command",
+    command: "reabrirTarefaTodo",
+    payload: desfazerPeloId("tarefa_id"),
+  },
 
   parse: parseCom(concluirTarefaEntrada),
   prever: (_ctx, payload) => preverConcluirTarefa(payload),
@@ -200,9 +212,11 @@ export const reabrirTarefaTodo: Command = {
   risk: 2,
   revalidar: ["/todo", "/dashboard"],
   camposAuditaveis: ["status"],
-  // Reabrir o que foi reaberto não faz sentido; e concluir de novo é uma AÇÃO, com proposta
-  // própria — não um desfazer.
-  undo: null,
+  desfazer: {
+    kind: "nao-ha",
+    porque:
+      "A tarefa voltou a ficar pendente. Concluí-la de novo é uma ação, com a sua própria confirmação — não o desfazer desta.",
+  },
 
   parse: parseCom(reabrirTarefaEntrada),
   prever: (_ctx, payload) => preverReabrirTarefa(payload),
@@ -237,7 +251,11 @@ export const reagendarTarefaTodo: Command = {
    * desfazer estaria usando um campo de AUDITORIA como fonte de verdade. A data anterior fica
    * em `changed_fields` para o dono voltar atrás pelo TO-DO sabendo exatamente para onde.
    */
-  undo: null,
+  desfazer: {
+    kind: "nao-ha",
+    porque:
+      "Voltar a data exigiria ler a data anterior desta trilha de auditoria e gravá-la de volta — usar um registro de auditoria como fonte de verdade. A data anterior está listada nesta mesma linha: reagende pelo TO-DO sabendo exatamente para onde voltar.",
+  },
 
   parse: parseCom(reagendarTarefaEntrada),
   prever: (_ctx, payload) => preverReagendarTarefa(payload),

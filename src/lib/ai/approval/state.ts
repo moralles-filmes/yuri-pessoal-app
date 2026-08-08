@@ -105,6 +105,12 @@ export type MotivoDeRecusa =
   | "EFEITO_MUDOU"
   | "COMMAND_DESCONHECIDO"
   | "JA_EXECUTADA"
+  /**
+   * 18-C · Bloco 5 — a corrida entre duas propostas de desfazer da MESMA execução. As duas
+   * podem existir (recusar um desfazer não pode impedir de pedir outro), mas só uma executa:
+   * quem decide é `ai_action_executions_undoes_user_uidx`, no banco.
+   */
+  | "JA_DESFEITA"
   | "SEM_CONFIRMACAO";
 
 /**
@@ -131,6 +137,8 @@ export const MENSAGEM_DE_RECUSA: Record<MotivoDeRecusa, string> = {
     "Esta proposta aponta para uma ação que o sistema não reconhece. Nada foi alterado.",
   JA_EXECUTADA:
     "Esta ação já foi executada. Nada foi feito de novo — confira o registro pelo link da ação.",
+  JA_DESFEITA:
+    "Esta ação já havia sido desfeita. Nada foi feito de novo — confira o registro pelo link da ação.",
   SEM_CONFIRMACAO:
     "Esta proposta ainda não foi confirmada. Nada foi alterado.",
 };

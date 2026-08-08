@@ -193,6 +193,66 @@ describe("as travas que o código não pode contornar", () => {
   });
 });
 
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ 18-C · BLOCO 5 — A PROPOSTA DE DESFAZER, E POR QUE ELA PODE NÃO TER CONVERSA.         ║
+ * ║                                                                                       ║
+ * ║ Afrouxar três colunas para `null` seria um afrouxamento — se não houvesse o CHECK que  ║
+ * ║ torna cada uma das duas formas obrigatória POR INTEIRO. É ele que mantém de pé a       ║
+ * ║ afirmação "proposta de ferramenta sempre nasce de uma tool call", e é ele que impede   ║
+ * ║ uma proposta de desfazer de carregar trilha de chat emprestada.                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("a proposta de desfazer (Bloco 5)", () => {
+  it("a origem é uma lista fechada de duas formas", () => {
+    expect(SQL).toMatch(/check \(origem in \('ferramenta', 'desfazer'\)\)/);
+  });
+
+  /**
+   * ⛔ AS DUAS FORMAS, INTEIRAS. Sem este CHECK, uma proposta poderia declarar-se "desfazer" e
+   * ainda assim apontar para um run — ou declarar-se "ferramenta" sem tool call, que é
+   * exatamente a garantia que o Bloco 3 fixou ("uma proposta sempre nasce de uma tool call").
+   */
+  it("o CHECK exige as duas formas por inteiro, e não mistura", () => {
+    const inicio = SQL.indexOf("ai_action_proposals_origem_coerente");
+    expect(inicio).toBeGreaterThan(-1);
+    const bloco = SQL.slice(inicio, inicio + 700);
+
+    expect(bloco).toContain("origem = 'ferramenta'");
+    expect(bloco).toContain("conversation_id is not null");
+    expect(bloco).toContain("run_id is not null");
+    expect(bloco).toContain("tool_call_id is not null");
+    expect(bloco).toContain("undoes_execution_id is null");
+
+    expect(bloco).toContain("origem = 'desfazer'");
+    expect(bloco).toContain("conversation_id is null");
+    expect(bloco).toContain("undoes_execution_id is not null");
+  });
+
+  /**
+   * FK COMPOSTA com `user_id` — a RLS confere o `user_id` da própria linha e não alcança a
+   * linha apontada. Sem o par, um intruso proporia o desfazer de execução alheia (mesma classe
+   * de defeito das fotos de evolução na 16-E e da ponte da agenda na 17-F).
+   */
+  it("o vínculo com a execução é FK COMPOSTA com user_id", () => {
+    expect(SQL).toMatch(
+      /foreign key \(undoes_execution_id, user_id\)\s*\n?\s*references public\.ai_action_executions \(id, user_id\)/,
+    );
+  });
+
+  /**
+   * ⛔ UMA EXECUÇÃO É DESFEITA UMA VEZ SÓ — e a trava é na tabela de EXECUÇÕES, não na de
+   * propostas. A distinção importa: recusar uma proposta de desfazer não pode impedir o dono
+   * de pedir o desfazer de novo.
+   */
+  it("o uso único do desfazer mora nas execuções, não nas propostas", () => {
+    expect(SQL).toMatch(
+      /ai_action_executions_undoes_user_uidx\s*\n\s*on public\.ai_action_executions \(undoes_execution_id, user_id\)/,
+    );
+    expect(SQL).not.toMatch(/unique index[^\n]*ai_action_proposals_undoes/);
+  });
+});
+
 describe("as cinco chaves de escrita", () => {
   const CHAVES = [
     "allow_write_todo",

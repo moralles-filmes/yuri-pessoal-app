@@ -1,13 +1,61 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-## 🎯 EM ANDAMENTO: 18-C — IA · Ações, aprovações, idempotência e auditoria
+## 🎯 PRÓXIMA: 18-D — IA · Visão, documentos e comprovantes
 
 **Desenho da fase (leia ANTES):** `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`
-**Desenho da 18-C, com as decisões:** `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`
-**A matriz (entregável de abertura):** `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`
+**O arquivo a abrir:** `docs/phases/PHASE_18_D_AI_VISION_DOCUMENTS_RECEIPTS.md`
 **O que já existe:** `docs/handoff/LAST_PHASE_SUMMARY.md` → seções **18-A**, **18-B** e **18-C**
 
-### ⏳ ONDE A 18-C PAROU, E POR QUÊ
+> ⚠️ **A 18-D não tem desenho validado ainda.** As 18-A, 18-B e 18-C tiveram um, escrito com o
+> dono **antes** de qualquer linha de código, e as três vezes ele mudou o que o documento da
+> fase sugeria. A 18-D toca o assunto mais sensível do sistema depois de dinheiro — **upload de
+> arquivo do usuário para um provedor externo** —, então **brainstorm primeiro, spec depois,
+> código por último**.
+
+### ⛔ O QUE A 18-D HERDA E NÃO PODE AFROUXAR
+
+1. **Anexo, foto e URL assinada NÃO entram em `changed_fields` de auditoria** (§3.6). A trava é
+   de FORMA (escalar de até 200 caracteres), não de nome — não a troque por lista de proibidos.
+2. **As fotos de evolução e a de receita são o dado mais sensível do sistema** (invariantes
+   21/22 e 29 da Dieta): bucket privado, nome aleatório, pasta `{user_id}/…`, **URL assinada de
+   5 min gerada a cada leitura**, validação do arquivo real no servidor, FK composta. Um arquivo
+   que a IA leia sai desse regime — e mandá-lo a um provedor externo é decisão do dono, não sua.
+3. **As três actions com `FormData`** (`body-measurements.ts`, `imports.ts`,
+   `nutrition-recipes.ts`) foram deixadas de fora da 18-C **de propósito**: são Caso B e
+   envolvem upload. Elas são o ponto de partida do levantamento da 18-D.
+4. **Dado é dado, nunca instrução.** Imagem e documento entram por `security/untrusted.ts`,
+   como resultado de ferramenta — jamais como mensagem de sistema.
+
+### ✅ A 18-C ESTÁ CONCLUÍDA (2026-08-08) — os seis blocos
+
+> ## ✅ O BLOCO 5 FECHOU (2026-08-08) — A TELA DE AÇÕES E O DESFAZER
+>
+> **`/ia/acoes`** é o 5º item da navegação do módulo. Ela une as três fontes de verdade
+> (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`), **deriva** o estado de
+> cada linha em `approval/history.ts` (puro, `agora` injetado) e oferece o desfazer quando o
+> command declara inverso.
+>
+> **O botão não desfaz — ele PROPÕE.** `prepararDesfazerDaIa` grava uma proposta com
+> `origem = 'desfazer'`, e quem executa é `confirmarAcaoDaIa`, a mesma porta de qualquer outra
+> alteração: mesmo hash, mesmo prazo de 10 min, mesmo uso único, mesma revalidação.
+>
+> **Três coisas que não podem ser afrouxadas:**
+> 1. `executando` **não é sucesso nem falha** — a linha reservou a vaga e não voltou. Rótulo
+>    *"sem desfecho registrado"*, filtro "Precisam de atenção", desfazer recusado com o motivo.
+> 2. **Execução cuja conversa foi apagada APARECE**, marcada como *sem trilha*. Se a tela
+>    listasse só propostas, a decisão de não pôr FK em `ai_action_executions` viraria letra morta.
+> 3. **Sem inverso, a tela EXPLICA** — e o motivo é obrigatório por tipo (`ComoDesfazer`), não
+>    por convenção.
+>
+> **A migration do bloco** (`20260812100000_ai_action_proposals_desfazer.sql`) afrouxou
+> `conversation_id`/`run_id`/`tool_call_id` **na coluna** e as manteve obrigatórias **no CHECK**
+> `ai_action_proposals_origem_coerente`. A proposta de desfazer não nasce de tool call, e não
+> pode depender de a conversa existir.
+>
+> ⚠️ **A regra que sai daqui para toda ação futura com desfazer:** o inverso recebe o que a
+> EXECUÇÃO registrou (`target_id` + `changed_fields`), nunca o payload original — que some com
+> a conversa. Campo que o inverso precise **tem de estar na allowlist §3.6** do command
+> original (é o caso de `log_date` em `registrarHabito`), e há teste que fica vermelho se sair.
 
 > ## ✅ O BLOCO 4 FECHOU (2026-08-07) — A IA ESCREVE
 >
@@ -33,8 +81,8 @@
 > Detalhe completo em `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md` → *"O que o Bloco 4
 > entregou de fato"*, e nas invariantes **40 a 47** do `CLAUDE.md`.
 >
-> **O que falta na 18-C:** os blocos 5 e 6 do spec (histórico de ações na tela, e o polimento
-> de auditoria). Ver a §3 do spec.
+> ~~**O que falta na 18-C:** os blocos 5 e 6~~ — ✅ **fechados em 2026-08-08**, ver o bloco
+> acima.
 
 **Blocos 1, 2 e 3 concluídos** (2026-08-07):
 

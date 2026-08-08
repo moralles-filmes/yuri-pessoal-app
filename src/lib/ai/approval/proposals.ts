@@ -43,6 +43,20 @@ function registrarFalha(code: string, correlationId: string, error: { code?: str
   });
 }
 
+/**
+ * 18-C · Bloco 5 — a ferramenta ficcional das propostas que NÃO vêm do chat.
+ *
+ * `tool_name`/`tool_version` são NOT NULL e entram no hash. Uma proposta de desfazer não nasce
+ * de ferramenta nenhuma — nasce do botão da tela —, então ela declara isso por escrito em vez
+ * de reaproveitar o nome da ferramenta que originou a ação desfeita (que descreveria a ação
+ * ERRADA) ou de deixar o campo vazio (que faria a trilha mentir por omissão).
+ *
+ * A versão é parte do hash: mudá-la invalida propostas de desfazer pendentes, e é o
+ * comportamento certo — pior caso "proponha de novo".
+ */
+export const FERRAMENTA_DO_DESFAZER = "tela.desfazer";
+export const VERSAO_DO_DESFAZER = "1";
+
 export type NovaProposta = {
   readonly userId: string;
   readonly conversationId: string;
@@ -93,26 +107,33 @@ export function hashDe(efeito: EfeitoProposto, toolName: string, toolVersion: st
  * como "a alteração não foi preparada", nunca como sucesso silencioso: uma proposta que não
  * existe é uma confirmação que nunca vai chegar, e o modelo não pode relatar o efeito.
  */
-export async function criarProposta(entrada: NovaProposta): Promise<PropostaGravada | null> {
-  /**
-   * As rotas das entidades vão para a tela como `href`. Mesma allowlist de `refs` desde a
-   * 18-B (invariante 22): `rotaInternaAceita` é allowlist, não lista de proibidos — recusar
-   * só `//` deixava passar `/\`, que o parser de URL resolve idêntico.
-   *
-   * Rota reprovada NÃO derruba a proposta: ela perde o link e mantém tipo e id, porque o que
-   * importa para a confirmação é O QUE será alterado, não o atalho para vê-lo.
-   */
-  const entidades = entrada.efeito.entidades.map((e) => ({
+/**
+ * As rotas das entidades vão para a tela como `href`. Mesma allowlist de `refs` desde a 18-B
+ * (invariante 22): `rotaInternaAceita` é allowlist, não lista de proibidos — recusar só `//`
+ * deixava passar `/\`, que o parser de URL resolve idêntico.
+ *
+ * Rota reprovada NÃO derruba a proposta: ela perde o link e mantém tipo e id, porque o que
+ * importa para a confirmação é O QUE será alterado, não o atalho para vê-lo.
+ */
+function entidadesGravaveis(efeito: EfeitoProposto) {
+  return efeito.entidades.map((e) => ({
     tipo: e.tipo,
     id: e.id,
     ...(rotaInternaAceita(e.rota) ? { rota: e.rota } : {}),
   }));
+}
+
+export async function criarProposta(entrada: NovaProposta): Promise<PropostaGravada | null> {
+  const entidades = entidadesGravaveis(entrada.efeito);
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ai_action_proposals")
     .insert({
       user_id: entrada.userId,
+      // Explícito, e não pelo default: quem lê este insert precisa ver QUAL das duas formas
+      // do CHECK `ai_action_proposals_origem_coerente` ele está criando.
+      origem: "ferramenta",
       conversation_id: entrada.conversationId,
       run_id: entrada.runId,
       tool_call_id: entrada.toolCallId,
@@ -143,4 +164,60 @@ export async function criarProposta(entrada: NovaProposta): Promise<PropostaGrav
     effectHash: data.effect_hash,
     expiresAt: data.expires_at,
   };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+// 18-C · Bloco 5 — a proposta que nasce do BOTÃO, não do chat
+// ══════════════════════════════════════════════════════════════════════════════════════
+
+export type NovaPropostaDeDesfazer = {
+  readonly userId: string;
+  /** A execução que será revertida. É ela que ocupa o lugar da trilha de chat. */
+  readonly undoesExecutionId: string;
+  readonly module: string;
+  readonly risk: NivelDeRisco;
+  /** O efeito do command INVERSO — previsto pelo mesmo `prever` que a execução recalcula. */
+  readonly efeito: EfeitoProposto;
+};
+
+/**
+ * ⚠️ O DESFAZER PASSA PELO MESMO MOTOR — proposta, hash, prazo de 10 min, uso único,
+ * confirmação e revalidação. Não é um atalho (§3.7).
+ *
+ * O que muda em relação a `criarProposta` é só a PROCEDÊNCIA: em vez de conversa, run e tool
+ * call, ela grava `origem = 'desfazer'` e o id da execução revertida. O CHECK
+ * `ai_action_proposals_origem_coerente` recusa qualquer mistura das duas formas, e a FK
+ * composta `(undoes_execution_id, user_id)` impede propor o desfazer de execução alheia.
+ */
+export async function criarPropostaDeDesfazer(
+  entrada: NovaPropostaDeDesfazer,
+): Promise<PropostaGravada | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ai_action_proposals")
+    .insert({
+      user_id: entrada.userId,
+      origem: "desfazer",
+      undoes_execution_id: entrada.undoesExecutionId,
+      tool_name: FERRAMENTA_DO_DESFAZER,
+      tool_version: VERSAO_DO_DESFAZER,
+      command: entrada.efeito.command,
+      module: entrada.module,
+      risk: entrada.risk,
+      payload: comoJson(entrada.efeito.payload),
+      resolved_entities: entidadesGravaveis(entrada.efeito),
+      preview: comoJson(previsaoCanonica(entrada.efeito)),
+      effect_hash: hashDe(entrada.efeito, FERRAMENTA_DO_DESFAZER, VERSAO_DO_DESFAZER),
+      // `expires_at` continua não sendo enviado — o prazo é o default do banco.
+    })
+    .select("id, effect_hash, expires_at")
+    .single();
+
+  if (error) {
+    registrarFalha("UNDO_PROPOSAL_INSERT_FAILED", entrada.undoesExecutionId, error);
+    return null;
+  }
+  if (!data) return null;
+
+  return { id: data.id, effectHash: data.effect_hash, expiresAt: data.expires_at };
 }

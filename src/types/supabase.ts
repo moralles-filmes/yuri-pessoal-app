@@ -166,56 +166,62 @@ export type Database = {
       ai_action_proposals: {
         Row: {
           command: string
-          conversation_id: string
+          conversation_id: string | null
           created_at: string
           effect_hash: string
           expires_at: string
           id: string
           module: string
+          origem: string
           payload: Json
           preview: Json
           resolved_entities: Json
           risk: number
-          run_id: string
-          tool_call_id: string
+          run_id: string | null
+          tool_call_id: string | null
           tool_name: string
           tool_version: string
+          undoes_execution_id: string | null
           user_id: string
         }
         Insert: {
           command: string
-          conversation_id: string
+          conversation_id?: string | null
           created_at?: string
           effect_hash: string
           expires_at?: string
           id?: string
           module: string
+          origem?: string
           payload?: Json
           preview?: Json
           resolved_entities?: Json
           risk: number
-          run_id: string
-          tool_call_id: string
+          run_id?: string | null
+          tool_call_id?: string | null
           tool_name: string
           tool_version: string
+          undoes_execution_id?: string | null
           user_id: string
         }
         Update: {
           command?: string
-          conversation_id?: string
+          conversation_id?: string | null
           created_at?: string
           effect_hash?: string
           expires_at?: string
           id?: string
           module?: string
+          origem?: string
           payload?: Json
           preview?: Json
           resolved_entities?: Json
           risk?: number
-          run_id?: string
-          tool_call_id?: string
+          run_id?: string | null
+          tool_call_id?: string | null
           tool_name?: string
           tool_version?: string
+          undoes_execution_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -232,6 +238,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "ai_tool_calls"
             referencedColumns: ["id", "run_id", "user_id"]
+          },
+          {
+            foreignKeyName: "ai_action_proposals_undoes_owner_fk"
+            columns: ["undoes_execution_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_action_executions"
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }

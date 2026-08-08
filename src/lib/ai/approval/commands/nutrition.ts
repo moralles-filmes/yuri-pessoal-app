@@ -18,7 +18,7 @@ import {
   registrarConsumoNoDiario,
   resolverRefeicaoDoDia,
 } from "@/lib/nutrition/services";
-import type { Command } from "../contracts";
+import { desfazerPeloId, type Command } from "../contracts";
 import {
   desfazerConsumoEntrada,
   parseComConsumo,
@@ -47,7 +47,11 @@ export const registrarConsumo: Command = {
    * existe para que o módulo de IA não guarde uma.
    */
   camposAuditaveis: ["food_name", "quantity", "measure_label", "diary_date", "meal_name"],
-  undo: "desfazerConsumo",
+  desfazer: {
+    kind: "command",
+    command: "desfazerConsumo",
+    payload: desfazerPeloId("entrada_id"),
+  },
 
   parse: parseComConsumo(registrarConsumoEntrada),
   prever: (_ctx, payload) => preverRegistrarConsumo(payload),
@@ -106,7 +110,11 @@ export const desfazerConsumo: Command = {
   // Nada a detalhar: o registro deixa de existir, e o id já está no alvo da execução. Nome do
   // alimento não entra — seria gravar dado de saúde na auditoria para descrever uma remoção.
   camposAuditaveis: [],
-  undo: null,
+  desfazer: {
+    kind: "nao-ha",
+    porque:
+      "O item saiu do diário. O histórico do consumo é imutável: registrar de novo cria outro snapshot, com os valores do catálogo de agora — não o que estava congelado antes.",
+  },
 
   parse: parseComConsumo(desfazerConsumoEntrada),
   prever: (_ctx, payload) => preverDesfazerConsumo(payload),

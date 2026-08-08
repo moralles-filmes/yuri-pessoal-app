@@ -1,13 +1,82 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-> 🟡 **EM ANDAMENTO: 18-C — IA · Ações, aprovações, idempotência e auditoria (2026-08-07).**
-> Os **Blocos 1, 2 e 3 estão concluídos**: a leitura dos nove módulos e o **Approval Engine**.
-> A escrita foi autorizada pelo dono em 2026-08-07 e, ainda assim, **nenhuma escrita é
-> possível** — o registry de commands nasce vazio, como o Tool Registry nasceu na 18-A.
+> ✅ **CONCLUÍDA: 18-C — IA · Ações, aprovações, idempotência e auditoria (2026-08-08).**
+> Os **seis blocos** fecharam: leitura dos nove módulos (1–2), **Approval Engine** (3),
+> **commands e escrita** (4), **tela "Ações realizadas pela IA" com desfazer** (5) e
+> documentação + verificação final (6). A IA escreve em cinco módulos, e **nada é aplicado sem
+> o dono confirmar na tela**, uma de cada vez, com prazo de 10 minutos.
 > Antes dela, a 18-B (2026-08-07), a 18-A (2026-08-04) e as
 > duas frentes grandes: **Fase 16 — Dieta e Alimentação** (16-A a 16-F, 40 de 40 critérios) e
 > **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55). Este arquivo tem os resumos na ordem
 > inversa de conclusão — o mais recente primeiro.
+
+---
+
+## Fase 18-C · Blocos 5 e 6 — a tela de ações e o desfazer (2026-08-08) ✅ **FECHA A 18-C**
+
+**Desenho:** `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md` (§3.7, §5)
+
+### Arquivos criados
+
+| Arquivo | Papel |
+| --- | --- |
+| `src/lib/ai/approval/history.ts` | **Puro.** Une propostas + aprovações + execuções, deriva o estado com `agora` injetado e decide a disponibilidade do desfazer |
+| `src/lib/ai/approval/history.test.ts` | 36 testes, fixtures escritos à mão |
+| `src/lib/ai/approval/queries.ts` | A leitura da tela. Três consultas, só em `ai_*`, teto declarado (100) |
+| `src/lib/ai/approval/undo.ts` | Prepara a **proposta** do inverso. Não executa nada, não importa `execute.ts` |
+| `src/lib/ai/approval/commands/desfazer.test.ts` | O elo execução → inverso, contra o Zod real de cada command |
+| `src/app/(app)/ia/acoes/page.tsx` + `loading.tsx` | A tela (Server Component, `force-dynamic`) |
+| `src/components/ai/action-history-client.tsx` | A lista, os filtros e o botão de desfazer |
+| `supabase/migrations/20260812100000_ai_action_proposals_desfazer.sql` | `origem` + `undoes_execution_id` + CHECK das duas formas + FK composta |
+
+### Arquivos alterados
+
+`approval/contracts.ts` (o contrato `ComoDesfazer` no lugar de `undo: string | null`, mais
+`desfazerPeloId`) · os 5 arquivos de command (os 13 descriptors) · `approval/proposals.ts`
+(`criarPropostaDeDesfazer`) · `approval/execute.ts` (copia `undoes_execution_id` da proposta;
+`JA_DESFEITA` distinguido do `JA_EXECUTADA` pelo índice que disparou) · `approval/state.ts`
+(o motivo novo) · `lib/actions/ai-actions.ts` (`prepararDesfazerDaIa`) · `lib/ai/constants.ts`
+(seção "Ações" na navegação, `ROTULO_DO_COMMAND`, `ROTULO_DO_ESTADO_DA_ACAO`,
+`AVISO_DAS_ACOES`, e o `AVISO_SEM_ACESSO` corrigido) · `components/ai/ai-nav.tsx` ·
+`components/ai/proposal-card.tsx` (rótulo opcional) · `components/ai/chat-client.tsx`
+(comentário) · os testes de `contracts`, `schema` e `constants` · `src/types/supabase.ts`.
+
+### As três decisões do bloco
+
+1. **O botão não desfaz — ele PROPÕE.** Clicar grava uma proposta, mostra a previsão do inverso
+   e espera confirmação; quem executa é `confirmarAcaoDaIa`, a mesma porta de sempre. O inverso
+   não é inofensivo: ele exclui tarefa, apaga registro de diário e cancela compromisso que já
+   foi para o Google.
+2. **A proposta de desfazer não tem trilha de chat, e isso virou uma segunda forma declarada.**
+   Ela **não pode** depender de a conversa existir — `ai_action_executions` foi deixada sem FK
+   justamente para sobreviver à exclusão dela. As três colunas do chat viraram opcionais na
+   coluna e obrigatórias no CHECK `ai_action_proposals_origem_coerente`.
+3. **`ComoDesfazer` é união, não dois campos opcionais.** Com o motivo num campo ao lado, o
+   estado *"sem desfazer e sem explicação"* seria representável — e a tela esconderia o botão
+   em silêncio, que é o que a §3.7 proíbe.
+
+### O que a tela se recusa a fazer
+
+`executando` não é sucesso nem falha (rótulo *"sem desfecho registrado"*, filtro "Precisam de
+atenção", desfazer recusado com o motivo) · execução cuja conversa foi apagada **aparece**,
+marcada como *sem trilha* · quando não há inverso, a explicação vem do **descriptor** · nenhuma
+consulta a tabela de módulo (`approval/` só toca `ai_*`) · o teto de 100 é **declarado**.
+
+### Bloco 6 — o texto datado, pela terceira vez
+
+`AVISO_SEM_ACESSO` dizia que a chave de escrita "hoje existe só para o TO-DO", e já nasceu
+falso. O teste cobria só a metade de LEITURA da frase. Agora a enumeração da ESCRITA é derivada
+do registry com `Intl.ListFormat` em pt-BR.
+
+### Verificação
+
+`npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm run test:run` ✅ **145 arquivos / 3.019 testes** ·
+`TZ=UTC npx vitest run` ✅ · `npm run build` ✅ · smoke (307 `/login`, 401 no cron) ✅ ·
+`get_advisors` sem lint novo. **Duas mutações confirmadas por md5**, as duas ficaram vermelhas.
+
+**Pendências conscientes:** a tela não pagina (mostra as 100 mais recentes e declara o teto);
+não há filtro por módulo nem por período (a 18-E trata de relatórios); e ações **em massa**
+continuam fora — nenhum command as produz, então `items` está sempre vazio.
 
 ---
 

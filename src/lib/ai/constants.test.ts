@@ -19,10 +19,12 @@ import { describe, expect, it } from "vitest";
 import {
   AVISO_DA_ESCRITA,
   AVISO_DA_TRILHA,
+  AVISO_DAS_ACOES,
   AVISO_SEM_ACESSO,
   RESUMO_DO_ASSISTENTE,
   ROTULO_DA_PERMISSAO,
   ROTULO_DA_PERMISSAO_DE_ESCRITA,
+  ROTULO_DO_ESTADO_DA_ACAO,
 } from "./constants";
 import { TOOL_PERMISSIONS, TOOL_WRITE_PERMISSIONS } from "./tools/contracts";
 import {
@@ -76,6 +78,28 @@ describe("os avisos da tela afirmam a REGRA, não o estado", () => {
       expect(texto.toLowerCase()).toContain("autoriz");
       expect(texto.toLowerCase()).toContain("confirm");
     }
+  });
+
+  /**
+   * ⛔ 18-C · BLOCO 5 — A METADE DA FRASE QUE NÃO TINHA DONO.
+   *
+   * O teste acima faz o registry mandar na parte de LEITURA do aviso. A parte de ESCRITA ficou
+   * sem ninguém: o texto do Bloco 4 dizia "uma segunda chave, que hoje existe só para o TO-DO"
+   * e já nascia falso — o mesmo commit publicou escrita em cinco módulos. Terceira vez que um
+   * texto datado passou por aqui sem teste que o alcançasse.
+   *
+   * A enumeração é montada com `Intl.ListFormat` em pt-BR a partir do REGISTRY, não copiada da
+   * constante: publicar a primeira escrita de Treinos deixa esta asserção vermelha até o aviso
+   * citá-lo.
+   */
+  it("os módulos com ferramenta de ESCRITA são enumerados no aviso", () => {
+    const comEscrita = TOOL_WRITE_PERMISSIONS.filter(
+      (p) => toolsForWritePermission(p).length > 0,
+    ).map((p) => ROTULO_DA_PERMISSAO_DE_ESCRITA[p].titulo);
+
+    expect(comEscrita.length).toBeGreaterThan(0);
+    const enumeracao = new Intl.ListFormat("pt-BR", { type: "conjunction" }).format(comEscrita);
+    expect(AVISO_SEM_ACESSO).toContain(enumeracao);
   });
 
   it("com escrita publicada, nenhum aviso promete que a IA não altera nada", () => {
@@ -178,6 +202,47 @@ describe("a trilha não afirma qualidade do dado — ela não a conhece", () => 
 
   it("e diz o que de fato guarda", () => {
     expect(AVISO_DA_TRILHA.toLowerCase()).toContain("não é guardado");
+  });
+});
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ 18-C · BLOCO 5 — A TELA DE AÇÕES NÃO PODE AFIRMAR O QUE NÃO SABE.                     ║
+ * ║                                                                                       ║
+ * ║ `executando` é a linha que reservou a vaga e não voltou (claim-first do Bloco 3). Ela  ║
+ * ║ pode ter sido aplicada ou não — e o rótulo tem de dizer isso. "Em andamento" seria     ║
+ * ║ otimista (o processo pode ter morrido há uma semana) e "falhou" seria falso.           ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("os rótulos de estado da tela de ações", () => {
+  /**
+   * ⚠️ Aqui NÃO vale a asserção "o rótulo difere do identificador" que os nomes de ferramenta
+   * usam: `confirmada` já É a palavra em pt-BR. O que se exige é que nenhum rótulo seja um
+   * identificador técnico — nada de `_` nem de `.`.
+   */
+  it("todo estado tem rótulo legível", () => {
+    for (const [estado, rotulo] of Object.entries(ROTULO_DO_ESTADO_DA_ACAO)) {
+      expect(rotulo.trim(), estado).not.toBe("");
+      expect(rotulo, estado).not.toMatch(/[_.]/);
+    }
+  });
+
+  it("o rótulo de 'executando' não afirma sucesso nem falha", () => {
+    const rotulo = ROTULO_DO_ESTADO_DA_ACAO.executando.toLowerCase();
+    for (const proibida of ["aplicada", "falhou", "concluí", "pronto", "andamento"]) {
+      expect(rotulo, proibida).not.toContain(proibida);
+    }
+    expect(rotulo).toContain("desfecho");
+  });
+
+  /**
+   * O aviso da tela diz o que ela PODE afirmar — e a frase sobre estado derivado é a que
+   * impede alguém de "otimizar" gravando uma coluna de situação em `ai_action_proposals`.
+   */
+  it("o aviso da tela promete confirmação e estado derivado", () => {
+    const t = AVISO_DAS_ACOES.toLowerCase();
+    expect(t).toContain("confirmar");
+    expect(t).toContain("calculado na leitura");
   });
 });
 

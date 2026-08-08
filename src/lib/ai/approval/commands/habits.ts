@@ -52,7 +52,20 @@ export const registrarHabito: Command = {
   risk: 2,
   revalidar: ["/habitos", "/dashboard"],
   camposAuditaveis: ["value", "is_done", "log_date"],
-  undo: "desfazerHabito",
+  /**
+   * O único inverso desta subfase que precisa de mais que o id: o check-in é do HÁBITO **num
+   * dia**, e o dia vem de `changed_fields.log_date` — que está na allowlist logo acima
+   * exatamente por isso, e não por acaso.
+   */
+  desfazer: {
+    kind: "command",
+    command: "desfazerHabito",
+    payload: (fatos) => {
+      const data = fatos.changedFields.log_date;
+      if (!fatos.targetId || typeof data !== "string") return null;
+      return { habito_id: fatos.targetId, data };
+    },
+  },
 
   parse: parseComHabito(registrarHabitoEntrada),
   prever: (_ctx, payload) => preverRegistrarHabito(payload),
@@ -96,7 +109,11 @@ export const desfazerHabito: Command = {
   risk: 2,
   revalidar: ["/habitos", "/dashboard"],
   camposAuditaveis: ["log_date"],
-  undo: null,
+  desfazer: {
+    kind: "nao-ha",
+    porque:
+      "O registro do dia foi apagado. Marcar o hábito de novo é uma ação, com a sua própria confirmação — não o desfazer desta.",
+  },
 
   parse: parseComHabito(desfazerHabitoEntrada),
   prever: (_ctx, payload) => preverDesfazerHabito(payload),
