@@ -217,3 +217,50 @@ describe("as cinco chaves de escrita", () => {
     expect(SQL.slice(ultimoCheck, ultimoCheck + 600)).toContain("TOOL_WRITE_OUT_OF_BAND");
   });
 });
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ 18-C · Bloco 4 — O CHECK QUE TERIA QUEBRADO SÓ EM RUNTIME.                            ║
+ * ║                                                                                       ║
+ * ║ `concluirTarefaTodo` grava a conclusão pelo MESMO serviço do formulário, com           ║
+ * ║ `source: 'ia'`. O CHECK da Fase 15 aceitava só manual/rapido/massa/notificacao/cron:   ║
+ * ║ a gravação falharia com 23514 **depois** de o dono confirmar na tela.                  ║
+ * ║                                                                                       ║
+ * ║ Este teste lê a migration real. É a lição do Bloco 3 aplicada de novo: duplo de teste  ║
+ * ║ que não modela a restrição do banco esconde exatamente este tipo de defeito.           ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("o vocabulário de origem de conclusão do TO-DO", () => {
+  it("existe uma migration que alarga o CHECK", () => {
+    expect(SQL).toContain("todo_completions_completion_source_check");
+  });
+
+  /**
+   * ⚠️ A JANELA É A DA LISTA, NÃO "OS PRÓXIMOS 300 CARACTERES" — e a diferença foi pega por
+   * mutação, não por leitura.
+   *
+   * A primeira versão deste teste fatiava 300 caracteres a partir do `check`. Removendo 'ia'
+   * do CHECK, ele continuava VERDE: o `comment on column` logo abaixo cita `''ia''` na
+   * explicação, e a janela o engolia. O teste estava lendo a documentação da regra em vez da
+   * regra — exatamente o defeito que `semComentarios` existe para evitar, entrando por outra
+   * porta (aqui é um literal SQL, não um comentário `--`).
+   *
+   * Agora a fatia vai do `in (` até o `)` que o fecha. Nada além da lista entra.
+   */
+  it("o ÚLTIMO CHECK declarado aceita ia e mantém os cinco anteriores", () => {
+    const ultimo = SQL.lastIndexOf("check (completion_source in");
+    expect(ultimo).toBeGreaterThan(-1);
+
+    const abre = SQL.indexOf("(", SQL.indexOf(" in", ultimo));
+    const fecha = SQL.indexOf(")", abre);
+    expect(abre, "lista não delimitada").toBeGreaterThan(-1);
+    expect(fecha, "lista não fechada").toBeGreaterThan(abre);
+
+    const lista = SQL.slice(abre + 1, fecha);
+    for (const valor of ["manual", "rapido", "massa", "notificacao", "cron", "ia"]) {
+      expect(lista, valor).toContain("'" + valor + "'");
+    }
+    // E nada além dos seis: um valor a mais aqui seria uma origem que nenhuma tela produz.
+    expect(lista.match(/'/g)?.length, lista).toBe(12);
+  });
+});

@@ -135,6 +135,36 @@ Ordem crescente de risco — é a ordem de execução do Bloco 4.
 | 7 | **Lançar transação** | `createTransaction` | `lancarTransacao` | **`invoice.ts`, parcelamentos, recebíveis** | **3** | idem | `/financeiro`, `/relatorios` | ⛔ **nunca apagar em silêncio** — usa o fluxo de exclusão segura |
 | 8 | Excluir qualquer um dos acima | `delete*` | — | — | **4** | idem | conforme o módulo | ⛔ não |
 
+### O que o Bloco 4 entregou de fato (2026-08-07)
+
+As sete linhas estão **implementadas**, na ordem acima. O que mudou em relação ao previsto:
+
+| Previsto | Entregue | Por quê |
+| --- | --- | --- |
+| 7 commands | **13** | Cada `undo` é um command PRÓPRIO — passa pelo mesmo Approval Engine, com proposta, hash e execução próprios. Um atalho que revertesse sem confirmação seria a única escrita do sistema sem o dono decidindo. |
+| 7 ferramentas | **6** | Os `undo` **não têm ferramenta**: o modelo não pode propor exclusão, reabertura, apagamento nem cancelamento. Quem os alcança é o botão de desfazer da tela. |
+| Linha 8 (excluir) risco 4, fora | **Continua fora** | O que existe é o desfazer de uma execução que a própria IA acabou de fazer — nunca "apague o lançamento X" dito em linguagem natural. |
+
+**Três decisões que a implementação obrigou a tomar, e que não estavam no plano:**
+
+1. ⚠️ **`calendar.criar_evento` produz efeito FORA do sistema, e isso não é a "sincronização
+   com Google Agenda" que a Parte 3 exclui.** A Parte 3 barra as *ações de sincronização*
+   (`syncGoogleCalendar`, `setTodoGoogleSync`) — a IA não liga, não desliga e não dispara
+   sincronia. O que `criarEvento` faz é o que o **formulário da Agenda já faz desde a Fase
+   08**: com a conta conectada, o evento criado é empurrado (best-effort) para o Google. Não é
+   capacidade nova; é a capacidade existente do módulo, alcançada pelo mesmo serviço.
+   **A previsão declara isso** ao dono, com o e-mail da conta, antes de ele confirmar — e a
+   sensibilidade `externo` (palavra NOVA no vocabulário, criada aqui) obriga risco ≥ 3.
+   *Se o dono preferir que a IA nunca produza efeito externo, a decisão é dele: basta manter
+   `allow_write_calendar` desligada, ou remover o descriptor.*
+2. **`finance.lancar_transacao` recusa fatura JÁ PAGA** — a única restrição desta ferramenta
+   que o formulário não tem. No formulário o dono está olhando a tela da fatura; aqui o pedido
+   veio em linguagem natural sobre uma fatura que ele nem citou.
+3. **A extração foi da função INTEIRA, não do pedaço que a IA usa.** `criarTransacao` sabe
+   fazer transferência, cartão e divisão — quem restringe é o **schema da ferramenta**, que não
+   tem campo para nada disso. Uma "versão simples" para a IA seria uma segunda implementação
+   do insert, e ela divergiria no primeiro campo novo.
+
 **Regras que valem para a coluna inteira:**
 
 - **Toda linha exige confirmação**, em qualquer `confirmation_mode` (§3.2 do spec).
@@ -163,7 +193,7 @@ de código**, e é assim que o spec geral define o nível mais alto de risco.
 | Exclusão em massa sem escopo | `bulkTodoTasks`, ações em massa de compras | Só com escopo explícito e confirmação reforçada — não na 18-C |
 | Estrutura de catálogo do sistema | `nutrition-foods` e `training-exercises` sobre a base `user_id is null` | A base do sistema é **imutável** (invariante dos dois módulos) |
 | Sessão de treino ao vivo | `training-sessions.ts` (19 ações) | `session-machine.ts` é máquina de estado com fila local e `client_mutation_id` de dispositivo — a IA no meio disso duplica série |
-| Envio externo | Sincronização com Google Agenda | Efeito fora do sistema; entra só depois, com confirmação reforçada própria |
+| Envio externo | Sincronização com Google Agenda (`syncGoogleCalendar`, `setTodoGoogleSync`, `syncTodoToGoogle`) | Efeito fora do sistema; entra só depois, com confirmação reforçada própria |
 | Anexos e fotos | `recordTodoAttachment`, fotos de evolução, foto de receita | Dado mais sensível do sistema (invariante 21/22 da Dieta). 18-D, se algum dia |
 
 ---

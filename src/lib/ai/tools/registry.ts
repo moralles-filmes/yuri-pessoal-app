@@ -26,6 +26,7 @@ import {
   isToolDescriptorCoherent,
   type ToolDescriptor,
   type ToolPermission,
+  type ToolWritePermission,
 } from "./contracts";
 
 export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
@@ -170,6 +171,138 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     requiresConfirmation: false,
     idempotent: true,
   },
+  // ───────────────────── 18-C · Bloco 4 · TO-DO · AS DUAS PRIMEIRAS ESCRITAS ─────────────
+  // ⚠️ Nenhuma delas ESCREVE dentro do run. Elas preparam uma proposta e param; quem executa
+  // é uma Server Action, depois de o dono confirmar na tela. Ver `approval/proposals.ts`.
+  {
+    name: "todo.criar_tarefa",
+    version: "1",
+    module: "todo",
+    kind: "escrita",
+    risk: 2,
+    description:
+      "PREPARA a criação de uma tarefa no TO-DO e devolve uma proposta para o usuário confirmar na tela — NADA é criado por esta chamada. Informe `projeto` pelo nome só se o usuário citou um; nome que não existir cancela a proposta. Ela não cria etiqueta, subtarefa nem recorrência. Depois de chamá-la, diga que a tarefa está aguardando confirmação, e NUNCA afirme que ela foi criada.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        titulo: { type: "string", maxLength: 300, description: "O título da tarefa." },
+        data: {
+          type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          description: "Data programada (AAAA-MM-DD). Ausente: a tarefa fica sem data.",
+        },
+        horario: {
+          type: "string",
+          pattern: "^\\d{2}:\\d{2}$",
+          description: "Horário (HH:MM), no fuso de Brasília. Só com data.",
+        },
+        prazo: {
+          type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          description: "Prazo final (AAAA-MM-DD). Não pode ser anterior à data programada.",
+        },
+        prioridade: {
+          type: "integer",
+          minimum: 1,
+          maximum: 4,
+          description: "1 é a mais alta, 4 a mais baixa. Ausente: 4.",
+        },
+        projeto: {
+          type: "string",
+          maxLength: 120,
+          description: "NOME de um projeto existente do TO-DO. Ausente: Caixa de entrada.",
+        },
+      },
+      required: ["titulo"],
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["todo"],
+    requiredPermission: "allow_todo",
+    requiredWritePermission: "allow_write_todo",
+    // Criar tarefa não toca dinheiro, saúde nem histórico consolidado. A lista vazia é uma
+    // DECLARAÇÃO — `undefined` seria omissão, e a coerência recusa omissão.
+    sensibilidades: [],
+    command: "criarTarefaTodo",
+    timeoutMs: 10_000,
+    // Escrita não devolve lista; o teto existe porque o contrato o exige de toda ferramenta,
+    // e zero seria incoerente. A proposta é uma só.
+    maxRecords: 1,
+    itemLabel: "propostas",
+    requiresConfirmation: true,
+    // A CHAMADA é idempotente porque não escreve nada — duas chamadas fazem duas propostas, e
+    // proposta não é efeito. Quem garante que o EFEITO acontece uma vez é a aprovação de uso
+    // único no banco, e não este campo.
+    idempotent: true,
+  },
+  {
+    name: "todo.concluir_tarefa",
+    version: "1",
+    module: "todo",
+    kind: "escrita",
+    risk: 2,
+    description:
+      "PREPARA a conclusão de uma tarefa do TO-DO e devolve uma proposta para o usuário confirmar — NADA é concluído por esta chamada. `tarefa_id` tem de vir de uma consulta anterior; nunca invente um id. Numa tarefa RECORRENTE, concluir não fecha a tarefa: ela avança para a próxima data, e a proposta mostra qual. Depois de chamá-la, diga que a conclusão aguarda confirmação.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tarefa_id: {
+          type: "string",
+          description: "O id da tarefa, vindo de uma consulta anterior do TO-DO.",
+        },
+      },
+      required: ["tarefa_id"],
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["todo"],
+    requiredPermission: "allow_todo",
+    requiredWritePermission: "allow_write_todo",
+    sensibilidades: [],
+    command: "concluirTarefaTodo",
+    timeoutMs: 10_000,
+    maxRecords: 1,
+    itemLabel: "propostas",
+    requiresConfirmation: true,
+    idempotent: true,
+  },
+  {
+    name: "todo.reagendar_tarefa",
+    version: "1",
+    module: "todo",
+    kind: "escrita",
+    risk: 2,
+    description:
+      "PREPARA a mudança de data de uma tarefa existente do TO-DO e devolve uma proposta para o usuário confirmar — NADA é alterado por esta chamada. `tarefa_id` tem de vir de uma consulta anterior (a busca de tarefas devolve os ids); nunca invente um id. Numa tarefa recorrente, muda só a ocorrência atual. Depois de chamá-la, diga que a mudança aguarda confirmação.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tarefa_id: {
+          type: "string",
+          description: "O id da tarefa, vindo de uma consulta anterior do TO-DO.",
+        },
+        data: {
+          type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          description: "A nova data programada (AAAA-MM-DD).",
+        },
+      },
+      required: ["tarefa_id", "data"],
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["todo"],
+    requiredPermission: "allow_todo",
+    requiredWritePermission: "allow_write_todo",
+    sensibilidades: [],
+    command: "reagendarTarefaTodo",
+    timeoutMs: 10_000,
+    maxRecords: 1,
+    itemLabel: "propostas",
+    requiresConfirmation: true,
+    idempotent: true,
+  },
+
   {
     name: "todo.get_projects",
     version: "1",
@@ -206,6 +339,56 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     maxRecords: 60,
     itemLabel: "hábitos",
     requiresConfirmation: false,
+    idempotent: true,
+  },
+  // ────────────────── 18-C · Bloco 4 · Hábitos · a escrita ──────────────────
+  {
+    name: "habits.registrar",
+    version: "1",
+    module: "habits",
+    kind: "escrita",
+    risk: 2,
+    description:
+      "PREPARA o registro de um hábito num dia e devolve uma proposta para o usuário confirmar — NADA é registrado por esta chamada. Informe o hábito pelo NOME, como ele aparece na lista. Sem `valor`, o dia é marcado como concluído com a meta cheia. O registro SUBSTITUI o valor do dia, não soma a ele — a proposta mostra o que já havia. Data futura não é aceita. Depois de chamá-la, diga que o registro aguarda confirmação.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        habito: {
+          type: "string",
+          maxLength: 120,
+          description: "NOME de um hábito ativo, como aparece na lista de hábitos.",
+        },
+        valor: {
+          type: "number",
+          minimum: 0,
+          description:
+            "Quanto foi feito, na unidade do hábito (copos, minutos, páginas). Ausente: a meta cheia.",
+        },
+        data: {
+          type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          description: "Dia do registro (AAAA-MM-DD). Ausente: hoje. Nunca no futuro.",
+        },
+      },
+      required: ["habito"],
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["habitos"],
+    requiredPermission: "allow_habits",
+    requiredWritePermission: "allow_write_habits",
+    /**
+     * ⚠️ Hábito NÃO é declarado como dado de saúde, e a decisão é consciente. `habits` guarda
+     * o que o dono escolheu acompanhar (água, leitura, sono) — é registro de rotina, não
+     * medição clínica. O que é dado de saúde no sistema são `body_*` e o diário alimentar, e
+     * nenhum dos dois tem ferramenta de escrita nesta subfase.
+     */
+    sensibilidades: [],
+    command: "registrarHabito",
+    timeoutMs: 10_000,
+    maxRecords: 1,
+    itemLabel: "propostas",
+    requiresConfirmation: true,
     idempotent: true,
   },
   {
@@ -330,6 +513,83 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     maxRecords: 60,
     itemLabel: "compromissos",
     requiresConfirmation: false,
+    idempotent: true,
+  },
+  // ────────────────── 18-C · Bloco 4 · Agenda · a escrita que SAI DO SISTEMA ──────────────
+  {
+    name: "calendar.criar_evento",
+    version: "1",
+    module: "calendar",
+    kind: "escrita",
+    /**
+     * ⚠️ RISCO 3 — o primeiro. Não porque um compromisso valha mais que uma tarefa, mas
+     * porque com o Google conectado o efeito atravessa a fronteira do sistema: ele vai para o
+     * calendário do dono lá fora e para os aparelhos dele. A previsão diz isso antes de o
+     * dono confirmar.
+     */
+    risk: 3,
+    description:
+      "PREPARA a criação de um compromisso na agenda e devolve uma proposta para o usuário confirmar — NADA é criado por esta chamada. Informe a data e a hora COMO O USUÁRIO DISSE, no relógio de Brasília: nunca converta para UTC e nunca monte data com hora em ISO. Sem `hora_inicio`, marque `dia_inteiro`; sem os dois, a proposta é cancelada. Sem `hora_fim`, o compromisso dura uma hora. Ela não cria repetição nem lembrete. Depois de chamá-la, diga que o compromisso aguarda confirmação, e NUNCA afirme que ele foi criado.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        titulo: { type: "string", maxLength: 200, description: "O título do compromisso." },
+        data: {
+          type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          description: "O dia do compromisso (AAAA-MM-DD).",
+        },
+        hora_inicio: {
+          type: "string",
+          pattern: "^\\d{2}:\\d{2}$",
+          description:
+            "Hora de início (HH:MM) no relógio de Brasília. Obrigatória, exceto se `dia_inteiro` for true.",
+        },
+        hora_fim: {
+          type: "string",
+          pattern: "^\\d{2}:\\d{2}$",
+          description: "Hora de fim (HH:MM), no mesmo dia. Ausente: uma hora depois do início.",
+        },
+        dia_inteiro: {
+          type: "boolean",
+          description: "true para compromisso sem horário. Nesse caso, as horas são ignoradas.",
+        },
+        local: { type: "string", maxLength: 300, description: "Onde acontece." },
+        descricao: { type: "string", maxLength: 2000, description: "Detalhes do compromisso." },
+        /**
+         * ⚠️ A lista está ESCRITA, e não importada de `@/lib/calendar/constants` — o teste de
+         * fronteira proíbe `tools/` de importar módulo do usuário, e ele está certo: o
+         * registry é a superfície que vai ao provedor, não um consumidor do domínio.
+         *
+         * A duplicação que isso cria é vigiada por teste (`registry.test.ts` compara esta
+         * lista com `EVENT_TYPES`), porque um tipo novo na Agenda que não chegasse aqui faria
+         * o modelo oferecer um valor que o Zod do command recusaria — falha silenciosa,
+         * invisível em revisão, e repetida a cada pergunta.
+         */
+        tipo: {
+          type: "string",
+          enum: ["pessoal", "trabalho", "estudos", "exercicios", "rotina"],
+          description: "Classificação do compromisso. Ausente: pessoal.",
+        },
+      },
+      required: ["titulo", "data"],
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["agenda"],
+    requiredPermission: "allow_calendar",
+    requiredWritePermission: "allow_write_calendar",
+    /**
+     * ⚠️ `externo` porque o efeito NÃO fica no sistema quando o Google está conectado. É a
+     * primeira ferramenta com uma sensibilidade declarada, e a lista deixou de ser vazia por
+     * um motivo concreto — não por precaução genérica.
+     */
+    sensibilidades: ["externo"],
+    command: "criarEvento",
+    timeoutMs: 12_000,
+    maxRecords: 1,
+    itemLabel: "propostas",
+    requiresConfirmation: true,
     idempotent: true,
   },
 
@@ -496,6 +756,77 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     requiresConfirmation: false,
     idempotent: true,
   },
+  // ───────── 18-C · Bloco 4 · Financeiro · a última escrita, e a de maior risco ─────────
+  {
+    name: "finance.lancar_transacao",
+    version: "1",
+    module: "finance",
+    kind: "escrita",
+    risk: 3,
+    /**
+     * ⚠️ A descrição enumera o que a ferramenta NÃO faz, e isso não é excesso de zelo: sem
+     * essa lista, o modelo tentaria parcelar ("em 3x") e dividir ("metade é do João") porque
+     * o usuário vai pedir exatamente assim. Ele precisa saber dizer "isso eu não faço" em vez
+     * de silenciosamente lançar só a primeira metade do pedido.
+     */
+    description:
+      "PREPARA um lançamento financeiro à vista e devolve uma proposta para o usuário confirmar — NADA é lançado por esta chamada. Informe a conta OU o cartão pelo nome, nunca os dois. `valor` é em reais, como o usuário disse (45.90), NUNCA em centavos. Ela NÃO faz parcelamento, NÃO divide com terceiros, NÃO faz transferência entre contas, NÃO paga fatura e NÃO altera nem exclui lançamento existente — se o usuário pedir qualquer um desses, diga que isso é pela tela do Financeiro. Depois de chamá-la, diga que o lançamento aguarda confirmação, e NUNCA afirme que ele foi feito.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tipo: {
+          type: "string",
+          enum: ["despesa", "receita"],
+          description: "despesa (saída) ou receita (entrada).",
+        },
+        valor: {
+          type: "number",
+          exclusiveMinimum: 0,
+          description: "Valor em REAIS (ex.: 45.90). Nunca em centavos.",
+        },
+        descricao: {
+          type: "string",
+          maxLength: 200,
+          description: "O que foi o gasto ou a entrada.",
+        },
+        data: {
+          type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          description: "Data do lançamento (AAAA-MM-DD). Ausente: hoje.",
+        },
+        conta: {
+          type: "string",
+          maxLength: 120,
+          description: "NOME da conta. Use para dinheiro, débito ou pix. Excludente com cartão.",
+        },
+        cartao: {
+          type: "string",
+          maxLength: 120,
+          description:
+            "NOME do cartão de crédito. Só para despesa; a compra entra na fatura, não no saldo.",
+        },
+        categoria: {
+          type: "string",
+          maxLength: 120,
+          description:
+            "NOME de uma categoria existente. Ausente: o lançamento entra sem categoria — não escolha uma por conta própria.",
+        },
+      },
+      required: ["tipo", "valor", "descricao"],
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["financeiro"],
+    requiredPermission: "allow_finance",
+    requiredWritePermission: "allow_write_finance",
+    sensibilidades: ["dinheiro"],
+    command: "lancarTransacao",
+    timeoutMs: 15_000,
+    maxRecords: 1,
+    itemLabel: "propostas",
+    requiresConfirmation: true,
+    idempotent: true,
+  },
 
   // ─────────────────────────────── 18-C · Lote 3 · Dieta ───────────────────────────────
   {
@@ -573,6 +904,68 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     requiresConfirmation: false,
     idempotent: true,
   },
+  // ─────────── 18-C · Bloco 4 · Dieta · a escrita em HISTÓRICO IMUTÁVEL ───────────
+  {
+    name: "nutrition.registrar_consumo",
+    version: "1",
+    module: "nutrition",
+    kind: "escrita",
+    risk: 3,
+    description:
+      "PREPARA o registro de um alimento no diário alimentar e devolve uma proposta para o usuário confirmar — NADA é registrado por esta chamada. Informe o alimento, a medida e a refeição pelos NOMES; nome que casar com mais de um cancela a proposta, e você deve perguntar qual. Sem `medida`, a quantidade é na unidade base do alimento (g ou ml). Data futura não é aceita. A proposta mostra os valores nutricionais que serão congelados — não os calcule, não os estime e não os comente. Depois de chamá-la, diga que o registro aguarda confirmação.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        alimento: {
+          type: "string",
+          maxLength: 120,
+          description: "NOME do alimento, como aparece no catálogo de Dieta.",
+        },
+        quantidade: {
+          type: "number",
+          exclusiveMinimum: 0,
+          description: "Quanto foi consumido, na medida informada (ou na unidade base).",
+        },
+        medida: {
+          type: "string",
+          maxLength: 80,
+          description:
+            "NOME de uma medida caseira cadastrada para esse alimento (ex.: colher de sopa). Ausente: a unidade base (g ou ml).",
+        },
+        refeicao: {
+          type: "string",
+          maxLength: 80,
+          description: "NOME da refeição (ex.: Almoço, Café da manhã), como na lista do diário.",
+        },
+        data: {
+          type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          description: "Dia do consumo (AAAA-MM-DD). Ausente: hoje. Nunca no futuro.",
+        },
+      },
+      required: ["alimento", "quantidade", "refeicao"],
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    allowedAgents: ["dieta"],
+    requiredPermission: "allow_nutrition",
+    requiredWritePermission: "allow_write_nutrition",
+    /**
+     * ⚠️ AS DUAS SENSIBILIDADES, e nenhuma delas é decorativa.
+     *
+     * `saude` — o diário alimentar é dado de saúde, e é o exemplo que o próprio contrato cita.
+     * `historico_consolidado` — o registro CONGELA os nutrientes (invariante 9 do módulo): o
+     * total do dia passa a somar aquele jsonb para sempre, e editar o alimento no catálogo
+     * depois não o altera. Não existe "corrigir": existe apagar e registrar de novo.
+     */
+    sensibilidades: ["saude", "historico_consolidado"],
+    command: "registrarConsumo",
+    timeoutMs: 15_000,
+    maxRecords: 1,
+    itemLabel: "propostas",
+    requiresConfirmation: true,
+    idempotent: true,
+  },
 ];
 
 export function findTool(name: string): ToolDescriptor | null {
@@ -599,6 +992,45 @@ export function toolsForPermission(
 }
 
 /**
+ * 18-C · Bloco 4 — o mesmo, para as chaves de ESCRITA.
+ *
+ * Quatro das cinco `allow_write_*` não liberam nada hoje (só o TO-DO tem ferramenta de
+ * escrita). A tela de preferências usa esta função para não oferecer um botão que não liga
+ * nada — e para começar a oferecê-lo, sozinha, no commit em que a ferramenta nascer.
+ */
+export function toolsForWritePermission(
+  permission: ToolWritePermission,
+): readonly ToolDescriptor[] {
+  return AI_TOOL_REGISTRY.filter(
+    (t) => t.requiredWritePermission === permission && isToolDescriptorCoherent(t),
+  );
+}
+
+/** As ferramentas de escrita publicadas — usado pelos testes de honestidade dos textos. */
+export function writeTools(): readonly ToolDescriptor[] {
+  return AI_TOOL_REGISTRY.filter((t) => t.kind === "escrita" && isToolDescriptorCoherent(t));
+}
+
+/**
+ * De qual chave de LEITURA uma chave de escrita depende — DERIVADO do registry.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ Uma segunda tabela escrita à mão (`allow_write_todo → allow_todo`) pareceria óbvia e   ║
+ * ║ envelheceria na primeira exceção. `body_*` já provou que a simetria "um módulo, uma    ║
+ * ║ chave" não se sustenta: quem atende as medidas é o agente de Treinos, e a permissão    ║
+ * ║ exigida é `allow_body`. Aqui vale o mesmo — quem sabe qual leitura a escrita exige é o ║
+ * ║ próprio descriptor, que declara as duas.                                               ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * `null` quando a chave ainda não tem ferramenta — a tela já a mantém desabilitada nesse caso.
+ */
+export function permissaoDeLeituraDaEscrita(
+  permission: ToolWritePermission,
+): ToolPermission | null {
+  return toolsForWritePermission(permission)[0]?.requiredPermission ?? null;
+}
+
+/**
  * As definições que vão para o provedor, dada a allowlist do agente e as permissões do usuário.
  *
  * Repare na ordem: a allowlist do agente é aplicada sobre o registry, e o registry é a fonte.
@@ -622,12 +1054,24 @@ export function toolsForPermission(
 export function toolDefinitionsFor(
   allowedToolNames: readonly string[],
   permissions: Readonly<Partial<Record<ToolPermission, boolean>>>,
+  /**
+   * 18-C · Bloco 4 — as chaves de escrita, pelo MESMO motivo do parágrafo acima. Uma
+   * ferramenta de escrita oferecida com a chave desligada faz o modelo pedi-la, queimar um
+   * dos 3 passos da tentativa e receber `TOOL_WRITE_DISABLED` — a cada pergunta.
+   *
+   * O padrão é o objeto VAZIO, e não `permissions`: um chamador que esqueça o argumento fica
+   * sem escrita nenhuma, nunca com escrita herdada da chave de leitura.
+   */
+  writePermissions: Readonly<Partial<Record<ToolWritePermission, boolean>>> = {},
 ): AiToolDefinition[] {
   return AI_TOOL_REGISTRY.filter(
     (t) =>
       allowedToolNames.includes(t.name) &&
       isToolDescriptorCoherent(t) &&
-      permissions[t.requiredPermission] === true,
+      permissions[t.requiredPermission] === true &&
+      (t.kind !== "escrita" ||
+        (t.requiredWritePermission !== undefined &&
+          writePermissions[t.requiredWritePermission] === true)),
   ).map((t) => ({
     name: t.name,
     description: t.description,

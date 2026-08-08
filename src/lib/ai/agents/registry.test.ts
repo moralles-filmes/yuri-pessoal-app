@@ -591,11 +591,17 @@ describe("a lista de agentes do RPC concorda com o registry", () => {
 });
 
 describe("74. o Tool Registry é a única porta", () => {
-  // Era "o registry está vazio na 18-A". Deixou de ser verdade — mas o que o teste
-  // protegia era que NADA entra sem ser leitura declarada, e isso continua verificado.
-  it("o registry tem ferramentas, e TODAS são de leitura", () => {
+  /**
+   * Era "o registry está vazio na 18-A", virou "todas são de leitura" na 18-B, e no Bloco 4
+   * da 18-C deixou de ser verdade também. O que o teste protege é o que sempre protegeu: NADA
+   * entra sem `kind` declarado, e o `kind` é o que o guard consulta para decidir se a chamada
+   * precisa da chave de escrita.
+   */
+  it("toda ferramenta do registry declara um `kind` conhecido", () => {
     expect(AI_TOOL_REGISTRY.length).toBeGreaterThan(0);
-    for (const t of AI_TOOL_REGISTRY) expect(t.kind).toBe("leitura");
+    for (const t of AI_TOOL_REGISTRY) {
+      expect(["leitura", "escrita"], t.name).toContain(t.kind);
+    }
   });
 
   // 18-C: `toolDefinitionsFor` passou a receber as permissões do usuário. Este objeto liga

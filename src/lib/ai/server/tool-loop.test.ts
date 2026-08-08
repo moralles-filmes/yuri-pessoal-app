@@ -105,6 +105,8 @@ const SAIDA: ToolOutput = {
 
 const CTX_BASE = {
   runId: "run-1",
+  // 18-C: a proposta de escrita tem FK composta para `ai_runs (id, conversation_id, user_id)`.
+  conversationId: "conv-1",
   userId: "user-1",
   agent: { id: "treinos", allowedTools: ["training.get_volume"] },
   permissions: { allow_training: true },

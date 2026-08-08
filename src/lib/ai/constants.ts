@@ -5,7 +5,11 @@
  */
 
 import type { RotaComContexto } from "@/lib/validators/ai";
-import type { ToolCallStatus, ToolPermission } from "@/lib/ai/tools/contracts";
+import type {
+  ToolCallStatus,
+  ToolPermission,
+  ToolWritePermission,
+} from "@/lib/ai/tools/contracts";
 
 export type AiSection = {
   readonly slug: string;
@@ -125,8 +129,20 @@ export const ROTULO_DA_ROTA_DE_CONTEXTO = {
  * ║ não sabe verificar deixou de existir, e o que ficou é só o que ele cobre.              ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
+/**
+ * ⚠️ **TERCEIRA REESCRITA — 18-C · Bloco 4, e a mais grave das três.**
+ *
+ * O texto terminava com "e não cria nem altera nada". Deixou de ser verdade no commit que
+ * ligou o primeiro command: a IA passou a PREPARAR alterações no TO-DO. O aviso que mais
+ * tranquilizava era o que estava mentindo, e ele fica logo acima do campo de digitar.
+ *
+ * O que ficou no lugar é verificável: `constants.test.ts` deriva do registry quais módulos
+ * têm ferramenta de ESCRITA e exige que a frase "não cria nem altera" tenha sumido enquanto
+ * existir uma. Publicar a primeira escrita de outro módulo deixa a suíte vermelha até este
+ * texto contá-lo.
+ */
 export const AVISO_SEM_ACESSO =
-  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Ele pode ler Financeiro, Dieta e Alimentação, Treinos, Medidas corporais, TO-DO, Agenda, Tarefas e Rotinas, Hábitos e Estudos — cada um com a sua chave — e não cria nem altera nada.";
+  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Ele pode ler Financeiro, Dieta e Alimentação, Treinos, Medidas corporais, TO-DO, Agenda, Tarefas e Rotinas, Hábitos e Estudos — cada um com a sua chave. Para ALTERAR algo ele precisa de uma segunda chave, que hoje existe só para o TO-DO: ele prepara a alteração, mostra exatamente o que vai mudar, e nada acontece até você confirmar aqui na tela.";
 
 /**
  * A versão curta da mesma regra, para a descrição da página. Afirma a REGRA, nunca o estado:
@@ -135,7 +151,7 @@ export const AVISO_SEM_ACESSO =
  * entraram no registry.
  */
 export const RESUMO_DO_ASSISTENTE =
-  "Assistente Pessoal. Ele só consulta os módulos que você autorizar nas preferências — e não cria nem altera nada.";
+  "Assistente Pessoal. Ele só consulta os módulos que você autorizar nas preferências, e nunca altera nada sem você confirmar a alteração na tela.";
 
 // ─────────────────── Fase 18-B · Preferências de leitura por módulo ───────────────────
 
@@ -189,6 +205,53 @@ export const ROTULO_DA_PERMISSAO = {
 } as const satisfies Record<ToolPermission, { titulo: string; frase: string }>;
 
 /**
+ * 18-C · Bloco 4 — o que cada chave `allow_write_*` autoriza.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ A FRASE PRECISA DIZER AS DUAS COISAS: o que a IA passa a poder PREPARAR, e que nada    ║
+ * ║ é aplicado sem confirmação. Só a primeira metade assustaria com razão; só a segunda    ║
+ * ║ esconderia o que a chave faz.                                                          ║
+ * ║                                                                                       ║
+ * ║ E `aviso` existe porque uma chave sem ferramenta é um botão que não liga nada — o      ║
+ * ║ mesmo defeito que `toolsForPermission` (invariante 24) evita do lado da leitura. Quem  ║
+ * ║ decide se a chave está clicável é o REGISTRY (`toolsForWritePermission`), nunca uma    ║
+ * ║ lista escrita à mão de "módulos prontos".                                              ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export const ROTULO_DA_PERMISSAO_DE_ESCRITA = {
+  allow_write_todo: {
+    titulo: "TO-DO",
+    frase: "Preparar tarefas novas e mudanças de data no TO-DO, para você confirmar na tela.",
+  },
+  allow_write_habits: {
+    titulo: "Hábitos",
+    frase: "Preparar check-ins de hábito, para você confirmar na tela.",
+  },
+  allow_write_calendar: {
+    titulo: "Agenda",
+    frase: "Preparar compromissos novos na agenda, para você confirmar na tela.",
+  },
+  allow_write_nutrition: {
+    titulo: "Dieta e Alimentação",
+    frase: "Preparar registros no diário alimentar, para você confirmar na tela.",
+  },
+  allow_write_finance: {
+    titulo: "Financeiro",
+    frase: "Preparar lançamentos de transação, para você confirmar na tela.",
+  },
+} as const satisfies Record<ToolWritePermission, { titulo: string; frase: string }>;
+
+/**
+ * A frase que acompanha TODA chave de escrita na tela de preferências, escrita uma vez.
+ *
+ * Ela não é decoração: é o resumo do desenho inteiro da subfase, no lugar em que a pessoa
+ * decide ligar a chave. Sem ela, "autorizar a IA a alterar o TO-DO" soa como autorizar a IA a
+ * alterar o TO-DO sozinha.
+ */
+export const AVISO_DA_ESCRITA =
+  "Ligar uma destas chaves não dá à IA o poder de alterar nada sozinha. Ela passa a poder PREPARAR uma alteração e mostrá-la a você, campo a campo; a alteração só acontece quando você confirma, uma de cada vez, e o pedido expira em 10 minutos.";
+
+/**
  * O nome de cada ferramenta na tela. `Record<string, …>` porque `ToolDescriptor.name` é
  * `string` — não há união fechada para o `satisfies` travar. A cobertura é garantida por
  * TESTE, sobre o registry real: ferramenta nova sem rótulo quebra a suíte.
@@ -219,6 +282,15 @@ export const ROTULO_DA_FERRAMENTA: Record<string, string> = {
   "nutrition.get_day": "Dieta · consumo do dia",
   "nutrition.get_period": "Dieta · consumo do período",
   "nutrition.get_goals": "Dieta · metas nutricionais",
+  // 18-C · Bloco 4 — as ferramentas de ESCRITA. O rótulo diz "preparar", porque é o que elas
+  // fazem: quem cria e quem reagenda é a confirmação do dono, não a chamada da ferramenta.
+  "todo.criar_tarefa": "TO-DO · preparar tarefa nova",
+  "todo.concluir_tarefa": "TO-DO · preparar conclusão",
+  "todo.reagendar_tarefa": "TO-DO · preparar mudança de data",
+  "habits.registrar": "Hábitos · preparar registro do dia",
+  "calendar.criar_evento": "Agenda · preparar compromisso novo",
+  "nutrition.registrar_consumo": "Dieta · preparar registro no diário",
+  "finance.lancar_transacao": "Financeiro · preparar lançamento",
 };
 
 /** Ferramenta desconhecida (registry antigo, linha de auditoria de outra versão). */

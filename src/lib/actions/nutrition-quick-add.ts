@@ -18,7 +18,8 @@ import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers"
 import type { ActionResult } from "@/types/finance";
 import { addDiaryEntry } from "@/lib/actions/nutrition-diary";
 import { addMealTemplateToDiary } from "@/lib/actions/nutrition-meal-templates";
-import { getMeasuresForFoods } from "@/lib/nutrition/diary-queries";
+import { getMeasuresForFoods, searchFoodsByTerm } from "@/lib/nutrition/diary-queries";
+import { resolverRefeicaoDoDia } from "@/lib/nutrition/services";
 import { isDateIso } from "@/lib/nutrition/calendar";
 import { hojeISO } from "@/lib/format";
 
@@ -113,38 +114,15 @@ export async function searchQuickAddFoods(term: string): Promise<QuickAddFood[]>
   const ctx = await authContext();
   if (!ctx) return [];
 
-  // Mesma higienização da busca global: estes caracteres quebram o filtro do PostgREST.
-  const q = String(term ?? "").replace(/[%_\\,()*:]/g, " ").trim();
-  if (q.length < 2) return [];
-  const like = `%${q}%`;
-
-  const { data } = await ctx.supabase
-    .from("nutrition_foods")
-    .select("id,name,brand,base_quantity,base_unit,is_system_food")
-    .or(`name.ilike.${like},alternative_name.ilike.${like},brand.ilike.${like},barcode.ilike.${like}`)
-    .is("archived_at", null)
-    .order("name")
-    .limit(20);
-
-  const rows = (data ?? []) as Array<{
-    id: string;
-    name: string;
-    brand: string | null;
-    base_quantity: number | string;
-    base_unit: string;
-    is_system_food: boolean;
-  }>;
+  // ⚠️ A busca em si saiu daqui (18-C · Bloco 4) e virou `searchFoodsByTerm`, na camada de
+  // leitura — o command da IA precisa dela e não pode importar Server Action.
+  const rows = await searchFoodsByTerm(term);
   if (rows.length === 0) return [];
 
   const measuresByFood = await getMeasuresForFoods(rows.map((r) => r.id));
 
   return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    brand: r.brand,
-    baseQuantity: Number(r.base_quantity),
-    baseUnit: r.base_unit,
-    isSystemFood: r.is_system_food,
+    ...r,
     measures: (measuresByFood.get(r.id) ?? []).map((m) => ({ id: m.id, label: m.label })),
   }));
 }
@@ -152,58 +130,18 @@ export async function searchQuickAddFoods(term: string): Promise<QuickAddFood[]>
 /* ═══════════════════════════ Resolver a refeição do dia ═══════════════════════════ */
 
 /**
- * Acha a refeição daquele tipo naquele dia; se não houver, cria.
- *
- * ⚠️ *Select-then-insert*, e não `upsert`: `nutrition_diary_meals` NÃO tem unique em
- * (user_id, diary_date, meal_type_id) — dois lanches no mesmo dia são legítimos. O único
- * índice único da tabela é PARCIAL (`planned_meal_id`), e o `ON CONFLICT` do PostgREST não
- * infere índice parcial (42P10, a armadilha documentada desde a 16-B).
+ * ⚠️ 18-C · Bloco 4 — a resolução da refeição saiu daqui e virou `resolverRefeicaoDoDia`, em
+ * `nutrition/services.ts`. O command `registrarConsumo` precisa exatamente dela: a IA diz
+ * "Almoço", não um uuid de linha de diário. Duas cópias divergiriam no primeiro dia em que
+ * alguém mudasse a regra de "achar ou criar" — e uma delas criaria refeição duplicada.
  */
 async function resolveDiaryMeal(
   ctx: NonNullable<Awaited<ReturnType<typeof authContext>>>,
   date: string,
   mealTypeId: string,
 ): Promise<{ id: string } | { error: string }> {
-  const { data: existing } = await ctx.supabase
-    .from("nutrition_diary_meals")
-    .select("id")
-    .eq("user_id", ctx.userId)
-    .eq("diary_date", date)
-    .eq("meal_type_id", mealTypeId)
-    .order("position")
-    .limit(1);
-
-  const found = (existing ?? [])[0];
-  if (found) return { id: found.id };
-
-  const { data: mealType } = await ctx.supabase
-    .from("nutrition_meal_types")
-    .select("id,default_time")
-    .eq("id", mealTypeId)
-    .maybeSingle();
-  if (!mealType) return { error: "Tipo de refeição não encontrado." };
-
-  const { count } = await ctx.supabase
-    .from("nutrition_diary_meals")
-    .select("id", { count: "exact", head: true })
-    .eq("diary_date", date);
-
-  const { data: created, error } = await ctx.supabase
-    .from("nutrition_diary_meals")
-    .insert({
-      user_id: ctx.userId,
-      diary_date: date,
-      meal_type_id: mealTypeId,
-      planned_time: mealType.default_time,
-      // O status GRAVADO continua sendo só fato. 'pendente' não existe no CHECK (16-B).
-      status: "fora_do_planejamento",
-      position: count ?? 0,
-    })
-    .select("id")
-    .single();
-
-  if (error || !created) return { error: "Não foi possível criar a refeição." };
-  return { id: created.id };
+  const r = await resolverRefeicaoDoDia(ctx, date, mealTypeId);
+  return r.ok ? { id: r.id } : { error: r.erro };
 }
 
 /* ═══════════════════════════ Ações do lançamento rápido ═══════════════════════════ */

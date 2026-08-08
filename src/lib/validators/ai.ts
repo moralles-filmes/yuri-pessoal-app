@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { optionalText } from "@/lib/validators/shared";
 import { AI_PROVIDERS } from "@/lib/ai/core/contracts";
-import { TOOL_PERMISSIONS, type ToolPermission } from "@/lib/ai/tools/contracts";
+import {
+  TOOL_PERMISSIONS,
+  TOOL_WRITE_PERMISSIONS,
+  type ToolPermission,
+  type ToolWritePermission,
+} from "@/lib/ai/tools/contracts";
 
 /**
  * Fase 18-A — IA · Schemas Zod.
@@ -285,9 +290,26 @@ export const aiPermissionsSchema = z.object(permissionShape).strict();
 
 export type AiPermissionsInput = z.infer<typeof aiPermissionsSchema>;
 
+/**
+ * As cinco flags `allow_write_*` (18-C · Bloco 4), pela MESMA derivação e pelos mesmos
+ * motivos. Objeto separado porque a decisão é separada: nenhuma leitura consulta este objeto,
+ * e nenhuma escrita passa só com o outro.
+ */
+const writePermissionShape = Object.fromEntries(
+  TOOL_WRITE_PERMISSIONS.map((chave) => [
+    chave,
+    z.boolean({ error: "Autorização de alteração inválida." }),
+  ]),
+) as { [K in ToolWritePermission]: z.ZodBoolean };
+
+export const aiWritePermissionsSchema = z.object(writePermissionShape).strict();
+
+export type AiWritePermissionsInput = z.infer<typeof aiWritePermissionsSchema>;
+
 export const aiPreferencesSchema = z
   .object({
     permissions: aiPermissionsSchema,
+    writePermissions: aiWritePermissionsSchema,
     defaultProvider: aiProviderEnum
       .nullish()
       .transform((v) => (v === undefined ? null : v)),

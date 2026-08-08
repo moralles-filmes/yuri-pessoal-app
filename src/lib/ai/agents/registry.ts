@@ -98,22 +98,36 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
   {
     id: TODO_AGENT_ID,
     label: "TO-DO",
+    /**
+     * ⚠️ 18-C · Bloco 4 — a descrição dizia "Só lê — não altera nada", e deixou de ser
+     * verdade: este agente é o primeiro a alcançar ferramentas de escrita. O que ela promete
+     * agora é o que continua sendo garantido, e por construção — a alteração é preparada,
+     * mostrada e só acontece com a confirmação do dono.
+     */
     description:
-      "Consulta suas tarefas: o que está atrasado, o que é para hoje, o que vem a seguir e os projetos. Só lê — não altera nada.",
+      "Consulta suas tarefas: o que está atrasado, o que é para hoje, o que vem a seguir e os projetos. Também prepara tarefas novas, conclusões e mudanças de data — sempre para você confirmar antes.",
     promptVersion: TODO_PROMPT_VERSION,
     prompt: TODO_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
-    allowedTools: ["todo.get_agenda", "todo.search_tasks", "todo.get_projects"],
+    allowedTools: [
+      "todo.get_agenda",
+      "todo.search_tasks",
+      "todo.get_projects",
+      "todo.criar_tarefa",
+      "todo.concluir_tarefa",
+      "todo.reagendar_tarefa",
+    ],
   },
   {
     id: HABITOS_AGENT_ID,
     label: "Hábitos",
     description:
-      "Consulta seus hábitos: a situação de hoje, as sequências e a consistência. Só lê — não altera nada.",
+      // ⚠️ 18-C · Bloco 4 — "Só lê" caiu aqui pelo mesmo motivo que caiu no TO-DO.
+      "Consulta seus hábitos: a situação de hoje, as sequências e a consistência. Também prepara o registro do dia — sempre para você confirmar antes.",
     promptVersion: HABITOS_PROMPT_VERSION,
     prompt: HABITOS_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
-    allowedTools: ["habits.get_today", "habits.get_streaks"],
+    allowedTools: ["habits.get_today", "habits.get_streaks", "habits.registrar"],
   },
   {
     id: ESTUDOS_AGENT_ID,
@@ -128,12 +142,17 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
   {
     id: AGENDA_AGENT_ID,
     label: "Agenda",
+    /**
+     * ⚠️ 18-C · Bloco 4 — "não cria, não altera e não cancela nada" caiu; "não cancela"
+     * ficou, porque continua sendo verdade: `excluirEvento` existe como command e NÃO tem
+     * ferramenta, então o modelo não alcança o cancelamento.
+     */
     description:
-      "Consulta seus compromissos: os próximos e os de um dia específico. Só lê — não cria, não altera e não cancela nada.",
+      "Consulta seus compromissos: os próximos e os de um dia específico. Também prepara compromissos novos — sempre para você confirmar antes. Não altera nem cancela compromissos existentes.",
     promptVersion: AGENDA_PROMPT_VERSION,
     prompt: AGENDA_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
-    allowedTools: ["calendar.get_upcoming", "calendar.get_day"],
+    allowedTools: ["calendar.get_upcoming", "calendar.get_day", "calendar.criar_evento"],
   },
   {
     id: TAREFAS_AGENT_ID,
@@ -149,7 +168,12 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
     id: FINANCEIRO_AGENT_ID,
     label: "Financeiro",
     description:
-      "Consulta suas finanças: saldo das contas, resumo do mês e faturas de cartão. Só lê — não lança, não paga e não altera nada.",
+      /**
+       * ⚠️ 18-C · Bloco 4 — "não lança" caiu; "não paga e não altera" FICOU, e continua
+       * verdade: não há ferramenta de pagar fatura, de editar nem de excluir. A frase precisa
+       * ser exata neste módulo — é a que o dono lê antes de ligar a chave do dinheiro.
+       */
+      "Consulta suas finanças: saldo das contas, resumo do mês e faturas de cartão. Também prepara lançamentos à vista — sempre para você confirmar antes. Não parcela, não divide com terceiros, não transfere entre contas, não paga fatura e não altera lançamento existente.",
     promptVersion: FINANCEIRO_PROMPT_VERSION,
     prompt: FINANCEIRO_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
@@ -157,13 +181,19 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
       "finance.get_balances",
       "finance.get_spending",
       "finance.get_invoice",
+      "finance.lancar_transacao",
     ],
   },
   {
     id: DIETA_AGENT_ID,
     label: "Dieta e Alimentação",
+    /**
+     * ⚠️ 18-C · Bloco 4 — "Só lê" caiu. O que ficou é o limite exato do que ela passou a
+     * poder: preparar um registro no diário. Medidas corporais continuam SÓ LEITURA — não há
+     * ferramenta de escrita em `body_*`, e a frase não pode sugerir que haja.
+     */
     description:
-      "Consulta seu registro alimentar (consumo do dia, do período e as metas) e, com a autorização de medidas, o peso e as circunferências. Só lê — não registra nem altera nada.",
+      "Consulta seu registro alimentar (consumo do dia, do período e as metas) e, com a autorização de medidas, o peso e as circunferências. Também prepara registros no diário alimentar — sempre para você confirmar antes. Não altera metas nem medidas.",
     promptVersion: DIETA_PROMPT_VERSION,
     prompt: DIETA_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
@@ -171,6 +201,7 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
       "nutrition.get_day",
       "nutrition.get_period",
       "nutrition.get_goals",
+      "nutrition.registrar_consumo",
       // ⚠️ As MESMAS duas ferramentas do agente de Treinos, não cópias: `body_*` é módulo
       // central, e uma segunda ferramenta para o mesmo dado daria duas respostas para o
       // mesmo fato. Elas exigem `allow_body`, que é separada de `allow_nutrition`.

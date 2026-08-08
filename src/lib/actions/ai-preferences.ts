@@ -76,6 +76,25 @@ export async function saveAiPreferences(
       allow_tasks: dados.permissions.allow_tasks,
       allow_habits: dados.permissions.allow_habits,
       allow_studies: dados.permissions.allow_studies,
+      /**
+       * ⚠️ As cinco autorizações de ESCRITA (18-C · Bloco 4). Mesma disciplina campo a campo,
+       * e um cuidado a mais: **escrita sem a leitura do mesmo módulo é derrubada aqui**, não
+       * só desabilitada na tela. A tela é conveniência; esta linha é a regra.
+       *
+       * Sem isto, um POST montado à mão gravaria `allow_write_todo = true` com
+       * `allow_todo = false` — um estado que o guard recusa na execução, mas que a tela de
+       * preferências passaria a exibir como "alterações autorizadas". Estado impossível
+       * gravado é pior que estado impossível recusado.
+       */
+      allow_write_todo: dados.writePermissions.allow_write_todo && dados.permissions.allow_todo,
+      allow_write_habits:
+        dados.writePermissions.allow_write_habits && dados.permissions.allow_habits,
+      allow_write_calendar:
+        dados.writePermissions.allow_write_calendar && dados.permissions.allow_calendar,
+      allow_write_nutrition:
+        dados.writePermissions.allow_write_nutrition && dados.permissions.allow_nutrition,
+      allow_write_finance:
+        dados.writePermissions.allow_write_finance && dados.permissions.allow_finance,
       default_provider: dados.defaultProvider,
       default_model: dados.defaultModel,
       confirmation_mode: dados.confirmationMode,

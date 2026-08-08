@@ -31,10 +31,15 @@ import {
   asValueState,
   DEFAULT_MEAL_TYPES,
 } from "./constants";
-import { parseNutrientSnapshot, type SnapshotFoodInput } from "./snapshot";
-import type { ConvertibleMeasure } from "./units";
+import {
+  buildDiaryEntrySnapshot,
+  parseNutrientSnapshot,
+  type SnapshotFoodInput,
+} from "./snapshot";
+import { CONVERSION_FAILURE_MESSAGES, type ConvertibleMeasure } from "./units";
 import type {
   DiaryEntry,
+  DiaryEntrySnapshot,
   DiaryMeal,
   FoodNutrientValue,
   GoalItemRow,
@@ -567,6 +572,97 @@ export async function getFoodBasics(foodIds: string[]): Promise<Map<string, Food
     });
   }
   return map;
+}
+
+export type SnapshotResolvido =
+  | { readonly ok: true; readonly snapshot: DiaryEntrySnapshot }
+  | { readonly ok: false; readonly erro: string };
+
+/**
+ * Lê o catálogo e monta o snapshot do consumo. SÓ LÊ — o cálculo é puro (`calc.ts`).
+ *
+ * ⚠️ 18-C · Bloco 4 — mora na camada de LEITURA de propósito, e não junto da gravação: a
+ * previsão do command precisa exatamente dela, e a fronteira do módulo de IA proíbe o lado
+ * "preview" de importar um arquivo de serviço (que é onde a escrita vive).
+ *
+ * Não é uma duplicação da montagem: é a MESMA montagem, chamada duas vezes — uma para o dono
+ * ler, outra para gravar. É isso que faz a tela mostrar exatamente os números que vão ser
+ * congelados, e o que faz a revalidação por hash detectar catálogo alterado entre propor e
+ * confirmar: mudou o valor nutricional nesses 10 minutos, o hash diverge e nada é gravado.
+ */
+export async function montarSnapshotDoConsumo(
+  foodId: string,
+  quantidade: number,
+  measureId: string | null,
+): Promise<SnapshotResolvido> {
+  const source = await getFoodSnapshotInput(foodId, measureId);
+  if (!source) return { ok: false, erro: "Alimento não encontrado." };
+
+  const built = buildDiaryEntrySnapshot({
+    food: source.food,
+    quantity: quantidade,
+    measure: source.measure,
+  });
+  // Conversão impossível é erro explícito com a mensagem certa — nunca uma estimativa.
+  if (!built.ok) return { ok: false, erro: CONVERSION_FAILURE_MESSAGES[built.reason] };
+
+  return { ok: true, snapshot: built.snapshot };
+}
+
+export type FoodSearchHit = {
+  id: string;
+  name: string;
+  brand: string | null;
+  baseQuantity: number;
+  baseUnit: string;
+  isSystemFood: boolean;
+};
+
+/**
+ * Busca de alimento por texto, NO SERVIDOR e limitada.
+ *
+ * ⚠️ 18-C · Bloco 4 — isto morava dentro de `searchQuickAddFoods`, numa Server Action. O
+ * command da IA precisa da MESMA busca (a IA diz "arroz", não um uuid) e não pode importar
+ * `@/lib/actions/` — a fronteira do módulo de IA proíbe, porque uma action carrega
+ * `revalidatePath`. Duas buscas divergiriam no primeiro ajuste de higienização, e a IA
+ * passaria a resolver nomes que a tela não resolve (ou o contrário).
+ *
+ * A RLS alcança a base do sistema (`user_id is null`) e os alimentos do próprio usuário —
+ * nunca os de outro.
+ */
+export async function searchFoodsByTerm(term: string, limit = 20): Promise<FoodSearchHit[]> {
+  const supabase = await createClient();
+
+  // Mesma higienização da busca global: estes caracteres quebram o filtro do PostgREST.
+  const q = String(term ?? "").replace(/[%_\\,()*:]/g, " ").trim();
+  if (q.length < 2) return [];
+  const like = `%${q}%`;
+
+  const { data } = await supabase
+    .from("nutrition_foods")
+    .select("id,name,brand,base_quantity,base_unit,is_system_food")
+    .or(
+      `name.ilike.${like},alternative_name.ilike.${like},brand.ilike.${like},barcode.ilike.${like}`,
+    )
+    .is("archived_at", null)
+    .order("name")
+    .limit(limit);
+
+  return ((data ?? []) as Array<{
+    id: string;
+    name: string;
+    brand: string | null;
+    base_quantity: number | string;
+    base_unit: string;
+    is_system_food: boolean;
+  }>).map((r) => ({
+    id: r.id,
+    name: r.name,
+    brand: r.brand,
+    baseQuantity: Number(r.base_quantity),
+    baseUnit: r.base_unit,
+    isSystemFood: r.is_system_food,
+  }));
 }
 
 /**

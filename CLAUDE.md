@@ -16,9 +16,9 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅. **18-C: leitura (Bloco 1–2) ✅ e Approval Engine (Bloco 3) ✅ — nenhuma escrita é possível ainda: o registry de commands está VAZIO** |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅. **18-C: Blocos 1–4 ✅ — a IA passou a ESCREVER, em 6 ferramentas e 13 commands, sempre com confirmação do dono** |
 
-Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`), e o número continua 124. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -130,11 +130,25 @@ uso único e revalidação. Desenhos em
 ⚠️ **A IA lê os NOVE módulos, e cada um SÓ se a sua flag `allow_*` estiver ligada** — todas
 nascem `false` no banco, e as chaves estão em `/ia/configuracoes`.
 
-⚠️ **NENHUMA ESCRITA É POSSÍVEL AINDA, e são TRÊS travas independentes:** nenhum descriptor
-com `kind: "escrita"` no registry; as cinco chaves `allow_write_*` nascendo `false`; e o
-**registry de commands VAZIO** em `src/lib/ai/approval/execute.ts` — uma proposta íntegra,
-confirmada e no prazo ainda para em `COMMAND_DESCONHECIDO`. Ligar o primeiro command é o
-Bloco 4, e é decisão do dono.
+⚠️ **A ESCRITA EXISTE DESDE O BLOCO 4 (2026-08-07), e continua DESLIGADA de fábrica.** São
+**6 ferramentas de escrita** e **13 commands**; as cinco chaves `allow_write_*` nascem `false`
+no banco e cada uma só é clicável junto com a chave de leitura do mesmo módulo. Nenhuma ação é
+aplicada sem o dono confirmar na tela, uma de cada vez, com prazo de 10 minutos.
+
+| Ferramenta | Command | Desfazer (sem ferramenta) | Risco |
+| --- | --- | --- | --- |
+| `todo.criar_tarefa` | `criarTarefaTodo` | `excluirTarefaTodo` | 2 |
+| `todo.concluir_tarefa` | `concluirTarefaTodo` | `reabrirTarefaTodo` | 2 |
+| `todo.reagendar_tarefa` | `reagendarTarefaTodo` | — (grava a data anterior) | 2 |
+| `habits.registrar` | `registrarHabito` | `desfazerHabito` | 2 |
+| `calendar.criar_evento` | `criarEvento` | `excluirEvento` | 3 |
+| `nutrition.registrar_consumo` | `registrarConsumo` | `desfazerConsumo` | 3 |
+| `finance.lancar_transacao` | `lancarTransacao` | `excluirTransacao` | 3 |
+
+⛔ **Os seis `undo` NÃO estão no Tool Registry, e a ausência é a trava:** o modelo não tem como
+propor exclusão, reabertura, apagamento de registro, cancelamento de compromisso nem exclusão
+de lançamento. Quem os alcança é o botão de desfazer da tela, sobre uma execução que a própria
+IA acabou de fazer. Excluir por pedido em linguagem natural é risco 4 e está fora da 18-C.
 
 ⚠️ **`body_*` é o módulo que quebra a simetria "1 módulo = 1 agente = 1 flag".** Ele não tem
 tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos agentes de
@@ -323,6 +337,54 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     assinada, texto longo e chave são recusados **sem que ninguém precise tê-los previsto** —
     uma lista de nomes proibidos fura no primeiro campo novo. Campo omitido vira
     `undetailed_change`, e **nem o nome dele** é registrado.
+
+**Invariantes acrescentadas pelo Bloco 4 da 18-C (a IA passa a escrever):**
+
+40. ⛔ **CADA COMMAND É PARTIDO EM DOIS ARQUIVOS, E ISSO É A GARANTIA DO BLOCO 3 SOBREVIVENDO.**
+    `<modulo>-preview.ts` só lê; `<modulo>.ts` escreve. O Tool Executor importa
+    `commands/previews.ts` — um registry deliberadamente mutilado, sem `executar` em entrada
+    nenhuma. Importar o objeto `Command` inteiro faria o laço **segurar** a função que grava, e
+    *"a escrita não acontece dentro do run"* cairia de **não alcança** para **não chama**.
+    Três testes de fronteira, todos com mutação confirmada: `tools/` só alcança
+    `commands/previews`; nenhum `*-preview.ts` importa um `services`; e `.executar(` aparece em
+    **um** arquivo do repositório.
+41. **NENHUMA REGRA DE NEGÓCIO É REESCRITA — e a prova é de IMPORT, não de promessa.** Cada
+    módulo ganhou um `services.ts` extraído da Server Action (`todo`, `habits`, `calendar`,
+    `nutrition`, `finance`), e os dois caminhos o chamam. A action virou casca: `auth + Zod +
+    serviço + revalidatePath`. Extrai-se a função **INTEIRA**, nunca "a parte que a IA usa" —
+    quem restringe é o **schema da ferramenta**, e uma versão simplificada seria a segunda
+    implementação que diverge no primeiro campo novo. Cada command tem um **teste de
+    equivalência** comparando o objeto que a IA monta com o que o formulário monta.
+42. **O EFEITO É RESOLVIDO DE NOVO NA EXECUÇÃO, a partir dos NOMES.** O payload gravado guarda
+    o que o dono disse ("arroz", "Nubank", "beber água"), não ids. Resolver outra vez é o que dá
+    sentido à revalidação por hash: se o nome passou a casar com outro registro nos 10 minutos,
+    a previsão recalculada difere, o hash diverge e **nada é gravado**. Nome ambíguo **recusa**
+    (`EfeitoImpossivel`) com os candidatos na mensagem — o sistema nunca desempata sozinho.
+43. **A PREVISÃO É O CÁLCULO REAL, não uma descrição dele.** Em Dieta, o snapshot mostrado é
+    montado por `montarSnapshotDoConsumo` — a MESMA função que grava —, e por isso
+    `nutriente ausente` aparece como *"não informado na fonte"*, nunca como zero (invariante 1
+    do módulo, aplicada ao ponto em que o dono confirma). Em Financeiro, a fatura em que a
+    compra cai sai de `resolverFatura`, a regra pura que a gravação também usa.
+44. ⚠️ **`externo` é a quarta SENSIBILIDADE, e nasceu com `calendar.criar_evento`.** As três
+    primeiras dizem o que o efeito TOCA; nenhuma dizia **onde ele para**. Com o Google
+    conectado, o compromisso vai para o calendário do dono lá fora e para os aparelhos dele —
+    e é o único efeito da subfase que não se desfaz mexendo só no nosso banco. A previsão
+    declara isso, com o e-mail da conta, **antes** da confirmação.
+45. **`approval/` NÃO monta consulta a tabela de módulo** — só toca `ai_*`. A previsão do
+    Financeiro precisou de três leituras novas (`getCardBillingDays`,
+    `getStatementByCompetencia`, `getTransactionById`) e elas nasceram em
+    `finance/queries.ts`, não dentro do módulo de IA. Consulta montada aqui é a porta pela qual
+    a regra do domínio começa a ser reescrita: primeiro o `select`, depois o filtro, depois a
+    decisão. O teste de fronteira pegou isso em revisão.
+46. ⛔ **O EVENTO `switch` LIMPA AS PROPOSTAS DA TELA.** Troca de provedor reinicia o laço, a
+    ferramenta de escrita roda de novo e nasce uma **segunda** proposta, com outro id e outro
+    hash. Dois cartões na tela, e confirmar os dois criaria duas tarefas — a aprovação de uso
+    único não impede, porque são propostas distintas. A órfã expira em 10 min sem ter tocado
+    em nada.
+47. **A chave de escrita é ANDada com a de leitura no SERVIDOR**, não só na tela: propor começa
+    por resolver de qual registro se fala, e isso é ler. E `toolsForWritePermission` (derivado
+    do registry) é quem decide se a chave é clicável — as cinco têm ferramenta desde o Bloco 4,
+    com teste que fica vermelho se alguma ficar órfã.
 
 ## Leitura obrigatória antes de mexer no código
 

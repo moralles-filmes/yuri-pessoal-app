@@ -9,6 +9,33 @@
 
 ### ⏳ ONDE A 18-C PAROU, E POR QUÊ
 
+> ## ✅ O BLOCO 4 FECHOU (2026-08-07) — A IA ESCREVE
+>
+> **6 ferramentas de escrita, 13 commands, 5 chaves — todas desligadas de fábrica.**
+> `todo.criar_tarefa` · `todo.concluir_tarefa` · `todo.reagendar_tarefa` · `habits.registrar` ·
+> `calendar.criar_evento` · `nutrition.registrar_consumo` · `finance.lancar_transacao`.
+>
+> As duas decisões que o texto abaixo antecipava **foram tomadas como previsto**: a segunda
+> porta declarada (`approval/commands/`) foi aberta no teste de fronteira, e o teste do registry
+> vazio virou uma **lista nomeada** — acrescentar um command continua exigindo editá-lo.
+>
+> **E uma terceira, que o Bloco 3 não previu e quase se perdeu:** importar o objeto `Command`
+> inteiro no Tool Executor daria ao laço um `executar` na mão. Por isso **cada command é
+> partido em dois arquivos** (`<modulo>-preview.ts` só lê, `<modulo>.ts` escreve) e o executor
+> importa `commands/previews.ts`, um registry sem `executar` em entrada nenhuma. A garantia
+> *"a escrita não acontece dentro do run"* voltou a ser **transitiva de import**, e não uma
+> convenção de "não chamar".
+>
+> **O que continua fora, e por decisão:** as ações de risco 4 (pagar fatura, parcelar, dividir
+> com terceiros, transferir entre contas, editar/excluir registro existente). Os seis `undo`
+> existem como command e **não têm ferramenta** — só o botão da tela os alcança.
+>
+> Detalhe completo em `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md` → *"O que o Bloco 4
+> entregou de fato"*, e nas invariantes **40 a 47** do `CLAUDE.md`.
+>
+> **O que falta na 18-C:** os blocos 5 e 6 do spec (histórico de ações na tela, e o polimento
+> de auditoria). Ver a §3 do spec.
+
 **Blocos 1, 2 e 3 concluídos** (2026-08-07):
 
 - **1–2 · leitura.** Os **nove módulos** têm ferramentas de LEITURA (22 no registry, 9
@@ -18,18 +45,19 @@
   chaves `allow_write_*`, hash canônico do EFEITO, prazo de 10 min **do banco**, uso único
   por índice, revalidação por recálculo, e as travas de fronteira testadas.
 
-⛔ **E MESMO ASSIM NENHUMA ESCRITA É POSSÍVEL — de propósito.** São três travas independentes:
-nenhum descriptor `kind: "escrita"` no registry, as cinco chaves `allow_write_*` nascendo
-`false`, e o **registry de commands VAZIO** (`ACTION_COMMANDS` em `approval/execute.ts`), do
-mesmo jeito que o Tool Registry nasceu vazio na 18-A. Uma proposta íntegra, confirmada e no
-prazo para em `COMMAND_DESCONHECIDO` **sem sequer reservar vaga de execução** — há teste.
+⛔ **NO FIM DO BLOCO 3 NENHUMA ESCRITA ERA POSSÍVEL — de propósito.** Eram três travas
+independentes: nenhum descriptor `kind: "escrita"` no registry, as cinco chaves `allow_write_*`
+nascendo `false`, e o **registry de commands VAZIO**. *O Bloco 4 desfez a primeira e a
+terceira, na ordem da matriz; **a segunda continua de pé** — as cinco chaves seguem `false` no
+banco, e são elas que decidem se a IA pode preparar qualquer alteração.*
 
-**O Bloco 4 é o primeiro em que a IA passa a alterar dado real.** Ordem crescente de risco,
-um command por vez, com teste de equivalência contra o formulário:
+**O Bloco 4 foi o primeiro em que a IA passou a alterar dado real.** Ordem crescente de risco,
+um command por vez, com teste de equivalência contra o formulário — a ordem foi cumprida:
 `criarTarefaTodo` → `concluirTarefaTodo` → `registrarHabito` → `reagendarTarefaTodo` →
 `criarEvento` → `registrarConsumo` → **`lancarTransacao` por último**.
 
-⚠️ **Duas coisas que o Bloco 4 vai ter de decidir, e que o Bloco 3 deixou marcadas no código:**
+⚠️ **Duas coisas que o Bloco 4 teve de decidir, e que o Bloco 3 deixou marcadas no código
+(ambas resolvidas — ficam aqui como registro):**
 
 1. `boundaries.test.ts` proíbe `src/lib/ai/` de importar serviço de módulo fora de
    `tools/adapters/`. Os commands vão precisar disso — a regra "nenhuma regra de negócio é

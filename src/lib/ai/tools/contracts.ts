@@ -92,7 +92,21 @@ export type ToolWritePermission = (typeof TOOL_WRITE_PERMISSIONS)[number];
  * que faz `isToolDescriptorCoherent` exigir risco ≥ 3 de quem mexe com dinheiro, saúde ou
  * histórico consolidado (§3.1 do design da 18-C).
  */
-export const SENSIBILIDADES = ["dinheiro", "saude", "historico_consolidado"] as const;
+/**
+ * ⚠️ `externo` entrou no Bloco 4, com `calendar.criar_evento`, e a ausência dela era um buraco
+ * real no vocabulário: as três primeiras descrevem o QUE o efeito toca, e nenhuma descrevia
+ * ONDE ele para. Um compromisso criado com o Google conectado não fica no banco do dono — ele
+ * vai para o calendário dele lá fora e chega aos aparelhos sincronizados. Isso não é
+ * "dinheiro", não é "saúde" e não é "histórico consolidado", e ainda assim é a razão mais
+ * forte para exigir risco 3 nesta subfase: é o único efeito que não dá para desfazer só
+ * mexendo no nosso banco.
+ */
+export const SENSIBILIDADES = [
+  "dinheiro",
+  "saude",
+  "historico_consolidado",
+  "externo",
+] as const;
 export type Sensibilidade = (typeof SENSIBILIDADES)[number];
 
 export type ToolDescriptor = {

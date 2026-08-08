@@ -14,6 +14,8 @@
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/supabase";
 import type { NivelDeRisco, ToolRef } from "@/lib/ai/tools/contracts";
 import type { ValorCanonico } from "./canonical";
 
@@ -195,4 +197,59 @@ export function isCommandCoherent(
   }
   if (command.undo !== null && !nomesConhecidos.includes(command.undo)) return false;
   return true;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+// 5. O command executável — 18-C · Bloco 4
+// ══════════════════════════════════════════════════════════════════════════════════════
+
+/** O client de SESSÃO (a RLS vale) e o dono, vindo de `authContext()`. Nunca service role. */
+export type CommandContext = {
+  readonly supabase: SupabaseClient<Database>;
+  readonly userId: string;
+};
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ AS TRÊS METADES DO COMMAND VIVEM JUNTAS, E É ISSO QUE FECHA A DIVERGÊNCIA.            ║
+ * ║                                                                                       ║
+ * ║   `parse`    — o Zod `.strict()`. O MESMO nas duas pontas: valida o que o modelo pediu ║
+ * ║                (na proposta) e o que voltou do `jsonb` (na execução).                  ║
+ * ║   `prever`   — monta o efeito. Roda DUAS vezes: ao propor, para o dono ler; e ao       ║
+ * ║                executar, para descobrir se o mundo mudou desde então.                  ║
+ * ║   `executar` — chama o serviço de domínio. É a única metade que escreve.               ║
+ * ║                                                                                       ║
+ * ║ Fossem dois arquivos, a previsão exibida e a recalculada divergiriam no primeiro campo ║
+ * ║ acrescentado a um dos dois — e a revalidação passaria a recusar propostas legítimas    ║
+ * ║ (ou, na direção pior, a aprovar uma previsão que não é a que o dono leu).              ║
+ * ║                                                                                       ║
+ * ║ ⚠️ É POR ISSO QUE NÃO EXISTE "ADAPTER DE ESCRITA" em `tools/adapters/`. As leituras    ║
+ * ║ têm adapter porque a saída delas não tem segunda vida; uma escrita tem, e a segunda    ║
+ * ║ vida acontece minutos depois, noutro processo. Um adapter que previsse por conta        ║
+ * ║ própria seria a segunda implementação da mesma previsão.                                ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export type Command = CommandDescriptor & {
+  readonly parse: (payload: unknown) => { ok: true; valor: unknown } | { ok: false };
+  readonly prever: (ctx: CommandContext, payload: unknown) => Promise<EfeitoProposto>;
+  readonly executar: (
+    ctx: CommandContext,
+    payload: unknown,
+    idempotencyKey: string,
+  ) => Promise<ResultadoDoCommand>;
+};
+
+/**
+ * O que `prever` devolve quando não dá para prever — porque o registro não existe mais, não
+ * é do usuário, ou o mundo mudou de um jeito que torna a ação sem sentido.
+ *
+ * Lançar é o contrato, e `execute.ts` traduz o lançamento em `EFEITO_MUDOU`. Devolver um
+ * efeito "vazio" seria pior: ele teria hash, casaria com nada e o dono confirmaria uma tela
+ * em branco.
+ */
+export class EfeitoImpossivel extends Error {
+  constructor(public readonly motivo: string) {
+    super(motivo);
+    this.name = "EfeitoImpossivel";
+  }
 }

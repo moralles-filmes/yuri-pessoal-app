@@ -11,6 +11,11 @@ import {
   googleToEventFields,
   type GoogleEventResource,
 } from "@/lib/calendar/mapping";
+import {
+  atualizarEventoNoGoogle,
+  criarEventoNaAgenda,
+  excluirEventoDaAgenda,
+} from "@/lib/calendar/services";
 import { reconcile, type GoogleSyncEvent, type LocalSyncEvent } from "@/lib/calendar/sync";
 import {
   deleteGoogleIntegration,
@@ -23,54 +28,17 @@ import { syncAllTasksToGoogle } from "@/lib/todo/calendar-sync";
 import { addDaysIso } from "@/lib/todo/recurrence";
 import { hojeISO } from "@/lib/format";
 import {
-  deleteEvent as googleDeleteEvent,
   insertEvent as googleInsertEvent,
   listEvents as googleListEvents,
   patchEvent as googlePatchEvent,
 } from "@/lib/google/calendar";
 
-type Ctx = NonNullable<Awaited<ReturnType<typeof authContext>>>;
-
-/** Campos do evento aceitos pelo mapeador Google (subset do row). */
-function toGoogleResourceInput(data: {
-  title: string;
-  description: string | null;
-  location: string | null;
-  start_at: string;
-  end_at: string;
-  all_day: boolean;
-  recurrence_freq: CalendarEventRow["recurrence_freq"];
-  recurrence_interval: number;
-  recurrence_until: string | null;
-  reminder_minutes: number | null;
-}): GoogleEventResource {
-  return eventToGoogleResource(data);
-}
-
-/** Empurra (best-effort) um evento recém-criado para o Google. Nunca derruba a ação. */
-async function pushCreate(ctx: Ctx, eventId: string, data: Parameters<typeof toGoogleResourceInput>[0]) {
-  try {
-    const token = await getValidAccessToken(ctx);
-    if (!token) return;
-    const created = await googleInsertEvent(
-      token.accessToken,
-      token.calendarId,
-      toGoogleResourceInput(data),
-    );
-    await ctx.supabase
-      .from("calendar_events")
-      .update({
-        google_event_id: created.id ?? null,
-        google_calendar_id: token.calendarId,
-        etag: created.etag ?? null,
-        synced_at: new Date().toISOString(),
-      })
-      .eq("id", eventId);
-  } catch {
-    // Sem internet/erro do Google: o evento local fica salvo; "Sincronizar" reconcilia depois.
-  }
-}
-
+/**
+ * ⚠️ 18-C · Bloco 4 — a criação saiu daqui e virou `calendar/services.ts`. O que sobrou nesta
+ * action é a casca: auth, Zod, serviço e `revalidatePath`. O command `criarEvento` chama o
+ * MESMO serviço, e é isso que faz "nenhuma regra de negócio é reescrita" ser um fato de
+ * import, não uma promessa.
+ */
 export async function createEvent(
   input: unknown,
 ): Promise<ActionResult<{ id: string }>> {
@@ -80,34 +48,11 @@ export async function createEvent(
   const parsed = calendarEventSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
 
-  const d = parsed.data;
-  const { data, error } = await ctx.supabase
-    .from("calendar_events")
-    .insert({
-      user_id: ctx.userId,
-      title: d.title,
-      description: d.description,
-      location: d.location,
-      start_at: d.start_at,
-      end_at: d.end_at,
-      all_day: d.all_day,
-      tipo: d.tipo,
-      color: d.color,
-      recurrence_freq: d.recurrence_freq,
-      recurrence_interval: d.recurrence_interval,
-      recurrence_until: d.recurrence_until,
-      reminder_minutes: d.reminder_minutes,
-      task_id: d.task_id,
-      origin: "local",
-    })
-    .select("id")
-    .single();
+  const r = await criarEventoNaAgenda(ctx, parsed.data);
+  if (!r.ok) return dbError(r.erro);
 
-  if (error || !data) return dbError("Não foi possível salvar o evento.");
-
-  await pushCreate(ctx, data.id, d);
   revalidatePath("/agenda");
-  return { ok: true, data: { id: data.id } };
+  return { ok: true, data: { id: r.id } };
 }
 
 export async function updateEvent(
@@ -150,23 +95,7 @@ export async function updateEvent(
 
   // Push (best-effort) se o evento já está vinculado ao Google.
   if (existing?.google_event_id) {
-    try {
-      const token = await getValidAccessToken(ctx);
-      if (token) {
-        const updated = await googlePatchEvent(
-          token.accessToken,
-          token.calendarId,
-          existing.google_event_id,
-          toGoogleResourceInput(d),
-        );
-        await ctx.supabase
-          .from("calendar_events")
-          .update({ etag: updated.etag ?? null, synced_at: new Date().toISOString() })
-          .eq("id", id);
-      }
-    } catch {
-      // Local salvo; reconciliar depois.
-    }
+    await atualizarEventoNoGoogle(ctx, id, existing.google_event_id, d);
   }
 
   revalidatePath("/agenda");
@@ -177,26 +106,8 @@ export async function deleteEvent(id: string): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { data: existing } = await ctx.supabase
-    .from("calendar_events")
-    .select("google_event_id")
-    .eq("id", id)
-    .maybeSingle();
-
-  // Exclui no Google primeiro (best-effort); 404/410 são tratados como já-excluído.
-  if (existing?.google_event_id) {
-    try {
-      const token = await getValidAccessToken(ctx);
-      if (token) {
-        await googleDeleteEvent(token.accessToken, token.calendarId, existing.google_event_id);
-      }
-    } catch {
-      // Segue excluindo localmente.
-    }
-  }
-
-  const { error } = await ctx.supabase.from("calendar_events").delete().eq("id", id);
-  if (error) return dbError("Não foi possível excluir o evento.");
+  const r = await excluirEventoDaAgenda(ctx, id);
+  if (!r.ok) return dbError(r.erro);
 
   revalidatePath("/agenda");
   return { ok: true, data: undefined };

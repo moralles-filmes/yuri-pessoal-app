@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { habitLogSchema, habitSchema } from "@/lib/validators/habit";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
-import { reachedTarget } from "@/lib/habits/streak";
+import {
+  desfazerCheckIn,
+  logDoDia,
+  metaDoHabito,
+  registrarCheckIn,
+} from "@/lib/habits/services";
 import { reorderedPositions } from "@/lib/shared/reorder";
 import type { ActionResult } from "@/types/finance";
 import type { HabitCategory, HabitUnit } from "@/lib/habits/constants";
@@ -172,56 +177,20 @@ export async function reorderHabits(
 
 /* ───────────────────────────── Check-in diário ───────────────────────────── */
 
-/** Lê a meta do hábito (para derivar `is_done` na regra reachedTarget). */
-async function getTarget(ctx: Ctx, habitId: string): Promise<number | null> {
-  const { data } = await ctx.supabase
-    .from("habits")
-    .select("target_value")
-    .eq("id", habitId)
-    .maybeSingle();
-  return data ? Number(data.target_value) : null;
-}
-
-/** Lê o log do dia (base para um check-in idempotente). */
-async function getDayLog(ctx: Ctx, habitId: string, logDate: string) {
-  const { data } = await ctx.supabase
-    .from("habit_logs")
-    .select("id, value, is_done, notes")
-    .eq("habit_id", habitId)
-    .eq("log_date", logDate)
-    .maybeSingle();
-  return data;
-}
-
 /**
- * Núcleo do check-in: UPSERT por (user_id, habit_id, log_date) — nunca duplica o dia.
- * Quando `isDone` não é informado, deriva da meta (reachedTarget). Falha se o hábito
- * não pertence ao usuário (RLS) ou não existe.
+ * ⚠️ 18-C · Bloco 4 — O MIOLO DO CHECK-IN MORA EM `habits/services.ts`.
+ *
+ * Esta casca só acrescenta o `revalidatePath` e a tradução para `ActionResult`. O command
+ * `registrarHabito` chama o MESMO serviço, sem a casca — é o que faz "nenhuma regra de negócio
+ * é reescrita" ser um fato do código.
  */
 async function upsertLog(
   ctx: Ctx,
   habitId: string,
   fields: { logDate: string; value: number; notes?: string | null; isDone?: boolean },
 ): Promise<ActionResult> {
-  const target = await getTarget(ctx, habitId);
-  if (target === null) return dbError("Hábito não encontrado.");
-
-  const value = Math.max(0, fields.value);
-  const isDone = fields.isDone ?? reachedTarget(value, target);
-
-  const { error } = await ctx.supabase.from("habit_logs").upsert(
-    {
-      user_id: ctx.userId,
-      habit_id: habitId,
-      log_date: fields.logDate,
-      value,
-      is_done: isDone,
-      notes: fields.notes ?? null,
-    },
-    { onConflict: "user_id,habit_id,log_date" },
-  );
-
-  if (error) return dbError("Não foi possível registrar o check-in.");
+  const r = await registrarCheckIn(ctx, habitId, fields);
+  if (!r.ok) return dbError(r.erro);
   revalidate();
   return { ok: true, data: undefined };
 }
@@ -248,7 +217,7 @@ export async function incrementHabit(
 ): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
-  const existing = await getDayLog(ctx, habitId, logDate);
+  const existing = await logDoDia(ctx, habitId, logDate);
   const current = existing ? Number(existing.value) : 0;
   return upsertLog(ctx, habitId, {
     logDate,
@@ -268,9 +237,9 @@ export async function setHabitDone(
 ): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
-  const target = await getTarget(ctx, habitId);
+  const target = await metaDoHabito(ctx, habitId);
   if (target === null) return dbError("Hábito não encontrado.");
-  const existing = await getDayLog(ctx, habitId, logDate);
+  const existing = await logDoDia(ctx, habitId, logDate);
   return upsertLog(ctx, habitId, {
     logDate,
     value: done ? target : 0,
@@ -306,12 +275,8 @@ export async function undoHabitCheckIn(
 ): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
-  const { error } = await ctx.supabase
-    .from("habit_logs")
-    .delete()
-    .eq("habit_id", habitId)
-    .eq("log_date", logDate);
-  if (error) return dbError("Não foi possível desfazer o check-in.");
+  const r = await desfazerCheckIn(ctx, habitId, logDate);
+  if (!r.ok) return dbError(r.erro);
   revalidate();
   return { ok: true, data: undefined };
 }

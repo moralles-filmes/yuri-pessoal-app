@@ -15,7 +15,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅ e 18-B ✅; **18-C com a leitura dos 9 módulos e o Approval Engine concluídos — nenhuma escrita é possível ainda (registry de commands VAZIO)** |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅ e 18-B ✅; **18-C com leitura dos 9 módulos, Approval Engine e ESCRITA concluídos — 6 ferramentas de escrita e 13 commands, todos atrás de chaves que nascem desligadas** |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -81,7 +81,7 @@ declarado por command) → Bloco 6 (documentação e verificação final). Decis
 | --- | --- | --- |
 | 18-A | Fundação, provedores e chat | ✅ **CONCLUÍDA** (2026-08-04) |
 | 18-B | Contexto, ferramentas de leitura e agentes | ✅ **CONCLUÍDA** (2026-08-07) |
-| 18-C | Ações, aprovações, idempotência e auditoria | 🟡 **EM ANDAMENTO** — leitura ✅ (Bloco 1–2), Approval Engine ✅ (Bloco 3); faltam commands, tela e desfazer |
+| 18-C | Ações, aprovações, idempotência e auditoria | 🟡 **EM ANDAMENTO** — leitura ✅ (1–2), Approval Engine ✅ (3), **commands e escrita ✅ (4)**; falta o histórico de ações na tela |
 | 18-D | Visão, documentos e comprovantes | ⬜ |
 | 18-E | Insights, relatórios e dashboards | ⬜ |
 | 18-F | Memória, voz, integrações e polimento | ⬜ — fecha a fase |
@@ -178,6 +178,66 @@ A regra está registrada no `CLAUDE.md` ("campo de TEXTO nunca é controlado pel
 **Verificação:** testes, lint, tsc, build e smoke test de rota em produção. ⚠️ **As três telas
 não foram exercitadas na aplicação rodando** — estão atrás do login e não havia sessão
 disponível; vale um clique antes de considerar 100% fechado.
+
+---
+
+## O que foi implementado no Bloco 4 da 18-C (a IA passa a ESCREVER) — 2026-08-07
+
+**É a primeira vez que a IA altera dado real do usuário.** Sete ações, na ordem crescente de
+risco que a matriz fixou, cada uma com teste de equivalência contra o formulário.
+
+| Entrega | O que é |
+| --- | --- |
+| 6 ferramentas de escrita | TO-DO (3), Hábitos, Agenda, Dieta, Financeiro — todas `requiresConfirmation` |
+| 13 commands | 7 de ação + 6 de **desfazer**, estes últimos **sem ferramenta** |
+| 5 `services.ts` extraídos | `todo`, `habits`, `calendar`, `nutrition`, `finance` — a action virou casca |
+| 1 migration | `todo_completions.completion_source` passou a aceitar `'ia'` (nenhuma tabela nova) |
+| Cartão de proposta na tela | previsão campo a campo, prazo, confirmar/recusar e desfazer |
+| 5 chaves `allow_write_*` | todas `false` no banco, e cada uma **ANDada com a chave de leitura** |
+
+### ⛔ A decisão central do bloco: O RUN NÃO ALCANÇA UMA FUNÇÃO QUE ESCREVE
+
+O Bloco 3 garantiu isso provando que nada em `src/lib/ai/` importa `approval/execute.ts`.
+O Bloco 4 quase derrubou a garantia: propor exige `parse` e `prever`, que moram no command —
+e importar o objeto `Command` inteiro no Tool Executor faria o laço **segurar** `executar`.
+A garantia teria caído de *"não alcança"* para *"não chama"*, que é uma convenção.
+
+**Cada command é partido em dois arquivos.** `<modulo>-preview.ts` só lê; `<modulo>.ts`
+escreve. O executor importa `commands/previews.ts`, um registry deliberadamente mutilado em
+que nenhuma entrada tem `executar`. Três testes de fronteira, todos com mutação confirmada:
+
+1. a partir de `tools/`, o único arquivo de `commands/` alcançável é `previews.ts`;
+2. nenhum `*-preview.ts` importa um módulo `services` (onde a escrita vive);
+3. `.executar(` aparece em **um** arquivo do repositório: `approval/execute.ts`.
+
+### As decisões que a implementação obrigou a tomar
+
+| Decisão | Por quê |
+| --- | --- |
+| **Extrair a função INTEIRA**, não o pedaço que a IA usa | `criarTransacao` sabe fazer transferência, cartão e divisão; quem restringe é o **schema da ferramenta**. Uma versão simplificada seria a segunda implementação do insert, e divergiria no primeiro campo novo. |
+| **Resolver o efeito DE NOVO na execução, a partir dos nomes** | O payload guarda o que o dono disse ("arroz", "Nubank"), não ids. É o que dá sentido à revalidação por hash: se o nome passou a casar com outro registro, o hash diverge e nada é gravado. |
+| **Nome ambíguo RECUSA** | "arroz" casa com o branco e o integral, que têm nutrientes diferentes. Escolher o primeiro registraria em histórico imutável uma comida que o dono não citou. |
+| **A previsão é o cálculo REAL** | Em Dieta, o snapshot mostrado sai da mesma função que grava — e nutriente ausente aparece como *"não informado na fonte"*, nunca zero. Em Financeiro, a fatura sai de `resolverFatura`. |
+| **`externo`, a 4ª sensibilidade** | As três primeiras dizem o que o efeito toca; nenhuma dizia **onde ele para**. Com o Google conectado, o compromisso sai do sistema — e é o único efeito que não se desfaz mexendo só no nosso banco. |
+| **Fatura já PAGA recusa o lançamento** | A única restrição que o formulário não tem. Lá o dono está olhando a tela da fatura; aqui o pedido veio em linguagem natural sobre uma fatura que ele nem citou. |
+| **O evento `switch` limpa as propostas da tela** | Fallback de provedor reinicia o laço e cria uma **segunda** proposta. Dois cartões, e confirmar os dois criaria duas tarefas — o uso único não impede, porque são propostas distintas. |
+
+### Dois defeitos que teriam aparecido só em produção
+
+- **`completion_source` não aceitava `'ia'`.** O CHECK da Fase 15 tinha cinco valores;
+  `concluirTarefaTodo` grava com `source: 'ia'` e falharia com `23514` **depois** de o dono
+  confirmar. Migration aditiva aplicada e conferida no banco.
+- **`approval/` abriu client e consultou tabela de módulo.** A primeira versão de
+  `finance-preview.ts` fazia `select` em `credit_cards`, `card_statements` e `transactions`.
+  O teste de fronteira pegou; as três leituras nasceram em `finance/queries.ts`.
+
+### Verificação (Bloco 4)
+
+`npx tsc --noEmit` ✅ · `npm run lint` ✅ · `npx vitest run` ✅ **143 arquivos / 2.952 testes** ·
+`TZ=UTC` ✅ · `npm run build` ✅. **12 mutações confirmadas por md5 antes de acreditar no
+vermelho**; duas delas ficaram **verdes** e revelaram lacuna real de teste (a recusa por nome
+ambíguo e a recusa por fatura paga) — as duas regras foram extraídas para função pura e
+cobertas, e a mutação repetida ficou vermelha.
 
 ---
 

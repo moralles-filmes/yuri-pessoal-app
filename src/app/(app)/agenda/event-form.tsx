@@ -35,11 +35,8 @@ import {
   type EventType,
 } from "@/lib/calendar/constants";
 import { EVENT_TYPE_COLORS } from "@/lib/calendar/colors";
-import {
-  dateInSaoPaulo,
-  saoPauloWallClockToInstant,
-  timeInSaoPaulo,
-} from "@/lib/format";
+import { dateInSaoPaulo, timeInSaoPaulo } from "@/lib/format";
+import { instanteDoEvento } from "@/lib/calendar/instants";
 import type { CalendarEventRow } from "@/types/database";
 
 const NONE = "none";
@@ -124,13 +121,12 @@ function defaults(
   };
 }
 
-function buildIso(date: string, time: string, allDay: boolean): string {
-  // Dia inteiro é ancorado ao meio-dia UTC de propósito (mesma convenção do Google).
-  if (allDay) return `${date}T12:00:00.000Z`;
-  // Com hora: "19:00" significa 19:00 EM BRASÍLIA. `new Date('…T19:00')` resolveria pelo
-  // fuso do dispositivo e gravaria o instante errado fora do BRT (viagem, VPN, tablet).
-  return saoPauloWallClockToInstant(date, time || "00:00").toISOString();
-}
+/**
+ * A conversão saiu daqui e virou `calendar/instants.ts` (18-C · Bloco 4): a IA passou a criar
+ * evento também, e duas cópias dessas três linhas dariam dois eventos diferentes para a mesma
+ * frase — divergindo só entre 21h e 00h BRT, que é quando ninguém está testando.
+ */
+const buildIso = instanteDoEvento;
 
 export function EventFormDialog({
   open,
