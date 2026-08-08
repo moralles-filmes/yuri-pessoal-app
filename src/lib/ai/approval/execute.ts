@@ -132,6 +132,11 @@ function negar(motivo: MotivoDeRecusa): ResultadoDaExecucao {
   return { ok: false, motivo, mensagem: MENSAGEM_DE_RECUSA[motivo] };
 }
 
+/** O `23505` veio do índice de "uma execução é desfeita uma vez só"? */
+function indiceDeDesfazer(erro: { message?: string; details?: string | null }): boolean {
+  return `${erro.message ?? ""} ${erro.details ?? ""}`.includes("undoes");
+}
+
 /**
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
  * ║ A ORDEM DAS ETAPAS É A GARANTIA. Ler de cima para baixo é ler o desenho da subfase.   ║
@@ -159,7 +164,9 @@ export async function executarAcaoAprovada(input: {
 
   const { data: proposta } = await supabase
     .from("ai_action_proposals")
-    .select("id, tool_name, tool_version, command, payload, effect_hash, expires_at")
+    .select(
+      "id, tool_name, tool_version, command, payload, effect_hash, expires_at, undoes_execution_id",
+    )
     .eq("id", input.proposalId)
     .eq("user_id", input.userId)
     .maybeSingle();
@@ -235,6 +242,12 @@ export async function executarAcaoAprovada(input: {
       command: command.name,
       idempotency_key: idempotencyKey,
       status: "executando",
+      /**
+       * 18-C · Bloco 5 — o vínculo vem da PROPOSTA, nunca do cliente. Se viesse do clique, o
+       * navegador escolheria qual execução declarar como desfeita — e ocuparia, com isso, o
+       * `ai_action_executions_undoes_user_uidx` de uma execução que ninguém reverteu.
+       */
+      undoes_execution_id: proposta.undoes_execution_id,
     })
     .select("id")
     .single();
@@ -243,7 +256,15 @@ export async function executarAcaoAprovada(input: {
     registrarFalha("EXECUTION_CLAIM_FAILED", input.proposalId, erroDaReserva);
     // `23505` = outra requisição reservou primeiro (clique duplo, duas abas, retry). A
     // resposta certa é "já executou", não "falhou": a ação está acontecendo ou aconteceu.
-    return negar(erroDaReserva?.code === "23505" ? "JA_EXECUTADA" : "COMMAND_DESCONHECIDO");
+    //
+    // ⚠️ Dois índices únicos diferentes produzem o mesmo `23505`, e as frases não são
+    // intercambiáveis: uma diz "esta ação já rodou", a outra diz "aquela ação já foi
+    // revertida". O nome da constraint é NOSSO (não é dado do usuário), então lê-lo aqui não
+    // vaza nada — e é o único jeito de saber qual das duas corridas aconteceu.
+    if (erroDaReserva?.code === "23505") {
+      return negar(indiceDeDesfazer(erroDaReserva) ? "JA_DESFEITA" : "JA_EXECUTADA");
+    }
+    return negar("COMMAND_DESCONHECIDO");
   }
 
   const inicio = input.agora.getTime();

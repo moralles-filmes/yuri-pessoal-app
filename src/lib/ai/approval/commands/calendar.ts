@@ -13,7 +13,7 @@ import "server-only";
  */
 
 import { criarEventoNaAgenda, excluirEventoDaAgenda } from "@/lib/calendar/services";
-import type { Command } from "../contracts";
+import { desfazerPeloId, type Command } from "../contracts";
 import {
   carregarEvento,
   criarEventoEntrada,
@@ -44,7 +44,11 @@ export const criarEvento: Command = {
   risk: 3,
   revalidar: ["/agenda", "/dashboard"],
   camposAuditaveis: ["title", "start_at", "end_at", "all_day", "tipo"],
-  undo: "excluirEvento",
+  desfazer: {
+    kind: "command",
+    command: "excluirEvento",
+    payload: desfazerPeloId("evento_id"),
+  },
 
   parse: parseComEvento(criarEventoEntrada),
   prever: (_ctx, payload) => preverCriarEvento(payload),
@@ -94,9 +98,11 @@ export const excluirEvento: Command = {
   risk: 3,
   revalidar: ["/agenda", "/dashboard"],
   camposAuditaveis: ["title"],
-  // Sem desfazer do desfazer: o evento apagado não volta com o mesmo id — nem aqui, nem no
-  // Google. Recriar outra linha mentiria sobre o que aconteceu.
-  undo: null,
+  desfazer: {
+    kind: "nao-ha",
+    porque:
+      "O compromisso foi apagado aqui e, com a conta Google conectada, também lá fora. Recriá-lo geraria outro evento, com outro id nos dois lados — quem já tinha o convite não voltaria a tê-lo.",
+  },
 
   parse: parseComEvento(excluirEventoEntrada),
   prever: (_ctx, payload) => preverExcluirEvento(payload),

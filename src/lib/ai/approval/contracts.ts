@@ -156,6 +156,59 @@ export type ResultadoDoCommand = {
   readonly itens: readonly ResultadoDoItem[];
 };
 
+// ─────────────── §3.7 — o desfazer, declarado no command · 18-C · Bloco 5 ───────────────
+
+/**
+ * O que a EXECUÇÃO deixou registrado, e é tudo que o desfazer tem para trabalhar.
+ *
+ * ⚠️ Repare no que NÃO está aqui: o payload original. Ele é do chat, e o chat pode ter sido
+ * apagado (`ai_action_executions` não tem FK para a proposta, de propósito — invariante 38).
+ * O desfazer se apoia só no que sobrevive: o id do registro tocado e os campos que a
+ * allowlist do command deixou passar.
+ */
+export type FatosParaDesfazer = {
+  readonly targetId: string | null;
+  readonly changedFields: Readonly<Record<string, ValorDeCampo>>;
+};
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ UMA UNIÃO, E NÃO DOIS CAMPOS OPCIONAIS — PORQUE OS TRÊS FATOS ANDAM JUNTOS.           ║
+ * ║                                                                                       ║
+ * ║ Há desfazer  ⇒ existe o command inverso E existe como montar o payload dele.          ║
+ * ║ Não há       ⇒ existe a EXPLICAÇÃO, que a tela mostra no lugar do botão.               ║
+ * ║                                                                                       ║
+ * ║ Com `undo: string | null` + um texto opcional ao lado, o estado "sem desfazer e sem   ║
+ * ║ explicação" seria representável — e a tela esconderia o botão sem dizer nada, que é    ║
+ * ║ exatamente o que a §3.7 proíbe. Aqui ele não tem como ser escrito.                     ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export type ComoDesfazer =
+  | {
+      readonly kind: "command";
+      /** O command INVERSO, que já existe porque a tela do módulo o usa. */
+      readonly command: string;
+      /**
+       * PURO: monta a entrada do inverso a partir do que a execução registrou. `null` quando
+       * a execução não guardou o necessário — e aí a tela diz isso, em vez de propor um
+       * desfazer com campo adivinhado.
+       */
+      readonly payload: (fatos: FatosParaDesfazer) => ValorCanonico | null;
+    }
+  | { readonly kind: "nao-ha"; readonly porque: string };
+
+/**
+ * O caso mais comum: o inverso só precisa do id do registro que a ação criou ou tocou.
+ *
+ * Sem `targetId` não há desfazer — e devolver `null` é o que faz a tela dizer isso, em vez de
+ * propor um desfazer sem alvo.
+ */
+export function desfazerPeloId(
+  campo: string,
+): (fatos: FatosParaDesfazer) => ValorCanonico | null {
+  return (fatos) => (fatos.targetId ? { [campo]: fatos.targetId } : null);
+}
+
 export type CommandDescriptor = {
   readonly name: string;
   readonly module: string;
@@ -169,12 +222,11 @@ export type CommandDescriptor = {
   /** §3.6 — os campos que ESTE command pode detalhar. Estática, nunca calculada. */
   readonly camposAuditaveis: readonly string[];
   /**
-   * §3.7 — o command INVERSO, quando o serviço de domínio já tem a operação que a tela usa.
-   * `null` significa "não há desfazer", e a tela então não mostra o botão e explica por quê.
-   * Reverter aplicando um snapshot escreveria no banco um estado que nenhum formulário
-   * produziu — que é exatamente o que a arquitetura proíbe.
+   * §3.7 — como se desfaz esta ação, ou por que não se desfaz. Reverter aplicando um snapshot
+   * escreveria no banco um estado que nenhum formulário produziu — que é exatamente o que a
+   * arquitetura proíbe. Por isso o desfazer é sempre outro command, com serviço de domínio.
    */
-  readonly undo: string | null;
+  readonly desfazer: ComoDesfazer;
 };
 
 /**
@@ -182,8 +234,8 @@ export type CommandDescriptor = {
  * `isToolDescriptorCoherent`.
  *
  * A allowlist vazia é PERMITIDA e significa "esta ação não detalha campo nenhum"; o que não
- * pode é `undo` apontando para um nome que não existe no mapa, porque aí o botão de desfazer
- * apareceria na tela e falharia no clique.
+ * pode é o desfazer apontar para um nome que não existe no mapa (o botão apareceria na tela e
+ * falharia no clique) nem declarar-se ausente sem dizer por quê (a tela ficaria muda).
  */
 export function isCommandCoherent(
   command: CommandDescriptor,
@@ -195,7 +247,13 @@ export function isCommandCoherent(
   if (new Set(command.camposAuditaveis).size !== command.camposAuditaveis.length) {
     return false;
   }
-  if (command.undo !== null && !nomesConhecidos.includes(command.undo)) return false;
+  if (command.desfazer.kind === "command") {
+    if (!nomesConhecidos.includes(command.desfazer.command)) return false;
+    // Um desfazer que apontasse para si mesmo entraria em laço na tela.
+    if (command.desfazer.command === command.name) return false;
+  } else if (command.desfazer.porque.trim() === "") {
+    return false;
+  }
   return true;
 }
 

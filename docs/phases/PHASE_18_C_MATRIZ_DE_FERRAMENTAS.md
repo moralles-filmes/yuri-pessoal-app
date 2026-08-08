@@ -165,6 +165,24 @@ As sete linhas estão **implementadas**, na ordem acima. O que mudou em relaçã
    tem campo para nada disso. Uma "versão simples" para a IA seria uma segunda implementação
    do insert, e ela divergiria no primeiro campo novo.
 
+### O que os Blocos 5 e 6 entregaram de fato (2026-08-08)
+
+A coluna **Desfazer** desta tabela deixou de ser uma promessa: ela virou o contrato
+`ComoDesfazer` no descriptor do command, e a tela `/ia/acoes` é onde ele é alcançado.
+
+| Previsto | Entregue | Por quê |
+| --- | --- | --- |
+| "Sem `undo` declarado, o botão não aparece" | **Sem `undo` declarado, o botão não aparece E a tela diz por quê** | Um botão ausente e mudo é indistinguível de um esquecimento do sistema. O motivo é obrigatório por tipo: `isCommandCoherent` recusa `{kind:"nao-ha"}` sem `porque`. |
+| Desfazer como ação, pelo Approval Engine | **Cumprido — e com migration** | A proposta de desfazer não nasce de tool call. `ai_action_proposals` ganhou `origem` (`ferramenta` \| `desfazer`) e `undoes_execution_id`, com CHECK que exige cada forma por inteiro. |
+| — | **A execução sem proposta APARECE na tela** | `ai_action_executions` não tem FK para a proposta (invariante 38). Se a tela listasse só propostas, apagar a conversa apagaria da vista o registro de que a IA lançou uma transação. |
+| — | **`executando` não é sucesso nem falha** | Claim-first do Bloco 3: rótulo *"sem desfecho registrado"*, filtro "Precisam de atenção", desfazer recusado com o motivo. |
+
+**A regra que sai daqui, para toda ação futura com desfazer:** o inverso recebe o que a
+**execução** registrou (`target_id` + `changed_fields`), nunca o payload original — que some
+com a conversa. Se o inverso precisar de um campo além do id, esse campo **tem de estar na
+allowlist §3.6** do command original. É o caso de `log_date` em `registrarHabito`, e há teste
+que fica vermelho se ele sair de lá.
+
 **Regras que valem para a coluna inteira:**
 
 - **Toda linha exige confirmação**, em qualquer `confirmation_mode` (§3.2 do spec).
