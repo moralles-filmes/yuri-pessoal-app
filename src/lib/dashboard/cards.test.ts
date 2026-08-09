@@ -101,10 +101,20 @@ describe("normalizeLayout com o card novo da 17-F", () => {
     view: "mes",
   };
 
-  it("anexa 'treinos' no fim, preservando a ordem salva inteira", () => {
+  /**
+   * ⚠️ 18-E: a asserção deixou de ser "o último é `treinos`" e passou a ser "os cards novos
+   * entram DEPOIS da ordem salva". A original quebrou no instante em que `insights` entrou no
+   * fim de `DASH_CARD_IDS` — e ela quebrou por estar amarrada ao último card DA ÉPOCA, não à
+   * regra. O que importa é que a ordem que o dono salvou continue intacta no começo, e que os
+   * cards que ele nunca viu sejam anexados no fim.
+   */
+  it("anexa os cards novos no fim, preservando a ordem salva inteira", () => {
     const layout = normalizeLayout(layoutPos16F);
     expect(layout.order.slice(0, layoutPos16F.order.length)).toEqual(layoutPos16F.order);
-    expect(layout.order[layout.order.length - 1]).toBe("treinos");
+    expect(layout.order.slice(layoutPos16F.order.length)).toEqual(
+      expect.arrayContaining(["treinos", "insights"]),
+    );
+    expect(layout.order[layout.order.length - 1]).toBe("insights");
   });
 
   it("o card de Treinos nasce VISÍVEL e pode ser ocultado como qualquer outro", () => {

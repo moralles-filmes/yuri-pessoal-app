@@ -24,6 +24,12 @@ export const DASH_CARD_IDS = [
   // Fase 17-F — Treinos. Pelo mesmo motivo da Dieta, entra no FIM: quem já personalizou a
   // ordem recebe o card novo no fim da lista, sem nada mudar de lugar.
   "treinos",
+  // Fase 18-E — Insights da IA. Mesmo motivo dos dois anteriores: entra no FIM, para quem já
+  // personalizou a ordem receber o card novo no fim da lista sem nada mudar de lugar.
+  //
+  // ⛔ Ele SÓ EXIBE. Não há botão de gerar no dashboard, e há teste de import provando que
+  // nada em `dashboard/` alcança o runner nem a Server Action que dispara a IA.
+  "insights",
 ] as const;
 export type DashCardId = (typeof DASH_CARD_IDS)[number];
 
@@ -39,6 +45,7 @@ export const DASH_CARD_TITLES: Record<DashCardId, string> = {
   estudos: "Estudos",
   notificacoes: "Notificações",
   treinos: "Treinos",
+  insights: "Insights da IA",
 };
 
 /** Preferência de layout do dashboard (persistida em settings.dashboard_layout). */

@@ -14,6 +14,7 @@ import { usePathname } from "next/navigation";
 import {
   Gauge,
   History,
+  Lightbulb,
   MessageSquare,
   MessagesSquare,
   ReceiptText,
@@ -29,6 +30,7 @@ const ICONS: Record<string, LucideIcon> = {
   "messages-square": MessagesSquare,
   history: History,
   receipt: ReceiptText,
+  lightbulb: Lightbulb,
   gauge: Gauge,
   settings: Settings,
 };
