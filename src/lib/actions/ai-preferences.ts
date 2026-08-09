@@ -95,6 +95,19 @@ export async function saveAiPreferences(
         dados.writePermissions.allow_write_nutrition && dados.permissions.allow_nutrition,
       allow_write_finance:
         dados.writePermissions.allow_write_finance && dados.permissions.allow_finance,
+      /**
+       * ⚠️ 18-D — o envio de arquivo, ANDado no SERVIDOR com as duas chaves do Financeiro.
+       *
+       * Mesma razão das cinco linhas acima, com uma consequência a mais: enviar um
+       * comprovante para o provedor só faz sentido se a IA puder LER o Financeiro (para
+       * resolver conta e categoria) e ALTERÁ-LO (para propor o lançamento). Gravar
+       * `allow_vision = true` sem elas descreveria um estado sem uso — o arquivo sairia do
+       * sistema e a extração não teria para onde ir.
+       *
+       * A tela desabilita a chave nesse caso; esta linha é o que torna isso uma REGRA.
+       */
+      allow_vision:
+        dados.allowVision && dados.permissions.allow_finance && dados.writePermissions.allow_write_finance,
       default_provider: dados.defaultProvider,
       default_model: dados.defaultModel,
       confirmation_mode: dados.confirmationMode,

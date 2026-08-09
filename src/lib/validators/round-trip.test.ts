@@ -466,6 +466,9 @@ describe("Fase 18-A — schemas de IA aceitam a própria saída", () => {
       permissions: Object.fromEntries(TOOL_PERMISSIONS.map((p) => [p, false])),
       // Mesma derivação, mesmo motivo (18-C · Bloco 4).
       writePermissions: Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((p) => [p, false])),
+      // 18-D. Escrito à mão, e não derivado de uma lista: `allow_vision` não é uma
+      // `ToolPermission` (não é módulo), então não sai de `TOOL_PERMISSIONS`.
+      allowVision: false,
       defaultModel: "",
       confirmationMode: "seguro",
       allowFallback: false,

@@ -170,6 +170,8 @@ const PREFS_PADRAO: AiPreferencesView = {
   rateLimitPerHour: 120,
   permissions: SEM_PERMISSAO,
   writePermissions: SEM_ESCRITA,
+  // 18-D. Nenhum arquivo sai do sistema sem o dono ligar isto explicitamente.
+  allowVision: false,
 };
 
 export async function getAiPreferences(userId: string): Promise<AiPreferencesView> {
@@ -177,7 +179,7 @@ export async function getAiPreferences(userId: string): Promise<AiPreferencesVie
   const { data } = await supabase
     .from("ai_user_preferences")
     .select(
-      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
+      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_vision, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -219,6 +221,10 @@ export async function getAiPreferences(userId: string): Promise<AiPreferencesVie
       allow_write_nutrition: data.allow_write_nutrition === true,
       allow_write_finance: data.allow_write_finance === true,
     },
+    // 18-D. Mesmo `=== true`, e pela razão mais forte de todas: o que está do outro lado
+    // desta coerção não é ler um número nem alterar um registro — é um documento do dono
+    // saindo deste sistema para uma empresa fora dele, sem volta.
+    allowVision: data.allow_vision === true,
   };
 }
 

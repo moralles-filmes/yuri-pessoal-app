@@ -447,6 +447,8 @@ describe("aceitar a própria saída (round-trip)", () => {
     const entrada = {
       permissions: Object.fromEntries(TOOL_PERMISSIONS.map((p) => [p, false])),
       writePermissions: Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((p) => [p, false])),
+      // 18-D — campo solto de propósito: não é módulo, logo não é `ToolPermission`.
+      allowVision: false,
       defaultProvider: undefined,
       defaultModel: "",
       confirmationMode: "seguro",
@@ -633,5 +635,38 @@ describe("18-C — aiWritePermissionsSchema", () => {
         `${p}: dados.writePermissions.${p} && dados.permissions.${leitura},`,
       );
     }
+  });
+
+  /**
+   * ⛔ 18-D — A MESMA TRAVA, PARA A CHAVE QUE DEIXA UM ARQUIVO SAIR DO SISTEMA.
+   *
+   * E aqui ela pesa mais que nas cinco de escrita. Um `allow_write_*` gravado sozinho
+   * descreve um estado que o guard recusa depois; um `allow_vision` gravado sozinho
+   * descreve um estado em que **o documento sai** e a extração não tem para onde ir.
+   *
+   * Varredura de código-fonte porque o `tsc` não vê a diferença entre
+   * `dados.allowVision` e `dados.allowVision && …` — os dois compilam.
+   */
+  it("`allow_vision` chega ao `upsert` conjugada com a leitura E a escrita do Financeiro", () => {
+    const fonte = readFileSync(
+      path.join(process.cwd(), "src", "lib", "actions", "ai-preferences.ts"),
+      "utf8",
+    ).replace(/\s+/g, " ");
+
+    expect(fonte).toContain(
+      "allow_vision: dados.allowVision && dados.permissions.allow_finance && " +
+        "dados.writePermissions.allow_write_finance,",
+    );
+  });
+
+  /**
+   * `allow_vision` NÃO é uma `ToolPermission`. Se alguém a acrescentar àquela lista, o
+   * roteador passa a procurar um módulo `vision` que não existe, e `permissaoDoModulo`
+   * ganha uma entrada sem ferramenta — o defeito que `toolsForPermission` (invariante 24
+   * da 18-B) existe para não cometer.
+   */
+  it("`allow_vision` fica FORA de TOOL_PERMISSIONS e de TOOL_WRITE_PERMISSIONS", () => {
+    expect(TOOL_PERMISSIONS).not.toContain("allow_vision");
+    expect(TOOL_WRITE_PERMISSIONS).not.toContain("allow_vision");
   });
 });

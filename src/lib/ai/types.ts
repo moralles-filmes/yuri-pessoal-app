@@ -63,6 +63,19 @@ export type AiPreferencesView = {
    * passa só com o outro — escrever num módulo exige a chave de leitura E a de escrita.
    */
   readonly writePermissions: Readonly<Record<ToolWritePermission, boolean>>;
+  /**
+   * Fase 18-D — a autorização para o CONTEÚDO de um arquivo do dono sair deste sistema.
+   *
+   * ⛔ **NÃO é uma `ToolPermission`, e por isso não está em `permissions`.** As nove
+   * `allow_*` respondem "a IA pode ler o módulo X?" e alimentam `permissaoDoModulo`, o
+   * guard e a allowlist de ferramentas. Esta responde outra pergunta — "um arquivo meu pode
+   * sair daqui?" — que não é sobre módulo nenhum. Enfiá-la naquele `Record` faria o
+   * roteador procurar um módulo `vision` que não existe.
+   *
+   * Campo à parte, decisão à parte: ela é ANDada com `allow_finance` e
+   * `allow_write_finance`, nunca lida sozinha.
+   */
+  readonly allowVision: boolean;
 };
 
 export type ConversationListItem = {

@@ -293,6 +293,59 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_documents: {
+        Row: {
+          altura_px: number | null
+          attachment_id: string
+          content_sha256: string
+          created_at: string
+          id: string
+          largura_px: number | null
+          mime_detectado: string
+          observacao: string | null
+          paginas: number | null
+          size_bytes: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          altura_px?: number | null
+          attachment_id: string
+          content_sha256: string
+          created_at?: string
+          id?: string
+          largura_px?: number | null
+          mime_detectado: string
+          observacao?: string | null
+          paginas?: number | null
+          size_bytes: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          altura_px?: number | null
+          attachment_id?: string
+          content_sha256?: string
+          created_at?: string
+          id?: string
+          largura_px?: number | null
+          mime_detectado?: string
+          observacao?: string | null
+          paginas?: number | null
+          size_bytes?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_documents_attachment_fk"
+            columns: ["attachment_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "attachments"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
       ai_messages: {
         Row: {
           content: string
@@ -823,6 +876,7 @@ export type Database = {
           allow_tasks: boolean
           allow_todo: boolean
           allow_training: boolean
+          allow_vision: boolean
           allow_write_calendar: boolean
           allow_write_finance: boolean
           allow_write_habits: boolean
@@ -858,6 +912,7 @@ export type Database = {
           allow_tasks?: boolean
           allow_todo?: boolean
           allow_training?: boolean
+          allow_vision?: boolean
           allow_write_calendar?: boolean
           allow_write_finance?: boolean
           allow_write_habits?: boolean
@@ -893,6 +948,7 @@ export type Database = {
           allow_tasks?: boolean
           allow_todo?: boolean
           allow_training?: boolean
+          allow_vision?: boolean
           allow_write_calendar?: boolean
           allow_write_finance?: boolean
           allow_write_habits?: boolean
