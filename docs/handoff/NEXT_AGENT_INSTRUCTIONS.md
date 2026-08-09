@@ -1,6 +1,84 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-## 🎯 PRÓXIMA: 18-D — IA · Visão, documentos e comprovantes
+## 🟡 EM ANDAMENTO: 18-D — branch `feat/18-d-visao-comprovantes`
+
+> **A 18-D TEM DESENHO VALIDADO AGORA.** Ele foi escrito com o dono em **2026-08-08**, antes
+> de qualquer linha de código, e está em
+> **`docs/superpowers/specs/2026-08-08-18d-visao-comprovantes-design.md`**. **Leia-o antes de
+> continuar** — as cinco decisões dele já estão no código, e mudá-las é reabrir o que foi
+> aprovado.
+
+### As cinco decisões do dono (2026-08-08)
+
+| # | Decisão |
+| --- | --- |
+| 1 | **Caminho dedicado** — o arquivo **nunca** entra no histórico do chat |
+| 2 | **Comprovante e nota fiscal, só** — rótulo nutricional, CSV/OFX/Excel e conversa sobre documento ficam FORA, declarados |
+| 3 | **Rota própria `/ia/comprovantes`** |
+| 4 | **Chave `allow_vision`** — décima chave, nasce `false`, ANDada no servidor |
+| 5 | **Nada some sozinho** — descartar é clique do dono |
+
+### ✅ O QUE JÁ ESTÁ PRONTO E VERDE (6 commits)
+
+| Commit | O quê |
+| --- | --- |
+| `c50b2bf` | **Bloco 1** — `AiContentPart` ganha `image`/`file` (sem `url`, sem `storagePath` — o caminho não é representável); `AiProviderClient.generateObject`; catálogo com `visao` verificada; `usage/vision-tokens.ts` entrando na reserva |
+| `523469c` | **Bloco 2** — `sniffMime` (magic bytes), `probe` (dimensões/páginas), tabela `ai_documents`, chave `allow_vision`, `document-store.ts`, action de envio |
+| `bad5793` | **Bloco 3a** — `vision/contracts.ts`, `schema.ts` (Zod `.strict()` em todo nível + JSON Schema), `confidence.ts` (rebaixamento, `podePropor`) |
+| `535028e` | **Bloco 4** — `duplicates.ts` e `receipt-items.ts` |
+| `863487e` | **Bloco 3b (banco)** — `ai_runs.kind`, `ai_document_extractions`, `origem = 'documento'`, RPC `ai_begin_extraction_run` |
+| `9b998ab` | Fronteira: **par declarado**, não terceira porta |
+
+**Estado medido em 2026-08-08:** **126 tabelas** no `public`, **14 `ai_*`**; **3.163 testes /
+154 arquivos**, `lint` e `tsc` limpos. Migrations aplicadas via MCP, `get_advisors` **sem lint
+novo**, `src/types/supabase.ts` regenerado.
+
+### ⛔ O QUE FALTA — E É O QUE FAZ O RECURSO FUNCIONAR
+
+Hoje o dono **envia** um comprovante e o sistema o guarda com segurança, mas **nada o lê
+ainda**: o pipeline para no Processo 1. Faltam duas peças.
+
+**1. Bloco 3c — o runner da extração (Processo 2).** Nada disto existe:
+
+- `src/lib/ai/server/extraction-runner.ts` — chama `ai_begin_extraction_run`, resolve o
+  modelo de **visão** pelo `core/router.ts`, lê os bytes por `lerBytesDoDocumento`, monta o
+  `AiObjectRequest` com a parte `image`/`file`, chama `generateObject`, valida com
+  `extracaoDoModeloSchema`, roda `avaliarExtracao(bruta, hojeISO())` e grava em
+  `ai_document_extractions`. Fecha o run e grava `ai_usage_events` **por tentativa**.
+- A reserva **tem de** passar `tokensDeArquivos: estimarTokensDoArquivo(...).tokens` —
+  as duas metades dessa decisão vivem em arquivos diferentes (`core/text.ts` devolve `""`
+  para imagem de propósito, para não contar duas vezes).
+- `src/lib/actions/ai-documents.ts` → `extrairComprovante(documentoId)`.
+- O prompt da extração: ele **não** é um agente do registry (o RPC fixa
+  `agent_id = 'documento.comprovante'`), e o conteúdo do arquivo entra por
+  `wrapUntrusted(source: "imagem")`.
+
+**2. Bloco 5 — a tela e a ponte com a 18-C.** Nada disto existe:
+
+- `src/app/(app)/ia/comprovantes/` (6º item da navegação, `src/config/nav.ts`).
+- Revisão campo a campo com a confiança visível, correção pelo dono (`corrigir()`), os
+  alertas de duplicidade e a classificação dos itens.
+- A ponte: `criarProposta` com **`origem: 'documento'`** + `document_extraction_id`. O CHECK
+  do banco já exige a forma inteira. Reusar `commands/finance-preview.ts` para a previsão —
+  **não montar o efeito por fora** (use `hashDe`).
+- Depois da execução, trocar `attachments.entity_type` de `ia_documento` para `transaction`
+  e `entity_id` para o id do lançamento. ⛔ **Nada de anexo entra em `changed_fields`.**
+
+### ⚠️ Três coisas que esta subfase descobriu e você vai reencontrar
+
+1. **FK composta exige `unique` composta no ALVO.** `(document_id, user_id)` → `ai_documents
+   (id, user_id)` falhou com `42830` porque `ai_documents` só tinha a PK. Foi o mesmo tropeço
+   da 16-E (`20260805100400`). O rollback foi total — DDL no Postgres é transacional.
+2. **A chave do advisory lock de `ai_begin_extraction_run` é IDÊNTICA à do chat.** Não é
+   preguiça: o recurso disputado é o **orçamento do usuário**, não a espécie do run. Com
+   namespace próprio, uma extração e uma mensagem simultâneas passariam as duas.
+3. **`photoFileSchema` (16-E) confere `file.type`, que é DECLARADO PELO CLIENTE.** A 18-D
+   decide por magic bytes (`vision/mime.ts`). **Retroportar para as fotos de evolução (16-E) e
+   a de receita (16-C) é tarefa avulsa**, registrada em §5 do spec — não foi esquecimento.
+
+---
+
+## 📎 Referência da fase (o arquivo original)
 
 **Desenho da fase (leia ANTES):** `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`
 **O arquivo a abrir:** `docs/phases/PHASE_18_D_AI_VISION_DOCUMENTS_RECEIPTS.md`
