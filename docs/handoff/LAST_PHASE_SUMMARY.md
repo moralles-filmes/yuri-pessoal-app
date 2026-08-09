@@ -1,6 +1,11 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-> ✅ **CONCLUÍDA: 18-D — IA · Visão, documentos e comprovantes (2026-08-09).** Os **cinco
+> 🟡 **ÚLTIMA: 18-E — IA · Insights (2026-08-09).** Os **blocos 1 a 3** fecharam; o **bloco 4
+> (o job automático) ficou DECLARADO FORA**, com o motivo e o ponto de retomada escritos
+> abaixo. A IA passa a produzir análises sobre grandezas que o SISTEMA deriva, num texto que
+> **não contém dígito** — todo número entra por token resolvido no servidor.
+>
+> ✅ **Antes dela: 18-D — IA · Visão, documentos e comprovantes (2026-08-09).** Os **cinco
 > blocos** fecharam. O dono envia uma foto ou um PDF, pede a leitura, confere campo a campo com
 > a confiança visível, corrige o que estiver errado e decide se aquilo vira um lançamento — pelo
 > **mesmo Approval Engine da 18-C**, sem atalho nenhum. Resumo logo abaixo.
@@ -14,6 +19,66 @@
 > duas frentes grandes: **Fase 16 — Dieta e Alimentação** (16-A a 16-F, 40 de 40 critérios) e
 > **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55). Este arquivo tem os resumos na ordem
 > inversa de conclusão — o mais recente primeiro.
+
+---
+
+## Fase 18-E · Blocos 1 a 3 — insights sobre grandeza derivada (2026-08-09) 🟡 **BLOCO 4 FORA**
+
+**Desenho:** `docs/superpowers/specs/2026-08-09-18e-insights-relatorios-dashboards-design.md`
+**Plano:** `docs/superpowers/plans/2026-08-09-18e-insights-relatorios-dashboards.md`
+**Branch:** `feat/18-e-insights`
+
+**O que mudou de natureza.** Até a 18-D a IA **relatou** números que outro alguém calculou. A
+18-E cria a primeira grandeza **derivada** do projeto — média de janela, comparação entre
+períodos, variação percentual —, escreve um texto em cima dela e o mostra numa tela que a IA
+não controla (o dashboard geral, da Fase 12). Três regras governam tudo:
+
+1. **O número é medido e vem pronto.** `insights/temporal.ts` agrega sobre o que os coletores
+   devolvem; ele não importa `resumoMes`, `metrics.ts` nem `calc.ts`.
+2. **O texto não contém dígito.** Todo número entra por `{{ind:<id>}}`, e
+   `ai_insights.explicacao` guarda os TOKENS — a garantia vira propriedade do dado.
+3. **O dashboard nunca chama a IA.** Geração e leitura em arquivos que ele não alcança.
+
+### O que cada bloco entregou
+
+| Bloco | Entrega |
+| --- | --- |
+| **1** | `src/lib/tone/vocabulary.ts` (a lista existia **duas vezes**, sem export, com conteúdos **diferentes**) · `insights/contracts.ts` · `insights/temporal.ts` com **cinco** recusas · `seguranca-v3` · as fronteiras novas |
+| **2** | 3 tabelas + `ai_runs.kind = 'insight'` + RPC com o **mesmo advisory lock** · os seis módulos puros · os três coletores pela **terceira porta declarada** |
+| **3** | `/ia/insights` (7º item de `AI_SECTIONS`) · card no **fim** de `DASH_CARD_IDS` · **quarta forma** de `origem` · "transformar em tarefa", que **propõe** |
+
+### ⛔ O que ficou de fora, declarado
+
+**O Bloco 4 inteiro — o job automático.** `allow_insight_jobs` **não foi criada**: uma chave
+que não liga nada é o "botão que não liga nada" que este projeto recusa desde a 18-B.
+
+O motivo é o ponto difícil que o desenho já declarava (§7): o Cron não tem sessão e usa service
+role, os coletores leem sob RLS, e são **oito assinaturas** a alargar em três módulos
+(`getFinanceCardData`, `getAccounts`, `getStatements`, `getReceivables`, `getBills`,
+`getTransactionsRange`, `getDiaryMeals`, `getTrainingPreferences`) para o job ler pelo **mesmo
+caminho da tela**. `getSessionHistory` já aceita, desde a 17-F. A alternativa — um segundo
+caminho de leitura — é a divergência que a invariante 31 existe para impedir.
+
+**Consequência: insight só existe sob demanda**, que é o que a decisão 2 do dono já dizia.
+
+### Três achados que valem além da subfase
+
+1. **Um teste escrito como aviso de fato dispara.** O `"8-D só pode negar médias enquanto elas
+   não existirem"` (18-B) ficou vermelho sozinho quando `temporal.ts` nasceu.
+2. **Afirmação sobre o ESTADO do sistema vence; sobre a REGRA, não.** "O sistema não calcula
+   média" virou mentira; **"esse número não é seu para calcular"** continua verdadeiro.
+3. **Um teste amarrado ao ÚLTIMO item de uma lista quebra na próxima adição.** O
+   `"anexa 'treinos' no fim"` foi reescrito para afirmar a regra, não o estado da época.
+
+### Números reconferidos (2026-08-09)
+
+126 → **129 tabelas** no `public`; 14 → **17 `ai_*`**; 3.219/159 → **3.347 testes / 164
+arquivos**; `AI_SECTIONS` 6 → **7**; `DASH_CARD_IDS` 10 → **11**; formas de `origem` 3 → **4**;
+`ai_runs.kind` 2 → **3**. Ferramentas (29), commands (13) e agentes (9) **inalterados**.
+
+Verificação: `lint` · `tsc --noEmit` · `test:run` · `build` · `TZ=UTC vitest run` — verdes.
+Smoke: `/ia/insights` → **307**; `/api/cron/notifications` → **401** sem o secret.
+`get_advisors` sem lint novo.
 
 ---
 

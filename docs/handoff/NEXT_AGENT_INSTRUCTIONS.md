@@ -1,59 +1,102 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-## ▶️ PRÓXIMA: **18-E — IA · Insights, relatórios e dashboards**
+> Atualizado em **2026-08-09**, ao fechar os blocos 1 a 3 da **18-E** na branch
+> `feat/18-e-insights`.
 
-⛔ **ELA NÃO TEM DESENHO VALIDADO.** As 18-A, 18-B, 18-C e 18-D tiveram um, escrito com o dono
-**antes** de qualquer linha de código, e as quatro vezes ele mudou o que o documento da fase
-sugeria. **Brainstorm primeiro, spec em `docs/superpowers/specs/` depois, código por último.**
+## ▶️ PRÓXIMA: **Bloco 4 da 18-E — o job automático de insights**
 
-**O arquivo a abrir:** `docs/phases/PHASE_18_E_AI_INSIGHTS_REPORTS_DASHBOARDS.md`
+Ele está **declarado fora**, não esquecido. Os blocos 1 a 3 estão entregues e verificados; sem
+o job, insight só existe **sob demanda** — que é exatamente o que a decisão 2 do dono diz que
+acontece com ele desligado. Nada está quebrado nem pela metade.
 
-### ✅ TRÊS DECISÕES JÁ TOMADAS COM O DONO (2026-08-09)
+**O arquivo a abrir:**
+`docs/superpowers/specs/2026-08-09-18e-insights-relatorios-dashboards-design.md`, **§7**.
 
-Elas foram levantadas ao fechar a 18-D e **já estão validadas** — não as reabra, e escreva a
-spec a partir delas.
+### ⛔ 1. PRIMEIRO O PONTO DIFÍCIL, E ELE NÃO TEM ATALHO
 
-| # | Decisão | Consequência |
-| --- | --- | --- |
-| 1 | **O módulo de agregação temporal É CRIADO**, e o item **8-D do prompt-base é reescrito com versão NOVA** | Média, comparação período×período e variação passam a ser calculadas pelo SISTEMA, num módulo puro e testado no molde de `metrics.ts`. ⛔ **Ele vem ANTES de qualquer chamada de IA da subfase.** Calcular por fora e deixar o 8-D como está é a família de mentira que a 18-B fechou |
-| 2 | **O job automático NASCE DESLIGADO, com chave própria e orçamento SEPARADO para jobs** | Como `allow_vision` na 18-D. Sem ligar, insight só existe **sob demanda** (o dono clica). É a primeira vez que o sistema gastaria dinheiro dele sem ele pedir — e essa decisão é dele, não do código |
-| 3 | **"Conversar com um relatório" fica FORA da 18-E, declarado** | Mesma razão que tirou o arquivo do chat na 18-D (§2.1): exige o conteúdo no histórico, repetido a cada turno, com custo e exposição multiplicados. Vai para a **18-F**, junto com "conversar sobre documento", que já está lá |
+O Cron **não tem sessão** e usa service role; os coletores leem sob RLS com a sessão do dono.
+Ou os coletores aceitam `client`/`userId`, ou o job lê por um caminho diferente do da tela — e
+a segunda opção é exatamente a divergência que a **invariante 31** existe para impedir. **Vá
+pela primeira.**
 
-### ⬜ A DECISÃO QUE CONTINUA ABERTA
+O molde é `getSessionHistory` (17-F, invariante 24): parâmetro opcional `client`, e quando ele
+vem, `userId` passa a ser **obrigatório** — o escopo do usuário deixa de vir da RLS e passa a
+ser nosso. Ela já aceita. As **oito** que faltam:
 
-**A ordem do escopo.** O documento da fase é maior que a 18-C inteira (Insight Engine + 3
-tabelas + cards no dashboard + Resumo do Dia + Revisão Semanal + análises cruzadas). O dono
-**ainda não escolheu** o que entra primeiro — pergunte antes de escrever a spec. As análises
-cruzadas dependem do módulo da decisão 1, então elas não podem vir antes dele.
+| Arquivo | Função |
+| --- | --- |
+| `src/lib/dashboard/queries.ts` | `getFinanceCardData` |
+| `src/lib/finance/queries.ts` | `getAccounts` · `getStatements` · `getReceivables` · `getBills` · `getTransactionsRange` |
+| `src/lib/nutrition/diary-queries.ts` | `getDiaryMeals` |
+| `src/lib/training/queries.ts` | `getTrainingPreferences` |
 
-### As duas invariantes que muito provavelmente governam a 18-E
+⚠️ **Sem mudar o comportamento do caminho com sessão.** Os testes existentes desses módulos são
+a rede: se algum ficar vermelho, a assinatura nova mexeu em algo que não devia.
 
-1. **A trava de honestidade (invariante 15, `seguranca-v2`).** O assistente só sabe o que as
-   ferramentas devolveram naquela conversa, e **nunca inventa, estima nem infere número**. Uma
-   subfase chamada *insights* é exatamente onde isso é mais tentador de afrouxar — "tendência",
-   "projeção" e "você costuma gastar mais em X" são todas afirmações que precisam sair de um
-   número medido, ou não sair.
-2. **Nenhum adapter reimplementa a agregação do módulo (invariante 31).** Financeiro entra por
-   `resumoMes`, Dieta por `calc.ts`, Treinos por `metrics.ts`. Um segundo cálculo faria o
-   insight discordar da tela — e o dono não teria como saber qual dos dois está certo.
+### 2. `allow_insight_jobs`, nascendo `false`
 
-⚠️ E o item **8-D** do prompt-base já diz, hoje, que **o sistema não calcula média, comparação
-entre períodos, variação nem percentual de evolução**, e que o modelo deve dizer isso em vez de
-fazer a conta. Se a 18-E for entregar qualquer um desses números, ela **tem de** entregá-los
-como agregado calculado pelo SISTEMA (num módulo puro e testado, no molde de `metrics.ts`) e
-reescrever o 8-D com versão nova de prompt. Deixar o texto como está e passar a calcular por
-fora é a família de mentira que a 18-B fechou.
+No molde de `allow_vision` (18-D). ⛔ **Só depois do item 1** — uma chave que não liga nada é o
+"botão que não liga nada" que este projeto recusa desde a 18-B, e foi exatamente por isso que
+ela **não** foi criada agora.
 
-**Sem prescrição** — nem em Dieta, nem em Treinos, nem em Finanças.
+### 3. O orçamento de jobs é um SEGUNDO teto, e os dois valem
 
-### Duas coisas que a 18-D deixou prontas e a 18-E pode querer
+O job respeita o teto próprio *e* continua dentro do mensal. Ligar o job não pode estourar o
+orçamento global sem o dono também mexer nele.
 
-- `AiObjectRequest` + `generateObject` nos 4 adapters: saída estruturada validada por Zod
-  `.strict()` do nosso lado, **sem laço de ferramentas** (o tipo não tem campo `tools`). É o
-  caminho certo para qualquer coisa que precise de um objeto e não de uma conversa.
-- `ai_runs.kind` já discrimina espécies de run (`chat` | `extracao`), com o CHECK exigindo cada
-  forma por inteiro. Uma terceira espécie entra pelo **mesmo padrão** — afrouxar na coluna,
-  manter obrigatória no CHECK —, nunca alargando o que já existe.
+### 4. `/api/cron/insights`
+
+**Separada** de `/api/cron/notifications` — um job de insight que falha não pode derrubar as
+notificações. Protegida por `CRON_SECRET` (Bearer) na própria rota, com entrada em
+`vercel.json` na cadência que já existe (`0 12` e `0 0` UTC = 09h e 21h BRT). Erro registrado
+**sanitizado** (`security/redact.ts`), e sem repetir escrita.
+
+---
+
+## ✅ 18-E BLOCOS 1–3 CONCLUÍDOS (2026-08-09) — branch `feat/18-e-insights`
+
+**Desenho validado com o dono antes de qualquer linha de código**, como nas quatro subfases
+anteriores: `docs/superpowers/specs/2026-08-09-18e-insights-relatorios-dashboards-design.md`.
+
+### ⛔ O que a 18-E fixou e NÃO pode ser afrouxado
+
+1. **`ai_insights.explicacao` guarda os TOKENS `{{ind:<id>}}`, nunca o número resolvido.**
+   Enquanto o texto guardar tokens, é IMPOSSÍVEL o banco conter um insight que cite um número
+   fora de `ai_insight_sources` — a garantia deixa de depender de o validador ter rodado.
+2. **`confianca` não existe no schema de saída do modelo.** Irrepresentável vence recusado.
+   `insights/confidence.ts` declara `rebaixar`, e **`promover` não existe**.
+3. **`insights/temporal.ts` não importa `resumoMes`, `metrics.ts` nem `calc.ts`.** Cinco
+   recusas: janela incompleta, sem período anterior, base zero (nunca `Infinity`/`NaN`), ponto
+   parcial contaminando o agregado, e **unidades diferentes não se comparam**.
+4. **A checagem de vocabulário roda EM PRODUÇÃO** (`insights/validate.ts`), não só na suíte —
+   o texto vem do modelo em runtime e não há função pura para varrer.
+5. **`insights/collectors/` é a TERCEIRA porta**, e é mais larga que as duas primeiras. Os três
+   controles que o Tool Registry dava voltam por outro caminho: chave na action **e** no RPC,
+   teto declarado por coletor (TETO + 1), e `ai_insight_sources` como auditoria. **Nenhum
+   `.from()` em `insights/`.**
+6. **Nada em `dashboard/` alcança `server/insight-runner` nem `actions/ai-insights`** — teste
+   de import. Gerar é em `/ia/insights`, por clique.
+
+### ⚠️ Quatro coisas que a 18-E descobriu e você vai reencontrar
+
+1. **Um teste de fronteira pode ser vacuamente verde.** A lista `modulos` do
+   `boundaries.test.ts` é escrita à mão: uma pasta nova fora dela passa sem provar nada. Foi
+   por isso que `insights/` ficou dentro de `src/lib/ai/` e que `tone` entrou na lista.
+2. **Um teste escrito como aviso de fato dispara.** O `"8-D só pode negar médias enquanto elas
+   não existirem"` (18-B) ficou vermelho sozinho. Foi reescrito com o escopo certo — do
+   SISTEMA para a FERRAMENTA —, mantendo as duas linhas que provam que os adapters continuam
+   sem média.
+3. **Teste amarrado ao ÚLTIMO item de uma lista quebra na próxima adição.** O
+   `"anexa 'treinos' no fim"` quebrou quando `insights` entrou em `DASH_CARD_IDS`. Foi
+   reescrito para afirmar a REGRA, não o estado da época.
+4. **Varredura por substring num JSON inteiro dá falso positivo** — `"acao"` casa dentro de
+   `"afirmacao"`. Varra os NOMES dos campos.
+
+### Números reconferidos (2026-08-09)
+
+**129 tabelas** no `public`, **17 `ai_*`**; **3.347 testes / 164 arquivos**; **7** itens em
+`AI_SECTIONS`; **11** cards em `DASH_CARD_IDS`; **4** formas de `origem`; **3** espécies de
+`ai_runs.kind`. Ferramentas (29), commands (13) e agentes (9) **inalterados**.
 
 ---
 

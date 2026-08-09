@@ -16,9 +16,12 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, **18-D ✅ (2026-08-09, blocos 1–5)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; e `/ia/comprovantes` lê nota fiscal por visão, com revisão campo a campo. Próxima: **18-E** (sem desenho validado) |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E blocos 1–3 ✅ (2026-08-09)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; e `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**. Próxima: **Bloco 4 da 18-E** (o job automático, declarado fora) |
 
-Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). **Reconferido no banco em 2026-08-09: 126 tabelas** no `public`, **14 `ai_*`**. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). A **18-E** (blocos 1–3, 2026-08-09) criou 3 (`ai_insights`, `ai_insight_sources`,
+`ai_insight_feedback`) e alterou 2 (`ai_runs.kind` ganhou a terceira espécie `'insight'`;
+`ai_action_proposals` ganhou `insight_id` e a quarta `origem`). **Reconferido no banco em
+2026-08-09, depois da 18-E: 129 tabelas** no `public`, **17 `ai_*`**. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -112,9 +115,9 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 23. **FK COMPOSTA sempre que uma tabela apontar para outra dentro do mesmo usuário.** A RLS confere o `user_id` da **própria linha** e não alcança a linha apontada. Sem isso, um intruso ocupava a chave única `(scheduled_workout_id, provider)` da ponte da agenda e **impedia o dono de sincronizar** aquele dia. Mesma correção da 16-E nas fotos de evolução.
 24. **`getSessionHistory` aceita `client`/`userId`** para o Cron (service role, sem sessão) usar **a mesma leitura da tela**. Um segundo caminho de montagem do histórico faria o número da notificação divergir do número da tela.
 
-## Módulo Inteligência Artificial (Fase 18 — 18-A a 18-D)
+## Módulo Inteligência Artificial (Fase 18 — 18-A a 18-E)
 
-Rota `/ia`, tabelas `ai_*` (14), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
+Rota `/ia`, tabelas `ai_*` (17), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
 internos, 4 adapters, catálogo de modelos e tarifas versionado, credenciais cifradas, chat com
 streaming, medição por tentativa e orçamento com reserva — **sem ler um único registro**. A
 **18-B** (2026-08-07) abriu a primeira leitura: 3 ferramentas de Treinos, laço de ferramentas
@@ -129,9 +132,16 @@ abriu a **visão**: `/ia/comprovantes` recebe foto ou PDF de comprovante, extrai
 **rebaixa a confiança** do que o modelo declarou, o dono revisa campo a campo e decide — pelo
 mesmo Approval Engine, com `origem = 'documento'`. **Ela não acrescentou ferramenta nem
 command:** o comprovante não é algo que o modelo possa pedir, é uma tela que o dono opera.
-Desenhos em `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`,
-`docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md` e
-`docs/superpowers/specs/2026-08-08-18d-visao-comprovantes-design.md`; matriz em
+A **18-E** (blocos 1–3, 2026-08-09) criou a primeira grandeza **DERIVADA** do projeto — média
+de janela, comparação entre períodos, variação percentual, em `src/lib/ai/insights/temporal.ts`
+—, e `/ia/insights` produz análises sobre ela. **Ela também não acrescentou ferramenta nem
+command.** ⛔ **O bloco 4 (o job automático) ficou DECLARADO FORA**, e `allow_insight_jobs`
+**não foi criada**: uma chave que não liga nada é o "botão que não liga nada" que este projeto
+recusa. Sem o job, insight só existe **sob demanda**. Desenhos em
+`docs/superpowers/specs/2026-08-04-modulo-ia-design.md`,
+`docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`,
+`docs/superpowers/specs/2026-08-08-18d-visao-comprovantes-design.md` e
+`docs/superpowers/specs/2026-08-09-18e-insights-relatorios-dashboards-design.md`; matriz em
 `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`; camadas em `PROJECT_ARCHITECTURE.md`.
 
 ⚠️ **A DÉCIMA CHAVE É `allow_vision`, e ela é ANDada com `allow_finance` E
@@ -496,6 +506,57 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     registro no módulo daria uma tela mais bonita e uma auditoria pior — e `approval/` continua
     tocando só `ai_*`.
 
+**Invariantes acrescentadas pela 18-E (insights sobre grandeza derivada — 2026-08-09):**
+
+64. ⛔ **O TEXTO GRAVADO NÃO TEM NÚMERO.** `ai_insights.explicacao` guarda os tokens
+    `{{ind:<id>}}`, e `insights/render.ts` os resolve a cada leitura a partir de
+    `ai_insight_sources`. Isso muda a NATUREZA da garantia: "não cita número fora das fontes"
+    deixa de depender de o validador ter rodado e vira **propriedade do dado** — o mesmo
+    movimento que pôs uso único num `unique` e prazo num `default` do banco.
+65. ⛔ **AUSÊNCIA CARREGA MOTIVO, DO CONTRATO À COLUNA.** `Indicador.valor: number | null` com
+    `indisponivel_porque` obrigatório (`indicadorCoerente`), um CHECK no banco exigindo a
+    mesma coerência, e a tela escrevendo **"não medido" com o motivo** — nunca "—", nunca "0".
+    É a invariante 1 da Dieta subida ao contrato e descida até o pixel.
+66. **`insights/temporal.ts` AGREGA, NUNCA RECALCULA** — ele não importa `resumoMes`,
+    `metrics.ts` nem `calc.ts`; quem os chama são os coletores. Cinco recusas, cada uma
+    herdada de uma invariante já paga: janela incompleta (Dieta 21), sem período anterior
+    (Treinos 21), base zero (**nunca `Infinity`, nunca `NaN`, nunca "+∞%"**), ponto parcial
+    contaminando o agregado, e **unidades diferentes não se comparam** (Treinos 1 no tempo).
+67. ⛔ **A CONFIANÇA É DO SERVIDOR, E O CAMPO NÃO EXISTE NO SCHEMA DE SAÍDA DO MODELO.**
+    Irrepresentável vence recusado: uma recusa é um `if` que alguém remove; um campo ausente é
+    uma mudança de schema que ninguém faz sem perceber. `confidence.ts` declara `rebaixar` e
+    **`promover` não existe**. Só os indicadores CITADOS contam.
+68. ⛔ **A DEDUPLICAÇÃO ACONTECE ANTES DA CHAMADA.** Deduplicar depois cumpriria a letra do
+    critério e faria o dono pagar por respostas jogadas fora. A chave sai dos INDICADORES;
+    rótulo, rota e regra de contagem ficam de fora (são apresentação); `tipo` também, porque é
+    escolha do modelo e só existe depois. ⚠️ Ela alcança o insight **expirado** — se a chave
+    repete, os dados não mudaram, e a leitura prévia devolve o existente em vez de gastar.
+69. **O VOCABULÁRIO PROIBIDO É DECLARADO UMA VEZ, EM MÓDULO NEUTRO** (`src/lib/tone/`), e a
+    checagem **roda em produção** (`insights/validate.ts`). Nas 16-F/17-F o texto sai de função
+    pura e um teste basta; aqui ele vem do modelo em runtime, e a suíte deixa de ser a última
+    linha de defesa. Neutro porque, dentro de `ai/`, `notifications/` passaria a depender do
+    módulo de IA — a seta ao contrário.
+70. **NENHUM ESTADO DE INSIGHT É GRAVADO** (invariante 35 aplicada aqui). `vigente`,
+    `expirado`, `dispensado`, `adiado` e `oculto` saem de `expires_at` +
+    `ai_insight_feedback` (append-only por policy), com precedência **decisão do dono >
+    prazo** — nos dois sentidos. ⛔ **Expirar não apaga**: o insight sai da lista de vigentes e
+    continua legível com os números que tinha (snapshot).
+71. **`insights/collectors/` É A TERCEIRA PORTA, e ela é mais larga que as duas primeiras** —
+    leitura de dado do dono FORA do Tool Registry, sem `guard.ts`, sem teto de descriptor e
+    sem linha em `ai_tool_calls`. Ela só se justifica porque os três controles voltam por
+    outro caminho, e os três estão amarrados: a chave `allow_<modulo>` na Server Action **e**
+    dentro do RPC; o teto declarado em cada coletor (com **TETO + 1** onde a API aceita
+    `limit`); e `ai_insight_sources` como auditoria. **Nenhum `.from()` em `insights/`.**
+72. **A QUARTA FORMA DE `ai_action_proposals.origem` É `insight`**, com o CHECK exigindo a
+    forma por inteiro e FK composta `(insight_id, user_id)`. `insight_id` **não entra no
+    hash**. ⛔ Restrito a `criarTarefaTodo`, e a trava é a **ausência** de campo `command` no
+    schema da action — com um `command` livre, a tela pediria qualquer um do registry.
+73. ⚠️ **AFIRMAÇÃO SOBRE O ESTADO DO SISTEMA VENCE; AFIRMAÇÃO SOBRE A REGRA, NÃO.** O 8-D da
+    v2 dizia "o sistema não calcula média" e virou mentira no instante em que `temporal.ts`
+    nasceu — exatamente como a v1 virou mentira quando a 18-B passou a ler Treinos. A
+    `seguranca-v3` diz **"esse número não é seu para calcular"**. E ela **não promete média ao
+    chat**: `temporal.ts` alimenta o Insight Engine, não os adapters.
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -522,7 +583,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.219 testes / 159 arquivos em 2026-08-09 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.347 testes / 164 arquivos em 2026-08-09 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos
