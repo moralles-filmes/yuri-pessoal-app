@@ -49,6 +49,18 @@ export const AI_SECTIONS: readonly AiSection[] = [
     icon: "history",
     description: "O que a IA preparou, o que você decidiu e o que foi aplicado.",
   },
+  /**
+   * 18-D · Bloco 5 — o 6º item. Entra ao lado de "Ações", e não perto de "Configurações",
+   * porque é uma tela de TRABALHO: o dono envia, revisa e decide aqui. A ordem da navegação
+   * é uma afirmação sobre o que importa — o que a IA faz com os dados dele vem primeiro.
+   */
+  {
+    slug: "comprovantes",
+    title: "Comprovantes",
+    href: "/ia/comprovantes",
+    icon: "receipt",
+    description: "Envie uma nota ou comprovante, revise a leitura e decida o lançamento.",
+  },
   {
     slug: "consumo",
     title: "Consumo",

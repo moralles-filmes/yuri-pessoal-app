@@ -83,6 +83,12 @@ let statusDoRun = "";
 
 vi.mock("./run-store", () => ({
   HEARTBEAT_INTERVAL_MS: 10_000,
+  /**
+   * 18-D — o mapa de mensagens saiu do `chat-runner.ts` para o `run-store.ts`, ao lado de
+   * `BeginRunErrorCode`, porque agora ele serve aos DOIS runners. O duplo precisa da chave
+   * que o runner de fato lê; um `Proxy` genérico esconderia um código sem frase.
+   */
+  MENSAGEM_ADMISSAO: { AI_AGENT_NOT_ALLOWED: "Este assistente não está disponível." },
   beginChatRun: async (input: { reservedCost: number }) => {
     reservaGravada = input.reservedCost;
     return {

@@ -24,10 +24,22 @@ import { revalidatePath } from "next/cache";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
 import { getAiPreferences } from "@/lib/ai/queries";
 import {
+  anexarDocumentoATransacao,
   descartarDocumento,
   guardarDocumento,
 } from "@/lib/ai/server/document-store";
-import { documentoRefSchema, observacaoDocumentoSchema } from "@/lib/validators/ai";
+import { runExtraction } from "@/lib/ai/server/extraction-runner";
+import {
+  prepararLancamentoDoComprovante as prepararLancamento,
+  type PropostaDoComprovante,
+} from "@/lib/ai/approval/document";
+import type { ExtracaoDeComprovante } from "@/lib/ai/vision/contracts";
+import {
+  anexarComprovanteSchema,
+  documentoRefSchema,
+  observacaoDocumentoSchema,
+  prepararLancamentoDoComprovanteSchema,
+} from "@/lib/validators/ai";
 import { limiteDeBytes } from "@/lib/ai/vision/limits";
 import type { ActionResult } from "@/types/finance";
 
@@ -130,6 +142,136 @@ export async function enviarComprovante(
 
   revalidatePath(ROTA);
   return { ok: true, data: { id: resultado.documento.id } };
+}
+
+/**
+ * **PROCESSO 2 do desenho** — a leitura. É a partir daqui que o arquivo sai do sistema.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⛔ ESTA AÇÃO NÃO LANÇA NADA, E NÃO TEM COMO LANÇAR.                                   ║
+ * ║                                                                                       ║
+ * ║ Ela chama `runExtraction`, que grava numa tabela `ai_*` e não conhece serviço de       ║
+ * ║ módulo nenhum. Propor o lançamento é o Processo 3, e ele começa com o dono revisando   ║
+ * ║ campo a campo — o critério "nenhum lançamento definitivo é criado só por ter recebido  ║
+ * ║ imagem" é verdadeiro por construção, não por checagem.                                 ║
+ * ║                                                                                       ║
+ * ║ As três chaves são conferidas AQUI **e** dentro do RPC. A daqui existe para a mensagem ║
+ * ║ dizer QUAL falta; a de lá existe porque um usuário autenticado pode chamar o RPC       ║
+ * ║ direto, e a Server Action não é a última barreira de nada.                             ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export async function extrairComprovante(
+  input: unknown,
+): Promise<ActionResult<{ extractionId: string; extracao: ExtracaoDeComprovante }>> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = documentoRefSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const autorizado = await autorizacaoDeEnvio(ctx.userId);
+  if (!autorizado.ok) return { ok: false, error: autorizado.mensagem };
+
+  const resultado = await runExtraction({
+    userId: ctx.userId,
+    documentoId: parsed.data.documentoId,
+    // O relógio real entra AQUI, na casca — o runner e o rebaixamento recebem `hoje`/`agora`
+    // injetados, e é isso que os torna testáveis sem esperar o calendário virar.
+    agora: new Date(),
+  });
+
+  // A falha também mexe na tela: ela grava uma tentativa de leitura com `status = 'falhou'`,
+  // e o dono precisa vê-la. Revalidar nos dois desfechos.
+  revalidatePath(ROTA);
+  revalidatePath("/ia/consumo");
+
+  if (!resultado.ok) return { ok: false, error: resultado.message };
+
+  return {
+    ok: true,
+    data: { extractionId: resultado.extractionId, extracao: resultado.extracao },
+  };
+}
+
+/**
+ * **PROCESSO 3 do desenho** — a revisão vira uma proposta. E só uma proposta.
+ *
+ * ⛔ Ela passa pelo MESMO motor da 18-C: mesmo hash do efeito, mesmo prazo de 10 minutos
+ * vindo do banco, mesmo uso único, mesma revalidação por recálculo. Quem executa continua
+ * sendo `confirmarAcaoDaIa` — esta action não alcança `approval/execute.ts`, e o teste de
+ * fronteira falha se alguém a fizer alcançar.
+ */
+export async function prepararLancamentoDoComprovante(
+  input: unknown,
+): Promise<ActionResult<PropostaDoComprovante>> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = prepararLancamentoDoComprovanteSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const autorizado = await autorizacaoDeEnvio(ctx.userId);
+  if (!autorizado.ok) return { ok: false, error: autorizado.mensagem };
+
+  const r = await prepararLancamento({
+    userId: ctx.userId,
+    extractionId: parsed.data.extractionId,
+    correcoes: parsed.data.correcoes,
+    escolha: {
+      conta: parsed.data.conta ?? null,
+      cartao: parsed.data.cartao ?? null,
+      categoria: parsed.data.categoria ?? null,
+    },
+  });
+  if (!r.ok) return { ok: false, error: r.mensagem };
+
+  // Sem `revalidatePath`: nada mudou nos módulos, e a proposta ainda está por decidir. A
+  // invalidação acontece quando ela for confirmada — em `confirmarAcaoDaIa`.
+  return { ok: true, data: r.proposta };
+}
+
+/**
+ * O comprovante passa a ser anexo DO LANÇAMENTO. Chamada DEPOIS da confirmação.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⛔ POR QUE ISTO É UMA SEGUNDA AÇÃO, E NÃO PARTE DA EXECUÇÃO.                          ║
+ * ║                                                                                       ║
+ * ║ Anexo, caminho de bucket e URL assinada **não entram em `changed_fields`** (§3.6), e a ║
+ * ║ trava lá é de FORMA, não uma lista de nomes proibidos. Embutir a anexação no command   ║
+ * ║ de `lancarTransacao` faria o Approval Engine escrever em `attachments` — uma tabela    ║
+ * ║ que não é dele — e obrigaria a allowlist a ganhar um campo de anexo.                   ║
+ * ║                                                                                       ║
+ * ║ O preço é uma janela: o lançamento existe e o arquivo ainda não está ligado a ele. Se  ║
+ * ║ esta ação falhar, o comprovante continua na lista como enviado, visível, e o dono      ║
+ * ║ decide. Errar para "o arquivo ficou solto" é melhor que errar para "o Approval Engine  ║
+ * ║ escreve onde quiser".                                                                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export async function anexarComprovanteAoLancamento(
+  input: unknown,
+): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = anexarComprovanteSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const anexou = await anexarDocumentoATransacao(
+    ctx.supabase,
+    ctx.userId,
+    parsed.data.documentoId,
+    parsed.data.transacaoId,
+  );
+
+  if (!anexou) {
+    return dbError(
+      "O lançamento foi criado, mas o comprovante não foi anexado a ele. Ele continua na lista de comprovantes.",
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath("/financeiro/lancamentos");
+  return { ok: true, data: undefined };
 }
 
 /**

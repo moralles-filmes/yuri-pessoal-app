@@ -170,6 +170,72 @@ export async function criarProposta(entrada: NovaProposta): Promise<PropostaGrav
 // 18-C · Bloco 5 — a proposta que nasce do BOTÃO, não do chat
 // ══════════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * 18-D · Bloco 5 — a TERCEIRA forma. Uma proposta que nasce de um DOCUMENTO.
+ *
+ * Mesma razão de `FERRAMENTA_DO_DESFAZER`: `tool_name`/`tool_version` são NOT NULL e entram
+ * no hash, e esta proposta não nasce de ferramenta nenhuma — nasce do dono revisando um
+ * comprovante em `/ia/comprovantes`. Declarar isso por escrito é melhor que reaproveitar
+ * `finance.lancar_transacao` (que descreveria uma tool call que nunca houve).
+ */
+export const FERRAMENTA_DO_COMPROVANTE = "tela.comprovante";
+export const VERSAO_DO_COMPROVANTE = "1";
+
+export type NovaPropostaDeDocumento = {
+  readonly userId: string;
+  /** A extração revisada que originou esta proposta. FK composta com `user_id`. */
+  readonly documentExtractionId: string;
+  readonly module: string;
+  readonly risk: NivelDeRisco;
+  readonly efeito: EfeitoProposto;
+};
+
+/**
+ * ⚠️ MESMO MOTOR: hash do efeito, prazo de 10 min do BANCO, uso único e revalidação. O
+ * comprovante não ganha atalho nenhum — ⛔ **nenhum lançamento definitivo é criado só por
+ * ter recebido imagem**, e a única porta continua sendo `confirmarAcaoDaIa`.
+ *
+ * `document_extraction_id` NÃO entra no hash, pela mesma razão de `undoes_execution_id`: o
+ * hash cobre o EFEITO, e o payload já carrega o que vai ser lançado. O vínculo é
+ * escrituração, e quem o protege é a FK composta `(document_extraction_id, user_id)`.
+ */
+export async function criarPropostaDeDocumento(
+  entrada: NovaPropostaDeDocumento,
+): Promise<PropostaGravada | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ai_action_proposals")
+    .insert({
+      user_id: entrada.userId,
+      origem: "documento",
+      document_extraction_id: entrada.documentExtractionId,
+      tool_name: FERRAMENTA_DO_COMPROVANTE,
+      tool_version: VERSAO_DO_COMPROVANTE,
+      command: entrada.efeito.command,
+      module: entrada.module,
+      risk: entrada.risk,
+      payload: comoJson(entrada.efeito.payload),
+      resolved_entities: entidadesGravaveis(entrada.efeito),
+      preview: comoJson(previsaoCanonica(entrada.efeito)),
+      effect_hash: hashDe(
+        entrada.efeito,
+        FERRAMENTA_DO_COMPROVANTE,
+        VERSAO_DO_COMPROVANTE,
+      ),
+      // `expires_at` continua não sendo enviado — o prazo é o default do banco.
+    })
+    .select("id, effect_hash, expires_at")
+    .single();
+
+  if (error) {
+    registrarFalha("DOCUMENT_PROPOSAL_INSERT_FAILED", entrada.documentExtractionId, error);
+    return null;
+  }
+  if (!data) return null;
+
+  return { id: data.id, effectHash: data.effect_hash, expiresAt: data.expires_at };
+}
+
 export type NovaPropostaDeDesfazer = {
   readonly userId: string;
   /** A execução que será revertida. É ela que ocupa o lugar da trilha de chat. */

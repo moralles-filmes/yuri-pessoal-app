@@ -122,6 +122,13 @@ export type ResultadoDaExecucao =
       readonly ok: true;
       readonly executionId: string;
       readonly status: StatusDaExecucao;
+      /**
+       * 18-D — o id do registro criado ou alterado. Ele já era gravado em
+       * `ai_action_executions.target_id`; passou a voltar porque a tela de comprovantes
+       * precisa dele para anexar o arquivo ao lançamento **fora** do Approval Engine
+       * (§3.6: anexo não entra em `changed_fields`).
+       */
+      readonly targetId: string | null;
       readonly targetRoute: string | null;
       /** As rotas para o `revalidatePath` da CASCA. Nunca chamado daqui. */
       readonly revalidar: readonly string[];
@@ -311,6 +318,7 @@ export async function executarAcaoAprovada(input: {
       ok: true,
       executionId: execucao.id,
       status: "falhou",
+      targetId: null,
       targetRoute: null,
       revalidar: command.revalidar,
     };
@@ -340,6 +348,7 @@ export async function executarAcaoAprovada(input: {
     ok: true,
     executionId: execucao.id,
     status,
+    targetId: resultado.targetId,
     targetRoute: rota,
     revalidar: command.revalidar,
   };

@@ -16,6 +16,7 @@ import {
   History,
   MessageSquare,
   MessagesSquare,
+  ReceiptText,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const ICONS: Record<string, LucideIcon> = {
   "message-square": MessageSquare,
   "messages-square": MessagesSquare,
   history: History,
+  receipt: ReceiptText,
   gauge: Gauge,
   settings: Settings,
 };

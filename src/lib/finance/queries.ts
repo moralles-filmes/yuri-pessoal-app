@@ -300,6 +300,53 @@ export async function getTransactionById(id: string): Promise<{
   return data ?? null;
 }
 
+/**
+ * 18-D — as CANDIDATAS a "já lancei isso": mesmo dia e mesmo valor.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⛔ ELA NÃO DECIDE NADA. Quem decide se há duplicidade é `vision/duplicates.ts`, que    ║
+ * ║ exige o TRIO (valor + data + estabelecimento) e ainda assim só SINALIZA.               ║
+ * ║                                                                                       ║
+ * ║ A consulta mora aqui, e não dentro do módulo de IA, pela mesma razão que               ║
+ * ║ `getCardBillingDays` nasceu na 18-C: consulta a `transactions` montada dentro de       ║
+ * ║ `src/lib/ai/` é a porta pela qual a regra do domínio começa a ser reescrita —          ║
+ * ║ primeiro o `select`, depois o filtro, depois a decisão.                                ║
+ * ║                                                                                       ║
+ * ║ ⚠️ **Parcela lançada NÃO está em `transactions`** (bug real de 2026-08-06): a compra   ║
+ * ║ parcelada guarda só a compra-pai aqui, e quem ocupa a fatura de cada mês é             ║
+ * ║ `transaction_installments`. Um comprovante de UMA parcela não vai casar com nada por   ║
+ * ║ este caminho — e é melhor não sinalizar do que sinalizar errado, porque o alerta que   ║
+ * ║ mente ensina o dono a ignorar todos.                                                   ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ **`transactions.amount` É `numeric(14,2)` EM REAIS — NÃO É INTEIRO EM CENTAVOS.**
+ *
+ * A extração trabalha em centavos (é o que `vision/schema.ts` pede ao modelo, para não
+ * depender de o modelo acertar vírgula ou ponto). A conversão acontece AQUI, na fronteira, e
+ * num ponto só: comparar 4790 com 47.90 não casaria com nada, e o alerta de duplicidade
+ * simplesmente nunca apareceria — uma falha silenciosa, que é a pior espécie.
+ *
+ * O teto existe porque um dia com muitos lançamentos do mesmo valor não deve virar uma tela
+ * de alertas.
+ */
+export const TETO_DE_CANDIDATAS_DO_COMPROVANTE = 10;
+
+export async function getTransactionsForReceiptMatch(input: {
+  dataISO: string;
+  valorCentavos: number;
+}): Promise<
+  { id: string; description: string | null; purchase_date: string; amount: number }[]
+> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("transactions")
+    .select("id, description, purchase_date, amount")
+    .eq("purchase_date", input.dataISO)
+    .eq("amount", input.valorCentavos / 100)
+    .limit(TETO_DE_CANDIDATAS_DO_COMPROVANTE);
+  return data ?? [];
+}
+
 export type StatementFilters = {
   cardId?: string;
   month?: string; // 'yyyy-MM' (filtra pela competência)

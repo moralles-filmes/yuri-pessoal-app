@@ -97,6 +97,16 @@ const CAMADAS_PURAS = [
   "security",
   "context",
   "approval",
+  /**
+   * 18-D. `vision/` decide o que é o arquivo, quanto ele custa, se a leitura merece confiança
+   * e se ela pode virar proposta — **sem ver um byte e sem conhecer o bucket**. Os bytes
+   * existem só em `server/document-store.ts`, e só até a chamada terminar (§10.1 do design).
+   *
+   * Sem esta linha, um `import { lerBytesDoDocumento } from "../server/document-store"` dentro
+   * de `vision/confidence.ts` passaria por lint, `tsc` e build — e a promessa de que a camada
+   * de decisão é pura viraria comentário.
+   */
+  "vision",
 ] as const;
 
 describe("fronteiras arquiteturais do módulo de IA", () => {

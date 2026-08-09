@@ -120,3 +120,22 @@ export const ROTULO_DO_CAMPO: Record<CampoEssencial, string> = {
   totalCentavos: "valor total",
   data: "data da compra",
 };
+
+/**
+ * O vocabulário do DONO para cada confiança — 18-D · Bloco 5.
+ *
+ * ⛔ `nao_identificado` é **"não identificado"**, e nunca "vazio", "0" ou "—". O critério de
+ * aceite é literal: *campo ilegível é "não identificado", nunca zero e nunca inventado*. Um
+ * traço na tela seria lido como "não tem", e "não tem" é uma afirmação sobre o comprovante
+ * que ninguém fez.
+ *
+ * `conflito` não é "confiança baixa": é uma CONTRADIÇÃO entre dois dados da mesma nota, e
+ * chamá-la de baixa faria parecer que basta olhar com atenção.
+ */
+export const ROTULO_DA_CONFIANCA: Record<Confianca, string> = {
+  alta: "leitura nítida",
+  media: "leitura razoável",
+  baixa: "leitura duvidosa",
+  conflito: "os números se contradizem",
+  nao_identificado: "não identificado",
+};

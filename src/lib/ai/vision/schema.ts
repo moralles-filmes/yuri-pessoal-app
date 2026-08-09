@@ -25,7 +25,11 @@
  */
 
 import { z } from "zod";
-import { CONFIANCAS_DO_MODELO } from "./contracts";
+import {
+  CONFIANCAS,
+  CONFIANCAS_DO_MODELO,
+  type ExtracaoDeComprovante,
+} from "./contracts";
 
 /** A versão do schema, gravada em cada extração. Mudar a forma invalida comparação antiga. */
 export const VERSAO_DO_SCHEMA = "comprovante-v1";
@@ -161,6 +165,61 @@ export const EXTRACAO_JSON_SCHEMA = {
     },
   },
 } as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   O caminho de VOLTA — 18-D · Bloco 5
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ⛔ O QUE SAI DE `ai_document_extractions.campos` É `unknown`, E TEM DE SER VALIDADO.
+ *
+ * A coluna é `jsonb`: ela aceita qualquer forma, e a forma que este código espera é
+ * versionada por `schema_version`. Uma linha gravada por uma versão anterior — ou por uma
+ * migração manual — chegaria aqui como um objeto que o TypeScript acredita ser
+ * `ExtracaoDeComprovante` e não é. O `as` seria a mentira; o `parse` é a verdade.
+ *
+ * ⚠️ Este schema aceita a PRÓPRIA SAÍDA de `avaliarExtracao` — é a mesma disciplina de
+ * round-trip dos formulários (`validators/round-trip.test.ts`): o que gravamos tem de voltar.
+ */
+const campoGravado = <T extends z.ZodType>(valor: T) =>
+  z
+    .object({
+      valor: valor.nullable(),
+      confianca: z.enum(CONFIANCAS),
+      motivo: z.string().nullable(),
+    })
+    .strict();
+
+export const extracaoGravadaSchema = z
+  .object({
+    estabelecimento: campoGravado(z.string()),
+    cnpj: campoGravado(z.string()),
+    data: campoGravado(z.string()),
+    hora: campoGravado(z.string()),
+    totalCentavos: campoGravado(z.number()),
+    formaPagamento: campoGravado(z.string()),
+    numeroDocumento: campoGravado(z.string()),
+    itens: z.array(
+      z
+        .object({
+          descricao: z.string(),
+          valorTotalCentavos: z.number().nullable(),
+          quantidade: z.number().nullable(),
+          confianca: z.enum(CONFIANCAS),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+/**
+ * `null` quando a linha não é legível por ESTA versão do código. Quem chama mostra
+ * "não foi possível ler esta extração" — nunca um objeto meio preenchido.
+ */
+export function lerExtracaoGravada(bruto: unknown): ExtracaoDeComprovante | null {
+  const r = extracaoGravadaSchema.safeParse(bruto);
+  return r.success ? r.data : null;
+}
 
 export const NOME_DO_SCHEMA = "extracao_de_comprovante";
 

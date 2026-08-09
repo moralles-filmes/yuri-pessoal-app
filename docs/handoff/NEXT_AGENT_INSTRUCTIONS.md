@@ -1,6 +1,103 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-## 🟡 EM ANDAMENTO: 18-D — branch `feat/18-d-visao-comprovantes`
+## ▶️ PRÓXIMA: **18-E — IA · Insights, relatórios e dashboards**
+
+⛔ **ELA NÃO TEM DESENHO VALIDADO.** As 18-A, 18-B, 18-C e 18-D tiveram um, escrito com o dono
+**antes** de qualquer linha de código, e as quatro vezes ele mudou o que o documento da fase
+sugeria. **Brainstorm primeiro, spec em `docs/superpowers/specs/` depois, código por último.**
+
+**O arquivo a abrir:** `docs/phases/PHASE_18_E_AI_INSIGHTS_REPORTS_DASHBOARDS.md`
+
+### ✅ TRÊS DECISÕES JÁ TOMADAS COM O DONO (2026-08-09)
+
+Elas foram levantadas ao fechar a 18-D e **já estão validadas** — não as reabra, e escreva a
+spec a partir delas.
+
+| # | Decisão | Consequência |
+| --- | --- | --- |
+| 1 | **O módulo de agregação temporal É CRIADO**, e o item **8-D do prompt-base é reescrito com versão NOVA** | Média, comparação período×período e variação passam a ser calculadas pelo SISTEMA, num módulo puro e testado no molde de `metrics.ts`. ⛔ **Ele vem ANTES de qualquer chamada de IA da subfase.** Calcular por fora e deixar o 8-D como está é a família de mentira que a 18-B fechou |
+| 2 | **O job automático NASCE DESLIGADO, com chave própria e orçamento SEPARADO para jobs** | Como `allow_vision` na 18-D. Sem ligar, insight só existe **sob demanda** (o dono clica). É a primeira vez que o sistema gastaria dinheiro dele sem ele pedir — e essa decisão é dele, não do código |
+| 3 | **"Conversar com um relatório" fica FORA da 18-E, declarado** | Mesma razão que tirou o arquivo do chat na 18-D (§2.1): exige o conteúdo no histórico, repetido a cada turno, com custo e exposição multiplicados. Vai para a **18-F**, junto com "conversar sobre documento", que já está lá |
+
+### ⬜ A DECISÃO QUE CONTINUA ABERTA
+
+**A ordem do escopo.** O documento da fase é maior que a 18-C inteira (Insight Engine + 3
+tabelas + cards no dashboard + Resumo do Dia + Revisão Semanal + análises cruzadas). O dono
+**ainda não escolheu** o que entra primeiro — pergunte antes de escrever a spec. As análises
+cruzadas dependem do módulo da decisão 1, então elas não podem vir antes dele.
+
+### As duas invariantes que muito provavelmente governam a 18-E
+
+1. **A trava de honestidade (invariante 15, `seguranca-v2`).** O assistente só sabe o que as
+   ferramentas devolveram naquela conversa, e **nunca inventa, estima nem infere número**. Uma
+   subfase chamada *insights* é exatamente onde isso é mais tentador de afrouxar — "tendência",
+   "projeção" e "você costuma gastar mais em X" são todas afirmações que precisam sair de um
+   número medido, ou não sair.
+2. **Nenhum adapter reimplementa a agregação do módulo (invariante 31).** Financeiro entra por
+   `resumoMes`, Dieta por `calc.ts`, Treinos por `metrics.ts`. Um segundo cálculo faria o
+   insight discordar da tela — e o dono não teria como saber qual dos dois está certo.
+
+⚠️ E o item **8-D** do prompt-base já diz, hoje, que **o sistema não calcula média, comparação
+entre períodos, variação nem percentual de evolução**, e que o modelo deve dizer isso em vez de
+fazer a conta. Se a 18-E for entregar qualquer um desses números, ela **tem de** entregá-los
+como agregado calculado pelo SISTEMA (num módulo puro e testado, no molde de `metrics.ts`) e
+reescrever o 8-D com versão nova de prompt. Deixar o texto como está e passar a calcular por
+fora é a família de mentira que a 18-B fechou.
+
+**Sem prescrição** — nem em Dieta, nem em Treinos, nem em Finanças.
+
+### Duas coisas que a 18-D deixou prontas e a 18-E pode querer
+
+- `AiObjectRequest` + `generateObject` nos 4 adapters: saída estruturada validada por Zod
+  `.strict()` do nosso lado, **sem laço de ferramentas** (o tipo não tem campo `tools`). É o
+  caminho certo para qualquer coisa que precise de um objeto e não de uma conversa.
+- `ai_runs.kind` já discrimina espécies de run (`chat` | `extracao`), com o CHECK exigindo cada
+  forma por inteiro. Uma terceira espécie entra pelo **mesmo padrão** — afrouxar na coluna,
+  manter obrigatória no CHECK —, nunca alargando o que já existe.
+
+---
+
+## ✅ 18-D CONCLUÍDA (2026-08-09) — branch `feat/18-d-runner-e-tela`
+
+Os **cinco blocos** fecharam. O pipeline anda de ponta a ponta: **enviar → ler → revisar →
+propor → confirmar**, e nenhum lançamento definitivo nasce das quatro primeiras etapas.
+
+**O arquivo que o próximo agente deve abrir se for mexer nisto:**
+`src/lib/ai/server/extraction-runner.ts` — é o único arquivo do sistema que manda um documento
+do dono para fora, e o cabeçalho dele explica por que a ordem dos dez passos não é estilo.
+
+### ⛔ O que a 18-D fixou e NÃO pode ser afrouxado
+
+1. **`tokensDeArquivos` entra em `computeReservation`.** `core/text.ts` devolve `""` para
+   imagem de propósito; sem essa linha o orçamento deixa passar em silêncio a chamada cara.
+   Há teste com número escrito à mão, e a mutação que remove a linha o derruba.
+2. **A saída da extração é Zod `.strict()`, e é ela a defesa contra injeção** — não o aviso do
+   bloco não confiável. Não existe campo que signifique "execute".
+3. **O bloqueio por confiança roda no servidor** (`revisar()`), não só como botão escondido.
+4. **Anexo continua fora de `changed_fields`** (§3.6). A anexação é uma segunda action, fora do
+   Approval Engine.
+5. **`vision/` está em `CAMADAS_PURAS`** no teste de fronteira: ela decide o que é o arquivo,
+   quanto custa e se merece confiança **sem ver um byte**.
+6. **O detector de magic bytes é UM (`@/lib/files/magic-bytes`); a política é de cada tela.**
+   As fotos de 16-C/16-E aceitam HEIC (só guardam o arquivo); a IA o recusa (os provedores não
+   o aceitam). Uma allowlist única faria uma das duas errar.
+
+### ⚠️ Três coisas que a 18-D descobriu e você vai reencontrar
+
+1. **`transactions.amount` é `numeric(14,2)` EM REAIS**, não inteiro em centavos. O `CLAUDE.md`
+   dizia "dinheiro em centavos (integer) no financeiro" de forma genérica, e isso é falso para
+   `transactions`. Confira o tipo da coluna antes de comparar valores.
+2. **`vitest` não checa tipo — de novo.** Três erros de tipo em arquivos de teste passaram
+   verdes nesta subfase (`AiError` sem `retryable`, helper tipado por inferência do literal).
+   `npx tsc --noEmit` sempre.
+3. **Um `Record` sobre uma união é a melhor trava para "código novo sem frase em pt-BR".**
+   `MENSAGEM_ADMISSAO` mudou de casa (do `chat-runner` para o `run-store`) justamente para os
+   dois runners compartilharem-no: um segundo mapa teria deixado o primeiro incompleto em
+   silêncio.
+
+---
+
+## 📌 Registro: como a 18-D chegou aqui — branch anterior `feat/18-d-visao-comprovantes`
 
 > **A 18-D TEM DESENHO VALIDADO AGORA.** Ele foi escrito com o dono em **2026-08-08**, antes
 > de qualquer linha de código, e está em
@@ -33,36 +130,24 @@
 154 arquivos**, `lint` e `tsc` limpos. Migrations aplicadas via MCP, `get_advisors` **sem lint
 novo**, `src/types/supabase.ts` regenerado.
 
-### ⛔ O QUE FALTA — E É O QUE FAZ O RECURSO FUNCIONAR
+### ✅ O QUE FALTAVA — ENTREGUE EM 2026-08-09
 
-Hoje o dono **envia** um comprovante e o sistema o guarda com segurança, mas **nada o lê
-ainda**: o pipeline para no Processo 1. Faltam duas peças.
+~~**1. Bloco 3c — o runner da extração (Processo 2).**~~ ✅ `src/lib/ai/server/extraction-runner.ts`,
+`src/lib/ai/vision/prompt.ts` e `extrairComprovante` em `src/lib/actions/ai-documents.ts`.
 
-**1. Bloco 3c — o runner da extração (Processo 2).** Nada disto existe:
+~~**2. Bloco 5 — a tela e a ponte com a 18-C.**~~ ✅ `src/app/(app)/ia/comprovantes/`,
+`approval/document.ts` (`origem = 'documento'`), `server/document-queries.ts` e os três
+componentes em `src/components/ai/receipt-*.tsx`.
 
-- `src/lib/ai/server/extraction-runner.ts` — chama `ai_begin_extraction_run`, resolve o
-  modelo de **visão** pelo `core/router.ts`, lê os bytes por `lerBytesDoDocumento`, monta o
-  `AiObjectRequest` com a parte `image`/`file`, chama `generateObject`, valida com
-  `extracaoDoModeloSchema`, roda `avaliarExtracao(bruta, hojeISO())` e grava em
-  `ai_document_extractions`. Fecha o run e grava `ai_usage_events` **por tentativa**.
-- A reserva **tem de** passar `tokensDeArquivos: estimarTokensDoArquivo(...).tokens` —
-  as duas metades dessa decisão vivem em arquivos diferentes (`core/text.ts` devolve `""`
-  para imagem de propósito, para não contar duas vezes).
-- `src/lib/actions/ai-documents.ts` → `extrairComprovante(documentoId)`.
-- O prompt da extração: ele **não** é um agente do registry (o RPC fixa
-  `agent_id = 'documento.comprovante'`), e o conteúdo do arquivo entra por
-  `wrapUntrusted(source: "imagem")`.
+⚠️ **Duas correções de rumo em relação ao que este arquivo previa**, ambas registradas no
+`LAST_PHASE_SUMMARY.md`:
 
-**2. Bloco 5 — a tela e a ponte com a 18-C.** Nada disto existe:
-
-- `src/app/(app)/ia/comprovantes/` (6º item da navegação, `src/config/nav.ts`).
-- Revisão campo a campo com a confiança visível, correção pelo dono (`corrigir()`), os
-  alertas de duplicidade e a classificação dos itens.
-- A ponte: `criarProposta` com **`origem: 'documento'`** + `document_extraction_id`. O CHECK
-  do banco já exige a forma inteira. Reusar `commands/finance-preview.ts` para a previsão —
-  **não montar o efeito por fora** (use `hashDe`).
-- Depois da execução, trocar `attachments.entity_type` de `ia_documento` para `transaction`
-  e `entity_id` para o id do lançamento. ⛔ **Nada de anexo entra em `changed_fields`.**
+- O 6º item da navegação entrou em **`src/lib/ai/constants.ts`** (`AI_SECTIONS`), que é a
+  navegação INTERNA do módulo — não em `src/config/nav.ts`, que é a Sidebar do sistema e já
+  tinha a entrada "Inteligência Artificial" apontando para `/ia`.
+- A ponte usa **`criarPropostaDeDocumento`**, uma função nova ao lado de
+  `criarPropostaDeDesfazer` — e não `criarProposta`, que grava `origem: "ferramenta"` fixo e
+  exige conversa, run e tool call (o CHECK do banco recusaria).
 
 ### ⚠️ Três coisas que esta subfase descobriu e você vai reencontrar
 
@@ -72,9 +157,12 @@ ainda**: o pipeline para no Processo 1. Faltam duas peças.
 2. **A chave do advisory lock de `ai_begin_extraction_run` é IDÊNTICA à do chat.** Não é
    preguiça: o recurso disputado é o **orçamento do usuário**, não a espécie do run. Com
    namespace próprio, uma extração e uma mensagem simultâneas passariam as duas.
-3. **`photoFileSchema` (16-E) confere `file.type`, que é DECLARADO PELO CLIENTE.** A 18-D
-   decide por magic bytes (`vision/mime.ts`). **Retroportar para as fotos de evolução (16-E) e
-   a de receita (16-C) é tarefa avulsa**, registrada em §5 do spec — não foi esquecimento.
+3. ~~**`photoFileSchema` (16-E) confere `file.type`, que é DECLARADO PELO CLIENTE.**~~
+   ✅ **RETROPORTADO EM 2026-08-09.** As fotos de evolução (16-E) e de receita (16-C) passaram
+   a conferir os BYTES por `@/lib/files/photo-guard`, que compartilha o detector com o
+   `sniffMime` da IA. ⚠️ **O detector é um; a política é de cada tela** — elas aceitam HEIC (só
+   guardam o arquivo), a IA o recusa (os provedores não o aceitam). Nas três telas, o MIME
+   gravado em `attachments.mime_type` passou a ser o **detectado**, nunca o declarado.
 
 ---
 
@@ -84,11 +172,11 @@ ainda**: o pipeline para no Processo 1. Faltam duas peças.
 **O arquivo a abrir:** `docs/phases/PHASE_18_D_AI_VISION_DOCUMENTS_RECEIPTS.md`
 **O que já existe:** `docs/handoff/LAST_PHASE_SUMMARY.md` → seções **18-A**, **18-B** e **18-C**
 
-> ⚠️ **A 18-D não tem desenho validado ainda.** As 18-A, 18-B e 18-C tiveram um, escrito com o
-> dono **antes** de qualquer linha de código, e as três vezes ele mudou o que o documento da
-> fase sugeria. A 18-D toca o assunto mais sensível do sistema depois de dinheiro — **upload de
-> arquivo do usuário para um provedor externo** —, então **brainstorm primeiro, spec depois,
-> código por último**.
+> ~~⚠️ **A 18-D não tem desenho validado ainda.**~~ ✅ **Ela ganhou um em 2026-08-08**
+> (`docs/superpowers/specs/2026-08-08-18d-visao-comprovantes-design.md`), e as cinco decisões
+> do dono estão no código. O bloco abaixo fica como REGISTRO do que a subfase herdou — e a
+> regra que ele afirma continua valendo para a 18-E: **brainstorm primeiro, spec depois, código
+> por último**.
 
 ### ⛔ O QUE A 18-D HERDA E NÃO PODE AFROUXAR
 
@@ -273,11 +361,17 @@ o desempate do roteador) foram validadas com o dono e mudam o desenho em relaç�
     `AVISO_SEM_ACESSO` e `RESUMO_DO_ASSISTENTE` (`lib/ai/constants.ts`) — os três afirmam a
     REGRA, não o estado, exatamente para não vencerem de novo.
 
-### O que continua bloqueado depois da 18-B
+### O que continua bloqueado — atualizado em 2026-08-09
 
-Escrita, propostas e confirmações (18-C) · imagens e documentos, **inclusive qualquer upload**
-(18-D) · insights e dashboards (18-E) · memória, voz, automações, botão flutuante,
-**sino/notificações** e busca global (18-F).
+~~Escrita, propostas e confirmações (18-C)~~ ✅ · ~~imagens e documentos, **inclusive qualquer
+upload** (18-D)~~ ✅ — mas **só comprovante e nota fiscal**, e só pelo caminho dedicado de
+`/ia/comprovantes`: o arquivo **nunca** entra no histórico do chat, então "o que tem nessa
+foto?" continua sendo 18-F.
+
+**Continua bloqueado:** insights, relatórios e dashboards (18-E) · memória, voz, automações,
+botão flutuante, **sino/notificações**, busca global e **conversar sobre um documento** (18-F).
+Rótulo nutricional por foto e CSV/OFX/Excel seguem fora — o segundo é da **Fase 06**, e não se
+cria um segundo caminho de importação.
 
 ### As armadilhas que a 18-C acrescentou à lista
 

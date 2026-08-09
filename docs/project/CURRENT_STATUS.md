@@ -1,24 +1,39 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-08-09** (18-D em andamento).
+> Atualizado ao final de **cada** fase. Última atualização: **2026-08-09** (18-D concluída).
 
-## 🟡 18-D EM ANDAMENTO — branch `feat/18-d-visao-comprovantes`
+## ✅ 18-D CONCLUÍDA (2026-08-09) — IA · Visão, documentos e comprovantes
 
 **Desenho validado com o dono em 2026-08-08:**
-`docs/superpowers/specs/2026-08-08-18d-visao-comprovantes-design.md`.
+`docs/superpowers/specs/2026-08-08-18d-visao-comprovantes-design.md`. Os **cinco blocos**
+fecharam, e o pipeline anda de ponta a ponta: **enviar → ler → revisar → propor → confirmar**.
 
-**Pronto e verde (6 commits):** a fronteira de `core/` cedendo para visão (parte `image`/`file`
-sem `url` nem `storagePath`, `generateObject`, catálogo com `visao` conferida na doc oficial,
-custo de arquivo entrando na reserva) · o envio com **MIME decidido pelos bytes** · a extração
-tipada com **rebaixamento de confiança pelo servidor** · duplicidade que **sinaliza e nunca
-bloqueia** · e o banco (`ai_runs.kind`, `ai_document_extractions`, `origem = 'documento'`,
-`ai_begin_extraction_run`).
+O que a subfase mudou de natureza: até a 18-C o pior caso de um defeito era a IA alterar um
+registro do dono — reversível. Aqui ele passou a ser **um documento dele saindo deste sistema
+para uma empresa fora dele, e não voltando**. Nenhum `undo`, nenhum Approval Engine e nenhuma
+FK composta alcançam um arquivo já transmitido. Por isso a decisão de enviar é do dono,
+explícita, e vive numa chave própria (`allow_vision`, ANDada com `allow_finance` e
+`allow_write_finance` — na tela, na Server Action **e** dentro do RPC).
 
-**Falta:** o **runner da extração** (Processo 2 — hoje o arquivo é guardado com segurança e
-**ninguém o lê**) e a **tela `/ia/comprovantes` com a ponte para a 18-C**. Detalhe item a item
-em `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
+**Os três processos, separados de propósito** — é o que torna dois critérios verdadeiros *por
+construção*, em vez de checagens que alguém esquece de escrever:
 
-**Medido em 2026-08-08:** 126 tabelas no `public`, 14 `ai_*`; 3.163 testes / 154 arquivos.
+| Processo | O quê | O que ele NÃO pode fazer |
+| --- | --- | --- |
+| 1 · Envio | `sniffMime` sobre os bytes, bucket privado, `ai_documents` | **Nenhuma chamada externa acontece** — ele não tem para onde mandar nada |
+| 2 · Extração | `extraction-runner.ts`, run próprio sem conversa, `generateObject`, Zod `.strict()`, rebaixamento | **Não alcança módulo do dono** — não importa `approval/`, não conhece serviço nenhum |
+| 3 · Revisão e ação | tela + Approval Engine da 18-C | Mesmo hash, mesmos 10 min, mesmo uso único, mesma revalidação. **Sem atalho** |
+
+**Medido em 2026-08-09:** **126 tabelas** no `public`, **14 `ai_*`**; **3.219 testes / 159
+arquivos**; **29 ferramentas** (22 leitura + 7 escrita), **13 commands**, **9 agentes** — a
+18-D **não acrescentou ferramenta nem command**, de propósito: o comprovante não é uma
+ferramenta que o modelo possa pedir, é uma tela que o dono opera. `lint`, `tsc`, `build` e
+`TZ=UTC` limpos; smoke conferido (rota privada → 307 `/login`, `/api/cron/*` → 401).
+
+**Nenhuma migration foi criada nesta etapa** — as duas da 18-D (`20260813100000_ai_documents`
+e `20260813100100_ai_document_extractions`) já estavam aplicadas. `get_advisors` continua com
+**um único lint**, o `auth_leaked_password_protection` (botão do painel de Auth, sem migration
+que o resolva) — nenhum lint novo sobre tabela do projeto.
 
 ## Estado
 As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluídas. Em
@@ -33,7 +48,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅ e **18-C ✅ (2026-08-08)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações e desfazer; tudo atrás de chaves que nascem desligadas. Próxima: **18-D** |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅ e **18-D ✅ (2026-08-09)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer e, agora, **comprovantes por visão**; tudo atrás de chaves que nascem desligadas. Próxima: **18-E** (sem desenho validado — brainstorm primeiro) |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,

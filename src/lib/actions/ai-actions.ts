@@ -48,6 +48,12 @@ const decisaoSchema = z
 export type ResultadoDaConfirmacao = {
   readonly status: StatusDaExecucao;
   readonly executionId: string;
+  /**
+   * 18-D — o id do registro criado. A tela de comprovantes o usa para anexar o arquivo ao
+   * lançamento, numa segunda ação: anexo NÃO é efeito financeiro e não entra em
+   * `changed_fields` (§3.6).
+   */
+  readonly targetId: string | null;
   /** Rota interna do registro criado ou alterado, quando existe. Já passou pela allowlist. */
   readonly targetRoute: string | null;
 };
@@ -102,6 +108,7 @@ export async function confirmarAcaoDaIa(
     data: {
       status: execucao.status,
       executionId: execucao.executionId,
+      targetId: execucao.targetId,
       targetRoute: execucao.targetRoute,
     },
   };

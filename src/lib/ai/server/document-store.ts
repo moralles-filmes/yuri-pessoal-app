@@ -225,6 +225,63 @@ export async function guardarDocumento(entrada: {
 }
 
 /**
+ * 18-D · Bloco 3c — o METADADO do documento, SEM os bytes.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ POR QUE ISTO É UMA FUNÇÃO SEPARADA DE `lerBytesDoDocumento`.                          ║
+ * ║                                                                                       ║
+ * ║ A ordem do Processo 2 é: estimar o custo → RESERVAR o orçamento → só então ler os     ║
+ * ║ bytes. A estimativa precisa das dimensões (ou das páginas), que estão no metadado; os ║
+ * ║ bytes só interessam depois que a admissão passou.                                     ║
+ * ║                                                                                       ║
+ * ║ Baixar 10 MB do bucket para descobrir que o orçamento do dia estourou seria pagar     ║
+ * ║ tráfego por uma chamada que não vai acontecer.                                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export type DocumentoParaExtracao = {
+  readonly id: string;
+  readonly attachmentId: string;
+  readonly mime: MimeAceito;
+  readonly sha256: string;
+  readonly sizeBytes: number;
+  readonly larguraPx: number | null;
+  readonly alturaPx: number | null;
+  readonly paginas: number | null;
+  readonly observacao: string | null;
+};
+
+export async function lerDocumentoParaExtracao(
+  supabase: Client,
+  userId: string,
+  documentoId: string,
+): Promise<DocumentoParaExtracao | null> {
+  const { data } = await supabase
+    .from("ai_documents")
+    .select(
+      "id, attachment_id, mime_detectado, content_sha256, size_bytes, largura_px, altura_px, paginas, observacao",
+    )
+    .eq("id", documentoId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!data) return null;
+  // A coluna é `text` no banco; quem decide o que o sistema aceita é a allowlist.
+  if (!isMimeAceito(data.mime_detectado)) return null;
+
+  return {
+    id: data.id,
+    attachmentId: data.attachment_id,
+    mime: data.mime_detectado,
+    sha256: data.content_sha256,
+    sizeBytes: data.size_bytes,
+    larguraPx: data.largura_px,
+    alturaPx: data.altura_px,
+    paginas: data.paginas,
+    observacao: data.observacao,
+  };
+}
+
+/**
  * Os bytes de volta, para o Processo 2 mandá-los ao provedor.
  *
  * ⛔ **`storage_path` entra e morre nesta função.** Quem chama recebe bytes e MIME — nunca o
@@ -293,6 +350,52 @@ export async function urlAssinadaDoDocumento(
     .createSignedUrl(anexo.storage_path, DOCUMENT_SIGNED_URL_TTL_SECONDS);
 
   return data?.signedUrl ?? null;
+}
+
+/**
+ * 18-D · Bloco 5 — o comprovante passa a ser anexo DO LANÇAMENTO.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⛔ ISTO NÃO É UM CAMPO DE AUDITORIA, E NÃO PODE VIRAR UM.                             ║
+ * ║                                                                                       ║
+ * ║ Anexo, caminho de bucket e URL assinada **nunca** entram em                            ║
+ * ║ `ai_action_executions.changed_fields` (§3.6). A trava lá é de FORMA — escalar de até   ║
+ * ║ 200 caracteres, dentro da allowlist estática do command — e `lancarTransacao` não tem  ║
+ * ║ campo de anexo na dele. Por isso a troca acontece AQUI, fora do Approval Engine, e     ║
+ * ║ depois que a execução terminou: ela é escrituração do arquivo, não efeito financeiro.  ║
+ * ║                                                                                       ║
+ * ║ Consequência aceita: existe uma janela entre "o lançamento foi criado" e "o            ║
+ * ║ comprovante foi anexado". Se a segunda falhar, o documento continua como               ║
+ * ║ `ia_documento` e o dono o vê na lista — que é o desfecho honesto. Embutir a anexação   ║
+ * ║ no command faria o Approval Engine escrever numa tabela que não é dele.                ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * A troca é CONDICIONAL ao estado anterior, como toda transição do módulo: só alcança anexo
+ * que ainda é `ia_documento`. Um comprovante já anexado a outro lançamento não é roubado.
+ */
+export async function anexarDocumentoATransacao(
+  supabase: Client,
+  userId: string,
+  documentoId: string,
+  transacaoId: string,
+): Promise<boolean> {
+  const { data: documento } = await supabase
+    .from("ai_documents")
+    .select("attachment_id")
+    .eq("id", documentoId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!documento) return false;
+
+  const { data, error } = await supabase
+    .from("attachments")
+    .update({ entity_type: "transaction", entity_id: transacaoId })
+    .eq("id", documento.attachment_id)
+    .eq("user_id", userId)
+    .eq("entity_type", DOCUMENT_ENTITY_TYPE)
+    .select("id");
+
+  return !error && (data?.length ?? 0) > 0;
 }
 
 /**

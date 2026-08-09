@@ -16,9 +16,9 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, **18-C ✅ (2026-08-08, blocos 1–6)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono, e `/ia/acoes` mostra o que foi feito com desfazer. Próxima: **18-D** |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, **18-D ✅ (2026-08-09, blocos 1–5)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; e `/ia/comprovantes` lê nota fiscal por visão, com revisão campo a campo. Próxima: **18-E** (sem desenho validado) |
 
-Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). Reconferido no banco em **2026-08-08**: continua **124 / 12**. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
+Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). **Reconferido no banco em 2026-08-09: 126 tabelas** no `public`, **14 `ai_*`**. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -112,9 +112,9 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 23. **FK COMPOSTA sempre que uma tabela apontar para outra dentro do mesmo usuário.** A RLS confere o `user_id` da **própria linha** e não alcança a linha apontada. Sem isso, um intruso ocupava a chave única `(scheduled_workout_id, provider)` da ponte da agenda e **impedia o dono de sincronizar** aquele dia. Mesma correção da 16-E nas fotos de evolução.
 24. **`getSessionHistory` aceita `client`/`userId`** para o Cron (service role, sem sessão) usar **a mesma leitura da tela**. Um segundo caminho de montagem do histórico faria o número da notificação divergir do número da tela.
 
-## Módulo Inteligência Artificial (Fase 18 — 18-A, 18-B e a 18-C inteira)
+## Módulo Inteligência Artificial (Fase 18 — 18-A a 18-D)
 
-Rota `/ia`, tabelas `ai_*` (12), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
+Rota `/ia`, tabelas `ai_*` (14), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
 internos, 4 adapters, catálogo de modelos e tarifas versionado, credenciais cifradas, chat com
 streaming, medição por tentativa e orçamento com reserva — **sem ler um único registro**. A
 **18-B** (2026-08-07) abriu a primeira leitura: 3 ferramentas de Treinos, laço de ferramentas
@@ -123,10 +123,22 @@ na tela. A **18-C** (concluída em 2026-08-08, seis blocos) estendeu a leitura a
 módulos — **22 ferramentas no registry, 9 agentes** (Blocos 1–2) — e, depois da autorização do
 dono, entregou o **Approval Engine** (Bloco 3: 3 tabelas novas, hash canônico do efeito, prazo,
 uso único e revalidação), a **escrita** (Bloco 4: 7 ferramentas e 13 commands) e a tela
-**`/ia/acoes`** com o desfazer (Bloco 5). Desenhos em
-`docs/superpowers/specs/2026-08-04-modulo-ia-design.md` e
-`docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`; matriz em
+**`/ia/acoes`** com o desfazer (Bloco 5). A **18-D** (concluída em 2026-08-09, cinco blocos)
+abriu a **visão**: `/ia/comprovantes` recebe foto ou PDF de comprovante, extrai por
+`generateObject` num run próprio (sem conversa e **sem laço de ferramentas**), o servidor
+**rebaixa a confiança** do que o modelo declarou, o dono revisa campo a campo e decide — pelo
+mesmo Approval Engine, com `origem = 'documento'`. **Ela não acrescentou ferramenta nem
+command:** o comprovante não é algo que o modelo possa pedir, é uma tela que o dono opera.
+Desenhos em `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`,
+`docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md` e
+`docs/superpowers/specs/2026-08-08-18d-visao-comprovantes-design.md`; matriz em
 `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`; camadas em `PROJECT_ARCHITECTURE.md`.
+
+⚠️ **A DÉCIMA CHAVE É `allow_vision`, e ela é ANDada com `allow_finance` E
+`allow_write_finance`** — na tela, na Server Action **e** dentro do RPC (um usuário autenticado
+pode chamá-lo direto). Sozinha ela não basta: um comprovante extraído precisa resolver conta e
+categoria (leitura) e virar proposta de lançamento (escrita), então sem as duas o arquivo sairia
+do sistema para uma leitura que não teria para onde ir.
 
 ⚠️ **A IA lê os NOVE módulos, e cada um SÓ se a sua flag `allow_*` estiver ligada** — todas
 nascem `false` no banco, e as chaves estão em `/ia/configuracoes`.
@@ -390,6 +402,59 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     do registry) é quem decide se a chave é clicável — as cinco têm ferramenta desde o Bloco 4,
     com teste que fica vermelho se alguma ficar órfã.
 
+**Invariantes acrescentadas pela 18-D (visão, documentos e comprovantes — 2026-08-09):**
+
+55. ⛔ **UM DOCUMENTO DO DONO SAI DESTE SISTEMA E NÃO VOLTA.** É o primeiro efeito irreversível
+    do projeto: nenhum `undo`, nenhum Approval Engine e nenhuma FK composta alcançam um arquivo
+    já transmitido. Por isso os **três processos são separados** — envio (`ai-documents.ts`,
+    nenhuma chamada externa), extração (`server/extraction-runner.ts`, nenhum módulo do dono
+    tocado) e revisão/ação (tela + Approval Engine). *"O arquivo não sai sem autorização"* e
+    *"nenhum lançamento definitivo nasce só por ter recebido imagem"* ficam verdadeiros **por
+    construção**, não por checagem. `extraction-runner.ts` é o único arquivo do sistema que
+    transmite documento; **`/ia/comprovantes` é a única porta**, e o arquivo nunca entra no
+    histórico do chat.
+56. ⛔ **`tokensDeArquivos` ENTRA EM `computeReservation` — e a ligação é fácil de perder.**
+    `core/text.ts` devolve `""` para uma parte `image`/`file` **de propósito** (para o arquivo
+    não ser contado duas vezes), e as duas metades da decisão moram em arquivos diferentes. Sem
+    ela, a reserva é a de um prompt de texto para uma chamada de dezenas de milhares de tokens,
+    e o orçamento deixa passar **em silêncio** exatamente o que ele existe para barrar. Há teste
+    com o número escrito à mão, e a mutação que remove a linha o derruba.
+57. **A CONFIANÇA É DO SERVIDOR, E ELE SÓ REBAIXA.** O modelo declara nitidez por campo;
+    `vision/confidence.ts` aplica regras puras (`rebaixar` devolve o mínimo, e **`promover` não
+    existe**). `nao_identificado` **não é zero e não é `null` ambíguo** — é a invariante 1 da
+    Dieta aplicada ao OCR, e a tela escreve "não identificado", nunca "—" nem "0". Σ dos itens ≠
+    total vira **`conflito`**, que não é "confiança baixa": é uma contradição.
+58. ⛔ **CONFIANÇA BAIXA EM CAMPO ESSENCIAL BLOQUEIA, E O BLOQUEIO RODA NO SERVIDOR.**
+    `podePropor` (via `vision/review.ts`, puro) decide; a tela esconde o botão (UX, contornável)
+    e a Server Action recusa com o motivo escrito (garantia). Corrigir um campo o traz para
+    `alta` **com o motivo registrando quem preencheu** — e marcar como não identificado **não**
+    vira `alta`. `correcoes` é coluna separada de `campos`: sobrescrever apagaria a leitura
+    original, que é justamente o que se quer poder conferir.
+59. **DUPLICIDADE SINALIZA, NUNCA BLOQUEIA** — a lição do FITID escrita antes do bug acontecer
+    de novo. `AlertaDeDuplicidade` **não tem campo `bloqueia`**, e a ausência é a garantia: a
+    tela não tem como transformar aviso em recusa sem inventar um estado que o contrato não
+    representa.
+60. **A PROPOSTA DE DOCUMENTO É A TERCEIRA FORMA DECLARADA.** `origem = 'documento'` +
+    `document_extraction_id`, com o CHECK exigindo a forma **por inteiro** (sem conversa, sem
+    run, sem tool call, sem `undoes_execution_id`). Ela passa pelo **mesmo** `prever`, `hashDe`,
+    prazo de 10 min do banco, uso único e revalidação — `criarPropostaDeDocumento`, ao lado de
+    `criarPropostaDeDesfazer`. **`document_extraction_id` não entra no hash**; quem o protege é
+    a FK composta.
+61. ⛔ **ANEXO NUNCA ENTRA EM `changed_fields`, E POR ISSO A ANEXAÇÃO É UMA SEGUNDA AÇÃO.**
+    Trocar `attachments.entity_type` de `ia_documento` para `transaction` acontece **fora** do
+    Approval Engine, depois da execução. Embuti-la no command faria o motor de ações escrever em
+    `attachments` — uma tabela que não é dele. O preço é uma janela; se ela falhar, o
+    comprovante continua na lista, visível.
+62. **O MIME É DECIDIDO PELOS BYTES, NAS TRÊS TELAS.** `@/lib/files/magic-bytes` é o detector
+    único; **a política é de cada tela** — fotos de evolução (16-E) e de receita (16-C) aceitam
+    HEIC (só guardam o arquivo), a IA o recusa (os provedores não o aceitam). `File.type` é
+    declarado pelo cliente e nunca decide nada. O MIME gravado é sempre o detectado.
+63. ⚠️ **`transactions.amount` É `numeric(14,2)` EM REAIS — não é inteiro em centavos.** A
+    afirmação genérica "dinheiro em centavos (integer) no financeiro" (mais abaixo neste
+    arquivo) **não vale para `transactions`**. A extração de comprovante trabalha em centavos, e
+    a conversão mora num ponto só (`approval/document.ts`), com teste. Comparar `4790` com
+    `47.90` não casa com nada — e o alerta de duplicidade simplesmente não apareceria.
+
 **Invariantes acrescentadas pelo Bloco 5 da 18-C (a tela de ações e o desfazer):**
 
 48. ⛔ **O BOTÃO DE DESFAZER NÃO DESFAZ — ELE PROPÕE.** `prepararDesfazerDaIa` grava uma
@@ -457,7 +522,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.019 testes / 145 arquivos em 2026-08-08 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.219 testes / 159 arquivos em 2026-08-09 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos
@@ -553,7 +618,7 @@ Padrões recorrentes que valem entender lendo o código:
 - **O saldo diário do extrato sai de `src/lib/finance/daily-balance.ts`** e espelha `public.account_balance`: só `pago`/`recebido` entram, o sinal vem do `type`, e **lançamento de cartão não move saldo de conta** (não tem `account_id`; quem move é o pagamento da fatura, gravado como `transferencia` com destino nulo). Com filtro de cartão **não há saldo** — ausência, nunca zero. O saldo **ignora** os filtros de categoria/tipo/status: a lista encolhe, o saldo continua verdadeiro, por isso `getDailyBalances` busca a própria janela. A tabela de sinais vive em dois lugares (`account_balance_before` no SQL e `efeitoNoSaldo` no TS) — mexeu num, mexa no outro.
 - **A divisão com terceiros tem UM núcleo** (2026-08-07): `decidirReaplicacao` (puro, `src/lib/finance/split.ts`) decide se a divisão mudou, se pode ser mexida e para onde vai; `reapplySplit` (`split-reapply.ts`) faz o I/O e só troca o modo de distribuir (`applySplit` à vista × `applySplitParcelado` parcelado). `updateTransaction` e `updateInstallmentSplit` chamam os dois — **não escreva um terceiro caminho**. No parcelado a base é a **soma das parcelas ATIVAS**, nunca `valor_total` (com parcela cancelada os dois divergem e Σ terceiros ≤ Σ parcelas quebra). Alterar a divisão alcança fatura fechada/paga **de propósito** — quem protege o histórico é a recusa por recebível `cobrado`/`pago`. E **cancelar parcela cancela a cobrança dela** (`cancelInstallmentFuture` apaga os recebíveis pendentes e recalcula `valor_pessoal`), senão o terceiro fica devendo por parcela que não existe mais.
 - **Quem PREVÊ a divisão usa o mesmo motor de quem a GRAVA** (2026-08-07): a revisão da importação mostra "meu × cada pessoa" por `src/lib/import/split-totals.ts`, que chama `dividirDespesa` + `toPartesDivisao` — os mesmos do `commitImport`. Por isso `toPartesDivisao` mora no núcleo puro (`split.ts`), e não em `split-persist.ts`: um segundo cálculo faria a tela prometer um número e a fatura receber outro. Nesse caminho, **estorno não é divisível** (volta negativo, para `meu + Σ terceiros` fechar o líquido) e **divisão que não fecha fica FORA da soma**, com o lote se declarando parcial — `setImportRowSplit` grava as partes sem conhecer o valor da linha, então isso acontece de verdade. E na tela a classificação é **lida** (`transactions.classificacao`, a da compra-pai no caso da parcela), nunca deduzida de `meu === 0`.
-- **Dinheiro em centavos (integer)** no financeiro; formatação centralizada em `src/lib/format.ts` (`Intl.NumberFormat('pt-BR')`, `date-fns` com `ptBR`).
+- **⚠️ Dinheiro: CONFIRA A COLUNA ANTES DE COMPARAR.** `transactions.amount` (e `bills`, `recurring_transactions`) é **`numeric(14,2)` EM REAIS** — o schema do formulário (`moneyAmount`) não converte para centavos. Já a extração de comprovante (18-D) trabalha em **centavos inteiros**, porque é o que se pede ao modelo para não depender de ele acertar vírgula ou ponto; a conversão entre os dois mora num ponto só (`ai/approval/document.ts`). Formatação centralizada em `src/lib/format.ts` (`formatCurrency` recebe **reais**; `Intl.NumberFormat('pt-BR')`, `date-fns` com `ptBR`).
 - **Datas locais pt-BR** (`'yyyy-MM-dd'` puro) em logs/streaks/heatmaps para evitar drift de UTC ("virar o dia").
 
 ### Fuso: o sistema inteiro é `America/Sao_Paulo`, nunca UTC

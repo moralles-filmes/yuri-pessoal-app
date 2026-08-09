@@ -65,9 +65,9 @@ import {
   HEARTBEAT_INTERVAL_MS,
   heartbeatAndPersist,
   markStreaming,
+  MENSAGEM_ADMISSAO,
   startAttempt,
   type AttemptType,
-  type BeginRunErrorCode,
 } from "./run-store";
 import { runToolLoop } from "./tool-loop";
 
@@ -147,31 +147,6 @@ export type ChatRunnerInput = {
 };
 
 type Alvo = { readonly provider: AiProviderId; readonly model: AiModelEntry };
-
-/**
- * Erros da ADMISSÃO viram texto pt-BR aqui, num lugar só. O Route Handler decide o status
- * HTTP a partir do código, e a tela mostra a mensagem — nem um nem outro reescreve o texto.
- */
-const MENSAGEM_ADMISSAO: Record<BeginRunErrorCode, string> = {
-  AI_NOT_AUTHENTICATED: "Sessão expirada. Faça login novamente.",
-  AI_MESSAGE_EMPTY: "Escreva alguma coisa antes de enviar.",
-  AI_MESSAGE_TOO_LONG: "A mensagem passou do tamanho máximo aceito.",
-  AI_AGENT_NOT_ALLOWED: "Este assistente não está disponível.",
-  AI_PROMPT_VERSION_REQUIRED: "Configuração interna do assistente incompleta.",
-  AI_INVALID_RESERVATION: "Não foi possível calcular a reserva de custo desta mensagem.",
-  AI_PROVIDER_NOT_AVAILABLE:
-    "O provedor escolhido não está ativo. Ative-o em Configurações.",
-  AI_CREDENTIAL_NOT_AVAILABLE:
-    "Não há credencial utilizável para este provedor. Cadastre a chave em Configurações.",
-  AI_MODEL_NOT_AVAILABLE:
-    "O modelo escolhido não está configurado para este provedor.",
-  AI_RATE_LIMITED: "Você enviou muitas mensagens em pouco tempo. Aguarde um instante.",
-  AI_BUDGET_EXCEEDED_DAILY: "O orçamento diário de IA foi atingido.",
-  AI_BUDGET_EXCEEDED_MONTHLY: "O orçamento mensal de IA foi atingido.",
-  AI_CONVERSATION_NOT_AVAILABLE: "Esta conversa não está disponível.",
-  AI_ADMISSION_BUSY: "Outra mensagem está sendo admitida agora. Tente de novo em segundos.",
-  AI_UNKNOWN: "Não foi possível iniciar a resposta.",
-};
 
 export async function* runChat(
   input: ChatRunnerInput,
