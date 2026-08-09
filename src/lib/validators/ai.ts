@@ -463,3 +463,40 @@ export const setConversationFavoriteSchema = z
     isFavorite: z.boolean(),
   })
   .strict();
+
+/* ══════════════════════════════ 18-E · Insights ══════════════════════════════ */
+
+/**
+ * ⚠️ `.strict()` nos dois, como em todo schema deste módulo: campo a mais é ERRO, e é por
+ * aqui que um `userId` vindo do cliente seria barrado. `user_id` sempre de `authContext()`.
+ */
+export const gerarInsightSchema = z
+  .object({
+    modulo: z.enum(["financeiro", "treinos", "dieta"]),
+    /**
+     * A janela em períodos (meses no Financeiro e em Treinos, dias na Dieta). Opcional: cada
+     * coletor tem o próprio padrão e o próprio TETO, e os dois moram lá — pôr o teto aqui
+     * daria dois lugares para mudá-lo, e um deles ficaria para trás.
+     */
+    janela: z.number().int().min(2).max(60).optional(),
+  })
+  .strict();
+
+export const feedbackDeInsightSchema = z
+  .object({
+    insightId: z.uuid("Insight inválido"),
+    decisao: z.enum(["util", "inutil", "dispensado", "adiado", "nao_mostrar"]),
+    /**
+     * Só em `adiado`, e obrigatório nele — o CHECK do banco exige a mesma coerência. Adiar
+     * sem data seria dispensar com outro nome.
+     */
+    adiadoAte: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use uma data válida")
+      .optional(),
+  })
+  .strict()
+  .refine((v) => (v.decisao === "adiado") === (v.adiadoAte !== undefined), {
+    message: "Adiar exige uma data, e as outras decisões não a aceitam",
+    path: ["adiadoAte"],
+  });

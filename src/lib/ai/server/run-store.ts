@@ -57,6 +57,11 @@ export type BeginRunErrorCode =
    */
   | "AI_DOCUMENT_NOT_AVAILABLE"
   | "AI_VISION_NOT_ALLOWED"
+  // 18-E — os dois do insight. `NOT_AVAILABLE` é módulo fora da fatia (allowlist do RPC);
+  // `NOT_ALLOWED` é a chave `allow_*` daquele módulo desligada. São coisas diferentes: a
+  // primeira é um pedido que o sistema não atende, a segunda é uma porta que o dono fechou.
+  | "AI_MODULE_NOT_AVAILABLE"
+  | "AI_MODULE_NOT_ALLOWED"
   | "AI_NOT_AUTHENTICATED"
   | "AI_MESSAGE_EMPTY"
   | "AI_MESSAGE_TOO_LONG"
@@ -160,12 +165,23 @@ export const MENSAGEM_ADMISSAO: Record<BeginRunErrorCode, string> = {
   AI_DOCUMENT_NOT_AVAILABLE: "Este comprovante não está disponível.",
   AI_VISION_NOT_ALLOWED:
     "A leitura de comprovantes está desligada. Ligue-a em /ia/configuracoes — o arquivo sai deste sistema e vai para o provedor escolhido.",
+  // 18-E — a fatia da subfase é Financeiro, Treinos e Dieta. Os outros seis módulos são um
+  // coletor cada, e ficaram declarados fora (§9 do desenho).
+  AI_MODULE_NOT_AVAILABLE:
+    "Ainda não há análise de IA para este módulo.",
+  AI_MODULE_NOT_ALLOWED:
+    "A leitura deste módulo pela IA está desligada. Ligue-a em /ia/configuracoes.",
   AI_UNKNOWN: "Não foi possível iniciar a resposta.",
 };
 
 const CODIGOS_CONHECIDOS: readonly BeginRunErrorCode[] = [
   "AI_DOCUMENT_NOT_AVAILABLE",
   "AI_VISION_NOT_ALLOWED",
+  // ⚠️ `AI_MODULE_NOT_ALLOWED` ANTES de `AI_MODULE_NOT_AVAILABLE`: a busca é por
+  // `includes`, e um dos dois não é prefixo do outro — mas a ordem fica explícita para
+  // ninguém acrescentar um terceiro `AI_MODULE_*` que os contenha e passe a casar antes.
+  "AI_MODULE_NOT_ALLOWED",
+  "AI_MODULE_NOT_AVAILABLE",
   "AI_NOT_AUTHENTICATED",
   "AI_MESSAGE_EMPTY",
   "AI_MESSAGE_TOO_LONG",
@@ -238,6 +254,52 @@ export async function beginExtractionRun(
 
   const { data, error } = await supabase.rpc("ai_begin_extraction_run", {
     p_document_id: input.documentId,
+    p_prompt_version: input.promptVersion,
+    p_selected_provider: input.provider,
+    p_selected_model: input.model,
+    p_reserved_cost: input.reservedCost,
+    p_reservation_rate_version: input.reservationRateVersion,
+    p_reservation_ttl_seconds: input.reservationTtlSeconds,
+  });
+
+  if (error) return { ok: false, code: classifyBeginError(error.message, error.code) };
+
+  const linha = Array.isArray(data) ? data[0] : data;
+  if (!linha) return { ok: false, code: "AI_UNKNOWN" };
+
+  return { ok: true, value: { runId: linha.run_id, correlationId: linha.correlation_id } };
+}
+
+// ─────────────────────────── 18-E · a admissão do INSIGHT ───────────────────────────
+
+export type BeginInsightInput = {
+  /** `financeiro` | `treinos` | `dieta`. O RPC valida contra a MESMA allowlist. */
+  readonly modulo: string;
+  readonly promptVersion: string;
+  readonly provider: AiProviderId;
+  readonly model: string;
+  readonly reservedCost: number;
+  readonly reservationRateVersion: string;
+  readonly reservationTtlSeconds: number;
+};
+
+/**
+ * 18-E — a terceira irmã, para um run que não tem conversa nem documento.
+ *
+ * ⛔ `ai_begin_insight_run` confere a chave `allow_*` DO MÓDULO PEDIDO dentro da transação,
+ * sob o MESMO advisory lock do chat e da extração. A chave do lock é idêntica de propósito: o
+ * recurso disputado é o orçamento do dono, não a espécie do run — com namespace próprio, um
+ * insight e uma mensagem simultâneos leriam o mesmo consumo confirmado e passariam os dois.
+ */
+export async function beginInsightRun(
+  input: BeginInsightInput,
+): Promise<
+  { ok: true; value: BeginExtractionOutput } | { ok: false; code: BeginRunErrorCode }
+> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("ai_begin_insight_run", {
+    p_modulo: input.modulo,
     p_prompt_version: input.promptVersion,
     p_selected_provider: input.provider,
     p_selected_model: input.model,
