@@ -314,10 +314,10 @@ com quatro provedores e registrar tudo que consultou ou modificou.
 | Subfase | Tema | Arquivo | Status |
 | --- | --- | --- | --- |
 | 18-A | Fundação, provedores e chat | `PHASE_18_A_AI_FOUNDATION_PROVIDERS_CHAT.md` | ✅ **CONCLUÍDA** (2026-08-04) |
-| 18-B | Contexto, ferramentas de leitura e agentes | `PHASE_18_B_AI_CONTEXT_READ_TOOLS_AGENTS.md` | ⬜ **Próxima** |
-| 18-C | Ações, aprovações, idempotência e auditoria | `PHASE_18_C_AI_ACTIONS_APPROVALS_AUDIT.md` | ⬜ |
-| 18-D | Visão, documentos e comprovantes | `PHASE_18_D_AI_VISION_DOCUMENTS_RECEIPTS.md` | ⬜ |
-| 18-E | Insights, relatórios e dashboards | `PHASE_18_E_AI_INSIGHTS_REPORTS_DASHBOARDS.md` | ⬜ |
+| 18-B | Contexto, ferramentas de leitura e agentes | `PHASE_18_B_AI_CONTEXT_READ_TOOLS_AGENTS.md` | ✅ **CONCLUÍDA** (2026-08-07) |
+| 18-C | Ações, aprovações, idempotência e auditoria | `PHASE_18_C_AI_ACTIONS_APPROVALS_AUDIT.md` | ✅ **CONCLUÍDA** (2026-08-08, blocos 1–6) |
+| 18-D | Visão, documentos e comprovantes | `PHASE_18_D_AI_VISION_DOCUMENTS_RECEIPTS.md` | ✅ **CONCLUÍDA** (2026-08-09, blocos 1–5) |
+| 18-E | Insights, relatórios e dashboards | `PHASE_18_E_AI_INSIGHTS_REPORTS_DASHBOARDS.md` | ⬜ **Próxima** — sem desenho validado |
 | 18-F | Memória, voz, integrações e polimento | `PHASE_18_F_AI_MEMORY_VOICE_INTEGRATIONS_POLISH.md` | ⬜ — **FECHA A FASE 18** |
 
 **Dependências gerais:** Fase 01 (design system/app shell), 12 (dashboard geral), 13 (busca

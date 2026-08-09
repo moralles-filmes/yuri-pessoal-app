@@ -23,6 +23,7 @@
  * • AÇÃO EM MASSA RELATA O QUE FEZ e prefere arquivar a excluir.
  */
 import { revalidatePath } from "next/cache";
+import { conferirFotoPelosBytes } from "@/lib/files/photo-guard";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
 import {
   NUTRITION_BASE_PATH,
@@ -525,14 +526,26 @@ export async function uploadRecipePhoto(
   }
   const file = fileResult.data;
 
+  /**
+   * ⛔ TRAVA 1-B — O QUE O ARQUIVO É, PELOS BYTES. (Retroporte da 18-D, 2026-08-09.)
+   *
+   * `recipePhotoFileSchema` confere `file.type`, que o navegador deriva da EXTENSÃO do nome.
+   * A mesma correção das fotos de evolução, pela mesma razão e com a mesma função — duas
+   * implementações divergiriam no primeiro formato novo.
+   */
+  const veredito = await conferirFotoPelosBytes(file);
+  if (!veredito.ok) return invalid({ file: [veredito.mensagem] });
+  const mimeReal = veredito.mime;
+
   // ⛔ TRAVAS 2 e 3.
-  const extension = RECIPE_PHOTO_EXTENSION_BY_MIME[file.type] ?? "bin";
+  const extension = RECIPE_PHOTO_EXTENSION_BY_MIME[mimeReal] ?? "bin";
   const storagePath = `${ctx.userId}/${RECIPE_PHOTO_ENTITY_TYPE}/${recipeId}/${crypto.randomUUID()}.${extension}`;
 
   const { error: uploadError } = await ctx.supabase.storage
     .from(RECIPE_PHOTO_BUCKET)
     .upload(storagePath, file, {
-      contentType: file.type,
+      // O MIME que vai para o Storage é o DETECTADO, nunca o declarado.
+      contentType: mimeReal,
       upsert: false,
       cacheControl: "private, max-age=0, no-store",
     });
@@ -547,7 +560,7 @@ export async function uploadRecipePhoto(
       bucket_id: RECIPE_PHOTO_BUCKET,
       storage_path: storagePath,
       file_name: file.name.slice(0, 200),
-      mime_type: file.type,
+      mime_type: mimeReal,
       size_bytes: file.size,
     })
     .select("id")

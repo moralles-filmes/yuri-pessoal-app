@@ -26,6 +26,7 @@
  * criar gravação própria de peso corporal.
  */
 import { revalidatePath } from "next/cache";
+import { conferirFotoPelosBytes } from "@/lib/files/photo-guard";
 import { authContext, dbError, invalid, notAuthed, type AuthContext } from "@/lib/actions/helpers";
 import {
   PHOTO_BUCKET,
@@ -480,16 +481,31 @@ export async function uploadProgressPhoto(
   }
   const file = fileResult.data;
 
+  /**
+   * ⛔ TRAVA 1-B — O QUE O ARQUIVO É, PELOS BYTES. (Retroporte da 18-D, 2026-08-09.)
+   *
+   * `photoFileSchema` confere `file.type`, e `file.type` é DECLARADO PELO CLIENTE: o
+   * navegador o deriva da extensão do nome. Renomear qualquer arquivo para `foto.jpg`
+   * produzia um `File` com `type: "image/jpeg"` que passava — e o conteúdo ia para o bucket
+   * privado com um MIME mentiroso gravado no metadado.
+   *
+   * Daqui para baixo, o MIME usado é o DETECTADO — nunca mais o declarado.
+   */
+  const veredito = await conferirFotoPelosBytes(file);
+  if (!veredito.ok) return invalid({ file: [veredito.mensagem] });
+  const mimeReal = veredito.mime;
+
   // ⛔ TRAVAS 2 e 3 — nome aleatório, dentro da pasta do próprio usuário. Nada do que o
   // cliente mandou (nem o nome original) entra na composição do caminho.
-  const extension = PHOTO_EXTENSION_BY_MIME[file.type] ?? "bin";
+  const extension = PHOTO_EXTENSION_BY_MIME[mimeReal] ?? "bin";
   const photoId = crypto.randomUUID();
   const storagePath = `${ctx.userId}/${PHOTO_ENTITY_TYPE}/${photoId}/${crypto.randomUUID()}.${extension}`;
 
   const { error: uploadError } = await ctx.supabase.storage
     .from(PHOTO_BUCKET)
     .upload(storagePath, file, {
-      contentType: file.type,
+      // O MIME que vai para o Storage é o DETECTADO, nunca o declarado.
+      contentType: mimeReal,
       upsert: false,
       // Cache privado: mesmo com URL assinada, nenhum intermediário deve guardar a imagem.
       cacheControl: "private, max-age=0, no-store",
@@ -505,7 +521,7 @@ export async function uploadProgressPhoto(
       bucket_id: PHOTO_BUCKET,
       storage_path: storagePath,
       file_name: file.name.slice(0, 200),
-      mime_type: file.type,
+      mime_type: mimeReal,
       size_bytes: file.size,
     })
     .select("id")

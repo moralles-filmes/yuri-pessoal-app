@@ -10,8 +10,11 @@
  * ║                                                                                       ║
  * ║ O critério de aceite "MIME falsificado (extensão que mente)" só passa lendo os bytes. ║
  * ║                                                                                       ║
- * ║ ⚠️ AS FOTOS DE EVOLUÇÃO E A DE RECEITA CONTINUAM NO CAMINHO ANTIGO. Retroportar é     ║
- * ║ tarefa avulsa, registrada em §5 do spec da 18-D — não foi esquecimento.                ║
+ * ║ ✅ **RETROPORTADO EM 2026-08-09** (a tarefa avulsa registrada em §5 do spec da 18-D). ║
+ * ║ As fotos de evolução (16-E) e a de receita (16-C) passaram a conferir os bytes por    ║
+ * ║ `@/lib/files/photo-guard`, que compartilha o detector com este arquivo. O que NÃO é   ║
+ * ║ compartilhado é a política: elas aceitam HEIC (só guardam o arquivo), e a IA o recusa ║
+ * ║ (os provedores não o aceitam, e falhar depois da chamada paga seria pior).             ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
  * ═══════════════════════ ALLOWLIST, E ORDEM IMPORTA ═══════════════════════
@@ -28,6 +31,7 @@
  * Puro. Nenhum I/O.
  */
 
+import { detectarFormato } from "@/lib/files/magic-bytes";
 import { type MimeAceito } from "./limits";
 
 /**
@@ -41,34 +45,16 @@ export type ResultadoDoSniff =
   | { readonly ok: true; readonly mime: MimeAceito }
   | { readonly ok: false; readonly motivo: MotivoDeRecusa; readonly mensagem: string };
 
-/** Compara uma sequência de bytes numa posição. `-1` em `esperado` é curinga. */
-function casa(bytes: Uint8Array, offset: number, esperado: readonly number[]): boolean {
-  if (bytes.length < offset + esperado.length) return false;
-  for (let i = 0; i < esperado.length; i += 1) {
-    if (esperado[i] !== -1 && bytes[offset + i] !== esperado[i]) return false;
-  }
-  return true;
-}
-
-/** ASCII numa posição — os contêineres RIFF/ISO-BMFF são identificados por texto. */
-function texto(bytes: Uint8Array, offset: number, esperado: string): boolean {
-  return casa(
-    bytes,
-    offset,
-    Array.from(esperado, (c) => c.charCodeAt(0)),
-  );
-}
-
-const JPEG = [0xff, 0xd8, 0xff];
-const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-const PDF = [0x25, 0x50, 0x44, 0x46, 0x2d]; // "%PDF-"
-
 /**
- * As marcas HEIC/HEIF dentro do contêiner ISO-BMFF, logo depois de `ftyp` (offset 4).
- * `mif1`/`msf1` são as marcas genéricas que o iOS usa nas fotos mais recentes.
+ * ⚠️ **A DETECÇÃO MORA EM `@/lib/files/magic-bytes`, E ISTO AQUI É A POLÍTICA DA IA.**
+ *
+ * A separação nasceu do retroporte para as fotos de evolução (16-E) e de receita (16-C):
+ * elas ACEITAM HEIC — só guardam o arquivo, nunca o mandam para lugar nenhum —, e a IA o
+ * RECUSA, porque os provedores não o aceitam. Uma allowlist única faria uma das duas telas
+ * errar; um segundo detector faria as duas divergirem no primeiro formato novo.
+ *
+ * O que este arquivo decide é só **o que a IA aceita**, e por quê.
  */
-const MARCAS_HEIC = ["heic", "heix", "heim", "heis", "hevc", "hevx", "mif1", "msf1"];
-
 export function sniffMime(bytes: Uint8Array): ResultadoDoSniff {
   if (bytes.length === 0) {
     return {
@@ -78,30 +64,26 @@ export function sniffMime(bytes: Uint8Array): ResultadoDoSniff {
     };
   }
 
-  if (casa(bytes, 0, JPEG)) return { ok: true, mime: "image/jpeg" };
-  if (casa(bytes, 0, PNG)) return { ok: true, mime: "image/png" };
-  // WEBP é um contêiner RIFF: "RIFF" no 0, tamanho nos 4..7, "WEBP" no 8.
-  if (texto(bytes, 0, "RIFF") && texto(bytes, 8, "WEBP")) {
-    return { ok: true, mime: "image/webp" };
-  }
+  const formato = detectarFormato(bytes);
 
-  // HEIC antes de "desconhecido", para a mensagem poder ser útil.
-  if (texto(bytes, 4, "ftyp")) {
-    const marca = Array.from(bytes.slice(8, 12), (b) => String.fromCharCode(b)).join("");
-    if (MARCAS_HEIC.includes(marca)) {
-      return {
-        ok: false,
-        motivo: "heic",
-        mensagem:
-          "Esta foto está em HEIC, o formato padrão do iPhone, que os provedores de IA não " +
-          "aceitam. No iPhone, use Compartilhar → Opções → Mais Compatível, ou envie por " +
-          "e-mail para si mesmo (o iOS converte para JPEG automaticamente).",
-      };
-    }
-  }
+  if (formato === "jpeg") return { ok: true, mime: "image/jpeg" };
+  if (formato === "png") return { ok: true, mime: "image/png" };
+  if (formato === "webp") return { ok: true, mime: "image/webp" };
+  if (formato === "pdf") return { ok: true, mime: "application/pdf" };
 
-  // ⛔ Offset 0 EXIGIDO. Ver o bloco sobre poliglota no topo.
-  if (casa(bytes, 0, PDF)) return { ok: true, mime: "application/pdf" };
+  // HEIC é distinguido de "desconhecido" para a mensagem poder ser útil: ele vai ser o
+  // motivo de recusa mais frequente do sistema, e "formato não aceito" mandaria o dono
+  // adivinhar o que fazer.
+  if (formato === "heic") {
+    return {
+      ok: false,
+      motivo: "heic",
+      mensagem:
+        "Esta foto está em HEIC, o formato padrão do iPhone, que os provedores de IA não " +
+        "aceitam. No iPhone, use Compartilhar → Opções → Mais Compatível, ou envie por " +
+        "e-mail para si mesmo (o iOS converte para JPEG automaticamente).",
+    };
+  }
 
   return {
     ok: false,
