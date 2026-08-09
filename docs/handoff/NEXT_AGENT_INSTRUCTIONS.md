@@ -8,6 +8,24 @@ sugeria. **Brainstorm primeiro, spec em `docs/superpowers/specs/` depois, códig
 
 **O arquivo a abrir:** `docs/phases/PHASE_18_E_AI_INSIGHTS_REPORTS_DASHBOARDS.md`
 
+### ✅ TRÊS DECISÕES JÁ TOMADAS COM O DONO (2026-08-09)
+
+Elas foram levantadas ao fechar a 18-D e **já estão validadas** — não as reabra, e escreva a
+spec a partir delas.
+
+| # | Decisão | Consequência |
+| --- | --- | --- |
+| 1 | **O módulo de agregação temporal É CRIADO**, e o item **8-D do prompt-base é reescrito com versão NOVA** | Média, comparação período×período e variação passam a ser calculadas pelo SISTEMA, num módulo puro e testado no molde de `metrics.ts`. ⛔ **Ele vem ANTES de qualquer chamada de IA da subfase.** Calcular por fora e deixar o 8-D como está é a família de mentira que a 18-B fechou |
+| 2 | **O job automático NASCE DESLIGADO, com chave própria e orçamento SEPARADO para jobs** | Como `allow_vision` na 18-D. Sem ligar, insight só existe **sob demanda** (o dono clica). É a primeira vez que o sistema gastaria dinheiro dele sem ele pedir — e essa decisão é dele, não do código |
+| 3 | **"Conversar com um relatório" fica FORA da 18-E, declarado** | Mesma razão que tirou o arquivo do chat na 18-D (§2.1): exige o conteúdo no histórico, repetido a cada turno, com custo e exposição multiplicados. Vai para a **18-F**, junto com "conversar sobre documento", que já está lá |
+
+### ⬜ A DECISÃO QUE CONTINUA ABERTA
+
+**A ordem do escopo.** O documento da fase é maior que a 18-C inteira (Insight Engine + 3
+tabelas + cards no dashboard + Resumo do Dia + Revisão Semanal + análises cruzadas). O dono
+**ainda não escolheu** o que entra primeiro — pergunte antes de escrever a spec. As análises
+cruzadas dependem do módulo da decisão 1, então elas não podem vir antes dele.
+
 ### As duas invariantes que muito provavelmente governam a 18-E
 
 1. **A trava de honestidade (invariante 15, `seguranca-v2`).** O assistente só sabe o que as
