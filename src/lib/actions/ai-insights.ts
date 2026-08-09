@@ -22,8 +22,13 @@ import { getAiPreferences } from "@/lib/ai/queries";
 import { registrarFeedback } from "@/lib/ai/server/insight-store";
 import { runInsight } from "@/lib/ai/server/insight-runner";
 import {
+  prepararTarefaDeInsight,
+  type PropostaDeInsight,
+} from "@/lib/ai/approval/insight";
+import {
   feedbackDeInsightSchema,
   gerarInsightSchema,
+  tarefaDeInsightSchema,
 } from "@/lib/validators/ai";
 import type { ActionResult } from "@/types/finance";
 
@@ -132,4 +137,53 @@ export async function registrarDecisaoDeInsight(
   revalidatePath(ROTA_DASHBOARD);
 
   return { ok: true, data: null };
+}
+
+/**
+ * ⛔ TRANSFORMAR UM INSIGHT EM TAREFA — E ELE PROPÕE, NÃO CRIA.
+ *
+ * A proposta passa pelo mesmo Approval Engine de qualquer outra escrita: hash do efeito,
+ * prazo de 10 min do banco, uso único e revalidação. Quem executa é `confirmarAcaoDaIa`.
+ *
+ * ⚠️ **DUAS CHAVES, ANDadas** (invariante 33 da 18-C): `allow_todo` porque propor começa por
+ * resolver de qual projeto se fala, e isso é LER; `allow_write_todo` porque o que vai
+ * acontecer é uma escrita. A mensagem diz qual das duas falta.
+ */
+export async function prepararTarefaDoInsight(
+  input: unknown,
+): Promise<ActionResult<PropostaDeInsight>> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = tarefaDeInsightSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const prefs = await getAiPreferences(ctx.userId);
+  if (!prefs.permissions.allow_todo) {
+    return {
+      ok: false,
+      error:
+        "A leitura do TO-DO pela IA está desligada. Ligue-a em /ia/configuracoes — preparar a tarefa começa por procurar o projeto.",
+    };
+  }
+  if (!prefs.writePermissions.allow_write_todo) {
+    return {
+      ok: false,
+      error:
+        "A criação de tarefas pela IA está desligada. Ligue-a em /ia/configuracoes.",
+    };
+  }
+
+  const resultado = await prepararTarefaDeInsight({
+    userId: ctx.userId,
+    insightId: parsed.data.insightId,
+    titulo: parsed.data.titulo,
+    data: parsed.data.data ?? null,
+    projeto: parsed.data.projeto ?? null,
+  });
+
+  if (!resultado.ok) return { ok: false, error: resultado.mensagem };
+
+  revalidatePath(ROTA);
+  return { ok: true, data: resultado.proposta };
 }

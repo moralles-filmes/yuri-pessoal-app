@@ -500,3 +500,28 @@ export const feedbackDeInsightSchema = z
     message: "Adiar exige uma data, e as outras decisões não a aceitam",
     path: ["adiadoAte"],
   });
+
+/**
+ * ⛔ 18-E — transformar insight em tarefa. RESTRITO a `criarTarefaTodo`: não há campo
+ * `command` neste schema, e a ausência é a trava. Com um `command` livre, a tela poderia
+ * pedir qualquer command do registry — inclusive `lancarTransacao`, que é risco 3 com
+ * sensibilidade `dinheiro` e está declarado FORA da subfase.
+ *
+ * ⚠️ O TÍTULO É DIGITADO PELO DONO. O texto do insight não vira título automaticamente: ele
+ * pode conter token `{{ind:…}}`, e no TO-DO não há quem o resolva.
+ */
+export const tarefaDeInsightSchema = z
+  .object({
+    insightId: z.uuid("Insight inválido"),
+    titulo: z
+      .string()
+      .trim()
+      .min(1, "Escreva o que você quer fazer")
+      .max(300, "Máximo de 300 caracteres"),
+    data: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use uma data válida")
+      .optional(),
+    projeto: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict();

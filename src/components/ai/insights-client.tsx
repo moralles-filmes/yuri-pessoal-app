@@ -26,11 +26,14 @@ import {
   Sparkles,
   ThumbsDown,
   ThumbsUp,
+  ListPlus,
   X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ProposalCard, type PropostaNaTela } from "@/components/ai/proposal-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
@@ -53,6 +56,7 @@ import {
 import type { InsightNaTela } from "@/lib/ai/server/insight-queries";
 import {
   gerarInsight,
+  prepararTarefaDoInsight,
   registrarDecisaoDeInsight,
 } from "@/lib/actions/ai-insights";
 import { formatDate } from "@/lib/format";
@@ -222,6 +226,41 @@ function CartaoDeInsight({
   const explicacao = renderizarExplicacao(insight.explicacao, insight.fontes);
   const resumo = renderizarExplicacao(insight.resumo, insight.fontes);
   const vigente = insight.estado.estado === "vigente";
+  const [titulo, setTitulo] = useState("");
+  const [proposta, setProposta] = useState<PropostaNaTela | null>(null);
+  const [preparando, startPreparo] = useTransition();
+
+  /**
+   * ⛔ ELE PROPÕE, NÃO CRIA. A action grava uma proposta com `origem = 'insight'` e devolve a
+   * previsão; quem executa é `ProposalCard` → `confirmarAcaoDaIa`, a MESMA porta de qualquer
+   * outra escrita da IA — com o mesmo hash, o mesmo prazo de 10 min, o mesmo uso único e a
+   * mesma revalidação. Um caminho de um clique só seria a única escrita do sistema sem o dono
+   * ler o que vai acontecer.
+   *
+   * ⚠️ E o TÍTULO É DIGITADO POR ELE. O texto do insight não vira título automaticamente: ele
+   * pode conter token `{{ind:…}}`, e no TO-DO não há quem o resolva.
+   */
+  function prepararTarefa() {
+    if (!titulo.trim()) return;
+    startPreparo(async () => {
+      const r = await prepararTarefaDoInsight({ insightId: insight.id, titulo });
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      setProposta({
+        id: r.data.id,
+        effectHash: r.data.effectHash,
+        expiresAt: r.data.expiresAt,
+        toolName: "tela.insight",
+        rotulo: r.data.rotulo,
+        risco: 2,
+        resumo: r.data.previsao.resumo,
+        linhas: r.data.previsao.linhas,
+        ressalvas: r.data.previsao.ressalvas,
+      });
+    });
+  }
 
   return (
     <Card className={vigente ? undefined : "opacity-70"}>
@@ -284,6 +323,38 @@ function CartaoDeInsight({
           {formatDate(insight.criadoEm)} por {insight.provider} · {insight.model} ·{" "}
           {insight.promptVersion}.
         </p>
+
+        {/* ⛔ Transformar em tarefa PROPÕE — quem executa é o cartão de proposta abaixo. */}
+        {vigente ? (
+          <div className="space-y-2 rounded-lg border p-3">
+            <p className="text-xs font-medium uppercase text-muted-foreground">
+              Transformar em tarefa
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                value={titulo}
+                onChange={(e) => setTitulo(e.target.value)}
+                placeholder="O que você quer fazer?"
+                maxLength={300}
+                className="min-w-0 flex-1"
+                disabled={preparando}
+              />
+              <Button
+                variant="outline"
+                onClick={prepararTarefa}
+                disabled={preparando || titulo.trim() === ""}
+              >
+                {preparando ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <ListPlus className="size-4" />
+                )}
+                Preparar
+              </Button>
+            </div>
+            {proposta ? <ProposalCard proposta={proposta} /> : null}
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           <Button

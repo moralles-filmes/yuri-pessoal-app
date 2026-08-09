@@ -172,6 +172,7 @@ export type Database = {
           effect_hash: string
           expires_at: string
           id: string
+          insight_id: string | null
           module: string
           origem: string
           payload: Json
@@ -193,6 +194,7 @@ export type Database = {
           effect_hash: string
           expires_at?: string
           id?: string
+          insight_id?: string | null
           module: string
           origem?: string
           payload?: Json
@@ -214,6 +216,7 @@ export type Database = {
           effect_hash?: string
           expires_at?: string
           id?: string
+          insight_id?: string | null
           module?: string
           origem?: string
           payload?: Json
@@ -233,6 +236,13 @@ export type Database = {
             columns: ["document_extraction_id", "user_id"]
             isOneToOne: false
             referencedRelation: "ai_document_extractions"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "ai_action_proposals_insight_fk"
+            columns: ["insight_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_insights"
             referencedColumns: ["id", "user_id"]
           },
           {
