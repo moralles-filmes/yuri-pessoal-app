@@ -107,6 +107,18 @@ const CAMADAS_PURAS = [
    * de decisão é pura viraria comentário.
    */
   "vision",
+  /**
+   * 18-E. `insights/` decide o que é um número medido, o que se pode agregar sobre ele, se o
+   * texto que o cita é aceitável e quando o insight vence — **sem falar com o banco e sem
+   * conhecer provedor**. Quem lê os módulos são os coletores (a terceira porta, abaixo); quem
+   * transmite é `server/insight-runner.ts`.
+   *
+   * Sem esta linha, um `import { chamarModelo } from "../server/insight-runner"` dentro de
+   * `insights/validate.ts` passaria por lint, `tsc` e build — e a validação, que existe
+   * justamente para poder rodar sem rede, viraria uma função que precisa de rede para ser
+   * testada.
+   */
+  "insights",
 ] as const;
 
 describe("fronteiras arquiteturais do módulo de IA", () => {
@@ -237,7 +249,7 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
    * O critério para um par entrar: o alvo tem de ser PURO (sem I/O, sem escrita, sem
    * Supabase). `@/lib/import/normalize` é — só transforma texto.
    */
-  it("query e action de módulo só entram pelas DUAS portas declaradas", () => {
+  it("query e action de módulo só entram pelas TRÊS portas declaradas", () => {
     /**
      * Pares (arquivo relativo a `src/lib/ai/`, especificador) autorizados. Um par por linha,
      * cada um com o motivo. Lista NOMEADA, não padrão — o mesmo espírito do registry de
@@ -247,6 +259,9 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
       // 18-D · a MESMA normalização da importação, para os dois concordarem sobre o que é
       // "o mesmo estabelecimento". Alvo puro: só transforma texto.
       [path.join("vision", "duplicates.ts"), "@/lib/import/normalize"],
+      // 18-E · a lista de vocabulário proibido, declarada UMA vez em módulo neutro. Alvo
+      // puro: só listas de string e comparação de texto. Ver `src/lib/tone/vocabulary.ts`.
+      [path.join("insights", "validate.ts"), "@/lib/tone/vocabulary"],
     ];
     const modulos = [
       "actions",
@@ -262,14 +277,43 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
       "dashboard",
       "reports",
       "import",
+      /**
+       * ⚠️ 18-E — `tone` NÃO é módulo de dado do usuário, e entra aqui mesmo assim.
+       *
+       * A lista acima é ESCRITA À MÃO, e é isso que a torna perigosa: uma pasta nova fora
+       * dela passa verde sem provar nada. `src/lib/tone/vocabulary.ts` nasceu na 18-E para a
+       * lista de termos proibidos existir uma vez só, e `src/lib/ai/ → @/lib/tone/` teria
+       * passado sem ser examinado. Está aqui para o import ter de ser DECLARADO — e o
+       * critério do par (alvo puro, sem I/O, sem escrita, sem Supabase) é atendido.
+       */
+      "tone",
     ];
     const adapters = path.join(RAIZ, "tools", "adapters");
     const commands = path.join(RAIZ, "approval", "commands");
+    /**
+     * ⚠️ **18-E — A TERCEIRA PORTA, E ELA É MAIS LARGA QUE AS DUAS PRIMEIRAS.**
+     *
+     * Um coletor lê dado do dono **fora do Tool Registry**: sem `guard.ts`, sem o teto do
+     * descriptor e sem linha em `ai_tool_calls`. A porta só se justifica porque os três
+     * controles voltam por outro caminho, e a implementação amarra os três:
+     *
+     *   `guard.ts` conferia `allow_*`  → a Server Action confere `allow_<modulo>` do módulo
+     *                                    pedido, ANTES de chamar o coletor
+     *   `maxRecords` do descriptor      → cada coletor declara o próprio teto e pede TETO + 1
+     *   `ai_tool_calls`                 → `ai_insight_sources`, uma linha por indicador, com
+     *                                     período, `n` e rota
+     *
+     * Pasta NOMEADA, não padrão: uma quarta porta continua exigindo editar este arquivo.
+     */
+    const coletores = path.join(RAIZ, "insights", "collectors");
     const violacoes: string[] = [];
 
     for (const arquivo of listarArquivos(RAIZ)) {
       if (arquivo.endsWith(".test.ts")) continue;
-      const naPorta = arquivo.startsWith(adapters) || arquivo.startsWith(commands);
+      const naPorta =
+        arquivo.startsWith(adapters) ||
+        arquivo.startsWith(commands) ||
+        arquivo.startsWith(coletores);
       const codigo = fs.readFileSync(arquivo, "utf8");
       for (const spec of especificadores(codigo)) {
         for (const modulo of modulos) {
@@ -394,6 +438,106 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
     }
 
     expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 18-E — `insights/` NÃO MONTA CONSULTA A TABELA DE MÓDULO.                            ║
+   * ║                                                                                     ║
+   * ║ A regra é a mesma que vale para `tools/` desde a 18-B, e a razão é a mesma: uma      ║
+   * ║ segunda leitura discordaria da primeira no primeiro campo novo, e o número do        ║
+   * ║ insight deixaria de bater com o número da tela. Os coletores CHAMAM as queries do    ║
+   * ║ módulo; quem fala com o banco continua sendo o módulo.                                ║
+   * ║                                                                                     ║
+   * ║ ⚠️ A porta dos coletores é larga (ver o docblock acima). Esta trava é o que a mantém  ║
+   * ║ sendo uma porta para SERVIÇO, e não uma porta para o BANCO — sem ela, um coletor     ║
+   * ║ escreveria o `select` que "só ele precisa" e a regra do domínio começaria a ser      ║
+   * ║ reescrita ali: primeiro o select, depois o filtro, depois a decisão. Foi assim que a ║
+   * ║ 18-C quase deixou a previsão do Financeiro montar consulta dentro de `approval/`.    ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("nenhum .from() nem select() em src/lib/ai/insights/ — nem nos coletores", () => {
+    const violacoes: string[] = [];
+
+    for (const arquivo of listarArquivos(path.join(RAIZ, "insights"))) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
+      for (const achado of chamaBanco(codigo)) {
+        violacoes.push(`${path.relative(SRC, arquivo)} → ${achado}`);
+      }
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 18-E — O DASHBOARD NÃO CHAMA A IA. POR CONSTRUÇÃO, NÃO POR PROMESSA.                 ║
+   * ║                                                                                     ║
+   * ║ O dashboard geral é da Fase 12 e carrega a cada visita. Um insight gerado no         ║
+   * ║ carregamento custaria dinheiro do dono a cada abertura de página — e o custo não     ║
+   * ║ apareceria como decisão de ninguém, apareceria como conta no fim do mês.             ║
+   * ║                                                                                     ║
+   * ║ Por isso a geração e a leitura moram em arquivos separados: `/ia/insights` GERA (só  ║
+   * ║ por clique, ou pelo job se o dono o ligar); o card do dashboard só LÊ `ai_insights`  ║
+   * ║ vigentes. É o mesmo raciocínio que separou os três processos da 18-D — e este teste  ║
+   * ║ é o que o mantém verdadeiro depois que alguém "só" acrescentar um botão de gerar ao  ║
+   * ║ card.                                                                                ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("nada em dashboard/ alcança o runner de insight nem a action que o dispara", () => {
+    const proibidos = [
+      /(^|\/)ai\/server\/insight-runner$/,
+      /(^|\/)actions\/ai-insights$/,
+      // 18-E Bloco 4 — o job é a MESMA geração por outra porta. Deixá-lo de fora daqui
+      // permitiria ao card do dashboard disparar a varredura inteira num carregamento.
+      /(^|\/)ai\/server\/insight-job$/,
+    ];
+    const violacoes: string[] = [];
+
+    for (const raiz of [
+      path.join(SRC, "lib", "dashboard"),
+      path.join(SRC, "components", "dashboard"),
+      path.join(SRC, "app", "(app)", "dashboard"),
+    ]) {
+      for (const arquivo of listarArquivos(raiz)) {
+        if (arquivo.endsWith(".test.ts")) continue;
+        const codigo = fs.readFileSync(arquivo, "utf8");
+        for (const spec of especificadores(codigo)) {
+          if (proibidos.some((p) => p.test(spec))) {
+            violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
+          }
+        }
+      }
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 18-E — O VOCABULÁRIO PROIBIDO É DECLARADO UMA VEZ, E EM MÓDULO NEUTRO.               ║
+   * ║                                                                                     ║
+   * ║ Ele existia DUAS vezes, dentro de dois arquivos de teste e sem export, com           ║
+   * ║ conteúdos diferentes: Dieta tinha "descontrol"/"exagerou", Treinos tinha             ║
+   * ║ "preguiç"/"desculpa"/"faltou"/"sedentár". Nenhuma cobria a outra. A terceira cópia   ║
+   * ║ — a do validador de insights — divergiria das duas no primeiro termo novo.            ║
+   * ║                                                                                     ║
+   * ║ Neutro e não dentro de `ai/`: com a lista no módulo de IA, `src/lib/notifications/`   ║
+   * ║ passaria a importar de `src/lib/ai/` — o módulo geral dependendo do novo.             ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("VOCABULARIO_DE_COBRANCA é declarado UMA vez, e em src/lib/tone/", () => {
+    const declaracoes: string[] = [];
+
+    for (const arquivo of listarArquivos(SRC)) {
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      if (/(?:const|let|var)\s+VOCABULARIO_DE_COBRANCA\s*[:=]/.test(codigo)) {
+        declaracoes.push(path.relative(SRC, arquivo).replace(/\\/g, "/"));
+      }
+    }
+
+    expect(declaracoes).toEqual(["lib/tone/vocabulary.ts"]);
   });
 
   /**
@@ -555,5 +699,52 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
 
     expect(tabelas.length).toBeGreaterThan(0);
     for (const tabela of tabelas) expect(tabela, tabela).toMatch(/^ai_/);
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 18-E · BLOCO 4 — SÓ O CRON ALCANÇA A VARREDURA.                                     ║
+   * ║                                                                                     ║
+   * ║ `server/insight-job.ts` é o ÚNICO ponto do sistema que roda um run de IA com dono    ║
+   * ║ vindo de fora da sessão. Ele monta o `LeituraDoDono` sobre a service role, que       ║
+   * ║ ignora a RLS — então quem o chama decide de quem são os dados lidos.                 ║
+   * ║                                                                                     ║
+   * ║ Uma Server Action que o alcançasse daria a um usuário autenticado o poder de         ║
+   * ║ disparar a varredura de outro (e de gastar o orçamento dele). A porta é UMA, e ela   ║
+   * ║ é a rota já protegida por CRON_SECRET.                                              ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("nada além de /api/cron/insights importa server/insight-job", () => {
+    const PORTA = path.join(SRC, "app", "api", "cron", "insights", "route.ts");
+    const alvo = /(^|\/)ai\/server\/insight-job$|^\.\/insight-job$/;
+    const violacoes: string[] = [];
+
+    for (const arquivo of listarArquivos(SRC)) {
+      if (arquivo.endsWith(".test.ts") || arquivo === PORTA) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      for (const spec of especificadores(codigo)) {
+        if (alvo.test(spec)) violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
+      }
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  it("a rota do Cron de insights confere CRON_SECRET antes de qualquer outra coisa", () => {
+    // O proxy libera `/api/cron/*` (PUBLIC_PATHS). Sem esta checagem NA PRÓPRIA ROTA, ela
+    // seria pública — e ela gasta dinheiro.
+    const codigo = fs.readFileSync(
+      path.join(SRC, "app", "api", "cron", "insights", "route.ts"),
+      "utf8",
+    );
+    expect(codigo).toMatch(/process\.env\.CRON_SECRET/);
+    expect(codigo).toMatch(/status:\s*401/);
+
+    // ⚠️ Segredo AUSENTE também é 401. Uma rota que gasta dinheiro nunca fica aberta
+    // "porque a variável não foi definida".
+    expect(codigo).toMatch(/!secret\s*\|\|/);
+
+    // A checagem vem ANTES de montar a service role.
+    expect(codigo.indexOf("CRON_SECRET")).toBeLessThan(codigo.indexOf("createServiceClient()"));
   });
 });

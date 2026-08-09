@@ -172,6 +172,7 @@ export type Database = {
           effect_hash: string
           expires_at: string
           id: string
+          insight_id: string | null
           module: string
           origem: string
           payload: Json
@@ -193,6 +194,7 @@ export type Database = {
           effect_hash: string
           expires_at?: string
           id?: string
+          insight_id?: string | null
           module: string
           origem?: string
           payload?: Json
@@ -214,6 +216,7 @@ export type Database = {
           effect_hash?: string
           expires_at?: string
           id?: string
+          insight_id?: string | null
           module?: string
           origem?: string
           payload?: Json
@@ -233,6 +236,13 @@ export type Database = {
             columns: ["document_extraction_id", "user_id"]
             isOneToOne: false
             referencedRelation: "ai_document_extractions"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "ai_action_proposals_insight_fk"
+            columns: ["insight_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_insights"
             referencedColumns: ["id", "user_id"]
           },
           {
@@ -415,6 +425,219 @@ export type Database = {
             columns: ["attachment_id", "user_id"]
             isOneToOne: false
             referencedRelation: "attachments"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      ai_insight_feedback: {
+        Row: {
+          adiado_ate: string | null
+          created_at: string
+          decisao: string
+          id: string
+          insight_id: string
+          user_id: string
+        }
+        Insert: {
+          adiado_ate?: string | null
+          created_at?: string
+          decisao: string
+          id?: string
+          insight_id: string
+          user_id: string
+        }
+        Update: {
+          adiado_ate?: string | null
+          created_at?: string
+          decisao?: string
+          id?: string
+          insight_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_insight_feedback_insight_fk"
+            columns: ["insight_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_insights"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      ai_insight_jobs: {
+        Row: {
+          created_at: string
+          desfecho: string
+          executed_at: string
+          id: string
+          insight_id: string | null
+          modulo: string
+          motivo: string | null
+          run_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          desfecho: string
+          executed_at?: string
+          id?: string
+          insight_id?: string | null
+          modulo: string
+          motivo?: string | null
+          run_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          desfecho?: string
+          executed_at?: string
+          id?: string
+          insight_id?: string | null
+          modulo?: string
+          motivo?: string | null
+          run_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_insight_sources: {
+        Row: {
+          created_at: string
+          id: string
+          indicador_id: string
+          indisponivel_porque: string | null
+          insight_id: string
+          motivo_incompleto: string | null
+          n: number
+          ordem: number
+          periodo_ate: string
+          periodo_de: string
+          qualidade: string
+          regra_de_contagem: string | null
+          rota: string
+          rotulo: string
+          unidade: string
+          user_id: string
+          valor: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          indicador_id: string
+          indisponivel_porque?: string | null
+          insight_id: string
+          motivo_incompleto?: string | null
+          n: number
+          ordem?: number
+          periodo_ate: string
+          periodo_de: string
+          qualidade: string
+          regra_de_contagem?: string | null
+          rota: string
+          rotulo: string
+          unidade: string
+          user_id: string
+          valor?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          indicador_id?: string
+          indisponivel_porque?: string | null
+          insight_id?: string
+          motivo_incompleto?: string | null
+          n?: number
+          ordem?: number
+          periodo_ate?: string
+          periodo_de?: string
+          qualidade?: string
+          regra_de_contagem?: string | null
+          rota?: string
+          rotulo?: string
+          unidade?: string
+          user_id?: string
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_insight_sources_insight_fk"
+            columns: ["insight_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_insights"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      ai_insights: {
+        Row: {
+          confianca: string
+          created_at: string
+          dedupe_key: string
+          expires_at: string
+          explicacao: string
+          id: string
+          model: string
+          modulo: string
+          periodo_ate: string
+          periodo_de: string
+          prioridade: string
+          prompt_version: string
+          provider: string
+          resumo: string
+          run_id: string
+          tipo: string
+          titulo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confianca: string
+          created_at?: string
+          dedupe_key: string
+          expires_at: string
+          explicacao: string
+          id?: string
+          model: string
+          modulo: string
+          periodo_ate: string
+          periodo_de: string
+          prioridade: string
+          prompt_version: string
+          provider: string
+          resumo: string
+          run_id: string
+          tipo: string
+          titulo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confianca?: string
+          created_at?: string
+          dedupe_key?: string
+          expires_at?: string
+          explicacao?: string
+          id?: string
+          model?: string
+          modulo?: string
+          periodo_ate?: string
+          periodo_de?: string
+          prioridade?: string
+          prompt_version?: string
+          provider?: string
+          resumo?: string
+          run_id?: string
+          tipo?: string
+          titulo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_insights_run_fk"
+            columns: ["run_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_runs"
             referencedColumns: ["id", "user_id"]
           },
         ]
@@ -662,6 +885,7 @@ export type Database = {
           agent_id: string
           assistant_message_id: string | null
           attempt_count: number
+          automatic: boolean
           cancel_reason: string | null
           completed_at: string | null
           completed_model: string | null
@@ -694,6 +918,7 @@ export type Database = {
           agent_id: string
           assistant_message_id?: string | null
           attempt_count?: number
+          automatic?: boolean
           cancel_reason?: string | null
           completed_at?: string | null
           completed_model?: string | null
@@ -726,6 +951,7 @@ export type Database = {
           agent_id?: string
           assistant_message_id?: string | null
           attempt_count?: number
+          automatic?: boolean
           cancel_reason?: string | null
           completed_at?: string | null
           completed_model?: string | null
@@ -946,6 +1172,7 @@ export type Database = {
           allow_files: boolean
           allow_finance: boolean
           allow_habits: boolean
+          allow_insight_jobs: boolean
           allow_memory: boolean
           allow_nutrition: boolean
           allow_studies: boolean
@@ -966,6 +1193,7 @@ export type Database = {
           default_model: string | null
           default_provider: string | null
           id: string
+          job_monthly_budget: number
           monthly_budget: number | null
           rate_limit_per_hour: number
           rate_limit_per_minute: number
@@ -982,6 +1210,7 @@ export type Database = {
           allow_files?: boolean
           allow_finance?: boolean
           allow_habits?: boolean
+          allow_insight_jobs?: boolean
           allow_memory?: boolean
           allow_nutrition?: boolean
           allow_studies?: boolean
@@ -1002,6 +1231,7 @@ export type Database = {
           default_model?: string | null
           default_provider?: string | null
           id?: string
+          job_monthly_budget?: number
           monthly_budget?: number | null
           rate_limit_per_hour?: number
           rate_limit_per_minute?: number
@@ -1018,6 +1248,7 @@ export type Database = {
           allow_files?: boolean
           allow_finance?: boolean
           allow_habits?: boolean
+          allow_insight_jobs?: boolean
           allow_memory?: boolean
           allow_nutrition?: boolean
           allow_studies?: boolean
@@ -1038,6 +1269,7 @@ export type Database = {
           default_model?: string | null
           default_provider?: string | null
           id?: string
+          job_monthly_budget?: number
           monthly_budget?: number | null
           rate_limit_per_hour?: number
           rate_limit_per_minute?: number
@@ -8676,6 +8908,22 @@ export type Database = {
           p_reserved_cost: number
           p_selected_model: string
           p_selected_provider: string
+        }
+        Returns: {
+          correlation_id: string
+          run_id: string
+        }[]
+      }
+      ai_begin_insight_run: {
+        Args: {
+          p_modulo: string
+          p_prompt_version: string
+          p_reservation_rate_version: string
+          p_reservation_ttl_seconds?: number
+          p_reserved_cost: number
+          p_selected_model: string
+          p_selected_provider: string
+          p_user_id?: string
         }
         Returns: {
           correlation_id: string

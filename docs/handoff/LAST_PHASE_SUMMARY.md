@@ -1,6 +1,11 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-> ✅ **CONCLUÍDA: 18-D — IA · Visão, documentos e comprovantes (2026-08-09).** Os **cinco
+> ✅ **ÚLTIMA: 18-E — IA · Insights (2026-08-09). CONCLUÍDA, com o Bloco 4.** Os blocos 1 a 3
+> entregaram a análise sob demanda; o **Bloco 4** entregou o **job automático**, que estava
+> declarado fora. A IA produz análises sobre grandezas que o SISTEMA deriva, num texto que
+> **não contém dígito** — e agora pode fazê-lo sozinha, uma vez por dia, se o dono ligar.
+>
+> ✅ **Antes dela: 18-D — IA · Visão, documentos e comprovantes (2026-08-09).** Os **cinco
 > blocos** fecharam. O dono envia uma foto ou um PDF, pede a leitura, confere campo a campo com
 > a confiança visível, corrige o que estiver errado e decide se aquilo vira um lançamento — pelo
 > **mesmo Approval Engine da 18-C**, sem atalho nenhum. Resumo logo abaixo.
@@ -14,6 +19,135 @@
 > duas frentes grandes: **Fase 16 — Dieta e Alimentação** (16-A a 16-F, 40 de 40 critérios) e
 > **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55). Este arquivo tem os resumos na ordem
 > inversa de conclusão — o mais recente primeiro.
+
+---
+
+## Fase 18-E · Bloco 4 — o job automático de insights (2026-08-09) ✅ **18-E CONCLUÍDA**
+
+Com este bloco, a 18-E fecha inteira. O que estava declarado fora dela desde 2026-08-09 — a
+varredura que gera insight sozinha — passa a existir, **desligada de fábrica**.
+
+### O que mudou de natureza
+
+Todo run de IA do projeto — chat (18-A), extração (18-D) e insight sob demanda (blocos 1-3) —
+nasceu de um clique do dono, dentro de uma sessão. Os três tinham em comum uma coisa que nunca
+precisou ser dita: **`auth.uid()` existe**. O Cron da Vercel roda com service role e sem sessão,
+e é o **primeiro gasto de dinheiro do sistema sem o dono estar olhando**.
+
+### As quatro decisões, e o que cada uma recusou
+
+| Decisão | Alternativa recusada |
+| --- | --- |
+| `ai_begin_insight_run` ganha `p_user_id`, honrado só quando `auth.uid()` é nulo | RPC gêmea `security definer` duplicaria ~150 linhas de admissão — dois juízes do mesmo orçamento, a divergência que a invariante 8 existe para impedir. E minerar um JWT do dono introduziria um primitivo de impersonação no repositório. |
+| O job **pula** o módulo cuja chave de leitura está desligada | ANDar (como `allow_vision` faz) faria desligar Dieta calar Financeiro junto. Lá as três chaves servem ao **mesmo** efeito; aqui os três módulos são efeitos independentes. |
+| Teto próprio **em dinheiro**, com marcador `automatic` em `ai_runs` | Teto por contagem de runs não limita custo. Sem teto próprio, "os dois valem" seria mentira. |
+| Tabela `ai_insight_jobs`, uma linha por módulo por execução | Só o log da Vercel registra onde o dono não olha; notificação por job barrado viraria ruído diário. |
+
+**Cadência: 1×/dia**, no slot `0 12` UTC (09h BRT). O insight expira em dias, não em horas —
+gerar de novo às 21h daria o mesmo texto (a dedupe barra) ou um segundo gasto pelo mesmo dia.
+
+### ⛔ A trava é a RLS, não o `coalesce`
+
+`v_user := coalesce(auth.uid(), p_user_id)` faz a sessão sempre vencer. Mas a garantia **não
+depende dessa linha**: a função continua `security invoker`, então um autenticado apontando
+para outro dono não lê `ai_user_preferences` (→ `AI_MODULE_NOT_ALLOWED`), não lê a credencial
+e não consegue o `insert` em `ai_runs` (`with check`). Invertendo a ordem do `coalesce`, a
+trava continua de pé — a mesma escolha que pôs uso único num `unique` e prazo num `default`.
+
+`automatic` é **derivado** de `auth.uid() is null` dentro da mesma transação, nunca recebido:
+um `p_automatic boolean` daria ao chamador o poder de escolher contra qual teto ele gasta.
+
+### O par `client`/`userId` virou UM objeto
+
+`LeituraDoDono` (`src/lib/supabase/owner.ts`). `getSessionHistory` (17-F) recebe os dois como
+campos separáveis, e por isso precisa do guard `if (range.client && !owner) return []`. Com um
+objeto único, **"client sem userId" deixa de ser representável** — irrepresentável vence
+recusado, a mesma escolha do campo `confianca` ausente do schema do modelo.
+
+**Foram NOVE funções, não oito.** A nona é `getMealTypes`, chamada por dentro de
+`getDiaryMeals`; sem ela o coletor de Dieta rodaria sob service role com a lista de tipos vazia,
+e refeição sem tipo não entra no total do dia.
+
+### ⚠️ Um defeito PRÉ-EXISTENTE, encontrado e corrigido
+
+`allowVision` (18-D) entrou em `aiPreferencesSchema` como `z.boolean()` obrigatório mas **nunca
+foi acrescentada ao payload do formulário** — nem havia interruptor para ela na tela. Toda
+gravação de preferências vinha sendo recusada desde a 18-D, com uma mensagem sobre um campo que
+a tela não tem. `tsc` não pega (a action recebe `unknown`); o teste novo compara as duas listas.
+
+### Entregue
+
+Migration `20260815100000_ai_insight_jobs.sql` (1 tabela, 3 colunas, RPC recriada) ·
+`insights/job.ts` (puro, 14 testes) · `server/insight-job.ts` · `/api/cron/insights` ·
+9 assinaturas alargadas · interruptor e teto na tela · rodapé da última varredura em
+`/ia/insights` · 4 arquivos de teste novos ou ampliados.
+
+**Verificação:** `lint` · `tsc --noEmit` · **3.385 testes / 166 arquivos** · `build` ·
+suíte verde em `TZ=UTC` · rota privada → 307 `/login` · `/api/cron/insights` → **401** sem
+secret e com secret errado · `get_advisors` sem lint novo sobre a tabela desta subfase.
+
+**Números:** 130 tabelas no `public`, **18 `ai_*`**. Ferramentas (29), commands (13) e
+agentes (9) **inalterados**.
+
+---
+
+## Fase 18-E · Blocos 1 a 3 — insights sobre grandeza derivada (2026-08-09) 🟡 **BLOCO 4 FORA**
+
+**Desenho:** `docs/superpowers/specs/2026-08-09-18e-insights-relatorios-dashboards-design.md`
+**Plano:** `docs/superpowers/plans/2026-08-09-18e-insights-relatorios-dashboards.md`
+**Branch:** `feat/18-e-insights`
+
+**O que mudou de natureza.** Até a 18-D a IA **relatou** números que outro alguém calculou. A
+18-E cria a primeira grandeza **derivada** do projeto — média de janela, comparação entre
+períodos, variação percentual —, escreve um texto em cima dela e o mostra numa tela que a IA
+não controla (o dashboard geral, da Fase 12). Três regras governam tudo:
+
+1. **O número é medido e vem pronto.** `insights/temporal.ts` agrega sobre o que os coletores
+   devolvem; ele não importa `resumoMes`, `metrics.ts` nem `calc.ts`.
+2. **O texto não contém dígito.** Todo número entra por `{{ind:<id>}}`, e
+   `ai_insights.explicacao` guarda os TOKENS — a garantia vira propriedade do dado.
+3. **O dashboard nunca chama a IA.** Geração e leitura em arquivos que ele não alcança.
+
+### O que cada bloco entregou
+
+| Bloco | Entrega |
+| --- | --- |
+| **1** | `src/lib/tone/vocabulary.ts` (a lista existia **duas vezes**, sem export, com conteúdos **diferentes**) · `insights/contracts.ts` · `insights/temporal.ts` com **cinco** recusas · `seguranca-v3` · as fronteiras novas |
+| **2** | 3 tabelas + `ai_runs.kind = 'insight'` + RPC com o **mesmo advisory lock** · os seis módulos puros · os três coletores pela **terceira porta declarada** |
+| **3** | `/ia/insights` (7º item de `AI_SECTIONS`) · card no **fim** de `DASH_CARD_IDS` · **quarta forma** de `origem` · "transformar em tarefa", que **propõe** |
+
+### ⛔ O que ficou de fora, declarado
+
+**O Bloco 4 inteiro — o job automático.** `allow_insight_jobs` **não foi criada**: uma chave
+que não liga nada é o "botão que não liga nada" que este projeto recusa desde a 18-B.
+
+O motivo é o ponto difícil que o desenho já declarava (§7): o Cron não tem sessão e usa service
+role, os coletores leem sob RLS, e são **oito assinaturas** a alargar em três módulos
+(`getFinanceCardData`, `getAccounts`, `getStatements`, `getReceivables`, `getBills`,
+`getTransactionsRange`, `getDiaryMeals`, `getTrainingPreferences`) para o job ler pelo **mesmo
+caminho da tela**. `getSessionHistory` já aceita, desde a 17-F. A alternativa — um segundo
+caminho de leitura — é a divergência que a invariante 31 existe para impedir.
+
+**Consequência: insight só existe sob demanda**, que é o que a decisão 2 do dono já dizia.
+
+### Três achados que valem além da subfase
+
+1. **Um teste escrito como aviso de fato dispara.** O `"8-D só pode negar médias enquanto elas
+   não existirem"` (18-B) ficou vermelho sozinho quando `temporal.ts` nasceu.
+2. **Afirmação sobre o ESTADO do sistema vence; sobre a REGRA, não.** "O sistema não calcula
+   média" virou mentira; **"esse número não é seu para calcular"** continua verdadeiro.
+3. **Um teste amarrado ao ÚLTIMO item de uma lista quebra na próxima adição.** O
+   `"anexa 'treinos' no fim"` foi reescrito para afirmar a regra, não o estado da época.
+
+### Números reconferidos (2026-08-09)
+
+126 → **129 tabelas** no `public`; 14 → **17 `ai_*`**; 3.219/159 → **3.347 testes / 164
+arquivos**; `AI_SECTIONS` 6 → **7**; `DASH_CARD_IDS` 10 → **11**; formas de `origem` 3 → **4**;
+`ai_runs.kind` 2 → **3**. Ferramentas (29), commands (13) e agentes (9) **inalterados**.
+
+Verificação: `lint` · `tsc --noEmit` · `test:run` · `build` · `TZ=UTC vitest run` — verdes.
+Smoke: `/ia/insights` → **307**; `/api/cron/notifications` → **401** sem o secret.
+`get_advisors` sem lint novo.
 
 ---
 

@@ -13,6 +13,7 @@ import { generateNutritionNotifications, type GenNutritionMeal } from "./nutriti
 import { filterByPrefs, selectNewCandidates } from "./generate";
 import { NOTIFICATION_TYPES } from "./constants";
 import { notificationEnabled } from "@/lib/settings/constants";
+import { VOCABULARIO_DE_COBRANCA } from "@/lib/tone/vocabulary";
 
 const HOJE = "2026-08-04"; // terça-feira
 const MEIO_DIA = 12 * 60;
@@ -461,24 +462,15 @@ describe("nutrition: idempotência (o requisito explícito da subfase)", () => {
 });
 
 describe("nutrition: sem linguagem de culpa", () => {
-  // Vocabulário de cobrança que NÃO pode aparecer num módulo sobre comida e corpo.
-  const PROIBIDO = [
-    "falhou",
-    "falhando",
-    "fracass",
-    "de novo",
-    "mais uma vez",
-    "você não",
-    "você deveria",
-    "precisa parar",
-    "descontrol",
-    "exagerou",
-    "culpa",
-    "vergonha",
-    "esqueceu",
-    "errado",
-    "ruim",
-  ];
+  /**
+   * Vocabulário de cobrança que NÃO pode aparecer num módulo sobre comida e corpo.
+   *
+   * ⚠️ 18-E: a lista saiu daqui e virou `@/lib/tone/vocabulary` — declarada UMA vez. Ela
+   * estava duplicada aqui e em `training.test.ts`, com conteúdos DIFERENTES, e uma terceira
+   * cópia (a do validador de insights) divergiria das duas. Agora este teste varre a união,
+   * que é mais exigente do que a lista que estava aqui.
+   */
+  const PROIBIDO = VOCABULARIO_DE_COBRANCA;
 
   it("nenhum título ou descrição usa vocabulário de cobrança", () => {
     const candidatos = generateNutritionNotifications({

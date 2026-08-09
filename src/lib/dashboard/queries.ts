@@ -8,6 +8,7 @@
  */
 import { addDays, format, startOfMonth, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
+import type { LeituraDoDono } from "@/lib/supabase/owner";
 import {
   dateInSaoPaulo,
   saoPauloWallClockToInstant,
@@ -114,17 +115,26 @@ function fimDoMes(mes: string): string {
 
 /* ───────────────────────────── Financeiro ───────────────────────────── */
 
+/**
+ * ⚠️ **Fase 18-E (Bloco 4) — `owner` opcional.** Ela não lê nada por si: repassa às cinco
+ * leituras do Financeiro. Sem `owner`, o caminho é o de sempre (sessão + RLS); com ele, quem
+ * chama é o Cron com service role e cada uma das cinco filtra `user_id` explicitamente.
+ *
+ * O coletor de insight do Financeiro entra por aqui — nenhuma agregação é reimplementada
+ * (invariante 31 da 18-C).
+ */
 export async function getFinanceCardData(
   mes: string,
   todayIso: string,
+  owner?: LeituraDoDono,
 ): Promise<FinanceCardData> {
   const [accounts, statements, receivables, bills, transactions] =
     await Promise.all([
-      getAccounts(),
-      getStatements(),
-      getReceivables(),
-      getBills(),
-      getTransactionsRange({ from: `${mes}-01`, to: fimDoMes(mes) }),
+      getAccounts(owner),
+      getStatements({}, owner),
+      getReceivables(owner),
+      getBills(owner),
+      getTransactionsRange({ from: `${mes}-01`, to: fimDoMes(mes) }, owner),
     ]);
 
   const txs: DashTx[] = transactions.map((t) => ({

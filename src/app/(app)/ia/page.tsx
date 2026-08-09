@@ -51,7 +51,7 @@ export default async function IaPage() {
     <div className="space-y-4">
       {/*
         ⚠️ A descrição afirma a REGRA, nunca o ESTADO — mesma disciplina de `AVISO_SEM_ACESSO`
-        e do prompt-base `seguranca-v2`. O texto da 18-A ("sem acesso aos seus registros nesta
+        e do prompt-base `seguranca-v3`. O texto da 18-A ("sem acesso aos seus registros nesta
         versão") era verdade enquanto o Tool Registry estava vazio e virou mentira quando as
         leituras de Treinos entraram nele. O texto de agora vale com as chaves ligadas ou
         desligadas, porque fala do que o sistema NÃO FAZ SEM AUTORIZAÇÃO.

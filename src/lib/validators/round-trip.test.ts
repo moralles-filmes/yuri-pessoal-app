@@ -469,6 +469,9 @@ describe("Fase 18-A — schemas de IA aceitam a própria saída", () => {
       // 18-D. Escrito à mão, e não derivado de uma lista: `allow_vision` não é uma
       // `ToolPermission` (não é módulo), então não sai de `TOOL_PERMISSIONS`.
       allowVision: false,
+      // 18-E Bloco 4. Mesma razão: nem a chave da varredura nem o teto dela são módulos.
+      allowInsightJobs: false,
+      jobMonthlyBudget: 1,
       defaultModel: "",
       confirmationMode: "seguro",
       allowFallback: false,

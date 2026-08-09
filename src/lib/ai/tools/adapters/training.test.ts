@@ -873,16 +873,28 @@ describe("o item 8-A promete exatamente o que as ferramentas calculam", () => {
     }
   });
 
-  it("e 8-D só pode negar médias e comparações enquanto elas não existirem", async () => {
+  /**
+   * ⛔ 18-E — ESTE TESTE DISPAROU, E FEZ EXATAMENTE O QUE FOI ESCRITO PARA FAZER.
+   *
+   * A redação da v2 era "não são calculados por NENHUMA FERRAMENTA" — uma afirmação sobre o
+   * sistema inteiro. Quando `insights/temporal.ts` passou a calcular média, comparação e
+   * variação, ela virou mentira e o teste ficou vermelho. Ele era o aviso, e o aviso chegou.
+   *
+   * O que mudou na v3 é o ESCOPO da negação, não a negação: ela desceu do sistema para a
+   * ferramenta. As duas linhas abaixo continuam provando que os adapters de Treinos não
+   * devolvem média nem comparação — se um deles passar a devolver, o 8-D vira mentira de
+   * novo, por outro motivo, e este teste dispara outra vez.
+   */
+  it("e 8-D só pode negar médias e comparações enquanto as FERRAMENTAS não as devolverem", async () => {
     const chaves = await chavesReais();
 
-    // Se um adapter passar a calcular média ou comparação, o 8-D vira mentira e precisa ser
-    // reescrito — este teste é o aviso.
     expect(chaves.filter((c) => MEDIA.test(c))).toEqual([]);
     expect(chaves.filter((c) => COMPARACAO.test(c))).toEqual([]);
     expect(SECURITY_PROMPT).toContain(
-      "Médias, comparações entre dois períodos, variações e percentuais de evolução não são calculados por nenhuma ferramenta",
+      'Médias, comparações entre dois períodos, variações e percentuais de evolução não aparecem em "agregados" e nenhuma ferramenta sua os devolve',
     );
+    // E a v3 não pode ter voltado a afirmar sobre o SISTEMA — `temporal.ts` existe.
+    expect(SECURITY_PROMPT).not.toContain("não são calculados por nenhuma ferramenta");
   });
 
   it("a diferença entre duas marcas de um recorde NÃO vem pronta", async () => {

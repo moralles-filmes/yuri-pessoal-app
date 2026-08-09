@@ -108,6 +108,21 @@ export async function saveAiPreferences(
        */
       allow_vision:
         dados.allowVision && dados.permissions.allow_finance && dados.writePermissions.allow_write_finance,
+      /**
+       * ⛔ 18-E Bloco 4 — E ESTA **NÃO** É ANDADA COM NADA. A diferença com a linha acima é
+       * o coração da decisão do bloco.
+       *
+       * `allow_vision` é ANDada porque as três chaves servem ao MESMO efeito: um comprovante
+       * que não pode virar lançamento é um arquivo que saiu do sistema para nada.
+       *
+       * A varredura não é assim. Ela cobre TRÊS módulos independentes, e ANDar com os três
+       * faria desligar a leitura de Dieta calar também o insight de Financeiro. Quem decide
+       * módulo a módulo é `insights/job.ts` (que PULA), e o RPC confere de novo. Ligar a
+       * chave com os três módulos desligados não é estado impossível: é uma varredura que
+       * roda, pula os três e registra o porquê em `ai_insight_jobs`.
+       */
+      allow_insight_jobs: dados.allowInsightJobs,
+      job_monthly_budget: dados.jobMonthlyBudget,
       default_provider: dados.defaultProvider,
       default_model: dados.defaultModel,
       confirmation_mode: dados.confirmationMode,

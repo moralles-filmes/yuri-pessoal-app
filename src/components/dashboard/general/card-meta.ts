@@ -7,6 +7,7 @@ import {
   CalendarClock,
   Dumbbell,
   GraduationCap,
+  Lightbulb,
   ListChecks,
   ListTodo,
   ReceiptText,
@@ -28,6 +29,7 @@ export const DASH_CARD_ICONS: Record<DashCardId, LucideIcon> = {
   estudos: GraduationCap,
   notificacoes: Bell,
   treinos: Dumbbell,
+  insights: Lightbulb,
 };
 
 /** Para onde o link "Ver" de cada card aponta. */
@@ -42,4 +44,6 @@ export const DASH_CARD_HREF: Record<DashCardId, string> = {
   estudos: "/estudos",
   notificacoes: "/configuracoes",
   treinos: "/treinos",
+  // ⛔ O link vai para a TELA de insights, que é onde se gera. O card em si não gera nada.
+  insights: "/ia/insights",
 };

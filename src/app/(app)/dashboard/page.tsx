@@ -17,6 +17,9 @@ import { StudiesCard } from "@/components/dashboard/general/studies-card";
 import { NutritionCard } from "@/components/dashboard/general/nutrition-card";
 import { TrainingCard } from "@/components/dashboard/general/training-card";
 import { NotificationsCard } from "@/components/dashboard/general/notifications-card";
+// ⛔ 18-E — o card SÓ LÊ. Ele importa `insight-queries` (a metade leitura) e não alcança o
+// runner nem a Server Action: "o dashboard não chama a IA no carregamento" é teste de import.
+import { InsightsCard } from "@/components/dashboard/general/insights-card";
 import { timeInSaoPaulo } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -102,6 +105,11 @@ export default async function DashboardPage({
     treinos: (
       <Suspense fallback={<CardBodySkeleton lines={5} />}>
         <TrainingCard todayIso={todayIso} />
+      </Suspense>
+    ),
+    insights: (
+      <Suspense fallback={<CardBodySkeleton lines={4} />}>
+        <InsightsCard />
       </Suspense>
     ),
   };

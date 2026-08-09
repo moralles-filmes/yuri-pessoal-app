@@ -61,6 +61,20 @@ export const AI_SECTIONS: readonly AiSection[] = [
     icon: "receipt",
     description: "Envie uma nota ou comprovante, revise a leitura e decida o lançamento.",
   },
+  /**
+   * 18-E — o 7º item. Entra ENTRE Comprovantes e Consumo, pela mesma razão que pôs Ações
+   * antes de Consumo: o que a IA faz com os dados do dono vem antes de quanto ela custou.
+   *
+   * ⛔ E ela é a ÚNICA porta de GERAÇÃO. O card do dashboard só exibe — não há botão de
+   * gerar lá, e há teste de import provando que o dashboard não alcança o runner.
+   */
+  {
+    slug: "insights",
+    title: "Insights",
+    href: "/ia/insights",
+    icon: "lightbulb",
+    description: "Análises sobre números que o sistema já mediu. Geradas quando você pede.",
+  },
   {
     slug: "consumo",
     title: "Consumo",
@@ -394,6 +408,35 @@ export const ROTULO_DO_ESTADO_DA_ACAO = {
  * O aviso da tela de ações. Ele diz as três coisas que a tela PODE afirmar, e nenhuma que ela
  * não pode — mesma disciplina de `AVISO_DA_TRILHA`.
  */
+/**
+ * 18-E. A frase que impede a tela de insight de prometer o que ela não é.
+ *
+ * ⚠️ Ela diz as três coisas que o dono precisa saber ANTES de ler um texto escrito por um
+ * modelo: os números são medidos pelo sistema (não pela IA), o texto não contém dígito que
+ * não venha de uma fonte listada, e nada aqui é recomendação.
+ */
+export const AVISO_DOS_INSIGHTS =
+  "Os números vêm dos seus registros, calculados pelo sistema — o assistente só escreve o texto ao redor deles, e não pode citar nenhum número que não esteja nas fontes de cada análise. Nada aqui é recomendação, meta ou prescrição.";
+
+/** Rótulo pt-BR de cada estado derivado de um insight. */
+export const ROTULO_DO_ESTADO_DE_INSIGHT = {
+  vigente: "vigente",
+  expirado: "expirado",
+  dispensado: "dispensado por você",
+  adiado: "adiado por você",
+  oculto: "oculto por você",
+} as const;
+
+/**
+ * ⚠️ A confiança fala da BASE, não do texto. Os rótulos dizem isso — "alta" não significa
+ * "bem escrito", significa "todos os números citados foram medidos e estão completos".
+ */
+export const ROTULO_DA_CONFIANCA = {
+  alta: "todos os números citados foram medidos e estão completos",
+  media: "algum número citado está incompleto ou não foi medido",
+  baixa: "vários números citados estão incompletos ou não foram medidos",
+} as const;
+
 export const AVISO_DAS_ACOES =
   "Nenhuma linha aqui foi aplicada sem você confirmar. O estado de cada uma é calculado na leitura, a partir do prazo, da sua decisão e do que a execução registrou — nada disso é gravado como situação.";
 

@@ -316,6 +316,20 @@ export const aiPreferencesSchema = z
      * Ver o comentário em `AiPreferencesView.allowVision`.
      */
     allowVision: z.boolean({ error: "Autorização de envio de arquivo inválida." }),
+    /**
+     * Fase 18-E Bloco 4. Campo solto pela MESMA razão de `allowVision`: a varredura
+     * automática não é um módulo, e `TOOL_PERMISSIONS` é a lista de módulos que o guard
+     * consulta. Ver o comentário em `AiPreferencesView.allowInsightJobs`.
+     */
+    allowInsightJobs: z.boolean({ error: "Autorização de análise automática inválida." }),
+    /**
+     * O teto próprio do job. `nonnegative` e NÃO `nullish`: a coluna é NOT NULL, e "sem
+     * teto" não é um estado que a varredura possa ter (ver a nota da migration).
+     */
+    jobMonthlyBudget: z.coerce
+      .number()
+      .nonnegative("Não pode ser negativo")
+      .max(1000, "O teto do job não pode passar de US$ 1.000 por mês"),
     defaultProvider: aiProviderEnum
       .nullish()
       .transform((v) => (v === undefined ? null : v)),
@@ -461,5 +475,67 @@ export const setConversationFavoriteSchema = z
   .object({
     conversationId: z.uuid("Conversa inválida"),
     isFavorite: z.boolean(),
+  })
+  .strict();
+
+/* ══════════════════════════════ 18-E · Insights ══════════════════════════════ */
+
+/**
+ * ⚠️ `.strict()` nos dois, como em todo schema deste módulo: campo a mais é ERRO, e é por
+ * aqui que um `userId` vindo do cliente seria barrado. `user_id` sempre de `authContext()`.
+ */
+export const gerarInsightSchema = z
+  .object({
+    modulo: z.enum(["financeiro", "treinos", "dieta"]),
+    /**
+     * A janela em períodos (meses no Financeiro e em Treinos, dias na Dieta). Opcional: cada
+     * coletor tem o próprio padrão e o próprio TETO, e os dois moram lá — pôr o teto aqui
+     * daria dois lugares para mudá-lo, e um deles ficaria para trás.
+     */
+    janela: z.number().int().min(2).max(60).optional(),
+  })
+  .strict();
+
+export const feedbackDeInsightSchema = z
+  .object({
+    insightId: z.uuid("Insight inválido"),
+    decisao: z.enum(["util", "inutil", "dispensado", "adiado", "nao_mostrar"]),
+    /**
+     * Só em `adiado`, e obrigatório nele — o CHECK do banco exige a mesma coerência. Adiar
+     * sem data seria dispensar com outro nome.
+     */
+    adiadoAte: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use uma data válida")
+      .optional(),
+  })
+  .strict()
+  .refine((v) => (v.decisao === "adiado") === (v.adiadoAte !== undefined), {
+    message: "Adiar exige uma data, e as outras decisões não a aceitam",
+    path: ["adiadoAte"],
+  });
+
+/**
+ * ⛔ 18-E — transformar insight em tarefa. RESTRITO a `criarTarefaTodo`: não há campo
+ * `command` neste schema, e a ausência é a trava. Com um `command` livre, a tela poderia
+ * pedir qualquer command do registry — inclusive `lancarTransacao`, que é risco 3 com
+ * sensibilidade `dinheiro` e está declarado FORA da subfase.
+ *
+ * ⚠️ O TÍTULO É DIGITADO PELO DONO. O texto do insight não vira título automaticamente: ele
+ * pode conter token `{{ind:…}}`, e no TO-DO não há quem o resolva.
+ */
+export const tarefaDeInsightSchema = z
+  .object({
+    insightId: z.uuid("Insight inválido"),
+    titulo: z
+      .string()
+      .trim()
+      .min(1, "Escreva o que você quer fazer")
+      .max(300, "Máximo de 300 caracteres"),
+    data: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use uma data válida")
+      .optional(),
+    projeto: z.string().trim().min(1).max(120).optional(),
   })
   .strict();

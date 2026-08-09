@@ -449,6 +449,9 @@ describe("aceitar a própria saída (round-trip)", () => {
       writePermissions: Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((p) => [p, false])),
       // 18-D — campo solto de propósito: não é módulo, logo não é `ToolPermission`.
       allowVision: false,
+      // 18-E Bloco 4 — idem, e mais o teto próprio da varredura.
+      allowInsightJobs: false,
+      jobMonthlyBudget: 1,
       defaultProvider: undefined,
       defaultModel: "",
       confirmationMode: "seguro",
@@ -668,5 +671,80 @@ describe("18-C — aiWritePermissionsSchema", () => {
   it("`allow_vision` fica FORA de TOOL_PERMISSIONS e de TOOL_WRITE_PERMISSIONS", () => {
     expect(TOOL_PERMISSIONS).not.toContain("allow_vision");
     expect(TOOL_WRITE_PERMISSIONS).not.toContain("allow_vision");
+  });
+});
+
+/**
+ * Fase 18-E · Bloco 4 — O FORMULÁRIO TEM DE MANDAR O QUE O SCHEMA EXIGE.
+ *
+ * ⚠️ Este bloco existe por causa de um defeito REAL, encontrado ao acrescentar a chave do
+ * job: `allowVision` entrou no schema na 18-D como `z.boolean()` obrigatório, mas nunca foi
+ * acrescentada ao payload de `ai-preferences-form.tsx`. Resultado: `saveAiPreferences`
+ * recusava TODO salvamento de preferências com "Autorização de envio de arquivo inválida",
+ * e a tela não tinha como mostrar de qual campo era o erro — ele não existe nela.
+ *
+ * `tsc` não pega isso: a action recebe `unknown`. O que pega é comparar as duas listas.
+ *
+ * Por que varredura do código-fonte, e não um teste de componente: o projeto roda em
+ * `environment: "node"` e não tem infraestrutura de teste de componente (invariante 25 da
+ * 18-B). Mesma técnica de `chat-events.test.ts`.
+ */
+describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do schema", () => {
+  const FORM = path.join(process.cwd(), "src/components/ai/ai-preferences-form.tsx");
+
+  /** Os campos de primeiro nível que o schema exige (sem default e sem `nullish`). */
+  const OBRIGATORIOS = [
+    "permissions",
+    "writePermissions",
+    "allowVision",
+    "allowInsightJobs",
+    "jobMonthlyBudget",
+    "confirmationMode",
+    "allowFallback",
+    "budgetBlockOnLimit",
+    "reservationMargin",
+    "rateLimitPerMinute",
+    "rateLimitPerHour",
+  ] as const;
+
+  it("o schema recusa o payload a que falte QUALQUER um deles", () => {
+    // Prova que a lista acima não é decoração: cada campo removido derruba o parse.
+    const completo: Record<string, unknown> = {
+      permissions: Object.fromEntries(TOOL_PERMISSIONS.map((p) => [p, false])),
+      writePermissions: Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((p) => [p, false])),
+      allowVision: false,
+      allowInsightJobs: false,
+      jobMonthlyBudget: 1,
+      defaultProvider: null,
+      defaultModel: "",
+      confirmationMode: "seguro",
+      allowFallback: false,
+      dailyBudget: null,
+      monthlyBudget: null,
+      budgetBlockOnLimit: true,
+      reservationMargin: 1.15,
+      rateLimitPerMinute: 10,
+      rateLimitPerHour: 120,
+    };
+    expect(aiPreferencesSchema.safeParse(completo).success).toBe(true);
+
+    for (const campo of OBRIGATORIOS) {
+      const semUm = { ...completo };
+      delete semUm[campo];
+      expect(
+        aiPreferencesSchema.safeParse(semUm).success,
+        `${campo} deveria ser obrigatório`,
+      ).toBe(false);
+    }
+  });
+
+  it("⛔ o payload de saveAiPreferences no formulário cita todos eles", () => {
+    const codigo = readFileSync(FORM, "utf8");
+    const chamada = codigo.slice(codigo.indexOf("await saveAiPreferences({"));
+    const payload = chamada.slice(0, chamada.indexOf("\n    });"));
+
+    const faltando = OBRIGATORIOS.filter((c) => !payload.includes(`${c}:`));
+    expect(faltando, `campos ausentes no payload do formulário: ${faltando.join(", ")}`)
+      .toEqual([]);
   });
 });

@@ -9,6 +9,7 @@ import "server-only";
  */
 
 import { createClient } from "@/lib/supabase/server";
+import type { ClienteDaIa } from "./server/client";
 import { AI_PROVIDERS, type AiProviderId } from "./core/contracts";
 import { PROVIDER_REGISTRY } from "./providers/registry";
 import {
@@ -48,8 +49,12 @@ export const MAX_HISTORY_CHARS = 24_000;
 
 // ─────────────────────────── Configurações e preferências ───────────────────────────
 
-export async function getProviderCards(userId: string): Promise<ProviderCardView[]> {
-  const supabase = await createClient();
+export async function getProviderCards(
+  userId: string,
+  /** 18-E Bloco 4 — sem sessão (Cron). `userId` já era explícito; falta só o client. */
+  client?: ClienteDaIa,
+): Promise<ProviderCardView[]> {
+  const supabase = client ?? (await createClient());
 
   const [configs, creds] = await Promise.all([
     supabase
@@ -105,8 +110,9 @@ export async function getProviderCards(userId: string): Promise<ProviderCardView
 /** O recorte que `core/router.ts` consome. Puro dado, sem decisão. */
 export async function getRouterConfigs(
   userId: string,
+  client?: ClienteDaIa,
 ): Promise<ProviderConfigView[]> {
-  const cards = await getProviderCards(userId);
+  const cards = await getProviderCards(userId, client);
   return cards.map((c) => ({
     provider: c.provider,
     enabled: c.enabled,
@@ -172,14 +178,22 @@ const PREFS_PADRAO: AiPreferencesView = {
   writePermissions: SEM_ESCRITA,
   // 18-D. Nenhum arquivo sai do sistema sem o dono ligar isto explicitamente.
   allowVision: false,
+  // 18-E Bloco 4. Sem linha de preferência, nenhuma varredura roda — e o teto do job é ZERO,
+  // não o default da coluna: quem não tem preferência gravada não autorizou gasto nenhum.
+  allowInsightJobs: false,
+  jobMonthlyBudget: 0,
 };
 
-export async function getAiPreferences(userId: string): Promise<AiPreferencesView> {
-  const supabase = await createClient();
+export async function getAiPreferences(
+  userId: string,
+  /** 18-E Bloco 4 — sem sessão (Cron). `userId` já era explícito; falta só o client. */
+  client?: ClienteDaIa,
+): Promise<AiPreferencesView> {
+  const supabase = client ?? (await createClient());
   const { data } = await supabase
     .from("ai_user_preferences")
     .select(
-      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_vision, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
+      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_vision, allow_insight_jobs, job_monthly_budget, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -225,6 +239,9 @@ export async function getAiPreferences(userId: string): Promise<AiPreferencesVie
     // desta coerção não é ler um número nem alterar um registro — é um documento do dono
     // saindo deste sistema para uma empresa fora dele, sem volta.
     allowVision: data.allow_vision === true,
+    // 18-E Bloco 4. Mesmo `=== true`: chave ausente é chave DESLIGADA, nunca "ainda não sei".
+    allowInsightJobs: data.allow_insight_jobs === true,
+    jobMonthlyBudget: data.job_monthly_budget ?? 0,
   };
 }
 

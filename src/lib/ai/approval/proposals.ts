@@ -287,3 +287,68 @@ export async function criarPropostaDeDesfazer(
 
   return { id: data.id, effectHash: data.effect_hash, expiresAt: data.expires_at };
 }
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+// 18-E · Bloco 3 — a proposta que nasce de um INSIGHT
+// ══════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * A QUARTA forma. Mesma razão de `FERRAMENTA_DO_DESFAZER` e `FERRAMENTA_DO_COMPROVANTE`:
+ * `tool_name`/`tool_version` são NOT NULL e entram no hash, e esta proposta não nasce de
+ * ferramenta nenhuma — nasce do dono lendo uma análise em `/ia/insights` e decidindo virar
+ * tarefa. Declarar por escrito é melhor que reaproveitar `todo.criar_tarefa`, que descreveria
+ * uma tool call que nunca houve.
+ */
+export const FERRAMENTA_DO_INSIGHT = "tela.insight";
+export const VERSAO_DO_INSIGHT = "1";
+
+export type NovaPropostaDeInsight = {
+  readonly userId: string;
+  /** O insight que originou esta proposta. FK composta com `user_id`. */
+  readonly insightId: string;
+  readonly module: string;
+  readonly risk: NivelDeRisco;
+  readonly efeito: EfeitoProposto;
+};
+
+/**
+ * ⚠️ MESMO MOTOR: hash do efeito, prazo de 10 min do BANCO, uso único e revalidação. Ler uma
+ * análise não cria tarefa nenhuma — a única porta continua sendo `confirmarAcaoDaIa`, com o
+ * dono lendo a previsão antes.
+ *
+ * `insight_id` NÃO entra no hash, pela mesma razão dos outros dois vínculos: o hash cobre o
+ * EFEITO, e o payload já carrega o que vai ser criado. Quem o protege é a FK composta
+ * `(insight_id, user_id)`.
+ */
+export async function criarPropostaDeInsight(
+  entrada: NovaPropostaDeInsight,
+): Promise<PropostaGravada | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ai_action_proposals")
+    .insert({
+      user_id: entrada.userId,
+      origem: "insight",
+      insight_id: entrada.insightId,
+      tool_name: FERRAMENTA_DO_INSIGHT,
+      tool_version: VERSAO_DO_INSIGHT,
+      command: entrada.efeito.command,
+      module: entrada.module,
+      risk: entrada.risk,
+      payload: comoJson(entrada.efeito.payload),
+      resolved_entities: entidadesGravaveis(entrada.efeito),
+      preview: comoJson(previsaoCanonica(entrada.efeito)),
+      effect_hash: hashDe(entrada.efeito, FERRAMENTA_DO_INSIGHT, VERSAO_DO_INSIGHT),
+      // `expires_at` continua não sendo enviado — o prazo é o default do banco.
+    })
+    .select("id, effect_hash, expires_at")
+    .single();
+
+  if (error) {
+    registrarFalha("INSIGHT_PROPOSAL_INSERT_FAILED", entrada.insightId, error);
+    return null;
+  }
+  if (!data) return null;
+
+  return { id: data.id, effectHash: data.effect_hash, expiresAt: data.expires_at };
+}

@@ -1,6 +1,167 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-08-09** (18-D concluída).
+> Atualizado ao final de **cada** fase. Última atualização: **2026-08-09**
+> (18-E CONCLUÍDA — os quatro blocos).
+
+## ✅ 18-E — IA · Insights (CONCLUÍDA, blocos 1 a 4)
+
+**Desenho validado com o dono em 2026-08-09:**
+`docs/superpowers/specs/2026-08-09-18e-insights-relatorios-dashboards-design.md`.
+Plano em `docs/superpowers/plans/2026-08-09-18e-insights-relatorios-dashboards.md`.
+
+**O que mudou de natureza.** Até a 18-D a IA **relatou** números que outro alguém calculou:
+`resumoMes` soma, `metrics.ts` agrega, `calc.ts` totaliza, e o adapter repassa. A 18-E cria a
+primeira grandeza **derivada** do projeto — média de janela, comparação entre períodos,
+variação percentual —, escreve um texto em cima dela e o mostra numa tela que a IA não
+controla (o dashboard geral, da Fase 12).
+
+Daí as três regras que governam a subfase inteira:
+
+| Regra | Como ela é garantida |
+| --- | --- |
+| **O número é medido e vem pronto** | `insights/temporal.ts` agrega sobre o que os coletores devolvem; ele não importa `resumoMes`, `metrics.ts` nem `calc.ts` — invariante 31 escrita como grafo de imports |
+| **O texto não contém dígito** | Todo número entra por token `{{ind:<id>}}`, e `ai_insights.explicacao` guarda os TOKENS. Enquanto o texto guardar tokens, é **impossível** o banco conter um insight que cite um número fora das fontes |
+| **O dashboard nunca chama a IA** | Geração (`/ia/insights` + runner + action) e leitura (`insight-queries` + card) moram em arquivos que o dashboard não alcança — teste de import, não promessa |
+
+### As oito decisões do dono
+
+As três primeiras vieram do fechamento da 18-D; as cinco seguintes, do brainstorm de
+2026-08-09.
+
+| # | Decisão |
+| --- | --- |
+| 1 | O módulo de agregação temporal **É criado**, e o 8-D é reescrito com versão NOVA de prompt |
+| 2 | O job automático **nasce desligado**, com chave própria e orçamento separado |
+| 3 | "Conversar com um relatório" fica **fora**, declarado → 18-F |
+| 4 | **Fatia vertical fina**, quatro blocos, e o que não couber é declarado fora |
+| 5 | **`/ia/insights` GERA; o card do dashboard só EXIBE** |
+| 6 | **O texto gerado não contém dígito** — número por token |
+| 7 | **Financeiro + Treinos + Dieta** na primeira fatia (três FORMAS diferentes de número) |
+| 8 | **"Transformar em ação" entra, restrito a `todo.criar_tarefa`** |
+
+### O que cada bloco entregou
+
+**Bloco 1 — a fundação, sem uma chamada de IA.** `src/lib/tone/vocabulary.ts` (a lista de
+vocabulário proibido existia **duas vezes**, dentro de dois arquivos de teste, sem export e
+com conteúdos **diferentes**); `insights/contracts.ts`; `insights/temporal.ts` com **cinco**
+recusas — a quinta (unidades diferentes não se comparam) nasceu do código, não do desenho;
+`seguranca-v3`; e as fronteiras novas.
+
+⚠️ **O teste do adapter de Treinos disparou sozinho.** O `"8-D só pode negar médias enquanto
+elas não existirem"` foi escrito na 18-B exatamente para este momento, e o aviso chegou.
+
+**Bloco 2 — três tabelas, o Engine e os coletores.** `ai_insights`, `ai_insight_sources`
+(o SNAPSHOT — exceção **declarada** à invariante 20, pelo mesmo motivo de
+`nutrients_snapshot`), `ai_insight_feedback` (append-only por policy: SELECT e INSERT, sem
+UPDATE e sem DELETE), `ai_runs.kind = 'insight'` como terceira espécie, e o RPC
+`ai_begin_insight_run` com o **mesmo advisory lock** do chat. Os seis módulos puros e os três
+coletores, pela **terceira porta declarada**.
+
+⚠️ **Desvio declarado do desenho, e mais forte que ele:** a `unique (user_id, dedupe_key)`
+alcança o insight **expirado**. O desenho dizia "devolva o existente se não estiver expirado",
+o que bateria em `23505` ao regenerar depois do vencimento. A leitura prévia devolve o
+existente **seja qual for o estado dele** — se a chave repete, os dados não mudaram, e um
+segundo texto sobre os mesmos números não é informação nova, é gasto.
+
+**Bloco 3 — a tela, o card e a quarta forma.** `/ia/insights` como 7º item de `AI_SECTIONS`;
+`insights` no **fim** de `DASH_CARD_IDS`; `ai_action_proposals.origem` ganha `'insight'`, com
+o CHECK exigindo a forma por inteiro e FK composta `(insight_id, user_id)`; e "transformar em
+tarefa", que **propõe** e não cria.
+
+### ✅ O Bloco 4 — o job automático (2026-08-09)
+
+Ele **estava** declarado fora, e fechou no mesmo dia, depois de o dono decidir o ponto difícil.
+Desenho: `docs/superpowers/specs/2026-08-09-18e-bloco4-job-insights-design.md`.
+
+**O ponto difícil era a admissão**, não as assinaturas: `ai_begin_insight_run` é
+`security invoker` e lê `auth.uid()`, que o Cron não tem. Das três saídas, a escolhida foi
+`p_user_id` honrado **só** quando a sessão é nula — ⛔ **e a trava é a RLS, não o `coalesce`**:
+a função continua `security invoker`, então um autenticado apontando para outro dono não lê as
+preferências, não lê a credencial e não consegue o `insert` em `ai_runs`. As duas recusadas:
+uma RPC gêmea `security definer` duplicaria ~150 linhas de admissão (dois juízes do mesmo
+orçamento, a divergência que a invariante 8 impede), e minerar um JWT do dono introduziria um
+primitivo de impersonação no repositório.
+
+**Eram NOVE assinaturas, não oito.** A nona é `getMealTypes`, chamada por dentro de
+`getDiaryMeals` — a lista anterior fora medida antes e essa transitiva escapou. Todas recebem
+`LeituraDoDono` (`src/lib/supabase/owner.ts`): um objeto único, em que **"client sem userId"
+não é representável** (o guard de `getSessionHistory` vira desnecessário porque o estado que
+ele protegia deixa de existir).
+
+**O orçamento ganhou um segundo teto.** `job_monthly_budget` é **NOT NULL** — ao contrário de
+`daily_budget`/`monthly_budget`, que aceitam nulo — porque o job é o único gasto sem o dono
+olhando, e um teto opcional sobre isso é um teto que a configuração padrão não tem. O job passa
+pelo próprio **e** pelo global; qualquer um dos dois barra. O marcador `ai_runs.automatic` é
+**derivado** de `auth.uid() is null`, nunca recebido por parâmetro.
+
+**`allow_insight_jobs` não é ANDada com as chaves de módulo** — diferente de `allow_vision`,
+cujas três chaves servem ao mesmo efeito. Aqui os três módulos são independentes: desligada,
+nada roda; ligada, o módulo sem chave é **PULADO** e os outros seguem (`insights/job.ts`, puro).
+
+**`ai_insight_jobs`** grava uma linha por módulo por execução — inclusive `pulado`, com o motivo
+sanitizado. Sem ela, "job barrado registra o motivo" ficaria só no log da Vercel, que o dono não
+lê. Append-only (só policy de SELECT); `run_id`/`insight_id` **sem FK**, invariante 38.
+
+**Cadência 1×/dia**, slot `0 12` UTC (09h BRT), em `/api/cron/insights` — rota **separada** de
+`/api/cron/notifications`, porque um job de insight que falha não pode derrubar as notificações.
+
+⚠️ **Defeito pré-existente encontrado e corrigido:** `allowVision` (18-D) era obrigatória no
+`aiPreferencesSchema` mas nunca foi acrescentada ao payload do formulário — nem tinha
+interruptor na tela. **Toda** gravação de preferências vinha sendo recusada desde a 18-D. Há
+teste novo comparando as duas listas.
+
+### Invariantes que a 18-E fixou
+
+64. ⛔ **O TEXTO GRAVADO NÃO TEM NÚMERO.** `ai_insights.explicacao` guarda `{{ind:<id>}}`, e
+    `render.ts` resolve a cada leitura a partir de `ai_insight_sources`. Isso muda a natureza
+    da garantia: ela deixa de depender de o validador ter rodado e vira **propriedade do
+    dado** — o mesmo movimento que pôs uso único num `unique` e prazo num `default`.
+65. ⛔ **AUSÊNCIA CARREGA MOTIVO, DO CONTRATO À COLUNA.** `Indicador.valor: number | null` com
+    `indisponivel_porque` obrigatório; um CHECK no banco exige a mesma coerência; e a tela
+    escreve **"não medido" com o motivo**, nunca "—" e nunca "0". É a invariante 1 da Dieta
+    subida ao nível do contrato e descida até o pixel.
+66. **`temporal.ts` AGREGA, NUNCA RECALCULA** — ele não importa `resumoMes`, `metrics.ts` nem
+    `calc.ts`. Cinco recusas, cada uma herdada de uma invariante já paga: janela incompleta
+    (Dieta 21), sem período anterior (Treinos 21), base zero (**nunca `Infinity`, nunca
+    `NaN`**), ponto parcial contaminando o agregado, e **unidades diferentes não se comparam**
+    (Treinos 1 aplicada ao tempo).
+67. ⛔ **A CONFIANÇA É DO SERVIDOR, E O CAMPO NÃO EXISTE NO SCHEMA DE SAÍDA DO MODELO.**
+    Irrepresentável vence recusado: uma recusa é um `if` que alguém remove, um campo ausente é
+    uma mudança de schema que ninguém faz sem perceber. `confidence.ts` declara `rebaixar` e
+    **`promover` não existe**. Invariante 57 da 18-D, aplicada a outro objeto.
+68. ⛔ **A DEDUPLICAÇÃO ACONTECE ANTES DA CHAMADA.** Deduplicar depois cumpriria a letra do
+    critério e faria o dono pagar por respostas que o sistema jogaria fora. A chave sai dos
+    INDICADORES; `tipo` **não entra nela**, porque é escolha do modelo e só existe depois.
+69. **O VOCABULÁRIO PROIBIDO É DECLARADO UMA VEZ, EM MÓDULO NEUTRO** (`src/lib/tone/`), e a
+    checagem **roda em produção**. Nas 16-F/17-F o texto sai de função pura e um teste basta;
+    aqui ele vem do modelo em runtime, e a suíte deixa de ser a última linha de defesa.
+70. **NENHUM ESTADO DE INSIGHT É GRAVADO** (invariante 35 aplicada aqui). `vigente`,
+    `expirado`, `dispensado`, `adiado` e `oculto` saem de `expires_at` +
+    `ai_insight_feedback`, com precedência **decisão do dono > prazo** — nos dois sentidos.
+71. ⛔ **EXPIRAR NÃO APAGA.** O insight sai da lista de vigentes e do card, e continua legível
+    com os números que ele tinha — eles são snapshot.
+72. **A QUARTA FORMA DE `origem` É `insight`**, e `insight_id` **não entra no hash**: quem o
+    protege é a FK composta. Restrito a `criarTarefaTodo`, e a trava é a **ausência** de campo
+    `command` no schema da action.
+
+### Números reconferidos no banco e na suíte (2026-08-09)
+
+| Medida | Antes | Depois |
+| --- | --- | --- |
+| Tabelas no `public` | 126 | **129** |
+| Tabelas `ai_*` | 14 | **17** |
+| Testes / arquivos | 3.219 / 159 | **3.347 / 164** |
+| Itens em `AI_SECTIONS` | 6 | **7** |
+| Cards em `DASH_CARD_IDS` | 10 | **11** |
+| Formas de `ai_action_proposals.origem` | 3 | **4** |
+| Espécies de `ai_runs.kind` | 2 | **3** |
+| Ferramentas · commands · agentes | 29 · 13 · 9 | **inalterados** |
+
+Verificação: `lint` · `tsc --noEmit` · `test:run` · `build` · `TZ=UTC vitest run` — verdes.
+Smoke: `/ia/insights` → **307** para `/login`; `/api/cron/notifications` → **401** sem o
+secret. `get_advisors` sem lint novo sobre as tabelas desta subfase.
+
+---
 
 ## ✅ 18-D CONCLUÍDA (2026-08-09) — IA · Visão, documentos e comprovantes
 
@@ -48,7 +209,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅ e **18-D ✅ (2026-08-09)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer e, agora, **comprovantes por visão**; tudo atrás de chaves que nascem desligadas. Próxima: **18-E** (sem desenho validado — brainstorm primeiro) |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. Próxima: **18-F** (integrações e polimento) |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -118,7 +279,7 @@ desfazer (5)** e documentação + verificação final (6). Decisões em
 | 18-B | Contexto, ferramentas de leitura e agentes | ✅ **CONCLUÍDA** (2026-08-07) |
 | 18-C | Ações, aprovações, idempotência e auditoria | ✅ **CONCLUÍDA** (2026-08-08) — blocos 1 a 6 |
 | 18-D | Visão, documentos e comprovantes | ⬜ |
-| 18-E | Insights, relatórios e dashboards | ⬜ |
+| 18-E | Insights, relatórios e dashboards | ✅ |
 | 18-F | Memória, voz, integrações e polimento | ⬜ — fecha a fase |
 
 As frentes 16 (Dieta) e 17 (Treinos) continuam **concluídas e em manutenção/iteração**:

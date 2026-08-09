@@ -6,6 +6,11 @@ import "server-only";
  * Padrão do projeto: poucas consultas amplas + derivação em memória (nada de N+1). A RLS
  * garante o recorte por usuário — nenhuma query aqui filtra `user_id` na mão, e nem deve.
  *
+ * ⚠️ **Fase 18-E (Bloco 4) — DUAS exceções declaradas: `getDiaryMeals` e `getMealTypes`.**
+ * Quando recebem `owner`, quem lê é o Cron com service role, que IGNORA a RLS — aí o
+ * `.eq("user_id", …)` explícito é o único escopo que existe. Sem `owner`, a frase acima
+ * continua valendo inteira. Ver `src/lib/supabase/owner.ts`.
+ *
  * ══ DE ONDE VEM CADA NÚMERO ══
  * • Total CONSUMIDO  → `nutrients_snapshot` da própria linha do diário. Nunca do catálogo.
  * • Total PLANEJADO  → catálogo atual, porque o plano é intenção sobre o futuro.
@@ -13,6 +18,7 @@ import "server-only";
  * • Água             → módulo Hábitos (Fase 10). Aqui só se LÊ; a fonte de verdade é lá.
  */
 import { createClient } from "@/lib/supabase/server";
+import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { hojeISO } from "@/lib/format";
 import {
   asBaseUnit,
@@ -92,11 +98,12 @@ export async function ensureMealTypes(userId: string): Promise<void> {
   );
 }
 
-export async function getMealTypes(): Promise<MealType[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
+export async function getMealTypes(owner?: LeituraDoDono): Promise<MealType[]> {
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase
     .from("nutrition_meal_types")
-    .select("id,name,slug,icon,color,default_time,position,is_active")
+    .select("id,name,slug,icon,color,default_time,position,is_active");
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("position")
     .order("name");
 
@@ -269,33 +276,46 @@ function mapEntry(row: EntryRow): DiaryEntry {
  * Refeições do diário num intervalo de datas, já com os itens.
  * Duas consultas, sempre — o número de dias não muda a quantidade de idas ao banco.
  */
-export async function getDiaryMeals(from: string, to: string): Promise<DiaryMeal[]> {
-  const supabase = await createClient();
+export async function getDiaryMeals(
+  from: string,
+  to: string,
+  owner?: LeituraDoDono,
+): Promise<DiaryMeal[]> {
+  const supabase = owner?.client ?? (await createClient());
+
+  const mealsBase = supabase
+    .from("nutrition_diary_meals")
+    .select(
+      "id,diary_date,meal_type_id,planned_meal_id,planned_time,consumed_time,status,title,notes,position",
+    )
+    .gte("diary_date", from)
+    .lte("diary_date", to);
 
   const [mealsResult, mealTypes] = await Promise.all([
-    supabase
-      .from("nutrition_diary_meals")
-      .select(
-        "id,diary_date,meal_type_id,planned_meal_id,planned_time,consumed_time,status,title,notes,position",
-      )
-      .gte("diary_date", from)
-      .lte("diary_date", to)
+    (owner ? mealsBase.eq("user_id", owner.userId) : mealsBase)
       .order("diary_date")
       .order("position"),
-    getMealTypes(),
+    // ⚠️ A TRANSITIVA. Sem o `owner` aqui, sob service role a lista de tipos viria vazia
+    // (ou do mundo inteiro) e refeição sem tipo não entra no total do dia.
+    getMealTypes(owner),
   ]);
 
   const meals = mealsResult.data ?? [];
   if (meals.length === 0) return [];
 
-  const { data: entriesData } = await supabase
+  // As linhas já estão recortadas pelos `diary_meal_id` acima, que são do dono — mas o filtro
+  // explícito não é decoração: ele é o que impede um id forjado de alcançar linha alheia num
+  // caminho onde a RLS não está mais entre a consulta e a tabela.
+  const entriesBase = supabase
     .from("nutrition_diary_entries")
     .select(ENTRY_SELECT)
     .in(
       "diary_meal_id",
       meals.map((meal) => meal.id),
-    )
-    .order("position");
+    );
+  const { data: entriesData } = await (
+    owner ? entriesBase.eq("user_id", owner.userId) : entriesBase
+  ).order("position");
 
   const entriesByMeal = new Map<string, DiaryEntry[]>();
   for (const row of (entriesData ?? []) as unknown as EntryRow[]) {

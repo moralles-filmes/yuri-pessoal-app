@@ -24,6 +24,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
+import type { ClienteDaIa } from "./client";
 import type { AiProviderId } from "@/lib/ai/core/contracts";
 import { aiError, type AiError } from "@/lib/ai/core/errors";
 import { err, ok, type Result } from "@/lib/ai/core/result";
@@ -212,13 +213,15 @@ export async function deleteCredential(
 export async function resolveApiKey(
   userId: string,
   provider: AiProviderId,
+  /** 18-E Bloco 4 — sem sessão (Cron). `userId` já era explícito; falta só o client. */
+  client?: ClienteDaIa,
 ): Promise<Result<string, AiError>> {
   const readiness = getCryptoReadiness();
   if (!readiness.ready) {
     return err(aiError("ERRO_PERMANENTE", AI_CRYPTO_NOT_CONFIGURED, readiness.message));
   }
 
-  const supabase = await createClient();
+  const supabase = client ?? (await createClient());
   const { data, error } = await supabase
     .from("ai_provider_credentials")
     .select(

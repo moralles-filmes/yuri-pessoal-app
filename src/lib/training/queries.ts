@@ -5,11 +5,16 @@
  * A RLS garante que só vem o que é do usuário **mais** o que é global (`user_id is null`) —
  * nenhuma query aqui filtra por `user_id` manualmente, e nem deve: quem faz isso é a policy.
  *
+ * ⚠️ **Fase 18-E (Bloco 4) — UMA exceção declarada: `getTrainingPreferences`.** Recebendo
+ * `owner`, quem lê é o Cron com service role, que IGNORA a RLS — aí o filtro explícito é o
+ * único escopo que sobra. Sem `owner`, a frase acima continua valendo.
+ *
  * Tudo que é "favorito", "arquivado", "editável", "nome exibido", "descanso efetivo" e
  * "incremento efetivo" é DERIVADO aqui, combinando o exercício com a preferência do usuário.
  * A base do sistema nunca é alterada — é o mesmo desenho do catálogo de alimentos (16-A).
  */
 import { createClient } from "@/lib/supabase/server";
+import type { LeituraDoDono } from "@/lib/supabase/owner";
 import {
   asEquipmentCategory,
   asExerciseSource,
@@ -102,14 +107,24 @@ export async function getEquipment(): Promise<Equipment[]> {
  * Sem linha = valores padrão. NÃO criamos a linha na leitura: um GET não deveria escrever, e
  * o primeiro salvamento faz o upsert de qualquer jeito.
  */
-export async function getTrainingPreferences(): Promise<TrainingPreferences> {
-  const supabase = await createClient();
-  const { data } = await supabase
+/**
+ * ⚠️ **Fase 18-E (Bloco 4) — `owner` opcional.** Sem ele, sessão + RLS, como sempre. Com ele,
+ * quem lê é o Cron com service role e o `.eq("user_id", …)` é o único escopo — sem o filtro,
+ * o `maybeSingle()` cairia em "mais de uma linha" no dia em que existisse um segundo usuário.
+ * Ver `src/lib/supabase/owner.ts`.
+ */
+export async function getTrainingPreferences(
+  owner?: LeituraDoDono,
+): Promise<TrainingPreferences> {
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase
     .from("training_preferences")
     .select(
       "weight_unit,difficulty_scale,default_rest_seconds,default_increment_kg,week_starts_on,weekly_workout_goal,auto_advance,rest_sound_enabled,rest_vibration_enabled,keep_screen_awake,unilateral_volume_rule,count_warmup_in_volume,one_rm_formula,progression_enabled,habit_id",
-    )
-    .maybeSingle();
+    );
+  const { data } = await (
+    owner ? base.eq("user_id", owner.userId) : base
+  ).maybeSingle();
 
   if (!data) return DEFAULT_TRAINING_PREFERENCES;
 

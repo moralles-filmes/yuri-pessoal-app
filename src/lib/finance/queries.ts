@@ -1,8 +1,14 @@
 /**
  * Camada de leitura do financeiro (Fase 02). Server-only: usada por Server
  * Components. A RLS garante que cada query retorna apenas os dados do usuário.
+ *
+ * ⚠️ **Fase 18-E (Bloco 4) — cinco funções aceitam `owner`.** Quando ele vem, quem lê é o
+ * Cron com service role, que IGNORA a RLS: a frase acima deixa de valer e o escopo do
+ * usuário passa a ser o `.eq("user_id", …)` explícito. Sem `owner`, o caminho é byte por
+ * byte o de antes. Ver `src/lib/supabase/owner.ts`.
  */
 import { createClient } from "@/lib/supabase/server";
+import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { toDateInputValue } from "@/lib/format";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
 import {
@@ -38,11 +44,14 @@ const TX_SELECT =
 const TX_SHARED_EMBED =
   ", shared:shared_expenses!shared_expenses_transaction_id_fkey(person_id,valor,person:people(id,nome))";
 
-export async function getAccounts(): Promise<AccountWithBalance[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("accounts_with_balance")
-    .select("*")
+export async function getAccounts(
+  owner?: LeituraDoDono,
+): Promise<AccountWithBalance[]> {
+  const supabase = owner?.client ?? (await createClient());
+  // `accounts_with_balance` é VIEW: sob service role a RLS dela não filtra nada, e o
+  // `user_id` que ela expõe é o único escopo que sobra.
+  const base = supabase.from("accounts_with_balance").select("*");
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("is_active", { ascending: false })
     .order("name", { ascending: true });
   return (data ?? []) as AccountWithBalance[];
@@ -225,13 +234,15 @@ export type TransactionRangeFilters = {
  */
 export async function getTransactionsRange(
   filters: TransactionRangeFilters,
+  owner?: LeituraDoDono,
 ): Promise<TransactionWithRelations[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase
     .from("transactions")
     .select(TX_SELECT)
     .gte("competence_date", filters.from)
-    .lte("competence_date", filters.to)
+    .lte("competence_date", filters.to);
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("competence_date", { ascending: true })
     .limit(2000);
   return (data ?? []) as unknown as TransactionWithRelations[];
@@ -363,8 +374,9 @@ export type StatementFilters = {
  */
 export async function getStatements(
   filters: StatementFilters = {},
+  owner?: LeituraDoDono,
 ): Promise<CardStatementWithTotal[]> {
-  const supabase = await createClient();
+  const supabase = owner?.client ?? (await createClient());
   let query = supabase
     .from("card_statements_with_total")
     .select(
@@ -373,6 +385,8 @@ export async function getStatements(
     .gt("itens", 0)
     .order("competencia", { ascending: false });
 
+  // VIEW, mesma nota de `getAccounts`.
+  if (owner) query = query.eq("user_id", owner.userId);
   if (filters.cardId) query = query.eq("card_id", filters.cardId);
   if (filters.month && /^\d{4}-\d{2}$/.test(filters.month)) {
     query = query.eq("competencia", `${filters.month}-01`);
@@ -453,18 +467,17 @@ export async function getStatementInstallmentItems(
   return (data ?? []) as unknown as StatementInstallmentItem[];
 }
 
-export async function getBills(): Promise<
+export async function getBills(owner?: LeituraDoDono): Promise<
   (BillRow & {
     category: Pick<CategoryRow, "id" | "name" | "color"> | null;
     account: { id: string; name: string } | null;
   })[]
 > {
-  const supabase = await createClient();
-  const { data } = await supabase
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase
     .from("bills")
-    .select(
-      "*, category:categories(id,name,color), account:accounts(id,name)",
-    )
+    .select("*, category:categories(id,name,color), account:accounts(id,name)");
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("is_active", { ascending: false })
     .order("due_day", { ascending: true });
   return (data ?? []) as unknown as (BillRow & {
@@ -533,11 +546,12 @@ export async function getPeopleForSelect(): Promise<
  * Recebíveis com pessoa, cartão, fatura e transação de origem embutidos. Single-user:
  * traz tudo (limite alto) e a aba "A Receber" filtra/agrupa no client (pessoa/mês/cartão/status).
  */
-export async function getReceivables(): Promise<ReceivableWithRelations[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("receivables")
-    .select(RECEIVABLE_SELECT)
+export async function getReceivables(
+  owner?: LeituraDoDono,
+): Promise<ReceivableWithRelations[]> {
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase.from("receivables").select(RECEIVABLE_SELECT);
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("created_at", { ascending: false })
     .limit(1000);
   return (data ?? []) as unknown as ReceivableWithRelations[];
