@@ -376,6 +376,65 @@ export const observacaoDocumentoSchema = z
   .nullish()
   .transform((v) => (v && v.length ? v : null));
 
+/**
+ * ⛔ AS CORREÇÕES DO DONO — e só as dele. Nenhum campo aqui vem do modelo.
+ *
+ * `null` e ausente são COISAS DIFERENTES, e o `.optional()` sem `.nullish()` é o que as
+ * separa: ausente = "não mexi neste campo"; `null` = "eu digitei que não dá para
+ * identificar". A segunda é uma correção legítima, e `aplicarCorrecoes` a transforma em
+ * `nao_identificado` — nunca em `alta`, senão o bloqueio de campo essencial passaria por cima
+ * de um campo que o próprio dono disse não saber.
+ *
+ * ⚠️ `totalCentavos` é INTEIRO em centavos, como todo o financeiro do projeto. A conversão
+ * para reais acontece num ponto só (`approval/document.ts`), na fronteira com o command.
+ */
+const correcoesDoComprovanteSchema = z
+  .object({
+    estabelecimento: z.string().trim().max(200).nullable().optional(),
+    cnpj: z.string().trim().max(20).nullable().optional(),
+    data: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Data no formato AAAA-MM-DD")
+      .nullable()
+      .optional(),
+    hora: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/, "Hora no formato HH:mm")
+      .nullable()
+      .optional(),
+    totalCentavos: z
+      .number()
+      .int("O valor precisa ser um número inteiro de centavos")
+      .nullable()
+      .optional(),
+    formaPagamento: z.string().trim().max(60).nullable().optional(),
+    numeroDocumento: z.string().trim().max(60).nullable().optional(),
+  })
+  .strict();
+
+/**
+ * A escolha de onde o lançamento entra. Vem do dono na revisão, NUNCA da imagem: o
+ * comprovante diz "PIX" ou "crédito", mas ele não sabe de qual conta nem de qual cartão
+ * DESTE sistema se trata — deduzir isso seria o sistema desempatando sozinho, que é
+ * exatamente o que `EfeitoImpossivel` recusa em `finance-preview.ts`.
+ */
+export const prepararLancamentoDoComprovanteSchema = z
+  .object({
+    extractionId: z.uuid("Leitura inválida"),
+    correcoes: correcoesDoComprovanteSchema,
+    conta: z.string().trim().max(120).nullable().optional(),
+    cartao: z.string().trim().max(120).nullable().optional(),
+    categoria: z.string().trim().max(120).nullable().optional(),
+  })
+  .strict();
+
+export const anexarComprovanteSchema = z
+  .object({
+    documentoId: z.uuid("Comprovante inválido"),
+    transacaoId: z.uuid("Lançamento inválido"),
+  })
+  .strict();
+
 export const conversationRefSchema = z
   .object({ conversationId: z.uuid("Conversa inválida") })
   .strict();

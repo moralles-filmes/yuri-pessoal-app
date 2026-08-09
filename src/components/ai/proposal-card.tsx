@@ -80,7 +80,24 @@ function minutosRestantes(expiresAt: string, agora: number): number | null {
   return restante <= 0 ? null : Math.max(1, Math.ceil(restante / 60_000));
 }
 
-export function ProposalCard({ proposta }: { readonly proposta: PropostaNaTela }) {
+export function ProposalCard({
+  proposta,
+  aoAplicar,
+}: {
+  readonly proposta: PropostaNaTela;
+  /**
+   * 18-D — chamado DEPOIS de a execução ter dado certo, com o registro que ela criou.
+   *
+   * Existe para um caso só: a tela de comprovantes precisa anexar o arquivo ao lançamento
+   * recém-criado, e anexo NÃO é efeito financeiro — ele não entra em `changed_fields` (§3.6)
+   * e não pode virar responsabilidade do Approval Engine. Por isso a segunda escrita é
+   * disparada por quem sabe que existe um arquivo esperando, e não pelo motor de ações.
+   */
+  readonly aoAplicar?: (registro: {
+    readonly targetId: string | null;
+    readonly targetRoute: string | null;
+  }) => void | Promise<void>;
+}) {
   const router = useRouter();
   const [desfecho, setDesfecho] = React.useState<Desfecho>({ tipo: "pendente" });
   const [agora, setAgora] = React.useState<number>(() => Date.now());
@@ -116,6 +133,12 @@ export function ProposalCard({ proposta }: { readonly proposta: PropostaNaTela }
     });
     if (r.data.status === "sucesso") toast.success("Feito.");
     else toast.warning("A ação foi executada, mas nem tudo deu certo.");
+
+    // ⚠️ Só depois do sucesso, e antes do `refresh`: quem escutar precisa da chance de
+    // escrever o que falta (o anexo) antes de a tela reler o servidor.
+    if (r.data.status === "sucesso" && aoAplicar) {
+      await aoAplicar({ targetId: r.data.targetId, targetRoute: r.data.targetRoute });
+    }
     router.refresh();
   }
 

@@ -353,6 +353,52 @@ export async function urlAssinadaDoDocumento(
 }
 
 /**
+ * 18-D · Bloco 5 — o comprovante passa a ser anexo DO LANÇAMENTO.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⛔ ISTO NÃO É UM CAMPO DE AUDITORIA, E NÃO PODE VIRAR UM.                             ║
+ * ║                                                                                       ║
+ * ║ Anexo, caminho de bucket e URL assinada **nunca** entram em                            ║
+ * ║ `ai_action_executions.changed_fields` (§3.6). A trava lá é de FORMA — escalar de até   ║
+ * ║ 200 caracteres, dentro da allowlist estática do command — e `lancarTransacao` não tem  ║
+ * ║ campo de anexo na dele. Por isso a troca acontece AQUI, fora do Approval Engine, e     ║
+ * ║ depois que a execução terminou: ela é escrituração do arquivo, não efeito financeiro.  ║
+ * ║                                                                                       ║
+ * ║ Consequência aceita: existe uma janela entre "o lançamento foi criado" e "o            ║
+ * ║ comprovante foi anexado". Se a segunda falhar, o documento continua como               ║
+ * ║ `ia_documento` e o dono o vê na lista — que é o desfecho honesto. Embutir a anexação   ║
+ * ║ no command faria o Approval Engine escrever numa tabela que não é dele.                ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * A troca é CONDICIONAL ao estado anterior, como toda transição do módulo: só alcança anexo
+ * que ainda é `ia_documento`. Um comprovante já anexado a outro lançamento não é roubado.
+ */
+export async function anexarDocumentoATransacao(
+  supabase: Client,
+  userId: string,
+  documentoId: string,
+  transacaoId: string,
+): Promise<boolean> {
+  const { data: documento } = await supabase
+    .from("ai_documents")
+    .select("attachment_id")
+    .eq("id", documentoId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!documento) return false;
+
+  const { data, error } = await supabase
+    .from("attachments")
+    .update({ entity_type: "transaction", entity_id: transacaoId })
+    .eq("id", documento.attachment_id)
+    .eq("user_id", userId)
+    .eq("entity_type", DOCUMENT_ENTITY_TYPE)
+    .select("id");
+
+  return !error && (data?.length ?? 0) > 0;
+}
+
+/**
  * Descarta: o ARQUIVO primeiro, depois o metadado.
  *
  * Nessa ordem pelo mesmo motivo da 16-E: um comprovante que sobrevive ao registro é dado
