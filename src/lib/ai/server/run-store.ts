@@ -50,6 +50,13 @@ export type BeginRunOutput = {
 
 /** Códigos que a função SQL levanta. O Route Handler traduz cada um em HTTP. */
 export type BeginRunErrorCode =
+  /**
+   * 18-D — os dois que só `ai_begin_extraction_run` levanta. Ficam na MESMA união de
+   * propósito: `MENSAGEM_ADMISSAO` é um `Record` sobre ela, então um código novo sem frase
+   * em pt-BR é erro de compilação, não uma tela mostrando o código cru.
+   */
+  | "AI_DOCUMENT_NOT_AVAILABLE"
+  | "AI_VISION_NOT_ALLOWED"
   | "AI_NOT_AUTHENTICATED"
   | "AI_MESSAGE_EMPTY"
   | "AI_MESSAGE_TOO_LONG"
@@ -119,7 +126,46 @@ export async function beginChatRun(
   };
 }
 
+/**
+ * Erros da ADMISSÃO viram texto pt-BR aqui, num lugar só — para os DOIS runners.
+ *
+ * ⚠️ Mora ao lado de `BeginRunErrorCode` de propósito: como é um `Record` sobre a união, um
+ * código novo levantado por qualquer das duas funções SQL sem frase correspondente é erro de
+ * compilação. Antes de a extração existir, este objeto vivia dentro do `chat-runner.ts` — e
+ * um segundo mapa no runner novo teria deixado o primeiro incompleto em silêncio.
+ *
+ * Quem decide o status HTTP a partir do código é o Route Handler; a tela mostra a mensagem.
+ * Nem um nem outro reescreve o texto.
+ */
+export const MENSAGEM_ADMISSAO: Record<BeginRunErrorCode, string> = {
+  AI_NOT_AUTHENTICATED: "Sessão expirada. Faça login novamente.",
+  AI_MESSAGE_EMPTY: "Escreva alguma coisa antes de enviar.",
+  AI_MESSAGE_TOO_LONG: "A mensagem passou do tamanho máximo aceito.",
+  AI_AGENT_NOT_ALLOWED: "Este assistente não está disponível.",
+  AI_PROMPT_VERSION_REQUIRED: "Configuração interna do assistente incompleta.",
+  AI_INVALID_RESERVATION: "Não foi possível calcular a reserva de custo desta mensagem.",
+  AI_PROVIDER_NOT_AVAILABLE:
+    "O provedor escolhido não está ativo. Ative-o em Configurações.",
+  AI_CREDENTIAL_NOT_AVAILABLE:
+    "Não há credencial utilizável para este provedor. Cadastre a chave em Configurações.",
+  AI_MODEL_NOT_AVAILABLE:
+    "O modelo escolhido não está configurado para este provedor.",
+  AI_RATE_LIMITED: "Você enviou muitas mensagens em pouco tempo. Aguarde um instante.",
+  AI_BUDGET_EXCEEDED_DAILY: "O orçamento diário de IA foi atingido.",
+  AI_BUDGET_EXCEEDED_MONTHLY: "O orçamento mensal de IA foi atingido.",
+  AI_CONVERSATION_NOT_AVAILABLE: "Esta conversa não está disponível.",
+  AI_ADMISSION_BUSY: "Outra mensagem está sendo admitida agora. Tente de novo em segundos.",
+  // 18-D — os dois da extração. "Não existe" e "não é seu" caem no MESMO ramo no SQL, com o
+  // mesmo código: distinguir os dois seria um oráculo de existência de documento alheio.
+  AI_DOCUMENT_NOT_AVAILABLE: "Este comprovante não está disponível.",
+  AI_VISION_NOT_ALLOWED:
+    "A leitura de comprovantes está desligada. Ligue-a em /ia/configuracoes — o arquivo sai deste sistema e vai para o provedor escolhido.",
+  AI_UNKNOWN: "Não foi possível iniciar a resposta.",
+};
+
 const CODIGOS_CONHECIDOS: readonly BeginRunErrorCode[] = [
+  "AI_DOCUMENT_NOT_AVAILABLE",
+  "AI_VISION_NOT_ALLOWED",
   "AI_NOT_AUTHENTICATED",
   "AI_MESSAGE_EMPTY",
   "AI_MESSAGE_TOO_LONG",
@@ -148,6 +194,64 @@ function classifyBeginError(
     if (texto.includes(codigo)) return codigo;
   }
   return "AI_UNKNOWN";
+}
+
+// ─────────────────────────── 18-D · a admissão da EXTRAÇÃO ───────────────────────────
+
+export type BeginExtractionInput = {
+  readonly documentId: string;
+  readonly promptVersion: string;
+  readonly provider: AiProviderId;
+  readonly model: string;
+  readonly reservedCost: number;
+  readonly reservationRateVersion: string;
+  readonly reservationTtlSeconds: number;
+};
+
+export type BeginExtractionOutput = {
+  readonly runId: string;
+  readonly correlationId: string;
+};
+
+/**
+ * 18-D — a irmã de `beginChatRun`, para um run que NÃO tem conversa.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ AS MESMAS GARANTIAS, PELO MESMO CAMINHO — e é por isso que ela é uma função e não um   ║
+ * ║ `insert` daqui de fora.                                                                ║
+ * ║                                                                                       ║
+ * ║ `ai_begin_extraction_run` valida rate limit, orçamento, provedor, credencial, modelo   ║
+ * ║ E as três chaves (`allow_vision` + `allow_finance` + `allow_write_finance`) DENTRO de  ║
+ * ║ uma transação, sob o MESMO advisory lock do chat — a chave do lock é idêntica de       ║
+ * ║ propósito: o recurso disputado é o orçamento do usuário, não a espécie do run.         ║
+ * ║                                                                                       ║
+ * ║ ⛔ Um `insert into ai_runs` escrito aqui pularia tudo isso e o CHECK do banco nem       ║
+ * ║ reclamaria: a linha seria válida. O que se perderia é a atomicidade da admissão.       ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export async function beginExtractionRun(
+  input: BeginExtractionInput,
+): Promise<
+  { ok: true; value: BeginExtractionOutput } | { ok: false; code: BeginRunErrorCode }
+> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("ai_begin_extraction_run", {
+    p_document_id: input.documentId,
+    p_prompt_version: input.promptVersion,
+    p_selected_provider: input.provider,
+    p_selected_model: input.model,
+    p_reserved_cost: input.reservedCost,
+    p_reservation_rate_version: input.reservationRateVersion,
+    p_reservation_ttl_seconds: input.reservationTtlSeconds,
+  });
+
+  if (error) return { ok: false, code: classifyBeginError(error.message, error.code) };
+
+  const linha = Array.isArray(data) ? data[0] : data;
+  if (!linha) return { ok: false, code: "AI_UNKNOWN" };
+
+  return { ok: true, value: { runId: linha.run_id, correlationId: linha.correlation_id } };
 }
 
 // ─────────────────────────── Heartbeat e persistência incremental ───────────────────────
@@ -211,7 +315,17 @@ export async function markStreaming(runId: string, userId: string): Promise<void
 type FecharInput = {
   readonly runId: string;
   readonly userId: string;
-  readonly assistantMessageId: string;
+  /**
+   * 18-D — `null` num run de EXTRAÇÃO. Ele não tem conversa (`ai_runs.kind = 'extracao'`,
+   * `conversation_id is null` exigido pelo CHECK), então não há mensagem de assistente para
+   * fechar.
+   *
+   * ⚠️ `null` em vez de `""`: a string vazia iria para `.eq("id", "")` e o Postgres a
+   * recusaria como uuid inválido (`22P02`). O erro é ignorado no código abaixo, então o
+   * defeito seria silencioso — e um dia alguém leria "o fechamento da mensagem falha sempre"
+   * como se fosse normal.
+   */
+  readonly assistantMessageId: string | null;
   readonly textoFinal: string;
   readonly startedAtMs: number;
   readonly attemptCount: number;
@@ -271,6 +385,9 @@ async function fecharRun(
   // Se ninguém casou, outro caminho já fechou este run. Não é erro — é a regra funcionando.
   if (!data || data.length === 0) return;
 
+  // Run de extração não tem mensagem. Nada a fechar do outro lado.
+  if (!input.assistantMessageId) return;
+
   const statusMensagem =
     status === "completed" ? "complete" : status === "cancelled" ? "cancelled" : "failed";
 
@@ -295,7 +412,8 @@ export type AttemptType = "PRIMARY" | "RETRY" | "FALLBACK" | "TOOL_STEP";
 export type StartAttemptInput = {
   readonly runId: string;
   readonly userId: string;
-  readonly conversationId: string;
+  /** `null` na extração — a coluna já era nullable desde a 18-A. */
+  readonly conversationId: string | null;
   readonly agentId: string;
   readonly attemptIndex: number;
   readonly attemptType: AttemptType;

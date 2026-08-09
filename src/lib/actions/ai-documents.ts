@@ -27,6 +27,8 @@ import {
   descartarDocumento,
   guardarDocumento,
 } from "@/lib/ai/server/document-store";
+import { runExtraction } from "@/lib/ai/server/extraction-runner";
+import type { ExtracaoDeComprovante } from "@/lib/ai/vision/contracts";
 import { documentoRefSchema, observacaoDocumentoSchema } from "@/lib/validators/ai";
 import { limiteDeBytes } from "@/lib/ai/vision/limits";
 import type { ActionResult } from "@/types/finance";
@@ -130,6 +132,55 @@ export async function enviarComprovante(
 
   revalidatePath(ROTA);
   return { ok: true, data: { id: resultado.documento.id } };
+}
+
+/**
+ * **PROCESSO 2 do desenho** — a leitura. É a partir daqui que o arquivo sai do sistema.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⛔ ESTA AÇÃO NÃO LANÇA NADA, E NÃO TEM COMO LANÇAR.                                   ║
+ * ║                                                                                       ║
+ * ║ Ela chama `runExtraction`, que grava numa tabela `ai_*` e não conhece serviço de       ║
+ * ║ módulo nenhum. Propor o lançamento é o Processo 3, e ele começa com o dono revisando   ║
+ * ║ campo a campo — o critério "nenhum lançamento definitivo é criado só por ter recebido  ║
+ * ║ imagem" é verdadeiro por construção, não por checagem.                                 ║
+ * ║                                                                                       ║
+ * ║ As três chaves são conferidas AQUI **e** dentro do RPC. A daqui existe para a mensagem ║
+ * ║ dizer QUAL falta; a de lá existe porque um usuário autenticado pode chamar o RPC       ║
+ * ║ direto, e a Server Action não é a última barreira de nada.                             ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export async function extrairComprovante(
+  input: unknown,
+): Promise<ActionResult<{ extractionId: string; extracao: ExtracaoDeComprovante }>> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = documentoRefSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const autorizado = await autorizacaoDeEnvio(ctx.userId);
+  if (!autorizado.ok) return { ok: false, error: autorizado.mensagem };
+
+  const resultado = await runExtraction({
+    userId: ctx.userId,
+    documentoId: parsed.data.documentoId,
+    // O relógio real entra AQUI, na casca — o runner e o rebaixamento recebem `hoje`/`agora`
+    // injetados, e é isso que os torna testáveis sem esperar o calendário virar.
+    agora: new Date(),
+  });
+
+  // A falha também mexe na tela: ela grava uma tentativa de leitura com `status = 'falhou'`,
+  // e o dono precisa vê-la. Revalidar nos dois desfechos.
+  revalidatePath(ROTA);
+  revalidatePath("/ia/consumo");
+
+  if (!resultado.ok) return { ok: false, error: resultado.message };
+
+  return {
+    ok: true,
+    data: { extractionId: resultado.extractionId, extracao: resultado.extracao },
+  };
 }
 
 /**
