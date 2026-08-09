@@ -16,6 +16,10 @@ import {
   timeToMinutes,
   type TrainingGenInput,
 } from "./training";
+import {
+  VOCABULARIO_DE_COBRANCA,
+  VOCABULARIO_DE_PRESCRICAO,
+} from "@/lib/tone/vocabulary";
 import { filterByPrefs, generateNotifications, selectNewCandidates } from "./generate";
 import { NOTIFICATION_TYPES, isOptInNotification } from "./constants";
 
@@ -362,25 +366,11 @@ describe("idempotência do Cron", () => {
 });
 
 describe("tom: lembrete não é cobrança", () => {
-  const PROIBIDO = [
-    "falhou",
-    "falhando",
-    "fracass",
-    "de novo",
-    "mais uma vez",
-    "você não",
-    "você deveria",
-    "precisa parar",
-    "preguiç",
-    "desculpa",
-    "culpa",
-    "vergonha",
-    "esqueceu",
-    "errado",
-    "ruim",
-    "faltou",
-    "sedentár",
-  ];
+  /**
+   * ⚠️ 18-E: a lista saiu daqui e virou `@/lib/tone/vocabulary` — declarada UMA vez, como
+   * união desta com a da Dieta. Ver o comentário em `nutrition.test.ts`.
+   */
+  const PROIBIDO = VOCABULARIO_DE_COBRANCA;
 
   it("nenhum título ou descrição usa vocabulário de cobrança", () => {
     const candidatos = generateTrainingNotifications({
@@ -414,7 +404,7 @@ describe("tom: lembrete não é cobrança", () => {
   });
 
   it("nenhuma notificação prescreve carga, volume ou alvo", () => {
-    const PRESCRICAO = ["tente", "aumente", "você deve", "recomendamos", "o ideal"];
+    const PRESCRICAO = VOCABULARIO_DE_PRESCRICAO;
     for (const c of generateTrainingNotifications(TUDO)) {
       const texto = `${c.title} ${c.description ?? ""}`.toLocaleLowerCase("pt-BR");
       for (const termo of PRESCRICAO) {

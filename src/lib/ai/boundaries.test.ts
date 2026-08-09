@@ -262,6 +262,16 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
       "dashboard",
       "reports",
       "import",
+      /**
+       * ⚠️ 18-E — `tone` NÃO é módulo de dado do usuário, e entra aqui mesmo assim.
+       *
+       * A lista acima é ESCRITA À MÃO, e é isso que a torna perigosa: uma pasta nova fora
+       * dela passa verde sem provar nada. `src/lib/tone/vocabulary.ts` nasceu na 18-E para a
+       * lista de termos proibidos existir uma vez só, e `src/lib/ai/ → @/lib/tone/` teria
+       * passado sem ser examinado. Está aqui para o import ter de ser DECLARADO — e o
+       * critério do par (alvo puro, sem I/O, sem escrita, sem Supabase) é atendido.
+       */
+      "tone",
     ];
     const adapters = path.join(RAIZ, "tools", "adapters");
     const commands = path.join(RAIZ, "approval", "commands");
