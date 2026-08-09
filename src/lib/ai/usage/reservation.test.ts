@@ -251,3 +251,69 @@ describe("reserva com passos de ferramenta (18-B)", () => {
     expect(r.valorUsd).toBeGreaterThanOrEqual(custoRealDoPiorCaso);
   });
 });
+
+/**
+ * Fase 18-D — o custo do ARQUIVO dentro da reserva.
+ *
+ * A metade que faltava: `estimarTokensDeEntrada` conta CARACTERES, e uma foto de nota tem
+ * zero caractere. Sem `tokensDeArquivos`, o Processo 2 reservaria quase nada.
+ */
+describe("18-D · tokens de arquivo", () => {
+  const A_SOZINHO = tarifa("10.00", "30.00", "só-esse");
+
+  const comum = {
+    rates: [A_SOZINHO],
+    tokensEntradaEstimados: 1_000,
+    tetoDeSaida: 1_000,
+    maxRetries: 0,
+    maxFallbacks: 0,
+    margem: 1,
+  };
+
+  it("ausente reproduz EXATAMENTE a fórmula anterior", () => {
+    // É o que garante que as 18-A e 18-B não mudaram de comportamento.
+    const sem = computeReservation(comum);
+    const zero = computeReservation({ ...comum, tokensDeArquivos: 0 });
+    expect(zero.valorUsd).toBe(sem.valorUsd);
+    expect(zero.explicacao).toBe(sem.explicacao);
+  });
+
+  it("soma ao custo de entrada", () => {
+    // entrada 1.000 + arquivo 12.000 = 13.000 tokens
+    // 13.000/1e6 × 10,00 = 0,13   ·   1.000/1e6 × 30,00 = 0,03   →  0,16
+    const r = computeReservation({ ...comum, tokensDeArquivos: 12_000 });
+    expect(r.valorUsd).toBeCloseTo(0.16, 6);
+    expect(r.explicacao).toContain("12000 tokens de arquivo");
+  });
+
+  it("⛔ ENTRA EM TODO PASSO, não só no primeiro", () => {
+    // O arquivo não sai do contexto entre os passos do laço. Com 2 passos de ferramenta
+    // são TRÊS chamadas, e o arquivo é pago nas três.
+    //
+    //   passo 0: entrada 1.000 + arquivo 12.000 + 0 de ferramenta = 13.000
+    //   passo 1: entrada 1.000 + arquivo 12.000 + 1×(MAX_TOOLS × TOKENS_FERRAMENTA)
+    //   passo 2: entrada 1.000 + arquivo 12.000 + 2×(MAX_TOOLS × TOKENS_FERRAMENTA)
+    //
+    // A propriedade verificável, sem repetir a fórmula: a diferença entre reservar COM e
+    // SEM o arquivo tem de ser 3× o custo do arquivo — uma vez por passo. Se alguém somar
+    // o arquivo fora do laço, a diferença cai para 1×.
+    const passos = 2;
+    const semArquivo = computeReservation({ ...comum, maxToolSteps: passos });
+    const comArquivo = computeReservation({
+      ...comum,
+      maxToolSteps: passos,
+      tokensDeArquivos: 12_000,
+    });
+
+    const custoDeUmArquivo = (12_000 / 1e6) * 10; // 0,12
+    expect(comArquivo.valorUsd - semArquivo.valorUsd).toBeCloseTo(
+      custoDeUmArquivo * (passos + 1),
+      6,
+    );
+  });
+
+  it("valor negativo não reduz a reserva", () => {
+    const r = computeReservation({ ...comum, tokensDeArquivos: -99_999 });
+    expect(r.valorUsd).toBe(computeReservation(comum).valorUsd);
+  });
+});

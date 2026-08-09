@@ -310,6 +310,12 @@ export const aiPreferencesSchema = z
   .object({
     permissions: aiPermissionsSchema,
     writePermissions: aiWritePermissionsSchema,
+    /**
+     * Fase 18-D. Campo solto, e não uma entrada de `aiPermissionsSchema`: `allow_vision`
+     * não é um módulo, e `TOOL_PERMISSIONS` é a lista de módulos que o guard consulta.
+     * Ver o comentário em `AiPreferencesView.allowVision`.
+     */
+    allowVision: z.boolean({ error: "Autorização de envio de arquivo inválida." }),
     defaultProvider: aiProviderEnum
       .nullish()
       .transform((v) => (v === undefined ? null : v)),
@@ -339,6 +345,36 @@ export const aiPreferencesSchema = z
 export type AiPreferencesInput = z.infer<typeof aiPreferencesSchema>;
 
 // ─────────────────────────── Conversas ───────────────────────────
+
+// ─────────────────────────── Comprovantes (18-D) ───────────────────────────
+
+/**
+ * O que o dono escreve ao enviar ("foi no PIX", "metade é do João").
+ *
+ * ⛔ **É DADO, NUNCA INSTRUÇÃO.** Entra na extração dentro do mesmo bloco `wrapUntrusted`
+ * que o conteúdo do arquivo — texto de humano não vira mensagem de sistema só porque foi
+ * digitado num campo nosso. O limite curto é parte disso: 500 caracteres não comportam um
+ * prompt, e cortam a superfície sem atrapalhar o uso real.
+ */
+export const MAX_OBSERVACAO_DOCUMENTO = 500;
+
+export const documentoRefSchema = z
+  .object({ documentoId: z.uuid("Comprovante inválido") })
+  .strict();
+
+/**
+ * A observação, validada à parte porque chega por `FormData` (o envio é upload, e
+ * `FormData` é o único caminho que carrega bytes).
+ *
+ * `null` e `""` são a MESMA coisa aqui — "não escreveu nada" —, e o schema aceita a própria
+ * saída (`parse(parse(x))`), como manda a regra de round-trip do projeto.
+ */
+export const observacaoDocumentoSchema = z
+  .string()
+  .trim()
+  .max(MAX_OBSERVACAO_DOCUMENTO, `Máximo de ${MAX_OBSERVACAO_DOCUMENTO} caracteres`)
+  .nullish()
+  .transform((v) => (v && v.length ? v : null));
 
 export const conversationRefSchema = z
   .object({ conversationId: z.uuid("Conversa inválida") })

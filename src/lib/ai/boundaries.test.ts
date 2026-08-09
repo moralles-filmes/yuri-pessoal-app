@@ -211,8 +211,33 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
    * Server Action carrega `revalidatePath` dentro, e um command que revalidasse estaria
    * preso ao Next, fora de teste, e furando a regra de que a invalidação mora na casca.
    * Command chama SERVIÇO (`@/lib/todo/services`), nunca action.
+   *
+   * ⚠️ **18-D — NÃO FOI ABERTA UMA TERCEIRA PORTA. FOI DECLARADO UM PAR.**
+   *
+   * `vision/duplicates.ts` precisa de `normalizarDescricao` para decidir se o nome do
+   * estabelecimento lido na nota é o mesmo de um lançamento existente. Reescrever a
+   * normalização faria a IA e a importação discordarem sobre "o mesmo estabelecimento" —
+   * exatamente o que a regra "nenhuma regra é reescrita" existe para impedir.
+   *
+   * Mas abrir `vision/` como porta seria largo demais: a porta permitiria `vision/`
+   * importar `@/lib/finance/queries` e ler dado do usuário fora do Tool Registry. Por isso
+   * a exceção é um PAR EXATO (arquivo, especificador) numa allowlist — o mais estreito que
+   * dá para escrever. Acrescentar um par continua exigindo editar este arquivo.
+   *
+   * O critério para um par entrar: o alvo tem de ser PURO (sem I/O, sem escrita, sem
+   * Supabase). `@/lib/import/normalize` é — só transforma texto.
    */
   it("query e action de módulo só entram pelas DUAS portas declaradas", () => {
+    /**
+     * Pares (arquivo relativo a `src/lib/ai/`, especificador) autorizados. Um par por linha,
+     * cada um com o motivo. Lista NOMEADA, não padrão — o mesmo espírito do registry de
+     * commands, que virou lista nomeada no Bloco 4 para que acrescentar um doesse.
+     */
+    const PARES_DECLARADOS: readonly (readonly [string, string])[] = [
+      // 18-D · a MESMA normalização da importação, para os dois concordarem sobre o que é
+      // "o mesmo estabelecimento". Alvo puro: só transforma texto.
+      [path.join("vision", "duplicates.ts"), "@/lib/import/normalize"],
+    ];
     const modulos = [
       "actions",
       "finance",
@@ -241,6 +266,16 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
           if (!spec.startsWith(`@/lib/${modulo}/`)) continue;
           // `@/lib/actions/` é fechado até para as portas — ver o docblock.
           if (naPorta && modulo !== "actions") continue;
+          // Par exato declarado (18-D). Casamento por IGUALDADE dos dois lados: um par
+          // não vira curinga para o diretório nem para o pacote.
+          const relativoAoAi = path.relative(RAIZ, arquivo);
+          if (
+            PARES_DECLARADOS.some(
+              ([arq, esp]) => arq === relativoAoAi && esp === spec,
+            )
+          ) {
+            continue;
+          }
           violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
         }
       }

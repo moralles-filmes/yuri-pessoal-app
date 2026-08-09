@@ -18,8 +18,11 @@
  */
 
 import {
+  generateObject as sdkGenerateObject,
   streamText,
   jsonSchema,
+  type FilePart,
+  type ImagePart,
   type LanguageModel,
   type ModelMessage,
   type TextPart,
@@ -30,6 +33,8 @@ import {
 import type {
   AiContentPart,
   AiMessage,
+  AiObjectRequest,
+  AiObjectResult,
   AiProviderClient,
   AiProviderId,
   AiRequest,
@@ -38,6 +43,7 @@ import type {
   AiUsage,
   AiFinishReason,
 } from "@/lib/ai/core/contracts";
+import { USAGE_UNAVAILABLE } from "@/lib/ai/core/contracts";
 import { aiError, type AiError } from "@/lib/ai/core/errors";
 import {
   extractModelIds,
@@ -82,6 +88,40 @@ function normalizeUsage(usage: unknown): AiUsage {
           : undefined,
     },
   };
+}
+
+/**
+ * Fase 18-D — o uso de uma tentativa que FALHOU.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ UMA CHAMADA QUE FALHOU DEPOIS DE O PROVEDOR TER LIDO A IMAGEM CONSUMIU TOKENS DE      ║
+ * ║ VERDADE — e a imagem é a parte cara da entrada.                                        ║
+ * ║                                                                                       ║
+ * ║ O SDK anexa `usage` ao erro quando o modelo produziu algo que não casou com o schema  ║
+ * ║ (`NoObjectGeneratedError`). Descartá-lo faria o orçamento errar PARA BAIXO, que é o    ║
+ * ║ único lado para o qual ele não pode errar. Erro sem `usage` continua sendo            ║
+ * ║ `USAGE_UNAVAILABLE` — ausência declarada, nunca zero.                                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+function usageDoErro(erro: unknown): AiUsage {
+  if (typeof erro === "object" && erro !== null && "usage" in erro) {
+    const u = (erro as { usage?: unknown }).usage;
+    if (typeof u === "object" && u !== null) return normalizeUsage(u);
+  }
+  return USAGE_UNAVAILABLE;
+}
+
+/** O id da requisição do provedor, quando ele o informa. Nunca o corpo da resposta. */
+function idDaResposta(response: unknown): string | null {
+  if (
+    typeof response === "object" &&
+    response !== null &&
+    "id" in response &&
+    typeof (response as { id?: unknown }).id === "string"
+  ) {
+    return (response as { id: string }).id;
+  }
+  return null;
 }
 
 function normalizeFinishReason(reason: unknown): AiFinishReason {
@@ -167,9 +207,22 @@ function recusar(code: string, detalhe: string): never {
   throw new ParteNaoRepresentavel(erroDeTraducao(code, detalhe));
 }
 
-/** `user` aceita texto (e mídia, que o contrato ainda não tem). Nunca ferramenta. */
-function partesDeTexto(p: AiContentPart, i: number): TextPart[] {
+/**
+ * `user` aceita texto e MÍDIA (18-D). Nunca ferramenta.
+ *
+ * ⚠️ `mediaType` é passado SEMPRE, mesmo sendo opcional em `ImagePart` no SDK. Sem ele o SDK
+ * tenta adivinhar pelo conteúdo, e adivinhação aqui desfaz o trabalho do `sniffMime`: o
+ * ponto da 18-D é que **o tipo do arquivo é decidido pelos bytes, uma vez, no servidor** —
+ * não por quem estiver olhando por último.
+ */
+function partesDeUsuario(p: AiContentPart, i: number): Array<TextPart | ImagePart | FilePart> {
   if (p.type === "text") return [{ type: "text", text: p.text }];
+  if (p.type === "image") {
+    return [{ type: "image", image: p.bytes, mediaType: p.mediaType }];
+  }
+  if (p.type === "file") {
+    return [{ type: "file", data: p.bytes, mediaType: p.mediaType }];
+  }
   recusar(
     "USER_PART_NOT_REPRESENTABLE",
     `a mensagem ${i} é do usuário e traz uma parte "${p.type}", que o papel user não aceita`,
@@ -267,7 +320,7 @@ function toModelMessages(messages: readonly AiMessage[]): PromptTraduzido {
           content:
             typeof m.content === "string"
               ? m.content
-              : m.content.flatMap((p) => partesDeTexto(p, i)),
+              : m.content.flatMap((p) => partesDeUsuario(p, i)),
         };
       }
 
@@ -440,6 +493,63 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
             "STREAM_ENDED_WITHOUT_FINISH",
             "A resposta terminou sem sinal de conclusão do provedor.",
           ),
+        };
+      }
+    },
+
+    /**
+     * Fase 18-D — uma chamada, um objeto. Espelha as garantias de `streamText`:
+     *
+     *  • **nunca lança** — erro vira `{ ok: false }` com `AiError` já sanitizado;
+     *  • **o uso volta nos dois desfechos** (ver `usageDoErro`);
+     *  • a tradução do prompt acontece ANTES da chamada, então prompt impossível não sai
+     *    para a rede nem consome nada.
+     *
+     * ⛔ Sem `tools` e sem `stopWhen`: `AiObjectRequest` não tem o campo, então **não existe
+     * caminho** para o laço de ferramentas nascer dentro de uma extração. E `maxRetries: 0`
+     * pelo mesmo motivo do streaming — o retry é nosso, e cada tentativa vira uma linha em
+     * `ai_usage_events`.
+     */
+    async generateObject(request: AiObjectRequest): Promise<AiObjectResult> {
+      const prompt = toModelMessages(request.messages);
+      if (!prompt.ok) {
+        return {
+          ok: false,
+          error: prompt.error,
+          usage: USAGE_UNAVAILABLE,
+          providerRequestId: null,
+        };
+      }
+
+      try {
+        const resultado = await sdkGenerateObject({
+          model: config.buildModel(request.model),
+          system: request.system,
+          messages: prompt.messages,
+          // `jsonSchema` descreve a forma AO PROVEDOR. Ele não valida o que volta — quem
+          // valida é o Zod `.strict()` de `vision/schema.ts`, do nosso lado, sempre.
+          schema: jsonSchema(request.schema as Parameters<typeof jsonSchema>[0]),
+          schemaName: request.schemaName,
+          schemaDescription: request.schemaDescription,
+          maxOutputTokens: request.maxOutputTokens,
+          temperature: request.temperature,
+          abortSignal: request.abortSignal,
+          maxRetries: 0,
+        });
+
+        return {
+          ok: true,
+          // `unknown` de propósito — ver `AiObjectResult` em `core/contracts.ts`.
+          value: resultado.object as unknown,
+          usage: normalizeUsage(resultado.usage),
+          providerRequestId: idDaResposta(resultado.response),
+        };
+      } catch (erro) {
+        return {
+          ok: false,
+          error: mapProviderError(erro),
+          usage: usageDoErro(erro),
+          providerRequestId: null,
         };
       }
     },

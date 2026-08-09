@@ -168,6 +168,7 @@ export type Database = {
           command: string
           conversation_id: string | null
           created_at: string
+          document_extraction_id: string | null
           effect_hash: string
           expires_at: string
           id: string
@@ -188,6 +189,7 @@ export type Database = {
           command: string
           conversation_id?: string | null
           created_at?: string
+          document_extraction_id?: string | null
           effect_hash: string
           expires_at?: string
           id?: string
@@ -208,6 +210,7 @@ export type Database = {
           command?: string
           conversation_id?: string | null
           created_at?: string
+          document_extraction_id?: string | null
           effect_hash?: string
           expires_at?: string
           id?: string
@@ -225,6 +228,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ai_action_proposals_extraction_fk"
+            columns: ["document_extraction_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_document_extractions"
+            referencedColumns: ["id", "user_id"]
+          },
           {
             foreignKeyName: "ai_action_proposals_run_owner_fk"
             columns: ["run_id", "conversation_id", "user_id"]
@@ -292,6 +302,122 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      ai_document_extractions: {
+        Row: {
+          campos: Json
+          correcoes: Json | null
+          created_at: string
+          document_id: string
+          erro_codigo: string | null
+          erro_mensagem: string | null
+          id: string
+          revisada_em: string | null
+          run_id: string
+          schema_version: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          campos: Json
+          correcoes?: Json | null
+          created_at?: string
+          document_id: string
+          erro_codigo?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          revisada_em?: string | null
+          run_id: string
+          schema_version: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          campos?: Json
+          correcoes?: Json | null
+          created_at?: string
+          document_id?: string
+          erro_codigo?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          revisada_em?: string | null
+          run_id?: string
+          schema_version?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_document_extractions_document_fk"
+            columns: ["document_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_documents"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "ai_document_extractions_run_fk"
+            columns: ["run_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "ai_runs"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      ai_documents: {
+        Row: {
+          altura_px: number | null
+          attachment_id: string
+          content_sha256: string
+          created_at: string
+          id: string
+          largura_px: number | null
+          mime_detectado: string
+          observacao: string | null
+          paginas: number | null
+          size_bytes: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          altura_px?: number | null
+          attachment_id: string
+          content_sha256: string
+          created_at?: string
+          id?: string
+          largura_px?: number | null
+          mime_detectado: string
+          observacao?: string | null
+          paginas?: number | null
+          size_bytes: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          altura_px?: number | null
+          attachment_id?: string
+          content_sha256?: string
+          created_at?: string
+          id?: string
+          largura_px?: number | null
+          mime_detectado?: string
+          observacao?: string | null
+          paginas?: number | null
+          size_bytes?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_documents_attachment_fk"
+            columns: ["attachment_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "attachments"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
       }
       ai_messages: {
         Row: {
@@ -540,13 +666,14 @@ export type Database = {
           completed_at: string | null
           completed_model: string | null
           completed_provider: string | null
-          conversation_id: string
+          conversation_id: string | null
           correlation_id: string
           created_at: string
           error_code: string | null
           error_message_sanitized: string | null
           fallback_count: number
           id: string
+          kind: string
           last_heartbeat_at: string
           lease_expires_at: string
           prompt_version: string
@@ -571,13 +698,14 @@ export type Database = {
           completed_at?: string | null
           completed_model?: string | null
           completed_provider?: string | null
-          conversation_id: string
+          conversation_id?: string | null
           correlation_id?: string
           created_at?: string
           error_code?: string | null
           error_message_sanitized?: string | null
           fallback_count?: number
           id?: string
+          kind?: string
           last_heartbeat_at?: string
           lease_expires_at?: string
           prompt_version: string
@@ -602,13 +730,14 @@ export type Database = {
           completed_at?: string | null
           completed_model?: string | null
           completed_provider?: string | null
-          conversation_id?: string
+          conversation_id?: string | null
           correlation_id?: string
           created_at?: string
           error_code?: string | null
           error_message_sanitized?: string | null
           fallback_count?: number
           id?: string
+          kind?: string
           last_heartbeat_at?: string
           lease_expires_at?: string
           prompt_version?: string
@@ -823,6 +952,7 @@ export type Database = {
           allow_tasks: boolean
           allow_todo: boolean
           allow_training: boolean
+          allow_vision: boolean
           allow_write_calendar: boolean
           allow_write_finance: boolean
           allow_write_habits: boolean
@@ -858,6 +988,7 @@ export type Database = {
           allow_tasks?: boolean
           allow_todo?: boolean
           allow_training?: boolean
+          allow_vision?: boolean
           allow_write_calendar?: boolean
           allow_write_finance?: boolean
           allow_write_habits?: boolean
@@ -893,6 +1024,7 @@ export type Database = {
           allow_tasks?: boolean
           allow_todo?: boolean
           allow_training?: boolean
+          allow_vision?: boolean
           allow_write_calendar?: boolean
           allow_write_finance?: boolean
           allow_write_habits?: boolean
@@ -8533,6 +8665,21 @@ export type Database = {
           correlation_id: string
           run_id: string
           user_message_id: string
+        }[]
+      }
+      ai_begin_extraction_run: {
+        Args: {
+          p_document_id: string
+          p_prompt_version: string
+          p_reservation_rate_version: string
+          p_reservation_ttl_seconds?: number
+          p_reserved_cost: number
+          p_selected_model: string
+          p_selected_provider: string
+        }
+        Returns: {
+          correlation_id: string
+          run_id: string
         }[]
       }
       ai_reconcile_abandoned_runs: {

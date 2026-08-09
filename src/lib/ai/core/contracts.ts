@@ -46,6 +46,38 @@ export type AiRole = "system" | "user" | "assistant" | "tool";
  */
 export type AiContentPart =
   | { readonly type: "text"; readonly text: string }
+  /**
+   * Fase 18-D — o CONTEÚDO de um arquivo do dono, a caminho de um modelo de visão.
+   *
+   * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ ⛔ NÃO EXISTE `url` E NÃO EXISTE `storagePath` AQUI. A AUSÊNCIA É A GARANTIA.         ║
+   * ║                                                                                       ║
+   * ║ "`storage_path` não sai do servidor" (invariante 21/22 da Dieta) deixa de ser uma      ║
+   * ║ promessa de comentário e passa a ser uma propriedade do SISTEMA DE TIPOS: o caminho   ║
+   * ║ do bucket simplesmente NÃO É REPRESENTÁVEL no que viaja até o provedor. Não há o que  ║
+   * ║ um refactor distraído possa preencher errado.                                         ║
+   * ║                                                                                       ║
+   * ║ Pelo mesmo motivo não há `url` assinada: mandar a URL faria o PROVEDOR buscar o        ║
+   * ║ arquivo no nosso bucket, transformando uma credencial de 5 minutos em algo que sai do ║
+   * ║ nosso controle. Quem lê os bytes é o servidor, uma vez, em memória.                    ║
+   * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+   *
+   * `image` e `file` são separados de propósito, e não é cerimônia: a estimativa de custo
+   * difere (megapixel × página, `usage/vision-tokens.ts`), e a capacidade exigida do modelo
+   * difere (`visao` × `arquivo`, `core/capabilities.ts`). Um tipo só faria as duas decisões
+   * dependerem de adivinhar pelo `mediaType`.
+   */
+  | {
+      readonly type: "image";
+      readonly bytes: Uint8Array;
+      /** O MIME REAL, decidido por `sniffMime` sobre os bytes — nunca o `File.type`. */
+      readonly mediaType: string;
+    }
+  | {
+      readonly type: "file";
+      readonly bytes: Uint8Array;
+      readonly mediaType: string;
+    }
   | {
       readonly type: "tool-call";
       readonly callId: string;
@@ -99,6 +131,59 @@ export type AiRequest = {
    */
   readonly tools: readonly AiToolDefinition[];
 };
+
+// ───────────────────── Saída estruturada (18-D) ─────────────────────
+
+/**
+ * Fase 18-D — uma chamada que devolve um OBJETO, não um texto que chega aos pedaços.
+ *
+ * ═══════════════ POR QUE NÃO DÁ PARA REUSAR `streamText` ═══════════════
+ *
+ * Extração não tem texto chegando para mostrar: tem um objeto para validar. Fatiar um JSON
+ * em deltas só para remontá-lo do outro lado acrescentaria um parser incremental — e um
+ * ponto a mais onde uma resposta truncada vira objeto meio válido.
+ *
+ * ⛔ **`schema` é conveniência do provedor, NUNCA a validação.** O que volta em `value` é
+ * `unknown` de propósito: quem decide se aquilo é uma extração é o Zod `.strict()` do nosso
+ * lado. Tratar a saída "estruturada" do fornecedor como já validada seria confiar no que o
+ * modelo escreveu — exatamente o que a regra 5 do projeto proíbe.
+ *
+ * Não há `tools` aqui, e a ausência é deliberada: uma extração não chama ferramenta. Sem o
+ * campo, não existe caminho para o laço de ferramentas nascer dentro do Processo 2.
+ */
+export type AiObjectRequest = {
+  readonly model: string;
+  readonly system: string;
+  readonly messages: readonly AiMessage[];
+  readonly maxOutputTokens: number;
+  readonly temperature?: number;
+  readonly timeoutMs: number;
+  readonly abortSignal?: AbortSignal;
+  /** JSON Schema da saída. `unknown` porque `core/` não conhece Zod nem o SDK. */
+  readonly schema: unknown;
+  readonly schemaName: string;
+  readonly schemaDescription: string;
+};
+
+/**
+ * O uso volta nos DOIS desfechos. Uma tentativa que falhou depois de o provedor já ter
+ * processado a entrada consumiu tokens de verdade, e perdê-los faria o orçamento mentir para
+ * baixo — o único lado para o qual ele não pode errar.
+ */
+export type AiObjectResult =
+  | {
+      readonly ok: true;
+      /** `unknown` de propósito. Ver o bloco acima. */
+      readonly value: unknown;
+      readonly usage: AiUsage;
+      readonly providerRequestId: string | null;
+    }
+  | {
+      readonly ok: false;
+      readonly error: AiError;
+      readonly usage: AiUsage;
+      readonly providerRequestId: string | null;
+    };
 
 // ───────────────────────────── Uso e custo ─────────────────────────────
 
@@ -184,6 +269,11 @@ export interface AiProviderClient {
   readonly provider: AiProviderId;
   /** Streaming normalizado. Nunca lança: erro vira evento `error`. */
   streamText(request: AiRequest): AsyncIterable<AiStreamEvent>;
+  /**
+   * Fase 18-D — uma chamada, um objeto. **Nunca lança**, pela mesma razão de `streamText`:
+   * uma exceção solta deixaria o run de extração sem fechamento e a reserva presa.
+   */
+  generateObject(request: AiObjectRequest): Promise<AiObjectResult>;
   /**
    * Listagem de modelos — usada SÓ pelo teste de conexão, porque custa ZERO tokens.
    * Valida a chave sem consumir nada e sem criar run nem evento de uso.

@@ -1,6 +1,24 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-08-08** (18-C concluída).
+> Atualizado ao final de **cada** fase. Última atualização: **2026-08-09** (18-D em andamento).
+
+## 🟡 18-D EM ANDAMENTO — branch `feat/18-d-visao-comprovantes`
+
+**Desenho validado com o dono em 2026-08-08:**
+`docs/superpowers/specs/2026-08-08-18d-visao-comprovantes-design.md`.
+
+**Pronto e verde (6 commits):** a fronteira de `core/` cedendo para visão (parte `image`/`file`
+sem `url` nem `storagePath`, `generateObject`, catálogo com `visao` conferida na doc oficial,
+custo de arquivo entrando na reserva) · o envio com **MIME decidido pelos bytes** · a extração
+tipada com **rebaixamento de confiança pelo servidor** · duplicidade que **sinaliza e nunca
+bloqueia** · e o banco (`ai_runs.kind`, `ai_document_extractions`, `origem = 'documento'`,
+`ai_begin_extraction_run`).
+
+**Falta:** o **runner da extração** (Processo 2 — hoje o arquivo é guardado com segurança e
+**ninguém o lê**) e a **tela `/ia/comprovantes` com a ponte para a 18-C**. Detalhe item a item
+em `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
+
+**Medido em 2026-08-08:** 126 tabelas no `public`, 14 `ai_*`; 3.163 testes / 154 arquivos.
 
 ## Estado
 As 14 fases do roadmap original e a **Fase 15 (Módulo TO-DO)** estão concluídas. Em
