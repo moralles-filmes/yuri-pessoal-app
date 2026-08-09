@@ -245,11 +245,12 @@ describe("prompt de sistema", () => {
   });
 });
 
-describe("prompt-base v2 — o que o modelo pode fazer com o resultado da ferramenta", () => {
+describe("prompt-base v3 — o que o modelo pode fazer com o resultado da ferramenta", () => {
   it("a versão do prompt-base subiu junto com o texto", () => {
     // Duas respostas produzidas por textos diferentes não podem ficar indistinguíveis em
-    // `ai_runs.prompt_version`.
-    expect(SECURITY_PROMPT_VERSION).toBe("seguranca-v2");
+    // `ai_runs.prompt_version`. A v3 é da 18-E: `insights/temporal.ts` passou a calcular
+    // média, comparação e variação, e o 8-D da v2 afirmava que ninguém as calculava.
+    expect(SECURITY_PROMPT_VERSION).toBe("seguranca-v3");
   });
 
   it("item 3 — ferramenta não se inventa, e recusa se declara", () => {
@@ -295,17 +296,44 @@ describe("prompt-base v2 — o que o modelo pode fazer com o resultado da ferram
    * ║ segunda com a primeira é afirmar sobre o sistema algo que não é verdade.             ║
    * ╚════════════════════════════════════════════════════════════════════════════════════╝
    */
+  /**
+   * ⛔ 18-E — A SEGUNDA CAUSA FOI REESCRITA, E O MOTIVO É O MESMO QUE DERRUBOU A v1.
+   *
+   * A v2 dizia "o sistema não calcula aquilo". Era verdade e deixou de ser: a 18-E criou
+   * `insights/temporal.ts`, que calcula média, comparação e variação. Um prompt que manda o
+   * assistente afirmar uma coisa falsa sobre o próprio sistema é exatamente o defeito da v1,
+   * que mandava dizer que o assistente não consultava registro nenhum.
+   *
+   * A proibição NÃO caiu — ela mudou de forma. "Esse número não existe" era afirmação sobre o
+   * ESTADO, e o estado mudou. "Esse número não é seu para calcular" descreve a REGRA, e
+   * continua verdadeira depois de o sistema aprender a calcular.
+   */
   it("8-D — número que não veio pronto tem DUAS causas, e nenhuma delas é fazer a conta", () => {
     // Causa 1: a grandeza não se aplica ao registro — e o campo que prova isso é nomeado.
     expect(SECURITY_PROMPT).toContain("não se aplica ao que foi registrado");
     expect(SECURITY_PROMPT).toContain('a lista "unidades" mostra quais se aplicam');
     expect(SECURITY_PROMPT).toContain("o número não existe, não é zero");
-    // Causa 2: o sistema não calcula aquilo — dito com todas as letras, e com o que fazer.
-    expect(SECURITY_PROMPT).toContain("o sistema não calcula aquilo");
-    expect(SECURITY_PROMPT).toContain("diga que o sistema não calcula esse número");
+    // Causa 2: existe, mas não veio NESTA leitura. O escopo é a ferramenta, não o sistema.
+    expect(SECURITY_PROMPT).toContain("a grandeza existe, mas esta leitura não a trouxe");
+    expect(SECURITY_PROMPT).toContain("nenhuma ferramenta sua os devolve");
+    expect(SECURITY_PROMPT).toContain("diga que esse número não veio nesta leitura");
     expect(SECURITY_PROMPT).toContain("aponte a tela do módulo");
-    // E o fechamento que impede a saída fácil.
+    // E o fechamento que impede a saída fácil — agora descrevendo a REGRA, não o estado.
     expect(SECURITY_PROMPT).toContain("Em nenhum dos dois casos você faz a conta");
+    expect(SECURITY_PROMPT).toContain("esse número não é seu para calcular");
+  });
+
+  /**
+   * ⛔ A v3 NÃO PROMETE MÉDIA AO CHAT. `temporal.ts` alimenta o Insight Engine; nenhum
+   * `agregados` de ferramenta ganhou média nesta subfase. Prometer no prompt o que o adapter
+   * não devolve é o defeito que o 8-A já teve uma vez — e este teste é o que impede alguém de
+   * "atualizar" o 8-D dizendo que agora o sistema calcula, deixando o modelo pedir uma
+   * ferramenta que não existe e queimar um dos 3 passos por tentativa.
+   */
+  it("8-D — a v3 não afirma nem que o sistema não calcula, nem que a média chegou ao chat", () => {
+    expect(SECURITY_PROMPT).not.toContain("o sistema não calcula");
+    expect(SECURITY_PROMPT).not.toContain("comparações já vêm prontas");
+    expect(SECURITY_PROMPT).not.toContain("médias já vêm prontas");
   });
 
   it("8-C — período só é citado quando existe", () => {
@@ -317,12 +345,31 @@ describe("prompt-base v2 — o que o modelo pode fazer com o resultado da ferram
 
   it("o perfil de Treinos explica o total ausente pelas DUAS causas, não por uma só", () => {
     // A redação anterior — "se um total não vier no resultado, ele não se aplica àquele
-    // período" — dava ao modelo uma explicação FALSA para uma métrica que o sistema
-    // simplesmente não calcula.
+    // período" — dava ao modelo uma explicação FALSA para uma métrica que a ferramenta não
+    // devolve.
     expect(TREINOS_PROMPT).not.toContain("ele não se aplica àquele período");
     expect(TREINOS_PROMPT).toContain('Se a grandeza não estiver em "unidades"');
-    expect(TREINOS_PROMPT).toContain("o sistema simplesmente não calcula esse número");
+    // 18-E: era "o sistema simplesmente não calcula esse número", e `temporal.ts` passou a
+    // calcular. O escopo desceu do SISTEMA para a FERRAMENTA, que é onde ele sempre esteve.
+    expect(TREINOS_PROMPT).toContain("nenhuma ferramenta sua devolve esse número");
+    expect(TREINOS_PROMPT).not.toContain("o sistema simplesmente não calcula");
     expect(TREINOS_PROMPT).toContain("Não faça a conta você mesmo");
+  });
+
+  /**
+   * ⚠️ Os OUTROS cinco perfis já estavam escritos com o escopo certo — "o sistema não calcula
+   * isso NAS FERRAMENTAS QUE VOCÊ TEM" — e por isso a 18-E não precisou tocá-los. A frase
+   * continua verdadeira depois de `temporal.ts` existir, porque ela sempre falou do que o
+   * agente alcança, não do que o sistema sabe fazer. Este teste é o que impede alguém de
+   * "padronizar" os seis textos escolhendo a redação errada.
+   */
+  it("nenhum perfil de agente afirma que o SISTEMA não calcula média", () => {
+    for (const agente of AI_AGENT_REGISTRY) {
+      const texto = buildSystemPrompt(agente);
+      expect(texto, agente.id).not.toContain("o sistema simplesmente não calcula");
+      expect(texto, agente.id).not.toContain("o sistema não calcula esse número");
+      expect(texto, agente.id).not.toContain("o sistema não calcula aquilo");
+    }
   });
 
   /**
