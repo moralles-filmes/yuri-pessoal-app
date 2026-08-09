@@ -1,9 +1,9 @@
 # CURRENT_STATUS — Estado atual do projeto
 
 > Atualizado ao final de **cada** fase. Última atualização: **2026-08-09**
-> (18-E blocos 1 a 3 concluídos; bloco 4 declarado fora).
+> (18-E CONCLUÍDA — os quatro blocos).
 
-## 🟡 18-E — IA · Insights (blocos 1 a 3 CONCLUÍDOS, bloco 4 DECLARADO FORA)
+## ✅ 18-E — IA · Insights (CONCLUÍDA, blocos 1 a 4)
 
 **Desenho validado com o dono em 2026-08-09:**
 `docs/superpowers/specs/2026-08-09-18e-insights-relatorios-dashboards-design.md`.
@@ -68,18 +68,47 @@ segundo texto sobre os mesmos números não é informação nova, é gasto.
 o CHECK exigindo a forma por inteiro e FK composta `(insight_id, user_id)`; e "transformar em
 tarefa", que **propõe** e não cria.
 
-### ⛔ O Bloco 4 ficou de fora, declarado
+### ✅ O Bloco 4 — o job automático (2026-08-09)
 
-O job automático **não foi implementado**, e `allow_insight_jobs` **não foi criada** — uma
-chave que não liga nada é o "botão que não liga nada" que este projeto recusa desde a 18-B.
+Ele **estava** declarado fora, e fechou no mesmo dia, depois de o dono decidir o ponto difícil.
+Desenho: `docs/superpowers/specs/2026-08-09-18e-bloco4-job-insights-design.md`.
 
-O motivo é o ponto difícil que o próprio desenho já declarava (§7): o Cron não tem sessão e
-usa service role, os coletores leem sob RLS, e são **oito assinaturas** a alargar em três
-módulos para o job ler pelo **mesmo caminho da tela**. A alternativa — um segundo caminho de
-leitura — é exatamente a divergência que a invariante 31 existe para impedir.
+**O ponto difícil era a admissão**, não as assinaturas: `ai_begin_insight_run` é
+`security invoker` e lê `auth.uid()`, que o Cron não tem. Das três saídas, a escolhida foi
+`p_user_id` honrado **só** quando a sessão é nula — ⛔ **e a trava é a RLS, não o `coalesce`**:
+a função continua `security invoker`, então um autenticado apontando para outro dono não lê as
+preferências, não lê a credencial e não consegue o `insert` em `ai_runs`. As duas recusadas:
+uma RPC gêmea `security definer` duplicaria ~150 linhas de admissão (dois juízes do mesmo
+orçamento, a divergência que a invariante 8 impede), e minerar um JWT do dono introduziria um
+primitivo de impersonação no repositório.
 
-**Consequência prática: insight só existe sob demanda**, que é precisamente o que a decisão 2
-do dono diz que acontece com o job desligado.
+**Eram NOVE assinaturas, não oito.** A nona é `getMealTypes`, chamada por dentro de
+`getDiaryMeals` — a lista anterior fora medida antes e essa transitiva escapou. Todas recebem
+`LeituraDoDono` (`src/lib/supabase/owner.ts`): um objeto único, em que **"client sem userId"
+não é representável** (o guard de `getSessionHistory` vira desnecessário porque o estado que
+ele protegia deixa de existir).
+
+**O orçamento ganhou um segundo teto.** `job_monthly_budget` é **NOT NULL** — ao contrário de
+`daily_budget`/`monthly_budget`, que aceitam nulo — porque o job é o único gasto sem o dono
+olhando, e um teto opcional sobre isso é um teto que a configuração padrão não tem. O job passa
+pelo próprio **e** pelo global; qualquer um dos dois barra. O marcador `ai_runs.automatic` é
+**derivado** de `auth.uid() is null`, nunca recebido por parâmetro.
+
+**`allow_insight_jobs` não é ANDada com as chaves de módulo** — diferente de `allow_vision`,
+cujas três chaves servem ao mesmo efeito. Aqui os três módulos são independentes: desligada,
+nada roda; ligada, o módulo sem chave é **PULADO** e os outros seguem (`insights/job.ts`, puro).
+
+**`ai_insight_jobs`** grava uma linha por módulo por execução — inclusive `pulado`, com o motivo
+sanitizado. Sem ela, "job barrado registra o motivo" ficaria só no log da Vercel, que o dono não
+lê. Append-only (só policy de SELECT); `run_id`/`insight_id` **sem FK**, invariante 38.
+
+**Cadência 1×/dia**, slot `0 12` UTC (09h BRT), em `/api/cron/insights` — rota **separada** de
+`/api/cron/notifications`, porque um job de insight que falha não pode derrubar as notificações.
+
+⚠️ **Defeito pré-existente encontrado e corrigido:** `allowVision` (18-D) era obrigatória no
+`aiPreferencesSchema` mas nunca foi acrescentada ao payload do formulário — nem tinha
+interruptor na tela. **Toda** gravação de preferências vinha sendo recusada desde a 18-D. Há
+teste novo comparando as duas listas.
 
 ### Invariantes que a 18-E fixou
 
@@ -180,7 +209,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E blocos 1–3 ✅ (2026-08-09)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão e, agora, **insights sobre grandezas derivadas** (texto sem dígito, número por token). Tudo atrás de chaves que nascem desligadas. Próxima: **Bloco 4 da 18-E** (o job automático, declarado fora) |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. Próxima: **18-F** (integrações e polimento) |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -250,7 +279,7 @@ desfazer (5)** e documentação + verificação final (6). Decisões em
 | 18-B | Contexto, ferramentas de leitura e agentes | ✅ **CONCLUÍDA** (2026-08-07) |
 | 18-C | Ações, aprovações, idempotência e auditoria | ✅ **CONCLUÍDA** (2026-08-08) — blocos 1 a 6 |
 | 18-D | Visão, documentos e comprovantes | ⬜ |
-| 18-E | Insights, relatórios e dashboards | ⬜ |
+| 18-E | Insights, relatórios e dashboards | ✅ |
 | 18-F | Memória, voz, integrações e polimento | ⬜ — fecha a fase |
 
 As frentes 16 (Dieta) e 17 (Treinos) continuam **concluídas e em manutenção/iteração**:

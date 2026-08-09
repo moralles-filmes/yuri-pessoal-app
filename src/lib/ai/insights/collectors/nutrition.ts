@@ -24,6 +24,7 @@ import "server-only";
 import { NUTRIENT_TOTAL_QUALITIES } from "@/lib/nutrition/constants";
 import { dayTotals } from "@/lib/nutrition/diary";
 import { getDiaryMeals } from "@/lib/nutrition/diary-queries";
+import type { LeituraDoDono } from "@/lib/supabase/owner";
 import type { NutrientTotal, NutrientTotalQuality } from "@/lib/nutrition/calc";
 
 import type {
@@ -78,6 +79,7 @@ export type ColetaDaDieta = {
 export async function coletarDieta(
   hoje: string,
   dias: number = DIAS_PADRAO,
+  owner?: LeituraDoDono,
 ): Promise<ColetaDaDieta> {
   const quantos = Math.min(Math.max(Math.trunc(dias) || DIAS_PADRAO, 2), MAX_DIAS);
   const janela = janelaDeDias(hoje, quantos);
@@ -86,7 +88,7 @@ export async function coletarDieta(
 
   // UMA consulta para a janela inteira — o padrão do projeto: uma leitura ampla, derivação
   // em memória. Um `getDiaryMeals` por dia seria N+1 sobre o diário.
-  const refeicoes = await getDiaryMeals(de, ate);
+  const refeicoes = await getDiaryMeals(de, ate, owner);
 
   const porDia = new Map<string, typeof refeicoes>();
   for (const m of refeicoes) {

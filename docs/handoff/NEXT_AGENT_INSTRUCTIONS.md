@@ -1,55 +1,97 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-> Atualizado em **2026-08-09**, ao fechar os blocos 1 a 3 da **18-E** na branch
-> `feat/18-e-insights`.
+> Atualizado em **2026-08-09**, ao fechar o **Bloco 4 da 18-E** na branch
+> `feat/18-e-insights`. Com ele, a **18-E está CONCLUÍDA** — e a Fase 18 tem 18-A a 18-E
+> fechadas; resta a **18-F** (integrações e polimento).
 
-## ▶️ PRÓXIMA: **Bloco 4 da 18-E — o job automático de insights**
+## ▶️ PRÓXIMA: **18-F — IA · integrações e polimento**
 
-Ele está **declarado fora**, não esquecido. Os blocos 1 a 3 estão entregues e verificados; sem
-o job, insight só existe **sob demanda** — que é exatamente o que a decisão 2 do dono diz que
-acontece com ele desligado. Nada está quebrado nem pela metade.
+Não há nada quebrado nem pela metade. O Bloco 4 fechou o último item declarado fora da 18-E.
 
-**O arquivo a abrir:**
-`docs/superpowers/specs/2026-08-09-18e-insights-relatorios-dashboards-design.md`, **§7**.
+**O arquivo a abrir primeiro:** `src/lib/ai/server/insight-job.ts` — é o único ponto do
+sistema que roda um run de IA com o dono vindo de FORA da sessão, e o cabeçalho dele explica
+por que os três cuidados (escopo explícito, uma tentativa por módulo, isolamento por módulo)
+não são estilo.
 
-### ⛔ 1. PRIMEIRO O PONTO DIFÍCIL, E ELE NÃO TEM ATALHO
+---
 
-O Cron **não tem sessão** e usa service role; os coletores leem sob RLS com a sessão do dono.
-Ou os coletores aceitam `client`/`userId`, ou o job lê por um caminho diferente do da tela — e
-a segunda opção é exatamente a divergência que a **invariante 31** existe para impedir. **Vá
-pela primeira.**
+## ✅ 18-E BLOCO 4 CONCLUÍDO (2026-08-09) — o job automático
 
-O molde é `getSessionHistory` (17-F, invariante 24): parâmetro opcional `client`, e quando ele
-vem, `userId` passa a ser **obrigatório** — o escopo do usuário deixa de vir da RLS e passa a
-ser nosso. Ela já aceita. As **oito** que faltam:
+`allow_insight_jobs` existe, nasce `false`, **e liga alguma coisa**. Com ela desligada, insight
+continua existindo só sob demanda — sem nenhuma linha gravada.
 
-| Arquivo | Função |
-| --- | --- |
-| `src/lib/dashboard/queries.ts` | `getFinanceCardData` |
-| `src/lib/finance/queries.ts` | `getAccounts` · `getStatements` · `getReceivables` · `getBills` · `getTransactionsRange` |
-| `src/lib/nutrition/diary-queries.ts` | `getDiaryMeals` |
-| `src/lib/training/queries.ts` | `getTrainingPreferences` |
+### ⛔ O que o Bloco 4 fixou e NÃO pode ser afrouxado
 
-⚠️ **Sem mudar o comportamento do caminho com sessão.** Os testes existentes desses módulos são
-a rede: se algum ficar vermelho, a assinatura nova mexeu em algo que não devia.
+1. **A SESSÃO SEMPRE VENCE, e a trava é a RLS — não o `coalesce`.**
+   `ai_begin_insight_run` ganhou `p_user_id`, honrado só quando `auth.uid()` é nulo. Mesmo que
+   alguém invertesse a ordem do `coalesce`, a função continua `security invoker`: um
+   autenticado apontando para outro dono não lê as preferências, não lê a credencial e não
+   consegue o `insert` em `ai_runs`.
+2. **`ai_runs.automatic` é DERIVADO de `auth.uid() is null`, nunca recebido.** Um
+   `p_automatic boolean` daria ao chamador o poder de escolher contra qual teto ele gasta.
+3. **Os DOIS tetos valem.** O job passa pelo próprio (`job_monthly_budget`, **NOT NULL** — teto
+   opcional sobre gasto invisível é teto que não existe) e depois pelo diário/mensal global.
+   Qualquer um dos dois barra.
+4. **`allow_insight_jobs` NÃO é ANDada com as chaves de módulo — ela as precede.** Diferente de
+   `allow_vision`, cujas três chaves servem ao mesmo efeito. Aqui os três módulos são efeitos
+   independentes: desligada, nada roda; ligada, o módulo sem chave é **PULADO** e os outros
+   seguem. A regra é pura, em `insights/job.ts`.
+5. **`ai_insight_jobs` registra uma linha por MÓDULO por EXECUÇÃO — inclusive `pulado`.**
+   Quando o job é barrado não existe linha em `ai_runs`; sem esta tabela o "registra o motivo
+   sanitizado" ficaria só no log da Vercel. Append-only: **só policy de SELECT**, e quem
+   escreve é a service role. `run_id`/`insight_id` **sem FK, de propósito** (invariante 38).
+6. **Só `/api/cron/insights` importa `server/insight-job`** — teste de fronteira. Uma Server
+   Action que o alcançasse daria a um autenticado o poder de disparar a varredura de outro.
+7. **A dedupe não é reimplementada no job.** Ele entra por `runInsight`, que resolve a chave
+   **antes** da admissão. Chave repetida ⇒ `reaproveitado`, sem run e sem custo.
 
-### 2. `allow_insight_jobs`, nascendo `false`
+### O par `client`/`userId` virou UM objeto — e por quê
 
-No molde de `allow_vision` (18-D). ⛔ **Só depois do item 1** — uma chave que não liga nada é o
-"botão que não liga nada" que este projeto recusa desde a 18-B, e foi exatamente por isso que
-ela **não** foi criada agora.
+`LeituraDoDono` (`src/lib/supabase/owner.ts`), último parâmetro opcional. `getSessionHistory`
+(17-F) recebe os dois como campos separáveis, e por isso precisa do guard
+`if (range.client && !owner) return []`. Com um objeto único, **"client sem userId" deixa de
+ser representável** e o guard vira desnecessário. `getSessionHistory` **não** foi reescrita —
+ela funciona, tem testes e não estava no caminho.
 
-### 3. O orçamento de jobs é um SEGUNDO teto, e os dois valem
+Mora em `src/lib/supabase/`, não em `src/lib/ai/`: o contrário faria finance/nutrition/training
+dependerem do módulo de IA — a seta ao contrário que mandou `tone` para fora de `ai/`.
 
-O job respeita o teto próprio *e* continua dentro do mensal. Ligar o job não pode estourar o
-orçamento global sem o dono também mexer nele.
+**Foram NOVE funções, não oito.** A nona é `getMealTypes`, chamada por dentro de
+`getDiaryMeals`: sem ela, o coletor de Dieta rodaria sob service role com a lista de tipos de
+refeição vazia — e refeição sem tipo não entra no total do dia. A lista do handoff anterior
+tinha sido medida antes e essa transitiva escapou. **Confira as transitivas.**
 
-### 4. `/api/cron/insights`
+⚠️ Duas das nove leem **views** (`accounts_with_balance`, `card_statements_with_total`). Sob
+service role a RLS da view não filtra nada; as duas expõem `user_id`, e é nele que o `.eq`
+pega — conferido.
 
-**Separada** de `/api/cron/notifications` — um job de insight que falha não pode derrubar as
-notificações. Protegida por `CRON_SECRET` (Bearer) na própria rota, com entrada em
-`vercel.json` na cadência que já existe (`0 12` e `0 0` UTC = 09h e 21h BRT). Erro registrado
-**sanitizado** (`security/redact.ts`), e sem repetir escrita.
+### ⚠️ Um defeito PRÉ-EXISTENTE que o Bloco 4 encontrou e corrigiu
+
+**`allowVision` (18-D) entrou em `aiPreferencesSchema` como `z.boolean()` obrigatório, mas
+nunca foi acrescentada ao payload de `ai-preferences-form.tsx` — nem havia interruptor para
+ela na tela.** Resultado: `saveAiPreferences` vinha recusando **todo** salvamento de
+preferências com "Autorização de envio de arquivo inválida", e a tela não tinha como destacar
+o campo, porque ele não existia nela.
+
+`tsc` não pega isso — a action recebe `unknown`. O que pega é comparar as duas listas, e é o
+que o teste novo em `validators/ai.test.ts` faz (varredura do código-fonte, como
+`chat-events.test.ts`, porque o projeto não tem infraestrutura de teste de componente).
+**Ao acrescentar campo obrigatório a um schema usado por formulário, acrescente ao payload no
+mesmo commit.**
+
+### Números reconferidos (2026-08-09, depois do Bloco 4)
+
+**130 tabelas** no `public`, **18 `ai_*`**; **3.385 testes / 166 arquivos**; **2** rotas de
+Cron; **4** desfechos de `ai_insight_jobs`. Ferramentas (**29**), commands (**13**) e agentes
+(**9**) **inalterados** — o Bloco 4 não acrescentou nenhum dos três.
+
+### O que ficou de fora do Bloco 4, declarado
+
+Nenhuma notificação sobre o job · nenhuma ferramenta e nenhum command · o job não escreve nos
+módulos do dono (só gera insight) · sem retry entre execuções · o segundo slot do Cron (21h
+BRT) segue só com as notificações · `getSessionHistory` não foi migrada para a forma nova ·
+as outras **17** tabelas `ai_*` continuam com a policy na forma antiga (40 lints
+`auth_rls_init_plan`); só a tabela desta subfase usa `(select auth.uid())`.
 
 ---
 

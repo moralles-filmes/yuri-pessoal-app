@@ -59,6 +59,7 @@ import {
   NOME_DO_SCHEMA,
 } from "@/lib/ai/insights/schema";
 import { validarInsight } from "@/lib/ai/insights/validate";
+import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { dateInSaoPaulo } from "@/lib/format";
 import { gravarInsight, buscarInsightPorChave } from "./insight-store";
 import {
@@ -85,6 +86,12 @@ export type InsightRunnerInput = {
   readonly agora: Date;
   readonly janela?: number;
   readonly abortSignal?: AbortSignal;
+  /**
+   * ⛔ **18-E Bloco 4 — só o job preenche.** Sem sessão, o escopo do usuário deixa de vir da
+   * RLS: as leituras de módulo recebem o par e a camada `ai_*` recebe só o client (que já
+   * tinha `userId` explícito). Ausente ⇒ o caminho do clique do dono, inalterado.
+   */
+  readonly owner?: LeituraDoDono;
 };
 
 export type InsightRunnerResult =
@@ -118,10 +125,11 @@ async function coletar(
   modulo: ModuloDeInsight,
   hoje: string,
   janela: number | undefined,
+  owner: LeituraDoDono | undefined,
 ): Promise<{ indicadores: readonly Indicador[]; periodo: { de: string; ate: string } }> {
-  if (modulo === "financeiro") return coletarFinanceiro(hoje, janela ?? undefined);
-  if (modulo === "treinos") return coletarTreinos(hoje, janela ?? undefined);
-  return coletarDieta(hoje, janela ?? undefined);
+  if (modulo === "financeiro") return coletarFinanceiro(hoje, janela ?? undefined, owner);
+  if (modulo === "treinos") return coletarTreinos(hoje, janela ?? undefined, owner);
+  return coletarDieta(hoje, janela ?? undefined, owner);
 }
 
 export async function runInsight(
@@ -133,7 +141,7 @@ export async function runInsight(
   const hoje = dateInSaoPaulo(input.agora);
 
   // ── 1. Os números, ANTES de qualquer coisa que custe dinheiro ──────────────────────
-  const coleta = await coletar(input.modulo, hoje, input.janela);
+  const coleta = await coletar(input.modulo, hoje, input.janela, input.owner);
 
   /**
    * ⚠️ O COERENTE RODA SOBRE O QUE O COLETOR DEVOLVEU. Ele é código nosso, mas escrito uma
@@ -157,15 +165,15 @@ export async function runInsight(
     indicadores,
   });
 
-  const existente = await buscarInsightPorChave(input.userId, dedupeKey);
+  const existente = await buscarInsightPorChave(input.userId, dedupeKey, input.owner?.client);
   if (existente) {
     return { ok: true, insightId: existente.id, reaproveitado: true };
   }
 
   // ── 3. Rota, tarifas e reserva ─────────────────────────────────────────────────────
   const [configs, prefs] = await Promise.all([
-    getRouterConfigs(input.userId),
-    getAiPreferences(input.userId),
+    getRouterConfigs(input.userId, input.owner?.client),
+    getAiPreferences(input.userId, input.owner?.client),
   ]);
 
   const rota = routeRequest({
@@ -231,6 +239,10 @@ export async function runInsight(
     reservedCost: reserva.valorUsd,
     reservationRateVersion: PRICING_VERSION,
     reservationTtlSeconds: RESERVA_TTL_SEGUNDOS,
+    client: input.owner?.client,
+    // Só no caminho sem sessão. Com sessão o `coalesce` do RPC o ignoraria de todo jeito,
+    // mas mandar `null` deixa a intenção legível de fora.
+    userId: input.owner ? input.userId : undefined,
   });
 
   if (!admissao.ok) return erro(admissao.code, MENSAGEM_ADMISSAO[admissao.code]);
@@ -248,6 +260,7 @@ export async function runInsight(
   const contexto = (concluiu = false) => ({
     runId,
     userId: input.userId,
+    client: input.owner?.client,
     assistantMessageId: null,
     textoFinal: "",
     startedAtMs: inicioMs,
@@ -280,6 +293,7 @@ export async function runInsight(
     const tentativa = await startAttempt({
       runId,
       userId: input.userId,
+      client: input.owner?.client,
       conversationId: null,
       agentId: agenteDoInsight(input.modulo),
       attemptIndex,
@@ -301,11 +315,12 @@ export async function runInsight(
 
     alvoAnterior = alvo;
 
-    const chave = await resolveApiKey(input.userId, alvo.provider);
+    const chave = await resolveApiKey(input.userId, alvo.provider, input.owner?.client);
     if (!chave.ok) {
       await closeAttempt({
         attemptId: tentativa.id,
         userId: input.userId,
+        client: input.owner?.client,
         status: "failed",
         usage: null,
         rate: tarifa,
@@ -342,6 +357,7 @@ export async function runInsight(
       await closeAttempt({
         attemptId: tentativa.id,
         userId: input.userId,
+        client: input.owner?.client,
         status,
         usage: uso,
         rate: tarifa,
@@ -407,7 +423,7 @@ export async function runInsight(
             provider: alvo.provider,
             model: alvo.model.id,
             promptVersion: versaoDoPromptDeInsight(),
-          });
+          }, input.owner?.client);
 
           if (!gravado) {
             return erro(

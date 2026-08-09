@@ -76,6 +76,21 @@ export type AiPreferencesView = {
    * `allow_write_finance`, nunca lida sozinha.
    */
   readonly allowVision: boolean;
+  /**
+   * Fase 18-E Bloco 4 — o interruptor da VARREDURA AUTOMÁTICA.
+   *
+   * ⛔ **Também não é uma `ToolPermission`**, pela mesma razão de `allowVision`: ela não
+   * responde "a IA pode ler o módulo X?", e sim "eu autorizo o sistema a gastar sozinho,
+   * sem eu estar olhando?". Enfiá-la em `permissions` faria o roteador procurar um módulo
+   * `insight_jobs` que não existe.
+   *
+   * ⚠️ Diferente de `allowVision`, ela NÃO é ANDada com as chaves de módulo: desligada, nada
+   * roda; ligada, cada módulo ainda depende da SUA `allow_*`, e o que estiver desligado é
+   * PULADO, não fatal para os outros. Ver `insights/job.ts`.
+   */
+  readonly allowInsightJobs: boolean;
+  /** Fase 18-E Bloco 4 — teto PRÓPRIO do job, em USD/mês. NOT NULL no banco. */
+  readonly jobMonthlyBudget: number;
 };
 
 export type ConversationListItem = {

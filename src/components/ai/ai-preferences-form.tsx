@@ -69,6 +69,16 @@ export function AiPreferencesForm({
     // ausente, nula ou de tipo inesperado. Nada aqui completa buraco por conta própria.
     permissions: { ...prefs.permissions },
     writePermissions: { ...prefs.writePermissions },
+    /**
+     * ⚠️ 18-D. `allowVision` EXISTIA no schema e na action desde a 18-D, mas nunca esteve
+     * neste formulário — nem no estado, nem no payload. Como `aiPreferencesSchema` a exige
+     * (`z.boolean()`, não opcional), TODO salvamento de preferências vinha sendo recusado
+     * com "Autorização de envio de arquivo inválida". Corrigido junto com o Bloco 4, porque
+     * um campo novo no mesmo schema herdaria o mesmo defeito.
+     */
+    allowVision: prefs.allowVision,
+    allowInsightJobs: prefs.allowInsightJobs,
+    jobMonthlyBudget: String(prefs.jobMonthlyBudget),
     defaultProvider: prefs.defaultProvider ?? NENHUM,
     defaultModel: prefs.defaultModel ?? NENHUM,
     confirmationMode: prefs.confirmationMode,
@@ -92,6 +102,9 @@ export function AiPreferencesForm({
     const r = await saveAiPreferences({
       permissions: form.permissions,
       writePermissions: form.writePermissions,
+      allowVision: form.allowVision,
+      allowInsightJobs: form.allowInsightJobs,
+      jobMonthlyBudget: Number(form.jobMonthlyBudget),
       defaultProvider: form.defaultProvider === NENHUM ? null : form.defaultProvider,
       defaultModel: form.defaultModel === NENHUM ? null : form.defaultModel,
       confirmationMode: form.confirmationMode,
@@ -224,6 +237,67 @@ export function AiPreferencesForm({
                 }
               />
             ))}
+          </div>
+        </div>
+
+        {/* ── Envio de arquivos (18-D) ──────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <Label htmlFor="pref-visao">Enviar comprovantes para leitura</Label>
+            <p className="text-xs text-muted-foreground">
+              O arquivo <strong>sai deste sistema</strong> e vai para o provedor escolhido —
+              é o único efeito do módulo que não se desfaz. Precisa da leitura{" "}
+              <strong>e</strong> da alteração do Financeiro ligadas: o comprovante lido vira
+              proposta de lançamento, e sem elas não teria para onde ir.
+            </p>
+          </div>
+          <Switch
+            id="pref-visao"
+            checked={form.allowVision}
+            disabled={
+              !form.permissions.allow_finance || !form.writePermissions.allow_write_finance
+            }
+            onCheckedChange={(v) => setForm((f) => ({ ...f, allowVision: v }))}
+            className="shrink-0"
+          />
+        </div>
+
+        {/* ── Análise automática (18-E · Bloco 4) ───────────────────────────────────── */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <Label htmlFor="pref-jobs">Gerar análises sozinho, uma vez por dia</Label>
+              <p className="text-xs text-muted-foreground">
+                É o único gasto que acontece <strong>sem você estar olhando</strong>. Ela
+                cobre Financeiro, Treinos e Dieta, e <strong>pula</strong> o módulo cuja
+                leitura estiver desligada — sem derrubar os outros. Se os números não mudaram
+                desde a última análise, nada é chamado e nada é cobrado.
+              </p>
+            </div>
+            <Switch
+              id="pref-jobs"
+              checked={form.allowInsightJobs}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, allowInsightJobs: v }))}
+              className="shrink-0"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="pref-job-teto">Teto da análise automática (USD/mês)</Label>
+            <Input
+              id="pref-job-teto"
+              inputMode="decimal"
+              value={form.jobMonthlyBudget}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, jobMonthlyBudget: e.target.value }))
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Teto <strong>próprio</strong>, e ele não substitui o mensal: a análise
+              automática passa pelos dois, e qualquer um dos dois a barra. Diferente dos
+              orçamentos acima, este não pode ficar em branco — deixá-lo sem valor seria não
+              ter teto justamente sobre o gasto que ninguém está vendo.
+            </p>
           </div>
         </div>
 

@@ -316,6 +316,20 @@ export const aiPreferencesSchema = z
      * Ver o comentário em `AiPreferencesView.allowVision`.
      */
     allowVision: z.boolean({ error: "Autorização de envio de arquivo inválida." }),
+    /**
+     * Fase 18-E Bloco 4. Campo solto pela MESMA razão de `allowVision`: a varredura
+     * automática não é um módulo, e `TOOL_PERMISSIONS` é a lista de módulos que o guard
+     * consulta. Ver o comentário em `AiPreferencesView.allowInsightJobs`.
+     */
+    allowInsightJobs: z.boolean({ error: "Autorização de análise automática inválida." }),
+    /**
+     * O teto próprio do job. `nonnegative` e NÃO `nullish`: a coluna é NOT NULL, e "sem
+     * teto" não é um estado que a varredura possa ter (ver a nota da migration).
+     */
+    jobMonthlyBudget: z.coerce
+      .number()
+      .nonnegative("Não pode ser negativo")
+      .max(1000, "O teto do job não pode passar de US$ 1.000 por mês"),
     defaultProvider: aiProviderEnum
       .nullish()
       .transform((v) => (v === undefined ? null : v)),

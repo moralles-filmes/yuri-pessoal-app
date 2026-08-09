@@ -489,6 +489,9 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
     const proibidos = [
       /(^|\/)ai\/server\/insight-runner$/,
       /(^|\/)actions\/ai-insights$/,
+      // 18-E Bloco 4 — o job é a MESMA geração por outra porta. Deixá-lo de fora daqui
+      // permitiria ao card do dashboard disparar a varredura inteira num carregamento.
+      /(^|\/)ai\/server\/insight-job$/,
     ];
     const violacoes: string[] = [];
 
@@ -696,5 +699,52 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
 
     expect(tabelas.length).toBeGreaterThan(0);
     for (const tabela of tabelas) expect(tabela, tabela).toMatch(/^ai_/);
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 18-E · BLOCO 4 — SÓ O CRON ALCANÇA A VARREDURA.                                     ║
+   * ║                                                                                     ║
+   * ║ `server/insight-job.ts` é o ÚNICO ponto do sistema que roda um run de IA com dono    ║
+   * ║ vindo de fora da sessão. Ele monta o `LeituraDoDono` sobre a service role, que       ║
+   * ║ ignora a RLS — então quem o chama decide de quem são os dados lidos.                 ║
+   * ║                                                                                     ║
+   * ║ Uma Server Action que o alcançasse daria a um usuário autenticado o poder de         ║
+   * ║ disparar a varredura de outro (e de gastar o orçamento dele). A porta é UMA, e ela   ║
+   * ║ é a rota já protegida por CRON_SECRET.                                              ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("nada além de /api/cron/insights importa server/insight-job", () => {
+    const PORTA = path.join(SRC, "app", "api", "cron", "insights", "route.ts");
+    const alvo = /(^|\/)ai\/server\/insight-job$|^\.\/insight-job$/;
+    const violacoes: string[] = [];
+
+    for (const arquivo of listarArquivos(SRC)) {
+      if (arquivo.endsWith(".test.ts") || arquivo === PORTA) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      for (const spec of especificadores(codigo)) {
+        if (alvo.test(spec)) violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
+      }
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  it("a rota do Cron de insights confere CRON_SECRET antes de qualquer outra coisa", () => {
+    // O proxy libera `/api/cron/*` (PUBLIC_PATHS). Sem esta checagem NA PRÓPRIA ROTA, ela
+    // seria pública — e ela gasta dinheiro.
+    const codigo = fs.readFileSync(
+      path.join(SRC, "app", "api", "cron", "insights", "route.ts"),
+      "utf8",
+    );
+    expect(codigo).toMatch(/process\.env\.CRON_SECRET/);
+    expect(codigo).toMatch(/status:\s*401/);
+
+    // ⚠️ Segredo AUSENTE também é 401. Uma rota que gasta dinheiro nunca fica aberta
+    // "porque a variável não foi definida".
+    expect(codigo).toMatch(/!secret\s*\|\|/);
+
+    // A checagem vem ANTES de montar a service role.
+    expect(codigo.indexOf("CRON_SECRET")).toBeLessThan(codigo.indexOf("createServiceClient()"));
   });
 });

@@ -161,3 +161,60 @@ export async function getInsightsVigentes(
   const todos = await getInsights(agora, opcoes);
   return todos.filter((i) => i.estado.estado === "vigente");
 }
+
+/* ═══════════════ 18-E · Bloco 4 — a última varredura automática ═══════════════ */
+
+export type LinhaDaVarredura = {
+  readonly modulo: ModuloDeInsight;
+  readonly desfecho: "gerado" | "reaproveitado" | "pulado" | "falhou";
+  readonly motivo: string | null;
+};
+
+export type UltimaVarredura = {
+  readonly executadaEm: string;
+  readonly modulos: readonly LinhaDaVarredura[];
+};
+
+/**
+ * A última execução do job, para o rodapé de `/ia/insights`.
+ *
+ * ⛔ **Sem isto, `ai_insight_jobs` seria um registro que ninguém lê** — e um registro que
+ * ninguém lê é primo do botão que não liga nada. O critério "job barrado registra o motivo
+ * sanitizado" só vale de verdade quando o dono tem onde ver o motivo.
+ *
+ * ⚠️ Devolve `null` quando nunca houve varredura — e a tela escreve isso, em vez de mostrar
+ * um rodapé vazio que pareceria "rodou e não fez nada".
+ */
+export async function getUltimaVarredura(
+  opcoes?: { readonly userId?: string; readonly client?: Client },
+): Promise<UltimaVarredura | null> {
+  const supabase = opcoes?.client ?? (await createClient());
+
+  let consulta = supabase
+    .from("ai_insight_jobs")
+    .select("modulo, desfecho, motivo, executed_at")
+    .order("executed_at", { ascending: false })
+    // Três módulos por execução; o teto pega a última rodada inteira com folga.
+    .limit(12);
+
+  if (opcoes?.userId) consulta = consulta.eq("user_id", opcoes.userId);
+
+  const { data } = await consulta;
+  const linhas = data ?? [];
+  if (linhas.length === 0) return null;
+
+  // Só a execução MAIS RECENTE. Misturar duas rodadas mostraria "Dieta pulada" ao lado de
+  // "Dieta gerada" — dois fatos verdadeiros em momentos diferentes, lidos como contradição.
+  const maisRecente = linhas[0].executed_at;
+
+  return {
+    executadaEm: maisRecente,
+    modulos: linhas
+      .filter((l) => l.executed_at === maisRecente)
+      .map((l) => ({
+        modulo: l.modulo as ModuloDeInsight,
+        desfecho: l.desfecho as LinhaDaVarredura["desfecho"],
+        motivo: l.motivo,
+      })),
+  };
+}

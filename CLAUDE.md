@@ -16,12 +16,14 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E blocos 1–3 ✅ (2026-08-09)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; e `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**. Próxima: **Bloco 4 da 18-E** (o job automático, declarado fora) |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. Próxima: **18-F** (integrações e polimento) |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). A **18-E** (blocos 1–3, 2026-08-09) criou 3 (`ai_insights`, `ai_insight_sources`,
 `ai_insight_feedback`) e alterou 2 (`ai_runs.kind` ganhou a terceira espécie `'insight'`;
-`ai_action_proposals` ganhou `insight_id` e a quarta `origem`). **Reconferido no banco em
-2026-08-09, depois da 18-E: 129 tabelas** no `public`, **17 `ai_*`**. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
+`ai_action_proposals` ganhou `insight_id` e a quarta `origem`). O **Bloco 4 da 18-E** criou 1
+(`ai_insight_jobs`) e alterou 2 (`ai_runs` ganhou `automatic`; `ai_user_preferences` ganhou
+`allow_insight_jobs` e `job_monthly_budget`). **Reconferido no banco em 2026-08-09, depois do
+Bloco 4: 130 tabelas** no `public`, **18 `ai_*`**. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -135,13 +137,14 @@ command:** o comprovante não é algo que o modelo possa pedir, é uma tela que 
 A **18-E** (blocos 1–3, 2026-08-09) criou a primeira grandeza **DERIVADA** do projeto — média
 de janela, comparação entre períodos, variação percentual, em `src/lib/ai/insights/temporal.ts`
 —, e `/ia/insights` produz análises sobre ela. **Ela também não acrescentou ferramenta nem
-command.** ⛔ **O bloco 4 (o job automático) ficou DECLARADO FORA**, e `allow_insight_jobs`
-**não foi criada**: uma chave que não liga nada é o "botão que não liga nada" que este projeto
-recusa. Sem o job, insight só existe **sob demanda**. Desenhos em
+command.** O **bloco 4 (2026-08-09)** fechou a subfase: `/api/cron/insights` roda **1×/dia** (09h BRT) e
+gera insight sozinho, atrás de `allow_insight_jobs` — que nasce `false` e **agora liga alguma
+coisa**. Com ela desligada, insight continua existindo só sob demanda. Desenhos em
 `docs/superpowers/specs/2026-08-04-modulo-ia-design.md`,
 `docs/superpowers/specs/2026-08-07-18c-acoes-aprovacoes-design.md`,
 `docs/superpowers/specs/2026-08-08-18d-visao-comprovantes-design.md` e
-`docs/superpowers/specs/2026-08-09-18e-insights-relatorios-dashboards-design.md`; matriz em
+`docs/superpowers/specs/2026-08-09-18e-insights-relatorios-dashboards-design.md` e
+`docs/superpowers/specs/2026-08-09-18e-bloco4-job-insights-design.md`; matriz em
 `docs/phases/PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md`; camadas em `PROJECT_ARCHITECTURE.md`.
 
 ⚠️ **A DÉCIMA CHAVE É `allow_vision`, e ela é ANDada com `allow_finance` E
@@ -557,6 +560,60 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     `seguranca-v3` diz **"esse número não é seu para calcular"**. E ela **não promete média ao
     chat**: `temporal.ts` alimenta o Insight Engine, não os adapters.
 
+**Invariantes acrescentadas pelo Bloco 4 da 18-E (o job que roda sem sessão — 2026-08-09):**
+
+74. ⛔ **A SESSÃO SEMPRE VENCE, E A TRAVA É A RLS — NÃO O `coalesce`.** `ai_begin_insight_run`
+    ganhou `p_user_id`, honrado só quando `auth.uid()` é nulo (Cron com service role). A ordem
+    do `coalesce` faz o caminho com sessão ser inalcançável de fora, mas a garantia **não
+    depende dela**: a função continua `security invoker`, então um autenticado apontando para
+    outro dono não lê `ai_user_preferences` (→ `AI_MODULE_NOT_ALLOWED`), não lê a credencial e
+    não consegue o `insert` em `ai_runs` (`with check`). Invertendo o `coalesce`, a trava
+    continua de pé — a mesma escolha que pôs uso único num `unique` e prazo num `default`
+    (invariante 36). ⚠️ A alternativa recusada era uma RPC gêmea `security definer`: ela
+    **duplicaria a admissão**, e dois juízes do mesmo orçamento é a divergência que a
+    invariante 8 existe para impedir.
+75. ⛔ **`ai_runs.automatic` É DERIVADO, NUNCA RECEBIDO.** O RPC o calcula de
+    `auth.uid() is null` na mesma transação que decide o dono. Um `p_automatic boolean` daria
+    ao chamador o poder de escolher **contra qual dos dois tetos ele gasta**.
+76. **OS DOIS TETOS VALEM, NESTA ORDEM.** O job passa pelo próprio
+    (`ai_user_preferences.job_monthly_budget`) e depois pelo diário/mensal global; qualquer um
+    dos dois barra. O teto próprio é **NOT NULL**, ao contrário dos outros dois (que aceitam
+    nulo = sem teto): o job é o único gasto sem o dono olhando, e um teto opcional sobre isso é
+    um teto que a configuração padrão não tem. Ele também **não** respeita
+    `budget_block_on_limit` — avisar um processo automático é o mesmo que não ter teto.
+77. ⚠️ **`allow_insight_jobs` NÃO É ANDADA COM AS CHAVES DE MÓDULO — ELA AS PRECEDE.** Diferente
+    de `allow_vision`, cujas três chaves servem ao **mesmo** efeito. Aqui os três módulos são
+    efeitos independentes: ANDar faria desligar a leitura de Dieta calar também o insight de
+    Financeiro. Desligada ⇒ nada roda; ligada ⇒ o módulo sem chave é **PULADO**, os outros
+    seguem. A regra é pura, em `insights/job.ts`, e o RPC confere as duas de novo.
+78. **`ai_insight_jobs` REGISTRA O QUE NÃO ACONTECEU.** Uma linha por módulo por execução —
+    inclusive `pulado`, com o motivo sanitizado. Quando o job é barrado **não existe linha em
+    `ai_runs`**, e sem esta tabela "job barrado registra o motivo" ficaria só no log da Vercel,
+    que o dono não lê e a retenção apaga. Append-only: **só policy de SELECT**, e quem escreve é
+    a service role. `run_id`/`insight_id` **sem FK, de propósito** (invariante 38 aplicada aqui:
+    a auditoria da varredura sobrevive ao insight). O rodapé de `/ia/insights` a lê — registro
+    que ninguém lê é primo do botão que não liga nada.
+79. ⛔ **`LeituraDoDono` É UM OBJETO, E POR ISSO NÃO PRECISA DE GUARD.**
+    `src/lib/supabase/owner.ts` (neutro — em `ai/` faria finance/nutrition/training dependerem
+    do módulo de IA, a seta ao contrário que mandou `tone` para fora). `getSessionHistory`
+    (17-F) recebe `client` e `userId` como campos **separáveis**, e por isso precisa de
+    `if (range.client && !owner) return []`. Com um objeto único, **"client sem userId" deixa de
+    ser representável** — irrepresentável vence recusado, como o campo `confianca` ausente do
+    schema do modelo (invariante 67). ⚠️ **Eram NOVE funções, não oito:** a nona é
+    `getMealTypes`, chamada por dentro de `getDiaryMeals`. **Confira as transitivas antes de
+    citar uma lista de assinaturas.**
+80. **SÓ `/api/cron/insights` IMPORTA `server/insight-job`** — teste de fronteira. Ele é o único
+    ponto do sistema que roda um run de IA com dono vindo de fora da sessão; uma Server Action
+    que o alcançasse daria a um autenticado o poder de disparar a varredura (e gastar o
+    orçamento) de outro. A rota confere `CRON_SECRET` **antes** de montar a service role, e
+    segredo ausente também é 401.
+81. ⚠️ **CAMPO OBRIGATÓRIO NUM SCHEMA DE FORMULÁRIO ENTRA NO PAYLOAD NO MESMO COMMIT.**
+    `allowVision` (18-D) era `z.boolean()` obrigatório em `aiPreferencesSchema` mas nunca foi
+    acrescentada ao payload de `ai-preferences-form.tsx` — nem tinha interruptor na tela.
+    Resultado: **toda** gravação de preferências vinha sendo recusada desde a 18-D, com uma
+    mensagem sobre um campo que a tela não tem. `tsc` não pega (a action recebe `unknown`); o
+    que pega é comparar as duas listas, e é o que `validators/ai.test.ts` passou a fazer.
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -583,7 +640,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.347 testes / 164 arquivos em 2026-08-09 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.385 testes / 166 arquivos em 2026-08-09 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

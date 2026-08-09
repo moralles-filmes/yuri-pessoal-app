@@ -6,8 +6,9 @@ import { PageHeader } from "@/components/shared/page-header";
 import { InsightsClient } from "@/components/ai/insights-client";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getAiPreferences } from "@/lib/ai/queries";
-import { getInsights } from "@/lib/ai/server/insight-queries";
+import { getInsights, getUltimaVarredura } from "@/lib/ai/server/insight-queries";
 import { AVISO_DOS_INSIGHTS } from "@/lib/ai/constants";
+import { dateInSaoPaulo, timeInSaoPaulo } from "@/lib/format";
 import type { ModuloDeInsight } from "@/lib/ai/insights/contracts";
 
 export const metadata: Metadata = { title: "Insights · IA" };
@@ -40,9 +41,11 @@ export default async function InsightsPage() {
 
   // O relógio real entra AQUI, na casca. Tudo abaixo recebe `agora`.
   const agora = new Date();
-  const [insights, prefs] = await Promise.all([
+  const [insights, prefs, varredura] = await Promise.all([
     getInsights(agora),
     getAiPreferences(user.id),
+    // 18-E Bloco 4 — o que a varredura automática fez da última vez. `null` = nunca rodou.
+    getUltimaVarredura(),
   ]);
 
   /**
@@ -69,6 +72,41 @@ export default async function InsightsPage() {
       </div>
 
       <InsightsClient insights={insights} disponiveis={disponiveis} />
+
+      {/*
+        ⛔ 18-E Bloco 4 — O RODAPÉ DA VARREDURA.
+
+        Sem ele, `ai_insight_jobs` seria um registro que ninguém lê, e "job barrado registra o
+        motivo sanitizado" valeria só no papel. Ele mostra o desfecho de CADA módulo — inclusive
+        os pulados, com o porquê —, porque o que NÃO aconteceu é justamente o que o dono não tem
+        como descobrir sozinho.
+      */}
+      {prefs.allowInsightJobs ? (
+        <p className="text-xs text-muted-foreground">
+          {varredura === null ? (
+            "A análise automática está ligada, mas ainda não rodou nenhuma vez."
+          ) : (
+            <>
+              Última varredura automática:{" "}
+              {dateInSaoPaulo(new Date(varredura.executadaEm))} às{" "}
+              {timeInSaoPaulo(new Date(varredura.executadaEm))}
+              {" — "}
+              {varredura.modulos
+                .map((m) =>
+                  m.motivo ? `${ROTULO[m.modulo]}: ${m.desfecho} (${m.motivo})` : `${ROTULO[m.modulo]}: ${m.desfecho}`,
+                )
+                .join(" · ")}
+            </>
+          )}
+        </p>
+      ) : null}
     </div>
   );
 }
+
+/** Os mesmos nomes que o resto da tela usa. */
+const ROTULO: Record<ModuloDeInsight, string> = {
+  financeiro: "Financeiro",
+  treinos: "Treinos",
+  dieta: "Dieta",
+};

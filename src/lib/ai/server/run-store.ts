@@ -18,6 +18,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
+import type { ClienteDaIa } from "./client";
 import type { AiProviderId, AiUsage } from "@/lib/ai/core/contracts";
 import type { AiError } from "@/lib/ai/core/errors";
 import { type AiRate, PRICING_VERSION, rateSnapshot } from "@/lib/ai/core/pricing";
@@ -62,6 +63,10 @@ export type BeginRunErrorCode =
   // primeira é um pedido que o sistema não atende, a segunda é uma porta que o dono fechou.
   | "AI_MODULE_NOT_AVAILABLE"
   | "AI_MODULE_NOT_ALLOWED"
+  // 18-E Bloco 4 — os dois do JOB. Só o caminho SEM SESSÃO os alcança: com sessão,
+  // `v_automatic` é falso e os dois ramos do RPC nem são avaliados.
+  | "AI_JOBS_NOT_ALLOWED"
+  | "AI_JOB_BUDGET_EXCEEDED"
   | "AI_NOT_AUTHENTICATED"
   | "AI_MESSAGE_EMPTY"
   | "AI_MESSAGE_TOO_LONG"
@@ -171,10 +176,20 @@ export const MENSAGEM_ADMISSAO: Record<BeginRunErrorCode, string> = {
     "Ainda não há análise de IA para este módulo.",
   AI_MODULE_NOT_ALLOWED:
     "A leitura deste módulo pela IA está desligada. Ligue-a em /ia/configuracoes.",
+  // 18-E Bloco 4. As frases falam com o DONO, que vai ler isto em /ia/insights depois —
+  // nunca com o processo, que não lê nada.
+  AI_JOBS_NOT_ALLOWED:
+    "A análise automática está desligada. Ligue-a em /ia/configuracoes.",
+  AI_JOB_BUDGET_EXCEEDED:
+    "O orçamento mensal da análise automática foi atingido. Ela volta no mês que vem, ou antes se você aumentar o teto em /ia/configuracoes.",
   AI_UNKNOWN: "Não foi possível iniciar a resposta.",
 };
 
 const CODIGOS_CONHECIDOS: readonly BeginRunErrorCode[] = [
+  // 18-E Bloco 4. Nenhum dos dois é prefixo do outro nem de terceiro, mas a busca é por
+  // `includes` e a ordem fica explícita pela mesma razão da nota abaixo.
+  "AI_JOBS_NOT_ALLOWED",
+  "AI_JOB_BUDGET_EXCEEDED",
   "AI_DOCUMENT_NOT_AVAILABLE",
   "AI_VISION_NOT_ALLOWED",
   // ⚠️ `AI_MODULE_NOT_ALLOWED` ANTES de `AI_MODULE_NOT_AVAILABLE`: a busca é por
@@ -281,6 +296,21 @@ export type BeginInsightInput = {
   readonly reservedCost: number;
   readonly reservationRateVersion: string;
   readonly reservationTtlSeconds: number;
+  /**
+   * ⛔ **18-E Bloco 4 — SÓ O CAMINHO SEM SESSÃO PREENCHE ISTO.** O Cron roda com service
+   * role e não tem `auth.uid()`; sem o par, o RPC levantaria `AI_NOT_AUTHENTICATED`.
+   *
+   * Do lado do banco, `v_user := coalesce(auth.uid(), p_user_id)` faz a SESSÃO SEMPRE VENCER:
+   * um autenticado que mande `userId` de outra pessoa é ignorado. E a garantia não depende
+   * dessa linha — a função continua `security invoker`, então ele não leria as preferências,
+   * nem a credencial, nem conseguiria o `insert` em `ai_runs`. **A trava é a RLS, não o
+   * `coalesce`.**
+   *
+   * ⚠️ `automatic` NÃO vem daqui: o RPC o deriva de `auth.uid() is null`. Quem chama não tem
+   * como se declarar automático — nem deixar de ser.
+   */
+  readonly client?: ClienteDaIa;
+  readonly userId?: string;
 };
 
 /**
@@ -296,7 +326,7 @@ export async function beginInsightRun(
 ): Promise<
   { ok: true; value: BeginExtractionOutput } | { ok: false; code: BeginRunErrorCode }
 > {
-  const supabase = await createClient();
+  const supabase = input.client ?? (await createClient());
 
   const { data, error } = await supabase.rpc("ai_begin_insight_run", {
     p_modulo: input.modulo,
@@ -306,6 +336,9 @@ export async function beginInsightRun(
     p_reserved_cost: input.reservedCost,
     p_reservation_rate_version: input.reservationRateVersion,
     p_reservation_ttl_seconds: input.reservationTtlSeconds,
+    // Omitido no caminho com sessão: o parâmetro tem `default null` no banco, e o
+    // `coalesce` o ignoraria de todo jeito.
+    p_user_id: input.userId,
   });
 
   if (error) return { ok: false, code: classifyBeginError(error.message, error.code) };
@@ -377,6 +410,8 @@ export async function markStreaming(runId: string, userId: string): Promise<void
 type FecharInput = {
   readonly runId: string;
   readonly userId: string;
+  /** 18-E Bloco 4 — sem sessão (Cron). Ver `./client`. */
+  readonly client?: ClienteDaIa;
   /**
    * 18-D — `null` num run de EXTRAÇÃO. Ele não tem conversa (`ai_runs.kind = 'extracao'`,
    * `conversation_id is null` exigido pelo CHECK), então não há mensagem de assistente para
@@ -422,7 +457,7 @@ async function fecharRun(
   error: AiError | null,
   cancelReason: string | null,
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = input.client ?? (await createClient());
   const agora = new Date();
 
   const { data } = await supabase
@@ -474,6 +509,8 @@ export type AttemptType = "PRIMARY" | "RETRY" | "FALLBACK" | "TOOL_STEP";
 export type StartAttemptInput = {
   readonly runId: string;
   readonly userId: string;
+  /** 18-E Bloco 4 — sem sessão (Cron). Ver `./client`. */
+  readonly client?: ClienteDaIa;
   /** `null` na extração — a coluna já era nullable desde a 18-A. */
   readonly conversationId: string | null;
   readonly agentId: string;
@@ -500,7 +537,7 @@ export type StartAttemptInput = {
 export async function startAttempt(
   input: StartAttemptInput,
 ): Promise<{ id: string; jaExistia: boolean } | null> {
-  const supabase = await createClient();
+  const supabase = input.client ?? (await createClient());
   const id = randomUUID();
 
   const { data, error } = await supabase
@@ -544,6 +581,8 @@ export async function startAttempt(
 export type CloseAttemptInput = {
   readonly attemptId: string;
   readonly userId: string;
+  /** 18-E Bloco 4 — sem sessão (Cron). Ver `./client`. */
+  readonly client?: ClienteDaIa;
   readonly status: "completed" | "failed" | "cancelled";
   readonly usage: AiUsage | null;
   readonly rate: AiRate;
@@ -560,7 +599,7 @@ export type CloseAttemptInput = {
  * disciplina do snapshot nutricional (16-B) e da sessão de treino (17-C).
  */
 export async function closeAttempt(input: CloseAttemptInput): Promise<void> {
-  const supabase = await createClient();
+  const supabase = input.client ?? (await createClient());
 
   // Sem `usage`, custo NULO e ausência registrada — nunca zero.
   const custo = input.usage ? computeAttemptCost(input.usage, input.rate) : null;

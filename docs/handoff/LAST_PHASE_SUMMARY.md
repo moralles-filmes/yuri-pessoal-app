@@ -1,9 +1,9 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-> 🟡 **ÚLTIMA: 18-E — IA · Insights (2026-08-09).** Os **blocos 1 a 3** fecharam; o **bloco 4
-> (o job automático) ficou DECLARADO FORA**, com o motivo e o ponto de retomada escritos
-> abaixo. A IA passa a produzir análises sobre grandezas que o SISTEMA deriva, num texto que
-> **não contém dígito** — todo número entra por token resolvido no servidor.
+> ✅ **ÚLTIMA: 18-E — IA · Insights (2026-08-09). CONCLUÍDA, com o Bloco 4.** Os blocos 1 a 3
+> entregaram a análise sob demanda; o **Bloco 4** entregou o **job automático**, que estava
+> declarado fora. A IA produz análises sobre grandezas que o SISTEMA deriva, num texto que
+> **não contém dígito** — e agora pode fazê-lo sozinha, uma vez por dia, se o dono ligar.
 >
 > ✅ **Antes dela: 18-D — IA · Visão, documentos e comprovantes (2026-08-09).** Os **cinco
 > blocos** fecharam. O dono envia uma foto ou um PDF, pede a leitura, confere campo a campo com
@@ -19,6 +19,75 @@
 > duas frentes grandes: **Fase 16 — Dieta e Alimentação** (16-A a 16-F, 40 de 40 critérios) e
 > **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55). Este arquivo tem os resumos na ordem
 > inversa de conclusão — o mais recente primeiro.
+
+---
+
+## Fase 18-E · Bloco 4 — o job automático de insights (2026-08-09) ✅ **18-E CONCLUÍDA**
+
+Com este bloco, a 18-E fecha inteira. O que estava declarado fora dela desde 2026-08-09 — a
+varredura que gera insight sozinha — passa a existir, **desligada de fábrica**.
+
+### O que mudou de natureza
+
+Todo run de IA do projeto — chat (18-A), extração (18-D) e insight sob demanda (blocos 1-3) —
+nasceu de um clique do dono, dentro de uma sessão. Os três tinham em comum uma coisa que nunca
+precisou ser dita: **`auth.uid()` existe**. O Cron da Vercel roda com service role e sem sessão,
+e é o **primeiro gasto de dinheiro do sistema sem o dono estar olhando**.
+
+### As quatro decisões, e o que cada uma recusou
+
+| Decisão | Alternativa recusada |
+| --- | --- |
+| `ai_begin_insight_run` ganha `p_user_id`, honrado só quando `auth.uid()` é nulo | RPC gêmea `security definer` duplicaria ~150 linhas de admissão — dois juízes do mesmo orçamento, a divergência que a invariante 8 existe para impedir. E minerar um JWT do dono introduziria um primitivo de impersonação no repositório. |
+| O job **pula** o módulo cuja chave de leitura está desligada | ANDar (como `allow_vision` faz) faria desligar Dieta calar Financeiro junto. Lá as três chaves servem ao **mesmo** efeito; aqui os três módulos são efeitos independentes. |
+| Teto próprio **em dinheiro**, com marcador `automatic` em `ai_runs` | Teto por contagem de runs não limita custo. Sem teto próprio, "os dois valem" seria mentira. |
+| Tabela `ai_insight_jobs`, uma linha por módulo por execução | Só o log da Vercel registra onde o dono não olha; notificação por job barrado viraria ruído diário. |
+
+**Cadência: 1×/dia**, no slot `0 12` UTC (09h BRT). O insight expira em dias, não em horas —
+gerar de novo às 21h daria o mesmo texto (a dedupe barra) ou um segundo gasto pelo mesmo dia.
+
+### ⛔ A trava é a RLS, não o `coalesce`
+
+`v_user := coalesce(auth.uid(), p_user_id)` faz a sessão sempre vencer. Mas a garantia **não
+depende dessa linha**: a função continua `security invoker`, então um autenticado apontando
+para outro dono não lê `ai_user_preferences` (→ `AI_MODULE_NOT_ALLOWED`), não lê a credencial
+e não consegue o `insert` em `ai_runs` (`with check`). Invertendo a ordem do `coalesce`, a
+trava continua de pé — a mesma escolha que pôs uso único num `unique` e prazo num `default`.
+
+`automatic` é **derivado** de `auth.uid() is null` dentro da mesma transação, nunca recebido:
+um `p_automatic boolean` daria ao chamador o poder de escolher contra qual teto ele gasta.
+
+### O par `client`/`userId` virou UM objeto
+
+`LeituraDoDono` (`src/lib/supabase/owner.ts`). `getSessionHistory` (17-F) recebe os dois como
+campos separáveis, e por isso precisa do guard `if (range.client && !owner) return []`. Com um
+objeto único, **"client sem userId" deixa de ser representável** — irrepresentável vence
+recusado, a mesma escolha do campo `confianca` ausente do schema do modelo.
+
+**Foram NOVE funções, não oito.** A nona é `getMealTypes`, chamada por dentro de
+`getDiaryMeals`; sem ela o coletor de Dieta rodaria sob service role com a lista de tipos vazia,
+e refeição sem tipo não entra no total do dia.
+
+### ⚠️ Um defeito PRÉ-EXISTENTE, encontrado e corrigido
+
+`allowVision` (18-D) entrou em `aiPreferencesSchema` como `z.boolean()` obrigatório mas **nunca
+foi acrescentada ao payload do formulário** — nem havia interruptor para ela na tela. Toda
+gravação de preferências vinha sendo recusada desde a 18-D, com uma mensagem sobre um campo que
+a tela não tem. `tsc` não pega (a action recebe `unknown`); o teste novo compara as duas listas.
+
+### Entregue
+
+Migration `20260815100000_ai_insight_jobs.sql` (1 tabela, 3 colunas, RPC recriada) ·
+`insights/job.ts` (puro, 14 testes) · `server/insight-job.ts` · `/api/cron/insights` ·
+9 assinaturas alargadas · interruptor e teto na tela · rodapé da última varredura em
+`/ia/insights` · 4 arquivos de teste novos ou ampliados.
+
+**Verificação:** `lint` · `tsc --noEmit` · **3.385 testes / 166 arquivos** · `build` ·
+suíte verde em `TZ=UTC` · rota privada → 307 `/login` · `/api/cron/insights` → **401** sem
+secret e com secret errado · `get_advisors` sem lint novo sobre a tabela desta subfase.
+
+**Números:** 130 tabelas no `public`, **18 `ai_*`**. Ferramentas (29), commands (13) e
+agentes (9) **inalterados**.
 
 ---
 

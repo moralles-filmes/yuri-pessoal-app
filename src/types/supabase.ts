@@ -464,6 +464,42 @@ export type Database = {
           },
         ]
       }
+      ai_insight_jobs: {
+        Row: {
+          created_at: string
+          desfecho: string
+          executed_at: string
+          id: string
+          insight_id: string | null
+          modulo: string
+          motivo: string | null
+          run_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          desfecho: string
+          executed_at?: string
+          id?: string
+          insight_id?: string | null
+          modulo: string
+          motivo?: string | null
+          run_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          desfecho?: string
+          executed_at?: string
+          id?: string
+          insight_id?: string | null
+          modulo?: string
+          motivo?: string | null
+          run_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       ai_insight_sources: {
         Row: {
           created_at: string
@@ -849,6 +885,7 @@ export type Database = {
           agent_id: string
           assistant_message_id: string | null
           attempt_count: number
+          automatic: boolean
           cancel_reason: string | null
           completed_at: string | null
           completed_model: string | null
@@ -881,6 +918,7 @@ export type Database = {
           agent_id: string
           assistant_message_id?: string | null
           attempt_count?: number
+          automatic?: boolean
           cancel_reason?: string | null
           completed_at?: string | null
           completed_model?: string | null
@@ -913,6 +951,7 @@ export type Database = {
           agent_id?: string
           assistant_message_id?: string | null
           attempt_count?: number
+          automatic?: boolean
           cancel_reason?: string | null
           completed_at?: string | null
           completed_model?: string | null
@@ -1133,6 +1172,7 @@ export type Database = {
           allow_files: boolean
           allow_finance: boolean
           allow_habits: boolean
+          allow_insight_jobs: boolean
           allow_memory: boolean
           allow_nutrition: boolean
           allow_studies: boolean
@@ -1153,6 +1193,7 @@ export type Database = {
           default_model: string | null
           default_provider: string | null
           id: string
+          job_monthly_budget: number
           monthly_budget: number | null
           rate_limit_per_hour: number
           rate_limit_per_minute: number
@@ -1169,6 +1210,7 @@ export type Database = {
           allow_files?: boolean
           allow_finance?: boolean
           allow_habits?: boolean
+          allow_insight_jobs?: boolean
           allow_memory?: boolean
           allow_nutrition?: boolean
           allow_studies?: boolean
@@ -1189,6 +1231,7 @@ export type Database = {
           default_model?: string | null
           default_provider?: string | null
           id?: string
+          job_monthly_budget?: number
           monthly_budget?: number | null
           rate_limit_per_hour?: number
           rate_limit_per_minute?: number
@@ -1205,6 +1248,7 @@ export type Database = {
           allow_files?: boolean
           allow_finance?: boolean
           allow_habits?: boolean
+          allow_insight_jobs?: boolean
           allow_memory?: boolean
           allow_nutrition?: boolean
           allow_studies?: boolean
@@ -1225,6 +1269,7 @@ export type Database = {
           default_model?: string | null
           default_provider?: string | null
           id?: string
+          job_monthly_budget?: number
           monthly_budget?: number | null
           rate_limit_per_hour?: number
           rate_limit_per_minute?: number
@@ -8878,6 +8923,7 @@ export type Database = {
           p_reserved_cost: number
           p_selected_model: string
           p_selected_provider: string
+          p_user_id?: string
         }
         Returns: {
           correlation_id: string

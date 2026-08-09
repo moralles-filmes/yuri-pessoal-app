@@ -24,6 +24,7 @@ import "server-only";
  */
 
 import { getFinanceCardData } from "@/lib/dashboard/queries";
+import type { LeituraDoDono } from "@/lib/supabase/owner";
 
 import type { Indicador, PeriodoDoIndicador, SerieTemporal } from "../contracts";
 import { comparar, janelaDeMeses, media } from "../temporal";
@@ -83,6 +84,7 @@ function emReais(
 export async function coletarFinanceiro(
   hoje: string,
   meses: number = MESES_PADRAO,
+  owner?: LeituraDoDono,
 ): Promise<ColetaDoFinanceiro> {
   const quantos = Math.min(Math.max(Math.trunc(meses) || MESES_PADRAO, 2), MAX_MESES);
   const janela = janelaDeMeses(hoje, quantos);
@@ -93,7 +95,10 @@ export async function coletarFinanceiro(
   const dados: { periodo: PeriodoDoIndicador; card: Awaited<ReturnType<typeof getFinanceCardData>> }[] =
     [];
   for (const periodo of janela) {
-    dados.push({ periodo, card: await getFinanceCardData(periodo.de.slice(0, 7), hoje) });
+    dados.push({
+      periodo,
+      card: await getFinanceCardData(periodo.de.slice(0, 7), hoje, owner),
+    });
   }
 
   const atual = dados[dados.length - 1];

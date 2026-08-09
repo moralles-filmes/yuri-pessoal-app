@@ -26,6 +26,7 @@ import {
 } from "@/lib/training/metrics";
 import { getTrainingPreferences } from "@/lib/training/queries";
 import type { TrainingPreferences } from "@/lib/training/types";
+import type { LeituraDoDono } from "@/lib/supabase/owner";
 
 import type { Indicador, PeriodoDoIndicador, SerieTemporal } from "../contracts";
 import { comparar, janelaDeMeses, media } from "../temporal";
@@ -58,10 +59,11 @@ export type ColetaDeTreinos = {
 export async function coletarTreinos(
   hoje: string,
   meses: number = MESES_PADRAO,
+  owner?: LeituraDoDono,
 ): Promise<ColetaDeTreinos> {
   const quantos = Math.min(Math.max(Math.trunc(meses) || MESES_PADRAO, 2), MAX_MESES);
   const janela = janelaDeMeses(hoje, quantos);
-  const prefs = await getTrainingPreferences();
+  const prefs = await getTrainingPreferences(owner);
   const options = opcoesDe(prefs);
   const regra = volumeRuleLabel(options);
 
@@ -80,6 +82,9 @@ export async function coletarTreinos(
       from: periodo.de,
       to: periodo.ate,
       limit: TETO_SESSOES + 1,
+      // 17-F já tinha o par, em campos separados. Aqui ele chega junto e é desmontado no
+      // último instante — ver a nota de forma em `src/lib/supabase/owner.ts`.
+      ...(owner ? { client: owner.client, userId: owner.userId } : {}),
     });
     const saturou = encontradas.length > TETO_SESSOES;
     const sessoes = saturou ? encontradas.slice(0, TETO_SESSOES) : encontradas;
