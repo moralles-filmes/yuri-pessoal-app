@@ -68,6 +68,23 @@ function serializar(valor: unknown): string {
 
 export function textoDaParte(parte: AiContentPart): string {
   if (parte.type === "text") return parte.text;
+  /**
+   * ⛔ 18-D — IMAGEM E ARQUIVO DEVOLVEM VAZIO **DE PROPÓSITO**, e este é o único lugar do
+   * arquivo onde vazio é a resposta certa.
+   *
+   * O bloco no topo avisa que uma parte medida como 15 caracteres faz a reserva sair menor
+   * que o custo real. Aqui é o contrário: o custo de um arquivo **não é proporcional a
+   * texto nenhum** — ele é contado em `usage/vision-tokens.ts`, por megapixel e por página,
+   * e somado à reserva pelo campo `tokensDeArquivos` de `computeReservation`.
+   *
+   * Serializar os bytes aqui (base64, digamos) **contaria a imagem duas vezes** e ainda
+   * inflaria o número por um fator que não tem relação com o que o provedor cobra. Vazio
+   * mais a contagem própria é a única combinação que soma uma vez só.
+   *
+   * ⚠️ Quem mexer nisto: confira que `tokensDeArquivos` continua sendo passado no
+   * `extraction-runner`. As duas metades desta decisão vivem em arquivos diferentes.
+   */
+  if (parte.type === "image" || parte.type === "file") return "";
   if (parte.type === "tool-call") {
     return `${parte.toolName} ${serializar(parte.input)}`;
   }

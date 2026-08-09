@@ -55,6 +55,15 @@ export type ReservationInput = {
    * 18-A — é o que mantém os testes e o comportamento anteriores intactos.
    */
   readonly maxToolSteps?: number;
+  /**
+   * Fase 18-D — tokens de ENTRADA vindos de arquivo (imagem, PDF), de
+   * `usage/vision-tokens.ts`. Ausente ou 0 reproduz exatamente a fórmula anterior — é o que
+   * mantém os testes e o comportamento da 18-A/18-B intactos.
+   *
+   * ⚠️ Entra em TODO passo, não só no primeiro: o arquivo não sai do contexto entre os
+   * passos do laço. Somá-lo uma vez só subestimaria justamente o caso caro.
+   */
+  readonly tokensDeArquivos?: number;
 };
 
 export type Reservation = {
@@ -87,10 +96,12 @@ export function computeReservation(input: ReservationInput): Reservation {
   // não furar — e importar os números de `tools/limits.ts` mantém a aritmética de custo num
   // lugar só, como manda a regra de `calc.ts` na Dieta.
   const passos = Math.max(0, input.maxToolSteps ?? 0);
+  const arquivos = Math.max(0, input.tokensDeArquivos ?? 0);
   let base = 0;
   for (let i = 0; i <= passos; i += 1) {
     const entradaDoPasso =
       input.tokensEntradaEstimados +
+      arquivos +
       i * MAX_TOOLS_POR_PASSO * TOKENS_POR_RESULTADO_DE_FERRAMENTA;
     base +=
       (entradaDoPasso / 1_000_000) * piorEntrada +
@@ -111,6 +122,7 @@ export function computeReservation(input: ReservationInput): Reservation {
       `Reserva de US$ ${valorUsd.toFixed(6)}: ${input.tokensEntradaEstimados} tokens de entrada estimados ` +
       `e teto de ${input.tetoDeSaida} de saída, pela tarifa do modelo mais caro autorizado ` +
       `(US$ ${piorEntrada}/M entrada e US$ ${piorSaida}/M saída), × ${multiplicador} tentativas × margem ${margem}` +
+      (arquivos > 0 ? `, mais ${arquivos} tokens de arquivo em cada passo` : "") +
       (passos > 0 ? `, cobrindo ${passos} passos de ferramenta.` : "."),
   };
 }
