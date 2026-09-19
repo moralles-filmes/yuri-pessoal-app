@@ -644,9 +644,10 @@ npm run test:run       # vitest run (suíte completa; 3.385 testes / 166 arquivo
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos
+npm run perf:bundle    # orçamento de JS por rota (DEPOIS do build; reprova acima de 250 KB gz)
 ```
 
-Verificação de mudança "pronta": `npm run test:run` + `npm run lint` + `npx tsc --noEmit` + `npm run build`. Migrations de schema são aplicadas no Supabase via MCP (`apply_migration`) no projeto `yjvnlbjvippefvzgrxxw`.
+Verificação de mudança "pronta": `npm run test:run` + `npm run lint` + `npx tsc --noEmit` + `npm run build` + `npm run perf:bundle`. Os cinco rodam no CI (`.github/workflows/ci.yml`, sem segredo nenhum). Migrations de schema são aplicadas no Supabase via MCP (`apply_migration`) no projeto `yjvnlbjvippefvzgrxxw`.
 
 ## Next.js 16 — o que difere do que você "sabe"
 
@@ -724,6 +725,53 @@ de teste e tire screenshot com `"/Applications/Google Chrome.app/Contents/MacOS/
 --headless --screenshot --window-size=W,H`. Para dúvida de cascata, **procure a regra no CSS
 do bundle** e compare as posições — o minificador reescreve (`width >= 40rem` vira
 `min-width:40rem`), então grep por texto exato engana.
+
+### Carregamento sob demanda — 4 regras da auditoria de performance (2026-09-19)
+
+O projeto não tinha code splitting nenhum (`grep -c "next/dynamic" src` = 0) e a pior rota
+pesava 434 KB gz. Hoje a mediana é **210,7 KB** e 66 das 67 rotas cabem em 250 KB. O que
+mantém isso de pé:
+
+1. **Gráfico entra por `next/dynamic`.** `recharts` custa **109 KB gz**. Cada arquivo de
+   gráfico é um par **fachada + `*-impl.tsx`**: a fachada mantém a API pública (nenhuma tela
+   mudou de import) e faz o `dynamic`; o `-impl` tem o `recharts`. O esqueleto reserva a
+   altura exata via `--chart-skeleton-h` (`src/components/shared/chart-skeleton.tsx`), porque
+   o `loading:` do `next/dynamic` **não enxerga as props** do componente.
+   ⛔ **O que NÃO usa `recharts` fica na FACHADA** — `DistributionBars`, `MeasurementTable`.
+   Deixá-los no `-impl` faria importá-los arrastar os 109 KB. `MeasurementTable` em especial é
+   a **regra 6 da 16-E** (a leitura textual do dado, para leitor de tela): atrás do
+   carregamento sob demanda ela sairia do HTML do servidor.
+2. **Diálogo de formulário entra por `next/dynamic` + `useLazyDialog`**
+   (`src/components/shared/use-lazy-dialog.ts`) — eles arrastam `zod` + `react-hook-form`
+   (~62 KB gz). ⛔ **`{aberto && <Dialog/>}` sozinho QUEBRA a animação de fechamento:** o
+   componente some no mesmo quadro em que o Radix começaria a desmontá-lo. O hook monta na
+   primeira abertura e não desmonta mais, e ajusta o estado **durante o render** (padrão de
+   estado derivado do React) — num efeito, `react-hooks/set-state-in-effect` reprova.
+   Exceção conhecida: diálogo que recebe o próprio botão por `trigger` (ex.: `TodoLinkDialog`)
+   **não** pode ser lazy — o botão sumiria da tela.
+3. ⚠️ **Constante lida pela TELA não mora em `src/lib/validators/`** — esse módulo começa com
+   `import { z } from "zod"`. As telas de `/ia` baixavam 62,7 KB gz para ler quatro
+   constantes; elas foram para `@/lib/ai/constants` (módulo puro, **zero imports de runtime**)
+   e são **reexportadas** pelos validators, então nenhum import existente quebrou.
+4. ⛔ **O segundo argumento de `next/dynamic` tem de ser objeto literal escrito ali mesmo.** O
+   compilador o lê estaticamente e recusa constante compartilhada
+   (`next/dynamic options must be an object literal`). A repetição é exigida, não descuido.
+
+**Medir:** `npm run build && npm run perf:bundle`. O `next build` do Next 16 **não imprime
+mais** o tamanho por rota — o script é a única fonte. Componente com `next/dynamic` sai do
+manifest, que é justamente o que se quer medir.
+
+### Medição de query — duas armadilhas que já enganaram uma auditoria
+
+- ⛔ **`EXPLAIN (analyze, timing off)`, sempre.** Com `timing on`, a `nutrition_foods_view`
+  acusou 150 ms onde o real eram 3 ms — overhead da instrumentação.
+- ⛔ **RLS só aparece no papel `authenticated`.** Como service role a mesma view roda em
+  14,4 ms e a policy some da conta. Foi assim que o custo do `auth.uid()` inlinado por linha
+  (**34,8 ms** nas 21.147 linhas de `nutrition_food_nutrients`, não os 6,9 ms estimados)
+  passou despercebido. `(select auth.uid())` derruba para 2,8 ms — **semanticamente idêntico**,
+  porque `auth.uid()` é estável dentro de uma instrução. Aplicado nas 8 policies de
+  `nutrition_foods` e `nutrition_food_nutrients` (as únicas tabelas grandes o bastante para
+  medir); as outras 179 do advisor `auth_rls_initplan` seguem em backlog, com razão medida.
 
 ### Lógica pura + testes (regra forte do projeto)
 Regras de negócio críticas são **funções puras com datas/`now` injetados (sem `Date.now()`)** em `src/lib/<domínio>/*.ts`, cobertas por Vitest co-localizado (`*.test.ts`, ambiente `node`). O I/O (Supabase) fica separado em `queries.ts`/`actions`. Exemplos canônicos: `src/lib/finance/invoice.ts` (regra de fatura cartão), `installments.ts`, `src/lib/notifications/generate.ts` (idempotência por `dedupe_key`), streaks de hábitos/estudos, recorrência de tarefas/agenda. **Ao mexer numa regra, ajuste/adicione testes puros — não teste via banco.**
