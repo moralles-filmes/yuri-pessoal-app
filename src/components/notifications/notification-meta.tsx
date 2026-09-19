@@ -9,6 +9,7 @@ import {
   CalendarClock,
   CalendarRange,
   CalendarCheck,
+  CircleAlert,
   CreditCard,
   Droplets,
   Dumbbell,
@@ -17,14 +18,17 @@ import {
   Layers,
   ListChecks,
   ListTodo,
+  PlugZap,
   Ruler,
   ReceiptText,
   ShoppingCart,
+  Sparkles,
   Target,
   Timer,
   TrendingUp,
   Trophy,
   UtensilsCrossed,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { NotificationType } from "@/lib/notifications/constants";
@@ -69,6 +73,11 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   training_goal_progress: Dumbbell,
   training_goal_deadline: AlarmClock,
   training_program_ending: Layers,
+  // Fase 18-F — Inteligência Artificial.
+  ai_budget_threshold: Wallet,
+  ai_provider_problem: PlugZap,
+  ai_action_stuck: CircleAlert,
+  ai_insight_available: Sparkles,
 };
 
 export function notificationIcon(type: string): LucideIcon {
