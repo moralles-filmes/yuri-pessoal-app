@@ -30,6 +30,7 @@ import {
   generateTrainingNotifications,
   type TrainingGenInput,
 } from "./training";
+import { generateAiNotifications, type AiGenInput } from "./ai";
 import { notificationEnabled, type NotificationPrefs } from "@/lib/settings/constants";
 import type { NotificationPriority, NotificationType } from "./constants";
 
@@ -180,6 +181,11 @@ export type GenerateInput = {
    * e o Cron continuam valendo igual para todos os módulos.
    */
   training?: TrainingGenInput | null;
+  /**
+   * Fase 18-F — módulo de IA. Mesmo isolamento de Dieta e Treinos: entra pelo MESMO gerador,
+   * então herda `dedupe_key`, `selectNewCandidates` e `filterByPrefs` sem nada novo.
+   */
+  ai?: AiGenInput | null;
   options?: GenerateOptions;
 };
 
@@ -567,6 +573,11 @@ export function generateNotifications(input: GenerateInput): NotificationCandida
   /* ── Treinos (Fase 17-F) ── */
   if (input.training) {
     out.push(...generateTrainingNotifications(input.training));
+  }
+
+  /* ── Inteligência Artificial (Fase 18-F) ── */
+  if (input.ai) {
+    out.push(...generateAiNotifications(input.ai));
   }
 
   return out;
