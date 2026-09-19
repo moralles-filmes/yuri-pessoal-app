@@ -1,71 +1,35 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
-  axisTick,
-  GRID_COLOR,
-  tooltipItemStyle,
-  tooltipLabelStyle,
-  tooltipStyle,
-} from "@/components/dashboard/chart-theme";
-import type { HabitWeekPoint } from "@/types/database";
+/**
+ * Fachada de carregamento sob demanda de `consistency-chart-impl` (P3 da auditoria de performance, F-003).
+ *
+ * A API pública é EXATAMENTE a de antes — nenhuma tela mudou. O que mudou é quando o código
+ * chega: o `recharts` custa 109 KB gz e entrava no primeiro byte desta rota mesmo quando o
+ * gráfico estava fora da tela. Agora ele é baixado quando o gráfico aparece.
+ *
+ * `ssr: false` porque `ResponsiveContainer` depende de medir a largura do elemento e já não
+ * renderizava nada no servidor — não há conteúdo de servidor a preservar.
+ *
+ * O estado vazio continua DENTRO da implementação: aqui a fachada não sabe o que é "vazio"
+ * para cada gráfico, e duplicar a regra seria criar uma segunda verdade.
+ */
+import type * as React from "react";
+import dynamic from "next/dynamic";
+import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
 
-const pct = (v: number | string) => `${Math.round(Number(v) * 100)}%`;
+type Props = React.ComponentProps<typeof import("./consistency-chart-impl").ConsistencyChart>;
 
-/** Gráfico de consistência semanal (taxa de conclusão por semana, últimas 8). */
-export function ConsistencyChart({ weekly }: { weekly: HabitWeekPoint[] }) {
-  const data = weekly.map((w) => ({
-    label: w.label,
-    rate: w.rate,
-    done: w.done,
-    scheduled: w.scheduled,
-  }));
+// ⛔ O segundo argumento de `next/dynamic` tem de ser objeto literal escrito ali mesmo — o
+// compilador o lê estaticamente e recusa uma constante compartilhada.
+const LazyConsistencyChart = dynamic(() => import("./consistency-chart-impl").then((m) => m.ConsistencyChart), {
+  ssr: false,
+  loading: () => <ChartSkeleton />,
+});
 
+export function ConsistencyChart(props: Props) {
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={data} margin={{ left: 4, right: 8, top: 8 }}>
-        <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-        <XAxis
-          dataKey="label"
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          domain={[0, 1]}
-          tickFormatter={pct}
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-          width={44}
-        />
-        <Tooltip
-          cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-          formatter={(value, _name, item) => {
-            const p = item?.payload as { done: number; scheduled: number };
-            return [`${pct(value as number)} (${p.done}/${p.scheduled})`, "Conclusão"];
-          }}
-          labelFormatter={(label) => `Semana de ${label}`}
-          contentStyle={tooltipStyle}
-          labelStyle={tooltipLabelStyle}
-          itemStyle={tooltipItemStyle}
-        />
-        <Bar
-          dataKey="rate"
-          name="Conclusão"
-          fill="var(--chart-1)"
-          radius={[4, 4, 0, 0]}
-          maxBarSize={44}
-        />
-      </BarChart>
-    </ResponsiveContainer>
+    <div style={chartSkeletonHeightVar(240)}>
+      <LazyConsistencyChart {...props} />
+    </div>
   );
 }

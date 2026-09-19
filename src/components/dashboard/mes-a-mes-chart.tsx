@@ -1,59 +1,35 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { formatCurrency } from "@/lib/format";
-import type { Comparativo } from "@/lib/finance/dashboard";
-import {
-  axisTick,
-  brlCompact,
-  CHART_COLORS,
-  GRID_COLOR,
-  tooltipItemStyle,
-  tooltipLabelStyle,
-  tooltipStyle,
-} from "./chart-theme";
+/**
+ * Fachada de carregamento sob demanda de `mes-a-mes-chart-impl` (P3 da auditoria de performance, F-003).
+ *
+ * A API pública é EXATAMENTE a de antes — nenhuma tela mudou. O que mudou é quando o código
+ * chega: o `recharts` custa 109 KB gz e entrava no primeiro byte desta rota mesmo quando o
+ * gráfico estava fora da tela. Agora ele é baixado quando o gráfico aparece.
+ *
+ * `ssr: false` porque `ResponsiveContainer` depende de medir a largura do elemento e já não
+ * renderizava nada no servidor — não há conteúdo de servidor a preservar.
+ *
+ * O estado vazio continua DENTRO da implementação: aqui a fachada não sabe o que é "vazio"
+ * para cada gráfico, e duplicar a regra seria criar uma segunda verdade.
+ */
+import type * as React from "react";
+import dynamic from "next/dynamic";
+import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
 
-/** Comparativo do mês atual com o anterior (barras agrupadas: entradas e saídas). */
-export function MesAMesChart({ comparativo }: { comparativo: Comparativo }) {
-  const data = [
-    {
-      nome: "Entradas",
-      anterior: comparativo.anterior.entradas,
-      atual: comparativo.atual.entradas,
-    },
-    {
-      nome: "Saídas",
-      anterior: comparativo.anterior.saidas,
-      atual: comparativo.atual.saidas,
-    },
-  ];
+type Props = React.ComponentProps<typeof import("./mes-a-mes-chart-impl").MesAMesChart>;
 
+// ⛔ O segundo argumento de `next/dynamic` tem de ser objeto literal escrito ali mesmo — o
+// compilador o lê estaticamente e recusa uma constante compartilhada.
+const LazyMesAMesChart = dynamic(() => import("./mes-a-mes-chart-impl").then((m) => m.MesAMesChart), {
+  ssr: false,
+  loading: () => <ChartSkeleton />,
+});
+
+export function MesAMesChart(props: Props) {
   return (
-    <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={data} margin={{ left: 4, right: 8, top: 8 }}>
-        <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-        <XAxis dataKey="nome" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width={78} />
-        <Tooltip
-          cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-          formatter={(value) => formatCurrency(Number(value))}
-          contentStyle={tooltipStyle}
-          labelStyle={tooltipLabelStyle}
-          itemStyle={tooltipItemStyle}
-        />
-        <Legend wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }} />
-        <Bar dataKey="anterior" name="Mês anterior" fill={CHART_COLORS[3]} radius={[4, 4, 0, 0]} maxBarSize={48} />
-        <Bar dataKey="atual" name="Mês atual" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} maxBarSize={48} />
-      </BarChart>
-    </ResponsiveContainer>
+    <div style={chartSkeletonHeightVar(260)}>
+      <LazyMesAMesChart {...props} />
+    </div>
   );
 }
