@@ -9,6 +9,7 @@ import "server-only";
  */
 
 import { createClient } from "@/lib/supabase/server";
+import type { LeituraDoDono } from "@/lib/supabase/owner";
 import type { ClienteDaIa } from "./server/client";
 import { AI_PROVIDERS, type AiProviderId } from "./core/contracts";
 import { PROVIDER_REGISTRY } from "./providers/registry";
@@ -488,8 +489,17 @@ export async function getUsageSummary(
   periodo: "dia" | "mes",
   limiteUsd: number | null,
   agora: Date,
+  /**
+   * Fase 18-F. Ausente = leitura com sessão (as telas). Presente = service role, e então o
+   * escopo do usuário deixa de vir da RLS e passa a ser NOSSO — por isso o objeto carrega o
+   * `userId` junto e "client sem userId" não é representável (`lib/supabase/owner.ts`).
+   *
+   * ⛔ O sino usa ESTA função, não um somatório próprio: dois cálculos do mesmo gasto fariam
+   * o número da notificação divergir do número de `/ia/consumo` (invariante 24 da 17-F).
+   */
+  dono?: LeituraDoDono,
 ): Promise<UsagePeriodSummary> {
-  const supabase = await createClient();
+  const supabase = dono?.client ?? (await createClient());
   const inicio = inicioDoPeriodoEmBrasilia(periodo, agora);
 
   const { data: runs } = await supabase
