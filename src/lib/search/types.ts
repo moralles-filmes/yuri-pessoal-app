@@ -31,6 +31,11 @@ export const SEARCH_TYPES = [
   "treino_sessao",
   "treino_meta",
   "treino_recorde",
+  // Fase 18-F — módulo de IA. ⚠️ Memória NÃO entra aqui: `/ia/memoria` só existe no Bloco 3,
+  // e link para rota inexistente é 404 (a lição do `?aba=despensa` da 16-F).
+  "ia_conversa",
+  "ia_insight",
+  "ia_acao",
   "notificacao",
 ] as const;
 export type SearchType = (typeof SEARCH_TYPES)[number];
@@ -61,6 +66,9 @@ export const SEARCH_TYPE_LABELS: Record<SearchType, string> = {
   treino_sessao: "Treinos · Sessões",
   treino_meta: "Treinos · Metas",
   treino_recorde: "Treinos · Recordes",
+  ia_conversa: "IA · Conversas",
+  ia_insight: "IA · Análises",
+  ia_acao: "IA · Ações",
   notificacao: "Notificações",
 };
 

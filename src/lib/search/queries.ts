@@ -5,6 +5,7 @@
  */
 import { createClient } from "@/lib/supabase/server";
 import { dateInSaoPaulo, formatCurrency, formatDate } from "@/lib/format";
+import { actionsLink, conversationLink, insightsLink } from "./ai-links";
 import {
   ACCOUNT_TYPE_LABELS,
   CARD_BRAND_LABELS,
@@ -104,6 +105,9 @@ export async function searchAll(
     treino_sessao: [],
     treino_meta: [],
     treino_recorde: [],
+    ia_conversa: [],
+    ia_insight: [],
+    ia_acao: [],
     notificacao: [],
   };
 
@@ -803,6 +807,77 @@ export async function searchAll(
           link: "/notificacoes",
         }),
       );
+    }),
+
+    // ─────────────────────────── Fase 18-F — módulo de IA ───────────────────────────
+    // ⚠️ Como todas as outras acima, estas TRÊS consultas NÃO filtram `user_id`: o client é o
+    // de sessão e quem faz o escopo é a RLS. É o oposto de `notifications/ai-cron.ts`, que
+    // roda sob service role e por isso precisa do filtro explícito. Os dois estão certos,
+    // cada um no seu contexto — trocá-los é vazar dado ou devolver vazio em silêncio.
+
+    // IA · Conversas. O link abre a conversa, não a lista.
+    safe(
+      supabase
+        .from("ai_conversations")
+        .select("id, title, updated_at")
+        .ilike("title", like)
+        .order("updated_at", { ascending: false })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.ia_conversa = (
+        rows as Array<{ id: string; title: string | null; updated_at: string }>
+      ).map((c) => ({
+        type: "ia_conversa",
+        id: c.id,
+        title: c.title ?? "Conversa sem título",
+        // ⛔ `updated_at` é timestamptz: `.slice(0, 10)` devolveria o dia em UTC.
+        subtitle: formatDate(dateInSaoPaulo(new Date(c.updated_at))),
+        link: conversationLink(c.id),
+      }));
+    }),
+
+    // IA · Análises (18-E).
+    safe(
+      supabase
+        .from("ai_insights")
+        .select("id, titulo, created_at")
+        .ilike("titulo", like)
+        .order("created_at", { ascending: false })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.ia_insight = (
+        rows as Array<{ id: string; titulo: string; created_at: string }>
+      ).map((i) => ({
+        type: "ia_insight",
+        id: i.id,
+        title: i.titulo,
+        subtitle: formatDate(dateInSaoPaulo(new Date(i.created_at))),
+        // A lista de insights não abre um registro por id: o link é a tela.
+        link: insightsLink(),
+      }));
+    }),
+
+    // IA · Ações aplicadas (18-C).
+    safe(
+      supabase
+        .from("ai_action_executions")
+        .select("id, command, created_at")
+        .ilike("command", like)
+        .order("created_at", { ascending: false })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.ia_acao = (
+        rows as Array<{ id: string; command: string; created_at: string }>
+      ).map((a) => ({
+        type: "ia_acao",
+        id: a.id,
+        title: a.command,
+        subtitle: formatDate(dateInSaoPaulo(new Date(a.created_at))),
+        link: actionsLink(),
+      }));
     }),
   ]);
 
