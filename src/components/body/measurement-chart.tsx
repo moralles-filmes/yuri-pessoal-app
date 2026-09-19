@@ -1,53 +1,36 @@
 "use client";
 
 /**
- * Fase 16-E — Módulo central de medidas corporais · Gráfico de evolução.
+ * Fase 16-E — Módulo central de medidas corporais · Gráfico de evolução (fachada).
  *
- * ══ AS TRÊS COISAS QUE ESTE GRÁFICO NÃO PODE FAZER ══
+ * ═══════════ POR QUE ESTE ARQUIVO EXISTE ═══════════
  *
- * 1. LIGAR OS PONTOS POR CIMA DE UM BURACO. Dia sem medição tem `value: null`, e a linha é
- *    INTERROMPIDA (`connectNulls={false}`). Ligar dois pontos distantes desenharia uma
- *    variação suave que nunca foi medida.
+ * A API pública é EXATAMENTE a de antes (`MeasurementChart` e `MeasurementTable`) — nenhuma
+ * tela mudou. O que mudou é quando o `recharts` (109 KB gz) chega: ele deixou de entrar no
+ * primeiro byte de `/nutricao/medidas`, `/nutricao/relatorios` e `/treinos/evolucao` e passou
+ * a ser baixado quando há gráfico para desenhar. Medição em `.turbo/BASELINE.md`.
  *
- * 2. COMEÇAR O EIXO EM ZERO. Uma variação de 2 kg num eixo de 0 a 80 vira uma linha reta, e o
- *    usuário conclui que "não mudou nada". O domínio acompanha os dados, com folga.
- *    (Em compensação, o eixo é rotulado e a tabela textual está sempre disponível.)
+ * ⛔ **`MeasurementTable` FICA AQUI, e isso não é organização — é a regra 6 da subfase.**
+ * "O gráfico nunca é a única leitura do dado": a tabela textual é o caminho de quem usa leitor
+ * de tela. Deixá-la atrás do carregamento sob demanda a tiraria do HTML do servidor e a faria
+ * depender de o código do gráfico ter baixado. Ela não usa `recharts`.
  *
- * 3. SER A ÚNICA FORMA DE LER O DADO. Regra 6 da subfase: quem chama este componente é
- *    obrigado a renderizar também a leitura textual. `MeasurementTable` está logo abaixo.
+ * ⛔ **O caso "nenhuma medição no período" também é decidido aqui**, antes de pedir o gráfico:
+ * a mensagem aparece de imediato e o navegador não baixa 109 KB para não desenhar nada.
  *
- * Reusa os tokens de `chart-theme` (Fase 07) — dark/light sem cor fixa, sem segundo conjunto
- * de gráficos.
+ * `ssr: false` porque `ResponsiveContainer` depende de medir a largura do elemento e já não
+ * renderizava nada no servidor — não há conteúdo de servidor a preservar.
  */
 import * as React from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
-  axisTick,
-  GRID_COLOR,
-  tooltipItemStyle,
-  tooltipLabelStyle,
-  tooltipStyle,
-} from "@/components/dashboard/chart-theme";
+import dynamic from "next/dynamic";
+import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
 import { shortDateLabel } from "@/lib/nutrition/calendar";
 import { formatMeasurement, measuredPoints, type SeriesPoint } from "@/lib/body/measurements";
 
-export function MeasurementChart({
-  series,
-  unit,
-  decimals,
-  target,
-  showAverage,
-  height = 260,
-}: {
+/** Altura padrão do gráfico — repetida aqui para o esqueleto reservar o espaço certo. */
+const DEFAULT_CHART_HEIGHT = 260;
+
+type MeasurementChartProps = {
   series: SeriesPoint[];
   unit: string;
   decimals: number;
@@ -56,38 +39,17 @@ export function MeasurementChart({
   /** Só passe `true` quando `hasEnoughForMovingAverage` autorizar. */
   showAverage?: boolean;
   height?: number;
-}) {
-  const data = React.useMemo(
-    () =>
-      series.map((point) => ({
-        date: point.date,
-        label: shortDateLabel(point.date),
-        value: point.value,
-        average: point.average,
-      })),
-    [series],
-  );
+};
 
-  const values = React.useMemo(
-    () => measuredPoints(series).map((point) => point.value as number),
-    [series],
-  );
+// ⛔ O segundo argumento de `next/dynamic` tem de ser objeto literal escrito ali mesmo — o
+// compilador o lê estaticamente e recusa uma constante compartilhada.
+const LazyMeasurementChart = dynamic(
+  () => import("./measurement-chart-impl").then((m) => m.MeasurementChart),
+  { ssr: false, loading: () => <ChartSkeleton /> },
+);
 
-  /**
-   * Domínio do eixo Y com 10% de folga — e nunca começando em zero.
-   * Sem medição nenhuma, devolve `auto` e o recharts não desenha nada, que é o correto.
-   */
-  const domain = React.useMemo((): [number | "auto", number | "auto"] => {
-    if (values.length === 0) return ["auto", "auto"];
-    const candidates = target !== null && target !== undefined ? [...values, target] : values;
-    const min = Math.min(...candidates);
-    const max = Math.max(...candidates);
-    // Todos os valores iguais: abre uma faixa artificial para a linha não colar na borda.
-    const padding = max === min ? Math.max(1, Math.abs(max) * 0.05) : (max - min) * 0.1;
-    return [min - padding, max + padding];
-  }, [values, target]);
-
-  if (values.length === 0) {
+export function MeasurementChart(props: MeasurementChartProps) {
+  if (measuredPoints(props.series).length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
         Ainda não há medições neste período para desenhar o gráfico.
@@ -96,75 +58,9 @@ export function MeasurementChart({
   }
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 4 }}>
-        <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-        <XAxis
-          dataKey="label"
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-          minTickGap={24}
-        />
-        <YAxis
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-          width={56}
-          domain={domain}
-          tickFormatter={(v) => formatMeasurement(Number(v), unit, decimals)}
-        />
-        <Tooltip
-          contentStyle={tooltipStyle}
-          labelStyle={tooltipLabelStyle}
-          itemStyle={tooltipItemStyle}
-          cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.3 }}
-          formatter={(value, name) => [
-            formatMeasurement(Number(value), unit, decimals),
-            name === "average" ? "Média móvel" : "Medição",
-          ]}
-        />
-
-        {target !== null && target !== undefined && (
-          <ReferenceLine
-            y={target}
-            stroke="var(--chart-2)"
-            strokeDasharray="4 4"
-            label={{
-              value: `Alvo: ${formatMeasurement(target, unit, decimals)}`,
-              position: "insideTopRight",
-              fill: "var(--muted-foreground)",
-              fontSize: 11,
-            }}
-          />
-        )}
-
-        {/* ⛔ connectNulls={false}: o buraco fica visível, como deve. */}
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke="var(--chart-1)"
-          strokeWidth={2}
-          dot={{ r: 3, fill: "var(--chart-1)" }}
-          activeDot={{ r: 5 }}
-          connectNulls={false}
-          isAnimationActive={false}
-        />
-
-        {showAverage && (
-          <Line
-            type="monotone"
-            dataKey="average"
-            stroke="var(--chart-3)"
-            strokeWidth={1.5}
-            strokeDasharray="5 3"
-            dot={false}
-            connectNulls
-            isAnimationActive={false}
-          />
-        )}
-      </LineChart>
-    </ResponsiveContainer>
+    <div style={chartSkeletonHeightVar(props.height ?? DEFAULT_CHART_HEIGHT)}>
+      <LazyMeasurementChart {...props} />
+    </div>
   );
 }
 

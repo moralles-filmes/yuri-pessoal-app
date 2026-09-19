@@ -7,6 +7,29 @@ import {
   type ToolPermission,
   type ToolWritePermission,
 } from "@/lib/ai/tools/contracts";
+// ⚠️ Estas seis moram em `@/lib/ai/constants` (módulo PURO, sem um único import de runtime) e
+// são REEXPORTADAS daqui para não quebrar nenhum import existente. Elas saíram deste arquivo
+// porque a TELA precisa delas, e importá-las de um módulo que começa com `import { z } from
+// "zod"` arrastava 62,7 KB gz de zod para o primeiro byte das rotas de /ia. Ver `.turbo/REPORT.md`.
+//
+// ⛔ Ao usá-las num componente client, importe de `@/lib/ai/constants` — não daqui.
+import {
+  MAX_CHAT_TEXT,
+  MAX_OBSERVACAO_DOCUMENTO,
+  MODULOS_COM_CONTEXTO,
+  ROTAS_COM_CONTEXTO,
+  type ModuloComContexto,
+  type RotaComContexto,
+} from "@/lib/ai/constants";
+
+export {
+  MAX_CHAT_TEXT,
+  MAX_OBSERVACAO_DOCUMENTO,
+  MODULOS_COM_CONTEXTO,
+  ROTAS_COM_CONTEXTO,
+  type ModuloComContexto,
+  type RotaComContexto,
+};
 
 /**
  * Fase 18-A — IA · Schemas Zod.
@@ -35,11 +58,6 @@ const modelId = z
   .nullish()
   .transform((v) => (v && v.length ? v : null));
 
-/**
- * Limite do texto da mensagem no ROUTE HANDLER. O banco tem um backstop de 32.000 — maior
- * de propósito, porque ele protege o caminho que não passa por aqui (RPC direto).
- */
-export const MAX_CHAT_TEXT = 16_000;
 /** Limite do CORPO HTTP inteiro. Bem acima do texto, para caber JSON e acentuação. */
 export const MAX_CHAT_BODY_BYTES = 64 * 1024;
 
@@ -74,45 +92,8 @@ export const MAX_CHAT_BODY_BYTES = 64 * 1024;
  * `user_id` não existe aqui — como em todo schema deste arquivo, ele vem só de
  * `authContext()`. E entrada e saída têm a MESMA forma: `parse(parse(x))` funciona.
  */
-export const ROTAS_COM_CONTEXTO = [
-  "/treinos",
-  "/treinos/historico",
-  "/treinos/recordes",
-  // 18-C · Lote 1. Cada uma destas é a tela ÚNICA do seu módulo — não há rota por registro
-  // aqui, pela mesma razão registrada acima.
-  "/todo",
-  "/habitos",
-  "/estudos",
-  // 18-C · Lote 2
-  "/agenda",
-  "/tarefas",
-  "/rotinas",
-  // ⚠️ `/nutricao/medidas` mapeia para o módulo `body`, não para `nutrition`: a tela mora
-  // dentro de Dieta, mas o dado é do módulo central `body_*` e a permissão é `allow_body`.
-  "/nutricao/medidas",
-  // 18-C · Lote 3
-  "/financeiro",
-  "/faturas",
-  "/nutricao",
-  "/nutricao/diario",
-] as const;
-
-export type RotaComContexto = (typeof ROTAS_COM_CONTEXTO)[number];
-
-/** Mesmo vocabulário de `ToolDescriptor.module` — quem entra aqui tem ferramenta lá. */
-export const MODULOS_COM_CONTEXTO = [
-  "training",
-  "todo",
-  "habits",
-  "studies",
-  "calendar",
-  "tasks",
-  "body",
-  "finance",
-  "nutrition",
-] as const;
-
-export type ModuloComContexto = (typeof MODULOS_COM_CONTEXTO)[number];
+// A lista de rotas, a de módulos e os dois tipos moram em `@/lib/ai/constants` e estão
+// reexportados no topo deste arquivo. O docblock que explicava a regra foi junto.
 
 /**
  * `satisfies Record<…>` é a trava: uma rota nova em `ROTAS_COM_CONTEXTO` sem entrada aqui
@@ -361,16 +342,6 @@ export type AiPreferencesInput = z.infer<typeof aiPreferencesSchema>;
 // ─────────────────────────── Conversas ───────────────────────────
 
 // ─────────────────────────── Comprovantes (18-D) ───────────────────────────
-
-/**
- * O que o dono escreve ao enviar ("foi no PIX", "metade é do João").
- *
- * ⛔ **É DADO, NUNCA INSTRUÇÃO.** Entra na extração dentro do mesmo bloco `wrapUntrusted`
- * que o conteúdo do arquivo — texto de humano não vira mensagem de sistema só porque foi
- * digitado num campo nosso. O limite curto é parte disso: 500 caracteres não comportam um
- * prompt, e cortam a superfície sem atrapalhar o uso real.
- */
-export const MAX_OBSERVACAO_DOCUMENTO = 500;
 
 export const documentoRefSchema = z
   .object({ documentoId: z.uuid("Comprovante inválido") })

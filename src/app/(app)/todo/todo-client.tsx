@@ -11,6 +11,7 @@
  * página ou compartilhar o link mantém exatamente a mesma tela.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -107,23 +108,12 @@ import {
   saveTodoPreference,
 } from "@/lib/actions/todo-extras";
 import { TaskRow, type TaskRowActions } from "@/components/todo/task-row";
-import { TaskBoard, type BoardColumn } from "@/components/todo/task-board";
-import { TaskCalendar } from "@/components/todo/task-calendar";
-import { TaskDetailSheet } from "@/components/todo/task-detail-sheet";
+import type { BoardColumn } from "@/components/todo/task-board";
+
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { QuickTaskInput } from "@/components/todo/quick-task-input";
 import { TodoNav, TodoNavDrawer, type TodoNavCounts, type TodoRoute } from "@/components/todo/todo-nav";
 import { ColorDot, PriorityFlag } from "@/components/todo/badges";
-import {
-  DeleteProjectDialog,
-  DeleteSectionDialog,
-  LabelDialog,
-  MakeSubtaskDialog,
-  MoveTaskDialog,
-  PickDateDialog,
-  ProjectDialog,
-  SaveFilterDialog,
-  SectionDialog,
-} from "@/components/todo/todo-dialogs";
 import type {
   TodoFilterDefinition,
   TodoLabel,
@@ -133,6 +123,71 @@ import type {
   TodoSummary,
   TodoTask,
 } from "@/lib/todo/types";
+
+/* ───────────────────────── Carregamento sob demanda ─────────────────────────
+ *
+ * Esta é a tela mais pesada do TO-DO e vivia a poucos KB do orçamento de 250 KB gz por rota
+ * (`npm run perf:bundle`). Os doze componentes abaixo só aparecem sob condição, então o que
+ * eles custam não precisa estar no primeiro byte.
+ *
+ * ⚠️ **Duas políticas diferentes, e a diferença não é estilo:**
+ *
+ * • **Quadro e calendário mantêm `ssr` LIGADO** (o padrão). São conteúdo principal, e quem
+ *   abre `?view=quadro` direto tem de receber o quadro já renderizado pelo servidor. O que o
+ *   `dynamic` resolve aqui é o outro caso: na lista — o modo padrão —, nenhum dos dois chunks
+ *   (incluindo o `@dnd-kit` do quadro) é sequer pedido. Medido: `ssr: false` não rendeu um
+ *   byte a mais, então não há por que abrir mão da renderização de servidor.
+ *
+ * • **Os dez painéis usam `ssr: false` + `useLazyDialog`.** Eles só abrem por clique (ou por
+ *   `?task=`), e sobrepõem a tela em vez de ocupar espaço nela. ⛔ `{aberto && <Dialog/>}`
+ *   sozinho **quebraria a animação de fechamento** — o hook monta na primeira abertura e não
+ *   desmonta mais.
+ */
+const TaskBoard = dynamic(() => import("@/components/todo/task-board").then((m) => m.TaskBoard));
+const TaskCalendar = dynamic(() =>
+  import("@/components/todo/task-calendar").then((m) => m.TaskCalendar),
+);
+
+const TaskDetailSheet = dynamic(
+  () => import("@/components/todo/task-detail-sheet").then((m) => m.TaskDetailSheet),
+  { ssr: false },
+);
+const DeleteProjectDialog = dynamic(
+  () => import("@/components/todo/todo-dialogs").then((m) => m.DeleteProjectDialog),
+  { ssr: false },
+);
+const DeleteSectionDialog = dynamic(
+  () => import("@/components/todo/todo-dialogs").then((m) => m.DeleteSectionDialog),
+  { ssr: false },
+);
+const LabelDialog = dynamic(
+  () => import("@/components/todo/todo-dialogs").then((m) => m.LabelDialog),
+  { ssr: false },
+);
+const MakeSubtaskDialog = dynamic(
+  () => import("@/components/todo/todo-dialogs").then((m) => m.MakeSubtaskDialog),
+  { ssr: false },
+);
+const MoveTaskDialog = dynamic(
+  () => import("@/components/todo/todo-dialogs").then((m) => m.MoveTaskDialog),
+  { ssr: false },
+);
+const PickDateDialog = dynamic(
+  () => import("@/components/todo/todo-dialogs").then((m) => m.PickDateDialog),
+  { ssr: false },
+);
+const ProjectDialog = dynamic(
+  () => import("@/components/todo/todo-dialogs").then((m) => m.ProjectDialog),
+  { ssr: false },
+);
+const SaveFilterDialog = dynamic(
+  () => import("@/components/todo/todo-dialogs").then((m) => m.SaveFilterDialog),
+  { ssr: false },
+);
+const SectionDialog = dynamic(
+  () => import("@/components/todo/todo-dialogs").then((m) => m.SectionDialog),
+  { ssr: false },
+);
 
 const NO_SECTION = "__sem_secao__";
 
@@ -237,6 +292,18 @@ export function TodoClient({
     open: boolean;
     filter: TodoSavedFilter | null;
   }>({ open: false, filter: null });
+
+  // Nada destes painéis é baixado antes da primeira abertura.
+  const detailMounted = useLazyDialog(detailTask !== null);
+  const projectDialogMounted = useLazyDialog(projectDialog.open);
+  const deleteProjectMounted = useLazyDialog(deleteProject !== null);
+  const sectionDialogMounted = useLazyDialog(sectionDialog !== null);
+  const deleteSectionMounted = useLazyDialog(deleteSection !== null);
+  const labelDialogMounted = useLazyDialog(labelDialog.open);
+  const moveTaskMounted = useLazyDialog(moveTask !== null);
+  const pickDateMounted = useLazyDialog(pickDateTask !== null);
+  const subtaskMounted = useLazyDialog(subtaskTask !== null);
+  const saveFilterMounted = useLazyDialog(saveFilterDialog.open);
 
   /* ── Ordem manual de projetos, etiquetas e filtros (UI otimista) ──
    * A lista reordena na hora e volta a seguir o servidor no próximo revalidate.
@@ -889,86 +956,106 @@ export function TodoClient({
       </div>
 
       {/* Diálogos e painel */}
-      <TaskDetailSheet
-        task={detailTask}
-        open={detailTask !== null}
-        onOpenChange={(open) => {
-          if (open) return;
-          setDetailTask(null);
-          // Limpa o `?task=` para o painel não reabrir a cada navegação.
-          if (openTaskId) navigate({ task: null });
-        }}
-        projects={projects}
-        labels={labels}
-        allTasks={tasks}
-        userId={userId}
-      />
-      <ProjectDialog
-        open={projectDialog.open}
-        onOpenChange={(open) => setProjectDialog({ open, project: open ? projectDialog.project : null })}
-        project={projectDialog.project}
-        projects={projects}
-      />
-      <DeleteProjectDialog
-        open={deleteProject !== null}
-        onOpenChange={(open) => !open && setDeleteProject(null)}
-        project={deleteProject}
-        projects={projects}
-      />
-      <SectionDialog
-        open={sectionDialog !== null}
-        onOpenChange={(open) => !open && setSectionDialog(null)}
-        projectId={sectionDialog?.projectId ?? ""}
-        section={
-          sectionDialog?.sectionId
-            ? (currentProject?.sections.find((s) => s.id === sectionDialog.sectionId) ?? null)
-            : null
-        }
-      />
-      <DeleteSectionDialog
-        open={deleteSection !== null}
-        onOpenChange={(open) => !open && setDeleteSection(null)}
-        section={
-          deleteSection
-            ? (currentProject?.sections.find((s) => s.id === deleteSection.id) ?? null)
-            : null
-        }
-        siblings={
-          currentProject?.sections.filter((s) => s.id !== deleteSection?.id) ?? []
-        }
-        taskCount={deleteSection?.taskCount ?? 0}
-      />
-      <LabelDialog
-        open={labelDialog.open}
-        onOpenChange={(open) => setLabelDialog({ open, label: open ? labelDialog.label : null })}
-        label={labelDialog.label}
-        labels={labels}
-      />
-      <MoveTaskDialog
-        open={moveTask !== null}
-        onOpenChange={(open) => !open && setMoveTask(null)}
-        task={moveTask}
-        projects={projects}
-      />
-      <PickDateDialog
-        open={pickDateTask !== null}
-        onOpenChange={(open) => !open && setPickDateTask(null)}
-        task={pickDateTask}
-      />
-      <MakeSubtaskDialog
-        open={subtaskTask !== null}
-        onOpenChange={(open) => !open && setSubtaskTask(null)}
-        task={subtaskTask}
-        candidates={tasks}
-      />
-      <SaveFilterDialog
-        open={saveFilterDialog.open}
-        onOpenChange={(open) =>
-          setSaveFilterDialog({ open, filter: open ? saveFilterDialog.filter : null })
-        }
-        definition={filterDefinition}
-        filter={saveFilterDialog.filter}
-      />
+      {detailMounted && (
+        <TaskDetailSheet
+          task={detailTask}
+          open={detailTask !== null}
+          onOpenChange={(open) => {
+            if (open) return;
+            setDetailTask(null);
+            // Limpa o `?task=` para o painel não reabrir a cada navegação.
+            if (openTaskId) navigate({ task: null });
+          }}
+          projects={projects}
+          labels={labels}
+          allTasks={tasks}
+          userId={userId}
+        />
+      )}
+      {projectDialogMounted && (
+        <ProjectDialog
+          open={projectDialog.open}
+          onOpenChange={(open) => setProjectDialog({ open, project: open ? projectDialog.project : null })}
+          project={projectDialog.project}
+          projects={projects}
+        />
+      )}
+      {deleteProjectMounted && (
+        <DeleteProjectDialog
+          open={deleteProject !== null}
+          onOpenChange={(open) => !open && setDeleteProject(null)}
+          project={deleteProject}
+          projects={projects}
+        />
+      )}
+      {sectionDialogMounted && (
+        <SectionDialog
+          open={sectionDialog !== null}
+          onOpenChange={(open) => !open && setSectionDialog(null)}
+          projectId={sectionDialog?.projectId ?? ""}
+          section={
+            sectionDialog?.sectionId
+              ? (currentProject?.sections.find((s) => s.id === sectionDialog.sectionId) ?? null)
+              : null
+          }
+        />
+      )}
+      {deleteSectionMounted && (
+        <DeleteSectionDialog
+          open={deleteSection !== null}
+          onOpenChange={(open) => !open && setDeleteSection(null)}
+          section={
+            deleteSection
+              ? (currentProject?.sections.find((s) => s.id === deleteSection.id) ?? null)
+              : null
+          }
+          siblings={
+            currentProject?.sections.filter((s) => s.id !== deleteSection?.id) ?? []
+          }
+          taskCount={deleteSection?.taskCount ?? 0}
+        />
+      )}
+      {labelDialogMounted && (
+        <LabelDialog
+          open={labelDialog.open}
+          onOpenChange={(open) => setLabelDialog({ open, label: open ? labelDialog.label : null })}
+          label={labelDialog.label}
+          labels={labels}
+        />
+      )}
+      {moveTaskMounted && (
+        <MoveTaskDialog
+          open={moveTask !== null}
+          onOpenChange={(open) => !open && setMoveTask(null)}
+          task={moveTask}
+          projects={projects}
+        />
+      )}
+      {pickDateMounted && (
+        <PickDateDialog
+          open={pickDateTask !== null}
+          onOpenChange={(open) => !open && setPickDateTask(null)}
+          task={pickDateTask}
+        />
+      )}
+      {subtaskMounted && (
+        <MakeSubtaskDialog
+          open={subtaskTask !== null}
+          onOpenChange={(open) => !open && setSubtaskTask(null)}
+          task={subtaskTask}
+          candidates={tasks}
+        />
+      )}
+      {saveFilterMounted && (
+        <SaveFilterDialog
+          open={saveFilterDialog.open}
+          onOpenChange={(open) =>
+            setSaveFilterDialog({ open, filter: open ? saveFilterDialog.filter : null })
+          }
+          definition={filterDefinition}
+          filter={saveFilterDialog.filter}
+        />
+      )}
     </div>
   );
 }

@@ -14,6 +14,7 @@
  * 4. **Sem prescrição e sem cobrança.** Nenhum texto sugere alvo, carga ou culpa.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -53,7 +54,15 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { Field } from "@/components/training/field";
-import { GoalFormDialog } from "@/components/training/goal-form-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+
+// Os diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form`
+// junto. Sob demanda, eles saem do primeiro byte da rota; `useLazyDialog` monta cada
+// um na primeira abertura e não o desmonta mais, para não cortar a animação de fechar.
+const GoalFormDialog = dynamic(
+  () => import("@/components/training/goal-form-dialog").then((m) => m.GoalFormDialog),
+  { ssr: false },
+);
 import { cn } from "@/lib/utils";
 import {
   GOAL_KIND_LABELS,
@@ -115,6 +124,8 @@ export function GoalsClient({
   const router = useRouter();
 
   const [formOpen, setFormOpen] = React.useState(false);
+  // Nada destes diálogos é baixado antes do primeiro clique que os abre.
+  const formMounted = useLazyDialog(formOpen);
   const [editing, setEditing] = React.useState<ResolvedGoal | null>(null);
   const [deleting, setDeleting] = React.useState<ResolvedGoal | null>(null);
   const [recording, setRecording] = React.useState<ResolvedGoal | null>(null);
@@ -272,17 +283,19 @@ export function GoalsClient({
         </>
       )}
 
-      <GoalFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        goal={editing?.goal ?? null}
-        hoje={hoje}
-        exercises={exercises}
-        muscleGroups={muscleGroups}
-        programs={programs}
-        measurementTypes={measurementTypes}
-        onSaved={() => router.refresh()}
-      />
+      {formMounted && (
+        <GoalFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          goal={editing?.goal ?? null}
+          hoje={hoje}
+          exercises={exercises}
+          muscleGroups={muscleGroups}
+          programs={programs}
+          measurementTypes={measurementTypes}
+          onSaved={() => router.refresh()}
+        />
+      )}
 
       <RecordProgressDialog
         goal={recording}

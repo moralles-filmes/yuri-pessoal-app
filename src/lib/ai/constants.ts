@@ -4,7 +4,6 @@
  * Puro. Importável por componente client — não há nada de servidor aqui.
  */
 
-import type { RotaComContexto } from "@/lib/validators/ai";
 // `import type` de um módulo PURO (`approval/state.ts` não tem `server-only`): apagado na
 // compilação, então nada de servidor entra no bundle do cliente por causa desta linha.
 import type { EstadoDaProposta } from "@/lib/ai/approval/state";
@@ -115,11 +114,90 @@ export const AVISO_MOEDA =
   "Valores em dólar (USD) e estimados pelo sistema a partir das tarifas publicadas pelos provedores. Não é a cobrança oficial deles, e não há conversão para reais.";
 
 /**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ A LISTA DE ROTAS É ESTÁTICA: UMA ROTA QUE NÃO ESTÁ AQUI NÃO EXISTE PARA A IA.         ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⛔ **A PÁGINA NÃO MANDA CONTEÚDO.** Nem HTML, nem título, nem estado, nem texto de
+ * registro. O único campo que atravessa o transporte é `rota`, e ele é um valor desta lista
+ * fechada — não é texto do usuário (invariante 21 da 18-B). Quem valida a entrada continua
+ * sendo `pageContextSchema`, em `@/lib/validators/ai`, que consome esta lista.
+ *
+ * ⚠️ **Ela mora AQUI, e não junto do schema, por uma razão medida:** `chat-client.tsx` precisa
+ * da lista para montar o seletor de contexto, e importá-la de `@/lib/validators/ai` arrastava
+ * o `zod` inteiro — 62,7 KB gz — para o primeiro byte das três rotas de `/ia`. Este arquivo é
+ * puro e não tem um único import de runtime; aquele importa `zod` na primeira linha. A lista é
+ * dado, não validação, e é dado que as duas pontas leem.
+ */
+export const ROTAS_COM_CONTEXTO = [
+  "/treinos",
+  "/treinos/historico",
+  "/treinos/recordes",
+  // 18-C · Lote 1. Cada uma destas é a tela ÚNICA do seu módulo — não há rota por registro
+  // aqui, pela mesma razão registrada no schema.
+  "/todo",
+  "/habitos",
+  "/estudos",
+  // 18-C · Lote 2
+  "/agenda",
+  "/tarefas",
+  "/rotinas",
+  // ⚠️ `/nutricao/medidas` mapeia para o módulo `body`, não para `nutrition`: a tela mora
+  // dentro de Dieta, mas o dado é do módulo central `body_*` e a permissão é `allow_body`.
+  "/nutricao/medidas",
+  // 18-C · Lote 3
+  "/financeiro",
+  "/faturas",
+  "/nutricao",
+  "/nutricao/diario",
+] as const;
+
+export type RotaComContexto = (typeof ROTAS_COM_CONTEXTO)[number];
+
+/** Mesmo vocabulário de `ToolDescriptor.module` — quem entra aqui tem ferramenta lá. */
+export const MODULOS_COM_CONTEXTO = [
+  "training",
+  "todo",
+  "habits",
+  "studies",
+  "calendar",
+  "tasks",
+  "body",
+  "finance",
+  "nutrition",
+] as const;
+
+export type ModuloComContexto = (typeof MODULOS_COM_CONTEXTO)[number];
+
+/**
+ * Limite do texto da mensagem no ROUTE HANDLER. O banco tem um backstop de 32.000 — maior
+ * de propósito, porque ele protege o caminho que não passa por aqui (RPC direto).
+ *
+ * Aqui e não no schema pela mesma razão da lista acima: o contador de caracteres do chat o
+ * lê no cliente.
+ */
+export const MAX_CHAT_TEXT = 16_000;
+
+/**
+ * Limite da observação que o dono escreve ao enviar um comprovante, 18-D ("foi no PIX",
+ * "metade é do João").
+ *
+ * ⛔ **É DADO, NUNCA INSTRUÇÃO.** Entra na extração dentro do mesmo bloco `wrapUntrusted`
+ * que o conteúdo do arquivo — texto de humano não vira mensagem de sistema só porque foi
+ * digitado num campo nosso. O limite curto é parte disso: 500 caracteres não comportam um
+ * prompt, e cortam a superfície sem atrapalhar o uso real.
+ *
+ * Quem o aplica é `observacaoDocumentoSchema`, em `@/lib/validators/ai`; o contador da tela
+ * o lê daqui.
+ */
+export const MAX_OBSERVACAO_DOCUMENTO = 500;
+
+/**
  * Fase 18-B — o rótulo de cada rota que pode virar contexto da conversa.
  *
  * `satisfies Record<RotaComContexto, string>` obriga a cadastrar o rótulo no MESMO commit
  * em que uma rota entra na lista estática — senão a tela mostraria um caminho cru, ou pior,
- * `undefined`. A lista em si é de `@/lib/validators/ai`: aqui mora só a apresentação.
+ * `undefined`. Aqui mora só a apresentação.
  */
 export const ROTULO_DA_ROTA_DE_CONTEXTO = {
   "/treinos": "Treinos · visão geral",

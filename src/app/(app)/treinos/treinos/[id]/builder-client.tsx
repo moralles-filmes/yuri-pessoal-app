@@ -15,6 +15,7 @@
  *   para as duas telas nunca discordarem.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -64,9 +65,24 @@ import {
   removeWorkoutExercise,
   reorderWorkoutExercises,
 } from "@/lib/actions/training-workouts";
-import { ExercisePickerDialog } from "@/components/training/exercise-picker-dialog";
-import { WorkoutExerciseSheet } from "@/components/training/workout-exercise-sheet";
-import { WorkoutFormDialog } from "@/components/training/workout-form-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+
+// Os três diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form` junto.
+// Sob demanda, eles saem do primeiro byte da rota; `useLazyDialog` monta cada um na primeira
+// abertura e não o desmonta mais, para não cortar a animação de fechamento.
+const ExercisePickerDialog = dynamic(
+  () =>
+    import("@/components/training/exercise-picker-dialog").then((m) => m.ExercisePickerDialog),
+  { ssr: false },
+);
+const WorkoutExerciseSheet = dynamic(
+  () => import("@/components/training/workout-exercise-sheet").then((m) => m.WorkoutExerciseSheet),
+  { ssr: false },
+);
+const WorkoutFormDialog = dynamic(
+  () => import("@/components/training/workout-form-dialog").then((m) => m.WorkoutFormDialog),
+  { ssr: false },
+);
 
 export function WorkoutBuilderClient({
   workout,
@@ -91,6 +107,12 @@ export function WorkoutBuilderClient({
   const [busy, setBusy] = React.useState(false);
 
   const editing = workout.exercises.find((item) => item.id === editingId) ?? null;
+
+  // Nada dos três diálogos é baixado antes do primeiro clique que os abre.
+  const pickerMounted = useLazyDialog(pickerOpen);
+  const formMounted = useLazyDialog(formOpen);
+  const sheetMounted = useLazyDialog(Boolean(editing));
+
   const groupName = React.useMemo(
     () => new Map(groups.map((group) => [group.id, group.name])),
     [groups],
@@ -358,30 +380,36 @@ export function WorkoutBuilderClient({
         </Card>
       )}
 
-      <ExercisePickerDialog
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        workoutId={workout.id}
-        exercises={catalog}
-        groups={groups}
-        onAdded={() => router.refresh()}
-      />
+      {pickerMounted && (
+        <ExercisePickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          workoutId={workout.id}
+          exercises={catalog}
+          groups={groups}
+          onAdded={() => router.refresh()}
+        />
+      )}
 
-      <WorkoutFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        workout={workout}
-        programs={programs}
-        onSaved={() => router.refresh()}
-      />
+      {formMounted && (
+        <WorkoutFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          workout={workout}
+          programs={programs}
+          onSaved={() => router.refresh()}
+        />
+      )}
 
-      <WorkoutExerciseSheet
-        open={Boolean(editing)}
-        onOpenChange={(open) => !open && setEditingId(null)}
-        item={editing}
-        catalog={catalog}
-        onChanged={() => router.refresh()}
-      />
+      {sheetMounted && (
+        <WorkoutExerciseSheet
+          open={Boolean(editing)}
+          onOpenChange={(open) => !open && setEditingId(null)}
+          item={editing}
+          catalog={catalog}
+          onChanged={() => router.refresh()}
+        />
+      )}
     </div>
   );
 }

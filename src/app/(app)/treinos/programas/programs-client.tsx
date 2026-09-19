@@ -13,6 +13,7 @@
  *   informa que já havia outro em uso e segue.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -78,11 +79,22 @@ import {
   setTrainingProgramStatus,
   updateProgramWorkout,
 } from "@/lib/actions/training-programs";
-import { ProgramFormDialog } from "@/components/training/program-form-dialog";
-import {
-  DeleteWithDestinationDialog,
-  type DependencyLine,
-} from "@/components/training/delete-with-destination-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import type { DependencyLine } from "@/components/training/delete-with-destination-dialog";
+
+// Os dois diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form` junto.
+// Sob demanda, eles saem do primeiro byte da rota.
+const ProgramFormDialog = dynamic(
+  () => import("@/components/training/program-form-dialog").then((m) => m.ProgramFormDialog),
+  { ssr: false },
+);
+const DeleteWithDestinationDialog = dynamic(
+  () =>
+    import("@/components/training/delete-with-destination-dialog").then(
+      (m) => m.DeleteWithDestinationDialog,
+    ),
+  { ssr: false },
+);
 
 const ALL = "__todos__";
 
@@ -122,6 +134,8 @@ export function ProgramsClient({
   }, [programs, search, statusFilter, goalFilter, showArchived]);
 
   const [formOpen, setFormOpen] = React.useState(false);
+  // Nada do diálogo é baixado antes do primeiro clique que o abre.
+  const formMounted = useLazyDialog(formOpen);
   const [editing, setEditing] = React.useState<TrainingProgram | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState<TrainingProgram | null>(null);
@@ -343,12 +357,14 @@ export function ProgramsClient({
         </ul>
       )}
 
-      <ProgramFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        program={editing}
-        onSaved={() => router.refresh()}
-      />
+      {formMounted && (
+        <ProgramFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          program={editing}
+          onSaved={() => router.refresh()}
+        />
+      )}
 
       {deleting && (
         <DeleteWithDestinationDialog

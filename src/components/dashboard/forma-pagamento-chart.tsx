@@ -1,74 +1,38 @@
 "use client";
 
-import { CreditCard } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { EmptyState } from "@/components/shared/empty-state";
-import { formatCurrency } from "@/lib/format";
-import { PAYMENT_METHOD_LABELS } from "@/lib/finance/constants";
-import type { FormaSlice } from "@/lib/finance/dashboard";
-import {
-  axisTick,
-  brlCompact,
-  CHART_COLORS,
-  tooltipItemStyle,
-  tooltipLabelStyle,
-  tooltipStyle,
-} from "./chart-theme";
+/**
+ * Fachada de carregamento sob demanda de `forma-pagamento-chart-impl` (P3 da auditoria de performance, F-003).
+ *
+ * A API pública é EXATAMENTE a de antes — nenhuma tela mudou. O que mudou é quando o código
+ * chega: o `recharts` custa 109 KB gz e entrava no primeiro byte desta rota mesmo quando o
+ * gráfico estava fora da tela. Agora ele é baixado quando o gráfico aparece.
+ *
+ * `ssr: false` porque `ResponsiveContainer` depende de medir a largura do elemento e já não
+ * renderizava nada no servidor — não há conteúdo de servidor a preservar.
+ *
+ * O estado vazio continua DENTRO da implementação: aqui a fachada não sabe o que é "vazio"
+ * para cada gráfico, e duplicar a regra seria criar uma segunda verdade.
+ */
+import type * as React from "react";
+import dynamic from "next/dynamic";
+import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
 
-const LABELS: Record<string, string> = { ...PAYMENT_METHOD_LABELS, outro: "Outro" };
+type Props = React.ComponentProps<typeof import("./forma-pagamento-chart-impl").FormaPagamentoChart>;
 
-/** Gastos por forma de pagamento (barras horizontais). */
-export function FormaPagamentoChart({ data }: { data: FormaSlice[] }) {
-  const positivos = data.filter((d) => d.movimentado > 0);
-  if (positivos.length === 0) {
-    return (
-      <EmptyState
-        icon={CreditCard}
-        title="Sem gastos no período"
-        description="Os gastos aparecem aqui agrupados por forma de pagamento."
-        className="py-8"
-      />
-    );
-  }
+// ⛔ O segundo argumento de `next/dynamic` tem de ser objeto literal escrito ali mesmo — o
+// compilador o lê estaticamente e recusa uma constante compartilhada.
+const LazyFormaPagamentoChart = dynamic(() => import("./forma-pagamento-chart-impl").then((m) => m.FormaPagamentoChart), {
+  ssr: false,
+  loading: () => <ChartSkeleton />,
+});
 
-  const chartData = positivos.map((d) => ({
-    nome: LABELS[d.paymentMethod] ?? d.paymentMethod,
-    valor: d.movimentado,
-  }));
-
+export function FormaPagamentoChart(props: Props) {
+  // ⚠️ Único gráfico cuja altura depende dos dados (uma faixa por forma de pagamento), então o
+  // esqueleto repete aqui o filtro que a implementação usa. Se os dois divergirem, o preço é o
+  // esqueleto reservar altura errada por um instante — nunca um número errado na tela.
   return (
-    <ResponsiveContainer width="100%" height={Math.max(180, chartData.length * 46)}>
-      <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16 }}>
-        <XAxis type="number" tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis
-          type="category"
-          dataKey="nome"
-          width={104}
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip
-          cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-          formatter={(value) => [formatCurrency(Number(value)), "Movimentado"]}
-          contentStyle={tooltipStyle}
-          labelStyle={tooltipLabelStyle}
-          itemStyle={tooltipItemStyle}
-        />
-        <Bar dataKey="valor" radius={[0, 6, 6, 0]} maxBarSize={28}>
-          {chartData.map((_, i) => (
-            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <div style={chartSkeletonHeightVar(Math.max(180, props.data.filter((d) => d.movimentado > 0).length * 46))}>
+      <LazyFormaPagamentoChart {...props} />
+    </div>
   );
 }

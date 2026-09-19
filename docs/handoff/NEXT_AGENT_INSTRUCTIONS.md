@@ -1,8 +1,32 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-> Atualizado em **2026-08-09**, ao fechar o **Bloco 4 da 18-E** na branch
-> `feat/18-e-insights`. Com ele, a **18-E está CONCLUÍDA** — e a Fase 18 tem 18-A a 18-E
-> fechadas; resta a **18-F** (integrações e polimento).
+> Atualizado em **2026-09-19**, ao fechar a **auditoria de performance**. A última FASE do
+> roadmap fechada continua sendo a **18-E** (2026-08-09); resta a **18-F**.
+
+## ⚡ LEIA ISTO ANTES DE ESCREVER QUALQUER TELA (auditoria de performance, 2026-09-19)
+
+Quatro regras novas, todas medidas. Detalhe em `docs/project/CURRENT_STATUS.md` e no
+relatório completo em `.turbo/REPORT.md` (local, fora do git).
+
+1. **Gráfico e diálogo de formulário entram por `next/dynamic`.** `recharts` custa 109 KB gz e
+   `zod` + `react-hook-form` uns 62 KB. Os padrões já existem: par fachada/`*-impl.tsx` com
+   `ChartSkeleton` para gráfico, e `useLazyDialog`
+   (`src/components/shared/use-lazy-dialog.ts`) para diálogo.
+   ⚠️ **`{aberto && <Dialog/>}` sozinho quebra a animação de fechamento** — use o hook.
+2. **O que NÃO usa `recharts` fica na FACHADA, não no `-impl`.** `MeasurementTable` é a leitura
+   textual exigida pela regra 6 da 16-E; atrás do carregamento sob demanda ela sairia do HTML
+   do servidor.
+3. **Constante lida pela tela não mora em `src/lib/validators/`** — esse módulo começa com
+   `import { z } from "zod"`. Ponha em módulo puro (ex.: `@/lib/ai/constants`) e reexporte pelo
+   validator, para não quebrar import existente.
+4. **`npm run perf:bundle` reprova rota acima de 250 KB gz**, e roda no CI novo
+   (`.github/workflows/ci.yml`). ⚠️ `/todo` está a **2,6 KB** do teto.
+
+⚠️ **Se for medir plano de query: `EXPLAIN (analyze, timing off)` e papel `authenticated`.**
+Com `timing on` a view de alimentos acusou 150 ms onde o real eram 3 ms; como service role, a
+RLS some da conta e o custo real da policy fica invisível.
+
+---
 
 ## ▶️ PRÓXIMA: **18-F — IA · integrações e polimento**
 

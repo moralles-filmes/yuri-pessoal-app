@@ -1,65 +1,36 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
-  axisTick,
-  CHART_COLORS,
-  GRID_COLOR,
-  tooltipItemStyle,
-  tooltipLabelStyle,
-  tooltipStyle,
-} from "@/components/dashboard/chart-theme";
-
-export type BarPoint = { label: string; value: number };
-
 /**
- * Gráfico de barras genérico dos relatórios (Fase 14). Reaproveita os tokens do
- * design system (preto/branco/dourado, legível em dark/light). `formatValue` permite
- * BRL, minutos, porcentagem ou contagem.
+ * Fachada de carregamento sob demanda de `report-bar-chart-impl` (P3 da auditoria de performance, F-003).
+ *
+ * A API pública é EXATAMENTE a de antes — nenhuma tela mudou. O que mudou é quando o código
+ * chega: o `recharts` custa 109 KB gz e entrava no primeiro byte desta rota mesmo quando o
+ * gráfico estava fora da tela. Agora ele é baixado quando o gráfico aparece.
+ *
+ * `ssr: false` porque `ResponsiveContainer` depende de medir a largura do elemento e já não
+ * renderizava nada no servidor — não há conteúdo de servidor a preservar.
+ *
+ * O estado vazio continua DENTRO da implementação: aqui a fachada não sabe o que é "vazio"
+ * para cada gráfico, e duplicar a regra seria criar uma segunda verdade.
  */
-export function ReportBarChart({
-  data,
-  name,
-  color = CHART_COLORS[0],
-  formatValue,
-  height = 240,
-}: {
-  data: BarPoint[];
-  name: string;
-  color?: string;
-  formatValue?: (v: number) => string;
-  height?: number;
-}) {
+import type * as React from "react";
+import dynamic from "next/dynamic";
+import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
+export type { BarPoint } from "./report-bar-chart-impl";
+
+type Props = React.ComponentProps<typeof import("./report-bar-chart-impl").ReportBarChart>;
+
+// ⛔ O segundo argumento de `next/dynamic` tem de ser objeto literal escrito ali mesmo — o
+// compilador o lê estaticamente e recusa uma constante compartilhada.
+const LazyReportBarChart = dynamic(() => import("./report-bar-chart-impl").then((m) => m.ReportBarChart), {
+  ssr: false,
+  loading: () => <ChartSkeleton />,
+});
+
+export function ReportBarChart(props: Props) {
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ left: 4, right: 12, top: 8 }}>
-        <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-        <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-          width={78}
-          allowDecimals={false}
-          tickFormatter={formatValue}
-        />
-        <Tooltip
-          formatter={(v) => [formatValue ? formatValue(Number(v)) : String(v), name]}
-          contentStyle={tooltipStyle}
-          labelStyle={tooltipLabelStyle}
-          itemStyle={tooltipItemStyle}
-          cursor={{ fill: "var(--muted)", opacity: 0.35 }}
-        />
-        <Bar dataKey="value" name={name} fill={color} radius={[6, 6, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <div style={chartSkeletonHeightVar(props.height ?? 240)}>
+      <LazyReportBarChart {...props} />
+    </div>
   );
 }

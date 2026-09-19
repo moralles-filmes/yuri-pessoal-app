@@ -1,70 +1,35 @@
 "use client";
 
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
-  axisTick,
-  GRID_COLOR,
-  tooltipItemStyle,
-  tooltipLabelStyle,
-  tooltipStyle,
-} from "@/components/dashboard/chart-theme";
-import { formatMinutes, minutesToHours } from "@/lib/studies/constants";
-import type { StudyWeekPoint } from "@/types/database";
+/**
+ * Fachada de carregamento sob demanda de `evolution-chart-impl` (P3 da auditoria de performance, F-003).
+ *
+ * A API pública é EXATAMENTE a de antes — nenhuma tela mudou. O que mudou é quando o código
+ * chega: o `recharts` custa 109 KB gz e entrava no primeiro byte desta rota mesmo quando o
+ * gráfico estava fora da tela. Agora ele é baixado quando o gráfico aparece.
+ *
+ * `ssr: false` porque `ResponsiveContainer` depende de medir a largura do elemento e já não
+ * renderizava nada no servidor — não há conteúdo de servidor a preservar.
+ *
+ * O estado vazio continua DENTRO da implementação: aqui a fachada não sabe o que é "vazio"
+ * para cada gráfico, e duplicar a regra seria criar uma segunda verdade.
+ */
+import type * as React from "react";
+import dynamic from "next/dynamic";
+import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
 
-/** Evolução do tempo estudado por semana (últimas 8). Eixo em horas, tooltip amigável. */
-export function EvolutionChart({ weekly }: { weekly: StudyWeekPoint[] }) {
-  const data = weekly.map((w) => ({
-    label: w.label,
-    hours: minutesToHours(w.minutes),
-    minutes: w.minutes,
-  }));
+type Props = React.ComponentProps<typeof import("./evolution-chart-impl").EvolutionChart>;
 
+// ⛔ O segundo argumento de `next/dynamic` tem de ser objeto literal escrito ali mesmo — o
+// compilador o lê estaticamente e recusa uma constante compartilhada.
+const LazyEvolutionChart = dynamic(() => import("./evolution-chart-impl").then((m) => m.EvolutionChart), {
+  ssr: false,
+  loading: () => <ChartSkeleton />,
+});
+
+export function EvolutionChart(props: Props) {
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <AreaChart data={data} margin={{ left: 4, right: 8, top: 8 }}>
-        <defs>
-          <linearGradient id="studyEvolution" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.4} />
-            <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-        <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-          width={40}
-          tickFormatter={(v) => `${v}h`}
-          allowDecimals
-        />
-        <Tooltip
-          cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.3 }}
-          formatter={(_value, _name, item) => {
-            const p = item?.payload as { minutes: number };
-            return [formatMinutes(p.minutes), "Estudado"];
-          }}
-          labelFormatter={(label) => `Semana de ${label}`}
-          contentStyle={tooltipStyle}
-          labelStyle={tooltipLabelStyle}
-          itemStyle={tooltipItemStyle}
-        />
-        <Area
-          type="monotone"
-          dataKey="hours"
-          stroke="var(--chart-1)"
-          strokeWidth={2}
-          fill="url(#studyEvolution)"
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div style={chartSkeletonHeightVar(240)}>
+      <LazyEvolutionChart {...props} />
+    </div>
   );
 }
