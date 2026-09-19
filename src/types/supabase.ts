@@ -2108,6 +2108,7 @@ export type Database = {
           status: string
           tipo: string | null
           transaction_id: string | null
+          transfer_account_id: string | null
           updated_at: string
           user_id: string
           valor: number | null
@@ -2131,6 +2132,7 @@ export type Database = {
           status?: string
           tipo?: string | null
           transaction_id?: string | null
+          transfer_account_id?: string | null
           updated_at?: string
           user_id: string
           valor?: number | null
@@ -2154,6 +2156,7 @@ export type Database = {
           status?: string
           tipo?: string | null
           transaction_id?: string | null
+          transfer_account_id?: string | null
           updated_at?: string
           user_id?: string
           valor?: number | null
@@ -2179,6 +2182,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "transactions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_rows_transfer_account_owner_fkey"
+            columns: ["transfer_account_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }

@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { IMPORT_AS_OPTIONS, IMPORT_ORIGENS } from "@/lib/import/constants";
+import {
+  IMPORT_AS_OPTIONS,
+  IMPORT_ORIGENS,
+  IMPORT_ROW_TIPOS,
+} from "@/lib/import/constants";
 import { dateString, optionalUuid } from "@/lib/validators/shared";
 
 /** UUID nullable e OPCIONAL: ausente (undefined) = "não alterar"; "" = limpar; uuid = definir. */
@@ -82,7 +86,13 @@ export const updateImportRowSchema = z.object({
     .finite("Valor inválido")
     .positive("O valor deve ser maior que zero")
     .optional(),
-  tipo: z.enum(["despesa", "receita"]).optional(),
+  tipo: z.enum(IMPORT_ROW_TIPOS).optional(),
+  /**
+   * Conta de destino da transferência. Segue a semântica de `patchUuid`: ausente = não alterar,
+   * "" = limpar, uuid = definir. Quem confere se a conta é do próprio dono é a FK composta
+   * `(transfer_account_id, user_id)` no banco — a RLS só alcança o `user_id` da própria linha.
+   */
+  transfer_account_id: patchUuid,
 });
 
 export type UpdateImportRowInput = z.infer<typeof updateImportRowSchema>;

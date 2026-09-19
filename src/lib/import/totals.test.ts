@@ -5,9 +5,12 @@ function row(
   status: ImportRowTotalInput["status"],
   valor: number | null,
   tipo: ImportRowTotalInput["tipo"] = "despesa",
+  transfer_account_id: string | null = null,
 ): ImportRowTotalInput {
-  return { status, valor, tipo };
+  return { status, valor, tipo, transfer_account_id };
 }
+
+const CONTA_DESTINO = "33333333-3333-4333-8333-333333333333";
 
 describe("totaisPorStatus", () => {
   it("soma apenas as linhas 'para_importar' por padrão (ignoradas/duplicadas/erro fora)", () => {
@@ -77,5 +80,38 @@ describe("totaisPorStatus", () => {
     expect(t.despesas).toBe(0);
     expect(t.receitas).toBe(0);
     expect(t.liquido).toBe(0);
+  });
+});
+
+/**
+ * Transferência não é gasto nem entrada — é dinheiro mudando de lugar. Antes deste bloco ela
+ * caía no `else` e era somada como DESPESA, o que fazia o total do extrato mentir no valor das
+ * maiores linhas do mês (o pagamento da fatura é a maior delas).
+ */
+describe("totaisPorStatus — transferência", () => {
+  it("tem soma própria e fica FORA do líquido", () => {
+    const t = totaisPorStatus([
+      row("para_importar", 100, "despesa"),
+      row("para_importar", 1200, "despesa", CONTA_DESTINO),
+    ]);
+    expect(t.despesas).toBe(100);
+    expect(t.transferencias).toBe(1200);
+    expect(t.liquido).toBe(100);
+  });
+
+  it("transferência de ENTRADA também fica fora — não abate o líquido", () => {
+    const t = totaisPorStatus([
+      row("para_importar", 100, "despesa"),
+      row("para_importar", 500, "receita", CONTA_DESTINO),
+    ]);
+    expect(t.receitas).toBe(0);
+    expect(t.transferencias).toBe(500);
+    expect(t.liquido).toBe(100);
+  });
+
+  it("quem decide é a conta de destino, não o tipo", () => {
+    const semDestino = totaisPorStatus([row("para_importar", 80, "despesa")]);
+    expect(semDestino.despesas).toBe(80);
+    expect(semDestino.transferencias).toBe(0);
   });
 });

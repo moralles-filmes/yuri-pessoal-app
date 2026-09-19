@@ -32,6 +32,10 @@ import {
   marcarParcelasJaLancadas,
   type ParcelaLancada,
 } from "@/lib/import/parcelas-lancadas";
+import {
+  marcarTransferencias,
+  pernasDaTransferencia,
+} from "@/lib/import/transferencia";
 import { descricaoBaseParcela } from "@/lib/import/normalize";
 import {
   escalarPartesParcelado,
@@ -299,7 +303,10 @@ export async function parseImportFile(
           await parcelasLancadasFor(ctx, d.credit_card_id),
           competenciaFatura,
         )
-      : deduped;
+      : // Extrato: avisa o que parece transferência (e auto-ignora o pagamento de fatura, que
+        // já entra pelo cartão). Depois da dedup de propósito — ela limpa o `motivo` ao promover
+        // a linha, e rodar antes apagaria o aviso justamente nas linhas que ele existe para marcar.
+        marcarTransferencias(deduped, d.origem);
   const duplicadas = conferidas.filter((r) => r.status === "duplicada").length;
 
   const { data: batch, error: batchErr } = await ctx.supabase
@@ -405,7 +412,7 @@ export async function remapImportBatch(
           await parcelasLancadasFor(ctx, targetId),
           competenciaFatura,
         )
-      : deduped;
+      : marcarTransferencias(deduped, origem);
 
   await ctx.supabase.from("import_rows").delete().eq("import_batch_id", batchId);
   const { error: insErr } = await ctx.supabase
@@ -449,16 +456,50 @@ export async function updateImportRow(
   // senão marcar "não é duplicidade" depois da importação não teria como chegar à fatura.
   const { data: row } = await ctx.supabase
     .from("import_rows")
-    .select("id, status, transaction_id, import_batches(status)")
+    .select(
+      "id, status, transaction_id, classificacao, import_batches(status, origem, account_id)",
+    )
     .eq("id", rowId)
     .maybeSingle();
   if (!row) return dbError("Linha não encontrada.");
-  const batchStatus = (row.import_batches as { status?: string } | null)?.status;
-  if (batchStatus === "cancelado") return dbError("Este lote foi cancelado.");
+  const batch = row.import_batches as {
+    status?: string;
+    origem?: string;
+    account_id?: string | null;
+  } | null;
+  if (batch?.status === "cancelado") return dbError("Este lote foi cancelado.");
   if (row.status === "importada" || row.transaction_id) {
     return dbError(
       "Esta linha já virou lançamento. Edite o lançamento em Financeiro, ou desfaça a importação do lote.",
     );
+  }
+
+  // Escolher a conta de destino é o ATO de transformar a linha em transferência (não existe
+  // `tipo = 'transferencia'`; ver a migration). Por isso as travas moram aqui, e não no commit:
+  // barrar no momento da escolha é o que impede o lote de chegar ao fim com uma linha que só vai
+  // falhar lá.
+  if (d.transfer_account_id) {
+    if (batch?.origem !== "conta") {
+      return invalid({
+        transfer_account_id: ["Transferência só existe em extrato de conta."],
+      });
+    }
+    if (d.transfer_account_id === batch.account_id) {
+      return invalid({
+        transfer_account_id: [
+          "A conta de destino tem de ser diferente da conta do extrato.",
+        ],
+      });
+    }
+    // Transferência não é despesa de ninguém: dividir uma exigiria decidir quem "pagou" um
+    // dinheiro que não saiu do casal, e o motor de divisão (applySplit) só sabe repartir gasto.
+    if (row.classificacao !== "pessoal") {
+      return invalid({
+        transfer_account_id: [
+          "Esta linha está dividida com terceiros. Remova a divisão antes de marcá-la como transferência.",
+        ],
+      });
+    }
   }
 
   const update: {
@@ -469,6 +510,7 @@ export async function updateImportRow(
     data_norm?: string;
     valor?: number;
     tipo?: string;
+    transfer_account_id?: string | null;
   } = {};
   if (d.status !== undefined) update.status = d.status;
   if (d.categoria_sugerida_id !== undefined)
@@ -478,6 +520,13 @@ export async function updateImportRow(
   if (d.data_norm !== undefined) update.data_norm = d.data_norm;
   if (d.valor !== undefined) update.valor = d.valor;
   if (d.tipo !== undefined) update.tipo = d.tipo;
+  if (d.transfer_account_id !== undefined) {
+    update.transfer_account_id = d.transfer_account_id;
+    // Transferência não tem categoria — o lançamento gravado também não terá
+    // (`criarTransacao` força `category_id: null`). Deixar a sugestão na linha faria a revisão
+    // prometer uma categoria que o lançamento não vai ter.
+    if (d.transfer_account_id) update.categoria_sugerida_id = null;
+  }
 
   if (Object.keys(update).length === 0) {
     return { ok: true, data: undefined };
@@ -511,7 +560,9 @@ export async function setImportRowSplit(
 
   const { data: row } = await ctx.supabase
     .from("import_rows")
-    .select("id, tipo, status, transaction_id, import_batches(status)")
+    .select(
+      "id, tipo, status, transaction_id, transfer_account_id, import_batches(status)",
+    )
     .eq("id", rowId)
     .maybeSingle();
   if (!row) return dbError("Linha não encontrada.");
@@ -520,6 +571,14 @@ export async function setImportRowSplit(
   if (row.status === "importada" || row.transaction_id) {
     return dbError(
       "Esta linha já virou lançamento. Ajuste a divisão em Financeiro, ou desfaça a importação do lote.",
+    );
+  }
+  // A linha marcada como transferência tem `tipo = 'despesa'` (o sentido "saiu da conta"), então
+  // a checagem de despesa abaixo a deixaria passar. Transferência não é gasto de ninguém: não há
+  // o que repartir, e `criarTransacao` nem chega a olhar a divisão nesse caminho.
+  if (parsed.data.classificacao !== "pessoal" && row.transfer_account_id) {
+    return dbError(
+      "Esta linha é uma transferência entre suas contas. Remova a conta de destino para poder dividi-la.",
     );
   }
   if (parsed.data.classificacao !== "pessoal" && row.tipo !== "despesa") {
@@ -614,7 +673,7 @@ export async function commitImport(
   const { data: rows } = await ctx.supabase
     .from("import_rows")
     .select(
-      "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, parcela, parcelas_total, import_as, classificacao, split_parts",
+      "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, parcela, parcelas_total, import_as, classificacao, split_parts, transfer_account_id",
     )
     .eq("import_batch_id", batchId)
     .eq("status", "para_importar")
@@ -749,6 +808,36 @@ export async function commitImport(
         description: r.descricao ?? "",
         status: "pago",
         ...split,
+      });
+    } else if (r.transfer_account_id) {
+      // EXTRATO — a linha é dinheiro andando entre duas contas do dono, não gasto nem entrada.
+      //
+      // ⚠️ Quem decide a ORIGEM é o `tipo`, que guarda o sentido que veio do sinal do arquivo:
+      // `despesa` = saiu da conta do extrato (ela é a origem), `receita` = entrou nela (ela é o
+      // destino). É por isso que nada neste módulo sobrescreve `tipo` com um terceiro valor —
+      // sem o sentido, uma aplicação e um resgate ficariam indistinguíveis e o saldo das duas
+      // contas sairia invertido, sem nada na tela para denunciar.
+      //
+      // Uma linha só, como o resto do sistema: `public.account_balance` deriva as duas pernas
+      // dela (−amount na origem, +amount no destino) desde a migration
+      // 20260720030000_transferencia_uma_linha.sql. Sem divisão e sem categoria — `criarTransacao`
+      // já força as duas coisas neste caminho.
+      const pernas = pernasDaTransferencia({
+        tipo: r.tipo,
+        contaDoLote: batch.account_id!,
+        outraConta: r.transfer_account_id,
+      });
+      res = await createTransaction({
+        type: "transferencia",
+        payment_method: "transferencia",
+        card_id: "",
+        category_id: "",
+        ...pernas,
+        amount: r.valor,
+        purchase_date: r.data_norm,
+        competence_date: r.data_norm,
+        description: r.descricao ?? "",
+        status: "pago",
       });
     } else {
       const tipo = r.tipo === "receita" ? "receita" : "despesa";

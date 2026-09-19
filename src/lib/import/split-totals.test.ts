@@ -13,11 +13,14 @@ function row(over: Partial<ImportRowSplitInput> = {}): ImportRowSplitInput {
     status: "para_importar",
     valor: 100,
     tipo: "despesa",
+    transfer_account_id: null,
     classificacao: "pessoal",
     split_parts: [],
     ...over,
   };
 }
+
+const CONTA_DESTINO = "33333333-3333-4333-8333-333333333333";
 
 describe("divisaoDaLinha", () => {
   it("linha pessoal é toda minha", () => {
@@ -210,5 +213,26 @@ describe("divisaoPorStatus", () => {
   it("não acumula erro de ponto flutuante (soma em centavos)", () => {
     const d = divisaoPorStatus([row({ valor: 0.1 }), row({ valor: 0.2 })]);
     expect(d.meu).toBe(0.3);
+  });
+});
+
+/**
+ * A quebra "meu × de cada pessoa" precisa descrever o MESMO conjunto de linhas que o total ao
+ * lado dela (`totaisPorStatus`), que deixa a transferência de fora. Somá-la aqui inflaria a
+ * minha parte em silêncio.
+ */
+describe("divisaoDaLinha — transferência", () => {
+  it("vale zero e não é divisível", () => {
+    const d = divisaoDaLinha(row({ valor: 1200, transfer_account_id: CONTA_DESTINO }));
+    expect(d).toEqual({ ok: true, meuCentavos: 0, partes: [] });
+  });
+
+  it("fica fora da quebra do lote", () => {
+    const r = divisaoPorStatus([
+      row({ valor: 100 }),
+      row({ valor: 1200, transfer_account_id: CONTA_DESTINO }),
+    ]);
+    expect(r.meu).toBe(100);
+    expect(r.parcial).toBe(false);
   });
 });

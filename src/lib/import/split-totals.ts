@@ -22,13 +22,15 @@ import {
 } from "@/lib/finance/split";
 import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
 import type { Classificacao } from "@/lib/finance/constants";
-import type { ImportRowStatus } from "@/lib/import/constants";
+import type { ImportRowStatus, ImportRowTipo } from "@/lib/import/constants";
 
 /** Forma mínima de uma linha para o cálculo (subconjunto de ImportRowWithRelations). */
 export type ImportRowSplitInput = {
   status: ImportRowStatus;
   valor: number | null;
-  tipo: "despesa" | "receita" | null;
+  tipo: ImportRowTipo | null;
+  /** Preenchida = a linha é uma transferência entre contas do dono (ver `transferencia.ts`). */
+  transfer_account_id: string | null;
   classificacao: Classificacao;
   split_parts: ParteEmReais[];
 };
@@ -55,6 +57,14 @@ export type DivisaoDaLinha =
  */
 export function divisaoDaLinha(row: ImportRowSplitInput): DivisaoDaLinha {
   if (row.valor == null) return { ok: false, motivo: "Linha sem valor." };
+
+  // Transferência não é gasto nem entrada: não é divisível e não entra na quebra do lote. Vale
+  // ZERO aqui de propósito — o total do lote também a deixa fora (`totaisPorStatus`), e as duas
+  // contas precisam descrever o mesmo conjunto de linhas, senão a quebra "meu × de cada pessoa"
+  // não fecharia com o número ao lado dela.
+  if (row.transfer_account_id) {
+    return { ok: true, meuCentavos: 0, partes: [] };
+  }
 
   const centavos = reaisParaCentavos(row.valor);
   const sinal = row.tipo === "receita" ? -1 : 1;

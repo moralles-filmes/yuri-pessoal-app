@@ -61,6 +61,23 @@ export const IMPORT_ROW_STATUS_LABELS: Record<ImportRowStatus, string> = {
   erro: "Erro",
 };
 
+/**
+ * Sentido de uma linha (casa com o CHECK de `import_rows.tipo`). São DOIS: o dinheiro saiu da
+ * conta/cartão do lote, ou entrou nele.
+ *
+ * ⚠️ **`transferencia` NÃO é um terceiro valor daqui.** Uma linha de extrato vira transferência
+ * quando ganha `transfer_account_id` (a outra conta), e `tipo` continua dizendo o SENTIDO —
+ * que é o que decide qual das duas contas é a origem. Ver a migration
+ * `20260919120000_import_rows_transferencia.sql`.
+ */
+export const IMPORT_ROW_TIPOS = ["despesa", "receita"] as const;
+export type ImportRowTipo = (typeof IMPORT_ROW_TIPOS)[number];
+
+export const IMPORT_ROW_TIPO_LABELS: Record<ImportRowTipo, string> = {
+  despesa: "Despesa",
+  receita: "Receita",
+};
+
 /** Como uma linha será criada: 1 lançamento (single) ou compra parcelada (Fase 04). */
 export const IMPORT_AS_OPTIONS = ["single", "parcelamento"] as const;
 export type ImportAs = (typeof IMPORT_AS_OPTIONS)[number];
