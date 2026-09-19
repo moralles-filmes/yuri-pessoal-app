@@ -28,10 +28,13 @@ export default async function ImportarPage({
   if (batchId) {
     const batch = await getImportBatch(batchId);
     if (batch) {
-      const [rows, categories, people] = await Promise.all([
+      // `accounts` só é usado no extrato (marcar linha como transferência), mas é buscado
+      // sempre: a consulta é pequena e um `if` aqui ramificaria o Promise.all sem ganho.
+      const [rows, categories, people, contas] = await Promise.all([
         getImportRows(batchId),
         getCategories(),
         getPeopleForSelect(),
+        getAccounts(),
       ]);
       return (
         <div className="space-y-6">
@@ -49,6 +52,15 @@ export default async function ImportarPage({
               color: c.color,
             }))}
             people={people}
+            // A conta ARQUIVADA continua na lista quando já é o destino de alguma linha: tirá-la
+            // faria o chip da linha perder o nome e virar "outra conta".
+            accounts={contas
+              .filter(
+                (a) =>
+                  a.is_active ||
+                  rows.some((r) => r.transfer_account_id === a.id),
+              )
+              .map((a) => ({ id: a.id, name: a.name }))}
             today={hojeISO()}
           />
         </div>

@@ -81,18 +81,22 @@ const NONE = "none";
 
 type Categoria = { id: string; name: string; color: string | null };
 type PersonOption = { id: string; nome: string };
+type AccountOption = { id: string; name: string };
 
 export function ImportReview({
   batch,
   rows,
   categories,
   people,
+  accounts,
   today,
 }: {
   batch: ImportBatchWithTarget;
   rows: ImportRowWithRelations[];
   categories: Categoria[];
   people: PersonOption[];
+  /** Contas do dono, para marcar uma linha do extrato como transferência. */
+  accounts: AccountOption[];
   /** 'yyyy-MM-dd' de hoje, vindo do servidor (o fuso do aparelho não decide nada aqui). */
   today: string;
 }) {
@@ -118,6 +122,7 @@ export function ImportReview({
   // sempre descreve o número que está do lado dela, nunca outro conjunto de linhas.
   const divisao = divisaoPorStatus(rows, isDone ? "importada" : "para_importar");
   const temReceitas = totais.receitas > 0;
+  const temTransferencias = totais.transferencias > 0;
   // Em fatura de cartão, "receita" significa estorno/crédito (reduz a fatura).
   const creditoLabel = batch.origem === "cartao" ? "Estornos" : "Receitas";
 
@@ -173,7 +178,7 @@ export function ImportReview({
             </span>
           </div>
 
-          {temReceitas && (
+          {(temReceitas || temTransferencias) && (
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
               <span>
                 Despesas{" "}
@@ -181,12 +186,26 @@ export function ImportReview({
                   {formatCurrency(totais.despesas)}
                 </span>
               </span>
-              <span>
-                {creditoLabel}{" "}
-                <span className="font-medium text-emerald-600 tabular-nums dark:text-emerald-400">
-                  −{formatCurrency(totais.receitas)}
+              {temReceitas && (
+                <span>
+                  {creditoLabel}{" "}
+                  <span className="font-medium text-emerald-600 tabular-nums dark:text-emerald-400">
+                    −{formatCurrency(totais.receitas)}
+                  </span>
                 </span>
-              </span>
+              )}
+              {/* Transferência fica FORA do líquido acima: não é gasto nem entrada, é dinheiro
+                  mudando de lugar. Aparece aqui para o usuário conferir o extrato linha a linha
+                  sem procurar a diferença. */}
+              {temTransferencias && (
+                <span>
+                  Transferências{" "}
+                  <span className="font-medium text-foreground tabular-nums">
+                    {formatCurrency(totais.transferencias)}
+                  </span>{" "}
+                  <span className="text-[11px]">(fora do total)</span>
+                </span>
+              )}
             </div>
           )}
 
@@ -302,6 +321,8 @@ export function ImportReview({
                   people={people}
                   loteCancelado={isCancelado}
                   origem={batch.origem}
+                  accounts={accounts}
+                  contaDoLote={batch.account_id}
                   onChanged={() => router.refresh()}
                 />
               ))}
@@ -378,6 +399,7 @@ function DivisaoDaLinhaResumo({
     status: row.status,
     valor: row.valor,
     tipo: row.tipo,
+    transfer_account_id: row.transfer_account_id,
     classificacao: row.classificacao,
     split_parts: row.split_parts,
   });
@@ -708,6 +730,8 @@ function MappingEditor({ batch }: { batch: ImportBatchWithTarget }) {
             <p className="text-xs text-muted-foreground">
               Reaplicar o mapeamento recalcula valores, categorias e duplicados —
               ajustes manuais por linha são refeitos.
+              {batch.origem === "conta" &&
+                " As contas de destino marcadas como transferência também são perdidas."}
             </p>
             <div className="flex justify-end">
               <Button size="sm" onClick={apply} disabled={saving}>
@@ -899,18 +923,25 @@ function CancelButton({
 function SentidoLinha({
   tipo,
   origem,
+  transferencia,
   editavel,
   disabled,
   onToggle,
 }: {
   tipo: "despesa" | "receita";
   origem: "cartao" | "conta";
+  /** Linha marcada como transferência: o sentido deixa de ser gasto/entrada e vira saiu/entrou. */
+  transferencia: boolean;
   editavel: boolean;
   disabled: boolean;
   onToggle: () => void;
 }) {
-  const labels =
-    origem === "cartao"
+  // Numa transferência o sentido continua sendo a informação mais importante da linha — é ele
+  // que decide qual das duas contas é a ORIGEM do lançamento —, mas chamá-lo de "despesa"
+  // mentiria sobre o que vai ser gravado.
+  const labels = transferencia
+    ? { despesa: "Saiu daqui", receita: "Entrou aqui" }
+    : origem === "cartao"
       ? { despesa: "Compra", receita: "Estorno" }
       : { despesa: "Despesa", receita: "Receita" };
   const label = labels[tipo];
@@ -932,12 +963,87 @@ function SentidoLinha({
   );
 }
 
+/**
+ * Marca (ou desmarca) uma linha de EXTRATO como transferência entre contas do dono.
+ *
+ * Escolher a conta é o próprio ATO de transformar a linha em transferência — não existe
+ * `tipo = 'transferencia'` a alternar, e por isso também não existe o estado intermediário
+ * "é transferência, mas não sei para onde" (ver a migration `transfer_account_id`).
+ *
+ * O rótulo diz PARA ONDE ou DE ONDE conforme o sentido da linha, porque é o sentido que decide
+ * qual das duas contas é a origem do lançamento gravado — mostrar sempre "para" faria um
+ * resgate parecer uma aplicação.
+ */
+function TransferenciaDaLinha({
+  row,
+  contas,
+  editavel,
+  disabled,
+  onPick,
+}: {
+  row: ImportRowWithRelations;
+  contas: AccountOption[];
+  editavel: boolean;
+  disabled: boolean;
+  onPick: (accountId: string) => void;
+}) {
+  const destino = contas.find((c) => c.id === row.transfer_account_id);
+  const saiu = row.tipo !== "receita";
+  const preposicao = saiu ? "para" : "de";
+
+  if (row.transfer_account_id) {
+    return (
+      <span className="inline-flex w-fit items-center gap-1 rounded-full bg-sky-500/10 py-0.5 pr-1 pl-2 text-[11px] text-sky-700 ring-1 ring-sky-500/20 dark:text-sky-400">
+        <ArrowLeftRight className="size-3 shrink-0" />
+        <span className="min-w-0 truncate">
+          Transferência {preposicao} {destino?.name ?? "outra conta"}
+        </span>
+        {editavel && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onPick("")}
+            aria-label="Não é transferência"
+            title="Não é transferência"
+            className="shrink-0 rounded-full p-0.5 transition-colors hover:bg-sky-500/20 disabled:opacity-50"
+          >
+            <X className="size-3" />
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  // `value=""` mantém o placeholder visível: este ramo só existe enquanto a linha NÃO é
+  // transferência, então não há o que "limpar" — a opção de desfazer vive no × do chip acima.
+  return (
+    <Select value="" onValueChange={onPick}>
+      <SelectTrigger
+        size="sm"
+        className="w-fit gap-1 rounded-full border-0 px-2 text-[11px] ring-1 ring-border"
+        disabled={disabled}
+      >
+        <SelectValue placeholder="É transferência?" />
+      </SelectTrigger>
+      <SelectContent>
+        {contas.map((c) => (
+          <SelectItem key={c.id} value={c.id}>
+            {preposicao === "para" ? "Para" : "De"} {c.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function RowLine({
   row,
   categories,
   people,
   loteCancelado,
   origem,
+  accounts,
+  contaDoLote,
   onChanged,
 }: {
   row: ImportRowWithRelations;
@@ -945,6 +1051,8 @@ function RowLine({
   people: PersonOption[];
   loteCancelado: boolean;
   origem: "cartao" | "conta";
+  accounts: AccountOption[];
+  contaDoLote: string | null;
   onChanged: () => void;
 }) {
   const [busy, setBusy] = React.useState(false);
@@ -975,9 +1083,19 @@ function RowLine({
     (row.parcela ?? 0) < (row.parcelas_total ?? 0);
   const isOpenForEdit =
     editavel && (row.status === "para_importar" || row.status === "duplicada");
-  // Divisão na importação (Fase 05+06): só despesa com valor, enquanto editável.
-  const podeDividir = isOpenForEdit && row.tipo === "despesa" && row.valor != null;
+  const isTransferencia = row.transfer_account_id != null;
+  // Divisão na importação (Fase 05+06): só despesa com valor, enquanto editável. Transferência
+  // fica de fora — ela tem `tipo = 'despesa'` (o sentido "saiu da conta"), mas não é gasto de
+  // ninguém: não há o que repartir, e a action recusaria.
+  const podeDividir =
+    isOpenForEdit && row.tipo === "despesa" && row.valor != null && !isTransferencia;
   const isShared = row.classificacao !== "pessoal";
+  // Marcar como transferência só faz sentido em extrato, e só havendo OUTRA conta para onde
+  // mandar o dinheiro (a do próprio lote não conta — `account_id` e `transfer_account_id`
+  // iguais são recusados pelo schema do lançamento).
+  const outrasContas = accounts.filter((a) => a.id !== contaDoLote);
+  const podeSerTransferencia =
+    origem === "conta" && isOpenForEdit && !isShared && outrasContas.length > 0;
 
   return (
     <tr
@@ -1043,6 +1161,15 @@ function RowLine({
               <DivisaoDaLinhaResumo row={row} people={people} />
             </span>
           )}
+          {(isTransferencia || podeSerTransferencia) && (
+            <TransferenciaDaLinha
+              row={row}
+              contas={outrasContas}
+              editavel={isOpenForEdit}
+              disabled={busy}
+              onPick={(accountId) => patch({ transfer_account_id: accountId })}
+            />
+          )}
           {row.motivo && (
             <span className="text-xs text-muted-foreground">{row.motivo}</span>
           )}
@@ -1050,15 +1177,18 @@ function RowLine({
       </td>
       <td className="px-3 py-2 text-right whitespace-nowrap">
         <div className="flex flex-col items-end gap-0.5">
+          {/* Transferência não ganha cor de receita nem o "−": ela não entra no líquido do lote
+              (ver `totaisPorStatus`), então pintá-la de entrada faria a tela sugerir que ela
+              abate o total. */}
           <span
             className={cn(
               "tabular-nums",
-              row.tipo === "receita"
+              row.tipo === "receita" && !isTransferencia
                 ? "text-emerald-600 dark:text-emerald-400"
                 : "text-foreground",
             )}
           >
-            {row.tipo === "receita" ? "−" : ""}
+            {row.tipo === "receita" && !isTransferencia ? "−" : ""}
             {row.valor != null ? formatCurrency(row.valor) : "—"}
           </span>
           {/* Sentido da linha, sempre visível e corrigível: um arquivo com convenção de sinal
@@ -1068,6 +1198,7 @@ function RowLine({
             <SentidoLinha
               tipo={row.tipo}
               origem={origem}
+              transferencia={isTransferencia}
               editavel={isOpenForEdit}
               disabled={busy}
               onToggle={() =>
@@ -1078,7 +1209,11 @@ function RowLine({
         </div>
       </td>
       <td className="px-3 py-2">
-        {!editavel ? (
+        {isTransferencia ? (
+          // Transferência não tem categoria — `criarTransacao` grava `category_id: null` neste
+          // caminho. Oferecer o select aqui prometeria uma categoria que o lançamento não terá.
+          <span className="text-xs text-muted-foreground">Sem categoria</span>
+        ) : !editavel ? (
           <span className="text-xs text-muted-foreground">
             {row.categoria?.name ?? "—"}
           </span>

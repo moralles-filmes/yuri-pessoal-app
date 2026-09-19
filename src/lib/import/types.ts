@@ -5,6 +5,7 @@
  */
 import type {
   ImportRowStatus,
+  ImportRowTipo,
   MappingField,
 } from "@/lib/import/constants";
 
@@ -36,6 +37,11 @@ export type NormalizeOptions = {
 /**
  * Linha já normalizada a partir do arquivo + mapeamento. `valorCentavos` é o MÓDULO
  * (sempre >= 0); o sentido vai em `tipo`. Linhas inválidas saem com status 'erro' + motivo.
+ *
+ * `tipo` é o SENTIDO, vindo da convenção de sinal: `despesa` = saiu, `receita` = entrou. Em
+ * extrato, `marcarTransferencias` pode acrescentar um AVISO (`motivo`) a uma linha que parece
+ * transferência, mas não mexe no sentido — a outra conta da transferência é escolhida pelo
+ * usuário na revisão, e o pipeline puro não tem como sabê-la.
  */
 export type NormalizedRow = {
   linhaIndex: number;
@@ -43,7 +49,7 @@ export type NormalizedRow = {
   dataNorm: string | null; // 'yyyy-MM-dd'
   descricao: string;
   valorCentavos: number | null; // módulo (>= 0)
-  tipo: "despesa" | "receita" | null;
+  tipo: ImportRowTipo | null;
   parcela: number | null;
   parcelasTotal: number | null;
   identificador: string | null;

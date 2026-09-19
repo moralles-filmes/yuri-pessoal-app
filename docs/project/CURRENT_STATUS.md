@@ -1,7 +1,50 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-08-09**
-> (18-E CONCLUÍDA — os quatro blocos).
+> Atualizado ao final de **cada** fase. Última atualização: **2026-09-19**
+> (iteração: transferência na importação de extrato de conta).
+
+## Iteração 2026-09-19 — transferência na importação de EXTRATO DE CONTA
+
+**O que já existia:** a importação de extrato (`/importar` → origem "Extrato de conta") está
+pronta desde a Fase 06 e funcionava para despesa e receita — parse, mapeamento, dedup por
+FITID, revisão editável, commit e desfazer já tratavam `origem = 'conta'`. Conferido no banco:
+os 6 lotes importados até aqui eram **todos de cartão**, então esse caminho nunca tinha sido
+exercitado de verdade.
+
+**O que faltava:** o dinheiro que só **muda de lugar**. Um extrato traz pagamento de fatura de
+cartão, aplicação, resgate e transferência entre contas próprias; tudo isso entrava como
+despesa ou receita. A pior consequência era o **pagamento da fatura contar o cartão duas
+vezes** — uma pela fatura importada, outra como despesa da conta.
+
+**Decisões que valem daqui em diante:**
+
+1. **A conta de destino é o que faz a linha ser transferência; `tipo` guarda o SENTIDO.** Não
+   existe `tipo = 'transferencia'` em `import_rows`. `despesa` = saiu da conta do extrato,
+   `receita` = entrou nela — e é isso que decide qual das duas contas é a ORIGEM do lançamento
+   (`pernasDaTransferencia`, puro e testado). Sobrescrever `tipo` faria aplicação e resgate
+   ficarem indistinguíveis, com o saldo das duas contas invertido e nada na tela denunciando.
+   Ganho de graça: *"transferência sem destino"* deixa de ser **representável**.
+2. **Vocabulário é allowlist de EXPRESSÃO.** `src/lib/import/transferencia.ts` reconhece
+   "pagamento de fatura", "aplicacao", "resgate", "entre contas". **"pix", "ted", "doc" e
+   "transferencia" sozinhos ficam de fora** — "PIX ENVIADO - PADARIA" é despesa real. Palavra
+   ambígua **desliga** a regra em vez de errá-la (mesma disciplina do roteador da 18-C).
+3. **Pagamento de fatura é auto-ignorado**, como a fatura de cartão já faz com a própria linha
+   de pagamento. Quem paga fatura é **Faturas → pagar**, que também marca `pago_em` e
+   `pago_transacao_id`; importá-lo como transferência solta criaria um pagamento que não deixa
+   fatura nenhuma paga — uma segunda verdade sobre o mesmo fato.
+4. **Roda DEPOIS da dedup**, como `marcarParcelasJaLancadas`: a dedup limpa o `motivo` ao
+   promover a linha, e rodar antes apagaria o aviso justo nas linhas que ele marca.
+5. **Transferência fica fora do líquido** (`totaisPorStatus` tem soma própria) e fora da quebra
+   "meu × de cada pessoa" (`split-totals.ts`), e **não é divisível** — as duas contas precisam
+   descrever o mesmo conjunto de linhas.
+
+**Banco:** 1 migration (`20260919120000_import_rows_transferencia.sql`) — `import_rows.
+transfer_account_id`, `unique (id, user_id)` em `accounts` e a **FK composta**
+`(transfer_account_id, user_id)` com `on delete set null (transfer_account_id)` (lista de
+colunas, PG 15+; sem ela o Postgres zeraria `user_id`, que é NOT NULL). Nenhuma tabela nova.
+
+**Verificação:** `npm run test:run` ✅ (**3.428 testes / 167 arquivos**; +43 novos),
+`npm run lint` ✅, `npx tsc --noEmit` ✅, `npm run build` ✅.
 
 ## ✅ 18-E — IA · Insights (CONCLUÍDA, blocos 1 a 4)
 
