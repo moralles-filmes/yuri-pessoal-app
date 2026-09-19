@@ -57,8 +57,22 @@ export type DeteccaoTransferencia = {
 const PAGAMENTO_FATURA: RegExp[] = [
   /\b(pagamento|pagto|pgto|pag)\b[a-z0-9 ]{0,20}\bfatura\b/,
   /\bfatura\b[a-z0-9 ]{0,20}\b(cartao|credito)\b/,
-  /\b(pagamento|pagto|pgto|pag)\b[a-z0-9 ]{0,20}\bcartao de credito\b/,
 ];
+
+/**
+ * ⚠️ **Nem todo banco escreve "fatura".** As duas regras acima cobrem o Nubank ("Pagamento de
+ * fatura"), mas o Itaú lança "PAGTO CARTAO ITAUCARD" e o BB "PAGAMENTO CARTAO CREDITO" — e
+ * essa é justamente a linha do gasto em dobro. Uma versão anterior exigia a expressão inteira
+ * "cartao de credito" e deixava as duas escaparem.
+ *
+ * Por isso "pagamento + cartao" basta aqui, com UMA ressalva: alguns bancos descrevem compra no
+ * débito como "PAGAMENTO COM CARTAO DE DEBITO", e essa é uma despesa real. A menção a "debito"
+ * derruba a regra — mas só ESTA, não as de cima: "DEBITO AUTOMATICO FATURA CARTAO" é pagamento
+ * de fatura de verdade e continua casando por "fatura".
+ */
+const PAGAMENTO_CARTAO =
+  /\b(pagamento|pagto|pgto|pag)\b[a-z0-9 ]{0,20}\bcartao\b/;
+const MENCIONA_DEBITO = /\bdebito\b/;
 
 /**
  * Dinheiro andando entre contas do próprio dono. Só expressões sem leitura de despesa: aplicar
@@ -83,7 +97,11 @@ export function detectarTransferencia(
   const d = normalizarDescricao(descricao);
   if (!d) return null;
 
-  if (PAGAMENTO_FATURA.some((re) => re.test(d))) {
+  const pagamentoDeFatura =
+    PAGAMENTO_FATURA.some((re) => re.test(d)) ||
+    (PAGAMENTO_CARTAO.test(d) && !MENCIONA_DEBITO.test(d));
+
+  if (pagamentoDeFatura) {
     return {
       especie: "pagamento_fatura",
       motivo:
