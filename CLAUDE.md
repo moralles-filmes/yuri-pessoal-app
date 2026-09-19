@@ -752,6 +752,16 @@ Em `src/lib/calendar/format.ts`, `monthYearLabel`/`weekdayShort` recebem **data 
 
 **Crons da Vercel são sempre UTC:** `vercel.json` usa `0 12` e `0 0` para rodar às **09h e 21h de Brasília**.
 
+**⛔ `"regions": ["gru1"]` no `vercel.json` não é preferência — é onde está o banco.** O Supabase
+roda em `sa-east-1` (São Paulo). Sem essa chave o compute da Vercel cai no padrão **`iad1`
+(Washington)** e **toda** query atravessa o continente: ~120 ms por ida-e-volta, contra ~1–3 ms
+co-locado. O custo aparecia em todas as rotas, porque cada navegação faz duas chamadas de
+`auth.getUser()` serializadas (uma no `proxy.ts`, outra no `(app)/layout.tsx`) **antes** de
+qualquer dado. Medido em 2026-09-19: o header trazia `x-vercel-id: gru1::iad1` (formato
+`edge::compute`). Para conferir depois de um deploy:
+`curl -sD - -o /dev/null https://app.yurimoraes.com.br/login | grep x-vercel-id` → deve dizer
+`gru1::gru1`. **Se mudar o banco de região, mude esta linha junto.**
+
 Testes de fuso não podem depender do `TZ` da máquina: use instantes absolutos (com `Z`) e valores esperados em BRT. A suíte deve passar em qualquer fuso — verifique com `TZ=UTC npx vitest run`.
 
 ### Clientes Supabase (3, não confunda)
@@ -773,3 +783,8 @@ Testes de fuso não podem depender do `TZ` da máquina: use instantes absolutos 
 
 ## Ao concluir uma mudança relevante
 Mantenha o handoff vivo (regra do projeto): atualize `docs/project/CURRENT_STATUS.md` e `docs/handoff/*` com o que mudou e decisões tomadas, e rode a verificação (testes/lint/tsc/build) antes de declarar pronto.
+
+<!-- ai-router-br:start -->
+## AI Router BR
+When ai-router-br is available (Claude Code skill `ai-router-br:route`, Codex skill `$ai-router`), classify substantial work by risk/cost before executing. Keep critical/security/architecture decisions with the main agent; delegate only when beneficial; external-worker output must be tested and reviewed before integration. Never place secrets in router state.
+<!-- ai-router-br:end -->
