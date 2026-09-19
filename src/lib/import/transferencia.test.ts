@@ -33,8 +33,32 @@ describe("detectarTransferencia — pagamento de fatura", () => {
     "Pag fatura",
     "DEBITO AUTOMATICO FATURA CARTAO",
     "Pagamento cartão de crédito",
+    // Itaú e BB não escrevem "fatura" — e essa é justamente a linha do gasto em dobro.
+    "PAGTO CARTAO ITAUCARD",
+    "PAGAMENTO CARTAO CREDITO",
+    "PAGAMENTO CARTAO NUBANK",
+    "PAG CARTAO",
   ])("reconhece %s", (d) => {
     expect(detectarTransferencia(d)?.especie).toBe("pagamento_fatura");
+  });
+
+  /**
+   * A ressalva da regra "pagamento + cartao": alguns bancos descrevem compra no débito assim,
+   * e isso é despesa real. A menção a "debito" derruba só ESSA regra — "DEBITO AUTOMATICO
+   * FATURA CARTAO" continua casando pela palavra "fatura".
+   */
+  it.each([
+    "PAGAMENTO COM CARTAO DE DEBITO",
+    "COMPRA COM CARTAO DE DEBITO PADARIA",
+    "PAGAMENTO CARTAO DEBITO SUPERMERCADO",
+  ])("não confunde compra no débito: %s", (d) => {
+    expect(detectarTransferencia(d)).toBeNull();
+  });
+
+  it("débito automático DA FATURA continua sendo pagamento de fatura", () => {
+    expect(detectarTransferencia("DEBITO AUTOMATICO FATURA CARTAO")?.especie).toBe(
+      "pagamento_fatura",
+    );
   });
 
   it("o motivo aponta o caminho certo, que é Faturas", () => {
