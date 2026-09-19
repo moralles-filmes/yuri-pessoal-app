@@ -75,9 +75,14 @@ const rotas = [];
 for (const arquivo of globSync(MANIFESTS)) {
   const conteudo = readFileSync(arquivo, "utf8");
   const chunks = new Set(conteudo.match(/static\/chunks\/[A-Za-z0-9_\-.]+\.js/g) ?? []);
+  // ⚠️ `globSync` devolve o separador do sistema: no Windows vem `\`, e o `.replace` do sufixo
+  // (escrito com `/`) não casa. A rota ficava com o nome do manifest colado, NENHUMA chave de
+  // `EXCECOES` era encontrada e o teto próprio de `/(app)/configuracoes` não valia — o portão
+  // reprovava no Windows e passava no CI (ubuntu). Normalizar antes de fatiar iguala os dois.
   const rota =
     arquivo
-      .replace(join(RAIZ, "server/app"), "")
+      .replaceAll("\\", "/")
+      .replace(join(RAIZ, "server/app").replaceAll("\\", "/"), "")
       .replace("/page_client-reference-manifest.js", "") || "/";
   let total = 0;
   for (const chunk of chunks) total += tamanhoGz(chunk);
