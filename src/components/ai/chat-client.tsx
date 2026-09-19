@@ -33,12 +33,13 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { AI_PROVIDER_LABEL, type AiProviderId } from "@/lib/ai/core/contracts";
-import { AVISO_SEM_ACESSO, ROTULO_DA_ROTA_DE_CONTEXTO } from "@/lib/ai/constants";
 import {
+  AVISO_SEM_ACESSO,
   MAX_CHAT_TEXT,
   ROTAS_COM_CONTEXTO,
+  ROTULO_DA_ROTA_DE_CONTEXTO,
   type RotaComContexto,
-} from "@/lib/validators/ai";
+} from "@/lib/ai/constants";
 import type { ToolCallStatus } from "@/lib/ai/tools/contracts";
 import { execucaoEmAndamento, type RunSources } from "@/lib/ai/tools/sources";
 import {

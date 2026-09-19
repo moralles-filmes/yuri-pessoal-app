@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { enviarComprovante } from "@/lib/actions/ai-documents";
-import { MAX_OBSERVACAO_DOCUMENTO } from "@/lib/validators/ai";
+import { MAX_OBSERVACAO_DOCUMENTO } from "@/lib/ai/constants";
 import {
   LIMITE_BYTES_IMAGEM,
   LIMITE_BYTES_PDF,
