@@ -17,6 +17,7 @@
  * vez de silenciar.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Copy,
@@ -62,8 +63,19 @@ import {
   setTrainingExercisePref,
 } from "@/lib/actions/training-exercises";
 import { ExerciseFilters } from "@/components/training/exercise-filters";
-import { ExerciseFormDialog } from "@/components/training/exercise-form-dialog";
-import { ExerciseDetailSheet } from "@/components/training/exercise-detail-sheet";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+
+// Os diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form`
+// junto. Sob demanda, eles saem do primeiro byte da rota; `useLazyDialog` monta cada
+// um na primeira abertura e não o desmonta mais, para não cortar a animação de fechar.
+const ExerciseFormDialog = dynamic(
+  () => import("@/components/training/exercise-form-dialog").then((m) => m.ExerciseFormDialog),
+  { ssr: false },
+);
+const ExerciseDetailSheet = dynamic(
+  () => import("@/components/training/exercise-detail-sheet").then((m) => m.ExerciseDetailSheet),
+  { ssr: false },
+);
 
 const PAGE_SIZE = 60;
 
@@ -106,6 +118,9 @@ export function ExercisesClient({
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [detailOpen, setDetailOpen] = React.useState(false);
   const [formOpen, setFormOpen] = React.useState(false);
+  // Nada destes diálogos é baixado antes do primeiro clique que os abre.
+  const formMounted = useLazyDialog(formOpen);
+  const detailMounted = useLazyDialog(detailOpen);
   const [editing, setEditing] = React.useState<ExerciseListItem | null>(null);
   const [busy, setBusy] = React.useState(false);
 
@@ -450,23 +465,27 @@ export function ExercisesClient({
         </>
       )}
 
-      <ExerciseFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        exercise={editing}
-        groups={groups}
-        equipment={equipment}
-        onSaved={() => router.refresh()}
-      />
+      {formMounted && (
+        <ExerciseFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          exercise={editing}
+          groups={groups}
+          equipment={equipment}
+          onSaved={() => router.refresh()}
+        />
+      )}
 
-      <ExerciseDetailSheet
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-        exercise={detail}
-        allExercises={exercises}
-        alternatives={alternatives}
-        onChanged={() => router.refresh()}
-      />
+      {detailMounted && (
+        <ExerciseDetailSheet
+          open={detailOpen}
+          onOpenChange={setDetailOpen}
+          exercise={detail}
+          allExercises={exercises}
+          alternatives={alternatives}
+          onChanged={() => router.refresh()}
+        />
+      )}
     </div>
   );
 }

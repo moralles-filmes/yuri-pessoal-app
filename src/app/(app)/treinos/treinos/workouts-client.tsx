@@ -11,6 +11,7 @@
  * boa. Um filtro traz todas de volta.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -64,7 +65,15 @@ import {
   getTrainingWorkoutDependencies,
   moveWorkoutsToProgram,
 } from "@/lib/actions/training-workouts";
-import { WorkoutFormDialog } from "@/components/training/workout-form-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+
+// Os diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form`
+// junto. Sob demanda, eles saem do primeiro byte da rota; `useLazyDialog` monta cada
+// um na primeira abertura e não o desmonta mais, para não cortar a animação de fechar.
+const WorkoutFormDialog = dynamic(
+  () => import("@/components/training/workout-form-dialog").then((m) => m.WorkoutFormDialog),
+  { ssr: false },
+);
 import {
   DeleteWithDestinationDialog,
   type DependencyLine,
@@ -119,6 +128,8 @@ export function WorkoutsClient({
 
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [formOpen, setFormOpen] = React.useState(false);
+  // Nada destes diálogos é baixado antes do primeiro clique que os abre.
+  const formMounted = useLazyDialog(formOpen);
   const [editing, setEditing] = React.useState<TrainingWorkout | null>(null);
   const [deleting, setDeleting] = React.useState<TrainingWorkout | null>(null);
   const [dependencies, setDependencies] = React.useState<DependencyLine[] | null>(null);
@@ -492,16 +503,18 @@ export function WorkoutsClient({
         </p>
       )}
 
-      <WorkoutFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        workout={editing}
-        programs={programs}
-        onSaved={(id) => {
-          if (id) router.push(`${TRAINING_BASE_PATH}/treinos/${id}`);
-          else router.refresh();
-        }}
-      />
+      {formMounted && (
+        <WorkoutFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          workout={editing}
+          programs={programs}
+          onSaved={(id) => {
+            if (id) router.push(`${TRAINING_BASE_PATH}/treinos/${id}`);
+            else router.refresh();
+          }}
+        />
+      )}
 
       {deleting && (
         <DeleteWithDestinationDialog

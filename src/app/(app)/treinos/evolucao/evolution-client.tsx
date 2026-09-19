@@ -13,6 +13,7 @@
  * Desligar a progressão nas configurações desliga o recurso inteiro.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -56,7 +57,15 @@ import {
   PeriodBarChart,
   type ChartPoint,
 } from "@/components/training/training-charts";
-import { ProgressionRuleDialog } from "@/components/training/progression-rule-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+
+// Os diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form`
+// junto. Sob demanda, eles saem do primeiro byte da rota; `useLazyDialog` monta cada
+// um na primeira abertura e não o desmonta mais, para não cortar a animação de fechar.
+const ProgressionRuleDialog = dynamic(
+  () => import("@/components/training/progression-rule-dialog").then((m) => m.ProgressionRuleDialog),
+  { ssr: false },
+);
 import { BodyEvolution } from "@/components/training/body-evolution";
 import type { MeasurementType, MeasurementWithType, SignedProgressPhoto } from "@/lib/body/types";
 import { TRAINING_BASE_PATH, type OneRmFormula } from "@/lib/training/constants";
@@ -142,6 +151,8 @@ export function EvolutionClient({
     facets.exercises[0]?.id ?? null,
   );
   const [ruleDialogOpen, setRuleDialogOpen] = React.useState(false);
+  // Nada destes diálogos é baixado antes do primeiro clique que os abre.
+  const ruleDialogMounted = useLazyDialog(ruleDialogOpen);
   const [editingRule, setEditingRule] = React.useState<ProgressionRule | null>(null);
   const [deletingRule, setDeletingRule] = React.useState<ProgressionRule | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -590,14 +601,16 @@ export function EvolutionClient({
         )}
       </Tabs>
 
-      <ProgressionRuleDialog
-        open={ruleDialogOpen}
-        onOpenChange={setRuleDialogOpen}
-        rule={editingRule}
-        exercises={facets.exercises}
-        muscleGroups={muscleGroups}
-        onSaved={() => router.refresh()}
-      />
+      {ruleDialogMounted && (
+        <ProgressionRuleDialog
+          open={ruleDialogOpen}
+          onOpenChange={setRuleDialogOpen}
+          rule={editingRule}
+          exercises={facets.exercises}
+          muscleGroups={muscleGroups}
+          onSaved={() => router.refresh()}
+        />
+      )}
 
       <Dialog open={Boolean(deletingRule)} onOpenChange={(open) => !open && setDeletingRule(null)}>
         <DialogContent>
