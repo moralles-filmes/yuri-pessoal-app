@@ -1,0 +1,59 @@
+# CI — os quatro portões do projeto, mais o orçamento de JS por rota.
+#
+# Os quatro portões são os mesmos que o CLAUDE.md exige antes de declarar qualquer coisa
+# pronta: `test:run`, `lint`, `tsc --noEmit` e `build`. O quinto, `perf:bundle`, é o
+# guarda-corpo da auditoria de performance de 2026-09-19 — sem ele o bundle regride em
+# silêncio, porque o `next build` do Next 16 não imprime mais o tamanho por rota.
+#
+# ⚠️ NENHUM SEGREDO É NECESSÁRIO, e isso foi verificado num worktree limpo, sem `.env.local`:
+# `next build` compila e termina com código 0. O app degrada com elegância sem as chaves do
+# Supabase (`src/config/env.ts`), e todas as rotas de dado são `force-dynamic`, então nada é
+# buscado durante o build. Se um dia o build passar a exigir chave, é sinal de que alguma
+# leitura escapou para o tempo de build — conserte isso, não acrescente segredo aqui.
+#
+# O fuso vem dos próprios scripts do `package.json` (`cross-env TZ=America/Sao_Paulo`), então o
+# runner em UTC não muda o resultado dos testes de data.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Um push novo no mesmo branch cancela a execução anterior — o resultado dela já não interessa.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Testes
+        run: npm run test:run
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      # Depende do build: lê os manifests de `.next/server/app/**`.
+      - name: Orçamento de JS por rota
+        run: npm run perf:bundle

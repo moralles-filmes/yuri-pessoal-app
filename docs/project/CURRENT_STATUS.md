@@ -1,7 +1,7 @@
 # CURRENT_STATUS — Estado atual do projeto
 
 > Atualizado ao final de **cada** fase. Última atualização: **2026-09-19**
-> (iteração: transferência na importação de extrato de conta).
+> (auditoria de performance + iteração: transferência na importação de extrato de conta).
 
 ## Iteração 2026-09-19 — transferência na importação de EXTRATO DE CONTA
 
@@ -45,6 +45,61 @@ colunas, PG 15+; sem ela o Postgres zeraria `user_id`, que é NOT NULL). Nenhuma
 
 **Verificação:** `npm run test:run` ✅ (**3.428 testes / 167 arquivos**; +43 novos),
 `npm run lint` ✅, `npx tsc --noEmit` ✅, `npm run build` ✅.
+
+## ⚡ Auditoria de performance (2026-09-19) — CONCLUÍDA
+
+Fora do roadmap: uma passada de performance ponta a ponta, disparada por "trocar de tela
+demora · o primeiro carregamento é pesado". Relatório completo em `.turbo/REPORT.md` (local,
+fora do git por `.git/info/exclude`).
+
+| Métrica | Antes | Depois |
+| --- | --- | --- |
+| Região de compute (Vercel) | `iad1` (Washington) | **`gru1` (São Paulo)**, co-locado com o banco |
+| JS por rota — mediana | 214,9 KB gz | **210,7 KB gz** |
+| JS por rota — pior | 434,1 KB (`/treinos/evolucao`) | **277,5 KB (`/configuracoes`)** |
+| Rotas acima de 250 KB gz | 20 de 67 | **1 de 67** (teto próprio documentado) |
+| `nutrition_foods_view` sob RLS | 49,2 ms | **14,9 ms** |
+| Build limpo | 34,6 s | **27,2 s** |
+
+### As quatro coisas que mudaram no código, e que valem para quem escrever tela nova
+
+1. **⛔ `"regions": ["gru1"]` no `vercel.json` não é preferência — é onde está o banco.**
+   O Supabase roda em `sa-east-1`. Sem essa chave o compute cai em `iad1` e **toda** query
+   atravessa o continente. Se um dia o banco mudar de região, mude essa linha junto.
+2. **Gráfico entra por `next/dynamic`.** `recharts` custa 109 KB gz e entrava no primeiro byte
+   de 5 rotas. Cada arquivo de gráfico virou um par fachada/`*-impl.tsx`: a fachada tem a API
+   pública e o `dynamic`, o `-impl` tem o `recharts`. ⚠️ **O que NÃO usa `recharts` fica na
+   fachada** — `DistributionBars`, `MeasurementTable` —, senão importá-los arrasta os 109 KB
+   junto. `MeasurementTable` em especial é a regra 6 da 16-E (a leitura textual do dado) e não
+   pode depender de o gráfico ter baixado.
+3. **Diálogo de formulário entra por `next/dynamic` + `useLazyDialog`**
+   (`src/components/shared/use-lazy-dialog.ts`). Eles arrastam `zod` + `react-hook-form`
+   (~62 KB gz). ⚠️ **`{aberto && <Dialog/>}` sozinho quebra a animação de fechamento** — o hook
+   monta na primeira abertura e não desmonta mais.
+4. **⚠️ Constante lida pela TELA não mora em `src/lib/validators/`.** As telas de `/ia`
+   baixavam 62,7 KB gz de `zod` para ler quatro constantes (`MAX_CHAT_TEXT`,
+   `ROTAS_COM_CONTEXTO`, `MAX_OBSERVACAO_DOCUMENTO`, `MODULOS_COM_CONTEXTO`), porque elas
+   moravam num módulo cuja primeira linha é `import { z } from "zod"`. Passaram para
+   `@/lib/ai/constants` (módulo puro, sem um único import de runtime) e são **reexportadas**
+   pelos validators, então nenhum import existente quebrou.
+
+### Guarda-corpo instalado
+
+`npm run perf:bundle` (depois de `npm run build`) reprova com código 1 qualquer rota acima de
+**250 KB gz** — o `next build` do Next 16 não imprime mais esse número, então sem o script o
+bundle regride em silêncio. Ele roda no CI novo (`.github/workflows/ci.yml`, que também roda os
+quatro portões do projeto e **não precisa de segredo nenhum**).
+
+⚠️ **`/todo` está a 247,6 KB, a 2,6 KB do teto.** É a próxima a estourar; ela ainda tem
+diálogos de cadastro entrando estáticos.
+
+### Duas armadilhas de MEDIÇÃO que custaram tempo nesta auditoria
+
+- **`EXPLAIN` sempre com `timing off`.** Com `timing on`, a view de alimentos acusou 150 ms
+  onde o real eram 3 ms — overhead da instrumentação.
+- **RLS só aparece no papel `authenticated`.** Como service role a `nutrition_foods_view` roda
+  em 14,4 ms e a policy some da conta. Foi assim que o custo real do `auth.uid()` por linha
+  (34,8 ms, não os 6,9 ms estimados) passou despercebido no levantamento inicial.
 
 ## ✅ 18-E — IA · Insights (CONCLUÍDA, blocos 1 a 4)
 
