@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 import type { ClienteDaIa } from "./server/client";
 import { AI_PROVIDERS, type AiProviderId } from "./core/contracts";
+import { cantoValido, CANTO_PADRAO, type CantoDoBotao } from "./painel";
 import { PROVIDER_REGISTRY } from "./providers/registry";
 import {
   computeBudgetUsage,
@@ -183,6 +184,10 @@ const PREFS_PADRAO: AiPreferencesView = {
   // não o default da coluna: quem não tem preferência gravada não autorizou gasto nenhum.
   allowInsightJobs: false,
   jobMonthlyBudget: 0,
+  // 18-F Bloco 2. Sem linha de preferência, o botão aparece no canto padrão: ele não
+  // autoriza nada, e esconder de fábrica seria entregar o que ninguém acha.
+  floatingCorner: CANTO_PADRAO,
+  floatingHidden: false,
 };
 
 export async function getAiPreferences(
@@ -194,7 +199,7 @@ export async function getAiPreferences(
   const { data } = await supabase
     .from("ai_user_preferences")
     .select(
-      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_vision, allow_insight_jobs, job_monthly_budget, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
+      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_vision, allow_insight_jobs, job_monthly_budget, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour, floating_corner, floating_hidden",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -243,6 +248,40 @@ export async function getAiPreferences(
     // 18-E Bloco 4. Mesmo `=== true`: chave ausente é chave DESLIGADA, nunca "ainda não sei".
     allowInsightJobs: data.allow_insight_jobs === true,
     jobMonthlyBudget: data.job_monthly_budget ?? 0,
+    /**
+     * 18-F Bloco 2. `cantoValido` e não um cast: mesma disciplina do `=== true` das chaves
+     * acima. Um valor inesperado (coluna lida por código de outra versão, linha adulterada)
+     * viraria classe CSS inexistente e o botão sumiria da tela sem erro nenhum. Cai no padrão.
+     */
+    floatingCorner: cantoValido(data.floating_corner),
+    floatingHidden: data.floating_hidden === true,
+  };
+}
+
+/**
+ * 18-F Bloco 2 — a leitura ESTREITA, para o layout do app.
+ *
+ * ⛔ POR QUE NÃO `getAiPreferences`. Esta consulta roda em TODA navegação de `(app)`, porque o
+ * botão vive na casca. `getAiPreferences` traz 28 colunas e serve a uma tela de configuração
+ * que o dono abre de vez em quando; trazer as 28 a cada clique de menu seria pagar o preço de
+ * uma tela em todas elas. São duas colunas, e é uma PROJEÇÃO da mesma linha — não uma segunda
+ * verdade: quem grava continua sendo `saveAiPreferences` e `definirBotaoFlutuante`.
+ *
+ * Sem sessão ou sem linha, devolve o padrão. Esta leitura nunca falha a navegação.
+ */
+export async function getFloatingButtonPrefs(
+  userId: string,
+): Promise<{ canto: CantoDoBotao; oculto: boolean }> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ai_user_preferences")
+    .select("floating_corner, floating_hidden")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  return {
+    canto: cantoValido(data?.floating_corner),
+    oculto: data?.floating_hidden === true,
   };
 }
 

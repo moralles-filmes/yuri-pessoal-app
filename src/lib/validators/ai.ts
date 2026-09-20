@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { optionalText } from "@/lib/validators/shared";
 import { AI_PROVIDERS } from "@/lib/ai/core/contracts";
+// 18-F Bloco 2. `@/lib/ai/painel` é puro e não importa NADA — não há ciclo, e o vocabulário
+// do canto fica declarado uma vez só, para a tela (que não pode arrastar zod) e para o schema.
+import { CANTOS_DO_BOTAO } from "@/lib/ai/painel";
 import {
   TOOL_PERMISSIONS,
   TOOL_WRITE_PERMISSIONS,
@@ -287,8 +290,29 @@ export const aiWritePermissionsSchema = z.object(writePermissionShape).strict();
 
 export type AiWritePermissionsInput = z.infer<typeof aiWritePermissionsSchema>;
 
+/**
+ * 18-F Bloco 2 — onde o botão flutuante fica, e se ele aparece.
+ *
+ * Schema PRÓPRIO, e não dois campos soltos, porque há dois caminhos de gravação para as
+ * MESMAS duas colunas: o formulário grande de `/ia/configuracoes` (que salva tudo de uma vez)
+ * e o menu do próprio painel (que salva só isto, de onde o dono está). Um schema só é o que
+ * impede os dois de divergirem — o vocabulário do canto é declarado uma vez, em
+ * `@/lib/ai/painel`, e o CHECK do banco o repete como trava final.
+ */
+export const botaoFlutuanteSchema = z
+  .object({
+    floatingCorner: z.enum(CANTOS_DO_BOTAO, { error: "Canto inválido." }),
+    floatingHidden: z.boolean({ error: "Preferência de exibição do botão inválida." }),
+  })
+  .strict();
+
+export type BotaoFlutuanteInput = z.infer<typeof botaoFlutuanteSchema>;
+
 export const aiPreferencesSchema = z
   .object({
+    // 18-F Bloco 2 — a MESMA forma do menu do painel, espalhada. Redeclarar os dois campos
+    // aqui criaria a segunda definição que este arquivo existe para evitar.
+    ...botaoFlutuanteSchema.shape,
     permissions: aiPermissionsSchema,
     writePermissions: aiWritePermissionsSchema,
     /**

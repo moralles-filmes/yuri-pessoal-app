@@ -16,12 +16,14 @@ import { describe, expect, it } from "vitest";
 import { AI_TOOL_REGISTRY } from "@/lib/ai/tools/registry";
 import { ROTULO_DA_ROTA_DE_CONTEXTO } from "@/lib/ai/constants";
 import { TOOL_PERMISSIONS, TOOL_WRITE_PERMISSIONS } from "@/lib/ai/tools/contracts";
+import { CANTOS_DO_BOTAO } from "@/lib/ai/painel";
 import {
   aiCredentialSchema,
   aiPermissionsSchema,
   aiPreferencesSchema,
   aiProviderConfigSchema,
   aiWritePermissionsSchema,
+  botaoFlutuanteSchema,
   chatRequestSchema,
   contextoDaRota,
   MAX_CHAT_TEXT,
@@ -462,6 +464,10 @@ describe("aceitar a própria saída (round-trip)", () => {
       reservationMargin: 1.15,
       rateLimitPerMinute: 10,
       rateLimitPerHour: 120,
+      // 18-F Bloco 2 — aparência, não autorização; e obrigatórias como todo campo que a tela
+      // manda. A fixture cresce junto com o schema, pelo mesmo motivo da lista `OBRIGATORIOS`.
+      floatingCorner: "direita",
+      floatingHidden: false,
     };
     const primeira = aiPreferencesSchema.safeParse(entrada);
     expect(primeira.success).toBe(true);
@@ -705,6 +711,11 @@ describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do 
     "reservationMargin",
     "rateLimitPerMinute",
     "rateLimitPerHour",
+    // 18-F Bloco 2. Entram AQUI no mesmo commit em que entram no schema — foi a lista não ter
+    // crescido junto que fez `allowVision` recusar toda gravação de preferências por três
+    // subfases, com uma mensagem sobre um campo que a tela não tinha.
+    "floatingCorner",
+    "floatingHidden",
   ] as const;
 
   it("o schema recusa o payload a que falte QUALQUER um deles", () => {
@@ -725,6 +736,8 @@ describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do 
       reservationMargin: 1.15,
       rateLimitPerMinute: 10,
       rateLimitPerHour: 120,
+      floatingCorner: "direita",
+      floatingHidden: false,
     };
     expect(aiPreferencesSchema.safeParse(completo).success).toBe(true);
 
@@ -746,5 +759,76 @@ describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do 
     const faltando = OBRIGATORIOS.filter((c) => !payload.includes(`${c}:`));
     expect(faltando, `campos ausentes no payload do formulário: ${faltando.join(", ")}`)
       .toEqual([]);
+  });
+});
+
+describe("18-F Bloco 2 — o botão flutuante", () => {
+  it("aceita os dois cantos, e só eles", () => {
+    for (const canto of CANTOS_DO_BOTAO) {
+      expect(
+        botaoFlutuanteSchema.safeParse({ floatingCorner: canto, floatingHidden: false })
+          .success,
+        canto,
+      ).toBe(true);
+    }
+    expect(
+      botaoFlutuanteSchema.safeParse({ floatingCorner: "topo", floatingHidden: false })
+        .success,
+    ).toBe(false);
+  });
+
+  it("campo a mais é erro (`.strict()`)", () => {
+    expect(
+      botaoFlutuanteSchema.safeParse({
+        floatingCorner: "direita",
+        floatingHidden: false,
+        user_id: "11111111-2222-4333-8444-555555555555",
+      }).success,
+    ).toBe(false);
+  });
+
+  /** Regra de round-trip do projeto: `parse(parse(x))` tem de funcionar. */
+  it("o schema aceita a própria saída", () => {
+    const uma = botaoFlutuanteSchema.parse({ floatingCorner: "esquerda", floatingHidden: true });
+    expect(botaoFlutuanteSchema.safeParse(uma).success).toBe(true);
+  });
+
+  /**
+   * ⛔ AS DUAS PORTAS VALIDAM A MESMA COISA. O menu do painel grava por `botaoFlutuanteSchema`
+   * e o formulário grande por `aiPreferencesSchema`; se um aceitar um canto que o outro
+   * recusa, a preferência passaria a depender de onde foi mexida. Hoje um espalha o outro —
+   * e se alguém desfizer isso, este teste é que fica vermelho.
+   */
+  it("o schema grande aceita exatamente os cantos que o schema do botão aceita", () => {
+    const base = {
+      permissions: Object.fromEntries(TOOL_PERMISSIONS.map((p) => [p, false])),
+      writePermissions: Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((p) => [p, false])),
+      allowVision: false,
+      allowInsightJobs: false,
+      jobMonthlyBudget: 1,
+      defaultProvider: null,
+      defaultModel: "",
+      confirmationMode: "seguro",
+      allowFallback: false,
+      dailyBudget: null,
+      monthlyBudget: null,
+      budgetBlockOnLimit: true,
+      reservationMargin: 1.15,
+      rateLimitPerMinute: 10,
+      rateLimitPerHour: 120,
+      floatingHidden: false,
+    };
+
+    for (const canto of [...CANTOS_DO_BOTAO, "topo", "", null]) {
+      const noBotao = botaoFlutuanteSchema.safeParse({
+        floatingCorner: canto,
+        floatingHidden: false,
+      }).success;
+      const noGrande = aiPreferencesSchema.safeParse({
+        ...base,
+        floatingCorner: canto,
+      }).success;
+      expect(noGrande, `canto ${String(canto)}`).toBe(noBotao);
+    }
   });
 });

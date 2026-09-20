@@ -7,6 +7,7 @@
  */
 
 import type { AiProviderId } from "./core/contracts";
+import type { CantoDoBotao } from "./painel";
 import type { ToolPermission, ToolWritePermission } from "./tools/contracts";
 
 export type CredentialStatus = "nao_validada" | "valida" | "invalida";
@@ -91,6 +92,15 @@ export type AiPreferencesView = {
   readonly allowInsightJobs: boolean;
   /** Fase 18-E Bloco 4 — teto PRÓPRIO do job, em USD/mês. NOT NULL no banco. */
   readonly jobMonthlyBudget: number;
+  /**
+   * 18-F Bloco 2 — onde o botão flutuante fica e se ele aparece.
+   *
+   * ⚠️ Não é `ToolPermission` nem parente das outras chaves deste tipo: as demais respondem
+   * "a IA pode ler/alterar X?"; estas respondem "onde o atalho fica na minha tela?". Nenhum
+   * guard as consulta, e nenhuma delas autoriza coisa alguma.
+   */
+  readonly floatingCorner: CantoDoBotao;
+  readonly floatingHidden: boolean;
 };
 
 export type ConversationListItem = {
