@@ -132,6 +132,11 @@ begin
      or p_experiencia not in ('planejar-dia', 'encerrar-dia', 'planejar-semana') then
     raise exception 'AI_EXPERIENCE_NOT_AVAILABLE' using errcode = 'P0001';
   end if;
+  -- ⚠️ `experiencias.*` é uma FAMÍLIA SINTÉTICA, derivada da allowlist logo acima — ela NÃO
+  -- passa por `ai_agent_is_allowed`, como passa o `p_agent_id` que `ai_begin_chat_run` recebe
+  -- do cliente. Aqui não há o que validar: o valor não vem de fora, ele é construído a partir
+  -- de uma das três strings. Quem audite `ai_runs.agent_id` deve saber que nem todo valor
+  -- gravado na coluna veio do registry de agentes.
   v_agent := 'experiencias.' || p_experiencia;
 
   -- ── 3. Advisory lock por usuário (transacional) — A MESMA CHAVE das outras três ──────

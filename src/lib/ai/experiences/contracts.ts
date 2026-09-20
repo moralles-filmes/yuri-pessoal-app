@@ -59,8 +59,18 @@ export type PlanoDaExperiencia = {
   readonly system: string;
   /** Vira a primeira mensagem da conversa E o título dela. Sai do catálogo, nunca do cliente. */
   readonly userText: string;
-  /** As leituras que VÃO rodar, já com argumentos resolvidos, na ordem do catálogo. */
-  readonly leituras: readonly { readonly toolName: string; readonly input: unknown }[];
+  /**
+   * As leituras que VÃO rodar, já com argumentos resolvidos, na ordem do catálogo.
+   *
+   * ⚠️ `rotulo` é o nome do módulo em pt-BR. Ele viaja junto porque quem descobre que uma
+   * leitura FALHOU é o `chat-runner`, em runtime — e a frase que declara isso ao dono é nossa,
+   * não um pedido ao modelo (ver `falhas.ts`).
+   */
+  readonly leituras: readonly {
+    readonly toolName: string;
+    readonly input: unknown;
+    readonly rotulo: string;
+  }[];
   /**
    * Os MÓDULOS que este panorama de fato lê — derivados do registry, sem repetição, e só os
    * que sobreviveram à checagem de chave.

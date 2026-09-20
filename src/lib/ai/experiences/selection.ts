@@ -15,7 +15,20 @@ import { AI_TOOL_REGISTRY } from "@/lib/ai/tools/registry";
 import type { ToolPermission } from "@/lib/ai/tools/contracts";
 import type { Experiencia } from "./contracts";
 
-export type LeituraResolvida = { readonly toolName: string; readonly input: unknown };
+export type LeituraResolvida = {
+  readonly toolName: string;
+  readonly input: unknown;
+  /**
+   * O nome do MÓDULO em pt-BR, da mesma fonte que a frase do que ficou de fora
+   * (`ROTULO_DA_PERMISSAO`) — para os dois avisos nomearem o módulo com a mesma palavra.
+   *
+   * ⚠️ Viaja no plano porque quem descobre, em runtime, que uma leitura falhou é o
+   * `chat-runner` — e ele não conhece catálogo nem seleção (invariante 104). Sem isto, ou ele
+   * consultaria o registry (acoplamento novo) ou a frase sairia com o nome técnico da
+   * ferramenta, que não é vocabulário do dono.
+   */
+  readonly rotulo: string;
+};
 
 export type PuloDeclarado = {
   readonly toolName: string;
@@ -53,11 +66,24 @@ export function decidirLeituras(
     // dono fechou, é código nosso fora de sincronia, e o teste do catálogo já a reprova.
     if (!descriptor) continue;
 
+    // ⛔ SÓ LEITURA. `catalog.test.ts` reprova uma ferramenta de escrita no catálogo, mas um
+    // teste só protege quem roda a suíte. O laço dirigido chama `executeTool` sem `modo` (o
+    // executor fixa `"proposta"` por dentro), então uma ferramenta de escrita que chegasse aqui
+    // criaria proposta em `ai_action_proposals` a cada clique no atalho — sem o dono nem o
+    // modelo terem pedido. Pula pelo mesmo motivo do descriptor ausente, e pela mesma razão
+    // NÃO entra em `puladas`: a frase de lá fala das preferências do dono, e esta porta não
+    // foi ele que fechou.
+    if (descriptor.kind !== "leitura") continue;
+
     const chave = descriptor.requiredPermission;
     // ⛔ `=== true`, nunca `!== false`: um mapa vazio (dono sem linha de preferências) liberaria
     // tudo com a comparação frouxa. Ausência é chave desligada.
     if (permissions[chave] === true) {
-      leituras.push({ toolName: f.toolName, input: f.argumentos(hoje) });
+      leituras.push({
+        toolName: f.toolName,
+        input: f.argumentos(hoje),
+        rotulo: ROTULO_DA_PERMISSAO[chave].titulo,
+      });
       if (!modulos.includes(descriptor.module)) modulos.push(descriptor.module);
       continue;
     }

@@ -46,6 +46,7 @@ import { getMemoriasVigentes } from "@/lib/ai/memory/queries";
  * afirmando que `experiences/catalog` só é importado por `server/experience-runner.ts`.
  */
 import type { PlanoDaExperiencia } from "@/lib/ai/experiences/contracts";
+import { avisoDeLeiturasQueFalharam } from "@/lib/ai/experiences/falhas";
 import {
   BLOCO_DA_CAIXA_DE_ENTRADA,
   versaoComCaixaDeEntrada,
@@ -508,6 +509,13 @@ export async function* runChat(
   const proximoStepIndex = () => (stepIndex += 1);
 
   /**
+   * 18-F Bloco 4 — o que NÃO chegou porque a leitura falhou, já em pt-BR. Vive fora do `try`
+   * porque nasce no passo dirigido e é consumido lá embaixo, no ramo de sucesso: tentativa
+   * nova zera o texto do modelo (invariante 23), mas não desfaz uma leitura que falhou.
+   */
+  let avisoDeFalhas = "";
+
+  /**
    * `completed_provider`/`completed_model` significam "quem EFETIVAMENTE CONCLUIU" — por
    * isso ficam nulos quando o run falha ou é cancelado. Gravar ali o último provedor
    * tentado faria a tela dizer "respondido por X" numa resposta que nunca existiu.
@@ -600,7 +608,8 @@ export async function* runChat(
       });
 
       const blocos: string[] = [];
-      for (const r of resultados) {
+      const rotulosQueFalharam: string[] = [];
+      for (const [i, r] of resultados.entries()) {
         // A tela mostra o que foi consultado — leitura nunca acontece em silêncio (18-B).
         yield {
           type: "tool",
@@ -608,8 +617,19 @@ export async function* runChat(
           status: r.status,
           registros: r.recordsRead,
         };
+        /**
+         * ⛔ QUALQUER DESFECHO QUE NÃO SEJA `executada` É DADO QUE NÃO CHEGOU.
+         *
+         * `rejeitada` entra aqui junto com `falhou`/`timeout` de propósito: a chave pode ter
+         * sido desligada ENTRE `decidirLeituras` e a execução, e nesse caso o guard recusa —
+         * um pulo que a frase do plano, decidida antes, não tem como conhecer.
+         */
+        if (r.status !== "executada") {
+          rotulosQueFalharam.push(input.plano.leituras[i]!.rotulo);
+        }
         blocos.push(renderUntrusted(r.block));
       }
+      avisoDeFalhas = avisoDeLeiturasQueFalharam(rotulosQueFalharam);
 
       /**
        * ⛔ PAPEL `user`, NUNCA `system` E NUNCA `tool`.
@@ -941,8 +961,9 @@ export async function* runChat(
          * ║ a resposta que de fato venceu.                                                  ║
          * ╚════════════════════════════════════════════════════════════════════════════════╝
          */
-        if (input.plano?.aviso) {
-          const trecho = texto === "" ? input.plano.aviso : `\n\n${input.plano.aviso}`;
+        for (const frase of [input.plano?.aviso ?? "", avisoDeFalhas]) {
+          if (!frase) continue;
+          const trecho = texto === "" ? frase : `\n\n${frase}`;
           texto += trecho;
           yield { type: "delta", text: trecho };
         }

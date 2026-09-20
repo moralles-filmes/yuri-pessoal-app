@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TOOL_PERMISSIONS } from "@/lib/ai/tools/contracts";
 import { experienciaPorId } from "./catalog";
+import type { Experiencia } from "./contracts";
 import { decidirLeituras } from "./selection";
 
 const HOJE = "2026-09-21";
@@ -111,5 +112,64 @@ describe("18-F Bloco 4 — o que a experiência LÊ depende das chaves do dono",
     const r = decidirLeituras(dia(), {}, HOJE);
     expect(r.leituras).toEqual([]);
     expect(r.puladas).toHaveLength(4);
+  });
+});
+
+/**
+ * ⛔ SÓ LEITURA ENTRA NUM PANORAMA — E A TRAVA NÃO PODE SER SÓ O TESTE DO CATÁLOGO.
+ *
+ * `catalog.test.ts` reprova uma ferramenta de escrita no catálogo, mas um teste só protege quem
+ * roda a suíte. O laço dirigido chama `executeTool` sem `modo` — e o executor fixa
+ * `modo: "proposta"` internamente —, então uma ferramenta de escrita que chegasse às `leituras`
+ * criaria uma linha em `ai_action_proposals` **todo dia, no clique do atalho**, sem o dono nem o
+ * modelo terem pedido nada. O Approval Engine ainda exigiria confirmação, mas o sistema passaria
+ * a propor alterações sozinho — que é justamente o que o Bloco 4 promete não fazer.
+ *
+ * Por isso a decisão acontece aqui, onde o descriptor já está resolvido, e não em `chat-runner`:
+ * aquele runner executa uma lista que recebeu e não conhece catálogo nem política de experiência
+ * (invariante 104).
+ */
+describe("18-F Bloco 4 — ferramenta de ESCRITA nunca vira leitura de panorama", () => {
+  const comEscrita: Experiencia = {
+    id: "planejar-dia",
+    titulo: "Panorama de teste",
+    prompt: "irrelevante",
+    promptVersion: "teste-v1",
+    ferramentas: [
+      { toolName: "habits.get_today", argumentos: () => ({}) },
+      // Do registry, `kind: "escrita"` — e o módulo dela está LIGADO em `TODAS`, então a
+      // checagem de permissão sozinha a deixaria passar.
+      { toolName: "habits.registrar", argumentos: () => ({ habito: "Água" }) },
+    ],
+  };
+
+  it("a ferramenta de escrita não entra em `leituras`", () => {
+    const r = decidirLeituras(comEscrita, TODAS, HOJE);
+    expect(r.leituras.map((l) => l.toolName)).toEqual(["habits.get_today"]);
+  });
+
+  /**
+   * ⛔ E ela também NÃO é declarada como pulada: `puladas` vira a frase "a leitura ficou
+   * desligada nas suas preferências", que seria MENTIRA — não foi o dono que fechou essa porta,
+   * é código nosso fora de sincronia. Mesmo tratamento da ferramenta que sumiu do registry.
+   */
+  it("e não é declarada ao dono como preferência desligada", () => {
+    const r = decidirLeituras(comEscrita, TODAS, HOJE);
+    expect(r.puladas).toEqual([]);
+    expect(r.aviso).toBe("");
+  });
+
+  /**
+   * A degradação é segura nos dois extremos: sobrando só escrita, não sobra leitura nenhuma —
+   * e `runExperience` recusa antes de gastar (a lição do `NO_INDICATORS` da 18-E).
+   */
+  it("catálogo só de escrita não deixa leitura nenhuma de pé", () => {
+    const soEscrita: Experiencia = {
+      ...comEscrita,
+      ferramentas: [comEscrita.ferramentas[1]!],
+    };
+    const r = decidirLeituras(soEscrita, TODAS, HOJE);
+    expect(r.leituras).toEqual([]);
+    expect(r.modulos).toEqual([]);
   });
 });

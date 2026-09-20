@@ -115,6 +115,16 @@ export async function* runExperience(
     agora: input.agora,
     plano: {
       id: experiencia.id,
+      /**
+       * ⚠️ FAMÍLIA SINTÉTICA, fora do registry de agentes — como `insights.*`. Nenhuma das
+       * duas travas que governam um agente de verdade se aplica a ela: `ai_agent_is_allowed`
+       * (no banco) não a conhece, e o `allowedAgents` dos descriptors não é consultado pelo
+       * guard, que decide por `agent.allowedTools`.
+       *
+       * O que de fato autoriza este panorama é outra coisa, em dois pontos: o CATÁLOGO
+       * ESTÁTICO (de onde `allowedTools` é derivado, abaixo) e a chave `allow_*` conferida
+       * duas vezes — em `decidirLeituras` e de novo no `guard.ts` de cada execução.
+       */
       agentId: `experiencias.${experiencia.id}`,
       promptVersion: experiencia.promptVersion,
       /**

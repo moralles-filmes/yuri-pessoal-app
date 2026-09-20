@@ -200,6 +200,12 @@ const SAIDA: ToolOutput = {
 };
 
 const ferramentaRodou: unknown[] = [];
+/**
+ * 18-F Bloco 4 — o nome da ferramenta que deve EXPLODIR nesta rodada. O adapter lançando é o
+ * que `executor.ts` converte em `status: "falhou"`, então o caminho exercitado é o real: nada
+ * aqui simula o executor, só o banco do outro lado dele.
+ */
+let falhaDaFerramenta: string | null = null;
 
 vi.mock("@/lib/ai/tools/executors", () => ({
   TOOL_EXECUTORS: {
@@ -214,6 +220,7 @@ vi.mock("@/lib/ai/tools/executors", () => ({
     "todo.get_agenda": {
       schema: z.object({ dias: z.number().int().optional() }).strict(),
       run: async (input: unknown) => {
+        if (falhaDaFerramenta === "todo.get_agenda") throw new Error("banco fora do ar");
         ferramentaRodou.push(input);
         return SAIDA;
       },
@@ -221,6 +228,7 @@ vi.mock("@/lib/ai/tools/executors", () => ({
     "habits.get_today": {
       schema: z.object({}).strict(),
       run: async (input: unknown) => {
+        if (falhaDaFerramenta === "habits.get_today") throw new Error("banco fora do ar");
         ferramentaRodou.push(input);
         return SAIDA;
       },
@@ -345,6 +353,7 @@ beforeEach(() => {
   statusDoRun = "";
   versaoGravada = "";
   admissaoDeExperiencia = null;
+  falhaDaFerramenta = null;
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -706,8 +715,11 @@ const PLANO = {
   system: "SEGURANCA\n\n---\n\nEscreva o panorama do dia.",
   userText: "Planejar meu dia",
   leituras: [
-    { toolName: "todo.get_agenda", input: { dias: 1 } },
-    { toolName: "habits.get_today", input: {} },
+    // ⚠️ `rotulo` é o nome em pt-BR do MÓDULO, resolvido por `decidirLeituras` a partir do
+    // registry. Viaja no plano porque `chat-runner` não conhece catálogo nem seleção
+    // (invariante 104) — e é ele quem descobre, em runtime, qual leitura falhou.
+    { toolName: "todo.get_agenda", input: { dias: 1 }, rotulo: "TO-DO" },
+    { toolName: "habits.get_today", input: {}, rotulo: "Hábitos" },
   ],
   modulos: ["todo", "habits"],
   aviso: "",
@@ -794,6 +806,51 @@ describe("runChat — o laço DIRIGIDO da experiência", () => {
     await rodar({ plano: PLANO });
 
     expect(textoGravado).toBe("Hoje: nada marcado.");
+  });
+
+  /**
+   * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ ⛔ LEITURA QUE FALHOU TAMBÉM É TEXTO NOSSO — PELO MESMO MOTIVO DA QUE FOI PULADA.      ║
+   * ║                                                                                       ║
+   * ║ O bloco de erro que chega ao modelo diz "diga que não conseguiu obter o dado": é uma  ║
+   * ║ INSTRUÇÃO, e a garantia vira a obediência dele — exatamente o que o aviso do que      ║
+   * ║ ficou de fora existe para não depender. Um modelo redigindo texto fluido simplesmente ║
+   * ║ omite o módulo, e o panorama sai PARECENDO completo: a mentira que a 18-E combateu.   ║
+   * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("leitura que FALHOU entra no texto gravado, mesmo se o modelo não disser nada", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    falhaDaFerramenta = "habits.get_today";
+    // O modelo redige como se estivesse tudo bem — é justamente o caso que a frase cobre.
+    respostasPorChamada = [[{ type: "delta", text: "Hoje: nada marcado." }, FINISH]];
+
+    await rodar({ plano: PLANO });
+
+    expect(textoGravado).toContain("Hoje: nada marcado.");
+    expect(textoGravado).toContain("Hábitos");
+    expect(textoGravado).toContain("a leitura falhou");
+  });
+
+  /** A falha não some com o pulo, nem o pulo com a falha: são dois fatos diferentes. */
+  it("pulo por preferência e falha de execução convivem no mesmo texto", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    falhaDaFerramenta = "habits.get_today";
+    respostasPorChamada = [[{ type: "delta", text: "Hoje: nada marcado." }, FINISH]];
+
+    await rodar({ plano: { ...PLANO, aviso: "Fora deste panorama: Agenda." } });
+
+    expect(textoGravado).toContain("Fora deste panorama: Agenda.");
+    expect(textoGravado).toContain("Hábitos");
+  });
+
+  /** Ferramenta que rodou bem não vira aviso — senão todo panorama sairia se desculpando. */
+  it("leitura bem-sucedida não gera frase de falha", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    respostasPorChamada = [[{ type: "delta", text: "Hoje: nada marcado." }, FINISH]];
+
+    await rodar({ plano: PLANO });
+
+    expect(textoGravado).not.toContain("a leitura falhou");
   });
 
   /**
