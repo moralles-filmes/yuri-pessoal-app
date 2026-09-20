@@ -1192,6 +1192,8 @@ export type Database = {
           daily_budget: number | null
           default_model: string | null
           default_provider: string | null
+          floating_corner: string
+          floating_hidden: boolean
           id: string
           job_monthly_budget: number
           monthly_budget: number | null
@@ -1230,6 +1232,8 @@ export type Database = {
           daily_budget?: number | null
           default_model?: string | null
           default_provider?: string | null
+          floating_corner?: string
+          floating_hidden?: boolean
           id?: string
           job_monthly_budget?: number
           monthly_budget?: number | null
@@ -1268,6 +1272,8 @@ export type Database = {
           daily_budget?: number | null
           default_model?: string | null
           default_provider?: string | null
+          floating_corner?: string
+          floating_hidden?: boolean
           id?: string
           job_monthly_budget?: number
           monthly_budget?: number | null
