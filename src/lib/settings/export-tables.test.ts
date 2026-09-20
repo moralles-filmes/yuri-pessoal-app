@@ -110,3 +110,35 @@ describe("backup do usuário", () => {
     }
   });
 });
+
+describe("Fase 18-F — seção de IA", () => {
+  it("inclui as tabelas de IA que são dado do usuário", () => {
+    for (const t of [
+      "ai_conversations",
+      "ai_messages",
+      "ai_runs",
+      "ai_usage_events",
+      "ai_insights",
+      "ai_action_executions",
+      "ai_user_preferences",
+    ] as const) {
+      expect(EXPORT_TABLES).toContain(t);
+    }
+  });
+
+  // ⛔ A própria fase proíbe exportar material criptográfico, e o backup SAI do sistema.
+  it("NÃO inclui a tabela de credenciais, e diz por quê", () => {
+    expect(EXPORT_TABLES as string[]).not.toContain("ai_provider_credentials");
+    expect(EXPORT_EXCLUDED.ai_provider_credentials).toBeTruthy();
+  });
+
+  it("a configuração de provedor entra — ela não guarda segredo", () => {
+    expect(EXPORT_TABLES).toContain("ai_provider_configs");
+  });
+
+  it("não perdeu as seções das outras frentes", () => {
+    expect(EXPORT_TABLES).toContain("training_sessions");
+    expect(EXPORT_TABLES).toContain("nutrition_diary_entries");
+    expect(EXPORT_TABLES).toContain("todo_tasks");
+  });
+});

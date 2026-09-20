@@ -163,6 +163,31 @@ export const EXPORT_TABLES: ExportTableName[] = [
   // `todo_calendar_sync`: sem ela, restaurar criaria eventos DUPLICADOS no Google, já que a
   // idempotência mora justamente aqui.
   "training_calendar_sync",
+  // Fase 18 — módulo de Inteligência Artificial.
+  //
+  // ⛔ `ai_provider_credentials` fica FORA: guarda o ciphertext da chave de API e a DEK
+  // embrulhada. Mesmo motivo de `google_integrations` — um backup que vaza é ruim; um que
+  // vaza credencial é pior. `ai_provider_configs` entra: só tem modelo, teto e timeout.
+  //
+  // ⚠️ `ai_documents` leva o METADADO do comprovante (nome, tipo, tamanho), nunca o binário:
+  // os arquivos vivem no bucket privado e não cabem num JSON — como `body_progress_photos`.
+  "ai_provider_configs",
+  "ai_user_preferences",
+  "ai_conversations",
+  "ai_messages",
+  "ai_runs",
+  "ai_run_steps",
+  "ai_usage_events",
+  "ai_tool_calls",
+  "ai_action_proposals",
+  "ai_action_approvals",
+  "ai_action_executions",
+  "ai_documents",
+  "ai_document_extractions",
+  "ai_insights",
+  "ai_insight_sources",
+  "ai_insight_feedback",
+  "ai_insight_jobs",
 ];
 
 
@@ -175,4 +200,6 @@ export const EXPORT_EXCLUDED: Record<string, string> = {
     "Guarda tokens OAuth do Google. Credencial nunca sai num arquivo de backup.",
   nutrition_nutrients:
     "Vocabulário global do sistema (sem user_id), recriado por migration — não é dado do usuário.",
+  ai_provider_credentials:
+    "Guarda o ciphertext da chave de API e a DEK embrulhada. Credencial nunca sai num arquivo de backup.",
 };
