@@ -41,10 +41,24 @@ números do orçamento estão em `docs/project/CURRENT_STATUS.md`.
   fronteira "o selo não repete o sino" — sem import, ele não tem de onde ler insight,
   notificação nem ação travada. ⚠️ Ele mora na RAIZ de `src/lib/ai/`, e `CAMADAS_PURAS` itera
   sobre **pastas** — então o `boundaries.test.ts` não o cobre. Quem cobre é o teste próprio.
+- ⛔ **O ESTADO DA CONVERSA DO PAINEL VIVE FORA DA GAVETA — e isso custou um bug.** O dono
+  relatou em 2026-09-20 que mandar uma pergunta e fechar o painel fazia a pergunta sumir.
+  `SheetContent` é embrulhado em `<Presence present={forceMount || context.open}>`: fechar
+  **desmonta a subárvore inteira**, e o `ChatClient` levava junto as bolhas, o
+  `conversationId` e o cleanup do `AbortController` — que **cancelava a resposta em
+  andamento**. `useLazyDialog` mantém montado o **invólucro**, não os filhos da gaveta; o
+  plano do bloco afirmava o contrário e eu o implementei sem conferir. `forceMount` não é
+  saída (`RemoveScroll`/`hideOthers`/`FocusScope` moram no mesmo `Presence`). Hoje
+  `chat-client.tsx` exporta **`useConversaDaIa`** (motor) e **`ChatView`** (vista), o painel
+  chama o hook **acima do `<Sheet>`**, e `ChatClient` continua juntando as duas para `/ia`.
+  Guardado por `src/lib/ai/painel-persistencia.test.ts`. **Vale para qualquer diálogo cujo
+  conteúdo precise sobreviver ao fechamento.**
 - ⚠️ **`estadoDoPainelDaIa` RECONCILIA** (`reconcileOwnRuns`). Abrir `/ia` era o gatilho
   primário da reconciliação preguiçosa; com o painel, ele deixou de ser o caminho mais curto.
   Qualquer porta nova para o chat precisa dessa linha, ou a reserva fica presa no orçamento
-  sem nada na tela explicando.
+  sem nada na tela explicando. ⚠️ E o efeito que a chama **depende de `aberto`**: preso à
+  montagem, o painel (que nunca desmonta) reconciliaria 1× por carregamento de página, e quem
+  ligasse um provedor sem recarregar veria "configure um provedor" para sempre.
 - ⚠️ **A frase de bloqueio do chat sai de `prontidaoDoChat`** (`server/chat-readiness.ts`),
   consumida pela página `/ia` **e** pelo painel. Não escreva a segunda cópia.
 - ⛔ **CAMPO OBRIGATÓRIO NUM SCHEMA DE FORMULÁRIO MEXE EM DUAS FIXTURES, NÃO UMA.** A lista

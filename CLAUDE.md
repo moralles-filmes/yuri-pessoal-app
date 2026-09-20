@@ -695,6 +695,24 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     neste bloco. E o gerador de tipos do Supabase traz mais que a sua migration (aqui: uma
     relationship de `import_rows` e a sintaxe nova dos genéricos) — **leia o diff de
     `src/types/supabase.ts` antes de aceitá-lo** e deixe fora o que não é do seu bloco.
+95. ⛔ **O ESTADO DA CONVERSA DO PAINEL VIVE FORA DA GAVETA — `useLazyDialog` NÃO O SALVA.**
+    Defeito real relatado pelo dono em 2026-09-20: mandar uma pergunta e fechar o painel fazia
+    a pergunta sumir. `SheetContent` é embrulhado em `<Presence present={forceMount ||
+    context.open}>`, então fechar desmonta tudo que está dentro; o `ChatClient` morava ali e
+    levava junto o `useState` das bolhas, o `conversationId` **e** o cleanup do
+    `AbortController` — que **cancelava a resposta em andamento**, deixando o critério de
+    aceite 6 quebrado inteiro (o selo nunca chegava a aparecer). O hook mantém montado o
+    COMPONENTE DO PAINEL, não os filhos da gaveta, e o plano do bloco afirmava o contrário.
+    ⛔ `forceMount` não é a saída (ver regra 2 do carregamento sob demanda). A saída é a do
+    React: **`chat-client.tsx` exporta as duas metades** — `useConversaDaIa` (estado, envio,
+    streaming, cancelamento) e `ChatView` (só JSX) —, o painel chama o hook **acima do
+    `<Sheet>`** e renderiza a vista dentro. `ChatClient` continua juntando as duas, então `/ia`
+    não muda. ⚠️ E o que persiste envelhece: o efeito que lê `estadoDoPainelDaIa` depende de
+    `aberto`, senão o dono que ligasse um provedor sem recarregar veria "configure um provedor"
+    para sempre — e o gatilho de reconciliação da invariante 92 dispararia 1× por carregamento
+    em vez de a cada abertura. Guardado por `src/lib/ai/painel-persistencia.test.ts`, que varre
+    o código-fonte **ignorando comentários** (a primeira versão casou com o `<Sheet>` citado na
+    própria explicação da regra).
 
 ## Leitura obrigatória antes de mexer no código
 
@@ -722,7 +740,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.507 testes / 171 arquivos em 2026-09-20 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.513 testes / 172 arquivos em 2026-09-20 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos
@@ -831,6 +849,14 @@ mantém isso de pé:
    estado derivado do React) — num efeito, `react-hooks/set-state-in-effect` reprova.
    Exceção conhecida: diálogo que recebe o próprio botão por `trigger` (ex.: `TodoLinkDialog`)
    **não** pode ser lazy — o botão sumiria da tela.
+   ⛔ **O QUE O HOOK NÃO FAZ: ele não preserva o estado de DENTRO do diálogo.** `DialogContent`
+   e `SheetContent` são embrulhados em `<Presence present={forceMount || context.open}>`, então
+   fechar **desmonta toda a subárvore**. O hook mantém montado o INVÓLUCRO — o que protege o
+   download sob demanda e a animação, não o `useState` dos filhos. Para formulário isso é
+   desejável (ele reseta); para qualquer coisa que precise sobreviver ao fechamento, **suba o
+   estado para fora do diálogo**. `forceMount` não é a saída: `RemoveScroll`, `hideOthers` e
+   `FocusScope` moram no mesmo `Presence`, e o app ficaria com rolagem travada e `aria-hidden`
+   permanentes. Custou um bug real em 2026-09-20 — ver invariante 95.
 3. ⚠️ **Constante lida pela TELA não mora em `src/lib/validators/`** — esse módulo começa com
    `import { z } from "zod"`. As telas de `/ia` baixavam 62,7 KB gz para ler quatro
    constantes; elas foram para `@/lib/ai/constants` (módulo puro, **zero imports de runtime**)

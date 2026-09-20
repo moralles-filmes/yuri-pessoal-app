@@ -1717,6 +1717,18 @@ de fechamento do Radix — o componente sumiria no mesmo quadro em que a gaveta 
 desmontar. O hook monta na primeira abertura e não desmonta mais, e é o que faz o streaming
 continuar quando o dono fecha o painel e navega.
 
+> ⛔ **ERRATA (2026-09-20, depois de o dono conferir à mão).** A última frase acima está
+> **ERRADA**, e foi implementada como escrita: `useLazyDialog` **não** faz o streaming
+> sobreviver ao fechamento. Ele mantém montado o **componente do painel**; já o `SheetContent`
+> é embrulhado em `<Presence present={forceMount || context.open}>`, e fechar **desmonta tudo
+> que está dentro da gaveta**. O `ChatClient` morava ali e levava junto as bolhas, o
+> `conversationId` e o cleanup do `AbortController` — que **cancelava a resposta em
+> andamento**. Sintoma relatado: *"manda uma pergunta, fecha o painel, a pergunta some"*.
+> `forceMount` não é a saída (`RemoveScroll`, `hideOthers` e `FocusScope` moram no mesmo
+> `Presence`). O conserto subiu o estado: `chat-client.tsx` exporta `useConversaDaIa` (motor)
+> e `ChatView` (vista), e o painel chama o hook **acima do `<Sheet>`**. Ver invariante 95 do
+> `CLAUDE.md` e `src/lib/ai/painel-persistencia.test.ts`.
+
 - [ ] **Passo 2: Montar na casca**
 
 Em `src/components/layout/app-shell.tsx`, acrescente as duas props e o componente **depois do

@@ -8,7 +8,7 @@
 
 Plano em `docs/superpowers/plans/2026-09-19-18f-bloco2-botao-flutuante.md` (§5 da spec).
 Branch `feat/18-f-memoria-integracoes`. **Uma migration, duas colunas, nenhuma tabela.**
-Suíte em **3.507 testes / 171 arquivos**.
+Suíte em **3.513 testes / 172 arquivos**.
 
 Um botão fixo no canto inferior abre um painel com o **mesmo** `ChatClient` da 18-A, apontando
 para o **mesmo** `/api/ia/chat`. Nenhuma chave de permissão nova, nenhuma porta nova de
@@ -47,6 +47,37 @@ mesmas `allow_*` e `allow_write_*`, e todas continuam desligadas de fábrica.
 6. **`floating_hidden` esconde o BOTÃO, não o assistente.** O atalho `Ctrl/⌘ + I` continua
    abrindo o painel, e as duas telas que oferecem ocultar dizem isso com essas palavras.
 
+### ⛔ O conserto de 2026-09-20 — a conversa não sobrevivia ao fechamento
+
+O dono conferiu à mão e achou o que o automatizado não pegava: **mandar uma pergunta e fechar
+o painel fazia a pergunta sumir.**
+
+`SheetContent` é embrulhado em `<Presence present={forceMount || context.open}>`, então fechar
+**desmonta tudo que está dentro da gaveta**. O `ChatClient` morava ali e levava junto o
+`useState` das bolhas, o `conversationId` e — o pior — o cleanup do `AbortController`, que
+**cancelava a resposta em andamento**. O critério de aceite 6 estava quebrado inteiro: o selo
+nunca chegaria a aparecer. O plano do bloco afirmava que `useLazyDialog` fazia o streaming
+sobreviver; ele mantém montado o **componente do painel**, não os filhos da gaveta.
+
+`forceMount` não era saída: `RemoveScroll`, `hideOthers` e `FocusScope` moram no mesmo
+`Presence`, e o app ficaria com rolagem travada e `aria-hidden` permanentes.
+
+**O conserto é o que o React manda — o estado sobe.** `chat-client.tsx` passou a exportar as
+duas metades: `useConversaDaIa` (estado, envio, streaming, cancelamento) e `ChatView` (só JSX).
+`ChatClient` continua juntando as duas, então `/ia` não mudou uma linha; o painel chama o hook
+**acima do `<Sheet>`** e renderiza a vista dentro. Como o painel sobrevive ao fechamento **e** à
+navegação, perguntar-fechar-navegar passou a funcionar. **Não há segundo chat.**
+
+E o que persiste envelhece: o efeito que lê `estadoDoPainelDaIa` passou a depender de `aberto`.
+Preso à montagem, quem ligasse um provedor sem recarregar veria "configure um provedor" para
+sempre, e o gatilho de reconciliação (invariante 92) dispararia 1× por carregamento em vez de a
+cada abertura.
+
+Guardado por `src/lib/ai/painel-persistencia.test.ts` — varredura de código-fonte **que ignora
+comentários**, porque a primeira versão do teste casou com o `<Sheet>` citado na própria
+explicação da regra. Orçamento inalterado: **281,4 KB gz**, 15 chunks, e das marcas do painel e
+do chat nenhuma aparece nos chunks contados para a rota.
+
 ### O orçamento de JS, que foi o juiz do bloco
 
 O botão mora na casca, então tudo que ele importa entra nas **67 rotas**. Medido antes e
@@ -82,9 +113,15 @@ tela cheia" e "Nenhuma mensagem ainda" (painel e chat) estão todas fora. O que 
 
 ### Verificação
 
-`npm run lint` · `npx tsc --noEmit` · `npm run test:run` (3.507/3.507) · `npm run build` ·
-`npm run perf:bundle` (67 rotas dentro do teto) · `TZ=UTC npx vitest run` (3.507/3.507) ·
+`npm run lint` · `npx tsc --noEmit` · `npm run test:run` (3.513/3.513) · `npm run build` ·
+`npm run perf:bundle` (67 rotas dentro do teto) · `TZ=UTC npx vitest run` (3.513/3.513) ·
 `get_advisors` sem lint novo.
+
+⚠️ **E a conferência à mão do dono achou o que tudo isso deixou passar** — a conversa não
+sobrevivia ao fechamento do painel. Ver "O conserto de 2026-09-20" acima. A suíte não tem como
+pegar sozinha um defeito de ciclo de vida de componente enquanto o projeto rodar em ambiente
+`node` sem um único `.test.tsx` (invariante 25); o que ficou no lugar é uma varredura de
+código-fonte, e ela só existe porque o defeito apareceu.
 
 ## 🟡 18-F · Bloco 1 — IA deixa de ser uma ilha (2026-09-19)
 
@@ -252,6 +289,13 @@ fora do git por `.git/info/exclude`).
    (`src/components/shared/use-lazy-dialog.ts`). Eles arrastam `zod` + `react-hook-form`
    (~62 KB gz). ⚠️ **`{aberto && <Dialog/>}` sozinho quebra a animação de fechamento** — o hook
    monta na primeira abertura e não desmonta mais.
+   ⛔ **O que ele NÃO faz: preservar o estado de DENTRO do diálogo.** `DialogContent`/
+   `SheetContent` são embrulhados em `<Presence present={forceMount || context.open}>`, então
+   fechar desmonta a subárvore inteira. O hook protege o invólucro (download sob demanda +
+   animação), não o `useState` dos filhos. Formulário pode resetar; o que precisa sobreviver
+   ao fechamento tem de ter o estado **fora** do diálogo. `forceMount` não resolve —
+   `RemoveScroll`, `hideOthers` e `FocusScope` moram no mesmo `Presence`. Custou um bug real
+   em 2026-09-20 (o painel da IA perdia a pergunta ao fechar).
 4. **⚠️ Constante lida pela TELA não mora em `src/lib/validators/`.** As telas de `/ia`
    baixavam 62,7 KB gz de `zod` para ler quatro constantes (`MAX_CHAT_TEXT`,
    `ROTAS_COM_CONTEXTO`, `MAX_OBSERVACAO_DOCUMENTO`, `MODULOS_COM_CONTEXTO`), porque elas
