@@ -16,14 +16,17 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (17 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece, **sem migration**; **Bloco 2 ✅ (2026-09-20)** — o assistente ao alcance de qualquer tela por um botão na casca que abre um painel sob demanda, com a **mesma** `ChatClient` e as mesmas chaves. **2 colunas, nenhuma tabela** |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (19 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece, **sem migration**; **Bloco 2 ✅ (2026-09-20)** — o assistente ao alcance de qualquer tela por um botão na casca que abre um painel sob demanda, com a **mesma** `ChatClient` e as mesmas chaves (**2 colunas, nenhuma tabela**); **Bloco 3 ✅ (2026-09-20)** — a **memória**: o dono escreve preferências em `/ia/memoria` e o assistente as leva para as conversas **como preferência, nunca como regra**; a IA passa a poder **propor** preferências, pelo mesmo Approval Engine. **2 tabelas + 1 coluna**, e `allow_memory` (que existia desde a 18-A) finalmente liga alguma coisa |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). A **18-E** (blocos 1–3, 2026-08-09) criou 3 (`ai_insights`, `ai_insight_sources`,
 `ai_insight_feedback`) e alterou 2 (`ai_runs.kind` ganhou a terceira espécie `'insight'`;
 `ai_action_proposals` ganhou `insight_id` e a quarta `origem`). O **Bloco 4 da 18-E** criou 1
 (`ai_insight_jobs`) e alterou 2 (`ai_runs` ganhou `automatic`; `ai_user_preferences` ganhou
 `allow_insight_jobs` e `job_monthly_budget`). **Reconferido no banco em 2026-08-09, depois do
-Bloco 4: 130 tabelas** no `public`, **18 `ai_*`**. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
+Bloco 4: 130 tabelas** no `public`, **18 `ai_*`**. O **Bloco 3 da 18-F** criou 2 (`ai_memories`
+e `ai_memory_events`) e acrescentou 1 coluna (`ai_user_preferences.allow_write_memory`):
+**reconferido no banco em 2026-09-20: 132 tabelas** no `public`, **20 `ai_*`**. Além delas,
+**32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -158,9 +161,10 @@ do sistema para uma leitura que não teria para onde ir.
 nascem `false` no banco, e as chaves estão em `/ia/configuracoes`.
 
 ⚠️ **A ESCRITA EXISTE DESDE O BLOCO 4 (2026-08-07), e continua DESLIGADA de fábrica.** O
-registry tem **29 ferramentas — 22 de leitura e 7 de escrita** (contado em 2026-08-08; a
-redação anterior dizia "6" e a própria tabela abaixo já listava sete linhas) e **13 commands**;
-as cinco chaves `allow_write_*` nascem `false`
+registry tem **30 ferramentas — 22 de leitura e 8 de escrita** e **15 commands** (contado no
+array em 2026-09-20, depois que a 18-F Bloco 3 acrescentou `memory.lembrar`, o 8º de escrita, e
+os commands `lembrarPreferencia`/`esquecerPreferencia`; eram 29 e 13 até a 18-C);
+as SEIS chaves `allow_write_*` nascem `false`
 no banco e cada uma só é clicável junto com a chave de leitura do mesmo módulo. Nenhuma ação é
 aplicada sem o dono confirmar na tela, uma de cada vez, com prazo de 10 minutos.
 
@@ -173,10 +177,11 @@ aplicada sem o dono confirmar na tela, uma de cada vez, com prazo de 10 minutos.
 | `calendar.criar_evento` | `criarEvento` | `excluirEvento` | 3 |
 | `nutrition.registrar_consumo` | `registrarConsumo` | `desfazerConsumo` | 3 |
 | `finance.lancar_transacao` | `lancarTransacao` | `excluirTransacao` | 3 |
+| `memory.lembrar` (18-F B3) | `lembrarPreferencia` | `esquecerPreferencia` | 2 |
 
-⛔ **Os seis `undo` NÃO estão no Tool Registry, e a ausência é a trava:** o modelo não tem como
-propor exclusão, reabertura, apagamento de registro, cancelamento de compromisso nem exclusão
-de lançamento. Quem os alcança é o botão de desfazer de **`/ia/acoes`** (Bloco 5), sobre uma
+⛔ **Os SETE `undo` NÃO estão no Tool Registry, e a ausência é a trava:** o modelo não tem como
+propor exclusão, reabertura, apagamento de registro, cancelamento de compromisso, exclusão
+de lançamento nem "esqueça o que eu te disse". Quem os alcança é o botão de desfazer de **`/ia/acoes`** (Bloco 5), sobre uma
 execução que a própria IA fez — e mesmo ali o botão **propõe**, não executa. Excluir por pedido
 em linguagem natural é risco 4 e está fora da 18-C.
 
@@ -639,7 +644,8 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     `FILTROS_DO_HISTORICO`: a página mostra TODAS as ações, em silêncio.
 86. ⛔ **`ai_provider_credentials` NUNCA entra no backup**, e o motivo está escrito em
     `EXPORT_EXCLUDED` (não só em comentário): é o ciphertext da chave de API mais a DEK
-    embrulhada. As outras 17 `ai_*` entram — ver invariante 28, **some a sua seção**.
+    embrulhada. As outras **19** `ai_*` entram (17 no Bloco 1 + as duas da memória, Bloco 3) — ver
+    invariante 28, **some a sua seção**.
 87. ⛔ **NÃO HÁ RETENÇÃO AUTOMÁTICA, E ISSO É DECISÃO.** Nada some sozinho: descartar é clique
     do dono, em `/ia/configuracoes`. Não escreva job que apague conversa velha.
 88. ⛔ **A EXCLUSÃO EM MASSA DECLARA O QUE PERMANECE **E** O QUE SAI JUNTO, ANTES DE CONFIRMAR.**
@@ -665,6 +671,61 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     para que acrescentar "insightNovo" exija a conversa antes do commit. ⚠️ O arquivo mora na
     RAIZ de `src/lib/ai/`, e `CAMADAS_PURAS` do `boundaries.test.ts` itera sobre **pastas** —
     aquele teste não o cobre; quem cobre é o próprio, e ele é mais estrito.
+
+**Invariantes acrescentadas pelo Bloco 3 da 18-F (a memória — 2026-09-20):**
+
+96. ⛔ **O EVENTO DE MEMÓRIA NÃO GUARDA O CONTEÚDO.** `ai_memory_events` é append-only (só
+    policies de SELECT e INSERT) e **não tem coluna de texto** — invariante 20 aplicada aqui:
+    com a frase no log, "excluir memória" a deixaria viva num lugar que o dono não sabe que
+    existe, o oposto exato do que o botão promete. `memory_id` vai **sem FK** (invariante 38):
+    apagar a memória não apaga o registro de que ela existiu. E `content` fica **fora** de
+    `camposAuditaveis` de `lembrarPreferencia` pelo mesmo motivo — `ai_action_executions` é
+    auditoria permanente e **não some com a conversa**. ⚠️ Ao contrário das tabelas de
+    auditoria, `ai_memories` **tem policy de DELETE**: ela guarda o que o dono escreveu sobre
+    si, e apagar é direito dele.
+97. ⛔ **O ESTADO DE UMA MEMÓRIA É DERIVADO, E A DECISÃO DO DONO VENCE O PRAZO.** `ai_memories`
+    não tem `active` nem `status`; `vigente`/`expirada`/`desativada`/`esquecida` saem de
+    `expires_at` + o último evento (`memory/state.ts`, `agora` injetado), e `criada`/`editada`
+    **não** são decisão de exibição — editar uma memória desativada não a reativa. `reativada`
+    devolve a palavra ao prazo em vez de ignorá-lo. ⛔ **Expirar não apaga**: a memória sai do
+    prompt e continua legível, com a data em que venceu (`dateInSaoPaulo`, **nunca**
+    `.slice(0,10)` — `expires_at` é `timestamptz`). E **esquecer ≠ apagar**: é por isso que o
+    inverso de `lembrarPreferencia` é `esquecerPreferencia` e não uma exclusão — o desfazer da
+    IA (invariante 48) tem de ser proporcional.
+98. ⛔ **A MEMÓRIA É O ÚNICO TEXTO DO DONO QUE ENTRA NO PROMPT SEM SER BLOCO NÃO CONFIÁVEL — E
+    ELA ENTRA POR ÚLTIMO.** `chat-runner` concatena SEGURANÇA + perfil + contexto de roteamento
+    + memória, e a ordem é varrida por teste sobre a fonte (a concatenação não é testável sem
+    provedor). A seção declara **em paralelo** que uma preferência **não desliga** regra, **não
+    autoriza** leitura, **não autoriza** alteração e **não é dado sobre os registros**
+    (invariante 21 aplicada à memória). Teto **visível** (20). Memória de módulo ANDa com a
+    `allow_<modulo>` daquele módulo, resolvida por `permissaoDoModulo` — ou seja, pelo módulo
+    da MEMÓRIA, nunca pelo agente que atende (invariante 26: `body` numa conversa de Treinos
+    exige `allow_body`). A validação é de **FORMA** (`memory/forma.ts`: uma linha, ≤300
+    **pontos de código** como o `char_length` do Postgres conta, sem endereço, sem bloco que
+    misture letra e dígito em 20+ caracteres); a proibição de ASSUNTO mora no prompt da
+    ferramenta, **descrita pelo lado positivo** — dizer o que PODE ser proposto é mais estreito
+    que listar assuntos e não planta palavra nenhuma no prompt (invariante 30).
+99. ⚠️ **`allow_memory` É A DÉCIMA `ToolPermission`, E ELA NÃO É UM MÓDULO DO DONO.** Está em
+    `TOOL_PERMISSIONS` porque `ToolDescriptor.requiredPermission` é desse tipo — fora dela, o
+    guard não teria como exigi-la. Consequência a conhecer: `permissaoDoModulo("memory")` passa
+    a existir, e o roteador **não** o alcança (sem vocabulário, sem agente).
+    `allow_write_memory` é a sexta de escrita e é **ANDada com `allow_memory`** na action.
+    ⚠️ **`memory/` é camada pura no `boundaries.test.ts` E mistura puro com I/O**: `queries.ts`
+    e `services.ts` declaram `server-only`, os quatro outros **não podem** (a TELA os lê). Há
+    teste próprio cobrindo as duas listas — e ele reprova arquivo novo fora delas. O I/O mora
+    ali, e não em `ai/server/`, porque `approval/commands/memory-preview.ts` precisa lê-lo sem
+    atravessar `ai/server/`.
+100. ⚠️ **FRASE DE AUSÊNCIA NA DESCRIÇÃO DE AGENTE ENVELHECE — E AGORA HÁ TESTE.** "Só lê — não
+    altera nada" caiu em Treinos, Estudos e Tarefas quando `memory.lembrar` entrou nas oito
+    allowlists. É a **quarta** vez que uma afirmação de ausência vira mentira neste módulo
+    (`AVISO_SEM_ACESSO` quatro vezes, o prompt-base três). `agents/registry.test.ts` passou a
+    derivar do REGISTRY quais agentes escrevem e a recusar "só lê" na descrição deles — nunca
+    de uma lista à mão, que é a que ficaria para trás. ⛔ **O orquestrador continua com
+    `allowedTools: []`** (invariante 74): o prompt dele afirma que não cria, edita nem exclui
+    nada, e incluí-lo custaria `assistente-pessoal-v3` — é decisão do dono. ⚠️ E a `.regex()`
+    de um schema roda **antes** do `.transform()`: um padrão de data que não aceite `""`
+    recusa o `<input type="date">` deixado em branco e o formulário nunca salva
+    (`round-trip.test.ts` pegou isso neste bloco).
 91. ⛔ **TUDO QUE A CASCA DO APP IMPORTA ENTRA NAS 67 ROTAS.** `floating-assistant.tsx` tem
     orçamento medido e uma lista **escrita** do que não pode importar (`@/lib/ai/constants`,
     `@/lib/validators/*`, `chat-client`, `ui/sheet`, `ui/dropdown-menu`); o painel inteiro fica
@@ -740,7 +801,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.513 testes / 172 arquivos em 2026-09-20 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.609 testes / 178 arquivos em 2026-09-20 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

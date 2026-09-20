@@ -1,8 +1,115 @@
 # CURRENT_STATUS — Estado atual do projeto
 
 > Atualizado ao final de **cada** fase. Última atualização: **2026-09-20**
-> (18-F Bloco 2 · botão flutuante; antes: 18-F Bloco 1 + auditoria de performance + iteração:
-> transferência na importação de extrato de conta).
+> (18-F Bloco 3 · memória; antes: 18-F Bloco 2 · botão flutuante, 18-F Bloco 1 + auditoria de
+> performance + iteração: transferência na importação de extrato de conta).
+
+## 🟡 18-F · Bloco 3 — o assistente conhece as preferências do dono (2026-09-20)
+
+Plano em `docs/superpowers/plans/2026-09-20-18f-bloco3-memoria.md` (§6 da spec).
+Branch `feat/18-f-memoria-integracoes`. **Uma migration: 2 tabelas + 1 coluna.**
+Banco em **132 tabelas** no `public`, **20 `ai_*`** (conferido no banco em 2026-09-20).
+Suíte em **3.609 testes / 178 arquivos**. Registry em **30 ferramentas** (22 leitura + 8
+escrita) e **15 commands**.
+
+O dono escreve preferências numa tela; o assistente as leva para as conversas **como
+preferência, nunca como regra**. E a IA passa a poder PROPOR preferências novas — pelo mesmo
+Approval Engine da 18-C, sem mecanismo novo de confirmação.
+
+⚠️ **`allow_memory` já existia desde a 18-A e nunca tinha sido lida por uma linha de código.**
+Este bloco a faz ligar alguma coisa — o mesmo movimento que o Bloco 4 da 18-E fez com
+`allow_insight_jobs`. **Só `allow_write_memory` é coluna nova**, e nasce `false`.
+
+| O que entrou | Onde |
+| --- | --- |
+| Vocabulário, validação de FORMA e o estado derivado (puros) | `src/lib/ai/memory/{contracts,forma,state}.ts` |
+| Duas tabelas + a chave de escrita | `supabase/migrations/20260921100000_ai_memoria.sql` |
+| Leitura e as cinco escritas, cada uma com o seu evento | `src/lib/ai/memory/{queries,services}.ts` |
+| A seção do prompt, e a ordem em que ela entra | `src/lib/ai/memory/prompt.ts` + `server/chat-runner.ts` |
+| A 8ª ferramenta e os dois commands, partidos em dois | `tools/registry.ts` + `approval/commands/memory{,-preview}.ts` |
+| A tela, o formulário sob demanda e as 4 actions | `app/(app)/ia/memoria/` + `components/ai/memory-*` + `actions/ai-memory.ts` |
+| O deep-link e o backup | `search/ai-links.ts`, `search/queries.ts`, `settings/export-tables.ts` |
+
+### As decisões deste bloco
+
+1. **Duas tabelas, e a segunda não é detalhe.** `ai_memories` guarda o que vale agora;
+   `ai_memory_events` guarda o que aconteceu, **append-only** (só SELECT e INSERT) e **sem o
+   conteúdo**. É a invariante 20 aplicada aqui: com a frase no log, "excluir memória" a
+   deixaria viva num lugar que o dono não sabe que existe. `memory_id` vai **sem FK**
+   (invariante 38) — apagar a memória não apaga o registro de que ela existiu.
+2. **Nenhum estado é gravado.** Sem `active`, sem `status`, sem `forgotten_at`.
+   `vigente`/`expirada`/`desativada`/`esquecida` saem de `expires_at` + o último evento, puro,
+   com `agora` injetado. **Decisão do dono > prazo, nos dois sentidos**, e `reativada` devolve
+   a palavra ao prazo em vez de ignorá-lo. ⛔ **Expirar não apaga**: a memória sai do prompt e
+   continua legível, com a data em que venceu.
+3. **O servidor valida FORMA, nunca assunto** (invariante 39): uma linha, ≤300 **pontos de
+   código** (como o `char_length` do Postgres conta — `.length` é UTF-16 e discordaria dele nas
+   frases com emoji), sem endereço e sem bloco que misture letra e dígito em 20+ caracteres.
+   Uma lista de assuntos proibidos fura no primeiro assunto novo. A proibição de ASSUNTO existe
+   e mora no prompt da ferramenta, **descrita pelo lado positivo** — dizer o que PODE ser
+   proposto é mais estreito e não planta palavra nenhuma no prompt (invariante 30).
+4. **A memória entra no prompt POR ÚLTIMO.** `chat-runner` concatena SEGURANÇA + perfil +
+   contexto de roteamento + memória, e a ordem é varrida por teste sobre a fonte. A seção
+   declara em paralelo que uma preferência **não desliga** regra, **não autoriza** leitura,
+   **não autoriza** alteração e **não é dado sobre os registros**. Teto **visível** (20).
+5. **Memória de módulo ANDa com a chave daquele módulo**, resolvida pelo MÓDULO da memória e
+   não pelo agente que atende — invariante 26. Há teste com `body`, que não tem agente próprio:
+   numa conversa de Treinos ela exige `allow_body`, não `allow_training`.
+6. **O inverso de `lembrarPreferencia` é `esquecerPreferencia`, não uma exclusão**
+   (invariante 48). Esquecer tira do prompt e deixa legível; apagar de vez continua sendo botão
+   do dono, na tela dele. E `content` fica **fora** de `camposAuditaveis`: `changed_fields` é
+   auditoria permanente e não some com a conversa.
+7. **O orquestrador continua com `allowedTools: []`.** `memory.lembrar` foi para os OITO
+   especialistas. O prompt dele afirma que não cria, edita nem exclui nada; incluí-lo custaria
+   reescrever aquela frase, subir `assistente-pessoal-v2` para `v3` e trocar a invariante 74.
+   A tela cobre o buraco: preferência geral o dono escreve lá, e o texto diz isso.
+
+### Três descrições de agente viraram mentira — e agora há teste
+
+"Só lê — não altera nada" caiu em **Treinos, Estudos e Tarefas** quando `memory.lembrar` entrou
+nas oito allowlists. É a **quarta vez** que uma frase de ausência envelhece neste módulo
+(`AVISO_SEM_ACESSO` quatro vezes, o prompt-base três), e a primeira em que há guarda:
+`agents/registry.test.ts` deriva do REGISTRY quais agentes escrevem e recusa "só lê" na
+descrição deles — nunca de uma lista escrita à mão, que é justamente a que ficaria para trás.
+
+### O que a execução encontrou e o plano não previa
+
+- **O teste de migration tinha duas asserções vácuas.** A regex de policy proibida exigia
+  quebra de linha onde o SQL escreve `on public.ai_memory_events for select` na mesma linha —
+  ela não casaria nem com o que existe, e passaria verde para sempre, inclusive depois de
+  alguém acrescentar o UPDATE que ela deveria barrar. E `indexOf` pelo nome da constraint
+  pegava o `drop constraint if exists`, devolvendo lista vazia. Corrigidos, com **asserção
+  positiva** provando que a primeira regex sabe encontrar presença.
+- **`round-trip.test.ts` pegou um defeito real antes do usuário:** `.regex()` roda ANTES do
+  `.transform()`, então o padrão de data recusava a string vazia que um `<input type="date">`
+  em branco manda — o formulário nunca salvaria, com "Use uma data válida" num campo deixado
+  vazio de propósito. É exatamente o bug que deu origem àquele arquivo.
+- **A regex do teste de fronteira do lado preview só pegava um nível de pasta.**
+  `@/lib/[a-z-]+/services$` deixaria `@/lib/ai/memory/services` passar, e a partição dos
+  commands viraria decoração — arquivos dois, grafo de imports um. Agora é `/services$`.
+- **`guard.test.ts` tinha duas fixtures escritas à mão** sobre uma lista que cresce. Viraram
+  derivadas de `TOOL_WRITE_PERMISSIONS`: ali, "tudo ligado" com uma chave faltando testaria o
+  guard contra um estado que nunca existe.
+- **`memory/` mistura puro com I/O, e nada no projeto guardava essa linha.**
+  `boundaries.test.ts` exige `server-only` só em `ai/server/` e `approval/commands/`. O teste
+  novo cobre as duas metades — e reprova arquivo novo que escape das duas listas (foi ele que
+  exigiu `prompt.ts` na lista assim que o arquivo nasceu).
+
+### Orçamento de JS, medido em 2026-09-20 depois do bloco
+
+| Rota | Bloco 2 | Bloco 3 | Teto |
+| --- | --- | --- | --- |
+| `/(app)/configuracoes` | 281,4 KB | **281,6 KB** | 285 (próprio) |
+| `/(app)/ia/memoria` | — | **203,0 KB** | 250 |
+| mediana | 213,8 KB (67 rotas) | **213,9 KB (68 rotas)** | 250 |
+
+⚠️ **A medição desmentiu a hipótese do plano.** Ele dizia que, se `/(app)/configuracoes`
+subisse, o culpado seria `@/lib/ai/constants`. Movi os dois rótulos novos dali para
+`memory/contracts.ts` e **o número ficou igual**: o custo vem da CASCA — a busca global vive no
+Header de todas as rotas, e `search-meta.tsx` ganhou o ícone e `search/types.ts` o tipo
+`ia_memoria`. O teto **não** foi subido; o movimento continua certo pelo argumento de não
+viajar com quem não usa, mas não é o que explica o número. **Ao mexer no orçamento, meça antes
+de escrever a causa.**
 
 ## 🟡 18-F · Bloco 2 — o assistente ao alcance de qualquer tela (2026-09-20)
 
@@ -527,7 +634,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino, na busca global, no backup e ganha exclusão em massa, sem migration; **Bloco 2 ✅ (2026-09-20)** — botão flutuante na casca com painel sob demanda, 2 colunas |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino, na busca global, no backup e ganha exclusão em massa, sem migration; **Bloco 2 ✅ (2026-09-20)** — botão flutuante na casca com painel sob demanda, 2 colunas; **Bloco 3 ✅ (2026-09-20)** — memória: 2 tabelas, a 8ª ferramenta de escrita, o 15º command, `/ia/memoria`, e `allow_memory` finalmente ligando alguma coisa |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,

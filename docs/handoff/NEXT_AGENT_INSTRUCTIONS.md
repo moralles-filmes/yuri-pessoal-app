@@ -1,26 +1,72 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-> Atualizado em **2026-09-20**, ao fechar o **Bloco 2 da 18-F**. A última FASE do
+> Atualizado em **2026-09-20**, ao fechar o **Bloco 3 da 18-F**. A última FASE do
 > roadmap fechada continua sendo a **18-E** (2026-08-09); a **18-F está em andamento**.
 
-## ▶️ O PRÓXIMO É O **Bloco 3 da 18-F — memória**
+## ▶️ O PRÓXIMO É O **Bloco 4 da 18-F — experiências**
 
-Desenho: `docs/superpowers/specs/2026-09-19-18f-memoria-integracoes-design.md` **§6**.
-Ele entrega **2 tabelas** (`ai_memories` + a de eventos), a coluna `allow_write_memory`, a
-**8ª ferramenta** de escrita, o **15º command**, a rota `/ia/memoria` e a busca por memória.
-É o bloco de maior risco da fase: memória é o único texto que o dono **autoriza** a entrar no
-prompt como preferência sua (§9.3).
+Desenho: `docs/superpowers/specs/2026-09-19-18f-memoria-integracoes-design.md` **§7**.
+Quatro experiências (**Planejar meu dia · Encerrar meu dia · Planejar minha semana · Caixa de
+entrada inteligente**), o **laço dirigido pelo servidor**, a 4ª espécie de `ai_runs.kind`
+(`experience`) e a chave `allow_cross_module`, que hoje está ociosa. **Nenhuma rota nova:**
+os três panoramas são atalhos em `/ia` e no painel do botão flutuante, e cada um **abre uma
+conversa** — do segundo turno em diante é chat comum.
 
-⛔ **`/ia/memoria` SÓ NASCE ALI, e o link em `src/lib/search/ai-links.ts` só pode entrar no
-MESMO commit da rota.** `ai-links.ts` tem teste que confere no DISCO se cada rota citada tem
-`page.tsx` — link para rota inexistente é 404, e o projeto já levou esse bug uma vez.
+⛔ **NENHUMA PORTA NOVA DE LEITURA.** As experiências entram pelo **Tool Executor**, com
+`guard.ts`, `ai_tool_calls` e a poda por orçamento intactos. `insights/collectors/` continua
+sendo a única exceção (invariante 71) e **ela não cresce**.
 
-⚠️ **`ai_user_preferences.allow_memory` JÁ EXISTE no banco** e não é lida por ninguém. Ela é
-do Bloco 3; os Blocos 1 e 2 não a tocaram de propósito.
+⛔ **O laço dirigido NÃO está sujeito a `MAX_TOOL_STEPS`** — aquele teto existe para impedir o
+MODELO de decidir quanto o dono gasta, e aqui quem decide é uma lista estática. Mas "não se
+aplica" não pode virar "não há teto": o catálogo declara `MAX_FERRAMENTAS_POR_EXPERIENCIA`,
+validado em teste, e `computeReservation` reserva sobre esse número — nunca sobre o tamanho da
+lista em runtime.
 
-⚠️ **`memory/` entra em `CAMADAS_PURAS` do `boundaries.test.ts` NO MESMO COMMIT em que nasce.**
-A lista `modulos` desse teste é escrita à mão: uma pasta nova fora dela passa **vacuamente
-verde** (§9.2 da spec).
+⛔ **Módulo sem chave é PULADO e DECLARADO**, nunca motivo de recusa geral (invariante 77).
+Desligar a leitura de Dieta não pode calar o panorama inteiro.
+
+⚠️ **As experiências CONSOMEM a memória do Bloco 3** — "Planejar meu dia" respeitando "prefiro
+treinar à noite" é onde ela justifica existir. Por isso aquele bloco veio antes.
+
+### ✅ Bloco 3 — a memória (2026-09-20)
+
+O assistente passou a conhecer as preferências que o dono escreveu, e a poder **propor**
+preferências novas pelo Approval Engine da 18-C. **Uma migration: 2 tabelas + 1 coluna.** Banco
+em **132 tabelas**, **20 `ai_*`**. Registry em **30 ferramentas** (22 leitura + 8 escrita) e
+**15 commands**. Plano executado:
+`docs/superpowers/plans/2026-09-20-18f-bloco3-memoria.md`. As sete decisões e os números do
+orçamento estão em `docs/project/CURRENT_STATUS.md`.
+
+**O que o próximo bloco precisa saber:**
+
+- ⛔ **A MEMÓRIA É O ÚNICO TEXTO DO DONO QUE ENTRA NO PROMPT SEM SER BLOCO NÃO CONFIÁVEL, E
+  ELA ENTRA POR ÚLTIMO.** `chat-runner` concatena SEGURANÇA + perfil + roteamento + memória, e
+  a ordem é varrida por teste sobre a fonte (`memory/prompt.test.ts`). **Qualquer runner novo
+  que monte system prompt — inclusive o `experience-runner` — carrega essa ordem junto**, ou o
+  panorama nasce sem as preferências que ele existe para respeitar.
+- ⛔ **NENHUM ESTADO DE MEMÓRIA É GRAVADO**, e **expirar não apaga**. `ai_memories` não tem
+  `active` nem `status`. Decisão do dono > prazo, nos dois sentidos.
+- ⛔ **O evento não guarda o conteúdo**, `memory_id` vai sem FK, e `content` fica FORA de
+  `camposAuditaveis` — `changed_fields` é permanente e não some com a conversa.
+- ⚠️ **`allow_memory` é a DÉCIMA `ToolPermission`, e não é um módulo de registros do dono.**
+  Consequência prática: `permissaoDoModulo("memory")` passa a existir, e o roteador **não** o
+  alcança (sem vocabulário, sem agente). `allow_write_memory` é a sexta de escrita, ANDada com
+  `allow_memory` na action.
+- ⛔ **O orquestrador continua com `allowedTools: []`** (invariante 74). Se o Bloco 4 quiser
+  dar uma ferramenta a ele, o preço está escrito: reescrever a frase "não consegue criar,
+  editar nem excluir nada", subir `assistente-pessoal-v2` para `v3` e trocar aquela
+  invariante. **É decisão do dono.**
+- ⚠️ **FRASE DE AUSÊNCIA NA DESCRIÇÃO DE AGENTE AGORA TEM TESTE.** "Só lê" caiu em Treinos,
+  Estudos e Tarefas quando `memory.lembrar` entrou nas oito allowlists — a quarta vez que isso
+  acontece neste módulo. `agents/registry.test.ts` passou a derivar do registry quais agentes
+  escrevem. Publicar ferramenta de escrita num agente novo exige a descrição no mesmo commit.
+- ⚠️ **`memory/` está em `CAMADAS_PURAS` e mistura puro com I/O.** `queries.ts` e
+  `services.ts` declaram `server-only`; `contracts`, `forma`, `state` e `prompt` não podem
+  declarar (a TELA os lê). Há teste cobrindo as duas listas — e ele **reprova arquivo novo**
+  que não esteja em nenhuma delas.
+- ⚠️ **AO MEXER NO ORÇAMENTO, MEÇA ANTES DE ESCREVER A CAUSA.** `/(app)/configuracoes` foi de
+  281,4 para 281,6 KB neste bloco; a hipótese óbvia (`@/lib/ai/constants`) estava errada — o
+  custo veio da casca, pelo ícone novo da busca global. Teto **não** subido: 285, folga 3,4 KB.
 
 ### ✅ Bloco 2 — o botão flutuante (2026-09-20)
 
