@@ -32,6 +32,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { hrefAtivo } from "@/lib/nav/active";
 import { TRAINING_SECTIONS, type TrainingSection } from "@/lib/training/constants";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -60,9 +61,15 @@ const GROUPS: { title: string; slugs: string[] }[] = [
 
 const sectionBySlug = new Map(TRAINING_SECTIONS.map((section) => [section.slug, section]));
 
+const HREFS = TRAINING_SECTIONS.map((section) => section.href);
+
+/**
+ * A raiz `/treinos` não precisa mais da exceção escrita à mão: ela só vence
+ * quando nenhuma seção mais funda casou. Regra única em `@/lib/nav/active`,
+ * a mesma que pinta a sidebar e os outros três navs de módulo.
+ */
 function isActive(pathname: string, section: TrainingSection): boolean {
-  if (section.href === "/treinos") return pathname === "/treinos";
-  return pathname === section.href || pathname.startsWith(`${section.href}/`);
+  return section.href === hrefAtivo(pathname, HREFS);
 }
 
 function NavLink({

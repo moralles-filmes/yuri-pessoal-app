@@ -24,7 +24,8 @@ import {
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { AI_SECTIONS, type AiSection } from "@/lib/ai/constants";
+import { hrefAtivo } from "@/lib/nav/active";
+import { AI_SECTIONS } from "@/lib/ai/constants";
 
 const ICONS: Record<string, LucideIcon> = {
   "message-square": MessageSquare,
@@ -37,20 +38,19 @@ const ICONS: Record<string, LucideIcon> = {
   settings: Settings,
 };
 
-function isActive(pathname: string, section: AiSection): boolean {
-  // `/ia` casaria com tudo se usássemos `startsWith` — a raiz exige igualdade exata.
-  if (section.href === "/ia") return pathname === "/ia";
-  return pathname === section.href || pathname.startsWith(`${section.href}/`);
-}
+const HREFS = AI_SECTIONS.map((section) => section.href);
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  // A raiz `/ia` não precisa mais da exceção escrita à mão: ela só vence quando
+  // nenhuma seção mais funda casou. Regra única em `@/lib/nav/active`.
+  const ativoAqui = hrefAtivo(pathname, HREFS);
 
   return (
     <nav className="space-y-1">
       {AI_SECTIONS.map((section) => {
         const Icon = ICONS[section.icon] ?? MessageSquare;
-        const ativo = isActive(pathname, section);
+        const ativo = section.href === ativoAqui;
         return (
           <Link
             key={section.slug}

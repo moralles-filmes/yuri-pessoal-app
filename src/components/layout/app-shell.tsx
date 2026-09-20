@@ -61,6 +61,20 @@ export function AppShell({
 
   return (
     <div className="flex min-h-svh bg-background">
+      {/*
+        PRIMEIRO elemento focável do documento, e por isso fora da ordem visual: no DOM a
+        sidebar vem antes do Header, então quem navega por teclado atravessava os 20 links
+        do menu, o botão de recolher e os controles do topo antes de chegar ao conteúdo —
+        em TODA navegação, nas 63 telas. Invisível ao mouse (`sr-only`), aparece ao receber
+        foco. O `tabIndex={-1}` no `<main>` é obrigatório: link de âncora move a rolagem,
+        mas só move o FOCO se o alvo for focável — sem ele o Tab seguinte voltaria ao topo.
+      */}
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      >
+        Pular para o conteúdo
+      </a>
       <Sidebar collapsed={collapsed} onToggleCollapse={toggle} hidden={hidden} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header
@@ -70,7 +84,11 @@ export function AppShell({
           sidebarHidden={hidden}
           onToggleSidebar={toggleHidden}
         />
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main
+          id="conteudo"
+          tabIndex={-1}
+          className="flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8"
+        >
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>
