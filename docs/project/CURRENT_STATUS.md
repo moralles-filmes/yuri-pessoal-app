@@ -1,8 +1,112 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-09-20**
-> (18-F Bloco 3 · memória; antes: 18-F Bloco 2 · botão flutuante, 18-F Bloco 1 + auditoria de
-> performance + iteração: transferência na importação de extrato de conta).
+> Atualizado ao final de **cada** fase. Última atualização: **2026-09-22**
+> (18-F Bloco 4 · experiências; antes: 18-F Bloco 3 · memória, 18-F Bloco 2 · botão flutuante,
+> 18-F Bloco 1 + auditoria de performance + iteração: transferência na importação de extrato).
+
+## 🟡 18-F · Bloco 4 — três panoramas de um clique (2026-09-22)
+
+Plano em `docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md` (§7 da spec).
+Branch `feat/18-f-memoria-integracoes`. **Uma migration, e ela NÃO CRIA TABELA:** um valor no
+CHECK de `ai_runs.kind` e uma RPC de admissão. Banco continua em **132 tabelas** no `public`,
+**20 `ai_*`** (reconferido no banco em 2026-09-22). Suíte em **3.682 testes / 182 arquivos**.
+Registry, commands e agentes **inalterados** — este bloco não acrescentou nenhum dos três.
+
+*Planejar meu dia* · *Encerrar meu dia* · *Planejar minha semana*: o servidor decide o que ler,
+executa a lista pelo Tool Executor de sempre e o modelo **só redige**. Mais um **modo** Caixa
+de entrada, que classifica um item solto e prepara a ação pelo Approval Engine de sempre.
+
+⚠️ **`allow_cross_module` já existia desde a 18-A e nunca tinha sido lida por uma linha de
+código.** Este bloco a faz ligar alguma coisa — o mesmo movimento que o Bloco 3 fez com
+`allow_memory` e o Bloco 4 da 18-E com `allow_insight_jobs`. **Nenhuma coluna nova.**
+
+| O que entrou | Onde |
+| --- | --- |
+| Catálogo, atalhos, seleção e os prompts de redação (puros) | `src/lib/ai/experiences/` |
+| A 4ª espécie de `kind` + `ai_begin_experience_run` | `supabase/migrations/20260922100000_ai_experiencias.sql` |
+| O plano, e quem o monta | `experiences/contracts.ts` + `server/experience-runner.ts` |
+| O passo dirigido, a admissão própria e o aviso no texto | `server/chat-runner.ts` |
+| A união de duas formas `.strict()` no único endpoint | `validators/ai.ts` + `app/api/ia/chat/route.ts` |
+| Os três atalhos e o interruptor da caixa de entrada | `components/ai/chat-client.tsx` (dentro de `ChatView`) |
+| A trilha de `allow_cross_module` | `ai/types.ts`, `ai/queries.ts`, `validators/ai.ts`, `actions/ai-preferences.ts`, `components/ai/ai-preferences-form.tsx` |
+
+### As decisões deste bloco
+
+1. **A lista de leituras é ESTÁTICA, e quem a executa é o servidor.** `MAX_TOOL_STEPS = 3` por
+   tentativa existe para impedir **o modelo** de decidir quanto o dono gasta; num roteiro
+   escrito por nós ele não se aplica. Mas "não se aplica" não virou "não há teto":
+   `MAX_FERRAMENTAS_POR_EXPERIENCIA = 5`, o catálogo é validado contra ele em teste, e
+   `computeReservation` reserva sobre **esse** número. Deixar o modelo pedir uma ferramenta por
+   vez faria o teto cortar antes da última **toda manhã**.
+2. **Nenhuma porta nova de leitura.** As experiências entram pelo Tool Executor, com `guard.ts`,
+   Zod do adapter, timeout do descriptor, poda e linha em `ai_tool_calls`.
+   `insights/collectors/` (invariante 71) continua sendo a única exceção, e **não cresceu**.
+3. **O panorama ABRE UMA CONVERSA**, e daí vêm de graça o "transformar resposta em ação" pelo
+   Approval Engine, a busca, o histórico e a exclusão em massa. Ele é a **segunda** espécie de
+   run com `conversation_id` — e essa foi a armadilha do bloco: `ai_runs` tem **dois** checks
+   sobre `kind`, e mexer só no de valores faria todo panorama falhar no `insert`, dentro da
+   transação de admissão, chegando à tela como `AI_UNKNOWN`.
+4. **Não há um terceiro laço de tentativas.** `experience-runner.ts` monta um PLANO e delega a
+   `runChat` — retry, fallback, medição por chamada, heartbeat e a regra "só uma tentativa
+   aberta por run" (`ai_usage_events_one_active_uidx`, que o próprio arquivo declara que nenhum
+   teste de unidade pega) ficam num lugar só. **Divergência declarada em relação à spec**, que
+   dizia que o runner executaria os seis passos.
+5. **Módulo sem chave é PULADO e DECLARADO; todos pulados é RECUSA antes de gastar.** A
+   assimetria é deliberada: desligar a Agenda não pode calar o panorama inteiro (invariante
+   77), mas chamar o modelo para escrever sobre nada faria o dono pagar por uma resposta que o
+   sistema já sabia que seria vazia (a lição do `NO_INDICATORS` da 18-E).
+6. **A frase do que ficou de fora é NOSSA**, entra no texto gravado e vai no **fim**, no ramo de
+   sucesso: tentativa nova zera o texto (invariante 23), e um aviso escrito antes sumiria no
+   primeiro retry. Pedi-la ao modelo seria obediência "quase sempre" — e num panorama diário
+   isso é uma omissão por mês.
+7. **A Caixa de entrada usa o LAÇO NORMAL, e não é preguiça.** Pelo runner dirigido ela exigiria
+   um agente com as ferramentas dos cinco módulos de escrita ao mesmo tempo — o "agente de
+   tudo" que a allowlist por agente existe para impedir. No laço normal, `routeAgent` entrega ao
+   especialista certo; palavra ambígua **desliga** o roteamento (invariante 27) e cai no
+   orquestrador, que não tem ferramenta e portanto **pergunta**.
+8. **Duas formas `.strict()` no lugar de um schema com campos opcionais.** A do panorama não
+   aceita `text`, nem `conversationId`, nem `caixaDeEntrada` — irrepresentável vence recusado
+   (invariantes 67 e 79). **Nenhum endpoint novo**, nenhuma rota nova, nenhuma tabela nova.
+
+### O que corrigi em relação ao plano, e por quê
+
+1. ⛔ **O `system` do panorama que o plano esboçava não tinha MEMÓRIA.** "Planejar meu dia"
+   respeitando uma preferência salva é onde a memória do Bloco 3 justifica existir, e o handoff
+   daquele bloco já avisava que **qualquer runner novo carrega essa ordem junto**. A
+   concatenação continua sendo UMA (`perfil.systemBase + blocoDeMemorias`), e o panorama passa
+   por ela. Como ele lê VÁRIOS módulos e `memoriasParaOPrompt` decide para UM, a seleção roda
+   uma vez por módulo do plano mais uma com `null` (as globais) e a união é deduplicada por id —
+   o filtro do Bloco 3 fica **intacto**, então cada memória de módulo continua exigindo a
+   `allow_*` dela (invariante 26). Daí o campo `modulos` no plano.
+2. ⚠️ **A união quebrou as mensagens em pt-BR do endpoint, e `route.test.ts` pegou.** O Zod
+   reporta `invalid_union` no TOPO quando nenhuma forma casa, e as mensagens de dentro de cada
+   ramo deixavam de subir: "Página de contexto não reconhecida." virava uma frase genérica, e
+   texto longo demais virava 400 em vez de 413. `problemasDoRamo` restaura as duas coisas **sem
+   afrouxar a união** — quem ACEITA continua sendo ela, e a escolha do ramo decide só a mensagem
+   e o status.
+
+### Orçamento de JS (medido depois do build, 2026-09-22)
+
+| Rota | Bloco 3 | Bloco 4 | Teto |
+| --- | --- | --- | --- |
+| `/(app)/configuracoes` | 281,6 KB | **281,6 KB** | 285 (próprio) |
+| mediana de 68 rotas | 213,9 KB | **213,9 KB** | 250 |
+
+Sem variação: o bloco não cria rota, não toca a casca e o `Switch` novo já era importado
+naquela tela. Os atalhos entram por `experiences/atalhos.ts`, que **não tem um único import**
+(há teste varrendo o arquivo) — o catálogo, que carrega os prompts e o Tool Registry, fica no
+servidor.
+
+### O que ficou de fora do Bloco 4, declarado
+
+Nenhuma rota `/ia/panorama` · nenhuma tabela · nenhum endpoint · nenhuma ferramenta e nenhum
+command novos · o botão da casca (`floating-assistant.tsx`) **não foi tocado** · panorama **não
+entra no Cron** (é clique do dono; não há retenção nem geração automática — decisão 5 da 18-D,
+invariante 87) · `insight-runner.ts` segue com a própria cópia do laço de tentativas, dívida
+conhecida que este bloco **não piorou**.
+
+⚠️ **Falta a conferência manual do dono** (tabela de 10 itens no Passo 4 da Task 8 do plano):
+nenhum teste do repositório percorre o salvamento de `/ia/configuracoes` nem o desenho em 320 px.
 
 ## 🟡 18-F · Bloco 3 — o assistente conhece as preferências do dono (2026-09-20)
 
@@ -634,7 +738,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino, na busca global, no backup e ganha exclusão em massa, sem migration; **Bloco 2 ✅ (2026-09-20)** — botão flutuante na casca com painel sob demanda, 2 colunas; **Bloco 3 ✅ (2026-09-20)** — memória: 2 tabelas, a 8ª ferramenta de escrita, o 15º command, `/ia/memoria`, e `allow_memory` finalmente ligando alguma coisa |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino, na busca global, no backup e ganha exclusão em massa, sem migration; **Bloco 2 ✅ (2026-09-20)** — botão flutuante na casca com painel sob demanda, 2 colunas; **Bloco 3 ✅ (2026-09-20)** — memória: 2 tabelas, a 8ª ferramenta de escrita, o 15º command, `/ia/memoria`, e `allow_memory` finalmente ligando alguma coisa; **Bloco 4 ✅ (2026-09-22)** — três panoramas de um clique com leitura DIRIGIDA pelo servidor, a 4ª espécie de `ai_runs.kind`, o modo Caixa de entrada e `allow_cross_module` ligando alguma coisa — **sem tabela, sem rota e sem endpoint novos** |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -705,7 +809,7 @@ desfazer (5)** e documentação + verificação final (6). Decisões em
 | 18-C | Ações, aprovações, idempotência e auditoria | ✅ **CONCLUÍDA** (2026-08-08) — blocos 1 a 6 |
 | 18-D | Visão, documentos e comprovantes | ✅ **CONCLUÍDA** (2026-08-09) — blocos 1 a 5 |
 | 18-E | Insights, relatórios e dashboards | ✅ **CONCLUÍDA** (2026-08-09) — blocos 1 a 4 |
-| 18-F | Memória, voz, integrações e polimento | 🟡 — Bloco 1 ✅ (costura: sino, busca, backup, exclusão em massa) · Bloco 2 ✅ (botão flutuante). Próximo: **Bloco 3 — memória**. Fecha a fase |
+| 18-F | Memória, voz, integrações e polimento | 🟡 — Bloco 1 ✅ (costura: sino, busca, backup, exclusão em massa) · Bloco 2 ✅ (botão flutuante) · Bloco 3 ✅ (memória) · Bloco 4 ✅ (experiências). Próximo: **Bloco 5 — fechamento da fase** (suíte de evals + validação item a item). Fecha a fase |
 
 As frentes 16 (Dieta) e 17 (Treinos) continuam **concluídas e em manutenção/iteração**:
 melhoria nelas entra como tarefa avulsa, com branch própria, e não como subfase. As pendências

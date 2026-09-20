@@ -1,32 +1,86 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-> Atualizado em **2026-09-20**, ao fechar o **Bloco 3 da 18-F**. A última FASE do
+> Atualizado em **2026-09-22**, ao fechar o **Bloco 4 da 18-F**. A última FASE do
 > roadmap fechada continua sendo a **18-E** (2026-08-09); a **18-F está em andamento**.
 
-## ▶️ O PRÓXIMO É O **Bloco 4 da 18-F — experiências**
+## ▶️ O PRÓXIMO É O **Bloco 5 da 18-F — fechamento da fase**
 
-Desenho: `docs/superpowers/specs/2026-09-19-18f-memoria-integracoes-design.md` **§7**.
-Quatro experiências (**Planejar meu dia · Encerrar meu dia · Planejar minha semana · Caixa de
-entrada inteligente**), o **laço dirigido pelo servidor**, a 4ª espécie de `ai_runs.kind`
-(`experience`) e a chave `allow_cross_module`, que hoje está ociosa. **Nenhuma rota nova:**
-os três panoramas são atalhos em `/ia` e no painel do botão flutuante, e cada um **abre uma
-conversa** — do segundo turno em diante é chat comum.
+Desenho: `docs/superpowers/specs/2026-09-19-18f-memoria-integracoes-design.md` **§8**.
+Ele **não escreve código de produção**: `src/lib/ai/evals/` com os casos do briefing (o
+roteador escolhe o agente certo · a chave desligada bloqueia · a ferramenta certa é oferecida ·
+*"organize minhas tarefas de hoje"* alcança o TO-DO · e o caso destrutivo), validação **item a
+item** dos critérios gerais da Fase 18 e a documentação final.
 
-⛔ **NENHUMA PORTA NOVA DE LEITURA.** As experiências entram pelo **Tool Executor**, com
-`guard.ts`, `ai_tool_calls` e a poda por orçamento intactos. `insights/collectors/` continua
-sendo a única exceção (invariante 71) e **ela não cresce**.
+⛔ **O caso destrutivo já é garantia ESTRUTURAL, não comportamental.** *"Exclua todas as minhas
+transações"* não encontra ferramenta nenhuma, porque o registry não tem exclusão e os sete
+`undo` estão fora dele de propósito. O teste afirma isso **sobre o registry**, nunca sobre uma
+resposta do modelo.
 
-⛔ **O laço dirigido NÃO está sujeito a `MAX_TOOL_STEPS`** — aquele teto existe para impedir o
-MODELO de decidir quanto o dono gasta, e aqui quem decide é uma lista estática. Mas "não se
-aplica" não pode virar "não há teto": o catálogo declara `MAX_FERRAMENTAS_POR_EXPERIENCIA`,
-validado em teste, e `computeReservation` reserva sobre esse número — nunca sobre o tamanho da
-lista em runtime.
+⚠️ **Corrigir a linha do `CURRENT_STATUS.md` que marca a 18-D como ⬜** embora ela esteja
+concluída desde 2026-08-09 (§8.2 da spec).
 
-⛔ **Módulo sem chave é PULADO e DECLARADO**, nunca motivo de recusa geral (invariante 77).
-Desligar a leitura de Dieta não pode calar o panorama inteiro.
+**Não há 18-G.** Com a 18-F fechada, a Fase 18 está concluída e o projeto volta ao modo
+manutenção/iteração.
 
-⚠️ **As experiências CONSOMEM a memória do Bloco 3** — "Planejar meu dia" respeitando "prefiro
-treinar à noite" é onde ela justifica existir. Por isso aquele bloco veio antes.
+### ⛔ FALTA UMA CONFERÊNCIA MANUAL DO BLOCO 4 — e nenhum teste a cobre
+
+O código está verde nas cinco verificações e em `TZ=UTC`, mas a tabela de 10 itens do Passo 4
+da Task 8 (`docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md`) precisa de um
+navegador com sessão. Os que mais importam:
+
+1. **Salvar em `/ia/configuracoes` e RECARREGAR.** Foi exatamente esse caminho que `allowVision`
+   deixou quebrado por três subfases, e ele continua sem teste que o percorra ponta a ponta.
+   O que existe hoje são as duas listas comparadas (`validators/ai.test.ts` + `round-trip`).
+2. Panorama com um módulo desligado: o texto tem de TERMINAR dizendo o que ficou de fora.
+3. Responder ao panorama pedindo uma alteração → cartão de proposta normal, com prazo.
+4. Painel flutuante: disparar um atalho e **fechar o painel** no meio — a resposta continua
+   (invariante 95).
+5. Caixa de entrada com "meta" (palavra ambígua) → tem de **perguntar**, não chutar.
+6. 320 px: os três atalhos quebram linha, sem rolagem horizontal.
+
+### ✅ Bloco 4 — as experiências (2026-09-22)
+
+Três panoramas de um clique com leitura **dirigida pelo servidor**, e um **modo** Caixa de
+entrada. **Uma migration, e ela NÃO CRIA TABELA:** um valor no CHECK de `ai_runs.kind` e a RPC
+`ai_begin_experience_run`. Banco continua em **132 tabelas**, **20 `ai_*`**. Registry (30),
+commands (15) e agentes (9) **inalterados**. Suíte em **3.682 testes / 182 arquivos**. Plano
+executado: `docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md`. As oito decisões e
+os números do orçamento estão em `docs/project/CURRENT_STATUS.md`.
+
+**O que o próximo bloco precisa saber:**
+
+- ⛔ **`ai_runs` TEM DOIS CHECKS SOBRE `kind`.** Além de `ai_runs_kind_check` (valores), existe
+  `ai_runs_kind_coerente`, que exige cada forma por inteiro: `chat` e `experience` **têm**
+  conversa, `extracao` e `insight` **não**. Uma quinta espécie que mexa só no primeiro falha no
+  `insert`, **dentro da transação de admissão**, e o erro chega à tela como `AI_UNKNOWN`.
+- ⛔ **`MAX_TOOL_STEPS` não se aplica ao laço dirigido — e isso não é "não há teto".**
+  `MAX_FERRAMENTAS_POR_EXPERIENCIA = 5`, validado contra o catálogo em teste, e
+  `computeReservation` reserva sobre **esse** número, nunca sobre `leituras.length`.
+- ⛔ **Só ferramenta de LEITURA entra num catálogo** (teste sobre o registry real). Uma de
+  escrita criaria proposta sem o dono ter pedido nada.
+- ⛔ **Três fronteiras novas, todas confirmadas por mutação:** só `experience-runner` importa
+  `experiences/catalog`; só `app/api/ia/chat/route.ts` alcança `server/experience-runner`; o
+  `chat-runner` não importa nem o catálogo nem a seleção. **Nenhum `.from()` em `experiences/`**,
+  e a pasta entrou em `CAMADAS_PURAS` no mesmo commit em que nasceu.
+- ⚠️ **QUALQUER RUNNER QUE MONTE `system` CARREGA A MEMÓRIA JUNTO, E ELA É A ÚLTIMA.** O plano
+  deste bloco esboçava o panorama sem ela; corrigido. A concatenação é UMA
+  (`perfil.systemBase + blocoDeMemorias`, em `chat-runner.ts`), e `memory/prompt.test.ts` varre
+  a ordem sobre a fonte, incluindo o bloco da caixa de entrada que entra **antes** dela.
+  ⚠️ Um panorama não tem "o módulo do agente": a seleção roda uma vez por módulo do plano mais
+  uma com `null`, e a união é deduplicada por id — o filtro do Bloco 3 fica intacto.
+- ⚠️ **UNIÃO DE SCHEMAS ENGOLE AS MENSAGENS DOS RAMOS.** O Zod reporta `invalid_union` no topo
+  e as frases em pt-BR de dentro de cada forma deixam de subir — "Página de contexto não
+  reconhecida." virou genérica e o 413 do texto longo virou 400. `route.test.ts` pegou.
+  `problemasDoRamo` (em `route.ts`) escolhe o ramo **só para a mensagem e o status**; quem
+  ACEITA continua sendo a união.
+- ⚠️ **`allow_cross_module` é campo SOLTO, nunca uma `ToolPermission`.** Há teste em
+  `validators/ai.test.ts` usando exatamente essa chave como o exemplo do que
+  `aiPermissionsSchema` recusa — o nome engana. Ela **não é ANDada** com chave nenhuma:
+  desligada, nada roda; ligada, o módulo sem `allow_*` é PULADO e declarado, e **todos** pulados
+  é recusa antes de gastar.
+- ⚠️ **O desfazer de uma mutação pode falhar EM SILÊNCIO por CRLF** (armadilha 5 da 18-B, que
+  reencontrei aqui). Depois de mutar para validar um teste, **confira o estado real do arquivo**
+  — `git diff` —, não só o verde da suíte.
 
 ### ✅ Bloco 3 — a memória (2026-09-20)
 

@@ -16,7 +16,7 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (19 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece, **sem migration**; **Bloco 2 ✅ (2026-09-20)** — o assistente ao alcance de qualquer tela por um botão na casca que abre um painel sob demanda, com a **mesma** `ChatClient` e as mesmas chaves (**2 colunas, nenhuma tabela**); **Bloco 3 ✅ (2026-09-20)** — a **memória**: o dono escreve preferências em `/ia/memoria` e o assistente as leva para as conversas **como preferência, nunca como regra**; a IA passa a poder **propor** preferências, pelo mesmo Approval Engine. **2 tabelas + 1 coluna**, e `allow_memory` (que existia desde a 18-A) finalmente liga alguma coisa |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (19 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece, **sem migration**; **Bloco 2 ✅ (2026-09-20)** — o assistente ao alcance de qualquer tela por um botão na casca que abre um painel sob demanda, com a **mesma** `ChatClient` e as mesmas chaves (**2 colunas, nenhuma tabela**); **Bloco 3 ✅ (2026-09-20)** — a **memória**: o dono escreve preferências em `/ia/memoria` e o assistente as leva para as conversas **como preferência, nunca como regra**; a IA passa a poder **propor** preferências, pelo mesmo Approval Engine. **2 tabelas + 1 coluna**, e `allow_memory` (que existia desde a 18-A) finalmente liga alguma coisa; **Bloco 4 ✅ (2026-09-22)** — três **panoramas de um clique** (*Planejar meu dia · Encerrar meu dia · Planejar minha semana*) cuja lista de leituras é **estática e executada pelo servidor**, mais um **modo Caixa de entrada**. O panorama abre uma **conversa** (4ª espécie de `ai_runs.kind`), então "transformar resposta em ação", busca, histórico e exclusão em massa vêm de graça. **Uma migration que NÃO cria tabela** — um valor de CHECK e uma RPC —, nenhuma rota e nenhum endpoint novos, e `allow_cross_module` (que existia desde a 18-A) finalmente liga alguma coisa |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). A **18-E** (blocos 1–3, 2026-08-09) criou 3 (`ai_insights`, `ai_insight_sources`,
 `ai_insight_feedback`) e alterou 2 (`ai_runs.kind` ganhou a terceira espécie `'insight'`;
@@ -25,7 +25,9 @@ Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`
 `allow_insight_jobs` e `job_monthly_budget`). **Reconferido no banco em 2026-08-09, depois do
 Bloco 4: 130 tabelas** no `public`, **18 `ai_*`**. O **Bloco 3 da 18-F** criou 2 (`ai_memories`
 e `ai_memory_events`) e acrescentou 1 coluna (`ai_user_preferences.allow_write_memory`):
-**reconferido no banco em 2026-09-20: 132 tabelas** no `public`, **20 `ai_*`**. Além delas,
+**reconferido no banco em 2026-09-22: 132 tabelas** no `public`, **20 `ai_*`**. O
+**Bloco 4 NÃO criou tabela nenhuma** — ele acrescentou a 4ª espécie a `ai_runs.kind`
+(`experience`), alargou o CHECK de coerência e criou a RPC `ai_begin_experience_run`. Além delas,
 **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
@@ -122,8 +124,9 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 
 ## Módulo Inteligência Artificial (Fase 18 — 18-A a 18-E)
 
-Rota `/ia`, tabelas `ai_*` (**18**, reconferidas no banco em 2026-09-20; o Bloco 2 da 18-F não
-criou tabela, só duas colunas), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
+Rota `/ia`, tabelas `ai_*` (**20**, reconferidas no banco em 2026-09-22; o Bloco 2 da 18-F não
+criou tabela, só duas colunas; as duas últimas são as da memória, do Bloco 3; o Bloco 4 não
+criou nenhuma — só um valor de CHECK e uma RPC), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
 internos, 4 adapters, catálogo de modelos e tarifas versionado, credenciais cifradas, chat com
 streaming, medição por tentativa e orçamento com reserva — **sem ler um único registro**. A
 **18-B** (2026-08-07) abriu a primeira leitura: 3 ferramentas de Treinos, laço de ferramentas
@@ -775,6 +778,67 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     o código-fonte **ignorando comentários** (a primeira versão casou com o `<Sheet>` citado na
     própria explicação da regra).
 
+**Invariantes acrescentadas pelo Bloco 4 da 18-F (as experiências — 2026-09-22):**
+
+101. ⛔ **A LISTA DE LEITURAS DE UMA EXPERIÊNCIA É ESTÁTICA, E QUEM A EXECUTA É O SERVIDOR.**
+     `MAX_TOOL_STEPS = 3` existe para impedir **o modelo** de decidir quanto o dono gasta; num
+     roteiro escrito por nós ele não se aplica — mas "não se aplica" não vira "não há teto":
+     `MAX_FERRAMENTAS_POR_EXPERIENCIA = 5`, o catálogo é validado contra ele em teste, e
+     `computeReservation` reserva sobre **esse** número, nunca sobre a lista em runtime. E só
+     ferramenta de **LEITURA** entra: uma de escrita criaria proposta sem o dono ter pedido
+     nada. ⛔ **Nenhuma porta nova de leitura** — as experiências entram pelo Tool Executor,
+     com `guard.ts` e linha em `ai_tool_calls`; `insights/collectors/` (invariante 71) continua
+     sendo a única exceção e **não cresce**. O motivo de não deixar o modelo dirigir está
+     medido: "Planejar meu dia" lê quatro módulos, e pedindo um por vez o teto cortaria antes
+     do último **toda manhã**.
+
+102. ⛔ **A EXPERIÊNCIA ABRE UMA CONVERSA, E É A SEGUNDA ESPÉCIE DE RUN COM
+     `conversation_id`.** `ai_runs` tem **DOIS** checks sobre `kind`, e é aí que está a
+     armadilha: `ai_runs_kind_coerente` exige cada forma por inteiro — `chat` e `experience`
+     **têm** conversa, `extracao` e `insight` **não**. Acrescentar a espécie só ao CHECK de
+     valores faz todo panorama falhar no `insert`, **dentro da transação de admissão**, e o
+     erro chega à tela como `AI_UNKNOWN`. De nascer como conversa vêm de graça: "transformar
+     resposta em ação" pelo Approval Engine de sempre, a busca, o histórico e a exclusão em
+     massa. `ai_begin_experience_run` usa o **mesmo advisory lock** das outras três — o recurso
+     disputado é o orçamento do dono, não a espécie do run.
+
+103. ⚠️ **`allow_cross_module` É O INTERRUPTOR DO MECANISMO, NÃO UMA `ToolPermission`.**
+     Ela é campo **solto** em `aiPreferencesSchema`, como `allowVision` e `allowInsightJobs` —
+     e `validators/ai.test.ts` usa **esta chave** como o exemplo do que `aiPermissionsSchema`
+     recusa, porque o nome engana. Desligada ⇒ nada roda; ligada ⇒ o módulo sem `allow_*` é
+     **PULADO e DECLARADO** (invariante 77), e **todos** pulados ⇒ recusa **antes** de gastar
+     (a lição do `NO_INDICATORS` da 18-E). ⛔ A frase do que ficou de fora é **nossa** e entra
+     no texto gravado, no **fim** do ramo de sucesso: tentativa nova zera o texto (invariante
+     23), e pedi-la ao modelo seria obediência "quase sempre" — num panorama diário, uma
+     omissão por mês.
+
+104. ⛔ **O PLANO É UM OBJETO, E POR ISSO O `chat-runner` NÃO CONHECE O CATÁLOGO.**
+     `experience-runner.ts` lê o catálogo, confere as chaves, deriva os argumentos do dia e
+     entrega um `PlanoDaExperiencia` pronto; o runner do chat executa uma lista que recebeu —
+     irrepresentável vence recusado (invariantes 67 e 79). Três fronteiras provam isso, todas
+     confirmadas por mutação. ⚠️ **E não há um terceiro laço de tentativas**: retry, fallback,
+     medição por chamada, heartbeat e a regra "só uma tentativa aberta por run"
+     (`ai_usage_events_one_active_uidx`, que o próprio arquivo declara que **nenhum teste de
+     unidade pega, porque a trava é do banco**) continuam num lugar só. ⛔ **E QUALQUER RUNNER
+     QUE MONTE `system` CARREGA A MEMÓRIA JUNTO, POR ÚLTIMO** (invariante 98): a concatenação é
+     UMA, em `chat-runner`. Um panorama não tem "o módulo do agente" — a seleção do Bloco 3
+     roda uma vez por módulo do plano, mais uma com `null` para as globais, e a união é
+     deduplicada por id; o filtro fica intacto, então cada memória de módulo continua exigindo
+     a `allow_*` dele (invariante 26).
+
+105. ⛔ **A CAIXA DE ENTRADA USA O LAÇO NORMAL, E ISSO NÃO É PREGUIÇA.** Passá-la pelo runner
+     dirigido exigiria um agente com as ferramentas dos cinco módulos de escrita ao mesmo
+     tempo — um "agente de tudo", que é exatamente o que a allowlist por agente existe para
+     impedir. No laço normal, `routeAgent` entrega ao especialista que já tem as ferramentas
+     certas, e só elas; palavra ambígua **desliga** o roteamento (invariante 27) e cai no
+     orquestrador, que não tem ferramenta nenhuma e portanto **pergunta**. ⚠️ O bloco dela entra
+     no prompt **antes** da memória e sobe `prompt_version` para `<agente>+caixa-v1` — o modo
+     muda o comportamento, então a coluna tem de contá-lo. ⚠️ **E `z.union` engole as mensagens
+     dos ramos:** o Zod reporta `invalid_union` no topo, e as frases em pt-BR de dentro de cada
+     forma deixam de subir (a de contexto de página virou genérica; o 413 do texto longo virou
+     400). `problemasDoRamo`, em `route.ts`, escolhe o ramo **só para a mensagem e o status** —
+     quem ACEITA continua sendo a união, e as duas formas continuam `.strict()`.
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -801,7 +865,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.609 testes / 178 arquivos em 2026-09-20 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.682 testes / 182 arquivos em 2026-09-22 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos
