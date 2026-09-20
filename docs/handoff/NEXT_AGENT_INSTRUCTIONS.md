@@ -1,7 +1,64 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-> Atualizado em **2026-09-19**, ao fechar o **Bloco 1 da 18-F**. A última FASE do
+> Atualizado em **2026-09-20**, ao fechar o **Bloco 2 da 18-F**. A última FASE do
 > roadmap fechada continua sendo a **18-E** (2026-08-09); a **18-F está em andamento**.
+
+## ▶️ O PRÓXIMO É O **Bloco 3 da 18-F — memória**
+
+Desenho: `docs/superpowers/specs/2026-09-19-18f-memoria-integracoes-design.md` **§6**.
+Ele entrega **2 tabelas** (`ai_memories` + a de eventos), a coluna `allow_write_memory`, a
+**8ª ferramenta** de escrita, o **15º command**, a rota `/ia/memoria` e a busca por memória.
+É o bloco de maior risco da fase: memória é o único texto que o dono **autoriza** a entrar no
+prompt como preferência sua (§9.3).
+
+⛔ **`/ia/memoria` SÓ NASCE ALI, e o link em `src/lib/search/ai-links.ts` só pode entrar no
+MESMO commit da rota.** `ai-links.ts` tem teste que confere no DISCO se cada rota citada tem
+`page.tsx` — link para rota inexistente é 404, e o projeto já levou esse bug uma vez.
+
+⚠️ **`ai_user_preferences.allow_memory` JÁ EXISTE no banco** e não é lida por ninguém. Ela é
+do Bloco 3; os Blocos 1 e 2 não a tocaram de propósito.
+
+⚠️ **`memory/` entra em `CAMADAS_PURAS` do `boundaries.test.ts` NO MESMO COMMIT em que nasce.**
+A lista `modulos` desse teste é escrita à mão: uma pasta nova fora dela passa **vacuamente
+verde** (§9.2 da spec).
+
+### ✅ Bloco 2 — o botão flutuante (2026-09-20)
+
+O assistente ao alcance de qualquer tela: botão fixo num canto inferior que abre um painel com
+o **mesmo** `ChatClient` da 18-A. **Uma migration, duas colunas** (`floating_corner`,
+`floating_hidden`), nenhuma tabela, **nenhuma chave de permissão nova**. Plano executado:
+`docs/superpowers/plans/2026-09-19-18f-bloco2-botao-flutuante.md`. As seis decisões e os
+números do orçamento estão em `docs/project/CURRENT_STATUS.md`.
+
+**O que o próximo bloco precisa saber:**
+
+- ⛔ **TUDO QUE A CASCA IMPORTA ENTRA NAS 67 ROTAS.** `floating-assistant.tsx` tem orçamento
+  medido e uma lista escrita do que **não** pode importar (`@/lib/ai/constants`,
+  `@/lib/validators/*`, `chat-client`, `ui/sheet`, `ui/dropdown-menu`). Depois do Bloco 2,
+  `/(app)/configuracoes` está em **281,4 KB gz de um teto de 285 — 3,6 KB de folga**. Se
+  estourar, **não suba o teto**: tire import da casca.
+- ⛔ **`src/lib/ai/painel.ts` não tem um único import, e há teste varrendo o arquivo.** É a
+  fronteira "o selo não repete o sino" — sem import, ele não tem de onde ler insight,
+  notificação nem ação travada. ⚠️ Ele mora na RAIZ de `src/lib/ai/`, e `CAMADAS_PURAS` itera
+  sobre **pastas** — então o `boundaries.test.ts` não o cobre. Quem cobre é o teste próprio.
+- ⚠️ **`estadoDoPainelDaIa` RECONCILIA** (`reconcileOwnRuns`). Abrir `/ia` era o gatilho
+  primário da reconciliação preguiçosa; com o painel, ele deixou de ser o caminho mais curto.
+  Qualquer porta nova para o chat precisa dessa linha, ou a reserva fica presa no orçamento
+  sem nada na tela explicando.
+- ⚠️ **A frase de bloqueio do chat sai de `prontidaoDoChat`** (`server/chat-readiness.ts`),
+  consumida pela página `/ia` **e** pelo painel. Não escreva a segunda cópia.
+- ⛔ **CAMPO OBRIGATÓRIO NUM SCHEMA DE FORMULÁRIO MEXE EM DUAS FIXTURES, NÃO UMA.** A lista
+  `OBRIGATORIOS` de `validators/ai.test.ts` **e** a fixture de `aiPreferencesSchema` em
+  `validators/round-trip.test.ts`. A segunda ficou vermelha sozinha neste bloco — a lista não
+  a cobre.
+- ⚠️ **O gerador de tipos do Supabase traz mais que a sua migration.** Neste bloco ele trouxe
+  também uma relationship de `import_rows` → `accounts_with_balance` e a sintaxe nova dos
+  genéricos auxiliares; só as seis linhas das colunas entraram. **Leia o diff antes de aceitar.**
+- ⚠️ **`compacto` do `ChatClient` esconde o aviso de honestidade LONGO.** Quem o passa assume
+  a obrigação de afirmar a REGRA no próprio cabeçalho — o painel cumpre com
+  `RESUMO_DO_ASSISTENTE`. A trava de honestidade é critério de aceite da fase.
+
+---
 
 ## ⚡ LEIA ISTO ANTES DE ESCREVER QUALQUER TELA (auditoria de performance, 2026-09-19)
 
@@ -20,7 +77,10 @@ relatório completo em `.turbo/REPORT.md` (local, fora do git).
    `import { z } from "zod"`. Ponha em módulo puro (ex.: `@/lib/ai/constants`) e reexporte pelo
    validator, para não quebrar import existente.
 4. **`npm run perf:bundle` reprova rota acima de 250 KB gz**, e roda no CI novo
-   (`.github/workflows/ci.yml`). ⚠️ `/todo` está a **2,6 KB** do teto.
+   (`.github/workflows/ci.yml`). ⚠️ **Conte antes de citar: o número muda a cada bloco.** Em
+   2026-09-20, depois do Bloco 2 da 18-F, a rota apertada é `/(app)/configuracoes` (281,4 KB
+   de um **teto próprio** de 285 — 3,6 KB de folga); a maior sem teto próprio é
+   `/(app)/nutricao/compras`, a 7,8 KB dos 250.
 
 ⚠️ **Se for medir plano de query: `EXPLAIN (analyze, timing off)` e papel `authenticated`.**
 Com `timing on` a view de alimentos acusou 150 ms onde o real eram 3 ms; como service role, a

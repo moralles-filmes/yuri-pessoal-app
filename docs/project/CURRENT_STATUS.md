@@ -1,8 +1,90 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-09-19**
-> (18-F Bloco 1 + auditoria de performance + iteração: transferência na importação de extrato
-> de conta).
+> Atualizado ao final de **cada** fase. Última atualização: **2026-09-20**
+> (18-F Bloco 2 · botão flutuante; antes: 18-F Bloco 1 + auditoria de performance + iteração:
+> transferência na importação de extrato de conta).
+
+## 🟡 18-F · Bloco 2 — o assistente ao alcance de qualquer tela (2026-09-20)
+
+Plano em `docs/superpowers/plans/2026-09-19-18f-bloco2-botao-flutuante.md` (§5 da spec).
+Branch `feat/18-f-memoria-integracoes`. **Uma migration, duas colunas, nenhuma tabela.**
+Suíte em **3.507 testes / 171 arquivos**.
+
+Um botão fixo no canto inferior abre um painel com o **mesmo** `ChatClient` da 18-A, apontando
+para o **mesmo** `/api/ia/chat`. Nenhuma chave de permissão nova, nenhuma porta nova de
+leitura, nenhuma regra reescrita — o chat atrás do botão continua exigindo exatamente as
+mesmas `allow_*` e `allow_write_*`, e todas continuam desligadas de fábrica.
+
+| O que entrou | Onde |
+| --- | --- |
+| A regra do selo, pura e **sem um único import** | `src/lib/ai/painel.ts` + `painel.test.ts` |
+| Duas colunas + CHECK do canto | `supabase/migrations/20260920100000_ai_botao_flutuante.sql` |
+| O botão (leve, mora na casca) | `src/components/ai/floating-assistant.tsx` |
+| O painel (pesado, atrás de `next/dynamic`) | `src/components/ai/floating-assistant-panel.tsx` |
+| A frase de bloqueio, num lugar só | `src/lib/ai/server/chat-readiness.ts` |
+| Abrir o painel (lê + **reconcilia**) e mover/ocultar o botão | `src/lib/actions/ai-panel.ts` |
+| Os dois controles, e o caminho de volta | `src/components/ai/ai-preferences-form.tsx` |
+
+### As seis decisões deste bloco
+
+1. **Dois cantos, não quatro.** O Header é `sticky top-0 z-30` com `h-16` e ocupa a faixa
+   superior inteira em toda rota `(app)`: canto de cima é colisão garantida. Ficam
+   inferior-direito e inferior-esquerdo.
+2. **Sem arrastar.** Arrastar exigiria persistência por tipo de aparelho, encaixe em bordas e
+   uma alternativa acessível ao gesto — três subsistemas para fugir de obstáculos que este
+   layout **não tem**: o lançamento rápido mora no Header e a navegação do celular é um drawer
+   lateral, não uma barra inferior.
+3. **Banco, não cookie.** A sidebar usa cookie porque o estado dela é por aparelho. Quem
+   escondeu o botão escondeu-o de propósito, e reencontrá-lo aparecendo no celular seria a
+   preferência não valendo. Em banco ele ainda entra no backup e some na exclusão em massa.
+4. **O botão nasce VISÍVEL,** e isso não fere "toda chave nasce desligada": aquela regra vale
+   para AUTORIZAÇÃO, e esta não autoriza nada. Um botão que nasce escondido é uma entrega que
+   ninguém encontra.
+5. **O painel abre conversa NOVA** (`conversationId={null}`). Nada é criado no banco até a
+   primeira mensagem, e o histórico continua em `/ia/conversas`, alcançável pelo "Abrir em
+   tela cheia" e pela busca global. Semear com "a última conversa" exigiria lê-la a cada
+   abertura e decidir o que é "a última" — decisão de produto que este bloco não tem.
+6. **`floating_hidden` esconde o BOTÃO, não o assistente.** O atalho `Ctrl/⌘ + I` continua
+   abrindo o painel, e as duas telas que oferecem ocultar dizem isso com essas palavras.
+
+### O orçamento de JS, que foi o juiz do bloco
+
+O botão mora na casca, então tudo que ele importa entra nas **67 rotas**. Medido antes e
+depois, com `npm run perf:bundle`:
+
+| Rota | Bloco 1 | Bloco 2 | Teto |
+| --- | --- | --- | --- |
+| `/(app)/configuracoes` | 279,2 KB | **281,4 KB** | 285 (próprio) |
+| `/(app)/nutricao/compras` | 240,0 KB | 242,2 KB | 250 |
+| `/(app)/todo` | 236,2 KB | 237,3 KB | 250 |
+| mediana de 67 rotas | 211,7 KB | 213,9 KB | — |
+
+⛔ **A folga da rota mais apertada caiu de 5,8 para 3,6 KB, e o teto NÃO subiu.** O comentário
+da exceção em `scripts/perf/bundle-budget.mjs` afirmava "folga de ~6 KB" e virou falso — foi
+corrigido junto, com o número novo.
+
+**A separação foi PROVADA no build, não assumida.** Dos 15 chunks contados para
+`/(app)/configuracoes`, só as marcas do BOTÃO aparecem; "Preparando o assistente", "Abrir em
+tela cheia" e "Nenhuma mensagem ainda" (painel e chat) estão todas fora. O que segura isso:
+`painel.ts` sem import, a lista escrita do que `floating-assistant.tsx` não pode importar, e o
+`next/dynamic` com **objeto literal** — trocá-lo por constante faz o painel voltar ao manifest.
+
+### Duas coisas que o plano não previa
+
+1. **`round-trip.test.ts` tinha a SEGUNDA fixture de `aiPreferencesSchema`** e ficou vermelha
+   sozinha. A lista `OBRIGATORIOS` de `validators/ai.test.ts` não a cobre — é o mecanismo da
+   invariante 81 disparando num lugar a mais. Campo obrigatório novo mexe em **duas** fixtures.
+2. **O gerador de tipos do Supabase traz mais do que a migration.** Além das duas colunas, ele
+   trouxe uma relationship de `import_rows` → `accounts_with_balance` e a sintaxe nova dos
+   genéricos auxiliares. Só as **seis linhas** das colunas entraram em `src/types/supabase.ts`;
+   as outras duas ficaram de fora de propósito, porque não são deste bloco. **Leia o diff dos
+   tipos antes de aceitá-lo** — o arquivo é ponto de contato entre frentes.
+
+### Verificação
+
+`npm run lint` · `npx tsc --noEmit` · `npm run test:run` (3.507/3.507) · `npm run build` ·
+`npm run perf:bundle` (67 rotas dentro do teto) · `TZ=UTC npx vitest run` (3.507/3.507) ·
+`get_advisors` sem lint novo.
 
 ## 🟡 18-F · Bloco 1 — IA deixa de ser uma ilha (2026-09-19)
 
@@ -401,7 +483,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino, na busca global, no backup e ganha exclusão em massa, sem migration |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino, na busca global, no backup e ganha exclusão em massa, sem migration; **Bloco 2 ✅ (2026-09-20)** — botão flutuante na casca com painel sob demanda, 2 colunas |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -472,7 +554,7 @@ desfazer (5)** e documentação + verificação final (6). Decisões em
 | 18-C | Ações, aprovações, idempotência e auditoria | ✅ **CONCLUÍDA** (2026-08-08) — blocos 1 a 6 |
 | 18-D | Visão, documentos e comprovantes | ✅ **CONCLUÍDA** (2026-08-09) — blocos 1 a 5 |
 | 18-E | Insights, relatórios e dashboards | ✅ **CONCLUÍDA** (2026-08-09) — blocos 1 a 4 |
-| 18-F | Memória, voz, integrações e polimento | 🟡 — Bloco 1 ✅ (costura: sino, busca, backup, exclusão em massa). Fecha a fase |
+| 18-F | Memória, voz, integrações e polimento | 🟡 — Bloco 1 ✅ (costura: sino, busca, backup, exclusão em massa) · Bloco 2 ✅ (botão flutuante). Próximo: **Bloco 3 — memória**. Fecha a fase |
 
 As frentes 16 (Dieta) e 17 (Treinos) continuam **concluídas e em manutenção/iteração**:
 melhoria nelas entra como tarefa avulsa, com branch própria, e não como subfase. As pendências

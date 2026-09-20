@@ -16,7 +16,7 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (17 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece. **Sem migration** |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (17 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece, **sem migration**; **Bloco 2 ✅ (2026-09-20)** — o assistente ao alcance de qualquer tela por um botão na casca que abre um painel sob demanda, com a **mesma** `ChatClient` e as mesmas chaves. **2 colunas, nenhuma tabela** |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). A **18-E** (blocos 1–3, 2026-08-09) criou 3 (`ai_insights`, `ai_insight_sources`,
 `ai_insight_feedback`) e alterou 2 (`ai_runs.kind` ganhou a terceira espécie `'insight'`;
@@ -119,7 +119,8 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 
 ## Módulo Inteligência Artificial (Fase 18 — 18-A a 18-E)
 
-Rota `/ia`, tabelas `ai_*` (17), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
+Rota `/ia`, tabelas `ai_*` (**18**, reconferidas no banco em 2026-09-20; o Bloco 2 da 18-F não
+criou tabela, só duas colunas), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
 internos, 4 adapters, catálogo de modelos e tarifas versionado, credenciais cifradas, chat com
 streaming, medição por tentativa e orçamento com reserva — **sem ler um único registro**. A
 **18-B** (2026-08-07) abriu a primeira leitura: 3 ferramentas de Treinos, laço de ferramentas
@@ -653,6 +654,48 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     virou anexo de lançamento. Um delete direto deixaria o binário órfão no bucket com a tela
     dizendo que apagou.
 
+**Invariantes acrescentadas pelo Bloco 2 da 18-F (o botão flutuante — 2026-09-20):**
+
+90. ⛔ **O SELO DO BOTÃO FALA SÓ DA CONVERSA ABERTA; O SINO FALA DO SISTEMA.** A garantia é a
+    AUSÊNCIA de caminho: `src/lib/ai/painel.ts` **não tem um único import**, e há teste
+    varrendo o arquivo por `import`. Sem import, ele não tem de onde ler insight, notificação,
+    ação travada nem orçamento — o risco nº 1 declarado no doc da fase (o mesmo fato virar
+    sino, selo, card e item de busca ao mesmo tempo) deixa de ser representável. A união
+    `EventoDoPainel` tem **seis** membros, todos do painel, e um teste trava o tamanho dela
+    para que acrescentar "insightNovo" exija a conversa antes do commit. ⚠️ O arquivo mora na
+    RAIZ de `src/lib/ai/`, e `CAMADAS_PURAS` do `boundaries.test.ts` itera sobre **pastas** —
+    aquele teste não o cobre; quem cobre é o próprio, e ele é mais estrito.
+91. ⛔ **TUDO QUE A CASCA DO APP IMPORTA ENTRA NAS 67 ROTAS.** `floating-assistant.tsx` tem
+    orçamento medido e uma lista **escrita** do que não pode importar (`@/lib/ai/constants`,
+    `@/lib/validators/*`, `chat-client`, `ui/sheet`, `ui/dropdown-menu`); o painel inteiro fica
+    atrás de `next/dynamic` com **objeto literal** — trocá-lo por constante faz o painel voltar
+    ao manifest e o número de TODAS as rotas disparar. Medido em 2026-09-20:
+    `/(app)/configuracoes` em **281,4 KB gz de um teto próprio de 285 — 3,6 KB de folga**
+    (eram 5,8 antes do bloco). ⛔ **Estourar não se resolve subindo o teto**: uma exceção que
+    cresce a cada bloco é um orçamento que não existe. E a separação se PROVA no build — das
+    marcas de texto do painel e do chat, nenhuma aparece nos chunks contados para a rota.
+92. **A FRASE DE BLOQUEIO DO CHAT SAI DE `prontidaoDoChat`** (`server/chat-readiness.ts`),
+    consumida pela página `/ia` **e** pelo painel — duas cópias divergiriam na primeira edição
+    e o dono leria um motivo em cada lugar para o mesmo sistema (invariantes 24 e 83 aplicadas
+    à frase). ⚠️ E `estadoDoPainelDaIa` **RECONCILIA**: abrir `/ia` era o gatilho primário da
+    reconciliação preguiçosa, e a partir deste bloco aquela página deixou de ser o caminho mais
+    curto para o chat. Sem essa linha, a reserva de um run travado fica presa no orçamento sem
+    nada na tela explicando. **Porta nova para o chat carrega essa linha junto.**
+93. **`floating_hidden` ESCONDE O BOTÃO, NÃO O ASSISTENTE:** o atalho `Ctrl/⌘ + I` continua
+    abrindo o painel, e as duas telas que oferecem ocultar dizem isso com essas palavras. Ela e
+    `floating_corner` nascem com o botão **VISÍVEL**, e isso não fere "toda chave nasce
+    desligada" — aquela regra vale para **AUTORIZAÇÃO** (as nove `allow_*`, as cinco
+    `allow_write_*`, `allow_vision`, `allow_insight_jobs`), e estas não autorizam nada: o chat
+    atrás do botão continua exigindo exatamente as mesmas chaves. Um botão que nasce escondido
+    é uma entrega que ninguém encontra. Por isso também não são ANDadas com chave nenhuma.
+94. ⚠️ **CAMPO OBRIGATÓRIO NUM SCHEMA DE FORMULÁRIO MEXE EM DUAS FIXTURES, NÃO UMA** — a
+    invariante 81 é mais larga do que estava escrita. Além da lista `OBRIGATORIOS` em
+    `validators/ai.test.ts`, existe a fixture de `aiPreferencesSchema` em
+    `validators/round-trip.test.ts`, que a lista **não** cobre e que ficou vermelha sozinha
+    neste bloco. E o gerador de tipos do Supabase traz mais que a sua migration (aqui: uma
+    relationship de `import_rows` e a sintaxe nova dos genéricos) — **leia o diff de
+    `src/types/supabase.ts` antes de aceitá-lo** e deixe fora o que não é do seu bloco.
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -679,7 +722,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.482 testes / 170 arquivos em 2026-09-19 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.507 testes / 171 arquivos em 2026-09-20 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos
