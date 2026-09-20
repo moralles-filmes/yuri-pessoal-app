@@ -35,6 +35,15 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-ink: var(--warning-ink);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-ink: var(--info-ink);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -87,6 +96,21 @@
 
   --destructive: oklch(0.582 0.218 27.3);
 
+  /* Semânticos. `-ink` é a versão LEGÍVEL (texto); a outra é preenchimento.
+     Medido sobre --card (#ffffff): success 3,35:1 (ponto/borda) × success-ink 7,54:1;
+     warning-ink 5,93:1. Usar `text-success` num rótulo produz texto ilegível — use o -ink. */
+  --success: oklch(0.621 0.207 143);
+  --success-foreground: oklch(1 0 0);
+  --success-ink: oklch(0.433 0.147 143);
+
+  --warning: oklch(0.811 0.164 78);
+  --warning-foreground: oklch(0.25 0.05 78);
+  --warning-ink: oklch(0.508 0.108 73);
+
+  --info: oklch(0.575 0.163 256);
+  --info-foreground: oklch(1 0 0);
+  --info-ink: oklch(0.527 0.15 256);
+
   --border: oklch(0.9 0.005 90);
   --input: oklch(0.9 0.005 90);
   --ring: oklch(0.71 0.118 83);
@@ -134,6 +158,20 @@
   --accent-foreground: oklch(0.92 0.04 88);
 
   --destructive: oklch(0.704 0.191 22.2);
+
+  /* No escuro o preenchimento já é legível como texto, então `-ink` repete o valor:
+     success 5,19:1 · warning 9,50:1 · info 6,96:1 sobre --card. */
+  --success: oklch(0.621 0.207 143);
+  --success-foreground: oklch(1 0 0);
+  --success-ink: oklch(0.621 0.207 143);
+
+  --warning: oklch(0.811 0.164 78);
+  --warning-foreground: oklch(0.25 0.05 78);
+  --warning-ink: oklch(0.811 0.164 78);
+
+  --info: oklch(0.717 0.118 254);
+  --info-foreground: oklch(1 0 0);
+  --info-ink: oklch(0.717 0.118 254);
 
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);

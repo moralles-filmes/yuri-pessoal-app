@@ -20,21 +20,34 @@ passou pelo validador, com os comandos registrados na §7 para você refazer.
 
 ---
 
-## 2. ⛔ A trava que precisa cair ANTES dos tokens
+## 2. ✅ A trava que caiu ANTES dos tokens — REDESIGN-02-A
 
-`src/lib/todo/constants.ts:141,153`:
-```ts
-TODO_COLOR_DOT.gold  = "bg-primary"
-TODO_COLOR_CHIP.gold = "bg-primary/15 text-primary"
-```
+`"Dourado"` é uma cor que **você escolhe** para projetos e etiquetas, e estava implementada
+com o token de **marca** (`bg-primary`). Trocar `--primary` para azul faria todo item marcado
+como "Dourado" virar azul em silêncio, **indistinguível do item `"azul"` da mesma paleta**.
 
-`"Dourado"` é uma cor que **você escolhe** para projetos e etiquetas — e está implementada com
-o token de **marca**. Trocar `--primary` para azul faz todo item marcado como "Dourado" virar
-azul em silêncio, **indistinguível do item `"azul"` da mesma paleta** (`bg-sky-500`, linha 145).
+**A varredura achou mais três casos do mesmo mecanismo**, que o plano não previa — todos
+invisíveis hoje porque a marca ainda é dourada, e todos quebrando no instante em que ela vira
+azul:
 
-**Correção (REDESIGN-02-A, antes de qualquer token):** apontar `gold` para um literal.
-`bg-amber-500` / `bg-amber-500/15 text-amber-600` preserva o que o usuário vê hoje e o
-desacopla da marca para sempre.
+| Onde | Era | Virou | Com quem colidia |
+| --- | --- | --- | --- |
+| `todo/constants.ts` `TODO_COLOR_DOT.gold` | `bg-primary` | `bg-yellow-600` | `azul` (`bg-sky-500`) |
+| `todo/constants.ts` `TODO_COLOR_CHIP.gold` | `bg-primary/15 text-primary` | `bg-yellow-500/15 text-yellow-700 dark:text-yellow-400` | `azul` |
+| `todo/constants.ts` prioridade **P2** | `text-primary` | `text-warning-ink` | **P3** (`text-sky-600`) |
+| `tasks/badges.tsx` prioridade **alta** | `bg-primary/10 text-primary` | `bg-warning/10 text-warning-ink` | **media** (`sky`) |
+| `training/consistency-calendar.tsx` **descanso** | `bg-sky-500/20` | `bg-violet-500/25` | **parcial** (`bg-primary/45`) |
+
+⚠️ **Por que `yellow` e não `amber`.** A 01-B propunha `bg-amber-500`. Amber-500 (`#f59e0b`) é
+vizinho de `orange-500` (`#f97316`), que já é o item **`laranja`** da mesma paleta — a correção
+trocaria uma colisão por outra. `yellow-600` (`#ca8a04`) é o que mais se aproxima do dourado
+real (`#C99A2E`) e se separa bem do laranja.
+
+⛔ **`treinado: "bg-primary"` continua certo e NÃO é violação.** Ali o destaque *é* a marca,
+não uma escolha sua. A regra proíbe a marca ocupar o lugar de um **dado**.
+
+**Prova:** `src/lib/theme/entity-colors.test.ts` (7 casos), **confirmado por 5 mutações** —
+cada uma das cinco linhas acima, revertida uma a uma, deixa a suíte vermelha.
 
 ---
 
@@ -153,6 +166,11 @@ temas — duplicação pura. `text-gradient-gold` tem **um único consumidor**
 **Decisão:** `--gold` vira **alias de `--primary`** na 02-B (some como conceito, sem quebrar
 nada que o use), e o utilitário é renomeado para `text-gradient-brand`, ajustando o único
 consumidor. `::selection` passa a usar `--primary`.
+
+✅ **A 02-A é o que torna isso seguro.** Enquanto `"Dourado"` do TO-DO dependesse do token de
+marca, transformar `--gold` em alias de `--primary` propagaria a mudança para um dado seu.
+Depois da 02-A, **nenhuma cor de entidade passa por `--gold` nem por `--primary`** — sobraram
+só `::selection` e o gradiente da tela de login, os dois decorativos.
 
 ---
 

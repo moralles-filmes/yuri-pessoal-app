@@ -66,8 +66,10 @@ export function isClosedStatus(status: TodoStatus): boolean {
 
 /**
  * P1 (urgente) … P4 (normal). Guardado como smallint 1..4 — ordena direto no banco.
- * A identidade do sistema é dourada, então o dourado marca P2 (alta) e a prioridade
- * máxima usa o vermelho destrutivo, que já significa "atenção" no resto do app.
+ *
+ * A escala é SEMÂNTICA, não de marca: vermelho destrutivo (P1) → âmbar de atenção (P2)
+ * → azul informativo (P3) → neutro (P4). P2 usava `primary`; com a marca azul ele ficaria
+ * igual ao P3, que é `sky`. Prioridade não é lugar para a cor da identidade.
  */
 export const TODO_PRIORITIES = [1, 2, 3, 4] as const;
 export type TodoPriority = (typeof TODO_PRIORITIES)[number];
@@ -90,14 +92,14 @@ export const TODO_PRIORITY_SHORT: Record<TodoPriority, string> = {
 /** Cor do indicador (bandeira). O rótulo P1..P4 SEMPRE acompanha — nunca só cor. */
 export const TODO_PRIORITY_FLAG: Record<TodoPriority, string> = {
   1: "text-destructive",
-  2: "text-primary",
+  2: "text-warning-ink",
   3: "text-sky-600 dark:text-sky-400",
   4: "text-muted-foreground",
 };
 
 export const TODO_PRIORITY_BADGE: Record<TodoPriority, string> = {
   1: "border-transparent bg-destructive/15 text-destructive",
-  2: "border-transparent bg-primary/15 text-primary",
+  2: "border-transparent bg-warning/15 text-warning-ink",
   3: "border-transparent bg-sky-500/15 text-sky-700 dark:text-sky-300",
   4: "border-transparent bg-muted text-muted-foreground",
 };
@@ -112,6 +114,13 @@ export function asPriority(value: unknown): TodoPriority {
 /**
  * Paleta fechada de tokens de cor. Guardar o TOKEN (não o hex) mantém as cores
  * consistentes com o tema e funcionando em dark/light sem recalcular contraste.
+ *
+ * ⛔ NENHUMA cor de entidade aponta para `primary` (o token de MARCA). `gold` apontava,
+ * e o dia em que a marca deixasse de ser dourada todo projeto/etiqueta que o dono
+ * marcou como "Dourado" viraria a cor da marca — indistinguível do item `azul` desta
+ * mesma paleta, sem nada na tela denunciando. Cor que o DONO escolheu é dado dele;
+ * `primary` é decisão de identidade visual e muda sem avisar. Guardado por
+ * `src/lib/theme/entity-colors.test.ts`.
  */
 export const TODO_COLORS = [
   "gold",
@@ -138,7 +147,7 @@ export const TODO_COLOR_LABELS: Record<TodoColor, string> = {
 
 /** Classe de PREENCHIMENTO (bolinha/ponto do projeto ou etiqueta). */
 export const TODO_COLOR_DOT: Record<TodoColor, string> = {
-  gold: "bg-primary",
+  gold: "bg-yellow-600",
   grafite: "bg-foreground/60",
   azul: "bg-sky-500",
   verde: "bg-emerald-500",
@@ -150,7 +159,7 @@ export const TODO_COLOR_DOT: Record<TodoColor, string> = {
 
 /** Classe de CHIP (fundo suave + texto legível nos dois temas). */
 export const TODO_COLOR_CHIP: Record<TodoColor, string> = {
-  gold: "bg-primary/15 text-primary",
+  gold: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
   grafite: "bg-muted text-muted-foreground",
   azul: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
   verde: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
