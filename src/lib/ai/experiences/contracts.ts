@@ -1,0 +1,73 @@
+/**
+ * Fase 18-F · Bloco 4 — IA · O vocabulário das experiências. Puro, sem I/O.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⛔ O PLANO É UM OBJETO, E POR ISSO O `chat-runner` NÃO PRECISA CONHECER O CATÁLOGO.    ║
+ * ║                                                                                       ║
+ * ║ `experience-runner.ts` lê o catálogo, resolve permissões, deriva os argumentos do dia  ║
+ * ║ e entrega ESTE objeto pronto. O runner do chat executa uma lista que recebeu — ele não ║
+ * ║ tem como buscar uma experiência, inventar uma ferramenta nem escolher outro prompt.    ║
+ * ║ É a mesma lição de `LeituraDoDono` (invariante 79): irrepresentável vence recusado.    ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+
+export const EXPERIENCIA_IDS = [
+  "planejar-dia",
+  "encerrar-dia",
+  "planejar-semana",
+] as const;
+
+export type ExperienciaId = (typeof EXPERIENCIA_IDS)[number];
+
+/**
+ * ⛔ O TETO DO LAÇO DIRIGIDO.
+ *
+ * `MAX_TOOL_STEPS` (3 por tentativa) existe para impedir **o modelo** de decidir quanto o dono
+ * gasta. Aqui quem decide é uma lista estática revisada em code review, então aquele teto não
+ * se aplica — mas "não se aplica" não pode virar "não há teto". Este número é o que
+ * `computeReservation` reserva, SEMPRE, mesmo que a lista da vez tenha duas ferramentas.
+ */
+export const MAX_FERRAMENTAS_POR_EXPERIENCIA = 5;
+
+export type FerramentaDaExperiencia = {
+  readonly toolName: string;
+  /**
+   * Os argumentos, derivados do DIA. `hoje` é injetado ('yyyy-MM-dd', data pura) — nada aqui
+   * chama `new Date()`, e é isso que torna o catálogo testável sem congelar relógio.
+   */
+  readonly argumentos: (hoje: string) => Record<string, unknown>;
+};
+
+export type Experiencia = {
+  readonly id: ExperienciaId;
+  readonly titulo: string;
+  readonly ferramentas: readonly FerramentaDaExperiencia[];
+  readonly prompt: string;
+  readonly promptVersion: string;
+};
+
+/**
+ * O que `experience-runner.ts` entrega a `runChat`. Tudo já resolvido: nada aqui precisa ser
+ * buscado, derivado ou decidido depois.
+ */
+export type PlanoDaExperiencia = {
+  readonly id: ExperienciaId;
+  /** O agente do RUN. Não é do registry de agentes — é fixo por experiência, como `insights.*`. */
+  readonly agentId: string;
+  readonly promptVersion: string;
+  /** O prompt de SISTEMA inteiro: SEGURANÇA + redação. Montado pelo runner da experiência. */
+  readonly system: string;
+  /** Vira a primeira mensagem da conversa E o título dela. Sai do catálogo, nunca do cliente. */
+  readonly userText: string;
+  /** As leituras que VÃO rodar, já com argumentos resolvidos, na ordem do catálogo. */
+  readonly leituras: readonly { readonly toolName: string; readonly input: unknown }[];
+  /**
+   * A frase do que ficou de fora, já escrita em pt-BR. `""` quando nada foi pulado.
+   *
+   * ⛔ Ela é NOSSA e vai para o texto gravado — não é um pedido ao modelo. Um panorama que
+   * omite um módulo e não diz isso é um dia pela metade fingindo estar completo.
+   */
+  readonly aviso: string;
+  /** Teto de tokens de contexto a RESERVAR. Do catálogo, nunca de `leituras.length`. */
+  readonly tokensDeContextoReservados: number;
+};
