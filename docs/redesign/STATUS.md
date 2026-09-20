@@ -1,8 +1,29 @@
 # STATUS
 
 **Atualizado:** 2026-09-20
-**Fase atual:** REDESIGN-00 **concluída** · decisões D6–D11 tomadas · **REDESIGN-01 liberada**,
-aguardando seu aval para começar
+**Fase atual:** REDESIGN-00 ✅ · decisões D6–D11 ✅ · **REDESIGN-01 entregue (A, B, C)** —
+aguardando sua aprovação visual e do dicionário antes da REDESIGN-02
+
+---
+
+## REDESIGN-01 — o que foi entregue
+
+| Subfase | Entrega | Onde |
+| --- | --- | --- |
+| **01-A** | Dicionário de métricas **fechado**: base caixa, base competência, terceiros, cartões, comparações | `METRICAS-FINANCEIRAS.md` §13 |
+| **01-A** | Desenho das 3 migrations aprovadas — **escritas, nenhuma aplicada** | `MIGRATIONS.md` |
+| **01-B** | Tokens claro/escuro, semânticos novos, paleta de gráficos **validada por script** | `TOKENS.md` |
+| **01-C** | Prévias: Dashboard, Relatório financeiro, Central de cartões, celular 390 px, folha de tokens | Artifact privado (link na conversa) |
+
+**Nenhuma linha de `src/` foi alterada na 01.** Nenhuma migration aplicada.
+
+### O que as prévias provam
+
+A base aparece na tela e nenhum número existe sem ela · renda pessoal separada de dinheiro de
+terceiros · resultado do período usa a **sua** parte, nunca o bruto · saldo das contas sai do
+bloco de resultado, com a data no rótulo · os três números de terceiros têm rótulos que os
+distinguem · horizonte de faturas declarado honestamente (6 ciclos × 3 cartões = 18) ·
+**ausência, zero medido e falha de leitura viram três coisas diferentes**.
 **Branch:** `feat/redesign-00-auditoria` (de `main` em `5de90d6`)
 
 ---
@@ -39,7 +60,7 @@ aguardando seu aval para começar
 | D8 | **Categoria ganha marcação de terceiros** + lista separada por tipo | ⛔ É **atalho e filtro**, nunca fonte de verdade — `METRICAS-FINANCEIRAS.md` §11 |
 | D9 | **Caixa EXATO** | `transactions.liquidado_em`; nulo cai para `competence_date` com a aproximação **declarada na tela** |
 | D10 | Separação vale **daqui pra frente** | Nenhuma reclassificação automática do histórico |
-| D11 | Recebível `ignorado`: as duas bases respondem, cada uma acerta | `METRICAS-FINANCEIRAS.md` §12. 0 casos hoje |
+| D11 | Recebível `ignorado` **vira despesa minha** | Sem sobrescrever `valor_pessoal`: a tela mostra a **parte efetiva** (acordada + perdoado), derivada. `METRICAS-FINANCEIRAS.md` §12. 0 casos hoje |
 
 ## Migrations aprovadas (aditivas, nenhuma apaga ou reinterpreta dado)
 
@@ -75,6 +96,14 @@ Nenhum teste foi alterado. Nenhum arquivo de `src/` foi alterado.
 
 ## Próximo passo
 
-**REDESIGN-01-A** — fechar o dicionário de métricas com as decisões D6–D11 e escrever o
-desenho das 3 migrations, **sem aplicá-las**. Nenhuma migration é aplicada no Supabase sem uma
-segunda autorização, específica para ela.
+Sua aprovação de duas coisas, que podem vir separadas:
+
+1. **O visual** (prévias + `TOKENS.md`) → libera a **REDESIGN-02**, que começa
+   obrigatoriamente por **02-A: desacoplar `gold` de `bg-primary`**, antes de qualquer token.
+2. **O dicionário** (`METRICAS-FINANCEIRAS.md` §13) → libera a **REDESIGN-03**, que começa por
+   **03-A: testes de caracterização**, congelando o comportamento atual antes de mexer.
+
+As duas são independentes e podem andar em paralelo — 02 é visual, 03 é significado.
+
+⛔ **As migrations continuam sem ser aplicadas.** Cada uma precisa de um "aplique a M1"
+(ou M2, ou M3) seu, separado.

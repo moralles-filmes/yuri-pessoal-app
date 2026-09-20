@@ -295,21 +295,161 @@ não está afirmando nada sobre o passado, só peneirando.
 
 ---
 
-## 12. Recebível `ignorado`, resolvido pelas duas bases (D11)
+## 12. Recebível `ignorado` vira despesa minha (D11 — decidido pelo dono)
 
 `ignorado` = você decidiu **não cobrar**. Perdoou, era presente, não valia a pena.
 
-A pergunta era: a despesa vira sua, ou continua sendo dele? **Com as duas bases aprovadas
-(D9), a pergunta se dissolve — cada visão responde diferente e as duas estão certas:**
+**Decisão: o valor perdoado passa a ser despesa sua**, nas duas bases. Se você pagou R$ 1.000,
+atribuiu R$ 600 a alguém e depois perdoou, sua despesa é R$ 1.000.
 
-| Visão | O que diz sobre R$ 600 perdoados | Por quê |
+### ⛔ Como implementar sem reescrever o passado
+
+`transactions.valor_pessoal` é **congelado na gravação** — é o acordo que existia no dia da
+compra, e o projeto inteiro trata histórico como imutável. Sobrescrevê-lo ao perdoar apagaria
+o fato de que houve um acordo de R$ 400.
+
+Então a minha parte passa a ter **duas leituras, ambas derivadas, nenhuma gravada de novo**:
+
+| Número | Fórmula | Responde |
 | --- | --- | --- |
-| **Responsabilidade / competência** | Continua **dele**. Minha parte segue R$ 400 | A despesa foi dele. Perdoar não me faz ter comido a comida dele |
-| **Caixa realizado** | **Saiu R$ 1.000 e voltou R$ 0** | O dinheiro não volta, e o caixa não mente sobre isso |
+| **Minha parte acordada** | à vista: `valor_pessoal` · cartão: `total_atual − Σ recebíveis` | O que foi combinado |
+| **Minha parte efetiva** | acordada **+ Σ recebíveis `ignorado`** | **O que me custou de verdade** |
 
-Nenhuma regra especial é escrita: o recebível ignorado simplesmente **nunca gera recebimento**,
-e o caixa reflete isso sozinho. É a mesma razão de a base ter de estar rotulada na tela.
+**A tela mostra a efetiva** — é a resposta à pergunta "quanto gastei comigo". Quando há valor
+perdoado, aparece a linha *"inclui R$ X que você decidiu não cobrar"*. Sem valor perdoado
+(o caso de hoje: **0 recebíveis ignorados**) os dois números são idênticos e a linha não existe.
 
-**Exigência de tela:** recebível ignorado aparece explicitamente como *"não será cobrado"*,
-com o valor. Ele **não some** da lista — some silenciosamente é como R$ 600 viram zero sem
-ninguém decidir. Hoje há **0 casos**, então nada é reescrito.
+### Consequências que valem em qualquer caminho
+
+- **`ignorado` sai da soma de terceiros.** Hoje `somaTerceirosDasFaturas` (`dashboard.ts:188`)
+  soma todos os recebíveis; passa a excluir os ignorados, e a minha parte da fatura cresce.
+- **`ignorado` já está fora de "A receber"** — `RECEIVABLE_OPEN_STATUSES` é só
+  `pendente`/`cobrado`. Coerente, nada muda aí.
+- **Caixa:** saiu R$ 1.000, voltou R$ 0. Já era assim e continua.
+- **Tela:** o recebível ignorado aparece como *"não será cobrado"*, com o valor. Ele **não
+  some** da lista — valor que some sem ninguém ver é como R$ 600 virarem zero sozinhos.
+
+---
+
+# 13. DICIONÁRIO TO-BE — fechado na REDESIGN-01-A
+
+Cada indicador com nome de tela, significado, fórmula, fonte, data e exclusões.
+**Toda tela financeira declara a base em que está.** Nenhum indicador aparece sem ela.
+
+## 13.1 Os dois seletores que toda tela financeira carrega
+
+| Seletor | Valores | O que muda |
+| --- | --- | --- |
+| **Base** | `Caixa realizado` · `Competência` | A pergunta que a tela responde |
+| **Responsabilidade** | `Meu` · `Terceiros` · `Consolidado` | O recorte. Em `Consolidado`, bruto, meu e terceiros aparecem **separados** — o bruto nunca é rotulado "meu gasto" |
+
+---
+
+## 13.2 Base CAIXA REALIZADO
+
+> **Pergunta:** quanto efetivamente entrou e saiu das minhas contas no período?
+> **Data:** `liquidado_em ?? competence_date` · **Status:** só `pago` / `recebido`
+> ⚠️ Onde `liquidado_em` é nulo, a tela escreve **"data aproximada pela competência"**. Nunca
+> em silêncio.
+
+| Nome na tela | Fórmula | Exclusões |
+| --- | --- | --- |
+| **Renda pessoal recebida** | Σ `amount` de `type='receita'`, `classificacao='pessoal'`, `card_id is null` | Estorno de cartão · receita de terceiro · pendente |
+| **Reembolsos recebidos** | Σ `receivable_receipts.valor` com `recebido_em` no período | — |
+| **Outras entradas de terceiros** | Σ `amount` de `type='receita'`, `classificacao='terceiro'` | Reembolso (já contado acima) |
+| **Saídas de caixa** | Σ despesas com `account_id` não nulo **+** Σ pagamentos de fatura | ⛔ **Compra no cartão não é saída de caixa** — quem tira dinheiro é o pagamento da fatura |
+| **Transferências entre contas próprias** | `type='transferencia'` com destino | ⛔ **Não é renda nem despesa.** Exibida à parte, informativa |
+| **Resultado de caixa** | (renda pessoal + reembolsos + outras entradas) − saídas | — |
+| **Saldo das contas em DD/MM** | `account_balance()` na data | ⚠️ **Indicador separado, com a data no rótulo.** Não é resultado do mês |
+
+⛔ **Regra que impede a contagem dupla:** o pagamento de fatura é a saída; as compras que o
+compõem **não** entram de novo. Já é verdade hoje por construção (`statement_id: null` +
+`type: 'transferencia'`) e o teste de caracterização da 03-A vai congelar isso.
+
+---
+
+## 13.3 Base COMPETÊNCIA (do período)
+
+> **Pergunta:** quais valores pertencem a este período?
+> **Data:** à vista `competence_date` · cartão **competência da fatura**
+> **Status:** tudo menos `cancelado`, **inclusive `pendente`** — que é marcado como *previsto*
+
+| Nome na tela | Fórmula | Exclusões |
+| --- | --- | --- |
+| **Renda pessoal do período** | Σ receitas `classificacao='pessoal'` | Estorno de cartão · `cancelado` |
+| **Movimentação de terceiros (entrada)** | Σ receitas `classificacao='terceiro'` | idem |
+| **Despesa bruta do período** | à vista (`card_id is null`, `!parcelado`) + Σ `total_atual` das faturas da competência | Compra-pai parcelada · `cancelado` · pagamento de fatura |
+| **Minha parte acordada** | à vista `valor_pessoal` · cartão `total_atual − Σ recebíveis` | — |
+| **Perdoado** | Σ recebíveis `ignorado` do período | — |
+| **▶ Minha parte das despesas** *(o número que a tela mostra)* | acordada **+** perdoado | — |
+| **Responsabilidade de terceiros** | Σ recebíveis **não** `ignorado` | — |
+| **▶ Resultado do período** | Renda pessoal − Minha parte das despesas | ⛔ **Nunca** renda − despesa bruta |
+
+**A conta fecha, e isso é testável:**
+```
+despesa bruta = minha parte das despesas + responsabilidade de terceiros
+              = (acordada + perdoado) + Σ recebíveis não-ignorados
+```
+
+⛔ **`Resultado do período` usa MINHA parte, não a bruta.** Subtrair o bruto da minha renda
+diria que gastei o dinheiro dos outros — é a versão em competência do defeito P0-1.
+
+---
+
+## 13.4 Terceiros e reembolsos — os três números que o briefing exige
+
+Podem ter valores diferentes ao mesmo tempo. **O rótulo diz qual é qual.**
+
+| Nome na tela | Fórmula | Data |
+| --- | --- | --- |
+| **Reembolsos recebidos neste período** | Σ `receivable_receipts.valor` | `recebido_em` ∈ período |
+| **Pendente referente a este período** | Σ (`valor` − Σ recebimentos) dos recebíveis do período, status `pendente`/`cobrado` | `ref_month` = período |
+| **Total pendente até DD/MM** | mesma fórmula, **sem** filtro de período | corte na data de referência |
+| **Perdoado (não será cobrado)** | Σ `valor` dos recebíveis `ignorado` | `ref_month` ∈ período |
+
+Por pessoa, a tela abre: origem do débito · compra/parcela/fatura · valor atribuído ·
+recebimentos com data · **saldo pendente** · histórico.
+
+⛔ **Reembolso nunca é renda pessoal**, em nenhuma das duas bases. Ele reduz o recebível.
+⛔ **Reembolso não reduz a fatura devida ao banco** — são tabelas e eventos independentes.
+
+---
+
+## 13.5 Cartões
+
+| Nome na tela | Fórmula | Nota |
+| --- | --- | --- |
+| **Total das faturas do período** | Σ `total_atual` das faturas da competência | |
+| **Minha parte da fatura** | `total_atual − Σ recebíveis não-ignorados` | Efetiva (D11) |
+| **Responsabilidade de terceiros** | Σ recebíveis não-ignorados da fatura | ⛔ **Não** é "a receber": recebível já pago continua contando |
+| **Pendente ao banco** | Σ `total_atual` das faturas com `statusEfetivo <> 'paga'` | |
+| **Reembolsos pendentes** | `totalAReceber` | ⚠️ Indicador **separado**, nunca somado ao anterior |
+| **Horizonte de projeção** | "**N ciclos de cada um dos M cartões**" | ⛔ Nunca "próximas 6 faturas" para 6 × M linhas |
+
+**Os cinco estados de uma célula de fatura, visualmente distintos:**
+`fatura existente` · `projeção` · `paga` · `valor zero medido` · **`sem lançamentos
+conhecidos`** — este último **não** é R$ 0,00. Ausência não é zero.
+
+---
+
+## 13.6 Comparações
+
+| Regra | Como |
+| --- | --- |
+| Base anterior **zero** | `variacaoPct` devolve `null` → tela escreve **"sem base de comparação"**. Nunca `+∞%`, nunca `+100%` |
+| Mês **em andamento** | Compara **até a mesma altura** do mês anterior (dia 1..D), e o rótulo diz *"até o dia D"* |
+| Ausência × zero | Sem dado ⇒ **"sem registro"**; zero medido ⇒ `R$ 0,00`. Nunca o mesmo pixel |
+| Falha de consulta | **Estado de erro com "tentar de novo"**. ⛔ Nunca `R$ 0,00` |
+| Projeção | Traço/hachura distinta de realizado, com legenda |
+| Pizza | ⛔ Nunca com valor negativo — filtro de positivos + nota do que ficou de fora |
+
+---
+
+## 13.7 Onde cada número passa a morar
+
+**Um módulo, uma fórmula.** `src/lib/finance/dashboard.ts` continua sendo o motor; o que muda
+é que os **três pipelines de leitura duplicados** (P1-9) viram um, e ninguém mais reimplementa
+a subtração `meu = total − terceiros` (hoje escrita em 5 lugares).
+
+Regra permanente da 03 em diante: **todo indicador desta tabela abre os registros que o
+explicam.** Um número que não abre é um número que não se pode conferir.
