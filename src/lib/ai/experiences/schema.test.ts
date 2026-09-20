@@ -12,16 +12,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { EXPERIENCIA_IDS } from "./contracts";
 
-const ARQUIVO = path.resolve(
-  __dirname,
-  "..",
-  "..",
-  "..",
-  "..",
-  "supabase",
-  "migrations",
-  "20260922100000_ai_experiencias.sql",
-);
+const migration = (nome: string) =>
+  path.resolve(__dirname, "..", "..", "..", "..", "supabase", "migrations", nome);
+
+const ARQUIVO = migration("20260922100000_ai_experiencias.sql");
+const ARQUIVO_CLIQUE_DUPLO = migration("20260922110000_ai_experiencia_clique_duplo.sql");
 
 /**
  * ⛔ SÓ AS DECLARAÇÕES. O cabeçalho desta migration DESCREVE as trocas em relação a
@@ -29,11 +24,15 @@ const ARQUIVO = path.resolve(
  * dizer que foram removidos. Sem cortar os comentários, o teste que prova a remoção passaria
  * a reprovar a própria explicação dela.
  */
-const sql = fs
-  .readFileSync(ARQUIVO, "utf8")
-  .split("\n")
-  .filter((l) => !/^\s*--/.test(l))
-  .join("\n");
+const semComentarios = (arquivo: string) =>
+  fs
+    .readFileSync(arquivo, "utf8")
+    .split("\n")
+    .filter((l) => !/^\s*--/.test(l))
+    .join("\n");
+
+const sql = semComentarios(ARQUIVO);
+const sqlCliqueDuplo = semComentarios(ARQUIVO_CLIQUE_DUPLO);
 
 describe("18-F Bloco 4 — a migration das experiências", () => {
   it("a 4ª espécie entra nos DOIS checks — valores E coerência", () => {
@@ -105,5 +104,85 @@ describe("18-F Bloco 4 — a migration das experiências", () => {
 
   it("não cria tabela nenhuma", () => {
     expect(sql).not.toMatch(/create table/i);
+  });
+});
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ 18-F Bloco 4 — A JANELA DE DEDUPE DO CLIQUE DUPLO (achado P2 da auditoria).           ║
+ * ║                                                                                       ║
+ * ║ O panorama SEMPRE gasta. O advisory lock serializa duas chamadas simultâneas, mas não ║
+ * ║ as deduplica: a segunda espera, lê a reserva da primeira e cria um segundo run pago   ║
+ * ║ pelo mesmo conteúdo. A trava mora no BANCO porque o estado `enviando` do cliente não  ║
+ * ║ atravessa duas requisições HTTP — nem duas telas (a página e o painel têm estados      ║
+ * ║ independentes).                                                                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("18-F Bloco 4 — a migration do clique duplo", () => {
+  it("recusa com um código próprio, não reusando um dos outros", () => {
+    expect(sqlCliqueDuplo).toContain("raise exception 'AI_EXPERIENCE_JUST_STARTED'");
+  });
+
+  /**
+   * ⛔ AS DUAS CONDIÇÕES, E É O PONTO INTEIRO DA CORREÇÃO. Só `status in (...)` travaria o
+   * dono por 5 minutos (a lease da reconciliação) depois de ele fechar a aba; só a janela
+   * recusaria o retry de um panorama que acabou de falhar — que é o caso mais comum de
+   * querer clicar de novo. Uma mutação que remova qualquer uma das duas derruba este teste.
+   */
+  it("filtra por run ABERTO **e** por janela de tempo — nunca só um dos dois", () => {
+    const bloco = sqlCliqueDuplo.slice(
+      sqlCliqueDuplo.indexOf("AI_EXPERIENCE_JUST_STARTED") - 600,
+      sqlCliqueDuplo.indexOf("AI_EXPERIENCE_JUST_STARTED"),
+    );
+    expect(bloco).toContain("r.status in ('reserved', 'streaming')");
+    // ⚠️ `created_at`: a coluna que as OUTRAS janelas da função usam (rate limit, orçamento).
+    expect(bloco).toContain("r.created_at > v_now - c_janela");
+    expect(bloco).toContain("r.kind = 'experience'");
+    // O dono, sempre: a janela de um não pode alcançar a de outro.
+    expect(bloco).toContain("r.user_id = v_user");
+  });
+
+  /**
+   * ⚠️ `agent_id` discrimina QUAL panorama. Sem ele, "Planejar meu dia" bloquearia
+   * "Encerrar meu dia" por 15 segundos — e pedir os dois em sequência é uso normal.
+   */
+  it("a janela é por EXPERIÊNCIA, não por experiências em geral", () => {
+    expect(sqlCliqueDuplo).toContain("r.agent_id = v_agent");
+  });
+
+  it("a janela é curta — segundos, nunca minutos", () => {
+    expect(sqlCliqueDuplo).toMatch(/c_janela\s+constant interval := interval '\d+ seconds'/);
+  });
+
+  /** É `create or replace` da MESMA função: nenhuma tabela, coluna ou índice novos. */
+  it("não cria tabela, coluna nem índice", () => {
+    expect(sqlCliqueDuplo).not.toMatch(/create table/i);
+    expect(sqlCliqueDuplo).not.toMatch(/add column/i);
+    expect(sqlCliqueDuplo).not.toMatch(/create (unique )?index/i);
+    expect(sqlCliqueDuplo).toContain(
+      "create or replace function public.ai_begin_experience_run(",
+    );
+  });
+
+  /**
+   * ⛔ DEPOIS DO LOCK, ou a checagem tem corrida: duas admissões simultâneas leriam a tabela
+   * antes de qualquer uma gravar, e as duas passariam — exatamente o defeito a corrigir.
+   */
+  it("a checagem acontece DEPOIS do advisory lock", () => {
+    const lock = sqlCliqueDuplo.indexOf("pg_advisory_xact_lock");
+    const checagem = sqlCliqueDuplo.indexOf("AI_EXPERIENCE_JUST_STARTED");
+    expect(lock).toBeGreaterThan(0);
+    expect(checagem).toBeGreaterThan(lock);
+  });
+
+  /** O rodapé viaja junto: `create or replace` não recria grants, mas repeti-los é barato. */
+  it("mantém o fechamento para public/anon", () => {
+    const assinatura = "(text, text, text, text, text, numeric, text, integer)";
+    expect(sqlCliqueDuplo).toContain(
+      `revoke all on function public.ai_begin_experience_run${assinatura} from public;`,
+    );
+    expect(sqlCliqueDuplo).toContain(
+      `grant execute on function public.ai_begin_experience_run${assinatura} to authenticated;`,
+    );
   });
 });

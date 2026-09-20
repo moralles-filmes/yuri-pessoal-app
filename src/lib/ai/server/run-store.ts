@@ -72,6 +72,7 @@ export type BeginRunErrorCode =
   // `NOT_ALLOWED` é a chave `allow_cross_module` desligada (porta que o dono fechou).
   | "AI_EXPERIENCE_NOT_AVAILABLE"
   | "AI_CROSS_MODULE_NOT_ALLOWED"
+  | "AI_EXPERIENCE_JUST_STARTED"
   | "AI_NOT_AUTHENTICATED"
   | "AI_MESSAGE_EMPTY"
   | "AI_MESSAGE_TOO_LONG"
@@ -192,6 +193,10 @@ export const MENSAGEM_ADMISSAO: Record<BeginRunErrorCode, string> = {
   AI_EXPERIENCE_NOT_AVAILABLE: "Este panorama não está disponível.",
   AI_CROSS_MODULE_NOT_ALLOWED:
     "Os panoramas de vários módulos estão desligados. Ligue “Panoramas de vários módulos” em /ia/configuracoes.",
+  // ⚠️ A frase NÃO é de erro: o dono não fez nada errado, e o que ele pediu está acontecendo.
+  // Dizer "aguarde" ou "muitas tentativas" transformaria um clique a mais em repreensão.
+  AI_EXPERIENCE_JUST_STARTED:
+    "Este panorama já começou agora há pouco — ele está sendo escrito. Se não aparecer, peça de novo em alguns segundos.",
   AI_UNKNOWN: "Não foi possível iniciar a resposta.",
 };
 
@@ -207,6 +212,7 @@ const CODIGOS_CONHECIDOS: readonly BeginRunErrorCode[] = [
   // ele pode ligar em dois cliques.
   "AI_EXPERIENCE_NOT_AVAILABLE",
   "AI_CROSS_MODULE_NOT_ALLOWED",
+  "AI_EXPERIENCE_JUST_STARTED",
   // ⚠️ `AI_MODULE_NOT_ALLOWED` ANTES de `AI_MODULE_NOT_AVAILABLE`: a busca é por
   // `includes`, e um dos dois não é prefixo do outro — mas a ordem fica explícita para
   // ninguém acrescentar um terceiro `AI_MODULE_*` que os contenha e passe a casar antes.

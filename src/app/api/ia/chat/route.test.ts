@@ -270,11 +270,14 @@ describe("POST /api/ia/chat — o panorama (18-F Bloco 4)", () => {
     expect(runChatMock).not.toHaveBeenCalled();
   });
 
-  /** Os três códigos novos viram status próprios — tradução, não decisão. */
+  /** Os quatro códigos novos viram status próprios — tradução, não decisão. */
   const STATUS: ReadonlyArray<readonly [string, number]> = [
     ["AI_EXPERIENCE_NOT_AVAILABLE", 400],
     ["AI_CROSS_MODULE_NOT_ALLOWED", 409],
     ["AI_EXPERIENCE_WITHOUT_DATA", 409],
+    // ⚠️ 409 e não 429: não é excesso de pedidos, é ESTE pedido chegando duas vezes. O
+    // dono não precisa esperar "menos", precisa saber que o primeiro já está a caminho.
+    ["AI_EXPERIENCE_JUST_STARTED", 409],
   ];
 
   for (const [code, status] of STATUS) {

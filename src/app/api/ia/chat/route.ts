@@ -58,10 +58,15 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   AI_ADMISSION_BUSY: 429,
   AI_BUDGET_EXCEEDED_DAILY: 402,
   AI_BUDGET_EXCEEDED_MONTHLY: 402,
-  // 18-F Bloco 4 — os três do panorama. `NOT_AVAILABLE` é pedido que o sistema não atende
-  // (400); os outros dois são estado do dono que ele pode mudar em Configurações (409).
+  // 18-F Bloco 4 — os quatro do panorama. `NOT_AVAILABLE` é pedido que o sistema não atende
+  // (400); os outros três são estado do momento, e o dono pode mudar todos eles (409).
+  //
+  // ⚠️ `JUST_STARTED` é 409 e NÃO 429: não é excesso de pedidos, é ESTE pedido chegando duas
+  // vezes. Um 429 mandaria o cliente esperar e tentar de novo — e o que ele pediu já está
+  // acontecendo.
   AI_EXPERIENCE_NOT_AVAILABLE: 400,
   AI_CROSS_MODULE_NOT_ALLOWED: 409,
+  AI_EXPERIENCE_JUST_STARTED: 409,
   [AI_EXPERIENCE_WITHOUT_DATA]: 409,
   [AI_CRYPTO_NOT_CONFIGURED]: 503,
 };
