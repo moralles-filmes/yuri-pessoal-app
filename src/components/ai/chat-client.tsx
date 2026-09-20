@@ -40,6 +40,8 @@ import {
   ROTULO_DA_ROTA_DE_CONTEXTO,
   type RotaComContexto,
 } from "@/lib/ai/constants";
+// `import type` de módulo puro: apagado na compilação, não muda o peso de nenhuma rota.
+import type { EventoDoPainel } from "@/lib/ai/painel";
 import type { ToolCallStatus } from "@/lib/ai/tools/contracts";
 import { execucaoEmAndamento, type RunSources } from "@/lib/ai/tools/sources";
 import {
@@ -132,6 +134,27 @@ export type ChatClientProps = {
   /** Quando falso, o formulário fica desabilitado com a explicação na tela. */
   readonly podeConversar: boolean;
   readonly motivoBloqueio: string | null;
+  /**
+   * 18-F Bloco 2 — o que ESTA conversa fez, para quem a hospeda.
+   *
+   * ⛔ É uma SAÍDA, nunca uma entrada: o chat continua dono do próprio estado, e quem escuta
+   * não tem como mudá-lo. A página `/ia` não passa nada e nada muda para ela; quem escuta é o
+   * botão flutuante, que precisa saber se uma resposta chegou enquanto estava fechado.
+   *
+   * ⚠️ O QUE SAI DAQUI NÃO É DADO DO DONO. Nem texto de resposta, nem número, nem nome de
+   * registro — só "respondeu", "propôs (id + prazo)" e "o laço recomeçou". O selo do botão
+   * mostra contagem e verbo, e é tudo que ele tem para mostrar.
+   */
+  readonly onAtividade?: (evento: EventoDoPainel) => void;
+  /**
+   * Tira o aviso de honestidade LONGO do topo, para o chat caber num drawer.
+   *
+   * ⛔ Quem passa `compacto` assume a obrigação de afirmar a REGRA no próprio cabeçalho — a
+   * trava de honestidade é critério de aceite da fase, não decoração. O painel flutuante
+   * cumpre isso com `RESUMO_DO_ASSISTENTE`, que `constants.ts` declara como a versão curta
+   * do mesmo texto.
+   */
+  readonly compacto?: boolean;
 };
 
 export function ChatClient({
@@ -141,6 +164,8 @@ export function ChatClient({
   sources = {},
   podeConversar,
   motivoBloqueio,
+  onAtividade,
+  compacto = false,
 }: ChatClientProps) {
   const router = useRouter();
 
@@ -283,7 +308,10 @@ export function ChatClient({
          * ║ ferramentas rodam de novo e os chips da tentativa anterior virariam duplicata.  ║
          * ╚════════════════════════════════════════════════════════════════════════════════╝
          */
-        onSwitch: (e) =>
+        onSwitch: (e) => {
+          // 18-F Bloco 2 — o selo do botão acompanha a limpeza dos cartões, senão ele
+          // contaria duas propostas onde o dono vê uma (mesma razão do `propostas: []`).
+          onAtividade?.({ tipo: "recomecou" });
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
@@ -312,7 +340,8 @@ export function ChatClient({
                   }
                 : b,
             ),
-          ),
+          );
+        },
         onTool: (e) =>
           setBolhas((atual) =>
             atual.map((b, i) =>
@@ -331,22 +360,30 @@ export function ChatClient({
                 : b,
             ),
           ),
-        onProposta: (e) =>
+        onProposta: (e) => {
+          onAtividade?.({
+            tipo: "propos",
+            id: e.proposta.id,
+            expiraEm: e.proposta.expiresAt,
+          });
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
                 ? { ...b, propostas: [...(b.propostas ?? []), e.proposta] }
                 : b,
             ),
-          ),
-        onDone: (e) =>
+          );
+        },
+        onDone: (e) => {
+          onAtividade?.({ tipo: "respondeu" });
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
                 ? { ...b, status: "complete", provider: e.provider, model: e.model }
                 : b,
             ),
-          ),
+          );
+        },
         onError: (e) => {
           marcarFalha(idProvisorioAssistente, e.message);
           toast.error(e.message);
@@ -384,11 +421,20 @@ export function ChatClient({
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      {/* TRAVA DE HONESTIDADE, na tela e não só no prompt. */}
-      <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
-        <p className="min-w-0 text-muted-foreground">{AVISO_SEM_ACESSO}</p>
-      </div>
+      {/*
+        TRAVA DE HONESTIDADE, na tela e não só no prompt.
+
+        ⚠️ `compacto` não a desliga: quem o passa mostra a REGRA no próprio cabeçalho, e o
+        painel do botão flutuante usa `RESUMO_DO_ASSISTENTE` — que `constants.ts` declara
+        como "a versão curta da mesma regra". Repetir o texto longo num drawer de 85% de
+        altura gastaria a altura útil dizendo duas vezes o que já está fixo acima.
+      */}
+      {!compacto && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
+          <p className="min-w-0 text-muted-foreground">{AVISO_SEM_ACESSO}</p>
+        </div>
+      )}
 
       {motivoBloqueio && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
