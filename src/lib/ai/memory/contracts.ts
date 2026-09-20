@@ -57,6 +57,20 @@ export const ORIGENS_DE_MEMORIA = ["dono", "ia"] as const;
 export type OrigemDeMemoria = (typeof ORIGENS_DE_MEMORIA)[number];
 
 /**
+ * O recorte de uma memória que o PROMPT vê: o texto e o módulo, nada mais.
+ *
+ * ⚠️ Declarado aqui, e não em `prompt.ts`, para `queries.ts` e `prompt.ts` dependerem os dois
+ * do vocabulário em vez de um do outro. Sem prazo, sem origem e sem estado de propósito:
+ * quem chega ao prompt já foi filtrado, e mandar junto o que não se usa é convidar o modelo a
+ * usá-lo.
+ */
+export type MemoriaParaPrompt = {
+  readonly id: string;
+  readonly conteudo: string;
+  readonly modulo: ModuloDeMemoria | null;
+};
+
+/**
  * ⚠️ O MESMO 300 do CHECK do banco, do `maxLength` do schema da ferramenta e do literal de
  * `forma.ts` (que não pode importar daqui). Quatro lugares, um número — e há teste comparando
  * cada um com este: `forma.test.ts` para o literal e `schema.test.ts` para o banco.
