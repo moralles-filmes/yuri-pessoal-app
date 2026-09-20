@@ -520,6 +520,7 @@ as colunas já existem e o CHECK já aceita.
 | D31 | **Uma mutação da 03-A achou fraqueza de quem escreveu o teste, e ela foi corrigida antes do commit.** Uma asserção testava a FORMA do código (`toContain("iso.slice(0, 7)")`) e quebrava ao trocar `slice` por `substring`, que é semanticamente idêntico. **Teste que fica vermelho em refatoração inofensiva ensina a afrouxar o arquivo** — e este arquivo é a linha de base da fase inteira. Virou asserção comportamental sobre as duas bordas do mês |
 | D32 | **Os "18 casos financeiros mínimos do briefing §13" não existem em `docs/`.** O aceite da REDESIGN-03 os cita; o repositório não os tem, e a §13 do `METRICAS-FINANCEIRAS.md` é o dicionário TO-BE. Decidido **seguir sem** e registrar como pendência de fechamento, em vez de derivar uma lista que divergiria do texto original. Volta na **03-G** |
 | D33 | **Um teste flaky preexistente foi consertado dentro da 03-A, fora do escopo dela e a pedido do dono.** `catalog.test.ts` (Fase 18-F). O fix é de RAIZ — o `await import` saiu de dentro do `it` — e não curativo: subir o `testTimeout` deixaria a corrida de pé, mais longe. **1.604 ms → 2 ms** |
+| D34 | **A contagem de commits deste documento estava errada pela terceira vez, e agora é MEDIDA.** Dizia 11; `a4bed98` já era **12** — e esse commit se chama "corrige a contagem de commits locais (11, nao 10)", ou seja, foi corrigido uma vez e continuou errado. O número passa a sair de `git rev-list --count main..HEAD`. ⛔ **É o mesmo mecanismo da D27** (contar com a ferramenta errada, publicar, recontar): número que alguém conta à mão neste projeto erra, e a saída é derivá-lo da ferramenta que sabe a resposta |
 
 ## Bloqueios
 
@@ -615,7 +616,13 @@ que é justamente a afirmação que a 03-B precisa fazer. As três coisas a enca
 ✅ **O `R4` voltou do outro chat, foi revisado com mutação independente e integrado** em
 `1b5aa28`. Não há nada pendente de outra frente.
 
-⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` está **14 commits à frente da
-`main`** (11 anteriores + os 2 da 03-A + o merge) e segue **sem upstream**.
-`feat/redesign-r4-deeplinks` e `feat/redesign-03a-caracterizacao` já estão contidas nela e
-podem ser apagadas quando você quiser.
+⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` está **16 commits à frente da
+`main`** e segue **sem upstream**. `feat/redesign-r4-deeplinks` e
+`feat/redesign-03a-caracterizacao` já estão contidas nela e podem ser apagadas quando você
+quiser.
+
+⚠️ **O 16 foi MEDIDO, não contado** (D34) — `git rev-list --count main..HEAD`. O número que
+estava aqui antes do merge (**11**) estava errado: `a4bed98` já era **12**. E esse `a4bed98`
+se chama literalmente *"corrige a contagem de commits locais (11, não 10)"* — ou seja, a
+contagem foi corrigida uma vez e **continuou errada**. É a terceira vez que um número contado
+à mão erra nesta branch (as outras duas estão na D27).
