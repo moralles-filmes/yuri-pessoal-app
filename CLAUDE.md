@@ -10,13 +10,13 @@ Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gas
 
 ## Estado do projeto
 
-As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 16 — Dieta e Alimentação** e a **Fase 17 — Treinos** estão **concluídas**. As duas frentes grandes (16 e 17), abertas em **2026-08-03** e divididas em 6 subfases cada (A–F), fecharam em **2026-08-04**: **40 de 40** e **55 de 55** critérios de aceite validados. **Não há 16-G nem 17-G** — o projeto está em manutenção/iteração e melhoria entra como tarefa avulsa.
+As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 16 — Dieta e Alimentação**, a **Fase 17 — Treinos** e a **Fase 18 — Inteligência Artificial** estão **concluídas**. As duas frentes grandes (16 e 17), abertas em **2026-08-03** e divididas em 6 subfases cada (A–F), fecharam em **2026-08-04**: **40 de 40** e **55 de 55** critérios de aceite validados. A **Fase 18** fechou em **2026-09-20**, com os critérios validados um a um em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` (**163** critérios: 142 validados, 17 pendentes de conferência à mão, 4 retirados no desenho). **Não há 16-G, 17-G nem 18-G, e não há Fase 19** — **o projeto inteiro está em manutenção/iteração** e melhoria entra como tarefa avulsa, com branch própria.
 
 | Fase | Módulo | Situação |
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (19 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece, **sem migration**; **Bloco 2 ✅ (2026-09-20)** — o assistente ao alcance de qualquer tela por um botão na casca que abre um painel sob demanda, com a **mesma** `ChatClient` e as mesmas chaves (**2 colunas, nenhuma tabela**); **Bloco 3 ✅ (2026-09-20)** — a **memória**: o dono escreve preferências em `/ia/memoria` e o assistente as leva para as conversas **como preferência, nunca como regra**; a IA passa a poder **propor** preferências, pelo mesmo Approval Engine. **2 tabelas + 1 coluna**, e `allow_memory` (que existia desde a 18-A) finalmente liga alguma coisa; **Bloco 4 ✅ (2026-09-22)** — três **panoramas de um clique** (*Planejar meu dia · Encerrar meu dia · Planejar minha semana*) cuja lista de leituras é **estática e executada pelo servidor**, mais um **modo Caixa de entrada**. O panorama abre uma **conversa** (4ª espécie de `ai_runs.kind`), então "transformar resposta em ação", busca, histórico e exclusão em massa vêm de graça. **Duas migrations, e NENHUMA cria tabela** — um valor de CHECK, a RPC e, depois da auditoria, a janela de dedupe do clique duplo —, nenhuma rota e nenhum endpoint novos, e `allow_cross_module` (que existia desde a 18-A) finalmente liga alguma coisa |
+| **18** | Inteligência Artificial (`/ia`) | ✅ **CONCLUÍDA (2026-09-20)** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F ✅ COMPLETA (blocos 1 a 5): Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (19 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece, **sem migration**; **Bloco 2 ✅ (2026-09-20)** — o assistente ao alcance de qualquer tela por um botão na casca que abre um painel sob demanda, com a **mesma** `ChatClient` e as mesmas chaves (**2 colunas, nenhuma tabela**); **Bloco 3 ✅ (2026-09-20)** — a **memória**: o dono escreve preferências em `/ia/memoria` e o assistente as leva para as conversas **como preferência, nunca como regra**; a IA passa a poder **propor** preferências, pelo mesmo Approval Engine. **2 tabelas + 1 coluna**, e `allow_memory` (que existia desde a 18-A) finalmente liga alguma coisa; **Bloco 4 ✅ (2026-09-22)** — três **panoramas de um clique** (*Planejar meu dia · Encerrar meu dia · Planejar minha semana*) cuja lista de leituras é **estática e executada pelo servidor**, mais um **modo Caixa de entrada**. O panorama abre uma **conversa** (4ª espécie de `ai_runs.kind`), então "transformar resposta em ação", busca, histórico e exclusão em massa vêm de graça. **Duas migrations, e NENHUMA cria tabela** — um valor de CHECK, a RPC e, depois da auditoria, a janela de dedupe do clique duplo —, nenhuma rota e nenhum endpoint novos, e `allow_cross_module` (que existia desde a 18-A) finalmente liga alguma coisa; **Bloco 5 ✅ (2026-09-20) — FECHA A FASE**: uma **suíte de evals** (`src/lib/ai/evals/`) com os oito casos do briefing, que afirma o **estrutural** e **encontrou um defeito real antes de ficar verde** (o plural de "proteína" não alcançava a Dieta), mais a validação **item a item** dos **163** critérios da fase em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` — 142 validados, 17 pendentes de conferência à mão, 4 retirados no desenho. **Sem migration, sem tabela, sem rota, sem ferramenta e sem command.** **Não há 18-G e não há Fase 19** |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). A **18-E** (blocos 1–3, 2026-08-09) criou 3 (`ai_insights`, `ai_insight_sources`,
 `ai_insight_feedback`) e alterou 2 (`ai_runs.kind` ganhou a terceira espécie `'insight'`;
@@ -27,7 +27,10 @@ Bloco 4: 130 tabelas** no `public`, **18 `ai_*`**. O **Bloco 3 da 18-F** criou 2
 e `ai_memory_events`) e acrescentou 1 coluna (`ai_user_preferences.allow_write_memory`):
 **reconferido no banco em 2026-09-22: 132 tabelas** no `public`, **20 `ai_*`**. O
 **Bloco 4 NÃO criou tabela nenhuma** — ele acrescentou a 4ª espécie a `ai_runs.kind`
-(`experience`), alargou o CHECK de coerência e criou a RPC `ai_begin_experience_run`. Além delas,
+(`experience`), alargou o CHECK de coerência e criou a RPC `ai_begin_experience_run`. O
+**Bloco 5 não tocou o banco**: só leu. **Reconferido no banco em 2026-09-20, no fechamento da
+fase: 132 tabelas, 20 `ai_*`, e RLS + FORCE RLS em TODAS** (a consulta por tabela sem uma das
+duas voltou vazia). Além delas,
 **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
@@ -856,6 +859,27 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
      400). `problemasDoRamo`, em `route.ts`, escolhe o ramo **só para a mensagem e o status** —
      quem ACEITA continua sendo a união, e as duas formas continuam `.strict()`.
 
+**Invariante acrescentada pelo Bloco 5 da 18-F (o fechamento — 2026-09-20):**
+
+106. ⛔ **A SUÍTE DE EVALS AFIRMA O ESTRUTURAL, E O CASO DESTRUTIVO É AUSÊNCIA DE CÓDIGO.**
+     "Exclua todas as minhas transações" não é recusado por prompt nem por confirmação
+     reforçada — as duas formas dependeriam de o modelo obedecer. Ele é **irrepresentável**: o
+     registry não tem ferramenta que apague, os **sete** `undo` moram fora dele, e
+     `evals/destrutivo.test.ts` afirma isso derivando as **duas** listas (commands alcançáveis
+     por ferramenta × inversos declarados pelos commands) — nunca de uma lista de nomes
+     proibidos escrita à mão, que furaria no primeiro command novo. Risco 4 continua sendo
+     ausência de código, não checagem. ⛔ **E um teste de ausência que nunca foi visto vermelho
+     pode estar afirmando `[] === []` sobre uma lista que ele não leu**: este foi confirmado por
+     mutação, e o desfazer da mutação foi conferido por `git diff`, não pelo verde.
+     ⚠️ **A suíte pagou por si na primeira execução:** uma das oito frases do briefing — *"Como
+     estão minhas proteínas nesta semana?"* — não alcançava a Dieta, porque o vocabulário
+     listava `"proteina"` no singular e o casamento é por **fronteira de palavra, sem stemming**
+     (de propósito: stemming faria palavras não relacionadas colidirem, e palavra ambígua
+     **desliga** o roteamento — invariante 27). **Cada forma precisa da própria entrada**, e a
+     convenção do arquivo já era essa (`"serie"`/`"series"`, `"caloria"`/`"calorias"`).
+     ⛔ Palavra nova no vocabulário pode **empatar** dois módulos e desligar o roteamento onde
+     ele funcionava — não acrescente "por via das dúvidas".
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -882,7 +906,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.701 testes / 183 arquivos em 2026-09-22 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.738 testes / 185 arquivos em 2026-09-20 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

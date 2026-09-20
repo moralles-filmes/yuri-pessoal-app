@@ -1,8 +1,132 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-09-22**
-> (18-F Bloco 4 · experiências; antes: 18-F Bloco 3 · memória, 18-F Bloco 2 · botão flutuante,
-> 18-F Bloco 1 + auditoria de performance + iteração: transferência na importação de extrato).
+> Atualizado ao final de **cada** fase. Última atualização: **2026-09-20**
+> (18-F Bloco 5 · fechamento da FASE 18; antes: 18-F Bloco 4 · experiências, 18-F Bloco 3 ·
+> memória, 18-F Bloco 2 · botão flutuante, 18-F Bloco 1 + auditoria de performance + iteração:
+> transferência na importação de extrato).
+
+## ✅ 18-F · Bloco 5 — o fechamento da Fase 18 (2026-09-20)
+
+Plano em `docs/superpowers/plans/2026-09-22-18f-bloco5-fechamento.md` (§8 da spec).
+Branch `feat/18-f-memoria-integracoes`. **Nenhuma migration, nenhuma tabela, nenhuma coluna,
+nenhuma rota, nenhum endpoint, nenhuma ferramenta e nenhum command.** O banco foi tocado **só
+para ler**. Suíte em **3.738 testes / 185 arquivos** (eram 3.701 / 183). Registry (**30**
+ferramentas — 22 leitura + 8 escrita), commands (**15**, dos quais **7** são inversos sem
+ferramenta) e agentes (**9**) inalterados.
+
+**Com este bloco a Fase 18 está CONCLUÍDA. Não há 18-G**, e o projeto volta ao modo
+manutenção/iteração.
+
+> ⚠️ **Divergência de data, registrada e não corrigida:** as seções do Bloco 4 abaixo estão
+> datadas **2026-09-22**, mas os commits dele são todos de **2026-09-20**
+> (`git log --date=short`). As datas do Bloco 5 seguem os **commits**. Não reescrevi as do
+> Bloco 4 porque são texto de outra entrega — mas quem for citá-las deve conferir no `git log`,
+> não no cabeçalho.
+
+### A suíte de evals — e o defeito que ela encontrou antes de ficar verde
+
+`src/lib/ai/evals/` traz os **oito casos do briefing** como dado (`casos.ts`) e afirma sobre
+eles o que é **estrutural**: o roteador escolhe o agente certo · a chave desligada bloqueia (e o
+teste liga **todas as outras** ao desligar uma, o que é mais forte que `{}`) · a ferramenta certa
+é oferecida · e ela **não** é oferecida com a chave desligada.
+
+⛔ **Nenhum teste chama provedor.** O doc da fase pedia `ai_eval_cases`/`ai_eval_runs` — duas
+tabelas, uma tela e um custo por execução. O desenho recusou: o que pode regredir nestes casos é
+estrutural, e uma suíte que às vezes fica vermelha sem defeito é uma suíte que se aprende a
+ignorar.
+
+⚠️ **A suíte pagou por si na primeira execução.** Uma das oito frases canônicas — *"Como estão
+minhas proteínas nesta semana?"* — **não alcançava a Dieta**: o vocabulário de `nutrition`
+listava `"proteina"` e `"carboidrato"` no singular, e o casamento é por **fronteira de palavra,
+sem stemming** (de propósito — stemming faria palavras não relacionadas colidirem, e palavra
+ambígua **desliga** o roteamento em vez de errá-lo, invariante 27). A correção foram **duas
+palavras** em `agents/routing.ts`, num commit separado do teste — e a separação é o que prova que
+ela era necessária. **É a única mudança de código de produção do bloco.**
+
+### O caso destrutivo é ausência de código, não recusa
+
+*"Exclua todas as minhas transações"* **chega** ao Financeiro — e o que protege o dono não é o
+roteamento nem um prompt: é não existir ferramenta que apague. `evals/destrutivo.test.ts` afirma
+isso **sobre o registry**, derivando as **duas** listas — {commands que as ferramentas apontam}
+∩ {inversos que os commands declaram} — em vez de uma lista de nomes proibidos escrita à mão,
+que furaria no primeiro command novo. Medido: 30 ferramentas, 15 commands, **7 inversos**,
+**interseção vazia**, risco máximo **3**.
+
+⛔ **Confirmado por MUTAÇÃO**, não só pelo verde: uma ferramenta `finance.excluir_transacao`
+apontando para `excluirTransacao` foi acrescentada ao registry, o teste ficou **vermelho**
+nomeando o inverso alcançável, e a mutação foi desfeita — conferida por `git diff`, não pelo
+verde (a armadilha de CRLF do Bloco 4).
+
+⚠️ **"Lance esta nota no PIX" cair no orquestrador NÃO é defeito** — é o desenho. O comprovante
+não é frase de chat: a porta é `/ia/comprovantes` e ela é a única (invariante 55). O
+orquestrador tem `allowedTools: []`, então a frase não faz nada por acidente — e o teste afirma
+junto que `chatRequestSchema` **recusa** um corpo com arquivo.
+
+### A validação item a item — e a contagem que mudou
+
+`docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md`: **163 critérios**, um por linha, cada um com
+evidência (teste com nome · arquivo/migration · conferência à mão com data · retirado pelo
+desenho). **Nenhuma linha diz "ok", "passa" ou "feito".**
+
+| | |
+| --- | --- |
+| Critérios extraídos | **163** (84 + 16 + 17 + 17 + 14 + 15) |
+| Validados | **142** |
+| Dependem de conferência à mão | **17** |
+| **RETIRADOS** no desenho (spec §3/§5.2) | **4** (+1 parcial) — não contam no denominador |
+
+⚠️ **A estimativa do plano era 158, e estava errada por método:** ela não contava o trecho final
+`transversais do projeto` das cinco listas em prosa, embora contasse os equivalentes numerados da
+18-A (itens 79–84). A regra do projeto é contar antes de citar, e o número certo é o medido.
+
+⚠️ **Três critérios ficaram registrados como "deixaram de valer", e não como falsos** — o padrão
+que o arquivo usa para tudo que o tempo tornou estranho: A-64 ("nenhuma notificação no sino
+nesta subfase", derrubado pela 18-F Bloco 1), A-74 ("nenhuma definição de ferramenta é enviada",
+derrubado pela 18-B), B-15 ("nenhuma escrita acontece", derrubado pela 18-C) e B-3 ("consulta
+cruzada pelo orquestrador", **substituída** pela experiência com `allow_cross_module`, porque o
+orquestrador não tem ferramenta nenhuma).
+
+### O que a conferência no banco mostrou (2026-09-20, só leitura)
+
+| Conferência | Resultado |
+| --- | --- |
+| Tabelas em `public` | **132**, das quais **20** `ai_*` — a documentação estava certa |
+| RLS + FORCE RLS | A consulta por tabelas sem uma das duas voltou **VAZIA** — critério bloqueante, passa |
+| `ai_runs_kind_check` | Os **quatro** valores: `chat`, `extracao`, `insight`, `experience` |
+| `ai_runs_kind_coerente` | Exige a forma por inteiro: conversa para `chat` **e** `experience`, ausência dela para `extracao` e `insight` |
+| Advisor de **segurança** | **1 lint**, `auth_leaked_password_protection` — **pré-existente** (registrado desde 2026-08-07), botão do painel de Auth, sem migration. **Zero lints de schema** |
+| Advisor de **performance** | Backlog conhecido, **não** tocado aqui: **179** `auth_rls_initplan` (bate com o número do `CLAUDE.md`), 150 `unused_index`, 117 `unindexed_foreign_keys`, 1 `auth_db_connections_absolute` |
+
+### O achado de documentação: `PROJECT_ROADMAP.md` mentia desde a Fase 02
+
+A spec mandava corrigir uma linha do `CURRENT_STATUS.md` que marcava a **18-D como ⬜** — ela
+**já não existia**. O problema real estava no roadmap, que ninguém olhava: **quinze linhas
+erradas**, incluindo `02 | Financeiro Base | ⬜ Próxima` e `18-E | ⬜ Próxima — sem desenho
+validado` (concluída em 2026-08-09). Ele é o **item 4 da leitura obrigatória** de todo agente
+novo, **antes** do `CURRENT_STATUS.md`. Corrigido.
+
+### As duas chaves que continuam ociosas — registro, não migration
+
+`allow_external_search` e `allow_files` existem desde a 18-A e **não ligam nada**, o que contraria
+a disciplina das invariantes 24 e 47. A decisão foi **registrar em vez de remover**: `allow_files`
+foi substituída na prática por `allow_vision` (18-D), mais específica; `allow_external_search`
+fica de pé caso a pesquisa externa volte como tarefa avulsa. ⛔ **Não escreva migration para
+apagá-las** — remover coluna no fechamento de fase é a mudança de schema mais arriscada possível
+pelo menor ganho possível.
+
+### Verificação (Bloco 5)
+
+`npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm run test:run` ✅ **3.738 testes / 185 arquivos** ·
+`npm run build` ✅ · `npm run perf:bundle` ✅ **68 rotas, mediana 213,9 KB gz**,
+`/(app)/configuracoes` em **281,6 KB de um teto próprio de 285** — **idêntico** à linha de base,
+como tinha de ser (o bloco mudou duas strings) · `TZ=UTC npx vitest run` ✅.
+
+⛔ **O que este bloco NÃO conseguiu validar:** os 17 critérios que dependem de navegador com
+sessão, mais a tabela de 10 itens do Bloco 4. As duas listas são a mesma pendência e estão em
+`PHASE_18_CRITERIOS_VALIDADOS.md` ("O que NÃO foi validado") e em
+`docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
+
+---
 
 ## 🟡 18-F · Bloco 4 — três panoramas de um clique (2026-09-22)
 
@@ -780,7 +904,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino, na busca global, no backup e ganha exclusão em massa, sem migration; **Bloco 2 ✅ (2026-09-20)** — botão flutuante na casca com painel sob demanda, 2 colunas; **Bloco 3 ✅ (2026-09-20)** — memória: 2 tabelas, a 8ª ferramenta de escrita, o 15º command, `/ia/memoria`, e `allow_memory` finalmente ligando alguma coisa; **Bloco 4 ✅ (2026-09-22)** — três panoramas de um clique com leitura DIRIGIDA pelo servidor, a 4ª espécie de `ai_runs.kind`, o modo Caixa de entrada e `allow_cross_module` ligando alguma coisa — **sem tabela, sem rota e sem endpoint novos** |
+| **18** | Inteligência Artificial (`/ia`) | A–F | ✅ **CONCLUÍDA (2026-09-20).** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. **18-F ✅ COMPLETA (blocos 1 a 5): Bloco 1 ✅ (2026-09-19)** — a IA entra no sino, na busca global, no backup e ganha exclusão em massa, sem migration; **Bloco 2 ✅ (2026-09-20)** — botão flutuante na casca com painel sob demanda, 2 colunas; **Bloco 3 ✅ (2026-09-20)** — memória: 2 tabelas, a 8ª ferramenta de escrita, o 15º command, `/ia/memoria`, e `allow_memory` finalmente ligando alguma coisa; **Bloco 4 ✅ (2026-09-22)** — três panoramas de um clique com leitura DIRIGIDA pelo servidor, a 4ª espécie de `ai_runs.kind`, o modo Caixa de entrada e `allow_cross_module` ligando alguma coisa — **sem tabela, sem rota e sem endpoint novos**; **Bloco 5 ✅ (2026-09-20)** — suíte de evals estrutural com os oito casos do briefing (que encontrou e consertou um defeito real no roteamento), o caso destrutivo afirmado sobre o registry e a **validação item a item dos 163 critérios** da fase em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md`. **FECHA A FASE 18 — não há 18-G** |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -851,7 +975,7 @@ desfazer (5)** e documentação + verificação final (6). Decisões em
 | 18-C | Ações, aprovações, idempotência e auditoria | ✅ **CONCLUÍDA** (2026-08-08) — blocos 1 a 6 |
 | 18-D | Visão, documentos e comprovantes | ✅ **CONCLUÍDA** (2026-08-09) — blocos 1 a 5 |
 | 18-E | Insights, relatórios e dashboards | ✅ **CONCLUÍDA** (2026-08-09) — blocos 1 a 4 |
-| 18-F | Memória, voz, integrações e polimento | 🟡 — Bloco 1 ✅ (costura: sino, busca, backup, exclusão em massa) · Bloco 2 ✅ (botão flutuante) · Bloco 3 ✅ (memória) · Bloco 4 ✅ (experiências). Próximo: **Bloco 5 — fechamento da fase** (suíte de evals + validação item a item). Fecha a fase |
+| 18-F | Memória, integrações e polimento | ✅ **CONCLUÍDA (2026-09-20) — blocos 1 a 5.** Bloco 1 (costura: sino, busca, backup, exclusão em massa) · Bloco 2 (botão flutuante) · Bloco 3 (memória) · Bloco 4 (experiências) · Bloco 5 (suíte de evals + validação item a item dos 163 critérios). **FECHA A FASE 18 — não há 18-G** |
 
 As frentes 16 (Dieta) e 17 (Treinos) continuam **concluídas e em manutenção/iteração**:
 melhoria nelas entra como tarefa avulsa, com branch própria, e não como subfase. As pendências

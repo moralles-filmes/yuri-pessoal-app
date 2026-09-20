@@ -1,32 +1,45 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-> Atualizado em **2026-09-22**, ao fechar o **Bloco 4 da 18-F**. A última FASE do
-> roadmap fechada continua sendo a **18-E** (2026-08-09); a **18-F está em andamento**.
+> Atualizado em **2026-09-20**, ao fechar o **Bloco 5 da 18-F** — que fecha a **Fase 18**.
 
-## ▶️ O PRÓXIMO É O **Bloco 5 da 18-F — fechamento da fase**
+## ✅ NÃO HÁ PRÓXIMA FASE. O PROJETO ESTÁ EM MANUTENÇÃO/ITERAÇÃO.
 
-Desenho: `docs/superpowers/specs/2026-09-19-18f-memoria-integracoes-design.md` **§8**.
-Ele **não escreve código de produção**: `src/lib/ai/evals/` com os casos do briefing (o
-roteador escolhe o agente certo · a chave desligada bloqueia · a ferramenta certa é oferecida ·
-*"organize minhas tarefas de hoje"* alcança o TO-DO · e o caso destrutivo), validação **item a
-item** dos critérios gerais da Fase 18 e a documentação final.
+As **14 fases do roadmap original**, a **15 (TO-DO)**, a **16 (Dieta)**, a **17 (Treinos)** e a
+**18 (IA)** estão concluídas. **Não há 18-G e não há Fase 19.**
 
-⛔ **O caso destrutivo já é garantia ESTRUTURAL, não comportamental.** *"Exclua todas as minhas
-transações"* não encontra ferramenta nenhuma, porque o registry não tem exclusão e os sete
-`undo` estão fora dele de propósito. O teste afirma isso **sobre o registry**, nunca sobre uma
-resposta do modelo.
+**Melhoria entra como TAREFA AVULSA**, não como subfase: branch própria e o fluxo normal do
+projeto — brainstorming quando houver decisão de design em aberto, depois plano, depois
+execução. ⛔ **Não invente uma "Fase 19" para organizar trabalho novo**; o roadmap é histórico
+de construção, e reabri-lo por um ajuste faz a documentação mentir de novo.
 
-⚠️ **Corrigir a linha do `CURRENT_STATUS.md` que marca a 18-D como ⬜** embora ela esteja
-concluída desde 2026-08-09 (§8.2 da spec).
+A leitura obrigatória continua a mesma (`PROJECT_BRIEFING` → `PROJECT_RULES` →
+`PROJECT_ARCHITECTURE` → `PROJECT_ROADMAP` → `CURRENT_STATUS` → este arquivo), e o `CLAUDE.md`
+da raiz continua sendo o resumo vivo das invariantes de cada módulo. **Leia as invariantes do
+módulo que você for tocar antes de tocá-lo** — quase todas nasceram de um bug real.
 
-**Não há 18-G.** Com a 18-F fechada, a Fase 18 está concluída e o projeto volta ao modo
-manutenção/iteração.
+### O que a Fase 18 entregou, em uma linha
 
-### ⛔ FALTA UMA CONFERÊNCIA MANUAL DO BLOCO 4 — e nenhum teste a cobre
+Um assistente que lê os nove módulos, prepara alterações que **só o dono aplica**, lê
+comprovantes por visão, produz insights sobre grandezas derivadas, conhece as preferências que
+o dono escreve e monta panoramas de um clique — tudo atrás de **16 chaves que nascem
+desligadas**, sem nunca tocar o banco direto. Placar item a item:
+`docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` (163 critérios: 142 validados, 17 pendentes de
+conferência à mão, 4 retirados no desenho).
 
-O código está verde nas cinco verificações e em `TZ=UTC`, mas a tabela de 10 itens do Passo 4
-da Task 8 (`docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md`) precisa de um
-navegador com sessão. Os que mais importam:
+---
+
+## ⛔ AS PENDÊNCIAS QUE SOBREVIVEM À FASE
+
+Nenhuma delas bloqueia nada hoje. Todas são conhecidas, e é por isso que estão escritas.
+
+### 1. A conferência à mão nunca foi feita — e ela é UMA lista, não duas
+
+O código está verde nas cinco verificações e em `TZ=UTC`, mas **17 critérios de aceite da Fase
+18 dependem de um navegador com sessão** e continuam por conferir. A lista está em
+`docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md`, seção "O que NÃO foi validado", e ela **inclui**
+a tabela de 10 itens que o Bloco 4 deixou pendente
+(`docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md`, Task 8, Passo 4). Os que mais
+importam:
 
 1. **Salvar em `/ia/configuracoes` e RECARREGAR.** Foi exatamente esse caminho que `allowVision`
    deixou quebrado por três subfases, e ele continua sem teste que o percorra ponta a ponta.
@@ -37,6 +50,79 @@ navegador com sessão. Os que mais importam:
    (invariante 95).
 5. Caixa de entrada com "meta" (palavra ambígua) → tem de **perguntar**, não chutar.
 6. 320 px: os três atalhos quebram linha, sem rolagem horizontal.
+7. Botão flutuante por **teclado**: `Ctrl/⌘ + I` abre · `Tab` alcança · `Esc` fecha · o foco
+   volta · e com `floating_hidden` ligada o atalho **continua abrindo**.
+8. Dark/light e 320 px nas oito seções de `/ia`, mais a leitura dos deep-links da busca global.
+
+⚠️ **Conferiu?** Marque na tabela de `PHASE_18_CRITERIOS_VALIDADOS.md` com a data e **o que foi
+visto** — "conferido" sem o que foi visto não é evidência, é promessa.
+
+### 2. Duas chaves de permissão continuam ociosas
+
+`allow_external_search` e `allow_files` existem no banco desde a 18-A e **não ligam nada**.
+`allow_files` foi substituída na prática por `allow_vision` (18-D); `allow_external_search` fica
+de pé caso a pesquisa externa volte como tarefa avulsa. ⛔ **Não escreva migration para
+apagá-las**: remover coluna pelo ganho de arrumação é a pior relação risco/benefício do projeto.
+
+### 3. O backlog de performance do banco
+
+Medido em 2026-09-20 pelo advisor do Supabase, e **conscientemente não consertado**:
+**179** `auth_rls_initplan`, 150 `unused_index`, 117 `unindexed_foreign_keys`. A razão está no
+`CLAUDE.md` (seção "Medição de query"): `(select auth.uid())` já foi aplicado nas 8 policies das
+duas tabelas grandes o bastante para a diferença ser medível; as outras seguem em backlog porque
+o ganho não foi demonstrado. ⛔ **Se for mexer, meça antes** — com `EXPLAIN (analyze, timing
+off)` e na role `authenticated`, senão a RLS some da conta.
+
+### 4. Um advisor de segurança aberto, que não é código
+
+`auth_leaked_password_protection` (proteção contra senha vazada, checagem no HaveIBeenPwned) é
+um **botão do painel de Auth** do Supabase. Sem migration, sem código. Registrado desde
+2026-08-07. **Zero lints de schema.**
+
+### 5. Decisões de escopo que podem voltar como tarefa avulsa
+
+Voz · automações configuráveis · pesquisa externa · observabilidade · conversar com um relatório
+· sugestões contextuais dentro de um registro. Todas saíram **com motivo escrito** (spec §3 da
+18-F) e com o dono de acordo — ver `LAST_PHASE_SUMMARY.md`. Se alguma voltar, ela é tarefa
+avulsa com desenho próprio, não uma subfase 18-G.
+
+---
+
+## Histórico dos blocos da 18-F
+
+### ✅ Bloco 5 — o fechamento da fase (2026-09-20)
+
+Suíte de evals em `src/lib/ai/evals/` com os oito casos do briefing, afirmando o **estrutural**
+(roteador · chave desligada · ferramenta oferecida), o caso destrutivo afirmado **sobre o
+registry**, e a validação item a item dos 163 critérios. **Nenhuma migration.** Suíte foi de
+3.701/183 para **3.738 testes / 185 arquivos**. Plano executado:
+`docs/superpowers/plans/2026-09-22-18f-bloco5-fechamento.md`.
+
+**O que este bloco deixou escrito para quem vier:**
+
+- ⛔ **O CASO DESTRUTIVO É AUSÊNCIA DE CÓDIGO, NÃO RECUSA.** *"Exclua todas as minhas
+  transações"* não é barrado por prompt nem por confirmação reforçada — as duas dependeriam de
+  o modelo obedecer. O registry não tem ferramenta que apague, e os **sete** `undo` moram fora
+  dele. `evals/destrutivo.test.ts` deriva as **duas** listas (commands alcançáveis por
+  ferramenta × inversos declarados pelos commands) e exige interseção vazia — **nunca** uma
+  lista de nomes proibidos escrita à mão, que furaria no primeiro command novo. Confirmado por
+  mutação.
+- ⚠️ **O VOCABULÁRIO DO ROTEADOR PRECISA DE CADA FORMA, UMA POR ENTRADA.** O casamento é por
+  fronteira de palavra e **não há stemming**, de propósito (stemming faria palavras não
+  relacionadas colidirem, e palavra ambígua **desliga** o roteamento — invariante 27).
+  `"proteina"` não casa em `"proteínas"`, e foi assim que uma das oito frases do briefing deixou
+  de alcançar a Dieta. ⛔ **Não acrescente palavra "por via das dúvidas"**: cada palavra nova
+  pode empatar dois módulos e desligar o roteamento onde ele funcionava — "meta", "gordura" e
+  "tarefa" estão fora **de propósito**.
+- ⛔ **PASTA NOVA EM `src/lib/ai/` ENTRA EM `CAMADAS_PURAS` NO MESMO COMMIT EM QUE NASCE.**
+  Aquela lista, em `boundaries.test.ts`, é escrita à mão: pasta fora dela passa **vacuamente
+  verde**. `memory/` (Bloco 3), `experiences/` (Bloco 4) e `evals/` (Bloco 5) pagaram as três
+  primeiras vezes. Não pague a quarta.
+- ⚠️ **AO CONTAR CRITÉRIO EM PROSA SEPARADA POR `·`, CONTE O ÚLTIMO TRECHO TAMBÉM.** A
+  estimativa de 158 saiu de não contar `transversais do projeto` no fim de cada lista. A regra
+  do projeto — "conte antes de citar" — vale também para o que parece rodapé.
+- ⚠️ **`agents/routing.ts` REEXPORTA OS OITO IDS DE ESPECIALISTA, MAS NÃO `ASSISTENTE_PESSOAL_ID`.**
+  Ele vem de `agents/registry`. O plano do bloco errava esse import.
 
 ### ✅ Bloco 4 — as experiências (2026-09-22)
 

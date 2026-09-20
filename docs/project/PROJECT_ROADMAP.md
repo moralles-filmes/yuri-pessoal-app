@@ -5,19 +5,29 @@
 | # | Fase | Arquivo | Status |
 | --- | --- | --- | --- |
 | 01 | Foundation, Arquitetura & Design System | `PHASE_01_FOUNDATION.md` | ✅ Concluída |
-| 02 | Financeiro Base | `PHASE_02_FINANCIAL_CORE.md` | ⬜ Próxima |
-| 03 | Cartões de Crédito & Faturas | `PHASE_03_CREDIT_CARDS_INVOICES.md` | ⬜ |
-| 04 | Parcelamentos | `PHASE_04_INSTALLMENTS.md` | ⬜ |
-| 05 | Gastos de Terceiros & Divisão | `PHASE_05_SHARED_EXPENSES.md` | ⬜ |
-| 06 | Importação (Excel/CSV/OFX) | `PHASE_06_IMPORTS.md` | ⬜ |
-| 07 | Dashboard Financeiro | `PHASE_07_FINANCIAL_DASHBOARD.md` | ⬜ |
-| 08 | Agenda & Google Agenda | `PHASE_08_CALENDAR.md` | ⬜ |
-| 09 | Demandas, Tarefas & Rotinas | `PHASE_09_TASKS_ROUTINES.md` | ⬜ |
-| 10 | Hábitos | `PHASE_10_HABITS.md` | ⬜ |
-| 11 | Estudos | `PHASE_11_STUDIES.md` | ⬜ |
-| 12 | Dashboard Geral | `PHASE_12_GENERAL_DASHBOARD.md` | ⬜ |
-| 13 | Busca Global, Lançamento Rápido & Notificações | `PHASE_13_SEARCH_QUICKADD_NOTIFICATIONS.md` | ⬜ |
-| 14 | Segurança, Responsividade & Polimento Final | `PHASE_14_POLISH_SECURITY.md` | ⬜ |
+| 02 | Financeiro Base | `PHASE_02_FINANCIAL_CORE.md` | ✅ Concluída |
+| 03 | Cartões de Crédito & Faturas | `PHASE_03_CREDIT_CARDS_INVOICES.md` | ✅ Concluída |
+| 04 | Parcelamentos | `PHASE_04_INSTALLMENTS.md` | ✅ Concluída |
+| 05 | Gastos de Terceiros & Divisão | `PHASE_05_SHARED_EXPENSES.md` | ✅ Concluída |
+| 06 | Importação (Excel/CSV/OFX) | `PHASE_06_IMPORTS.md` | ✅ Concluída |
+| 07 | Dashboard Financeiro | `PHASE_07_FINANCIAL_DASHBOARD.md` | ✅ Concluída |
+| 08 | Agenda & Google Agenda | `PHASE_08_CALENDAR.md` | ✅ Concluída |
+| 09 | Demandas, Tarefas & Rotinas | `PHASE_09_TASKS_ROUTINES.md` | ✅ Concluída |
+| 10 | Hábitos | `PHASE_10_HABITS.md` | ✅ Concluída |
+| 11 | Estudos | `PHASE_11_STUDIES.md` | ✅ Concluída |
+| 12 | Dashboard Geral | `PHASE_12_GENERAL_DASHBOARD.md` | ✅ Concluída |
+| 13 | Busca Global, Lançamento Rápido & Notificações | `PHASE_13_SEARCH_QUICKADD_NOTIFICATIONS.md` | ✅ Concluída |
+| 14 | Segurança, Responsividade & Polimento Final | `PHASE_14_POLISH_SECURITY.md` | ✅ Concluída |
+
+> ✅ **As 14 fases do roadmap original estão concluídas**, mais a **Fase 15 (TO-DO)**, a
+> **Fase 16 (Dieta)**, a **Fase 17 (Treinos)** e a **Fase 18 (IA)**. O projeto está em
+> **manutenção/iteração**: melhoria entra como tarefa avulsa, com branch própria, não como
+> fase nova. **Não há Fase 19 planejada.**
+>
+> ⚠️ Esta tabela esteve **errada desde a Fase 02**, marcando quinze fases concluídas como
+> pendentes — inclusive "02 | Financeiro Base | ⬜ Próxima". Corrigida no fechamento da Fase 18
+> (18-F, Bloco 5). Ela é o item 4 da leitura obrigatória de todo agente novo, **antes** do
+> `CURRENT_STATUS.md`: mantenha-a viva ao fechar qualquer trabalho.
 
 ---
 
@@ -317,8 +327,14 @@ com quatro provedores e registrar tudo que consultou ou modificou.
 | 18-B | Contexto, ferramentas de leitura e agentes | `PHASE_18_B_AI_CONTEXT_READ_TOOLS_AGENTS.md` | ✅ **CONCLUÍDA** (2026-08-07) |
 | 18-C | Ações, aprovações, idempotência e auditoria | `PHASE_18_C_AI_ACTIONS_APPROVALS_AUDIT.md` | ✅ **CONCLUÍDA** (2026-08-08, blocos 1–6) |
 | 18-D | Visão, documentos e comprovantes | `PHASE_18_D_AI_VISION_DOCUMENTS_RECEIPTS.md` | ✅ **CONCLUÍDA** (2026-08-09, blocos 1–5) |
-| 18-E | Insights, relatórios e dashboards | `PHASE_18_E_AI_INSIGHTS_REPORTS_DASHBOARDS.md` | ⬜ **Próxima** — sem desenho validado |
-| 18-F | Memória, voz, integrações e polimento | `PHASE_18_F_AI_MEMORY_VOICE_INTEGRATIONS_POLISH.md` | ⬜ — **FECHA A FASE 18** |
+| 18-E | Insights, relatórios e dashboards | `PHASE_18_E_AI_INSIGHTS_REPORTS_DASHBOARDS.md` | ✅ **CONCLUÍDA** (2026-08-09, blocos 1–4) |
+| 18-F | Memória, integrações e polimento | `PHASE_18_F_AI_MEMORY_VOICE_INTEGRATIONS_POLISH.md` | ✅ **CONCLUÍDA** (2026-09-20, blocos 1–5) — **FECHA A FASE 18** |
+
+> ✅ **FASE 18 CONCLUÍDA** (18-A a 18-F). **Não há 18-G.** Os critérios de aceite da fase
+> completa foram validados **um a um** no Bloco 5 da 18-F:
+> `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` — **163 critérios**, 142 validados,
+> 17 dependendo de conferência à mão e **4 retirados no desenho** (voz, automações
+> configuráveis, pesquisa externa e observabilidade), com motivo escrito e com o dono de acordo.
 
 **Dependências gerais:** Fase 01 (design system/app shell), 12 (dashboard geral), 13 (busca
 global, lançamento rápido, notificações + Cron), 14 (`attachments`, buckets privados,
@@ -356,4 +372,4 @@ global, lançamento rápido, notificações + Cron), 14 (`attachments`, buckets 
     integralmente sobre o que a IA escreve.
 
 **Critérios de aceite da fase completa:** os itens listados no arquivo da Subfase F, validados
-um a um na 18-F.
+um a um na 18-F — **feito**, em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md`.

@@ -1,6 +1,14 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
-> ✅ **ÚLTIMA: 18-E — IA · Insights (2026-08-09). CONCLUÍDA, com o Bloco 4.** Os blocos 1 a 3
+> ✅ **ÚLTIMA: 18-F — IA · Memória, integrações e polimento (2026-09-20). CONCLUÍDA, com os
+> cinco blocos — e ela FECHA A FASE 18.** A IA deixou de ser uma ilha: entrou no sino, na busca
+> global e no backup (Bloco 1); ganhou um botão em toda tela (2); passou a conhecer as
+> preferências que o dono escreve (3); e ganhou panoramas de um clique cuja lista de leituras é
+> **estática e executada pelo servidor** (4). O Bloco 5 fechou a fase: suíte de evals
+> estrutural e **validação item a item** dos critérios. **Não há 18-G, e não há Fase 19** — o
+> projeto está em manutenção/iteração. Resumo logo abaixo.
+>
+> ✅ **Antes dela: 18-E — IA · Insights (2026-08-09). CONCLUÍDA, com o Bloco 4.** Os blocos 1 a 3
 > entregaram a análise sob demanda; o **Bloco 4** entregou o **job automático**, que estava
 > declarado fora. A IA produz análises sobre grandezas que o SISTEMA deriva, num texto que
 > **não contém dígito** — e agora pode fazê-lo sozinha, uma vez por dia, se o dono ligar.
@@ -19,6 +27,86 @@
 > duas frentes grandes: **Fase 16 — Dieta e Alimentação** (16-A a 16-F, 40 de 40 critérios) e
 > **Fase 17 — Módulo Treinos** (17-A a 17-F, 55 de 55). Este arquivo tem os resumos na ordem
 > inversa de conclusão — o mais recente primeiro.
+
+---
+
+## Fase 18-F — Memória, integrações e polimento (2026-09-20) ✅ **FASE 18 CONCLUÍDA**
+
+Cinco blocos, em ordem crescente de risco. **Duas tabelas no total** (as da memória) e **quatro
+migrations**, nenhuma delas criando tabela depois do Bloco 3.
+
+| Bloco | Entrega | Banco |
+| --- | --- | --- |
+| 1 | Costura: 4 famílias de notificação, busca global, backup, exclusão em massa | — |
+| 2 | Botão flutuante em toda tela, com painel sob demanda | 2 colunas |
+| 3 | **Memória**: o dono escreve preferências, e a IA pode **propor** novas | **2 tabelas** + 1 coluna |
+| 4 | **Experiências**: 3 panoramas de um clique + modo Caixa de entrada | 1 valor de CHECK + 1 RPC |
+| 5 | **Fechamento**: suíte de evals, validação item a item, documentação | — |
+
+### O que mudou de natureza nesta subfase
+
+A IA **deixou de ser uma ilha**. Até a 18-E ela existia em `/ia` e em lugar nenhum mais: não
+aparecia no sino, não era encontrada pela busca, não entrava no backup e não tinha porta fora
+da própria rota. Os quatro primeiros blocos mudaram isso — e o quarto deu a ela a única coisa
+que o laço de ferramentas não podia dar, **consulta cruzada de verdade**, por um caminho em que
+quem decide o que ler é o servidor, não o modelo.
+
+⛔ **Nada disso afrouxou uma trava.** A escrita continua fora do run, as chaves continuam
+nascendo desligadas, `insights/collectors/` continua sendo a única porta de leitura fora do Tool
+Registry — e não cresceu —, e a memória é o único texto do dono que entra no prompt sem ser
+bloco não confiável, declarada como **preferência**, nunca como regra, e sempre **por último**.
+
+### O placar da fase
+
+`docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` — **os critérios de aceite da Fase 18 inteira,
+um a um**, com evidência por linha (teste com nome · arquivo/migration · conferência à mão com
+data · retirado pelo desenho):
+
+| | |
+| --- | --- |
+| Critérios extraídos das seis subfases | **163** (84 + 16 + 17 + 17 + 14 + 15) |
+| ✅ Validados | **142** |
+| ⏳ Dependem de conferência à mão (navegador com sessão) | **17** |
+| ⊘ **RETIRADOS** no desenho | **4** (+1 parcial) — **não** contam no denominador |
+
+⚠️ **O número não é 158**, como o plano estimava: a estimativa não contava o trecho final
+`transversais do projeto` das cinco listas em prosa. Contado ao extrair, como manda a regra do
+projeto.
+
+⚠️ **A suíte de evals encontrou um defeito real antes de ficar verde.** Uma das oito frases do
+briefing — *"Como estão minhas proteínas nesta semana?"* — não alcançava a Dieta, porque o
+vocabulário listava `"proteina"` no singular e o casamento é por fronteira de palavra, sem
+stemming. Duas palavras em `agents/routing.ts`, num commit separado do teste.
+
+### O que ficou FORA, com motivo — foi decisão, não esquecimento
+
+Quem ler isto daqui a seis meses precisa saber que estes itens estavam no doc da fase e saíram
+no desenho (spec §3), com o dono de acordo:
+
+| Item | Por que saiu |
+| --- | --- |
+| **Voz** (captura, transcrição, ação) | Exige provedor de transcrição novo, captura de áudio e um caminho de confirmação por confiança próprio. É o item mais caro da lista, e o único cujo valor depende de um hábito que o dono ainda não tem |
+| **Automações configuráveis** | São a generalização do job de insights que a 18-E **já entregou funcionando**. Construir o genérico para ter duas instâncias é YAGNI |
+| **Pesquisa externa** | É, por definição, a parte da IA que **não** usa os dados do dono; entrega o que um chat genérico entrega e traz conteúdo não confiável de fora |
+| **Observabilidade** (latência, taxa de sucesso, circuit breaker) | `/ia/consumo` já mostra custo e tentativa; painel de métricas para um usuário só é ornamento que precisa ser mantido |
+| **Arrasto livre do botão flutuante** | O Bloco 2 entregou **canto** (`floating_corner`), que resolve o mesmo problema sem estado por dispositivo |
+| **Canais externos** (push, e-mail) | Fora do escopo do sistema inteiro, como já registrado nas Fases 16 e 17 |
+
+### As duas chaves ociosas
+
+`allow_external_search` e `allow_files` existem desde a 18-A e **não ligam nada**.
+`allow_files` foi substituída na prática por `allow_vision` (18-D), mais específica;
+`allow_external_search` fica de pé caso a pesquisa externa volte como tarefa avulsa.
+⛔ **Não escreva migration para apagá-las** — remover coluna no fechamento de fase é a mudança
+de schema mais arriscada possível pelo menor ganho possível.
+
+### Estado do sistema ao fim da Fase 18
+
+**132 tabelas** no `public`, **20 `ai_*`** (conferido no banco em 2026-09-20, com RLS **e** FORCE
+RLS em todas). Registry com **30 ferramentas** (22 leitura + 8 escrita), **15 commands** (7 deles
+inversos que **nenhuma ferramenta alcança**), **9 agentes** (o orquestrador com `allowedTools:
+[]`), **10** chaves `allow_*` e **6** `allow_write_*`, todas nascendo desligadas. Suíte em
+**3.738 testes / 185 arquivos**. `perf:bundle`: 68 rotas, mediana **213,9 KB gz**.
 
 ---
 
