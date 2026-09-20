@@ -642,6 +642,66 @@ export type Database = {
           },
         ]
       }
+      ai_memories: {
+        Row: {
+          content: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          modulo: string | null
+          origem: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          modulo?: string | null
+          origem: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          modulo?: string | null
+          origem?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_memory_events: {
+        Row: {
+          created_at: string
+          evento: string
+          id: string
+          memory_id: string
+          origem: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          evento: string
+          id?: string
+          memory_id: string
+          origem: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          evento?: string
+          id?: string
+          memory_id?: string
+          origem?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ai_messages: {
         Row: {
           content: string
@@ -1183,6 +1243,7 @@ export type Database = {
           allow_write_calendar: boolean
           allow_write_finance: boolean
           allow_write_habits: boolean
+          allow_write_memory: boolean
           allow_write_nutrition: boolean
           allow_write_todo: boolean
           budget_alert_level_reached: number
@@ -1223,6 +1284,7 @@ export type Database = {
           allow_write_calendar?: boolean
           allow_write_finance?: boolean
           allow_write_habits?: boolean
+          allow_write_memory?: boolean
           allow_write_nutrition?: boolean
           allow_write_todo?: boolean
           budget_alert_level_reached?: number
@@ -1263,6 +1325,7 @@ export type Database = {
           allow_write_calendar?: boolean
           allow_write_finance?: boolean
           allow_write_habits?: boolean
+          allow_write_memory?: boolean
           allow_write_nutrition?: boolean
           allow_write_todo?: boolean
           budget_alert_level_reached?: number
