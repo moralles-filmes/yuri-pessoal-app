@@ -180,15 +180,45 @@ describe("a ordem da montagem do system prompt", () => {
     "utf8",
   );
 
-  it("blocoDeMemorias vem DEPOIS de buildSystemPrompt e do contexto de roteamento", () => {
-    const base = runner.indexOf("buildSystemPrompt(agent)");
+  /**
+   * ⚠️ 18-F Bloco 4 — a montagem foi PARTIDA EM DUAS (`perfil.systemBase`, depois
+   * `+ blocoDeMemorias`) para o panorama poder trazer o próprio prompt de redação no lugar
+   * do perfil do agente. A ordem que este teste protege não mudou; o que mudou é onde ela
+   * está escrita, e o bloco da caixa de entrada entrou no meio.
+   */
+  it("blocoDeMemorias vem DEPOIS do perfil, do roteamento e da caixa de entrada", () => {
+    const base = runner.indexOf("buildSystemPrompt(agent");
     const roteamento = runner.indexOf("blocoDeContextoDeRoteamento(");
-    const memoria = runner.indexOf("blocoDeMemorias(");
+    // A USADA, não a importada: o nome aparece primeiro no `import` do topo do arquivo.
+    const caixa = runner.indexOf("? BLOCO_DA_CAIXA_DE_ENTRADA");
+    const memoria = runner.indexOf("const system = perfil.systemBase + blocoDeMemorias(");
 
     expect(base, "buildSystemPrompt não encontrado").toBeGreaterThan(-1);
-    expect(memoria, "blocoDeMemorias não encontrado").toBeGreaterThan(-1);
+    expect(caixa, "o bloco da caixa de entrada não encontrado").toBeGreaterThan(-1);
+    expect(memoria, "a montagem final do system não encontrada").toBeGreaterThan(-1);
     expect(base).toBeLessThan(roteamento);
-    expect(roteamento).toBeLessThan(memoria);
+    expect(roteamento).toBeLessThan(caixa);
+    expect(caixa).toBeLessThan(memoria);
+  });
+
+  /**
+   * ⛔ 18-F Bloco 4 — O PANORAMA TAMBÉM CARREGA A MEMÓRIA.
+   *
+   * "Planejar meu dia" respeitando uma preferência salva é onde a memória do Bloco 3
+   * justifica existir. Um `system` de panorama montado sem ela — que é o que a primeira
+   * versão do plano desta task esboçava — faria o panorama nascer sem as preferências que
+   * ele existe para respeitar. A concatenação é UMA, e os dois caminhos passam por ela.
+   */
+  it("o caminho do PLANO passa pela mesma concatenação, e a memória é a última", () => {
+    const montagem = runner.indexOf("const system = perfil.systemBase + blocoDeMemorias(");
+    expect(montagem).toBeGreaterThan(-1);
+
+    // Não existe um segundo lugar que monte `system` — nem no ramo do plano.
+    const ocorrencias = runner.match(/blocoDeMemorias\(/g) ?? [];
+    expect(ocorrencias, "blocoDeMemorias aparece mais de uma vez").toHaveLength(1);
+
+    // E o `systemBase` do plano vem do próprio plano, não de um agente do registry.
+    expect(runner).toContain("systemBase: input.plano.system");
   });
 
   /** A leitura é condicionada à chave — nenhuma consulta quando o dono não autorizou. */

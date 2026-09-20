@@ -26,6 +26,14 @@ export type PuloDeclarado = {
 export type DecisaoDeLeituras = {
   readonly leituras: readonly LeituraResolvida[];
   readonly puladas: readonly PuloDeclarado[];
+  /**
+   * Os módulos que SOBREVIVERAM à checagem de chave, sem repetição e na ordem do catálogo.
+   * Lidos do registry (`descriptor.module`), nunca deduzidos do prefixo do nome — o prefixo
+   * é convenção de nomenclatura, o campo é declaração.
+   *
+   * ⚠️ Quem consome é a MEMÓRIA, em `chat-runner`: um panorama não tem "o módulo do agente".
+   */
+  readonly modulos: readonly string[];
   /** Já em pt-BR, pronta para entrar no texto gravado. `""` quando nada foi pulado. */
   readonly aviso: string;
 };
@@ -37,6 +45,7 @@ export function decidirLeituras(
 ): DecisaoDeLeituras {
   const leituras: LeituraResolvida[] = [];
   const puladas: PuloDeclarado[] = [];
+  const modulos: string[] = [];
 
   for (const f of experiencia.ferramentas) {
     const descriptor = AI_TOOL_REGISTRY.find((t) => t.name === f.toolName);
@@ -49,6 +58,7 @@ export function decidirLeituras(
     // tudo com a comparação frouxa. Ausência é chave desligada.
     if (permissions[chave] === true) {
       leituras.push({ toolName: f.toolName, input: f.argumentos(hoje) });
+      if (!modulos.includes(descriptor.module)) modulos.push(descriptor.module);
       continue;
     }
     puladas.push({
@@ -58,7 +68,7 @@ export function decidirLeituras(
     });
   }
 
-  return { leituras, puladas, aviso: avisoDoQueFicouDeFora(puladas) };
+  return { leituras, puladas, modulos, aviso: avisoDoQueFicouDeFora(puladas) };
 }
 
 /**

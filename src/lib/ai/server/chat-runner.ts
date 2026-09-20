@@ -36,9 +36,23 @@ import {
   routeAgent,
 } from "@/lib/ai/agents/routing";
 import { blocoDeMemorias, memoriasParaOPrompt } from "@/lib/ai/memory/prompt";
+import type { MemoriaParaPrompt } from "@/lib/ai/memory/contracts";
 import { getMemoriasVigentes } from "@/lib/ai/memory/queries";
-import type { ToolCallStatus } from "@/lib/ai/tools/audit";
-import type { PropostaParaATela } from "@/lib/ai/tools/executor";
+/**
+ * ⛔ 18-F Bloco 4 — `contracts` e `inbox`, NUNCA `experiences/catalog`.
+ *
+ * O plano chega pronto; este arquivo não tem como buscar uma experiência, inventar uma
+ * ferramenta nem trocar o prompt de redação. Há teste de fronteira em `boundaries.test.ts`
+ * afirmando que `experiences/catalog` só é importado por `server/experience-runner.ts`.
+ */
+import type { PlanoDaExperiencia } from "@/lib/ai/experiences/contracts";
+import {
+  BLOCO_DA_CAIXA_DE_ENTRADA,
+  versaoComCaixaDeEntrada,
+} from "@/lib/ai/experiences/inbox";
+import { closeStep, startStep, type ToolCallStatus } from "@/lib/ai/tools/audit";
+import { executeTool, type PropostaParaATela } from "@/lib/ai/tools/executor";
+import { renderUntrusted } from "@/lib/ai/security/untrusted";
 import { toolDefinitionsFor, UNEXPECTED_TOOL_CALL } from "@/lib/ai/tools/registry";
 import { MAX_TOOL_STEPS } from "@/lib/ai/tools/limits";
 import { textoDasMensagens } from "@/lib/ai/core/text";
@@ -61,6 +75,7 @@ import { AI_CRYPTO_NOT_CONFIGURED, getCryptoReadiness } from "./crypto-readiness
 import { resolveApiKey } from "./credential-store";
 import {
   beginChatRun,
+  beginExperienceRun,
   cancelRun,
   closeAttempt,
   completeRun,
@@ -147,6 +162,23 @@ export type ChatRunnerInput = {
   readonly modelPreference?: string | null;
   readonly abortSignal: AbortSignal;
   readonly agora: Date;
+  /**
+   * 18-F Bloco 4 — O PLANO DA EXPERIÊNCIA. Ausente = mensagem normal, tudo como antes.
+   *
+   * ⛔ É um OBJETO PRONTO, e por isso este arquivo NÃO importa `experiences/catalog`: ele não
+   * tem como buscar uma experiência, inventar uma ferramenta nem trocar o prompt. Quem lê o
+   * catálogo é `server/experience-runner.ts`, e há teste de fronteira sobre isso.
+   */
+  readonly plano?: PlanoDaExperiencia | null;
+  /**
+   * 18-F Bloco 4 — o MODO caixa de entrada. Só acrescenta um bloco ao prompt de sistema; o
+   * roteamento, o agente, as ferramentas e o Approval Engine são os de sempre.
+   *
+   * ⛔ Ele NÃO se combina com `plano`: um panorama não tem texto do dono para classificar, e
+   * o schema do endpoint torna as duas formas mutuamente exclusivas (`z.union` de dois
+   * `.strict()`).
+   */
+  readonly caixaDeEntrada?: boolean;
 };
 
 type Alvo = { readonly provider: AiProviderId; readonly model: AiModelEntry };
@@ -175,15 +207,21 @@ export async function* runChat(
     getAiPreferences(input.userId),
   ]);
 
-  // ── 3. Agente escolhido pelo SERVIDOR, no registry ESTÁTICO ────────────────────────
-  const decisao = routeAgent({
-    texto: input.text,
-    pageContext: input.pageContext ?? null,
-    permissions: prefs.permissions,
-    preferido: input.agentId,
-  });
-  const agent = findAgent(decisao.agentId);
-  if (!agent) {
+  // ── 3. Agente escolhido pelo SERVIDOR, no registry ESTÁTICO — OU o plano recebido ───
+  //
+  // ⛔ 18-F Bloco 4 — com plano, `routeAgent` e `findAgent` NÃO rodam. A experiência não é um
+  // agente do dono: é um roteiro nosso, com lista de leituras fixa e prompt próprio. Rotear
+  // um panorama seria deixar o texto do título decidir quem responde.
+  const decisao = input.plano
+    ? null
+    : routeAgent({
+        texto: input.text,
+        pageContext: input.pageContext ?? null,
+        permissions: prefs.permissions,
+        preferido: input.agentId,
+      });
+  const agent = decisao ? findAgent(decisao.agentId) : null;
+  if (!input.plano && !agent) {
     yield {
       type: "error",
       code: "AI_AGENT_NOT_ALLOWED",
@@ -200,7 +238,9 @@ export async function* runChat(
     defaultModel: prefs.defaultModel,
     providerPreference: input.providerPreference,
     modelPreference: input.modelPreference,
-    requiredCapabilities: agent.requiredCapabilities,
+    // Um panorama só REDIGE: nenhuma capacidade especial é exigida do modelo, e exigir a de
+    // um agente que não está respondendo estreitaria a rota por nada.
+    requiredCapabilities: agent?.requiredCapabilities ?? [],
     hoje,
   });
 
@@ -246,25 +286,87 @@ export async function* runChat(
     ? await getMemoriasVigentes(input.userId, input.agora)
     : [];
 
-  const system =
-    buildSystemPrompt(agent) +
-    blocoDeContextoDeRoteamento(decisao.motivo, input.pageContext?.rota ?? null) +
-    blocoDeMemorias(
-      memoriasParaOPrompt({
+  /**
+   * ⛔ 18-F Bloco 4 — O PANORAMA TAMBÉM CARREGA A MEMÓRIA, E ELA CONTINUA SENDO A ÚLTIMA
+   * SEÇÃO. "Planejar meu dia" respeitando *"prefiro treinar à noite"* é onde a memória do
+   * Bloco 3 justifica existir; montar o `system` do panorama em `experience-runner.ts` sem
+   * ela (como o plano da task esboçava) faria o panorama nascer justamente sem as
+   * preferências que ele existe para respeitar. Por isso a concatenação é UMA, aqui.
+   *
+   * ⚠️ E um panorama não tem "o módulo do agente": ele lê vários. A seleção roda uma vez por
+   * módulo do plano, MAIS uma com `null` para alcançar as memórias globais — e a união é
+   * deduplicada por id. Cada módulo continua passando pelo MESMO filtro do Bloco 3, que
+   * exige a `allow_*` daquele módulo (invariante 26): nenhuma memória entra por um módulo que
+   * o panorama não leu.
+   */
+  const selecionadas = input.plano
+    ? unirMemorias(
+        [null, ...input.plano.modulos].map((m) =>
+          memoriasParaOPrompt({
+            memorias,
+            moduloDoAgente: m,
+            permissions: prefs.permissions,
+            allowMemory: prefs.permissions.allow_memory,
+          }),
+        ),
+      )
+    : memoriasParaOPrompt({
         memorias,
-        moduloDoAgente: moduloDoAgente(agent.id),
+        moduloDoAgente: moduloDoAgente(agent!.id),
         permissions: prefs.permissions,
         allowMemory: prefs.permissions.allow_memory,
-      }),
-    );
-  const historico = input.conversationId
-    ? await getHistoryForPrompt(input.userId, input.conversationId)
-    : [];
+      });
 
-  const mensagens: AiMessage[] = [
-    ...historico.map((m) => ({ role: m.role, content: m.content })),
-    { role: "user" as const, content: input.text },
-  ];
+  /**
+   * O que o resto do run precisa saber sobre "quem está respondendo". Com plano, nada disso
+   * vem do registry de agentes: a experiência não é um agente do dono, é um roteiro nosso.
+   *
+   * ⚠️ `system` é montado ANTES da memória e a memória é concatenada depois, nos dois
+   * caminhos — a ordem é a garantia da invariante 98, e `memory/prompt.test.ts` a varre sobre
+   * a fonte deste arquivo. O bloco da caixa de entrada entra ANTES dela, nunca depois.
+   */
+  const perfil = input.plano
+    ? {
+        id: input.plano.agentId,
+        allowedTools: input.plano.leituras.map((l) => l.toolName),
+        requiredCapabilities: [] as readonly string[],
+        systemBase: input.plano.system,
+        promptVersion: input.plano.promptVersion,
+      }
+    : {
+        id: agent!.id,
+        allowedTools: agent!.allowedTools,
+        requiredCapabilities: agent!.requiredCapabilities,
+        systemBase:
+          buildSystemPrompt(agent!) +
+          blocoDeContextoDeRoteamento(decisao!.motivo, input.pageContext?.rota ?? null) +
+          (input.caixaDeEntrada ? BLOCO_DA_CAIXA_DE_ENTRADA : ""),
+        promptVersion: input.caixaDeEntrada
+          ? versaoComCaixaDeEntrada(promptVersionOf(agent!))
+          : promptVersionOf(agent!),
+      };
+
+  const system = perfil.systemBase + blocoDeMemorias(selecionadas);
+
+  // Com plano, `conversationId` é sempre null (a experiência abre conversa nova) — a guarda
+  // explícita é o que impede um caminho futuro de misturar histórico com leitura dirigida.
+  const historico =
+    input.conversationId && !input.plano
+      ? await getHistoryForPrompt(input.userId, input.conversationId)
+      : [];
+
+  /**
+   * ⚠️ MUTÁVEL DE PROPÓSITO. No caminho do plano, os blocos das ferramentas só existem DEPOIS
+   * da admissão (cada chamada precisa de `run_id` e `step_id`), então eles são acrescentados
+   * mais abaixo. O que está aqui é o que a RESERVA enxerga — e a reserva não pode esperar os
+   * blocos, por isso ela usa o teto do catálogo (ver `tokensDeContextoReservados`).
+   */
+  const mensagens: AiMessage[] = input.plano
+    ? [{ role: "user" as const, content: input.plano.userText }]
+    : [
+        ...historico.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user" as const, content: input.text },
+      ];
 
   const tarifas: AiRate[] = [];
   for (const alvo of alvos) {
@@ -286,11 +388,13 @@ export async function* runChat(
   // ⚠️ As permissões entram AQUI desde a 18-C: um agente pode ter na allowlist ferramentas de
   // módulos com flags diferentes (o de Treinos tem `training` e `body`), e oferecer o que a
   // flag vai recusar queima um passo do laço por pergunta. O guard segue decidindo na execução.
-  const definicoes = toolDefinitionsFor(
-    agent.allowedTools,
-    prefs.permissions,
-    prefs.writePermissions,
-  );
+  //
+  // ⛔ 18-F Bloco 4 — NUM PANORAMA O MODELO NÃO RECEBE FERRAMENTA NENHUMA. As leituras já
+  // aconteceram quando ele é chamado; ele só redige. Se ainda assim ele pedir uma, a lista de
+  // oferecidas está vazia → `tool-call-inesperada` → o run fecha como falha. Certo assim.
+  const definicoes = input.plano
+    ? []
+    : toolDefinitionsFor(perfil.allowedTools, prefs.permissions, prefs.writePermissions);
   const nomesOferecidos = definicoes.map((d) => d.name);
 
   // A estimativa é sobre o prompt JÁ MONTADO, nunca sobre o texto cru do usuário.
@@ -301,29 +405,61 @@ export async function* runChat(
   const promptMontado = system + textoDasMensagens(mensagens);
   const reserva = computeReservation({
     rates: tarifas,
-    tokensEntradaEstimados: estimarTokensDeEntrada(promptMontado),
+    /**
+     * ⛔ 18-F Bloco 4 — O CONTEXTO DA EXPERIÊNCIA ENTRA NA RESERVA, E PELO TETO DO CATÁLOGO.
+     *
+     * Os blocos das ferramentas só existem DEPOIS da admissão, então reservar pelo tamanho
+     * real é impossível — e reservar sem eles repetiria exatamente o defeito que
+     * `tokensDeArquivos` corrigiu na 18-D (invariante 56): a reserva de um prompt de texto
+     * para uma chamada de dezenas de milhares de tokens, e o orçamento deixando passar em
+     * silêncio justamente o que ele existe para barrar.
+     *
+     * ⚠️ O número vem de `MAX_FERRAMENTAS_POR_EXPERIENCIA`, NUNCA de `leituras.length`: um
+     * panorama com dois módulos ligados reserva o mesmo que um com quatro.
+     */
+    tokensEntradaEstimados:
+      estimarTokensDeEntrada(promptMontado) + (input.plano?.tokensDeContextoReservados ?? 0),
     tetoDeSaida: model.outputCapTokens,
     maxRetries: config.maxRetries,
     maxFallbacks: Math.max(0, alvos.length - 1),
     margem: prefs.reservationMargin,
     // Só reserva passos se o agente TEM ferramenta oferecida. Sem ferramenta não há laço, e
     // reservar passos que não vão acontecer bloquearia orçamento à toa.
+    //
+    // ⛔ Num panorama não há laço NENHUM: as ferramentas rodam ANTES da chamada ao modelo, e
+    // `definicoes` é `[]`. A linha abaixo já devolve 0 nesse caso, e é assim de propósito.
     maxToolSteps: definicoes.length > 0 ? MAX_TOOL_STEPS : 0,
   });
 
   // ── 5. ADMISSÃO ATÔMICA — o commit acontece aqui, antes de qualquer chamada externa ──
-  const admissao = await beginChatRun({
-    conversationId: input.conversationId,
-    agentId: agent.id,
-    promptVersion: promptVersionOf(agent),
-    userText: input.text,
-    provider,
-    model: model.id,
-    reservedCost: reserva.valorUsd,
-    reservationRateVersion: PRICING_VERSION,
-    reservationTtlSeconds: RESERVA_TTL_SEGUNDOS,
-    title: input.conversationId ? null : tituloProvisorio(input.text),
-  });
+  //
+  // ⛔ 18-F Bloco 4 — o panorama entra por uma RPC própria, que confere `allow_cross_module`
+  // dentro da mesma transação e usa o MESMO advisory lock: o recurso disputado é o orçamento
+  // do dono, não a espécie do run.
+  const admissao = input.plano
+    ? await beginExperienceRun({
+        experiencia: input.plano.id,
+        // O título sai do CATÁLOGO. Não existe parâmetro para texto do cliente, aqui nem lá.
+        title: input.plano.userText,
+        promptVersion: perfil.promptVersion,
+        provider,
+        model: model.id,
+        reservedCost: reserva.valorUsd,
+        reservationRateVersion: PRICING_VERSION,
+        reservationTtlSeconds: RESERVA_TTL_SEGUNDOS,
+      })
+    : await beginChatRun({
+        conversationId: input.conversationId,
+        agentId: perfil.id,
+        promptVersion: perfil.promptVersion,
+        userText: input.text,
+        provider,
+        model: model.id,
+        reservedCost: reserva.valorUsd,
+        reservationRateVersion: PRICING_VERSION,
+        reservationTtlSeconds: RESERVA_TTL_SEGUNDOS,
+        title: input.conversationId ? null : tituloProvisorio(input.text),
+      });
 
   if (!admissao.ok) {
     yield {
@@ -391,6 +527,103 @@ export async function* runChat(
   });
 
   try {
+    /**
+     * ╔════════════════════════════════════════════════════════════════════════════════════╗
+     * ║ 18-F Bloco 4 — O LAÇO DIRIGIDO PELO SERVIDOR.                                       ║
+     * ║                                                                                     ║
+     * ║ Roda DEPOIS da admissão porque cada chamada precisa de `run_id` e de `step_id`:     ║
+     * ║ `ai_tool_calls.step_id` é NOT NULL, e "sem trilha, sem leitura" (18-B) vale aqui    ║
+     * ║ igual. Roda ANTES da chamada ao modelo porque o modelo não vai pedir nada — ele     ║
+     * ║ recebe o resultado pronto e só redige.                                              ║
+     * ║                                                                                     ║
+     * ║ ⛔ `executeTool` é o MESMO do chat: guard, Zod do adapter, timeout do descriptor,   ║
+     * ║ poda por `maxRecords` + envelope, e linha em `ai_tool_calls`. NENHUMA PORTA NOVA.   ║
+     * ║                                                                                     ║
+     * ║ ⛔ E `MAX_TOOL_STEPS` não se aplica aqui — quem decide o tamanho da lista é o        ║
+     * ║ catálogo, validado contra `MAX_FERRAMENTAS_POR_EXPERIENCIA` em teste, e é sobre     ║
+     * ║ ESSE número que `computeReservation` reservou lá em cima.                           ║
+     * ╚════════════════════════════════════════════════════════════════════════════════════╝
+     */
+    if (input.plano && input.plano.leituras.length > 0) {
+      const stepId = await startStep({
+        runId: run.runId,
+        userId: input.userId,
+        stepIndex: proximoStepIndex(),
+        kind: "ferramentas",
+      });
+
+      if (!stepId) {
+        // Sem trilha, sem leitura — e um panorama sem leitura nenhuma não é um panorama. No
+        // chat isto vira um aviso e a resposta segue; aqui encerra, porque a resposta inteira
+        // seria escrita sobre nada.
+        const erro = aiError(
+          "ERRO_PERMANENTE",
+          "ATTEMPT_NOT_RECORDED",
+          "Não foi possível registrar as consultas deste panorama. Nenhuma leitura foi feita.",
+        );
+        await failRun(contexto(), erro);
+        fechado = true;
+        yield { type: "error", code: erro.code, message: safeUserMessage(erro) };
+        return;
+      }
+
+      const inicioFerramentas = Date.now();
+      const resultados = await Promise.all(
+        input.plano.leituras.map((l, i) =>
+          executeTool(
+            {
+              runId: run.runId,
+              conversationId: run.conversationId,
+              userId: input.userId,
+              stepId,
+              agent: { id: perfil.id, allowedTools: perfil.allowedTools },
+              permissions: prefs.permissions,
+              writePermissions: prefs.writePermissions,
+            },
+            // ⚠️ `callId` é NOSSO: não houve provedor pedindo nada. Determinístico, para a
+            // trilha poder ser lida na ordem do catálogo.
+            {
+              callId: `experiencia:${input.plano!.id}:${i}`,
+              toolName: l.toolName,
+              input: l.input,
+            },
+          ),
+        ),
+      );
+
+      await closeStep({
+        runId: run.runId,
+        stepId,
+        userId: input.userId,
+        status: "completed",
+        durationMs: Date.now() - inicioFerramentas,
+      });
+
+      const blocos: string[] = [];
+      for (const r of resultados) {
+        // A tela mostra o que foi consultado — leitura nunca acontece em silêncio (18-B).
+        yield {
+          type: "tool",
+          toolName: r.toolName,
+          status: r.status,
+          registros: r.recordsRead,
+        };
+        blocos.push(renderUntrusted(r.block));
+      }
+
+      /**
+       * ⛔ PAPEL `user`, NUNCA `system` E NUNCA `tool`.
+       *
+       * `renderUntrusted` declara no próprio docblock que é "o texto que vai na mensagem de
+       * papel `user`" — o aviso de bloco não confiável vem ANTES do conteúdo, e instrução que
+       * venha dentro do dado é conteúdo relatado, nunca ordem. E `tool-result` sem um
+       * `tool-call` correspondente é 400 na Anthropic, porque não houve pedido nenhum.
+       */
+      if (blocos.length > 0) {
+        mensagens.push({ role: "user", content: blocos.join("\n\n") });
+      }
+    }
+
     while (alvoIdx < alvos.length) {
       const alvo = alvos[alvoIdx];
       const tarifa = rateFor(alvo.provider, alvo.model.id, hoje);
@@ -439,7 +672,7 @@ export async function* runChat(
         runId: run.runId,
         userId: input.userId,
         conversationId: run.conversationId,
-        agentId: agent.id,
+        agentId: perfil.id,
         attemptIndex,
         attemptType: tipo,
         provider: alvo.provider,
@@ -548,7 +781,7 @@ export async function* runChat(
               runId: run.runId,
               userId: input.userId,
               conversationId: run.conversationId,
-              agentId: agent.id,
+              agentId: perfil.id,
               attemptIndex,
               attemptType: "TOOL_STEP",
               provider: alvo.provider,
@@ -592,7 +825,7 @@ export async function* runChat(
             // que a FK composta de `ai_action_proposals` confere contra o run e o dono.
             conversationId: run.conversationId,
             userId: input.userId,
-            agent: { id: agent.id, allowedTools: agent.allowedTools },
+            agent: { id: perfil.id, allowedTools: perfil.allowedTools },
             permissions: prefs.permissions,
             writePermissions: prefs.writePermissions,
           },
@@ -695,6 +928,24 @@ export async function* runChat(
 
       // ── Sucesso ────────────────────────────────────────────────────────────────────
       if (concluiu && !erroDaTentativa) {
+        /**
+         * ╔════════════════════════════════════════════════════════════════════════════════╗
+         * ║ 18-F Bloco 4 — O QUE FICOU DE FORA ENTRA NO TEXTO GRAVADO, E É TEXTO NOSSO.     ║
+         * ║                                                                                 ║
+         * ║ Pedir ao modelo "diga o que ficou de fora" é a mesma família de erro que a 18-E ║
+         * ║ resolveu tirando os números do texto: ele obedece quase sempre, e "quase        ║
+         * ║ sempre" num panorama diário é uma omissão por mês.                              ║
+         * ║                                                                                 ║
+         * ║ ⚠️ NO FIM, e não no começo: tentativa nova ZERA `texto` (a regra logo acima), e ║
+         * ║ um aviso escrito antes do modelo sumiria no primeiro retry. Aqui ele acompanha  ║
+         * ║ a resposta que de fato venceu.                                                  ║
+         * ╚════════════════════════════════════════════════════════════════════════════════╝
+         */
+        if (input.plano?.aviso) {
+          const trecho = texto === "" ? input.plano.aviso : `\n\n${input.plano.aviso}`;
+          texto += trecho;
+          yield { type: "delta", text: trecho };
+        }
         await fecharTentativaAberta("completed", null);
         await completeRun(contexto(true));
         fechado = true;
@@ -824,6 +1075,32 @@ function combinarSinais(
       externo.removeEventListener("abort", abortar);
     },
   };
+}
+
+/**
+ * 18-F Bloco 4 — a união das seleções de memória de um panorama, sem repetir.
+ *
+ * Um panorama lê vários módulos, e `memoriasParaOPrompt` (Bloco 3) decide para UM módulo por
+ * vez. Chamá-la uma vez por módulo — mais uma com `null`, que alcança as globais — preserva
+ * o filtro dela INTACTO: cada memória de módulo continua exigindo a `allow_*` daquele módulo
+ * (invariante 26). A dedupe é por `id` porque as globais voltam em toda chamada.
+ *
+ * ⛔ Reescrever aquele filtro aqui, para aceitar uma lista de módulos, seria a segunda
+ * implementação que diverge no primeiro campo novo.
+ */
+function unirMemorias(
+  listas: readonly (readonly MemoriaParaPrompt[])[],
+): readonly MemoriaParaPrompt[] {
+  const vistas = new Set<string>();
+  const saida: MemoriaParaPrompt[] = [];
+  for (const lista of listas) {
+    for (const m of lista) {
+      if (vistas.has(m.id)) continue;
+      vistas.add(m.id);
+      saida.push(m);
+    }
+  }
+  return saida;
 }
 
 /** Título provisório da conversa nova: as primeiras palavras da pergunta. */

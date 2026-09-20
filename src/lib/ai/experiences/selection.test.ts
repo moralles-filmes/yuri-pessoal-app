@@ -29,6 +29,26 @@ describe("18-F Bloco 4 — o que a experiência LÊ depende das chaves do dono",
   });
 
   /**
+   * ⚠️ Os módulos saem de `descriptor.module` — declaração do registry —, nunca do prefixo do
+   * nome da ferramenta. `tasks.get_routines_today` é do módulo `tasks`, e `todo.get_agenda` é
+   * do `todo`: dois módulos DIFERENTES que o prefixo por acaso distingue, mas que uma
+   * heurística de string erraria no dia em que uma ferramenta fosse renomeada.
+   */
+  it("devolve os MÓDULOS lidos, sem repetição e sem os pulados", () => {
+    const r = decidirLeituras(dia(), TODAS, HOJE);
+    expect(r.modulos).toEqual(["todo", "calendar", "habits", "tasks"]);
+
+    const semAgenda = decidirLeituras(dia(), { ...TODAS, allow_calendar: false }, HOJE);
+    expect(semAgenda.modulos).toEqual(["todo", "habits", "tasks"]);
+  });
+
+  it("módulo com duas ferramentas aparece UMA vez na lista de módulos", () => {
+    const encerrar = experienciaPorId("encerrar-dia")!;
+    const r = decidirLeituras(encerrar, TODAS, HOJE);
+    expect(r.modulos).toEqual(["todo", "habits", "nutrition", "training"]);
+  });
+
+  /**
    * ⛔ A REGRA DA INVARIANTE 77, APLICADA AQUI: módulo sem chave é PULADO, não motivo de
    * recusa geral. Desligar a Agenda não pode calar o panorama inteiro.
    */

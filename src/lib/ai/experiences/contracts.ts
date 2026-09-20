@@ -62,6 +62,20 @@ export type PlanoDaExperiencia = {
   /** As leituras que VÃO rodar, já com argumentos resolvidos, na ordem do catálogo. */
   readonly leituras: readonly { readonly toolName: string; readonly input: unknown }[];
   /**
+   * Os MÓDULOS que este panorama de fato lê — derivados do registry, sem repetição, e só os
+   * que sobreviveram à checagem de chave.
+   *
+   * ⚠️ Existe para a MEMÓRIA. `memoriasParaOPrompt` (Bloco 3) decide para um módulo por vez,
+   * porque no chat quem responde é um agente só. Um panorama não tem "o módulo do agente":
+   * `chat-runner` chama aquela seleção uma vez por módulo daqui e une o resultado, o que
+   * preserva o filtro do Bloco 3 intacto — cada memória de módulo continua exigindo a
+   * `allow_*` daquele módulo (invariante 26).
+   *
+   * ⛔ Módulo PULADO não entra: sem a chave de leitura, nem o dado nem a preferência sobre
+   * ele alcançam o prompt.
+   */
+  readonly modulos: readonly string[];
+  /**
    * A frase do que ficou de fora, já escrita em pt-BR. `""` quando nada foi pulado.
    *
    * ⛔ Ela é NOSSA e vai para o texto gravado — não é um pedido ao modelo. Um panorama que
