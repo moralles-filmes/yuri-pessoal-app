@@ -67,6 +67,8 @@ vi.mock("@/lib/ai/queries", () => ({
     rateLimitPerMinute: 10,
     rateLimitPerHour: 120,
     permissions: permissoes,
+    // 18-F Bloco 4 — o executor dirigido recebe as duas listas, como qualquer chamada.
+    writePermissions: {},
   }),
   getHistoryForPrompt: async () => [],
 }));
@@ -80,6 +82,8 @@ const medicao: Evento[] = [];
 let reservaGravada = 0;
 let textoGravado = "";
 let statusDoRun = "";
+let versaoGravada = "";
+let admissaoDeExperiencia: { experiencia: string; title: string } | null = null;
 
 vi.mock("./run-store", () => ({
   HEARTBEAT_INTERVAL_MS: 10_000,
@@ -89,8 +93,9 @@ vi.mock("./run-store", () => ({
    * que o runner de fato lê; um `Proxy` genérico esconderia um código sem frase.
    */
   MENSAGEM_ADMISSAO: { AI_AGENT_NOT_ALLOWED: "Este assistente não está disponível." },
-  beginChatRun: async (input: { reservedCost: number }) => {
+  beginChatRun: async (input: { reservedCost: number; promptVersion: string }) => {
     reservaGravada = input.reservedCost;
+    versaoGravada = input.promptVersion;
     return {
       ok: true,
       value: {
@@ -99,6 +104,32 @@ vi.mock("./run-store", () => ({
         runId: "run-1",
         assistantMessageId: "msg-a",
         correlationId: "corr-1",
+      },
+    };
+  },
+  /**
+   * 18-F Bloco 4 — a admissão do PANORAMA. Duplo separado de propósito: se o runner passasse
+   * a chamar `beginChatRun` para um panorama, `admissaoDeExperiencia` ficaria nula e os casos
+   * abaixo cairiam — o que é exatamente o que deve acontecer, porque aquela RPC não confere
+   * `allow_cross_module` e nem grava `kind = 'experience'`.
+   */
+  beginExperienceRun: async (input: {
+    reservedCost: number;
+    promptVersion: string;
+    experiencia: string;
+    title: string;
+  }) => {
+    reservaGravada = input.reservedCost;
+    versaoGravada = input.promptVersion;
+    admissaoDeExperiencia = { experiencia: input.experiencia, title: input.title };
+    return {
+      ok: true,
+      value: {
+        conversationId: "conv-exp",
+        userMessageId: "msg-u",
+        runId: "run-exp",
+        assistantMessageId: "msg-a",
+        correlationId: "corr-exp",
       },
     };
   },
@@ -135,6 +166,8 @@ vi.mock("./run-store", () => ({
 let respostasPorChamada: (readonly AiStreamEvent[])[] = [];
 const systemsRecebidos: string[] = [];
 const ferramentasRecebidas: string[][] = [];
+/** 18-F Bloco 4 — as mensagens que chegaram ao provedor, para provar PAPEL e ORDEM. */
+const mensagensRecebidas: { role: string; content: unknown }[][] = [];
 
 vi.mock("@/lib/ai/providers/provider-factory", () => ({
   createProviderClient: () => ({
@@ -142,10 +175,12 @@ vi.mock("@/lib/ai/providers/provider-factory", () => ({
     streamText: (request: {
       system: string;
       tools: readonly { name: string }[];
+      messages: readonly { role: string; content: unknown }[];
     }) => {
       const indice = systemsRecebidos.length;
       systemsRecebidos.push(request.system);
       ferramentasRecebidas.push(request.tools.map((t) => t.name));
+      mensagensRecebidas.push(request.messages.map((m) => ({ ...m })));
       const eventos = respostasPorChamada[indice] ?? [FINISH];
       return (async function* () {
         for (const e of eventos) yield e;
@@ -165,12 +200,35 @@ const SAIDA: ToolOutput = {
 };
 
 const ferramentaRodou: unknown[] = [];
+/**
+ * 18-F Bloco 4 — o nome da ferramenta que deve EXPLODIR nesta rodada. O adapter lançando é o
+ * que `executor.ts` converte em `status: "falhou"`, então o caminho exercitado é o real: nada
+ * aqui simula o executor, só o banco do outro lado dele.
+ */
+let falhaDaFerramenta: string | null = null;
 
 vi.mock("@/lib/ai/tools/executors", () => ({
   TOOL_EXECUTORS: {
     "training.get_volume": {
       schema: z.object({ dias: z.number().int().optional() }).strict(),
       run: async (input: unknown) => {
+        ferramentaRodou.push(input);
+        return SAIDA;
+      },
+    },
+    // 18-F Bloco 4 — as duas do panorama "Planejar meu dia" que este arquivo exercita.
+    "todo.get_agenda": {
+      schema: z.object({ dias: z.number().int().optional() }).strict(),
+      run: async (input: unknown) => {
+        if (falhaDaFerramenta === "todo.get_agenda") throw new Error("banco fora do ar");
+        ferramentaRodou.push(input);
+        return SAIDA;
+      },
+    },
+    "habits.get_today": {
+      schema: z.object({}).strict(),
+      run: async (input: unknown) => {
+        if (falhaDaFerramenta === "habits.get_today") throw new Error("banco fora do ar");
         ferramentaRodou.push(input);
         return SAIDA;
       },
@@ -283,6 +341,7 @@ beforeEach(() => {
   medicao.length = 0;
   systemsRecebidos.length = 0;
   ferramentasRecebidas.length = 0;
+  mensagensRecebidas.length = 0;
   ferramentaRodou.length = 0;
   passosDoRun.length = 0;
   passosFechados.length = 0;
@@ -292,6 +351,9 @@ beforeEach(() => {
   reservaGravada = 0;
   textoGravado = "";
   statusDoRun = "";
+  versaoGravada = "";
+  admissaoDeExperiencia = null;
+  falhaDaFerramenta = null;
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -631,5 +693,257 @@ describe("runChat — o que a resposta DECLARA", () => {
       type: "error",
       code: "UNEXPECTED_TOOL_CALL",
     });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// 18-F Bloco 4 — O LAÇO DIRIGIDO PELO SERVIDOR
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * Um plano como `experience-runner.ts` o entrega: leituras resolvidas, prompt pronto, aviso
+ * já escrito e o teto de contexto vindo do CATÁLOGO.
+ *
+ * ⚠️ Escrito à mão, e não importado do catálogo real: este arquivo testa o RUNNER, e amarrá-lo
+ * ao catálogo faria uma ferramenta nova numa experiência quebrar testes que não falam dela.
+ * Quem prova que o catálogo é coerente é `experiences/catalog.test.ts`.
+ */
+const PLANO = {
+  id: "planejar-dia" as const,
+  agentId: "experiencias.planejar-dia",
+  promptVersion: "experiencia-planejar-dia-v1",
+  system: "SEGURANCA\n\n---\n\nEscreva o panorama do dia.",
+  userText: "Planejar meu dia",
+  leituras: [
+    // ⚠️ `rotulo` é o nome em pt-BR do MÓDULO, resolvido por `decidirLeituras` a partir do
+    // registry. Viaja no plano porque `chat-runner` não conhece catálogo nem seleção
+    // (invariante 104) — e é ele quem descobre, em runtime, qual leitura falhou.
+    { toolName: "todo.get_agenda", input: { dias: 1 }, rotulo: "TO-DO" },
+    { toolName: "habits.get_today", input: {}, rotulo: "Hábitos" },
+  ],
+  modulos: ["todo", "habits"],
+  aviso: "",
+  tokensDeContextoReservados: 5000,
+};
+
+describe("runChat — o laço DIRIGIDO da experiência", () => {
+  it("executa a lista do plano ANTES de chamar o modelo, e na ordem do catálogo", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    respostasPorChamada = [[{ type: "delta", text: "Hoje você tem..." }, FINISH]];
+
+    const eventos = await rodar({ plano: PLANO });
+
+    // As duas rodaram, na ordem do plano, e ANTES da única chamada ao modelo.
+    expect(ferramentaRodou).toEqual([{ dias: 1 }, {}]);
+    expect(systemsRecebidos).toHaveLength(1);
+    expect(eventos.filter((e) => e.type === "tool").map((e) => e.toolName)).toEqual([
+      "todo.get_agenda",
+      "habits.get_today",
+    ]);
+    // O run é de EXPERIÊNCIA: passou pela RPC própria, com o título do catálogo.
+    expect(admissaoDeExperiencia).toEqual({
+      experiencia: "planejar-dia",
+      title: "Planejar meu dia",
+    });
+    expect(versaoGravada).toBe("experiencia-planejar-dia-v1");
+    expect(statusDoRun).toBe("completed");
+  });
+
+  /**
+   * ⛔ O modelo REDIGE, não pede. Se ele pedisse uma ferramenta, `oferecidas` está vazio →
+   * `tool-call-inesperada` → o run fecha como falha, que é o certo.
+   */
+  it("nenhuma ferramenta é OFERECIDA ao modelo num panorama", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar({ plano: PLANO });
+
+    expect(ferramentasRecebidas[0]).toEqual([]);
+    // ⚠️ Sem esta linha o caso seria VACUAMENTE verde: com `allow_training` desligada, a
+    // pergunta do `ENTRADA` cairia no orquestrador, que também oferece lista vazia. A
+    // asserção abaixo prova que o caminho exercitado foi mesmo o do plano.
+    expect(admissaoDeExperiencia).not.toBeNull();
+  });
+
+  /**
+   * ⛔ PAPEL `user`, NUNCA `system` E NUNCA `tool`. `renderUntrusted` põe o aviso ANTES do
+   * conteúdo, e `tool-result` sem `tool-call` correspondente é 400 na Anthropic.
+   */
+  it("o resultado entra como mensagem de papel `user`, com o aviso de não confiável", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar({ plano: PLANO });
+
+    const enviadas = mensagensRecebidas[0];
+    expect(enviadas.map((m) => m.role)).toEqual(["user", "user"]);
+    expect(enviadas[0].content).toBe("Planejar meu dia");
+
+    const bloco = String(enviadas[1].content);
+    expect(bloco.toLowerCase()).toContain("não confiá");
+    expect(bloco).toContain("todo.get_agenda");
+    expect(bloco).toContain("habits.get_today");
+  });
+
+  /**
+   * ⛔ A FRASE DO QUE FICOU DE FORA É NOSSA, e vai para o texto GRAVADO. Pedi-la ao modelo
+   * seria obediência "quase sempre" — e num panorama diário isso é uma omissão por mês.
+   */
+  it("o aviso do que ficou de fora entra no TEXTO GRAVADO, no fim", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    respostasPorChamada = [[{ type: "delta", text: "Hoje: nada marcado." }, FINISH]];
+
+    await rodar({ plano: { ...PLANO, aviso: "Fora deste panorama: Agenda." } });
+
+    expect(textoGravado).toBe("Hoje: nada marcado.\n\nFora deste panorama: Agenda.");
+  });
+
+  it("sem nada pulado, nenhuma frase é acrescentada", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    respostasPorChamada = [[{ type: "delta", text: "Hoje: nada marcado." }, FINISH]];
+
+    await rodar({ plano: PLANO });
+
+    expect(textoGravado).toBe("Hoje: nada marcado.");
+  });
+
+  /**
+   * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ ⛔ LEITURA QUE FALHOU TAMBÉM É TEXTO NOSSO — PELO MESMO MOTIVO DA QUE FOI PULADA.      ║
+   * ║                                                                                       ║
+   * ║ O bloco de erro que chega ao modelo diz "diga que não conseguiu obter o dado": é uma  ║
+   * ║ INSTRUÇÃO, e a garantia vira a obediência dele — exatamente o que o aviso do que      ║
+   * ║ ficou de fora existe para não depender. Um modelo redigindo texto fluido simplesmente ║
+   * ║ omite o módulo, e o panorama sai PARECENDO completo: a mentira que a 18-E combateu.   ║
+   * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("leitura que FALHOU entra no texto gravado, mesmo se o modelo não disser nada", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    falhaDaFerramenta = "habits.get_today";
+    // O modelo redige como se estivesse tudo bem — é justamente o caso que a frase cobre.
+    respostasPorChamada = [[{ type: "delta", text: "Hoje: nada marcado." }, FINISH]];
+
+    await rodar({ plano: PLANO });
+
+    expect(textoGravado).toContain("Hoje: nada marcado.");
+    expect(textoGravado).toContain("Hábitos");
+    expect(textoGravado).toContain("a leitura falhou");
+  });
+
+  /** A falha não some com o pulo, nem o pulo com a falha: são dois fatos diferentes. */
+  it("pulo por preferência e falha de execução convivem no mesmo texto", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    falhaDaFerramenta = "habits.get_today";
+    respostasPorChamada = [[{ type: "delta", text: "Hoje: nada marcado." }, FINISH]];
+
+    await rodar({ plano: { ...PLANO, aviso: "Fora deste panorama: Agenda." } });
+
+    expect(textoGravado).toContain("Fora deste panorama: Agenda.");
+    expect(textoGravado).toContain("Hábitos");
+  });
+
+  /** Ferramenta que rodou bem não vira aviso — senão todo panorama sairia se desculpando. */
+  it("leitura bem-sucedida não gera frase de falha", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    respostasPorChamada = [[{ type: "delta", text: "Hoje: nada marcado." }, FINISH]];
+
+    await rodar({ plano: PLANO });
+
+    expect(textoGravado).not.toContain("a leitura falhou");
+  });
+
+  /**
+   * ⛔ A RESERVA USA O TETO DO CATÁLOGO, NUNCA O TAMANHO DA LISTA EM RUNTIME. É a invariante
+   * 56 aplicada aqui: sem o contexto na conta, o orçamento reservaria um prompt de texto para
+   * uma chamada de dezenas de milhares de tokens.
+   */
+  it("a reserva do panorama usa o TETO do catálogo, não o tamanho da lista", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar({ plano: PLANO });
+    const comDuas = reservaGravada;
+
+    await rodar({ plano: { ...PLANO, leituras: [PLANO.leituras[0]], modulos: ["todo"] } });
+    const comUma = reservaGravada;
+
+    expect(comDuas).toBeGreaterThan(0);
+    expect(comUma).toBe(comDuas);
+  });
+
+  /** E o contexto reservado de fato PESA: um plano sem ele reservaria menos. */
+  it("o teto de contexto entra na reserva", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar({ plano: PLANO });
+    const comContexto = reservaGravada;
+
+    await rodar({ plano: { ...PLANO, tokensDeContextoReservados: 0 } });
+    const semContexto = reservaGravada;
+
+    expect(comContexto).toBeGreaterThan(semContexto);
+  });
+
+  /**
+   * ⛔ SEM TRILHA, SEM LEITURA (18-B) — e aqui ela ENCERRA o run, em vez de virar um aviso.
+   * Um panorama é escrito inteiramente sobre o que as leituras trouxeram; sem elas, a
+   * resposta seria redigida sobre nada.
+   */
+  it("falha ao abrir o passo de ferramentas ENCERRA o run", async () => {
+    permissoes = { allow_todo: true, allow_habits: true };
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    // Ocupa a chave `(run_id, step_index, kind)` que o passo dirigido vai pedir: o duplo
+    // modela o `UNIQUE` do banco e devolve `null`, como `audit.ts` faz num `23505`.
+    chavesDePasso.add("run-exp|1|ferramentas");
+
+    const eventos = await rodar({ plano: PLANO });
+
+    expect(ferramentaRodou).toHaveLength(0);
+    expect(systemsRecebidos).toHaveLength(0);
+    expect(statusDoRun).toBe("failed");
+    expect(eventos.at(-1)).toMatchObject({
+      type: "error",
+      code: "ATTEMPT_NOT_RECORDED",
+    });
+  });
+});
+
+describe("runChat — o modo CAIXA DE ENTRADA", () => {
+  it("acrescenta o bloco ao prompt e marca a versão do run", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar({ caixaDeEntrada: true });
+
+    expect(systemsRecebidos[0]).toContain("MODO CAIXA DE ENTRADA");
+    expect(versaoGravada).toMatch(/\+caixa-v\d+$/);
+  });
+
+  it("sem o modo, nada disso aparece", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar();
+
+    expect(systemsRecebidos[0]).not.toContain("MODO CAIXA DE ENTRADA");
+    expect(versaoGravada).not.toContain("+caixa-v");
+  });
+
+  /**
+   * ⛔ O modo NÃO desliga o roteamento nem as ferramentas: é o laço normal, com um bloco a
+   * mais. Passá-lo pelo runner dirigido exigiria um "agente de tudo", que é o que a allowlist
+   * por agente existe para impedir.
+   */
+  it("o roteador e as ferramentas continuam os de sempre", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar({ caixaDeEntrada: true });
+
+    expect(ferramentasRecebidas[0]).toEqual([
+      "training.get_last_workout",
+      "training.get_volume",
+      "training.get_records",
+    ]);
   });
 });

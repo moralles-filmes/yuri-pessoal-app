@@ -74,6 +74,11 @@ export const NOTIFICATION_TYPES = [
   "training_goal_progress",
   "training_goal_deadline",
   "training_program_ending",
+  // Fase 18-F — módulo Inteligência Artificial.
+  "ai_budget_threshold",
+  "ai_provider_problem",
+  "ai_action_stuck",
+  "ai_insight_available",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -90,6 +95,10 @@ export const NOTIFICATION_OPT_IN_TYPES: NotificationType[] = [
   // Fase 17-F — acompanhar o quanto falta para a meta da semana é útil para quem PEDE, e vira
   // cobrança para quem não pediu. Mesma decisão da meta do dia na Dieta, mesmo motivo.
   "training_goal_progress",
+  // Fase 18-F — as outras três famílias de IA nascem LIGADAS (dinheiro do dono, a IA tendo
+  // parado sem ele saber, e um "pode não ter acontecido"). Esta é a única recorrente sobre
+  // algo que ninguém pediu: mesmo caso de `nutrition_goal_close`.
+  "ai_insight_available",
 ];
 
 /** True se o tipo só existe quando o usuário liga explicitamente. */
@@ -132,6 +141,10 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   training_goal_progress: "Meta de treino em andamento",
   training_goal_deadline: "Prazo da meta de treino",
   training_program_ending: "Programa perto do fim",
+  ai_budget_threshold: "IA · Orçamento",
+  ai_provider_problem: "IA · Provedor",
+  ai_action_stuck: "IA · Ação sem desfecho",
+  ai_insight_available: "IA · Análise disponível",
 };
 
 /** Rótulo amigável de um tipo (com fallback para tipos desconhecidos). */

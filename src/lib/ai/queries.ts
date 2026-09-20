@@ -9,8 +9,10 @@ import "server-only";
  */
 
 import { createClient } from "@/lib/supabase/server";
+import type { LeituraDoDono } from "@/lib/supabase/owner";
 import type { ClienteDaIa } from "./server/client";
 import { AI_PROVIDERS, type AiProviderId } from "./core/contracts";
+import { cantoValido, CANTO_PADRAO, type CantoDoBotao } from "./painel";
 import { PROVIDER_REGISTRY } from "./providers/registry";
 import {
   computeBudgetUsage,
@@ -147,6 +149,9 @@ const SEM_PERMISSAO: Record<ToolPermission, boolean> = {
   allow_tasks: false,
   allow_habits: false,
   allow_studies: false,
+  // 18-F Bloco 3. Sem linha de preferência, o assistente não conhece preferência nenhuma —
+  // e um prompt sem a seção de memória é o estado correto, não um estado degradado.
+  allow_memory: false,
 };
 
 /**
@@ -160,6 +165,7 @@ const SEM_ESCRITA: Record<ToolWritePermission, boolean> = {
   allow_write_calendar: false,
   allow_write_nutrition: false,
   allow_write_finance: false,
+  allow_write_memory: false,
 };
 
 const PREFS_PADRAO: AiPreferencesView = {
@@ -181,7 +187,13 @@ const PREFS_PADRAO: AiPreferencesView = {
   // 18-E Bloco 4. Sem linha de preferência, nenhuma varredura roda — e o teto do job é ZERO,
   // não o default da coluna: quem não tem preferência gravada não autorizou gasto nenhum.
   allowInsightJobs: false,
+  // 18-F Bloco 4. Sem linha de preferência, nenhum panorama roda.
+  allowCrossModule: false,
   jobMonthlyBudget: 0,
+  // 18-F Bloco 2. Sem linha de preferência, o botão aparece no canto padrão: ele não
+  // autoriza nada, e esconder de fábrica seria entregar o que ninguém acha.
+  floatingCorner: CANTO_PADRAO,
+  floatingHidden: false,
 };
 
 export async function getAiPreferences(
@@ -193,7 +205,7 @@ export async function getAiPreferences(
   const { data } = await supabase
     .from("ai_user_preferences")
     .select(
-      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_vision, allow_insight_jobs, job_monthly_budget, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour",
+      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_memory, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_write_memory, allow_vision, allow_insight_jobs, allow_cross_module, job_monthly_budget, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour, floating_corner, floating_hidden",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -224,6 +236,9 @@ export async function getAiPreferences(
       allow_tasks: data.allow_tasks === true,
       allow_habits: data.allow_habits === true,
       allow_studies: data.allow_studies === true,
+      // 18-F Bloco 3. Mesmo `=== true`: coluna ausente, nula ou de tipo inesperado vira
+      // DESLIGADA. Aqui o que está do outro lado é um texto do dono entrando no prompt.
+      allow_memory: data.allow_memory === true,
     },
     // Mesmo `=== true` da leitura, e aqui ele importa ainda mais: a coerção que
     // transformasse um `null` em "ligado" autorizaria a IA a propor alteração num módulo
@@ -234,6 +249,7 @@ export async function getAiPreferences(
       allow_write_calendar: data.allow_write_calendar === true,
       allow_write_nutrition: data.allow_write_nutrition === true,
       allow_write_finance: data.allow_write_finance === true,
+      allow_write_memory: data.allow_write_memory === true,
     },
     // 18-D. Mesmo `=== true`, e pela razão mais forte de todas: o que está do outro lado
     // desta coerção não é ler um número nem alterar um registro — é um documento do dono
@@ -241,7 +257,44 @@ export async function getAiPreferences(
     allowVision: data.allow_vision === true,
     // 18-E Bloco 4. Mesmo `=== true`: chave ausente é chave DESLIGADA, nunca "ainda não sei".
     allowInsightJobs: data.allow_insight_jobs === true,
+    // 18-F Bloco 4. Mesmo `=== true`. A coluna existe desde a 18-A e esta é a primeira linha
+    // de código que a lê — até aqui ela era `not null default false` e mais nada.
+    allowCrossModule: data.allow_cross_module === true,
     jobMonthlyBudget: data.job_monthly_budget ?? 0,
+    /**
+     * 18-F Bloco 2. `cantoValido` e não um cast: mesma disciplina do `=== true` das chaves
+     * acima. Um valor inesperado (coluna lida por código de outra versão, linha adulterada)
+     * viraria classe CSS inexistente e o botão sumiria da tela sem erro nenhum. Cai no padrão.
+     */
+    floatingCorner: cantoValido(data.floating_corner),
+    floatingHidden: data.floating_hidden === true,
+  };
+}
+
+/**
+ * 18-F Bloco 2 — a leitura ESTREITA, para o layout do app.
+ *
+ * ⛔ POR QUE NÃO `getAiPreferences`. Esta consulta roda em TODA navegação de `(app)`, porque o
+ * botão vive na casca. `getAiPreferences` traz 28 colunas e serve a uma tela de configuração
+ * que o dono abre de vez em quando; trazer as 28 a cada clique de menu seria pagar o preço de
+ * uma tela em todas elas. São duas colunas, e é uma PROJEÇÃO da mesma linha — não uma segunda
+ * verdade: quem grava continua sendo `saveAiPreferences` e `definirBotaoFlutuante`.
+ *
+ * Sem sessão ou sem linha, devolve o padrão. Esta leitura nunca falha a navegação.
+ */
+export async function getFloatingButtonPrefs(
+  userId: string,
+): Promise<{ canto: CantoDoBotao; oculto: boolean }> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ai_user_preferences")
+    .select("floating_corner, floating_hidden")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  return {
+    canto: cantoValido(data?.floating_corner),
+    oculto: data?.floating_hidden === true,
   };
 }
 
@@ -488,8 +541,17 @@ export async function getUsageSummary(
   periodo: "dia" | "mes",
   limiteUsd: number | null,
   agora: Date,
+  /**
+   * Fase 18-F. Ausente = leitura com sessão (as telas). Presente = service role, e então o
+   * escopo do usuário deixa de vir da RLS e passa a ser NOSSO — por isso o objeto carrega o
+   * `userId` junto e "client sem userId" não é representável (`lib/supabase/owner.ts`).
+   *
+   * ⛔ O sino usa ESTA função, não um somatório próprio: dois cálculos do mesmo gasto fariam
+   * o número da notificação divergir do número de `/ia/consumo` (invariante 24 da 17-F).
+   */
+  dono?: LeituraDoDono,
 ): Promise<UsagePeriodSummary> {
-  const supabase = await createClient();
+  const supabase = dono?.client ?? (await createClient());
   const inicio = inicioDoPeriodoEmBrasilia(periodo, agora);
 
   const { data: runs } = await supabase

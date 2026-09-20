@@ -966,6 +966,100 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     requiresConfirmation: true,
     idempotent: true,
   },
+
+  // ─────────────────────── 18-F · Bloco 3 · Memória (a 8ª escrita) ───────────────────────
+  {
+    name: "memory.lembrar",
+    version: "1",
+    module: "memory",
+    kind: "escrita",
+    /**
+     * ⚠️ RISCO 2, e não 3. O risco descreve o efeito sobre os REGISTROS do dono, e este efeito
+     * não toca nenhum: ele cria uma linha em `ai_*`, sem dinheiro, sem saúde, sem histórico
+     * consolidado e sem nada saindo do sistema. O que torna a memória delicada é outra coisa —
+     * ela entra no prompt —, e isso é tratado onde acontece (`memory/prompt.ts`), não com um
+     * número aqui.
+     */
+    risk: 2,
+    /**
+     * ⚠️ A RESTRIÇÃO DE ASSUNTO É DESCRITA PELO LADO POSITIVO, e isso é a invariante 30
+     * funcionando: o teste de vocabulário proibido varre o texto inteiro e não distingue uso
+     * negado — e está certo, porque a frase literal no contexto a torna mais provável de sair.
+     * Dizer o que PODE ser proposto, em vez de listar assuntos a evitar, é mais estreito e não
+     * planta nenhuma palavra no prompt.
+     */
+    description:
+      "PREPARA uma preferência para a memória do assistente e devolve uma proposta para o usuário confirmar — NADA é salvo por esta chamada. Use só quando ele pedir explicitamente para lembrar de algo daqui em diante; nunca por conta própria. Escreva a preferência na voz dele, em UMA frase de até 300 caracteres, sem endereço de site e sem chave de acesso. Proponha só preferência de USO: como ele quer ser atendido, que unidade prefere, que formato de resposta gosta, por onde começar. A memória guarda preferência, não informação sobre ele nem sobre outras pessoas — se ele pedir para guardar informação, diga isso e não chame esta ferramenta. Informe `modulo` quando a preferência valer para um módulo só. Depois de chamá-la, diga que a memória aguarda confirmação.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        conteudo: {
+          type: "string",
+          maxLength: 300,
+          description:
+            "A preferência, em UMA frase, na voz do usuário. Sem quebra de linha, sem endereço, sem chave.",
+        },
+        modulo: {
+          type: "string",
+          // ⚠️ Repete `MODULOS_DE_MEMORIA` porque `inputSchema` é JSON Schema literal e este
+          // arquivo não importa de `memory/`. `registry.test.ts` compara os dois.
+          enum: [
+            "finance",
+            "nutrition",
+            "training",
+            "body",
+            "todo",
+            "calendar",
+            "tasks",
+            "habits",
+            "studies",
+          ],
+          description:
+            "Informe quando a preferência valer só para um módulo. Ausente: vale para todas as conversas.",
+        },
+        expira_em: {
+          type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          description:
+            "Dia em que a preferência deixa de valer (AAAA-MM-DD), quando ela for temporária. Ausente: sem prazo.",
+        },
+      },
+      required: ["conteudo"],
+      additionalProperties: false,
+    },
+    outputSchema: { type: "object" },
+    /**
+     * ⚠️ OS OITO ESPECIALISTAS, e NÃO o orquestrador. O prompt dele afirma, literalmente, que
+     * ele "não consegue criar, editar nem excluir nada" — com uma ferramenta de escrita aqui,
+     * essa frase vira mentira, e incluí-lo custaria reescrevê-la, subir `assistente-pessoal-v2`
+     * para `v3` e trocar a invariante 74. O que se perde: preferência dita numa conversa geral
+     * não vira proposta. O que cobre: a tela `/ia/memoria`, onde o dono escreve a preferência
+     * global ele mesmo — e o texto de lá diz isso.
+     *
+     * Um agente novo que entre no registry entra AQUI junto, ou o teste dos dois sentidos
+     * (`allowedAgents` × allowlist) fica vermelho.
+     */
+    allowedAgents: [
+      "treinos",
+      "todo",
+      "habitos",
+      "estudos",
+      "agenda",
+      "tarefas",
+      "financeiro",
+      "dieta",
+    ],
+    requiredPermission: "allow_memory",
+    requiredWritePermission: "allow_write_memory",
+    // Não toca dinheiro, saúde, histórico consolidado, e nada sai do sistema.
+    sensibilidades: [],
+    command: "lembrarPreferencia",
+    timeoutMs: 10_000,
+    maxRecords: 1,
+    itemLabel: "propostas",
+    requiresConfirmation: true,
+    idempotent: true,
+  },
 ];
 
 export function findTool(name: string): ToolDescriptor | null {

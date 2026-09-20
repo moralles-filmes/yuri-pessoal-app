@@ -140,6 +140,14 @@ describe("injeção vinda de conteúdo de registro", () => {
       "body",
       "finance",
       "nutrition",
+      /**
+       * ⚠️ 18-F Bloco 3 — `memory` também não tem agente próprio, e por uma razão DIFERENTE
+       * da de `body`: ele não é um módulo de registros do dono, é a preferência dele sobre
+       * como o assistente se comporta. A ferramenta fica na allowlist dos OITO especialistas
+       * e exige `allow_memory`, que é uma `ToolPermission` como as nove — sem isso o guard
+       * não teria como exigi-la (`requiredPermission` é desse tipo).
+       */
+      "memory",
     ];
     for (const t of AI_TOOL_REGISTRY) {
       expect(DECLARADOS, t.name).toContain(t.module);

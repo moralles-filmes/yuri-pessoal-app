@@ -67,6 +67,12 @@ export type BeginRunErrorCode =
   // `v_automatic` é falso e os dois ramos do RPC nem são avaliados.
   | "AI_JOBS_NOT_ALLOWED"
   | "AI_JOB_BUDGET_EXCEEDED"
+  // 18-F Bloco 4 — os dois da EXPERIÊNCIA, e a distinção é a mesma da 18-E:
+  // `NOT_AVAILABLE` é panorama fora da allowlist do RPC (pedido que o sistema não atende);
+  // `NOT_ALLOWED` é a chave `allow_cross_module` desligada (porta que o dono fechou).
+  | "AI_EXPERIENCE_NOT_AVAILABLE"
+  | "AI_CROSS_MODULE_NOT_ALLOWED"
+  | "AI_EXPERIENCE_JUST_STARTED"
   | "AI_NOT_AUTHENTICATED"
   | "AI_MESSAGE_EMPTY"
   | "AI_MESSAGE_TOO_LONG"
@@ -182,6 +188,15 @@ export const MENSAGEM_ADMISSAO: Record<BeginRunErrorCode, string> = {
     "A análise automática está desligada. Ligue-a em /ia/configuracoes.",
   AI_JOB_BUDGET_EXCEEDED:
     "O orçamento mensal da análise automática foi atingido. Ela volta no mês que vem, ou antes se você aumentar o teto em /ia/configuracoes.",
+  // 18-F Bloco 4. A segunda frase nomeia o interruptor com as palavras da tela, porque é lá
+  // que o dono vai procurá-lo.
+  AI_EXPERIENCE_NOT_AVAILABLE: "Este panorama não está disponível.",
+  AI_CROSS_MODULE_NOT_ALLOWED:
+    "Os panoramas de vários módulos estão desligados. Ligue “Panoramas de vários módulos” em /ia/configuracoes.",
+  // ⚠️ A frase NÃO é de erro: o dono não fez nada errado, e o que ele pediu está acontecendo.
+  // Dizer "aguarde" ou "muitas tentativas" transformaria um clique a mais em repreensão.
+  AI_EXPERIENCE_JUST_STARTED:
+    "Este panorama já começou agora há pouco — ele está sendo escrito. Se não aparecer, peça de novo em alguns segundos.",
   AI_UNKNOWN: "Não foi possível iniciar a resposta.",
 };
 
@@ -192,6 +207,12 @@ const CODIGOS_CONHECIDOS: readonly BeginRunErrorCode[] = [
   "AI_JOB_BUDGET_EXCEEDED",
   "AI_DOCUMENT_NOT_AVAILABLE",
   "AI_VISION_NOT_ALLOWED",
+  // 18-F Bloco 4. Sem estas duas linhas, `classifyBeginError` cairia em `AI_UNKNOWN` e o dono
+  // leria "não foi possível iniciar a resposta" onde o motivo real é uma chave desligada que
+  // ele pode ligar em dois cliques.
+  "AI_EXPERIENCE_NOT_AVAILABLE",
+  "AI_CROSS_MODULE_NOT_ALLOWED",
+  "AI_EXPERIENCE_JUST_STARTED",
   // ⚠️ `AI_MODULE_NOT_ALLOWED` ANTES de `AI_MODULE_NOT_AVAILABLE`: a busca é por
   // `includes`, e um dos dois não é prefixo do outro — mas a ordem fica explícita para
   // ninguém acrescentar um terceiro `AI_MODULE_*` que os contenha e passe a casar antes.
@@ -283,6 +304,70 @@ export async function beginExtractionRun(
   if (!linha) return { ok: false, code: "AI_UNKNOWN" };
 
   return { ok: true, value: { runId: linha.run_id, correlationId: linha.correlation_id } };
+}
+
+// ────────────────────────── 18-F · a admissão da EXPERIÊNCIA ──────────────────────────
+
+export type BeginExperienceInput = {
+  /** `planejar-dia` | `encerrar-dia` | `planejar-semana`. O RPC valida a MESMA allowlist. */
+  readonly experiencia: string;
+  /**
+   * O título do CATÁLOGO. Vira o nome da conversa E o texto da primeira mensagem — não há
+   * campo para texto do cliente, aqui nem no RPC.
+   */
+  readonly title: string;
+  readonly promptVersion: string;
+  readonly provider: AiProviderId;
+  readonly model: string;
+  readonly reservedCost: number;
+  readonly reservationRateVersion: string;
+  readonly reservationTtlSeconds: number;
+};
+
+/**
+ * 18-F Bloco 4 — a irmã de `beginChatRun` para um run que ABRE conversa sem mensagem do dono.
+ *
+ * Devolve `BeginRunOutput` inteiro (as cinco chaves), e não um par como a extração e o
+ * insight: o panorama nasce como a primeira mensagem de uma conversa, então há conversa,
+ * mensagem do usuário e mensagem do assistente para o runner usar — as mesmas do chat.
+ *
+ * ⛔ `conversationId` não é parâmetro. A experiência SEMPRE abre conversa nova (§7.3), e a
+ * ausência do campo é o que torna "panorama que continua conversa alheia" irrepresentável,
+ * em vez de recusado por um `if`.
+ */
+export async function beginExperienceRun(
+  input: BeginExperienceInput,
+): Promise<
+  { ok: true; value: BeginRunOutput } | { ok: false; code: BeginRunErrorCode }
+> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("ai_begin_experience_run", {
+    p_experiencia: input.experiencia,
+    p_title: input.title,
+    p_prompt_version: input.promptVersion,
+    p_selected_provider: input.provider,
+    p_selected_model: input.model,
+    p_reserved_cost: input.reservedCost,
+    p_reservation_rate_version: input.reservationRateVersion,
+    p_reservation_ttl_seconds: input.reservationTtlSeconds,
+  });
+
+  if (error) return { ok: false, code: classifyBeginError(error.message, error.code) };
+
+  const linha = Array.isArray(data) ? data[0] : data;
+  if (!linha) return { ok: false, code: "AI_UNKNOWN" };
+
+  return {
+    ok: true,
+    value: {
+      conversationId: linha.conversation_id,
+      userMessageId: linha.user_message_id,
+      runId: linha.run_id,
+      assistantMessageId: linha.assistant_message_id,
+      correlationId: linha.correlation_id,
+    },
+  };
 }
 
 // ─────────────────────────── 18-E · a admissão do INSIGHT ───────────────────────────

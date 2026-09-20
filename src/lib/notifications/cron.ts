@@ -30,6 +30,7 @@ import {
 } from "@/lib/notifications/generate";
 import { buildNutritionGenInput } from "@/lib/notifications/nutrition-cron";
 import { buildTrainingGenInput } from "@/lib/notifications/training-cron";
+import { buildAiGenInput } from "@/lib/notifications/ai-cron";
 import { normalizeNotificationPrefs } from "@/lib/settings/constants";
 import { timeInSaoPaulo } from "@/lib/format";
 
@@ -392,6 +393,9 @@ export async function generateForUser(
       minutosAgora,
       nowMs,
     ).catch(() => null),
+    // Fase 18-F — IA. Mesmo isolamento de Dieta e Treinos: uma falha de leitura do módulo
+    // não pode impedir o alerta de fatura atrasada de existir.
+    ai: await buildAiGenInput(service, userId, todayIso, now).catch(() => null),
   };
 
   const generated = generateNotifications(input);

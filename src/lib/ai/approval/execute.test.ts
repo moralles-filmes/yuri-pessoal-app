@@ -86,20 +86,28 @@ describe("registry de commands", () => {
       "desfazerConsumo",
       "lancarTransacao",
       "excluirTransacao",
+      // 18-F Bloco 3 — os dois últimos, e o 15º é o 6º `undo` sem ferramenta.
+      "lembrarPreferencia",
+      "esquecerPreferencia",
     ]);
   });
 
   /**
-   * ⛔ SEIS DOS TREZE COMMANDS NÃO TÊM FERRAMENTA, E A AUSÊNCIA É A TRAVA.
+   * ⛔ SETE DOS QUINZE COMMANDS NÃO TÊM FERRAMENTA, E A AUSÊNCIA É A TRAVA.
    *
-   * Os cinco `undo` só são alcançados pelo botão de desfazer da tela, sobre algo que a própria
-   * IA fez. O modelo não tem como propô-los: não existe entrada deles em
+   * Os `undo` só são alcançados pelo botão de desfazer da tela, sobre algo que a própria IA
+   * fez. O modelo não tem como propô-los: não existe entrada deles em
    * `PROPOSTAS_POR_FERRAMENTA`, e sem entrada não há chamada.
    *
    * Este teste falha se alguém publicar uma ferramenta para um deles — que é uma decisão de
-   * risco 4 e está fora da 18-C (Parte 3 da matriz). Vale em especial para os dois últimos:
+   * risco 4 e está fora da 18-C (Parte 3 da matriz). Vale em especial para dois:
    * `excluirEvento` apaga um registro que, com o Google conectado, some também do calendário
    * externo do dono; e `desfazerConsumo` apaga uma linha de histórico de saúde.
+   *
+   * ⚠️ 18-F Bloco 3 — `esquecerPreferencia` é o SÉTIMO, e é o único cujo efeito não apaga
+   * nada: ele tira a preferência do prompt e a deixa legível na tela. Ainda assim fica fora
+   * do registry, pela mesma razão dos outros seis — "esqueça o que eu te disse" não é coisa
+   * que o modelo proponha; é decisão do dono, na tela dele ou pelo botão de desfazer.
    */
   it("os commands de DESFAZER não são propostos pelo modelo", async () => {
     const { PROPOSTAS_POR_FERRAMENTA } = await import("./commands/previews");
@@ -114,6 +122,7 @@ describe("registry de commands", () => {
       "excluirEvento",
       "desfazerConsumo",
       "excluirTransacao",
+      "esquecerPreferencia",
     ]) {
       expect(findCommand(semFerramenta), semFerramenta).not.toBeNull();
       expect(comandosComFerramenta.has(semFerramenta), semFerramenta).toBe(false);

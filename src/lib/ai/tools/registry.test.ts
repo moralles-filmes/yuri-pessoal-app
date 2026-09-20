@@ -22,6 +22,7 @@ import {
 import { AI_AGENT_REGISTRY } from "@/lib/ai/agents/registry";
 import { ROTULO_DA_FERRAMENTA, rotuloDaFerramenta } from "@/lib/ai/constants";
 import { EVENT_TYPES } from "@/lib/calendar/constants";
+import { MODULOS_DE_MEMORIA } from "@/lib/ai/memory/contracts";
 
 describe("integridade do registry (18-B)", () => {
   /**
@@ -157,6 +158,23 @@ describe("integridade do registry (18-B)", () => {
       const texto = t.description.toLowerCase();
       for (const termo of PROIBIDO) expect(texto, `${t.name}: ${termo}`).not.toContain(termo);
     }
+  });
+
+  /**
+   * ⚠️ 18-F Bloco 3 — O `enum` DO MÓDULO DA MEMÓRIA REPETE `MODULOS_DE_MEMORIA`, e a repetição
+   * é forçada: `inputSchema` é JSON Schema LITERAL, e `registry.ts` não importa de `memory/`.
+   *
+   * Sem esta asserção a divergência seria silenciosa nos dois sentidos — um módulo a mais aqui
+   * faria o modelo propor memória para um módulo que o CHECK do banco recusa (e a ação
+   * apareceria como falha em `/ia/acoes`); um a menos faria o módulo existir na tela e não no
+   * chat, sem nada denunciando.
+   */
+  it("o enum de módulo da memória casa com MODULOS_DE_MEMORIA", () => {
+    const t = AI_TOOL_REGISTRY.find((x) => x.name === "memory.lembrar");
+    expect(t, "memory.lembrar não está no registry").toBeDefined();
+    const enumerado = (t?.inputSchema as { properties: { modulo: { enum: string[] } } })
+      .properties.modulo.enum;
+    expect([...enumerado].sort()).toEqual([...MODULOS_DE_MEMORIA].sort());
   });
 
   it("a allowlist de todo agente é subconjunto do registry", () => {

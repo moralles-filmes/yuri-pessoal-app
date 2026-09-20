@@ -26,6 +26,7 @@ import { optionalText } from "@/lib/validators/shared";
 import {
   aiPreferencesSchema,
   aiProviderConfigSchema,
+  memoriaSchema,
 } from "@/lib/validators/ai";
 import { TOOL_PERMISSIONS, TOOL_WRITE_PERMISSIONS } from "@/lib/ai/tools/contracts";
 import {
@@ -471,6 +472,9 @@ describe("Fase 18-A — schemas de IA aceitam a própria saída", () => {
       allowVision: false,
       // 18-E Bloco 4. Mesma razão: nem a chave da varredura nem o teto dela são módulos.
       allowInsightJobs: false,
+      // 18-F Bloco 4. Mesma razão de novo — e esta fixture é a segunda que a lista
+      // `OBRIGATORIOS` de `ai.test.ts` NÃO cobre (invariante 94).
+      allowCrossModule: false,
       jobMonthlyBudget: 1,
       defaultModel: "",
       confirmationMode: "seguro",
@@ -479,7 +483,49 @@ describe("Fase 18-A — schemas de IA aceitam a própria saída", () => {
       reservationMargin: 1.15,
       rateLimitPerMinute: 10,
       rateLimitPerHour: 120,
+      // 18-F Bloco 2. Escritas à mão pelo mesmo motivo das duas acima: não são módulos, e não
+      // autorizam nada — dizem onde o botão flutuante fica e se ele aparece.
+      floatingCorner: "direita",
+      floatingHidden: false,
     });
     expect(prefs.noServidor.success, fieldErrors(prefs.noServidor.error)).toBe(true);
+  });
+
+  /**
+   * 18-F Bloco 3 — `memoriaSchema` é usado com `zodResolver` em `memory-form-dialog.tsx`, e
+   * por isso entra aqui. Os três casos que o formulário de fato produz:
+   *
+   *   • tudo preenchido;
+   *   • os dois opcionais AUSENTES (o `.nullish().transform()` os leva a `null`, e a segunda
+   *     passada precisa aceitar `null` — exatamente o defeito que deu origem a este arquivo);
+   *   • os dois opcionais como `""`, que é o que um `<input type="date">` vazio manda.
+   */
+  it("memoriaSchema faz a ida e volta, com e sem os opcionais", () => {
+    const completo = roundTrip(memoriaSchema, {
+      id: "11111111-1111-4111-8111-111111111111",
+      conteudo: "Prefiro respostas curtas",
+      modulo: "training",
+      expiraEm: "2026-12-31",
+    });
+    expect(completo.noServidor.success, fieldErrors(completo.noServidor.error)).toBe(true);
+
+    const minimo = roundTrip(memoriaSchema, { conteudo: "Me chame de Yuri" });
+    expect(minimo.noServidor.success, fieldErrors(minimo.noServidor.error)).toBe(true);
+    expect(minimo.noCliente.data).toMatchObject({ modulo: null, expiraEm: null });
+
+    const vazios = roundTrip(memoriaSchema, {
+      id: null,
+      conteudo: "Me chame de Yuri",
+      modulo: null,
+      expiraEm: "",
+    });
+    expect(vazios.noServidor.success, fieldErrors(vazios.noServidor.error)).toBe(true);
+  });
+
+  /** A forma é conferida pelo MESMO `formaDaMemoria` do servidor — não reimplementada. */
+  it("memoriaSchema recusa o que a forma recusa, com a mensagem em pt-BR", () => {
+    const r = memoriaSchema.safeParse({ conteudo: "veja em https://exemplo.com" });
+    expect(r.success).toBe(false);
+    expect(fieldErrors(r.error)).toContain("endereço");
   });
 });

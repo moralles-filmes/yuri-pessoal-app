@@ -16,12 +16,16 @@ import { describe, expect, it } from "vitest";
 import { AI_TOOL_REGISTRY } from "@/lib/ai/tools/registry";
 import { ROTULO_DA_ROTA_DE_CONTEXTO } from "@/lib/ai/constants";
 import { TOOL_PERMISSIONS, TOOL_WRITE_PERMISSIONS } from "@/lib/ai/tools/contracts";
+import { EXPERIENCIA_IDS } from "@/lib/ai/experiences/contracts";
+import { CANTOS_DO_BOTAO } from "@/lib/ai/painel";
 import {
   aiCredentialSchema,
   aiPermissionsSchema,
   aiPreferencesSchema,
   aiProviderConfigSchema,
   aiWritePermissionsSchema,
+  botaoFlutuanteSchema,
+  chatMensagemSchema,
   chatRequestSchema,
   contextoDaRota,
   MAX_CHAT_TEXT,
@@ -98,6 +102,94 @@ describe("chatRequestSchema", () => {
     expect(chatRequestSchema.safeParse({ text: "olá", conversationId: "1" }).success).toBe(
       false,
     );
+  });
+});
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ 18-F Bloco 4 — DUAS FORMAS `.strict()`, E A SEPARAÇÃO É A GARANTIA.                   ║
+ * ║                                                                                       ║
+ * ║ A mensagem carrega texto do dono; o panorama carrega só o id de um roteiro do         ║
+ * ║ SERVIDOR. Um schema único com `text` opcional deixaria representável um panorama com  ║
+ * ║ texto injetado pelo cliente — e o servidor teria de recusá-lo num `if`, que é um `if` ║
+ * ║ que alguém remove. Duas formas `.strict()` fazem isso não existir.                    ║
+ * ║                                                                                       ║
+ * ║ É a escolha da invariante 79 (`LeituraDoDono`) e da 67 (o campo `confianca` ausente   ║
+ * ║ do schema de saída do modelo): irrepresentável vence recusado.                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("18-F Bloco 4 — o payload de `/api/ia/chat`", () => {
+  it("mensagem normal continua aceita, igualzinho", () => {
+    const r = chatRequestSchema.safeParse({ text: "olá" });
+    expect(r.success).toBe(true);
+  });
+
+  it("panorama sozinho é aceito", () => {
+    for (const id of EXPERIENCIA_IDS) {
+      expect(chatRequestSchema.safeParse({ experiencia: id }).success, id).toBe(true);
+    }
+  });
+
+  it("panorama COM `text` é recusado", () => {
+    expect(
+      chatRequestSchema.safeParse({ experiencia: "planejar-dia", text: "oi" }).success,
+    ).toBe(false);
+  });
+
+  it("panorama COM `conversationId` é recusado — ele sempre abre conversa nova", () => {
+    expect(
+      chatRequestSchema.safeParse({
+        experiencia: "planejar-dia",
+        conversationId: UUID,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("panorama COM `caixaDeEntrada` é recusado — os dois modos não se combinam", () => {
+    expect(
+      chatRequestSchema.safeParse({ experiencia: "planejar-dia", caixaDeEntrada: true })
+        .success,
+    ).toBe(false);
+  });
+
+  it("mensagem COM `experiencia` é recusada", () => {
+    expect(
+      chatRequestSchema.safeParse({ text: "olá", experiencia: "planejar-dia" }).success,
+    ).toBe(false);
+  });
+
+  it("experiência fora da allowlist é recusada", () => {
+    expect(chatRequestSchema.safeParse({ experiencia: "planejar-o-mes" }).success).toBe(
+      false,
+    );
+  });
+
+  it("o panorama aceita preferência de provedor e modelo, como a mensagem", () => {
+    const r = chatRequestSchema.safeParse({
+      experiencia: "encerrar-dia",
+      providerPreference: "openai",
+      modelPreference: "gpt-5.6-terra",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("`caixaDeEntrada` é opcional e booleano na mensagem normal", () => {
+    expect(chatRequestSchema.safeParse({ text: "pão 12 reais" }).success).toBe(true);
+    expect(
+      chatRequestSchema.safeParse({ text: "pão 12 reais", caixaDeEntrada: true }).success,
+    ).toBe(true);
+    expect(
+      chatRequestSchema.safeParse({ text: "pão 12 reais", caixaDeEntrada: "sim" }).success,
+    ).toBe(false);
+  });
+
+  /**
+   * ⚠️ O corpo VAZIO não casa com nenhuma das duas formas: a mensagem exige `text`, o
+   * panorama exige `experiencia`. É o que garante que a união não tenha um "terceiro estado"
+   * silencioso em que nada foi pedido e o runner escolheria sozinho.
+   */
+  it("corpo vazio é recusado pelas duas formas", () => {
+    expect(chatRequestSchema.safeParse({}).success).toBe(false);
   });
 });
 
@@ -228,7 +320,13 @@ describe("pageContext (18-B) — o contexto da página", () => {
   });
 
   it("a saída não ganha campo nenhum — o que atravessa o transporte é SÓ a rota", () => {
-    const r = chatRequestSchema.parse({ text: "oi", pageContext: { rota: "/treinos" } });
+    /**
+     * ⚠️ 18-F Bloco 4 — `chatMensagemSchema` e não `chatRequestSchema`. A união não tem
+     * `pageContext` em todos os ramos (o panorama não aceita nenhum), então lê-lo na união é
+     * erro de TIPO — e `vitest` não checa tipo. Usar o ramo certo é a correção; um cast
+     * desligaria justamente a checagem que aponta o problema.
+     */
+    const r = chatMensagemSchema.parse({ text: "oi", pageContext: { rota: "/treinos" } });
     expect(Object.keys(r.pageContext ?? {})).toEqual(["rota"]);
   });
 
@@ -451,6 +549,8 @@ describe("aceitar a própria saída (round-trip)", () => {
       allowVision: false,
       // 18-E Bloco 4 — idem, e mais o teto próprio da varredura.
       allowInsightJobs: false,
+      // 18-F Bloco 4 — idem: o interruptor dos panoramas não é um módulo.
+      allowCrossModule: false,
       jobMonthlyBudget: 1,
       defaultProvider: undefined,
       defaultModel: "",
@@ -462,6 +562,10 @@ describe("aceitar a própria saída (round-trip)", () => {
       reservationMargin: 1.15,
       rateLimitPerMinute: 10,
       rateLimitPerHour: 120,
+      // 18-F Bloco 2 — aparência, não autorização; e obrigatórias como todo campo que a tela
+      // manda. A fixture cresce junto com o schema, pelo mesmo motivo da lista `OBRIGATORIOS`.
+      floatingCorner: "direita",
+      floatingHidden: false,
     };
     const primeira = aiPreferencesSchema.safeParse(entrada);
     expect(primeira.success).toBe(true);
@@ -672,6 +776,36 @@ describe("18-C — aiWritePermissionsSchema", () => {
     expect(TOOL_PERMISSIONS).not.toContain("allow_vision");
     expect(TOOL_WRITE_PERMISSIONS).not.toContain("allow_vision");
   });
+
+  /**
+   * ⛔ 18-F Bloco 4 — A CHAVE DO MECANISMO NÃO É ANDADA COM CHAVE NENHUMA, e isso é decisão,
+   * não esquecimento.
+   *
+   * `allow_vision` É ANDada com `allow_finance` + `allow_write_finance` porque as três servem
+   * ao MESMO efeito: um comprovante que sai do sistema precisa ter para onde ir. Aqui não: os
+   * módulos de uma experiência são efeitos INDEPENDENTES, e ANDar faria desligar a Agenda
+   * calar o panorama inteiro. Desligada ⇒ nada roda; ligada ⇒ o módulo sem chave é PULADO e
+   * declarado. É a regra da invariante 77, e esta linha a torna visível no `upsert`.
+   */
+  it("`allow_cross_module` chega ao upsert SOZINHA", () => {
+    const fonte = readFileSync(
+      path.join(process.cwd(), "src", "lib", "actions", "ai-preferences.ts"),
+      "utf8",
+    ).replace(/\s+/g, " ");
+
+    expect(fonte).toContain("allow_cross_module: dados.allowCrossModule,");
+  });
+
+  /**
+   * ⚠️ E o nome engana: "cross_module" SOA como permissão de módulo. Ela é campo solto, como
+   * `allowVision` e `allowInsightJobs` — pô-la em `aiPermissionsSchema` faria o roteador
+   * procurar um módulo `cross_module` que não existe, e `permissaoDoModulo` ganharia uma
+   * entrada sem ferramenta nenhuma.
+   */
+  it("`allow_cross_module` fica FORA de TOOL_PERMISSIONS e de TOOL_WRITE_PERMISSIONS", () => {
+    expect(TOOL_PERMISSIONS).not.toContain("allow_cross_module");
+    expect(TOOL_WRITE_PERMISSIONS).not.toContain("allow_cross_module");
+  });
 });
 
 /**
@@ -698,6 +832,9 @@ describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do 
     "writePermissions",
     "allowVision",
     "allowInsightJobs",
+    // 18-F Bloco 4. O interruptor dos panoramas. Entra AQUI no mesmo commit em que entra no
+    // schema, pela mesma razão das duas do Bloco 2 logo abaixo.
+    "allowCrossModule",
     "jobMonthlyBudget",
     "confirmationMode",
     "allowFallback",
@@ -705,6 +842,11 @@ describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do 
     "reservationMargin",
     "rateLimitPerMinute",
     "rateLimitPerHour",
+    // 18-F Bloco 2. Entram AQUI no mesmo commit em que entram no schema — foi a lista não ter
+    // crescido junto que fez `allowVision` recusar toda gravação de preferências por três
+    // subfases, com uma mensagem sobre um campo que a tela não tinha.
+    "floatingCorner",
+    "floatingHidden",
   ] as const;
 
   it("o schema recusa o payload a que falte QUALQUER um deles", () => {
@@ -714,6 +856,7 @@ describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do 
       writePermissions: Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((p) => [p, false])),
       allowVision: false,
       allowInsightJobs: false,
+      allowCrossModule: false,
       jobMonthlyBudget: 1,
       defaultProvider: null,
       defaultModel: "",
@@ -725,6 +868,8 @@ describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do 
       reservationMargin: 1.15,
       rateLimitPerMinute: 10,
       rateLimitPerHour: 120,
+      floatingCorner: "direita",
+      floatingHidden: false,
     };
     expect(aiPreferencesSchema.safeParse(completo).success).toBe(true);
 
@@ -746,5 +891,77 @@ describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do 
     const faltando = OBRIGATORIOS.filter((c) => !payload.includes(`${c}:`));
     expect(faltando, `campos ausentes no payload do formulário: ${faltando.join(", ")}`)
       .toEqual([]);
+  });
+});
+
+describe("18-F Bloco 2 — o botão flutuante", () => {
+  it("aceita os dois cantos, e só eles", () => {
+    for (const canto of CANTOS_DO_BOTAO) {
+      expect(
+        botaoFlutuanteSchema.safeParse({ floatingCorner: canto, floatingHidden: false })
+          .success,
+        canto,
+      ).toBe(true);
+    }
+    expect(
+      botaoFlutuanteSchema.safeParse({ floatingCorner: "topo", floatingHidden: false })
+        .success,
+    ).toBe(false);
+  });
+
+  it("campo a mais é erro (`.strict()`)", () => {
+    expect(
+      botaoFlutuanteSchema.safeParse({
+        floatingCorner: "direita",
+        floatingHidden: false,
+        user_id: "11111111-2222-4333-8444-555555555555",
+      }).success,
+    ).toBe(false);
+  });
+
+  /** Regra de round-trip do projeto: `parse(parse(x))` tem de funcionar. */
+  it("o schema aceita a própria saída", () => {
+    const uma = botaoFlutuanteSchema.parse({ floatingCorner: "esquerda", floatingHidden: true });
+    expect(botaoFlutuanteSchema.safeParse(uma).success).toBe(true);
+  });
+
+  /**
+   * ⛔ AS DUAS PORTAS VALIDAM A MESMA COISA. O menu do painel grava por `botaoFlutuanteSchema`
+   * e o formulário grande por `aiPreferencesSchema`; se um aceitar um canto que o outro
+   * recusa, a preferência passaria a depender de onde foi mexida. Hoje um espalha o outro —
+   * e se alguém desfizer isso, este teste é que fica vermelho.
+   */
+  it("o schema grande aceita exatamente os cantos que o schema do botão aceita", () => {
+    const base = {
+      permissions: Object.fromEntries(TOOL_PERMISSIONS.map((p) => [p, false])),
+      writePermissions: Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((p) => [p, false])),
+      allowVision: false,
+      allowInsightJobs: false,
+      allowCrossModule: false,
+      jobMonthlyBudget: 1,
+      defaultProvider: null,
+      defaultModel: "",
+      confirmationMode: "seguro",
+      allowFallback: false,
+      dailyBudget: null,
+      monthlyBudget: null,
+      budgetBlockOnLimit: true,
+      reservationMargin: 1.15,
+      rateLimitPerMinute: 10,
+      rateLimitPerHour: 120,
+      floatingHidden: false,
+    };
+
+    for (const canto of [...CANTOS_DO_BOTAO, "topo", "", null]) {
+      const noBotao = botaoFlutuanteSchema.safeParse({
+        floatingCorner: canto,
+        floatingHidden: false,
+      }).success;
+      const noGrande = aiPreferencesSchema.safeParse({
+        ...base,
+        floatingCorner: canto,
+      }).success;
+      expect(noGrande, `canto ${String(canto)}`).toBe(noBotao);
+    }
   });
 });

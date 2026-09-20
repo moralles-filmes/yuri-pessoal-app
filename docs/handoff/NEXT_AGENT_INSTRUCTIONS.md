@@ -1,7 +1,286 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-> Atualizado em **2026-09-19**, ao fechar a **auditoria de performance**. A última FASE do
-> roadmap fechada continua sendo a **18-E** (2026-08-09); resta a **18-F**.
+> Atualizado em **2026-09-20**, ao fechar o **Bloco 5 da 18-F** — que fecha a **Fase 18**.
+
+## ✅ NÃO HÁ PRÓXIMA FASE. O PROJETO ESTÁ EM MANUTENÇÃO/ITERAÇÃO.
+
+As **14 fases do roadmap original**, a **15 (TO-DO)**, a **16 (Dieta)**, a **17 (Treinos)** e a
+**18 (IA)** estão concluídas. **Não há 18-G e não há Fase 19.**
+
+**Melhoria entra como TAREFA AVULSA**, não como subfase: branch própria e o fluxo normal do
+projeto — brainstorming quando houver decisão de design em aberto, depois plano, depois
+execução. ⛔ **Não invente uma "Fase 19" para organizar trabalho novo**; o roadmap é histórico
+de construção, e reabri-lo por um ajuste faz a documentação mentir de novo.
+
+A leitura obrigatória continua a mesma (`PROJECT_BRIEFING` → `PROJECT_RULES` →
+`PROJECT_ARCHITECTURE` → `PROJECT_ROADMAP` → `CURRENT_STATUS` → este arquivo), e o `CLAUDE.md`
+da raiz continua sendo o resumo vivo das invariantes de cada módulo. **Leia as invariantes do
+módulo que você for tocar antes de tocá-lo** — quase todas nasceram de um bug real.
+
+### O que a Fase 18 entregou, em uma linha
+
+Um assistente que lê os nove módulos, prepara alterações que **só o dono aplica**, lê
+comprovantes por visão, produz insights sobre grandezas derivadas, conhece as preferências que
+o dono escreve e monta panoramas de um clique — tudo atrás de **16 chaves que nascem
+desligadas**, sem nunca tocar o banco direto. Placar item a item:
+`docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` (163 critérios: 142 validados, 17 pendentes de
+conferência à mão, 4 retirados no desenho).
+
+---
+
+## ⛔ AS PENDÊNCIAS QUE SOBREVIVEM À FASE
+
+Nenhuma delas bloqueia nada hoje. Todas são conhecidas, e é por isso que estão escritas.
+
+### 1. A conferência à mão nunca foi feita — e ela é UMA lista, não duas
+
+O código está verde nas cinco verificações e em `TZ=UTC`, mas **17 critérios de aceite da Fase
+18 dependem de um navegador com sessão** e continuam por conferir. A lista está em
+`docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md`, seção "O que NÃO foi validado", e ela **inclui**
+a tabela de 10 itens que o Bloco 4 deixou pendente
+(`docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md`, Task 8, Passo 4). Os que mais
+importam:
+
+1. **Salvar em `/ia/configuracoes` e RECARREGAR.** Foi exatamente esse caminho que `allowVision`
+   deixou quebrado por três subfases, e ele continua sem teste que o percorra ponta a ponta.
+   O que existe hoje são as duas listas comparadas (`validators/ai.test.ts` + `round-trip`).
+2. Panorama com um módulo desligado: o texto tem de TERMINAR dizendo o que ficou de fora.
+3. Responder ao panorama pedindo uma alteração → cartão de proposta normal, com prazo.
+4. Painel flutuante: disparar um atalho e **fechar o painel** no meio — a resposta continua
+   (invariante 95).
+5. Caixa de entrada com "meta" (palavra ambígua) → tem de **perguntar**, não chutar.
+6. 320 px: os três atalhos quebram linha, sem rolagem horizontal.
+7. Botão flutuante por **teclado**: `Ctrl/⌘ + I` abre · `Tab` alcança · `Esc` fecha · o foco
+   volta · e com `floating_hidden` ligada o atalho **continua abrindo**.
+8. Dark/light e 320 px nas oito seções de `/ia`, mais a leitura dos deep-links da busca global.
+
+⚠️ **Conferiu?** Marque na tabela de `PHASE_18_CRITERIOS_VALIDADOS.md` com a data e **o que foi
+visto** — "conferido" sem o que foi visto não é evidência, é promessa.
+
+### 2. Duas chaves de permissão continuam ociosas
+
+`allow_external_search` e `allow_files` existem no banco desde a 18-A e **não ligam nada**.
+`allow_files` foi substituída na prática por `allow_vision` (18-D); `allow_external_search` fica
+de pé caso a pesquisa externa volte como tarefa avulsa. ⛔ **Não escreva migration para
+apagá-las**: remover coluna pelo ganho de arrumação é a pior relação risco/benefício do projeto.
+
+### 3. O backlog de performance do banco
+
+Medido em 2026-09-20 pelo advisor do Supabase, e **conscientemente não consertado**:
+**179** `auth_rls_initplan`, 150 `unused_index`, 117 `unindexed_foreign_keys`. A razão está no
+`CLAUDE.md` (seção "Medição de query"): `(select auth.uid())` já foi aplicado nas 8 policies das
+duas tabelas grandes o bastante para a diferença ser medível; as outras seguem em backlog porque
+o ganho não foi demonstrado. ⛔ **Se for mexer, meça antes** — com `EXPLAIN (analyze, timing
+off)` e na role `authenticated`, senão a RLS some da conta.
+
+### 4. Um advisor de segurança aberto, que não é código
+
+`auth_leaked_password_protection` (proteção contra senha vazada, checagem no HaveIBeenPwned) é
+um **botão do painel de Auth** do Supabase. Sem migration, sem código. Registrado desde
+2026-08-07. **Zero lints de schema.**
+
+### 5. Decisões de escopo que podem voltar como tarefa avulsa
+
+Voz · automações configuráveis · pesquisa externa · observabilidade · conversar com um relatório
+· sugestões contextuais dentro de um registro. Todas saíram **com motivo escrito** (spec §3 da
+18-F) e com o dono de acordo — ver `LAST_PHASE_SUMMARY.md`. Se alguma voltar, ela é tarefa
+avulsa com desenho próprio, não uma subfase 18-G.
+
+---
+
+## Histórico dos blocos da 18-F
+
+### ✅ Bloco 5 — o fechamento da fase (2026-09-20)
+
+Suíte de evals em `src/lib/ai/evals/` com os oito casos do briefing, afirmando o **estrutural**
+(roteador · chave desligada · ferramenta oferecida), o caso destrutivo afirmado **sobre o
+registry**, e a validação item a item dos 163 critérios. **Nenhuma migration.** Suíte foi de
+3.701/183 para **3.738 testes / 185 arquivos**. Plano executado:
+`docs/superpowers/plans/2026-09-22-18f-bloco5-fechamento.md`.
+
+**O que este bloco deixou escrito para quem vier:**
+
+- ⛔ **O CASO DESTRUTIVO É AUSÊNCIA DE CÓDIGO, NÃO RECUSA.** *"Exclua todas as minhas
+  transações"* não é barrado por prompt nem por confirmação reforçada — as duas dependeriam de
+  o modelo obedecer. O registry não tem ferramenta que apague, e os **sete** `undo` moram fora
+  dele. `evals/destrutivo.test.ts` deriva as **duas** listas (commands alcançáveis por
+  ferramenta × inversos declarados pelos commands) e exige interseção vazia — **nunca** uma
+  lista de nomes proibidos escrita à mão, que furaria no primeiro command novo. Confirmado por
+  mutação.
+- ⚠️ **O VOCABULÁRIO DO ROTEADOR PRECISA DE CADA FORMA, UMA POR ENTRADA.** O casamento é por
+  fronteira de palavra e **não há stemming**, de propósito (stemming faria palavras não
+  relacionadas colidirem, e palavra ambígua **desliga** o roteamento — invariante 27).
+  `"proteina"` não casa em `"proteínas"`, e foi assim que uma das oito frases do briefing deixou
+  de alcançar a Dieta. ⛔ **Não acrescente palavra "por via das dúvidas"**: cada palavra nova
+  pode empatar dois módulos e desligar o roteamento onde ele funcionava — "meta", "gordura" e
+  "tarefa" estão fora **de propósito**.
+- ⛔ **PASTA NOVA EM `src/lib/ai/` ENTRA EM `CAMADAS_PURAS` NO MESMO COMMIT EM QUE NASCE.**
+  Aquela lista, em `boundaries.test.ts`, é escrita à mão: pasta fora dela passa **vacuamente
+  verde**. `memory/` (Bloco 3), `experiences/` (Bloco 4) e `evals/` (Bloco 5) pagaram as três
+  primeiras vezes. Não pague a quarta.
+- ⚠️ **AO CONTAR CRITÉRIO EM PROSA SEPARADA POR `·`, CONTE O ÚLTIMO TRECHO TAMBÉM.** A
+  estimativa de 158 saiu de não contar `transversais do projeto` no fim de cada lista. A regra
+  do projeto — "conte antes de citar" — vale também para o que parece rodapé.
+- ⚠️ **`agents/routing.ts` REEXPORTA OS OITO IDS DE ESPECIALISTA, MAS NÃO `ASSISTENTE_PESSOAL_ID`.**
+  Ele vem de `agents/registry`. O plano do bloco errava esse import.
+
+### ✅ Bloco 4 — as experiências (2026-09-22)
+
+Três panoramas de um clique com leitura **dirigida pelo servidor**, e um **modo** Caixa de
+entrada. **Duas migrations, e NENHUMA cria tabela:** um valor no CHECK de `ai_runs.kind` e a RPC
+`ai_begin_experience_run`; depois, a janela de dedupe do clique duplo, por `create or replace`
+da mesma função. Banco continua em **132 tabelas**, **20 `ai_*`**. Registry (30),
+commands (15) e agentes (9) **inalterados**. Suíte em **3.701 testes / 183 arquivos**. Plano
+executado: `docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md`. As oito decisões e
+os números do orçamento estão em `docs/project/CURRENT_STATUS.md`.
+
+**O que o próximo bloco precisa saber:**
+
+- ⛔ **`ai_runs` TEM DOIS CHECKS SOBRE `kind`.** Além de `ai_runs_kind_check` (valores), existe
+  `ai_runs_kind_coerente`, que exige cada forma por inteiro: `chat` e `experience` **têm**
+  conversa, `extracao` e `insight` **não**. Uma quinta espécie que mexa só no primeiro falha no
+  `insert`, **dentro da transação de admissão**, e o erro chega à tela como `AI_UNKNOWN`.
+- ⛔ **`MAX_TOOL_STEPS` não se aplica ao laço dirigido — e isso não é "não há teto".**
+  `MAX_FERRAMENTAS_POR_EXPERIENCIA = 5`, validado contra o catálogo em teste, e
+  `computeReservation` reserva sobre **esse** número, nunca sobre `leituras.length`.
+- ⛔ **Só ferramenta de LEITURA entra num catálogo, e a recusa é EM RUNTIME.** `decidirLeituras`
+  confere `descriptor.kind` além do teste sobre o registry real — a auditoria do bloco mostrou
+  por quê: o laço dirigido chama `executeTool` **sem `modo`**, e o executor fixa `"proposta"`
+  por dentro, então uma ferramenta de escrita no catálogo criaria proposta em
+  `ai_action_proposals` **a cada clique no atalho**, sem o dono nem o modelo terem pedido. Teste
+  só protege quem roda a suíte.
+- ⛔ **SÃO DUAS FRASES NOSSAS NO TEXTO GRAVADO, NÃO UMA:** módulo pulado por preferência
+  (`selection.ts`, manda o dono a `/ia/configuracoes`) e leitura que **falhou**
+  (`experiences/falhas.ts`, **não** manda — a chave já está ligada). A segunda nasceu da
+  auditoria: o bloco de erro pedia ao modelo "diga que não conseguiu obter o dado", e isso é
+  instrução, não garantia. `rejeitada` conta como falha junto com `falhou`/`timeout` — a chave
+  pode cair **entre** a seleção e a execução, e esse pulo o plano não conhece.
+- ⛔ **O CLIQUE DUPLO É DEDUPLICADO NO BANCO, POR UMA JANELA — E AS DUAS CONDIÇÕES IMPORTAM.**
+  O passo 5b de `ai_begin_experience_run` recusa (`AI_EXPERIENCE_JUST_STARTED`) quando já há
+  run de experiência **do mesmo `agent_id`**, ainda **aberto** (`reserved`/`streaming`) **e**
+  criado **há menos de 15 s**. Só a primeira condição travaria o dono por 5 minutos (a lease
+  da reconciliação) depois de ele fechar a aba; só a segunda recusaria o retry de um panorama
+  que acabou de falhar. A checagem vem **depois** do advisory lock, senão ela mesma tem
+  corrida. O estado `enviando` do cliente **não** substitui isso: ele não atravessa duas
+  requisições HTTP nem duas telas (a página e o painel têm estados independentes).
+- ⚠️ **SÃO DUAS MIGRATIONS neste bloco, não uma** — `20260922100000` (a 4ª espécie + a RPC) e
+  `20260922110000` (`create or replace` da mesma função, com o passo 5b). Nenhuma das duas cria
+  tabela, coluna ou índice. A aplicada **não se edita**: correção vira arquivo novo.
+- ⛔ **Três fronteiras novas, todas confirmadas por mutação:** só `experience-runner` importa
+  `experiences/catalog`; só `app/api/ia/chat/route.ts` alcança `server/experience-runner`; o
+  `chat-runner` não importa nem o catálogo nem a seleção. **Nenhum `.from()` em `experiences/`**,
+  e a pasta entrou em `CAMADAS_PURAS` no mesmo commit em que nasceu.
+- ⚠️ **QUALQUER RUNNER QUE MONTE `system` CARREGA A MEMÓRIA JUNTO, E ELA É A ÚLTIMA.** O plano
+  deste bloco esboçava o panorama sem ela; corrigido. A concatenação é UMA
+  (`perfil.systemBase + blocoDeMemorias`, em `chat-runner.ts`), e `memory/prompt.test.ts` varre
+  a ordem sobre a fonte, incluindo o bloco da caixa de entrada que entra **antes** dela.
+  ⚠️ Um panorama não tem "o módulo do agente": a seleção roda uma vez por módulo do plano mais
+  uma com `null`, e a união é deduplicada por id — o filtro do Bloco 3 fica intacto.
+- ⚠️ **UNIÃO DE SCHEMAS ENGOLE AS MENSAGENS DOS RAMOS.** O Zod reporta `invalid_union` no topo
+  e as frases em pt-BR de dentro de cada forma deixam de subir — "Página de contexto não
+  reconhecida." virou genérica e o 413 do texto longo virou 400. `route.test.ts` pegou.
+  `problemasDoRamo` (em `route.ts`) escolhe o ramo **só para a mensagem e o status**; quem
+  ACEITA continua sendo a união.
+- ⚠️ **`allow_cross_module` é campo SOLTO, nunca uma `ToolPermission`.** Há teste em
+  `validators/ai.test.ts` usando exatamente essa chave como o exemplo do que
+  `aiPermissionsSchema` recusa — o nome engana. Ela **não é ANDada** com chave nenhuma:
+  desligada, nada roda; ligada, o módulo sem `allow_*` é PULADO e declarado, e **todos** pulados
+  é recusa antes de gastar.
+- ⚠️ **O desfazer de uma mutação pode falhar EM SILÊNCIO por CRLF** (armadilha 5 da 18-B, que
+  reencontrei aqui). Depois de mutar para validar um teste, **confira o estado real do arquivo**
+  — `git diff` —, não só o verde da suíte.
+
+### ✅ Bloco 3 — a memória (2026-09-20)
+
+O assistente passou a conhecer as preferências que o dono escreveu, e a poder **propor**
+preferências novas pelo Approval Engine da 18-C. **Uma migration: 2 tabelas + 1 coluna.** Banco
+em **132 tabelas**, **20 `ai_*`**. Registry em **30 ferramentas** (22 leitura + 8 escrita) e
+**15 commands**. Plano executado:
+`docs/superpowers/plans/2026-09-20-18f-bloco3-memoria.md`. As sete decisões e os números do
+orçamento estão em `docs/project/CURRENT_STATUS.md`.
+
+**O que o próximo bloco precisa saber:**
+
+- ⛔ **A MEMÓRIA É O ÚNICO TEXTO DO DONO QUE ENTRA NO PROMPT SEM SER BLOCO NÃO CONFIÁVEL, E
+  ELA ENTRA POR ÚLTIMO.** `chat-runner` concatena SEGURANÇA + perfil + roteamento + memória, e
+  a ordem é varrida por teste sobre a fonte (`memory/prompt.test.ts`). **Qualquer runner novo
+  que monte system prompt — inclusive o `experience-runner` — carrega essa ordem junto**, ou o
+  panorama nasce sem as preferências que ele existe para respeitar.
+- ⛔ **NENHUM ESTADO DE MEMÓRIA É GRAVADO**, e **expirar não apaga**. `ai_memories` não tem
+  `active` nem `status`. Decisão do dono > prazo, nos dois sentidos.
+- ⛔ **O evento não guarda o conteúdo**, `memory_id` vai sem FK, e `content` fica FORA de
+  `camposAuditaveis` — `changed_fields` é permanente e não some com a conversa.
+- ⚠️ **`allow_memory` é a DÉCIMA `ToolPermission`, e não é um módulo de registros do dono.**
+  Consequência prática: `permissaoDoModulo("memory")` passa a existir, e o roteador **não** o
+  alcança (sem vocabulário, sem agente). `allow_write_memory` é a sexta de escrita, ANDada com
+  `allow_memory` na action.
+- ⛔ **O orquestrador continua com `allowedTools: []`** (invariante 74). Se o Bloco 4 quiser
+  dar uma ferramenta a ele, o preço está escrito: reescrever a frase "não consegue criar,
+  editar nem excluir nada", subir `assistente-pessoal-v2` para `v3` e trocar aquela
+  invariante. **É decisão do dono.**
+- ⚠️ **FRASE DE AUSÊNCIA NA DESCRIÇÃO DE AGENTE AGORA TEM TESTE.** "Só lê" caiu em Treinos,
+  Estudos e Tarefas quando `memory.lembrar` entrou nas oito allowlists — a quarta vez que isso
+  acontece neste módulo. `agents/registry.test.ts` passou a derivar do registry quais agentes
+  escrevem. Publicar ferramenta de escrita num agente novo exige a descrição no mesmo commit.
+- ⚠️ **`memory/` está em `CAMADAS_PURAS` e mistura puro com I/O.** `queries.ts` e
+  `services.ts` declaram `server-only`; `contracts`, `forma`, `state` e `prompt` não podem
+  declarar (a TELA os lê). Há teste cobrindo as duas listas — e ele **reprova arquivo novo**
+  que não esteja em nenhuma delas.
+- ⚠️ **AO MEXER NO ORÇAMENTO, MEÇA ANTES DE ESCREVER A CAUSA.** `/(app)/configuracoes` foi de
+  281,4 para 281,6 KB neste bloco; a hipótese óbvia (`@/lib/ai/constants`) estava errada — o
+  custo veio da casca, pelo ícone novo da busca global. Teto **não** subido: 285, folga 3,4 KB.
+
+### ✅ Bloco 2 — o botão flutuante (2026-09-20)
+
+O assistente ao alcance de qualquer tela: botão fixo num canto inferior que abre um painel com
+o **mesmo** `ChatClient` da 18-A. **Uma migration, duas colunas** (`floating_corner`,
+`floating_hidden`), nenhuma tabela, **nenhuma chave de permissão nova**. Plano executado:
+`docs/superpowers/plans/2026-09-19-18f-bloco2-botao-flutuante.md`. As seis decisões e os
+números do orçamento estão em `docs/project/CURRENT_STATUS.md`.
+
+**O que o próximo bloco precisa saber:**
+
+- ⛔ **TUDO QUE A CASCA IMPORTA ENTRA NAS 67 ROTAS.** `floating-assistant.tsx` tem orçamento
+  medido e uma lista escrita do que **não** pode importar (`@/lib/ai/constants`,
+  `@/lib/validators/*`, `chat-client`, `ui/sheet`, `ui/dropdown-menu`). Depois do Bloco 2,
+  `/(app)/configuracoes` está em **281,4 KB gz de um teto de 285 — 3,6 KB de folga**. Se
+  estourar, **não suba o teto**: tire import da casca.
+- ⛔ **`src/lib/ai/painel.ts` não tem um único import, e há teste varrendo o arquivo.** É a
+  fronteira "o selo não repete o sino" — sem import, ele não tem de onde ler insight,
+  notificação nem ação travada. ⚠️ Ele mora na RAIZ de `src/lib/ai/`, e `CAMADAS_PURAS` itera
+  sobre **pastas** — então o `boundaries.test.ts` não o cobre. Quem cobre é o teste próprio.
+- ⛔ **O ESTADO DA CONVERSA DO PAINEL VIVE FORA DA GAVETA — e isso custou um bug.** O dono
+  relatou em 2026-09-20 que mandar uma pergunta e fechar o painel fazia a pergunta sumir.
+  `SheetContent` é embrulhado em `<Presence present={forceMount || context.open}>`: fechar
+  **desmonta a subárvore inteira**, e o `ChatClient` levava junto as bolhas, o
+  `conversationId` e o cleanup do `AbortController` — que **cancelava a resposta em
+  andamento**. `useLazyDialog` mantém montado o **invólucro**, não os filhos da gaveta; o
+  plano do bloco afirmava o contrário e eu o implementei sem conferir. `forceMount` não é
+  saída (`RemoveScroll`/`hideOthers`/`FocusScope` moram no mesmo `Presence`). Hoje
+  `chat-client.tsx` exporta **`useConversaDaIa`** (motor) e **`ChatView`** (vista), o painel
+  chama o hook **acima do `<Sheet>`**, e `ChatClient` continua juntando as duas para `/ia`.
+  Guardado por `src/lib/ai/painel-persistencia.test.ts`. **Vale para qualquer diálogo cujo
+  conteúdo precise sobreviver ao fechamento.**
+- ⚠️ **`estadoDoPainelDaIa` RECONCILIA** (`reconcileOwnRuns`). Abrir `/ia` era o gatilho
+  primário da reconciliação preguiçosa; com o painel, ele deixou de ser o caminho mais curto.
+  Qualquer porta nova para o chat precisa dessa linha, ou a reserva fica presa no orçamento
+  sem nada na tela explicando. ⚠️ E o efeito que a chama **depende de `aberto`**: preso à
+  montagem, o painel (que nunca desmonta) reconciliaria 1× por carregamento de página, e quem
+  ligasse um provedor sem recarregar veria "configure um provedor" para sempre.
+- ⚠️ **A frase de bloqueio do chat sai de `prontidaoDoChat`** (`server/chat-readiness.ts`),
+  consumida pela página `/ia` **e** pelo painel. Não escreva a segunda cópia.
+- ⛔ **CAMPO OBRIGATÓRIO NUM SCHEMA DE FORMULÁRIO MEXE EM DUAS FIXTURES, NÃO UMA.** A lista
+  `OBRIGATORIOS` de `validators/ai.test.ts` **e** a fixture de `aiPreferencesSchema` em
+  `validators/round-trip.test.ts`. A segunda ficou vermelha sozinha neste bloco — a lista não
+  a cobre.
+- ⚠️ **O gerador de tipos do Supabase traz mais que a sua migration.** Neste bloco ele trouxe
+  também uma relationship de `import_rows` → `accounts_with_balance` e a sintaxe nova dos
+  genéricos auxiliares; só as seis linhas das colunas entraram. **Leia o diff antes de aceitar.**
+- ⚠️ **`compacto` do `ChatClient` esconde o aviso de honestidade LONGO.** Quem o passa assume
+  a obrigação de afirmar a REGRA no próprio cabeçalho — o painel cumpre com
+  `RESUMO_DO_ASSISTENTE`. A trava de honestidade é critério de aceite da fase.
+
+---
 
 ## ⚡ LEIA ISTO ANTES DE ESCREVER QUALQUER TELA (auditoria de performance, 2026-09-19)
 
@@ -20,7 +299,10 @@ relatório completo em `.turbo/REPORT.md` (local, fora do git).
    `import { z } from "zod"`. Ponha em módulo puro (ex.: `@/lib/ai/constants`) e reexporte pelo
    validator, para não quebrar import existente.
 4. **`npm run perf:bundle` reprova rota acima de 250 KB gz**, e roda no CI novo
-   (`.github/workflows/ci.yml`). ⚠️ `/todo` está a **2,6 KB** do teto.
+   (`.github/workflows/ci.yml`). ⚠️ **Conte antes de citar: o número muda a cada bloco.** Em
+   2026-09-20, depois do Bloco 2 da 18-F, a rota apertada é `/(app)/configuracoes` (281,4 KB
+   de um **teto próprio** de 285 — 3,6 KB de folga); a maior sem teto próprio é
+   `/(app)/nutricao/compras`, a 7,8 KB dos 250.
 
 ⚠️ **Se for medir plano de query: `EXPLAIN (analyze, timing off)` e papel `authenticated`.**
 Com `timing on` a view de alimentos acusou 150 ms onde o real eram 3 ms; como service role, a
@@ -28,14 +310,44 @@ RLS some da conta e o custo real da policy fica invisível.
 
 ---
 
-## ▶️ PRÓXIMA: **18-F — IA · integrações e polimento**
+## ▶️ EM ANDAMENTO: **18-F — IA · memória, integrações e polimento**
 
-Não há nada quebrado nem pela metade. O Bloco 4 fechou o último item declarado fora da 18-E.
+Branch `feat/18-f-memoria-integracoes`. Desenho em
+`docs/superpowers/specs/2026-09-19-18f-memoria-integracoes-design.md`.
+Não há nada quebrado nem pela metade.
 
-**O arquivo a abrir primeiro:** `src/lib/ai/server/insight-job.ts` — é o único ponto do
-sistema que roda um run de IA com o dono vindo de FORA da sessão, e o cabeçalho dele explica
-por que os três cuidados (escopo explícito, uma tentativa por módulo, isolamento por módulo)
-não são estilo.
+### ✅ Bloco 1 — a costura (2026-09-19)
+
+A IA deixou de ser uma ilha: entra no sino (4 famílias), na busca global (conversas, análises,
+ações), no backup (17 tabelas `ai_*`) e ganhou exclusão em massa em `/ia/configuracoes`.
+**Nenhuma migration** — o bloco não criou tabela nem coluna. Plano executado:
+`docs/superpowers/plans/2026-09-19-18f-bloco1-costura.md`. As dez decisões e as duas
+armadilhas de fuso corrigidas estão em `docs/project/CURRENT_STATUS.md`.
+
+**O que o próximo bloco precisa saber:**
+
+- ⛔ **Não linke para `/ia/memoria`.** Ela só nasce no **Bloco 3**. Quando nascer, o link entra
+  em `src/lib/search/ai-links.ts` — fonte única das rotas de `/ia`, com teste que confere no
+  DISCO se cada rota citada tem `page.tsx`.
+- ⛔ **Tipo novo de notificação NÃO consulta preferência por conta própria.** Entra por
+  `generateNotifications` → `filterByPrefs` (invariante 24). E `Record<Union, T>` vai deixar o
+  `tsc` vermelho em `components/notifications/notification-meta.tsx` e
+  `components/search/search-meta.tsx` até você dar um ícone ao membro novo — é a armadilha
+  funcionando.
+- **`ai_user_preferences.allow_memory` JÁ EXISTE no banco** e não é lida por ninguém ainda.
+  Ela é do Bloco 3; o Bloco 1 não a tocou de propósito.
+- ⛔ **Apagar conversa apaga a medição de custo dela.** `ai_conversations` → `ai_runs` →
+  `ai_usage_events` é cascade. A tela declara isso antes de confirmar
+  (`src/lib/ai/retention.ts`, `oQueTambemSai`). Se algum bloco futuro fizer migration, essa é
+  a FK a reconsiderar — seria o único jeito de preservar o histórico de gasto.
+- **Não há retenção automática, e é decisão.** Não escreva um job que apague conversa velha.
+- **`getUsageSummary` aceita `LeituraDoDono`** (invariante 79), para o Cron service-role usar
+  a mesma leitura de `/ia/consumo`. Não some consumo num segundo lugar.
+
+**O arquivo a abrir primeiro no que vier depois:** `src/lib/ai/server/insight-job.ts` — é o
+único ponto do sistema que roda um run de IA com o dono vindo de FORA da sessão, e o cabeçalho
+dele explica por que os três cuidados (escopo explícito, uma tentativa por módulo, isolamento
+por módulo) não são estilo.
 
 ---
 

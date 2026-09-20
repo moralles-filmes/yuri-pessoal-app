@@ -1,7 +1,597 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-09-19**
-> (auditoria de performance + iteração: transferência na importação de extrato de conta).
+> Atualizado ao final de **cada** fase. Última atualização: **2026-09-20**
+> (18-F Bloco 5 · fechamento da FASE 18; antes: 18-F Bloco 4 · experiências, 18-F Bloco 3 ·
+> memória, 18-F Bloco 2 · botão flutuante, 18-F Bloco 1 + auditoria de performance + iteração:
+> transferência na importação de extrato).
+
+## ✅ 18-F · Bloco 5 — o fechamento da Fase 18 (2026-09-20)
+
+Plano em `docs/superpowers/plans/2026-09-22-18f-bloco5-fechamento.md` (§8 da spec).
+Branch `feat/18-f-memoria-integracoes`. **Nenhuma migration, nenhuma tabela, nenhuma coluna,
+nenhuma rota, nenhum endpoint, nenhuma ferramenta e nenhum command.** O banco foi tocado **só
+para ler**. Suíte em **3.738 testes / 185 arquivos** (eram 3.701 / 183). Registry (**30**
+ferramentas — 22 leitura + 8 escrita), commands (**15**, dos quais **7** são inversos sem
+ferramenta) e agentes (**9**) inalterados.
+
+**Com este bloco a Fase 18 está CONCLUÍDA. Não há 18-G**, e o projeto volta ao modo
+manutenção/iteração.
+
+> ⚠️ **Divergência de data, registrada e não corrigida:** as seções do Bloco 4 abaixo estão
+> datadas **2026-09-22**, mas os commits dele são todos de **2026-09-20**
+> (`git log --date=short`). As datas do Bloco 5 seguem os **commits**. Não reescrevi as do
+> Bloco 4 porque são texto de outra entrega — mas quem for citá-las deve conferir no `git log`,
+> não no cabeçalho.
+
+### A suíte de evals — e o defeito que ela encontrou antes de ficar verde
+
+`src/lib/ai/evals/` traz os **oito casos do briefing** como dado (`casos.ts`) e afirma sobre
+eles o que é **estrutural**: o roteador escolhe o agente certo · a chave desligada bloqueia (e o
+teste liga **todas as outras** ao desligar uma, o que é mais forte que `{}`) · a ferramenta certa
+é oferecida · e ela **não** é oferecida com a chave desligada.
+
+⛔ **Nenhum teste chama provedor.** O doc da fase pedia `ai_eval_cases`/`ai_eval_runs` — duas
+tabelas, uma tela e um custo por execução. O desenho recusou: o que pode regredir nestes casos é
+estrutural, e uma suíte que às vezes fica vermelha sem defeito é uma suíte que se aprende a
+ignorar.
+
+⚠️ **A suíte pagou por si na primeira execução.** Uma das oito frases canônicas — *"Como estão
+minhas proteínas nesta semana?"* — **não alcançava a Dieta**: o vocabulário de `nutrition`
+listava `"proteina"` e `"carboidrato"` no singular, e o casamento é por **fronteira de palavra,
+sem stemming** (de propósito — stemming faria palavras não relacionadas colidirem, e palavra
+ambígua **desliga** o roteamento em vez de errá-lo, invariante 27). A correção foram **duas
+palavras** em `agents/routing.ts`, num commit separado do teste — e a separação é o que prova que
+ela era necessária. **É a única mudança de código de produção do bloco.**
+
+### O caso destrutivo é ausência de código, não recusa
+
+*"Exclua todas as minhas transações"* **chega** ao Financeiro — e o que protege o dono não é o
+roteamento nem um prompt: é não existir ferramenta que apague. `evals/destrutivo.test.ts` afirma
+isso **sobre o registry**, derivando as **duas** listas — {commands que as ferramentas apontam}
+∩ {inversos que os commands declaram} — em vez de uma lista de nomes proibidos escrita à mão,
+que furaria no primeiro command novo. Medido: 30 ferramentas, 15 commands, **7 inversos**,
+**interseção vazia**, risco máximo **3**.
+
+⛔ **Confirmado por MUTAÇÃO**, não só pelo verde: uma ferramenta `finance.excluir_transacao`
+apontando para `excluirTransacao` foi acrescentada ao registry, o teste ficou **vermelho**
+nomeando o inverso alcançável, e a mutação foi desfeita — conferida por `git diff`, não pelo
+verde (a armadilha de CRLF do Bloco 4).
+
+⚠️ **"Lance esta nota no PIX" cair no orquestrador NÃO é defeito** — é o desenho. O comprovante
+não é frase de chat: a porta é `/ia/comprovantes` e ela é a única (invariante 55). O
+orquestrador tem `allowedTools: []`, então a frase não faz nada por acidente — e o teste afirma
+junto que `chatRequestSchema` **recusa** um corpo com arquivo.
+
+### A validação item a item — e a contagem que mudou
+
+`docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md`: **163 critérios**, um por linha, cada um com
+evidência (teste com nome · arquivo/migration · conferência à mão com data · retirado pelo
+desenho). **Nenhuma linha diz "ok", "passa" ou "feito".**
+
+| | |
+| --- | --- |
+| Critérios extraídos | **163** (84 + 16 + 17 + 17 + 14 + 15) |
+| Validados | **142** |
+| Dependem de conferência à mão | **17** |
+| **RETIRADOS** no desenho (spec §3/§5.2) | **4** (+1 parcial) — não contam no denominador |
+
+⚠️ **A estimativa do plano era 158, e estava errada por método:** ela não contava o trecho final
+`transversais do projeto` das cinco listas em prosa, embora contasse os equivalentes numerados da
+18-A (itens 79–84). A regra do projeto é contar antes de citar, e o número certo é o medido.
+
+⚠️ **Três critérios ficaram registrados como "deixaram de valer", e não como falsos** — o padrão
+que o arquivo usa para tudo que o tempo tornou estranho: A-64 ("nenhuma notificação no sino
+nesta subfase", derrubado pela 18-F Bloco 1), A-74 ("nenhuma definição de ferramenta é enviada",
+derrubado pela 18-B), B-15 ("nenhuma escrita acontece", derrubado pela 18-C) e B-3 ("consulta
+cruzada pelo orquestrador", **substituída** pela experiência com `allow_cross_module`, porque o
+orquestrador não tem ferramenta nenhuma).
+
+### O que a conferência no banco mostrou (2026-09-20, só leitura)
+
+| Conferência | Resultado |
+| --- | --- |
+| Tabelas em `public` | **132**, das quais **20** `ai_*` — a documentação estava certa |
+| RLS + FORCE RLS | A consulta por tabelas sem uma das duas voltou **VAZIA** — critério bloqueante, passa |
+| `ai_runs_kind_check` | Os **quatro** valores: `chat`, `extracao`, `insight`, `experience` |
+| `ai_runs_kind_coerente` | Exige a forma por inteiro: conversa para `chat` **e** `experience`, ausência dela para `extracao` e `insight` |
+| Advisor de **segurança** | **1 lint**, `auth_leaked_password_protection` — **pré-existente** (registrado desde 2026-08-07), botão do painel de Auth, sem migration. **Zero lints de schema** |
+| Advisor de **performance** | Backlog conhecido, **não** tocado aqui: **179** `auth_rls_initplan` (bate com o número do `CLAUDE.md`), 150 `unused_index`, 117 `unindexed_foreign_keys`, 1 `auth_db_connections_absolute` |
+
+### O achado de documentação: `PROJECT_ROADMAP.md` mentia desde a Fase 02
+
+A spec mandava corrigir uma linha do `CURRENT_STATUS.md` que marcava a **18-D como ⬜** — ela
+**já não existia**. O problema real estava no roadmap, que ninguém olhava: **quinze linhas
+erradas**, incluindo `02 | Financeiro Base | ⬜ Próxima` e `18-E | ⬜ Próxima — sem desenho
+validado` (concluída em 2026-08-09). Ele é o **item 4 da leitura obrigatória** de todo agente
+novo, **antes** do `CURRENT_STATUS.md`. Corrigido.
+
+### As duas chaves que continuam ociosas — registro, não migration
+
+`allow_external_search` e `allow_files` existem desde a 18-A e **não ligam nada**, o que contraria
+a disciplina das invariantes 24 e 47. A decisão foi **registrar em vez de remover**: `allow_files`
+foi substituída na prática por `allow_vision` (18-D), mais específica; `allow_external_search`
+fica de pé caso a pesquisa externa volte como tarefa avulsa. ⛔ **Não escreva migration para
+apagá-las** — remover coluna no fechamento de fase é a mudança de schema mais arriscada possível
+pelo menor ganho possível.
+
+### Verificação (Bloco 5)
+
+`npm run lint` ✅ · `npx tsc --noEmit` ✅ · `npm run test:run` ✅ **3.738 testes / 185 arquivos** ·
+`npm run build` ✅ · `npm run perf:bundle` ✅ **68 rotas, mediana 213,9 KB gz**,
+`/(app)/configuracoes` em **281,6 KB de um teto próprio de 285** — **idêntico** à linha de base,
+como tinha de ser (o bloco mudou duas strings) · `TZ=UTC npx vitest run` ✅.
+
+⛔ **O que este bloco NÃO conseguiu validar:** os 17 critérios que dependem de navegador com
+sessão, mais a tabela de 10 itens do Bloco 4. As duas listas são a mesma pendência e estão em
+`PHASE_18_CRITERIOS_VALIDADOS.md` ("O que NÃO foi validado") e em
+`docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`.
+
+---
+
+## 🟡 18-F · Bloco 4 — três panoramas de um clique (2026-09-22)
+
+Plano em `docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md` (§7 da spec).
+Branch `feat/18-f-memoria-integracoes`. **Duas migrations, e NENHUMA cria tabela:** um valor no
+CHECK de `ai_runs.kind` e uma RPC de admissão; depois, a janela de dedupe do clique duplo, por
+`create or replace` da mesma função. Banco continua em **132 tabelas** no `public`,
+**20 `ai_*`** (reconferido no banco em 2026-09-22). Suíte em **3.701 testes / 183 arquivos**.
+Registry, commands e agentes **inalterados** — este bloco não acrescentou nenhum dos três.
+
+*Planejar meu dia* · *Encerrar meu dia* · *Planejar minha semana*: o servidor decide o que ler,
+executa a lista pelo Tool Executor de sempre e o modelo **só redige**. Mais um **modo** Caixa
+de entrada, que classifica um item solto e prepara a ação pelo Approval Engine de sempre.
+
+⚠️ **`allow_cross_module` já existia desde a 18-A e nunca tinha sido lida por uma linha de
+código.** Este bloco a faz ligar alguma coisa — o mesmo movimento que o Bloco 3 fez com
+`allow_memory` e o Bloco 4 da 18-E com `allow_insight_jobs`. **Nenhuma coluna nova.**
+
+| O que entrou | Onde |
+| --- | --- |
+| Catálogo, atalhos, seleção e os prompts de redação (puros) | `src/lib/ai/experiences/` |
+| A 4ª espécie de `kind` + `ai_begin_experience_run` | `supabase/migrations/20260922100000_ai_experiencias.sql` |
+| O plano, e quem o monta | `experiences/contracts.ts` + `server/experience-runner.ts` |
+| O passo dirigido, a admissão própria e o aviso no texto | `server/chat-runner.ts` |
+| A união de duas formas `.strict()` no único endpoint | `validators/ai.ts` + `app/api/ia/chat/route.ts` |
+| Os três atalhos e o interruptor da caixa de entrada | `components/ai/chat-client.tsx` (dentro de `ChatView`) |
+| A trilha de `allow_cross_module` | `ai/types.ts`, `ai/queries.ts`, `validators/ai.ts`, `actions/ai-preferences.ts`, `components/ai/ai-preferences-form.tsx` |
+
+### As decisões deste bloco
+
+1. **A lista de leituras é ESTÁTICA, e quem a executa é o servidor.** `MAX_TOOL_STEPS = 3` por
+   tentativa existe para impedir **o modelo** de decidir quanto o dono gasta; num roteiro
+   escrito por nós ele não se aplica. Mas "não se aplica" não virou "não há teto":
+   `MAX_FERRAMENTAS_POR_EXPERIENCIA = 5`, o catálogo é validado contra ele em teste, e
+   `computeReservation` reserva sobre **esse** número. Deixar o modelo pedir uma ferramenta por
+   vez faria o teto cortar antes da última **toda manhã**.
+2. **Nenhuma porta nova de leitura.** As experiências entram pelo Tool Executor, com `guard.ts`,
+   Zod do adapter, timeout do descriptor, poda e linha em `ai_tool_calls`.
+   `insights/collectors/` (invariante 71) continua sendo a única exceção, e **não cresceu**.
+3. **O panorama ABRE UMA CONVERSA**, e daí vêm de graça o "transformar resposta em ação" pelo
+   Approval Engine, a busca, o histórico e a exclusão em massa. Ele é a **segunda** espécie de
+   run com `conversation_id` — e essa foi a armadilha do bloco: `ai_runs` tem **dois** checks
+   sobre `kind`, e mexer só no de valores faria todo panorama falhar no `insert`, dentro da
+   transação de admissão, chegando à tela como `AI_UNKNOWN`.
+4. **Não há um terceiro laço de tentativas.** `experience-runner.ts` monta um PLANO e delega a
+   `runChat` — retry, fallback, medição por chamada, heartbeat e a regra "só uma tentativa
+   aberta por run" (`ai_usage_events_one_active_uidx`, que o próprio arquivo declara que nenhum
+   teste de unidade pega) ficam num lugar só. **Divergência declarada em relação à spec**, que
+   dizia que o runner executaria os seis passos.
+5. **Módulo sem chave é PULADO e DECLARADO; todos pulados é RECUSA antes de gastar.** A
+   assimetria é deliberada: desligar a Agenda não pode calar o panorama inteiro (invariante
+   77), mas chamar o modelo para escrever sobre nada faria o dono pagar por uma resposta que o
+   sistema já sabia que seria vazia (a lição do `NO_INDICATORS` da 18-E).
+6. **A frase do que ficou de fora é NOSSA**, entra no texto gravado e vai no **fim**, no ramo de
+   sucesso: tentativa nova zera o texto (invariante 23), e um aviso escrito antes sumiria no
+   primeiro retry. Pedi-la ao modelo seria obediência "quase sempre" — e num panorama diário
+   isso é uma omissão por mês.
+7. **A Caixa de entrada usa o LAÇO NORMAL, e não é preguiça.** Pelo runner dirigido ela exigiria
+   um agente com as ferramentas dos cinco módulos de escrita ao mesmo tempo — o "agente de
+   tudo" que a allowlist por agente existe para impedir. No laço normal, `routeAgent` entrega ao
+   especialista certo; palavra ambígua **desliga** o roteamento (invariante 27) e cai no
+   orquestrador, que não tem ferramenta e portanto **pergunta**.
+8. **Duas formas `.strict()` no lugar de um schema com campos opcionais.** A do panorama não
+   aceita `text`, nem `conversationId`, nem `caixaDeEntrada` — irrepresentável vence recusado
+   (invariantes 67 e 79). **Nenhum endpoint novo**, nenhuma rota nova, nenhuma tabela nova.
+
+### O que corrigi em relação ao plano, e por quê
+
+1. ⛔ **O `system` do panorama que o plano esboçava não tinha MEMÓRIA.** "Planejar meu dia"
+   respeitando uma preferência salva é onde a memória do Bloco 3 justifica existir, e o handoff
+   daquele bloco já avisava que **qualquer runner novo carrega essa ordem junto**. A
+   concatenação continua sendo UMA (`perfil.systemBase + blocoDeMemorias`), e o panorama passa
+   por ela. Como ele lê VÁRIOS módulos e `memoriasParaOPrompt` decide para UM, a seleção roda
+   uma vez por módulo do plano mais uma com `null` (as globais) e a união é deduplicada por id —
+   o filtro do Bloco 3 fica **intacto**, então cada memória de módulo continua exigindo a
+   `allow_*` dela (invariante 26). Daí o campo `modulos` no plano.
+2. ⚠️ **A união quebrou as mensagens em pt-BR do endpoint, e `route.test.ts` pegou.** O Zod
+   reporta `invalid_union` no TOPO quando nenhuma forma casa, e as mensagens de dentro de cada
+   ramo deixavam de subir: "Página de contexto não reconhecida." virava uma frase genérica, e
+   texto longo demais virava 400 em vez de 413. `problemasDoRamo` restaura as duas coisas **sem
+   afrouxar a união** — quem ACEITA continua sendo ela, e a escolha do ramo decide só a mensagem
+   e o status.
+
+### Orçamento de JS (medido depois do build, 2026-09-22)
+
+| Rota | Bloco 3 | Bloco 4 | Teto |
+| --- | --- | --- | --- |
+| `/(app)/configuracoes` | 281,6 KB | **281,6 KB** | 285 (próprio) |
+| mediana de 68 rotas | 213,9 KB | **213,9 KB** | 250 |
+
+Sem variação: o bloco não cria rota, não toca a casca e o `Switch` novo já era importado
+naquela tela. Os atalhos entram por `experiences/atalhos.ts`, que **não tem um único import**
+(há teste varrendo o arquivo) — o catálogo, que carrega os prompts e o Tool Registry, fica no
+servidor.
+
+### O que ficou de fora do Bloco 4, declarado
+
+Nenhuma rota `/ia/panorama` · nenhuma tabela · nenhum endpoint · nenhuma ferramenta e nenhum
+command novos · o botão da casca (`floating-assistant.tsx`) **não foi tocado** · panorama **não
+entra no Cron** (é clique do dono; não há retenção nem geração automática — decisão 5 da 18-D,
+invariante 87) · `insight-runner.ts` segue com a própria cópia do laço de tentativas, dívida
+conhecida que este bloco **não piorou**.
+
+⚠️ **Falta a conferência manual do dono** (tabela de 10 itens no Passo 4 da Task 8 do plano):
+nenhum teste do repositório percorre o salvamento de `/ia/configuracoes` nem o desenho em 320 px.
+
+### Auditoria do bloco (2026-09-22) — os 3 P2 corrigidos
+
+Três auditorias read-only (RLS da migration, IA/automação, processo e integridade): **zero
+P0/P1**. A migration passou limpa nos dez controles (invoker, `search_path`, `auth.uid()` sem
+parâmetro de dono, GRANT batendo com a assinatura, `with check` de cada `insert`, lock
+transacional). Os três P2 viraram código. Os dois primeiros são a mesma família — **uma
+garantia que dependia de alguém obedecer**:
+
+1. **Só leitura entra, agora em runtime.** `decidirLeituras` recusa `kind !== "leitura"`. O
+   catálogo já era varrido por teste, mas teste só protege quem roda a suíte — e o laço
+   dirigido chama `executeTool` sem `modo` (o executor fixa `"proposta"` por dentro), então uma
+   ferramenta de escrita no catálogo criaria proposta **a cada clique no atalho**.
+2. **Leitura que falhou tem frase nossa** (`experiences/falhas.ts`). Até aqui a garantia era o
+   bloco de erro pedindo ao modelo "diga que não conseguiu obter o dado" — instrução, não
+   garantia. É a mesma decisão que já tinha sido tomada para o módulo pulado, aplicada ao caso
+   que faltava.
+
+3. **Clique duplo do atalho deduplicado no banco** — `20260922110000`, a **segunda** migration
+   do bloco. O atalho **sempre gasta**, diferente de uma proposta do Approval Engine (que
+   expira sem efeito), e o único freio era o estado `enviando` do cliente — que não atravessa
+   duas requisições HTTP nem duas telas (a página e o painel têm estados independentes). O
+   advisory lock **serializa** duas chamadas do mesmo dono mas **não as deduplica**: a segunda
+   espera, lê a reserva da primeira e cria um segundo run pago pelo mesmo conteúdo.
+
+   ⛔ **A correção não é a que a auditoria sugeriu.** "Recusar enquanto houver run aberto"
+   travaria o dono por **até 5 minutos** (a lease da reconciliação) depois de ele fechar a aba
+   no meio de um panorama. O passo 5b usa **duas** condições, e cada uma desarma o defeito da
+   outra: run ainda aberto **e** aberto há menos de 15 s. O segundo clique do gesto morre; um
+   run que fechou — por falha, cancelamento ou sucesso — devolve o botão na hora. É a
+   invariante 68 aplicada aqui: **deduplicar antes de gastar**.
+
+   Detalhes que a checagem precisa acertar: **depois** do advisory lock (senão ela mesma tem
+   corrida); `agent_id` no filtro (um panorama não bloqueia outro); `created_at`, a coluna que
+   as outras janelas da função já usam; e **409, não 429** — não é excesso de pedidos, é este
+   pedido chegando duas vezes, e a frase não repreende ninguém.
+
+Banco reconferido **depois** das duas migrations: **132 tabelas**, **20 `ai_*`**,
+`security_definer: false`, assinatura de 8 argumentos intacta, grants sem `public`/`anon`,
+nenhum lint novo em `get_advisors`. Tipos **não regerados** de propósito: assinatura, nomes de
+argumento e tabela de retorno idênticos, então a entrada em `Functions` não muda.
+
+## 🟡 18-F · Bloco 3 — o assistente conhece as preferências do dono (2026-09-20)
+
+Plano em `docs/superpowers/plans/2026-09-20-18f-bloco3-memoria.md` (§6 da spec).
+Branch `feat/18-f-memoria-integracoes`. **Uma migration: 2 tabelas + 1 coluna.**
+Banco em **132 tabelas** no `public`, **20 `ai_*`** (conferido no banco em 2026-09-20).
+Suíte em **3.609 testes / 178 arquivos**. Registry em **30 ferramentas** (22 leitura + 8
+escrita) e **15 commands**.
+
+O dono escreve preferências numa tela; o assistente as leva para as conversas **como
+preferência, nunca como regra**. E a IA passa a poder PROPOR preferências novas — pelo mesmo
+Approval Engine da 18-C, sem mecanismo novo de confirmação.
+
+⚠️ **`allow_memory` já existia desde a 18-A e nunca tinha sido lida por uma linha de código.**
+Este bloco a faz ligar alguma coisa — o mesmo movimento que o Bloco 4 da 18-E fez com
+`allow_insight_jobs`. **Só `allow_write_memory` é coluna nova**, e nasce `false`.
+
+| O que entrou | Onde |
+| --- | --- |
+| Vocabulário, validação de FORMA e o estado derivado (puros) | `src/lib/ai/memory/{contracts,forma,state}.ts` |
+| Duas tabelas + a chave de escrita | `supabase/migrations/20260921100000_ai_memoria.sql` |
+| Leitura e as cinco escritas, cada uma com o seu evento | `src/lib/ai/memory/{queries,services}.ts` |
+| A seção do prompt, e a ordem em que ela entra | `src/lib/ai/memory/prompt.ts` + `server/chat-runner.ts` |
+| A 8ª ferramenta e os dois commands, partidos em dois | `tools/registry.ts` + `approval/commands/memory{,-preview}.ts` |
+| A tela, o formulário sob demanda e as 4 actions | `app/(app)/ia/memoria/` + `components/ai/memory-*` + `actions/ai-memory.ts` |
+| O deep-link e o backup | `search/ai-links.ts`, `search/queries.ts`, `settings/export-tables.ts` |
+
+### As decisões deste bloco
+
+1. **Duas tabelas, e a segunda não é detalhe.** `ai_memories` guarda o que vale agora;
+   `ai_memory_events` guarda o que aconteceu, **append-only** (só SELECT e INSERT) e **sem o
+   conteúdo**. É a invariante 20 aplicada aqui: com a frase no log, "excluir memória" a
+   deixaria viva num lugar que o dono não sabe que existe. `memory_id` vai **sem FK**
+   (invariante 38) — apagar a memória não apaga o registro de que ela existiu.
+2. **Nenhum estado é gravado.** Sem `active`, sem `status`, sem `forgotten_at`.
+   `vigente`/`expirada`/`desativada`/`esquecida` saem de `expires_at` + o último evento, puro,
+   com `agora` injetado. **Decisão do dono > prazo, nos dois sentidos**, e `reativada` devolve
+   a palavra ao prazo em vez de ignorá-lo. ⛔ **Expirar não apaga**: a memória sai do prompt e
+   continua legível, com a data em que venceu.
+3. **O servidor valida FORMA, nunca assunto** (invariante 39): uma linha, ≤300 **pontos de
+   código** (como o `char_length` do Postgres conta — `.length` é UTF-16 e discordaria dele nas
+   frases com emoji), sem endereço e sem bloco que misture letra e dígito em 20+ caracteres.
+   Uma lista de assuntos proibidos fura no primeiro assunto novo. A proibição de ASSUNTO existe
+   e mora no prompt da ferramenta, **descrita pelo lado positivo** — dizer o que PODE ser
+   proposto é mais estreito e não planta palavra nenhuma no prompt (invariante 30).
+4. **A memória entra no prompt POR ÚLTIMO.** `chat-runner` concatena SEGURANÇA + perfil +
+   contexto de roteamento + memória, e a ordem é varrida por teste sobre a fonte. A seção
+   declara em paralelo que uma preferência **não desliga** regra, **não autoriza** leitura,
+   **não autoriza** alteração e **não é dado sobre os registros**. Teto **visível** (20).
+5. **Memória de módulo ANDa com a chave daquele módulo**, resolvida pelo MÓDULO da memória e
+   não pelo agente que atende — invariante 26. Há teste com `body`, que não tem agente próprio:
+   numa conversa de Treinos ela exige `allow_body`, não `allow_training`.
+6. **O inverso de `lembrarPreferencia` é `esquecerPreferencia`, não uma exclusão**
+   (invariante 48). Esquecer tira do prompt e deixa legível; apagar de vez continua sendo botão
+   do dono, na tela dele. E `content` fica **fora** de `camposAuditaveis`: `changed_fields` é
+   auditoria permanente e não some com a conversa.
+7. **O orquestrador continua com `allowedTools: []`.** `memory.lembrar` foi para os OITO
+   especialistas. O prompt dele afirma que não cria, edita nem exclui nada; incluí-lo custaria
+   reescrever aquela frase, subir `assistente-pessoal-v2` para `v3` e trocar a invariante 74.
+   A tela cobre o buraco: preferência geral o dono escreve lá, e o texto diz isso.
+
+### Três descrições de agente viraram mentira — e agora há teste
+
+"Só lê — não altera nada" caiu em **Treinos, Estudos e Tarefas** quando `memory.lembrar` entrou
+nas oito allowlists. É a **quarta vez** que uma frase de ausência envelhece neste módulo
+(`AVISO_SEM_ACESSO` quatro vezes, o prompt-base três), e a primeira em que há guarda:
+`agents/registry.test.ts` deriva do REGISTRY quais agentes escrevem e recusa "só lê" na
+descrição deles — nunca de uma lista escrita à mão, que é justamente a que ficaria para trás.
+
+### O que a execução encontrou e o plano não previa
+
+- **O teste de migration tinha duas asserções vácuas.** A regex de policy proibida exigia
+  quebra de linha onde o SQL escreve `on public.ai_memory_events for select` na mesma linha —
+  ela não casaria nem com o que existe, e passaria verde para sempre, inclusive depois de
+  alguém acrescentar o UPDATE que ela deveria barrar. E `indexOf` pelo nome da constraint
+  pegava o `drop constraint if exists`, devolvendo lista vazia. Corrigidos, com **asserção
+  positiva** provando que a primeira regex sabe encontrar presença.
+- **`round-trip.test.ts` pegou um defeito real antes do usuário:** `.regex()` roda ANTES do
+  `.transform()`, então o padrão de data recusava a string vazia que um `<input type="date">`
+  em branco manda — o formulário nunca salvaria, com "Use uma data válida" num campo deixado
+  vazio de propósito. É exatamente o bug que deu origem àquele arquivo.
+- **A regex do teste de fronteira do lado preview só pegava um nível de pasta.**
+  `@/lib/[a-z-]+/services$` deixaria `@/lib/ai/memory/services` passar, e a partição dos
+  commands viraria decoração — arquivos dois, grafo de imports um. Agora é `/services$`.
+- **`guard.test.ts` tinha duas fixtures escritas à mão** sobre uma lista que cresce. Viraram
+  derivadas de `TOOL_WRITE_PERMISSIONS`: ali, "tudo ligado" com uma chave faltando testaria o
+  guard contra um estado que nunca existe.
+- **`memory/` mistura puro com I/O, e nada no projeto guardava essa linha.**
+  `boundaries.test.ts` exige `server-only` só em `ai/server/` e `approval/commands/`. O teste
+  novo cobre as duas metades — e reprova arquivo novo que escape das duas listas (foi ele que
+  exigiu `prompt.ts` na lista assim que o arquivo nasceu).
+
+### Orçamento de JS, medido em 2026-09-20 depois do bloco
+
+| Rota | Bloco 2 | Bloco 3 | Teto |
+| --- | --- | --- | --- |
+| `/(app)/configuracoes` | 281,4 KB | **281,6 KB** | 285 (próprio) |
+| `/(app)/ia/memoria` | — | **203,0 KB** | 250 |
+| mediana | 213,8 KB (67 rotas) | **213,9 KB (68 rotas)** | 250 |
+
+⚠️ **A medição desmentiu a hipótese do plano.** Ele dizia que, se `/(app)/configuracoes`
+subisse, o culpado seria `@/lib/ai/constants`. Movi os dois rótulos novos dali para
+`memory/contracts.ts` e **o número ficou igual**: o custo vem da CASCA — a busca global vive no
+Header de todas as rotas, e `search-meta.tsx` ganhou o ícone e `search/types.ts` o tipo
+`ia_memoria`. O teto **não** foi subido; o movimento continua certo pelo argumento de não
+viajar com quem não usa, mas não é o que explica o número. **Ao mexer no orçamento, meça antes
+de escrever a causa.**
+
+## 🟡 18-F · Bloco 2 — o assistente ao alcance de qualquer tela (2026-09-20)
+
+Plano em `docs/superpowers/plans/2026-09-19-18f-bloco2-botao-flutuante.md` (§5 da spec).
+Branch `feat/18-f-memoria-integracoes`. **Uma migration, duas colunas, nenhuma tabela.**
+Suíte em **3.513 testes / 172 arquivos**.
+
+Um botão fixo no canto inferior abre um painel com o **mesmo** `ChatClient` da 18-A, apontando
+para o **mesmo** `/api/ia/chat`. Nenhuma chave de permissão nova, nenhuma porta nova de
+leitura, nenhuma regra reescrita — o chat atrás do botão continua exigindo exatamente as
+mesmas `allow_*` e `allow_write_*`, e todas continuam desligadas de fábrica.
+
+| O que entrou | Onde |
+| --- | --- |
+| A regra do selo, pura e **sem um único import** | `src/lib/ai/painel.ts` + `painel.test.ts` |
+| Duas colunas + CHECK do canto | `supabase/migrations/20260920100000_ai_botao_flutuante.sql` |
+| O botão (leve, mora na casca) | `src/components/ai/floating-assistant.tsx` |
+| O painel (pesado, atrás de `next/dynamic`) | `src/components/ai/floating-assistant-panel.tsx` |
+| A frase de bloqueio, num lugar só | `src/lib/ai/server/chat-readiness.ts` |
+| Abrir o painel (lê + **reconcilia**) e mover/ocultar o botão | `src/lib/actions/ai-panel.ts` |
+| Os dois controles, e o caminho de volta | `src/components/ai/ai-preferences-form.tsx` |
+
+### As seis decisões deste bloco
+
+1. **Dois cantos, não quatro.** O Header é `sticky top-0 z-30` com `h-16` e ocupa a faixa
+   superior inteira em toda rota `(app)`: canto de cima é colisão garantida. Ficam
+   inferior-direito e inferior-esquerdo.
+2. **Sem arrastar.** Arrastar exigiria persistência por tipo de aparelho, encaixe em bordas e
+   uma alternativa acessível ao gesto — três subsistemas para fugir de obstáculos que este
+   layout **não tem**: o lançamento rápido mora no Header e a navegação do celular é um drawer
+   lateral, não uma barra inferior.
+3. **Banco, não cookie.** A sidebar usa cookie porque o estado dela é por aparelho. Quem
+   escondeu o botão escondeu-o de propósito, e reencontrá-lo aparecendo no celular seria a
+   preferência não valendo. Em banco ele ainda entra no backup e some na exclusão em massa.
+4. **O botão nasce VISÍVEL,** e isso não fere "toda chave nasce desligada": aquela regra vale
+   para AUTORIZAÇÃO, e esta não autoriza nada. Um botão que nasce escondido é uma entrega que
+   ninguém encontra.
+5. **O painel abre conversa NOVA** (`conversationId={null}`). Nada é criado no banco até a
+   primeira mensagem, e o histórico continua em `/ia/conversas`, alcançável pelo "Abrir em
+   tela cheia" e pela busca global. Semear com "a última conversa" exigiria lê-la a cada
+   abertura e decidir o que é "a última" — decisão de produto que este bloco não tem.
+6. **`floating_hidden` esconde o BOTÃO, não o assistente.** O atalho `Ctrl/⌘ + I` continua
+   abrindo o painel, e as duas telas que oferecem ocultar dizem isso com essas palavras.
+
+### ⛔ O conserto de 2026-09-20 — a conversa não sobrevivia ao fechamento
+
+O dono conferiu à mão e achou o que o automatizado não pegava: **mandar uma pergunta e fechar
+o painel fazia a pergunta sumir.**
+
+`SheetContent` é embrulhado em `<Presence present={forceMount || context.open}>`, então fechar
+**desmonta tudo que está dentro da gaveta**. O `ChatClient` morava ali e levava junto o
+`useState` das bolhas, o `conversationId` e — o pior — o cleanup do `AbortController`, que
+**cancelava a resposta em andamento**. O critério de aceite 6 estava quebrado inteiro: o selo
+nunca chegaria a aparecer. O plano do bloco afirmava que `useLazyDialog` fazia o streaming
+sobreviver; ele mantém montado o **componente do painel**, não os filhos da gaveta.
+
+`forceMount` não era saída: `RemoveScroll`, `hideOthers` e `FocusScope` moram no mesmo
+`Presence`, e o app ficaria com rolagem travada e `aria-hidden` permanentes.
+
+**O conserto é o que o React manda — o estado sobe.** `chat-client.tsx` passou a exportar as
+duas metades: `useConversaDaIa` (estado, envio, streaming, cancelamento) e `ChatView` (só JSX).
+`ChatClient` continua juntando as duas, então `/ia` não mudou uma linha; o painel chama o hook
+**acima do `<Sheet>`** e renderiza a vista dentro. Como o painel sobrevive ao fechamento **e** à
+navegação, perguntar-fechar-navegar passou a funcionar. **Não há segundo chat.**
+
+E o que persiste envelhece: o efeito que lê `estadoDoPainelDaIa` passou a depender de `aberto`.
+Preso à montagem, quem ligasse um provedor sem recarregar veria "configure um provedor" para
+sempre, e o gatilho de reconciliação (invariante 92) dispararia 1× por carregamento em vez de a
+cada abertura.
+
+Guardado por `src/lib/ai/painel-persistencia.test.ts` — varredura de código-fonte **que ignora
+comentários**, porque a primeira versão do teste casou com o `<Sheet>` citado na própria
+explicação da regra. Orçamento inalterado: **281,4 KB gz**, 15 chunks, e das marcas do painel e
+do chat nenhuma aparece nos chunks contados para a rota.
+
+### O orçamento de JS, que foi o juiz do bloco
+
+O botão mora na casca, então tudo que ele importa entra nas **67 rotas**. Medido antes e
+depois, com `npm run perf:bundle`:
+
+| Rota | Bloco 1 | Bloco 2 | Teto |
+| --- | --- | --- | --- |
+| `/(app)/configuracoes` | 279,2 KB | **281,4 KB** | 285 (próprio) |
+| `/(app)/nutricao/compras` | 240,0 KB | 242,2 KB | 250 |
+| `/(app)/todo` | 236,2 KB | 237,3 KB | 250 |
+| mediana de 67 rotas | 211,7 KB | 213,9 KB | — |
+
+⛔ **A folga da rota mais apertada caiu de 5,8 para 3,6 KB, e o teto NÃO subiu.** O comentário
+da exceção em `scripts/perf/bundle-budget.mjs` afirmava "folga de ~6 KB" e virou falso — foi
+corrigido junto, com o número novo.
+
+**A separação foi PROVADA no build, não assumida.** Dos 15 chunks contados para
+`/(app)/configuracoes`, só as marcas do BOTÃO aparecem; "Preparando o assistente", "Abrir em
+tela cheia" e "Nenhuma mensagem ainda" (painel e chat) estão todas fora. O que segura isso:
+`painel.ts` sem import, a lista escrita do que `floating-assistant.tsx` não pode importar, e o
+`next/dynamic` com **objeto literal** — trocá-lo por constante faz o painel voltar ao manifest.
+
+### Duas coisas que o plano não previa
+
+1. **`round-trip.test.ts` tinha a SEGUNDA fixture de `aiPreferencesSchema`** e ficou vermelha
+   sozinha. A lista `OBRIGATORIOS` de `validators/ai.test.ts` não a cobre — é o mecanismo da
+   invariante 81 disparando num lugar a mais. Campo obrigatório novo mexe em **duas** fixtures.
+2. **O gerador de tipos do Supabase traz mais do que a migration.** Além das duas colunas, ele
+   trouxe uma relationship de `import_rows` → `accounts_with_balance` e a sintaxe nova dos
+   genéricos auxiliares. Só as **seis linhas** das colunas entraram em `src/types/supabase.ts`;
+   as outras duas ficaram de fora de propósito, porque não são deste bloco. **Leia o diff dos
+   tipos antes de aceitá-lo** — o arquivo é ponto de contato entre frentes.
+
+### Verificação
+
+`npm run lint` · `npx tsc --noEmit` · `npm run test:run` (3.513/3.513) · `npm run build` ·
+`npm run perf:bundle` (67 rotas dentro do teto) · `TZ=UTC npx vitest run` (3.513/3.513) ·
+`get_advisors` sem lint novo.
+
+⚠️ **E a conferência à mão do dono achou o que tudo isso deixou passar** — a conversa não
+sobrevivia ao fechamento do painel. Ver "O conserto de 2026-09-20" acima. A suíte não tem como
+pegar sozinha um defeito de ciclo de vida de componente enquanto o projeto rodar em ambiente
+`node` sem um único `.test.tsx` (invariante 25); o que ficou no lugar é uma varredura de
+código-fonte, e ela só existe porque o defeito apareceu.
+
+## 🟡 18-F · Bloco 1 — IA deixa de ser uma ilha (2026-09-19)
+
+**Desenho validado com o dono:**
+`docs/superpowers/specs/2026-09-19-18f-memoria-integracoes-design.md`.
+Plano em `docs/superpowers/plans/2026-09-19-18f-bloco1-costura.md`.
+Branch `feat/18-f-memoria-integracoes`. **Nenhuma migration: o bloco não cria tabela nem
+coluna.** Suíte em 3.482 testes / 170 arquivos.
+
+O módulo de IA funcionava inteiro e **não aparecia em lugar nenhum do sistema**: não
+notificava, não era encontrado pela busca global, não entrava no backup e não tinha como ser
+apagado em massa. O Bloco 1 costura os quatro pontos.
+
+| O que entrou | Onde |
+| --- | --- |
+| 4 famílias de notificação (orçamento, provedor, ação sem desfecho, análise disponível) | `src/lib/notifications/ai.ts` (pura) + `ai-cron.ts` (I/O) |
+| Busca global alcança conversas, análises e ações | `src/lib/search/queries.ts` + `types.ts` |
+| Backup ganha 17 tabelas `ai_*`, **sem a de credenciais** | `src/lib/settings/export-tables.ts` |
+| Exclusão em massa que declara o que permanece | `src/lib/ai/retention.ts` + `actions/ai-retention.ts` + `components/ai/retention-card.tsx` |
+| Fonte única dos deep-links de `/ia` | `src/lib/search/ai-links.ts` (rotas conferidas no DISCO por teste) |
+
+### As decisões que este bloco tomou
+
+1. **Nenhum tipo novo consulta preferência por conta própria.** As quatro famílias entram por
+   `generateNotifications` → `filterByPrefs`, o único ponto de decisão (invariante 24). Só
+   `ai_insight_available` é opt-in; as outras três são avisos de que algo está errado ou
+   custando dinheiro.
+2. **O orçamento do sino NÃO é recalculado.** Ele sai de `getUsageSummary` — a mesma função
+   de `/ia/consumo` —, que passou a aceitar `LeituraDoDono` (invariante 79) para o Cron
+   service-role usar **a mesma leitura da tela**. Um segundo somatório faria o número do sino
+   divergir do da tela, que é a invariante 24 da 17-F aplicada aqui.
+3. **`nivelAtingido` + `deveAvisar` foram REUSADOS, não reescritos.** `ai/usage/budget.ts` já
+   os exportava (o comentário deles dizia "nenhuma notificação no sino nesta subfase (é
+   18-F)"); o plano trazia uma terceira cópia da regra de limiar, que foi descartada.
+4. **A assimetria de RLS é declarada nos dois arquivos.** `ai-cron.ts` roda com service role,
+   ignora RLS e carrega `user_id` em **toda** query; `searchAll` usa o client COM SESSÃO e
+   **não** filtra por `user_id`, porque a RLS o faz. Trocar um pelo outro é vazar dado ou
+   devolver vazio em silêncio.
+5. **`ai_provider_credentials` fica fora do backup**, com o motivo escrito em
+   `EXPORT_EXCLUDED` (não só em comentário): ela guarda o ciphertext da chave de API e a DEK
+   embrulhada. Mesmo motivo de `google_integrations`.
+6. **Não há retenção automática, e isso é decisão.** Nenhum job apaga conversa velha — a
+   decisão 5 da 18-D é "nada some sozinho, descartar é clique do dono". O que existe é
+   exclusão em massa PEDIDA, em `/ia/configuracoes`.
+7. ⛔ **A exclusão declara o que PERMANECE e o que SAI JUNTO, antes de confirmar.**
+   `ai_action_executions` não tem FK para proposta nem aprovação (invariante 38) justamente
+   para sobreviver a apagar a conversa; a tela diz isso. E diz também o que não está no nome
+   do escopo: `ai_conversations` → `ai_runs` → `ai_usage_events` é **cascade**, então apagar
+   conversas apaga a **medição de custo** delas — o gasto sai de `/ia/consumo` e deixa de
+   contar no teto do mês. Mudar essa FK exigiria migration, que este bloco não faz; declarar
+   é a saída, e é melhor do que descobrir depois.
+8. **Contar e apagar saem do MESMO seletor** (`alvosDoEscopo`, em `actions/ai-retention.ts`).
+   A tela pede a contagem ao servidor ao abrir o diálogo, pelo mesmo filtro que a exclusão
+   usará — dois filtros separados fariam a tela prometer um número e o banco executar outro
+   (invariante 43).
+9. **Comprovante não é `delete from ai_documents`.** A exclusão em massa chama
+   `descartarDocumento` (18-D) um a um: ele apaga o ARQUIVO do bucket privado antes do
+   metadado e **recusa** o comprovante que já virou anexo de um lançamento. Um delete direto
+   deixaria o binário do documento pessoal órfão no bucket com a tela dizendo que apagou.
+10. ⛔ **Nada linka para `/ia/memoria`** — essa rota só nasce no Bloco 3, e link para rota
+    inexistente é 404 (a lição do `?aba=despensa` da 16-F). `ai-links.ts` tem um teste que
+    confere no DISCO que cada rota citada tem `page.tsx`.
+
+### Duas armadilhas de fuso que o plano trazia e foram corrigidas
+
+- **`.slice(0, 10)` num `timestamptz`** (`ai_insights.created_at`) devolve o dia em **UTC** e
+  erra a data entre 21h e 00h BRT. Trocado por `dateInSaoPaulo(new Date(...))`.
+- **Cortar o dia em `${todayIso}T00:00:00.000Z`** é meia-noite UTC = 21h BRT da véspera: três
+  horas da noite anterior entrariam como "hoje". Há um `inicioDoDiaEmSaoPaulo()` usando
+  `saoPauloWallClockToInstant`, e o mesmo corte vale para a data de exclusão de conversas
+  antigas.
+
+### `Record<Union, T>` pegou dois arquivos que o plano não listava
+
+Acrescentar membro à união deixou `tsc` vermelho até cada mapa ter a entrada:
+`src/components/notifications/notification-meta.tsx` (ícone por `NotificationType`) e
+`src/components/search/search-meta.tsx` (ícone por `SearchType`). É a armadilha funcionando
+como projetada — sem ela, os tipos novos apareceriam sem ícone, em silêncio.
+
+### Verificação
+
+`lint` + `tsc --noEmit` + `test:run` (3.482 ✓) + `build` + `perf:bundle` verdes, e a suíte
+também passa com `TZ=UTC`. `/ia/configuracoes` ficou em **214,1 KB gz** (orçamento 250).
+⚠️ `/(app)/configuracoes` subiu de 276,8 para **279,2 KB** — os 7 ícones novos do `lucide`
+entram pelo sino e pela busca, que vivem no Header e portanto em **toda** rota `(app)`. Segue
+abaixo do teto próprio de 285 KB; a medição registrada em `scripts/perf/bundle-budget.mjs`
+foi atualizada.
+
+Cron conferido de verdade: `/api/cron/notifications` sem Bearer devolve **401**; com o
+`CRON_SECRET`, três execuções seguidas **não criaram nenhuma notificação nova** (o Cron das
+09h já havia rodado). O caminho de IA foi exercitado com sonda temporária e devolveu
+orçamento real (US$ 0,005442 contra teto de US$ 20) — ou seja, zero notificação de IA é
+"não há o que avisar", não um erro engolido pelo `.catch`.
 
 ## Iteração 2026-09-19 — transferência na importação de EXTRATO DE CONTA
 
@@ -76,6 +666,13 @@ fora do git por `.git/info/exclude`).
    (`src/components/shared/use-lazy-dialog.ts`). Eles arrastam `zod` + `react-hook-form`
    (~62 KB gz). ⚠️ **`{aberto && <Dialog/>}` sozinho quebra a animação de fechamento** — o hook
    monta na primeira abertura e não desmonta mais.
+   ⛔ **O que ele NÃO faz: preservar o estado de DENTRO do diálogo.** `DialogContent`/
+   `SheetContent` são embrulhados em `<Presence present={forceMount || context.open}>`, então
+   fechar desmonta a subárvore inteira. O hook protege o invólucro (download sob demanda +
+   animação), não o `useState` dos filhos. Formulário pode resetar; o que precisa sobreviver
+   ao fechamento tem de ter o estado **fora** do diálogo. `forceMount` não resolve —
+   `RemoveScroll`, `hideOthers` e `FocusScope` moram no mesmo `Presence`. Custou um bug real
+   em 2026-09-20 (o painel da IA perdia a pergunta ao fechar).
 4. **⚠️ Constante lida pela TELA não mora em `src/lib/validators/`.** As telas de `/ia`
    baixavam 62,7 KB gz de `zod` para ler quatro constantes (`MAX_CHAT_TEXT`,
    `ROTAS_COM_CONTEXTO`, `MAX_OBSERVACAO_DOCUMENTO`, `MODULOS_COM_CONTEXTO`), porque elas
@@ -307,7 +904,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. Próxima: **18-F** (integrações e polimento) |
+| **18** | Inteligência Artificial (`/ia`) | A–F | ✅ **CONCLUÍDA (2026-09-20).** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. **18-F ✅ COMPLETA (blocos 1 a 5): Bloco 1 ✅ (2026-09-19)** — a IA entra no sino, na busca global, no backup e ganha exclusão em massa, sem migration; **Bloco 2 ✅ (2026-09-20)** — botão flutuante na casca com painel sob demanda, 2 colunas; **Bloco 3 ✅ (2026-09-20)** — memória: 2 tabelas, a 8ª ferramenta de escrita, o 15º command, `/ia/memoria`, e `allow_memory` finalmente ligando alguma coisa; **Bloco 4 ✅ (2026-09-22)** — três panoramas de um clique com leitura DIRIGIDA pelo servidor, a 4ª espécie de `ai_runs.kind`, o modo Caixa de entrada e `allow_cross_module` ligando alguma coisa — **sem tabela, sem rota e sem endpoint novos**; **Bloco 5 ✅ (2026-09-20)** — suíte de evals estrutural com os oito casos do briefing (que encontrou e consertou um defeito real no roteamento), o caso destrutivo afirmado sobre o registry e a **validação item a item dos 163 critérios** da fase em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md`. **FECHA A FASE 18 — não há 18-G** |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -376,9 +973,9 @@ desfazer (5)** e documentação + verificação final (6). Decisões em
 | 18-A | Fundação, provedores e chat | ✅ **CONCLUÍDA** (2026-08-04) |
 | 18-B | Contexto, ferramentas de leitura e agentes | ✅ **CONCLUÍDA** (2026-08-07) |
 | 18-C | Ações, aprovações, idempotência e auditoria | ✅ **CONCLUÍDA** (2026-08-08) — blocos 1 a 6 |
-| 18-D | Visão, documentos e comprovantes | ⬜ |
-| 18-E | Insights, relatórios e dashboards | ✅ |
-| 18-F | Memória, voz, integrações e polimento | ⬜ — fecha a fase |
+| 18-D | Visão, documentos e comprovantes | ✅ **CONCLUÍDA** (2026-08-09) — blocos 1 a 5 |
+| 18-E | Insights, relatórios e dashboards | ✅ **CONCLUÍDA** (2026-08-09) — blocos 1 a 4 |
+| 18-F | Memória, integrações e polimento | ✅ **CONCLUÍDA (2026-09-20) — blocos 1 a 5.** Bloco 1 (costura: sino, busca, backup, exclusão em massa) · Bloco 2 (botão flutuante) · Bloco 3 (memória) · Bloco 4 (experiências) · Bloco 5 (suíte de evals + validação item a item dos 163 critérios). **FECHA A FASE 18 — não há 18-G** |
 
 As frentes 16 (Dieta) e 17 (Treinos) continuam **concluídas e em manutenção/iteração**:
 melhoria nelas entra como tarefa avulsa, com branch própria, e não como subfase. As pendências
@@ -2164,8 +2761,8 @@ de responsabilidades está documentada no arquivo da fase.
 | 16-B | Dieta e Alimentação · Metas, diário e planejamento | ✅ Concluída |
 | 16-C | Dieta e Alimentação · Receitas, refeições e substituições | ✅ Concluída |
 | 16-D | Dieta e Alimentação · Lista de compras e despensa | ✅ Concluída |
-| 16-E | Dieta e Alimentação · Medidas, evolução e relatórios | ⬜ Próxima |
-| 16-F | Dieta e Alimentação · Integrações e polimento | ⬜ |
+| 16-E | Dieta e Alimentação · Medidas, evolução e relatórios | ✅ Concluída |
+| 16-F | Dieta e Alimentação · Integrações e polimento | ✅ Concluída |
 
 ## O que foi implementado na Fase 14 (Segurança, Responsividade & Polimento Final)
 - **Schema finalizado (idempotente)** em `supabase/migrations/`, aplicado no projeto `yjvnlbjvippefvzgrxxw`. Security advisor: **0 lints de schema** (resta só o aviso externo de Auth "leaked password protection"). **34 tabelas** no total (+ `attachments`) e **2 buckets** privados de Storage.

@@ -18,7 +18,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Loader2, Send, Square } from "lucide-react";
+import { AlertTriangle, Loader2, Send, Sparkles, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,6 +40,16 @@ import {
   ROTULO_DA_ROTA_DE_CONTEXTO,
   type RotaComContexto,
 } from "@/lib/ai/constants";
+// `import type` de módulo puro: apagado na compilação, não muda o peso de nenhuma rota.
+import { Switch } from "@/components/ui/switch";
+/**
+ * ⚠️ `experiences/atalhos` e NUNCA `experiences/catalog`: aquele arquivo não tem um único
+ * import (é a regra 3 do carregamento sob demanda), enquanto o catálogo carrega os prompts de
+ * redação inteiros e importa o Tool Registry — que o cliente baixaria por causa de três
+ * strings. Um teste amarra as duas listas, então elas não divergem.
+ */
+import { ATALHOS_DE_EXPERIENCIA } from "@/lib/ai/experiences/atalhos";
+import type { EventoDoPainel } from "@/lib/ai/painel";
 import type { ToolCallStatus } from "@/lib/ai/tools/contracts";
 import { execucaoEmAndamento, type RunSources } from "@/lib/ai/tools/sources";
 import {
@@ -132,16 +142,71 @@ export type ChatClientProps = {
   /** Quando falso, o formulário fica desabilitado com a explicação na tela. */
   readonly podeConversar: boolean;
   readonly motivoBloqueio: string | null;
+  /**
+   * 18-F Bloco 2 — o que ESTA conversa fez, para quem a hospeda.
+   *
+   * ⛔ É uma SAÍDA, nunca uma entrada: o chat continua dono do próprio estado, e quem escuta
+   * não tem como mudá-lo. A página `/ia` não passa nada e nada muda para ela; quem escuta é o
+   * botão flutuante, que precisa saber se uma resposta chegou enquanto estava fechado.
+   *
+   * ⚠️ O QUE SAI DAQUI NÃO É DADO DO DONO. Nem texto de resposta, nem número, nem nome de
+   * registro — só "respondeu", "propôs (id + prazo)" e "o laço recomeçou". O selo do botão
+   * mostra contagem e verbo, e é tudo que ele tem para mostrar.
+   */
+  readonly onAtividade?: (evento: EventoDoPainel) => void;
+  /**
+   * Tira o aviso de honestidade LONGO do topo, para o chat caber num drawer.
+   *
+   * ⛔ Quem passa `compacto` assume a obrigação de afirmar a REGRA no próprio cabeçalho — a
+   * trava de honestidade é critério de aceite da fase, não decoração. O painel flutuante
+   * cumpre isso com `RESUMO_DO_ASSISTENTE`, que `constants.ts` declara como a versão curta
+   * do mesmo texto.
+   */
+  readonly compacto?: boolean;
 };
 
-export function ChatClient({
+/**
+ * O que o MOTOR da conversa entrega a quem a desenha.
+ *
+ * ⛔ Ele existe porque o estado da conversa NÃO PODE NASCER DENTRO DA GAVETA do painel
+ * flutuante (18-F Bloco 2). O `SheetContent` do Radix é embrulhado em
+ * `<Presence present={forceMount || context.open}>`: sem `forceMount`, fechar desmonta tudo
+ * que está dentro — e com isso ia embora a pergunta, o `conversationId` e, pior, o
+ * `AbortController`, que cancelava a resposta em andamento. `useLazyDialog` não resolve isso:
+ * ele mantém montado o componente do painel, não os filhos da gaveta.
+ *
+ * `forceMount` não serve de saída: `RemoveScroll`, `hideOthers` e `FocusScope` moram no mesmo
+ * `Presence`, e o app inteiro ficaria com rolagem travada e `aria-hidden` permanentes.
+ *
+ * Então o motor sobe e a vista desce — que é o que o React manda fazer com estado que precisa
+ * viver mais que uma subárvore. `/ia` não sente: `ChatClient` continua juntando os dois.
+ */
+export type ConversaDaIa = {
+  readonly bolhas: readonly Bolha[];
+  readonly texto: string;
+  readonly setTexto: (valor: string) => void;
+  readonly enviando: boolean;
+  readonly contexto: RotaComContexto | null;
+  readonly setContexto: (valor: RotaComContexto | null) => void;
+  /** 18-F Bloco 4 — o MODO caixa de entrada. Desligado por padrão, como toda chave do módulo. */
+  readonly caixaDeEntrada: boolean;
+  readonly setCaixaDeEntrada: (valor: boolean) => void;
+  readonly enviar: () => Promise<void>;
+  /** 18-F Bloco 4 — dispara um panorama pelo MESMO endpoint e pelo mesmo leitor de SSE. */
+  readonly iniciarExperiencia: (id: string) => Promise<void>;
+  readonly cancelar: () => void;
+};
+
+export function useConversaDaIa({
   conversationId,
   initialMessages,
   runs,
-  sources = {},
   podeConversar,
-  motivoBloqueio,
-}: ChatClientProps) {
+  onAtividade,
+}: Pick<
+  ChatClientProps,
+  "conversationId" | "initialMessages" | "runs" | "podeConversar" | "onAtividade"
+>): ConversaDaIa {
   const router = useRouter();
 
   const [bolhas, setBolhas] = React.useState<Bolha[]>(() =>
@@ -171,27 +236,43 @@ export function ChatClient({
    * gravar na URL faria um round-trip de RSC por clique sem nenhum ganho de link.
    */
   const [contexto, setContexto] = React.useState<RotaComContexto | null>(null);
+  /**
+   * 18-F Bloco 4 — o MODO caixa de entrada. Estado local, desligado por padrão, pela mesma
+   * razão do contexto de página acima: é escolha por clique, e a página é `force-dynamic`.
+   */
+  const [caixaDeEntrada, setCaixaDeEntrada] = React.useState(false);
   const [conversa, setConversa] = React.useState<string | null>(conversationId);
   const abortRef = React.useRef<AbortController | null>(null);
-  const fimRef = React.useRef<HTMLDivElement | null>(null);
   const contadorRef = React.useRef(0);
 
-  React.useEffect(() => {
-    fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [bolhas]);
+  /*
+    Cancela ao desmontar. Sem isso, sair da página deixaria o run rodando e a reserva presa
+    até a lease vencer.
 
-  // Cancela ao desmontar. Sem isso, sair da página deixaria o run rodando e a reserva presa
-  // até a lease vencer.
+    ⛔ E quem desmonta AQUI é a página `/ia` ou a casca do app — nunca o fechar da gaveta. É
+    exatamente por isso que este efeito pertence ao motor: enquanto ele morava junto da vista,
+    fechar o painel cancelava a resposta que o dono tinha acabado de pedir.
+  */
   React.useEffect(() => () => abortRef.current?.abort(), []);
 
   function cancelar() {
     abortRef.current?.abort();
   }
 
-  async function enviar() {
-    const conteudo = texto.trim();
-    if (!conteudo || enviando || !podeConversar) return;
-
+  /**
+   * O caminho ÚNICO do envio: bolhas provisórias, POST, leitor de SSE, `switch` de eventos,
+   * `AbortController` e `router.refresh`.
+   *
+   * ⚠️ 18-F Bloco 4 — `enviar` e `iniciarExperiencia` diferem em DUAS coisas: o corpo do POST
+   * e o texto da bolha do dono. Tudo o mais é idêntico, e uma segunda cópia deste bloco
+   * divergiria no primeiro evento SSE novo — que é exatamente o que `chat-events.test.ts`
+   * existe para impedir do outro lado.
+   */
+  async function disparar(
+    corpo: Record<string, unknown>,
+    textoDaBolha: string,
+    contextoDaBolha: RotaComContexto | null,
+  ) {
     // Contador, e não `Date.now()`: relógio é função impura e o React exige pureza no
     // render (`react-hooks/purity`). Um contador em `ref` é estável e serve igual — estes
     // ids são provisórios e vivem só até o evento `start` trazer os reais do servidor.
@@ -201,16 +282,15 @@ export function ChatClient({
 
     setBolhas((atual) => [
       ...atual,
-      { id: idProvisorioUsuario, role: "user", content: conteudo, status: "complete" },
+      { id: idProvisorioUsuario, role: "user", content: textoDaBolha, status: "complete" },
       {
         id: idProvisorioAssistente,
         role: "assistant",
         content: "",
         status: "streaming",
-        contexto,
+        contexto: contextoDaBolha,
       },
     ]);
-    setTexto("");
     setEnviando(true);
 
     const controller = new AbortController();
@@ -220,13 +300,7 @@ export function ChatClient({
       const resposta = await fetch("/api/ia/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...(conversa ? { conversationId: conversa } : {}),
-          text: conteudo,
-          // Só a ROTA, e só quando o usuário escolheu uma. Nada do conteúdo da tela sai
-          // daqui — título, estado e registro ficam onde estão. O módulo é do servidor.
-          ...(contexto ? { pageContext: { rota: contexto } } : {}),
-        }),
+        body: JSON.stringify(corpo),
         signal: controller.signal,
       });
 
@@ -283,7 +357,10 @@ export function ChatClient({
          * ║ ferramentas rodam de novo e os chips da tentativa anterior virariam duplicata.  ║
          * ╚════════════════════════════════════════════════════════════════════════════════╝
          */
-        onSwitch: (e) =>
+        onSwitch: (e) => {
+          // 18-F Bloco 2 — o selo do botão acompanha a limpeza dos cartões, senão ele
+          // contaria duas propostas onde o dono vê uma (mesma razão do `propostas: []`).
+          onAtividade?.({ tipo: "recomecou" });
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
@@ -312,7 +389,8 @@ export function ChatClient({
                   }
                 : b,
             ),
-          ),
+          );
+        },
         onTool: (e) =>
           setBolhas((atual) =>
             atual.map((b, i) =>
@@ -331,22 +409,30 @@ export function ChatClient({
                 : b,
             ),
           ),
-        onProposta: (e) =>
+        onProposta: (e) => {
+          onAtividade?.({
+            tipo: "propos",
+            id: e.proposta.id,
+            expiraEm: e.proposta.expiresAt,
+          });
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
                 ? { ...b, propostas: [...(b.propostas ?? []), e.proposta] }
                 : b,
             ),
-          ),
-        onDone: (e) =>
+          );
+        },
+        onDone: (e) => {
+          onAtividade?.({ tipo: "respondeu" });
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
                 ? { ...b, status: "complete", provider: e.provider, model: e.model }
                 : b,
             ),
-          ),
+          );
+        },
         onError: (e) => {
           marcarFalha(idProvisorioAssistente, e.message);
           toast.error(e.message);
@@ -370,6 +456,44 @@ export function ChatClient({
     }
   }
 
+  async function enviar() {
+    const conteudo = texto.trim();
+    if (!conteudo || enviando || !podeConversar) return;
+    setTexto("");
+    await disparar(
+      {
+        ...(conversa ? { conversationId: conversa } : {}),
+        text: conteudo,
+        // Só a ROTA, e só quando o usuário escolheu uma. Nada do conteúdo da tela sai
+        // daqui — título, estado e registro ficam onde estão. O módulo é do servidor.
+        ...(contexto ? { pageContext: { rota: contexto } } : {}),
+        // 18-F Bloco 4 — o MODO. Ausente = conversa normal, como sempre foi.
+        ...(caixaDeEntrada ? { caixaDeEntrada: true } : {}),
+      },
+      conteudo,
+      contexto,
+    );
+  }
+
+  /**
+   * 18-F Bloco 4 — dispara um PANORAMA. É o MESMO caminho de `enviar`: mesmo endpoint, mesmo
+   * leitor de SSE, mesmo `switch` de eventos, mesmo `AbortController`, mesmo `router.refresh`.
+   * O que muda é o corpo do POST — e o fato de o texto da bolha do dono vir do ATALHO, não
+   * do campo de digitar.
+   *
+   * ⛔ Ela NUNCA manda `conversationId`, e nem teria como: o schema do panorama não tem esse
+   * campo. O painel sempre abre conversa nova, que é o que o dono espera de um botão chamado
+   * "Planejar meu dia" — e o evento `start` troca `conversa` para a nova.
+   */
+  async function iniciarExperiencia(id: string) {
+    if (enviando || !podeConversar) return;
+    const atalho = ATALHOS_DE_EXPERIENCIA.find((a) => a.id === id);
+    if (!atalho) return;
+    // `contextoDaBolha` é null: um panorama não tem página de contexto — as leituras dele
+    // são decididas pelo catálogo, no servidor, e não pela tela que estava aberta.
+    await disparar({ experiencia: id }, atalho.titulo, null);
+  }
+
   function marcarFalha(idFallback: string, mensagem: string) {
     setBolhas((atual) =>
       atual.map((b, i) =>
@@ -380,15 +504,75 @@ export function ChatClient({
     );
   }
 
+  return {
+    bolhas,
+    texto,
+    setTexto,
+    enviando,
+    contexto,
+    setContexto,
+    caixaDeEntrada,
+    setCaixaDeEntrada,
+    enviar,
+    iniciarExperiencia,
+    cancelar,
+  };
+}
+
+/**
+ * A VISTA da conversa. Ela não tem estado de conversa nenhum — recebe o motor pronto.
+ *
+ * O `fimRef` e a rolagem ficam aqui, e não no motor, porque a referência aponta para um nó
+ * que só existe enquanto a vista está na tela. Efeito colateral bom: reabrir o painel rola
+ * para a última mensagem, porque o efeito roda de novo na montagem.
+ */
+export function ChatView({
+  conversa,
+  runs,
+  sources = {},
+  podeConversar,
+  motivoBloqueio,
+  compacto = false,
+}: Omit<ChatClientProps, "conversationId" | "initialMessages" | "onAtividade"> & {
+  readonly conversa: ConversaDaIa;
+}) {
+  const {
+    bolhas,
+    texto,
+    setTexto,
+    enviando,
+    contexto,
+    setContexto,
+    caixaDeEntrada,
+    setCaixaDeEntrada,
+    enviar,
+    iniciarExperiencia,
+    cancelar,
+  } = conversa;
+  const fimRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [bolhas]);
+
   const restante = MAX_CHAT_TEXT - texto.length;
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      {/* TRAVA DE HONESTIDADE, na tela e não só no prompt. */}
-      <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
-        <p className="min-w-0 text-muted-foreground">{AVISO_SEM_ACESSO}</p>
-      </div>
+      {/*
+        TRAVA DE HONESTIDADE, na tela e não só no prompt.
+
+        ⚠️ `compacto` não a desliga: quem o passa mostra a REGRA no próprio cabeçalho, e o
+        painel do botão flutuante usa `RESUMO_DO_ASSISTENTE` — que `constants.ts` declara
+        como "a versão curta da mesma regra". Repetir o texto longo num drawer de 85% de
+        altura gastaria a altura útil dizendo duas vezes o que já está fixo acima.
+      */}
+      {!compacto && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
+          <p className="min-w-0 text-muted-foreground">{AVISO_SEM_ACESSO}</p>
+        </div>
+      )}
 
       {motivoBloqueio && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -505,6 +689,43 @@ export function ChatClient({
         <div ref={fimRef} />
       </div>
 
+      {/*
+        18-F Bloco 4 — OS PANORAMAS. Só na conversa VAZIA: numa conversa em andamento eles
+        roubariam a atenção do que está sendo lido, e o dono que quiser outro panorama abre
+        uma conversa nova (que é o que o botão faz de qualquer jeito).
+
+        ⚠️ Eles ficam dentro de `ChatView`, e é por isso que aparecem nos DOIS lugares — `/ia`
+        e o painel flutuante — sem uma linha duplicada.
+      */}
+      {bolhas.length === 0 && podeConversar && (
+        <div className="space-y-2 pb-1">
+          <p className="text-xs text-muted-foreground">
+            Ou comece por um panorama — o assistente consulta os módulos que você liberou e
+            escreve um resumo. O que estiver desligado fica de fora, e ele diz o que ficou.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {ATALHOS_DE_EXPERIENCIA.map((a) => (
+              <Button
+                key={a.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                // ⚠️ `min-w-0` + `truncate`: `Button` é `whitespace-nowrap`, e três rótulos
+                // longos numa linha empurrariam a página na horizontal no celular (regra 3
+                // do layout responsivo).
+                className="min-w-0"
+                title={a.descricao}
+                disabled={enviando}
+                onClick={() => void iniciarExperiencia(a.id)}
+              >
+                <Sparkles className="size-4 shrink-0" />
+                <span className="truncate">{a.titulo}</span>
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="sticky bottom-0 space-y-2 border-t bg-background pt-3">
         {/*
           CONTEXTO DA PÁGINA — desligado por padrão. O que sai daqui é UMA ROTA de uma lista
@@ -540,6 +761,24 @@ export function ChatClient({
               ))}
             </SelectContent>
           </Select>
+          {/*
+            18-F Bloco 4 — A CAIXA DE ENTRADA. Um MODO do chat normal: o roteamento, o agente,
+            as ferramentas e o Approval Engine continuam os de sempre — só entra um bloco a
+            mais no prompt de sistema. Na dúvida ela PERGUNTA, e isso não é promessa do texto:
+            palavra ambígua desliga o roteamento e a mensagem cai no orquestrador, que não tem
+            ferramenta nenhuma.
+          */}
+          <div className="flex shrink-0 items-center gap-2">
+            <Switch
+              id="caixa-de-entrada"
+              checked={caixaDeEntrada}
+              onCheckedChange={setCaixaDeEntrada}
+              disabled={!podeConversar || enviando}
+            />
+            <Label htmlFor="caixa-de-entrada" className="text-xs text-muted-foreground">
+              Caixa de entrada
+            </Label>
+          </div>
           <p className="min-w-0 flex-1 text-xs text-muted-foreground">
             O assistente recebe só o endereço da página — nada do que está escrito nela.
           </p>
@@ -555,9 +794,11 @@ export function ChatClient({
             }
           }}
           placeholder={
-            podeConversar
-              ? "Escreva sua mensagem… (Ctrl+Enter envia)"
-              : "Configure um provedor de IA para começar."
+            !podeConversar
+              ? "Configure um provedor de IA para começar."
+              : caixaDeEntrada
+                ? "Escreva o item solto — ele diz onde guardar e prepara a ação."
+                : "Escreva sua mensagem… (Ctrl+Enter envia)"
           }
           rows={3}
           disabled={!podeConversar || enviando}
@@ -597,6 +838,27 @@ export function ChatClient({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * A PORTA DE SEMPRE: motor + vista no mesmo componente.
+ *
+ * É o que `/ia` usa desde a 18-A, e nada mudou para ela — ali o chat é a página inteira, e
+ * nada desmonta a subárvore por baixo dele. Quem precisa das duas metades separadas é o painel
+ * flutuante, e só ele.
+ */
+export function ChatClient(props: ChatClientProps) {
+  const conversa = useConversaDaIa(props);
+  return (
+    <ChatView
+      conversa={conversa}
+      runs={props.runs}
+      sources={props.sources}
+      podeConversar={props.podeConversar}
+      motivoBloqueio={props.motivoBloqueio}
+      compacto={props.compacto}
+    />
   );
 }
 

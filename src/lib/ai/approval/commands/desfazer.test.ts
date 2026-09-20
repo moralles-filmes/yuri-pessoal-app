@@ -48,15 +48,26 @@ const FATOS: Record<string, FatosParaDesfazer> = {
     targetId: UUID,
     changedFields: { type: "despesa", amount: 12000, description: "Mercado" },
   },
+  /**
+   * ⚠️ 18-F Bloco 3 — repare no que NÃO está aqui: `content`. `camposAuditaveis` de
+   * `lembrarPreferencia` é `["modulo", "expires_at"]`, e a frase fica de fora de propósito
+   * (`ai_action_executions.changed_fields` é auditoria permanente e não some com a conversa).
+   * O inverso não precisa dela: ele recebe o `targetId` e esquece a memória.
+   */
+  lembrarPreferencia: {
+    targetId: UUID,
+    changedFields: { modulo: "training", expires_at: null },
+  },
 };
 
 const COM_DESFAZER = ACTION_COMMANDS.filter((c) => c.desfazer.kind === "command");
 
 describe("todo command com desfazer produz uma entrada que o INVERSO aceita", () => {
   it("há desfazer declarado para conferir — o laço não é vacuoso", () => {
-    // 6 dos 13: criar tarefa, concluir tarefa, registrar hábito, criar evento, registrar
-    // consumo e lançar transação. Os outros 7 declaram por que NÃO há inverso.
-    expect(COM_DESFAZER).toHaveLength(6);
+    // 7 dos 15: criar tarefa, concluir tarefa, registrar hábito, criar evento, registrar
+    // consumo, lançar transação e — na 18-F Bloco 3 — lembrar preferência. Os outros 8
+    // declaram por que NÃO há inverso.
+    expect(COM_DESFAZER).toHaveLength(7);
   });
 
   it.each(COM_DESFAZER.map((c) => [c.name] as const))("%s", (nome) => {

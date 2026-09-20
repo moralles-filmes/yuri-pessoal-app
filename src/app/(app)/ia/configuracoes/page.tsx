@@ -4,6 +4,7 @@ import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ProviderCard } from "@/components/ai/provider-card";
 import { AiPreferencesForm } from "@/components/ai/ai-preferences-form";
+import { RetentionCard } from "@/components/ai/retention-card";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getAiPreferences, getProviderCards } from "@/lib/ai/queries";
 import { isCatalogStale, oldestVerification } from "@/lib/ai/core/models";
@@ -84,6 +85,13 @@ export default async function IaConfiguracoesPage() {
             criptoOk={problemaCripto === null}
           />
         ))}
+      </div>
+
+      {/* Fase 18-F — a única porta de exclusão em massa do módulo. Não há job que apague
+          nada sozinho: descartar é clique do dono. */}
+      <div className="space-y-4">
+        <h2 className="text-sm font-semibold">Seus dados</h2>
+        <RetentionCard />
       </div>
     </div>
   );

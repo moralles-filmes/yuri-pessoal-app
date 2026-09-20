@@ -37,6 +37,11 @@ import {
   registrarHabitoEntrada,
 } from "./habits-preview";
 import {
+  lembrarPreferenciaEntrada,
+  parseComMemoria,
+  preverLembrarPreferencia,
+} from "./memory-preview";
+import {
   criarEventoEntrada,
   parseComEvento,
   preverCriarEvento,
@@ -91,6 +96,12 @@ export const PROPOSTAS_POR_FERRAMENTA: Readonly<Record<string, PropostaDeFerrame
   "finance.lancar_transacao": {
     parse: parseComTransacao(lancarTransacaoEntrada),
     prever: (_ctx, payload) => preverLancarTransacao(payload),
+  },
+  // 18-F Bloco 3. A previsão precisa do DONO para ler as memórias que já existem (e recusar a
+  // repetida), então esta é a primeira que usa o `ctx` em vez de ignorá-lo.
+  "memory.lembrar": {
+    parse: parseComMemoria(lembrarPreferenciaEntrada),
+    prever: (ctx, payload) => preverLembrarPreferencia(ctx, payload),
   },
   // ⛔ OS `undo` NÃO TÊM FERRAMENTA, e a ausência é a trava: sem entrada aqui, o modelo não
   // tem como propor uma exclusão, uma reabertura, o apagamento de um registro nem o

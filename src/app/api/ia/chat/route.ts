@@ -22,12 +22,18 @@
 import { NextResponse } from "next/server";
 import { authContext } from "@/lib/actions/helpers";
 import {
+  chatExperienciaSchema,
+  chatMensagemSchema,
   chatRequestSchema,
   contextoDaRota,
   MAX_CHAT_BODY_BYTES,
   MAX_CHAT_TEXT,
 } from "@/lib/validators/ai";
 import { runChat, type ChatRunnerEvent } from "@/lib/ai/server/chat-runner";
+import {
+  AI_EXPERIENCE_WITHOUT_DATA,
+  runExperience,
+} from "@/lib/ai/server/experience-runner";
 import {
   AI_CRYPTO_NOT_CONFIGURED,
   getCryptoReadiness,
@@ -52,6 +58,16 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   AI_ADMISSION_BUSY: 429,
   AI_BUDGET_EXCEEDED_DAILY: 402,
   AI_BUDGET_EXCEEDED_MONTHLY: 402,
+  // 18-F Bloco 4 — os quatro do panorama. `NOT_AVAILABLE` é pedido que o sistema não atende
+  // (400); os outros três são estado do momento, e o dono pode mudar todos eles (409).
+  //
+  // ⚠️ `JUST_STARTED` é 409 e NÃO 429: não é excesso de pedidos, é ESTE pedido chegando duas
+  // vezes. Um 429 mandaria o cliente esperar e tentar de novo — e o que ele pediu já está
+  // acontecendo.
+  AI_EXPERIENCE_NOT_AVAILABLE: 400,
+  AI_CROSS_MODULE_NOT_ALLOWED: 409,
+  AI_EXPERIENCE_JUST_STARTED: 409,
+  [AI_EXPERIENCE_WITHOUT_DATA]: 409,
   [AI_CRYPTO_NOT_CONFIGURED]: 503,
 };
 
@@ -76,7 +92,44 @@ function mensagemEmPortugues(issue: { code: string; message: string } | undefine
     return "O pedido trouxe um campo que o servidor não aceita.";
   }
   if (issue.code === "invalid_type") return "Pedido em formato inválido.";
+  /**
+   * 18-F Bloco 4 — o topo da UNIÃO, quando nem `problemasDoRamo` conseguiu escolher um lado
+   * (corpo vazio, por exemplo). Ele não ecoa nada do que o cliente mandou.
+   */
+  if (issue.code === "invalid_union") {
+    return "O pedido não corresponde a uma mensagem nem a um panorama.";
+  }
   return issue.message;
+}
+
+type ProblemaDeValidacao = { code: string; message: string; path: readonly PropertyKey[] };
+
+/**
+ * Os problemas do RAMO que o cliente tentou usar.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⚠️ `chatRequestSchema` é uma UNIÃO, e o Zod reporta `invalid_union` no TOPO quando     ║
+ * ║ nenhuma das duas formas casou — as mensagens de dentro de cada ramo não sobem. Só que ║
+ * ║ são justamente elas que o dono precisa ler ("Página de contexto não reconhecida."), e  ║
+ * ║ é o `code` delas que decide entre 400 e 413.                                          ║
+ * ║                                                                                       ║
+ * ║ ⛔ ISTO NÃO É UMA TERCEIRA FORMA DE VALIDAR. Quem ACEITA continua sendo a união, e as  ║
+ * ║ duas formas continuam `.strict()`: um corpo com `experiencia` E `text` é recusado      ║
+ * ║ pelos dois caminhos, porque schema nenhum deste repositório aceita os dois juntos. A   ║
+ * ║ escolha abaixo decide só a MENSAGEM e o status.                                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+function problemasDoRamo(
+  json: unknown,
+  doTopo: readonly ProblemaDeValidacao[],
+): readonly ProblemaDeValidacao[] {
+  const ehPanorama =
+    typeof json === "object" && json !== null && "experiencia" in json;
+  const ramo = ehPanorama ? chatExperienciaSchema : chatMensagemSchema;
+  const r = ramo.safeParse(json);
+  // Ramo que PASSA sozinho e união que falha não é estado alcançável (a união tenta os dois),
+  // mas devolver o problema do topo é o fallback honesto se um dia for.
+  return r.success ? doTopo : r.error.issues;
 }
 
 export async function POST(request: Request) {
@@ -131,7 +184,7 @@ export async function POST(request: Request) {
   // lista de proibidos, que alguém esqueceria de atualizar. Anexo é 18-D.
   const parsed = chatRequestSchema.safeParse(json);
   if (!parsed.success) {
-    const primeiro = parsed.error.issues[0];
+    const primeiro = problemasDoRamo(json, parsed.error.issues)[0];
     const tamanho =
       primeiro?.code === "too_big" && primeiro.path[0] === "text" ? 413 : 400;
     return NextResponse.json(
@@ -158,26 +211,42 @@ export async function POST(request: Request) {
   // O PRIMEIRO evento do runner decide o formato da resposta: se for `error`, ainda dá
   // tempo de devolver um JSON com status HTTP correto (que a tela sabe tratar). A partir do
   // `start`, a resposta vira SSE e todo erro viaja como evento — cabeçalho já foi enviado.
-  const iterador = runChat({
-    userId: ctx.userId,
-    conversationId: parsed.data.conversationId ?? null,
-    text: parsed.data.text,
-    // ⚠️ PREFERÊNCIA, não decisão: quem escolhe o agente é `routeAgent`, no servidor, com as
-    // flags `allow_*` do usuário na mão. `null` (o caso de hoje — a tela não manda o campo) é
-    // "não pedi nenhum", que é diferente de "pedi o orquestrador".
-    agentId: parsed.data.agentId ?? null,
-    // ⚠️ Do contexto da página, SÓ A ROTA atravessa o transporte — e ela vem de uma lista
-    // estática, não de texto da tela. O MÓDULO é resolvido aqui, no servidor: é ele que
-    // decide o agente e, por tabela, a allowlist de ferramentas. Se a tela pudesse
-    // declará-lo, o cliente escolheria o que a IA pode ler.
-    pageContext: parsed.data.pageContext
-      ? contextoDaRota(parsed.data.pageContext.rota)
-      : null,
-    providerPreference: parsed.data.providerPreference ?? null,
-    modelPreference: parsed.data.modelPreference ?? null,
-    abortSignal: request.signal,
-    agora: new Date(),
-  })[Symbol.asyncIterator]();
+  //
+  // ⚠️ 18-F Bloco 4 — A ESCOLHA ABAIXO É DE TRANSPORTE: qual gerador consumir. Nenhuma
+  // decisão de negócio mora aqui — quem sabe o que é uma experiência é `experience-runner.ts`
+  // (catálogo, chaves, recusa antes de gastar) e quem sabe o que é uma mensagem é
+  // `chat-runner.ts`. Isto continua NÃO autorizando um segundo endpoint.
+  const corpo = parsed.data;
+  const iterador = (
+    "experiencia" in corpo
+      ? runExperience({
+          userId: ctx.userId,
+          experiencia: corpo.experiencia,
+          providerPreference: corpo.providerPreference ?? null,
+          modelPreference: corpo.modelPreference ?? null,
+          abortSignal: request.signal,
+          agora: new Date(),
+        })
+      : runChat({
+          userId: ctx.userId,
+          conversationId: corpo.conversationId ?? null,
+          text: corpo.text,
+          // ⚠️ PREFERÊNCIA, não decisão: quem escolhe o agente é `routeAgent`, no servidor,
+          // com as flags `allow_*` do usuário na mão. `null` (o caso de hoje — a tela não
+          // manda o campo) é "não pedi nenhum", diferente de "pedi o orquestrador".
+          agentId: corpo.agentId ?? null,
+          // ⚠️ Do contexto da página, SÓ A ROTA atravessa o transporte — e ela vem de uma
+          // lista estática, não de texto da tela. O MÓDULO é resolvido aqui, no servidor: é
+          // ele que decide o agente e, por tabela, a allowlist de ferramentas. Se a tela
+          // pudesse declará-lo, o cliente escolheria o que a IA pode ler.
+          pageContext: corpo.pageContext ? contextoDaRota(corpo.pageContext.rota) : null,
+          providerPreference: corpo.providerPreference ?? null,
+          modelPreference: corpo.modelPreference ?? null,
+          abortSignal: request.signal,
+          agora: new Date(),
+          caixaDeEntrada: corpo.caixaDeEntrada === true,
+        })
+  )[Symbol.asyncIterator]();
 
   const primeiro = await iterador.next();
 

@@ -5,6 +5,7 @@ import {
   Apple,
   ArrowLeftRight,
   Bell,
+  Brain,
   CalendarDays,
   CalendarRange,
   ChefHat,
@@ -17,16 +18,19 @@ import {
   Layers,
   ListChecks,
   ListTodo,
+  MessagesSquare,
   ReceiptText,
   Repeat,
   Search,
   ShoppingCart,
+  Sparkles,
   Tag,
   Target,
   Trophy,
   Users,
   UtensilsCrossed,
   Wallet,
+  Wand2,
   type LucideIcon,
 } from "lucide-react";
 import type { SearchType } from "@/lib/search/types";
@@ -58,6 +62,11 @@ const ICONS: Record<SearchType, LucideIcon> = {
   treino_sessao: History,
   treino_meta: Target,
   treino_recorde: Trophy,
+  // Fase 18-F — Inteligência Artificial.
+  ia_conversa: MessagesSquare,
+  ia_insight: Sparkles,
+  ia_acao: Wand2,
+  ia_memoria: Brain,
   notificacao: Bell,
 };
 

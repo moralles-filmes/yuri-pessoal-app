@@ -115,6 +115,54 @@ describe("registry de agentes", () => {
       expect(AGENT_PERMISSION[agente.id], agente.id).toBeDefined();
     }
   });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ ⚠️ 18-F · BLOCO 3 — A QUARTA VEZ QUE UMA FRASE DE AUSÊNCIA ENVELHECEU NESTE MÓDULO. ║
+   * ║                                                                                     ║
+   * ║ `AVISO_SEM_ACESSO` foi reescrito QUATRO vezes e o prompt-base TRÊS — e os dois já    ║
+   * ║ tinham teste. As descrições de agente nunca tiveram guarda nenhuma, e "Só lê — não   ║
+   * ║ altera nada" ficou mentindo em Treinos, Estudos e Tarefas no instante em que         ║
+   * ║ `memory.lembrar` entrou nas oito allowlists.                                         ║
+   * ║                                                                                     ║
+   * ║ ⛔ DERIVADO DO REGISTRY, nunca de uma lista escrita à mão de "agentes que escrevem": ║
+   * ║ essa lista é exatamente a que ficaria para trás na quinta vez.                       ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("agente com ferramenta de escrita não diz que só lê", () => {
+    const escrita = new Set(
+      AI_TOOL_REGISTRY.filter((t) => t.kind === "escrita").map((t) => t.name),
+    );
+    for (const agente of AI_AGENT_REGISTRY) {
+      if (!agente.allowedTools.some((nome) => escrita.has(nome))) continue;
+      expect(agente.description.toLowerCase(), agente.id).not.toContain("só lê");
+    }
+  });
+
+  /**
+   * A outra metade: quem ALCANÇA a memória diz isso. Sem ela, a correção acima poderia ser
+   * feita apagando a frase — e a descrição ficaria calada sobre o que a chave do dono libera,
+   * que é o defeito que a 18-C já corrigiu uma vez em Treinos (as medidas corporais).
+   */
+  it("agente que alcança a memória diz isso na descrição", () => {
+    for (const agente of AI_AGENT_REGISTRY) {
+      if (!agente.allowedTools.includes("memory.lembrar")) continue;
+      expect(agente.description.toLowerCase(), agente.id).toContain("memória");
+    }
+  });
+
+  /**
+   * ⛔ E O ORQUESTRADOR CONTINUA DE FORA. Ele é o lugar mais natural para "lembre que me chame
+   * de Yuri" — e fica de fora por um preço específico: o prompt dele afirma, literalmente, que
+   * não cria, edita nem exclui nada. Incluí-lo custaria reescrever aquela frase, subir
+   * `assistente-pessoal-v2` para `v3` e trocar a invariante 74. A asserção acima (linha 96) já
+   * guarda `allowedTools: []`; esta nomeia o motivo, para que a decisão seja tomada de novo em
+   * vez de derivar.
+   */
+  it("o orquestrador não alcança a memória", () => {
+    const orquestrador = findAgent(ASSISTENTE_PESSOAL_ID);
+    expect(orquestrador?.allowedTools).not.toContain("memory.lembrar");
+  });
 });
 
 describe("prompt de sistema", () => {

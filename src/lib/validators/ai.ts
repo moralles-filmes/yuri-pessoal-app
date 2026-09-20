@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { optionalText } from "@/lib/validators/shared";
 import { AI_PROVIDERS } from "@/lib/ai/core/contracts";
+// 18-F Bloco 2. `@/lib/ai/painel` é puro e não importa NADA — não há ciclo, e o vocabulário
+// do canto fica declarado uma vez só, para a tela (que não pode arrastar zod) e para o schema.
+import { CANTOS_DO_BOTAO } from "@/lib/ai/painel";
 import {
   TOOL_PERMISSIONS,
   TOOL_WRITE_PERMISSIONS,
@@ -21,6 +24,16 @@ import {
   type ModuloComContexto,
   type RotaComContexto,
 } from "@/lib/ai/constants";
+// 18-F Bloco 3. Mesma razão: os dois módulos da memória não têm um único import, e a TELA os
+// lê (o contador de caracteres e a mensagem de recusa). Ver `memory/forma.ts`.
+/**
+ * 18-F Bloco 4 — módulo PURO, sem imports de runtime, como `@/lib/ai/constants`. O enum do
+ * panorama sai da mesma união que o catálogo e a allowlist do SQL usam, e há teste amarrando
+ * as três.
+ */
+import { EXPERIENCIA_IDS } from "@/lib/ai/experiences/contracts";
+import { MODULOS_DE_MEMORIA } from "@/lib/ai/memory/contracts";
+import { formaDaMemoria, MOTIVO_DA_RECUSA } from "@/lib/ai/memory/forma";
 
 export {
   MAX_CHAT_TEXT,
@@ -149,11 +162,19 @@ export type PageContextInput = z.infer<typeof pageContextSchema>;
 
 // ─────────────────────────── Chat ───────────────────────────
 
-/**
- * O payload aceito por `/api/ia/chat`, E NADA ALÉM DISTO.
- * `conversationId` ausente = conversa nova.
- */
-export const chatRequestSchema = z
+/** Preferências de rota que as DUAS formas do payload aceitam, escritas uma vez só. */
+const preferenciaDeProvedor = {
+  providerPreference: aiProviderEnum.optional(),
+  modelPreference: z
+    .string()
+    .trim()
+    .min(1, "Modelo inválido.")
+    .max(120, "Modelo inválido.")
+    .optional(),
+};
+
+/** Uma MENSAGEM do dono. `conversationId` ausente = conversa nova. */
+export const chatMensagemSchema = z
   .object({
     conversationId: z.uuid("Conversa inválida").optional(),
     text: z
@@ -169,15 +190,37 @@ export const chatRequestSchema = z
       .optional(),
     /** Ausente = a tela não mandou contexto. Ver `pageContextSchema`. */
     pageContext: pageContextSchema.optional(),
-    providerPreference: aiProviderEnum.optional(),
-    modelPreference: z
-      .string()
-      .trim()
-      .min(1, "Modelo inválido.")
-      .max(120, "Modelo inválido.")
-      .optional(),
+    ...preferenciaDeProvedor,
+    /** 18-F Bloco 4 — o MODO caixa de entrada. Ausente = conversa normal. */
+    caixaDeEntrada: z.boolean({ error: "Modo inválido." }).optional(),
   })
   .strict();
+
+/**
+ * Um PANORAMA. Só o id de um roteiro do servidor — e mais nada.
+ *
+ * ⛔ SEM `text` E SEM `conversationId`, e a ausência é a garantia, não um `if`. O título e o
+ * prompt saem do CATÁLOGO, no servidor; a experiência sempre abre conversa nova (§7.3).
+ */
+export const chatExperienciaSchema = z
+  .object({
+    experiencia: z.enum(EXPERIENCIA_IDS, { error: "Panorama não reconhecido." }),
+    ...preferenciaDeProvedor,
+  })
+  .strict();
+
+/**
+ * O payload aceito por `/api/ia/chat`, E NADA ALÉM DISTO.
+ *
+ * ⛔ DUAS FORMAS, e a separação é a garantia. Um schema único com `text` opcional deixaria
+ * representável um panorama com texto injetado pelo cliente — e o servidor teria de recusá-lo
+ * num `if`. Duas formas `.strict()` fazem isso não existir (invariantes 67 e 79).
+ *
+ * ⚠️ `z.union` tenta na ordem e devolve o primeiro sucesso. Como as duas são `.strict()` e não
+ * compartilham campo OBRIGATÓRIO, não há ambiguidade: um corpo com `text` falha na segunda
+ * (campo a mais), um com `experiencia` falha na primeira (campo a mais + `text` ausente).
+ */
+export const chatRequestSchema = z.union([chatMensagemSchema, chatExperienciaSchema]);
 
 export type ChatRequestInput = z.infer<typeof chatRequestSchema>;
 
@@ -287,8 +330,29 @@ export const aiWritePermissionsSchema = z.object(writePermissionShape).strict();
 
 export type AiWritePermissionsInput = z.infer<typeof aiWritePermissionsSchema>;
 
+/**
+ * 18-F Bloco 2 — onde o botão flutuante fica, e se ele aparece.
+ *
+ * Schema PRÓPRIO, e não dois campos soltos, porque há dois caminhos de gravação para as
+ * MESMAS duas colunas: o formulário grande de `/ia/configuracoes` (que salva tudo de uma vez)
+ * e o menu do próprio painel (que salva só isto, de onde o dono está). Um schema só é o que
+ * impede os dois de divergirem — o vocabulário do canto é declarado uma vez, em
+ * `@/lib/ai/painel`, e o CHECK do banco o repete como trava final.
+ */
+export const botaoFlutuanteSchema = z
+  .object({
+    floatingCorner: z.enum(CANTOS_DO_BOTAO, { error: "Canto inválido." }),
+    floatingHidden: z.boolean({ error: "Preferência de exibição do botão inválida." }),
+  })
+  .strict();
+
+export type BotaoFlutuanteInput = z.infer<typeof botaoFlutuanteSchema>;
+
 export const aiPreferencesSchema = z
   .object({
+    // 18-F Bloco 2 — a MESMA forma do menu do painel, espalhada. Redeclarar os dois campos
+    // aqui criaria a segunda definição que este arquivo existe para evitar.
+    ...botaoFlutuanteSchema.shape,
     permissions: aiPermissionsSchema,
     writePermissions: aiWritePermissionsSchema,
     /**
@@ -303,6 +367,13 @@ export const aiPreferencesSchema = z
      * consulta. Ver o comentário em `AiPreferencesView.allowInsightJobs`.
      */
     allowInsightJobs: z.boolean({ error: "Autorização de análise automática inválida." }),
+    /**
+     * 18-F Bloco 4. Campo solto pela MESMA razão das duas acima — e aqui o nome engana mais
+     * que nos outros dois casos: "cross_module" SOA como permissão de módulo. Há teste em
+     * `validators/ai.test.ts` que usa exatamente esta chave como o exemplo do que
+     * `aiPermissionsSchema` recusa. Ver o comentário em `AiPreferencesView.allowCrossModule`.
+     */
+    allowCrossModule: z.boolean({ error: "Autorização de panorama inválida." }),
     /**
      * O teto próprio do job. `nonnegative` e NÃO `nullish`: a coluna é NOT NULL, e "sem
      * teto" não é um estado que a varredura possa ter (ver a nota da migration).
@@ -509,4 +580,56 @@ export const tarefaDeInsightSchema = z
       .optional(),
     projeto: z.string().trim().min(1).max(120).optional(),
   })
+  .strict();
+
+/**
+ * 18-F Bloco 3 — a memória escrita PELO DONO, na tela `/ia/memoria`.
+ *
+ * ⚠️ A validação de FORMA não é reimplementada aqui: `formaDaMemoria` (puro, sem um único
+ * import) é a fonte, e o `superRefine` a chama. Uma segunda regra de forma divergiria da do
+ * servidor no primeiro ajuste, e a tela aceitaria o que a gravação recusa — ou o contrário,
+ * que é pior: o dono lendo "salvo" sobre algo que o banco rejeitou.
+ *
+ * ⛔ Não há campo `origem`: quem escreve por aqui é sempre o dono, e a coluna é preenchida
+ * pelo serviço. Aceitá-la do cliente deixaria a tela declarar uma memória como "proposta pelo
+ * assistente" — um selo que a própria tela exibe.
+ */
+export const memoriaSchema = z
+  .object({
+    id: z.uuid().nullish(),
+    conteudo: z.string(),
+    modulo: z
+      .enum(MODULOS_DE_MEMORIA)
+      .nullish()
+      .transform((v) => v ?? null),
+    /**
+     * ⚠️ O REGEX ACEITA A STRING VAZIA, e isso não é folga — é o que um `<input type="date">`
+     * vazio de fato manda. `.regex()` roda ANTES do `.transform()`, então um padrão
+     * `^\d{4}-\d{2}-\d{2}$` recusaria `""` com "Use uma data válida" num campo que o dono
+     * deixou em branco de propósito, e o formulário nunca salvaria.
+     */
+    expiraEm: z
+      .string()
+      .regex(/^(\d{4}-\d{2}-\d{2})?$/, "Use uma data válida")
+      .nullish()
+      .transform((v) => (v === undefined || v === "" ? null : v)),
+  })
+  .strict()
+  .superRefine((valor, ctx) => {
+    const r = formaDaMemoria(valor.conteudo);
+    if (!r.ok) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["conteudo"],
+        message: MOTIVO_DA_RECUSA[r.motivo],
+      });
+    }
+  });
+
+/** As três ações que só precisam do alvo: desativar/reativar, esquecer e apagar. */
+export const memoriaIdSchema = z.object({ id: z.uuid("Memória inválida") }).strict();
+
+/** Desativar e reativar são a MESMA ação com sentido oposto — um schema, não dois. */
+export const alternarMemoriaSchema = z
+  .object({ id: z.uuid("Memória inválida"), ligar: z.boolean() })
   .strict();

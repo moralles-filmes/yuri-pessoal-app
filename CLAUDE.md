@@ -10,20 +10,28 @@ Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gas
 
 ## Estado do projeto
 
-As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 16 — Dieta e Alimentação** e a **Fase 17 — Treinos** estão **concluídas**. As duas frentes grandes (16 e 17), abertas em **2026-08-03** e divididas em 6 subfases cada (A–F), fecharam em **2026-08-04**: **40 de 40** e **55 de 55** critérios de aceite validados. **Não há 16-G nem 17-G** — o projeto está em manutenção/iteração e melhoria entra como tarefa avulsa.
+As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 16 — Dieta e Alimentação**, a **Fase 17 — Treinos** e a **Fase 18 — Inteligência Artificial** estão **concluídas**. As duas frentes grandes (16 e 17), abertas em **2026-08-03** e divididas em 6 subfases cada (A–F), fecharam em **2026-08-04**: **40 de 40** e **55 de 55** critérios de aceite validados. A **Fase 18** fechou em **2026-09-20**, com os critérios validados um a um em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` (**163** critérios: 142 validados, 17 pendentes de conferência à mão, 4 retirados no desenho). **Não há 16-G, 17-G nem 18-G, e não há Fase 19** — **o projeto inteiro está em manutenção/iteração** e melhoria entra como tarefa avulsa, com branch própria.
 
 | Fase | Módulo | Situação |
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. Próxima: **18-F** (integrações e polimento) |
+| **18** | Inteligência Artificial (`/ia`) | ✅ **CONCLUÍDA (2026-09-20)** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F ✅ COMPLETA (blocos 1 a 5): Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (19 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece, **sem migration**; **Bloco 2 ✅ (2026-09-20)** — o assistente ao alcance de qualquer tela por um botão na casca que abre um painel sob demanda, com a **mesma** `ChatClient` e as mesmas chaves (**2 colunas, nenhuma tabela**); **Bloco 3 ✅ (2026-09-20)** — a **memória**: o dono escreve preferências em `/ia/memoria` e o assistente as leva para as conversas **como preferência, nunca como regra**; a IA passa a poder **propor** preferências, pelo mesmo Approval Engine. **2 tabelas + 1 coluna**, e `allow_memory` (que existia desde a 18-A) finalmente liga alguma coisa; **Bloco 4 ✅ (2026-09-22)** — três **panoramas de um clique** (*Planejar meu dia · Encerrar meu dia · Planejar minha semana*) cuja lista de leituras é **estática e executada pelo servidor**, mais um **modo Caixa de entrada**. O panorama abre uma **conversa** (4ª espécie de `ai_runs.kind`), então "transformar resposta em ação", busca, histórico e exclusão em massa vêm de graça. **Duas migrations, e NENHUMA cria tabela** — um valor de CHECK, a RPC e, depois da auditoria, a janela de dedupe do clique duplo —, nenhuma rota e nenhum endpoint novos, e `allow_cross_module` (que existia desde a 18-A) finalmente liga alguma coisa; **Bloco 5 ✅ (2026-09-20) — FECHA A FASE**: uma **suíte de evals** (`src/lib/ai/evals/`) com os oito casos do briefing, que afirma o **estrutural** e **encontrou um defeito real antes de ficar verde** (o plural de "proteína" não alcançava a Dieta), mais a validação **item a item** dos **163** critérios da fase em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` — 142 validados, 17 pendentes de conferência à mão, 4 retirados no desenho. **Sem migration, sem tabela, sem rota, sem ferramenta e sem command.** **Não há 18-G e não há Fase 19** |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). A **18-E** (blocos 1–3, 2026-08-09) criou 3 (`ai_insights`, `ai_insight_sources`,
 `ai_insight_feedback`) e alterou 2 (`ai_runs.kind` ganhou a terceira espécie `'insight'`;
 `ai_action_proposals` ganhou `insight_id` e a quarta `origem`). O **Bloco 4 da 18-E** criou 1
 (`ai_insight_jobs`) e alterou 2 (`ai_runs` ganhou `automatic`; `ai_user_preferences` ganhou
 `allow_insight_jobs` e `job_monthly_budget`). **Reconferido no banco em 2026-08-09, depois do
-Bloco 4: 130 tabelas** no `public`, **18 `ai_*`**. Além delas, **32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
+Bloco 4: 130 tabelas** no `public`, **18 `ai_*`**. O **Bloco 3 da 18-F** criou 2 (`ai_memories`
+e `ai_memory_events`) e acrescentou 1 coluna (`ai_user_preferences.allow_write_memory`):
+**reconferido no banco em 2026-09-22: 132 tabelas** no `public`, **20 `ai_*`**. O
+**Bloco 4 NÃO criou tabela nenhuma** — ele acrescentou a 4ª espécie a `ai_runs.kind`
+(`experience`), alargou o CHECK de coerência e criou a RPC `ai_begin_experience_run`. O
+**Bloco 5 não tocou o banco**: só leu. **Reconferido no banco em 2026-09-20, no fechamento da
+fase: 132 tabelas, 20 `ai_*`, e RLS + FORCE RLS em TODAS** (a consulta por tabela sem uma das
+duas voltou vazia). Além delas,
+**32 `nutrition_*`** + **29 `training_*`** + **13 `todo_*`** + **4 centrais `body_*`** (16-E, compartilhadas com Treinos). O número muda a cada subfase: **conte antes de citar**.
 
 > As duas frentes compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`, `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`, **leia antes e edite de forma pontual** — sobrescrever leva embora o trabalho da outra frente.
 
@@ -119,7 +127,9 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 
 ## Módulo Inteligência Artificial (Fase 18 — 18-A a 18-E)
 
-Rota `/ia`, tabelas `ai_*` (17), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
+Rota `/ia`, tabelas `ai_*` (**20**, reconferidas no banco em 2026-09-22; o Bloco 2 da 18-F não
+criou tabela, só duas colunas; as duas últimas são as da memória, do Bloco 3; o Bloco 4 não
+criou nenhuma — só um valor de CHECK e uma RPC), 6 subfases (A–F). A **18-A** (2026-08-04) entregou contratos
 internos, 4 adapters, catálogo de modelos e tarifas versionado, credenciais cifradas, chat com
 streaming, medição por tentativa e orçamento com reserva — **sem ler um único registro**. A
 **18-B** (2026-08-07) abriu a primeira leitura: 3 ferramentas de Treinos, laço de ferramentas
@@ -157,9 +167,10 @@ do sistema para uma leitura que não teria para onde ir.
 nascem `false` no banco, e as chaves estão em `/ia/configuracoes`.
 
 ⚠️ **A ESCRITA EXISTE DESDE O BLOCO 4 (2026-08-07), e continua DESLIGADA de fábrica.** O
-registry tem **29 ferramentas — 22 de leitura e 7 de escrita** (contado em 2026-08-08; a
-redação anterior dizia "6" e a própria tabela abaixo já listava sete linhas) e **13 commands**;
-as cinco chaves `allow_write_*` nascem `false`
+registry tem **30 ferramentas — 22 de leitura e 8 de escrita** e **15 commands** (contado no
+array em 2026-09-20, depois que a 18-F Bloco 3 acrescentou `memory.lembrar`, o 8º de escrita, e
+os commands `lembrarPreferencia`/`esquecerPreferencia`; eram 29 e 13 até a 18-C);
+as SEIS chaves `allow_write_*` nascem `false`
 no banco e cada uma só é clicável junto com a chave de leitura do mesmo módulo. Nenhuma ação é
 aplicada sem o dono confirmar na tela, uma de cada vez, com prazo de 10 minutos.
 
@@ -172,10 +183,11 @@ aplicada sem o dono confirmar na tela, uma de cada vez, com prazo de 10 minutos.
 | `calendar.criar_evento` | `criarEvento` | `excluirEvento` | 3 |
 | `nutrition.registrar_consumo` | `registrarConsumo` | `desfazerConsumo` | 3 |
 | `finance.lancar_transacao` | `lancarTransacao` | `excluirTransacao` | 3 |
+| `memory.lembrar` (18-F B3) | `lembrarPreferencia` | `esquecerPreferencia` | 2 |
 
-⛔ **Os seis `undo` NÃO estão no Tool Registry, e a ausência é a trava:** o modelo não tem como
-propor exclusão, reabertura, apagamento de registro, cancelamento de compromisso nem exclusão
-de lançamento. Quem os alcança é o botão de desfazer de **`/ia/acoes`** (Bloco 5), sobre uma
+⛔ **Os SETE `undo` NÃO estão no Tool Registry, e a ausência é a trava:** o modelo não tem como
+propor exclusão, reabertura, apagamento de registro, cancelamento de compromisso, exclusão
+de lançamento nem "esqueça o que eu te disse". Quem os alcança é o botão de desfazer de **`/ia/acoes`** (Bloco 5), sobre uma
 execução que a própria IA fez — e mesmo ali o botão **propõe**, não executa. Excluir por pedido
 em linguagem natural é risco 4 e está fora da 18-C.
 
@@ -614,6 +626,260 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     mensagem sobre um campo que a tela não tem. `tsc` não pega (a action recebe `unknown`); o
     que pega é comparar as duas listas, e é o que `validators/ai.test.ts` passou a fazer.
 
+**Invariantes acrescentadas pelo Bloco 1 da 18-F (a IA deixa de ser uma ilha — 2026-09-19):**
+
+82. **AS QUATRO FAMÍLIAS DE NOTIFICAÇÃO DE IA ENTRAM PELO GERADOR ÚNICO.** `notifications/ai.ts`
+    é puro (`hoje` injetado), `ai-cron.ts` é o I/O, e quem decide preferência continua sendo
+    **só** `filterByPrefs` (invariante 24). Todas são `low`/`medium`, todas têm link, todas têm
+    `dedupe_key` determinístico. Só `ai_insight_available` é opt-in: as outras três avisam que
+    algo está errado ou custando dinheiro, e isso não se desliga por preferência de rotina.
+83. ⛔ **O ORÇAMENTO DO SINO NÃO É RECALCULADO — E O LIMIAR TAMPOUCO.** O total sai de
+    `getUsageSummary` (a mesma função de `/ia/consumo`, que passou a aceitar `LeituraDoDono`), e
+    a régua sai de `nivelAtingido` + `deveAvisar`, que `ai/usage/budget.ts` já exportava. Um
+    segundo somatório ou uma terceira cópia do limiar fariam o número do sino divergir do da
+    tela — invariante 24 da 17-F aplicada aqui.
+84. ⚠️ **A ASSIMETRIA DE RLS É DECLARADA NOS DOIS ARQUIVOS.** `notifications/ai-cron.ts` roda
+    com **service role**, ignora RLS e carrega `user_id` em TODA query; `search/queries.ts`
+    (`searchAll`) usa o client **com sessão** e **não** filtra por `user_id`, porque a RLS o
+    faz. Os dois estão certos no seu contexto; trocar um pelo outro é vazar dado ou devolver
+    vazio em silêncio.
+85. **`src/lib/search/ai-links.ts` é a fonte única dos deep-links de `/ia`** (busca e
+    notificações), com teste que confere no DISCO se cada rota citada tem `page.tsx`.
+    ⛔ **Nada linka para `/ia/memoria` até o Bloco 3** — link para rota inexistente é 404.
+    E `?filtro=problemas` em `/ia/acoes` é pior que 404 se o valor sair de
+    `FILTROS_DO_HISTORICO`: a página mostra TODAS as ações, em silêncio.
+86. ⛔ **`ai_provider_credentials` NUNCA entra no backup**, e o motivo está escrito em
+    `EXPORT_EXCLUDED` (não só em comentário): é o ciphertext da chave de API mais a DEK
+    embrulhada. As outras **19** `ai_*` entram (17 no Bloco 1 + as duas da memória, Bloco 3) — ver
+    invariante 28, **some a sua seção**.
+87. ⛔ **NÃO HÁ RETENÇÃO AUTOMÁTICA, E ISSO É DECISÃO.** Nada some sozinho: descartar é clique
+    do dono, em `/ia/configuracoes`. Não escreva job que apague conversa velha.
+88. ⛔ **A EXCLUSÃO EM MASSA DECLARA O QUE PERMANECE **E** O QUE SAI JUNTO, ANTES DE CONFIRMAR.**
+    `ai_action_executions` não tem FK para proposta nem aprovação (invariante 38) justamente
+    para sobreviver a apagar a conversa. E o que o nome do escopo não diz:
+    `ai_conversations` → `ai_runs` → `ai_usage_events` é **cascade**, então apagar conversas
+    apaga a **medição de custo** delas — o gasto sai de `/ia/consumo` e deixa de contar no teto
+    do mês. Regra pura em `src/lib/ai/retention.ts`.
+89. **CONTAR E APAGAR SAEM DO MESMO SELETOR** (`alvosDoEscopo`, em `actions/ai-retention.ts`), e
+    **comprovante não é `delete from ai_documents`**: a exclusão chama `descartarDocumento`
+    (18-D) um a um, que apaga o ARQUIVO do bucket privado antes do metadado e recusa o que já
+    virou anexo de lançamento. Um delete direto deixaria o binário órfão no bucket com a tela
+    dizendo que apagou.
+
+**Invariantes acrescentadas pelo Bloco 2 da 18-F (o botão flutuante — 2026-09-20):**
+
+90. ⛔ **O SELO DO BOTÃO FALA SÓ DA CONVERSA ABERTA; O SINO FALA DO SISTEMA.** A garantia é a
+    AUSÊNCIA de caminho: `src/lib/ai/painel.ts` **não tem um único import**, e há teste
+    varrendo o arquivo por `import`. Sem import, ele não tem de onde ler insight, notificação,
+    ação travada nem orçamento — o risco nº 1 declarado no doc da fase (o mesmo fato virar
+    sino, selo, card e item de busca ao mesmo tempo) deixa de ser representável. A união
+    `EventoDoPainel` tem **seis** membros, todos do painel, e um teste trava o tamanho dela
+    para que acrescentar "insightNovo" exija a conversa antes do commit. ⚠️ O arquivo mora na
+    RAIZ de `src/lib/ai/`, e `CAMADAS_PURAS` do `boundaries.test.ts` itera sobre **pastas** —
+    aquele teste não o cobre; quem cobre é o próprio, e ele é mais estrito.
+
+**Invariantes acrescentadas pelo Bloco 3 da 18-F (a memória — 2026-09-20):**
+
+96. ⛔ **O EVENTO DE MEMÓRIA NÃO GUARDA O CONTEÚDO.** `ai_memory_events` é append-only (só
+    policies de SELECT e INSERT) e **não tem coluna de texto** — invariante 20 aplicada aqui:
+    com a frase no log, "excluir memória" a deixaria viva num lugar que o dono não sabe que
+    existe, o oposto exato do que o botão promete. `memory_id` vai **sem FK** (invariante 38):
+    apagar a memória não apaga o registro de que ela existiu. E `content` fica **fora** de
+    `camposAuditaveis` de `lembrarPreferencia` pelo mesmo motivo — `ai_action_executions` é
+    auditoria permanente e **não some com a conversa**. ⚠️ Ao contrário das tabelas de
+    auditoria, `ai_memories` **tem policy de DELETE**: ela guarda o que o dono escreveu sobre
+    si, e apagar é direito dele.
+97. ⛔ **O ESTADO DE UMA MEMÓRIA É DERIVADO, E A DECISÃO DO DONO VENCE O PRAZO.** `ai_memories`
+    não tem `active` nem `status`; `vigente`/`expirada`/`desativada`/`esquecida` saem de
+    `expires_at` + o último evento (`memory/state.ts`, `agora` injetado), e `criada`/`editada`
+    **não** são decisão de exibição — editar uma memória desativada não a reativa. `reativada`
+    devolve a palavra ao prazo em vez de ignorá-lo. ⛔ **Expirar não apaga**: a memória sai do
+    prompt e continua legível, com a data em que venceu (`dateInSaoPaulo`, **nunca**
+    `.slice(0,10)` — `expires_at` é `timestamptz`). E **esquecer ≠ apagar**: é por isso que o
+    inverso de `lembrarPreferencia` é `esquecerPreferencia` e não uma exclusão — o desfazer da
+    IA (invariante 48) tem de ser proporcional.
+98. ⛔ **A MEMÓRIA É O ÚNICO TEXTO DO DONO QUE ENTRA NO PROMPT SEM SER BLOCO NÃO CONFIÁVEL — E
+    ELA ENTRA POR ÚLTIMO.** `chat-runner` concatena SEGURANÇA + perfil + contexto de roteamento
+    + memória, e a ordem é varrida por teste sobre a fonte (a concatenação não é testável sem
+    provedor). A seção declara **em paralelo** que uma preferência **não desliga** regra, **não
+    autoriza** leitura, **não autoriza** alteração e **não é dado sobre os registros**
+    (invariante 21 aplicada à memória). Teto **visível** (20). Memória de módulo ANDa com a
+    `allow_<modulo>` daquele módulo, resolvida por `permissaoDoModulo` — ou seja, pelo módulo
+    da MEMÓRIA, nunca pelo agente que atende (invariante 26: `body` numa conversa de Treinos
+    exige `allow_body`). A validação é de **FORMA** (`memory/forma.ts`: uma linha, ≤300
+    **pontos de código** como o `char_length` do Postgres conta, sem endereço, sem bloco que
+    misture letra e dígito em 20+ caracteres); a proibição de ASSUNTO mora no prompt da
+    ferramenta, **descrita pelo lado positivo** — dizer o que PODE ser proposto é mais estreito
+    que listar assuntos e não planta palavra nenhuma no prompt (invariante 30).
+99. ⚠️ **`allow_memory` É A DÉCIMA `ToolPermission`, E ELA NÃO É UM MÓDULO DO DONO.** Está em
+    `TOOL_PERMISSIONS` porque `ToolDescriptor.requiredPermission` é desse tipo — fora dela, o
+    guard não teria como exigi-la. Consequência a conhecer: `permissaoDoModulo("memory")` passa
+    a existir, e o roteador **não** o alcança (sem vocabulário, sem agente).
+    `allow_write_memory` é a sexta de escrita e é **ANDada com `allow_memory`** na action.
+    ⚠️ **`memory/` é camada pura no `boundaries.test.ts` E mistura puro com I/O**: `queries.ts`
+    e `services.ts` declaram `server-only`, os quatro outros **não podem** (a TELA os lê). Há
+    teste próprio cobrindo as duas listas — e ele reprova arquivo novo fora delas. O I/O mora
+    ali, e não em `ai/server/`, porque `approval/commands/memory-preview.ts` precisa lê-lo sem
+    atravessar `ai/server/`.
+100. ⚠️ **FRASE DE AUSÊNCIA NA DESCRIÇÃO DE AGENTE ENVELHECE — E AGORA HÁ TESTE.** "Só lê — não
+    altera nada" caiu em Treinos, Estudos e Tarefas quando `memory.lembrar` entrou nas oito
+    allowlists. É a **quarta** vez que uma afirmação de ausência vira mentira neste módulo
+    (`AVISO_SEM_ACESSO` quatro vezes, o prompt-base três). `agents/registry.test.ts` passou a
+    derivar do REGISTRY quais agentes escrevem e a recusar "só lê" na descrição deles — nunca
+    de uma lista à mão, que é a que ficaria para trás. ⛔ **O orquestrador continua com
+    `allowedTools: []`** (invariante 74): o prompt dele afirma que não cria, edita nem exclui
+    nada, e incluí-lo custaria `assistente-pessoal-v3` — é decisão do dono. ⚠️ E a `.regex()`
+    de um schema roda **antes** do `.transform()`: um padrão de data que não aceite `""`
+    recusa o `<input type="date">` deixado em branco e o formulário nunca salva
+    (`round-trip.test.ts` pegou isso neste bloco).
+91. ⛔ **TUDO QUE A CASCA DO APP IMPORTA ENTRA NAS 67 ROTAS.** `floating-assistant.tsx` tem
+    orçamento medido e uma lista **escrita** do que não pode importar (`@/lib/ai/constants`,
+    `@/lib/validators/*`, `chat-client`, `ui/sheet`, `ui/dropdown-menu`); o painel inteiro fica
+    atrás de `next/dynamic` com **objeto literal** — trocá-lo por constante faz o painel voltar
+    ao manifest e o número de TODAS as rotas disparar. Medido em 2026-09-20:
+    `/(app)/configuracoes` em **281,4 KB gz de um teto próprio de 285 — 3,6 KB de folga**
+    (eram 5,8 antes do bloco). ⛔ **Estourar não se resolve subindo o teto**: uma exceção que
+    cresce a cada bloco é um orçamento que não existe. E a separação se PROVA no build — das
+    marcas de texto do painel e do chat, nenhuma aparece nos chunks contados para a rota.
+92. **A FRASE DE BLOQUEIO DO CHAT SAI DE `prontidaoDoChat`** (`server/chat-readiness.ts`),
+    consumida pela página `/ia` **e** pelo painel — duas cópias divergiriam na primeira edição
+    e o dono leria um motivo em cada lugar para o mesmo sistema (invariantes 24 e 83 aplicadas
+    à frase). ⚠️ E `estadoDoPainelDaIa` **RECONCILIA**: abrir `/ia` era o gatilho primário da
+    reconciliação preguiçosa, e a partir deste bloco aquela página deixou de ser o caminho mais
+    curto para o chat. Sem essa linha, a reserva de um run travado fica presa no orçamento sem
+    nada na tela explicando. **Porta nova para o chat carrega essa linha junto.**
+93. **`floating_hidden` ESCONDE O BOTÃO, NÃO O ASSISTENTE:** o atalho `Ctrl/⌘ + I` continua
+    abrindo o painel, e as duas telas que oferecem ocultar dizem isso com essas palavras. Ela e
+    `floating_corner` nascem com o botão **VISÍVEL**, e isso não fere "toda chave nasce
+    desligada" — aquela regra vale para **AUTORIZAÇÃO** (as nove `allow_*`, as cinco
+    `allow_write_*`, `allow_vision`, `allow_insight_jobs`), e estas não autorizam nada: o chat
+    atrás do botão continua exigindo exatamente as mesmas chaves. Um botão que nasce escondido
+    é uma entrega que ninguém encontra. Por isso também não são ANDadas com chave nenhuma.
+94. ⚠️ **CAMPO OBRIGATÓRIO NUM SCHEMA DE FORMULÁRIO MEXE EM DUAS FIXTURES, NÃO UMA** — a
+    invariante 81 é mais larga do que estava escrita. Além da lista `OBRIGATORIOS` em
+    `validators/ai.test.ts`, existe a fixture de `aiPreferencesSchema` em
+    `validators/round-trip.test.ts`, que a lista **não** cobre e que ficou vermelha sozinha
+    neste bloco. E o gerador de tipos do Supabase traz mais que a sua migration (aqui: uma
+    relationship de `import_rows` e a sintaxe nova dos genéricos) — **leia o diff de
+    `src/types/supabase.ts` antes de aceitá-lo** e deixe fora o que não é do seu bloco.
+95. ⛔ **O ESTADO DA CONVERSA DO PAINEL VIVE FORA DA GAVETA — `useLazyDialog` NÃO O SALVA.**
+    Defeito real relatado pelo dono em 2026-09-20: mandar uma pergunta e fechar o painel fazia
+    a pergunta sumir. `SheetContent` é embrulhado em `<Presence present={forceMount ||
+    context.open}>`, então fechar desmonta tudo que está dentro; o `ChatClient` morava ali e
+    levava junto o `useState` das bolhas, o `conversationId` **e** o cleanup do
+    `AbortController` — que **cancelava a resposta em andamento**, deixando o critério de
+    aceite 6 quebrado inteiro (o selo nunca chegava a aparecer). O hook mantém montado o
+    COMPONENTE DO PAINEL, não os filhos da gaveta, e o plano do bloco afirmava o contrário.
+    ⛔ `forceMount` não é a saída (ver regra 2 do carregamento sob demanda). A saída é a do
+    React: **`chat-client.tsx` exporta as duas metades** — `useConversaDaIa` (estado, envio,
+    streaming, cancelamento) e `ChatView` (só JSX) —, o painel chama o hook **acima do
+    `<Sheet>`** e renderiza a vista dentro. `ChatClient` continua juntando as duas, então `/ia`
+    não muda. ⚠️ E o que persiste envelhece: o efeito que lê `estadoDoPainelDaIa` depende de
+    `aberto`, senão o dono que ligasse um provedor sem recarregar veria "configure um provedor"
+    para sempre — e o gatilho de reconciliação da invariante 92 dispararia 1× por carregamento
+    em vez de a cada abertura. Guardado por `src/lib/ai/painel-persistencia.test.ts`, que varre
+    o código-fonte **ignorando comentários** (a primeira versão casou com o `<Sheet>` citado na
+    própria explicação da regra).
+
+**Invariantes acrescentadas pelo Bloco 4 da 18-F (as experiências — 2026-09-22):**
+
+101. ⛔ **A LISTA DE LEITURAS DE UMA EXPERIÊNCIA É ESTÁTICA, E QUEM A EXECUTA É O SERVIDOR.**
+     `MAX_TOOL_STEPS = 3` existe para impedir **o modelo** de decidir quanto o dono gasta; num
+     roteiro escrito por nós ele não se aplica — mas "não se aplica" não vira "não há teto":
+     `MAX_FERRAMENTAS_POR_EXPERIENCIA = 5`, o catálogo é validado contra ele em teste, e
+     `computeReservation` reserva sobre **esse** número, nunca sobre a lista em runtime. E só
+     ferramenta de **LEITURA** entra — recusada **em runtime** por `decidirLeituras`
+     (`descriptor.kind !== "leitura"`), não só pelo teste do catálogo: o laço dirigido chama
+     `executeTool` sem `modo`, e o executor fixa `"proposta"` por dentro, então uma de escrita
+     que chegasse às leituras criaria proposta em `ai_action_proposals` **a cada clique no
+     atalho**, sem o dono nem o modelo terem pedido. Teste só protege quem roda a suíte.
+     ⛔ **Nenhuma porta nova de leitura** — as experiências entram pelo Tool Executor,
+     com `guard.ts` e linha em `ai_tool_calls`; `insights/collectors/` (invariante 71) continua
+     sendo a única exceção e **não cresce**. O motivo de não deixar o modelo dirigir está
+     medido: "Planejar meu dia" lê quatro módulos, e pedindo um por vez o teto cortaria antes
+     do último **toda manhã**.
+
+102. ⛔ **A EXPERIÊNCIA ABRE UMA CONVERSA, E É A SEGUNDA ESPÉCIE DE RUN COM
+     `conversation_id`.** `ai_runs` tem **DOIS** checks sobre `kind`, e é aí que está a
+     armadilha: `ai_runs_kind_coerente` exige cada forma por inteiro — `chat` e `experience`
+     **têm** conversa, `extracao` e `insight` **não**. Acrescentar a espécie só ao CHECK de
+     valores faz todo panorama falhar no `insert`, **dentro da transação de admissão**, e o
+     erro chega à tela como `AI_UNKNOWN`. De nascer como conversa vêm de graça: "transformar
+     resposta em ação" pelo Approval Engine de sempre, a busca, o histórico e a exclusão em
+     massa. `ai_begin_experience_run` usa o **mesmo advisory lock** das outras três — o recurso
+     disputado é o orçamento do dono, não a espécie do run. ⛔ **Mas o lock SERIALIZA, não
+     DEDUPLICA:** o atalho sempre gasta, e dois cliques do mesmo gesto criariam dois runs pagos
+     pelo mesmo conteúdo (o estado `enviando` do cliente não atravessa duas requisições nem as
+     duas telas). O passo 5b recusa por **janela**: mesmo `agent_id`, run ainda **aberto** **e**
+     criado há menos de **15 s**. As duas condições, sempre — só a primeira travaria o dono por
+     5 minutos (a lease da reconciliação); só a segunda recusaria o retry de um panorama que
+     acabou de falhar. Vem **depois** do lock, senão ela mesma tem corrida. **São duas
+     migrations** neste bloco; a aplicada não se edita.
+
+103. ⚠️ **`allow_cross_module` É O INTERRUPTOR DO MECANISMO, NÃO UMA `ToolPermission`.**
+     Ela é campo **solto** em `aiPreferencesSchema`, como `allowVision` e `allowInsightJobs` —
+     e `validators/ai.test.ts` usa **esta chave** como o exemplo do que `aiPermissionsSchema`
+     recusa, porque o nome engana. Desligada ⇒ nada roda; ligada ⇒ o módulo sem `allow_*` é
+     **PULADO e DECLARADO** (invariante 77), e **todos** pulados ⇒ recusa **antes** de gastar
+     (a lição do `NO_INDICATORS` da 18-E). ⛔ A frase do que ficou de fora é **nossa** e entra
+     no texto gravado, no **fim** do ramo de sucesso: tentativa nova zera o texto (invariante
+     23), e pedi-la ao modelo seria obediência "quase sempre" — num panorama diário, uma
+     omissão por mês. ⛔ **E são DUAS frases, não uma:** módulo pulado por preferência
+     (`avisoDoQueFicouDeFora`, que manda o dono a `/ia/configuracoes`) e leitura que **falhou**
+     (`falhas.ts`, que **não** manda — a chave já está ligada). Sem a segunda, a garantia da
+     falha era o bloco de erro pedindo ao modelo "diga que não conseguiu obter o dado" —
+     instrução, não garantia: redigindo texto corrido ele omite o módulo e o panorama sai
+     **parecendo completo**. `rejeitada` conta como falha junto com `falhou`/`timeout`, porque
+     a chave pode cair **entre** a seleção e a execução, e esse pulo o plano não conhece.
+
+104. ⛔ **O PLANO É UM OBJETO, E POR ISSO O `chat-runner` NÃO CONHECE O CATÁLOGO.**
+     `experience-runner.ts` lê o catálogo, confere as chaves, deriva os argumentos do dia e
+     entrega um `PlanoDaExperiencia` pronto; o runner do chat executa uma lista que recebeu —
+     irrepresentável vence recusado (invariantes 67 e 79). Três fronteiras provam isso, todas
+     confirmadas por mutação. ⚠️ **E não há um terceiro laço de tentativas**: retry, fallback,
+     medição por chamada, heartbeat e a regra "só uma tentativa aberta por run"
+     (`ai_usage_events_one_active_uidx`, que o próprio arquivo declara que **nenhum teste de
+     unidade pega, porque a trava é do banco**) continuam num lugar só. ⛔ **E QUALQUER RUNNER
+     QUE MONTE `system` CARREGA A MEMÓRIA JUNTO, POR ÚLTIMO** (invariante 98): a concatenação é
+     UMA, em `chat-runner`. Um panorama não tem "o módulo do agente" — a seleção do Bloco 3
+     roda uma vez por módulo do plano, mais uma com `null` para as globais, e a união é
+     deduplicada por id; o filtro fica intacto, então cada memória de módulo continua exigindo
+     a `allow_*` dele (invariante 26).
+
+105. ⛔ **A CAIXA DE ENTRADA USA O LAÇO NORMAL, E ISSO NÃO É PREGUIÇA.** Passá-la pelo runner
+     dirigido exigiria um agente com as ferramentas dos cinco módulos de escrita ao mesmo
+     tempo — um "agente de tudo", que é exatamente o que a allowlist por agente existe para
+     impedir. No laço normal, `routeAgent` entrega ao especialista que já tem as ferramentas
+     certas, e só elas; palavra ambígua **desliga** o roteamento (invariante 27) e cai no
+     orquestrador, que não tem ferramenta nenhuma e portanto **pergunta**. ⚠️ O bloco dela entra
+     no prompt **antes** da memória e sobe `prompt_version` para `<agente>+caixa-v1` — o modo
+     muda o comportamento, então a coluna tem de contá-lo. ⚠️ **E `z.union` engole as mensagens
+     dos ramos:** o Zod reporta `invalid_union` no topo, e as frases em pt-BR de dentro de cada
+     forma deixam de subir (a de contexto de página virou genérica; o 413 do texto longo virou
+     400). `problemasDoRamo`, em `route.ts`, escolhe o ramo **só para a mensagem e o status** —
+     quem ACEITA continua sendo a união, e as duas formas continuam `.strict()`.
+
+**Invariante acrescentada pelo Bloco 5 da 18-F (o fechamento — 2026-09-20):**
+
+106. ⛔ **A SUÍTE DE EVALS AFIRMA O ESTRUTURAL, E O CASO DESTRUTIVO É AUSÊNCIA DE CÓDIGO.**
+     "Exclua todas as minhas transações" não é recusado por prompt nem por confirmação
+     reforçada — as duas formas dependeriam de o modelo obedecer. Ele é **irrepresentável**: o
+     registry não tem ferramenta que apague, os **sete** `undo` moram fora dele, e
+     `evals/destrutivo.test.ts` afirma isso derivando as **duas** listas (commands alcançáveis
+     por ferramenta × inversos declarados pelos commands) — nunca de uma lista de nomes
+     proibidos escrita à mão, que furaria no primeiro command novo. Risco 4 continua sendo
+     ausência de código, não checagem. ⛔ **E um teste de ausência que nunca foi visto vermelho
+     pode estar afirmando `[] === []` sobre uma lista que ele não leu**: este foi confirmado por
+     mutação, e o desfazer da mutação foi conferido por `git diff`, não pelo verde.
+     ⚠️ **A suíte pagou por si na primeira execução:** uma das oito frases do briefing — *"Como
+     estão minhas proteínas nesta semana?"* — não alcançava a Dieta, porque o vocabulário
+     listava `"proteina"` no singular e o casamento é por **fronteira de palavra, sem stemming**
+     (de propósito: stemming faria palavras não relacionadas colidirem, e palavra ambígua
+     **desliga** o roteamento — invariante 27). **Cada forma precisa da própria entrada**, e a
+     convenção do arquivo já era essa (`"serie"`/`"series"`, `"caloria"`/`"calorias"`).
+     ⛔ Palavra nova no vocabulário pode **empatar** dois módulos e desligar o roteamento onde
+     ele funcionava — não acrescente "por via das dúvidas".
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -640,7 +906,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.385 testes / 166 arquivos em 2026-08-09 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.738 testes / 185 arquivos em 2026-09-20 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos
@@ -749,6 +1015,14 @@ mantém isso de pé:
    estado derivado do React) — num efeito, `react-hooks/set-state-in-effect` reprova.
    Exceção conhecida: diálogo que recebe o próprio botão por `trigger` (ex.: `TodoLinkDialog`)
    **não** pode ser lazy — o botão sumiria da tela.
+   ⛔ **O QUE O HOOK NÃO FAZ: ele não preserva o estado de DENTRO do diálogo.** `DialogContent`
+   e `SheetContent` são embrulhados em `<Presence present={forceMount || context.open}>`, então
+   fechar **desmonta toda a subárvore**. O hook mantém montado o INVÓLUCRO — o que protege o
+   download sob demanda e a animação, não o `useState` dos filhos. Para formulário isso é
+   desejável (ele reseta); para qualquer coisa que precise sobreviver ao fechamento, **suba o
+   estado para fora do diálogo**. `forceMount` não é a saída: `RemoveScroll`, `hideOthers` e
+   `FocusScope` moram no mesmo `Presence`, e o app ficaria com rolagem travada e `aria-hidden`
+   permanentes. Custou um bug real em 2026-09-20 — ver invariante 95.
 3. ⚠️ **Constante lida pela TELA não mora em `src/lib/validators/`** — esse módulo começa com
    `import { z } from "zod"`. As telas de `/ia` baixavam 62,7 KB gz para ler quatro
    constantes; elas foram para `@/lib/ai/constants` (módulo puro, **zero imports de runtime**)

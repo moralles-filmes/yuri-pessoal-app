@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { ChatClient } from "@/components/ai/chat-client";
 import { BudgetAlert } from "@/components/ai/budget-alert";
 import { getCurrentUser } from "@/lib/supabase/server";
-import { getAiPreferences, getRouterConfigs, getUsageSummary } from "@/lib/ai/queries";
+import { getAiPreferences, getUsageSummary } from "@/lib/ai/queries";
 import { RESUMO_DO_ASSISTENTE } from "@/lib/ai/constants";
-import { usableProviders } from "@/lib/ai/core/router";
-import { cryptoProblemMessage } from "@/lib/ai/server/crypto-readiness";
+import { prontidaoDoChat } from "@/lib/ai/server/chat-readiness";
 import { reconcileOwnRuns } from "@/lib/ai/server/reconcile";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +26,14 @@ export default async function IaPage() {
 
   await reconcileOwnRuns();
 
-  const [configs, prefs] = await Promise.all([
-    getRouterConfigs(user.id),
+  /**
+   * 18-F Bloco 2 — a frase de bloqueio sai de `prontidaoDoChat`, não daqui.
+   *
+   * Ela era calculada nesta página, que até o Bloco 2 era o único caminho para o chat. Agora
+   * o painel flutuante é o outro, e duas cópias divergiriam na primeira edição.
+   */
+  const [prontidao, prefs] = await Promise.all([
+    prontidaoDoChat(user.id),
     getAiPreferences(user.id),
   ]);
 
@@ -37,15 +42,6 @@ export default async function IaPage() {
     getUsageSummary(user.id, "dia", prefs.dailyBudget, agora),
     getUsageSummary(user.id, "mes", prefs.monthlyBudget, agora),
   ]);
-
-  const problemaCripto = cryptoProblemMessage();
-  const prontos = usableProviders(configs);
-
-  const motivoBloqueio =
-    problemaCripto ??
-    (prontos.length === 0
-      ? "Nenhum provedor de IA está configurado e ativo. Cadastre uma chave em Configurações para começar."
-      : null);
 
   return (
     <div className="space-y-4">
@@ -81,8 +77,8 @@ export default async function IaPage() {
         conversationId={null}
         initialMessages={[]}
         runs={{}}
-        podeConversar={motivoBloqueio === null}
-        motivoBloqueio={motivoBloqueio}
+        podeConversar={prontidao.podeConversar}
+        motivoBloqueio={prontidao.motivoBloqueio}
       />
     </div>
   );

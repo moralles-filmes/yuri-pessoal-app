@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { FloatingAssistant } from "@/components/ai/floating-assistant";
+import type { CantoDoBotao } from "@/lib/ai/painel";
 
 export const SIDEBAR_COOKIE = "yuri:sidebar-collapsed";
 export const SIDEBAR_HIDDEN_COOKIE = "yuri:sidebar-hidden";
@@ -24,6 +26,8 @@ export function AppShell({
   unreadCount = 0,
   defaultCollapsed = false,
   defaultHidden = false,
+  cantoDoAssistente = "direita",
+  assistenteOculto = false,
   children,
 }: {
   email?: string | null;
@@ -31,6 +35,9 @@ export function AppShell({
   unreadCount?: number;
   defaultCollapsed?: boolean;
   defaultHidden?: boolean;
+  /** 18-F Bloco 2 — semeados pelo servidor, mantidos pelo próprio botão depois. */
+  cantoDoAssistente?: CantoDoBotao;
+  assistenteOculto?: boolean;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = React.useState(defaultCollapsed);
@@ -67,6 +74,14 @@ export function AppShell({
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>
+
+      {/*
+        18-F Bloco 2. Fora do `<main>` e por último: `position: fixed` não depende do lugar no
+        DOM para se posicionar, mas depende dele para a ORDEM DE FOCO — e um botão flutuante
+        que entra antes do conteúdo faria o Tab passar por ele em toda tela, antes de qualquer
+        coisa que o dono veio fazer.
+      */}
+      <FloatingAssistant canto={cantoDoAssistente} oculto={assistenteOculto} />
     </div>
   );
 }

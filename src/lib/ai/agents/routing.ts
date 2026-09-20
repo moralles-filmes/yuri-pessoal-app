@@ -110,6 +110,21 @@ export function permissaoDoModulo(modulo: string): ToolPermission | null {
 }
 
 /**
+ * 18-F Bloco 3 — o inverso de `AGENTE_DO_MODULO`, DERIVADO dele.
+ *
+ * Responde "que módulo este agente serve", que é o que a seção de memória precisa saber para
+ * decidir qual preferência amarrada a módulo pode entrar nesta conversa.
+ *
+ * ⚠️ `body` e `training` apontam para o MESMO agente, então o inverso não é função: a primeira
+ * entrada vence, e é `training`. Está certo para o uso que tem — uma preferência de medida
+ * corporal amarrada ao agente de Treinos seria arbitrária nos dois sentidos, e quem quiser que
+ * ela valha sempre deixa o módulo em branco.
+ */
+export function moduloDoAgente(agentId: string): string | null {
+  return Object.entries(AGENTE_DO_MODULO).find(([, id]) => id === agentId)?.[0] ?? null;
+}
+
+/**
  * Palavras que indicam o módulo. Acentos são removidos na comparação, então escreva sem
  * acento aqui. Radicais curtos ("serie") entram com fronteira de palavra para não casar
  * dentro de outra palavra.
@@ -199,7 +214,11 @@ const PALAVRAS: Record<string, readonly string[]> = {
     // ⚠️ "gordura" SOZINHA ficaria de fora de propósito: ela casaria dentro de "gordura
     // corporal", que é de `body`, e toda pergunta sobre composição corporal viraria empate.
     // "lipidios" e "gorduras" (plural) não têm essa sobreposição.
-    "caloria", "calorias", "proteina", "carboidrato", "lipidios", "gorduras",
+    // ⚠️ SINGULAR **E** PLURAL, um por entrada. O casamento é por fronteira de palavra e não
+    // há stemming (ver `casamentosPorModulo`), então "proteina" NÃO casa em "proteínas" — e a
+    // frase do briefing da fase está no plural. Foi a suíte de evals do Bloco 5 que pegou.
+    "caloria", "calorias", "proteina", "proteinas", "carboidrato", "carboidratos",
+    "lipidios", "gorduras",
     "macros", "nutricao", "diario alimentar", "receita", "receitas",
   ],
 };

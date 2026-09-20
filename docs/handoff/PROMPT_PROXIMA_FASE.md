@@ -1,22 +1,29 @@
 # PROMPT_PROXIMA_FASE — Prompt reutilizável para continuar o projeto
 
 > Como usar: **copie o bloco "PROMPT" abaixo** e cole no novo chat.
-> Você só precisa **editar 1 linha** — a que começa com `>>> FASE A IMPLEMENTAR:`.
-> Use a tabela do fim para saber o nome do arquivo de cada fase.
+> Você só precisa **editar 1 linha** — a que começa com `>>> TAREFA:`.
 
-> ✅ **A Fase 16 (Dieta, `/nutricao`) está CONCLUÍDA** desde 2026-08-04 — 16-A a 16-F, com os
-> 40 critérios de aceite validados. **Só a Fase 17 (Treinos, `/treinos`) tem próxima subfase.**
-> A frente Dieta está em manutenção: melhoria nela entra como tarefa avulsa.
+> ⛔ **NÃO HÁ PRÓXIMA FASE.** As **14 fases do roadmap original**, a **15 (TO-DO)**, a
+> **16 (Dieta)**, a **17 (Treinos)** e a **18 (IA)** estão **CONCLUÍDAS** — a 18 fechou em
+> 2026-09-20, com os critérios validados um a um em
+> `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md`. **Não há 18-G e não há Fase 19.**
+>
+> O projeto está em **manutenção/iteração**: toda melhoria entra como **tarefa avulsa**, com
+> branch própria e o fluxo normal (brainstorming quando houver decisão de design em aberto →
+> plano → execução). O prompt abaixo foi convertido para isso. ⚠️ Ele mandava implementar a
+> **Subfase 17-E**, concluída em 2026-08-04 — e, como é um prompt para copiar e colar, um
+> agente obedeceria ao pé da letra e reimplementaria coisa pronta.
 
 ---
 
 ## PROMPT (copie a partir daqui)
 
 ```text
-Você vai continuar o projeto "Sistema Pessoal Yuri" (já iniciado, faseado e documentado).
+Você vai trabalhar no projeto "Sistema Pessoal Yuri" (concluído, faseado e documentado).
+Ele NÃO tem fase em aberto: toda melhoria é tarefa avulsa, com branch própria.
 
->>> FASE A IMPLEMENTAR: Subfase 17-E — docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md <<<
-(edite SOMENTE a linha acima ao trocar de fase — o resto continua igual)
+>>> TAREFA: <descreva aqui, em uma ou duas linhas, o que você quer> <<<
+(edite SOMENTE a linha acima — o resto continua igual)
 
 NÃO comece a codar antes de ler a documentação. Leia, nesta ordem:
 1. docs/project/PROJECT_BRIEFING.md
@@ -26,25 +33,22 @@ NÃO comece a codar antes de ler a documentação. Leia, nesta ordem:
 5. docs/project/CURRENT_STATUS.md
 6. docs/handoff/LAST_PHASE_SUMMARY.md
 7. docs/handoff/NEXT_AGENT_INSTRUCTIONS.md
-8. O arquivo da fase indicado na linha ">>> FASE A IMPLEMENTAR" acima
-9. O arquivo da subfase ANTERIOR do mesmo módulo (para saber o que já existe)
+8. As INVARIANTES do módulo que a tarefa toca, no CLAUDE.md da raiz — quase todas nasceram
+   de um bug real, e várias são travas de banco que um patch inocente desfaz
+9. O arquivo docs/phases/PHASE_XX_*.md do módulo que a tarefa toca (o que já existe ali)
 
-Implemente AGORA apenas a fase indicada acima, seguindo o arquivo da fase e as regras:
-- Trabalhe só nessa fase. Não adiante fases futuras. Não reduza requisitos em silêncio:
-  o que não couber, registre no arquivo da subfase seguinte.
+Faça AGORA apenas a tarefa acima, seguindo as regras:
+- Trabalhe só nessa tarefa. NÃO invente uma "Fase 19" nem uma subfase nova para organizar o
+  trabalho: o roadmap é histórico de construção, e reabri-lo por um ajuste faz a documentação
+  mentir. Se a tarefa for grande, quebre em blocos DENTRO dela.
+- Não reduza requisitos em silêncio: o que não couber, diga qual foi e por quê.
 - Não quebre nada já pronto (layout, tema dark/light, responsividade, rotas, auth, format).
-- DUAS FRENTES EM PARALELO (Fase 16 Dieta e Fase 17 Treinos) compartilham repositório e
-  banco. Ao editar PROJECT_ROADMAP.md, CURRENT_STATUS.md, NEXT_AGENT_INSTRUCTIONS.md,
-  src/types/supabase.ts e src/config/nav.ts, LEIA ANTES e edite de forma pontual —
-  sobrescrever leva embora o trabalho da outra frente.
-- CRIE UMA BRANCH para a fase a partir de origin/main e CONFIRME com
-  `git branch --show-current` ANTES de cada commit. As duas frentes usam a mesma pasta e a
-  outra pode trocar a branch no meio do trabalho: já aconteceu de uma fase inteira ser
-  commitada na branch da outra frente e o push subir uma branch vazia.
-  ACONTECEU DE NOVO NA 16-F (2026-08-04): a branch virou a da outra frente com o trabalho
-  ainda não commitado. Se acontecer: `git stash push -u -- src/`, volte para a SUA branch,
-  `git stash pop`, e confira que nenhum arquivo da outra frente entrou. COMMITE CEDO E
-  COMMITE SÓ OS SEUS ARQUIVOS.
+- CRIE UMA BRANCH para a tarefa a partir de origin/main e CONFIRME com
+  `git branch --show-current` ANTES de cada commit. Enquanto houve duas frentes em paralelo
+  (Fases 16 e 17), aconteceu duas vezes de uma fase inteira ser commitada na branch da outra e
+  o push subir uma branch vazia. Se outro trabalho estiver em curso na mesma pasta e a branch
+  trocar no meio: `git stash push -u -- src/`, volte para a SUA branch, `git stash pop`, e
+  confira que nenhum arquivo alheio entrou. COMMITE CEDO E COMMITE SÓ OS SEUS ARQUIVOS.
 - Migrations em supabase/migrations/ (idempotentes, timestamp YYYYMMDDHHMMSS) com RLS +
   FORCE RLS por user_id = auth.uid() em TODAS as tabelas; índice em user_id; trigger
   updated_at. Nunca confie em user_id vindo do client — sempre auth.getUser().
@@ -67,32 +71,53 @@ Implemente AGORA apenas a fase indicada acima, seguindo o arquivo da fase e as r
      (src/lib/forms/server-errors.ts) e passe `error` para TODO campo. "Verifique os campos
      destacados" só pode aparecer se algum campo for destacado de fato.
 - Verificação obrigatória antes de declarar pronto:
-  npm run lint && npx tsc --noEmit && npm run test:run && npm run build
-  Mais um smoke test: rotas privadas → 307 /login; /api/cron/* → 401 sem segredo.
+  npm run lint && npx tsc --noEmit && npm run test:run && npm run build && npm run perf:bundle
+  Mais TZ=UTC npx vitest run (a suíte tem de passar em qualquer fuso) e um smoke test:
+  rotas privadas → 307 /login; /api/cron/* → 401 sem segredo.
+  ⚠️ Confira o pwd antes de acreditar num verde: cd persiste entre chamadas de shell.
 - Segurança: nunca suba segredo/chave/token; revise o diff antes de qualquer commit.
+  Não faça push sem eu pedir.
 
-Ao terminar, atualize docs/project/CURRENT_STATUS.md, docs/handoff/LAST_PHASE_SUMMARY.md
-e docs/handoff/NEXT_AGENT_INSTRUCTIONS.md (apontando para a PRÓXIMA fase), e me diga no fim:
-o que foi feito, arquivos criados/alterados, fase concluída, próxima fase e o caminho exato
-do arquivo que o próximo agente deve abrir.
+Ao terminar, atualize docs/project/CURRENT_STATUS.md e docs/handoff/NEXT_AGENT_INSTRUCTIONS.md
+(a seção de pendências), e o CLAUDE.md da raiz SE alguma invariante mudou. Me diga no fim:
+o que foi feito, arquivos criados/alterados, o que ficou de fora e por quê.
 ```
 
 (copie até aqui)
 
 ---
 
-## Tabela de referência — o que pôr na linha `>>> FASE A IMPLEMENTAR`
+## Tabela de referência — onde está cada módulo (histórico)
+
+⛔ **Nenhuma linha desta seção é "a próxima".** Todas as fases estão concluídas; a tabela serve
+para achar o arquivo do módulo que a sua tarefa toca.
+
+### Fase 18 — Inteligência Artificial (`/ia`)
+
+| Subfase | Arquivo |
+| --- | --- |
+| 18-A | ✅ concluída (`PHASE_18_A_AI_FOUNDATION_PROVIDERS_CHAT.md`) |
+| 18-B | ✅ concluída (`PHASE_18_B_AI_CONTEXT_READ_TOOLS_AGENTS.md`) |
+| 18-C | ✅ concluída (`PHASE_18_C_AI_ACTIONS_APPROVALS_AUDIT.md`) — matriz em `PHASE_18_C_MATRIZ_DE_FERRAMENTAS.md` |
+| 18-D | ✅ concluída (`PHASE_18_D_AI_VISION_DOCUMENTS_RECEIPTS.md`) |
+| 18-E | ✅ concluída (`PHASE_18_E_AI_INSIGHTS_REPORTS_DASHBOARDS.md`) |
+| 18-F | ✅ concluída (`PHASE_18_F_AI_MEMORY_VOICE_INTEGRATIONS_POLISH.md`) — **FECHOU a Fase 18** |
+
+> ✅ **A Fase 18 está CONCLUÍDA** (2026-09-20). Os critérios de aceite da fase inteira foram
+> validados **um a um** em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md`: 163 critérios, 142
+> validados, 17 dependendo de conferência à mão e 4 retirados no desenho, com motivo.
+> **Não há 18-G.**
 
 ### Fase 17 — Treinos (`/treinos`)
 
-| Subfase | Linha para colar |
+| Subfase | Arquivo |
 | --- | --- |
 | 17-C | ✅ concluída (`PHASE_17_C_TRAINING_LIVE_SESSION.md`) |
 | 17-D | ✅ concluída (`PHASE_17_D_TRAINING_HISTORY_PROGRESS.md`) |
-| 17-E | `Subfase 17-E — docs/phases/PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md` ← **próxima** |
-| 17-F | `Subfase 17-F — docs/phases/PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md` |
+| 17-E | ✅ concluída (`PHASE_17_E_TRAINING_GOALS_DASHBOARDS.md`) |
+| 17-F | ✅ concluída (`PHASE_17_F_TRAINING_INTEGRATIONS_POLISH.md`) — **FECHOU a Fase 17** |
 
-> ⛔ **Os dois avisos centrais para a 17-E:**
+> ⛔ **Os dois avisos centrais de quem for mexer em Treinos:**
 > **1.** `src/lib/training/metrics.ts` é a fonte ÚNICA de todo agregado do módulo (volume,
 > séries, repetições, tempo, distância, frequência, distribuição por grupo). Os dashboards
 > **consomem** — se refizerem a conta, vão discordar do histórico e o usuário verá dois números
@@ -102,16 +127,15 @@ do arquivo que o próximo agente deve abrir.
 
 ### Fase 16 — Dieta e Alimentação (`/nutricao`)
 
-| Subfase | Linha para colar |
+| Subfase | Arquivo |
 | --- | --- |
 | 16-D | ✅ concluída (`PHASE_16_D_NUTRITION_SHOPPING_LIST.md`) |
 | 16-E | ✅ concluída (`PHASE_16_E_NUTRITION_MEASUREMENTS_REPORTS.md`) |
-| 16-F | `Subfase 16-F — docs/phases/PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md` — ✅ **concluída (FECHOU a Fase 16)** |
+| 16-F | ✅ concluída (`PHASE_16_F_NUTRITION_INTEGRATIONS_POLISH.md`) — **FECHOU a Fase 16** |
 
 > ✅ **O encontro das duas frentes já aconteceu (2026-08-04).** A **16-E CRIOU** o módulo
 > central `body_*` (4 tabelas + `src/lib/body/`); a **17-E CONSOME** e **não cria tabela
-> nenhuma** — `getLatestWeight()` já está pronto para a preparação da sessão pré-preencher o
-> peso. Nunca duas tabelas de peso corporal.
+> nenhuma**. Nunca duas tabelas de peso corporal.
 >
 > ✅ **A Fase 16 está CONCLUÍDA.** A 16-F validou os **40 critérios de aceite gerais** — 40 de
 > 40 atendidos (veredito item a item em `docs/handoff/LAST_PHASE_SUMMARY.md`). **Não há 16-G**:
@@ -134,13 +158,13 @@ do arquivo que o próximo agente deve abrir.
 
 ## Mais fácil ainda (sem editar nada)
 
-Cada agente, ao terminar uma fase, atualiza `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`
-apontando para a fase seguinte. Como há duas frentes, diga qual você quer:
-
 ```text
-Implemente a próxima subfase da frente TREINOS do projeto "Sistema Pessoal Yuri", seguindo
-docs/handoff/NEXT_AGENT_INSTRUCTIONS.md e o arquivo de fase que ele indicar.
-Respeite docs/project/PROJECT_RULES.md e atualize os arquivos de handoff ao terminar.
+Trabalhe no projeto "Sistema Pessoal Yuri", que está concluído e em manutenção. Leia
+docs/handoff/NEXT_AGENT_INSTRUCTIONS.md e docs/project/PROJECT_RULES.md antes de tocar em
+qualquer coisa, e as invariantes do módulo no CLAUDE.md da raiz. Não há fase em aberto:
+o que eu pedir é tarefa avulsa, com branch própria.
 ```
 
-> **Qual é a próxima fase agora?** Veja sempre `docs/project/CURRENT_STATUS.md`.
+> **O que ainda está aberto?** As pendências conscientes — a conferência à mão dos 17 critérios
+> da Fase 18, as duas chaves ociosas, o backlog de `auth_rls_initplan` — estão listadas em
+> `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Não há próxima fase.**

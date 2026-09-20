@@ -55,6 +55,19 @@ export const TOOL_PERMISSIONS = [
   "allow_tasks",
   "allow_habits",
   "allow_studies",
+  /**
+   * ⚠️ 18-F Bloco 3 — A DÉCIMA, E ELA NÃO É UM MÓDULO DO DONO.
+   *
+   * As nove acima autorizam LER um módulo de registros dele. Esta autoriza o assistente a ler
+   * as PREFERÊNCIAS que ele escreveu, e a colocá-las no prompt. Ela está aqui, e não solta
+   * como `allow_vision`, por uma razão concreta: `memory.lembrar` é uma ferramenta do Tool
+   * Registry, e `ToolDescriptor.requiredPermission` é `ToolPermission` — uma chave fora desta
+   * lista não teria como ser exigida pelo guard.
+   *
+   * A consequência a conhecer: `permissaoDoModulo("memory")` passa a existir. O roteador não
+   * a alcança (não há vocabulário de "memória" e não há agente do módulo), e é assim que fica.
+   */
+  "allow_memory",
 ] as const;
 export type ToolPermission = (typeof TOOL_PERMISSIONS)[number];
 
@@ -80,6 +93,15 @@ export const TOOL_WRITE_PERMISSIONS = [
   "allow_write_calendar",
   "allow_write_nutrition",
   "allow_write_finance",
+  /**
+   * 18-F Bloco 3 — a SEXTA. Liga a IA a PROPOR memória; a de leitura (`allow_memory`) liga a
+   * IA a USAR as que já existem. A distinção é a que o dono provavelmente quer: usar as
+   * preferências dele sem que ela fique criando preferências por conta própria.
+   *
+   * ⚠️ A ORDEM IMPORTA em um lugar: `constants.test.ts` monta a enumeração do aviso com
+   * `Intl.ListFormat` NA ORDEM desta lista. Por último, ela fecha a frase com "e Memória".
+   */
+  "allow_write_memory",
 ] as const;
 export type ToolWritePermission = (typeof TOOL_WRITE_PERMISSIONS)[number];
 

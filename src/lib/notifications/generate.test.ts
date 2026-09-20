@@ -415,3 +415,32 @@ describe("selectNewCandidates — idempotência por dedupe_key", () => {
     expect(fresh).toHaveLength(1);
   });
 });
+
+describe("Fase 18-F — IA entra pelo mesmo gerador", () => {
+  it("as notificações de IA saem de generateNotifications", () => {
+    const saida = generateNotifications(
+      base({
+        ai: {
+          hoje: "2026-09-19",
+          budgets: [
+            {
+              escopo: "mensal",
+              competencia: "2026-09",
+              totalUsd: 10,
+              limiteUsd: 10,
+              nivelJaAvisado: 0,
+            },
+          ],
+          providerProblems: [],
+          stuckActions: [],
+          insights: [],
+        },
+      }),
+    );
+    expect(saida.some((c) => c.type === "ai_budget_threshold")).toBe(true);
+  });
+
+  it("ai ausente não gera nada e não quebra", () => {
+    expect(() => generateNotifications(base())).not.toThrow();
+  });
+});

@@ -169,14 +169,18 @@ describe("os rótulos das autorizações de ESCRITA", () => {
   });
 
   /**
-   * ⚠️ FECHADO O BLOCO 4, AS CINCO CHAVES TÊM FERRAMENTA — nenhuma é botão que não liga nada.
+   * ⚠️ AS SEIS CHAVES TÊM FERRAMENTA — nenhuma é botão que não liga nada.
    *
    * O laço acima aceita chave sem ferramenta de propósito (era o estado dos Blocos 1–3), então
    * ele sozinho não notaria uma chave ficando órfã de novo. Esta asserção é a que percebe: ela
    * fica vermelha se alguém remover a última ferramenta de um módulo sem remover a chave, e
    * obriga a decisão a ser explícita nos dois sentidos.
+   *
+   * ⚠️ Eram CINCO até a 18-F Bloco 3; `allow_write_memory` é a sexta, e ela fica vermelha aqui
+   * até `memory.lembrar` entrar no registry — que é exatamente o serviço que esta asserção
+   * presta.
    */
-  it("as cinco chaves de escrita têm pelo menos uma ferramenta", () => {
+  it("as seis chaves de escrita têm pelo menos uma ferramenta", () => {
     for (const p of TOOL_WRITE_PERMISSIONS) {
       expect(toolsForWritePermission(p).length, p).toBeGreaterThan(0);
     }

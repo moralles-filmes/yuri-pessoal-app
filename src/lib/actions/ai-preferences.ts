@@ -76,6 +76,8 @@ export async function saveAiPreferences(
       allow_tasks: dados.permissions.allow_tasks,
       allow_habits: dados.permissions.allow_habits,
       allow_studies: dados.permissions.allow_studies,
+      // 18-F Bloco 3 — campo a campo, como as outras nove.
+      allow_memory: dados.permissions.allow_memory,
       /**
        * ⚠️ As cinco autorizações de ESCRITA (18-C · Bloco 4). Mesma disciplina campo a campo,
        * e um cuidado a mais: **escrita sem a leitura do mesmo módulo é derrubada aqui**, não
@@ -95,6 +97,14 @@ export async function saveAiPreferences(
         dados.writePermissions.allow_write_nutrition && dados.permissions.allow_nutrition,
       allow_write_finance:
         dados.writePermissions.allow_write_finance && dados.permissions.allow_finance,
+      /**
+       * ⚠️ 18-F Bloco 3 — ANDada com `allow_memory`, pela MESMA razão das cinco acima: propor
+       * uma preferência começa por ler as que já existem, para não repetir o que o dono já
+       * disse. Gravar a escrita sem a leitura descreveria um estado que o guard recusa na
+       * execução e que a tela exibiria como "autorizado".
+       */
+      allow_write_memory:
+        dados.writePermissions.allow_write_memory && dados.permissions.allow_memory,
       /**
        * ⚠️ 18-D — o envio de arquivo, ANDado no SERVIDOR com as duas chaves do Financeiro.
        *
@@ -122,6 +132,19 @@ export async function saveAiPreferences(
        * roda, pula os três e registra o porquê em `ai_insight_jobs`.
        */
       allow_insight_jobs: dados.allowInsightJobs,
+      /**
+       * ⛔ 18-F Bloco 4 — E ESTA TAMBÉM **NÃO** É ANDADA COM NADA, pela mesma razão da linha
+       * acima e não pela da linha de `allow_vision`.
+       *
+       * Um panorama cobre até quatro módulos INDEPENDENTES. ANDar com eles faria desligar a
+       * leitura da Agenda calar "Planejar meu dia" inteiro — o oposto da invariante 77. Quem
+       * decide módulo a módulo é `experiences/selection.ts` (que PULA e DECLARA), e o RPC
+       * confere esta chave de novo, dentro da transação de admissão.
+       *
+       * Ligar a chave com os módulos todos desligados não é estado impossível: é um panorama
+       * que `experience-runner.ts` RECUSA antes de gastar, com o motivo escrito.
+       */
+      allow_cross_module: dados.allowCrossModule,
       job_monthly_budget: dados.jobMonthlyBudget,
       default_provider: dados.defaultProvider,
       default_model: dados.defaultModel,
@@ -133,6 +156,14 @@ export async function saveAiPreferences(
       reservation_margin: dados.reservationMargin,
       rate_limit_per_minute: dados.rateLimitPerMinute,
       rate_limit_per_hour: dados.rateLimitPerHour,
+      /**
+       * 18-F Bloco 2 — aparência, não autorização, e por isso NÃO é ANDada com nada. As linhas
+       * de `allow_write_*` e `allow_vision` acima derrubam estado impossível; aqui não há
+       * estado impossível a derrubar: esconder o botão com as chaves todas desligadas é
+       * simplesmente esconder um botão que não lia nada mesmo.
+       */
+      floating_corner: dados.floatingCorner,
+      floating_hidden: dados.floatingHidden,
     },
     { onConflict: "user_id" },
   );

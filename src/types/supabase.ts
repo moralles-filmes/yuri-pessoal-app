@@ -642,6 +642,66 @@ export type Database = {
           },
         ]
       }
+      ai_memories: {
+        Row: {
+          content: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          modulo: string | null
+          origem: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          modulo?: string | null
+          origem: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          modulo?: string | null
+          origem?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_memory_events: {
+        Row: {
+          created_at: string
+          evento: string
+          id: string
+          memory_id: string
+          origem: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          evento: string
+          id?: string
+          memory_id: string
+          origem: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          evento?: string
+          id?: string
+          memory_id?: string
+          origem?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ai_messages: {
         Row: {
           content: string
@@ -1183,6 +1243,7 @@ export type Database = {
           allow_write_calendar: boolean
           allow_write_finance: boolean
           allow_write_habits: boolean
+          allow_write_memory: boolean
           allow_write_nutrition: boolean
           allow_write_todo: boolean
           budget_alert_level_reached: number
@@ -1192,6 +1253,8 @@ export type Database = {
           daily_budget: number | null
           default_model: string | null
           default_provider: string | null
+          floating_corner: string
+          floating_hidden: boolean
           id: string
           job_monthly_budget: number
           monthly_budget: number | null
@@ -1221,6 +1284,7 @@ export type Database = {
           allow_write_calendar?: boolean
           allow_write_finance?: boolean
           allow_write_habits?: boolean
+          allow_write_memory?: boolean
           allow_write_nutrition?: boolean
           allow_write_todo?: boolean
           budget_alert_level_reached?: number
@@ -1230,6 +1294,8 @@ export type Database = {
           daily_budget?: number | null
           default_model?: string | null
           default_provider?: string | null
+          floating_corner?: string
+          floating_hidden?: boolean
           id?: string
           job_monthly_budget?: number
           monthly_budget?: number | null
@@ -1259,6 +1325,7 @@ export type Database = {
           allow_write_calendar?: boolean
           allow_write_finance?: boolean
           allow_write_habits?: boolean
+          allow_write_memory?: boolean
           allow_write_nutrition?: boolean
           allow_write_todo?: boolean
           budget_alert_level_reached?: number
@@ -1268,6 +1335,8 @@ export type Database = {
           daily_budget?: number | null
           default_model?: string | null
           default_provider?: string | null
+          floating_corner?: string
+          floating_hidden?: boolean
           id?: string
           job_monthly_budget?: number
           monthly_budget?: number | null
@@ -8900,6 +8969,25 @@ export type Database = {
           p_selected_provider: string
           p_title?: string
           p_user_text: string
+        }
+        Returns: {
+          assistant_message_id: string
+          conversation_id: string
+          correlation_id: string
+          run_id: string
+          user_message_id: string
+        }[]
+      }
+      ai_begin_experience_run: {
+        Args: {
+          p_experiencia: string
+          p_prompt_version: string
+          p_reservation_rate_version: string
+          p_reservation_ttl_seconds?: number
+          p_reserved_cost: number
+          p_selected_model: string
+          p_selected_provider: string
+          p_title: string
         }
         Returns: {
           assistant_message_id: string

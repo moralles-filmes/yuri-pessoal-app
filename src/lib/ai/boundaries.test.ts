@@ -119,6 +119,39 @@ const CAMADAS_PURAS = [
    * testada.
    */
   "insights",
+  /**
+   * 18-F Bloco 3. `memory/` decide o que tem forma de preferência, qual é o estado de uma
+   * memória e quais entram no prompt — **sem conhecer provedor e sem falar com o AI SDK**.
+   *
+   * ⚠️ ELA ENTRA NA LISTA NO MESMO COMMIT EM QUE NASCE, e a razão está na natureza do teste:
+   * a lista é escrita à mão, então uma pasta nova FORA dela passa vacuamente verde — ele não
+   * reprova o que não conhece. Foi por isso que a spec (§9.2) exigiu esta linha por escrito.
+   *
+   * ⚠️ E ela FALA COM O BANCO (`queries.ts`, `services.ts`), como `approval/` já fazia: o que
+   * "pura" proíbe aqui é alcançar `ai/server/` e o pacote do fornecedor, não falar com o
+   * Supabase. O I/O da memória mora nesta pasta justamente porque `approval/commands/
+   * memory-preview.ts` precisa lê-lo sem atravessar `ai/server/`.
+   */
+  "memory",
+  /**
+   * 18-F Bloco 4. `experiences/` DECLARA o que uma experiência lê e como ela é redigida —
+   * sem falar com o banco, sem conhecer provedor e sem alcançar `ai/server/`. Quem executa é
+   * `server/experience-runner.ts`.
+   *
+   * ⚠️ Aquela lista é escrita à MÃO: uma pasta nova FORA dela passa vacuamente verde. Por
+   * isso esta linha entra no MESMO commit em que a pasta nasce — foi a regra que o Bloco 3
+   * pagou para aprender com `memory/`.
+   */
+  "experiences",
+  /**
+   * 18-F Bloco 5. `evals/` é dado e afirmação: os casos do briefing e o que o sistema garante
+   * sobre eles, com a rede desligada. Nada ali fala com provedor, banco ou `ai/server/`.
+   *
+   * ⚠️ Ela entra na lista NO MESMO COMMIT em que a pasta nasce, pela mesma razão de `memory/`
+   * e `experiences/`: a lista é escrita à mão, e uma pasta FORA dela passa VACUAMENTE VERDE.
+   * É a terceira vez que esta frase precisa ser escrita neste arquivo.
+   */
+  "evals",
 ] as const;
 
 describe("fronteiras arquiteturais do módulo de IA", () => {
@@ -386,7 +419,13 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
 
       const codigo = fs.readFileSync(arquivo, "utf8");
       for (const spec of especificadores(codigo)) {
-        if (/@\/lib\/[a-z-]+\/services$/.test(spec) || spec.includes("/services/")) {
+        /**
+         * ⚠️ 18-F Bloco 3 — a regex ERA `@\/lib\/[a-z-]+\/services$`, que só pega UM nível de
+         * pasta. `@/lib/ai/memory/services` tem dois, e passaria: a partição dos commands de
+         * memória viraria decoração, com os arquivos continuando dois e o grafo de imports um.
+         * `/services$` cobre qualquer profundidade.
+         */
+        if (/\/services$/.test(spec) || spec.includes("/services/")) {
           violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
         }
       }
@@ -460,6 +499,31 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
     const violacoes: string[] = [];
 
     for (const arquivo of listarArquivos(path.join(RAIZ, "insights"))) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
+      for (const achado of chamaBanco(codigo)) {
+        violacoes.push(`${path.relative(SRC, arquivo)} → ${achado}`);
+      }
+    }
+
+    expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 18-F Bloco 4 — `experiences/` DECLARA O QUE LER; QUEM LÊ É O TOOL EXECUTOR.          ║
+   * ║                                                                                     ║
+   * ║ Um `.from()` aqui seria a QUARTA porta de leitura nascendo dentro de um catálogo —   ║
+   * ║ e ela não teria `guard.ts`, não teria o teto do descriptor e não deixaria linha em   ║
+   * ║ `ai_tool_calls`. A 18-E só justificou a terceira (`insights/collectors/`) porque os  ║
+   * ║ três controles voltavam por outro caminho; aqui não há nada a justificar, porque as  ║
+   * ║ leituras já existem e já são auditadas.                                              ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("nenhum .from() nem select() em src/lib/ai/experiences/", () => {
+    const violacoes: string[] = [];
+
+    for (const arquivo of listarArquivos(path.join(RAIZ, "experiences"))) {
       if (arquivo.endsWith(".test.ts")) continue;
       const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
       for (const achado of chamaBanco(codigo)) {
@@ -728,6 +792,65 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
     }
 
     expect(violacoes).toEqual([]);
+  });
+
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 18-F Bloco 4 — AS DUAS PONTAS DO CATÁLOGO (§9.2), pela razão da invariante 80.      ║
+   * ║                                                                                     ║
+   * ║ Quem lê o catálogo decide o que uma experiência lê e com que prompt ela é escrita.  ║
+   * ║ Espalhar isso daria a qualquer arquivo o poder de montar um "plano" e passá-lo ao   ║
+   * ║ `runChat` — com lista de ferramentas própria e prompt próprio, sem passar por       ║
+   * ║ `allow_cross_module` nem pela recusa de "todos os módulos pulados".                 ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("SÓ o experience-runner importa `experiences/catalog`", () => {
+    const alvo = /(^|\/)ai\/experiences\/catalog$|^\.\.\/experiences\/catalog$/;
+    const donos: string[] = [];
+
+    for (const arquivo of listarArquivos(SRC)) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      for (const spec of especificadores(codigo)) {
+        if (alvo.test(spec)) {
+          donos.push(path.relative(SRC, arquivo).replace(/\\/g, "/"));
+        }
+      }
+    }
+
+    expect(donos).toEqual(["lib/ai/server/experience-runner.ts"]);
+  });
+
+  it("SÓ o Route Handler do chat alcança `server/experience-runner`", () => {
+    const alvo = /(^|\/)ai\/server\/experience-runner$|^\.\/experience-runner$/;
+    const donos: string[] = [];
+
+    for (const arquivo of listarArquivos(SRC)) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      for (const spec of especificadores(codigo)) {
+        if (alvo.test(spec)) {
+          donos.push(path.relative(SRC, arquivo).replace(/\\/g, "/"));
+        }
+      }
+    }
+
+    expect(donos).toEqual(["app/api/ia/chat/route.ts"]);
+  });
+
+  /**
+   * ⛔ O PLANO É UM OBJETO, E POR ISSO O `chat-runner` NÃO PRECISA DO CATÁLOGO.
+   *
+   * Ele executa uma lista que RECEBEU: não tem como buscar uma experiência, inventar uma
+   * ferramenta nem trocar o prompt de redação. Irrepresentável vence recusado — a mesma
+   * escolha de `LeituraDoDono` (invariante 79) e do campo `confianca` ausente (67).
+   */
+  it("o chat-runner NÃO conhece o catálogo — ele executa um plano que recebeu", () => {
+    const codigo = fs.readFileSync(path.join(RAIZ, "server", "chat-runner.ts"), "utf8");
+    for (const spec of especificadores(codigo)) {
+      expect(spec, `chat-runner importou ${spec}`).not.toMatch(/experiences\/catalog$/);
+      expect(spec, `chat-runner importou ${spec}`).not.toMatch(/experiences\/selection$/);
+    }
   });
 
   it("a rota do Cron de insights confere CRON_SECRET antes de qualquer outra coisa", () => {
