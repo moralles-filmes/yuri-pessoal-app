@@ -8978,6 +8978,25 @@ export type Database = {
           user_message_id: string
         }[]
       }
+      ai_begin_experience_run: {
+        Args: {
+          p_experiencia: string
+          p_prompt_version: string
+          p_reservation_rate_version: string
+          p_reservation_ttl_seconds?: number
+          p_reserved_cost: number
+          p_selected_model: string
+          p_selected_provider: string
+          p_title: string
+        }
+        Returns: {
+          assistant_message_id: string
+          conversation_id: string
+          correlation_id: string
+          run_id: string
+          user_message_id: string
+        }[]
+      }
       ai_begin_extraction_run: {
         Args: {
           p_document_id: string
