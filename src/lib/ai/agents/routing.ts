@@ -214,7 +214,11 @@ const PALAVRAS: Record<string, readonly string[]> = {
     // ⚠️ "gordura" SOZINHA ficaria de fora de propósito: ela casaria dentro de "gordura
     // corporal", que é de `body`, e toda pergunta sobre composição corporal viraria empate.
     // "lipidios" e "gorduras" (plural) não têm essa sobreposição.
-    "caloria", "calorias", "proteina", "carboidrato", "lipidios", "gorduras",
+    // ⚠️ SINGULAR **E** PLURAL, um por entrada. O casamento é por fronteira de palavra e não
+    // há stemming (ver `casamentosPorModulo`), então "proteina" NÃO casa em "proteínas" — e a
+    // frase do briefing da fase está no plural. Foi a suíte de evals do Bloco 5 que pegou.
+    "caloria", "calorias", "proteina", "proteinas", "carboidrato", "carboidratos",
+    "lipidios", "gorduras",
     "macros", "nutricao", "diario alimentar", "receita", "receitas",
   ],
 };

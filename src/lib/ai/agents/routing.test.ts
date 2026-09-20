@@ -388,6 +388,33 @@ describe("desempate entre módulos", () => {
     expect(moduloPeloTexto("e aí, como estou indo?")).toEqual({ tipo: "nenhum" });
   });
 
+  /**
+   * 18-F Bloco 5 — encontrado pela suíte de evals.
+   *
+   * O casamento é por FRONTEIRA DE PALAVRA e não tem stemming — de propósito: stemming faria
+   * palavras não relacionadas colidirem, e a invariante 27 diz que palavra ambígua DESLIGA o
+   * roteamento em vez de errá-lo. O preço dessa escolha é que cada forma precisa estar
+   * listada, e a convenção do arquivo já era essa ("serie" e "series", "caloria" e
+   * "calorias"). As duas entradas de nutriente ficaram para trás no singular.
+   */
+  it("nutriente no plural também encontra a Dieta", () => {
+    expect(moduloPeloTexto("Como estão minhas proteínas nesta semana?")).toEqual({
+      tipo: "modulo",
+      modulo: "nutrition",
+    });
+    expect(moduloPeloTexto("bati os carboidratos ontem")).toEqual({
+      tipo: "modulo",
+      modulo: "nutrition",
+    });
+  });
+
+  it("e o singular continua encontrando", () => {
+    expect(moduloPeloTexto("quanta proteína eu comi")).toEqual({
+      tipo: "modulo",
+      modulo: "nutrition",
+    });
+  });
+
   it("a flag desligada vence o desempate — o especialista simplesmente não existe", () => {
     // "tarefas" + "projeto" = 2: todo venceria com folga, mas `allow_todo` está desligada.
     const r = routeAgent({
