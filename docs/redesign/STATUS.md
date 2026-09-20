@@ -2,13 +2,69 @@
 
 **Atualizado:** 2026-09-20
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
-por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅** —
-02-D liberada
+por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
+REDESIGN-02-D ✅** — 02-E liberada
 
 ⛔ **As três migrations continuam sem ser aplicadas.** "Aprovado tudo" foi lido como aval do
 **visual** e do **dicionário**. Cada migration escreve no banco de produção e segue precisando
 de um "aplique a M1" (ou M2, ou M3) seu, separado. Serão pedidas uma a uma, no momento em que
 a subfase precisar delas — a M3 é a primeira, na 03-B.
+
+---
+
+## REDESIGN-02-D — o menu e os deep-links param de apontar para o vazio ✅
+
+**⚠️ Esta subfase NÃO consertou defeito nenhum, e isso está dito de propósito.** Os 20 itens
+do menu e os 30 deep-links apontavam todos para rotas que existem. Ela não corrige; ela
+impede. Por isso o critério de aceite aqui não é "ficou verde" — verde era o estado inicial —
+e sim **a confirmação por mutação**: 10 mutações, todas vermelhas.
+
+**O que estava frouxo, medido:**
+
+| Onde | O que havia | O que faltava |
+| --- | --- | --- |
+| `config/nav.ts` | 20 hrefs | **nada** conferia que a rota existe. Renomear uma pasta em `src/app/(app)/` dá um item com ícone e rótulo que leva a 404 |
+| `search/ai-links.test.ts` | conferia o disco | com resolução **própria**, `"(app)"` e `"ia"` escritos dentro e um `slice(1)`. Se `/ia` mudasse de grupo, ela responderia "não existe" em vez de "não sei procurar" |
+| `search/nutrition-links.test.ts` | 8 links | **prometia no cabeçalho** que a rota existe do outro lado; conferia o formato da string contra ela mesma |
+| `search/training-links.test.ts` | 11 links | idem — e o cabeçalho afirmava literalmente "se um dos dois mudar sem o outro, `training-links.test.ts` quebra". Era falso |
+
+**A resolução de rota virou uma só** — `src/test/rotas.ts`. Ela varre `src/app/**/page.tsx`,
+trata grupo de rota (`(app)`, `(auth)`) e segmento dinâmico, e responde três coisas:
+`PADROES_DE_ROTA` (com `[id]` preservado), `ROTAS_DO_APP` (as 63 telas da casca, id concreto)
+e `temPagina(link)` (aceita query e âncora). A varredura que a 02-C tinha dentro do
+`active.test.ts` **saiu de lá** e passou a vir daqui: a 02-D não podia recriar a duplicação
+que a 02-C acabou de remover.
+
+⚠️ **Por que em `src/test/` e não em `src/lib/`:** o módulo importa `node:fs`. Hoje `node:fs`
+no `src/` só aparece em arquivos `*.test.ts` — um módulo com `fs` que a tela alcance quebra o
+build.
+
+**Mutações — 10 aplicadas uma a uma, 10 vermelhas:**
+
+| # | Mutação | Resultado |
+| --- | --- | --- |
+| M1 | `temPagina` responde **sim** a tudo | 🔴 4 |
+| M2 | `temPagina` responde **não** a tudo | 🔴 50 |
+| M3 | deixa de conferir a contagem de segmentos | 🔴 4 |
+| M4 | segmento dinâmico passa a casar **literalmente** | 🔴 5 |
+| M5 | grupo de rota deixa de ser removido da URL | 🔴 55 |
+| M6 | toda tela vira tela da casca autenticada | 🔴 2 |
+| M7 | varredura apontada para pasta sem páginas | 🔴 não carrega, **com a mensagem própria** |
+| M8 | item do menu aponta para rota inexistente | 🔴 2 |
+| M9 | dois itens do menu na **mesma** rota | 🔴 3 |
+| M10 | `navHrefs` deixa de refletir o menu | 🔴 3 |
+
+A M4 saiu **verde na primeira tentativa** — e o verde era meu erro, não do teste: a
+substituição deixou um ternário sem `else`, o arquivo não compilava e a suíte nem carregava.
+Refeita como mudança que compila, ficou vermelha em 5. **Mutação que não compila não prova
+nada.** Restauração conferida por `git diff` (`nav.ts` sem diff algum) e por varredura dos
+seis marcadores — não pelo verde.
+
+**Dois testes que ninguém pediu e que valem mais que o principal:** *nenhum href se repete*
+(dois itens na mesma rota acendem os dois — é a 02-C entrando por outra porta, sem prefixo
+nenhum envolvido) e *o href é absoluto, sem query e sem barra final* (`hrefAtivo` compara com
+`pathname`; um href com `?` nunca ficaria ativo, e o item ficaria apagado para sempre sem
+nada quebrar).
 
 ---
 
@@ -224,6 +280,9 @@ as colunas já existem e o CHECK já aceita.
 | D16 | **REDESIGN-02-C idem** (roteador: TIER 1 → Codex). O que decide aqui é o **contrato** da função que pinta a navegação inteira (o que "mais específico" significa, e que a resposta seja uma só) e a **casca**, onde mora o orçamento de bundle. Aplicar nos 5 pontos é mecânico; o contrato e a prova não são |
 | D17 | **A decisão de item ativo foi unificada nos 5 navs, mas a CASCA visual deles fica para a 02-E.** Deixar quatro cópias da mesma decisão obrigaria a 02-E a refazê-la, e as exceções escritas à mão são armadilha latente. Unificar a **decisão** é correção; unificar o **shell** é design |
 | D18 | **`/busca` não acende item nenhum, e isso é exceção DECLARADA, não silêncio.** Ela é a tela de resultado do Ctrl/Cmd+K, não um item de menu. Sem a lista, "toda rota acende alguma coisa" seria falso — e um teste que se acomoda a uma rota órfã se acomoda à próxima |
+| D19 | **REDESIGN-02-D fica com o agente principal** — desta vez o roteador concordou (TIER 0 → principal). `audit_required: true` veio junto e **não foi honrado**: a política do próprio plugin exclui mudança sem superfície nova, e a 02-D não altera um arquivo de runtime sequer. Nenhuma auditoria externa rodou, e não se afirma que rodou |
+| D20 | **A resolução "esta rota existe?" mora em `src/test/rotas.ts`, não em `src/lib/`.** Ela importa `node:fs`; hoje `node:fs` no `src/` só aparece em `*.test.ts`, e um módulo com `fs` alcançável pela tela quebra o build. A varredura saiu de dentro do `active.test.ts` no mesmo passo — 02-D não podia recriar a duplicação que a 02-C removeu |
+| D21 | **A 02-D não conserta nada, e o documento diz isso.** Os 20 hrefs e os 30 deep-links já apontavam para rotas existentes. Numa subfase que nasce verde, o único critério de aceite honesto é a mutação — e uma delas (M4) saiu verde por erro meu, não do teste: não compilava. **Mutação que não compila não prova nada** |
 
 ## Bloqueios
 
@@ -233,32 +292,52 @@ Nenhum.
 
 ~~`R1` cor de entidade "Dourado" ligada a `bg-primary`~~ **FECHADO na 02-A**, com teste e
 mutação · `R2` **3,1 KB** de folga de bundle na casca (eram 3,3; o link de pular custou 0,2) ·
-`R3` ids de card do dashboard · `R4` deep-links sem teste em 8 módulos · `R5` mudar número sem
+`R3` ids de card do dashboard · **`R4` REDUZIDO na 02-D, não fechado** · `R5` mudar número sem
 perceber · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
 Detalhe em `AUDITORIA.md` §4.
 
+**O que falta do `R4`, medido em 2026-09-20.** A 02-D cobriu o menu (20 hrefs) e os três
+módulos de deep-link (Dieta 8, Treinos 11, IA 9). Continuam **sem teste de disco** as rotas
+montadas **à mão, inline**, nos dois arquivos que o próprio `R4` nomeia:
+
+- `src/lib/search/queries.ts` — 8 rotas (`/cartoes`, `/financeiro/contas`,
+  `/financeiro/lancamentos`, `/habitos`, `/notificacoes`, `/rotinas`, `/tarefas`, `/terceiros`)
+- `src/lib/notifications/generate.ts` — 6 rotas (`/cartoes`, `/dashboard/financeiro`,
+  `/financeiro/contas-fixas`, `/habitos`, `/tarefas`, `/terceiros`)
+
+São **11 rotas distintas**, e são justamente as dos módulos que a **REDESIGN-04 e a 07** vão
+mover. Fechar isso é uma varredura de fonte de ~30 linhas sobre `temPagina`, que já existe.
+**Ficou de fora de propósito:** não é o que a 02-D declara no `PLANO.md`, e alargar uma fase
+por conta própria é o que o faseamento existe para impedir. Decisão sua.
+
 ## Testes executados
 
-| Comando | REDESIGN-00/01 | 02-A | 02-B | 02-C |
-| --- | --- | --- | --- | --- |
-| `npm run test:run` | ✅ 185 / 3.738 | ✅ 186 / 3.745 | ✅ 187 / 3.757 | ✅ **188 / 3.770**, 13,59 s |
-| `npm run lint` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
-| `npx tsc --noEmit` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
-| `npm run build` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
-| `npm run perf:bundle` | ✅ mediana 213,9 · config. 281,6/285 | ✅ 213,9 · 281,7/285 | ✅ 213,9 · 281,7/285 | ✅ mediana **214,2** · config. **281,9/285** (3,1 KB de folga) · 68 rotas dentro |
+| Comando | REDESIGN-00/01 | 02-A | 02-B | 02-C | 02-D |
+| --- | --- | --- | --- | --- | --- |
+| `npm run test:run` | ✅ 185 / 3.738 | ✅ 186 / 3.745 | ✅ 187 / 3.757 | ✅ 188 / 3.770, 13,59 s | ✅ **189 / 3.818**, 13,35 s |
+| `npm run lint` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
+| `npx tsc --noEmit` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
+| `npm run build` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
+| `npm run perf:bundle` | ✅ mediana 213,9 · config. 281,6/285 | ✅ 213,9 · 281,7/285 | ✅ 213,9 · 281,7/285 | ✅ mediana 214,2 · config. 281,9/285 | ✅ **idêntico à 02-C** — 214,2 · 281,9/285 · 68 rotas |
 
-Em cada subfase o delta de testes é **exatamente** o arquivo novo (02-A: +1 arq./+7 casos;
-02-B: +1 arq./+12 casos; 02-C: +1 arq./+13 casos). **Nenhum teste existente foi alterado**
-para passar.
+Em cada subfase o delta de testes é **exatamente** o que foi acrescentado (02-A: +1 arq./+7
+casos; 02-B: +1 arq./+12; 02-C: +1 arq./+13; 02-D: **+1 arq./+48** — 27 do `nav.test.ts`, 9
+da Dieta, 12 de Treinos). **Nenhum teste existente foi afrouxado para passar.**
 
-## Próximo passo — REDESIGN-02-D
+⚠️ **Ressalva de honestidade da 02-D:** ela é a primeira subfase que **editou arquivos de
+teste existentes** — `active.test.ts` e `ai-links.test.ts` tiveram a resolução de rota trocada
+pela compartilhada. Nenhuma afirmação mudou e a contagem dos dois ficou igual (13 e 11), mas
+"não mexeu em teste existente" deixou de ser verdade a partir daqui.
 
-Teste de que todo `href` de `nav.ts` tem um `page.tsx` no disco. A 02-C já enumera as rotas
-do disco (`rotasDoDisco()` em `src/lib/nav/active.test.ts`); a 02-D é o **sentido inverso** —
-href → arquivo — e reusa a mesma varredura.
+E o `perf:bundle` da 02-D ser idêntico ao da 02-C **é o resultado esperado, não uma
+coincidência**: a subfase não altera um arquivo de runtime sequer. Ele foi rodado justamente
+para confirmar isso em vez de eu afirmar.
 
-Depois, a **02-E**: `ModuleNav`/`ModuleShell` únicos, hoje repetidos por módulo. A **decisão**
-de item ativo já foi unificada na 02-C (D17); o que resta ali é a **casca visual**.
+## Próximo passo — REDESIGN-02-E
+
+`ModuleNav`/`ModuleShell` únicos, hoje repetidos por módulo (Nutrição, Treinos, IA e
+Financeiro). A **decisão** de item ativo já foi unificada na 02-C (D17); o que resta ali é a
+**casca visual**.
 
 ⚠️ A 02-E é a que mexe na casca do app, e a casca é onde moram os **3,1 KB de folga** do
 `/(app)/configuracoes` (R2 — eram 3,3 antes do link de pular). O orçamento é critério de

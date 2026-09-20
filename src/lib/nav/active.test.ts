@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { hrefAtivo } from "./active";
 import { findNavItem, navHrefs } from "@/config/nav";
+import { ROTAS_DO_APP as ROTAS } from "@/test/rotas";
 
 /**
  * REDESIGN-02-C — a navegação tem UMA decisão de item ativo.
@@ -14,37 +15,15 @@ import { findNavItem, navHrefs } from "@/config/nav";
  *  - que nenhuma rota real do disco acenda dois itens, com as rotas LIDAS do
  *    disco em vez de escritas à mão aqui — uma lista à mão fica para trás no dia
  *    em que alguém cria uma pasta, e é exatamente aí que o defeito voltaria.
+ *
+ * A varredura das pastas saiu daqui na REDESIGN-02-D (`@/test/rotas`), porque outros
+ * três arquivos precisavam da mesma resposta e dois deles a estavam supondo.
  */
 
 const SRC = path.resolve(__dirname, "..", "..");
-const ROTAS_APP = path.join(SRC, "app", "(app)");
 
 function semComentarios(codigo: string): string {
   return codigo.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
-}
-
-/** Todo `page.tsx` sob `(app)` vira a rota que o Next serve. */
-function rotasDoDisco(): string[] {
-  const achadas: string[] = [];
-  const anda = (dir: string) => {
-    for (const entrada of fs.readdirSync(dir, { withFileTypes: true })) {
-      const alvo = path.join(dir, entrada.name);
-      if (entrada.isDirectory()) anda(alvo);
-      else if (entrada.name === "page.tsx") {
-        const segmentos = path
-          .relative(ROTAS_APP, path.dirname(alvo))
-          .split(path.sep)
-          // Grupo de rota `(nome)` organiza pastas e não aparece na URL.
-          .filter((s) => s && !(s.startsWith("(") && s.endsWith(")")))
-          // `[id]` é um segmento como outro qualquer para esta decisão; damos um
-          // valor concreto para a rota testada parecer com a que o usuário abre.
-          .map((s) => (s.startsWith("[") ? "abc123" : s));
-        achadas.push(`/${segmentos.join("/")}`);
-      }
-    }
-  };
-  anda(ROTAS_APP);
-  return achadas.sort();
 }
 
 /** Arquivos de componente, para as varreduras de fonte. */
@@ -60,8 +39,6 @@ function arquivosDeComponente(): string[] {
   anda(path.join(SRC, "components"));
   return achados;
 }
-
-const ROTAS = rotasDoDisco();
 
 /**
  * `/busca` é a tela de resultado da busca global do Header — chega-se a ela pelo

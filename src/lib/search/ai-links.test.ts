@@ -1,6 +1,5 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { temPagina } from "@/test/rotas";
 import {
   actionsLink,
   conversationLink,
@@ -13,12 +12,13 @@ import {
   usageLink,
 } from "./ai-links";
 
-/** Converte a rota em caminho de página no disco, ignorando a query string. */
-function paginaDe(rota: string): string {
-  const semQuery = rota.split("?")[0];
-  const partes = semQuery.split("/").filter(Boolean).slice(1); // tira "ia"
-  return join(process.cwd(), "src", "app", "(app)", "ia", ...partes, "page.tsx");
-}
+/*
+ * A resolução "esta rota tem página?" saiu daqui na REDESIGN-02-D. A daqui montava o
+ * caminho do arquivo à mão, com `"(app)"` e `"ia"` escritos dentro e um `slice(1)` para
+ * tirar o primeiro segmento: ela responderia "não existe" — e não "eu não sei procurar" —
+ * no dia em que `/ia` mudasse de grupo ou ganhasse um nível. `@/test/rotas` varre as
+ * pastas de uma vez só e é a mesma fonte que a sidebar usa desde a 02-C.
+ */
 
 describe("ai-links", () => {
   it("monta o link da conversa com o id", () => {
@@ -43,20 +43,13 @@ describe("ai-links", () => {
     // 18-F Bloco 3 — a rota e o link no mesmo commit. Esta linha é o que prova isso.
     ["memória", memoryLink()],
   ])("a rota de %s tem página no disco", (_nome, rota) => {
-    expect(existsSync(paginaDe(rota))).toBe(true);
+    expect(temPagina(rota)).toBe(true);
   });
 
   it("a rota dinâmica da conversa tem página no disco", () => {
-    const pagina = join(
-      process.cwd(),
-      "src",
-      "app",
-      "(app)",
-      "ia",
-      "conversas",
-      "[id]",
-      "page.tsx",
-    );
-    expect(existsSync(pagina)).toBe(true);
+    // Agora pelo LINK que o sistema monta, e não por um caminho `[id]` escrito à mão:
+    // o caminho à mão continuaria verde se `conversationLink` passasse a apontar para
+    // outro lugar.
+    expect(temPagina(conversationLink("9f8e7d6c-1234"))).toBe(true);
   });
 });
