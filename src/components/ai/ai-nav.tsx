@@ -1,16 +1,19 @@
-"use client";
-
 /**
  * Fase 18-A — IA · Navegação interna do módulo.
  *
- * Mesmo padrão do TO-DO (15), da Dieta (16) e dos Treinos (17): coluna fixa no desktop,
- * gaveta no celular. São 4 seções na 18-A, então não há agrupamento — quando as subfases
- * seguintes acrescentarem itens, aí sim vale agrupar por finalidade.
+ * REDESIGN-02-E: o desenho da coluna, da gaveta e do item ativo saiu daqui e foi para
+ * `@/components/shared/module-shell`, que é o mesmo dos outros dois módulos. O que fica
+ * neste arquivo é o que é DA IA: quais seções e com que ícone.
+ *
+ * Duas coisas que só apareceram quando as três cópias foram lidas lado a lado, e que a
+ * casca compartilhada corrige: este nav não marcava `aria-current="page"` e o `<nav>` não
+ * tinha `aria-label`. Em `/ia`, a única pista de "você está aqui" era a cor.
+ *
+ * ⚠️ O cabeçalho antigo dizia "são 4 seções na 18-A, então não há agrupamento — quando as
+ * subfases seguintes acrescentarem itens, aí sim vale agrupar". São OITO desde a 18-F, e a
+ * lista corrida continua: Dieta agrupou com 12 e Treinos com 13. Se passar disso, o formato
+ * já aceita grupos — basta partir o array.
  */
-
-import * as React from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   Brain,
   Gauge,
@@ -22,9 +25,7 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
-import { hrefAtivo } from "@/lib/nav/active";
+import type { NavegacaoDeModulo } from "@/components/shared/module-shell";
 import { AI_SECTIONS } from "@/lib/ai/constants";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -38,72 +39,16 @@ const ICONS: Record<string, LucideIcon> = {
   settings: Settings,
 };
 
-const HREFS = AI_SECTIONS.map((section) => section.href);
-
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
-  // A raiz `/ia` não precisa mais da exceção escrita à mão: ela só vence quando
-  // nenhuma seção mais funda casou. Regra única em `@/lib/nav/active`.
-  const ativoAqui = hrefAtivo(pathname, HREFS);
-
-  return (
-    <nav className="space-y-1">
-      {AI_SECTIONS.map((section) => {
-        const Icon = ICONS[section.icon] ?? MessageSquare;
-        const ativo = section.href === ativoAqui;
-        return (
-          <Link
-            key={section.slug}
-            href={section.href}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
-              // `min-w-0` no lado texto: sem ele o rótulo empurra o ícone para fora do card.
-              ativo
-                ? "bg-primary/10 font-medium text-primary"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Icon className="size-4 shrink-0" />
-            <span className="min-w-0 truncate">{section.title}</span>
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
-
-export function AiNav() {
-  return (
-    <aside className="hidden w-56 shrink-0 lg:block">
-      {/* `top-18` e não `top-0`: o Header é `sticky top-0` com `h-16`. */}
-      <div className="sticky top-18">
-        <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Inteligência Artificial
-        </p>
-        <NavLinks />
-      </div>
-    </aside>
-  );
-}
-
-export function AiNavDrawer({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-72">
-        <SheetHeader>
-          <SheetTitle>Inteligência Artificial</SheetTitle>
-        </SheetHeader>
-        <div className="px-4 pb-6">
-          <NavLinks onNavigate={() => onOpenChange(false)} />
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
+/** A navegação da IA: um grupo só, sem título — 8 itens ainda se varrem de uma vez. */
+export const NAV_DA_IA: NavegacaoDeModulo = {
+  nome: "Inteligência Artificial",
+  grupos: [
+    {
+      itens: AI_SECTIONS.map((section) => ({
+        href: section.href,
+        title: section.title,
+        icon: ICONS[section.icon] ?? MessageSquare,
+      })),
+    },
+  ],
+};

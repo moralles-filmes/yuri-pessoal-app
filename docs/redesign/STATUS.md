@@ -3,12 +3,72 @@
 **Atualizado:** 2026-09-20
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
-REDESIGN-02-D ✅** — 02-E liberada
+REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada**; 03-A liberada
 
 ⛔ **As três migrations continuam sem ser aplicadas.** "Aprovado tudo" foi lido como aval do
 **visual** e do **dicionário**. Cada migration escreve no banco de produção e segue precisando
 de um "aplique a M1" (ou M2, ou M3) seu, separado. Serão pedidas uma a uma, no momento em que
 a subfase precisar delas — a M3 é a primeira, na 03-B.
+
+---
+
+## REDESIGN-02-E — a navegação de módulo passa a ser UMA ✅
+
+Ao contrário da 02-D, esta subfase **consertou defeito vivo** — e ele só apareceu porque as
+três cópias foram lidas lado a lado. Havia três navs de módulo "quase iguais" e três cascas
+**idênticas até o comentário**; "quase" era o problema.
+
+**O que estava diferente entre as cópias:**
+
+| # | Divergência | Gravidade |
+| --- | --- | --- |
+| 1 | ⛔ **O nav da IA não marcava `aria-current="page"`.** Dieta, Treinos e as abas do Financeiro marcavam | **Defeito de acessibilidade, vivo.** Em `/ia`, quem usa leitor de tela não recebia "você está aqui" — a única pista era a cor |
+| 2 | ⛔ **O `<nav>` da IA não tinha `aria-label`.** A página tem dois landmarks de navegação | Um "navigation" sem nome na lista de landmarks, ao lado da sidebar do app |
+| 3 | Dois desenhos de item ativo no mesmo produto: Dieta/Treinos com fundo + anel e texto em `foreground`; IA com fundo e texto em `primary` | Inconsistência visível, e a variante da IA é a de **menor contraste** (texto colorido sobre fundo colorido) |
+| 4 | Só a IA era `sticky`, e sem teto de altura | Com os 13 itens de Treinos, numa janela baixa os últimos ficariam inalcançáveis |
+
+**O que foi feito.** `src/components/shared/module-shell.tsx` passou a ser a única
+implementação de coluna, gaveta, botão "Seções", estado da gaveta e item ativo. Os três
+módulos viraram **dados**: quais seções, em que ordem, sob que grupo, com que ícone. As
+cascas viraram uma linha cada. O item ativo ficou na variante de maior contraste — **texto em
+cor de texto, e a cor da marca marcando a POSIÇÃO** (ícone e anel).
+
+⚠️ **O Financeiro não entrou, e isso é decisão declarada (D23).** A navegação dele é uma fita
+de abas horizontal, não uma coluna: não é uma quarta cópia disto, é outra forma.
+
+⚠️ **O badge "Em breve"/"Planejado" não foi trazido (D24).** As **25 seções** dos três módulos
+estão todas `pronto` desde que as fases 16, 17 e 18 fecharam — é um ramo que dado nenhum
+alcança. Quem avisa se isso deixar de ser verdade é um teste, não a memória de alguém.
+
+**Mutação — 10 aplicadas uma a uma, 10 vermelhas**, cada uma derrubando exatamente o teste
+que deveria derrubar:
+
+| # | Mutação | Resultado |
+| --- | --- | --- |
+| M1 | item ativo deixa de ser anunciado (`aria-current`) | 🔴 1 |
+| M2 | landmark perde o nome (`aria-label`) | 🔴 1 |
+| M3 | a IA volta a decidir a própria rota atual | 🔴 1 |
+| M4 | uma seção de Treinos fica fora da coluna | 🔴 2 |
+| M5 | dois itens de Treinos na mesma rota | 🔴 2 |
+| M6 | as rotas da IA apontam para módulo inexistente | 🔴 9 |
+| M7 | `temPagina` responde sim a tudo | 🔴 3 |
+| M8 | uma seção de Treinos deixa de estar pronta | 🔴 1 |
+| M9 | a sonda some da casca (**autoteste da varredura**) | 🔴 1 |
+| M10 | item ativo passa a olhar só o 1º grupo | 🔴 1 |
+
+⚠️ **A primeira rodada de mutação foi descartada e refeita (D25).** Ela reportava só a
+CONTAGEM de vermelhos, e dois números não bateram com a realidade quando fui conferir um a
+um. A 2ª rodada registra o **nome** de cada teste que cai e faz o backup byte a byte. Contagem
+sem nome é número que se lê errado — e foi o que aconteceu comigo.
+
+**Efeito no bundle: nenhum, e era o esperado.** `/(app)/configuracoes` segue em **281,9 de
+285** e a mediana em **214,2** — os navs de módulo não são importados pela casca do app, então
+consolidá-los não move o orçamento. Rodado para confirmar, não afirmado.
+
+**Achado que fica para a REDESIGN-07:** `NutritionSectionPlaceholder` e
+`TrainingSectionPlaceholder` **não têm chamador nenhum** e os campos `status`/`phase` das
+constantes só alimentavam o badge morto. Ficaram de pé — removê-los é limpeza de módulo, não
+unificação de navegação.
 
 ---
 
@@ -283,6 +343,10 @@ as colunas já existem e o CHECK já aceita.
 | D19 | **REDESIGN-02-D fica com o agente principal** — desta vez o roteador concordou (TIER 0 → principal). `audit_required: true` veio junto e **não foi honrado**: a política do próprio plugin exclui mudança sem superfície nova, e a 02-D não altera um arquivo de runtime sequer. Nenhuma auditoria externa rodou, e não se afirma que rodou |
 | D20 | **A resolução "esta rota existe?" mora em `src/test/rotas.ts`, não em `src/lib/`.** Ela importa `node:fs`; hoje `node:fs` no `src/` só aparece em `*.test.ts`, e um módulo com `fs` alcançável pela tela quebra o build. A varredura saiu de dentro do `active.test.ts` no mesmo passo — 02-D não podia recriar a duplicação que a 02-C removeu |
 | D21 | **A 02-D não conserta nada, e o documento diz isso.** Os 20 hrefs e os 30 deep-links já apontavam para rotas existentes. Numa subfase que nasce verde, o único critério de aceite honesto é a mutação — e uma delas (M4) saiu verde por erro meu, não do teste: não compilava. **Mutação que não compila não prova nada** |
+| D22 | **REDESIGN-02-E fica com o agente principal por BLOQUEIO do roteador, não por escolha.** Ele classificou TIER 1 → Codex e o `dispatch` voltou `blocked` com `unsafe_test_command`: o pacote declara `npm run`/`npx` como testes, e o gate do plugin não os permite para worker externo. Reescrever os comandos para passar pelo gate seria contorná-lo, e a política do próprio plugin proíbe. Nenhuma auditoria externa rodou, e não se afirma que rodou |
+| D23 | **O Financeiro NÃO entrou no `ModuleShell`, contra a letra do `PLANO.md`.** A navegação dele é fita de abas horizontal (`finance-tabs-nav.tsx`), não coluna — não é uma quarta cópia, é outra forma, com um consumidor só. Um componente compartilhado com um chamador é abstração sem segundo caso. O que ele já compartilha é a **decisão** (`hrefAtivo`, 02-C) e a linguagem de token. Virar coluna é **mudar a navegação do módulo**, e isso é assunto da REDESIGN-04, que o redesenha inteiro |
+| D24 | **O badge "Em breve"/"Planejado" não foi para a casca compartilhada.** As 25 seções dos três módulos estão `pronto`; um ramo que dado nenhum alcança, copiado para dentro de um componente compartilhado, vira peso que ninguém consegue justificar depois. ⛔ O risco de a regressão ficar muda foi coberto por teste: `module-shell.test.ts` fica vermelho no dia em que uma seção nascer sem estar pronta |
+| D25 | **A 1ª rodada de mutação da 02-E foi descartada, não corrigida por cima.** Ela reportava só a contagem de vermelhos, e dois números não sobreviveram à conferência um a um (M1 acusava 4; eram 1). Causa: estado sujo do meu próprio script, mais um backup feito com `cp` do Git Bash que ficou em LF contra um arquivo de trabalho em CRLF. A 2ª rodada faz backup byte a byte e registra o **nome** de cada teste que cai. **Contagem sem nome é número que se lê errado** |
 
 ## Bloqueios
 
@@ -296,33 +360,41 @@ mutação · `R2` **3,1 KB** de folga de bundle na casca (eram 3,3; o link de pu
 perceber · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
 Detalhe em `AUDITORIA.md` §4.
 
-**O que falta do `R4`, medido em 2026-09-20.** A 02-D cobriu o menu (20 hrefs) e os três
-módulos de deep-link (Dieta 8, Treinos 11, IA 9). Continuam **sem teste de disco** as rotas
-montadas **à mão, inline**, nos dois arquivos que o próprio `R4` nomeia:
+**O que falta do `R4`, recontado em 2026-09-20 na abertura da 02-E.** A 02-D cobriu o menu
+(20 hrefs) e os três módulos de deep-link (Dieta 8, Treinos 11, IA 9); a 02-E acrescentou as
+**25 seções** dos navs de módulo. Continuam **sem teste de disco** as rotas montadas **à mão,
+inline**:
 
-- `src/lib/search/queries.ts` — 8 rotas (`/cartoes`, `/financeiro/contas`,
-  `/financeiro/lancamentos`, `/habitos`, `/notificacoes`, `/rotinas`, `/tarefas`, `/terceiros`)
-- `src/lib/notifications/generate.ts` — 6 rotas (`/cartoes`, `/dashboard/financeiro`,
-  `/financeiro/contas-fixas`, `/habitos`, `/tarefas`, `/terceiros`)
+- `src/lib/search/queries.ts` — **13 pontos** (linhas 176, 195, 222, 241, 285, 304, 324, 349,
+  368, 388, 412, 440, 808)
+- `src/lib/notifications/generate.ts` — **7 pontos** (309, 328, 342, 365, 413, 469, 561)
+- `src/lib/notifications/nutrition.ts` — **1 ponto** (255)
 
-São **11 rotas distintas**, e são justamente as dos módulos que a **REDESIGN-04 e a 07** vão
-mover. Fechar isso é uma varredura de fonte de ~30 linhas sobre `temPagina`, que já existe.
-**Ficou de fora de propósito:** não é o que a 02-D declara no `PLANO.md`, e alargar uma fase
-por conta própria é o que o faseamento existe para impedir. Decisão sua.
+⚠️ **A primeira contagem, publicada na 02-D, estava errada: eu disse "11 rotas em 2
+arquivos".** São **21 pontos de link e 15 rotas distintas, em 3 arquivos** — o terceiro
+apareceu só quando fui escrever o prompt da tarefa. O `nutrition.ts:255` monta
+`/nutricao/planejamento?data=` inline, passando ao largo do `nutrition-links.ts` que a
+**invariante 26** declara fonte única (o `planLink` que existe lá abre outra coisa).
+
+São justamente as rotas dos módulos que a **REDESIGN-04 e a 07** vão mover. Fechar isso é uma
+varredura de fonte sobre `temPagina`, que já existe. **Despachado para outro chat em
+2026-09-20**, em branch própria a partir de `fce701f`, com instrução explícita de **não tocar
+este arquivo** — o `R4` só sai daqui como fechado quando aquele trabalho voltar e for revisto.
 
 ## Testes executados
 
-| Comando | REDESIGN-00/01 | 02-A | 02-B | 02-C | 02-D |
-| --- | --- | --- | --- | --- | --- |
-| `npm run test:run` | ✅ 185 / 3.738 | ✅ 186 / 3.745 | ✅ 187 / 3.757 | ✅ 188 / 3.770, 13,59 s | ✅ **189 / 3.818**, 13,35 s |
-| `npm run lint` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
-| `npx tsc --noEmit` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
-| `npm run build` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
-| `npm run perf:bundle` | ✅ mediana 213,9 · config. 281,6/285 | ✅ 213,9 · 281,7/285 | ✅ 213,9 · 281,7/285 | ✅ mediana 214,2 · config. 281,9/285 | ✅ **idêntico à 02-C** — 214,2 · 281,9/285 · 68 rotas |
+| Comando | REDESIGN-00/01 | 02-A | 02-B | 02-C | 02-D | 02-E |
+| --- | --- | --- | --- | --- | --- | --- |
+| `npm run test:run` | ✅ 185 / 3.738 | ✅ 186 / 3.745 | ✅ 187 / 3.757 | ✅ 188 / 3.770, 13,59 s | ✅ 189 / 3.818, 13,35 s | ✅ **190 / 3.880**, 15,62 s |
+| `npm run lint` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
+| `npx tsc --noEmit` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
+| `npm run build` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
+| `npm run perf:bundle` | ✅ mediana 213,9 · config. 281,6/285 | ✅ 213,9 · 281,7/285 | ✅ 213,9 · 281,7/285 | ✅ mediana 214,2 · config. 281,9/285 | ✅ **idêntico à 02-C** — 214,2 · 281,9/285 · 68 rotas | ✅ **idêntico à 02-D** — 214,2 · 281,9/285 · 68 rotas |
 
 Em cada subfase o delta de testes é **exatamente** o que foi acrescentado (02-A: +1 arq./+7
-casos; 02-B: +1 arq./+12; 02-C: +1 arq./+13; 02-D: **+1 arq./+48** — 27 do `nav.test.ts`, 9
-da Dieta, 12 de Treinos). **Nenhum teste existente foi afrouxado para passar.**
+casos; 02-B: +1 arq./+12; 02-C: +1 arq./+13; 02-D: +1 arq./+48 — 27 do `nav.test.ts`, 9 da
+Dieta, 12 de Treinos; 02-E: **+1 arq./+62**, todos de `module-shell.test.ts`). **Nenhum teste
+existente foi afrouxado para passar.**
 
 ⚠️ **Ressalva de honestidade da 02-D:** ela é a primeira subfase que **editou arquivos de
 teste existentes** — `active.test.ts` e `ai-links.test.ts` tiveram a resolução de rota trocada
@@ -333,15 +405,19 @@ E o `perf:bundle` da 02-D ser idêntico ao da 02-C **é o resultado esperado, n�
 coincidência**: a subfase não altera um arquivo de runtime sequer. Ele foi rodado justamente
 para confirmar isso em vez de eu afirmar.
 
-## Próximo passo — REDESIGN-02-E
+## Próximo passo — REDESIGN-03-A
 
-`ModuleNav`/`ModuleShell` únicos, hoje repetidos por módulo (Nutrição, Treinos, IA e
-Financeiro). A **decisão** de item ativo já foi unificada na 02-C (D17); o que resta ali é a
-**casca visual**.
+**A REDESIGN-02 está fechada** (A, B, C, D, E). O que vem é o contrato financeiro, que é o
+item nº 1 da ordem de prioridade do briefing: *integridade dos dados* antes de tudo.
 
-⚠️ A 02-E é a que mexe na casca do app, e a casca é onde moram os **3,1 KB de folga** do
-`/(app)/configuracoes` (R2 — eram 3,3 antes do link de pular). O orçamento é critério de
-aceite, não detalhe.
+A **03-A** são **testes de caracterização** de `resumoMes`, `gastosPorCategoria`,
+`proximas6Faturas` e `totalAReceber`: fixar o que essas quatro consultas respondem HOJE,
+**antes** de qualquer mudança, para que a 03-B tenha como provar que não mudou sentido
+financeiro nenhum. Ela **não depende de migration** e não altera runtime.
 
-Em paralelo, a **03-A** (testes de caracterização de `resumoMes`, `gastosPorCategoria`,
-`proximas6Faturas`, `totalAReceber`) já está liberada e **não depende de migration nenhuma**.
+⛔ A **03-B** é a primeira que precisa da **M3** (`categories.classificacao_padrao`) — e
+migration em produção continua exigindo um "aplique a M3" seu, separado.
+
+⏳ **Em outro chat:** o fechamento do `R4` (as 21 rotas inline de `search/queries.ts`,
+`notifications/generate.ts` e `notifications/nutrition.ts`). Volta como branch própria para
+revisão; nada foi empurrado por lá nem por aqui.
