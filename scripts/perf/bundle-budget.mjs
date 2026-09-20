@@ -45,9 +45,12 @@ const EXCECOES = {
     porque:
       "Mostra sete cartões de formulário ao mesmo tempo, todos visíveis sem interação. " +
       "Carregá-los sob demanda trocaria peso por piscada numa tela onde não há clique para " +
-      "esconder o custo. Medido em 279,2 KB gz em 2026-09-19, depois do Bloco 1 da 18-F " +
-      "(os 7 ícones novos do lucide entram pelo sino e pela busca, que vivem no Header e " +
-      "portanto em toda rota `(app)`); eram 276,8 KB antes dela. O teto dá folga de ~6 KB.",
+      "esconder o custo. Medido em 281,4 KB gz em 2026-09-19, depois do Bloco 2 da 18-F " +
+      "(o botão flutuante mora na casca, então ele e o ícone novo do lucide entram em toda " +
+      "rota `(app)` — o painel fica fora, atrás do `next/dynamic`); eram 279,2 KB depois do " +
+      "Bloco 1 e 276,8 KB antes dela. ⛔ A FOLGA CAIU PARA 3,6 KB, e este teto NÃO SOBE: " +
+      "uma exceção que cresce a cada bloco é um orçamento que não existe. O caminho é tirar " +
+      "import da casca.",
   },
 };
 
