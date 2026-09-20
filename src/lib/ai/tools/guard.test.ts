@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TOOL_WRITE_PERMISSIONS } from "./contracts";
 import type {
   ToolDescriptor,
   ToolPermission,
@@ -52,21 +53,22 @@ const TUDO_LIGADO = Object.fromEntries(
   ["allow_training", "allow_finance", "allow_todo"].map((k) => [k, true]),
 ) as Record<ToolPermission, boolean>;
 
-const ESCRITA_LIGADA: Record<ToolWritePermission, boolean> = {
-  allow_write_todo: true,
-  allow_write_habits: true,
-  allow_write_calendar: true,
-  allow_write_nutrition: true,
-  allow_write_finance: true,
-};
+/**
+ * ⚠️ 18-F Bloco 3 — DERIVADAS de `TOOL_WRITE_PERMISSIONS`, não escritas à mão.
+ *
+ * As duas eram literais com as cinco chaves, e a sexta (`allow_write_memory`) as deixou
+ * vermelhas. Uma fixture escrita à mão sobre uma lista que cresce é a invariante 94 esperando
+ * acontecer — e aqui ela é pior que em `validators/`: "tudo ligado" com uma chave faltando
+ * testaria o guard contra um estado que nunca existe.
+ */
+const escrita = (valor: boolean): Record<ToolWritePermission, boolean> =>
+  Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((k) => [k, valor])) as Record<
+    ToolWritePermission,
+    boolean
+  >;
 
-const ESCRITA_DESLIGADA: Record<ToolWritePermission, boolean> = {
-  allow_write_todo: false,
-  allow_write_habits: false,
-  allow_write_calendar: false,
-  allow_write_nutrition: false,
-  allow_write_finance: false,
-};
+const ESCRITA_LIGADA = escrita(true);
+const ESCRITA_DESLIGADA = escrita(false);
 
 const base = {
   registry: [TREINOS, ESCRITA],

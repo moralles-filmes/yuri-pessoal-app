@@ -76,6 +76,8 @@ export async function saveAiPreferences(
       allow_tasks: dados.permissions.allow_tasks,
       allow_habits: dados.permissions.allow_habits,
       allow_studies: dados.permissions.allow_studies,
+      // 18-F Bloco 3 — campo a campo, como as outras nove.
+      allow_memory: dados.permissions.allow_memory,
       /**
        * ⚠️ As cinco autorizações de ESCRITA (18-C · Bloco 4). Mesma disciplina campo a campo,
        * e um cuidado a mais: **escrita sem a leitura do mesmo módulo é derrubada aqui**, não
@@ -95,6 +97,14 @@ export async function saveAiPreferences(
         dados.writePermissions.allow_write_nutrition && dados.permissions.allow_nutrition,
       allow_write_finance:
         dados.writePermissions.allow_write_finance && dados.permissions.allow_finance,
+      /**
+       * ⚠️ 18-F Bloco 3 — ANDada com `allow_memory`, pela MESMA razão das cinco acima: propor
+       * uma preferência começa por ler as que já existem, para não repetir o que o dono já
+       * disse. Gravar a escrita sem a leitura descreveria um estado que o guard recusa na
+       * execução e que a tela exibiria como "autorizado".
+       */
+      allow_write_memory:
+        dados.writePermissions.allow_write_memory && dados.permissions.allow_memory,
       /**
        * ⚠️ 18-D — o envio de arquivo, ANDado no SERVIDOR com as duas chaves do Financeiro.
        *

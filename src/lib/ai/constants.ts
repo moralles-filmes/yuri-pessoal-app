@@ -269,8 +269,14 @@ export const ROTULO_DA_ROTA_DE_CONTEXTO = {
  * (`toolsForWritePermission` + `Intl.ListFormat` em pt-BR): publicar a primeira escrita de
  * outro módulo, ou remover a última de um, deixa a suíte vermelha até este texto acompanhar.
  */
+/**
+ * ⚠️ **QUINTA REESCRITA — 18-F · Bloco 3.** A memória entrou nas DUAS listas: ela é lida
+ * (`allow_memory`, a décima) e é escrita (`allow_write_memory`, a sexta). As duas enumerações
+ * continuam derivadas do registry por `constants.test.ts` — a de leitura por título, a de
+ * escrita pela string EXATA de `Intl.ListFormat`, na ordem de `TOOL_WRITE_PERMISSIONS`.
+ */
 export const AVISO_SEM_ACESSO =
-  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Ele pode ler Financeiro, Dieta e Alimentação, Treinos, Medidas corporais, TO-DO, Agenda, Tarefas e Rotinas, Hábitos e Estudos — cada um com a sua chave. Para ALTERAR algo ele precisa de uma segunda chave, e há chave de alteração para TO-DO, Hábitos, Agenda, Dieta e Alimentação e Financeiro: ele prepara a alteração, mostra exatamente o que vai mudar, e nada acontece até você confirmar na tela.";
+  "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Ele pode ler Financeiro, Dieta e Alimentação, Treinos, Medidas corporais, TO-DO, Agenda, Tarefas e Rotinas, Hábitos, Estudos e a Memória de preferências — cada um com a sua chave. Para ALTERAR algo ele precisa de uma segunda chave, e há chave de alteração para TO-DO, Hábitos, Agenda, Dieta e Alimentação, Financeiro e Memória: ele prepara a alteração, mostra exatamente o que vai mudar, e nada acontece até você confirmar na tela.";
 
 /**
  * A versão curta da mesma regra, para a descrição da página. Afirma a REGRA, nunca o estado:
@@ -330,6 +336,16 @@ export const ROTULO_DA_PERMISSAO = {
     titulo: "Estudos",
     frase: "Ler cursos, aulas e progresso de estudo.",
   },
+  /**
+   * ⚠️ 18-F Bloco 3 — A ÚNICA QUE NÃO É UM MÓDULO DE REGISTROS DO DONO.
+   *
+   * A frase começa por "Ler " como as outras nove, e é a verdade: esta chave não deixa a IA
+   * escrever memória nenhuma. Quem faz isso é `allow_write_memory`.
+   */
+  allow_memory: {
+    titulo: "Memória",
+    frase: "Ler as preferências que você salvou na memória do assistente.",
+  },
 } as const satisfies Record<ToolPermission, { titulo: string; frase: string }>;
 
 /**
@@ -366,6 +382,11 @@ export const ROTULO_DA_PERMISSAO_DE_ESCRITA = {
   allow_write_finance: {
     titulo: "Financeiro",
     frase: "Preparar lançamentos de transação, para você confirmar na tela.",
+  },
+  allow_write_memory: {
+    titulo: "Memória",
+    frase:
+      "Preparar preferências novas para a memória do assistente, para você confirmar na tela.",
   },
 } as const satisfies Record<ToolWritePermission, { titulo: string; frase: string }>;
 

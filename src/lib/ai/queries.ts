@@ -149,6 +149,9 @@ const SEM_PERMISSAO: Record<ToolPermission, boolean> = {
   allow_tasks: false,
   allow_habits: false,
   allow_studies: false,
+  // 18-F Bloco 3. Sem linha de preferência, o assistente não conhece preferência nenhuma —
+  // e um prompt sem a seção de memória é o estado correto, não um estado degradado.
+  allow_memory: false,
 };
 
 /**
@@ -162,6 +165,7 @@ const SEM_ESCRITA: Record<ToolWritePermission, boolean> = {
   allow_write_calendar: false,
   allow_write_nutrition: false,
   allow_write_finance: false,
+  allow_write_memory: false,
 };
 
 const PREFS_PADRAO: AiPreferencesView = {
@@ -199,7 +203,7 @@ export async function getAiPreferences(
   const { data } = await supabase
     .from("ai_user_preferences")
     .select(
-      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_vision, allow_insight_jobs, job_monthly_budget, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour, floating_corner, floating_hidden",
+      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_memory, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_write_memory, allow_vision, allow_insight_jobs, job_monthly_budget, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour, floating_corner, floating_hidden",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -230,6 +234,9 @@ export async function getAiPreferences(
       allow_tasks: data.allow_tasks === true,
       allow_habits: data.allow_habits === true,
       allow_studies: data.allow_studies === true,
+      // 18-F Bloco 3. Mesmo `=== true`: coluna ausente, nula ou de tipo inesperado vira
+      // DESLIGADA. Aqui o que está do outro lado é um texto do dono entrando no prompt.
+      allow_memory: data.allow_memory === true,
     },
     // Mesmo `=== true` da leitura, e aqui ele importa ainda mais: a coerção que
     // transformasse um `null` em "ligado" autorizaria a IA a propor alteração num módulo
@@ -240,6 +247,7 @@ export async function getAiPreferences(
       allow_write_calendar: data.allow_write_calendar === true,
       allow_write_nutrition: data.allow_write_nutrition === true,
       allow_write_finance: data.allow_write_finance === true,
+      allow_write_memory: data.allow_write_memory === true,
     },
     // 18-D. Mesmo `=== true`, e pela razão mais forte de todas: o que está do outro lado
     // desta coerção não é ler um número nem alterar um registro — é um documento do dono
