@@ -119,6 +119,20 @@ const CAMADAS_PURAS = [
    * testada.
    */
   "insights",
+  /**
+   * 18-F Bloco 3. `memory/` decide o que tem forma de preferência, qual é o estado de uma
+   * memória e quais entram no prompt — **sem conhecer provedor e sem falar com o AI SDK**.
+   *
+   * ⚠️ ELA ENTRA NA LISTA NO MESMO COMMIT EM QUE NASCE, e a razão está na natureza do teste:
+   * a lista é escrita à mão, então uma pasta nova FORA dela passa vacuamente verde — ele não
+   * reprova o que não conhece. Foi por isso que a spec (§9.2) exigiu esta linha por escrito.
+   *
+   * ⚠️ E ela FALA COM O BANCO (`queries.ts`, `services.ts`), como `approval/` já fazia: o que
+   * "pura" proíbe aqui é alcançar `ai/server/` e o pacote do fornecedor, não falar com o
+   * Supabase. O I/O da memória mora nesta pasta justamente porque `approval/commands/
+   * memory-preview.ts` precisa lê-lo sem atravessar `ai/server/`.
+   */
+  "memory",
 ] as const;
 
 describe("fronteiras arquiteturais do módulo de IA", () => {
