@@ -1,17 +1,33 @@
 /**
  * Tokens e formatadores compartilhados dos gráficos do dashboard (Fase 07).
- * Cores e estilos saem SEMPRE das variáveis CSS do design system (preto/branco/dourado),
- * garantindo legibilidade em dark e light. Valores em BRL e meses em pt-BR.
+ * Cores e estilos saem SEMPRE das variáveis CSS do design system, garantindo
+ * legibilidade em dark e light. Valores em BRL e meses em pt-BR.
  */
 import { formatCurrency } from "@/lib/format";
 
-/** Paleta dos gráficos: dourado + neutros (definida em globals.css p/ dark e light). */
+/**
+ * Paleta CATEGÓRICA dos gráficos — 8 slots, ordem fixa, definida em
+ * `globals.css` para os dois temas e **validada** (`docs/redesign/TOKENS.md` §7).
+ *
+ * ⛔ ERAM 5, E ISSO ERA UM DEFEITO VISÍVEL, não só feiura. Dois dos cinco slots
+ * antigos eram cinza, e quem indexa com `i % CHART_COLORS.length` repetia cor
+ * DENTRO DO MESMO GRÁFICO: o donut de categorias desenha até 7 fatias (6 +
+ * "Outros"), então a 6ª saía da cor da 1ª; as formas de pagamento são 8, então
+ * três barras repetiam. Com 8 slots os dois cabem sem ciclar.
+ *
+ * ⚠️ Cor categórica é atribuída por IDENTIDADE e nunca ciclada. Uma 9ª série
+ * não ganha cor gerada — ela vira "Outros", ou o gráfico vira vários pequenos.
+ * Guardado por `src/lib/theme/tokens.test.ts`.
+ */
 export const CHART_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
   "var(--chart-3)",
   "var(--chart-4)",
   "var(--chart-5)",
+  "var(--chart-6)",
+  "var(--chart-7)",
+  "var(--chart-8)",
 ] as const;
 
 export const AXIS_COLOR = "var(--muted-foreground)";

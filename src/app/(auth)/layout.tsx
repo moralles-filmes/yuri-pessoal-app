@@ -33,7 +33,7 @@ export default function AuthLayout({
           <h2 className="text-3xl font-semibold leading-tight">
             Sua vida pessoal,
             <br />
-            <span className="text-gradient-gold">organizada num só lugar.</span>
+            <span className="text-gradient-brand">organizada num só lugar.</span>
           </h2>
           <p className="max-w-sm text-sm text-neutral-400">
             Controle financeiro completo, cartões e faturas, agenda, tarefas,

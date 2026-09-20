@@ -51,7 +51,13 @@ cada uma das cinco linhas acima, revertida uma a uma, deixa a suíte vermelha.
 
 ---
 
-## 3. Tokens — tema CLARO
+## 3. Tokens — tema CLARO ✅ **aplicado na 02-B**
+
+⚠️ **A 01-B não especificou a sidebar.** Os oito `--sidebar-*` foram derivados na 02-B
+preservando as relações que o tema dourado já tinha (sidebar um pouco mais clara que o fundo;
+accent da sidebar igual ao accent geral), só re-matizadas. Medido: texto **13,25:1** e
+`muted-foreground` **5,70:1** sobre a sidebar; `--primary` como texto sobre `--accent` (o item
+ativo) **4,73:1**. Os 14 pares medidos passam AA.
 
 ```css
 :root {
@@ -86,7 +92,10 @@ cada uma das cinco linhas acima, revertida uma a uma, deixa a suíte vermelha.
 }
 ```
 
-## 4. Tokens — tema ESCURO
+## 4. Tokens — tema ESCURO ✅ **aplicado na 02-B**
+
+A sidebar do escuro ficou **entre** o fundo (0,177) e o card (0,217), em 0,197 — mesma
+relação do tema antigo. Texto **11,57:1** e `muted` **7,21:1** sobre ela.
 
 ```css
 .dark {
@@ -167,6 +176,20 @@ temas — duplicação pura. `text-gradient-gold` tem **um único consumidor**
 nada que o use), e o utilitário é renomeado para `text-gradient-brand`, ajustando o único
 consumidor. `::selection` passa a usar `--primary`.
 
+✅ **Feito na 02-B.** A varredura confirmou o que a 01-B supunha: **`--gold` não tem um único
+consumidor em `src/`** — as utilitárias `bg-gold`/`text-gold` estavam registradas e nunca
+foram usadas. Sobraram os dois decorativos deste arquivo.
+
+⚠️ **O apelido é declarado nos DOIS temas, de propósito.** Uma custom property resolve o
+`var()` no elemento em que é declarada. Se a classe `.dark` não caísse no mesmo elemento que
+`:root`, uma declaração só faria o valor do tema **claro** vazar para o escuro. Duas linhas
+removem a dependência de onde o `.dark` é pendurado — e a mutação que devolve um literal ao
+escuro deixa `tokens.test.ts` vermelho.
+
+⚠️ **Renomear classe Tailwind não quebra build.** `text-gradient-gold` num arquivo esquecido
+compilaria, passaria no lint e no `tsc`, e simplesmente **não pintaria nada**. Por isso há um
+caso varrendo `src/` inteiro pelo nome antigo.
+
 ✅ **A 02-A é o que torna isso seguro.** Enquanto `"Dourado"` do TO-DO dependesse do token de
 marca, transformar `--gold` em alias de `--primary` propagaria a mudança para um dado seu.
 Depois da 02-A, **nenhuma cor de entidade passa por `--gold` nem por `--primary`** — sobraram
@@ -210,20 +233,52 @@ referência visual mostra a legenda com valor ao lado do donut, e essa legenda p
 obrigatória, não decorativa.
 
 **Para refazer a validação** (obrigatório se qualquer superfície ou hex mudar):
+
+⛔ **Correção da 02-B: o validador NÃO está no repositório.** A 01-B escreveu
+`node scripts/validate_palette.js`, que não existe aqui — `scripts/` tem só `nutrition/`,
+`perf/` e `training/`. Ele vem com a skill `dataviz`, e é de lá que se chama:
+
 ```bash
-node scripts/validate_palette.js "#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4,#008300,#4a3aa7,#e34948" \
+V="$CLAUDE_SKILLS/dataviz/scripts/validate_palette.js"   # ajuste o caminho da skill
+node "$V" "#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4,#008300,#4a3aa7,#e34948" \
   --mode light --surface "#ffffff"
-node scripts/validate_palette.js "#3987e5,#d95926,#199e70,#c98500,#d55181,#008300,#9085e9,#e66767" \
+node "$V" "#3987e5,#d95926,#199e70,#c98500,#d55181,#008300,#9085e9,#e66767" \
   --mode dark  --surface "#171a20"
 ```
 
+✅ **Re-executado na 02-B**, antes de instalar: os dois modos reproduzem o laudo acima linha
+por linha (claro com o WARN de relevo, escuro 8/8 acima de 3:1). Os contrastes das §3/§4/§5
+também foram remedidos um a um — 5,39 · 4,80 · 7,54 · 5,93 · 6,97 batem com o que estava
+escrito.
+
+⚠️ **Quem não roda o validador ainda é pego.** `src/lib/theme/tokens.test.ts` guarda os
+**oito hexes** e as **duas superfícies `--card`**: mexer em qualquer um deixa a suíte
+vermelha, com a instrução de revalidar no lugar da mensagem de erro. Sem isso, este laudo
+poderia continuar afirmando "todas passam" sobre cores que não existem mais.
+
 ⛔ **`--card` é a superfície validada.** Mudar `--card` sem revalidar invalida a tabela acima.
 
-### O que isso corrige
+### O que isso corrige — e era mais grave do que "feio"
 
-`--chart-1..5` hoje são **dourado + neutros** (`chart-2` e `chart-4` são cinza). Para uma
-série categórica — gastos por categoria — isso é a pior escolha possível: duas fatias
-literalmente cinza, indistinguíveis. A paleta nova é categórica de verdade.
+`--chart-1..5` eram **dourado + neutros** (`chart-2` e `chart-4`, cinza). Para uma série
+categórica — gastos por categoria — é a pior escolha possível: duas fatias literalmente cinza,
+indistinguíveis. Mas a 02-B achou um segundo defeito, **que estava em produção**:
+
+⛔ **Com 5 slots, os gráficos repetiam cor DENTRO DO MESMO GRÁFICO.** Quem pinta indexa com
+`i % CHART_COLORS.length`, e os dois consumidores passam de 5:
+
+| Gráfico | Fatias/barras possíveis | Com 5 slots | Com 8 |
+| --- | --- | --- | --- |
+| Donut de categorias (`categoria-chart-impl`) | **7** (as 6 maiores + "Outros") | a 6ª repetia a cor da 1ª, e "Outros" a da 2ª | cabe |
+| Formas de pagamento (`forma-pagamento-chart-impl`) | **8** (7 formas + "outro") | **três** barras repetiam | cabe |
+
+Duas fatias da mesma cor no mesmo donut não são um problema estético: são duas categorias
+diferentes afirmando ser a mesma. Os dois limites agora são **derivados da fonte** em
+`tokens.test.ts` — acrescentar uma 8ª forma de pagamento, ou subir o corte do donut, deixa a
+suíte vermelha antes de a colisão chegar à tela.
+
+⚠️ **Oito slots não autorizam uma 9ª série.** Cor categórica é atribuída por identidade e
+**nunca ciclada**; série que não cabe vira "Outros" ou vários gráficos pequenos.
 
 ⚠️ `categoria-chart-impl.tsx:66` usa `d.color ?? CHART_COLORS[...]` — **a cor da categoria
 escolhida por você continua vencendo**. A paleta é só o fallback.
