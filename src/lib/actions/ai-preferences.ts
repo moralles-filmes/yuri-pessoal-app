@@ -133,6 +133,14 @@ export async function saveAiPreferences(
       reservation_margin: dados.reservationMargin,
       rate_limit_per_minute: dados.rateLimitPerMinute,
       rate_limit_per_hour: dados.rateLimitPerHour,
+      /**
+       * 18-F Bloco 2 — aparência, não autorização, e por isso NÃO é ANDada com nada. As linhas
+       * de `allow_write_*` e `allow_vision` acima derrubam estado impossível; aqui não há
+       * estado impossível a derrubar: esconder o botão com as chaves todas desligadas é
+       * simplesmente esconder um botão que não lia nada mesmo.
+       */
+      floating_corner: dados.floatingCorner,
+      floating_hidden: dados.floatingHidden,
     },
     { onConflict: "user_id" },
   );

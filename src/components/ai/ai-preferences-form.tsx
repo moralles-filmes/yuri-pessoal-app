@@ -38,6 +38,14 @@ import {
   ROTULO_DA_PERMISSAO,
   ROTULO_DA_PERMISSAO_DE_ESCRITA,
 } from "@/lib/ai/constants";
+// ⚠️ Módulo PURO, sem um único import de runtime — pela mesma razão de `@/lib/ai/constants`
+// acima: a tela não pode arrastar `zod` para ler quatro constantes.
+import {
+  ATALHO_DO_PAINEL,
+  CANTOS_DO_BOTAO,
+  ROTULO_DO_CANTO,
+  type CantoDoBotao,
+} from "@/lib/ai/painel";
 import {
   TOOL_PERMISSIONS,
   TOOL_WRITE_PERMISSIONS,
@@ -89,6 +97,9 @@ export function AiPreferencesForm({
     reservationMargin: String(prefs.reservationMargin),
     rateLimitPerMinute: String(prefs.rateLimitPerMinute),
     rateLimitPerHour: String(prefs.rateLimitPerHour),
+    // 18-F Bloco 2 — entram no estado E no payload no MESMO commit (invariante 81).
+    floatingCorner: prefs.floatingCorner,
+    floatingHidden: prefs.floatingHidden,
   });
 
   const provedoresProntos = cards.filter((c) => c.enabled && c.credentialStatus !== null);
@@ -115,6 +126,8 @@ export function AiPreferencesForm({
       reservationMargin: Number(form.reservationMargin),
       rateLimitPerMinute: Number(form.rateLimitPerMinute),
       rateLimitPerHour: Number(form.rateLimitPerHour),
+      floatingCorner: form.floatingCorner,
+      floatingHidden: form.floatingHidden,
     });
     setSalvando(false);
 
@@ -429,6 +442,64 @@ export function AiPreferencesForm({
             Guardado desde já, mas ainda <strong>sem efeito</strong>: nesta versão a IA não
             cria nem altera nada, então não há o que confirmar.
           </p>
+        </div>
+
+        {/* ── Botão flutuante (18-F · Bloco 2) ──────────────────────────────────────────
+          Este cartão é o ÚNICO caminho de volta: quem esconde o botão pelo menu do painel só
+          o reencontra aqui. Por isso ele não fica atrás de "avançado", e por isso o texto diz
+          o que "ocultar" NÃO faz.
+        */}
+        <div className="space-y-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-medium">Botão flutuante</h3>
+            <p className="text-xs text-muted-foreground">
+              O atalho para conversar com o assistente sem sair da tela em que você está.
+              Ocultar tira o <strong>botão</strong> da tela — o atalho {ATALHO_DO_PAINEL}{" "}
+              continua abrindo o painel, e o que a IA pode ler ou alterar não muda.
+            </p>
+          </div>
+
+          <div className="min-w-0 space-y-1.5">
+            <Label htmlFor="pref-canto-botao">Posição</Label>
+            <Select
+              value={form.floatingCorner}
+              onValueChange={(v) =>
+                setForm((f) => ({ ...f, floatingCorner: v as CantoDoBotao }))
+              }
+              disabled={form.floatingHidden}
+            >
+              <SelectTrigger id="pref-canto-botao" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CANTOS_DO_BOTAO.map((canto) => (
+                  <SelectItem key={canto} value={canto}>
+                    {ROTULO_DO_CANTO[canto]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/*
+            `min-w-0` no lado do texto e `shrink-0` no controle — regra 2 do layout
+            responsivo: sem isso o rótulo empurra o `Switch` para fora e o card o corta.
+          */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <Label htmlFor="pref-ocultar-botao">Ocultar o botão</Label>
+              <p className="text-xs text-muted-foreground">
+                O assistente continua ao alcance pelo atalho e pela página{" "}
+                <strong>Conversar</strong>.
+              </p>
+            </div>
+            <Switch
+              id="pref-ocultar-botao"
+              checked={form.floatingHidden}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, floatingHidden: v }))}
+              className="shrink-0"
+            />
+          </div>
         </div>
 
         <Button type="button" onClick={() => void salvar()} disabled={salvando}>
