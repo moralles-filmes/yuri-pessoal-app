@@ -22,6 +22,8 @@
 import { NextResponse } from "next/server";
 import { authContext } from "@/lib/actions/helpers";
 import {
+  chatExperienciaSchema,
+  chatMensagemSchema,
   chatRequestSchema,
   contextoDaRota,
   MAX_CHAT_BODY_BYTES,
@@ -86,14 +88,43 @@ function mensagemEmPortugues(issue: { code: string; message: string } | undefine
   }
   if (issue.code === "invalid_type") return "Pedido em formato inválido.";
   /**
-   * 18-F Bloco 4 — `chatRequestSchema` virou UNIÃO, e o Zod reporta `invalid_union` no topo
-   * quando NENHUMA das duas formas casou. As mensagens internas de cada ramo não sobem até
-   * aqui, e ecoá-las seria devolver ao cliente o que ele mandou.
+   * 18-F Bloco 4 — o topo da UNIÃO, quando nem `problemasDoRamo` conseguiu escolher um lado
+   * (corpo vazio, por exemplo). Ele não ecoa nada do que o cliente mandou.
    */
   if (issue.code === "invalid_union") {
     return "O pedido não corresponde a uma mensagem nem a um panorama.";
   }
   return issue.message;
+}
+
+type ProblemaDeValidacao = { code: string; message: string; path: readonly PropertyKey[] };
+
+/**
+ * Os problemas do RAMO que o cliente tentou usar.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ ⚠️ `chatRequestSchema` é uma UNIÃO, e o Zod reporta `invalid_union` no TOPO quando     ║
+ * ║ nenhuma das duas formas casou — as mensagens de dentro de cada ramo não sobem. Só que ║
+ * ║ são justamente elas que o dono precisa ler ("Página de contexto não reconhecida."), e  ║
+ * ║ é o `code` delas que decide entre 400 e 413.                                          ║
+ * ║                                                                                       ║
+ * ║ ⛔ ISTO NÃO É UMA TERCEIRA FORMA DE VALIDAR. Quem ACEITA continua sendo a união, e as  ║
+ * ║ duas formas continuam `.strict()`: um corpo com `experiencia` E `text` é recusado      ║
+ * ║ pelos dois caminhos, porque schema nenhum deste repositório aceita os dois juntos. A   ║
+ * ║ escolha abaixo decide só a MENSAGEM e o status.                                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+function problemasDoRamo(
+  json: unknown,
+  doTopo: readonly ProblemaDeValidacao[],
+): readonly ProblemaDeValidacao[] {
+  const ehPanorama =
+    typeof json === "object" && json !== null && "experiencia" in json;
+  const ramo = ehPanorama ? chatExperienciaSchema : chatMensagemSchema;
+  const r = ramo.safeParse(json);
+  // Ramo que PASSA sozinho e união que falha não é estado alcançável (a união tenta os dois),
+  // mas devolver o problema do topo é o fallback honesto se um dia for.
+  return r.success ? doTopo : r.error.issues;
 }
 
 export async function POST(request: Request) {
@@ -148,7 +179,7 @@ export async function POST(request: Request) {
   // lista de proibidos, que alguém esqueceria de atualizar. Anexo é 18-D.
   const parsed = chatRequestSchema.safeParse(json);
   if (!parsed.success) {
-    const primeiro = parsed.error.issues[0];
+    const primeiro = problemasDoRamo(json, parsed.error.issues)[0];
     const tamanho =
       primeiro?.code === "too_big" && primeiro.path[0] === "text" ? 413 : 400;
     return NextResponse.json(

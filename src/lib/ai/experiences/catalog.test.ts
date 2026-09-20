@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { AI_TOOL_REGISTRY } from "@/lib/ai/tools/registry";
 import { TOOL_PERMISSIONS } from "@/lib/ai/tools/contracts";
@@ -66,5 +68,25 @@ describe("18-F Bloco 4 — o catálogo das experiências", () => {
       expect(e.promptVersion, e.id).toMatch(/^experiencia-[a-z-]+-v\d+$/);
       expect(e.prompt.length, e.id).toBeGreaterThan(200);
     }
+  });
+
+  /**
+   * ⛔ `atalhos.ts` NÃO TEM UM ÚNICO IMPORT, e a ausência é a garantia — a mesma forma do
+   * teste de `painel.ts` (invariante 90).
+   *
+   * `chat-client.tsx` precisa de três títulos para desenhar três botões. Um import daqui
+   * para o catálogo arrastaria os prompts de redação inteiros e o Tool Registry para o
+   * bundle do cliente, por causa de três strings. Sem import, isso não tem como acontecer.
+   */
+  it("`atalhos.ts` não tem import nenhum — é DADO, não declaração de servidor", () => {
+    const codigo = fs.readFileSync(path.join(__dirname, "atalhos.ts"), "utf8");
+    const semComentarios = codigo
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .filter((l) => !/^\s*(\/\/|\*)/.test(l))
+      .join("\n");
+
+    expect(semComentarios).not.toMatch(/\bimport\b/);
+    expect(semComentarios).not.toMatch(/\brequire\s*\(/);
   });
 });

@@ -18,7 +18,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Loader2, Send, Square } from "lucide-react";
+import { AlertTriangle, Loader2, Send, Sparkles, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,6 +41,14 @@ import {
   type RotaComContexto,
 } from "@/lib/ai/constants";
 // `import type` de módulo puro: apagado na compilação, não muda o peso de nenhuma rota.
+import { Switch } from "@/components/ui/switch";
+/**
+ * ⚠️ `experiences/atalhos` e NUNCA `experiences/catalog`: aquele arquivo não tem um único
+ * import (é a regra 3 do carregamento sob demanda), enquanto o catálogo carrega os prompts de
+ * redação inteiros e importa o Tool Registry — que o cliente baixaria por causa de três
+ * strings. Um teste amarra as duas listas, então elas não divergem.
+ */
+import { ATALHOS_DE_EXPERIENCIA } from "@/lib/ai/experiences/atalhos";
 import type { EventoDoPainel } from "@/lib/ai/painel";
 import type { ToolCallStatus } from "@/lib/ai/tools/contracts";
 import { execucaoEmAndamento, type RunSources } from "@/lib/ai/tools/sources";
@@ -180,7 +188,12 @@ export type ConversaDaIa = {
   readonly enviando: boolean;
   readonly contexto: RotaComContexto | null;
   readonly setContexto: (valor: RotaComContexto | null) => void;
+  /** 18-F Bloco 4 — o MODO caixa de entrada. Desligado por padrão, como toda chave do módulo. */
+  readonly caixaDeEntrada: boolean;
+  readonly setCaixaDeEntrada: (valor: boolean) => void;
   readonly enviar: () => Promise<void>;
+  /** 18-F Bloco 4 — dispara um panorama pelo MESMO endpoint e pelo mesmo leitor de SSE. */
+  readonly iniciarExperiencia: (id: string) => Promise<void>;
   readonly cancelar: () => void;
 };
 
@@ -223,6 +236,11 @@ export function useConversaDaIa({
    * gravar na URL faria um round-trip de RSC por clique sem nenhum ganho de link.
    */
   const [contexto, setContexto] = React.useState<RotaComContexto | null>(null);
+  /**
+   * 18-F Bloco 4 — o MODO caixa de entrada. Estado local, desligado por padrão, pela mesma
+   * razão do contexto de página acima: é escolha por clique, e a página é `force-dynamic`.
+   */
+  const [caixaDeEntrada, setCaixaDeEntrada] = React.useState(false);
   const [conversa, setConversa] = React.useState<string | null>(conversationId);
   const abortRef = React.useRef<AbortController | null>(null);
   const contadorRef = React.useRef(0);
@@ -241,10 +259,20 @@ export function useConversaDaIa({
     abortRef.current?.abort();
   }
 
-  async function enviar() {
-    const conteudo = texto.trim();
-    if (!conteudo || enviando || !podeConversar) return;
-
+  /**
+   * O caminho ÚNICO do envio: bolhas provisórias, POST, leitor de SSE, `switch` de eventos,
+   * `AbortController` e `router.refresh`.
+   *
+   * ⚠️ 18-F Bloco 4 — `enviar` e `iniciarExperiencia` diferem em DUAS coisas: o corpo do POST
+   * e o texto da bolha do dono. Tudo o mais é idêntico, e uma segunda cópia deste bloco
+   * divergiria no primeiro evento SSE novo — que é exatamente o que `chat-events.test.ts`
+   * existe para impedir do outro lado.
+   */
+  async function disparar(
+    corpo: Record<string, unknown>,
+    textoDaBolha: string,
+    contextoDaBolha: RotaComContexto | null,
+  ) {
     // Contador, e não `Date.now()`: relógio é função impura e o React exige pureza no
     // render (`react-hooks/purity`). Um contador em `ref` é estável e serve igual — estes
     // ids são provisórios e vivem só até o evento `start` trazer os reais do servidor.
@@ -254,16 +282,15 @@ export function useConversaDaIa({
 
     setBolhas((atual) => [
       ...atual,
-      { id: idProvisorioUsuario, role: "user", content: conteudo, status: "complete" },
+      { id: idProvisorioUsuario, role: "user", content: textoDaBolha, status: "complete" },
       {
         id: idProvisorioAssistente,
         role: "assistant",
         content: "",
         status: "streaming",
-        contexto,
+        contexto: contextoDaBolha,
       },
     ]);
-    setTexto("");
     setEnviando(true);
 
     const controller = new AbortController();
@@ -273,13 +300,7 @@ export function useConversaDaIa({
       const resposta = await fetch("/api/ia/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...(conversa ? { conversationId: conversa } : {}),
-          text: conteudo,
-          // Só a ROTA, e só quando o usuário escolheu uma. Nada do conteúdo da tela sai
-          // daqui — título, estado e registro ficam onde estão. O módulo é do servidor.
-          ...(contexto ? { pageContext: { rota: contexto } } : {}),
-        }),
+        body: JSON.stringify(corpo),
         signal: controller.signal,
       });
 
@@ -435,6 +456,44 @@ export function useConversaDaIa({
     }
   }
 
+  async function enviar() {
+    const conteudo = texto.trim();
+    if (!conteudo || enviando || !podeConversar) return;
+    setTexto("");
+    await disparar(
+      {
+        ...(conversa ? { conversationId: conversa } : {}),
+        text: conteudo,
+        // Só a ROTA, e só quando o usuário escolheu uma. Nada do conteúdo da tela sai
+        // daqui — título, estado e registro ficam onde estão. O módulo é do servidor.
+        ...(contexto ? { pageContext: { rota: contexto } } : {}),
+        // 18-F Bloco 4 — o MODO. Ausente = conversa normal, como sempre foi.
+        ...(caixaDeEntrada ? { caixaDeEntrada: true } : {}),
+      },
+      conteudo,
+      contexto,
+    );
+  }
+
+  /**
+   * 18-F Bloco 4 — dispara um PANORAMA. É o MESMO caminho de `enviar`: mesmo endpoint, mesmo
+   * leitor de SSE, mesmo `switch` de eventos, mesmo `AbortController`, mesmo `router.refresh`.
+   * O que muda é o corpo do POST — e o fato de o texto da bolha do dono vir do ATALHO, não
+   * do campo de digitar.
+   *
+   * ⛔ Ela NUNCA manda `conversationId`, e nem teria como: o schema do panorama não tem esse
+   * campo. O painel sempre abre conversa nova, que é o que o dono espera de um botão chamado
+   * "Planejar meu dia" — e o evento `start` troca `conversa` para a nova.
+   */
+  async function iniciarExperiencia(id: string) {
+    if (enviando || !podeConversar) return;
+    const atalho = ATALHOS_DE_EXPERIENCIA.find((a) => a.id === id);
+    if (!atalho) return;
+    // `contextoDaBolha` é null: um panorama não tem página de contexto — as leituras dele
+    // são decididas pelo catálogo, no servidor, e não pela tela que estava aberta.
+    await disparar({ experiencia: id }, atalho.titulo, null);
+  }
+
   function marcarFalha(idFallback: string, mensagem: string) {
     setBolhas((atual) =>
       atual.map((b, i) =>
@@ -445,7 +504,19 @@ export function useConversaDaIa({
     );
   }
 
-  return { bolhas, texto, setTexto, enviando, contexto, setContexto, enviar, cancelar };
+  return {
+    bolhas,
+    texto,
+    setTexto,
+    enviando,
+    contexto,
+    setContexto,
+    caixaDeEntrada,
+    setCaixaDeEntrada,
+    enviar,
+    iniciarExperiencia,
+    cancelar,
+  };
 }
 
 /**
@@ -465,8 +536,19 @@ export function ChatView({
 }: Omit<ChatClientProps, "conversationId" | "initialMessages" | "onAtividade"> & {
   readonly conversa: ConversaDaIa;
 }) {
-  const { bolhas, texto, setTexto, enviando, contexto, setContexto, enviar, cancelar } =
-    conversa;
+  const {
+    bolhas,
+    texto,
+    setTexto,
+    enviando,
+    contexto,
+    setContexto,
+    caixaDeEntrada,
+    setCaixaDeEntrada,
+    enviar,
+    iniciarExperiencia,
+    cancelar,
+  } = conversa;
   const fimRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
@@ -607,6 +689,43 @@ export function ChatView({
         <div ref={fimRef} />
       </div>
 
+      {/*
+        18-F Bloco 4 — OS PANORAMAS. Só na conversa VAZIA: numa conversa em andamento eles
+        roubariam a atenção do que está sendo lido, e o dono que quiser outro panorama abre
+        uma conversa nova (que é o que o botão faz de qualquer jeito).
+
+        ⚠️ Eles ficam dentro de `ChatView`, e é por isso que aparecem nos DOIS lugares — `/ia`
+        e o painel flutuante — sem uma linha duplicada.
+      */}
+      {bolhas.length === 0 && podeConversar && (
+        <div className="space-y-2 pb-1">
+          <p className="text-xs text-muted-foreground">
+            Ou comece por um panorama — o assistente consulta os módulos que você liberou e
+            escreve um resumo. O que estiver desligado fica de fora, e ele diz o que ficou.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {ATALHOS_DE_EXPERIENCIA.map((a) => (
+              <Button
+                key={a.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                // ⚠️ `min-w-0` + `truncate`: `Button` é `whitespace-nowrap`, e três rótulos
+                // longos numa linha empurrariam a página na horizontal no celular (regra 3
+                // do layout responsivo).
+                className="min-w-0"
+                title={a.descricao}
+                disabled={enviando}
+                onClick={() => void iniciarExperiencia(a.id)}
+              >
+                <Sparkles className="size-4 shrink-0" />
+                <span className="truncate">{a.titulo}</span>
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="sticky bottom-0 space-y-2 border-t bg-background pt-3">
         {/*
           CONTEXTO DA PÁGINA — desligado por padrão. O que sai daqui é UMA ROTA de uma lista
@@ -642,6 +761,24 @@ export function ChatView({
               ))}
             </SelectContent>
           </Select>
+          {/*
+            18-F Bloco 4 — A CAIXA DE ENTRADA. Um MODO do chat normal: o roteamento, o agente,
+            as ferramentas e o Approval Engine continuam os de sempre — só entra um bloco a
+            mais no prompt de sistema. Na dúvida ela PERGUNTA, e isso não é promessa do texto:
+            palavra ambígua desliga o roteamento e a mensagem cai no orquestrador, que não tem
+            ferramenta nenhuma.
+          */}
+          <div className="flex shrink-0 items-center gap-2">
+            <Switch
+              id="caixa-de-entrada"
+              checked={caixaDeEntrada}
+              onCheckedChange={setCaixaDeEntrada}
+              disabled={!podeConversar || enviando}
+            />
+            <Label htmlFor="caixa-de-entrada" className="text-xs text-muted-foreground">
+              Caixa de entrada
+            </Label>
+          </div>
           <p className="min-w-0 flex-1 text-xs text-muted-foreground">
             O assistente recebe só o endereço da página — nada do que está escrito nela.
           </p>
@@ -657,9 +794,11 @@ export function ChatView({
             }
           }}
           placeholder={
-            podeConversar
-              ? "Escreva sua mensagem… (Ctrl+Enter envia)"
-              : "Configure um provedor de IA para começar."
+            !podeConversar
+              ? "Configure um provedor de IA para começar."
+              : caixaDeEntrada
+                ? "Escreva o item solto — ele diz onde guardar e prepara a ação."
+                : "Escreva sua mensagem… (Ctrl+Enter envia)"
           }
           rows={3}
           disabled={!podeConversar || enviando}
