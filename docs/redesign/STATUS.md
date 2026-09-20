@@ -3,12 +3,67 @@
 **Atualizado:** 2026-09-20
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
-REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada**; 03-A liberada
+REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
+(trabalho de outro chat, revisado e integrado aqui em `1b5aa28`); 03-A liberada
 
 ⛔ **As três migrations continuam sem ser aplicadas.** "Aprovado tudo" foi lido como aval do
 **visual** e do **dicionário**. Cada migration escreve no banco de produção e segue precisando
 de um "aplique a M1" (ou M2, ou M3) seu, separado. Serão pedidas uma a uma, no momento em que
 a subfase precisar delas — a M3 é a primeira, na 03-B.
+
+---
+
+## `R4` — as rotas montadas à mão ✅ FECHADO
+
+Feito em **outro chat**, em branch própria a partir de `fce701f`
+(`feat/redesign-r4-deeplinks`, commit `b1540ae`), revisado e integrado aqui por merge
+`--no-ff` em **`1b5aa28`**. Um arquivo só, `src/test/deep-links-inline.test.ts`, **nenhuma
+mudança de runtime**.
+
+**O que faltava.** Os três módulos com arquivo de links já estavam cobertos pela 02-D — são
+funções puras. Ficou de fora a rota escrita **inline**, dentro de função de I/O que nenhum
+teste alcança sem banco: `searchAll` monta `/faturas?card=…` dentro de um `.then()` sobre o
+Supabase. Como não dá para **chamar** o código, o teste **lê** o código — o idioma do projeto
+para contrato que o `tsc` não pega. E reusa `temPagina`: nenhuma terceira resolução de rota.
+
+**Cobertura: 29 pontos de link, 15 rotas distintas, 3 arquivos** (`search/queries.ts` 15 ·
+`notifications/generate.ts` 13 · `notifications/nutrition.ts` 1). Nenhum link quebrado de
+verdade — as 15 existem no disco.
+
+⚠️ **As DUAS contagens que publiquei antes estavam erradas** (D27): primeiro "11 rotas em 2
+arquivos", depois "21 pontos em 3 arquivos". São **29**. O `grep` que usei nos dois briefings
+não pegava os dois ramos dos ternários de `/todo` (`queries.ts:154`, `generate.ts:542`) nem os
+quatro links com query string (`/tarefas?view=`, `/habitos?view=`). O número de rotas
+**distintas** (15) é o único que sobreviveu às três contagens.
+
+**Mutação — 7 no total: 3 de quem escreveu, 4 independentes na revisão.**
+
+| # | Mutação | Resultado |
+| --- | --- | --- |
+| deles 1 | o extrator deixa de casar (`link:` → `linkz:`) | 🔴 7 |
+| deles 2 | `generate.ts:561` → `/dashboard/financeiros` | 🔴 1, nomeando arquivo, linha e rota |
+| deles 3 | `temPagina` responde sim a tudo | 🔴 1 |
+| **MA** | um link REAL de `queries.ts` → rota inexistente | 🔴 1, nomeando a linha |
+| **MB** | a leitura da expressão para em `;` em vez de `,` | 🟢 **VERDE — e está certo** |
+| **MC** | o extrator deixa de enxergar crase (template) | 🔴 7 |
+| **MD** | um link some do `nutrition.ts` (piso) | 🔴 1 |
+
+⛔ **A MB verde NÃO é furo, e eu só sei disso porque fui medir** (D28). `expressaoDoLink` tem
+uma **segunda parada** — o `}` no nível zero — e nestes arquivos todo `link:` está dentro de
+objeto que fecha. Com e sem a mutação o extrator acha os **mesmos 29 pontos, lista idêntica**.
+Mutação que não muda comportamento não prova nada — **nem a favor nem contra**. Chamar aquele
+verde de fraqueza do teste teria sido tão desonesto quanto chamar de força.
+
+**O risco que segue aberto, declarado pelo próprio arquivo:** a varredura cobre os **3
+arquivos listados em `VARRIDOS`**. Um quarto arquivo que passe a montar rota inline não entra
+sozinho. E o teste prova que a rota **existe**, não que a query string faz sentido — é o caso
+do `nutrition.ts:255`, abaixo.
+
+**Achado que fica:** `notifications/nutrition.ts:255` monta `/nutricao/planejamento?data=`
+inline, ao largo do `nutrition-links.ts` que a **invariante 26** declara fonte única. Não é
+duplicata (o `planLink` de lá abre outra coisa), é uma rota que escapou. A rota existe, então
+não é 404 — mas o `?data=` não é lido por `planLink` nenhum. **Fica para a REDESIGN-07**, que
+é quando a Dieta é tocada; mexer nisso agora é mudar runtime fora de fase.
 
 ---
 
@@ -347,6 +402,9 @@ as colunas já existem e o CHECK já aceita.
 | D23 | **O Financeiro NÃO entrou no `ModuleShell`, contra a letra do `PLANO.md`.** A navegação dele é fita de abas horizontal (`finance-tabs-nav.tsx`), não coluna — não é uma quarta cópia, é outra forma, com um consumidor só. Um componente compartilhado com um chamador é abstração sem segundo caso. O que ele já compartilha é a **decisão** (`hrefAtivo`, 02-C) e a linguagem de token. Virar coluna é **mudar a navegação do módulo**, e isso é assunto da REDESIGN-04, que o redesenha inteiro |
 | D24 | **O badge "Em breve"/"Planejado" não foi para a casca compartilhada.** As 25 seções dos três módulos estão `pronto`; um ramo que dado nenhum alcança, copiado para dentro de um componente compartilhado, vira peso que ninguém consegue justificar depois. ⛔ O risco de a regressão ficar muda foi coberto por teste: `module-shell.test.ts` fica vermelho no dia em que uma seção nascer sem estar pronta |
 | D25 | **A 1ª rodada de mutação da 02-E foi descartada, não corrigida por cima.** Ela reportava só a contagem de vermelhos, e dois números não sobreviveram à conferência um a um (M1 acusava 4; eram 1). Causa: estado sujo do meu próprio script, mais um backup feito com `cp` do Git Bash que ficou em LF contra um arquivo de trabalho em CRLF. A 2ª rodada faz backup byte a byte e registra o **nome** de cada teste que cai. **Contagem sem nome é número que se lê errado** |
+| D26 | **`deep-links-inline.test.ts` mora em `src/test/`, quebrando a co-locação de propósito.** O sujeito dele não é `search/` nem `notifications/`: é o CONJUNTO dos arquivos que cunham rota inline, e hoje ele atravessa os dois. Pendurá-lo num deles deixaria o outro invisível para quem abre o outro — que é como nasce a terceira cópia de uma regra. Ele fica ao lado de `rotas.ts`, que é a resolução que ele consome |
+| D27 | **Minhas duas contagens do `R4` estavam erradas, e a segunda foi publicada como correção da primeira.** "11 rotas em 2 arquivos" → "21 pontos em 3 arquivos" → **29 pontos**. As duas vieram de `grep` meu, que não pegava ramo de ternário nem link com query string. O que sobreviveu às três contagens foi o número de rotas **distintas** (15). ⛔ **Contar com a ferramenta errada duas vezes seguidas é o motivo de a varredura ser derivada do código e não de uma lista minha** |
+| D28 | **Uma das minhas mutações no `R4` saiu verde, e o verde está CERTO.** A MB troca a parada da leitura da expressão de `,` para `;`, e o extrator acha os mesmos 29 pontos — porque há uma segunda parada (`}` no nível zero) que a mutação não toca. Fui medir as duas listas antes de opinar. **Mutação que não muda comportamento não prova nada em nenhuma das duas direções** — é a D21 pelo outro lado |
 
 ## Bloqueios
 
@@ -356,30 +414,23 @@ Nenhum.
 
 ~~`R1` cor de entidade "Dourado" ligada a `bg-primary`~~ **FECHADO na 02-A**, com teste e
 mutação · `R2` **3,1 KB** de folga de bundle na casca (eram 3,3; o link de pular custou 0,2) ·
-`R3` ids de card do dashboard · **`R4` REDUZIDO na 02-D, não fechado** · `R5` mudar número sem
+`R3` ids de card do dashboard · ~~`R4` deep-link para rota inexistente~~ **FECHADO**
+(02-D → 02-E → merge `1b5aa28`), com mutação nas três etapas · `R5` mudar número sem
 perceber · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
 Detalhe em `AUDITORIA.md` §4.
 
-**O que falta do `R4`, recontado em 2026-09-20 na abertura da 02-E.** A 02-D cobriu o menu
-(20 hrefs) e os três módulos de deep-link (Dieta 8, Treinos 11, IA 9); a 02-E acrescentou as
-**25 seções** dos navs de módulo. Continuam **sem teste de disco** as rotas montadas **à mão,
-inline**:
+**Como o `R4` foi fechado, em três etapas.** A 02-D cobriu o menu (20 hrefs) e os três
+módulos com arquivo de links (Dieta 8, Treinos 11, IA 9). A 02-E acrescentou as **25 seções**
+dos navs de módulo. O merge `1b5aa28` fechou o que faltava: os **29 pontos de link montados
+inline** em `search/queries.ts`, `notifications/generate.ts` e `notifications/nutrition.ts`.
 
-- `src/lib/search/queries.ts` — **13 pontos** (linhas 176, 195, 222, 241, 285, 304, 324, 349,
-  368, 388, 412, 440, 808)
-- `src/lib/notifications/generate.ts` — **7 pontos** (309, 328, 342, 365, 413, 469, 561)
-- `src/lib/notifications/nutrition.ts` — **1 ponto** (255)
+**Todas as três etapas passam pelo mesmo `temPagina`**, de `src/test/rotas.ts` — nenhuma
+segunda resolução de rota nasceu no caminho, que era o risco de fechar isso às pressas.
 
-⚠️ **A primeira contagem, publicada na 02-D, estava errada: eu disse "11 rotas em 2
-arquivos".** São **21 pontos de link e 15 rotas distintas, em 3 arquivos** — o terceiro
-apareceu só quando fui escrever o prompt da tarefa. O `nutrition.ts:255` monta
-`/nutricao/planejamento?data=` inline, passando ao largo do `nutrition-links.ts` que a
-**invariante 26** declara fonte única (o `planLink` que existe lá abre outra coisa).
-
-São justamente as rotas dos módulos que a **REDESIGN-04 e a 07** vão mover. Fechar isso é uma
-varredura de fonte sobre `temPagina`, que já existe. **Despachado para outro chat em
-2026-09-20**, em branch própria a partir de `fce701f`, com instrução explícita de **não tocar
-este arquivo** — o `R4` só sai daqui como fechado quando aquele trabalho voltar e for revisto.
+⚠️ **O que continua aberto, e é menor mas não é nada:** a varredura inline cobre os **3
+arquivos declarados em `VARRIDOS`**; um quarto arquivo que passe a montar rota à mão precisa
+ser acrescentado ali. E nenhuma das três etapas prova que a **query string** faz sentido — só
+que a rota existe.
 
 ## Testes executados
 
@@ -391,10 +442,15 @@ este arquivo** — o `R4` só sai daqui como fechado quando aquele trabalho volt
 | `npm run build` | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 | ✅ exit 0 |
 | `npm run perf:bundle` | ✅ mediana 213,9 · config. 281,6/285 | ✅ 213,9 · 281,7/285 | ✅ 213,9 · 281,7/285 | ✅ mediana 214,2 · config. 281,9/285 | ✅ **idêntico à 02-C** — 214,2 · 281,9/285 · 68 rotas | ✅ **idêntico à 02-D** — 214,2 · 281,9/285 · 68 rotas |
 
+**Depois do merge do `R4` (`1b5aa28`), na árvore integrada:** `test:run` ✅ **191 / 3.922**
+(13,02 s) · `lint` ✅ · `tsc` ✅ · `build` ✅ · `perf:bundle` ✅ mediana **214,2**, 68 rotas
+dentro, `/(app)/configuracoes` **281,9/285**. Os cinco foram rodados **depois** do merge, e
+não herdados da 02-E.
+
 Em cada subfase o delta de testes é **exatamente** o que foi acrescentado (02-A: +1 arq./+7
 casos; 02-B: +1 arq./+12; 02-C: +1 arq./+13; 02-D: +1 arq./+48 — 27 do `nav.test.ts`, 9 da
-Dieta, 12 de Treinos; 02-E: **+1 arq./+62**, todos de `module-shell.test.ts`). **Nenhum teste
-existente foi afrouxado para passar.**
+Dieta, 12 de Treinos; 02-E: +1 arq./+62, todos de `module-shell.test.ts`; **`R4`: +1 arq./+42**,
+todos de `deep-links-inline.test.ts`). **Nenhum teste existente foi afrouxado para passar.**
 
 ⚠️ **Ressalva de honestidade da 02-D:** ela é a primeira subfase que **editou arquivos de
 teste existentes** — `active.test.ts` e `ai-links.test.ts` tiveram a resolução de rota trocada
@@ -418,6 +474,9 @@ financeiro nenhum. Ela **não depende de migration** e não altera runtime.
 ⛔ A **03-B** é a primeira que precisa da **M3** (`categories.classificacao_padrao`) — e
 migration em produção continua exigindo um "aplique a M3" seu, separado.
 
-⏳ **Em outro chat:** o fechamento do `R4` (as 21 rotas inline de `search/queries.ts`,
-`notifications/generate.ts` e `notifications/nutrition.ts`). Volta como branch própria para
-revisão; nada foi empurrado por lá nem por aqui.
+✅ **O `R4` voltou do outro chat, foi revisado com mutação independente e integrado** em
+`1b5aa28`. Não há nada pendente de outra frente.
+
+⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` tem **10 commits locais** e
+segue sem upstream. `feat/redesign-r4-deeplinks` já está contida nela e pode ser apagada
+quando você quiser.
