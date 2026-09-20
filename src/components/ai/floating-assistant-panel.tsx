@@ -25,7 +25,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ChatClient } from "@/components/ai/chat-client";
+import { ChatView, useConversaDaIa } from "@/components/ai/chat-client";
 import { definirBotaoFlutuante, estadoDoPainelDaIa } from "@/lib/actions/ai-panel";
 import { AI_LINK_BASE } from "@/lib/search/ai-links";
 import {
@@ -81,6 +81,32 @@ export function FloatingAssistantPanel({
   const desktop = useDesktop();
   const [prontidao, setProntidao] = React.useState<ProntidaoDoChat | null>(null);
   const [salvando, setSalvando] = React.useState(false);
+
+  /*
+    ╔══════════════════════════════════════════════════════════════════════════════════════╗
+    ║ ⛔ O MOTOR DA CONVERSA NASCE AQUI, ACIMA DO `<Sheet>` — E ISSO NÃO É ESTILO.           ║
+    ║                                                                                       ║
+    ║ O `SheetContent` do Radix é embrulhado em `<Presence present={forceMount ||           ║
+    ║ context.open}>`: fechar a gaveta DESMONTA tudo que está dentro dela. Enquanto o        ║
+    ║ `ChatClient` morava ali, fechar o painel apagava a pergunta, perdia o                 ║
+    ║ `conversationId` e — o pior — disparava o cleanup do `AbortController`, cancelando a   ║
+    ║ resposta em andamento. O dono relatou isso em 2026-09-20.                              ║
+    ║                                                                                       ║
+    ║ `useLazyDialog` (no botão) mantém montado ESTE componente, não os filhos da gaveta.    ║
+    ║ Como este componente sobrevive ao fechamento E à navegação (a casca de `(app)` não     ║
+    ║ desmonta entre rotas), o estado que mora aqui é o que faz o critério de aceite 6 ser   ║
+    ║ verdadeiro: perguntar, fechar, navegar, e a resposta continuar chegando.               ║
+    ║                                                                                       ║
+    ║ Guardado por `src/lib/ai/painel-persistencia.test.ts`.                                 ║
+    ╚══════════════════════════════════════════════════════════════════════════════════════╝
+  */
+  const conversa = useConversaDaIa({
+    conversationId: null,
+    initialMessages: [],
+    runs: {},
+    podeConversar: prontidao?.podeConversar ?? false,
+    onAtividade,
+  });
 
   // A prontidão é buscada UMA vez, na montagem — e a montagem só acontece na primeira
   // abertura, porque quem monta este componente é o `useLazyDialog` do botão.
@@ -182,13 +208,11 @@ export function FloatingAssistantPanel({
               <Loader2 className="size-4 animate-spin" /> Preparando o assistente…
             </div>
           ) : (
-            <ChatClient
-              conversationId={null}
-              initialMessages={[]}
+            <ChatView
+              conversa={conversa}
               runs={{}}
               podeConversar={prontidao.podeConversar}
               motivoBloqueio={prontidao.motivoBloqueio}
-              onAtividade={onAtividade}
               compacto
             />
           )}

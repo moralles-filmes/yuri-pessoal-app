@@ -157,16 +157,43 @@ export type ChatClientProps = {
   readonly compacto?: boolean;
 };
 
-export function ChatClient({
+/**
+ * O que o MOTOR da conversa entrega a quem a desenha.
+ *
+ * ⛔ Ele existe porque o estado da conversa NÃO PODE NASCER DENTRO DA GAVETA do painel
+ * flutuante (18-F Bloco 2). O `SheetContent` do Radix é embrulhado em
+ * `<Presence present={forceMount || context.open}>`: sem `forceMount`, fechar desmonta tudo
+ * que está dentro — e com isso ia embora a pergunta, o `conversationId` e, pior, o
+ * `AbortController`, que cancelava a resposta em andamento. `useLazyDialog` não resolve isso:
+ * ele mantém montado o componente do painel, não os filhos da gaveta.
+ *
+ * `forceMount` não serve de saída: `RemoveScroll`, `hideOthers` e `FocusScope` moram no mesmo
+ * `Presence`, e o app inteiro ficaria com rolagem travada e `aria-hidden` permanentes.
+ *
+ * Então o motor sobe e a vista desce — que é o que o React manda fazer com estado que precisa
+ * viver mais que uma subárvore. `/ia` não sente: `ChatClient` continua juntando os dois.
+ */
+export type ConversaDaIa = {
+  readonly bolhas: readonly Bolha[];
+  readonly texto: string;
+  readonly setTexto: (valor: string) => void;
+  readonly enviando: boolean;
+  readonly contexto: RotaComContexto | null;
+  readonly setContexto: (valor: RotaComContexto | null) => void;
+  readonly enviar: () => Promise<void>;
+  readonly cancelar: () => void;
+};
+
+export function useConversaDaIa({
   conversationId,
   initialMessages,
   runs,
-  sources = {},
   podeConversar,
-  motivoBloqueio,
   onAtividade,
-  compacto = false,
-}: ChatClientProps) {
+}: Pick<
+  ChatClientProps,
+  "conversationId" | "initialMessages" | "runs" | "podeConversar" | "onAtividade"
+>): ConversaDaIa {
   const router = useRouter();
 
   const [bolhas, setBolhas] = React.useState<Bolha[]>(() =>
@@ -198,15 +225,16 @@ export function ChatClient({
   const [contexto, setContexto] = React.useState<RotaComContexto | null>(null);
   const [conversa, setConversa] = React.useState<string | null>(conversationId);
   const abortRef = React.useRef<AbortController | null>(null);
-  const fimRef = React.useRef<HTMLDivElement | null>(null);
   const contadorRef = React.useRef(0);
 
-  React.useEffect(() => {
-    fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [bolhas]);
+  /*
+    Cancela ao desmontar. Sem isso, sair da página deixaria o run rodando e a reserva presa
+    até a lease vencer.
 
-  // Cancela ao desmontar. Sem isso, sair da página deixaria o run rodando e a reserva presa
-  // até a lease vencer.
+    ⛔ E quem desmonta AQUI é a página `/ia` ou a casca do app — nunca o fechar da gaveta. É
+    exatamente por isso que este efeito pertence ao motor: enquanto ele morava junto da vista,
+    fechar o painel cancelava a resposta que o dono tinha acabado de pedir.
+  */
   React.useEffect(() => () => abortRef.current?.abort(), []);
 
   function cancelar() {
@@ -416,6 +444,34 @@ export function ChatClient({
       ),
     );
   }
+
+  return { bolhas, texto, setTexto, enviando, contexto, setContexto, enviar, cancelar };
+}
+
+/**
+ * A VISTA da conversa. Ela não tem estado de conversa nenhum — recebe o motor pronto.
+ *
+ * O `fimRef` e a rolagem ficam aqui, e não no motor, porque a referência aponta para um nó
+ * que só existe enquanto a vista está na tela. Efeito colateral bom: reabrir o painel rola
+ * para a última mensagem, porque o efeito roda de novo na montagem.
+ */
+export function ChatView({
+  conversa,
+  runs,
+  sources = {},
+  podeConversar,
+  motivoBloqueio,
+  compacto = false,
+}: Omit<ChatClientProps, "conversationId" | "initialMessages" | "onAtividade"> & {
+  readonly conversa: ConversaDaIa;
+}) {
+  const { bolhas, texto, setTexto, enviando, contexto, setContexto, enviar, cancelar } =
+    conversa;
+  const fimRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [bolhas]);
 
   const restante = MAX_CHAT_TEXT - texto.length;
 
@@ -643,6 +699,27 @@ export function ChatClient({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * A PORTA DE SEMPRE: motor + vista no mesmo componente.
+ *
+ * É o que `/ia` usa desde a 18-A, e nada mudou para ela — ali o chat é a página inteira, e
+ * nada desmonta a subárvore por baixo dele. Quem precisa das duas metades separadas é o painel
+ * flutuante, e só ele.
+ */
+export function ChatClient(props: ChatClientProps) {
+  const conversa = useConversaDaIa(props);
+  return (
+    <ChatView
+      conversa={conversa}
+      runs={props.runs}
+      sources={props.sources}
+      podeConversar={props.podeConversar}
+      motivoBloqueio={props.motivoBloqueio}
+      compacto={props.compacto}
+    />
   );
 }
 
