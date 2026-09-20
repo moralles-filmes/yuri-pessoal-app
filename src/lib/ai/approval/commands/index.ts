@@ -30,6 +30,7 @@ import { desfazerHabito, registrarHabito } from "./habits";
 import { criarEvento, excluirEvento } from "./calendar";
 import { desfazerConsumo, registrarConsumo } from "./nutrition";
 import { excluirTransacao, lancarTransacao } from "./finance";
+import { esquecerPreferencia, lembrarPreferencia } from "./memory";
 
 /**
  * ⚠️ Nem todo command tem ferramenta. Os `undo` (`excluirTarefaTodo`, `reabrirTarefaTodo`,
@@ -56,9 +57,13 @@ export const ACTION_COMMANDS: readonly Command[] = [
   // Dieta
   registrarConsumo,
   desfazerConsumo,
-  // Financeiro — o último, e o de maior risco
+  // Financeiro — o de maior risco
   lancarTransacao,
   excluirTransacao,
+  // Memória (18-F Bloco 3). `esquecerPreferencia` é o 6º `undo` sem ferramenta — e o único
+  // cujo inverso NÃO apaga nada: ele tira a preferência do prompt e a deixa legível.
+  lembrarPreferencia,
+  esquecerPreferencia,
 ];
 
 export function nomesDeCommands(): readonly string[] {

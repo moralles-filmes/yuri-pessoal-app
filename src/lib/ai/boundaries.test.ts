@@ -400,7 +400,13 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
 
       const codigo = fs.readFileSync(arquivo, "utf8");
       for (const spec of especificadores(codigo)) {
-        if (/@\/lib\/[a-z-]+\/services$/.test(spec) || spec.includes("/services/")) {
+        /**
+         * ⚠️ 18-F Bloco 3 — a regex ERA `@\/lib\/[a-z-]+\/services$`, que só pega UM nível de
+         * pasta. `@/lib/ai/memory/services` tem dois, e passaria: a partição dos commands de
+         * memória viraria decoração, com os arquivos continuando dois e o grafo de imports um.
+         * `/services$` cobre qualquer profundidade.
+         */
+        if (/\/services$/.test(spec) || spec.includes("/services/")) {
           violacoes.push(`${path.relative(SRC, arquivo)} → ${spec}`);
         }
       }

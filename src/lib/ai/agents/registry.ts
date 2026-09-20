@@ -55,6 +55,20 @@ export const TAREFAS_AGENT_ID = "tarefas";
 export const FINANCEIRO_AGENT_ID = "financeiro";
 export const DIETA_AGENT_ID = "dieta";
 
+/**
+ * ⚠️ **18-F · BLOCO 3 — "SÓ LÊ" CAIU EM TRÊS DESCRIÇÕES** (Treinos, Estudos e Tarefas), porque
+ * `memory.lembrar` entrou nas OITO allowlists.
+ *
+ * É a quarta vez que uma frase de ausência envelhece neste módulo: `AVISO_SEM_ACESSO` foi
+ * reescrito quatro vezes e o prompt-base, três. As descrições de agente nunca tiveram guarda
+ * nenhuma — e por isso as três ficaram mentindo por um commit inteiro em cada bloco anterior,
+ * sem nada denunciar.
+ *
+ * ⛔ **DESTA VEZ HÁ TESTE**, e ele é DERIVADO do registry (`registry.test.ts`): agente cuja
+ * allowlist contém uma ferramenta de escrita não pode dizer "só lê", e agente que alcança a
+ * memória tem de citá-la. Nenhuma lista escrita à mão de "agentes que escrevem" — essa é a
+ * lista que ficaria para trás.
+ */
 export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
   {
     id: ASSISTENTE_PESSOAL_ID,
@@ -73,7 +87,7 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
     description:
       // ⚠️ Atualizada na 18-C junto com a allowlist: ela ganhou as medidas corporais, e uma
       // descrição que não as cita mente para o usuário sobre o que a chave dele libera.
-      "Consulta seu histórico de treino (último treino, totais do período, recordes) e, com a autorização de medidas, o peso e as circunferências registradas. Só lê — não altera nada.",
+      "Consulta seu histórico de treino (último treino, totais do período, recordes) e, com a autorização de medidas, o peso e as circunferências registradas. Não altera nada em Treinos — só prepara preferências para a memória do assistente, quando você pede.",
     promptVersion: TREINOS_PROMPT_VERSION,
     prompt: TREINOS_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
@@ -93,6 +107,7 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
        */
       "body.get_latest",
       "body.get_series",
+      "memory.lembrar",
     ],
   },
   {
@@ -105,7 +120,7 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
      * mostrada e só acontece com a confirmação do dono.
      */
     description:
-      "Consulta suas tarefas: o que está atrasado, o que é para hoje, o que vem a seguir e os projetos. Também prepara tarefas novas, conclusões e mudanças de data — sempre para você confirmar antes.",
+      "Consulta suas tarefas: o que está atrasado, o que é para hoje, o que vem a seguir e os projetos. Também prepara tarefas novas, conclusões e mudanças de data — sempre para você confirmar antes. Também prepara preferências para a memória do assistente, quando você pede.",
     promptVersion: TODO_PROMPT_VERSION,
     prompt: TODO_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
@@ -116,6 +131,7 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
       "todo.criar_tarefa",
       "todo.concluir_tarefa",
       "todo.reagendar_tarefa",
+      "memory.lembrar",
     ],
   },
   {
@@ -123,21 +139,26 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
     label: "Hábitos",
     description:
       // ⚠️ 18-C · Bloco 4 — "Só lê" caiu aqui pelo mesmo motivo que caiu no TO-DO.
-      "Consulta seus hábitos: a situação de hoje, as sequências e a consistência. Também prepara o registro do dia — sempre para você confirmar antes.",
+      "Consulta seus hábitos: a situação de hoje, as sequências e a consistência. Também prepara o registro do dia — sempre para você confirmar antes. Também prepara preferências para a memória do assistente, quando você pede.",
     promptVersion: HABITOS_PROMPT_VERSION,
     prompt: HABITOS_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
-    allowedTools: ["habits.get_today", "habits.get_streaks", "habits.registrar"],
+    allowedTools: [
+      "habits.get_today",
+      "habits.get_streaks",
+      "habits.registrar",
+      "memory.lembrar",
+    ],
   },
   {
     id: ESTUDOS_AGENT_ID,
     label: "Estudos",
     description:
-      "Consulta seus cursos e o tempo de estudo: progresso, próxima aula e sequência de dias. Só lê — não altera nada.",
+      "Consulta seus cursos e o tempo de estudo: progresso, próxima aula e sequência de dias. Não altera nada em Estudos — só prepara preferências para a memória do assistente, quando você pede.",
     promptVersion: ESTUDOS_PROMPT_VERSION,
     prompt: ESTUDOS_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
-    allowedTools: ["studies.get_courses", "studies.get_study_time"],
+    allowedTools: ["studies.get_courses", "studies.get_study_time", "memory.lembrar"],
   },
   {
     id: AGENDA_AGENT_ID,
@@ -148,21 +169,26 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
      * ferramenta, então o modelo não alcança o cancelamento.
      */
     description:
-      "Consulta seus compromissos: os próximos e os de um dia específico. Também prepara compromissos novos — sempre para você confirmar antes. Não altera nem cancela compromissos existentes.",
+      "Consulta seus compromissos: os próximos e os de um dia específico. Também prepara compromissos novos — sempre para você confirmar antes. Não altera nem cancela compromissos existentes. Também prepara preferências para a memória do assistente, quando você pede.",
     promptVersion: AGENDA_PROMPT_VERSION,
     prompt: AGENDA_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
-    allowedTools: ["calendar.get_upcoming", "calendar.get_day", "calendar.criar_evento"],
+    allowedTools: [
+      "calendar.get_upcoming",
+      "calendar.get_day",
+      "calendar.criar_evento",
+      "memory.lembrar",
+    ],
   },
   {
     id: TAREFAS_AGENT_ID,
     label: "Tarefas e Rotinas",
     description:
-      "Consulta o módulo legado de tarefas e as rotinas com check-in diário — que NÃO é o TO-DO. Só lê.",
+      "Consulta o módulo legado de tarefas e as rotinas com check-in diário — que NÃO é o TO-DO. Não altera nada aqui: só prepara preferências para a memória do assistente, quando você pede.",
     promptVersion: TAREFAS_PROMPT_VERSION,
     prompt: TAREFAS_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
-    allowedTools: ["tasks.get_pending", "tasks.get_routines_today"],
+    allowedTools: ["tasks.get_pending", "tasks.get_routines_today", "memory.lembrar"],
   },
   {
     id: FINANCEIRO_AGENT_ID,
@@ -173,7 +199,7 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
        * verdade: não há ferramenta de pagar fatura, de editar nem de excluir. A frase precisa
        * ser exata neste módulo — é a que o dono lê antes de ligar a chave do dinheiro.
        */
-      "Consulta suas finanças: saldo das contas, resumo do mês e faturas de cartão. Também prepara lançamentos à vista — sempre para você confirmar antes. Não parcela, não divide com terceiros, não transfere entre contas, não paga fatura e não altera lançamento existente.",
+      "Consulta suas finanças: saldo das contas, resumo do mês e faturas de cartão. Também prepara lançamentos à vista — sempre para você confirmar antes. Não parcela, não divide com terceiros, não transfere entre contas, não paga fatura e não altera lançamento existente. Também prepara preferências para a memória do assistente, quando você pede.",
     promptVersion: FINANCEIRO_PROMPT_VERSION,
     prompt: FINANCEIRO_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
@@ -182,6 +208,7 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
       "finance.get_spending",
       "finance.get_invoice",
       "finance.lancar_transacao",
+      "memory.lembrar",
     ],
   },
   {
@@ -193,7 +220,7 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
      * ferramenta de escrita em `body_*`, e a frase não pode sugerir que haja.
      */
     description:
-      "Consulta seu registro alimentar (consumo do dia, do período e as metas) e, com a autorização de medidas, o peso e as circunferências. Também prepara registros no diário alimentar — sempre para você confirmar antes. Não altera metas nem medidas.",
+      "Consulta seu registro alimentar (consumo do dia, do período e as metas) e, com a autorização de medidas, o peso e as circunferências. Também prepara registros no diário alimentar — sempre para você confirmar antes. Não altera metas nem medidas. Também prepara preferências para a memória do assistente, quando você pede.",
     promptVersion: DIETA_PROMPT_VERSION,
     prompt: DIETA_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
@@ -207,6 +234,7 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
       // mesmo fato. Elas exigem `allow_body`, que é separada de `allow_nutrition`.
       "body.get_latest",
       "body.get_series",
+      "memory.lembrar",
     ],
   },
 ];

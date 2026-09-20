@@ -440,6 +440,7 @@ export const ROTULO_DA_FERRAMENTA: Record<string, string> = {
   "calendar.criar_evento": "Agenda · preparar compromisso novo",
   "nutrition.registrar_consumo": "Dieta · preparar registro no diário",
   "finance.lancar_transacao": "Financeiro · preparar lançamento",
+  "memory.lembrar": "Memória · preparar preferência nova",
 };
 
 /** Ferramenta desconhecida (registry antigo, linha de auditoria de outra versão). */
@@ -478,6 +479,10 @@ export const ROTULO_DO_COMMAND: Record<string, string> = {
   desfazerConsumo: "Dieta · remover do diário",
   lancarTransacao: "Financeiro · lançar transação",
   excluirTransacao: "Financeiro · excluir lançamento",
+  // 18-F Bloco 3. "Esquecer" e não "excluir", e a palavra é o desenho: o inverso de lembrar
+  // tira a preferência do prompt e a deixa legível na tela.
+  lembrarPreferencia: "Memória · salvar preferência",
+  esquecerPreferencia: "Memória · esquecer preferência",
 };
 
 /** Command desconhecido (linha de auditoria feita por uma versão anterior do sistema). */
