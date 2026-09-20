@@ -245,9 +245,9 @@ R$ 600 entraram; deixar `pendente` afirma que R$ 0 entraram. **R$ 350 não exist
 
 ---
 
-## 10. A menor evolução necessária (proposta, exige sua aprovação)
+## 10. A menor evolução necessária — **APROVADA em 2026-09-20**
 
-Ordenada por necessidade. Nada disso será executado sem seu "sim" explícito.
+Ordenada por necessidade. E1, E2, E3, E4, E5 e E6 aprovados; E7 acrescentado pela decisão D8.
 
 | # | Mudança | Por quê | Custo |
 | --- | --- | --- | --- |
@@ -256,25 +256,60 @@ Ordenada por necessidade. Nada disso será executado sem seu "sim" explícito.
 | **E3** | `resumoMes` ganha `entradasMeu` / `entradasTerceiros` | É o card da sua referência visual. Depende de E2 | Zero migration |
 | **E4** | Reembolso recebido **opcionalmente** gera transação de caixa vinculada | Fecha o buraco do saldo. Opcional para não reescrever o histórico | Depende de E1 |
 | **E5** | Rótulo de base em toda tela financeira | Exigência direta do briefing §6 | Zero migration |
-| **E6** | `transactions.liquidado_em` (date, nullable) | Só se você quiser caixa **exato** em vez de aproximado. Com 0 pendentes hoje, o ganho é futuro | 1 migration aditiva |
+| **E6** | `transactions.liquidado_em` (date, nullable) | **Caixa exato** (decisão D9). Retroativo: `liquidado_em` nulo ⇒ cai para `competence_date`, com a aproximação declarada na tela | 1 migration aditiva |
+| **E7** | `categories.classificacao_padrao` (`pessoal` \| `terceiro`, nullable) + agrupar a lista por tipo | Decisão D8. É **atalho de preenchimento e filtro**, nunca fonte de verdade | 1 migration aditiva |
 
-**E5 é a única que entra sem aprovação de schema** — é rótulo, não regra.
+Total: **4 migrations aditivas** (E1, E6, E7 e a coluna de E2 já existe). **Nenhuma apaga,
+renomeia ou reinterpreta dado existente.**
 
 ---
 
-## 11. Perguntas que só você pode responder
+## 11. Decisões do dono — 2026-09-20
 
-- **Q1** — Recebimento parcial: entra (E1) ou seguimos sem, aceitando que a tela não represente
-  R$ 350? *Isto decide se os critérios de aceite §13 do seu briefing são atingíveis.*
-- **Q2** — Além da categoria de terceiros, há **outras duas categorias de receita** (6 e 4
-  lançamentos) cujo nome sugere origem específica e que podem não ser renda sua. Eu as
-  identifico para você na conversa, fora deste documento. São renda sua ou dinheiro de
-  terceiros? A reclassificação é sua, não minha — e nada será reclassificado sozinho.
-- **Q3** — Recebível `ignorado` (você decidiu não cobrar): continua contando como
-  responsabilidade do terceiro, ou vira sua despesa? Hoje conta como dele. Há **0 casos**, então
-  a decisão não reescreve nada.
-- **Q4** — Caixa **aproximado** pela competência (sem migration, rotulado como aproximação) ou
-  caixa **exato** com `liquidado_em` (E6)?
-- **Q5** — Histórico: as 20 receitas da categoria de terceiros devem ser reclassificadas
-  retroativamente, ou a separação vale só daqui pra frente? **Recomendo daqui pra frente**, com
-  a tela oferecendo a reclassificação uma a uma, sob seu comando.
+| # | Decisão | Consequência |
+| --- | --- | --- |
+| **D6** | **Recebimento parcial ENTRA** (E1) | Os critérios de aceite do briefing §13 passam a ser atingíveis. `receivables.valor` vira a **responsabilidade original** e o saldo passa a ser `valor − Σ recebimentos` |
+| **D7** | As outras duas categorias de receita são **renda dele** | Só a categoria de terceiros é reclassificada. Nada mais muda |
+| **D8** | **Categoria ganha marcação de terceiros**, e a lista passa a separar receita de despesa | Vira E7. ⛔ Ver a regra abaixo — isso é **atalho**, não verdade |
+| **D9** | **Caixa EXATO** (E6) | `transactions.liquidado_em`. Onde for nulo, cai para `competence_date` **com a aproximação declarada na tela**, nunca em silêncio |
+| **D10** | Separação vale **daqui pra frente** | Nenhuma reclassificação automática do histórico. A tela oferece reclassificar uma a uma, sob comando |
+| **D11** | Recebível `ignorado`: **as duas visões respondem, e cada uma acerta** | Ver §12 |
+
+### ⛔ A regra que a D8 exige: a categoria PROPÕE, o lançamento REGISTRA
+
+`categories.classificacao_padrao` preenche o formulário; quem guarda a verdade é
+`transactions.classificacao` + `valor_pessoal`, gravados no ato. **Relatório nunca lê a
+categoria para decidir de quem é o dinheiro.** Três motivos, cada um um defeito evitado:
+
+1. **Categoria não representa divisão parcial.** Um gasto de R$ 1.000 em "Alimentação" com
+   R$ 400 meus e R$ 600 dele é `compartilhada`. Marcar a categoria inteira como "de terceiros"
+   seria mentira; marcar como pessoal também.
+2. **Trocar a marcação reescreveria o passado.** Se o relatório lê a categoria, mudar a
+   marcação hoje muda o que você gastou em março. É o oposto da invariante que o projeto
+   inteiro segue (snapshot imutável na Dieta, status derivado na leitura no Financeiro).
+3. **`valor_pessoal` é exato ao centavo e já existe.** Uma segunda fonte de verdade que
+   discordasse dele seria o pior dos dois mundos.
+
+A marcação continua valendo como **filtro** ("mostre o que é de terceiros") — porque aí ela
+não está afirmando nada sobre o passado, só peneirando.
+
+---
+
+## 12. Recebível `ignorado`, resolvido pelas duas bases (D11)
+
+`ignorado` = você decidiu **não cobrar**. Perdoou, era presente, não valia a pena.
+
+A pergunta era: a despesa vira sua, ou continua sendo dele? **Com as duas bases aprovadas
+(D9), a pergunta se dissolve — cada visão responde diferente e as duas estão certas:**
+
+| Visão | O que diz sobre R$ 600 perdoados | Por quê |
+| --- | --- | --- |
+| **Responsabilidade / competência** | Continua **dele**. Minha parte segue R$ 400 | A despesa foi dele. Perdoar não me faz ter comido a comida dele |
+| **Caixa realizado** | **Saiu R$ 1.000 e voltou R$ 0** | O dinheiro não volta, e o caixa não mente sobre isso |
+
+Nenhuma regra especial é escrita: o recebível ignorado simplesmente **nunca gera recebimento**,
+e o caixa reflete isso sozinho. É a mesma razão de a base ter de estar rotulada na tela.
+
+**Exigência de tela:** recebível ignorado aparece explicitamente como *"não será cobrado"*,
+com o valor. Ele **não some** da lista — some silenciosamente é como R$ 600 viram zero sem
+ninguém decidir. Hoje há **0 casos**, então nada é reescrito.

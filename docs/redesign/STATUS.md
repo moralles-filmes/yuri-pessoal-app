@@ -1,7 +1,8 @@
 # STATUS
 
 **Atualizado:** 2026-09-20
-**Fase atual:** REDESIGN-00 — **concluída, aguardando aprovação**
+**Fase atual:** REDESIGN-00 **concluída** · decisões D6–D11 tomadas · **REDESIGN-01 liberada**,
+aguardando seu aval para começar
 **Branch:** `feat/redesign-00-auditoria` (de `main` em `5de90d6`)
 
 ---
@@ -29,23 +30,29 @@
 | D4 | Rotas antigas (`/faturas`, `/parcelamentos`, `/tarefas`) **não morrem**. Layout compartilhado antes de mover a árvore |
 | D5 | Os 11 ids de `DASH_CARD_IDS` são imutáveis — renomear apaga preferência salva em silêncio |
 
-## Pendências — bloqueiam a REDESIGN-01
+## Decisões do dono — 2026-09-20 (respondidas)
 
-Suas respostas a `METRICAS-FINANCEIRAS.md` §11:
+| # | Decisão | Detalhe |
+| --- | --- | --- |
+| D6 | **Recebimento parcial ENTRA** | Tabela `receivable_receipts`. Torna atingíveis os critérios do briefing §13 |
+| D7 | As outras duas categorias de receita são **renda dele** | Só a categoria de terceiros é reclassificada |
+| D8 | **Categoria ganha marcação de terceiros** + lista separada por tipo | ⛔ É **atalho e filtro**, nunca fonte de verdade — `METRICAS-FINANCEIRAS.md` §11 |
+| D9 | **Caixa EXATO** | `transactions.liquidado_em`; nulo cai para `competence_date` com a aproximação **declarada na tela** |
+| D10 | Separação vale **daqui pra frente** | Nenhuma reclassificação automática do histórico |
+| D11 | Recebível `ignorado`: as duas bases respondem, cada uma acerta | `METRICAS-FINANCEIRAS.md` §12. 0 casos hoje |
 
-- **Q1** — Recebimento parcial entra (tabela `receivable_receipts`)? *Decide se os critérios de
-  aceite do seu §13 são atingíveis.*
-- **Q2** — Outras duas categorias de receita (6 e 4 lançamentos) são renda sua ou de terceiros?
-  Identifico quais na conversa — não neste arquivo, porque o repositório é público.
-- **Q3** — Recebível `ignorado` conta como responsabilidade do terceiro ou vira sua despesa?
-  (0 casos hoje — a decisão não reescreve nada.)
-- **Q4** — Caixa aproximado pela competência, ou exato com `liquidado_em`?
-- **Q5** — Reclassificar as 20 receitas da categoria de terceiros retroativamente, ou só daqui
-  pra frente? *(recomendo: daqui pra frente, com reclassificação manual oferecida na tela)*
+## Migrations aprovadas (aditivas, nenhuma apaga ou reinterpreta dado)
+
+1. `receivable_receipts` (E1)
+2. `transactions.liquidado_em` (E6)
+3. `categories.classificacao_padrao` (E7)
+
+`transactions.classificacao`/`valor_pessoal` para receita (E2) **não precisa de migration** —
+as colunas já existem e o CHECK já aceita.
 
 ## Bloqueios
 
-Nenhum bloqueio técnico. A fase 01 está travada apenas pela sua aprovação.
+Nenhum. Falta apenas o seu aval para eu começar a REDESIGN-01.
 
 ## Riscos abertos
 
@@ -68,5 +75,6 @@ Nenhum teste foi alterado. Nenhum arquivo de `src/` foi alterado.
 
 ## Próximo passo
 
-Aguardar sua aprovação da auditoria e as respostas Q1–Q5. Em seguida, **REDESIGN-01-A**
-(fechar o dicionário de métricas) antes de qualquer código.
+**REDESIGN-01-A** — fechar o dicionário de métricas com as decisões D6–D11 e escrever o
+desenho das 3 migrations, **sem aplicá-las**. Nenhuma migration é aplicada no Supabase sem uma
+segunda autorização, específica para ela.

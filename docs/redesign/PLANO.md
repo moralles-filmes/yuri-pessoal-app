@@ -15,9 +15,13 @@ proposta de navegação, riscos, plano. **Zero alteração de código funcional.
 
 ---
 
-## REDESIGN-01 — Contratos e protótipos 🔒 aguardando aprovação da 00
+## REDESIGN-01 — Contratos e protótipos 🔓 gate liberado
 
-**Gate de entrada:** suas respostas às perguntas Q1–Q5 de `METRICAS-FINANCEIRAS.md` §11.
+**Gate de entrada:** ✅ decisões D6–D11 tomadas em 2026-09-20
+(`METRICAS-FINANCEIRAS.md` §11–§12).
+
+⛔ **A 01 continua sem aplicar migration.** Ela **desenha** as três aprovadas (E1, E6, E7) e as
+apresenta; aplicar no Supabase exige uma segunda autorização, específica por migration.
 
 | Subfase | Entrega |
 | --- | --- |
@@ -57,9 +61,10 @@ de mexer, para que qualquer mudança de número seja visível e intencional.
 | --- | --- |
 | **03-A** | Testes de caracterização de `resumoMes`, `gastosPorCategoria`, `proximas6Faturas`, `totalAReceber` — congelando o que eles devolvem hoje |
 | **03-B** | **Unificar o pipeline triplicado** (P1-9) num módulo só, com uma janela de leitura declarada. Sem mudar número nenhum |
-| **03-C** | Separação de **renda pessoal × movimentação de terceiros** (E2/E3). Depende de Q1/Q2/Q5 |
-| **03-D** | Reembolsos e recebíveis: os três números distintos do briefing §7. Recebimento parcial (E1) **se aprovado** |
-| **03-E** | Modo **caixa × competência** com rótulo, e a regra de comparação de mês parcial |
+| **03-C** | Separação de **renda pessoal × movimentação de terceiros** (E2/E3): `classificacao` e `valor_pessoal` passam a valer para receita, gravados no lançamento |
+| **03-C2** | **Categorias** (E7, decisão D8): marcação de terceiros como **atalho de preenchimento e filtro**, lista agrupada por tipo. ⛔ Teste que prove que **nenhum relatório lê a categoria** para decidir de quem é o dinheiro |
+| **03-D** | Reembolsos e recebíveis: os três números distintos do briefing §7 + **recebimento parcial** (E1). Recebível `ignorado` visível como "não será cobrado" |
+| **03-E** | Modo **caixa exato × competência** com rótulo (E6). `liquidado_em` nulo cai para `competence_date` **com a aproximação declarada**, nunca em silêncio. Regra de comparação de mês parcial |
 | **03-F** | Idempotência do pagamento de fatura (P0-4) e confirmação no desfazer (P1-8) |
 | **03-G** | Erro é erro: `error.tsx` por rota e leituras que param de engolir falha (P0-5) |
 
