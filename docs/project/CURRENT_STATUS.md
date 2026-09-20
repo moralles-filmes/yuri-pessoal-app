@@ -470,8 +470,8 @@ desfazer (5)** e documentação + verificação final (6). Decisões em
 | 18-A | Fundação, provedores e chat | ✅ **CONCLUÍDA** (2026-08-04) |
 | 18-B | Contexto, ferramentas de leitura e agentes | ✅ **CONCLUÍDA** (2026-08-07) |
 | 18-C | Ações, aprovações, idempotência e auditoria | ✅ **CONCLUÍDA** (2026-08-08) — blocos 1 a 6 |
-| 18-D | Visão, documentos e comprovantes | ⬜ |
-| 18-E | Insights, relatórios e dashboards | ✅ |
+| 18-D | Visão, documentos e comprovantes | ✅ **CONCLUÍDA** (2026-08-09) — blocos 1 a 5 |
+| 18-E | Insights, relatórios e dashboards | ✅ **CONCLUÍDA** (2026-08-09) — blocos 1 a 4 |
 | 18-F | Memória, voz, integrações e polimento | 🟡 — Bloco 1 ✅ (costura: sino, busca, backup, exclusão em massa). Fecha a fase |
 
 As frentes 16 (Dieta) e 17 (Treinos) continuam **concluídas e em manutenção/iteração**:
@@ -2258,8 +2258,8 @@ de responsabilidades está documentada no arquivo da fase.
 | 16-B | Dieta e Alimentação · Metas, diário e planejamento | ✅ Concluída |
 | 16-C | Dieta e Alimentação · Receitas, refeições e substituições | ✅ Concluída |
 | 16-D | Dieta e Alimentação · Lista de compras e despensa | ✅ Concluída |
-| 16-E | Dieta e Alimentação · Medidas, evolução e relatórios | ⬜ Próxima |
-| 16-F | Dieta e Alimentação · Integrações e polimento | ⬜ |
+| 16-E | Dieta e Alimentação · Medidas, evolução e relatórios | ✅ Concluída |
+| 16-F | Dieta e Alimentação · Integrações e polimento | ✅ Concluída |
 
 ## O que foi implementado na Fase 14 (Segurança, Responsividade & Polimento Final)
 - **Schema finalizado (idempotente)** em `supabase/migrations/`, aplicado no projeto `yjvnlbjvippefvzgrxxw`. Security advisor: **0 lints de schema** (resta só o aviso externo de Auth "leaked password protection"). **34 tabelas** no total (+ `attachments`) e **2 buckets** privados de Storage.
