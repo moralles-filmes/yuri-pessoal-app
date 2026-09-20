@@ -472,6 +472,9 @@ describe("Fase 18-A — schemas de IA aceitam a própria saída", () => {
       allowVision: false,
       // 18-E Bloco 4. Mesma razão: nem a chave da varredura nem o teto dela são módulos.
       allowInsightJobs: false,
+      // 18-F Bloco 4. Mesma razão de novo — e esta fixture é a segunda que a lista
+      // `OBRIGATORIOS` de `ai.test.ts` NÃO cobre (invariante 94).
+      allowCrossModule: false,
       jobMonthlyBudget: 1,
       defaultModel: "",
       confirmationMode: "seguro",

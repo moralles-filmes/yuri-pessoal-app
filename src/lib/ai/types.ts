@@ -90,6 +90,23 @@ export type AiPreferencesView = {
    * PULADO, não fatal para os outros. Ver `insights/job.ts`.
    */
   readonly allowInsightJobs: boolean;
+  /**
+   * 18-F Bloco 4 — o interruptor das EXPERIÊNCIAS (os panoramas de vários módulos).
+   *
+   * ⛔ **Também não é uma `ToolPermission`**, pela mesma razão de `allowVision` e de
+   * `allowInsightJobs`: ela não responde "a IA pode ler o módulo X?", e sim "eu autorizo um
+   * panorama que atravessa vários módulos de uma vez?". Há teste em `validators/ai.test.ts`
+   * que usa esta chave como exemplo do que `aiPermissionsSchema` RECUSA — o nome engana, e
+   * era o erro fácil de cometer.
+   *
+   * ⚠️ Como `allowInsightJobs` e diferente de `allowVision`, ela NÃO é ANDada: desligada,
+   * nenhum panorama roda; ligada, cada módulo ainda depende da SUA `allow_*`, e o que estiver
+   * desligado é PULADO e declarado, não fatal para os outros. Ver `experiences/selection.ts`.
+   *
+   * ⚠️ A coluna existe no banco desde a 18-A (`20260807100000_ai_foundation.sql`), `not null
+   * default false`, e ficou cinco subfases sem ser lida por uma linha de código.
+   */
+  readonly allowCrossModule: boolean;
   /** Fase 18-E Bloco 4 — teto PRÓPRIO do job, em USD/mês. NOT NULL no banco. */
   readonly jobMonthlyBudget: number;
   /**

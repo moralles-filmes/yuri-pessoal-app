@@ -86,6 +86,8 @@ export function AiPreferencesForm({
      */
     allowVision: prefs.allowVision,
     allowInsightJobs: prefs.allowInsightJobs,
+    // 18-F Bloco 4 — entra no estado E no payload no MESMO commit (invariantes 81 e 94).
+    allowCrossModule: prefs.allowCrossModule,
     jobMonthlyBudget: String(prefs.jobMonthlyBudget),
     defaultProvider: prefs.defaultProvider ?? NENHUM,
     defaultModel: prefs.defaultModel ?? NENHUM,
@@ -115,6 +117,7 @@ export function AiPreferencesForm({
       writePermissions: form.writePermissions,
       allowVision: form.allowVision,
       allowInsightJobs: form.allowInsightJobs,
+      allowCrossModule: form.allowCrossModule,
       jobMonthlyBudget: Number(form.jobMonthlyBudget),
       defaultProvider: form.defaultProvider === NENHUM ? null : form.defaultProvider,
       defaultModel: form.defaultModel === NENHUM ? null : form.defaultModel,
@@ -312,6 +315,24 @@ export function AiPreferencesForm({
               ter teto justamente sobre o gasto que ninguém está vendo.
             </p>
           </div>
+        </div>
+
+        {/* ── Panoramas de vários módulos (18-F · Bloco 4) ──────────────────────────── */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <Label htmlFor="pref-panoramas">Panoramas de vários módulos</Label>
+            <p className="text-xs text-muted-foreground">
+              Libera os atalhos “Planejar meu dia”, “Encerrar meu dia” e “Planejar minha
+              semana”. Cada panorama lê só os módulos cuja leitura estiver ligada acima — o que
+              estiver desligado fica de fora, e o panorama <strong>diz o que ficou</strong>.
+            </p>
+          </div>
+          <Switch
+            id="pref-panoramas"
+            checked={form.allowCrossModule}
+            onCheckedChange={(v) => setForm((f) => ({ ...f, allowCrossModule: v }))}
+            className="shrink-0"
+          />
         </div>
 
         {/* ── Orçamento ─────────────────────────────────────────────────────────────── */}

@@ -187,6 +187,8 @@ const PREFS_PADRAO: AiPreferencesView = {
   // 18-E Bloco 4. Sem linha de preferência, nenhuma varredura roda — e o teto do job é ZERO,
   // não o default da coluna: quem não tem preferência gravada não autorizou gasto nenhum.
   allowInsightJobs: false,
+  // 18-F Bloco 4. Sem linha de preferência, nenhum panorama roda.
+  allowCrossModule: false,
   jobMonthlyBudget: 0,
   // 18-F Bloco 2. Sem linha de preferência, o botão aparece no canto padrão: ele não
   // autoriza nada, e esconder de fábrica seria entregar o que ninguém acha.
@@ -203,7 +205,7 @@ export async function getAiPreferences(
   const { data } = await supabase
     .from("ai_user_preferences")
     .select(
-      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_memory, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_write_memory, allow_vision, allow_insight_jobs, job_monthly_budget, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour, floating_corner, floating_hidden",
+      "default_provider, default_model, confirmation_mode, allow_fallback, allow_finance, allow_nutrition, allow_training, allow_body, allow_todo, allow_calendar, allow_tasks, allow_habits, allow_studies, allow_memory, allow_write_todo, allow_write_habits, allow_write_calendar, allow_write_nutrition, allow_write_finance, allow_write_memory, allow_vision, allow_insight_jobs, allow_cross_module, job_monthly_budget, daily_budget, monthly_budget, budget_block_on_limit, budget_alert_level_reached, reservation_margin, rate_limit_per_minute, rate_limit_per_hour, floating_corner, floating_hidden",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -255,6 +257,9 @@ export async function getAiPreferences(
     allowVision: data.allow_vision === true,
     // 18-E Bloco 4. Mesmo `=== true`: chave ausente é chave DESLIGADA, nunca "ainda não sei".
     allowInsightJobs: data.allow_insight_jobs === true,
+    // 18-F Bloco 4. Mesmo `=== true`. A coluna existe desde a 18-A e esta é a primeira linha
+    // de código que a lê — até aqui ela era `not null default false` e mais nada.
+    allowCrossModule: data.allow_cross_module === true,
     jobMonthlyBudget: data.job_monthly_budget ?? 0,
     /**
      * 18-F Bloco 2. `cantoValido` e não um cast: mesma disciplina do `=== true` das chaves

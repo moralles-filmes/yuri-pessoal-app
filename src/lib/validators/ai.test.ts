@@ -453,6 +453,8 @@ describe("aceitar a própria saída (round-trip)", () => {
       allowVision: false,
       // 18-E Bloco 4 — idem, e mais o teto próprio da varredura.
       allowInsightJobs: false,
+      // 18-F Bloco 4 — idem: o interruptor dos panoramas não é um módulo.
+      allowCrossModule: false,
       jobMonthlyBudget: 1,
       defaultProvider: undefined,
       defaultModel: "",
@@ -678,6 +680,36 @@ describe("18-C — aiWritePermissionsSchema", () => {
     expect(TOOL_PERMISSIONS).not.toContain("allow_vision");
     expect(TOOL_WRITE_PERMISSIONS).not.toContain("allow_vision");
   });
+
+  /**
+   * ⛔ 18-F Bloco 4 — A CHAVE DO MECANISMO NÃO É ANDADA COM CHAVE NENHUMA, e isso é decisão,
+   * não esquecimento.
+   *
+   * `allow_vision` É ANDada com `allow_finance` + `allow_write_finance` porque as três servem
+   * ao MESMO efeito: um comprovante que sai do sistema precisa ter para onde ir. Aqui não: os
+   * módulos de uma experiência são efeitos INDEPENDENTES, e ANDar faria desligar a Agenda
+   * calar o panorama inteiro. Desligada ⇒ nada roda; ligada ⇒ o módulo sem chave é PULADO e
+   * declarado. É a regra da invariante 77, e esta linha a torna visível no `upsert`.
+   */
+  it("`allow_cross_module` chega ao upsert SOZINHA", () => {
+    const fonte = readFileSync(
+      path.join(process.cwd(), "src", "lib", "actions", "ai-preferences.ts"),
+      "utf8",
+    ).replace(/\s+/g, " ");
+
+    expect(fonte).toContain("allow_cross_module: dados.allowCrossModule,");
+  });
+
+  /**
+   * ⚠️ E o nome engana: "cross_module" SOA como permissão de módulo. Ela é campo solto, como
+   * `allowVision` e `allowInsightJobs` — pô-la em `aiPermissionsSchema` faria o roteador
+   * procurar um módulo `cross_module` que não existe, e `permissaoDoModulo` ganharia uma
+   * entrada sem ferramenta nenhuma.
+   */
+  it("`allow_cross_module` fica FORA de TOOL_PERMISSIONS e de TOOL_WRITE_PERMISSIONS", () => {
+    expect(TOOL_PERMISSIONS).not.toContain("allow_cross_module");
+    expect(TOOL_WRITE_PERMISSIONS).not.toContain("allow_cross_module");
+  });
 });
 
 /**
@@ -704,6 +736,9 @@ describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do 
     "writePermissions",
     "allowVision",
     "allowInsightJobs",
+    // 18-F Bloco 4. O interruptor dos panoramas. Entra AQUI no mesmo commit em que entra no
+    // schema, pela mesma razão das duas do Bloco 2 logo abaixo.
+    "allowCrossModule",
     "jobMonthlyBudget",
     "confirmationMode",
     "allowFallback",
@@ -725,6 +760,7 @@ describe("18-E Bloco 4 — o formulário manda todos os campos obrigatórios do 
       writePermissions: Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((p) => [p, false])),
       allowVision: false,
       allowInsightJobs: false,
+      allowCrossModule: false,
       jobMonthlyBudget: 1,
       defaultProvider: null,
       defaultModel: "",
@@ -805,6 +841,7 @@ describe("18-F Bloco 2 — o botão flutuante", () => {
       writePermissions: Object.fromEntries(TOOL_WRITE_PERMISSIONS.map((p) => [p, false])),
       allowVision: false,
       allowInsightJobs: false,
+      allowCrossModule: false,
       jobMonthlyBudget: 1,
       defaultProvider: null,
       defaultModel: "",

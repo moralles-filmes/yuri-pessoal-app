@@ -332,6 +332,13 @@ export const aiPreferencesSchema = z
      */
     allowInsightJobs: z.boolean({ error: "Autorização de análise automática inválida." }),
     /**
+     * 18-F Bloco 4. Campo solto pela MESMA razão das duas acima — e aqui o nome engana mais
+     * que nos outros dois casos: "cross_module" SOA como permissão de módulo. Há teste em
+     * `validators/ai.test.ts` que usa exatamente esta chave como o exemplo do que
+     * `aiPermissionsSchema` recusa. Ver o comentário em `AiPreferencesView.allowCrossModule`.
+     */
+    allowCrossModule: z.boolean({ error: "Autorização de panorama inválida." }),
+    /**
      * O teto próprio do job. `nonnegative` e NÃO `nullish`: a coluna é NOT NULL, e "sem
      * teto" não é um estado que a varredura possa ter (ver a nota da migration).
      */

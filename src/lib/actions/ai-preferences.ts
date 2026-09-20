@@ -132,6 +132,19 @@ export async function saveAiPreferences(
        * roda, pula os três e registra o porquê em `ai_insight_jobs`.
        */
       allow_insight_jobs: dados.allowInsightJobs,
+      /**
+       * ⛔ 18-F Bloco 4 — E ESTA TAMBÉM **NÃO** É ANDADA COM NADA, pela mesma razão da linha
+       * acima e não pela da linha de `allow_vision`.
+       *
+       * Um panorama cobre até quatro módulos INDEPENDENTES. ANDar com eles faria desligar a
+       * leitura da Agenda calar "Planejar meu dia" inteiro — o oposto da invariante 77. Quem
+       * decide módulo a módulo é `experiences/selection.ts` (que PULA e DECLARA), e o RPC
+       * confere esta chave de novo, dentro da transação de admissão.
+       *
+       * Ligar a chave com os módulos todos desligados não é estado impossível: é um panorama
+       * que `experience-runner.ts` RECUSA antes de gastar, com o motivo escrito.
+       */
+      allow_cross_module: dados.allowCrossModule,
       job_monthly_budget: dados.jobMonthlyBudget,
       default_provider: dados.defaultProvider,
       default_model: dados.defaultModel,
