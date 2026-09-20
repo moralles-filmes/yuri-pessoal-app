@@ -477,6 +477,7 @@ migration em produção continua exigindo um "aplique a M3" seu, separado.
 ✅ **O `R4` voltou do outro chat, foi revisado com mutação independente e integrado** em
 `1b5aa28`. Não há nada pendente de outra frente.
 
-⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` tem **10 commits locais** e
-segue sem upstream. `feat/redesign-r4-deeplinks` já está contida nela e pode ser apagada
-quando você quiser.
+⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` está **11 commits à frente da
+`main`** (9 de trabalho + o commit do R4 vindo da outra branch + o merge) e segue **sem
+upstream**. `feat/redesign-r4-deeplinks` já está contida nela e pode ser apagada quando você
+quiser.
