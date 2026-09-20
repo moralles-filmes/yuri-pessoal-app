@@ -51,6 +51,44 @@ export function oQuePermanece(escopo: EscopoDeExclusao): readonly string[] {
 }
 
 /**
+ * O que sai JUNTO, por cascade, sem estar no nome do escopo.
+ *
+ * ⛔ A linha do consumo não é detalhe. `ai_conversations` → `ai_runs` → `ai_usage_events` é
+ * `on delete cascade` (conferido nas migrations 20260807100000 e 20260808100000): apagar as
+ * conversas apaga a MEDIÇÃO de custo delas, o gasto some de `/ia/consumo` e deixa de contar
+ * no teto do mês. Quem clica para arrumar a casa não imagina que está zerando o próprio
+ * controle de orçamento — e um aviso depois do fato não serve para nada.
+ *
+ * Declarar é a única saída deste bloco: mudar a FK exigiria migration, e o Bloco 1 não cria
+ * nem altera schema.
+ */
+const TAMBEM_SAI: Record<EscopoDeExclusao, readonly string[]> = {
+  conversas: [
+    "As mensagens e a trilha de cada conversa.",
+    "A medição de custo delas: o gasto sai de IA · Consumo e deixa de contar no teto do mês.",
+    "As propostas que nasceram nessas conversas — o registro do que foi APLICADO permanece.",
+  ],
+  conversas_antigas: [
+    "As mensagens e a trilha das conversas dentro do período.",
+    "A medição de custo delas: o gasto sai de IA · Consumo e deixa de contar no teto do mês.",
+    "As propostas que nasceram nessas conversas — o registro do que foi APLICADO permanece.",
+  ],
+  documentos: [
+    "O arquivo em si, do armazenamento privado.",
+    "A leitura que a IA fez de cada comprovante.",
+  ],
+  insights: [
+    "Os indicadores que sustentavam cada análise.",
+    "O que você respondeu a elas (dispensar, adiar).",
+  ],
+};
+
+/** O que a exclusão leva junto, além do que o nome do escopo diz. Nunca vazia. */
+export function oQueTambemSai(escopo: EscopoDeExclusao): readonly string[] {
+  return TAMBEM_SAI[escopo];
+}
+
+/**
  * Singular, plural e GÊNERO de cada escopo. O gênero não é preciosismo: "comprovante" é
  * masculino e os outros três são femininos, então uma frase montada com concordância fixa
  * escreveria "1 comprovante será apagada" na tela do dono, bem no momento em que ele está
@@ -63,13 +101,24 @@ const SUBSTANTIVO: Record<EscopoDeExclusao, readonly [string, string, "f" | "m"]
   insights: ["análise", "análises", "f"],
 };
 
-export function resumoDaExclusao(escopo: EscopoDeExclusao, quantidade: number): string {
+export function resumoDaExclusao(
+  escopo: EscopoDeExclusao,
+  quantidade: number,
+  tempo: "futuro" | "passado" = "futuro",
+): string {
   const [um, varios, genero] = SUBSTANTIVO[escopo];
   if (quantidade === 0) {
     return `Nada a apagar: ${genero === "f" ? "nenhuma" : "nenhum"} ${um} neste filtro.`;
   }
   const palavra = quantidade === 1 ? um : varios;
   const particip = genero === "f" ? "apagada" : "apagado";
-  const verbo = quantidade === 1 ? `será ${particip}` : `serão ${particip}s`;
-  return `${quantidade} ${palavra} ${verbo}.`;
+  const auxiliar =
+    tempo === "futuro"
+      ? quantidade === 1
+        ? "será"
+        : "serão"
+      : quantidade === 1
+        ? "foi"
+        : "foram";
+  return `${quantidade} ${palavra} ${auxiliar} ${particip}${quantidade === 1 ? "" : "s"}.`;
 }

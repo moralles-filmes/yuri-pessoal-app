@@ -3,6 +3,7 @@ import {
   ESCOPOS_DE_EXCLUSAO,
   ehEscopoDeExclusao,
   oQuePermanece,
+  oQueTambemSai,
   resumoDaExclusao,
 } from "./retention";
 
@@ -30,6 +31,23 @@ describe("o que permanece", () => {
   });
 });
 
+describe("o que também sai", () => {
+  // ⛔ `ai_conversations` → `ai_runs` → `ai_usage_events` é cascade: apagar conversa apaga a
+  // medição de custo dela. Quem clica para arrumar a casa não imagina que está zerando o
+  // próprio controle de orçamento, e um aviso depois do fato não serve para nada.
+  it("avisa que o consumo medido some junto com as conversas", () => {
+    for (const escopo of ["conversas", "conversas_antigas"] as const) {
+      expect(oQueTambemSai(escopo).join(" ")).toContain("Consumo");
+    }
+  });
+
+  it("TODO escopo declara o que leva junto — nenhum devolve lista vazia", () => {
+    for (const escopo of ESCOPOS_DE_EXCLUSAO) {
+      expect(oQueTambemSai(escopo).length).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe("resumo", () => {
   it("usa singular e plural corretamente", () => {
     expect(resumoDaExclusao("conversas", 1)).toContain("1 conversa");
@@ -51,6 +69,17 @@ describe("resumo", () => {
     expect(resumoDaExclusao("insights", 1)).toBe("1 análise será apagada.");
     expect(resumoDaExclusao("conversas", 0)).toBe(
       "Nada a apagar: nenhuma conversa neste filtro.",
+    );
+  });
+
+  // O toast relata o que JÁ aconteceu; o diálogo, o que vai acontecer. Mesma frase, mesmo
+  // gênero, mesmo número — só o tempo do verbo muda.
+  it("relata no passado o que já foi apagado", () => {
+    expect(resumoDaExclusao("conversas", 1, "passado")).toBe("1 conversa foi apagada.");
+    expect(resumoDaExclusao("conversas", 4, "passado")).toBe("4 conversas foram apagadas.");
+    expect(resumoDaExclusao("documentos", 1, "passado")).toBe("1 comprovante foi apagado.");
+    expect(resumoDaExclusao("documentos", 2, "passado")).toBe(
+      "2 comprovantes foram apagados.",
     );
   });
 });
