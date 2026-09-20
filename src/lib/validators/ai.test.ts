@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import { AI_TOOL_REGISTRY } from "@/lib/ai/tools/registry";
 import { ROTULO_DA_ROTA_DE_CONTEXTO } from "@/lib/ai/constants";
 import { TOOL_PERMISSIONS, TOOL_WRITE_PERMISSIONS } from "@/lib/ai/tools/contracts";
+import { EXPERIENCIA_IDS } from "@/lib/ai/experiences/contracts";
 import { CANTOS_DO_BOTAO } from "@/lib/ai/painel";
 import {
   aiCredentialSchema,
@@ -24,6 +25,7 @@ import {
   aiProviderConfigSchema,
   aiWritePermissionsSchema,
   botaoFlutuanteSchema,
+  chatMensagemSchema,
   chatRequestSchema,
   contextoDaRota,
   MAX_CHAT_TEXT,
@@ -100,6 +102,94 @@ describe("chatRequestSchema", () => {
     expect(chatRequestSchema.safeParse({ text: "olá", conversationId: "1" }).success).toBe(
       false,
     );
+  });
+});
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ 18-F Bloco 4 — DUAS FORMAS `.strict()`, E A SEPARAÇÃO É A GARANTIA.                   ║
+ * ║                                                                                       ║
+ * ║ A mensagem carrega texto do dono; o panorama carrega só o id de um roteiro do         ║
+ * ║ SERVIDOR. Um schema único com `text` opcional deixaria representável um panorama com  ║
+ * ║ texto injetado pelo cliente — e o servidor teria de recusá-lo num `if`, que é um `if` ║
+ * ║ que alguém remove. Duas formas `.strict()` fazem isso não existir.                    ║
+ * ║                                                                                       ║
+ * ║ É a escolha da invariante 79 (`LeituraDoDono`) e da 67 (o campo `confianca` ausente   ║
+ * ║ do schema de saída do modelo): irrepresentável vence recusado.                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+describe("18-F Bloco 4 — o payload de `/api/ia/chat`", () => {
+  it("mensagem normal continua aceita, igualzinho", () => {
+    const r = chatRequestSchema.safeParse({ text: "olá" });
+    expect(r.success).toBe(true);
+  });
+
+  it("panorama sozinho é aceito", () => {
+    for (const id of EXPERIENCIA_IDS) {
+      expect(chatRequestSchema.safeParse({ experiencia: id }).success, id).toBe(true);
+    }
+  });
+
+  it("panorama COM `text` é recusado", () => {
+    expect(
+      chatRequestSchema.safeParse({ experiencia: "planejar-dia", text: "oi" }).success,
+    ).toBe(false);
+  });
+
+  it("panorama COM `conversationId` é recusado — ele sempre abre conversa nova", () => {
+    expect(
+      chatRequestSchema.safeParse({
+        experiencia: "planejar-dia",
+        conversationId: UUID,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("panorama COM `caixaDeEntrada` é recusado — os dois modos não se combinam", () => {
+    expect(
+      chatRequestSchema.safeParse({ experiencia: "planejar-dia", caixaDeEntrada: true })
+        .success,
+    ).toBe(false);
+  });
+
+  it("mensagem COM `experiencia` é recusada", () => {
+    expect(
+      chatRequestSchema.safeParse({ text: "olá", experiencia: "planejar-dia" }).success,
+    ).toBe(false);
+  });
+
+  it("experiência fora da allowlist é recusada", () => {
+    expect(chatRequestSchema.safeParse({ experiencia: "planejar-o-mes" }).success).toBe(
+      false,
+    );
+  });
+
+  it("o panorama aceita preferência de provedor e modelo, como a mensagem", () => {
+    const r = chatRequestSchema.safeParse({
+      experiencia: "encerrar-dia",
+      providerPreference: "openai",
+      modelPreference: "gpt-5.6-terra",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("`caixaDeEntrada` é opcional e booleano na mensagem normal", () => {
+    expect(chatRequestSchema.safeParse({ text: "pão 12 reais" }).success).toBe(true);
+    expect(
+      chatRequestSchema.safeParse({ text: "pão 12 reais", caixaDeEntrada: true }).success,
+    ).toBe(true);
+    expect(
+      chatRequestSchema.safeParse({ text: "pão 12 reais", caixaDeEntrada: "sim" }).success,
+    ).toBe(false);
+  });
+
+  /**
+   * ⚠️ O corpo VAZIO não casa com nenhuma das duas formas: a mensagem exige `text`, o
+   * panorama exige `experiencia`. É o que garante que a união não tenha um "terceiro estado"
+   * silencioso em que nada foi pedido e o runner escolheria sozinho.
+   */
+  it("corpo vazio é recusado pelas duas formas", () => {
+    expect(chatRequestSchema.safeParse({}).success).toBe(false);
   });
 });
 
@@ -230,7 +320,13 @@ describe("pageContext (18-B) — o contexto da página", () => {
   });
 
   it("a saída não ganha campo nenhum — o que atravessa o transporte é SÓ a rota", () => {
-    const r = chatRequestSchema.parse({ text: "oi", pageContext: { rota: "/treinos" } });
+    /**
+     * ⚠️ 18-F Bloco 4 — `chatMensagemSchema` e não `chatRequestSchema`. A união não tem
+     * `pageContext` em todos os ramos (o panorama não aceita nenhum), então lê-lo na união é
+     * erro de TIPO — e `vitest` não checa tipo. Usar o ramo certo é a correção; um cast
+     * desligaria justamente a checagem que aponta o problema.
+     */
+    const r = chatMensagemSchema.parse({ text: "oi", pageContext: { rota: "/treinos" } });
     expect(Object.keys(r.pageContext ?? {})).toEqual(["rota"]);
   });
 

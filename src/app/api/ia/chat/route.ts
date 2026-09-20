@@ -29,6 +29,10 @@ import {
 } from "@/lib/validators/ai";
 import { runChat, type ChatRunnerEvent } from "@/lib/ai/server/chat-runner";
 import {
+  AI_EXPERIENCE_WITHOUT_DATA,
+  runExperience,
+} from "@/lib/ai/server/experience-runner";
+import {
   AI_CRYPTO_NOT_CONFIGURED,
   getCryptoReadiness,
 } from "@/lib/ai/server/crypto-readiness";
@@ -52,6 +56,11 @@ const STATUS_POR_CODIGO: Record<string, number> = {
   AI_ADMISSION_BUSY: 429,
   AI_BUDGET_EXCEEDED_DAILY: 402,
   AI_BUDGET_EXCEEDED_MONTHLY: 402,
+  // 18-F Bloco 4 — os três do panorama. `NOT_AVAILABLE` é pedido que o sistema não atende
+  // (400); os outros dois são estado do dono que ele pode mudar em Configurações (409).
+  AI_EXPERIENCE_NOT_AVAILABLE: 400,
+  AI_CROSS_MODULE_NOT_ALLOWED: 409,
+  [AI_EXPERIENCE_WITHOUT_DATA]: 409,
   [AI_CRYPTO_NOT_CONFIGURED]: 503,
 };
 
@@ -76,6 +85,14 @@ function mensagemEmPortugues(issue: { code: string; message: string } | undefine
     return "O pedido trouxe um campo que o servidor não aceita.";
   }
   if (issue.code === "invalid_type") return "Pedido em formato inválido.";
+  /**
+   * 18-F Bloco 4 — `chatRequestSchema` virou UNIÃO, e o Zod reporta `invalid_union` no topo
+   * quando NENHUMA das duas formas casou. As mensagens internas de cada ramo não sobem até
+   * aqui, e ecoá-las seria devolver ao cliente o que ele mandou.
+   */
+  if (issue.code === "invalid_union") {
+    return "O pedido não corresponde a uma mensagem nem a um panorama.";
+  }
   return issue.message;
 }
 
@@ -158,26 +175,42 @@ export async function POST(request: Request) {
   // O PRIMEIRO evento do runner decide o formato da resposta: se for `error`, ainda dá
   // tempo de devolver um JSON com status HTTP correto (que a tela sabe tratar). A partir do
   // `start`, a resposta vira SSE e todo erro viaja como evento — cabeçalho já foi enviado.
-  const iterador = runChat({
-    userId: ctx.userId,
-    conversationId: parsed.data.conversationId ?? null,
-    text: parsed.data.text,
-    // ⚠️ PREFERÊNCIA, não decisão: quem escolhe o agente é `routeAgent`, no servidor, com as
-    // flags `allow_*` do usuário na mão. `null` (o caso de hoje — a tela não manda o campo) é
-    // "não pedi nenhum", que é diferente de "pedi o orquestrador".
-    agentId: parsed.data.agentId ?? null,
-    // ⚠️ Do contexto da página, SÓ A ROTA atravessa o transporte — e ela vem de uma lista
-    // estática, não de texto da tela. O MÓDULO é resolvido aqui, no servidor: é ele que
-    // decide o agente e, por tabela, a allowlist de ferramentas. Se a tela pudesse
-    // declará-lo, o cliente escolheria o que a IA pode ler.
-    pageContext: parsed.data.pageContext
-      ? contextoDaRota(parsed.data.pageContext.rota)
-      : null,
-    providerPreference: parsed.data.providerPreference ?? null,
-    modelPreference: parsed.data.modelPreference ?? null,
-    abortSignal: request.signal,
-    agora: new Date(),
-  })[Symbol.asyncIterator]();
+  //
+  // ⚠️ 18-F Bloco 4 — A ESCOLHA ABAIXO É DE TRANSPORTE: qual gerador consumir. Nenhuma
+  // decisão de negócio mora aqui — quem sabe o que é uma experiência é `experience-runner.ts`
+  // (catálogo, chaves, recusa antes de gastar) e quem sabe o que é uma mensagem é
+  // `chat-runner.ts`. Isto continua NÃO autorizando um segundo endpoint.
+  const corpo = parsed.data;
+  const iterador = (
+    "experiencia" in corpo
+      ? runExperience({
+          userId: ctx.userId,
+          experiencia: corpo.experiencia,
+          providerPreference: corpo.providerPreference ?? null,
+          modelPreference: corpo.modelPreference ?? null,
+          abortSignal: request.signal,
+          agora: new Date(),
+        })
+      : runChat({
+          userId: ctx.userId,
+          conversationId: corpo.conversationId ?? null,
+          text: corpo.text,
+          // ⚠️ PREFERÊNCIA, não decisão: quem escolhe o agente é `routeAgent`, no servidor,
+          // com as flags `allow_*` do usuário na mão. `null` (o caso de hoje — a tela não
+          // manda o campo) é "não pedi nenhum", diferente de "pedi o orquestrador".
+          agentId: corpo.agentId ?? null,
+          // ⚠️ Do contexto da página, SÓ A ROTA atravessa o transporte — e ela vem de uma
+          // lista estática, não de texto da tela. O MÓDULO é resolvido aqui, no servidor: é
+          // ele que decide o agente e, por tabela, a allowlist de ferramentas. Se a tela
+          // pudesse declará-lo, o cliente escolheria o que a IA pode ler.
+          pageContext: corpo.pageContext ? contextoDaRota(corpo.pageContext.rota) : null,
+          providerPreference: corpo.providerPreference ?? null,
+          modelPreference: corpo.modelPreference ?? null,
+          abortSignal: request.signal,
+          agora: new Date(),
+          caixaDeEntrada: corpo.caixaDeEntrada === true,
+        })
+  )[Symbol.asyncIterator]();
 
   const primeiro = await iterador.next();
 

@@ -26,6 +26,12 @@ import {
 } from "@/lib/ai/constants";
 // 18-F Bloco 3. Mesma razão: os dois módulos da memória não têm um único import, e a TELA os
 // lê (o contador de caracteres e a mensagem de recusa). Ver `memory/forma.ts`.
+/**
+ * 18-F Bloco 4 — módulo PURO, sem imports de runtime, como `@/lib/ai/constants`. O enum do
+ * panorama sai da mesma união que o catálogo e a allowlist do SQL usam, e há teste amarrando
+ * as três.
+ */
+import { EXPERIENCIA_IDS } from "@/lib/ai/experiences/contracts";
 import { MODULOS_DE_MEMORIA } from "@/lib/ai/memory/contracts";
 import { formaDaMemoria, MOTIVO_DA_RECUSA } from "@/lib/ai/memory/forma";
 
@@ -156,11 +162,19 @@ export type PageContextInput = z.infer<typeof pageContextSchema>;
 
 // ─────────────────────────── Chat ───────────────────────────
 
-/**
- * O payload aceito por `/api/ia/chat`, E NADA ALÉM DISTO.
- * `conversationId` ausente = conversa nova.
- */
-export const chatRequestSchema = z
+/** Preferências de rota que as DUAS formas do payload aceitam, escritas uma vez só. */
+const preferenciaDeProvedor = {
+  providerPreference: aiProviderEnum.optional(),
+  modelPreference: z
+    .string()
+    .trim()
+    .min(1, "Modelo inválido.")
+    .max(120, "Modelo inválido.")
+    .optional(),
+};
+
+/** Uma MENSAGEM do dono. `conversationId` ausente = conversa nova. */
+export const chatMensagemSchema = z
   .object({
     conversationId: z.uuid("Conversa inválida").optional(),
     text: z
@@ -176,15 +190,37 @@ export const chatRequestSchema = z
       .optional(),
     /** Ausente = a tela não mandou contexto. Ver `pageContextSchema`. */
     pageContext: pageContextSchema.optional(),
-    providerPreference: aiProviderEnum.optional(),
-    modelPreference: z
-      .string()
-      .trim()
-      .min(1, "Modelo inválido.")
-      .max(120, "Modelo inválido.")
-      .optional(),
+    ...preferenciaDeProvedor,
+    /** 18-F Bloco 4 — o MODO caixa de entrada. Ausente = conversa normal. */
+    caixaDeEntrada: z.boolean({ error: "Modo inválido." }).optional(),
   })
   .strict();
+
+/**
+ * Um PANORAMA. Só o id de um roteiro do servidor — e mais nada.
+ *
+ * ⛔ SEM `text` E SEM `conversationId`, e a ausência é a garantia, não um `if`. O título e o
+ * prompt saem do CATÁLOGO, no servidor; a experiência sempre abre conversa nova (§7.3).
+ */
+export const chatExperienciaSchema = z
+  .object({
+    experiencia: z.enum(EXPERIENCIA_IDS, { error: "Panorama não reconhecido." }),
+    ...preferenciaDeProvedor,
+  })
+  .strict();
+
+/**
+ * O payload aceito por `/api/ia/chat`, E NADA ALÉM DISTO.
+ *
+ * ⛔ DUAS FORMAS, e a separação é a garantia. Um schema único com `text` opcional deixaria
+ * representável um panorama com texto injetado pelo cliente — e o servidor teria de recusá-lo
+ * num `if`. Duas formas `.strict()` fazem isso não existir (invariantes 67 e 79).
+ *
+ * ⚠️ `z.union` tenta na ordem e devolve o primeiro sucesso. Como as duas são `.strict()` e não
+ * compartilham campo OBRIGATÓRIO, não há ambiguidade: um corpo com `text` falha na segunda
+ * (campo a mais), um com `experiencia` falha na primeira (campo a mais + `text` ausente).
+ */
+export const chatRequestSchema = z.union([chatMensagemSchema, chatExperienciaSchema]);
 
 export type ChatRequestInput = z.infer<typeof chatRequestSchema>;
 

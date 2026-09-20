@@ -785,6 +785,65 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
     expect(violacoes).toEqual([]);
   });
 
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ 18-F Bloco 4 — AS DUAS PONTAS DO CATÁLOGO (§9.2), pela razão da invariante 80.      ║
+   * ║                                                                                     ║
+   * ║ Quem lê o catálogo decide o que uma experiência lê e com que prompt ela é escrita.  ║
+   * ║ Espalhar isso daria a qualquer arquivo o poder de montar um "plano" e passá-lo ao   ║
+   * ║ `runChat` — com lista de ferramentas própria e prompt próprio, sem passar por       ║
+   * ║ `allow_cross_module` nem pela recusa de "todos os módulos pulados".                 ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  it("SÓ o experience-runner importa `experiences/catalog`", () => {
+    const alvo = /(^|\/)ai\/experiences\/catalog$|^\.\.\/experiences\/catalog$/;
+    const donos: string[] = [];
+
+    for (const arquivo of listarArquivos(SRC)) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      for (const spec of especificadores(codigo)) {
+        if (alvo.test(spec)) {
+          donos.push(path.relative(SRC, arquivo).replace(/\\/g, "/"));
+        }
+      }
+    }
+
+    expect(donos).toEqual(["lib/ai/server/experience-runner.ts"]);
+  });
+
+  it("SÓ o Route Handler do chat alcança `server/experience-runner`", () => {
+    const alvo = /(^|\/)ai\/server\/experience-runner$|^\.\/experience-runner$/;
+    const donos: string[] = [];
+
+    for (const arquivo of listarArquivos(SRC)) {
+      if (arquivo.endsWith(".test.ts")) continue;
+      const codigo = fs.readFileSync(arquivo, "utf8");
+      for (const spec of especificadores(codigo)) {
+        if (alvo.test(spec)) {
+          donos.push(path.relative(SRC, arquivo).replace(/\\/g, "/"));
+        }
+      }
+    }
+
+    expect(donos).toEqual(["app/api/ia/chat/route.ts"]);
+  });
+
+  /**
+   * ⛔ O PLANO É UM OBJETO, E POR ISSO O `chat-runner` NÃO PRECISA DO CATÁLOGO.
+   *
+   * Ele executa uma lista que RECEBEU: não tem como buscar uma experiência, inventar uma
+   * ferramenta nem trocar o prompt de redação. Irrepresentável vence recusado — a mesma
+   * escolha de `LeituraDoDono` (invariante 79) e do campo `confianca` ausente (67).
+   */
+  it("o chat-runner NÃO conhece o catálogo — ele executa um plano que recebeu", () => {
+    const codigo = fs.readFileSync(path.join(RAIZ, "server", "chat-runner.ts"), "utf8");
+    for (const spec of especificadores(codigo)) {
+      expect(spec, `chat-runner importou ${spec}`).not.toMatch(/experiences\/catalog$/);
+      expect(spec, `chat-runner importou ${spec}`).not.toMatch(/experiences\/selection$/);
+    }
+  });
+
   it("a rota do Cron de insights confere CRON_SECRET antes de qualquer outra coisa", () => {
     // O proxy libera `/api/cron/*` (PUBLIC_PATHS). Sem esta checagem NA PRÓPRIA ROTA, ela
     // seria pública — e ela gasta dinheiro.
