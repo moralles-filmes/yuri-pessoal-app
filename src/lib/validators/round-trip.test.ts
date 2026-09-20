@@ -479,6 +479,10 @@ describe("Fase 18-A — schemas de IA aceitam a própria saída", () => {
       reservationMargin: 1.15,
       rateLimitPerMinute: 10,
       rateLimitPerHour: 120,
+      // 18-F Bloco 2. Escritas à mão pelo mesmo motivo das duas acima: não são módulos, e não
+      // autorizam nada — dizem onde o botão flutuante fica e se ele aparece.
+      floatingCorner: "direita",
+      floatingHidden: false,
     });
     expect(prefs.noServidor.success, fieldErrors(prefs.noServidor.error)).toBe(true);
   });
