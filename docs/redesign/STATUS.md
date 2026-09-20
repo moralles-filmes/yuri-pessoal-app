@@ -616,13 +616,21 @@ que é justamente a afirmação que a 03-B precisa fazer. As três coisas a enca
 ✅ **O `R4` voltou do outro chat, foi revisado com mutação independente e integrado** em
 `1b5aa28`. Não há nada pendente de outra frente.
 
-⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` está **16 commits à frente da
-`main`** e segue **sem upstream**. `feat/redesign-r4-deeplinks` e
-`feat/redesign-03a-caracterizacao` já estão contidas nela e podem ser apagadas quando você
-quiser.
+⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` segue **sem upstream**.
+`feat/redesign-r4-deeplinks` e `feat/redesign-03a-caracterizacao` já estão contidas nela e
+podem ser apagadas quando você quiser.
 
-⚠️ **O 16 foi MEDIDO, não contado** (D34) — `git rev-list --count main..HEAD`. O número que
-estava aqui antes do merge (**11**) estava errado: `a4bed98` já era **12**. E esse `a4bed98`
-se chama literalmente *"corrige a contagem de commits locais (11, não 10)"* — ou seja, a
-contagem foi corrigida uma vez e **continuou errada**. É a terceira vez que um número contado
-à mão erra nesta branch (as outras duas estão na D27).
+⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA MAIS AQUI — meça** (D34):
+
+```bash
+git rev-list --count main..feat/redesign-00-auditoria
+```
+
+Eram **16** no merge `d4d4faf`. Antes dele este documento dizia **11**, e `a4bed98` já era
+**12** — sendo que `a4bed98` se chama literalmente *"corrige a contagem de commits locais
+(11, não 10)"*: a contagem foi corrigida uma vez e **continuou errada**. Terceira vez que um
+número contado à mão erra nesta branch (as outras duas na D27).
+
+⛔ **E há um motivo estrutural para não cravá-lo:** o commit que escreve o número o torna
+obsoleto no ato. Cravar 16 fez virar 17; corrigir para 17 faria virar 18. **Número que o
+próprio ato de registrar invalida não é um fato a documentar, é um comando a documentar.**
