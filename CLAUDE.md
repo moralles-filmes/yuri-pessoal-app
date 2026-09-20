@@ -785,8 +785,12 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
      roteiro escrito por nós ele não se aplica — mas "não se aplica" não vira "não há teto":
      `MAX_FERRAMENTAS_POR_EXPERIENCIA = 5`, o catálogo é validado contra ele em teste, e
      `computeReservation` reserva sobre **esse** número, nunca sobre a lista em runtime. E só
-     ferramenta de **LEITURA** entra: uma de escrita criaria proposta sem o dono ter pedido
-     nada. ⛔ **Nenhuma porta nova de leitura** — as experiências entram pelo Tool Executor,
+     ferramenta de **LEITURA** entra — recusada **em runtime** por `decidirLeituras`
+     (`descriptor.kind !== "leitura"`), não só pelo teste do catálogo: o laço dirigido chama
+     `executeTool` sem `modo`, e o executor fixa `"proposta"` por dentro, então uma de escrita
+     que chegasse às leituras criaria proposta em `ai_action_proposals` **a cada clique no
+     atalho**, sem o dono nem o modelo terem pedido. Teste só protege quem roda a suíte.
+     ⛔ **Nenhuma porta nova de leitura** — as experiências entram pelo Tool Executor,
      com `guard.ts` e linha em `ai_tool_calls`; `insights/collectors/` (invariante 71) continua
      sendo a única exceção e **não cresce**. O motivo de não deixar o modelo dirigir está
      medido: "Planejar meu dia" lê quatro módulos, e pedindo um por vez o teto cortaria antes
@@ -810,7 +814,13 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
      (a lição do `NO_INDICATORS` da 18-E). ⛔ A frase do que ficou de fora é **nossa** e entra
      no texto gravado, no **fim** do ramo de sucesso: tentativa nova zera o texto (invariante
      23), e pedi-la ao modelo seria obediência "quase sempre" — num panorama diário, uma
-     omissão por mês.
+     omissão por mês. ⛔ **E são DUAS frases, não uma:** módulo pulado por preferência
+     (`avisoDoQueFicouDeFora`, que manda o dono a `/ia/configuracoes`) e leitura que **falhou**
+     (`falhas.ts`, que **não** manda — a chave já está ligada). Sem a segunda, a garantia da
+     falha era o bloco de erro pedindo ao modelo "diga que não conseguiu obter o dado" —
+     instrução, não garantia: redigindo texto corrido ele omite o módulo e o panorama sai
+     **parecendo completo**. `rejeitada` conta como falha junto com `falhou`/`timeout`, porque
+     a chave pode cair **entre** a seleção e a execução, e esse pulo o plano não conhece.
 
 104. ⛔ **O PLANO É UM OBJETO, E POR ISSO O `chat-runner` NÃO CONHECE O CATÁLOGO.**
      `experience-runner.ts` lê o catálogo, confere as chaves, deriva os argumentos do dia e
@@ -865,7 +875,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.682 testes / 182 arquivos em 2026-09-22 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.693 testes / 183 arquivos em 2026-09-22 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

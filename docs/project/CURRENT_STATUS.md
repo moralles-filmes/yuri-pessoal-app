@@ -9,7 +9,7 @@
 Plano em `docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md` (§7 da spec).
 Branch `feat/18-f-memoria-integracoes`. **Uma migration, e ela NÃO CRIA TABELA:** um valor no
 CHECK de `ai_runs.kind` e uma RPC de admissão. Banco continua em **132 tabelas** no `public`,
-**20 `ai_*`** (reconferido no banco em 2026-09-22). Suíte em **3.682 testes / 182 arquivos**.
+**20 `ai_*`** (reconferido no banco em 2026-09-22). Suíte em **3.693 testes / 183 arquivos**.
 Registry, commands e agentes **inalterados** — este bloco não acrescentou nenhum dos três.
 
 *Planejar meu dia* · *Encerrar meu dia* · *Planejar minha semana*: o servidor decide o que ler,
@@ -107,6 +107,33 @@ conhecida que este bloco **não piorou**.
 
 ⚠️ **Falta a conferência manual do dono** (tabela de 10 itens no Passo 4 da Task 8 do plano):
 nenhum teste do repositório percorre o salvamento de `/ia/configuracoes` nem o desenho em 320 px.
+
+### Auditoria do bloco (2026-09-22) — 2 correções e 1 risco aceito
+
+Três auditorias read-only (RLS da migration, IA/automação, processo e integridade): **zero
+P0/P1**. A migration passou limpa nos dez controles (invoker, `search_path`, `auth.uid()` sem
+parâmetro de dono, GRANT batendo com a assinatura, `with check` de cada `insert`, lock
+transacional). Dois P2 viraram código, os dois da mesma família — **uma garantia que dependia
+de alguém obedecer**:
+
+1. **Só leitura entra, agora em runtime.** `decidirLeituras` recusa `kind !== "leitura"`. O
+   catálogo já era varrido por teste, mas teste só protege quem roda a suíte — e o laço
+   dirigido chama `executeTool` sem `modo` (o executor fixa `"proposta"` por dentro), então uma
+   ferramenta de escrita no catálogo criaria proposta **a cada clique no atalho**.
+2. **Leitura que falhou tem frase nossa** (`experiences/falhas.ts`). Até aqui a garantia era o
+   bloco de erro pedindo ao modelo "diga que não conseguiu obter o dado" — instrução, não
+   garantia. É a mesma decisão que já tinha sido tomada para o módulo pulado, aplicada ao caso
+   que faltava.
+
+⚠️ **Risco aceito, não corrigido:** o atalho de panorama **não tem idempotência no servidor**.
+Duplo clique realmente concorrente geraria duas conversas e dois gastos. O freio hoje é o
+estado `enviando` do cliente, que cobre o gesto real (`click` é evento discreto e o React
+libera o estado antes do segundo). A recusa sugerida — barrar se já houver run `reserved`/
+`streaming` da mesma experiência — **bloquearia o dono por até 5 minutos** depois de fechar a
+aba no meio de um panorama, até a reconciliação preguiçosa soltar a reserva. Trocar um
+aborrecimento de custo (que o orçamento já limita) por uma funcionalidade travada não compensa
+**neste sistema single-user**. Se o dono vir conversa duplicada na prática, a saída é o token
+de idempotência por clique (como `client_mutation_id` da 17-C), não a recusa por run aberto.
 
 ## 🟡 18-F · Bloco 3 — o assistente conhece as preferências do dono (2026-09-20)
 

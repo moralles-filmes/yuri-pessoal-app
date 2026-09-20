@@ -43,7 +43,7 @@ navegador com sessão. Os que mais importam:
 Três panoramas de um clique com leitura **dirigida pelo servidor**, e um **modo** Caixa de
 entrada. **Uma migration, e ela NÃO CRIA TABELA:** um valor no CHECK de `ai_runs.kind` e a RPC
 `ai_begin_experience_run`. Banco continua em **132 tabelas**, **20 `ai_*`**. Registry (30),
-commands (15) e agentes (9) **inalterados**. Suíte em **3.682 testes / 182 arquivos**. Plano
+commands (15) e agentes (9) **inalterados**. Suíte em **3.693 testes / 183 arquivos**. Plano
 executado: `docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md`. As oito decisões e
 os números do orçamento estão em `docs/project/CURRENT_STATUS.md`.
 
@@ -56,8 +56,22 @@ os números do orçamento estão em `docs/project/CURRENT_STATUS.md`.
 - ⛔ **`MAX_TOOL_STEPS` não se aplica ao laço dirigido — e isso não é "não há teto".**
   `MAX_FERRAMENTAS_POR_EXPERIENCIA = 5`, validado contra o catálogo em teste, e
   `computeReservation` reserva sobre **esse** número, nunca sobre `leituras.length`.
-- ⛔ **Só ferramenta de LEITURA entra num catálogo** (teste sobre o registry real). Uma de
-  escrita criaria proposta sem o dono ter pedido nada.
+- ⛔ **Só ferramenta de LEITURA entra num catálogo, e a recusa é EM RUNTIME.** `decidirLeituras`
+  confere `descriptor.kind` além do teste sobre o registry real — a auditoria do bloco mostrou
+  por quê: o laço dirigido chama `executeTool` **sem `modo`**, e o executor fixa `"proposta"`
+  por dentro, então uma ferramenta de escrita no catálogo criaria proposta em
+  `ai_action_proposals` **a cada clique no atalho**, sem o dono nem o modelo terem pedido. Teste
+  só protege quem roda a suíte.
+- ⛔ **SÃO DUAS FRASES NOSSAS NO TEXTO GRAVADO, NÃO UMA:** módulo pulado por preferência
+  (`selection.ts`, manda o dono a `/ia/configuracoes`) e leitura que **falhou**
+  (`experiences/falhas.ts`, **não** manda — a chave já está ligada). A segunda nasceu da
+  auditoria: o bloco de erro pedia ao modelo "diga que não conseguiu obter o dado", e isso é
+  instrução, não garantia. `rejeitada` conta como falha junto com `falhou`/`timeout` — a chave
+  pode cair **entre** a seleção e a execução, e esse pulo o plano não conhece.
+- ⚠️ **O atalho NÃO tem idempotência no servidor, e isso é risco aceito, não esquecimento.**
+  Ver o porquê em `CURRENT_STATUS.md` (a recusa por run aberto travaria o dono por até 5 min
+  depois de fechar a aba). Se aparecer conversa duplicada na prática, a saída é token de
+  idempotência por clique, não recusa por run aberto.
 - ⛔ **Três fronteiras novas, todas confirmadas por mutação:** só `experience-runner` importa
   `experiences/catalog`; só `app/api/ia/chat/route.ts` alcança `server/experience-runner`; o
   `chat-runner` não importa nem o catálogo nem a seleção. **Nenhum `.from()` em `experiences/`**,
