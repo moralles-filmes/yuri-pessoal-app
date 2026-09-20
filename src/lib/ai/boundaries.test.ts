@@ -143,6 +143,15 @@ const CAMADAS_PURAS = [
    * pagou para aprender com `memory/`.
    */
   "experiences",
+  /**
+   * 18-F Bloco 5. `evals/` é dado e afirmação: os casos do briefing e o que o sistema garante
+   * sobre eles, com a rede desligada. Nada ali fala com provedor, banco ou `ai/server/`.
+   *
+   * ⚠️ Ela entra na lista NO MESMO COMMIT em que a pasta nasce, pela mesma razão de `memory/`
+   * e `experiences/`: a lista é escrita à mão, e uma pasta FORA dela passa VACUAMENTE VERDE.
+   * É a terceira vez que esta frase precisa ser escrita neste arquivo.
+   */
+  "evals",
 ] as const;
 
 describe("fronteiras arquiteturais do módulo de IA", () => {
