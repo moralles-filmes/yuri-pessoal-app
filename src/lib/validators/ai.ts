@@ -24,6 +24,10 @@ import {
   type ModuloComContexto,
   type RotaComContexto,
 } from "@/lib/ai/constants";
+// 18-F Bloco 3. Mesma razão: os dois módulos da memória não têm um único import, e a TELA os
+// lê (o contador de caracteres e a mensagem de recusa). Ver `memory/forma.ts`.
+import { MODULOS_DE_MEMORIA } from "@/lib/ai/memory/contracts";
+import { formaDaMemoria, MOTIVO_DA_RECUSA } from "@/lib/ai/memory/forma";
 
 export {
   MAX_CHAT_TEXT,
@@ -533,4 +537,56 @@ export const tarefaDeInsightSchema = z
       .optional(),
     projeto: z.string().trim().min(1).max(120).optional(),
   })
+  .strict();
+
+/**
+ * 18-F Bloco 3 — a memória escrita PELO DONO, na tela `/ia/memoria`.
+ *
+ * ⚠️ A validação de FORMA não é reimplementada aqui: `formaDaMemoria` (puro, sem um único
+ * import) é a fonte, e o `superRefine` a chama. Uma segunda regra de forma divergiria da do
+ * servidor no primeiro ajuste, e a tela aceitaria o que a gravação recusa — ou o contrário,
+ * que é pior: o dono lendo "salvo" sobre algo que o banco rejeitou.
+ *
+ * ⛔ Não há campo `origem`: quem escreve por aqui é sempre o dono, e a coluna é preenchida
+ * pelo serviço. Aceitá-la do cliente deixaria a tela declarar uma memória como "proposta pelo
+ * assistente" — um selo que a própria tela exibe.
+ */
+export const memoriaSchema = z
+  .object({
+    id: z.uuid().nullish(),
+    conteudo: z.string(),
+    modulo: z
+      .enum(MODULOS_DE_MEMORIA)
+      .nullish()
+      .transform((v) => v ?? null),
+    /**
+     * ⚠️ O REGEX ACEITA A STRING VAZIA, e isso não é folga — é o que um `<input type="date">`
+     * vazio de fato manda. `.regex()` roda ANTES do `.transform()`, então um padrão
+     * `^\d{4}-\d{2}-\d{2}$` recusaria `""` com "Use uma data válida" num campo que o dono
+     * deixou em branco de propósito, e o formulário nunca salvaria.
+     */
+    expiraEm: z
+      .string()
+      .regex(/^(\d{4}-\d{2}-\d{2})?$/, "Use uma data válida")
+      .nullish()
+      .transform((v) => (v === undefined || v === "" ? null : v)),
+  })
+  .strict()
+  .superRefine((valor, ctx) => {
+    const r = formaDaMemoria(valor.conteudo);
+    if (!r.ok) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["conteudo"],
+        message: MOTIVO_DA_RECUSA[r.motivo],
+      });
+    }
+  });
+
+/** As três ações que só precisam do alvo: desativar/reativar, esquecer e apagar. */
+export const memoriaIdSchema = z.object({ id: z.uuid("Memória inválida") }).strict();
+
+/** Desativar e reativar são a MESMA ação com sentido oposto — um schema, não dois. */
+export const alternarMemoriaSchema = z
+  .object({ id: z.uuid("Memória inválida"), ligar: z.boolean() })
   .strict();

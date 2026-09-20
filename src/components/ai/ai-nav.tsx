@@ -12,6 +12,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Brain,
   Gauge,
   History,
   Lightbulb,
@@ -31,6 +32,7 @@ const ICONS: Record<string, LucideIcon> = {
   history: History,
   receipt: ReceiptText,
   lightbulb: Lightbulb,
+  brain: Brain,
   gauge: Gauge,
   settings: Settings,
 };

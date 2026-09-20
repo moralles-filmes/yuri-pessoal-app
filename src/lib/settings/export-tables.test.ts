@@ -121,6 +121,10 @@ describe("Fase 18-F — seção de IA", () => {
       "ai_insights",
       "ai_action_executions",
       "ai_user_preferences",
+      // 18-F Bloco 3 — as duas, e a segunda não é detalhe: sem o evento, restaurar traria as
+      // frases e perderia a história delas, e o estado derivado sairia errado.
+      "ai_memories",
+      "ai_memory_events",
     ] as const) {
       expect(EXPORT_TABLES).toContain(t);
     }
@@ -134,6 +138,18 @@ describe("Fase 18-F — seção de IA", () => {
 
   it("a configuração de provedor entra — ela não guarda segredo", () => {
     expect(EXPORT_TABLES).toContain("ai_provider_configs");
+  });
+
+  /**
+   * ⚠️ O NÚMERO É CONFERIDO, e ele só sobe quando alguém decide que sobe. Eram 17 `ai_*` no
+   * Bloco 1; a memória levou a 19. Uma tabela `ai_*` nova que NÃO entre aqui é dado do dono
+   * ficando de fora do backup sem ninguém perceber — e uma que entre por engano (a de
+   * credenciais) é o oposto, pior.
+   */
+  it("são 19 tabelas de IA no backup, e nenhuma delas é a de credenciais", () => {
+    const deIa = (EXPORT_TABLES as readonly string[]).filter((t) => t.startsWith("ai_"));
+    expect(deIa).toHaveLength(19);
+    expect(deIa).not.toContain("ai_provider_credentials");
   });
 
   it("não perdeu as seções das outras frentes", () => {

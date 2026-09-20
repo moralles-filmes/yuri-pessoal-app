@@ -11,8 +11,9 @@
  * `lib/ai/approval/history.ts`). Um valor fora dessa lista não dá 404 — é pior: a página
  * ignora em silêncio e mostra TODAS as ações, e o aviso do sino leva a lugar nenhum.
  *
- * ⚠️ NÃO existe rota de memória ainda. `/ia/memoria` nasce no Bloco 3, e o link dela entra
- * JUNTO com a rota — nunca antes.
+ * ⚠️ 18-F Bloco 3 — a rota de memória NASCEU, e o link dela entrou NO MESMO COMMIT, que era
+ * exatamente o que o aviso do Bloco 1 pedia. Link para rota inexistente é 404, e o projeto já
+ * levou esse bug uma vez (a despensa tratada como rota própria sem ser uma, invariante 26).
  */
 
 export const AI_LINK_BASE = "/ia";
@@ -43,3 +44,6 @@ export const settingsLink = () => `${AI_LINK_BASE}/configuracoes`;
 
 /** Envio e revisão de comprovante (18-D). */
 export const receiptsLink = () => `${AI_LINK_BASE}/comprovantes`;
+
+/** As preferências que o assistente leva para toda conversa (18-F Bloco 3). */
+export const memoryLink = () => `${AI_LINK_BASE}/memoria`;

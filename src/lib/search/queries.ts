@@ -5,7 +5,7 @@
  */
 import { createClient } from "@/lib/supabase/server";
 import { dateInSaoPaulo, formatCurrency, formatDate } from "@/lib/format";
-import { actionsLink, conversationLink, insightsLink } from "./ai-links";
+import { actionsLink, conversationLink, insightsLink, memoryLink } from "./ai-links";
 import {
   ACCOUNT_TYPE_LABELS,
   CARD_BRAND_LABELS,
@@ -108,6 +108,7 @@ export async function searchAll(
     ia_conversa: [],
     ia_insight: [],
     ia_acao: [],
+    ia_memoria: [],
     notificacao: [],
   };
 
@@ -877,6 +878,36 @@ export async function searchAll(
         title: a.command,
         subtitle: formatDate(dateInSaoPaulo(new Date(a.created_at))),
         link: actionsLink(),
+      }));
+    }),
+
+    /**
+     * IA · Memória (18-F Bloco 3).
+     *
+     * ⚠️ ENCONTRA MEMÓRIA EM QUALQUER ESTADO, inclusive a esquecida e a expirada — e isso é o
+     * certo: o dono procura o que ESCREVEU, não o que está em uso. Filtrar por vigente faria
+     * a busca não achar justamente a frase que ele quer reler ou reativar; o estado aparece
+     * ao lado de cada linha na tela.
+     */
+    safe(
+      supabase
+        .from("ai_memories")
+        .select("id, content, created_at")
+        .ilike("content", like)
+        .order("created_at", { ascending: false })
+        .limit(limitPerType)
+        .then((r) => r.data ?? []),
+    ).then((rows) => {
+      byType.ia_memoria = (
+        rows as Array<{ id: string; content: string; created_at: string }>
+      ).map((m) => ({
+        type: "ia_memoria",
+        id: m.id,
+        title: m.content,
+        // ⛔ `created_at` é timestamptz: `.slice(0, 10)` devolveria o dia em UTC.
+        subtitle: formatDate(dateInSaoPaulo(new Date(m.created_at))),
+        // A lista não abre um registro por id: o link é a tela.
+        link: memoryLink(),
       }));
     }),
   ]);

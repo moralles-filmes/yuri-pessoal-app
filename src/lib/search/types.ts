@@ -36,6 +36,7 @@ export const SEARCH_TYPES = [
   "ia_conversa",
   "ia_insight",
   "ia_acao",
+  "ia_memoria",
   "notificacao",
 ] as const;
 export type SearchType = (typeof SEARCH_TYPES)[number];
@@ -69,6 +70,7 @@ export const SEARCH_TYPE_LABELS: Record<SearchType, string> = {
   ia_conversa: "IA · Conversas",
   ia_insight: "IA · Análises",
   ia_acao: "IA · Ações",
+  ia_memoria: "IA · Memória",
   notificacao: "Notificações",
 };
 

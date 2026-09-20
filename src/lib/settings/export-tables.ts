@@ -188,6 +188,11 @@ export const EXPORT_TABLES: ExportTableName[] = [
   "ai_insight_sources",
   "ai_insight_feedback",
   "ai_insight_jobs",
+  // 18-F Bloco 3. A memória é do dono: ela sai no backup e volta na restauração. O EVENTO
+  // também — sem ele, restaurar traria as frases e perderia a história delas (quando cada uma
+  // foi criada, desativada, reativada ou esquecida), e o estado derivado sairia errado.
+  "ai_memories",
+  "ai_memory_events",
 ];
 
 

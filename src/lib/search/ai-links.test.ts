@@ -6,6 +6,7 @@ import {
   conversationLink,
   conversationsLink,
   insightsLink,
+  memoryLink,
   receiptsLink,
   settingsLink,
   stuckActionsLink,
@@ -39,6 +40,8 @@ describe("ai-links", () => {
     ["consumo", usageLink()],
     ["configurações", settingsLink()],
     ["comprovantes", receiptsLink()],
+    // 18-F Bloco 3 — a rota e o link no mesmo commit. Esta linha é o que prova isso.
+    ["memória", memoryLink()],
   ])("a rota de %s tem página no disco", (_nome, rota) => {
     expect(existsSync(paginaDe(rota))).toBe(true);
   });

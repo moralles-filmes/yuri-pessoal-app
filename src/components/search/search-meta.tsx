@@ -5,6 +5,7 @@ import {
   Apple,
   ArrowLeftRight,
   Bell,
+  Brain,
   CalendarDays,
   CalendarRange,
   ChefHat,
@@ -65,6 +66,7 @@ const ICONS: Record<SearchType, LucideIcon> = {
   ia_conversa: MessagesSquare,
   ia_insight: Sparkles,
   ia_acao: Wand2,
+  ia_memoria: Brain,
   notificacao: Bell,
 };
 

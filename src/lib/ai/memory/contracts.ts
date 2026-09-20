@@ -85,3 +85,45 @@ export const MAX_MEMORIA = 300;
  * afirmação errada.
  */
 export const TETO_DE_MEMORIAS_NO_PROMPT = 20;
+
+/**
+ * 18-F Bloco 3 — rótulo pt-BR de cada estado DERIVADO de uma memória.
+ *
+ * ⚠️ "prazo encerrado" diz o que aconteceu, e não que a memória sumiu — expirar NÃO apaga, e
+ * a tela mostra ao lado a data em que ela venceu. "desativada por você" e "esquecida" nomeiam
+ * a decisão do dono, que vence o prazo nos dois sentidos.
+ */
+export const ROTULO_DO_ESTADO_DA_MEMORIA = {
+  vigente: "em uso",
+  expirada: "prazo encerrado",
+  desativada: "desativada por você",
+  esquecida: "esquecida",
+} as const;
+
+/**
+ * O aviso da tela de Memória — a §6.4 em pt-BR, no lugar em que o dono decide o que escrever.
+ *
+ * Ele não é decoração: a memória é o único texto dele que entra no prompt sem ser bloco não
+ * confiável, e a frase abaixo é a mesma promessa que a seção do prompt faz ao assistente.
+ */
+export const AVISO_DA_MEMORIA =
+  "O assistente leva estas frases para toda conversa, como preferência sua: elas orientam o estilo e a escolha dele. Elas não desligam nenhuma regra, não autorizam nenhuma leitura e não alteram nada nos seus módulos. Nada entra aqui sem você escrever ou confirmar.";
+
+/**
+ * ⚠️ OS DOIS ACIMA COMEÇARAM EM `@/lib/ai/constants` E VIERAM PARA CÁ. Aquele módulo é lido
+ * por telas de várias rotas — inclusive `/(app)/configuracoes`, que tem teto PRÓPRIO e tinha
+ * 3,6 KB de folga —, e os dois são usados SÓ pela página de memória, no servidor. É a regra 3
+ * do carregamento sob demanda vista do outro lado: não basta a constante não arrastar `zod`,
+ * ela também não pode viajar junto de quem não a usa.
+ *
+ * ⚠️ **E A MEDIÇÃO DESMENTIU O MOTIVO QUE EU TINHA ESCRITO AQUI.** `/(app)/configuracoes` foi
+ * de 281,4 para 281,6 KB gz neste bloco, e mover estes dois textos NÃO devolveu os 0,2 KB: o
+ * número ficou igual. O custo veio da CASCA, não daqui — a busca global vive no Header de
+ * todas as rotas, e `search-meta.tsx` ganhou o ícone `Brain` e `search/types.ts` ganhou o tipo
+ * `ia_memoria`. Esse custo é o preço de a memória ser encontrável, e não tem como não estar
+ * nas 68 rotas.
+ *
+ * Fica o registro, porque a explicação plausível estava errada: ao mexer no orçamento, MEÇA
+ * antes de escrever a causa. O movimento continua certo pelo argumento de cima; ele só não é
+ * o que explica o número.
+ */

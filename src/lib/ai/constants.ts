@@ -74,6 +74,19 @@ export const AI_SECTIONS: readonly AiSection[] = [
     icon: "lightbulb",
     description: "Análises sobre números que o sistema já mediu. Geradas quando você pede.",
   },
+  /**
+   * 18-F Bloco 3 — o 8º item. Entre Insights e Consumo, pelo mesmo critério que pôs Ações
+   * antes de Consumo: ele fala de COMO o assistente se comporta, que é assunto do dono, e
+   * não de quanto ele custou.
+   */
+  {
+    slug: "memoria",
+    title: "Memória",
+    href: "/ia/memoria",
+    icon: "brain",
+    description:
+      "As preferências que o assistente leva para toda conversa. Você escreve, edita e apaga aqui.",
+  },
   {
     slug: "consumo",
     title: "Consumo",
@@ -484,6 +497,7 @@ export const ROTULO_DO_COMMAND: Record<string, string> = {
   lembrarPreferencia: "Memória · salvar preferência",
   esquecerPreferencia: "Memória · esquecer preferência",
 };
+
 
 /** Command desconhecido (linha de auditoria feita por uma versão anterior do sistema). */
 export function rotuloDoCommand(nome: string): string {
