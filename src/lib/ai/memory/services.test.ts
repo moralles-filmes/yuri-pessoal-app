@@ -101,7 +101,7 @@ describe("a leitura usa o client de sessão e o estado é derivado", () => {
  */
 describe("quem fala com o banco declara server-only; quem é puro, não", () => {
   const COM_IO = ["queries.ts", "services.ts"];
-  const PUROS = ["contracts.ts", "forma.ts", "state.ts"];
+  const PUROS = ["contracts.ts", "forma.ts", "state.ts", "prompt.ts"];
 
   it.each(COM_IO)("%s declara server-only", (arquivo) => {
     expect(ler(arquivo)).toMatch(/import\s+["']server-only["']/);

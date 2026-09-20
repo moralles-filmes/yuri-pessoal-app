@@ -32,8 +32,11 @@ import { routeRequest } from "@/lib/ai/core/router";
 import { buildSystemPrompt, findAgent, promptVersionOf } from "@/lib/ai/agents/registry";
 import {
   blocoDeContextoDeRoteamento,
+  moduloDoAgente,
   routeAgent,
 } from "@/lib/ai/agents/routing";
+import { blocoDeMemorias, memoriasParaOPrompt } from "@/lib/ai/memory/prompt";
+import { getMemoriasVigentes } from "@/lib/ai/memory/queries";
 import type { ToolCallStatus } from "@/lib/ai/tools/audit";
 import type { PropostaParaATela } from "@/lib/ai/tools/executor";
 import { toolDefinitionsFor, UNEXPECTED_TOOL_CALL } from "@/lib/ai/tools/registry";
@@ -225,9 +228,35 @@ export async function* runChat(
   // A rota vai junto: ela diz QUAL tela o usuário tinha aberto, o que inclina a escolha da
   // ferramenta. Continua sendo fato do sistema — `blocoDeContextoDeRoteamento` a converte
   // numa descrição de allowlist e ignora o que não estiver nela.
+  /**
+   * ⚠️ 18-F Bloco 3 — A MEMÓRIA ENTRA POR ÚLTIMO, e a ordem é a garantia (§6.4). O prompt de
+   * SEGURANÇA vem primeiro, o perfil do agente depois, o contexto do roteamento depois, e só
+   * então as preferências do dono. Uma frase dele acima das travas seria injeção com um passo
+   * humano no meio. `memory/prompt.test.ts` varre esta concatenação.
+   *
+   * ⚠️ E isto NÃO muda `promptVersionOf(agent)`. A versão registrada em `ai_runs` descreve o
+   * PROMPT-BASE e o perfil; memória e contexto de roteamento são dado desta execução, como já
+   * era o bloco de rota. Subir a versão a cada memória nova tornaria a coluna inútil.
+   *
+   * ⚠️ Custo: duas consultas a mais por mensagem, e SÓ com `allow_memory` ligada. Elas são
+   * pequenas e recortadas pela RLS; ler memória junto do histórico acoplaria duas leituras
+   * que não têm nada em comum.
+   */
+  const memorias = prefs.permissions.allow_memory
+    ? await getMemoriasVigentes(input.userId, input.agora)
+    : [];
+
   const system =
     buildSystemPrompt(agent) +
-    blocoDeContextoDeRoteamento(decisao.motivo, input.pageContext?.rota ?? null);
+    blocoDeContextoDeRoteamento(decisao.motivo, input.pageContext?.rota ?? null) +
+    blocoDeMemorias(
+      memoriasParaOPrompt({
+        memorias,
+        moduloDoAgente: moduloDoAgente(agent.id),
+        permissions: prefs.permissions,
+        allowMemory: prefs.permissions.allow_memory,
+      }),
+    );
   const historico = input.conversationId
     ? await getHistoryForPrompt(input.userId, input.conversationId)
     : [];
