@@ -108,9 +108,25 @@ export function FloatingAssistantPanel({
     onAtividade,
   });
 
-  // A prontidão é buscada UMA vez, na montagem — e a montagem só acontece na primeira
-  // abertura, porque quem monta este componente é o `useLazyDialog` do botão.
+  /*
+    A prontidão é reconsultada A CADA ABERTURA, e não uma vez na montagem.
+
+    Este componente sobrevive à sessão inteira (`useLazyDialog` monta e não desmonta mais),
+    então o que ele leu na primeira abertura envelhece junto com ele. Preso à montagem, o dono
+    que configurasse um provedor em `/ia/configuracoes` e voltasse por navegação de cliente
+    continuaria vendo "configure um provedor" até recarregar a página inteira.
+
+    ⚠️ E é `estadoDoPainelDaIa` quem chama `reconcileOwnRuns()` (invariante 92): preso à
+    montagem, o gatilho preguiçoso dispararia 1× por carregamento, não a cada vez que o dono
+    abre o chat. Reconsultar durante um streaming é seguro — a reconciliação só alcança run com
+    heartbeat vencido há `LEASE_MINUTOS` (5 min), e um streaming vivo bate a cada 10 s.
+
+    `prontidao` NÃO volta a `null` aqui: reabrir mostra a conversa na hora, e a prontidão se
+    corrige em silêncio se tiver mudado. Piscar o "Preparando o assistente…" a cada abertura
+    esconderia a conversa que o dono acabou de reabrir para ler.
+  */
   React.useEffect(() => {
+    if (!aberto) return;
     let vivo = true;
     estadoDoPainelDaIa()
       .then((r) => {
@@ -127,7 +143,7 @@ export function FloatingAssistantPanel({
     return () => {
       vivo = false;
     };
-  }, []);
+  }, [aberto]);
 
   async function salvarPreferencia(proximo: { canto: CantoDoBotao; oculto: boolean }) {
     setSalvando(true);

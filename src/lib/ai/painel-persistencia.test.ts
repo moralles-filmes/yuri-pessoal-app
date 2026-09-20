@@ -88,6 +88,32 @@ describe("18-F Bloco 2 — a conversa do painel sobrevive ao fechamento", () => 
     expect(painel).not.toContain("<ChatClient");
   });
 
+  it("abrir o painel reconsulta a prontidão, em vez de confiar no que cacheou", () => {
+    /*
+      O OUTRO LADO DA MOEDA. O painel agora sobrevive à sessão inteira — logo, o que ele leu
+      UMA vez na montagem envelhece junto com ele. São dois prejuízos:
+
+        1. o dono configura um provedor em `/ia/configuracoes`, volta por navegação de
+           cliente (que não remonta a casca) e o painel continua dizendo que não dá para
+           conversar — para sempre, até um recarregamento completo;
+        2. `estadoDoPainelDaIa` é quem chama `reconcileOwnRuns()` (invariante 92). Preso à
+           montagem, o gatilho preguiçoso dispararia 1× por carregamento de página, e não a
+           cada vez que o dono abre o chat.
+
+      Reconsultar durante um streaming é seguro: a reconciliação só alcança run com heartbeat
+      vencido há 5 min (`LEASE_MINUTOS`), e um streaming vivo bate a cada 10 s.
+    */
+    const chamada = painel.indexOf("estadoDoPainelDaIa()");
+    expect(chamada, "o painel não chama `estadoDoPainelDaIa`").toBeGreaterThan(-1);
+
+    const deps = painel.slice(chamada).match(/\}, \[([^\]]*)\]\);/);
+    expect(deps, "não achei o array de dependências do efeito").not.toBeNull();
+    expect(
+      deps?.[1],
+      "o efeito está preso à montagem — abrir o painel não reconsulta nada",
+    ).toContain("aberto");
+  });
+
   it("o cancelamento por desmontagem pertence ao motor, não à vista", () => {
     // É a linha 2 do defeito. Se `abortRef` (e o efeito que o aborta ao desmontar) voltar para
     // dentro de `ChatView`, fechar a gaveta cancela a resposta de novo — a pergunta ficaria na
