@@ -41,9 +41,10 @@ navegador com sessão. Os que mais importam:
 ### ✅ Bloco 4 — as experiências (2026-09-22)
 
 Três panoramas de um clique com leitura **dirigida pelo servidor**, e um **modo** Caixa de
-entrada. **Uma migration, e ela NÃO CRIA TABELA:** um valor no CHECK de `ai_runs.kind` e a RPC
-`ai_begin_experience_run`. Banco continua em **132 tabelas**, **20 `ai_*`**. Registry (30),
-commands (15) e agentes (9) **inalterados**. Suíte em **3.693 testes / 183 arquivos**. Plano
+entrada. **Duas migrations, e NENHUMA cria tabela:** um valor no CHECK de `ai_runs.kind` e a RPC
+`ai_begin_experience_run`; depois, a janela de dedupe do clique duplo, por `create or replace`
+da mesma função. Banco continua em **132 tabelas**, **20 `ai_*`**. Registry (30),
+commands (15) e agentes (9) **inalterados**. Suíte em **3.701 testes / 183 arquivos**. Plano
 executado: `docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md`. As oito decisões e
 os números do orçamento estão em `docs/project/CURRENT_STATUS.md`.
 
@@ -68,10 +69,17 @@ os números do orçamento estão em `docs/project/CURRENT_STATUS.md`.
   auditoria: o bloco de erro pedia ao modelo "diga que não conseguiu obter o dado", e isso é
   instrução, não garantia. `rejeitada` conta como falha junto com `falhou`/`timeout` — a chave
   pode cair **entre** a seleção e a execução, e esse pulo o plano não conhece.
-- ⚠️ **O atalho NÃO tem idempotência no servidor, e isso é risco aceito, não esquecimento.**
-  Ver o porquê em `CURRENT_STATUS.md` (a recusa por run aberto travaria o dono por até 5 min
-  depois de fechar a aba). Se aparecer conversa duplicada na prática, a saída é token de
-  idempotência por clique, não recusa por run aberto.
+- ⛔ **O CLIQUE DUPLO É DEDUPLICADO NO BANCO, POR UMA JANELA — E AS DUAS CONDIÇÕES IMPORTAM.**
+  O passo 5b de `ai_begin_experience_run` recusa (`AI_EXPERIENCE_JUST_STARTED`) quando já há
+  run de experiência **do mesmo `agent_id`**, ainda **aberto** (`reserved`/`streaming`) **e**
+  criado **há menos de 15 s**. Só a primeira condição travaria o dono por 5 minutos (a lease
+  da reconciliação) depois de ele fechar a aba; só a segunda recusaria o retry de um panorama
+  que acabou de falhar. A checagem vem **depois** do advisory lock, senão ela mesma tem
+  corrida. O estado `enviando` do cliente **não** substitui isso: ele não atravessa duas
+  requisições HTTP nem duas telas (a página e o painel têm estados independentes).
+- ⚠️ **SÃO DUAS MIGRATIONS neste bloco, não uma** — `20260922100000` (a 4ª espécie + a RPC) e
+  `20260922110000` (`create or replace` da mesma função, com o passo 5b). Nenhuma das duas cria
+  tabela, coluna ou índice. A aplicada **não se edita**: correção vira arquivo novo.
 - ⛔ **Três fronteiras novas, todas confirmadas por mutação:** só `experience-runner` importa
   `experiences/catalog`; só `app/api/ia/chat/route.ts` alcança `server/experience-runner`; o
   `chat-runner` não importa nem o catálogo nem a seleção. **Nenhum `.from()` em `experiences/`**,

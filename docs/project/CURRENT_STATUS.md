@@ -7,9 +7,10 @@
 ## 🟡 18-F · Bloco 4 — três panoramas de um clique (2026-09-22)
 
 Plano em `docs/superpowers/plans/2026-09-20-18f-bloco4-experiencias.md` (§7 da spec).
-Branch `feat/18-f-memoria-integracoes`. **Uma migration, e ela NÃO CRIA TABELA:** um valor no
-CHECK de `ai_runs.kind` e uma RPC de admissão. Banco continua em **132 tabelas** no `public`,
-**20 `ai_*`** (reconferido no banco em 2026-09-22). Suíte em **3.693 testes / 183 arquivos**.
+Branch `feat/18-f-memoria-integracoes`. **Duas migrations, e NENHUMA cria tabela:** um valor no
+CHECK de `ai_runs.kind` e uma RPC de admissão; depois, a janela de dedupe do clique duplo, por
+`create or replace` da mesma função. Banco continua em **132 tabelas** no `public`,
+**20 `ai_*`** (reconferido no banco em 2026-09-22). Suíte em **3.701 testes / 183 arquivos**.
 Registry, commands e agentes **inalterados** — este bloco não acrescentou nenhum dos três.
 
 *Planejar meu dia* · *Encerrar meu dia* · *Planejar minha semana*: o servidor decide o que ler,
@@ -108,13 +109,13 @@ conhecida que este bloco **não piorou**.
 ⚠️ **Falta a conferência manual do dono** (tabela de 10 itens no Passo 4 da Task 8 do plano):
 nenhum teste do repositório percorre o salvamento de `/ia/configuracoes` nem o desenho em 320 px.
 
-### Auditoria do bloco (2026-09-22) — 2 correções e 1 risco aceito
+### Auditoria do bloco (2026-09-22) — os 3 P2 corrigidos
 
 Três auditorias read-only (RLS da migration, IA/automação, processo e integridade): **zero
 P0/P1**. A migration passou limpa nos dez controles (invoker, `search_path`, `auth.uid()` sem
 parâmetro de dono, GRANT batendo com a assinatura, `with check` de cada `insert`, lock
-transacional). Dois P2 viraram código, os dois da mesma família — **uma garantia que dependia
-de alguém obedecer**:
+transacional). Os três P2 viraram código. Os dois primeiros são a mesma família — **uma
+garantia que dependia de alguém obedecer**:
 
 1. **Só leitura entra, agora em runtime.** `decidirLeituras` recusa `kind !== "leitura"`. O
    catálogo já era varrido por teste, mas teste só protege quem roda a suíte — e o laço
@@ -125,15 +126,29 @@ de alguém obedecer**:
    garantia. É a mesma decisão que já tinha sido tomada para o módulo pulado, aplicada ao caso
    que faltava.
 
-⚠️ **Risco aceito, não corrigido:** o atalho de panorama **não tem idempotência no servidor**.
-Duplo clique realmente concorrente geraria duas conversas e dois gastos. O freio hoje é o
-estado `enviando` do cliente, que cobre o gesto real (`click` é evento discreto e o React
-libera o estado antes do segundo). A recusa sugerida — barrar se já houver run `reserved`/
-`streaming` da mesma experiência — **bloquearia o dono por até 5 minutos** depois de fechar a
-aba no meio de um panorama, até a reconciliação preguiçosa soltar a reserva. Trocar um
-aborrecimento de custo (que o orçamento já limita) por uma funcionalidade travada não compensa
-**neste sistema single-user**. Se o dono vir conversa duplicada na prática, a saída é o token
-de idempotência por clique (como `client_mutation_id` da 17-C), não a recusa por run aberto.
+3. **Clique duplo do atalho deduplicado no banco** — `20260922110000`, a **segunda** migration
+   do bloco. O atalho **sempre gasta**, diferente de uma proposta do Approval Engine (que
+   expira sem efeito), e o único freio era o estado `enviando` do cliente — que não atravessa
+   duas requisições HTTP nem duas telas (a página e o painel têm estados independentes). O
+   advisory lock **serializa** duas chamadas do mesmo dono mas **não as deduplica**: a segunda
+   espera, lê a reserva da primeira e cria um segundo run pago pelo mesmo conteúdo.
+
+   ⛔ **A correção não é a que a auditoria sugeriu.** "Recusar enquanto houver run aberto"
+   travaria o dono por **até 5 minutos** (a lease da reconciliação) depois de ele fechar a aba
+   no meio de um panorama. O passo 5b usa **duas** condições, e cada uma desarma o defeito da
+   outra: run ainda aberto **e** aberto há menos de 15 s. O segundo clique do gesto morre; um
+   run que fechou — por falha, cancelamento ou sucesso — devolve o botão na hora. É a
+   invariante 68 aplicada aqui: **deduplicar antes de gastar**.
+
+   Detalhes que a checagem precisa acertar: **depois** do advisory lock (senão ela mesma tem
+   corrida); `agent_id` no filtro (um panorama não bloqueia outro); `created_at`, a coluna que
+   as outras janelas da função já usam; e **409, não 429** — não é excesso de pedidos, é este
+   pedido chegando duas vezes, e a frase não repreende ninguém.
+
+Banco reconferido **depois** das duas migrations: **132 tabelas**, **20 `ai_*`**,
+`security_definer: false`, assinatura de 8 argumentos intacta, grants sem `public`/`anon`,
+nenhum lint novo em `get_advisors`. Tipos **não regerados** de propósito: assinatura, nomes de
+argumento e tabela de retorno idênticos, então a entrada em `Functions` não muda.
 
 ## 🟡 18-F · Bloco 3 — o assistente conhece as preferências do dono (2026-09-20)
 
