@@ -4,12 +4,122 @@
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
 REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
-(trabalho de outro chat, revisado e integrado aqui em `1b5aa28`); 03-A liberada
+(trabalho de outro chat, revisado e integrado aqui em `1b5aa28`) · **REDESIGN-03-A ✅**
+(`02aa54b`, integrada por merge `--no-ff`); 03-B liberada
 
 ⛔ **As três migrations continuam sem ser aplicadas.** "Aprovado tudo" foi lido como aval do
 **visual** e do **dicionário**. Cada migration escreve no banco de produção e segue precisando
 de um "aplique a M1" (ou M2, ou M3) seu, separado. Serão pedidas uma a uma, no momento em que
-a subfase precisar delas — a M3 é a primeira, na 03-B.
+a subfase precisar delas.
+
+⚠️ **CORREÇÃO (D29): a M3 NÃO é da 03-B.** Este documento afirmava, em dois lugares, que a
+`categories.classificacao_padrao` seria pedida na 03-B. Não bate com as outras duas fontes:
+o `PLANO.md` descreve a 03-B como *"unificar o pipeline triplicado … **sem mudar número
+nenhum**"*, e `MIGRATIONS.md:16` liga a M3 à **D8**, que é a **03-C2**. **A 03-B não precisa
+de migration nenhuma.** A primeira a precisar é a 03-C2.
+
+---
+
+## REDESIGN-03-A — o núcleo financeiro fica caracterizado antes de a 03 mexer nele ✅
+
+Branch própria a partir de `a4bed98`, dois commits, integrada por merge `--no-ff`. Um arquivo
+novo — `src/lib/finance/dashboard-caracterizacao.test.ts`, 1.280 linhas, 52 blocos `it`,
+**65 casos**. **Nenhuma linha de runtime, nenhuma migration, nenhum teste existente tocado ou
+afrouxado.**
+
+**⚠️ Ela nasce verde, e isso não é elogio.** Um teste de caracterização descreve o que já
+acontece; o único critério de aceite honesto é a **mutação**. Foram **19, uma a uma, 19
+vermelhas**, cada uma registrando o **nome** do teste que caiu — não a contagem (D25).
+
+**O que ela congela, e para quem:**
+
+| Bloco | Congela | Para |
+| --- | --- | --- |
+| 1–4 | contrato AS-IS objeto a objeto das quatro funções, com `toEqual` cheio | todos |
+| 5 | **o cenário sintético obrigatório do §9** | aceite da 03 |
+| 6 | receita **não** é partida entre "minha" e "de terceiros" | 03-C |
+| 7 | **nenhuma** das quatro funções lê categoria para decidir de quem é o dinheiro | 03-C2 / D8 |
+| 8 | quais status de recebível cada função conta — **um a um** | 03-D |
+| 9 | existe **uma base só** (competência), e qual data cada função usa | 03-E |
+| 10 | a linha de base do pipeline triplicado, antes de ele virar um | 03-B |
+
+### O §9 resolvido: são **4 provadas + 1 condicional**, não 5 (D30)
+
+Provadas: minha despesa continua R$ 400 **nos quatro status de recebível** · a
+responsabilidade original do terceiro é R$ 600 nos quatro · o reembolso não reduz a fatura
+devida ao banco · pagar o banco não cria despesa nova.
+
+A quinta — *"minha renda pessoal não sobe R$ 250"* — **vale só enquanto o reembolso não for
+lançado como receita**. Lançado, as entradas sobem 250, e o teste prova que o resumo de um
+reembolso é **idêntico** ao de uma renda genuína.
+
+⛔ **As três irrepresentáveis ganharam preço em número, não em frase:** o único jeito de o
+schema de hoje dizer *"restam R$ 350"* é reescrever `receivables.valor` de 600 para 350 — e
+isso faz minha despesa **saltar de 400 para 650**. As exigências [1] e [4] são incompatíveis
+no schema atual. É a prova de que a **E1 é necessária**, não preferência de modelagem.
+
+### O que `dashboard.test.ts` deixava passar VERDE
+
+Quatro mutações reais atravessaram intactas os 24 casos que já existiam, e agora ficam
+vermelhas:
+
+| Mutação | Existente | 03-A |
+| --- | --- | --- |
+| a compra-pai parcelada entrando nas saídas à vista | 🟢 0 | 🔴 1 |
+| a soma de terceiros do cartão filtrando "só os em aberto" — **o "conserto" que a D3 proíbe** | 🟢 0 | 🔴 9 |
+| `proximas6Faturas` devolvendo 6 no total em vez de 6 por cartão | 🟢 0 | 🔴 1 |
+| receita passando a ser repartida por `valor_pessoal` | 🟢 0 | 🔴 1 |
+
+**Sete das 19 mutações são autoteste dos testes de AUSÊNCIA** (`classificacao`,
+`classificacao_padrao`, `liquidado_em`, `valor_recebido`, `Date.now()`, `new Date()` e a
+fronteira de mês). Teste de ausência nunca visto vermelho pode estar afirmando `[] === []`
+(invariante 106). Restauração conferida por `git diff --quiet` em **cada** mutação, nunca pelo
+verde.
+
+⚠️ **Uma mutação achou fraqueza de quem escreveu, e ela foi corrigida** (D31): uma asserção
+testava a **forma** do código (`toContain("iso.slice(0, 7)")`) e ficava vermelha ao trocar
+`slice` por `substring`, que é idêntico. Teste que quebra em refatoração inofensiva ensina a
+afrouxar o arquivo. Virou asserção comportamental sobre as duas bordas do mês.
+
+### ACHADO — os três chamadores **não** alimentam igual (não consertado; é da 03-B)
+
+| # | Divergência | Efeito, congelado em teste |
+| --- | --- | --- |
+| 1 | **Janela de transações.** `lib/dashboard/queries.ts` lê só o mês; `lib/reports/queries.ts` e `dashboard/financeiro/page.tsx` leem 6 meses atrás até 6 à frente | Para o `resumoMes` **do mês** é inofensivo — e é isso que a 03-B precisa afirmar **antes** de unificar. Fora do mês, a janela estreita responde **zero** |
+| 2 | **`installmentItems`.** O dashboard nem os busca | Lista vazia faz a parcela **sumir** do total, sem exceção e sem campo de completude |
+| 3 | **`ref_month`.** `getInvoicesCardData` monta os recebíveis **sem** o campo | Coerente hoje (chama sem mês). Se a unificação passar a mandar o mês por ali, o card responde **R$ 0,00** sem nada quebrar |
+
+### Congelado como está, parecendo errado (nenhum corrigido)
+
+`pendente` entra em entradas **e** saídas como se tivesse acontecido (03-E) · `ignorado` conta
+como terceiro, e a D11 já decidiu que vira despesa minha (03-D) · `meu` do cartão fica
+**negativo** quando os recebíveis passam do total · `totalAReceber` ignora status desconhecido
+em silêncio · `gastosPorCategoria` mantém nome e cor do **primeiro** item com id repetido.
+
+### Defeito preexistente fechado no caminho (`f878b94`)
+
+O teste `catalog.test.ts` → *"os argumentos saem de `hoje` INJETADO…"* (Fase 18-F) falhou **1
+vez em 6 rodadas** da suíte completa, com `Test timed out in 5000ms`. Raiz **reproduzida**:
+`executors.ts` é `server-only` e arrasta a árvore de I/O das 30 ferramentas — carregá-lo custa
+**1.604 ms**, contra 0–2 ms dos outros seis casos do arquivo. Era o **único `await import` do
+repositório dentro de um caso de teste**; os outros quinze ficam no topo do módulo, onde o
+custo cai no `collect`, que não tem teto. `--testTimeout=1200` reproduz a falha com a forma de
+erro idêntica (o `^` na linha do `it`, não num `expect`).
+
+⛔ **O fix é de raiz, não curativo:** o `await import` foi para o topo. **1.604 ms → 2 ms**,
+passa com `--testTimeout=50`. Aumentar o `testTimeout` deixaria a corrida de pé, mais longe.
+
+### Limitações declaradas
+
+Os três pipelines são I/O e não têm função pura para chamar — o bloco 10 congela o **efeito**
+de cada divergência, não a divergência em si · `getStatements` filtra `.gt("itens", 0)`, então
+fatura sem lançamento nunca chega ao motor (reforça o *"sem lançamentos conhecidos ≠ R$ 0,00"*
+do §13.5; fica para a **05**) · tudo é fixture sintética e nada afirma sobre o banco real.
+
+⛔ **PENDÊNCIA DE FECHAMENTO DA FASE 03 (D32):** o aceite do `PLANO.md` cita *"os 18 casos
+financeiros mínimos do briefing §13"*, e **esse texto não existe em `docs/`**. A §13 do
+`METRICAS-FINANCEIRAS.md` é o dicionário TO-BE, não uma lista de 18 casos. Sem ele, ninguém
+fecha a fase contra o próprio critério dela. Decidido seguir sem; volta na **03-G**.
 
 ---
 
@@ -405,6 +515,11 @@ as colunas já existem e o CHECK já aceita.
 | D26 | **`deep-links-inline.test.ts` mora em `src/test/`, quebrando a co-locação de propósito.** O sujeito dele não é `search/` nem `notifications/`: é o CONJUNTO dos arquivos que cunham rota inline, e hoje ele atravessa os dois. Pendurá-lo num deles deixaria o outro invisível para quem abre o outro — que é como nasce a terceira cópia de uma regra. Ele fica ao lado de `rotas.ts`, que é a resolução que ele consome |
 | D27 | **Minhas duas contagens do `R4` estavam erradas, e a segunda foi publicada como correção da primeira.** "11 rotas em 2 arquivos" → "21 pontos em 3 arquivos" → **29 pontos**. As duas vieram de `grep` meu, que não pegava ramo de ternário nem link com query string. O que sobreviveu às três contagens foi o número de rotas **distintas** (15). ⛔ **Contar com a ferramenta errada duas vezes seguidas é o motivo de a varredura ser derivada do código e não de uma lista minha** |
 | D28 | **Uma das minhas mutações no `R4` saiu verde, e o verde está CERTO.** A MB troca a parada da leitura da expressão de `,` para `;`, e o extrator acha os mesmos 29 pontos — porque há uma segunda parada (`}` no nível zero) que a mutação não toca. Fui medir as duas listas antes de opinar. **Mutação que não muda comportamento não prova nada em nenhuma das duas direções** — é a D21 pelo outro lado |
+| D29 | **A M3 não é da 03-B — este documento estava errado, em dois lugares.** Ele dizia que `categories.classificacao_padrao` seria pedida na 03-B; o `PLANO.md` descreve a 03-B como "sem mudar número nenhum" e `MIGRATIONS.md:16` liga a M3 à D8, que é a **03-C2**. **A 03-B não precisa de migration nenhuma.** Corrigido no cabeçalho e no próximo passo |
+| D30 | **O §9 tem 4 exigências certas + 1 CONDICIONAL, não 5.** O `METRICAS-FINANCEIRAS.md` conta cinco como funcionando. A quinta ("minha renda pessoal não sobe R$ 250") vale **só enquanto o reembolso não for lançado como receita** — e o teste prova que, lançado, o resumo dele é idêntico ao de uma renda genuína. Contei 4+1 em vez de 5 porque o número honesto é o que sobrevive ao teste |
+| D31 | **Uma mutação da 03-A achou fraqueza de quem escreveu o teste, e ela foi corrigida antes do commit.** Uma asserção testava a FORMA do código (`toContain("iso.slice(0, 7)")`) e quebrava ao trocar `slice` por `substring`, que é semanticamente idêntico. **Teste que fica vermelho em refatoração inofensiva ensina a afrouxar o arquivo** — e este arquivo é a linha de base da fase inteira. Virou asserção comportamental sobre as duas bordas do mês |
+| D32 | **Os "18 casos financeiros mínimos do briefing §13" não existem em `docs/`.** O aceite da REDESIGN-03 os cita; o repositório não os tem, e a §13 do `METRICAS-FINANCEIRAS.md` é o dicionário TO-BE. Decidido **seguir sem** e registrar como pendência de fechamento, em vez de derivar uma lista que divergiria do texto original. Volta na **03-G** |
+| D33 | **Um teste flaky preexistente foi consertado dentro da 03-A, fora do escopo dela e a pedido do dono.** `catalog.test.ts` (Fase 18-F). O fix é de RAIZ — o `await import` saiu de dentro do `it` — e não curativo: subir o `testTimeout` deixaria a corrida de pé, mais longe. **1.604 ms → 2 ms** |
 
 ## Bloqueios
 
@@ -415,9 +530,19 @@ Nenhum.
 ~~`R1` cor de entidade "Dourado" ligada a `bg-primary`~~ **FECHADO na 02-A**, com teste e
 mutação · `R2` **3,1 KB** de folga de bundle na casca (eram 3,3; o link de pular custou 0,2) ·
 `R3` ids de card do dashboard · ~~`R4` deep-link para rota inexistente~~ **FECHADO**
-(02-D → 02-E → merge `1b5aa28`), com mutação nas três etapas · `R5` mudar número sem
-perceber · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
+(02-D → 02-E → merge `1b5aa28`), com mutação nas três etapas · **`R5` mudar número sem
+perceber — MITIGADO nas quatro funções do núcleo pela 03-A, CONTINUA ABERTO no resto** (ver
+abaixo) · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
 Detalhe em `AUDITORIA.md` §4.
+
+**O que a 03-A fechou do `R5`, e o que ela não fechou.** Fechou: `resumoMes`,
+`gastosPorCategoria`, `proximas6Faturas` e `totalAReceber` — qualquer mudança de número nas
+quatro fica vermelha, e 19 mutações confirmam isso. **Não fechou:** `gastosPorForma`,
+`comparativoMesAMes`, `evolucaoMensal`, `projecaoProximosMeses`, `proximasContasPagar` e
+`gerarAlertas` seguem só com o que `dashboard.test.ts` já afirmava; e a subtração
+`meu = total − terceiros` escrita **em cinco lugares** (§5 do dicionário) continua sem teste
+que prove que as cinco concordam. ⛔ **Nada fora de `dashboard.ts` foi caracterizado** —
+`invoice.ts`, `split.ts` e `daily-balance.ts` não foram tocados por esta subfase.
 
 **Como o `R4` foi fechado, em três etapas.** A 02-D cobriu o menu (20 hrefs) e os três
 módulos com arquivo de links (Dieta 8, Treinos 11, IA 9). A 02-E acrescentou as **25 seções**
@@ -447,6 +572,13 @@ que a rota existe.
 dentro, `/(app)/configuracoes` **281,9/285**. Os cinco foram rodados **depois** do merge, e
 não herdados da 02-E.
 
+**REDESIGN-03-A:** `test:run` ✅ **192 / 3.987** · `lint` ✅ · `tsc` ✅ · `build` ✅ ·
+`perf:bundle` ✅ mediana **214,2**, 68 rotas, `/(app)/configuracoes` **281,9/285** —
+**idêntico à linha de base**, que é o resultado esperado de um arquivo que não toca runtime, e
+foi rodado para confirmar em vez de ser afirmado. O delta de **+1 arquivo e +65 casos** foi
+**medido removendo e recolocando o arquivo** (sem ele: 191 / 3.922), não deduzido. A suíte
+passa em `TZ=UTC` e em `TZ=Pacific/Kiritimati` (UTC+14) com os mesmos 65 verdes.
+
 Em cada subfase o delta de testes é **exatamente** o que foi acrescentado (02-A: +1 arq./+7
 casos; 02-B: +1 arq./+12; 02-C: +1 arq./+13; 02-D: +1 arq./+48 — 27 do `nav.test.ts`, 9 da
 Dieta, 12 de Treinos; 02-E: +1 arq./+62, todos de `module-shell.test.ts`; **`R4`: +1 arq./+42**,
@@ -461,23 +593,29 @@ E o `perf:bundle` da 02-D ser idêntico ao da 02-C **é o resultado esperado, n�
 coincidência**: a subfase não altera um arquivo de runtime sequer. Ele foi rodado justamente
 para confirmar isso em vez de eu afirmar.
 
-## Próximo passo — REDESIGN-03-A
+## Próximo passo — REDESIGN-03-B
 
-**A REDESIGN-02 está fechada** (A, B, C, D, E). O que vem é o contrato financeiro, que é o
-item nº 1 da ordem de prioridade do briefing: *integridade dos dados* antes de tudo.
+**A 03-A está fechada e integrada.** O que vem é unificar o **pipeline triplicado** (P1-9)
+num módulo só, com uma janela de leitura declarada — **sem mudar número nenhum**.
 
-A **03-A** são **testes de caracterização** de `resumoMes`, `gastosPorCategoria`,
-`proximas6Faturas` e `totalAReceber`: fixar o que essas quatro consultas respondem HOJE,
-**antes** de qualquer mudança, para que a 03-B tenha como provar que não mudou sentido
-financeiro nenhum. Ela **não depende de migration** e não altera runtime.
+⛔ **A 03-B NÃO precisa de migration** (ver D29). A primeira a precisar é a **03-C2**, com a
+**M3** (`categories.classificacao_padrao`), e migration em produção continua exigindo um
+"aplique a M3" seu, separado.
 
-⛔ A **03-B** é a primeira que precisa da **M3** (`categories.classificacao_padrao`) — e
-migration em produção continua exigindo um "aplique a M3" seu, separado.
+**A 03-A entregou a linha de base que ela consome.** As três divergências entre os chamadores
+estão medidas e o bloco 10 já prova que unificar a janela **não move** o `resumoMes` do mês —
+que é justamente a afirmação que a 03-B precisa fazer. As três coisas a encarar de frente:
+
+1. **O `ref_month` ausente em `getInvoicesCardData`** é a armadilha concreta: se o caminho
+   unificado passar a mandar o mês por ali, o card responde **R$ 0,00** sem nada quebrar.
+2. **A janela estreita do dashboard** responde zero para qualquer mês fora dela. Unificar para
+   a janela larga muda o custo de leitura, não o número do mês.
+3. **`installmentItems` vazio** faz a parcela sumir do total, sem exceção e sem sinal.
 
 ✅ **O `R4` voltou do outro chat, foi revisado com mutação independente e integrado** em
 `1b5aa28`. Não há nada pendente de outra frente.
 
-⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` está **11 commits à frente da
-`main`** (9 de trabalho + o commit do R4 vindo da outra branch + o merge) e segue **sem
-upstream**. `feat/redesign-r4-deeplinks` já está contida nela e pode ser apagada quando você
-quiser.
+⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` está **14 commits à frente da
+`main`** (11 anteriores + os 2 da 03-A + o merge) e segue **sem upstream**.
+`feat/redesign-r4-deeplinks` e `feat/redesign-03a-caracterizacao` já estão contidas nela e
+podem ser apagadas quando você quiser.
