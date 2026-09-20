@@ -45,7 +45,9 @@ const EXCECOES = {
     porque:
       "Mostra sete cartões de formulário ao mesmo tempo, todos visíveis sem interação. " +
       "Carregá-los sob demanda trocaria peso por piscada numa tela onde não há clique para " +
-      "esconder o custo. Medido em 276,8 KB gz em 2026-09-19; o teto dá folga de ~8 KB.",
+      "esconder o custo. Medido em 279,2 KB gz em 2026-09-19, depois do Bloco 1 da 18-F " +
+      "(os 7 ícones novos do lucide entram pelo sino e pela busca, que vivem no Header e " +
+      "portanto em toda rota `(app)`); eram 276,8 KB antes dela. O teto dá folga de ~6 KB.",
   },
 };
 

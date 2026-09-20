@@ -16,7 +16,7 @@ As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 1
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. Próxima: **18-F** (integrações e polimento) |
+| **18** | Inteligência Artificial (`/ia`) | 🟡 **EM ANDAMENTO** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (17 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece. **Sem migration** |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). A **18-E** (blocos 1–3, 2026-08-09) criou 3 (`ai_insights`, `ai_insight_sources`,
 `ai_insight_feedback`) e alterou 2 (`ai_runs.kind` ganhou a terceira espécie `'insight'`;
@@ -614,6 +614,45 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     mensagem sobre um campo que a tela não tem. `tsc` não pega (a action recebe `unknown`); o
     que pega é comparar as duas listas, e é o que `validators/ai.test.ts` passou a fazer.
 
+**Invariantes acrescentadas pelo Bloco 1 da 18-F (a IA deixa de ser uma ilha — 2026-09-19):**
+
+82. **AS QUATRO FAMÍLIAS DE NOTIFICAÇÃO DE IA ENTRAM PELO GERADOR ÚNICO.** `notifications/ai.ts`
+    é puro (`hoje` injetado), `ai-cron.ts` é o I/O, e quem decide preferência continua sendo
+    **só** `filterByPrefs` (invariante 24). Todas são `low`/`medium`, todas têm link, todas têm
+    `dedupe_key` determinístico. Só `ai_insight_available` é opt-in: as outras três avisam que
+    algo está errado ou custando dinheiro, e isso não se desliga por preferência de rotina.
+83. ⛔ **O ORÇAMENTO DO SINO NÃO É RECALCULADO — E O LIMIAR TAMPOUCO.** O total sai de
+    `getUsageSummary` (a mesma função de `/ia/consumo`, que passou a aceitar `LeituraDoDono`), e
+    a régua sai de `nivelAtingido` + `deveAvisar`, que `ai/usage/budget.ts` já exportava. Um
+    segundo somatório ou uma terceira cópia do limiar fariam o número do sino divergir do da
+    tela — invariante 24 da 17-F aplicada aqui.
+84. ⚠️ **A ASSIMETRIA DE RLS É DECLARADA NOS DOIS ARQUIVOS.** `notifications/ai-cron.ts` roda
+    com **service role**, ignora RLS e carrega `user_id` em TODA query; `search/queries.ts`
+    (`searchAll`) usa o client **com sessão** e **não** filtra por `user_id`, porque a RLS o
+    faz. Os dois estão certos no seu contexto; trocar um pelo outro é vazar dado ou devolver
+    vazio em silêncio.
+85. **`src/lib/search/ai-links.ts` é a fonte única dos deep-links de `/ia`** (busca e
+    notificações), com teste que confere no DISCO se cada rota citada tem `page.tsx`.
+    ⛔ **Nada linka para `/ia/memoria` até o Bloco 3** — link para rota inexistente é 404.
+    E `?filtro=problemas` em `/ia/acoes` é pior que 404 se o valor sair de
+    `FILTROS_DO_HISTORICO`: a página mostra TODAS as ações, em silêncio.
+86. ⛔ **`ai_provider_credentials` NUNCA entra no backup**, e o motivo está escrito em
+    `EXPORT_EXCLUDED` (não só em comentário): é o ciphertext da chave de API mais a DEK
+    embrulhada. As outras 17 `ai_*` entram — ver invariante 28, **some a sua seção**.
+87. ⛔ **NÃO HÁ RETENÇÃO AUTOMÁTICA, E ISSO É DECISÃO.** Nada some sozinho: descartar é clique
+    do dono, em `/ia/configuracoes`. Não escreva job que apague conversa velha.
+88. ⛔ **A EXCLUSÃO EM MASSA DECLARA O QUE PERMANECE **E** O QUE SAI JUNTO, ANTES DE CONFIRMAR.**
+    `ai_action_executions` não tem FK para proposta nem aprovação (invariante 38) justamente
+    para sobreviver a apagar a conversa. E o que o nome do escopo não diz:
+    `ai_conversations` → `ai_runs` → `ai_usage_events` é **cascade**, então apagar conversas
+    apaga a **medição de custo** delas — o gasto sai de `/ia/consumo` e deixa de contar no teto
+    do mês. Regra pura em `src/lib/ai/retention.ts`.
+89. **CONTAR E APAGAR SAEM DO MESMO SELETOR** (`alvosDoEscopo`, em `actions/ai-retention.ts`), e
+    **comprovante não é `delete from ai_documents`**: a exclusão chama `descartarDocumento`
+    (18-D) um a um, que apaga o ARQUIVO do bucket privado antes do metadado e recusa o que já
+    virou anexo de lançamento. Um delete direto deixaria o binário órfão no bucket com a tela
+    dizendo que apagou.
+
 ## Leitura obrigatória antes de mexer no código
 
 Projeto **documentação-primeiro**. Antes de implementar, leia nesta ordem:
@@ -640,7 +679,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.385 testes / 166 arquivos em 2026-08-09 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 3.482 testes / 170 arquivos em 2026-09-19 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

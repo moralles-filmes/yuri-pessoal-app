@@ -1,7 +1,101 @@
 # CURRENT_STATUS — Estado atual do projeto
 
 > Atualizado ao final de **cada** fase. Última atualização: **2026-09-19**
-> (auditoria de performance + iteração: transferência na importação de extrato de conta).
+> (18-F Bloco 1 + auditoria de performance + iteração: transferência na importação de extrato
+> de conta).
+
+## 🟡 18-F · Bloco 1 — IA deixa de ser uma ilha (2026-09-19)
+
+**Desenho validado com o dono:**
+`docs/superpowers/specs/2026-09-19-18f-memoria-integracoes-design.md`.
+Plano em `docs/superpowers/plans/2026-09-19-18f-bloco1-costura.md`.
+Branch `feat/18-f-memoria-integracoes`. **Nenhuma migration: o bloco não cria tabela nem
+coluna.** Suíte em 3.482 testes / 170 arquivos.
+
+O módulo de IA funcionava inteiro e **não aparecia em lugar nenhum do sistema**: não
+notificava, não era encontrado pela busca global, não entrava no backup e não tinha como ser
+apagado em massa. O Bloco 1 costura os quatro pontos.
+
+| O que entrou | Onde |
+| --- | --- |
+| 4 famílias de notificação (orçamento, provedor, ação sem desfecho, análise disponível) | `src/lib/notifications/ai.ts` (pura) + `ai-cron.ts` (I/O) |
+| Busca global alcança conversas, análises e ações | `src/lib/search/queries.ts` + `types.ts` |
+| Backup ganha 17 tabelas `ai_*`, **sem a de credenciais** | `src/lib/settings/export-tables.ts` |
+| Exclusão em massa que declara o que permanece | `src/lib/ai/retention.ts` + `actions/ai-retention.ts` + `components/ai/retention-card.tsx` |
+| Fonte única dos deep-links de `/ia` | `src/lib/search/ai-links.ts` (rotas conferidas no DISCO por teste) |
+
+### As decisões que este bloco tomou
+
+1. **Nenhum tipo novo consulta preferência por conta própria.** As quatro famílias entram por
+   `generateNotifications` → `filterByPrefs`, o único ponto de decisão (invariante 24). Só
+   `ai_insight_available` é opt-in; as outras três são avisos de que algo está errado ou
+   custando dinheiro.
+2. **O orçamento do sino NÃO é recalculado.** Ele sai de `getUsageSummary` — a mesma função
+   de `/ia/consumo` —, que passou a aceitar `LeituraDoDono` (invariante 79) para o Cron
+   service-role usar **a mesma leitura da tela**. Um segundo somatório faria o número do sino
+   divergir do da tela, que é a invariante 24 da 17-F aplicada aqui.
+3. **`nivelAtingido` + `deveAvisar` foram REUSADOS, não reescritos.** `ai/usage/budget.ts` já
+   os exportava (o comentário deles dizia "nenhuma notificação no sino nesta subfase (é
+   18-F)"); o plano trazia uma terceira cópia da regra de limiar, que foi descartada.
+4. **A assimetria de RLS é declarada nos dois arquivos.** `ai-cron.ts` roda com service role,
+   ignora RLS e carrega `user_id` em **toda** query; `searchAll` usa o client COM SESSÃO e
+   **não** filtra por `user_id`, porque a RLS o faz. Trocar um pelo outro é vazar dado ou
+   devolver vazio em silêncio.
+5. **`ai_provider_credentials` fica fora do backup**, com o motivo escrito em
+   `EXPORT_EXCLUDED` (não só em comentário): ela guarda o ciphertext da chave de API e a DEK
+   embrulhada. Mesmo motivo de `google_integrations`.
+6. **Não há retenção automática, e isso é decisão.** Nenhum job apaga conversa velha — a
+   decisão 5 da 18-D é "nada some sozinho, descartar é clique do dono". O que existe é
+   exclusão em massa PEDIDA, em `/ia/configuracoes`.
+7. ⛔ **A exclusão declara o que PERMANECE e o que SAI JUNTO, antes de confirmar.**
+   `ai_action_executions` não tem FK para proposta nem aprovação (invariante 38) justamente
+   para sobreviver a apagar a conversa; a tela diz isso. E diz também o que não está no nome
+   do escopo: `ai_conversations` → `ai_runs` → `ai_usage_events` é **cascade**, então apagar
+   conversas apaga a **medição de custo** delas — o gasto sai de `/ia/consumo` e deixa de
+   contar no teto do mês. Mudar essa FK exigiria migration, que este bloco não faz; declarar
+   é a saída, e é melhor do que descobrir depois.
+8. **Contar e apagar saem do MESMO seletor** (`alvosDoEscopo`, em `actions/ai-retention.ts`).
+   A tela pede a contagem ao servidor ao abrir o diálogo, pelo mesmo filtro que a exclusão
+   usará — dois filtros separados fariam a tela prometer um número e o banco executar outro
+   (invariante 43).
+9. **Comprovante não é `delete from ai_documents`.** A exclusão em massa chama
+   `descartarDocumento` (18-D) um a um: ele apaga o ARQUIVO do bucket privado antes do
+   metadado e **recusa** o comprovante que já virou anexo de um lançamento. Um delete direto
+   deixaria o binário do documento pessoal órfão no bucket com a tela dizendo que apagou.
+10. ⛔ **Nada linka para `/ia/memoria`** — essa rota só nasce no Bloco 3, e link para rota
+    inexistente é 404 (a lição do `?aba=despensa` da 16-F). `ai-links.ts` tem um teste que
+    confere no DISCO que cada rota citada tem `page.tsx`.
+
+### Duas armadilhas de fuso que o plano trazia e foram corrigidas
+
+- **`.slice(0, 10)` num `timestamptz`** (`ai_insights.created_at`) devolve o dia em **UTC** e
+  erra a data entre 21h e 00h BRT. Trocado por `dateInSaoPaulo(new Date(...))`.
+- **Cortar o dia em `${todayIso}T00:00:00.000Z`** é meia-noite UTC = 21h BRT da véspera: três
+  horas da noite anterior entrariam como "hoje". Há um `inicioDoDiaEmSaoPaulo()` usando
+  `saoPauloWallClockToInstant`, e o mesmo corte vale para a data de exclusão de conversas
+  antigas.
+
+### `Record<Union, T>` pegou dois arquivos que o plano não listava
+
+Acrescentar membro à união deixou `tsc` vermelho até cada mapa ter a entrada:
+`src/components/notifications/notification-meta.tsx` (ícone por `NotificationType`) e
+`src/components/search/search-meta.tsx` (ícone por `SearchType`). É a armadilha funcionando
+como projetada — sem ela, os tipos novos apareceriam sem ícone, em silêncio.
+
+### Verificação
+
+`lint` + `tsc --noEmit` + `test:run` (3.482 ✓) + `build` + `perf:bundle` verdes, e a suíte
+também passa com `TZ=UTC`. `/ia/configuracoes` ficou em **214,1 KB gz** (orçamento 250).
+⚠️ `/(app)/configuracoes` subiu de 276,8 para **279,2 KB** — os 7 ícones novos do `lucide`
+entram pelo sino e pela busca, que vivem no Header e portanto em **toda** rota `(app)`. Segue
+abaixo do teto próprio de 285 KB; a medição registrada em `scripts/perf/bundle-budget.mjs`
+foi atualizada.
+
+Cron conferido de verdade: `/api/cron/notifications` sem Bearer devolve **401**; com o
+`CRON_SECRET`, três execuções seguidas **não criaram nenhuma notificação nova** (o Cron das
+09h já havia rodado). O caminho de IA foi exercitado com sonda temporária e devolveu
+orçamento real (US$ 0,005442 contra teto de US$ 20) — ou seja, zero notificação de IA é
+"não há o que avisar", não um erro engolido pelo `.catch`.
 
 ## Iteração 2026-09-19 — transferência na importação de EXTRATO DE CONTA
 
@@ -307,7 +401,7 @@ Em **2026-08-04**, com as duas fechadas, o usuário abriu a **Fase 18 — Inteli
 
 | Fase | Módulo | Subfases | Situação |
 | --- | --- | --- | --- |
-| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. Próxima: **18-F** (integrações e polimento) |
+| **18** | Inteligência Artificial (`/ia`) | A–F | 🟡 **EM ANDAMENTO.** 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)** — leitura dos 9 módulos, Approval Engine, 7 ferramentas de escrita, 13 commands, tela de ações com desfazer, comprovantes por visão, **insights sobre grandezas derivadas** (texto sem dígito, número por token) e o **job automático** que os gera 1×/dia. Tudo atrás de chaves que nascem desligadas. **18-F em andamento: Bloco 1 ✅ (2026-09-19)** — a IA entra no sino, na busca global, no backup e ganha exclusão em massa, sem migration |
 
 > ⚠️ As duas fases compartilham repositório e banco. Ao editar `PROJECT_ROADMAP.md`,
 > `CURRENT_STATUS.md`, `NEXT_AGENT_INSTRUCTIONS.md`, `src/types/supabase.ts` e `src/config/nav.ts`,
@@ -378,7 +472,7 @@ desfazer (5)** e documentação + verificação final (6). Decisões em
 | 18-C | Ações, aprovações, idempotência e auditoria | ✅ **CONCLUÍDA** (2026-08-08) — blocos 1 a 6 |
 | 18-D | Visão, documentos e comprovantes | ⬜ |
 | 18-E | Insights, relatórios e dashboards | ✅ |
-| 18-F | Memória, voz, integrações e polimento | ⬜ — fecha a fase |
+| 18-F | Memória, voz, integrações e polimento | 🟡 — Bloco 1 ✅ (costura: sino, busca, backup, exclusão em massa). Fecha a fase |
 
 As frentes 16 (Dieta) e 17 (Treinos) continuam **concluídas e em manutenção/iteração**:
 melhoria nelas entra como tarefa avulsa, com branch própria, e não como subfase. As pendências

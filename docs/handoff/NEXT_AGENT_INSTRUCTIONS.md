@@ -1,7 +1,7 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
-> Atualizado em **2026-09-19**, ao fechar a **auditoria de performance**. A última FASE do
-> roadmap fechada continua sendo a **18-E** (2026-08-09); resta a **18-F**.
+> Atualizado em **2026-09-19**, ao fechar o **Bloco 1 da 18-F**. A última FASE do
+> roadmap fechada continua sendo a **18-E** (2026-08-09); a **18-F está em andamento**.
 
 ## ⚡ LEIA ISTO ANTES DE ESCREVER QUALQUER TELA (auditoria de performance, 2026-09-19)
 
@@ -28,14 +28,44 @@ RLS some da conta e o custo real da policy fica invisível.
 
 ---
 
-## ▶️ PRÓXIMA: **18-F — IA · integrações e polimento**
+## ▶️ EM ANDAMENTO: **18-F — IA · memória, integrações e polimento**
 
-Não há nada quebrado nem pela metade. O Bloco 4 fechou o último item declarado fora da 18-E.
+Branch `feat/18-f-memoria-integracoes`. Desenho em
+`docs/superpowers/specs/2026-09-19-18f-memoria-integracoes-design.md`.
+Não há nada quebrado nem pela metade.
 
-**O arquivo a abrir primeiro:** `src/lib/ai/server/insight-job.ts` — é o único ponto do
-sistema que roda um run de IA com o dono vindo de FORA da sessão, e o cabeçalho dele explica
-por que os três cuidados (escopo explícito, uma tentativa por módulo, isolamento por módulo)
-não são estilo.
+### ✅ Bloco 1 — a costura (2026-09-19)
+
+A IA deixou de ser uma ilha: entra no sino (4 famílias), na busca global (conversas, análises,
+ações), no backup (17 tabelas `ai_*`) e ganhou exclusão em massa em `/ia/configuracoes`.
+**Nenhuma migration** — o bloco não criou tabela nem coluna. Plano executado:
+`docs/superpowers/plans/2026-09-19-18f-bloco1-costura.md`. As dez decisões e as duas
+armadilhas de fuso corrigidas estão em `docs/project/CURRENT_STATUS.md`.
+
+**O que o próximo bloco precisa saber:**
+
+- ⛔ **Não linke para `/ia/memoria`.** Ela só nasce no **Bloco 3**. Quando nascer, o link entra
+  em `src/lib/search/ai-links.ts` — fonte única das rotas de `/ia`, com teste que confere no
+  DISCO se cada rota citada tem `page.tsx`.
+- ⛔ **Tipo novo de notificação NÃO consulta preferência por conta própria.** Entra por
+  `generateNotifications` → `filterByPrefs` (invariante 24). E `Record<Union, T>` vai deixar o
+  `tsc` vermelho em `components/notifications/notification-meta.tsx` e
+  `components/search/search-meta.tsx` até você dar um ícone ao membro novo — é a armadilha
+  funcionando.
+- **`ai_user_preferences.allow_memory` JÁ EXISTE no banco** e não é lida por ninguém ainda.
+  Ela é do Bloco 3; o Bloco 1 não a tocou de propósito.
+- ⛔ **Apagar conversa apaga a medição de custo dela.** `ai_conversations` → `ai_runs` →
+  `ai_usage_events` é cascade. A tela declara isso antes de confirmar
+  (`src/lib/ai/retention.ts`, `oQueTambemSai`). Se algum bloco futuro fizer migration, essa é
+  a FK a reconsiderar — seria o único jeito de preservar o histórico de gasto.
+- **Não há retenção automática, e é decisão.** Não escreva um job que apague conversa velha.
+- **`getUsageSummary` aceita `LeituraDoDono`** (invariante 79), para o Cron service-role usar
+  a mesma leitura de `/ia/consumo`. Não some consumo num segundo lugar.
+
+**O arquivo a abrir primeiro no que vier depois:** `src/lib/ai/server/insight-job.ts` — é o
+único ponto do sistema que roda um run de IA com o dono vindo de FORA da sessão, e o cabeçalho
+dele explica por que os três cuidados (escopo explícito, uma tentativa por módulo, isolamento
+por módulo) não são estilo.
 
 ---
 
