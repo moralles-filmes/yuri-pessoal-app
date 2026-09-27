@@ -1149,10 +1149,7 @@ describe("03-B — fronteira: nenhum arquivo fora de pipeline.ts monta um Dash*"
    * migram (um commit cada), a comparação é nos DOIS sentidos: arquivo novo reprova, e arquivo
    * já migrado que continuasse aqui também — a lista só encolhe.
    */
-  const AINDA_NAO_MIGRADOS = [
-    "app/(app)/dashboard/financeiro/page.tsx",
-    "lib/reports/queries.ts",
-  ];
+  const AINDA_NAO_MIGRADOS: string[] = [];
 
   it("zero montagens fora de pipeline.ts (excluídos os *.test.ts, onde fixture é legítima)", () => {
     const encontrados = varridos

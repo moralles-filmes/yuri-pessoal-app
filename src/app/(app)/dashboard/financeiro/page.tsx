@@ -1,38 +1,26 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
-import {
-  getAccounts,
-  getBills,
-  getCreditCards,
-  getRecurrences,
-  getStatementInstallmentItems,
-  getStatements,
-  getReceivables,
-  getTransactionsRange,
-} from "@/lib/finance/queries";
+import { lerFinanceiro } from "@/lib/finance/queries";
 import {
   comparativoMesAMes,
   evolucaoMensal,
   gastosPorCategoria,
   gastosPorForma,
   gerarAlertas,
+  mediaDeSaidas,
   mesDe,
   proximas6Faturas,
   projecaoProximosMeses,
   proximasContasPagar,
-  proximosMeses,
   resumoMes,
   totalAReceber,
-  ultimosMeses,
-  type DashBill,
-  type DashCard,
-  type DashInstallmentItem,
-  type DashReceivable,
-  type DashRecurrence,
-  type DashStatement,
-  type DashTx,
 } from "@/lib/finance/dashboard";
-import { hojeISO, toDateInputValue } from "@/lib/format";
+import {
+  ESCOPO_RELATORIO,
+  janelaDoRelatorio,
+  saldoDasContas,
+} from "@/lib/finance/pipeline";
+import { hojeISO } from "@/lib/format";
 import { DashboardClient } from "./financial-dashboard-client";
 
 export const metadata: Metadata = { title: "Dashboard financeiro" };
@@ -40,12 +28,6 @@ export const dynamic = "force-dynamic";
 
 function str(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" && value.length ? value : undefined;
-}
-
-/** Último dia do mês 'yyyy-MM' como 'yyyy-MM-dd'. */
-function fimDoMes(mes: string): string {
-  const [y, m] = mes.split("-").map(Number);
-  return toDateInputValue(new Date(y, m, 0));
 }
 
 export default async function DashboardFinanceiroPage({
@@ -62,94 +44,16 @@ export default async function DashboardFinanceiroPage({
   })();
 
   // Janela de leitura: 6 meses para trás (evolução) até 6 meses à frente (projeção).
-  const evoMeses = ultimosMeses(mesSel, 6);
-  const projMeses = proximosMeses(mesAtual, 6);
-  const from = `${evoMeses[0]}-01`;
-  const to = fimDoMes(projMeses[projMeses.length - 1]);
+  const janela = janelaDoRelatorio({ mesSel, mesAtual });
+  const { evoMeses, projMeses } = janela;
 
-  // Uma rodada de leituras (sem N+1). RLS garante o escopo por usuário.
-  const [accounts, cards, statements, receivables, bills, recurrences, transactions] =
-    await Promise.all([
-      getAccounts(),
-      getCreditCards(),
-      getStatements(),
-      getReceivables(),
-      getBills(),
-      getRecurrences(),
-      getTransactionsRange({ from, to }),
-    ]);
-
-  const statementIds = statements.map((s) => s.id).filter(Boolean) as string[];
-  const installmentItems = await getStatementInstallmentItems(statementIds);
-
-  // Normaliza para os tipos estruturais do módulo puro.
-  const txs: DashTx[] = transactions.map((t) => ({
-    amount: t.amount,
-    valor_pessoal: t.valor_pessoal,
-    type: t.type,
-    payment_method: t.payment_method,
-    status: t.status,
-    competence_date: t.competence_date,
-    card_id: t.card_id,
-    statement_id: t.statement_id,
-    parcelado: t.parcelado,
-    category_id: t.category_id,
-    category: t.category
-      ? { id: t.category.id, name: t.category.name, color: t.category.color }
-      : null,
-  }));
-  const sts: DashStatement[] = statements.map((s) => ({
-    id: s.id,
-    card_id: s.card_id,
-    competencia: s.competencia,
-    data_fechamento: s.data_fechamento,
-    data_vencimento: s.data_vencimento,
-    pago_em: s.pago_em,
-    total_atual: s.total_atual,
-  }));
-  const recs: DashReceivable[] = receivables.map((r) => ({
-    statement_id: r.statement_id,
-    installment_id: r.installment_id,
-    valor: r.valor,
-    status: r.status,
-    ref_month:
-      r.statement?.competencia?.slice(0, 7) ??
-      r.transaction?.purchase_date?.slice(0, 7) ??
-      null,
-  }));
-  const inst: DashInstallmentItem[] = installmentItems.map((it) => ({
-    id: it.id,
-    statement_id: it.statement_id,
-    valor: it.valor,
-    status: it.status,
-    parent: it.parent?.category
-      ? { category: { id: it.parent.category.id, name: it.parent.category.name, color: it.parent.category.color } }
-      : { category: null },
-  }));
-  const dashCards: DashCard[] = cards.map((c) => ({
-    id: c.id,
-    nome: c.nome,
-    cor: c.cor,
-    limite_total: c.limite_total,
-    dia_fechamento: c.dia_fechamento,
-    dia_vencimento: c.dia_vencimento,
-  }));
-  const recorrencias: DashRecurrence[] = recurrences.map((r) => ({
-    amount: r.amount,
-    type: r.type,
-    frequency: r.frequency,
-    interval_count: r.interval_count,
-    anchor_date: r.anchor_date,
-    next_due_date: r.next_due_date,
-    end_date: r.end_date,
-    is_active: r.is_active,
-  }));
-  const dashBills: DashBill[] = bills.map((b) => ({
-    name: b.name,
-    amount: b.amount,
-    due_day: b.due_day,
-    is_active: b.is_active,
-  }));
+  // Uma rodada de leituras (sem N+1), já normalizada para os tipos do módulo puro — a MESMA
+  // chamada do relatório (REDESIGN-03-B). RLS garante o escopo por usuário.
+  const { entradas, contas: accounts } = await lerFinanceiro({
+    janela,
+    escopo: ESCOPO_RELATORIO,
+  });
+  const { txs, sts, recs, inst, cards: dashCards, recorrencias, bills: dashBills } = entradas;
 
   // Agregações (no servidor — módulo puro, determinístico).
   const resumo = resumoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
@@ -161,14 +65,14 @@ export default async function DashboardFinanceiroPage({
   const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, recorrencias, bills: dashBills });
   const contas = proximasContasPagar({ hoje, bills: dashBills });
   const aReceber = totalAReceber(recs, mesSel);
-  const saldo = accounts.reduce((s, a) => s + (a.current_balance ?? 0), 0);
+  const saldo = saldoDasContas(accounts);
 
-  // Média de saídas dos meses anteriores ao selecionado (para o alerta de gasto alto).
-  const anteriores = evolucao.filter((p) => p.mes < mesSel && p.saidas > 0);
-  const mediaSaidas =
-    anteriores.length > 0
-      ? anteriores.reduce((s, p) => s + p.saidas, 0) / anteriores.length
-      : 0;
+  // Média de saídas dos meses anteriores ao selecionado (para o alerta de gasto alto). A régua
+  // da tela ignora mês sem saída; a do sino não — ver `mediaDeSaidas`.
+  const mediaSaidas = mediaDeSaidas(
+    evolucao.filter((p) => p.mes < mesSel),
+    { ignorarMesesSemSaida: true },
+  );
   const alertas = gerarAlertas({
     hoje,
     resumoAtual: resumo,
