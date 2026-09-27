@@ -136,11 +136,23 @@ describe("finance.get_balances", () => {
     expect(nubank.saldo).toBe(12345.67);
   });
 
+  /**
+   * CARACTERIZAÇÃO da B3: congela o comportamento de hoje antes do conserto aprovado pelo dono.
+   * A conta inativa com saldo não aparece nos itens nem no total.
+   */
   it("soma só as contas ativas", async () => {
     const saida = await getBalances();
+    const itens = saida.itens as { conta: string; saldo: number }[];
     // 12345.67 + 890.12 = 13235.79. A conta inativa (999.99) fica fora.
     expect(saida.agregados).toMatchObject({ contas_ativas: 2, saldo_total: 13235.79 });
     expect(saida.contagem).toBe(2);
+    expect(itens.map((item) => item.conta)).toEqual(["Nubank", "Poupança"]);
+    const somaDosItens = itens.reduce((total, item) => total + item.saldo, 0);
+    expect(somaDosItens).toBeCloseTo(13235.79, 2);
+    expect(somaDosItens).toBeCloseTo(
+      (saida.agregados as { saldo_total: number }).saldo_total,
+      2,
+    );
   });
 
   /**
