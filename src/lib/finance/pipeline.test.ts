@@ -1152,7 +1152,6 @@ describe("03-B — fronteira: nenhum arquivo fora de pipeline.ts monta um Dash*"
   const AINDA_NAO_MIGRADOS = [
     "app/(app)/dashboard/financeiro/page.tsx",
     "lib/dashboard/queries.ts",
-    "lib/notifications/cron.ts",
     "lib/reports/queries.ts",
   ];
 

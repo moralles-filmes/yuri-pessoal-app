@@ -13,13 +13,13 @@ import { dateInSaoPaulo } from "@/lib/format";
 import { expandRowsToOccurrences } from "@/lib/calendar/expand";
 import { proximosCompromissos } from "@/lib/calendar/upcoming";
 import { habitOccursOn } from "@/lib/habits/streak";
+import { addMes, mediaDeSaidas, resumoMes } from "@/lib/finance/dashboard";
 import {
-  addMes,
-  resumoMes,
-  type DashReceivable,
-  type DashStatement,
-  type DashTx,
-} from "@/lib/finance/dashboard";
+  janelaDoCron,
+  montarEntradas,
+  type LinhaRecebivel,
+  type LinhaTx,
+} from "@/lib/finance/pipeline";
 import type { CalendarEventRow } from "@/types/database";
 import {
   filterByPrefs,
@@ -55,6 +55,8 @@ export async function generateForUser(
   // configurado (a Vercel roda em UTC por padrão).
   const [horaSp, minutoSp] = timeInSaoPaulo(now).split(":").map(Number);
   const minutosAgora = (horaSp || 0) * 60 + (minutoSp || 0);
+  // REDESIGN-03-B — a janela das transações é DECLARADA (e o truncamento em hoje com ela).
+  const janelaTx = janelaDoCron({ mesAtual, ate: todayIso });
 
   // Leituras em paralelo (todas filtradas por user_id).
   const [
@@ -122,8 +124,8 @@ export async function generateForUser(
         "amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado",
       )
       .eq("user_id", userId)
-      .gte("competence_date", `${addMes(mesAtual, -3)}-01`)
-      .lte("competence_date", todayIso),
+      .gte("competence_date", janelaTx.from)
+      .lte("competence_date", janelaTx.to),
     // Fase 15 — TO-DO: só as tarefas ABERTAS interessam para alerta.
     service
       .from("todo_tasks")
@@ -284,48 +286,34 @@ export async function generateForUser(
   }));
 
   /* ── Gasto alto (resumo do mês × média dos 3 anteriores) ── */
-  const dashStatements: DashStatement[] = statements.map((s) => ({
-    id: s.id,
-    card_id: s.card_id,
-    competencia: s.competencia,
-    data_fechamento: s.data_fechamento,
-    data_vencimento: s.data_vencimento,
-    pago_em: s.pago_em,
-    total_atual: s.total_atual,
-  }));
-  const dashReceivables: DashReceivable[] = receivables.map((r) => ({
-    statement_id: r.statement_id,
-    installment_id: r.installment_id,
-    valor: Number(r.valor),
-    status: r.status,
-  }));
-  const dashTx = ((txRes.data ?? []) as Array<Record<string, unknown>>).map(
-    (t): DashTx => ({
-      amount: Number(t.amount),
-      valor_pessoal: t.valor_pessoal === null ? null : Number(t.valor_pessoal),
-      type: t.type as DashTx["type"],
-      payment_method: (t.payment_method as DashTx["payment_method"]) ?? null,
-      status: t.status as DashTx["status"],
-      competence_date: t.competence_date as string,
-      card_id: (t.card_id as string | null) ?? null,
-      statement_id: (t.statement_id as string | null) ?? null,
-      parcelado: Boolean(t.parcelado),
-      category_id: null,
-    }),
-  );
+  // REDESIGN-03-B — a tradução para o motor é a MESMA das telas (`montarEntradas`). Um cast por
+  // lista, nunca campo a campo: o `select` enxuto não traz `category`/`category_id` nem os
+  // embeds de `ref_month`, e as linhas tolerantes aceitam isso — `category_id` sai do dado
+  // (`null` enquanto o select não pedir a coluna), não de uma constante escrita aqui. O embed
+  // `statement` deste select é `{ data_vencimento }`, sem chave em comum com o que a linha lê
+  // (`competencia`), e por isso o TS pede o cast; o `ref_month` sai `null`, e o Cron não o lê.
+  const { txs, sts, recs } = montarEntradas({
+    transacoes: (txRes.data ?? []) as LinhaTx[],
+    faturas: statements,
+    recebiveis: receivables as LinhaRecebivel[],
+  });
   const resumoAtual = resumoMes({
     mes: mesAtual,
-    transactions: dashTx,
-    statements: dashStatements,
-    receivables: dashReceivables,
+    transactions: txs,
+    statements: sts,
+    receivables: recs,
   });
-  const priorMonths = [1, 2, 3].map((k) => addMes(mesAtual, -k));
-  const priorSaidas = priorMonths.map(
-    (mes) =>
-      resumoMes({ mes, transactions: dashTx, statements: dashStatements, receivables: dashReceivables })
-        .saidas,
-  );
-  const mediaSaidas = priorSaidas.reduce((a, b) => a + b, 0) / priorMonths.length;
+  // ⚠️ A régua do sino NÃO é a da tela, e continua não sendo (ver `mediaDeSaidas`): mês sem
+  // saída conta e divide, são exatamente 3 meses, e a base de cada um é a janela truncada em
+  // hoje. Unificar muda o alerta de gasto alto — decisão do dono, fora da 03-B.
+  const tresMesesAnteriores = [1, 2, 3].map((k) => {
+    const mes = addMes(mesAtual, -k);
+    return {
+      mes,
+      saidas: resumoMes({ mes, transactions: txs, statements: sts, receivables: recs }).saidas,
+    };
+  });
+  const mediaSaidas = mediaDeSaidas(tresMesesAnteriores, { ignorarMesesSemSaida: false });
 
   /* ── TO-DO (Fase 15) ── */
   const genTodoTasks = ((todoTasksRes.data ?? []) as Array<{
