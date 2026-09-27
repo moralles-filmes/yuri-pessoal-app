@@ -386,14 +386,7 @@ export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): Entradas
   return entradas as EntradasDasLinhas<L>;
 }
 
-/**
- * Saldo somado das contas — a conta que o card do dashboard, o relatório e a página faziam cada
- * um com o seu `reduce`. Recebe as contas CRUAS: devolver `saldo: number` de `lerFinanceiro`
- * obrigaria a inventar `0` para "não pedi contas".
- */
-export function saldoDasContas(contas: readonly { current_balance: number | null }[]): number {
-  return contas.reduce((s, a) => s + (a.current_balance ?? 0), 0);
-}
+export { saldoDasContas } from "@/lib/finance/saldo-das-contas";
 
 /* ───────────────────────────── Janelas declaradas ───────────────────────────── */
 
