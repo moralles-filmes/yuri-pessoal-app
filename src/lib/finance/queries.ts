@@ -16,7 +16,10 @@ import {
   type MovimentoDeSaldo,
 } from "@/lib/finance/daily-balance";
 import {
+  completudeDe,
+  lancamentosForaDoDominio,
   montarEntradas,
+  type CompletudeFinanceira,
   type EntradasDoEscopo,
   type EscopoFinanceiro,
   type JanelaFinanceira,
@@ -232,6 +235,22 @@ export type TransactionRangeFilters = {
   to: string;
 };
 
+export const TETO_DE_LANCAMENTOS = 2000;
+export const TETO_DE_RECEBIVEIS = 1000;
+
+export type LeituraComTeto<T> = {
+  linhas: T[];
+  situacao: "completa" | "saturou" | "sem_contagem";
+};
+
+/** Compara com o recebido: o max_rows do PostgREST pode cortar antes do nosso limit. */
+function leituraComTeto<T>(linhas: T[], count: number | null): LeituraComTeto<T> {
+  return {
+    linhas,
+    situacao: count === null ? "sem_contagem" : count > linhas.length ? "saturou" : "completa",
+  };
+}
+
 /**
  * Lançamentos por intervalo de competência (Fase 07 — dashboard). Diferente de
  * `getTransactions` (single-month, limite 500), busca uma JANELA de meses (ex.: últimos 6
@@ -242,17 +261,17 @@ export type TransactionRangeFilters = {
 export async function getTransactionsRange(
   filters: TransactionRangeFilters,
   owner?: LeituraDoDono,
-): Promise<TransactionWithRelations[]> {
+): Promise<LeituraComTeto<TransactionWithRelations>> {
   const supabase = owner?.client ?? (await createClient());
   const base = supabase
     .from("transactions")
-    .select(TX_SELECT)
+    .select(TX_SELECT, { count: "exact" })
     .gte("competence_date", filters.from)
     .lte("competence_date", filters.to);
-  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
+  const { data, count } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("competence_date", { ascending: true })
-    .limit(2000);
-  return (data ?? []) as unknown as TransactionWithRelations[];
+    .limit(TETO_DE_LANCAMENTOS);
+  return leituraComTeto((data ?? []) as unknown as TransactionWithRelations[], count);
 }
 
 /* ───────────────────────── Fase 03 — Cartões & Faturas ───────────────────────── */
@@ -561,12 +580,18 @@ export async function getPeopleForSelect(): Promise<
 export async function getReceivables(
   owner?: LeituraDoDono,
 ): Promise<ReceivableWithRelations[]> {
+  return (await lerRecebiveis(owner)).linhas;
+}
+
+async function lerRecebiveis(
+  owner?: LeituraDoDono,
+): Promise<LeituraComTeto<ReceivableWithRelations>> {
   const supabase = owner?.client ?? (await createClient());
-  const base = supabase.from("receivables").select(RECEIVABLE_SELECT);
-  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
+  const base = supabase.from("receivables").select(RECEIVABLE_SELECT, { count: "exact" });
+  const { data, count } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("created_at", { ascending: false })
-    .limit(1000);
-  return (data ?? []) as unknown as ReceivableWithRelations[];
+    .limit(TETO_DE_RECEBIVEIS);
+  return leituraComTeto((data ?? []) as unknown as ReceivableWithRelations[], count);
 }
 
 /**
@@ -596,6 +621,7 @@ export type ParametrosDaLeitura<E extends EscopoFinanceiro> = {
 
 export type LeituraFinanceira<E extends EscopoFinanceiro> = {
   entradas: EntradasDoEscopo<E>;
+  completude: CompletudeFinanceira;
 } & (E["contas"] extends true ? { contas: AccountWithBalance[] } : unknown) &
   (E["recorrencias"] extends true ? { recorrencias: RecorrenciaCrua[] } : unknown);
 
@@ -633,7 +659,7 @@ export async function lerFinanceiro<E extends EscopoFinanceiro>(
       escopo.contas ? getAccounts(owner) : undefined,
       escopo.cartoes ? getCreditCards(owner) : undefined,
       escopo.faturas ? getStatements({}, owner) : undefined,
-      escopo.recebiveis ? getReceivables(owner) : undefined,
+      escopo.recebiveis ? lerRecebiveis(owner) : undefined,
       escopo.contasFixas ? getBills(owner) : undefined,
       escopo.recorrencias ? getRecurrences(owner) : undefined,
       escopo.transacoes && janela !== undefined
@@ -642,9 +668,34 @@ export async function lerFinanceiro<E extends EscopoFinanceiro>(
     ]);
 
   const linhas: LinhasFinanceiras = {};
-  if (transacoes !== undefined) linhas.transacoes = transacoes;
+  const motivos: string[] = [];
+  if (transacoes !== undefined) {
+    linhas.transacoes = transacoes.linhas;
+    if (transacoes.situacao === "saturou") {
+      motivos.push(
+        `A leitura de lançamentos traz no máximo ${TETO_DE_LANCAMENTOS} registros por janela e havia mais: os totais podem estar incompletos.`,
+      );
+    } else if (transacoes.situacao === "sem_contagem") {
+      motivos.push("Não foi possível confirmar que a leitura de lançamentos veio completa.");
+    }
+    const foraDoDominio = lancamentosForaDoDominio(transacoes.linhas);
+    if (foraDoDominio > 0) {
+      motivos.push(
+        `${foraDoDominio} lançamento(s) com tipo, status ou forma de pagamento fora do que o sistema conhece ficaram fora da conta.`,
+      );
+    }
+  }
   if (faturas !== undefined) linhas.faturas = faturas;
-  if (recebiveis !== undefined) linhas.recebiveis = recebiveis;
+  if (recebiveis !== undefined) {
+    linhas.recebiveis = recebiveis.linhas;
+    if (recebiveis.situacao === "saturou") {
+      motivos.push(
+        `A leitura de recebíveis traz no máximo ${TETO_DE_RECEBIVEIS} registros e havia mais: os totais podem estar incompletos.`,
+      );
+    } else if (recebiveis.situacao === "sem_contagem") {
+      motivos.push("Não foi possível confirmar que a leitura de recebíveis veio completa.");
+    }
+  }
   if (cartoes !== undefined) linhas.cartoes = cartoes;
   if (recorrencias !== undefined) linhas.recorrencias = recorrencias;
   if (contasFixas !== undefined) linhas.contasFixas = contasFixas;
@@ -659,6 +710,7 @@ export async function lerFinanceiro<E extends EscopoFinanceiro>(
   // somente de uma leitura pedida; ler-financeiro.test.ts confere Object.keys nos três escopos.
   return {
     entradas: montarEntradas(linhas),
+    completude: completudeDe(motivos),
     ...(contas !== undefined ? { contas } : {}),
     ...(recorrencias !== undefined ? { recorrencias } : {}),
   } as LeituraFinanceira<E>;

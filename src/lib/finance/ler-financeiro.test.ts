@@ -24,23 +24,29 @@ import {
   ESCOPO_CARD_FINANCEIRO,
   ESCOPO_FATURAS,
   ESCOPO_RELATORIO,
+  completudeDe,
   janelaDoMes,
   montarEntradas,
   saldoDasContas,
+  type CompletudeFinanceira,
   type EntradasDoEscopo,
   type EscopoFinanceiro,
+  type LinhaTx,
 } from "@/lib/finance/pipeline";
 
 type Leitura = {
   tabela: string;
   origem: "sessao" | "dono";
   filtros: Array<[metodo: string, coluna: string, valor: unknown]>;
+  selecao?: { colunas: string; opcoes?: { count?: "exact" } };
+  limite?: number;
 };
 
 const estado = vi.hoisted(() => ({
   leituras: [] as Leitura[],
   clientsDaSessao: 0,
   dados: {} as Record<string, unknown[]>,
+  contagens: {} as Record<string, number | null | undefined>,
 }));
 
 /** Builder encadeável que registra a tabela e os filtros, e resolve com os dados da tabela. */
@@ -50,7 +56,15 @@ function clientFalso(origem: Leitura["origem"]) {
       const leitura: Leitura = { tabela, origem, filtros: [] };
       estado.leituras.push(leitura);
       const builder: Record<string, unknown> = {};
-      for (const metodo of ["select", "order", "limit"]) builder[metodo] = () => builder;
+      builder.select = (colunas: string, opcoes?: { count?: "exact" }) => {
+        leitura.selecao = { colunas, opcoes };
+        return builder;
+      };
+      builder.order = () => builder;
+      builder.limit = (n: number) => {
+        leitura.limite = n;
+        return builder;
+      };
       for (const metodo of ["eq", "gt", "gte", "lte", "in", "neq"]) {
         builder[metodo] = (coluna: string, valor: unknown) => {
           leitura.filtros.push([metodo, coluna, valor]);
@@ -58,9 +72,18 @@ function clientFalso(origem: Leitura["origem"]) {
         };
       }
       builder.then = (
-        resolve: (v: { data: unknown[]; error: null }) => unknown,
+        resolve: (v: { data: unknown[]; error: null; count: number | null }) => unknown,
         reject: (e: unknown) => unknown,
-      ) => Promise.resolve({ data: estado.dados[tabela] ?? [], error: null }).then(resolve, reject);
+      ) => {
+        const linhasAntesDoLimit = estado.dados[tabela] ?? [];
+        return Promise.resolve({
+          data: linhasAntesDoLimit.slice(0, leitura.limite),
+          error: null,
+          count: estado.contagens[tabela] !== undefined
+            ? estado.contagens[tabela]
+            : linhasAntesDoLimit.length,
+        }).then(resolve, reject);
+      };
       return builder;
     },
   };
@@ -73,7 +96,7 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 
-const { lerFinanceiro } = await import("@/lib/finance/queries");
+const { getReceivables, getTransactionsRange, lerFinanceiro } = await import("@/lib/finance/queries");
 
 const JANELA = janelaDoMes("2026-05");
 const DONO: LeituraDoDono = {
@@ -164,6 +187,7 @@ beforeEach(() => {
   estado.leituras.length = 0;
   estado.clientsDaSessao = 0;
   estado.dados = dadosSinteticos();
+  estado.contagens = {};
 });
 
 describe("03-B2 — lerFinanceiro: owner nos três escopos (desenho, §5.4)", () => {
@@ -303,19 +327,19 @@ describe("03-B — lerFinanceiro: o que volta", () => {
     expect(Object.keys(r.entradas).sort()).toEqual([
       "bills", "cards", "inst", "recorrencias", "recs", "sts", "txs",
     ]);
-    expect(Object.keys(r).sort()).toEqual(["contas", "entradas", "recorrencias"]);
+    expect(Object.keys(r).sort()).toEqual(["completude", "contas", "entradas", "recorrencias"]);
     expectTypeOf<keyof typeof r.entradas>().toEqualTypeOf<
       "bills" | "cards" | "inst" | "recs" | "recorrencias" | "sts" | "txs"
     >();
-    expectTypeOf<keyof typeof r>().toEqualTypeOf<"contas" | "entradas" | "recorrencias">();
+    expectTypeOf<keyof typeof r>().toEqualTypeOf<"completude" | "contas" | "entradas" | "recorrencias">();
   });
 
   it("card do dashboard: parcelas, cartões e recorrências ficam ausentes (R1)", async () => {
     const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
     expect(Object.keys(r.entradas).sort()).toEqual(["bills", "recs", "sts", "txs"]);
-    expect(Object.keys(r).sort()).toEqual(["contas", "entradas"]);
+    expect(Object.keys(r).sort()).toEqual(["completude", "contas", "entradas"]);
     expectTypeOf<keyof typeof r.entradas>().toEqualTypeOf<"bills" | "recs" | "sts" | "txs">();
-    expectTypeOf<keyof typeof r>().toEqualTypeOf<"contas" | "entradas">();
+    expectTypeOf<keyof typeof r>().toEqualTypeOf<"completude" | "contas" | "entradas">();
     expect(r.entradas.txs).toHaveLength(1);
     expect(r.contas).toHaveLength(1);
     const entradasDoCard = r.entradas;
@@ -332,14 +356,133 @@ describe("03-B — lerFinanceiro: o que volta", () => {
 
   it("card de faturas: contas não lidas ficam ausentes — não há saldo a somar", async () => {
     const r = await lerFinanceiro({ escopo: ESCOPO_FATURAS });
-    expect(Object.keys(r).sort()).toEqual(["entradas"]);
+    expect(Object.keys(r).sort()).toEqual(["completude", "entradas"]);
     expect(Object.keys(r.entradas).sort()).toEqual(["cards", "recs", "sts"]);
     expectTypeOf<keyof typeof r.entradas>().toEqualTypeOf<"cards" | "recs" | "sts">();
-    expectTypeOf<keyof typeof r>().toEqualTypeOf<"entradas">();
+    expectTypeOf<keyof typeof r>().toEqualTypeOf<"completude" | "entradas">();
     expect(r.entradas.cards).toHaveLength(1);
     // @ts-expect-error — faturas não lê contas: ausência não pode virar saldo zero.
     const naoRoda = () => saldoDasContas(r.contas);
     expect(naoRoda).toBeTypeOf("function");
+  });
+});
+
+describe("03-B2 A5 — tetos e completude (desenho, §5.5)", () => {
+  it("card com dados normais é exato e pede count exact mantendo os limites", async () => {
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(r.completude).toEqual({ estado: "exato" });
+    for (const [tabela, limite] of [["transactions", 2000], ["receivables", 1000]] as const) {
+      const leitura = estado.leituras.find((l) => l.tabela === tabela);
+      expect(leitura?.selecao?.opcoes).toEqual({ count: "exact" });
+      expect(leitura?.limite).toBe(limite);
+    }
+  });
+
+  it("2001 lançamentos: parcial (M8a), com exatamente os 2000 primeiros no motor (M8b)", async () => {
+    const base = estado.dados.transactions[0] as LinhaTx;
+    const transacoes = Array.from({ length: 2001 }, (_, i) => ({
+      ...base,
+      competence_date: new Date(Date.UTC(2020, 0, i + 1)).toISOString().slice(0, 10),
+    }));
+    estado.dados.transactions = transacoes;
+    const r = await lerFinanceiro({
+      janela: { from: transacoes[0].competence_date, to: transacoes[2000].competence_date },
+      escopo: ESCOPO_CARD_FINANCEIRO,
+    });
+    expect(r.entradas.txs).toHaveLength(2000);
+    expect(r.entradas.txs).toEqual(montarEntradas({ transacoes: transacoes.slice(0, 2000) }).txs);
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: ["A leitura de lançamentos traz no máximo 2000 registros por janela e havia mais: os totais podem estar incompletos."],
+    });
+  });
+
+  it("1001 recebíveis: parcial, preservando as 1000 linhas que entram no motor", async () => {
+    estado.dados.receivables = Array.from({ length: 1001 }, () => estado.dados.receivables[0]);
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(r.entradas.recs).toHaveLength(1000);
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: ["A leitura de recebíveis traz no máximo 1000 registros e havia mais: os totais podem estar incompletos."],
+    });
+  });
+
+  it.each([
+    ["transactions", "lançamentos"],
+    ["receivables", "recebíveis"],
+  ])("contagem nula de %s declara que não foi possível confirmar", async (tabela, nome) => {
+    estado.contagens[tabela] = null;
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: [`Não foi possível confirmar que a leitura de ${nome} veio completa.`],
+    });
+  });
+
+  it("lançamento de tipo desconhecido fica fora da conta com motivo", async () => {
+    estado.dados.transactions = [{ ...estado.dados.transactions[0] as LinhaTx, type: "desconhecido" }];
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(r.entradas.txs).toEqual([]);
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: ["1 lançamento(s) com tipo, status ou forma de pagamento fora do que o sistema conhece ficaram fora da conta."],
+    });
+  });
+
+  it.each([undefined, null, 1001])("faturas só refletem recebíveis (contagem %s)", async (count) => {
+    estado.contagens.transactions = null;
+    estado.dados.transactions = [{ ...estado.dados.transactions[0] as LinhaTx, type: "desconhecido" }];
+    estado.contagens.receivables = count;
+    const r = await lerFinanceiro({ escopo: ESCOPO_FATURAS });
+    expect(tabelasLidas()).not.toContain("transactions");
+    if (count === undefined) {
+      expect(r.completude).toEqual({ estado: "exato" });
+    } else {
+      expect(r.completude).toEqual({
+        estado: "parcial",
+        motivos: [expect.stringContaining("recebíveis")],
+      });
+    }
+  });
+
+  it.each([
+    [undefined, "completa"],
+    [null, "sem_contagem"],
+    [2, "saturou"],
+  ] as const)("getTransactionsRange distingue a contagem %s mesmo abaixo do teto", async (count, situacao) => {
+    estado.contagens.transactions = count;
+    const r = await getTransactionsRange(JANELA);
+    expect(r).toEqual({ linhas: estado.dados.transactions, situacao });
+  });
+
+  it("atingir os limites com contagens iguais às linhas ainda é exato", async () => {
+    estado.dados.transactions = Array.from({ length: 2000 }, () => estado.dados.transactions[0]);
+    estado.dados.receivables = Array.from({ length: 1000 }, () => estado.dados.receivables[0]);
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(r.entradas.txs).toHaveLength(2000);
+    expect(r.entradas.recs).toHaveLength(1000);
+    expect(r.completude).toEqual({ estado: "exato" });
+  });
+
+  it("getReceivables continua devolvendo array com o mesmo limite e owner", async () => {
+    estado.dados.receivables = Array.from({ length: 1001 }, () => estado.dados.receivables[0]);
+    const r = await getReceivables(DONO);
+    expect(r).toEqual(estado.dados.receivables.slice(0, 1000));
+    expect(estado.leituras).toHaveLength(1);
+    expect(estado.leituras[0].origem).toBe("dono");
+    expect(estado.leituras[0].filtros).toContainEqual(["eq", "user_id", DONO.userId]);
+    expect(estado.clientsDaSessao).toBe(0);
+  });
+
+  it("completudeDe exige motivos para parcial e preserva todos eles", () => {
+    expect(completudeDe([])).toEqual({ estado: "exato" });
+    expect(completudeDe(["Contagem indisponível.", "Leitura incompleta."])).toEqual({
+      estado: "parcial",
+      motivos: ["Contagem indisponível.", "Leitura incompleta."],
+    });
+    // @ts-expect-error — parcial sem motivo não é representável.
+    const semMotivo: CompletudeFinanceira = { estado: "parcial", motivos: [] };
+    expect(semMotivo.estado).toBe("parcial");
   });
 });
 

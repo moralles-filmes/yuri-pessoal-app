@@ -145,6 +145,18 @@ export type LinhasFinanceiras = {
   contasFixas?: readonly LinhaContaFixa[];
 };
 
+export type CompletudeFinanceira =
+  | { readonly estado: "exato" }
+  | { readonly estado: "parcial"; readonly motivos: readonly [string, ...string[]] };
+
+/** Uma leitura parcial sempre declara ao menos um motivo. */
+export function completudeDe(motivos: readonly string[]): CompletudeFinanceira {
+  const [primeiro, ...restantes] = motivos;
+  return primeiro === undefined
+    ? { estado: "exato" }
+    : { estado: "parcial", motivos: [primeiro, ...restantes] };
+}
+
 export type EntradasDoMotor = {
   txs: DashTx[];
   sts: DashStatement[];
