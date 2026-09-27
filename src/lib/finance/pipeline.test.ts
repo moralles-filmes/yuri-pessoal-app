@@ -1142,15 +1142,11 @@ describe("03-B — fronteira: nenhum arquivo fora de pipeline.ts monta um Dash*"
   });
 
   /**
-   * ⚠️ ANDAIME DA 03-B — some no passo 6, quando a lista fica vazia.
-   *
-   * Vista VERMELHA com `[]` antes de qualquer chamador migrar, listando estes quatro arquivos:
-   * um teste de ausência que nunca foi visto vermelho não provou nada. Enquanto os chamadores
-   * migram (um commit cada), a comparação é nos DOIS sentidos: arquivo novo reprova, e arquivo
-   * já migrado que continuasse aqui também — a lista só encolhe.
+   * Vista VERMELHA antes de qualquer chamador migrar (passo 2 da 03-B), listando os quatro
+   * arquivos das 24 montagens — `dashboard/financeiro/page.tsx`, `dashboard/queries.ts`,
+   * `notifications/cron.ts` e `reports/queries.ts`. Um teste de ausência que nunca foi visto
+   * vermelho não provou nada; este foi, e foi confirmado de novo por mutação (N7).
    */
-  const AINDA_NAO_MIGRADOS: string[] = [];
-
   it("zero montagens fora de pipeline.ts (excluídos os *.test.ts, onde fixture é legítima)", () => {
     const encontrados = varridos
       .filter((f) => {
@@ -1159,6 +1155,6 @@ describe("03-B — fronteira: nenhum arquivo fora de pipeline.ts monta um Dash*"
       })
       .map((f) => path.relative(SRC, f).split(path.sep).join("/"))
       .sort();
-    expect(encontrados).toEqual(AINDA_NAO_MIGRADOS);
+    expect(encontrados).toEqual([]);
   });
 });
