@@ -17,22 +17,23 @@ import {
 import {
   getAccounts,
   getBills,
-  getCreditCards,
   getReceivables,
   getStatements,
   getTransactionsRange,
+  lerFinanceiro,
 } from "@/lib/finance/queries";
 import {
+  mesDe,
   proximas6Faturas,
   proximasContasPagar,
   resumoMes,
   totalAReceber,
   type DashBill,
-  type DashCard,
   type DashReceivable,
   type DashStatement,
   type DashTx,
 } from "@/lib/finance/dashboard";
+import { ESCOPO_FATURAS, janelaDoMes } from "@/lib/finance/pipeline";
 import { getCalendarEvents, getUpcomingCalendarEvents } from "@/lib/calendar/queries";
 import { getHabitsDashboard } from "@/lib/habits/queries";
 import { getRoutinesWithToday } from "@/lib/tasks/queries";
@@ -203,39 +204,18 @@ export async function getFinanceCardData(
 export async function getInvoicesCardData(
   todayIso: string,
 ): Promise<InvoicesCardData> {
-  const [cards, statements, receivables] = await Promise.all([
-    getCreditCards(),
-    getStatements(),
-    getReceivables(),
-  ]);
-
-  const dashCards: DashCard[] = cards.map((c) => ({
-    id: c.id,
-    nome: c.nome,
-    cor: c.cor,
-    limite_total: c.limite_total,
-    dia_fechamento: c.dia_fechamento,
-    dia_vencimento: c.dia_vencimento,
-  }));
-  const sts: DashStatement[] = statements.map((s) => ({
-    id: s.id,
-    card_id: s.card_id,
-    competencia: s.competencia,
-    data_fechamento: s.data_fechamento,
-    data_vencimento: s.data_vencimento,
-    pago_em: s.pago_em,
-    total_atual: s.total_atual,
-  }));
-  const recs: DashReceivable[] = receivables.map((r) => ({
-    statement_id: r.statement_id,
-    installment_id: r.installment_id,
-    valor: r.valor,
-    status: r.status,
-  }));
+  // REDESIGN-03-B — a janela NÃO é lida: `ESCOPO_FATURAS` não pede transações. Os recebíveis
+  // passam a carregar `ref_month` como os das outras telas; este card chama `totalAReceber`
+  // SEM mês, então o número dele não muda.
+  const { entradas } = await lerFinanceiro({
+    janela: janelaDoMes(mesDe(todayIso)),
+    escopo: ESCOPO_FATURAS,
+  });
+  const { cards, sts, recs } = entradas;
 
   const faturas = proximas6Faturas({
     hoje: todayIso,
-    cards: dashCards,
+    cards,
     statements: sts,
     receivables: recs,
   });
