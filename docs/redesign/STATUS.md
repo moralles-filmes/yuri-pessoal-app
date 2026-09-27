@@ -1,11 +1,13 @@
 # STATUS
 
-**Atualizado:** 2026-09-20
+**Atualizado:** 2026-09-27
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
 REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
 (trabalho de outro chat, revisado e integrado aqui em `1b5aa28`) · **REDESIGN-03-A ✅**
-(`02aa54b`, integrada por merge `--no-ff`); 03-B liberada
+(`02aa54b`, integrada por merge `--no-ff`) · **REDESIGN-03-B ✅** (integrada por merge
+`--no-ff` em `ad9f359`); **03-B2 liberada** — fecha os riscos residuais da 03-B antes da 03-C
+(D40)
 
 ⛔ **As três migrations continuam sem ser aplicadas.** "Aprovado tudo" foi lido como aval do
 **visual** e do **dicionário**. Cada migration escreve no banco de produção e segue precisando
@@ -17,6 +19,65 @@ a subfase precisar delas.
 o `PLANO.md` descreve a 03-B como *"unificar o pipeline triplicado … **sem mudar número
 nenhum**"*, e `MIGRATIONS.md:16` liga a M3 à **D8**, que é a **03-C2**. **A 03-B não precisa
 de migration nenhuma.** A primeira a precisar é a 03-C2.
+
+---
+
+## REDESIGN-03-B — o pipeline do motor financeiro vira UM ✅
+
+Branch própria a partir de `7b850e9` (desenho `b5d74dc` + 9 commits), integrada por merge
+`--no-ff` em **`ad9f359`**. Contrato: `docs/superpowers/specs/2026-09-27-03b-pipeline-financeiro-design.md`.
+**Nenhum número mudou, nenhuma migration, as quatro assinaturas públicas intactas.**
+
+**O defeito, medido:** entre o banco e o motor havia uma camada de tradução copiada à mão —
+**24 montagens** de `Dash*` em **4 arquivos** (card do dashboard, relatório, página do
+dashboard financeiro, Cron), mais 3 cópias do saldo e 3 de `fimDoMes`. Cada cópia envelheceu
+sozinha: `category_id: null` escrito à mão no Cron, `ref_month` ausente no card de faturas,
+`mediaSaidas` com duas definições, duas disciplinas de conversão de `numeric`.
+
+| Camada | Onde | O que faz |
+| --- | --- | --- |
+| Pura | `src/lib/finance/pipeline.ts` (sem `server-only`) | `montarEntradas` — as 7 montagens, uma por tipo · `saldoDasContas` · `ultimoDiaDoMes` · janelas nomeadas · escopos nomeados `as const` (escopo solto não tipa) |
+| I/O | `lerFinanceiro` em `finance/queries.ts` | um `Promise.all`; leitura fora do escopo não roda; **lança** se `owner` vier com escopo cujas leituras ainda não aceitam `LeituraDoDono` |
+| Motor | `mediaDeSaidas` em `dashboard.ts` | a régua do gasto alto, com "mês sem saída" como **parâmetro** — tela e sino continuam divergindo, agora declarados |
+
+As 24 montagens viraram **7, todas dentro de `pipeline.ts`**. O Cron entra só pela camada
+pura (§3.1 do desenho). Dois defeitos latentes morreram sem mover número: o `category_id` do
+Cron sai do dado, e o `ref_month` do card de faturas passa a ser derivado.
+
+**Prova:**
+- **Os 65 da 03-A e os 24 do `dashboard.test.ts` não mudaram uma linha** — `git diff --quiet`
+  nos dois, contra o ponto de partida e de novo depois do merge.
+- **Fronteira** (`pipeline.test.ts`): varredura sem comentários — nenhum arquivo fora de
+  `pipeline.ts` monta `Dash*`. Vista **vermelha listando os 4 arquivos** antes de qualquer
+  chamador migrar (D37).
+- **+3 arquivos, +46 casos:** `pipeline.test.ts` (28), `ler-financeiro.test.ts` (11),
+  `media-saidas.test.ts` (7).
+- **As 9 mutações do desenho, mais variantes e 1 extra, todas vermelhas**, com o nome de cada
+  teste que caiu no corpo de `2968b3c`. A extra (escopo afrouxado) passa no vitest e é
+  **reprovada pelo `tsc`** (TS2578) — a trava é de tipo, e isso está dito.
+
+⚠️ **Desvios do desenho, declarados:** `lerFinanceiro` devolve também `recorrencias` **cruas**
+(D36) · a N3 **não derruba nenhum dos 65, e não tem como** (D38) · **dois** casts no Cron, não
+um · chave ausente vira `null` **declarado em teste** (`ref_month` e `category` no Cron).
+
+### Risco residual — vira a 03-B2
+
+| # | Risco | Estado ao integrar |
+| --- | --- | --- |
+| R1 | `inst: []` com o escopo do card — `gastosPorCategoria`/`gastosPorForma` perdem parcelamento em silêncio | **Real.** Mitigado por escopo nomeado e aviso no tipo |
+| R2 | Dois casts no Cron | No diff, comentados |
+| R3 | Fronteira textual: `Array<DashTx> =`, `satisfies` e literal inline escapariam | Aberto |
+| R4 | Linha tolerante: campo opcional ausente vira `null` sem erro de tipo | Aberto |
+| R5 | Tela e sino com réguas diferentes no gasto alto (3 eixos) | Declarado, não unificado |
+| — | Cron sem `.gt("itens", 0)` · janela do Cron truncada em hoje · tetos 2000/1000 invisíveis · 3 leituras sem `LeituraDoDono` | Declarados no código |
+
+**Achados ao preparar a 03-B2 (nenhum consertado):** o sino manda "Fatura atrasada"
+**urgente** de fatura **vazia** — a view garante `itens = 0` ⇒ `total_atual = 0` · a IA soma
+saldo **só de contas ativas** e afirma ser "a mesma soma do card do dashboard" · a IA declara
+`completude: "exato"` fixo sobre leituras com teto · `getSpending` declara
+`periodo.ate = ${mes}-31` · os limiares do alerta (1.2 · 0.8 · 5 dias) estão escritos duas
+vezes · `usadoPorCartao` soma em centavos na tela e em float no sino · a busca lista fatura
+vazia.
 
 ---
 
@@ -521,6 +582,12 @@ as colunas já existem e o CHECK já aceita.
 | D32 | **Os "18 casos financeiros mínimos do briefing §13" não existem em `docs/`.** O aceite da REDESIGN-03 os cita; o repositório não os tem, e a §13 do `METRICAS-FINANCEIRAS.md` é o dicionário TO-BE. Decidido **seguir sem** e registrar como pendência de fechamento, em vez de derivar uma lista que divergiria do texto original. Volta na **03-G** |
 | D33 | **Um teste flaky preexistente foi consertado dentro da 03-A, fora do escopo dela e a pedido do dono.** `catalog.test.ts` (Fase 18-F). O fix é de RAIZ — o `await import` saiu de dentro do `it` — e não curativo: subir o `testTimeout` deixaria a corrida de pé, mais longe. **1.604 ms → 2 ms** |
 | D34 | **A contagem de commits deste documento estava errada pela terceira vez, e agora é MEDIDA.** Dizia 11; `a4bed98` já era **12** — e esse commit se chama "corrige a contagem de commits locais (11, nao 10)", ou seja, foi corrigido uma vez e continuou errado. O número passa a sair de `git rev-list --count main..HEAD`. ⛔ **É o mesmo mecanismo da D27** (contar com a ferramenta errada, publicar, recontar): número que alguém conta à mão neste projeto erra, e a saída é derivá-lo da ferramenta que sabe a resposta |
+| D35 | **A 03-B ficou com o agente principal por FALHA do roteador, não por escolha.** TIER 1 → Codex estourou o `timeout_ms` de 900 s; o fallback DeepSeek devolveu `invalid_output`. Sem fallback restante, a política do plugin manda seguir no principal. Lição registrada: um pacote de ~10 arquivos estoura o Codex — **fatiar o TASK PACKAGE por passo** |
+| D36 | **`lerFinanceiro` devolve `recorrencias` CRUAS** (você, 2026-09-27). O desenho não previa: `assinaturas` do relatório lê `description` e `category.name`, que não existem no tipo de entrada do motor. Recusadas: uma segunda leitura de recorrências e alargar `DashRecurrence` |
+| D37 | **"Cada passo fecha verde" × "a fronteira fica vermelha até o passo 5" foi conciliado com uma lista temporária dos NÃO migrados**, comparada nos dois sentidos (arquivo já migrado que continuasse na lista também reprovava). Ela só encolheu, e saiu no passo 6 |
+| D38 | **A N3 não derrubar nenhum dos 65 é estrutural, não fraqueza.** O critério do desenho ("equivalência + algum dos 65") era inatingível: os 65 chamam o motor com `Dash*` direto e nunca passam por `montarEntradas`. Medido, não suposto — quem prova a mudança de número são os testes do motor sobre a entrada montada |
+| D39 | **A 03-B foi integrada na mesma sessão que a escreveu, com sua autorização** — a primeira integração sem revisão independente com mutação própria (o R4 teve). A árvore integrada tem o **mesmo hash** da ponta da branch e os cinco comandos rodaram depois do merge. ⚠️ **Falta a conferência com dado real**: rodar a branch local (mesmo banco) e comparar card do dashboard, dashboard financeiro e relatórios com o app no ar. É sua — exige a sua sessão |
+| D40 | **Os riscos residuais da 03-B viram a 03-B2, ANTES da 03-C** (você, 2026-09-27). Três itens mudam número (B1–B3) e precisam de "sim" um a um; misturados às mudanças de sentido da 03-C, os dois tipos de mudança ficariam indistinguíveis no diff |
 
 ## Bloqueios
 
@@ -532,8 +599,8 @@ Nenhum.
 mutação · `R2` **3,1 KB** de folga de bundle na casca (eram 3,3; o link de pular custou 0,2) ·
 `R3` ids de card do dashboard · ~~`R4` deep-link para rota inexistente~~ **FECHADO**
 (02-D → 02-E → merge `1b5aa28`), com mutação nas três etapas · **`R5` mudar número sem
-perceber — MITIGADO nas quatro funções do núcleo pela 03-A, CONTINUA ABERTO no resto** (ver
-abaixo) · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
+perceber — MITIGADO nas quatro funções do núcleo pela 03-A; o pipeline que as alimenta virou
+UM na 03-B (com os riscos dele indo para a 03-B2); CONTINUA ABERTO no resto** (ver abaixo) · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
 Detalhe em `AUDITORIA.md` §4.
 
 **O que a 03-A fechou do `R5`, e o que ela não fechou.** Fechou: `resumoMes`,
@@ -580,6 +647,14 @@ foi rodado para confirmar em vez de ser afirmado. O delta de **+1 arquivo e +65 
 **medido removendo e recolocando o arquivo** (sem ele: 191 / 3.922), não deduzido. A suíte
 passa em `TZ=UTC` e em `TZ=Pacific/Kiritimati` (UTC+14) com os mesmos 65 verdes.
 
+**REDESIGN-03-B, depois do merge `ad9f359`:** `test:run` ✅ **195 / 4.033** (15,17 s) · `lint` ✅
+· `tsc` ✅ · `build` ✅ · `perf:bundle` ✅ mediana **214,2**, 68 rotas, `/(app)/configuracoes`
+**281,9/285** · `/(app)/dashboard/financeiro` **200,9** · `/(app)/dashboard` **203,8** ·
+`/(app)/relatorios` **204,1** — **idênticos à linha de base**, e aqui isso é afirmação com
+alvo: a página do dashboard financeiro passou a importar `pipeline.ts`, e ele não arrastou
+nada para o cliente. Delta de **+3 arquivos e +46 casos**, todos da 03-B. A árvore integrada
+tem o **mesmo hash** da ponta da branch — e os cinco rodaram de novo mesmo assim.
+
 Em cada subfase o delta de testes é **exatamente** o que foi acrescentado (02-A: +1 arq./+7
 casos; 02-B: +1 arq./+12; 02-C: +1 arq./+13; 02-D: +1 arq./+48 — 27 do `nav.test.ts`, 9 da
 Dieta, 12 de Treinos; 02-E: +1 arq./+62, todos de `module-shell.test.ts`; **`R4`: +1 arq./+42**,
@@ -594,31 +669,30 @@ E o `perf:bundle` da 02-D ser idêntico ao da 02-C **é o resultado esperado, n�
 coincidência**: a subfase não altera um arquivo de runtime sequer. Ele foi rodado justamente
 para confirmar isso em vez de eu afirmar.
 
-## Próximo passo — REDESIGN-03-B
+## Próximo passo — REDESIGN-03-B2 (fechar os riscos residuais da 03-B)
 
-**A 03-A está fechada e integrada.** O que vem é unificar o **pipeline triplicado** (P1-9)
-num módulo só, com uma janela de leitura declarada — **sem mudar número nenhum**.
+**A 03-B está fechada e integrada** (`ad9f359`). Antes da 03-C, você decidiu fechar os riscos
+que ela declarou (D40). O briefing foi entregue nesta sessão, e o primeiro entregável da 03-B2
+é o **desenho** (`docs/superpowers/specs/`), aprovado por você antes de qualquer linha de
+código.
 
-⛔ **A 03-B NÃO precisa de migration** (ver D29). A primeira a precisar é a **03-C2**, com a
-**M3** (`categories.classificacao_padrao`), e migration em produção continua exigindo um
-"aplique a M3" seu, separado.
+| Parte | Itens | Muda número? |
+| --- | --- | --- |
+| **A** | R1 vira erro de compilação (tipo das entradas por escopo) · linhas estritas e zero cast no Cron (R2 + R4) · fronteira pelo checker do TypeScript (R3) · `LeituraDoDono` nas 3 leituras, e o guard sai · tetos visíveis + `completude` real na IA · `saldoDasContas` nas telas de conta · limiares do alerta num lugar só · `periodo.ate` da IA | não |
+| **B** | **B1** `.gt("itens", 0)` no sino — some a "Fatura atrasada" urgente de fatura vazia · **B2** uma régua só para o gasto alto — o sino adota a da tela, e o "até a mesma altura" do §13.6 continua da 03-E · **B3** o saldo da IA passa a incluir conta inativa? | **sim — cada um só com o seu "sim"** |
 
-**A 03-A entregou a linha de base que ela consome.** As três divergências entre os chamadores
-estão medidas e o bloco 10 já prova que unificar a janela **não move** o `resumoMes` do mês —
-que é justamente a afirmação que a 03-B precisa fazer. As três coisas a encarar de frente:
+Cada item da parte B entra em **dois commits**: um que congela o comportamento de hoje em
+teste, e o conserto com o mesmo teste atualizado — o diff mostra o número que muda.
 
-1. **O `ref_month` ausente em `getInvoicesCardData`** é a armadilha concreta: se o caminho
-   unificado passar a mandar o mês por ali, o card responde **R$ 0,00** sem nada quebrar.
-2. **A janela estreita do dashboard** responde zero para qualquer mês fora dela. Unificar para
-   a janela larga muda o custo de leitura, não o número do mês.
-3. **`installmentItems` vazio** faz a parcela sumir do total, sem exceção e sem sinal.
+⛔ **A 03-B2 NÃO precisa de migration.** A primeira continua sendo a **03-C2**, com a **M3**, e
+migration em produção continua exigindo um "aplique a M3" seu, separado.
 
-✅ **O `R4` voltou do outro chat, foi revisado com mutação independente e integrado** em
-`1b5aa28`. Não há nada pendente de outra frente.
+⚠️ **Pendência da 03-B que é sua (D39):** a conferência com dado real — card do dashboard,
+dashboard financeiro e relatórios da branch local contra o app no ar.
 
 ⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` segue **sem upstream**.
-`feat/redesign-r4-deeplinks` e `feat/redesign-03a-caracterizacao` já estão contidas nela e
-podem ser apagadas quando você quiser.
+`feat/redesign-r4-deeplinks`, `feat/redesign-03a-caracterizacao` e
+`feat/redesign-03b-pipeline` já estão contidas nela e podem ser apagadas quando você quiser.
 
 ⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA MAIS AQUI — meça** (D34):
 

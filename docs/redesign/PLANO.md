@@ -61,6 +61,7 @@ de mexer, para que qualquer mudança de número seja visível e intencional.
 | --- | --- |
 | **03-A** | Testes de caracterização de `resumoMes`, `gastosPorCategoria`, `proximas6Faturas`, `totalAReceber` — congelando o que eles devolvem hoje |
 | **03-B** | **Unificar o pipeline triplicado** (P1-9) num módulo só, com uma janela de leitura declarada. Sem mudar número nenhum |
+| **03-B2** | **Fechar os riscos residuais da 03-B** (decidido em 2026-09-27, D40): R1 como erro de tipo, linhas estritas, fronteira robusta, tetos visíveis e `LeituraDoDono` nas leituras que faltam — sem mudar número — e, só com "sim" item a item, fatura vazia fora do sino, régua única do gasto alto e a definição de saldo da IA |
 | **03-C** | Separação de **renda pessoal × movimentação de terceiros** (E2/E3): `classificacao` e `valor_pessoal` passam a valer para receita, gravados no lançamento |
 | **03-C2** | **Categorias** (E7, decisão D8): marcação de terceiros como **atalho de preenchimento e filtro**, lista agrupada por tipo. ⛔ Teste que prove que **nenhum relatório lê a categoria** para decidir de quem é o dinheiro |
 | **03-D** | Reembolsos e recebíveis: os três números distintos do briefing §7 + **recebimento parcial** (E1). Recebível `ignorado` visível como "não será cobrado" |
