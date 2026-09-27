@@ -1,0 +1,96 @@
+/**
+ * REDESIGN-07-A · V4 — O PARÂMETRO DO DEEP-LINK É ACEITO PELA PÁGINA.
+ *
+ * O R4 (`deep-links-inline.test.ts`) prova que o CAMINHO do link tem `page.tsx`. Ele não
+ * olha a query string: `/tarefas?view=atrasadas` passaria mesmo se `atrasadas` saísse de
+ * `TASK_VIEWS`, e a notificação abriria a visão padrão em silêncio. É o defeito que a 07-A
+ * pode produzir mexendo nas telas de Organização — por isso o contrato nasce antes delas.
+ *
+ * Usa o MESMO extrator do R4 (`@/test/links-inline`), e os dois arquivos varridos são da
+ * 03-B2: aqui eles são só LIDOS.
+ */
+import fs from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { lerLinks, VALOR_DE_EXEMPLO, type PontoDeLink } from "@/test/links-inline";
+import { TASK_VIEWS } from "@/lib/tasks/constants";
+import { CALENDAR_VIEWS } from "@/lib/calendar/constants";
+import { resolveRoute } from "@/app/(app)/todo/resolve-route";
+
+const SRC = path.resolve(__dirname, "..");
+/** Só lidos: os dois são da 03-B2. */
+const ARQUIVOS = ["lib/search/queries.ts", "lib/notifications/generate.ts"] as const;
+const ROTAS = ["/tarefas", "/agenda", "/todo", "/rotinas"] as const;
+type Rota = (typeof ROTAS)[number];
+/** Contado pela varredura no commit que a introduz. Piso: link novo é bem-vindo. */
+const PISO: Record<Rota, number> = { "/todo": 8, "/tarefas": 3, "/agenda": 2, "/rotinas": 1 };
+
+const caminho = (p: PontoDeLink) => p.concreta.split(/[?#]/)[0];
+const query = (s: string) => new URLSearchParams(s.split("?")[1]?.split("#")[0] ?? "");
+const ehRota = (c: string): c is Rota => (ROTAS as readonly string[]).includes(c);
+
+/** O que a página LÊ, derivado do `page.tsx` (`sp.<nome>`) — nunca escrito à mão. */
+function lidosPela(rota: Rota): Set<string> {
+  const fonte = fs.readFileSync(path.join(SRC, "app", "(app)", rota.slice(1), "page.tsx"), "utf8");
+  return new Set([...fonte.matchAll(/\bsp\.(\w+)/g)].map((m) => m[1]));
+}
+
+const PONTOS = ARQUIVOS.flatMap((a) => lerLinks(a).pontos).filter((p) => ehRota(caminho(p)));
+const onde = (p: PontoDeLink) => `${p.arquivo}:${p.linha} → \`${p.literal}\``;
+
+describe("V4 — o parâmetro do deep-link é aceito pela página", () => {
+  it.each(ROTAS)("%s continua recebendo links (piso)", (rota) => {
+    const n = PONTOS.filter((p) => caminho(p) === rota).length;
+    expect(n, `${rota}: ${n} link(s), piso ${PISO[rota]}`).toBeGreaterThanOrEqual(PISO[rota]);
+  });
+
+  it("a leitura do page.tsx sabe dizer sim e não", () => {
+    expect(lidosPela("/tarefas")).toEqual(new Set(["view", "date"]));
+    expect(lidosPela("/todo").has("task")).toBe(true);
+    expect(lidosPela("/rotinas").size).toBe(0);
+    expect(lidosPela("/agenda").has("naoexiste")).toBe(false);
+  });
+
+  it.each(PONTOS)("$arquivo:$linha → $literal — todo parâmetro é lido pela página", (p) => {
+    const lidos = lidosPela(caminho(p) as Rota);
+    for (const chave of query(p.concreta).keys()) {
+      expect(lidos.has(chave), `${onde(p)}: a página não lê \`${chave}\``).toBe(true);
+    }
+  });
+
+  it.each(PONTOS.filter((p) => caminho(p) === "/tarefas"))("$arquivo:$linha → $literal — view de Tarefas", (p) => {
+    const view = query(p.literal).get("view");
+    if (view === null || view.includes("${")) return;
+    expect((TASK_VIEWS as readonly string[]).includes(view), `${onde(p)}: \`${view}\` não está em TASK_VIEWS`).toBe(true);
+  });
+
+  it.each(PONTOS.filter((p) => caminho(p) === "/agenda"))("$arquivo:$linha → $literal — view e data da Agenda", (p) => {
+    const q = query(p.literal);
+    const view = q.get("view");
+    if (view !== null && !view.includes("${")) {
+      expect((CALENDAR_VIEWS as readonly string[]).includes(view), `${onde(p)}: \`${view}\` não está em CALENDAR_VIEWS`).toBe(true);
+    }
+    const data = q.get("date");
+    // Interpolada, a data não é verificável lendo o código (risco residual do spec §11).
+    if (data !== null && !data.includes("${")) {
+      expect(data, onde(p)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it.each(PONTOS.filter((p) => caminho(p) === "/todo"))("$arquivo:$linha → $literal — o TO-DO abre o que o link pede", (p) => {
+    const q = query(p.concreta);
+    const v = q.get("v") ?? undefined;
+    const id = q.get("id") ?? undefined;
+    const rota = resolveRoute(v, id);
+    const reflete = rota.kind === v || (rota.kind === "view" && rota.value === v);
+    expect(reflete, `${onde(p)}: \`v=${v}\` cai em ${JSON.stringify(rota)}`).toBe(true);
+    const precisaDeId =
+      JSON.stringify(resolveRoute(v, undefined)) !== JSON.stringify(resolveRoute(v, VALOR_DE_EXEMPLO));
+    if (precisaDeId) expect(id, `${onde(p)}: \`v=${v}\` exige \`id\``).toBeDefined();
+  });
+
+  it("a checagem do TO-DO sabe dizer não", () => {
+    expect(resolveRoute("projeto", undefined)).toEqual({ kind: "view", value: "hoje" });
+    expect(resolveRoute("inexistente", undefined)).toEqual({ kind: "view", value: "hoje" });
+  });
+});
