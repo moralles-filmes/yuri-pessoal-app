@@ -17,14 +17,18 @@
  * Fixture sintética.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
+import { gastosPorCategoria } from "@/lib/finance/dashboard";
 import {
   ESCOPO_CARD_FINANCEIRO,
   ESCOPO_FATURAS,
   ESCOPO_RELATORIO,
   janelaDoMes,
   montarEntradas,
+  saldoDasContas,
+  type EntradasDoEscopo,
+  type EscopoFinanceiro,
 } from "@/lib/finance/pipeline";
 
 type Leitura = {
@@ -164,7 +168,7 @@ beforeEach(() => {
 
 describe("03-B2 — lerFinanceiro: owner nos três escopos (desenho, §5.4)", () => {
   it("owner + escopo de faturas lê as três tabelas pelo client do dono, todas com user_id", async () => {
-    await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_FATURAS, owner: DONO });
+    await lerFinanceiro({ escopo: ESCOPO_FATURAS, owner: DONO });
     expect(tabelasLidas()).toEqual(["card_statements_with_total", "credit_cards", "receivables"]);
     expect(estado.clientsDaSessao).toBe(0);
     for (const leitura of estado.leituras) {
@@ -216,7 +220,9 @@ describe("03-B — lerFinanceiro: cada escopo lê exatamente as suas tabelas", (
   it.each([ESCOPO_CARD_FINANCEIRO, ESCOPO_FATURAS, ESCOPO_RELATORIO])(
     "$nome sem owner usa a sessão e não filtra user_id explicitamente",
     async (escopo) => {
-      await lerFinanceiro({ janela: JANELA, escopo });
+      await (escopo.transacoes
+        ? lerFinanceiro({ janela: JANELA, escopo })
+        : lerFinanceiro({ escopo }));
       expect(estado.clientsDaSessao).toBe(estado.leituras.length);
       for (const leitura of estado.leituras) {
         expect(leitura.origem).toBe("sessao");
@@ -234,8 +240,8 @@ describe("03-B — lerFinanceiro: cada escopo lê exatamente as suas tabelas", (
     expect(estado.leituras.flatMap((l) => l.filtros)).not.toContainEqual(["eq", "user_id", "user-1"]);
   });
 
-  it("card de faturas: três leituras, e a janela não é lida (o escopo não pede transações)", async () => {
-    await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_FATURAS });
+  it("card de faturas: três leituras, sem janela (o escopo não pede transações)", async () => {
+    await lerFinanceiro({ escopo: ESCOPO_FATURAS });
     expect(tabelasLidas()).toEqual(["card_statements_with_total", "credit_cards", "receivables"]);
   });
 
@@ -260,13 +266,15 @@ describe("03-B — lerFinanceiro: cada escopo lê exatamente as suas tabelas", (
 
   it("relatório sem nenhuma fatura: as parcelas nem chegam a ser lidas", async () => {
     estado.dados.card_statements_with_total = [];
-    await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_RELATORIO });
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_RELATORIO });
     expect(tabelasLidas()).not.toContain("transaction_installments");
     expect(estado.leituras).toHaveLength(7);
+    expect(r.entradas.inst).toEqual([]);
+    expect(r.entradas).toHaveProperty("inst");
   });
 
   it("as faturas continuam filtradas por itens > 0 (getStatements, não uma leitura nova)", async () => {
-    await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_FATURAS });
+    await lerFinanceiro({ escopo: ESCOPO_FATURAS });
     const faturas = estado.leituras.find((l) => l.tabela === "card_statements_with_total");
     expect(faturas?.filtros).toContainEqual(["gt", "itens", 0]);
   });
@@ -292,23 +300,65 @@ describe("03-B — lerFinanceiro: o que volta", () => {
     // Cruas: o relatório monta "assinaturas" com `description`, que não é entrada do motor.
     expect(r.recorrencias).toEqual(dados.recurring_transactions);
     expect(r.contas).toEqual(dados.accounts_with_balance);
+    expect(Object.keys(r.entradas).sort()).toEqual([
+      "bills", "cards", "inst", "recorrencias", "recs", "sts", "txs",
+    ]);
+    expect(Object.keys(r).sort()).toEqual(["contas", "entradas", "recorrencias"]);
+    expectTypeOf<keyof typeof r.entradas>().toEqualTypeOf<
+      "bills" | "cards" | "inst" | "recs" | "recorrencias" | "sts" | "txs"
+    >();
+    expectTypeOf<keyof typeof r>().toEqualTypeOf<"contas" | "entradas" | "recorrencias">();
   });
 
-  it("card do dashboard: sem parcelas, `inst` volta [] (risco R1) e as recorrências também", async () => {
+  it("card do dashboard: parcelas, cartões e recorrências ficam ausentes (R1)", async () => {
     const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
-    expect(r.entradas.inst).toEqual([]);
-    expect(r.entradas.cards).toEqual([]);
-    expect(r.entradas.recorrencias).toEqual([]);
-    expect(r.recorrencias).toEqual([]);
+    expect(Object.keys(r.entradas).sort()).toEqual(["bills", "recs", "sts", "txs"]);
+    expect(Object.keys(r).sort()).toEqual(["contas", "entradas"]);
+    expectTypeOf<keyof typeof r.entradas>().toEqualTypeOf<"bills" | "recs" | "sts" | "txs">();
+    expectTypeOf<keyof typeof r>().toEqualTypeOf<"contas" | "entradas">();
     expect(r.entradas.txs).toHaveLength(1);
     expect(r.contas).toHaveLength(1);
+    const entradasDoCard = r.entradas;
+    const naoRoda = () => gastosPorCategoria({
+      mes: "2026-05",
+      transactions: entradasDoCard.txs,
+      statements: entradasDoCard.sts,
+      receivables: entradasDoCard.recs,
+      // @ts-expect-error — o card não lê parcelas: inst não existe (M1a).
+      installmentItems: entradasDoCard.inst,
+    });
+    expect(naoRoda).toBeTypeOf("function");
   });
 
-  it("card de faturas: contas não lidas voltam [] — ausência de leitura não vira saldo", async () => {
-    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_FATURAS });
-    expect(r.contas).toEqual([]);
-    expect(r.recorrencias).toEqual([]);
-    expect(r.entradas.txs).toEqual([]);
+  it("card de faturas: contas não lidas ficam ausentes — não há saldo a somar", async () => {
+    const r = await lerFinanceiro({ escopo: ESCOPO_FATURAS });
+    expect(Object.keys(r).sort()).toEqual(["entradas"]);
+    expect(Object.keys(r.entradas).sort()).toEqual(["cards", "recs", "sts"]);
+    expectTypeOf<keyof typeof r.entradas>().toEqualTypeOf<"cards" | "recs" | "sts">();
+    expectTypeOf<keyof typeof r>().toEqualTypeOf<"entradas">();
     expect(r.entradas.cards).toHaveLength(1);
+    // @ts-expect-error — faturas não lê contas: ausência não pode virar saldo zero.
+    const naoRoda = () => saldoDasContas(r.contas);
+    expect(naoRoda).toBeTypeOf("function");
+  });
+});
+
+describe("03-B2 A1 — contratos de tipo (conferidos pelo tsc --noEmit)", () => {
+  it("a janela é exigida só quando o escopo lê transações", () => {
+    const naoRoda = () => {
+      // @ts-expect-error — o card lê transações: exige janela.
+      void lerFinanceiro({ escopo: ESCOPO_CARD_FINANCEIRO });
+      // @ts-expect-error — faturas não lê transações: não aceita janela.
+      void lerFinanceiro({ escopo: ESCOPO_FATURAS, janela: JANELA });
+    };
+    expect(naoRoda).toBeTypeOf("function");
+  });
+
+  it("escopo como união só promete os campos comuns", () => {
+    type DaUniao = EntradasDoEscopo<EscopoFinanceiro>;
+    expectTypeOf<keyof DaUniao>().toEqualTypeOf<"recs" | "sts">();
+    // @ts-expect-error — a união não garante leitura de parcelas: inst fica ausente.
+    const inst: DaUniao["inst"] = [];
+    expect(inst).toEqual([]);
   });
 });

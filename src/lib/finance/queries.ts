@@ -17,9 +17,10 @@ import {
 } from "@/lib/finance/daily-balance";
 import {
   montarEntradas,
-  type EntradasDoMotor,
+  type EntradasDoEscopo,
   type EscopoFinanceiro,
   type JanelaFinanceira,
+  type LinhasFinanceiras,
 } from "@/lib/finance/pipeline";
 import type {
   AccountWithBalance,
@@ -588,6 +589,16 @@ export async function getReceivablesByStatements(
 
 type RecorrenciaCrua = Awaited<ReturnType<typeof getRecurrences>>[number];
 
+export type ParametrosDaLeitura<E extends EscopoFinanceiro> = {
+  escopo: E;
+  owner?: LeituraDoDono;
+} & (E["transacoes"] extends true ? { janela: JanelaFinanceira } : { janela?: undefined });
+
+export type LeituraFinanceira<E extends EscopoFinanceiro> = {
+  entradas: EntradasDoEscopo<E>;
+} & (E["contas"] extends true ? { contas: AccountWithBalance[] } : unknown) &
+  (E["recorrencias"] extends true ? { recorrencias: RecorrenciaCrua[] } : unknown);
+
 /**
  * As leituras que o motor financeiro consome, já montadas por `montarEntradas` — a camada de
  * I/O do pipeline (a pura é `pipeline.ts`). Usada pelos dois cards do dashboard, pelo
@@ -596,66 +607,61 @@ type RecorrenciaCrua = Awaited<ReturnType<typeof getRecurrences>>[number];
  *
  * - UM `Promise.all` com exatamente as leituras que o `escopo` pede — nem uma a mais, para o
  *   card do dashboard não passar a pagar pelas que só o relatório usa. Leitura fora do escopo
- *   volta `[]` sem tocar o banco.
+ *   fica ausente do retorno, sem tocar o banco.
  * - `getStatementInstallmentItems` fica DEPOIS do `Promise.all`, porque depende dos ids das
  *   faturas. Preservar a forma das chamadas é parte de preservar o comportamento: uma ida e
  *   volta em série a mais ou a menos é mudança de tempo de resposta.
  * - `contas` voltam CRUAS (quem quer o número chama `saldoDasContas`), e `recorrencias`
  *   também — além de entrarem em `entradas.recorrencias`. Decisão do dono, fechando uma lacuna
  *   do desenho: o relatório monta "assinaturas" com `description` e `category.name`, que não
- *   são entrada do motor. As duas são `[]` quando o escopo não as lê.
+ *   são entrada do motor. As duas ficam ausentes quando o escopo não as lê.
  *
  * Com `owner`, todas as leituras usam o client do dono e filtram `user_id` explicitamente,
  * inclusive as parcelas cujos ids de fatura já vieram filtrados (invariante 84).
  */
-export async function lerFinanceiro(params: {
-  janela: JanelaFinanceira;
-  escopo: EscopoFinanceiro;
-  owner?: LeituraDoDono;
-}): Promise<{
-  entradas: EntradasDoMotor;
-  contas: AccountWithBalance[];
-  recorrencias: RecorrenciaCrua[];
-}> {
+export async function lerFinanceiro<E extends EscopoFinanceiro>(
+  params: ParametrosDaLeitura<E>,
+): Promise<LeituraFinanceira<E>> {
   const { janela, escopo, owner } = params;
 
-  const nada = <T>(): Promise<T[]> => Promise.resolve([]);
+  if (escopo.transacoes && janela === undefined) {
+    throw new Error("A leitura de transações exige uma janela financeira.");
+  }
 
   const [contas, cartoes, faturas, recebiveis, contasFixas, recorrencias, transacoes] =
     await Promise.all([
-      escopo.contas ? getAccounts(owner) : nada<AccountWithBalance>(),
-      escopo.cartoes ? getCreditCards(owner) : nada<CreditCardRow>(),
-      escopo.faturas ? getStatements({}, owner) : nada<CardStatementWithTotal>(),
-      escopo.recebiveis ? getReceivables(owner) : nada<ReceivableWithRelations>(),
-      escopo.contasFixas
-        ? getBills(owner)
-        : nada<Awaited<ReturnType<typeof getBills>>[number]>(),
-      escopo.recorrencias ? getRecurrences(owner) : nada<RecorrenciaCrua>(),
-      escopo.transacoes
+      escopo.contas ? getAccounts(owner) : undefined,
+      escopo.cartoes ? getCreditCards(owner) : undefined,
+      escopo.faturas ? getStatements({}, owner) : undefined,
+      escopo.recebiveis ? getReceivables(owner) : undefined,
+      escopo.contasFixas ? getBills(owner) : undefined,
+      escopo.recorrencias ? getRecurrences(owner) : undefined,
+      escopo.transacoes && janela !== undefined
         ? getTransactionsRange({ from: janela.from, to: janela.to }, owner)
-        : nada<TransactionWithRelations>(),
+        : undefined,
     ]);
 
-  const parcelas = escopo.parcelas
-    ? await getStatementInstallmentItems(
-        faturas.map((s) => s.id).filter(Boolean) as string[],
-        owner,
-      )
-    : [];
+  const linhas: LinhasFinanceiras = {};
+  if (transacoes !== undefined) linhas.transacoes = transacoes;
+  if (faturas !== undefined) linhas.faturas = faturas;
+  if (recebiveis !== undefined) linhas.recebiveis = recebiveis;
+  if (cartoes !== undefined) linhas.cartoes = cartoes;
+  if (recorrencias !== undefined) linhas.recorrencias = recorrencias;
+  if (contasFixas !== undefined) linhas.contasFixas = contasFixas;
+  if (escopo.parcelas) {
+    linhas.parcelas = await getStatementInstallmentItems(
+      (faturas ?? []).map((s) => s.id).filter((id): id is string => Boolean(id)),
+      owner,
+    );
+  }
 
+  // O TS não relaciona as leituras condicionais acima ao tipo de E. Cada chave nasce
+  // somente de uma leitura pedida; ler-financeiro.test.ts confere Object.keys nos três escopos.
   return {
-    entradas: montarEntradas({
-      transacoes,
-      faturas,
-      recebiveis,
-      parcelas,
-      cartoes,
-      recorrencias,
-      contasFixas,
-    }),
-    contas,
-    recorrencias,
-  };
+    entradas: montarEntradas(linhas),
+    ...(contas !== undefined ? { contas } : {}),
+    ...(recorrencias !== undefined ? { recorrencias } : {}),
+  } as LeituraFinanceira<E>;
 }
 
 /* ───────────────────── Fase 06 — Importação (Excel/CSV/OFX) ───────────────────── */

@@ -46,6 +46,7 @@ import {
   saldoDasContas,
   ultimoDiaDoMes,
   type EscopoFinanceiro,
+  type LinhasFinanceiras,
   type LinhaTx,
 } from "@/lib/finance/pipeline";
 
@@ -908,11 +909,10 @@ describe("03-B — montarEntradas devolve o que o Cron montava à mão (caso do 
     expect(novo.recs[1].valor).toBe(12.34);
   });
 
-  it("listas que o Cron não passa voltam vazias", () => {
-    expect(novo.inst).toEqual([]);
-    expect(novo.cards).toEqual([]);
-    expect(novo.recorrencias).toEqual([]);
-    expect(novo.bills).toEqual([]);
+  it("listas que o Cron não passa ficam ausentes", () => {
+    expect(Object.keys(novo).sort()).toEqual(["recs", "sts", "txs"]);
+    // @ts-expect-error — o Cron não leu parcelas: a chave não existe (R1).
+    expect(novo.inst).toBeUndefined();
   });
 });
 
@@ -965,8 +965,29 @@ describe("03-B — o motor lê a entrada montada como lia a montagem de referên
 /* ═══════════════════════════ Normalização e forma ═══════════════════════════ */
 
 describe("03-B — montarEntradas: normalização", () => {
-  it("lista não informada volta vazia", () => {
-    expect(montarEntradas({})).toEqual({
+  it("lista não informada ou undefined deixa a chave ausente", () => {
+    expect(montarEntradas({})).toEqual({});
+    expect(montarEntradas({
+      transacoes: undefined,
+      faturas: undefined,
+      recebiveis: undefined,
+      parcelas: undefined,
+      cartoes: undefined,
+      recorrencias: undefined,
+      contasFixas: undefined,
+    })).toEqual({});
+  });
+
+  it("lista lida e vazia mantém a chave presente", () => {
+    expect(montarEntradas({
+      transacoes: [],
+      faturas: [],
+      recebiveis: [],
+      parcelas: [],
+      cartoes: [],
+      recorrencias: [],
+      contasFixas: [],
+    })).toEqual({
       txs: [],
       sts: [],
       recs: [],
@@ -975,6 +996,18 @@ describe("03-B — montarEntradas: normalização", () => {
       recorrencias: [],
       bills: [],
     });
+  });
+
+  it("o tipo só promete listas obrigatórias e definidas (tsc --noEmit)", () => {
+    // @ts-expect-error — receber transações não disponibiliza parcelas (M1b).
+    expect(montarEntradas({ transacoes: transacoesDoCron }).inst).toBeUndefined();
+    const opcionais: LinhasFinanceiras = { transacoes: transacoesDoCron };
+    const entradas = montarEntradas(opcionais);
+    // @ts-expect-error — uma chave opcional não garante que a lista foi lida.
+    expect(entradas.txs).toHaveLength(transacoesDoCron.length);
+    const indefinidas: { transacoes: readonly LinhaTx[] | undefined } = { transacoes: undefined };
+    // @ts-expect-error — aceitar undefined também impede prometer a chave.
+    expect(montarEntradas(indefinidas).txs).toBeUndefined();
   });
 
   it("dinheiro em texto vira número em todo campo de dinheiro; ausente vira null, não 0", () => {
@@ -1310,6 +1343,21 @@ describe("03-B — fronteira: nenhum arquivo fora de pipeline.ts monta um Dash*"
         const codigo = semComentarios(fs.readFileSync(f, "utf8"));
         return MONTAGEM_EM_LISTA.test(codigo) || MONTAGEM_EM_CALLBACK.test(codigo);
       })
+      .map((f) => path.relative(SRC, f).split(path.sep).join("/"))
+      .sort();
+    expect(encontrados).toEqual([]);
+  });
+
+  it("nenhum installmentItems: [] nem parcelas: [] literal fora de teste (M2)", () => {
+    const VAZIO = /\b(?:installmentItems|parcelas)\s*:\s*\[\s*\]/;
+    expect(VAZIO.test("installmentItems: []")).toBe(true);
+    expect(VAZIO.test("parcelas: [\n  ]")).toBe(true);
+    expect(VAZIO.test("parcelas: linhas")).toBe(false);
+    expect(VAZIO.test(semComentarios("// parcelas: []\n/* installmentItems: [] */"))).toBe(false);
+    // A trava de ausência também vale dentro de pipeline.ts.
+    const encontrados = todos
+      .filter((f) => !f.endsWith(".test.ts"))
+      .filter((f) => VAZIO.test(semComentarios(fs.readFileSync(f, "utf8"))))
       .map((f) => path.relative(SRC, f).split(path.sep).join("/"))
       .sort();
     expect(encontrados).toEqual([]);

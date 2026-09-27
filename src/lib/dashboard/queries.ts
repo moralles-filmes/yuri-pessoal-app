@@ -12,7 +12,6 @@ import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { dateInSaoPaulo, saoPauloWallClockToInstant } from "@/lib/format";
 import { lerFinanceiro } from "@/lib/finance/queries";
 import {
-  mesDe,
   proximas6Faturas,
   proximasContasPagar,
   resumoMes,
@@ -114,8 +113,8 @@ export async function getFinanceCardData(
   owner?: LeituraDoDono,
 ): Promise<FinanceCardData> {
   // REDESIGN-03-B — as mesmas cinco leituras, com o mesmo `owner` em cada uma. ⚠️ Este escopo
-  // NÃO lê parcelas (`entradas.inst` vem vazio): serve para o resumo, não para
-  // `gastosPorCategoria` (risco R1 do desenho).
+  // NÃO lê parcelas (`entradas.inst` fica ausente): serve para o resumo; tentar usá-lo em
+  // `gastosPorCategoria` é erro de compilação (R1).
   const { entradas, contas: accounts } = await lerFinanceiro({
     janela: janelaDoMes(mes),
     escopo: ESCOPO_CARD_FINANCEIRO,
@@ -148,11 +147,10 @@ export async function getFinanceCardData(
 export async function getInvoicesCardData(
   todayIso: string,
 ): Promise<InvoicesCardData> {
-  // REDESIGN-03-B — a janela NÃO é lida: `ESCOPO_FATURAS` não pede transações. Os recebíveis
+  // REDESIGN-03-B2 — sem janela: `ESCOPO_FATURAS` não pede transações. Os recebíveis
   // passam a carregar `ref_month` como os das outras telas; este card chama `totalAReceber`
   // SEM mês, então o número dele não muda.
   const { entradas } = await lerFinanceiro({
-    janela: janelaDoMes(mesDe(todayIso)),
     escopo: ESCOPO_FATURAS,
   });
   const { cards, sts, recs } = entradas;
