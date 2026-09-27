@@ -71,6 +71,7 @@ beforeEach(() => {
     conta({ id: "c3", name: "Antiga", current_balance: 999.99, is_active: false }),
   ];
   resumoFalso = {
+    completude: { estado: "exato" },
     saldo: 13235.79,
     entradas: 5000,
     saidas: 3200,
@@ -85,6 +86,7 @@ beforeEach(() => {
     mes: "2026-08",
   };
   faturasFalsas = {
+    completude: { estado: "exato" },
     abertas: 1,
     fechadas: 1,
     pagas: 2,
@@ -161,6 +163,25 @@ describe("finance.get_balances", () => {
 });
 
 describe("finance.get_spending", () => {
+  it("mantém a leitura exata sem motivo de incompletude", async () => {
+    const saida = await getSpending({});
+    expect(saida.completude).toBe("exato");
+    expect(saida).not.toHaveProperty("motivo_incompleto");
+  });
+
+  it("repassa a completude parcial e junta os motivos do card", async () => {
+    resumoFalso.completude = {
+      estado: "parcial",
+      motivos: ["Leitura de lançamentos incompleta.", "Leitura de recebíveis incompleta."],
+    };
+    const saida = await getSpending({});
+    expect(saida.completude).toBe("parcial");
+    expect(saida.motivo_incompleto).toBe(
+      "Leitura de lançamentos incompleta. Leitura de recebíveis incompleta.",
+    );
+    expect(saida.agregados).toMatchObject({ entradas: 5000, saidas: 3200 });
+  });
+
   it("usa o mês atual quando nenhum é pedido", async () => {
     await getSpending({});
     expect(mesPedido).toBe("2026-08");
@@ -210,6 +231,41 @@ describe("finance.get_spending", () => {
 });
 
 describe("finance.get_invoice", () => {
+  it("mantém a leitura exata sem motivo de incompletude", async () => {
+    const saida = await getInvoice();
+    expect(saida.completude).toBe("exato");
+    expect(saida).not.toHaveProperty("motivo_incompleto");
+  });
+
+  it("repassa a completude parcial e junta os motivos do card", async () => {
+    faturasFalsas.completude = {
+      estado: "parcial",
+      motivos: ["Leitura de recebíveis incompleta.", "Contagem indisponível."],
+    };
+    const saida = await getInvoice();
+    expect(saida.completude).toBe("parcial");
+    expect(saida.motivo_incompleto).toBe(
+      "Leitura de recebíveis incompleta. Contagem indisponível.",
+    );
+    expect(saida.agregados).toMatchObject({ total_das_nao_pagas: 1800 });
+    expect(saida.contagem).toBe(2);
+  });
+
+  it.each([false, true])("preserva completude parcial na saída vazia (hasCards=%s)", async (hasCards) => {
+    faturasFalsas = {
+      ...faturasFalsas,
+      hasCards,
+      proximas: [],
+      completude: { estado: "parcial", motivos: ["Leitura de recebíveis incompleta."] },
+    };
+    const saida = await getInvoice();
+    expect(saida).toMatchObject({
+      completude: "parcial",
+      motivo_incompleto: "Leitura de recebíveis incompleta.",
+      contagem: 0,
+    });
+  });
+
   it("repassa contagens e totais das faturas", async () => {
     const saida = await getInvoice();
     expect(saida.agregados).toMatchObject({

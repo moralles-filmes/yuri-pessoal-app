@@ -113,6 +113,9 @@ export async function generateForUser(
       .select("course_id, session_date")
       .eq("user_id", userId)
       .gte("session_date", spDateIso(addDays(now, -120))),
+    // A leitura de transações do Cron não tem .limit e continua sem: pôr teto agora
+    // truncaria os dados e mudaria o número. O max_rows do PostgREST (padrão 1000,
+    // configurado fora do alcance do SQL) também vale para o Cron.
     service
       .from("transactions")
       .select(

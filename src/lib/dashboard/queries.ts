@@ -115,7 +115,7 @@ export async function getFinanceCardData(
   // REDESIGN-03-B — as mesmas cinco leituras, com o mesmo `owner` em cada uma. ⚠️ Este escopo
   // NÃO lê parcelas (`entradas.inst` fica ausente): serve para o resumo; tentar usá-lo em
   // `gastosPorCategoria` é erro de compilação (R1).
-  const { entradas, contas: accounts } = await lerFinanceiro({
+  const { entradas, contas: accounts, completude } = await lerFinanceiro({
     janela: janelaDoMes(mes),
     escopo: ESCOPO_CARD_FINANCEIRO,
     owner,
@@ -127,6 +127,7 @@ export async function getFinanceCardData(
   const saldo = saldoDasContas(accounts);
 
   return {
+    completude,
     saldo,
     entradas: resumo.entradas,
     saidas: resumo.saidas,
@@ -150,7 +151,7 @@ export async function getInvoicesCardData(
   // REDESIGN-03-B2 — sem janela: `ESCOPO_FATURAS` não pede transações. Os recebíveis
   // passam a carregar `ref_month` como os das outras telas; este card chama `totalAReceber`
   // SEM mês, então o número dele não muda.
-  const { entradas } = await lerFinanceiro({
+  const { entradas, completude } = await lerFinanceiro({
     escopo: ESCOPO_FATURAS,
   });
   const { cards, sts, recs } = entradas;
@@ -164,6 +165,7 @@ export async function getInvoicesCardData(
   const reais = faturas.filter((f) => !f.virtual);
 
   return {
+    completude,
     abertas: reais.filter((f) => f.status === "aberta").length,
     fechadas: reais.filter((f) => f.status === "fechada" || f.status === "atrasada").length,
     pagas: reais.filter((f) => f.status === "paga").length,

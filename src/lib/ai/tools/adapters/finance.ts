@@ -112,7 +112,10 @@ export async function getSpending(input: { mes?: string }): Promise<ToolOutput> 
     // Não é uma lista de transações: a ferramenta devolve o RESUMO do mês, e é isso que a
     // contagem representa. Uma lista de lançamentos é outra ferramenta, que não existe.
     contagem: 1,
-    completude: "exato",
+    completude: d.completude.estado,
+    ...(d.completude.estado === "parcial"
+      ? { motivo_incompleto: d.completude.motivos.join(" ") }
+      : {}),
     agregados: {
       mes,
       moeda: "BRL",
@@ -145,21 +148,33 @@ export async function getSpending(input: { mes?: string }): Promise<ToolOutput> 
 export async function getInvoice(): Promise<ToolOutput> {
   const hoje = hojeISO();
   const d = await getInvoicesCardData(hoje);
+  const completude = {
+    completude: d.completude.estado,
+    ...(d.completude.estado === "parcial"
+      ? { motivo_incompleto: d.completude.motivos.join(" ") }
+      : {}),
+  };
 
   if (!d.hasCards) {
-    return emptyToolOutput("Não há cartão de crédito cadastrado, então não há fatura.");
+    return {
+      ...emptyToolOutput("Não há cartão de crédito cadastrado, então não há fatura."),
+      ...completude,
+    };
   }
 
   if (d.proximas.length === 0) {
-    return emptyToolOutput(
-      "Há cartão cadastrado, mas nenhuma fatura para mostrar. Isso é ausência de fatura registrada, não uma fatura de valor zero.",
-    );
+    return {
+      ...emptyToolOutput(
+        "Há cartão cadastrado, mas nenhuma fatura para mostrar. Isso é ausência de fatura registrada, não uma fatura de valor zero.",
+      ),
+      ...completude,
+    };
   }
 
   return {
     periodo: null,
     contagem: d.proximas.length,
-    completude: "exato",
+    ...completude,
     agregados: {
       moeda: "BRL",
       faturas_abertas: d.abertas,

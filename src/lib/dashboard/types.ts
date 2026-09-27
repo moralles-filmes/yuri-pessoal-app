@@ -6,6 +6,7 @@
 import type { CalendarEventLite } from "@/lib/calendar/events";
 import type { NutrientTotalQuality } from "@/lib/nutrition/constants";
 import type { StatementStatus } from "@/lib/finance/constants";
+import type { CompletudeFinanceira } from "@/lib/finance/pipeline";
 import type { HabitCategory, HabitUnit } from "@/lib/habits/constants";
 import type { StudyCategory } from "@/lib/studies/constants";
 import type { TaskPriority, TaskStatus, TaskStoredStatus } from "@/lib/tasks/constants";
@@ -13,6 +14,7 @@ import type { TaskPriority, TaskStatus, TaskStoredStatus } from "@/lib/tasks/con
 /* ───────────────────────────── Financeiro ───────────────────────────── */
 
 export type FinanceCardData = {
+  completude: CompletudeFinanceira;
   saldo: number;
   entradas: number;
   saidas: number;
@@ -42,6 +44,7 @@ export type DashFaturaItem = {
 };
 
 export type InvoicesCardData = {
+  completude: CompletudeFinanceira;
   abertas: number;
   fechadas: number;
   pagas: number;
