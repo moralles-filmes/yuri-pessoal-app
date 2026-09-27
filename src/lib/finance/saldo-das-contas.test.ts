@@ -71,12 +71,12 @@ describe("03-B2 (A6) — fronteira da soma de saldos", () => {
     expect(SOMA_DE_SALDOS.test(semComentarios(`// ${soma}\n/* ${soma} */`))).toBe(false);
   });
 
-  it("só a exceção declarada da IA soma current_balance fora do módulo (M9)", () => {
-    // A IA soma só as contas ativas; esta exceção sai no conserto da B3.
+  it("ninguém soma current_balance fora do módulo (M9)", () => {
+    // A exceção da IA saiu no conserto da B3.
     const encontrados = varridos
       .filter((f) => SOMA_DE_SALDOS.test(f.codigo))
       .map((f) => f.arquivo)
       .sort();
-    expect(encontrados).toEqual(["lib/ai/tools/adapters/finance.ts"]);
+    expect(encontrados).toEqual([]);
   });
 });

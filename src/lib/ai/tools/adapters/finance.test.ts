@@ -137,18 +137,23 @@ describe("finance.get_balances", () => {
   });
 
   /**
-   * CARACTERIZAÇÃO da B3: congela o comportamento de hoje antes do conserto aprovado pelo dono.
-   * A conta inativa com saldo não aparece nos itens nem no total.
+   * Decisão do dono na 03-B2, B3: esconder a conta não faz o dinheiro sumir.
+   * O total inclui todas as contas; as inativas com saldo aparecem nos itens, marcadas.
    */
-  it("soma só as contas ativas", async () => {
+  it("soma todas as contas e marca as inativas com saldo nos itens", async () => {
     const saida = await getBalances();
-    const itens = saida.itens as { conta: string; saldo: number }[];
-    // 12345.67 + 890.12 = 13235.79. A conta inativa (999.99) fica fora.
-    expect(saida.agregados).toMatchObject({ contas_ativas: 2, saldo_total: 13235.79 });
-    expect(saida.contagem).toBe(2);
-    expect(itens.map((item) => item.conta)).toEqual(["Nubank", "Poupança"]);
+    const itens = saida.itens as { conta: string; saldo: number; inativa: boolean }[];
+    // 12345.67 + 890.12 + 999.99 = 14235.78, incluindo a conta inativa.
+    expect(saida.agregados).toMatchObject({ contas_ativas: 2, contas_inativas_com_saldo: 1 });
+    expect((saida.agregados as { saldo_total: number }).saldo_total).toBeCloseTo(14235.78, 2);
+    expect(saida.contagem).toBe(3);
+    expect(itens).toEqual([
+      { conta: "Nubank", tipo: "corrente", saldo: 12345.67, inativa: false },
+      { conta: "Poupança", tipo: "poupanca", saldo: 890.12, inativa: false },
+      { conta: "Antiga", tipo: "corrente", saldo: 999.99, inativa: true },
+    ]);
     const somaDosItens = itens.reduce((total, item) => total + item.saldo, 0);
-    expect(somaDosItens).toBeCloseTo(13235.79, 2);
+    expect(somaDosItens).toBeCloseTo(14235.78, 2);
     expect(somaDosItens).toBeCloseTo(
       (saida.agregados as { saldo_total: number }).saldo_total,
       2,
@@ -167,10 +172,25 @@ describe("finance.get_balances", () => {
 
   it("sem conta ativa, distingue 'nenhuma cadastrada' de 'todas inativas'", async () => {
     contasFalsas = [contasFalsas[2]];
-    expect((await getBalances()).observacao).toContain("inativas");
+    const comSaldo = await getBalances();
+    expect(comSaldo.contagem).toBe(1);
+    expect(comSaldo.agregados).toMatchObject({ contas_ativas: 0, contas_inativas_com_saldo: 1 });
+    expect((comSaldo.agregados as { saldo_total: number }).saldo_total).toBeCloseTo(999.99, 2);
+    expect(comSaldo.itens).toEqual([
+      { conta: "Antiga", tipo: "corrente", saldo: 999.99, inativa: true },
+    ]);
+
+    contasFalsas = [{ ...contasFalsas[0], current_balance: 0 }];
+    const semSaldo = await getBalances();
+    expect(semSaldo.contagem).toBe(0);
+    expect(semSaldo.itens).toEqual([]);
+    expect(semSaldo.observacao).toBe("Não há conta ativa — as 1 existentes estão inativas.");
 
     contasFalsas = [];
-    expect((await getBalances()).observacao).toContain("não há conta cadastrada");
+    const semContas = await getBalances();
+    expect(semContas.contagem).toBe(0);
+    expect(semContas.itens).toEqual([]);
+    expect(semContas.observacao).toBe("Ainda não há conta cadastrada.");
   });
 });
 
