@@ -9,7 +9,7 @@ import { RegionalCard } from "@/components/settings/regional-card";
 import { NotificationsCard } from "@/components/settings/notifications-card";
 import { DashboardPrefsCard } from "@/components/settings/dashboard-prefs-card";
 import { AiCard } from "@/components/settings/ai-card";
-import { GoogleConnectCard } from "@/app/(app)/agenda/google-connect-card";
+import { GoogleConnectCard } from "@/components/calendar/google-connect-card";
 import {
   Card,
   CardContent,

@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { MonthView } from "@/components/calendar/month-view";
 import { TimeGridView } from "@/components/calendar/time-grid";
 import { UpcomingEvents } from "@/components/calendar/upcoming-events";
-import { GoogleConnectCard } from "./google-connect-card";
+import { GoogleConnectCard } from "@/components/calendar/google-connect-card";
 import { EventFormDialog } from "./event-form";
 import { EventDetailsDialog } from "./event-details";
 import {
