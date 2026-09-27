@@ -9,31 +9,21 @@
 import { addDays, format, startOfMonth, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
-import {
-  dateInSaoPaulo,
-  saoPauloWallClockToInstant,
-  toDateInputValue,
-} from "@/lib/format";
-import {
-  getAccounts,
-  getBills,
-  getReceivables,
-  getStatements,
-  getTransactionsRange,
-  lerFinanceiro,
-} from "@/lib/finance/queries";
+import { dateInSaoPaulo, saoPauloWallClockToInstant } from "@/lib/format";
+import { lerFinanceiro } from "@/lib/finance/queries";
 import {
   mesDe,
   proximas6Faturas,
   proximasContasPagar,
   resumoMes,
   totalAReceber,
-  type DashBill,
-  type DashReceivable,
-  type DashStatement,
-  type DashTx,
 } from "@/lib/finance/dashboard";
-import { ESCOPO_FATURAS, janelaDoMes } from "@/lib/finance/pipeline";
+import {
+  ESCOPO_CARD_FINANCEIRO,
+  ESCOPO_FATURAS,
+  janelaDoMes,
+  saldoDasContas,
+} from "@/lib/finance/pipeline";
 import { getCalendarEvents, getUpcomingCalendarEvents } from "@/lib/calendar/queries";
 import { getHabitsDashboard } from "@/lib/habits/queries";
 import { getRoutinesWithToday } from "@/lib/tasks/queries";
@@ -108,12 +98,6 @@ function fimDoDiaSP(dia: string): Date {
   return new Date(inicioDoDiaSP(dia).getTime() + UM_DIA_MS - 1);
 }
 
-/** Último dia do mês 'yyyy-MM' como 'yyyy-MM-dd'. */
-function fimDoMes(mes: string): string {
-  const [y, m] = mes.split("-").map(Number);
-  return toDateInputValue(new Date(y, m, 0));
-}
-
 /* ───────────────────────────── Financeiro ───────────────────────────── */
 
 /**
@@ -129,59 +113,19 @@ export async function getFinanceCardData(
   todayIso: string,
   owner?: LeituraDoDono,
 ): Promise<FinanceCardData> {
-  const [accounts, statements, receivables, bills, transactions] =
-    await Promise.all([
-      getAccounts(owner),
-      getStatements({}, owner),
-      getReceivables(owner),
-      getBills(owner),
-      getTransactionsRange({ from: `${mes}-01`, to: fimDoMes(mes) }, owner),
-    ]);
-
-  const txs: DashTx[] = transactions.map((t) => ({
-    amount: t.amount,
-    valor_pessoal: t.valor_pessoal,
-    type: t.type,
-    payment_method: t.payment_method,
-    status: t.status,
-    competence_date: t.competence_date,
-    card_id: t.card_id,
-    statement_id: t.statement_id,
-    parcelado: t.parcelado,
-    category_id: t.category_id,
-    category: t.category
-      ? { id: t.category.id, name: t.category.name, color: t.category.color }
-      : null,
-  }));
-  const sts: DashStatement[] = statements.map((s) => ({
-    id: s.id,
-    card_id: s.card_id,
-    competencia: s.competencia,
-    data_fechamento: s.data_fechamento,
-    data_vencimento: s.data_vencimento,
-    pago_em: s.pago_em,
-    total_atual: s.total_atual,
-  }));
-  const recs: DashReceivable[] = receivables.map((r) => ({
-    statement_id: r.statement_id,
-    installment_id: r.installment_id,
-    valor: r.valor,
-    status: r.status,
-    ref_month:
-      r.statement?.competencia?.slice(0, 7) ??
-      r.transaction?.purchase_date?.slice(0, 7) ??
-      null,
-  }));
-  const dashBills: DashBill[] = bills.map((b) => ({
-    name: b.name,
-    amount: b.amount,
-    due_day: b.due_day,
-    is_active: b.is_active,
-  }));
+  // REDESIGN-03-B — as mesmas cinco leituras, com o mesmo `owner` em cada uma. ⚠️ Este escopo
+  // NÃO lê parcelas (`entradas.inst` vem vazio): serve para o resumo, não para
+  // `gastosPorCategoria` (risco R1 do desenho).
+  const { entradas, contas: accounts } = await lerFinanceiro({
+    janela: janelaDoMes(mes),
+    escopo: ESCOPO_CARD_FINANCEIRO,
+    owner,
+  });
+  const { txs, sts, recs, bills } = entradas;
 
   const resumo = resumoMes({ mes, transactions: txs, statements: sts, receivables: recs });
-  const contas = proximasContasPagar({ hoje: todayIso, bills: dashBills });
-  const saldo = accounts.reduce((s, a) => s + (a.current_balance ?? 0), 0);
+  const contas = proximasContasPagar({ hoje: todayIso, bills });
+  const saldo = saldoDasContas(accounts);
 
   return {
     saldo,
