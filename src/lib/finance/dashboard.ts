@@ -679,6 +679,32 @@ export function proximasContasPagar(params: {
 
 /* ───────────────────────────── Alertas ───────────────────────────── */
 
+/**
+ * REDESIGN-03-B — Média de saídas dos meses de referência, a régua do alerta de gasto alto.
+ *
+ * ⚠️ A TELA E O SINO USAM RÉGUAS DIFERENTES, E CONTINUAM USANDO. Até a 03-B eram duas contas
+ * escritas à mão (a página do dashboard financeiro e o Cron) que discordavam em três eixos:
+ *  1. mês sem saída — a tela IGNORA, o sino conta como 0 e DIVIDE;
+ *  2. quantos meses — a tela usa até 5 (a janela da evolução), o sino exatamente 3;
+ *  3. a base de cada mês — a tela lê a janela inteira, o sino a janela truncada em hoje.
+ * O eixo 1 passou a ter nome (`ignorarMesesSemSaida`); os eixos 2 e 3 ficam visíveis nos pontos
+ * que cada chamador monta. Unificá-los muda número — é decisão do dono, não desta função.
+ *
+ * O filtro é `> 0`, não `!== 0`: saída NEGATIVA (estorno maior que o gasto) também é descartada
+ * pela tela. Lista vazia devolve 0, nunca `NaN` — e `gerarAlertas` não alerta com média 0.
+ */
+export function mediaDeSaidas(
+  pontos: readonly { mes: string; saidas: number }[],
+  opcoes: { ignorarMesesSemSaida: boolean },
+): number {
+  const considerados = opcoes.ignorarMesesSemSaida
+    ? pontos.filter((p) => p.saidas > 0)
+    : pontos;
+  return considerados.length > 0
+    ? considerados.reduce((s, p) => s + p.saidas, 0) / considerados.length
+    : 0;
+}
+
 export type Alerta = {
   kind: "gasto_alto" | "limite_cartao" | "vencimento";
   severity: "warning" | "danger";

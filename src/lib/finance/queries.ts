@@ -15,6 +15,12 @@ import {
   saldosPorDia,
   type MovimentoDeSaldo,
 } from "@/lib/finance/daily-balance";
+import {
+  montarEntradas,
+  type EntradasDoMotor,
+  type EscopoFinanceiro,
+  type JanelaFinanceira,
+} from "@/lib/finance/pipeline";
 import type {
   AccountWithBalance,
   BillRow,
@@ -571,6 +577,92 @@ export async function getReceivablesByStatements(
     .select("*, person:people(id,nome)")
     .in("statement_id", statementIds);
   return (data ?? []) as unknown as ReceivableWithPerson[];
+}
+
+/* ───────────────────── REDESIGN-03-B — a leitura do motor financeiro ───────────────────── */
+
+type RecorrenciaCrua = Awaited<ReturnType<typeof getRecurrences>>[number];
+
+/**
+ * As leituras que o motor financeiro consome, já montadas por `montarEntradas` — a camada de
+ * I/O do pipeline (a pura é `pipeline.ts`). Usada pelos dois cards do dashboard, pelo
+ * relatório e pela página do dashboard financeiro. O Cron NÃO entra por aqui: ele mantém o
+ * `Promise.all` de 13 leituras e usa só a camada pura (desenho, §3.1).
+ *
+ * - UM `Promise.all` com exatamente as leituras que o `escopo` pede — nem uma a mais, para o
+ *   card do dashboard não passar a pagar pelas que só o relatório usa. Leitura fora do escopo
+ *   volta `[]` sem tocar o banco.
+ * - `getStatementInstallmentItems` fica DEPOIS do `Promise.all`, porque depende dos ids das
+ *   faturas. Preservar a forma das chamadas é parte de preservar o comportamento: uma ida e
+ *   volta em série a mais ou a menos é mudança de tempo de resposta.
+ * - `contas` voltam CRUAS (quem quer o número chama `saldoDasContas`), e `recorrencias`
+ *   também — além de entrarem em `entradas.recorrencias`. Decisão do dono, fechando uma lacuna
+ *   do desenho: o relatório monta "assinaturas" com `description` e `category.name`, que não
+ *   são entrada do motor. As duas são `[]` quando o escopo não as lê.
+ *
+ * ⛔ `owner` + escopo que peça cartões, recorrências ou parcelas LANÇA, antes de qualquer
+ * leitura: essas três ainda não aceitam `LeituraDoDono` e, sob service role, leriam SEM filtro
+ * de usuário. Erra para "não roda", nunca para "roda lendo o que não devia".
+ */
+export async function lerFinanceiro(params: {
+  janela: JanelaFinanceira;
+  escopo: EscopoFinanceiro;
+  owner?: LeituraDoDono;
+}): Promise<{
+  entradas: EntradasDoMotor;
+  contas: AccountWithBalance[];
+  recorrencias: RecorrenciaCrua[];
+}> {
+  const { janela, escopo, owner } = params;
+
+  if (owner) {
+    const semDono = [
+      escopo.cartoes ? "cartões (getCreditCards)" : null,
+      escopo.recorrencias ? "recorrências (getRecurrences)" : null,
+      escopo.parcelas ? "parcelas (getStatementInstallmentItems)" : null,
+    ].filter((leitura): leitura is string => leitura !== null);
+    if (semDono.length > 0) {
+      throw new Error(
+        `lerFinanceiro: o escopo "${escopo.nome}" pede ${semDono.join(", ")}, que ainda não ` +
+          "aceitam LeituraDoDono — sob service role essas leituras rodariam sem filtro de usuário.",
+      );
+    }
+  }
+
+  const nada = <T>(): Promise<T[]> => Promise.resolve([]);
+
+  const [contas, cartoes, faturas, recebiveis, contasFixas, recorrencias, transacoes] =
+    await Promise.all([
+      escopo.contas ? getAccounts(owner) : nada<AccountWithBalance>(),
+      escopo.cartoes ? getCreditCards() : nada<CreditCardRow>(),
+      escopo.faturas ? getStatements({}, owner) : nada<CardStatementWithTotal>(),
+      escopo.recebiveis ? getReceivables(owner) : nada<ReceivableWithRelations>(),
+      escopo.contasFixas
+        ? getBills(owner)
+        : nada<Awaited<ReturnType<typeof getBills>>[number]>(),
+      escopo.recorrencias ? getRecurrences() : nada<RecorrenciaCrua>(),
+      escopo.transacoes
+        ? getTransactionsRange({ from: janela.from, to: janela.to }, owner)
+        : nada<TransactionWithRelations>(),
+    ]);
+
+  const parcelas = escopo.parcelas
+    ? await getStatementInstallmentItems(faturas.map((s) => s.id).filter(Boolean) as string[])
+    : [];
+
+  return {
+    entradas: montarEntradas({
+      transacoes,
+      faturas,
+      recebiveis,
+      parcelas,
+      cartoes,
+      recorrencias,
+      contasFixas,
+    }),
+    contas,
+    recorrencias,
+  };
 }
 
 /* ───────────────────── Fase 06 — Importação (Excel/CSV/OFX) ───────────────────── */
