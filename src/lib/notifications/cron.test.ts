@@ -18,6 +18,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import { formatCurrency } from "@/lib/format";
 import { generateForUser } from "@/lib/notifications/cron";
 
 type Linha = Record<string, unknown>;
@@ -150,6 +151,72 @@ describe("03-B2 B1 — as faturas que o sino vê", () => {
     const faturas = inseridas("invoice_");
     expect(faturas.map((n) => n.dedupe_key).sort()).toEqual([
       "invoice_overdue:st-real",
+    ]);
+  });
+});
+
+/* ═══════════════════════════ B2 — a régua do gasto alto ═══════════════════════════ */
+
+/** Despesa à vista (pix, sem cartão, sem parcelamento): entra direto em `resumoMes.saidas`. */
+function despesaAVista(data: string, valor: number, status: "pago" | "pendente" = "pago"): Linha {
+  return {
+    user_id: USUARIO,
+    amount: valor,
+    valor_pessoal: null,
+    type: "despesa",
+    payment_method: "pix",
+    status,
+    competence_date: data,
+    card_id: null,
+    statement_id: null,
+    parcelado: false,
+    category_id: null,
+    category: null,
+  };
+}
+
+/** Só lançamentos: sem cartão nem fatura, para o gasto alto ser a única conta em jogo. */
+function soLancamentos(...linhas: Linha[]): void {
+  estado.tabelas = { transactions: linhas };
+}
+
+describe("03-B2 B2 — a régua do gasto alto no sino", () => {
+  /**
+   * ⚠️ CARACTERIZAÇÃO — congela o HOJE, antes do conserto da B2 (decisão do dono em
+   * 2026-09-27: o sino adota a régua da tela). A régua de hoje do sino: exatamente os 3 meses
+   * anteriores, mês sem saída conta como 0 e divide, e o mês corrente lê transações só até hoje.
+   *
+   * Cenário A — um mês zerado (junho) e uma despesa PENDENTE com data futura no mês corrente.
+   * Hoje: saídas de setembro = 700 (a pendente do dia 25 fica fora da janela); média de
+   * jun/jul/ago = (0 + 900 + 900) / 3 = 600; 700 não passa de 600 × 1,2 = 720 → NÃO dispara.
+   */
+  it("B2 — CARACTERIZAÇÃO (cenário A): mês zerado + pendente futuro — hoje o sino não dispara", async () => {
+    soLancamentos(
+      despesaAVista("2026-04-15", 1000),
+      despesaAVista("2026-05-15", 1000),
+      despesaAVista("2026-07-15", 900),
+      despesaAVista("2026-08-15", 900),
+      despesaAVista("2026-09-05", 700),
+      despesaAVista("2026-09-25", 600, "pendente"),
+    );
+    await rodarOCron();
+    expect(inseridas("high_spending").map((n) => n.description)).toEqual([]);
+  });
+
+  /**
+   * Cenário B — o mês zerado puxa a média para baixo.
+   * Hoje: média de jun/jul/ago = (0 + 500 + 500) / 3 ≈ 333,33; setembro = 500 > 400 →
+   * DISPARA, com "50%" na descrição.
+   */
+  it("B2 — CARACTERIZAÇÃO (cenário B): mês zerado puxando a média — hoje o sino dispara 50%", async () => {
+    soLancamentos(
+      despesaAVista("2026-07-15", 500),
+      despesaAVista("2026-08-15", 500),
+      despesaAVista("2026-09-05", 500),
+    );
+    await rodarOCron();
+    expect(inseridas("high_spending").map((n) => n.description)).toEqual([
+      `As saídas do mês superam a média recente em 50% (${formatCurrency(500)}).`,
     ]);
   });
 });
