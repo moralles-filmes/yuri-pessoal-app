@@ -4,9 +4,9 @@
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
  * ║ O QUE ESTE ARQUIVO PROVA.                                                             ║
  * ║                                                                                       ║
- * ║  1. O GUARD: `owner` + escopo que peça cartões, recorrências ou parcelas LANÇA, e      ║
- * ║     lança ANTES de qualquer leitura. Essas três ainda não aceitam `LeituraDoDono`; sob ║
- * ║     service role elas leriam sem filtro de usuário.                                   ║
+ * ║  1. OWNER: os três escopos usam o client do dono e filtram user_id em cada leitura,    ║
+ * ║     inclusive nas parcelas com ids de fatura já filtrados (invariante 84).             ║
+ * ║     Sem owner, usam a sessão sem filtro explícito de user_id.                         ║
  * ║  2. NEM UMA LEITURA A MAIS: cada escopo lê exatamente as tabelas dele.                ║
  * ║  3. A FORMA DAS CHAMADAS: as parcelas vêm DEPOIS do `Promise.all`, com os ids das      ║
  * ║     faturas, e o `owner` chega a cada leitura que o aceita.                            ║
@@ -162,26 +162,38 @@ beforeEach(() => {
   estado.dados = dadosSinteticos();
 });
 
-describe("03-B — lerFinanceiro: o guard do owner (desenho, §4.2)", () => {
-  it("owner + escopo de faturas LANÇA com o motivo, e nenhuma tabela é lida", async () => {
-    await expect(
-      lerFinanceiro({ janela: JANELA, escopo: ESCOPO_FATURAS, owner: DONO }),
-    ).rejects.toThrow(/"faturas" pede cartões \(getCreditCards\).*ainda não aceitam LeituraDoDono/);
-    expect(estado.leituras).toEqual([]);
+describe("03-B2 — lerFinanceiro: owner nos três escopos (desenho, §5.4)", () => {
+  it("owner + escopo de faturas lê as três tabelas pelo client do dono, todas com user_id", async () => {
+    await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_FATURAS, owner: DONO });
+    expect(tabelasLidas()).toEqual(["card_statements_with_total", "credit_cards", "receivables"]);
     expect(estado.clientsDaSessao).toBe(0);
+    for (const leitura of estado.leituras) {
+      expect(leitura.origem).toBe("dono");
+      expect(leitura.filtros).toContainEqual(["eq", "user_id", DONO.userId]);
+    }
   });
 
-  it("owner + escopo do relatório LANÇA citando as três leituras sem dono", async () => {
-    const erro = await lerFinanceiro({
+  it("owner + relatório lê as oito tabelas pelo dono, incluindo user_id nas parcelas", async () => {
+    await lerFinanceiro({
       janela: JANELA,
       escopo: ESCOPO_RELATORIO,
       owner: DONO,
-    }).catch((e: unknown) => e);
-    expect(erro).toBeInstanceOf(Error);
-    expect((erro as Error).message).toContain("cartões (getCreditCards)");
-    expect((erro as Error).message).toContain("recorrências (getRecurrences)");
-    expect((erro as Error).message).toContain("parcelas (getStatementInstallmentItems)");
-    expect(estado.leituras).toEqual([]);
+    });
+    expect(tabelasLidas()).toEqual(
+      [
+        "accounts_with_balance", "bills", "card_statements_with_total", "credit_cards",
+        "receivables", "recurring_transactions", "transaction_installments", "transactions",
+      ].sort(),
+    );
+    expect(estado.clientsDaSessao).toBe(0);
+    for (const leitura of estado.leituras) {
+      expect(leitura.origem).toBe("dono");
+      expect(leitura.filtros).toContainEqual(["eq", "user_id", DONO.userId]);
+    }
+    const ultima = estado.leituras[estado.leituras.length - 1];
+    expect(ultima.tabela).toBe("transaction_installments");
+    expect(ultima.filtros).toContainEqual(["in", "statement_id", ["st-1"]]);
+    expect(ultima.filtros).toContainEqual(["neq", "status", "cancelada"]);
   });
 
   it("owner + escopo do card lê as cinco tabelas PELO CLIENT DO DONO, todas com user_id", async () => {
@@ -201,6 +213,18 @@ describe("03-B — lerFinanceiro: o guard do owner (desenho, §4.2)", () => {
 });
 
 describe("03-B — lerFinanceiro: cada escopo lê exatamente as suas tabelas", () => {
+  it.each([ESCOPO_CARD_FINANCEIRO, ESCOPO_FATURAS, ESCOPO_RELATORIO])(
+    "$nome sem owner usa a sessão e não filtra user_id explicitamente",
+    async (escopo) => {
+      await lerFinanceiro({ janela: JANELA, escopo });
+      expect(estado.clientsDaSessao).toBe(estado.leituras.length);
+      for (const leitura of estado.leituras) {
+        expect(leitura.origem).toBe("sessao");
+        expect(leitura.filtros.some(([, coluna]) => coluna === "user_id")).toBe(false);
+      }
+    },
+  );
+
   it("card do dashboard: cinco leituras, nenhuma de cartões, recorrências ou parcelas", async () => {
     await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
     expect(tabelasLidas()).toEqual(

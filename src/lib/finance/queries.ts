@@ -2,7 +2,7 @@
  * Camada de leitura do financeiro (Fase 02). Server-only: usada por Server
  * Components. A RLS garante que cada query retorna apenas os dados do usuário.
  *
- * ⚠️ **Fase 18-E (Bloco 4) — cinco funções aceitam `owner`.** Quando ele vem, quem lê é o
+ * ⚠️ **Fase 18-E / 03-B2 — oito funções aceitam `owner`.** Quando ele vem, quem lê é o
  * Cron com service role, que IGNORA a RLS: a frase acima deixa de valer e o escopo do
  * usuário passa a ser o `.eq("user_id", …)` explícito. Sem `owner`, o caminho é byte por
  * byte o de antes. Ver `src/lib/supabase/owner.ts`.
@@ -256,11 +256,12 @@ export async function getTransactionsRange(
 
 /* ───────────────────────── Fase 03 — Cartões & Faturas ───────────────────────── */
 
-export async function getCreditCards(): Promise<CreditCardRow[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("credit_cards")
-    .select("*")
+export async function getCreditCards(
+  owner?: LeituraDoDono,
+): Promise<CreditCardRow[]> {
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase.from("credit_cards").select("*");
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("ativo", { ascending: false })
     .order("nome", { ascending: true });
   return (data ?? []) as CreditCardRow[];
@@ -456,10 +457,11 @@ export async function getInstallmentPurchases(
  */
 export async function getStatementInstallmentItems(
   statementIds: string[],
+  owner?: LeituraDoDono,
 ): Promise<StatementInstallmentItem[]> {
   if (statementIds.length === 0) return [];
-  const supabase = await createClient();
-  const { data } = await supabase
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase
     .from("transaction_installments")
     .select(
       // `classificacao` vem do PAI porque é dele que a divisão é: a parcela herda o rateio,
@@ -468,7 +470,9 @@ export async function getStatementInstallmentItems(
       "*, parent:transactions!transaction_installments_parent_transaction_id_fkey(id,description,classificacao,category:categories(id,name,color))",
     )
     .in("statement_id", statementIds)
-    .neq("status", "cancelada")
+    .neq("status", "cancelada");
+  // Invariante 84: ids de faturas já filtrados não substituem o escopo explícito do dono.
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("numero", { ascending: true });
   return (data ?? []) as unknown as StatementInstallmentItem[];
 }
@@ -492,19 +496,20 @@ export async function getBills(owner?: LeituraDoDono): Promise<
   })[];
 }
 
-export async function getRecurrences(): Promise<
+export async function getRecurrences(owner?: LeituraDoDono): Promise<
   (RecurringTransactionRow & {
     account: { id: string; name: string } | null;
     card: { id: string; nome: string } | null;
     category: Pick<CategoryRow, "id" | "name" | "color"> | null;
   })[]
 > {
-  const supabase = await createClient();
-  const { data } = await supabase
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase
     .from("recurring_transactions")
     .select(
       "*, account:accounts(id,name), card:credit_cards(id,nome), category:categories(id,name,color)",
-    )
+    );
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("is_active", { ascending: false })
     .order("next_due_date", { ascending: true });
   return (data ?? []) as unknown as (RecurringTransactionRow & {
@@ -600,9 +605,8 @@ type RecorrenciaCrua = Awaited<ReturnType<typeof getRecurrences>>[number];
  *   do desenho: o relatório monta "assinaturas" com `description` e `category.name`, que não
  *   são entrada do motor. As duas são `[]` quando o escopo não as lê.
  *
- * ⛔ `owner` + escopo que peça cartões, recorrências ou parcelas LANÇA, antes de qualquer
- * leitura: essas três ainda não aceitam `LeituraDoDono` e, sob service role, leriam SEM filtro
- * de usuário. Erra para "não roda", nunca para "roda lendo o que não devia".
+ * Com `owner`, todas as leituras usam o client do dono e filtram `user_id` explicitamente,
+ * inclusive as parcelas cujos ids de fatura já vieram filtrados (invariante 84).
  */
 export async function lerFinanceiro(params: {
   janela: JanelaFinanceira;
@@ -615,39 +619,28 @@ export async function lerFinanceiro(params: {
 }> {
   const { janela, escopo, owner } = params;
 
-  if (owner) {
-    const semDono = [
-      escopo.cartoes ? "cartões (getCreditCards)" : null,
-      escopo.recorrencias ? "recorrências (getRecurrences)" : null,
-      escopo.parcelas ? "parcelas (getStatementInstallmentItems)" : null,
-    ].filter((leitura): leitura is string => leitura !== null);
-    if (semDono.length > 0) {
-      throw new Error(
-        `lerFinanceiro: o escopo "${escopo.nome}" pede ${semDono.join(", ")}, que ainda não ` +
-          "aceitam LeituraDoDono — sob service role essas leituras rodariam sem filtro de usuário.",
-      );
-    }
-  }
-
   const nada = <T>(): Promise<T[]> => Promise.resolve([]);
 
   const [contas, cartoes, faturas, recebiveis, contasFixas, recorrencias, transacoes] =
     await Promise.all([
       escopo.contas ? getAccounts(owner) : nada<AccountWithBalance>(),
-      escopo.cartoes ? getCreditCards() : nada<CreditCardRow>(),
+      escopo.cartoes ? getCreditCards(owner) : nada<CreditCardRow>(),
       escopo.faturas ? getStatements({}, owner) : nada<CardStatementWithTotal>(),
       escopo.recebiveis ? getReceivables(owner) : nada<ReceivableWithRelations>(),
       escopo.contasFixas
         ? getBills(owner)
         : nada<Awaited<ReturnType<typeof getBills>>[number]>(),
-      escopo.recorrencias ? getRecurrences() : nada<RecorrenciaCrua>(),
+      escopo.recorrencias ? getRecurrences(owner) : nada<RecorrenciaCrua>(),
       escopo.transacoes
         ? getTransactionsRange({ from: janela.from, to: janela.to }, owner)
         : nada<TransactionWithRelations>(),
     ]);
 
   const parcelas = escopo.parcelas
-    ? await getStatementInstallmentItems(faturas.map((s) => s.id).filter(Boolean) as string[])
+    ? await getStatementInstallmentItems(
+        faturas.map((s) => s.id).filter(Boolean) as string[],
+        owner,
+      )
     : [];
 
   return {
