@@ -14,12 +14,7 @@ import { expandRowsToOccurrences } from "@/lib/calendar/expand";
 import { proximosCompromissos } from "@/lib/calendar/upcoming";
 import { habitOccursOn } from "@/lib/habits/streak";
 import { addMes, mediaDeSaidas, resumoMes } from "@/lib/finance/dashboard";
-import {
-  janelaDoCron,
-  montarEntradas,
-  type LinhaRecebivel,
-  type LinhaTx,
-} from "@/lib/finance/pipeline";
+import { janelaDoCron, montarEntradas } from "@/lib/finance/pipeline";
 import type { CalendarEventRow } from "@/types/database";
 import {
   filterByPrefs,
@@ -83,7 +78,7 @@ export async function generateForUser(
     service
       .from("receivables")
       .select(
-        "id, valor, status, installment_id, statement_id, data_prevista, person:people(nome), statement:card_statements(data_vencimento)",
+        "id, valor, status, installment_id, statement_id, data_prevista, person:people(nome), statement:card_statements(data_vencimento, competencia), transaction:transactions!receivables_transaction_id_fkey(purchase_date)",
       )
       .eq("user_id", userId),
     service
@@ -121,7 +116,7 @@ export async function generateForUser(
     service
       .from("transactions")
       .select(
-        "amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado",
+        "amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado, category_id, category:categories(id,name,color)",
       )
       .eq("user_id", userId)
       .gte("competence_date", janelaTx.from)
@@ -286,16 +281,20 @@ export async function generateForUser(
   }));
 
   /* ── Gasto alto (resumo do mês × média dos 3 anteriores) ── */
-  // REDESIGN-03-B — a tradução para o motor é a MESMA das telas (`montarEntradas`). Um cast por
-  // lista, nunca campo a campo: o `select` enxuto não traz `category`/`category_id` nem os
-  // embeds de `ref_month`, e as linhas tolerantes aceitam isso — `category_id` sai do dado
-  // (`null` enquanto o select não pedir a coluna), não de uma constante escrita aqui. O embed
-  // `statement` deste select é `{ data_vencimento }`, sem chave em comum com o que a linha lê
-  // (`competencia`), e por isso o TS pede o cast; o `ref_month` sai `null`, e o Cron não o lê.
+  // REDESIGN-03-B — a tradução para o motor é a MESMA das telas (`montarEntradas`).
+  // 03-B2 (A2) — e SEM cast de linha: transações e recebíveis entram como o client os inferiu,
+  // e o `select` traz o que as linhas estritas pedem (`category_id`, `category`, `competencia`,
+  // `purchase_date`). Duas coisas declaradas:
+  //  • lançamento com tipo, status ou forma de pagamento fora do domínio conhecido fica FORA da
+  //    soma (`montarEntradas` estreita pelos arrays de `finance/constants.ts`, que batem com os
+  //    CHECKs). As telas e a IA dizem "parcial" quando isso acontece; o sino não tem onde dizer.
+  //  • as FATURAS continuam passando por `statements`, com o cast local lá de cima: a view
+  //    `card_statements_with_total` tem TODA coluna anulável no tipo gerado, e decidir o que é
+  //    uma fatura sem `id` está fora da 03-B2 (é o mesmo estreitamento de `getStatements`).
   const { txs, sts, recs } = montarEntradas({
-    transacoes: (txRes.data ?? []) as LinhaTx[],
+    transacoes: txRes.data ?? [],
     faturas: statements,
-    recebiveis: receivables as LinhaRecebivel[],
+    recebiveis: receivablesRes.data ?? [],
   });
   const resumoAtual = resumoMes({
     mes: mesAtual,

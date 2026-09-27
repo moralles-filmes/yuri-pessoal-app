@@ -41,11 +41,11 @@ import {
   janelaDoCron,
   janelaDoMes,
   janelaDoRelatorio,
+  lancamentosForaDoDominio,
   montarEntradas,
   saldoDasContas,
   ultimoDiaDoMes,
   type EscopoFinanceiro,
-  type LinhaRecebivel,
   type LinhaTx,
 } from "@/lib/finance/pipeline";
 
@@ -402,6 +402,10 @@ type FaturaDoCron = {
   total_atual: number | null;
 };
 
+/**
+ * 03-B2 (A2): o `select` do Cron passou a trazer `competencia` no embed da fatura e o embed
+ * `transaction` — o que a linha estrita pede para derivar `ref_month`.
+ */
 type RecebivelDoCron = {
   id: string;
   valor: number;
@@ -410,7 +414,11 @@ type RecebivelDoCron = {
   statement_id: string | null;
   data_prevista: string | null;
   person: { nome: string } | { nome: string }[] | null;
-  statement: { data_vencimento: string } | { data_vencimento: string }[] | null;
+  statement:
+    | { data_vencimento: string; competencia: string }
+    | { data_vencimento: string; competencia: string }[]
+    | null;
+  transaction: { purchase_date: string } | { purchase_date: string }[] | null;
 };
 
 function referenciaCron(
@@ -657,8 +665,9 @@ function comoLinhasFinanceiras(l: LinhasCompletas) {
   };
 }
 
-// O Cron: linha CRUA do `select` enxuto — sem `category`, sem `category_id`, sem embeds, e com
-// numérico como texto (o `Number(...)` que ele escrevia campo a campo).
+// O Cron: linha CRUA do `select`, com numérico como texto (o `Number(...)` que ele escrevia
+// campo a campo). Desde a 03-B2 (A2) o `select` traz `category_id`, `category` e os embeds que
+// derivam `ref_month` — e um deles vem como LISTA, a forma que o client pode entregar.
 const faturasDoCron: FaturaDoCron[] = [
   {
     id: "st-1",
@@ -689,7 +698,8 @@ const recebiveisDoCron: RecebivelDoCron[] = [
     statement_id: "st-1",
     data_prevista: null,
     person: { nome: "Pessoa 1" },
-    statement: { data_vencimento: "2026-05-15" },
+    statement: { data_vencimento: "2026-05-15", competencia: "2026-05-01" },
+    transaction: { purchase_date: "2026-04-28" },
   },
   {
     id: "rec-2",
@@ -700,10 +710,11 @@ const recebiveisDoCron: RecebivelDoCron[] = [
     data_prevista: "2026-05-20",
     person: [{ nome: "Pessoa 2" }],
     statement: null,
+    transaction: [{ purchase_date: "2026-04-30" }],
   },
 ];
 
-const transacoesDoCron: Array<Record<string, unknown>> = [
+const transacoesDoCron: LinhaTx[] = [
   {
     amount: "123.45",
     valor_pessoal: null,
@@ -714,6 +725,8 @@ const transacoesDoCron: Array<Record<string, unknown>> = [
     card_id: null,
     statement_id: null,
     parcelado: false,
+    category_id: "cat-a",
+    category: { id: "cat-a", name: "Categoria A", color: "#111111" },
   },
   {
     amount: "90.00",
@@ -725,6 +738,8 @@ const transacoesDoCron: Array<Record<string, unknown>> = [
     card_id: null,
     statement_id: null,
     parcelado: null,
+    category_id: null,
+    category: null,
   },
   {
     amount: 80,
@@ -736,15 +751,20 @@ const transacoesDoCron: Array<Record<string, unknown>> = [
     card_id: "card-1",
     statement_id: "st-1",
     parcelado: false,
+    category_id: "cat-b",
+    category: [{ id: "cat-b", name: "Categoria B", color: null }],
   },
 ];
 
-/** A chamada exata que o Cron faz (um cast por lista, nunca campo a campo — risco R2). */
+/**
+ * A chamada exata que o Cron faz — desde a 03-B2 (A2), SEM cast de linha: as fixtures têm o
+ * tipo que o client infere, e o `LinhaRecebivel` estrito as aceita como estão.
+ */
 function entradasDoCron() {
   return montarEntradas({
-    transacoes: transacoesDoCron as LinhaTx[],
+    transacoes: transacoesDoCron,
     faturas: faturasDoCron,
-    recebiveis: recebiveisDoCron as LinhaRecebivel[],
+    recebiveis: recebiveisDoCron,
   });
 }
 
@@ -848,11 +868,27 @@ describe("03-B — montarEntradas devolve o que o Cron montava à mão (caso do 
     expect(novo.sts).toEqual(ref.sts);
   });
 
-  it("D · txs idênticos, category_id nulo SAINDO DO DADO; category ausente vira null declarado", () => {
-    // Única diferença declarada: a cópia do Cron não tinha a chave `category`; a montagem nova
-    // escreve `null`. Nenhum leitor distingue as duas (o motor lê `t.category?.…`).
-    expect(novo.txs).toEqual(ref.txs.map((t) => ({ ...t, category: null })));
-    expect(novo.txs.map((t) => t.category_id)).toEqual([null, null, null]);
+  /**
+   * 03-B2 (A2) — a "diferença declarada" da 03-B (`category` ausente virando `null`,
+   * `category_id` nulo por constante) DEIXOU DE EXISTIR: o `select` do Cron passou a trazer a
+   * categoria. A referência continua sendo a cópia verbatim da montagem antiga, que escrevia
+   * `category_id: null` — então a comparação é sobre o que o motor SOMA, e a categoria é
+   * conferida à parte, saindo do dado.
+   */
+  it("D · txs: o que o motor soma é idêntico à referência; category_id e category saem do dado (A2)", () => {
+    const semCategoria = (t: DashTx): Partial<DashTx> => {
+      const resto: Partial<DashTx> = { ...t };
+      delete resto.category;
+      delete resto.category_id;
+      return resto;
+    };
+    expect(novo.txs.map(semCategoria)).toEqual(ref.txs.map(semCategoria));
+    expect(novo.txs.map((t) => t.category_id)).toEqual(["cat-a", null, "cat-b"]);
+    expect(novo.txs.map((t) => t.category?.name ?? null)).toEqual([
+      "Categoria A",
+      null,
+      "Categoria B",
+    ]);
     // A normalização que o Cron fazia campo a campo continua acontecendo — agora num lugar só.
     expect(novo.txs.map((t) => [t.amount, t.valor_pessoal])).toEqual([
       [123.45, null],
@@ -861,8 +897,14 @@ describe("03-B — montarEntradas devolve o que o Cron montava à mão (caso do 
     ]);
   });
 
-  it("D · recs idênticos; ref_month ausente vira null declarado (o Cron não lê ref_month)", () => {
-    expect(novo.recs).toEqual(ref.recs.map((r) => ({ ...r, ref_month: null })));
+  it("D · recs: idênticos à referência, e ref_month sai dos embeds que o select passou a trazer (A2)", () => {
+    const semMes = (r: DashReceivable): Partial<DashReceivable> => {
+      const resto: Partial<DashReceivable> = { ...r };
+      delete resto.ref_month;
+      return resto;
+    };
+    expect(novo.recs.map(semMes)).toEqual(ref.recs);
+    expect(novo.recs.map((r) => r.ref_month)).toEqual(["2026-05", "2026-04"]);
     expect(novo.recs[1].valor).toBe(12.34);
   });
 
@@ -937,7 +979,21 @@ describe("03-B — montarEntradas: normalização", () => {
 
   it("dinheiro em texto vira número em todo campo de dinheiro; ausente vira null, não 0", () => {
     const e = montarEntradas({
-      transacoes: [{ amount: "10.5", type: "despesa", status: "pago", competence_date: "2026-05-01" }],
+      transacoes: [
+        {
+          amount: "10.5",
+          type: "despesa",
+          status: "pago",
+          competence_date: "2026-05-01",
+          valor_pessoal: null,
+          payment_method: null,
+          card_id: null,
+          statement_id: null,
+          parcelado: null,
+          category_id: null,
+          category: null,
+        },
+      ],
       faturas: [
         {
           id: "st-1",
@@ -949,8 +1005,17 @@ describe("03-B — montarEntradas: normalização", () => {
           total_atual: "480.50",
         },
       ],
-      recebiveis: [{ statement_id: null, installment_id: null, valor: "7.25", status: "pendente" }],
-      parcelas: [{ id: "inst-1", statement_id: "st-1", valor: "100.00", status: "ativa" }],
+      recebiveis: [
+        {
+          statement_id: null,
+          installment_id: null,
+          valor: "7.25",
+          status: "pendente",
+          statement: null,
+          transaction: null,
+        },
+      ],
+      parcelas: [{ id: "inst-1", statement_id: "st-1", valor: "100.00", status: "ativa", parent: null }],
       cartoes: [
         { id: "card-1", nome: "Cartao 1", cor: null, limite_total: "5000.00", dia_fechamento: 5, dia_vencimento: 15 },
       ],
@@ -1003,6 +1068,98 @@ describe("03-B — montarEntradas: normalização", () => {
 
   it("total_atual nulo continua nulo", () => {
     expect(entradasDoCron().sts[1].total_atual).toBeNull();
+  });
+});
+
+/* ═══════════════════════════ 03-B2 · A2 — linhas estritas ═══════════════════════════ */
+
+describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
+  const base: LinhaTx = {
+    amount: 10,
+    type: "despesa",
+    status: "pago",
+    competence_date: "2026-05-01",
+    valor_pessoal: null,
+    payment_method: null,
+    card_id: null,
+    statement_id: null,
+    parcelado: false,
+    category_id: null,
+    category: null,
+  };
+
+  it("linha sem category_id não compila — chave ausente não vira null em silêncio (M3, tsc --noEmit)", () => {
+    const semCategoria: Omit<LinhaTx, "category_id"> = {
+      amount: 10,
+      type: "despesa",
+      status: "pago",
+      competence_date: "2026-05-01",
+      valor_pessoal: null,
+      payment_method: null,
+      card_id: null,
+      statement_id: null,
+      parcelado: false,
+      category: null,
+    };
+    // @ts-expect-error — `category_id` é obrigatório (anulável, mas presente): R4 da 03-B fechado.
+    const linha: LinhaTx = semCategoria;
+    expect(linha.category_id).toBeUndefined();
+  });
+
+  it.each([
+    ["tipo", { type: "desconhecido" }],
+    ["status", { status: "desconhecido" }],
+    ["forma de pagamento", { payment_method: "desconhecida" }],
+  ] as const)("%s fora do domínio não entra na soma e é contado", (_, desvio) => {
+    const linhas: LinhaTx[] = [base, { ...base, ...desvio }];
+    expect(montarEntradas({ transacoes: linhas }).txs).toHaveLength(1);
+    expect(lancamentosForaDoDominio(linhas)).toBe(1);
+  });
+
+  it("forma de pagamento nula continua válida, e todo valor do CHECK é do domínio", () => {
+    expect(lancamentosForaDoDominio([base])).toBe(0);
+    const doCheck: LinhaTx[] = [
+      { ...base, type: "ajuste", status: "cancelado", payment_method: "conta_corrente" },
+      { ...base, type: "transferencia", status: "recebido", payment_method: "boleto" },
+    ];
+    expect(lancamentosForaDoDominio(doCheck)).toBe(0);
+    expect(montarEntradas({ transacoes: doCheck }).txs).toHaveLength(2);
+  });
+
+  it("embed que vem como lista é normalizado para o primeiro elemento", () => {
+    const e = montarEntradas({
+      recebiveis: [
+        {
+          statement_id: null,
+          installment_id: null,
+          valor: 1,
+          status: "pendente",
+          statement: [{ competencia: "2026-05-01" }],
+          transaction: null,
+        },
+        {
+          statement_id: null,
+          installment_id: null,
+          valor: 2,
+          status: "pendente",
+          statement: [],
+          transaction: [{ purchase_date: "2026-04-20" }],
+        },
+      ],
+      transacoes: [{ ...base, category: [{ id: "cat-z", name: "Categoria Z", color: null }] }],
+      parcelas: [
+        {
+          id: "inst-9",
+          statement_id: null,
+          valor: 3,
+          status: "ativa",
+          parent: [{ category: [{ id: "cat-y", name: "Categoria Y", color: null }] }],
+        },
+      ],
+    });
+    expect(e.recs.map((r) => r.ref_month)).toEqual(["2026-05", "2026-04"]);
+    expect(e.txs[0].category).toEqual({ id: "cat-z", name: "Categoria Z", color: null });
+    expect(e.inst[0].parent).toEqual({ category: { id: "cat-y", name: "Categoria Y", color: null } });
   });
 });
 
@@ -1153,6 +1310,34 @@ describe("03-B — fronteira: nenhum arquivo fora de pipeline.ts monta um Dash*"
         const codigo = semComentarios(fs.readFileSync(f, "utf8"));
         return MONTAGEM_EM_LISTA.test(codigo) || MONTAGEM_EM_CALLBACK.test(codigo);
       })
+      .map((f) => path.relative(SRC, f).split(path.sep).join("/"))
+      .sort();
+    expect(encontrados).toEqual([]);
+  });
+
+  /**
+   * 03-B2 A2 — o Cron entregava as linhas ao pipeline com `as LinhaTx[]` e `as LinhaRecebivel[]`
+   * (R2 da 03-B). Com as linhas estritas e o estreitamento em `montarEntradas`, o dado entra como
+   * o client o inferiu, e um cast de linha volta a ser a forma de esconder uma chave ausente.
+   */
+  it("nenhum `as Linha…` nem `<Linha…>` fora de teste (M4)", () => {
+    // Os tipos de linha são os que `pipeline.ts` EXPORTA — derivados do arquivo, não de uma lista
+    // à mão. Outros módulos têm tipos `LinhaDe…` próprios (memória, documentos e insights da IA)
+    // que não entram no motor e não são assunto desta fronteira.
+    const nomes = [
+      ...semComentarios(fs.readFileSync(PROPRIO, "utf8")).matchAll(/export type (Linha\w+)/g),
+    ].map((m) => m[1]);
+    expect(nomes).toEqual(expect.arrayContaining(["LinhaTx", "LinhaRecebivel", "LinhasFinanceiras"]));
+    const alternativa = nomes.join("|");
+    const CAST_DE_LINHA = new RegExp(
+      `\\bas\\s+(?:readonly\\s+)?(?:${alternativa})\\b|<(?:${alternativa})(?:\\[\\])?>`,
+    );
+    expect(CAST_DE_LINHA.test("rows as LinhaTx[]")).toBe(true);
+    expect(CAST_DE_LINHA.test("rows as readonly LinhaRecebivel[]")).toBe(true);
+    expect(CAST_DE_LINHA.test("type Linhas = LinhasFinanceiras")).toBe(false);
+    expect(CAST_DE_LINHA.test("rows as LinhaDeMemoria[]")).toBe(false);
+    const encontrados = varridos
+      .filter((f) => CAST_DE_LINHA.test(semComentarios(fs.readFileSync(f, "utf8"))))
       .map((f) => path.relative(SRC, f).split(path.sep).join("/"))
       .sort();
     expect(encontrados).toEqual([]);

@@ -29,9 +29,14 @@ import {
   type DashStatement,
   type DashTx,
 } from "@/lib/finance/dashboard";
+import {
+  PAYMENT_METHODS,
+  TRANSACTION_STATUSES,
+  TRANSACTION_TYPES,
+} from "@/lib/finance/constants";
 import { toDateInputValue } from "@/lib/format";
 
-/* ───────────────────────────── Tipos de linha (tolerantes) ───────────────────────────── */
+/* ───────────────────────────── Tipos de linha (estritos) ───────────────────────────── */
 
 /**
  * Dinheiro vem do banco como `numeric`. O client tipado entrega `number`; um `select` cru
@@ -43,22 +48,33 @@ type Dinheiro = number | string;
 type CategoriaEmbutida = { id: string; name: string; color: string | null };
 
 /**
- * Linha de lançamento. TOLERANTE, não frouxa: o que um chamador não traz é opcional (o
- * `select` do Cron não tem `category`, `category_id` nem embeds), mas os quatro campos sem os
- * quais `resumoMes` não tem o que somar continuam obrigatórios.
+ * Relação embutida pelo PostgREST. O client tipado pode entregá-la como objeto OU como lista
+ * (o `one()` do Cron existia por isso), e a linha não mente sobre a forma: `primeiro()`
+ * normaliza, num lugar só.
+ */
+export type Embutido<T> = T | readonly T[] | null;
+
+/**
+ * Linha de lançamento. ESTRITA (03-B2, A2): nenhuma chave é opcional — campo que um chamador
+ * não tem é `null` escrito, e chave ausente é erro de compilação, não `null` silencioso (o R4 da
+ * 03-B). Os quatro campos de `resumoMes` seguem obrigatórios e não anuláveis.
+ *
+ * ⚠️ `type`, `status` e `payment_method` são `string`: é o que o client gerado entrega para
+ * colunas `text` com CHECK. `montarEntradas` ESTREITA pelos arrays de `finance/constants.ts`, que
+ * batem com os CHECKs vigentes — ver `dominioDoLancamento`.
  */
 export type LinhaTx = {
   amount: Dinheiro;
-  type: DashTx["type"];
-  status: DashTx["status"];
+  type: string;
+  status: string;
   competence_date: string;
-  valor_pessoal?: Dinheiro | null;
-  payment_method?: DashTx["payment_method"];
-  card_id?: string | null;
-  statement_id?: string | null;
-  parcelado?: boolean | null;
-  category_id?: string | null;
-  category?: CategoriaEmbutida | null;
+  valor_pessoal: Dinheiro | null;
+  payment_method: string | null;
+  card_id: string | null;
+  statement_id: string | null;
+  parcelado: boolean | null;
+  category_id: string | null;
+  category: Embutido<CategoriaEmbutida>;
 };
 
 export type LinhaFatura = {
@@ -72,16 +88,16 @@ export type LinhaFatura = {
 };
 
 /**
- * Recebível. Os embeds `statement`/`transaction` só existem na leitura completa
- * (`getReceivables`); é deles que sai `ref_month`.
+ * Recebível. `ref_month` sai dos embeds `statement`/`transaction` — a leitura das telas
+ * (`getReceivables`) e, desde a 03-B2, também a do Cron os trazem.
  */
 export type LinhaRecebivel = {
   statement_id: string | null;
   installment_id: string | null;
   valor: Dinheiro;
   status: string;
-  statement?: { competencia?: string | null } | null;
-  transaction?: { purchase_date?: string | null } | null;
+  statement: Embutido<{ competencia: string | null }>;
+  transaction: Embutido<{ purchase_date: string | null }>;
 };
 
 export type LinhaParcela = {
@@ -89,7 +105,7 @@ export type LinhaParcela = {
   statement_id: string | null;
   valor: Dinheiro;
   status: string;
-  parent?: { category?: CategoriaEmbutida | null } | null;
+  parent: Embutido<{ category: Embutido<CategoriaEmbutida> }>;
 };
 
 export type LinhaCartao = {
@@ -163,13 +179,53 @@ function numOuNulo(v: Dinheiro | null | undefined): number | null {
   return v == null ? null : num(v);
 }
 
+function ehLista<T>(v: T | readonly T[]): v is readonly T[] {
+  return Array.isArray(v);
+}
+
+/** Embed → o objeto, ou `null`. Lista vazia é ausência, não objeto vazio. */
+function primeiro<T>(v: Embutido<T>): T | null {
+  if (v == null) return null;
+  return ehLista(v) ? (v[0] ?? null) : v;
+}
+
+function doConjunto<T extends string>(conjunto: readonly T[], v: string): v is T {
+  return (conjunto as readonly string[]).includes(v);
+}
+
+/**
+ * O ÚNICO predicado de domínio do lançamento — `montarEntradas` e `lancamentosForaDoDominio`
+ * usam este, e nenhum outro.
+ *
+ * ⚠️ DECISÃO DO DONO (03-B2, A2): ESTREITAR E DECLARAR. Lançamento com tipo, status ou forma de
+ * pagamento fora do que o sistema conhece NÃO entra na soma — e é contado, para que quem lê
+ * possa dizer "parcial" com o motivo. Nunca lança: um lançamento estranho não pode calar o sino
+ * inteiro de um usuário (o `catch` do Cron é por usuário, e levaria a fatura atrasada junto).
+ * Para dado real o número é idêntico: os arrays batem com os CHECKs de `transactions`.
+ */
+function dominioDoLancamento(
+  t: LinhaTx,
+): Pick<DashTx, "type" | "status" | "payment_method"> | null {
+  const { type, status, payment_method } = t;
+  if (!doConjunto(TRANSACTION_TYPES, type)) return null;
+  if (!doConjunto(TRANSACTION_STATUSES, status)) return null;
+  if (payment_method !== null && !doConjunto(PAYMENT_METHODS, payment_method)) return null;
+  return { type, status, payment_method };
+}
+
+/** Quantos lançamentos `montarEntradas` deixou fora da soma por estarem fora do domínio. */
+export function lancamentosForaDoDominio(transacoes: readonly LinhaTx[]): number {
+  return transacoes.filter((t) => dominioDoLancamento(t) === null).length;
+}
+
 /* ───────────────────────────── A montagem ───────────────────────────── */
 
 /**
  * Linha do banco → entrada do motor. Lista não informada volta `[]`.
  *
- * As cinco regras de forma (desenho, §4.1), cada uma existindo por um dos chamadores:
- *  1. linhas tolerantes, com os quatro campos de `resumoMes` obrigatórios;
+ * As cinco regras de forma (desenho da 03-B, §4.1), cada uma existindo por um dos chamadores:
+ *  1. linhas ESTRITAS desde a 03-B2 (toda chave presente; lançamento fora do domínio sai da
+ *     soma e é contado por `lancamentosForaDoDominio`);
  *  2. dinheiro aceita `number | string` e é normalizado aqui;
  *  3. `category_id` sai do DADO (`?? null`) — antes o Cron o escrevia como constante `null`,
  *     e um `gastosPorCategoria` chamado ali jogaria todo gasto em "sem categoria";
@@ -178,21 +234,28 @@ function numOuNulo(v: Dinheiro | null | undefined): number | null {
  *  5. `parent` da parcela é `{ category: null }`, nunca `null`.
  */
 export function montarEntradas(linhas: LinhasFinanceiras): EntradasDoMotor {
-  const txs: DashTx[] = (linhas.transacoes ?? []).map((t) => ({
-    amount: num(t.amount),
-    valor_pessoal: numOuNulo(t.valor_pessoal),
-    type: t.type,
-    payment_method: t.payment_method ?? null,
-    status: t.status,
-    competence_date: t.competence_date,
-    card_id: t.card_id ?? null,
-    statement_id: t.statement_id ?? null,
-    parcelado: Boolean(t.parcelado),
-    category_id: t.category_id ?? null,
-    category: t.category
-      ? { id: t.category.id, name: t.category.name, color: t.category.color }
-      : null,
-  }));
+  const txs: DashTx[] = (linhas.transacoes ?? []).flatMap((t) => {
+    const dominio = dominioDoLancamento(t);
+    if (dominio === null) return [];
+    const categoria = primeiro(t.category);
+    return [
+      {
+        amount: num(t.amount),
+        valor_pessoal: numOuNulo(t.valor_pessoal),
+        type: dominio.type,
+        payment_method: dominio.payment_method,
+        status: dominio.status,
+        competence_date: t.competence_date,
+        card_id: t.card_id,
+        statement_id: t.statement_id,
+        parcelado: Boolean(t.parcelado),
+        category_id: t.category_id,
+        category: categoria
+          ? { id: categoria.id, name: categoria.name, color: categoria.color }
+          : null,
+      },
+    ];
+  });
 
   const sts: DashStatement[] = (linhas.faturas ?? []).map((s) => ({
     id: s.id,
@@ -212,26 +275,23 @@ export function montarEntradas(linhas: LinhasFinanceiras): EntradasDoMotor {
     // `competencia` e `purchase_date` são DATAS PURAS (`date`): o `.slice(0, 7)` é correto aqui.
     // A proibição do projeto é sobre `timestamptz`.
     ref_month:
-      r.statement?.competencia?.slice(0, 7) ??
-      r.transaction?.purchase_date?.slice(0, 7) ??
+      primeiro(r.statement)?.competencia?.slice(0, 7) ??
+      primeiro(r.transaction)?.purchase_date?.slice(0, 7) ??
       null,
   }));
 
-  const inst: DashInstallmentItem[] = (linhas.parcelas ?? []).map((it) => ({
-    id: it.id,
-    statement_id: it.statement_id,
-    valor: num(it.valor),
-    status: it.status,
-    parent: it.parent?.category
-      ? {
-          category: {
-            id: it.parent.category.id,
-            name: it.parent.category.name,
-            color: it.parent.category.color,
-          },
-        }
-      : { category: null },
-  }));
+  const inst: DashInstallmentItem[] = (linhas.parcelas ?? []).map((it) => {
+    const categoria = primeiro(primeiro(it.parent)?.category ?? null);
+    return {
+      id: it.id,
+      statement_id: it.statement_id,
+      valor: num(it.valor),
+      status: it.status,
+      parent: categoria
+        ? { category: { id: categoria.id, name: categoria.name, color: categoria.color } }
+        : { category: null },
+    };
+  });
 
   const cards: DashCard[] = (linhas.cartoes ?? []).map((c) => ({
     id: c.id,
