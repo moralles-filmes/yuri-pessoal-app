@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { SortableList } from "@/components/shared/sortable-list";
@@ -128,24 +129,13 @@ export function HabitsClient({
         </EmptyState>
       ) : (
         <>
-          {/* Navegação de visões */}
-          <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1">
-            {HABIT_VIEWS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => navigate(v)}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-                  view === v
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {HABIT_VIEW_LABELS[v]}
-              </button>
-            ))}
-          </div>
+          <SeletorDeVisao
+            rotulo="Visão dos hábitos"
+            visoes={HABIT_VIEWS}
+            rotulos={HABIT_VIEW_LABELS}
+            atual={view}
+            aoEscolher={navigate}
+          />
 
           {view === "hoje" && (
             <TodayView habits={habits} todayIso={todayIso} onEdit={openEdit} />

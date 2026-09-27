@@ -14,7 +14,7 @@ import {
 import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
-import { cn } from "@/lib/utils";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { MonthView } from "@/components/calendar/month-view";
 import { TimeGridView } from "@/components/calendar/time-grid";
 import { UpcomingEvents } from "@/components/calendar/upcoming-events";
@@ -178,23 +178,13 @@ export function AgendaClient({
 
       {/* Barra de controle: visões + navegação de período */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="inline-flex rounded-lg border p-0.5">
-          {CALENDAR_VIEWS.map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => navigate({ view: v })}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                view === v
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {CALENDAR_VIEW_LABELS[v]}
-            </button>
-          ))}
-        </div>
+        <SeletorDeVisao
+          rotulo="Visão da agenda"
+          visoes={CALENDAR_VIEWS}
+          rotulos={CALENDAR_VIEW_LABELS}
+          atual={view}
+          aoEscolher={(v) => navigate({ view: v })}
+        />
 
         <div className="flex items-center gap-2">
           <span className="mr-1 text-sm font-medium capitalize">{periodLabel}</span>

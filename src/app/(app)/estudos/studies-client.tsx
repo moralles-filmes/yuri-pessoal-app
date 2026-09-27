@@ -20,10 +20,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
-import { cn } from "@/lib/utils";
 import { CourseCard } from "@/components/studies/course-card";
 import {
   StudyDifficultyBadge,
@@ -119,23 +119,13 @@ export function StudiesClient({
         </EmptyState>
       ) : (
         <>
-          <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1">
-            {STUDY_VIEWS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => navigate(v)}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-                  view === v
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {STUDY_VIEW_LABELS[v]}
-              </button>
-            ))}
-          </div>
+          <SeletorDeVisao
+            rotulo="Visão dos estudos"
+            visoes={STUDY_VIEWS}
+            rotulos={STUDY_VIEW_LABELS}
+            atual={view}
+            aoEscolher={navigate}
+          />
 
           {view === "painel" && <PanelView dashboard={dashboard} />}
           {view === "cursos" && (

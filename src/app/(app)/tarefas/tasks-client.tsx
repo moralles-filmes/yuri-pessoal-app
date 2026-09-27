@@ -35,6 +35,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { PageHeader } from "@/components/shared/page-header";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import { cn } from "@/lib/utils";
@@ -224,25 +225,13 @@ export function TasksClient({
       </div>
 
       {/* Seletor de visão */}
-      <div className="-mx-1 overflow-x-auto px-1">
-        <div className="inline-flex rounded-lg border p-0.5">
-          {TASK_VIEWS.map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => navigate({ view: v })}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-                view === v
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {TASK_VIEW_LABELS[v]}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SeletorDeVisao
+        rotulo="Visão das tarefas"
+        visoes={TASK_VIEWS}
+        rotulos={TASK_VIEW_LABELS}
+        atual={view}
+        aoEscolher={(v) => navigate({ view: v })}
+      />
 
       {/* Conteúdo por visão */}
       {view === "lista" && (
