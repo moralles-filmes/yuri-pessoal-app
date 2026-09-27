@@ -7,11 +7,11 @@ import {
   gastosPorCategoria,
   gastosPorForma,
   gerarAlertas,
-  mediaDeSaidas,
   mesDe,
   proximas6Faturas,
   projecaoProximosMeses,
   proximasContasPagar,
+  reguaDoGastoAlto,
   resumoMes,
   totalAReceber,
 } from "@/lib/finance/dashboard";
@@ -67,16 +67,18 @@ export default async function DashboardFinanceiroPage({
   const aReceber = totalAReceber(recs, mesSel);
   const saldo = saldoDasContas(accounts);
 
-  // Média de saídas dos meses anteriores ao selecionado (para o alerta de gasto alto). A régua
-  // da tela ignora mês sem saída; a do sino não — ver `mediaDeSaidas`.
-  const mediaSaidas = mediaDeSaidas(
-    evolucao.filter((p) => p.mes < mesSel),
-    { ignorarMesesSemSaida: true },
-  );
+  // A régua do alerta de gasto alto — a MESMA que o sino usa desde a 03-B2 (B2, decisão do dono):
+  // até 5 meses anteriores ao selecionado, mês sem saída ignorado. O número desta tela não mudou.
+  const regua = reguaDoGastoAlto({
+    mes: mesSel,
+    transactions: txs,
+    statements: sts,
+    receivables: recs,
+  });
   const alertas = gerarAlertas({
     hoje,
     resumoAtual: resumo,
-    mediaSaidas,
+    mediaSaidas: regua.mediaSaidas,
     cards: dashCards,
     statements: sts,
     receivables: recs,

@@ -38,7 +38,7 @@ import {
   ESCOPO_CARD_FINANCEIRO,
   ESCOPO_FATURAS,
   ESCOPO_RELATORIO,
-  janelaDoCron,
+  janelaDoGastoAlto,
   janelaDoMes,
   janelaDoRelatorio,
   lancamentosForaDoDominio,
@@ -1222,12 +1222,24 @@ describe("03-B — ultimoDiaDoMes e as três janelas declaradas", () => {
     expect(janelaDoRelatorio({ mesSel: "2026-09", mesAtual: "2026-09" }).to).toBe("2027-02-28");
   });
 
-  it("janelaDoCron: 3 meses para trás até `ate` — o truncamento em hoje é declarado", () => {
-    expect(janelaDoCron({ mesAtual: "2026-05", ate: "2026-05-17" })).toEqual({
-      from: "2026-02-01",
-      to: "2026-05-17",
-    });
-    expect(janelaDoCron({ mesAtual: "2026-01", ate: "2026-01-09" }).from).toBe("2025-10-01");
+  /**
+   * 03-B2 (B2, decisão do dono) — a `janelaDoCron` ("3 meses para trás até hoje", com o
+   * truncamento declarado) deu lugar à janela da régua única: o que `reguaDoGastoAlto` lê, nada
+   * a mais — os 5 meses anteriores e o mês corrente CHEIO.
+   */
+  it("janelaDoGastoAlto: 5 meses para trás até o fim do mês — sem truncamento em hoje", () => {
+    expect(janelaDoGastoAlto("2026-09")).toEqual({ from: "2026-04-01", to: "2026-09-30" });
+    expect(janelaDoGastoAlto("2026-01")).toEqual({ from: "2025-08-01", to: "2026-01-31" });
+    expect(janelaDoGastoAlto("2024-02").to).toBe("2024-02-29");
+  });
+
+  it("a janela da tela contém a da régua — a página lê pelo menos o que a régua pede", () => {
+    for (const mes of ["2026-01", "2026-02", "2026-06", "2026-09", "2026-12"]) {
+      const tela = janelaDoRelatorio({ mesSel: mes, mesAtual: mes });
+      const regua = janelaDoGastoAlto(mes);
+      expect(tela.from <= regua.from).toBe(true);
+      expect(tela.to >= regua.to).toBe(true);
+    }
   });
 });
 

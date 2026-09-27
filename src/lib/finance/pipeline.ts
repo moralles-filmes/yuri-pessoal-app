@@ -429,15 +429,15 @@ export function janelaDoRelatorio(params: {
 }
 
 /**
- * A janela de transações do Cron: 3 meses para trás até `ate`.
+ * A janela da régua do gasto alto (`reguaDoGastoAlto`): os 5 meses anteriores e o mês `mes`
+ * CHEIO — o que a régua lê, nada a mais. É a janela de transações do Cron.
  *
- * ⚠️ O TRUNCAMENTO EM `ate` É DECLARADO, NÃO CONSERTADO. O Cron lê transações só até hoje, mas
- * lê TODAS as faturas — então a "saída do mês" do sino é, dentro do mês corrente,
- * estruturalmente MENOR que a da tela: o à vista conta até hoje, o cartão conta a fatura
- * inteira. Consertar muda número (e o alerta de gasto alto); é decisão do dono, fora da 03-B.
+ * 03-B2 (B2, decisão do dono): substitui a `janelaDoCron` da 03-B ("3 meses para trás até hoje"),
+ * cujo truncamento em hoje fazia a saída do mês do sino ser, dentro do mês corrente,
+ * estruturalmente MENOR que a da tela. A tela lê `janelaDoRelatorio`, que contém esta.
  */
-export function janelaDoCron(params: { mesAtual: string; ate: string }): JanelaFinanceira {
-  return { from: `${addMes(params.mesAtual, -3)}-01`, to: params.ate };
+export function janelaDoGastoAlto(mes: string): JanelaFinanceira {
+  return { from: `${addMes(mes, -5)}-01`, to: ultimoDiaDoMes(mes) };
 }
 
 /* ───────────────────────────── Escopos nomeados ───────────────────────────── */
