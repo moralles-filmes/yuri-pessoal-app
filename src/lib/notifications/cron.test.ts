@@ -18,7 +18,6 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { formatCurrency } from "@/lib/format";
 import { generateForUser } from "@/lib/notifications/cron";
 
 type Linha = Record<string, unknown>;
@@ -143,20 +142,14 @@ beforeEach(() => {
 
 describe("03-B2 B1 — as faturas que o sino vê", () => {
   /**
-   * ⚠️ CARACTERIZAÇÃO — congela o comportamento de HOJE, antes do conserto da B1 (decisão do
-   * dono em 2026-09-27). O Cron lê `card_statements_with_total` SEM `.gt("itens", 0)`, que as
-   * telas aplicam: a fatura vazia vencida vira "Fatura atrasada" URGENTE com R$ 0,00. O commit de
-   * conserto atualiza ESTE teste, e o diff dele mostra o aviso que deixa de nascer.
+   * B1 — conserto aprovado pelo dono em 2026-09-27: o Cron filtra `.gt("itens", 0)`.
+   * A fatura real vencida gera alerta; a vazia deixa de gerar novas notificações.
    */
-  it("B1 — CARACTERIZAÇÃO: hoje o sino avisa a fatura vazia vencida", async () => {
+  it("B1 — o sino avisa somente a fatura real vencida", async () => {
     await rodarOCron();
     const faturas = inseridas("invoice_");
     expect(faturas.map((n) => n.dedupe_key).sort()).toEqual([
       "invoice_overdue:st-real",
-      "invoice_overdue:st-vazia",
     ]);
-    const vazia = faturas.find((n) => n.dedupe_key === "invoice_overdue:st-vazia");
-    expect(vazia?.priority).toBe("urgent");
-    expect(String(vazia?.description)).toContain(formatCurrency(0));
   });
 });

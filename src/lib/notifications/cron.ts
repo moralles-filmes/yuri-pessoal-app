@@ -73,7 +73,10 @@ export async function generateForUser(
     service
       .from("card_statements_with_total")
       .select("id, card_id, competencia, data_fechamento, data_vencimento, pago_em, total_atual")
-      .eq("user_id", userId),
+      .eq("user_id", userId)
+      // 03-B2 (B1, decisão do dono): fatura sem item não é fatura real — o sino deixa de
+      // avisar "Fatura atrasada" de R$ 0,00. É o mesmo filtro de `getStatements`.
+      .gt("itens", 0),
     service.from("bills").select("id, name, amount, due_day, is_active").eq("user_id", userId),
     service
       .from("receivables")

@@ -96,21 +96,17 @@ describe("03-B2 B1 — leituras da view de faturas", () => {
   const arquivosDe = (filtro: (l: Leitura) => boolean) =>
     [...new Set(leituras.filter(filtro).map((l) => l.arquivo))].sort();
 
-  it("a varredura leu o repositório e reconhece as três formas", () => {
+  it("a varredura leu o repositório e reconhece listas filtradas e leituras por ID", () => {
     expect(arquivos.length).toBeGreaterThan(100);
     expect(arquivosDe(comFiltro)).toContain("lib/finance/queries.ts");
     expect(arquivosDe(porId)).toEqual(["lib/actions/statements.ts"]);
   });
 
   /**
-   * ⚠️ CARACTERIZAÇÃO — congela o HOJE, antes do conserto da B1 (decisão do dono em
-   * 2026-09-27: o Cron E a busca passam a filtrar). O commit de conserto atualiza ESTE teste
-   * para a lista vazia.
+   * B1 — conserto aprovado pelo dono em 2026-09-27: o Cron e a busca também filtram.
+   * Nenhuma leitura de lista pode incluir faturas sem itens.
    */
-  it("B1 — CARACTERIZAÇÃO: as leituras de lista sem .gt('itens', 0) são o Cron e a busca", () => {
-    expect(arquivosDe((l) => !porId(l) && !comFiltro(l))).toEqual([
-      "lib/notifications/cron.ts",
-      "lib/search/queries.ts",
-    ]);
+  it("B1 — nenhuma leitura de lista fica sem .gt('itens', 0)", () => {
+    expect(arquivosDe((l) => !porId(l) && !comFiltro(l))).toEqual([]);
   });
 });
