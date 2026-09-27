@@ -23,6 +23,7 @@
  */
 import { addMonths, format, getDaysInMonth, parseISO } from "date-fns";
 import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
+import { LIMIARES_DE_ALERTA } from "@/lib/finance/limiares-de-alerta";
 import { occurrenceOn } from "@/lib/finance/recurrence";
 import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
 import {
@@ -730,9 +731,9 @@ export function gerarAlertas(params: {
     mediaSaidas,
     cards,
     statements,
-    diasVencimentoAviso = 5,
-    limiarGastoAltoPct = 1.2,
-    limiarLimitePct = 0.8,
+    diasVencimentoAviso = LIMIARES_DE_ALERTA.diasDeAvisoDeVencimento,
+    limiarGastoAltoPct = LIMIARES_DE_ALERTA.gastoAlto,
+    limiarLimitePct = LIMIARES_DE_ALERTA.usoDoLimite,
   } = params;
 
   const alertas: Alerta[] = [];
@@ -752,6 +753,8 @@ export function gerarAlertas(params: {
 
   // Limite do cartão: soma das faturas não pagas vs limite total.
   const cardById = new Map(cards.map((c) => [c.id, c]));
+  // Registrado, não corrigido: usadoPorCartao soma em centavos aqui e em float no sino
+  // (notifications/generate.ts); isso pode mover o percentual na borda do limiar.
   const usadoPorCartao = new Map<string, number>();
   for (const s of statements) {
     if (!s.card_id) continue;

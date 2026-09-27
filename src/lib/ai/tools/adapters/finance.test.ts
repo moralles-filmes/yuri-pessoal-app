@@ -183,8 +183,18 @@ describe("finance.get_spending", () => {
   });
 
   it("usa o mês atual quando nenhum é pedido", async () => {
-    await getSpending({});
+    const saida = await getSpending({});
     expect(mesPedido).toBe("2026-08");
+    expect(saida.periodo?.ate).toBe(HOJE);
+  });
+
+  it.each([
+    { mes: "2026-09", ate: "2026-09-30" },
+    { mes: "2026-02", ate: "2026-02-28" },
+    { mes: HOJE.slice(0, 7), ate: HOJE },
+  ])("encerra o período de $mes em $ate", async ({ mes, ate }) => {
+    const saida = await getSpending({ mes });
+    expect(saida.periodo).toEqual({ de: `${mes}-01`, ate });
   });
 
   it("repassa o mês pedido para a leitura do dashboard", async () => {

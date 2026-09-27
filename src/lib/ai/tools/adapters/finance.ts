@@ -33,6 +33,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getAccounts } from "@/lib/finance/queries";
+import { ultimoDiaDoMes } from "@/lib/finance/pipeline";
 import {
   getFinanceCardData,
   getInvoicesCardData,
@@ -108,7 +109,7 @@ export async function getSpending(input: { mes?: string }): Promise<ToolOutput> 
   const d = await getFinanceCardData(mes, hoje);
 
   return {
-    periodo: { de: `${mes}-01`, ate: mes === mesDe(hoje) ? hoje : `${mes}-31` },
+    periodo: { de: `${mes}-01`, ate: mes === mesDe(hoje) ? hoje : ultimoDiaDoMes(mes) },
     // Não é uma lista de transações: a ferramenta devolve o RESUMO do mês, e é isso que a
     // contagem representa. Uma lista de lançamentos é outra ferramenta, que não existe.
     contagem: 1,
