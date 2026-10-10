@@ -186,8 +186,8 @@ export function AgendaClient({
           aoEscolher={(v) => navigate({ view: v })}
         />
 
-        <div className="flex items-center gap-2">
-          <span className="mr-1 text-sm font-medium capitalize">{periodLabel}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="mr-1 min-w-0 truncate text-sm font-medium capitalize">{periodLabel}</span>
           <Button
             variant="outline"
             size="icon-sm"

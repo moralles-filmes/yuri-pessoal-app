@@ -50,6 +50,7 @@ export function TimeGridView({
                 {weekdayShort(d.date)}
               </span>
               <span
+                aria-current={d.isToday ? "date" : undefined}
                 className={cn(
                   "grid size-7 place-items-center rounded-full text-sm font-medium tabular-nums",
                   d.isToday && "bg-primary text-primary-foreground",
