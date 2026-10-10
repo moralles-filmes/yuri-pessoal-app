@@ -28,6 +28,14 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "app/(app)/rotinas/routines-client.tsx", exige: /todays\.length === 0 \? \(\s*<EmptyState/, porque: "seção vazia usa o EmptyState compartilhado" },
   { arquivo: "components/tasks/task-card.tsx", exige: /overdue \? \(\s*<TriangleAlert/, porque: "atrasada tem ícone, não só vermelho" },
   { arquivo: "components/tasks/task-calendar.tsx", exige: /aria-current=\{day\.isToday \? "date" : undefined\}/, porque: "hoje no calendário é anunciado" },
+  // TO-DO
+  { arquivo: "components/todo/todo-nav.tsx", exige: /sticky top-18\b/, porque: "regra 5: com top-4 a coluna escorrega para trás do Header" },
+  { arquivo: "components/todo/todo-nav.tsx", exige: /\{danger && <TriangleAlert/, porque: "contagem com atrasadas tem ícone, não só vermelho" },
+  { arquivo: "app/(app)/todo/todo-client.tsx", exige: /<PageHeader[^>]*className="[^"]*\bmin-w-0\b/, porque: "regra 2: o título não empurra o botão de navegação" },
+  { arquivo: "components/todo/task-calendar.tsx", exige: /aria-current=\{isToday \? "date" : undefined\}/, porque: "hoje no calendário é anunciado" },
+  { arquivo: "components/todo/task-calendar.tsx", exige: /\{overdue && <TriangleAlert/, porque: "atrasada no calendário tem ícone" },
+  { arquivo: "components/todo/task-row.tsx", exige: /<PriorityFlag[^>]*\brotulo\b/, porque: "prioridade na linha tem a palavra (P1–P3)" },
+  { arquivo: "components/todo/badges.tsx", exige: /próximo · /, porque: "prazo próximo é escrito, não só âmbar" },
 ];
 
 describe("V7 — contratos visuais da Organização", () => {

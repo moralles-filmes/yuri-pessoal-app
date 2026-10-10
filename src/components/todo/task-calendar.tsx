@@ -26,7 +26,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { WEEKDAY_SHORT, TODO_PRIORITY_FLAG } from "@/lib/todo/constants";
@@ -196,6 +196,7 @@ function CalendarDay({
     >
       <div className="mb-1 flex items-center justify-between">
         <span
+          aria-current={isToday ? "date" : undefined}
           className={cn(
             "grid size-5 place-items-center rounded-full text-[0.7rem] tabular-nums",
             isToday && "bg-primary font-semibold text-primary-foreground",
@@ -256,6 +257,7 @@ function CalendarTask({
       {...attributes}
       {...listeners}
     >
+      {overdue && <TriangleAlert className="size-3 shrink-0 text-destructive" aria-label="Atrasada" />}
       <span
         aria-hidden
         className={cn("shrink-0 text-[0.6rem]", TODO_PRIORITY_FLAG[task.priority])}

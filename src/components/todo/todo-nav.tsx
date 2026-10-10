@@ -24,6 +24,7 @@ import {
   Plus,
   Star,
   Sun,
+  TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -110,11 +111,13 @@ function NavButton({
         {count !== undefined && count > 0 && (
           <span
             className={cn(
-              "shrink-0 rounded-full px-1.5 py-0.5 text-[0.7rem] tabular-nums",
+              "inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[0.7rem] tabular-nums",
               danger ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground",
             )}
           >
+            {danger && <TriangleAlert className="size-3" aria-hidden />}
             {count}
+            {danger && <span className="sr-only">, com atrasadas</span>}
           </span>
         )}
       </button>
@@ -404,7 +407,7 @@ function NavContent({
 export function TodoNav(props: React.ComponentProps<typeof NavContent>) {
   return (
     <aside className="hidden w-60 shrink-0 lg:block">
-      <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
+      <div className="sticky top-18 max-h-[calc(100vh-5.5rem)] overflow-y-auto pr-1">
         <NavContent {...props} />
       </div>
     </aside>
@@ -422,7 +425,7 @@ export function TodoNavDrawer({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-[17rem] overflow-y-auto">
+      <SheetContent side="left" className="overflow-y-auto data-[side=left]:w-[17rem]">
         <SheetHeader>
           <SheetTitle className="text-base">TO-DO</SheetTitle>
         </SheetHeader>
