@@ -117,14 +117,18 @@ export function TaskDetailsDialog({
 
           {task.recurrence && (
             <p className="flex items-center gap-1.5 text-muted-foreground">
-              <Repeat className="size-3.5" /> {recurrenceSummary(task.recurrence)}
+              <Repeat className="size-3.5 shrink-0" />
+              <span className="min-w-0 break-words">{recurrenceSummary(task.recurrence)}</span>
             </p>
           )}
 
           {task.calendar_event && (
             <p className="flex items-center gap-1.5 text-muted-foreground">
-              <CalendarClock className="size-3.5" /> Vinculada a “{task.calendar_event.title}”
-              {` · ${formatDate(task.calendar_event.start_at)}`}
+              <CalendarClock className="size-3.5 shrink-0" />
+              <span className="min-w-0 break-words">
+                Vinculada a “{task.calendar_event.title}”
+                {` · ${formatDate(task.calendar_event.start_at)}`}
+              </span>
             </p>
           )}
 
@@ -269,8 +273,8 @@ function ChecklistEditor({ task }: { task: TaskWithRelations }) {
 
 function cnLine(done: boolean) {
   return done
-    ? "flex-1 text-sm text-muted-foreground line-through decoration-1"
-    : "flex-1 text-sm";
+    ? "min-w-0 flex-1 break-words text-sm text-muted-foreground line-through decoration-1"
+    : "min-w-0 flex-1 break-words text-sm";
 }
 
 function AttachmentsEditor({

@@ -141,6 +141,7 @@ export function ProjectFormDialog({
                       !field.value && "ring-2 ring-primary ring-offset-1 ring-offset-background",
                     )}
                     aria-label="Sem cor"
+                    aria-pressed={!field.value}
                   >
                     —
                   </button>
@@ -155,6 +156,7 @@ export function ProjectFormDialog({
                       )}
                       style={{ backgroundColor: c }}
                       aria-label={`Cor ${c}`}
+                      aria-pressed={field.value === c}
                     >
                       {field.value === c && (
                         <Check className="size-3.5 text-white" strokeWidth={3} />

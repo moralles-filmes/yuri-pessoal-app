@@ -141,9 +141,12 @@ export function RoutinesClient({
               Rotinas de hoje ({todays.length})
             </h2>
             {todays.length === 0 ? (
-              <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                Nenhuma rotina agendada para hoje.
-              </p>
+              <EmptyState
+                icon={CalendarCheck}
+                title="Nenhuma rotina para hoje"
+                description="As rotinas ativas aparecem aqui nos dias em que estão agendadas."
+                className="py-8"
+              />
             ) : (
               <div className="grid gap-3">
                 {todays.map((r) => (

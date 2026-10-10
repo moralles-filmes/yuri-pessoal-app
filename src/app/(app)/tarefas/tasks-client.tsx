@@ -11,6 +11,7 @@ import {
   ListChecks,
   Pencil,
   Plus,
+  Repeat,
   Search,
   Settings2,
   Trash2,
@@ -403,10 +404,11 @@ function ProjectChip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
         active
-          ? "border-primary bg-primary/10 text-foreground"
+          ? "border-primary bg-primary/10 font-semibold text-foreground"
           : "text-muted-foreground hover:bg-accent",
       )}
     >
@@ -557,14 +559,16 @@ function RoutinesTodayCard({
   const router = useRouter();
   if (routines.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-4 text-sm text-muted-foreground">
-          Nenhuma rotina para hoje.{" "}
-          <Link href="/rotinas" className="text-primary hover:underline">
-            Gerenciar rotinas
-          </Link>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={Repeat}
+        title="Nenhuma rotina para hoje"
+        description="As rotinas ativas aparecem aqui nos dias em que estão agendadas."
+        className="py-8"
+      >
+        <Button asChild size="sm" variant="outline">
+          <Link href="/rotinas">Gerenciar rotinas</Link>
+        </Button>
+      </EmptyState>
     );
   }
   return (
@@ -584,7 +588,7 @@ function RoutinesTodayCard({
                 else toast.error(res.error);
               }}
             />
-            <span className="flex-1 text-sm font-medium">{r.name}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">{r.name}</span>
             <RoutineTypeBadge type={r.type} />
           </label>
         ))}
@@ -620,6 +624,7 @@ function WeekView({
           <div key={iso} className="space-y-2">
             <div className="flex items-center justify-between">
               <h3
+                aria-current={day.isToday ? "date" : undefined}
                 className={cn(
                   "text-sm font-medium capitalize",
                   day.isToday && "text-primary",
@@ -687,7 +692,7 @@ function ProjectsManager({ projects }: { projects: ProjectWithCount[] }) {
           <Settings2 /> Listas
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+      <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md">
         <SheetHeader>
           <SheetTitle>Projetos & listas</SheetTitle>
           <SheetDescription>

@@ -233,6 +233,7 @@ export function RoutineFormDialog({
                         <button
                           key={d.value}
                           type="button"
+                          aria-pressed={active}
                           onClick={() =>
                             field.onChange(
                               active
@@ -277,6 +278,7 @@ export function RoutineFormDialog({
                       !field.value && "ring-2 ring-primary ring-offset-1 ring-offset-background",
                     )}
                     aria-label="Sem cor"
+                    aria-pressed={!field.value}
                   >
                     —
                   </button>
@@ -291,6 +293,7 @@ export function RoutineFormDialog({
                       )}
                       style={{ backgroundColor: c }}
                       aria-label={`Cor ${c}`}
+                      aria-pressed={field.value === c}
                     >
                       {field.value === c && (
                         <Check className="size-3.5 text-white" strokeWidth={3} />
@@ -370,7 +373,7 @@ function RoutineItemsEditor({ routine }: { routine: RoutineWithItems }) {
         <ul className="space-y-1">
           {items.map((item) => (
             <li key={item.id} className="flex items-center gap-2 text-sm">
-              <span className="flex-1">{item.label}</span>
+              <span className="min-w-0 flex-1 break-words">{item.label}</span>
               <Button
                 type="button"
                 variant="ghost"

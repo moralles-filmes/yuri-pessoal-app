@@ -100,6 +100,7 @@ export function TaskCalendar({
                 )}
               >
                 <div
+                  aria-current={day.isToday ? "date" : undefined}
                   className={cn(
                     "mb-1 inline-flex size-6 items-center justify-center rounded-full text-xs font-medium",
                     day.isToday && "bg-primary text-primary-foreground",
