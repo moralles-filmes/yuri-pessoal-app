@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Archive,
@@ -36,6 +37,7 @@ import {
 } from "@/components/ui/sheet";
 import { PageHeader } from "@/components/shared/page-header";
 import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
+import { RotinasETarefasAbas } from "@/components/tasks/rotinas-e-tarefas-abas";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import { cn } from "@/lib/utils";
@@ -188,7 +190,7 @@ export function TasksClient({
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Tarefas & Rotinas"
+        title="Rotinas e tarefas"
         description="Demandas, projetos, kanban e visões — organize o que precisa ser feito."
       >
         <ProjectsManager projects={projects} />
@@ -196,6 +198,8 @@ export function TasksClient({
           <Plus /> Nova tarefa
         </Button>
       </PageHeader>
+
+      <RotinasETarefasAbas />
 
       {/* Filtro por projeto (chips) */}
       <div className="flex flex-wrap items-center gap-2">
@@ -556,9 +560,9 @@ function RoutinesTodayCard({
       <Card>
         <CardContent className="p-4 text-sm text-muted-foreground">
           Nenhuma rotina para hoje.{" "}
-          <a href="/rotinas" className="text-primary hover:underline">
+          <Link href="/rotinas" className="text-primary hover:underline">
             Gerenciar rotinas
-          </a>
+          </Link>
         </CardContent>
       </Card>
     );

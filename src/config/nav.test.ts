@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { allNavItems, navHrefs, navSections } from "./nav";
 import { PADROES_DE_ROTA, ROTAS_DO_APP, temPagina } from "@/test/rotas";
+import { rotasDeclaradas } from "@/lib/nav/active";
+import { ABAS_DE_ROTINAS_E_TAREFAS } from "@/components/tasks/rotinas-e-tarefas";
 
 /**
  * REDESIGN-02-D — o sentido inverso da 02-C.
@@ -87,9 +89,41 @@ describe("a forma de um href do menu", () => {
   });
 
   it("a lista plana é exatamente a soma das seções, na ordem", () => {
-    // `navHrefs` alimenta `hrefAtivo` na sidebar. Se ela deixar de refletir o que as
-    // seções contêm, um item passa a existir na tela e não na decisão — ou o contrário.
+    // `allNavItems` alimenta `hrefAtivo` na sidebar (era `navHrefs` até a 07-A). Se ela
+    // deixar de refletir o que as seções contêm, um item passa a existir na tela e não na
+    // decisão — ou o contrário.
     expect(allNavItems).toEqual(navSections.flatMap((secao) => secao.items));
     expect(navHrefs).toEqual(allNavItems.map((item) => item.href));
+  });
+});
+
+/**
+ * REDESIGN-07-A — um item pode REPRESENTAR outras rotas (`tambem`). Cada uma delas acende o
+ * item, então precisa das mesmas garantias de um href: abrir uma tela e ter a forma que o
+ * `pathname` tem.
+ */
+const representadas = allNavItems.flatMap((item) => (item.tambem ?? []).map((rota) => [item.title, rota] as const));
+
+describe("toda rota que um item representa também abre uma tela", () => {
+  it("há ao menos uma (guarda)", () => expect(representadas.length).toBeGreaterThan(0));
+  it.each(representadas)("%s → %s", (_t, rota) => expect(temPagina(rota)).toBe(true));
+});
+
+describe("rotas representadas", () => {
+  it("têm a forma de um href do menu", () => {
+    for (const [titulo, rota] of representadas) {
+      expect(rota.startsWith("/"), titulo).toBe(true);
+      expect(rota, titulo).not.toMatch(/[?#]|\/$|http/);
+    }
+  });
+  it("nenhuma rota é declarada por dois itens (href ou tambem)", () => {
+    const todas = allNavItems.flatMap((item) => rotasDeclaradas(item));
+    expect(new Set(todas).size).toBe(todas.length);
+  });
+  it("Rotinas e tarefas representa /tarefas, e as abas das duas telas são exatamente as dele", () => {
+    const item = allNavItems.find((i) => i.title === "Rotinas e tarefas");
+    expect(item?.href).toBe("/rotinas");
+    expect(item?.tambem).toEqual(["/tarefas"]);
+    expect(ABAS_DE_ROTINAS_E_TAREFAS.map((a) => a.href)).toEqual(item ? [...rotasDeclaradas(item)] : []);
   });
 });

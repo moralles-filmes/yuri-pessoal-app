@@ -23,6 +23,7 @@ import { StatCard } from "@/components/shared/stat-card";
 import { SortableList } from "@/components/shared/sortable-list";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import { RoutineTypeBadge } from "@/components/tasks/badges";
+import { RotinasETarefasAbas } from "@/components/tasks/rotinas-e-tarefas-abas";
 import { cn } from "@/lib/utils";
 import { RoutineFormDialog } from "./routine-form";
 import {
@@ -84,13 +85,15 @@ export function RoutinesClient({
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Rotinas"
+        title="Rotinas e tarefas"
         description="Manhã, noite, trabalho, estudos e exercícios — com check-in diário e frequência."
       >
         <Button size="sm" onClick={openCreate}>
           <Plus /> Nova rotina
         </Button>
       </PageHeader>
+
+      <RotinasETarefasAbas />
 
       {routines.length === 0 ? (
         <EmptyState
