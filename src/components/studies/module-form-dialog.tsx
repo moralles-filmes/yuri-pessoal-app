@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, type Path } from "react-hook-form";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -16,11 +16,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { applyFieldErrors } from "@/components/financeiro/form-utils";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 import { createModule, updateModule } from "@/lib/actions/studies";
 import type { StudyModuleWithLessons } from "@/types/database";
 
 type ModuleValues = { title: string; notes: string };
+
+// Campos que a tela tem: erro de campo fora desta lista sobe para o toast com o nome (mapServerFieldErrors).
+const FORM_FIELDS = ["title", "notes"] as const;
 
 export function ModuleFormDialog({
   courseId,
@@ -58,8 +61,10 @@ export function ModuleFormDialog({
       onOpenChange(false);
       router.refresh();
     } else {
-      applyFieldErrors(setError, res.fieldErrors);
-      toast.error(res.error);
+      const mapped = mapServerFieldErrors(res.fieldErrors, FORM_FIELDS);
+      for (const { name, message } of mapped.toSet)
+        setError(name as Path<ModuleValues>, { message });
+      toast.error(serverErrorMessage(res.error, mapped));
     }
   }
 

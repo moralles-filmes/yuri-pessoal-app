@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, type Path } from "react-hook-form";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { applyFieldErrors } from "@/components/financeiro/form-utils";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 import { createVocabulary, updateVocabulary } from "@/lib/actions/studies";
 import {
   VOCAB_MASTERY,
@@ -39,6 +39,9 @@ type VocabValues = {
   mastery: VocabMastery;
   next_review_date: string;
 };
+
+// Campos que a tela tem: erro de campo fora desta lista sobe para o toast com o nome (mapServerFieldErrors).
+const FORM_FIELDS = ["term", "translation", "example", "mastery", "next_review_date"] as const;
 
 export function VocabFormDialog({
   courseId,
@@ -77,8 +80,10 @@ export function VocabFormDialog({
       onOpenChange(false);
       router.refresh();
     } else {
-      applyFieldErrors(setError, res.fieldErrors);
-      toast.error(res.error);
+      const mapped = mapServerFieldErrors(res.fieldErrors, FORM_FIELDS);
+      for (const { name, message } of mapped.toSet)
+        setError(name as Path<VocabValues>, { message });
+      toast.error(serverErrorMessage(res.error, mapped));
     }
   }
 

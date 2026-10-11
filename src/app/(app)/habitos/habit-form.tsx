@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch, type Path } from "react-hook-form";
 import { toast } from "sonner";
 import { Check } from "lucide-react";
 import {
@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { applyFieldErrors } from "@/components/financeiro/form-utils";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 import { createHabit, updateHabit } from "@/lib/actions/habits";
 import {
   HABIT_CATEGORIES,
@@ -51,6 +51,22 @@ const WEEKDAYS = [
   { value: 5, label: "S" },
   { value: 6, label: "S" },
 ];
+
+// Campos que a tela tem: erro de campo fora desta lista sobe para o toast com o nome (mapServerFieldErrors).
+const FORM_FIELDS = [
+  "name",
+  "category",
+  "description",
+  "frequency",
+  "weekdays",
+  "target_value",
+  "unit",
+  "time_of_day",
+  "reminder_at",
+  "color",
+  "icon",
+  "is_active",
+] as const;
 
 type FormValues = {
   name: string;
@@ -137,8 +153,10 @@ export function HabitFormDialog({
       onOpenChange(false);
       router.refresh();
     } else {
-      applyFieldErrors(setError, res.fieldErrors);
-      toast.error(res.error);
+      const mapped = mapServerFieldErrors(res.fieldErrors, FORM_FIELDS);
+      for (const { name, message } of mapped.toSet)
+        setError(name as Path<FormValues>, { message });
+      toast.error(serverErrorMessage(res.error, mapped));
     }
   }
 
