@@ -20,7 +20,9 @@ const SRC = path.resolve(__dirname, "..", "..");
 const COLUNA = "classificacao_padrao";
 
 /** Caminho relativo a `src/` → por que este arquivo pode mencionar a marcação. */
-const ALLOWLIST: Record<string, string> = {};
+const ALLOWLIST: Record<string, string> = {
+  "types/supabase.ts": "tipos gerados do banco (M3)",
+};
 
 /**
  * Os que NUNCA podem mencionar — nem entrar na allowlist. A segunda trava impede que alguém

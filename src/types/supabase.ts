@@ -1832,6 +1832,7 @@ export type Database = {
       }
       categories: {
         Row: {
+          classificacao_padrao: string | null
           color: string
           created_at: string
           icon: string
@@ -1845,6 +1846,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          classificacao_padrao?: string | null
           color?: string
           created_at?: string
           icon?: string
@@ -1858,6 +1860,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          classificacao_padrao?: string | null
           color?: string
           created_at?: string
           icon?: string
