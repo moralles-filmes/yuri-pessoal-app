@@ -414,6 +414,7 @@ export function DiaryClient(props: DiaryClientProps) {
       {props.view === "mes" ? (
         <DiaryMonthView
           view={monthView}
+          hoje={props.hoje}
           onPickDay={(day) => goTo({ date: day, view: "dia" })}
         />
       ) : props.view === "semana" ? (
@@ -1185,6 +1186,7 @@ function WeekView({
               key={day}
               type="button"
               onClick={() => onPickDay(day)}
+              aria-current={day === hoje ? "date" : undefined}
               className={cn(
                 "rounded-lg border p-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 day === hoje && "border-primary/40 bg-primary/5",

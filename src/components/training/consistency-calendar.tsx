@@ -21,7 +21,7 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { WEEKDAY_SHORT_LABELS } from "@/lib/training/constants";
+import { WEEKDAY_LABELS, WEEKDAY_SHORT_LABELS } from "@/lib/training/constants";
 import {
   CONSISTENCY_STATE_LABELS,
   consistencyCalendar,
@@ -30,8 +30,9 @@ import {
   type ConsistencyState,
   type PlannedDay,
 } from "@/lib/training/dashboards";
-import { formatVolumeKg, type MetricOptions, type MetricSession } from "@/lib/training/metrics";
+import type { MetricOptions, MetricSession } from "@/lib/training/metrics";
 import { addDaysIso, monthGridIso, startOfMonthIso } from "@/lib/training/schedule";
+import { textoDoDiaDaConsistencia } from "./rotulos-da-consistencia";
 
 /**
  * Tons por estado.
@@ -50,8 +51,13 @@ const STATE_STYLE: Record<ConsistencyState, string> = {
   descanso: "bg-violet-500/25 text-foreground",
   planejado_sem_execucao: "border border-dashed border-muted-foreground/50 bg-transparent",
   livre: "bg-muted/50",
-  futuro: "bg-transparent text-muted-foreground/60",
+  // Contorno fino (D4): sem ele, o dia que ainda vai chegar era um buraco igual ao fundo do
+  // card — não dava para ver onde a grade terminava.
+  futuro: "bg-transparent text-muted-foreground/60 ring-1 ring-inset ring-border",
 };
+
+/** O anel de hoje: o mesmo na célula e na legenda. */
+const HOJE_STYLE = "ring-2 ring-primary ring-offset-1 ring-offset-background";
 
 const ORDER: ConsistencyState[] = [
   "treinado",
@@ -131,6 +137,7 @@ export function ConsistencyCalendar({
               monthStart={monthStart}
               byDate={byDate}
               weekStartsOn={weekStartsOn}
+              hoje={hoje}
             />
           ))}
         </div>
@@ -147,6 +154,14 @@ export function ConsistencyCalendar({
               <span className="tabular-nums">({summary[state]})</span>
             </li>
           ))}
+          <li className="flex items-center gap-1.5">
+            <span className={cn("inline-block size-3 rounded-[3px]", STATE_STYLE.futuro)} aria-hidden="true" />
+            {CONSISTENCY_STATE_LABELS.futuro}
+          </li>
+          <li className="flex items-center gap-1.5">
+            <span className={cn("inline-block size-3 rounded-[3px] bg-muted/50", HOJE_STYLE)} aria-hidden="true" />
+            Hoje
+          </li>
         </ul>
       </CardContent>
     </Card>
@@ -162,17 +177,19 @@ function MonthBlock({
   monthStart,
   byDate,
   weekStartsOn,
+  hoje,
 }: {
   monthStart: string;
   byDate: Map<string, ConsistencyDay>;
   weekStartsOn: number;
+  hoje: string;
 }) {
   const grid = monthGridIso(monthStart, weekStartsOn);
   const monthPrefix = monthStart.slice(0, 7);
   const label = `${MONTH_SHORT[Number(monthStart.slice(5, 7)) - 1]}/${monthStart.slice(2, 4)}`;
 
   // Cabeçalho de dias da semana na ordem configurada (domingo pode ser o primeiro).
-  const weekdays = Array.from({ length: 7 }, (_, i) => WEEKDAY_SHORT_LABELS[(weekStartsOn + i) % 7]);
+  const weekdays = Array.from({ length: 7 }, (_, i) => (weekStartsOn + i) % 7);
 
   return (
     <div className="shrink-0">
@@ -181,13 +198,15 @@ function MonthBlock({
         <caption className="sr-only">Consistência de treinos em {label}</caption>
         <thead>
           <tr>
-            {weekdays.map((weekday, index) => (
+            {weekdays.map((weekday) => (
               <th
-                key={`${weekday}-${index}`}
+                key={weekday}
                 scope="col"
                 className="text-[9px] font-normal text-muted-foreground"
               >
-                {weekday.slice(0, 1)}
+                {/* Uma letra só é ambígua (S S, Q Q): o nome inteiro vai ao leitor de tela. */}
+                <span aria-hidden="true">{WEEKDAY_SHORT_LABELS[weekday].slice(0, 1)}</span>
+                <span className="sr-only">{WEEKDAY_LABELS[weekday]}</span>
               </th>
             ))}
           </tr>
@@ -202,11 +221,7 @@ function MonthBlock({
                 }
                 const day = byDate.get(date);
                 const state: ConsistencyState = day?.state ?? "futuro";
-                const description = day
-                  ? `${date.slice(8, 10)}/${date.slice(5, 7)}: ${CONSISTENCY_STATE_LABELS[state]}${
-                      day.workouts.length > 0 ? ` — ${day.workouts.join(", ")}` : ""
-                    }${day.volumeKg > 0 ? ` — ${formatVolumeKg(day.volumeKg)}` : ""}`
-                  : `${date.slice(8, 10)}/${date.slice(5, 7)}: ainda vai chegar`;
+                const description = textoDoDiaDaConsistencia(date, day, hoje);
 
                 return (
                   <td key={date} className="p-0">
@@ -214,10 +229,11 @@ function MonthBlock({
                       className={cn(
                         "block size-4 rounded-[3px]",
                         STATE_STYLE[state],
-                        day?.isToday && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                        date === hoje && HOJE_STYLE,
                       )}
                       title={description}
                       aria-label={description}
+                      aria-current={date === hoje ? "date" : undefined}
                       role="img"
                     />
                   </td>

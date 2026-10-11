@@ -19,36 +19,28 @@ import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { roundForDisplay, TOTAL_QUALITY_HINTS } from "@/lib/nutrition/calc";
-import { longDateLabel, monthLabel, shortDateLabel } from "@/lib/nutrition/calendar";
+import { monthLabel, shortDateLabel } from "@/lib/nutrition/calendar";
 import { CORE_NUTRIENTS, WEEKDAY_SHORT_LABELS } from "@/lib/nutrition/constants";
-import { cellIntensity, cellLabel, type MonthDayCell, type MonthView } from "@/lib/nutrition/diary-month";
+import type { MonthView } from "@/lib/nutrition/diary-month";
+import { ORDEM_DOS_TONS, TONS_DO_MES, tomDaCelula } from "./tons-do-mes";
+import { textoDaCelulaDoMes } from "./rotulos-do-mes";
 
 const kcal = (value: number | null): string =>
   value === null ? "—" : `${roundForDisplay(value, 0).toLocaleString("pt-BR")}`;
 
-/**
- * Cor da célula.
- *
- * A escala vai do "bem abaixo da meta" ao "acima", em tokens do design system (dourado do
- * projeto), e funciona em dark e light porque usa `--primary` com opacidade, não hex fixo.
- * Sem meta ou sem registro → neutro: um dia sem meta não é um dia ruim.
- */
-function cellTone(cell: MonthDayCell): string {
-  if (!cell.hasRecord) return "bg-muted/30 text-muted-foreground";
-  const intensity = cellIntensity(cell);
-  if (intensity === null) return "bg-accent/40";
-  if (cell.goalPercent !== null && cell.goalPercent > 110) return "bg-destructive/15";
-  if (intensity >= 0.9) return "bg-primary/25";
-  if (intensity >= 0.6) return "bg-primary/15";
-  return "bg-primary/[0.07]";
-}
+// A cor da célula e a legenda saem da MESMA fonte (`tons-do-mes.ts`, REDESIGN-07-C · D4): a
+// escala vai do "menos de 60%" ao "acima de 110%" em tokens do design system, e funciona em
+// dark e light porque usa `--primary` com opacidade. Sem meta ou sem registro → neutro.
 
 export function DiaryMonthView({
   view,
+  hoje,
   onPickDay,
   weekStartDay = 1,
 }: {
   view: MonthView;
+  /** "Hoje" do servidor (Brasília), injetado — nunca a data do aparelho. */
+  hoje: string;
   onPickDay: (day: string) => void;
   /** 0 = domingo … 6 = sábado. O app usa segunda (1), como o resto do módulo. */
   weekStartDay?: number;
@@ -120,10 +112,17 @@ export function DiaryMonthView({
       {/* ── Calendário ── */}
       <Card>
         <CardContent className="p-2 sm:p-4">
-          <div className="grid grid-cols-7 gap-1" role="grid" aria-label="Calendário do mês">
+          {/* Grupo com nome, não `role="grid"`: um grid exige navegação por setas que esta
+              grade não tem. Cada dia diz tudo no próprio nome; o cabeçalho é só visual. */}
+          <div
+            className="grid grid-cols-7 gap-1"
+            role="group"
+            aria-label={`Dias de ${monthLabel(view.monthStart)}`}
+          >
             {weekdayHeaders.map((label) => (
               <div
                 key={label}
+                aria-hidden="true"
                 className="pb-1 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
               >
                 {label}
@@ -137,21 +136,21 @@ export function DiaryMonthView({
                 onClick={() => onPickDay(cell.date)}
                 // A leitura completa vai para o leitor de tela: a cor nunca é a única
                 // portadora da informação.
-                aria-label={`${longDateLabel(cell.date)}: ${cellLabel(cell)}`}
-                aria-current={cell.isToday ? "date" : undefined}
+                aria-label={textoDaCelulaDoMes(cell, hoje)}
+                aria-current={cell.date === hoje ? "date" : undefined}
                 className={cn(
                   "flex min-h-16 flex-col rounded-md border p-1.5 text-left transition-colors sm:min-h-20",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   "hover:border-primary/40",
-                  cellTone(cell),
+                  TONS_DO_MES[tomDaCelula(cell)].classe,
                   !cell.inMonth && "opacity-40",
-                  cell.isToday && "border-primary ring-1 ring-primary/30",
+                  cell.date === hoje && "border-primary ring-1 ring-primary/30",
                 )}
               >
                 <span
                   className={cn(
                     "text-xs font-medium tabular-nums",
-                    cell.isToday && "text-primary",
+                    cell.date === hoje && "text-primary",
                   )}
                 >
                   {cell.date.slice(8)}
@@ -175,20 +174,31 @@ export function DiaryMonthView({
             ))}
           </div>
 
-          <p className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className="size-2.5 rounded-sm bg-muted/60" /> sem registro
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="size-2.5 rounded-sm bg-primary/15" /> abaixo da meta
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="size-2.5 rounded-sm bg-primary/25" /> na meta
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="size-2.5 rounded-sm bg-destructive/25" /> acima da meta
-            </span>
-          </p>
+          {/* Legenda: as amostras são as classes da célula, da mesma fonte. */}
+          <ul
+            aria-label="Legenda"
+            className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground"
+          >
+            {ORDEM_DOS_TONS.map((tom) => (
+              <li key={tom} className="flex items-center gap-1">
+                <span
+                  aria-hidden="true"
+                  className={cn("size-3 rounded-sm border", TONS_DO_MES[tom].classe)}
+                />
+                {TONS_DO_MES[tom].rotulo}
+              </li>
+            ))}
+            <li className="flex items-center gap-1">
+              <span aria-hidden="true" className="text-amber-600 dark:text-amber-500">
+                ●
+              </span>
+              refeição pendente
+            </li>
+            <li className="flex items-center gap-1">
+              <span aria-hidden="true" className="size-3 rounded-sm border border-primary ring-1 ring-primary/30" />
+              hoje
+            </li>
+          </ul>
         </CardContent>
       </Card>
 

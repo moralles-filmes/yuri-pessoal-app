@@ -499,10 +499,13 @@ export default async function TreinosPage() {
               return (
                 <li
                   key={day.date}
+                  aria-current={day.isToday ? "date" : undefined}
                   className={`rounded-lg border p-2 text-xs ${day.isToday ? "border-primary/50 bg-primary/5" : ""}`}
                 >
                   <p className="font-medium text-muted-foreground">
                     {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
+                    {/* Hoje em palavra (D4): antes só a cor da borda dizia. */}
+                    {day.isToday && <span className="ms-1 font-semibold text-primary">· Hoje</span>}
                   </p>
                   <p className="mt-1 truncate">
                     {entry ? (entry.workoutName ?? "Treino") : day.hasRest ? "Descanso" : "—"}

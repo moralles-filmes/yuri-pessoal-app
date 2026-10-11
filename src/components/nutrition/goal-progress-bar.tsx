@@ -144,6 +144,9 @@ export function AdherenceBadge({
               : "bg-muted text-muted-foreground",
         )}
       >
+        {/* Nome acessível (D4): "aderência de N%". A cor é só ênfase do número — as faixas não
+            ganham palavra (seria julgamento; invariante 25 da Dieta). */}
+        <span className="sr-only">aderência de </span>
         {rounded}%
       </span>
       <TotalQualityBadge quality={quality} />

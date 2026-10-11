@@ -79,6 +79,7 @@ import {
   draftToPayload,
   type SetValuesDraft,
 } from "./set-editor";
+import { rotuloDoChipDeSerie } from "./rotulos-da-sessao";
 import { sendSessionMutation } from "./session-mutations";
 import {
   optimisticFromQueue,
@@ -398,7 +399,7 @@ export function SessionLiveClient({
                     set.status === "pulada" && "line-through opacity-60",
                   )}
                   aria-current={isFocused ? "step" : undefined}
-                  aria-label={`Série ${set.setNumber}${set.isWarmup ? " de aquecimento" : ""}`}
+                  aria-label={rotuloDoChipDeSerie(set)}
                 >
                   {done && <Check className="mr-1 size-3.5" />}
                   {set.setNumber}

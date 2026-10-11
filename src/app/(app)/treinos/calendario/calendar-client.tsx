@@ -30,8 +30,11 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
+  Ban,
+  Check,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Copy,
   Eraser,
   GripVertical,
@@ -40,6 +43,7 @@ import {
   Repeat,
   Trash2,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -55,20 +59,26 @@ import { PageHeader } from "@/components/shared/page-header";
 import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { useChaveDeAbertura, useItemRetido } from "@/components/shared/use-item-retido";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import {
+  ROTULOS_DO_STATUS,
+  rotuloDaCelulaDoMes,
+  rotuloDeAdicionar,
+  rotuloDeDescanso,
+  statusExibido,
+  textoDaColunaDaSemana,
+  type StatusExibido,
+} from "@/components/training/rotulos-do-calendario";
 import { ConsistencyCalendar } from "@/components/training/consistency-calendar";
 import type { MetricOptions, MetricSession } from "@/lib/training/metrics";
 import { cn } from "@/lib/utils";
 import {
-  DERIVED_SCHEDULE_STATUS_LABELS,
   SCHEDULE_SOURCE_LABELS,
   TRAINING_BASE_PATH,
   WEEKDAY_SHORT_LABELS,
-  type DerivedScheduleStatus,
 } from "@/lib/training/constants";
 import {
   addDaysIso,
   buildScheduleWeek,
-  derivePlannedStatus,
   groupByDate,
   monthGridIso,
   summarizeAdherence,
@@ -110,7 +120,7 @@ const VIEW_LABELS: Record<View, string> = {
   consistencia: "Consistência",
 };
 
-const STATUS_STYLES: Record<DerivedScheduleStatus, string> = {
+const STATUS_STYLES: Record<StatusExibido, string> = {
   planejado: "border-border bg-card",
   hoje: "border-primary/50 bg-primary/10",
   atrasado: "border-destructive/40 bg-destructive/5",
@@ -118,6 +128,19 @@ const STATUS_STYLES: Record<DerivedScheduleStatus, string> = {
   nao_realizado: "border-muted bg-muted/60 opacity-80",
   reagendado: "border-border bg-muted/40",
   cancelado: "border-border bg-muted/40 line-through opacity-70",
+  // G2 (REDESIGN-07-C): descanso era passado por derivePlannedStatus no mês e na lista e saía
+  // "Atrasado", em tom de alarme. Agora tem o tratamento neutro que a semana já dava.
+  descanso: "border-dashed border-border bg-transparent text-muted-foreground",
+};
+
+/** O status do chip do mês também em forma, não só em cor (D4). */
+const STATUS_ICONE: Partial<Record<StatusExibido, LucideIcon>> = {
+  concluido: Check,
+  nao_realizado: X,
+  atrasado: Clock,
+  reagendado: Repeat,
+  cancelado: Ban,
+  descanso: Moon,
 };
 
 /** "03/08" a partir de data pura — sem converter para Date, sem fuso. */
@@ -481,6 +504,7 @@ function WeekView({
         <DayColumn
           key={day.date}
           date={day.date}
+          hoje={hoje}
           isToday={day.isToday}
           isPast={day.isPast}
           hasRest={day.hasRest}
@@ -505,6 +529,7 @@ function WeekView({
 
 function DayColumn({
   date,
+  hoje,
   isToday,
   isPast,
   hasRest,
@@ -514,6 +539,7 @@ function DayColumn({
   children,
 }: {
   date: string;
+  hoje: string;
   isToday: boolean;
   isPast: boolean;
   hasRest: boolean;
@@ -527,6 +553,9 @@ function DayColumn({
   return (
     <div
       ref={setNodeRef}
+      role="group"
+      aria-label={textoDaColunaDaSemana(date, hoje)}
+      aria-current={isToday ? "date" : undefined}
       className={cn(
         "flex min-h-32 flex-col gap-1.5 rounded-xl border p-2 transition-colors",
         isToday && "border-primary/50 bg-primary/5",
@@ -547,7 +576,7 @@ function DayColumn({
           <button
             type="button"
             onClick={onRest}
-            aria-label={hasRest ? `Desmarcar descanso em ${date}` : `Marcar descanso em ${date}`}
+            aria-label={rotuloDeDescanso(date, hoje, hasRest)}
             aria-pressed={hasRest}
             className={cn(
               "rounded p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -559,13 +588,16 @@ function DayColumn({
           <button
             type="button"
             onClick={onAdd}
-            aria-label={`Adicionar treino em ${date}`}
+            aria-label={rotuloDeAdicionar(date, hoje)}
             className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Plus className="size-3.5" />
           </button>
         </div>
       </div>
+      {/* Hoje em palavra (D4), numa linha própria: o rótulo do dia continua quebrando como
+          antes (a 1280 a coluna tem ~100 px) e "Hoje" não disputa espaço com ele. */}
+      {isToday && <p className="text-[11px] font-semibold text-primary">Hoje</p>}
       {children}
     </div>
   );
@@ -585,7 +617,7 @@ function DraggableEntry({
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: entry.id,
   });
-  const derived = derivePlannedStatus(entry, hoje);
+  const derived = statusExibido(entry, hoje);
 
   if (entry.entryKind === "descanso") {
     return (
@@ -639,7 +671,7 @@ function DraggableEntry({
           )}
           {derived !== "planejado" && (
             <Badge variant="secondary" className="mt-1 text-[9px]">
-              {DERIVED_SCHEDULE_STATUS_LABELS[derived]}
+              {ROTULOS_DO_STATUS[derived]}
             </Badge>
           )}
         </div>
@@ -720,22 +752,39 @@ function MonthView({
                   outside && "opacity-40",
                   date === hoje && "border-primary/50 bg-primary/5",
                 )}
-                aria-label={`Adicionar treino em ${date}`}
+                aria-current={date === hoje ? "date" : undefined}
+                aria-label={rotuloDaCelulaDoMes(
+                  date,
+                  hoje,
+                  month,
+                  dayEntries.map((entry) => ({
+                    ...entry,
+                    nome: entry.workoutName ?? entry.title ?? "Treino",
+                  })),
+                )}
               >
-                <span className="text-[11px] font-medium tabular-nums">{date.slice(8, 10)}</span>
+                <span className="text-[11px] font-medium tabular-nums">
+                  {date.slice(8, 10)}
+                  {date === hoje && <span className="ms-1 font-semibold text-primary">hoje</span>}
+                </span>
                 {dayEntries.slice(0, 3).map((entry) => {
-                  const derived = derivePlannedStatus(entry, hoje);
+                  const status = statusExibido(entry, hoje);
+                  const Icone = STATUS_ICONE[status];
                   return (
                     <span
                       key={entry.id}
+                      title={ROTULOS_DO_STATUS[status]}
                       className={cn(
-                        "w-full truncate rounded border px-1 py-0.5 text-[10px]",
-                        STATUS_STYLES[derived],
+                        "flex w-full items-center gap-0.5 truncate rounded border px-1 py-0.5 text-[10px]",
+                        STATUS_STYLES[status],
                       )}
                     >
-                      {entry.entryKind === "descanso"
-                        ? "Descanso"
-                        : (entry.workoutName ?? entry.title ?? "Treino")}
+                      {Icone && <Icone aria-hidden className="size-2.5 shrink-0" />}
+                      <span className="truncate">
+                        {entry.entryKind === "descanso"
+                          ? "Descanso"
+                          : (entry.workoutName ?? entry.title ?? "Treino")}
+                      </span>
                     </span>
                   );
                 })}
@@ -781,7 +830,7 @@ function ListView({
   return (
     <ul className="space-y-2">
       {sorted.map((entry) => {
-        const derived = derivePlannedStatus(entry, hoje);
+        const derived = statusExibido(entry, hoje);
         return (
           <li
             key={entry.id}
@@ -797,7 +846,7 @@ function ListView({
                   : (entry.workoutName ?? entry.title ?? "Treino")}
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                {DERIVED_SCHEDULE_STATUS_LABELS[derived]}
+                {ROTULOS_DO_STATUS[derived]}
                 {entry.plannedTime ? ` · ${entry.plannedTime.slice(0, 5)}` : ""}
                 {entry.originalDate ? ` · era ${shortDate(entry.originalDate)}` : ""}
                 {entry.skipReason ? ` · ${entry.skipReason}` : ""}

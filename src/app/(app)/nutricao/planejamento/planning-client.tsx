@@ -799,12 +799,17 @@ function WeekPlanning({
             key={day}
             type="button"
             onClick={() => onPickDay(day)}
+            aria-current={day === hoje ? "date" : undefined}
             className={cn(
               "rounded-lg border p-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               day === hoje && "border-primary/40 bg-primary/5",
             )}
           >
-            <p className="text-xs font-medium">{WEEKDAY_SHORT_LABELS[(index + 1) % 7]}</p>
+            <p className="text-xs font-medium">
+              {WEEKDAY_SHORT_LABELS[(index + 1) % 7]}
+              {/* Hoje em palavra (D4): antes só a cor da borda dizia. */}
+              {day === hoje && <span className="ms-1 font-semibold text-primary">· Hoje</span>}
+            </p>
             <p className="text-[11px] text-muted-foreground">{shortDateLabel(day)}</p>
             <p className="mt-2 text-sm font-semibold tabular-nums">
               {total ? `${roundForDisplay(total.amount, 0).toLocaleString("pt-BR")} kcal` : "—"}

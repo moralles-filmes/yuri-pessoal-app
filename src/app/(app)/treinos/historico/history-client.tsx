@@ -856,13 +856,18 @@ function CalendarView({
             return (
               <div
                 key={date}
+                aria-current={date === hoje ? "date" : undefined}
                 className={cn(
                   "min-h-[64px] rounded-lg border border-border/60 p-1 text-left",
                   !inMonth && "opacity-40",
                   date === hoje && "border-primary/60",
                 )}
               >
-                <span className="text-xs text-muted-foreground">{Number(date.slice(-2))}</span>
+                <span className="text-xs text-muted-foreground">
+                  {Number(date.slice(-2))}
+                  {/* Hoje em palavra (D4): antes só a cor da borda dizia. */}
+                  {date === hoje && <span className="ms-1 font-semibold text-primary">hoje</span>}
+                </span>
                 <div className="mt-0.5 space-y-0.5">
                   {sessions.map((session) => (
                     <Link

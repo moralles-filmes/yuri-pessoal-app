@@ -55,6 +55,25 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "components/training/exercise-picker-dialog.tsx", exige: /aria-pressed=\{onlyFavorites\}/, porque: "\"Favoritos\" do seletor de exercícios anuncia se está ligado" },
   { arquivo: "components/training/session/exercise-list-sheet.tsx", exige: /aria-current=\{isCurrent \? "step" : undefined\}/, porque: "o exercício atual da sessão é anunciado" },
   { arquivo: "components/training/session/substitute-sheet.tsx", exige: /aria-pressed=\{selected === item\.id\}/, porque: "o substituto escolhido é anunciado (assinatura border-primary, fora da V1)" },
+
+  // D4 — calendários dizem estado e hoje sem depender da cor
+  { arquivo: "components/training/consistency-calendar.tsx", exige: /aria-current=\{date === hoje \? "date" : undefined\}/, porque: "hoje na consistência é anunciado" },
+  { arquivo: "components/training/consistency-calendar.tsx", exige: /textoDoDiaDaConsistencia\(date, day, hoje\)/, porque: "cada dia da consistência diz o estado e \"hoje\" em palavras" },
+  { arquivo: "components/training/consistency-calendar.tsx", exige: /futuro: "[^"]*ring-1 ring-inset ring-border/, porque: "o dia que ainda vai chegar tem contorno (não é um buraco no fundo)" },
+  { arquivo: "components/training/consistency-calendar.tsx", exige: /<span className="sr-only">\{WEEKDAY_LABELS\[weekday\]\}<\/span>/, porque: "S S / Q Q de uma letra ganham o nome inteiro para o leitor de tela" },
+  { arquivo: "app/(app)/treinos/calendario/calendar-client.tsx", exige: /aria-label=\{textoDaColunaDaSemana\(date, hoje\)\}/, porque: "a coluna da semana tem nome com a data escrita e \"hoje\"" },
+  { arquivo: "app/(app)/treinos/calendario/calendar-client.tsx", exige: /\{isToday && <p className="[^"]*">Hoje<\/p>\}/, porque: "hoje em palavra na semana, em linha própria" },
+  { arquivo: "app/(app)/treinos/calendario/calendar-client.tsx", exige: /aria-label=\{rotuloDeAdicionar\(date, hoje\)\}/, porque: "o botão de adicionar diz a data escrita, não ISO" },
+  { arquivo: "app/(app)/treinos/calendario/calendar-client.tsx", exige: /aria-label=\{rotuloDaCelulaDoMes\(/, porque: "a célula do mês diz cada treino e o status dele" },
+  { arquivo: "app/(app)/treinos/calendario/calendar-client.tsx", exige: /const Icone = STATUS_ICONE\[status\]/, porque: "o status do chip do mês tem forma, não só cor" },
+  { arquivo: "app/(app)/treinos/page.tsx", exige: /aria-current=\{day\.isToday \? "date" : undefined\}/, porque: "hoje na faixa \"Sua semana\" é anunciado" },
+  { arquivo: "app/(app)/treinos/historico/history-client.tsx", exige: /aria-current=\{date === hoje \? "date" : undefined\}/, porque: "hoje no calendário do histórico é anunciado" },
+  { arquivo: "app/(app)/nutricao/diario/diary-client.tsx", exige: /aria-current=\{day === hoje \? "date" : undefined\}/, porque: "hoje na semana do diário é anunciado" },
+  { arquivo: "app/(app)/nutricao/planejamento/planning-client.tsx", exige: /aria-current=\{day === hoje \? "date" : undefined\}/, porque: "hoje na semana do planejamento é anunciado" },
+  { arquivo: "components/nutrition/diary-month-view.tsx", exige: /aria-label=\{textoDaCelulaDoMes\(cell, hoje\)\}/, porque: "o dia do mês diz data, hoje, fora do mês, pendentes e planejado sem registro" },
+  { arquivo: "components/nutrition/diary-month-view.tsx", exige: /role="group"/, porque: "a grade do mês é um grupo com nome (grid exigiria setas)" },
+  { arquivo: "components/training/session/session-live-client.tsx", exige: /aria-label=\{rotuloDoChipDeSerie\(set\)\}/, porque: "o chip de série diz feita, pulada ou pendente" },
+  { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /<span className="sr-only">aderência de <\/span>/, porque: "a aderência tem nome; a cor é só ênfase" },
 ];
 
 /** O que não pode voltar. */
@@ -63,6 +82,8 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: "app/(app)/treinos/treinos/workouts-client.tsx", exige: /\{deleting && \(/, porque: "montagem condicional sem o hook quebra a animação de fechamento" },
   { arquivo: "app/(app)/treinos/programas/programs-client.tsx", exige: /\{deleting && \(/, porque: "montagem condicional sem o hook quebra a animação de fechamento" },
   { arquivo: "app/(app)/treinos/metas/goals-client.tsx", exige: /Escondendo nada/, porque: "com aria-pressed o rótulo é fixo — trocar o texto apagava o nome do botão" },
+  { arquivo: "app/(app)/treinos/calendario/calendar-client.tsx", exige: /derivePlannedStatus\(/, porque: "G2: o calendário lê statusExibido (descanso nunca vira \"Atrasado\")" },
+  { arquivo: "components/nutrition/diary-month-view.tsx", exige: /role="grid"/, porque: "grid sem navegação por setas promete o que não entrega" },
 ];
 
 const fonte = (arquivo: string) => semComentarios(fs.readFileSync(path.join(SRC, arquivo), "utf8"));
