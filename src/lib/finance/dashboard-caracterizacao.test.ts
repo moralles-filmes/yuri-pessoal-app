@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { reaisParaCentavos } from "@/lib/format";
 import {
+  evolucaoMensal,
   gastosPorCategoria,
   proximas6Faturas,
   resumoMes,
@@ -162,6 +164,8 @@ describe("1 · resumoMes — contrato AS-IS", () => {
       resumoMes({ mes: "2026-06", transactions, statements, receivables }),
     ).toEqual({
       entradas: 550,
+      entradasMeu: 550,
+      entradasTerceiros: 0,
       saidas: 420.6,
       meu: 280.55,
       terceiros: 140.05,
@@ -183,6 +187,8 @@ describe("1 · resumoMes — contrato AS-IS", () => {
 
     expect(resumoMes({ mes: "2026-06", transactions: [], statements, receivables })).toEqual({
       entradas: 0,
+      entradasMeu: 0,
+      entradasTerceiros: 0,
       saidas: 100,
       meu: 0,
       terceiros: 100,
@@ -203,6 +209,8 @@ describe("1 · resumoMes — contrato AS-IS", () => {
 
     expect(result).toEqual({
       entradas: 0,
+      entradasMeu: 0,
+      entradasTerceiros: 0,
       saidas: 50,
       meu: -25,
       terceiros: 75,
@@ -223,6 +231,8 @@ describe("1 · resumoMes — contrato AS-IS", () => {
       }),
     ).toEqual({
       entradas: 0,
+      entradasMeu: 0,
+      entradasTerceiros: 0,
       saidas: 0,
       meu: 0,
       terceiros: 0,
@@ -643,22 +653,26 @@ describe("5 · §9 — cenário sintético obrigatório", () => {
     expect(resumo9("pendente", [pagamento]).entradas).toBe(0);
   });
 
-  it("[5 ⚠️] a renda pessoal NÃO sobe — só enquanto o reembolso não for lançado como receita", () => {
+  it("[5 ⚠️] a renda pessoal NÃO sobe quando o reembolso é lançado como receita DE TERCEIRO — condicional à classificação (D10)", () => {
     // Sem lançar nada, a promessa vale.
     expect(resumo9("pendente").entradas).toBe(0);
 
-    // ⚠️ DEFEITO CONGELADO, NÃO CORRIGIDO. Lançar o reembolso como receita infla as
-    // entradas em R$ 250 — é o P0-1 do §1 do dicionário. A 03-C conserta (E2/E3).
-    const reembolsoLancado = tx({
+    // REDESIGN-03-C (E2/E3) — o defeito do P0-1 deixou de estar congelado aqui: lançado como
+    // receita de terceiro (`valor_pessoal` 0, gravado no ato), o reembolso entra no bruto e
+    // NÃO na minha parte.
+    const reembolsoDeTerceiro = tx({
       amount: 250,
+      valor_pessoal: 0,
       type: "receita",
       status: "recebido",
       competence_date: "2026-06-28",
     });
-    expect(resumo9("pendente", [reembolsoLancado]).entradas).toBe(250);
+    const comReembolso = resumo9("pendente", [reembolsoDeTerceiro]);
+    expect(comReembolso.entradas).toBe(250); // o bruto ainda inclui
+    expect(comReembolso.entradasMeu).toBe(0);
+    expect(comReembolso.entradasTerceiros).toBe(250);
 
-    // ⛔ E o pior não é o número: é que NADA no retorno distingue esses R$ 250 de salário.
-    // O resumo de um reembolso é byte a byte igual ao de uma renda genuína.
+    // E o resumo dele deixou de ser byte a byte igual ao de uma renda genuína.
     const rendaGenuina = tx({
       amount: 250,
       type: "receita",
@@ -667,7 +681,19 @@ describe("5 · §9 — cenário sintético obrigatório", () => {
       category_id: "outra-categoria",
       category: { id: "outra-categoria", name: "Categoria X", color: null },
     });
-    expect(resumo9("pendente", [reembolsoLancado])).toEqual(resumo9("pendente", [rendaGenuina]));
+    expect(resumo9("pendente", [rendaGenuina]).entradasMeu).toBe(250);
+    expect(comReembolso).not.toEqual(resumo9("pendente", [rendaGenuina]));
+
+    // ⚠️ Continua CONDICIONAL: lançado sem classificar (pessoal, valor nulo), o reembolso ainda
+    // sobe a renda pessoal. Nada é reclassificado sozinho (D10), e ligar a entrada ao recebível
+    // é da 03-D.
+    const reembolsoSemClassificar = tx({
+      amount: 250,
+      type: "receita",
+      status: "recebido",
+      competence_date: "2026-06-28",
+    });
+    expect(resumo9("pendente", [reembolsoSemClassificar]).entradasMeu).toBe(250);
   });
 
   it("[3+4 ❌] R$ 250 recebidos e R$ 350 restantes são IRREPRESENTÁVEIS — e o preço é medido", () => {
@@ -713,65 +739,152 @@ describe("5 · §9 — cenário sintético obrigatório", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════════════
- * 6 · 03-C — RECEITA NÃO É PARTIDA ENTRE "MINHA" E "DE TERCEIROS"
+ * 6 · 03-C — A ENTRADA É PARTIDA ENTRE "MINHA" E "DE TERCEIROS" (E3)
  *
- * A 03-C (E2/E3) vai fazer `classificacao` e `valor_pessoal` valerem para `type='receita'`.
- * Hoje não valem. Este bloco prova que não valem — para que o dia em que passarem a valer
- * seja um diff neste arquivo, e não um número que mudou sozinho numa tela.
+ * ⚠️ REESCRITO no commit da A4 da 03-C, de propósito. Até ali este bloco provava que a
+ * entrada NÃO era partida (o laço somava `amount` cheio e nunca olhava `valor_pessoal`), para
+ * que o dia em que passasse a ser fosse um diff aqui, e não um número que mudou sozinho.
+ *
+ * Agora prova que é — pelo `valor_pessoal` GRAVADO no ato (A2), pela mesma `meuCentavos` da
+ * despesa à vista, sem o motor conhecer `classificacao` nem categoria (D8). E prova a
+ * divergência que o dono decidiu manter (B2): o `saldo` da evolução continua bruto − bruto.
  * ═══════════════════════════════════════════════════════════════════════════════════════ */
 
-describe("6 · 03-C — entrada não é partida entre minha e de terceiros", () => {
-  it("receita com valor_pessoal preenchido soma o amount CHEIO nas entradas", () => {
-    // ⚠️ A coluna existe no tipo e é simplesmente IGNORADA para receita: o laço de
-    // `resumoMes` faz `entradasCent += cent(t.amount)` e dá `continue` antes de olhar
-    // `valor_pessoal`. `meuCentavos` nunca é chamado para uma entrada.
-    const r = resumoMes({
-      mes: "2026-06",
-      transactions: [
-        tx({ amount: 1000, valor_pessoal: 300, type: "receita", status: "recebido" }),
-      ],
-      statements: [],
-      receivables: [],
-    });
+describe("6 · 03-C — a entrada é partida entre minha e de terceiros", () => {
+  const resumo = (transactions: DashTx[]) =>
+    resumoMes({ mes: "2026-06", transactions, statements: [], receivables: [] });
+
+  it("compartilhada: entradas continua cheio, entradasMeu é a parte gravada e o resto é de terceiros", () => {
+    const r = resumo([
+      tx({ amount: 1000, valor_pessoal: 300, type: "receita", status: "recebido" }),
+    ]);
     expect(r.entradas).toBe(1000);
-    expect(r.entradas).not.toBe(300);
+    expect(r.entradasMeu).toBe(300);
+    expect(r.entradasTerceiros).toBe(700);
   });
 
-  it("`meu` e `terceiros` do resumo falam SÓ das saídas — a entrada não é repartida", () => {
-    const r = resumoMes({
-      mes: "2026-06",
-      transactions: [
-        tx({ amount: 1000, valor_pessoal: 300, type: "receita", status: "recebido" }),
-        tx({ amount: 100, valor_pessoal: 40 }),
-      ],
-      statements: [],
-      receivables: [],
-    });
-    // Os R$ 1.000 de entrada não aparecem em `meu` nem em `terceiros`.
+  it("terceiro (valor_pessoal 0): nada entra na minha parte", () => {
+    const r = resumo([tx({ amount: 250, valor_pessoal: 0, type: "receita", status: "recebido" })]);
+    expect(r).toMatchObject({ entradas: 250, entradasMeu: 0, entradasTerceiros: 250 });
+  });
+
+  it("pessoal (valor_pessoal nulo): a entrada inteira é minha — o dado de hoje não muda", () => {
+    const r = resumo([tx({ amount: 1000, type: "receita", status: "recebido" })]);
+    expect(r).toMatchObject({ entradas: 1000, entradasMeu: 1000, entradasTerceiros: 0 });
+  });
+
+  it("`meu` e `terceiros` do resumo continuam falando SÓ das saídas", () => {
+    const r = resumo([
+      tx({ amount: 1000, valor_pessoal: 300, type: "receita", status: "recebido" }),
+      tx({ amount: 100, valor_pessoal: 40 }),
+    ]);
     expect(r.meu).toBe(40);
     expect(r.terceiros).toBe(60);
     expect(r.meu + r.terceiros).toBe(r.saidas);
     expect(r.saidas).toBe(100);
+    expect(r.entradasMeu).toBe(300);
   });
 
-  it("ResumoMes NÃO tem entradasMeu nem entradasTerceiros — a separação não existe", () => {
-    const r = resumoMes({ mes: "2026-06", transactions: [], statements: [], receivables: [] });
-    expect(Object.keys(r).sort()).toEqual([
+  it("a partição fecha: entradasMeu + entradasTerceiros === entradas", () => {
+    // ⚠️ O estorno de cartão e a receita cancelada carregam `valor_pessoal` 0 DE PROPÓSITO:
+    // uma conta de terceiros feita por fora do filtro de `entradas` os somaria, e a partição
+    // quebraria. É o que torna esta fixture capaz de derrubar a mutação C2.
+    const r = resumo([
+      tx({ amount: 500.11, type: "receita", status: "recebido" }),
+      tx({ amount: 1000, valor_pessoal: 300.33, type: "receita", status: "recebido" }),
+      tx({ amount: 250, valor_pessoal: 0, type: "receita", status: "recebido" }),
+      tx({
+        amount: 80,
+        valor_pessoal: 0,
+        type: "receita",
+        status: "recebido",
+        card_id: "card-1",
+        statement_id: "st",
+      }),
+      tx({ amount: 999, valor_pessoal: 0, type: "receita", status: "cancelado" }),
+    ]);
+    expect(reaisParaCentavos(r.entradasMeu) + reaisParaCentavos(r.entradasTerceiros)).toBe(
+      reaisParaCentavos(r.entradas),
+    );
+    expect(r.entradas).toBe(1750.11);
+    expect(r.entradasMeu).toBe(800.44);
+    expect(r.entradasTerceiros).toBe(949.67);
+  });
+
+  it("estorno de cartão fica fora das três", () => {
+    const r = resumo([
+      tx({
+        amount: 80,
+        type: "receita",
+        status: "recebido",
+        card_id: "card-1",
+        statement_id: "st",
+      }),
+    ]);
+    expect(r).toMatchObject({ entradas: 0, entradasMeu: 0, entradasTerceiros: 0 });
+  });
+
+  it("receita cancelada fica fora das três", () => {
+    const r = resumo([tx({ amount: 999, type: "receita", status: "cancelado" })]);
+    expect(r).toMatchObject({ entradas: 0, entradasMeu: 0, entradasTerceiros: 0 });
+  });
+
+  it("as chaves do ResumoMes: as duas novas entram, nenhuma sai", () => {
+    expect(Object.keys(resumo([])).sort()).toEqual([
       "aVista",
       "aVistaMeu",
       "cartao",
       "cartaoMeu",
       "entradas",
+      "entradasMeu",
+      "entradasTerceiros",
       "meu",
       "saidas",
       "terceiros",
     ]);
   });
 
-  it("o motor não conhece `classificacao` em lugar nenhum", () => {
-    // ⚠️ `DashTx` carrega `valor_pessoal`, mas NÃO carrega `classificacao`. A distinção
-    // pessoal/terceiro/compartilhada nunca chega ao motor — nem para despesa.
+  it("o motor continua sem conhecer `classificacao`", () => {
+    // A repartição sai do `valor_pessoal` gravado no ato (D8). `DashTx` não carrega
+    // `classificacao`, e o motor não precisa dela — nem para despesa, nem para receita.
     expect(FONTE_DASHBOARD).not.toContain("classificacao");
+  });
+
+  it("trocar a categoria de uma RECEITA não move entradasMeu nem entradasTerceiros (D8)", () => {
+    // ⛔ É o teste que a mutação C9 tem de derrubar: o bloco 7 só tem DESPESA na fixture, e
+    // ler a categoria para repartir a receita passaria verde por lá. A segunda categoria tem um
+    // nome que "declara" ser de terceiros — e mesmo assim não decide nada.
+    const receita = (category_id: string | null, name: string | null) =>
+      tx({
+        amount: 1000,
+        valor_pessoal: 300,
+        type: "receita",
+        status: "recebido",
+        category_id,
+        category: category_id && name ? { id: category_id, name, color: null } : null,
+      });
+    const emA = resumo([receita("cat-a", "Categoria A")]);
+    const emTerceiros = resumo([receita("cat-terceiros", "Categoria de terceiros (sintética)")]);
+    const semCategoria = resumo([receita(null, null)]);
+    expect(emA).toEqual(emTerceiros);
+    expect(emA).toEqual(semCategoria);
+    expect(emA.entradasMeu).toBe(300);
+  });
+
+  it("B2 — divergência declarada: o saldo da evolução continua bruto − bruto", () => {
+    // Decisão do dono na 03-C: o Resultado do §13.3 (renda pessoal − minha parte EFETIVA das
+    // despesas) nasce depois da 03-D, quando o perdoado (D11) existir. Trocar um lado só seria
+    // a subtração que o próprio §13.3 proíbe.
+    const ev = evolucaoMensal({
+      meses: ["2026-06"],
+      transactions: [
+        tx({ amount: 250, valor_pessoal: 0, type: "receita", status: "recebido" }),
+        tx({ amount: 100 }),
+      ],
+      statements: [],
+      receivables: [],
+    });
+    expect(ev).toEqual([{ mes: "2026-06", entradas: 250, saidas: 100, saldo: 150 }]);
   });
 });
 

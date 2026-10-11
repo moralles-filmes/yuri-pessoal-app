@@ -19,6 +19,8 @@
  * -------------------------------------------------------
  * - À vista / não-cartão: meu = `valor_pessoal ?? amount`; terceiros = `amount − meu`.
  * - Cartão (por fatura): terceiros = Σ `receivables.valor` da fatura; meu = `total_atual − terceiros`.
+ * - Entradas (REDESIGN-03-C, E3): `entradas` é BRUTA; `entradasMeu`/`entradasTerceiros` a
+ *   repartem pela mesma regra da saída à vista (`valor_pessoal ?? amount`), gravada no ato.
  * `cancelado`/`cancelada`, `transferencia` e `ajuste` ficam fora de entradas/saídas.
  */
 import { addMonths, format, getDaysInMonth, parseISO } from "date-fns";
@@ -164,13 +166,25 @@ export function meuCentavos(t: { amount: number; valor_pessoal: number | null })
 /* ───────────────────────────── Resumo do mês ───────────────────────────── */
 
 export type ResumoMes = {
-  /** Entradas do mês (receitas, base competência). */
+  /** Entradas do mês (receitas, base competência). BRUTAS: incluem o dinheiro de terceiros. */
   entradas: number;
+  /**
+   * REDESIGN-03-C (E3) — a parte das entradas que é MINHA: Σ (`valor_pessoal ?? amount`), pela
+   * MESMA `meuCentavos` da despesa à vista, sobre EXATAMENTE as receitas de `entradas` (ativas,
+   * da competência do mês, sem cartão). Receita pessoal tem `valor_pessoal` nulo e entra
+   * inteira; de terceiro grava 0; compartilhada grava a parte informada.
+   *
+   * O motor NÃO lê a classificação gravada nem a categoria: quem decide é o `valor_pessoal`
+   * gravado no ato (D8). Trocar a marcação de uma categoria nunca reescreve o que entrou em março.
+   */
+  entradasMeu: number;
+  /** Entradas de terceiros: `entradas − entradasMeu`. A partição fecha por construção. */
+  entradasTerceiros: number;
   /** Saídas do mês = total movimentado (à vista + cartão). */
   saidas: number;
-  /** Quanto das saídas é realmente meu. */
+  /** Quanto das SAÍDAS é realmente meu (não fala das entradas — essas têm `entradasMeu`). */
   meu: number;
-  /** Quanto das saídas é de terceiros (saidas − meu). */
+  /** Quanto das SAÍDAS é de terceiros (saidas − meu). */
   terceiros: number;
   /** Gasto no cartão (Σ total das faturas do mês, base fatura). */
   cartao: number;
@@ -207,6 +221,7 @@ export function resumoMes(params: {
   const { mes, transactions, statements, receivables } = params;
 
   let entradasCent = 0;
+  let entradasMeuCent = 0;
   let aVistaCent = 0;
   let aVistaMeuCent = 0;
 
@@ -218,7 +233,11 @@ export function resumoMes(params: {
       // Estorno de cartão (receita vinculada à fatura) NÃO é entrada de caixa: já reduz o total
       // da fatura (total_atual = despesas − estornos + parcelas) e não cai em conta. Só receita
       // "de conta" (sem cartão) conta como entrada do mês — senão o estorno é contado em dobro.
-      if (t.card_id === null) entradasCent += cent(t.amount);
+      // A minha parte sai do MESMO `if`: as três (bruta, minha, de terceiros) têm um filtro só.
+      if (t.card_id === null) {
+        entradasCent += cent(t.amount);
+        entradasMeuCent += meuCentavos(t);
+      }
       continue;
     }
     if (t.type !== "despesa") continue; // transferencia/ajuste fora
@@ -239,6 +258,8 @@ export function resumoMes(params: {
 
   return {
     entradas: reais(entradasCent),
+    entradasMeu: reais(entradasMeuCent),
+    entradasTerceiros: reais(entradasCent - entradasMeuCent),
     saidas: reais(saidasCent),
     meu: reais(meuCent),
     terceiros: reais(saidasCent - meuCent),
@@ -458,6 +479,11 @@ export function evolucaoMensal(params: {
   const { meses, transactions, statements, receivables } = params;
   return meses.map((mes) => {
     const r = resumoMes({ mes, transactions, statements, receivables });
+    // ⚠️ REDESIGN-03-C · B2 — divergência DECLARADA, por decisão do dono: `saldo` continua
+    // `entradas − saidas`, bruto − bruto. O Resultado do §13.3 (renda pessoal − minha parte
+    // EFETIVA das despesas) depende do perdoado (D11), que é da 03-D; trocar um lado só
+    // (renda pessoal − despesa bruta) é a subtração que o próprio §13.3 proíbe. Congelado no
+    // bloco 6 de `dashboard-caracterizacao.test.ts`.
     return {
       mes,
       entradas: r.entradas,
