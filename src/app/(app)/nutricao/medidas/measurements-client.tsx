@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ariaDeProgresso } from "@/components/shared/aria-de-progresso";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/shared/page-header";
@@ -457,11 +458,11 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
                   <>
                     <div
                       className="h-2 w-full overflow-hidden rounded-full bg-muted"
-                      role="progressbar"
-                      aria-valuenow={Math.round(progress.percent)}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-label="Progresso da meta"
+                      {...ariaDeProgresso(
+                        `Meta de ${selectedType?.name ?? "medida"}`,
+                        progress.percent,
+                        `${Math.round(progress.percent)}% do caminho percorrido`,
+                      )}
                     >
                       <div
                         className={cn(
@@ -630,8 +631,9 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
 
             <TabsContent value="historico" className="mt-4">
               <Card>
-                <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-base">Histórico</CardTitle>
+                {/* G6 (REDESIGN-07-C): a primitiva é `grid`; sem `flex`, "Excluir N" caía embaixo. */}
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-3">
+                  <CardTitle className="min-w-0 text-base">Histórico</CardTitle>
                   {selected.size > 0 && (
                     <Button
                       variant="outline"
@@ -651,6 +653,7 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
                       icon={Ruler}
                       title="Nenhuma medição no período"
                       description="Registre uma medição ou escolha um período maior."
+                      className="border-0 bg-transparent py-6"
                     />
                   ) : (
                     <ul className="divide-y">

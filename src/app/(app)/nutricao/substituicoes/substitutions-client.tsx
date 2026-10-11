@@ -150,7 +150,7 @@ export function SubstitutionsClient(props: SubstitutionsClientProps) {
 
               return (
                 <Card key={group.id}>
-                  <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 pb-3">
+                  <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-3">
                     <div className="min-w-0">
                       <CardTitle className="flex flex-wrap items-center gap-2 text-base">
                         <span className="truncate">{group.name}</span>
@@ -175,7 +175,7 @@ export function SubstitutionsClient(props: SubstitutionsClientProps) {
                       )}
                     </div>
 
-                    <div className="flex shrink-0 gap-1">
+                    <div className="ml-auto flex shrink-0 gap-1">
                       <Button
                         variant="ghost"
                         size="sm"

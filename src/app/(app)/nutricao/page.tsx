@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { hojeISO, timeInSaoPaulo } from "@/lib/format";
@@ -308,15 +309,15 @@ export default async function NutricaoPage() {
                 </Button>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                Nada pendente para hoje.{" "}
-                <Link
-                  href="/nutricao/planejamento"
-                  className="text-primary underline-offset-4 hover:underline"
-                >
-                  Planejar refeições
-                </Link>
-              </p>
+              <EmptyState
+                icon={CalendarRange}
+                title="Nada pendente para hoje"
+                className="border-0 bg-transparent py-6"
+              >
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/nutricao/planejamento">Planejar refeições</Link>
+                </Button>
+              </EmptyState>
             )}
           </CardContent>
         </Card>

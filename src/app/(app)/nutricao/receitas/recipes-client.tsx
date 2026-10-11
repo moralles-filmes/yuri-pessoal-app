@@ -382,7 +382,10 @@ export function RecipesClient(props: RecipesClientProps) {
                         </p>
                       </button>
                       {recipe.isFavorite && (
-                        <Star className="size-4 shrink-0 fill-current text-primary" />
+                        <>
+                          <Star className="size-4 shrink-0 fill-current text-primary" aria-hidden="true" />
+                          <span className="sr-only">Favorito</span>
+                        </>
                       )}
                     </div>
 

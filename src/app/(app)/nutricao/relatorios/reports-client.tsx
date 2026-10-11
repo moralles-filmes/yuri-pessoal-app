@@ -21,6 +21,7 @@ import {
   FileSpreadsheet,
   Percent,
   Repeat,
+  Ruler,
   ShoppingCart,
   UtensilsCrossed,
 } from "lucide-react";
@@ -479,8 +480,8 @@ export function ReportsClient(props: ReportsClientProps) {
         {/* ═══ Micronutrientes ═══ */}
         <TabsContent value="micro" className="mt-4 space-y-4">
           <Card>
-            <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
-              <div>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
+              <div className="min-w-0">
                 <CardTitle className="text-base">Micronutrientes no período</CardTitle>
                 <CardDescription>
                   A coluna &ldquo;dias incompletos&rdquo; diz em quantos dias algum item não
@@ -505,8 +506,8 @@ export function ReportsClient(props: ReportsClientProps) {
         {/* ═══ Alimentos e refeições ═══ */}
         <TabsContent value="alimentos" className="mt-4 space-y-4">
           <Card>
-            <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
-              <div>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
+              <div className="min-w-0">
                 <CardTitle className="text-base">Mais consumidos</CardTitle>
                 <CardDescription>
                   Agrupado pelo nome registrado na época — o histórico sobrevive à exclusão do
@@ -532,6 +533,7 @@ export function ReportsClient(props: ReportsClientProps) {
               {props.topFoods.length === 0 ? (
                 <EmptyState
                   icon={UtensilsCrossed}
+                  className="border-0 bg-transparent py-6"
                   title="Nenhum registro no período"
                   description="Registre refeições no diário para ver o que mais aparece."
                 />
@@ -563,7 +565,11 @@ export function ReportsClient(props: ReportsClientProps) {
             </CardHeader>
             <CardContent>
               {props.topMeals.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhuma refeição registrada.</p>
+                <EmptyState
+                  icon={UtensilsCrossed}
+                  title="Nenhuma refeição registrada"
+                  className="border-0 bg-transparent py-6"
+                />
               ) : (
                 <ul className="divide-y">
                   {props.topMeals.map((meal) => (
@@ -588,8 +594,8 @@ export function ReportsClient(props: ReportsClientProps) {
         {/* ═══ Substituições ═══ */}
         <TabsContent value="substituicoes" className="mt-4">
           <Card>
-            <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
-              <div>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
+              <div className="min-w-0">
                 <CardTitle className="text-base">Substituições mais realizadas</CardTitle>
                 <CardDescription>
                   Contagem do que você trocou. Os rótulos e as diferenças ficaram congelados na
@@ -615,6 +621,7 @@ export function ReportsClient(props: ReportsClientProps) {
               {props.substitutions.length === 0 ? (
                 <EmptyState
                   icon={Repeat}
+                  className="border-0 bg-transparent py-6"
                   title="Nenhuma substituição no período"
                   description="Quando você troca um item por uma alternativa, a troca fica registrada e aparece aqui."
                 />
@@ -666,6 +673,7 @@ export function ReportsClient(props: ReportsClientProps) {
               {props.market.lists === 0 ? (
                 <EmptyState
                   icon={ShoppingCart}
+                  className="border-0 bg-transparent py-6"
                   title="Nenhuma lista no período"
                   description="Gere uma lista de compras a partir do planejamento para acompanhar o gasto."
                 />
@@ -818,10 +826,12 @@ function NutrientTable({
 }) {
   if (rows.length === 0) {
     return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        Nenhum micronutriente registrado no período. Eles aparecem conforme os alimentos
-        consumidos tenham esses valores publicados pela fonte.
-      </p>
+      <EmptyState
+        icon={BarChart3}
+        title="Nenhum micronutriente registrado no período"
+        description="Eles aparecem conforme os alimentos consumidos tenham esses valores publicados pela fonte."
+        className="border-0 bg-transparent py-6"
+      />
     );
   }
 
@@ -952,8 +962,8 @@ function EvolutionPanel({
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
-          <div>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
+          <div className="min-w-0">
             <CardTitle className="text-base">Evolução corporal no mesmo período</CardTitle>
             <CardDescription>
               Dias sem medição ficam vazios: a linha é interrompida, não ligada por cima.
@@ -992,12 +1002,15 @@ function EvolutionPanel({
               />
             </>
           ) : (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Nenhuma medida corporal registrada neste período.{" "}
-              <a href="/nutricao/medidas" className="underline underline-offset-2">
-                Registrar medidas
-              </a>
-            </p>
+            <EmptyState
+              icon={Ruler}
+              title="Nenhuma medida corporal registrada neste período"
+              className="border-0 bg-transparent py-6"
+            >
+              <Button asChild size="sm" variant="outline">
+                <a href="/nutricao/medidas">Registrar medidas</a>
+              </Button>
+            </EmptyState>
           )}
         </CardContent>
       </Card>

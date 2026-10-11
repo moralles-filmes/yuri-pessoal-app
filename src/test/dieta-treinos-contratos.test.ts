@@ -116,6 +116,32 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "app/(app)/nutricao/planejamento/planning-client.tsx", exige: /meal\.items\.length === 0 \? \(\s*<p\b/, porque: "refeição planejada sem item é dica em linha, não seção" },
   { arquivo: "app/(app)/nutricao/planejamento/model-days-sheet.tsx", exige: /day\.meals\.length === 0 \? \(\s*<p\b/, porque: "dia do modelo sem refeição é dica em linha dentro da gaveta" },
   { arquivo: "app/(app)/nutricao/diario/template-picker-dialog.tsx", exige: /active\.length === 0 \? \(\s*<p\b/, porque: "picker vazio continua <p> dentro do diálogo" },
+
+  // V · demais telas da Dieta — G6
+  { arquivo: "app/(app)/nutricao/medidas/measurements-client.tsx", exige: /<CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-3">/, porque: "G6: \"Histórico\" e \"Excluir N\" lado a lado" },
+  { arquivo: "app/(app)/nutricao/substituicoes/substitutions-client.tsx", exige: /<CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-3">/, porque: "G6: o grupo de substituição põe nome e ações lado a lado" },
+  { arquivo: "components/body/progress-photos.tsx", exige: /<CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">/, porque: "G6: \"Fotos de evolução\" e os botões lado a lado" },
+  { arquivo: "app/(app)/nutricao/relatorios/reports-client.tsx", exige: /(?:<CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">\s*<div className="min-w-0">[\s\S]*?){4}/, porque: "G6: os quatro cabeçalhos com ação dos relatórios são flex, com o título encolhível" },
+  // V · barras com nome
+  { arquivo: "app/(app)/nutricao/medidas/measurements-client.tsx", exige: /\{\.\.\.ariaDeProgresso\(\s*`Meta de \$\{selectedType\?\.name \?\? "medida"\}`/, porque: "a barra da meta de medida diz QUAL medida" },
+  // V · favorito em palavra, não só no ícone (o lucide põe aria-hidden no ícone sem rótulo)
+  { arquivo: "app/(app)/nutricao/receitas/recipes-client.tsx", exige: /recipe\.isFavorite && \([\s\S]{0,200}?<span className="sr-only">Favorito<\/span>/, porque: "a receita favorita é anunciada" },
+  { arquivo: "app/(app)/nutricao/refeicoes/meal-templates-client.tsx", exige: /template\.isFavorite && \([\s\S]{0,200}?<span className="sr-only">Favorito<\/span>/, porque: "a refeição-modelo favorita é anunciada" },
+  // V · vazios de seção — EmptyState; dentro de Card, sem borda e com py-6
+  { arquivo: "app/(app)/nutricao/page.tsx", exige: /<EmptyState\s+icon=\{CalendarRange\}\s+title="Nada pendente para hoje"\s+className="border-0 bg-transparent py-6"/, porque: "o dia sem pendência usa o EmptyState dentro do Card" },
+  { arquivo: "app/(app)/nutricao/configuracoes/settings-client.tsx", exige: /sources\.length === 0 \? \(\s*<EmptyState[^>]*?className="border-0 bg-transparent py-6"/, porque: "sem fonte cadastrada usa o EmptyState" },
+  { arquivo: "app/(app)/nutricao/configuracoes/settings-client.tsx", exige: /mealTypes\.length === 0 && \(\s*<li>\s*<EmptyState/, porque: "sem tipo de refeição usa o EmptyState (dentro do <li>: o <ul> continua válido)" },
+  { arquivo: "app/(app)/nutricao/configuracoes/settings-client.tsx", exige: /items\.length === 0 && \(\s*<li>\s*<EmptyState icon=\{Icon\} title=\{emptyLabel\}/, porque: "lista simples vazia usa o EmptyState" },
+  { arquivo: "app/(app)/nutricao/relatorios/reports-client.tsx", exige: /props\.topMeals\.length === 0 \? \(\s*<EmptyState/, porque: "sem refeição registrada usa o EmptyState" },
+  { arquivo: "app/(app)/nutricao/relatorios/reports-client.tsx", exige: /title="Nenhum micronutriente registrado no período"/, porque: "sem micronutriente usa o EmptyState" },
+  { arquivo: "app/(app)/nutricao/relatorios/reports-client.tsx", exige: /title="Nenhuma medida corporal registrada neste período"/, porque: "sem medida corporal usa o EmptyState, com o caminho para registrar" },
+  { arquivo: "components/body/measurement-chart.tsx", exige: /<EmptyState[^>]*?className="border-0 bg-transparent py-6"/, porque: "o gráfico sem medição usa o EmptyState (decidido antes de baixar o recharts)" },
+  // Exceção DECLARADA: item repetido, picker, diálogo e gaveta ficam <p>.
+  { arquivo: "app/(app)/nutricao/substituicoes/substitutions-client.tsx", exige: /options\.length === 0 \? \(\s*<p\b/, porque: "grupo sem alternativa é dica em linha dentro do cartão repetido" },
+  { arquivo: "app/(app)/nutricao/refeicoes/meal-templates-client.tsx", exige: /detail\.items\.length === 0 \? \(\s*<p\b/, porque: "refeição-modelo sem item é dica dentro da gaveta" },
+  { arquivo: "components/nutrition/food-picker-dialog.tsx", exige: /results\.length === 0 && \(\s*<p\b/, porque: "picker vazio continua <p>" },
+  { arquivo: "components/nutrition/recipe-picker-dialog.tsx", exige: /results\.length === 0 && \(\s*<p\b/, porque: "picker vazio continua <p>" },
+  { arquivo: "components/nutrition/substitution-compare-dialog.tsx", exige: /options\.length === 0 \? \(\s*<p\b/, porque: "diálogo sem alternativa continua <p>" },
 ];
 
 /** O que não pode voltar. */
@@ -140,6 +166,7 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: "components/training/training-nav.tsx", exige: /SectionPlaceholder/, porque: "tela de espera sem chamador (todas as seções prontas)" },
   { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /percent \?\? 0/, porque: "meta zero viraria \"0% da meta\" no nome da barra" },
   { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /aria-valuenow=\{[^}]*Math\.round\(percent\)\}/, porque: "aria-valuenow sem limite passa de aria-valuemax com o consumo acima da meta" },
+  { arquivo: "app/(app)/nutricao/medidas/measurements-client.tsx", exige: /aria-label="Progresso da meta"/, porque: "barra sem dizer qual medida" },
 ];
 
 const fonte = (arquivo: string) => semComentarios(fs.readFileSync(path.join(SRC, arquivo), "utf8"));

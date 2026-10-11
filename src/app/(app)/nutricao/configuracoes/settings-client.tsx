@@ -33,6 +33,7 @@ import {
   Tag,
   Trash2,
   UtensilsCrossed,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { shortTime } from "@/lib/nutrition/calendar";
@@ -136,7 +138,7 @@ export function NutritionSettingsClient({
           title="Categorias de receita"
           description="Como você agrupa suas receitas. Excluir uma categoria NÃO exclui receita: elas voltam para “sem categoria”."
           icon={ChefHat}
-          emptyLabel="Nenhuma categoria de receita ainda."
+          emptyLabel="Nenhuma categoria de receita ainda"
           placeholder="Ex.: Marmitas"
           items={recipeCategories.map((c) => ({ id: c.id, name: c.name }))}
           pending={pending}
@@ -161,7 +163,7 @@ export function NutritionSettingsClient({
           title="Etiquetas de alimento"
           description="Marcadores livres para filtrar o catálogo (“sem lactose”, “da feira”…). Excluir uma etiqueta não exclui alimento nenhum."
           icon={Tag}
-          emptyLabel="Nenhuma etiqueta ainda."
+          emptyLabel="Nenhuma etiqueta ainda"
           placeholder="Ex.: Sem lactose"
           items={tags.map((t) => ({ id: t.id, name: t.name }))}
           pending={pending}
@@ -196,7 +198,11 @@ export function NutritionSettingsClient({
         </CardHeader>
         <CardContent className="space-y-3">
           {sources.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma fonte cadastrada.</p>
+            <EmptyState
+              icon={Database}
+              title="Nenhuma fonte cadastrada"
+              className="border-0 bg-transparent py-6"
+            />
           ) : (
             <ul className="divide-y rounded-lg border">
               {sources.map((source) => {
@@ -330,8 +336,12 @@ function MealTypesCard({
       <CardContent className="space-y-3">
         <ul className="divide-y rounded-lg border">
           {mealTypes.length === 0 && (
-            <li className="p-4 text-center text-sm text-muted-foreground">
-              Nenhum tipo de refeição.
+            <li>
+              <EmptyState
+                icon={UtensilsCrossed}
+                title="Nenhum tipo de refeição"
+                className="border-0 bg-transparent py-6"
+              />
             </li>
           )}
           {mealTypes.map((type, index) => (
@@ -491,7 +501,7 @@ function SimpleListCard({
 }: {
   title: string;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   emptyLabel: string;
   placeholder: string;
   items: { id: string; name: string }[];
@@ -515,7 +525,9 @@ function SimpleListCard({
       <CardContent className="space-y-3">
         <ul className="divide-y rounded-lg border">
           {items.length === 0 && (
-            <li className="p-4 text-center text-sm text-muted-foreground">{emptyLabel}</li>
+            <li>
+              <EmptyState icon={Icon} title={emptyLabel} className="border-0 bg-transparent py-6" />
+            </li>
           )}
           {items.map((item) => (
             <li key={item.id} className="flex items-center gap-2 p-2">

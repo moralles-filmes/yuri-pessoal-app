@@ -102,7 +102,8 @@ export function ProgressPhotos({
 
   return (
     <Card>
-      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+      {/* G6 (REDESIGN-07-C): a primitiva é `grid`; sem `flex`, os botões caíam embaixo do texto. */}
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
         <div className="min-w-0">
           <CardTitle className="text-base">Fotos de evolução</CardTitle>
           <CardDescription>
@@ -111,7 +112,7 @@ export function ProgressPhotos({
             compartilhável.
           </CardDescription>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="ml-auto flex shrink-0 gap-2">
           {photos.length >= 2 && (
             <Button variant="outline" size="sm" onClick={() => setCompareOpen(true)}>
               <Images className="size-4" />
@@ -131,6 +132,7 @@ export function ProgressPhotos({
             icon={Camera}
             title="Nenhuma foto ainda"
             description="Fotos do mesmo ângulo, na mesma luz e no mesmo horário mostram mudanças que a balança não mostra."
+            className="border-0 bg-transparent py-6"
           />
         ) : (
           <div className="space-y-4">
