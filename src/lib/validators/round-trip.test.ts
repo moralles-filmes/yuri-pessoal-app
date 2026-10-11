@@ -23,6 +23,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { optionalText } from "@/lib/validators/shared";
+import { receitaResponsabilidadeSchema } from "@/lib/validators/split";
 import {
   aiPreferencesSchema,
   aiProviderConfigSchema,
@@ -527,5 +528,63 @@ describe("Fase 18-A — schemas de IA aceitam a própria saída", () => {
     const r = memoriaSchema.safeParse({ conteudo: "veja em https://exemplo.com" });
     expect(r.success).toBe(false);
     expect(fieldErrors(r.error)).toContain("endereço");
+  });
+});
+
+/**
+ * REDESIGN-03-C · A1 — a responsabilidade da receita. O formulário de lançamentos não usa
+ * `zodResolver`, mas o payload dele passa por este schema no servidor, e quem o lê de novo
+ * (`criarTransacao`, `updateTransaction`) recebe o mesmo objeto cru: ele tem de aceitar a
+ * própria saída como todo schema deste arquivo — inclusive o `null` de um campo vazio.
+ */
+describe("receita: a responsabilidade da entrada salva", () => {
+  it("pessoal com a parte em branco passa e sai pessoal, sem parte", () => {
+    const { noCliente, noServidor } = roundTrip(receitaResponsabilidadeSchema, {
+      receita_classificacao: "pessoal",
+      receita_minha_parte: "",
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noCliente.data).toEqual({ receita_classificacao: "pessoal" });
+    expect(noServidor.data).toEqual(noCliente.data);
+  });
+
+  it("compartilhada com a parte no padrão BR preserva o valor na segunda passada", () => {
+    const { noCliente, noServidor } = roundTrip(receitaResponsabilidadeSchema, {
+      receita_classificacao: "compartilhada",
+      receita_minha_parte: "400,00",
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noCliente.data).toEqual({
+      receita_classificacao: "compartilhada",
+      receita_minha_parte: 400,
+    });
+    expect(noServidor.data).toEqual(noCliente.data);
+  });
+
+  it("null nos dois campos passa, vira pessoal sem parte, e a saída é aceita de novo", () => {
+    const { noCliente, noServidor } = roundTrip(receitaResponsabilidadeSchema, {
+      receita_classificacao: null,
+      receita_minha_parte: null,
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noCliente.data).toEqual({ receita_classificacao: "pessoal" });
+  });
+
+  it("sem os dois campos (o payload de quem não conhece a receita) vira pessoal", () => {
+    const { noServidor } = roundTrip(receitaResponsabilidadeSchema, { type: "receita" });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noServidor.data).toEqual({ receita_classificacao: "pessoal" });
+  });
+
+  it("continua recusando classificação inventada e parte negativa", () => {
+    expect(
+      receitaResponsabilidadeSchema.safeParse({ receita_classificacao: "inventada" }).success,
+    ).toBe(false);
+    expect(
+      receitaResponsabilidadeSchema.safeParse({
+        receita_classificacao: "compartilhada",
+        receita_minha_parte: "-1",
+      }).success,
+    ).toBe(false);
   });
 });

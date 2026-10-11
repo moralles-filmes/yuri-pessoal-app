@@ -74,6 +74,8 @@ beforeEach(() => {
     completude: { estado: "exato" },
     saldo: 13235.79,
     entradas: 5000,
+    entradasMeu: 4200,
+    entradasTerceiros: 800,
     saidas: 3200,
     meu: 2700,
     terceiros: 500,
@@ -232,6 +234,19 @@ describe("finance.get_spending", () => {
   it("repassa o mês pedido para a leitura do dashboard", async () => {
     await getSpending({ mes: "2026-03" });
     expect(mesPedido).toBe("2026-03");
+  });
+
+  /** REDESIGN-03-C (A5) — a separação da entrada chega à IA já somada pelo motor. */
+  it("entradas_meu e entradas_terceiros chegam aos agregados, e a composição diz que particionam entradas", async () => {
+    const saida = await getSpending({});
+    expect(saida.agregados).toMatchObject({
+      entradas: 5000,
+      entradas_meu: 4200,
+      entradas_terceiros: 800,
+    });
+    expect(String(saida.agregados?.composicao)).toContain(
+      "`entradas_meu` + `entradas_terceiros` = `entradas`",
+    );
   });
 
   /** Os valores chegam idênticos aos do card — nenhum é recalculado nem reagrupado. */

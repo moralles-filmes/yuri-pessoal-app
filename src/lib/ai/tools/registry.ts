@@ -717,7 +717,7 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     kind: "leitura",
     risk: 1,
     description:
-      "Resumo financeiro de um mês (AAAA-MM; ausente = mês atual): entradas, saídas, quanto é seu e quanto é de terceiros, cartão × à vista, a receber e contas a pagar. Todos os totais já vêm somados pelo sistema — não refaça nenhuma conta. `meu` + `de terceiros` = `saídas`, e `cartão` + `à vista` = `saídas`: são partições, não parcelas a somar.",
+      "Resumo financeiro de um mês (AAAA-MM; ausente = mês atual): entradas (com quanto delas é seu — `entradas_meu` — e quanto é dinheiro de terceiros que passou pela sua conta — `entradas_terceiros`), saídas, quanto do gasto é seu e quanto é de terceiros, cartão × à vista, a receber e contas a pagar. Todos os totais já vêm somados pelo sistema — não refaça nenhuma conta. `meu` + `de terceiros` = `saídas`, `entradas_meu` + `entradas_terceiros` = `entradas`, e `cartão` + `à vista` = `saídas`: são partições, não parcelas a somar.",
     inputSchema: {
       type: "object",
       properties: {
@@ -770,7 +770,7 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
      * de silenciosamente lançar só a primeira metade do pedido.
      */
     description:
-      "PREPARA um lançamento financeiro à vista e devolve uma proposta para o usuário confirmar — NADA é lançado por esta chamada. Informe a conta OU o cartão pelo nome, nunca os dois. `valor` é em reais, como o usuário disse (45.90), NUNCA em centavos. Ela NÃO faz parcelamento, NÃO divide com terceiros, NÃO faz transferência entre contas, NÃO paga fatura e NÃO altera nem exclui lançamento existente — se o usuário pedir qualquer um desses, diga que isso é pela tela do Financeiro. Depois de chamá-la, diga que o lançamento aguarda confirmação, e NUNCA afirme que ele foi feito.",
+      "PREPARA um lançamento financeiro à vista e devolve uma proposta para o usuário confirmar — NADA é lançado por esta chamada. Informe a conta OU o cartão pelo nome, nunca os dois. `valor` é em reais, como o usuário disse (45.90), NUNCA em centavos. Ela NÃO faz parcelamento, NÃO divide com terceiros, NÃO faz transferência entre contas, NÃO paga fatura e NÃO altera nem exclui lançamento existente — se o usuário pedir qualquer um desses, diga que isso é pela tela do Financeiro. Uma receita lançada por aqui é registrada como renda do usuário; marcar uma entrada como dinheiro de terceiros é pela tela do Financeiro. Depois de chamá-la, diga que o lançamento aguarda confirmação, e NUNCA afirme que ele foi feito.",
     inputSchema: {
       type: "object",
       properties: {

@@ -130,6 +130,8 @@ export async function getFinanceCardData(
     completude,
     saldo,
     entradas: resumo.entradas,
+    entradasMeu: resumo.entradasMeu,
+    entradasTerceiros: resumo.entradasTerceiros,
     saidas: resumo.saidas,
     meu: resumo.meu,
     terceiros: resumo.terceiros,

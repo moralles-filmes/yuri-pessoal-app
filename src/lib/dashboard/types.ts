@@ -17,6 +17,9 @@ export type FinanceCardData = {
   completude: CompletudeFinanceira;
   saldo: number;
   entradas: number;
+  /** REDESIGN-03-C (E3) — `entradas` é bruta; `entradasMeu + entradasTerceiros = entradas`. */
+  entradasMeu: number;
+  entradasTerceiros: number;
   saidas: number;
   meu: number;
   terceiros: number;

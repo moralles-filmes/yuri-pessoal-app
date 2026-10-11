@@ -37,6 +37,8 @@ function gerarNosDoisCaminhos({
     hoje: HOJE,
     resumoAtual: {
       entradas: 0,
+      entradasMeu: 0,
+      entradasTerceiros: 0,
       saidas,
       meu: saidas,
       terceiros: 0,

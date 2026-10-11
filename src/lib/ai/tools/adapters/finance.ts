@@ -129,6 +129,14 @@ export async function getSpending(input: { mes?: string }): Promise<ToolOutput> 
       mes,
       moeda: "BRL",
       entradas: d.entradas,
+      /**
+       * REDESIGN-03-C (A5) — ⚠️ `entradas_meu` e `entradas_terceiros` NÃO se somam a `entradas`:
+       * eles a PARTICIONAM. `entradas` é o bruto que passou pelas contas; `entradas_meu` é a
+       * renda do usuário; `entradas_terceiros` é dinheiro de outras pessoas que passou pela conta
+       * dele — e NÃO é renda dele. Os dois já vêm somados pelo motor (invariante 15).
+       */
+      entradas_meu: d.entradasMeu,
+      entradas_terceiros: d.entradasTerceiros,
       saidas: d.saidas,
       /**
        * ⚠️ `meu` e `terceiros` NÃO se somam a `saidas` — eles a PARTICIONAM. `saidas` é o
@@ -145,7 +153,7 @@ export async function getSpending(input: { mes?: string }): Promise<ToolOutput> 
       contas_a_pagar_quantidade: d.contasCount,
       proxima_conta: d.proximaConta,
       composicao:
-        "entradas e saídas são independentes; `gasto_meu` + `gasto_de_terceiros` = `saidas`; `no_cartao` + `a_vista` = `saidas`. Não some as partições entre si nem com o total.",
+        "entradas e saídas são independentes; `entradas_meu` + `entradas_terceiros` = `entradas`; `gasto_meu` + `gasto_de_terceiros` = `saidas`; `no_cartao` + `a_vista` = `saidas`. Não some as partições entre si nem com o total.",
       base_de_calculo:
         "Gasto no cartão é o total das FATURAS do mês (base fatura); o restante é base competência. Parcela de compra parcelada entra pela fatura do mês dela, não pelo mês da compra.",
     },

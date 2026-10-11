@@ -13,6 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 import { transactionSchema } from "@/lib/validators/transaction";
+import { receitaResponsabilidadeSchema } from "@/lib/validators/split";
 import { EfeitoImpossivel } from "../contracts";
 import {
   excluirTransacaoEntrada,
@@ -202,6 +203,23 @@ describe("equivalência: a IA e o formulário produzem o mesmo lançamento", () 
     );
     expect(dados.classificacao).toBe("pessoal");
     expect(dados.parts).toEqual([]);
+  });
+
+  /**
+   * REDESIGN-03-C · A2 — a receita da IA nasce PESSOAL por construção: ela não carrega as
+   * chaves de responsabilidade da receita (`receita_*`), e quem lê essas chaves no serviço
+   * cai em `pessoal` quando elas faltam. Marcar uma entrada como de terceiros é pela tela.
+   */
+  it("a receita da IA não carrega responsabilidade — nasce pessoal", () => {
+    const dados = paraOSchemaDoFormulario(
+      { tipo: "receita", valor: 100, descricao: "Salário" },
+      { ...CONTA, tipo: "receita" },
+    );
+    expect(Object.hasOwn(dados, "receita_classificacao")).toBe(false);
+    expect(Object.hasOwn(dados, "receita_minha_parte")).toBe(false);
+    expect(receitaResponsabilidadeSchema.parse(dados)).toEqual({
+      receita_classificacao: "pessoal",
+    });
   });
 
   it("data ausente usa a resolvida, e a competência acompanha a compra", () => {
