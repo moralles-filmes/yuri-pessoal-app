@@ -77,3 +77,18 @@ export function marcacaoParaGravar(
 ): typeof MARCACAO_DE_TERCEIROS | null {
   return tipoDeCategoriaSugere(kind) && sugereTerceiros(escolha) ? MARCACAO_DE_TERCEIROS : null;
 }
+
+/** A6 (K1): a lista vazia com o filtro ligado diz por quê. */
+export function motivoDaListaVazia(categoriasMarcadas: number): string {
+  return categoriasMarcadas === 0
+    ? "Nenhuma categoria está marcada como de terceiros. Marque uma em Categorias."
+    : "Nenhum lançamento nas categorias marcadas como de terceiros, com os filtros atuais.";
+}
+
+/** P5: sem categoria marcada o botão não ligaria nada; ligado pela URL, aparece para desligar. */
+export function mostrarFiltroDeTerceiros(args: {
+  ligado: boolean;
+  categoriasMarcadas: number;
+}): boolean {
+  return args.ligado || args.categoriasMarcadas > 0;
+}

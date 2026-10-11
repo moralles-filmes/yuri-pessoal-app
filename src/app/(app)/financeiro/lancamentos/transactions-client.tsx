@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TransactionFormDialog } from "./transaction-form";
 import { TransactionFilters } from "./transaction-filters";
+import { motivoDaListaVazia } from "@/lib/finance/marcacao-da-categoria";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import {
   CategoryPill,
@@ -77,8 +78,11 @@ export function TransactionsClient({
   subcategories,
   cards,
   people,
+  filtroDeTerceiros,
 }: {
   transactions: TransactionWithRelations[];
+  /** 03-C2 · A6 */
+  filtroDeTerceiros: { ligado: boolean; categoriasMarcadas: number };
   /** Saldo por dia ('yyyy-MM-dd' → reais). `null` quando não há saldo a mostrar. */
   dailyBalances: Record<string, number> | null;
   balanceScope: "conta" | "todas";
@@ -133,7 +137,12 @@ export function TransactionsClient({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <TransactionFilters accounts={accounts} categories={categories} cards={cards} />
+        <TransactionFilters
+          accounts={accounts}
+          categories={categories}
+          cards={cards}
+          categoriasMarcadas={filtroDeTerceiros.categoriasMarcadas}
+        />
         <div className="shrink-0">{newButton}</div>
       </div>
 
@@ -141,7 +150,11 @@ export function TransactionsClient({
         <EmptyState
           icon={Receipt}
           title="Nenhum lançamento"
-          description="Registre despesas, receitas, transferências e ajustes. Use os filtros para refinar."
+          description={
+            filtroDeTerceiros.ligado
+              ? motivoDaListaVazia(filtroDeTerceiros.categoriasMarcadas)
+              : "Registre despesas, receitas, transferências e ajustes. Use os filtros para refinar."
+          }
         >
           {newButton}
         </EmptyState>

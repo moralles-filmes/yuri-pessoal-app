@@ -25,3 +25,14 @@ describe("03-C2 · A5 — o atalho no formulário de lançamento", () => {
     expect(FORM).not.toMatch(/origem\s*:/);
   });
 });
+
+const FILTROS = semComentarios(
+  fs.readFileSync(path.resolve(path.dirname(ARQ), "transaction-filters.tsx"), "utf8"),
+);
+
+describe("03-C2 · A6 — a barra de filtros", () => {
+  it("o 'Limpar' alcança o filtro novo: 'marcadas' está na lista de hasFilters", () => {
+    const lista = FILTROS.match(/const hasFilters = \[([\s\S]*?)\]/)?.[1] ?? "";
+    expect(lista).toContain('"marcadas"');
+  });
+});

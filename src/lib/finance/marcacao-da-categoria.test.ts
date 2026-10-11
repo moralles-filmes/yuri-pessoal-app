@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   aplicarAtalhoDaCategoria,
   marcacaoParaGravar,
+  mostrarFiltroDeTerceiros,
+  motivoDaListaVazia,
   sugereTerceiros,
   tipoDeCategoriaSugere,
   type ClassificacaoNaTela,
@@ -93,5 +95,23 @@ describe("03-C2 · A2 — marcacaoParaGravar (P2)", () => {
       expect(marcacaoParaGravar(kind, null)).toBeNull();
       expect(marcacaoParaGravar(kind, "nenhuma")).toBeNull();
     }
+  });
+});
+
+describe("03-C2 · A6 — o filtro, do lado puro", () => {
+  it("lista vazia sem categoria marcada diz isso e aponta o caminho", () => {
+    expect(motivoDaListaVazia(0)).toBe(
+      "Nenhuma categoria está marcada como de terceiros. Marque uma em Categorias.",
+    );
+  });
+  it("lista vazia com categoria marcada diz que não há lançamento nelas", () => {
+    expect(motivoDaListaVazia(2)).toBe(
+      "Nenhum lançamento nas categorias marcadas como de terceiros, com os filtros atuais.",
+    );
+  });
+  it("P5: o botão aparece com categoria marcada, ou ligado pela URL para poder ser desligado", () => {
+    expect(mostrarFiltroDeTerceiros({ ligado: false, categoriasMarcadas: 0 })).toBe(false);
+    expect(mostrarFiltroDeTerceiros({ ligado: false, categoriasMarcadas: 1 })).toBe(true);
+    expect(mostrarFiltroDeTerceiros({ ligado: true, categoriasMarcadas: 0 })).toBe(true);
   });
 });

@@ -29,6 +29,7 @@ const ALLOWLIST: Record<string, string> = {
   "app/(app)/financeiro/lancamentos/page.tsx": "transporta a marcacao ao formulario (e, na A6, conta as marcadas para a lista vazia)",
   "app/(app)/financeiro/lancamentos/transactions-client.tsx": "tipo da prop que leva a marcacao ao formulario",
   "app/(app)/financeiro/lancamentos/transaction-form.tsx": "le a marcacao da categoria escolhida para a regra pura do atalho",
+  "lib/finance/categorias-marcadas.ts": "o unico ponto do servidor que FILTRA pela marcacao (A6); peneira, nao decide",
 };
 
 /**
