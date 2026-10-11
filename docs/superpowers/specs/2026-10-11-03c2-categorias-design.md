@@ -596,3 +596,134 @@ aplicar.
 novo, na tela; que o servidor nunca lê a marcação para decidir; que nenhum número muda, com ou sem
 marcação; que a prova é mutação e não o verde; e que o que ficou de fora está no §8, e o que ela
 criou está aqui.
+
+---
+
+## 12. Resultado — 2026-10-11, na ponta `b853965`
+
+### 12.1 Commits (branch `feat/redesign-03c2-categorias`, locais, sem push)
+
+| Passo | Commit |
+| --- | --- |
+| 0 · desenho | `ae9516d` (+ plano `70660b5`) |
+| 1 · A1 | `e602396` |
+| 2 · A2 | `8285698` |
+| 3 · A3 | `b32cca2` (arquivo + teste) · `1af18fe` (tipos) |
+| 4 · A4 | `591fe17` |
+| 5 · A5 | `0a6303d` |
+| 6 · A6 | `b853965` |
+| 7 · este registro | o commit que traz esta seção |
+
+### 12.2 A M3
+
+Aplicada em **2026-10-11**, pelo MCP (`apply_migration`), **depois** da mensagem literal do dono
+*"aplique a M3"* — uma resposta anterior ("Pode aplicar") **não** foi tratada como a autorização.
+Versão remota `20261011190803`, a última da lista; nenhuma outra migration entrou. Os tipos foram
+regenerados pelo MCP (`generate_typescript_types`) e o diff foi lido: entraram **só as 3 linhas de
+`categories`** (`Row`, `Insert`, `Update`). Ficaram de fora, por não serem desta subfase
+(invariante 94): a relationship `import_rows_transfer_account_owner_fkey` (7 linhas) e a sintaxe
+nova dos genéricos em 5 helpers (20 linhas).
+
+### 12.3 Os cinco comandos
+
+| Comando | Antes (`ade0dd0`) | Depois (`b853965`) |
+| --- | --- | --- |
+| `npm run test:run` | 205 arquivos / 4.155 testes | **214 arquivos / 4.229 testes**, 17,6 s |
+| `npm run lint` | limpo | **limpo** |
+| `npx tsc --noEmit` | limpo | **limpo** |
+| `npm run build` | ok | **ok** |
+| `npm run perf:bundle` | mediana 214,2 KB · 68 rotas · 1 com teto próprio | **mediana 214,2 KB · 68 rotas · 1 com teto próprio**, todas dentro |
+
+| Rota (KB gz) | Antes | Depois |
+| --- | --- | --- |
+| `/(app)/financeiro/categorias` | 211,9 | **213,1** (+1,2) |
+| `/(app)/financeiro/lancamentos` | 220,9 | **221,7** (+0,8) |
+| `/(app)/dashboard/financeiro` | 201,1 | 201,1 |
+| `/(app)/relatorios` | 204,2 | 204,2 |
+| `/(app)/dashboard` | 203,8 | 203,8 |
+| `/(app)/financeiro` | 195,9 | 195,9 |
+
+`TZ=UTC npx vitest run src/lib/finance/ src/lib/notifications/`: **32 arquivos / 523 testes**.
+
+### 12.4 Mutações — cada uma sozinha, compilando, restaurada por `git checkout` e conferida por `git diff --quiet`
+
+Todas compilaram (`tsc` = 0), todas caíram, todas foram restauradas; `git diff --quiet` = 0 ao fim.
+
+| # | Mutação aplicada | Testes que caíram |
+| --- | --- | --- |
+| X1 | sem `if (contexto.modo === "editar") return atual;` | `marcacao-da-categoria.test.ts` › *aplicarAtalhoDaCategoria NUNCA age em edição (D10), nem com a origem do atalho* |
+| X2 | sem `if (atual.origem === "usuario") return atual;` | › *NUNCA sobrescreve a escolha do usuário* |
+| X3 | `contexto.tipo === "receita" &&` → `true &&` | › *despesa em categoria marcada nunca recebe 'terceiro', em nenhuma origem (K0)* · › *P1 … receita → despesa desfaz a sugestão* |
+| X4 | CHECK aceita `'compartilhada'` | `m3-categorias.test.ts` › *o CHECK aceita exatamente 'pessoal' e 'terceiro' — compartilhada fica de fora* |
+| X5 | a M3 ganha `update public.categories … where false;` | › *o arquivo NÃO escreve dado nem mexe em policy (D10)* |
+| X6 | `criarTransacao` lê a marcação e grava `terceiro` sem `receita_classificacao` | `services.test.ts` › *receita em categoria marcada, sem receita_classificacao, grava pessoal* · `quem-le-a-marcacao.test.ts` › *só os arquivos da allowlist mencionam classificacao_padrao* · › *lib/finance/services.ts não menciona a marcação e não está na allowlist* |
+| X7 | idem em `updateTransaction` | `actions/transactions.test.ts` › *receita pessoal movida para uma categoria marcada, sem receita_\*, continua pessoal* · `quem-le-a-marcacao.test.ts` › *só os arquivos da allowlist…* · › *lib/actions/transactions.ts não menciona…* |
+| X8 | `dashboard.ts`: `const _m = "classificacao_padrao"` num ramo de `meuCentavos` | `dashboard-caracterizacao.test.ts` › *6 · … o motor continua sem conhecer `classificacao`* · › *7 · … o motor não conhece `classificacao_padrao`* · `quem-le-a-marcacao.test.ts` › *só os arquivos da allowlist…* · › *lib/finance/dashboard.ts não menciona…* |
+| X9a | `reports/queries.ts` menciona a coluna | `quem-le-a-marcacao.test.ts` › *só os arquivos da allowlist…* · › *lib/reports/queries.ts não menciona…* |
+| X9b | `ai/tools/adapters/finance.ts` menciona a coluna | › *só os arquivos da allowlist…* · › *lib/ai/tools/adapters/finance.ts não menciona…* |
+| X10 | `.nullable()` → `.transform((v) => v ?? undefined)` | `round-trip.test.ts` › *categoria: o formulário de 'Nova categoria' salva sem sugestão faz a ida e volta e continua null* |
+| X11 | o agrupamento usa `["despesa", "receita"]` | `categorias-agrupadas.test.ts` › *cada categoria está no grupo do seu tipo* · › *a ordem dos grupos é a de CATEGORY_KINDS, com os títulos* |
+| X12 | `DailyBalanceFilters` ganha `categoriasMarcadas` e a página o repassa | `lancamentos/page.test.ts` › *o saldo diário NÃO recebe o filtro: só conta, cartão e os dias* |
+| X13 | sem `.in("category_id", ids)` | `categorias-marcadas.test.ts` › *ligado, só vêm os lançamentos de categoria marcada* · › *combina em E com o filtro de categoria* |
+| X14 | sem o `superRefine` | `validators/category.test.ts` › *P2: despesa com 'terceiro' é recusada NO CAMPO da marcação* |
+| X15 | `marcacaoParaGravar` ignora o `kind` | `marcacao-da-categoria.test.ts` › *categoria de despesa nunca grava a marcação* |
+| X16 | `lib/finance/dashboard.ts` na allowlist + a menção do X8 | `quem-le-a-marcacao.test.ts` › *lib/finance/dashboard.ts não menciona a marcação e não está na allowlist* — **só** o caso `NUNCA`, como desenhado: a igualdade com a allowlist passa, porque ela foi alargada junto |
+
+**Extras, fora da lista do §7**, para as varreduras de fiação também terem sido vistas vermelhas:
+
+| # | Mutação | Teste que caiu |
+| --- | --- | --- |
+| E1 | o gatilho da categoria deixa de reavaliar o atalho | `atalho-no-formulario.test.ts` › *os DOIS gatilhos reavaliam o atalho (Review Focus 1)* |
+| E2 | `onOpenChange={setOpen}` (reabrir não volta a origem a `padrao`) | › *a escolha no seletor vira do usuário, e reabrir o diálogo volta a origem a 'padrao' (Review Focus 2)* |
+| E3 | `"marcadas"` sai de `hasFilters` | › *o 'Limpar' alcança o filtro novo* |
+
+### 12.5 Conferências da ponta
+
+- `git diff --quiet ade0dd0 -- src/lib/finance/dashboard.test.ts src/lib/finance/dashboard-caracterizacao.test.ts` = **0**.
+- Desde `ade0dd0`: `supabase/` só com o arquivo da M3; `src/types/supabase.ts` só com as 3 linhas de
+  `categories`; `docs/redesign/STATUS.md`, `CLAUDE.md` e `AGENTS.md` **intocados**.
+- Os arquivos de `getFinanceCardData`, `getInvoicesCardData` (`dashboard/queries.ts`),
+  `getReportsData` (`reports/queries.ts`) e `generateForUser` (`notifications/cron.ts`) **sem diff**;
+  `dashboard.ts` e `pipeline.ts` sem diff. `ai/tools/registry.ts` sem diff: a descrição de
+  `finance.lancar_transacao` continua verdadeira, porque o servidor continua sem ler a marcação.
+- Nenhum `Date.now()`/`new Date()` sem argumento nas linhas acrescentadas.
+- Banco (só leitura), no fim: categorias **26** (19/6/1), receitas **48**, `pessoal` **48**,
+  `valor_pessoal` não nulo **0**, em categoria `receita` 45, sem categoria 3, em `ambos` 0 — iguais
+  ao §2.1. Categorias marcadas: **0** (o dono não marcou nenhuma).
+
+### 12.6 Desvios do plano
+
+1. **Passo 2:** um comando meu de comparação (`git --work-tree=… apply`) aplicou o patch na árvore
+   principal. O conteúdo foi conferido idêntico ao do plano (só CRLF) e mantido. Erro meu, não do
+   worker.
+2. **Passo 4:** a árvore suja bloqueava o segundo despacho; o 4a foi guardado em `git stash`, o 4b
+   despachado, e os dois aplicados depois. As entradas da allowlist foram escritas por mim.
+3. **Passo 6 (6a):** o Codex falhou com `worker_modified_main_repository`. A árvore principal foi
+   conferida intacta (HEAD e diff), e os Steps 1–5 foram feitos no principal, com o vermelho visto
+   antes da implementação (os 3 testes puros e 3 de 4 do filtro).
+4. **Passo 6 (6b):** dois desvios do worker foram revertidos ao plano. Os dois vieram de uma
+   instrução minha larga demais ("só `page.tsx` pode conter a string"): (a) a chave da fixture de
+   `page.test.ts` montada por `["classificacao","padrao"].join("_")` — desnecessário, a varredura
+   exclui `*.test.ts`; (b) o tipo de `categories` em `transactions-client.tsx` derivado do
+   formulário, o que deixaria morta a entrada da allowlist criada na A5.
+5. **Passo 7:** o roteador classificou para o Codex, e o passo ficou no principal. O entregável é o
+   resultado dos testes sob cada mutante, e a worktree do worker não tem `node_modules` — nos sete
+   despachos desta subfase ele registrou "testes bloqueados".
+6. **Vermelho visto por mutação, não antes:** `page.test.ts` e `atalho-no-formulario.test.ts`
+   chegaram do worker junto com a implementação. O vermelho deles foi visto pelo X12 e pelos E1–E3.
+7. **Conferência visual** pelo caminho alternativo do §10.9 (a extensão do Chrome não conectou):
+   componentes isolados, HTML estático com o CSS do build num iframe de 390 px. Limitações: o
+   diálogo é um dublê com as mesmas classes de largura; os `Select` aparecem sem o valor escolhido
+   no render estático; do formulário de lançamento foi conferida só a seção que mudou (o editor da
+   receita, com e sem a dica).
+
+### 12.7 Risco residual acrescentado na execução
+
+| # | Risco | Mitigação | Destino |
+| --- | --- | --- | --- |
+| RR-C2-10 | No tema escuro, o botão do filtro ligado (`secondary`) e desligado (`outline`) diferem pouco — só a borda muda | O estado vai em `aria-pressed`, e o "Limpar" aparece com ele ligado | Aceito; revisitar na barra de filtros da 04-A |
+| RR-C2-11 | A fiação do atalho no formulário é provada por varredura de texto (contagem de chamadas, padrão do `onOpenChange`), não por teste de componente | Invariante 25: o projeto não tem teste de componente; a regra em si é pura e testada | Aceito; cai junto com a infraestrutura de teste de componente |
+
+O **RR2** fica com o destino do §11: sugestão por linha na revisão da importação, numa subfase
+futura; IA, comprovante, registro rápido, estorno e recorrência continuam nascendo `pessoal`,
+declarados.
