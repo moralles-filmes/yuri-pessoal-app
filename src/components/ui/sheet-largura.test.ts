@@ -16,14 +16,14 @@ const SRC = path.resolve(__dirname, "..", "..");
 
 /** Exceções DECLARADAS, com dono — e cada uma tem de continuar violando. */
 const EXCECOES = new Map<string, string>([
-  ["app/(app)/nutricao/planejamento/planning-client.tsx", "07-B"],
-  ["app/(app)/nutricao/refeicoes/meal-templates-client.tsx", "07-B"],
-  ["components/nutrition/food-detail-sheet.tsx", "07-B"],
-  ["components/nutrition/recipe-detail-sheet.tsx", "07-B"],
+  ["app/(app)/nutricao/planejamento/planning-client.tsx", "07-C"],
+  ["app/(app)/nutricao/refeicoes/meal-templates-client.tsx", "07-C"],
+  ["components/nutrition/food-detail-sheet.tsx", "07-C"],
+  ["components/nutrition/recipe-detail-sheet.tsx", "07-C"],
   ["components/training/exercise-detail-sheet.tsx", "07-C"],
   ["components/training/workout-exercise-sheet.tsx", "07-C"],
   ["components/layout/mobile-nav.tsx", "casca — fora da 07-A"],
-  ["components/shared/module-shell.tsx", "compartilhado por Dieta, Treinos e IA — 07-B/C/D"],
+  ["components/shared/module-shell.tsx", "compartilhado por Dieta, Treinos e IA — 07-C/D"],
   // `side={desktop ? "right" : "bottom"}`: a varredura não lê lado dinâmico e assume "right".
   // No desktop o `w-full` é mesmo morto (`data-[side=right]:w-3/4` vence), mas o
   // `data-[side=right]:sm:max-w-lg` limita no mesmo valor e nada muda na tela; na gaveta de
