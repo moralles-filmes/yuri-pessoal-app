@@ -102,7 +102,7 @@ export function FoodDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent side="right" className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         <SheetHeader className="space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">

@@ -148,7 +148,7 @@ export function RecipeDetailSheet({
 
   return (
     <Sheet open={recipe !== null} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent side="right" className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         <SheetHeader>
           <SheetTitle className="flex items-start gap-2 pr-6 text-left">
             <ChefHat className="mt-0.5 size-5 shrink-0 text-primary" />

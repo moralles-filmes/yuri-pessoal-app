@@ -52,7 +52,7 @@ export function ModelDaysSheet({
 
   return (
     <Sheet open={plan !== null} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent side="right" className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         <SheetHeader>
           <SheetTitle className="pr-6 text-left">Dias de “{plan.name}”</SheetTitle>
         </SheetHeader>

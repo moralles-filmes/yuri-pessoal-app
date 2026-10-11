@@ -429,7 +429,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
 
       {/* ── Detalhe ── */}
       <Sheet open={detailAtual !== null} onOpenChange={(open) => !open && setDetailId(null)}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetContent side="right" className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
           {detail && (
             <>
               <SheetHeader>

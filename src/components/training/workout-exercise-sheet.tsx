@@ -112,7 +112,7 @@ export function WorkoutExerciseSheet({
   if (!item) return null;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent side="right" className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         <Inner key={item.id} item={item} catalog={catalog} onChanged={onChanged} />
       </SheetContent>
     </Sheet>
