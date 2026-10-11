@@ -122,9 +122,7 @@ export function VocabularyView({
           </Button>
         </EmptyState>
       ) : shown.length === 0 ? (
-        <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-          Nenhum termo neste nível.
-        </p>
+        <EmptyState icon={Languages} title="Nenhum termo neste nível" className="py-8" />
       ) : (
         <div className="space-y-2">
           {shown.map((v) => (

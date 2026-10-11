@@ -61,12 +61,25 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "components/habits/habit-card.tsx", exige: /flex flex-wrap items-center justify-between gap-x-3 gap-y-0\.5/, porque: "a linha de valor quebra em vez de empurrar" },
   { arquivo: "components/habits/session-view.tsx", exige: /flex flex-wrap items-center justify-between gap-x-3 gap-y-0\.5/, porque: "a linha de valor quebra em vez de empurrar" },
   { arquivo: "components/habits/consistency-chart.tsx", exige: /<table className="sr-only">/, porque: "o gráfico tem alternativa textual na FACHADA (regra 1 do carregamento sob demanda)" },
+  // Alinhamento visual — Estudos
+  { arquivo: "app/(app)/estudos/studies-client.tsx", exige: /nextLessons\.length === 0 \? \(\s*<EmptyState/, porque: "\"próximas aulas\" vazio usa o EmptyState compartilhado" },
+  { arquivo: "app/(app)/estudos/studies-client.tsx", exige: /overdue\.length === 0 \? \(\s*<EmptyState/, porque: "\"estudos atrasados\" vazio usa o EmptyState compartilhado" },
+  { arquivo: "app/(app)/estudos/studies-client.tsx", exige: /inProgress\.length === 0 \? \(\s*<EmptyState/, porque: "\"progresso por curso\" vazio usa o EmptyState compartilhado" },
+  { arquivo: "components/studies/practice-view.tsx", exige: /practice\.length === 0 \? \(\s*<EmptyState/, porque: "histórico de prática vazio usa o EmptyState compartilhado" },
+  { arquivo: "components/studies/vocabulary-view.tsx", exige: /shown\.length === 0 \? \(\s*<EmptyState/, porque: "filtro de vocabulário sem termos usa o EmptyState compartilhado" },
+  { arquivo: "components/studies/badges.tsx", exige: /rotulo: string;/, porque: "a barra de progresso EXIGE nome (o TypeScript cobra cada uso)" },
+  { arquivo: "components/studies/badges.tsx", exige: /role="progressbar"\s+aria-label=\{rotulo\}/, porque: "a barra de progresso tem nome acessível" },
+  { arquivo: "app/(app)/estudos/course-form.tsx", exige: /aria-label="Sem cor própria \(usa a cor de destaque\)"/, porque: "a amostra \"—\" diz o que acontece (o fallback é var(--primary), não a cor da categoria)" },
+  { arquivo: "components/studies/evolution-chart.tsx", exige: /<table className="sr-only">/, porque: "o gráfico tem alternativa textual na FACHADA (regra 1 do carregamento sob demanda)" },
 ];
 
 /** O que não pode VOLTAR. Mesma varredura, sentido contrário. */
 export const PROIBIDOS: { arquivo: string; proibe: RegExp; porque: string }[] = [
   { arquivo: "components/habits/badges.tsx", proibe: /<Badge[^>]*style=\{\{\s*color/, porque: "D5: a cor da categoria fica no ponto; como texto ela reprova o contraste (20/20 no claro)" },
   { arquivo: "components/habits/consistency-chart-impl.tsx", proibe: /sr-only/, porque: "a alternativa textual não pode ir para o -impl: sairia do HTML do servidor" },
+  { arquivo: "components/studies/badges.tsx", proibe: /<Badge[^>]*style=\{\{\s*color/, porque: "D5: a cor de status/prioridade/dificuldade/domínio fica no ponto; como texto reprova o contraste" },
+  { arquivo: "components/studies/evolution-chart-impl.tsx", proibe: /sr-only/, porque: "a alternativa textual não pode ir para o -impl: sairia do HTML do servidor" },
+  { arquivo: "app/(app)/estudos/course-form.tsx", proibe: /Cor padrão da categoria/, porque: "Estudos não tem cor padrão por categoria: a promessa era falsa" },
 ];
 
 describe("07-B — contratos visuais de Hábitos e Estudos", () => {

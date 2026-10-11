@@ -225,9 +225,11 @@ function PanelView({ dashboard }: { dashboard: StudyDashboard }) {
           </CardHeader>
           <CardContent>
             {dashboard.nextLessons.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Nenhuma aula pendente em cursos em andamento.
-              </p>
+              <EmptyState
+                icon={Layers}
+                title="Nenhuma aula pendente em cursos em andamento"
+                className="border-0 bg-transparent py-6"
+              />
             ) : (
               <ul className="space-y-2">
                 {dashboard.nextLessons.map((n) => (
@@ -261,9 +263,7 @@ function PanelView({ dashboard }: { dashboard: StudyDashboard }) {
           </CardHeader>
           <CardContent>
             {dashboard.overdue.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Tudo em dia. 🎯
-              </p>
+              <EmptyState icon={CalendarClock} title="Tudo em dia. 🎯" className="border-0 bg-transparent py-6" />
             ) : (
               <ul className="space-y-2">
                 {dashboard.overdue.map((c) => (
@@ -296,9 +296,12 @@ function PanelView({ dashboard }: { dashboard: StudyDashboard }) {
         </CardHeader>
         <CardContent>
           {inProgress.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Nenhum curso em andamento. Mude o status de um curso para começar.
-            </p>
+            <EmptyState
+              icon={GraduationCap}
+              title="Nenhum curso em andamento"
+              description="Mude o status de um curso para começar."
+              className="border-0 bg-transparent py-6"
+            />
           ) : (
             <div className="space-y-3">
               {inProgress.map((c) => (
@@ -315,7 +318,11 @@ function PanelView({ dashboard }: { dashboard: StudyDashboard }) {
                       {formatPercent(c.progressPct)}
                     </span>
                   </div>
-                  <StudyProgressBar value={c.progressPct} color={c.cover_color} />
+                  <StudyProgressBar
+                    value={c.progressPct}
+                    color={c.cover_color}
+                    rotulo={`Progresso de ${c.title}`}
+                  />
                 </div>
               ))}
             </div>
@@ -503,7 +510,11 @@ function LanguagesView({ dashboard }: { dashboard: StudyDashboard }) {
                   </span>
                 </div>
                 {goal > 0 ? (
-                  <StudyProgressBar value={pct} color={c.cover_color} />
+                  <StudyProgressBar
+                    value={pct}
+                    color={c.cover_color}
+                    rotulo={`Prática na semana — ${c.title}`}
+                  />
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     Defina uma meta semanal no curso para acompanhar o progresso.

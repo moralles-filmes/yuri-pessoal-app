@@ -21,14 +21,14 @@ import {
   type VocabMastery,
 } from "@/lib/studies/constants";
 
-/** Badge com ponto colorido + rótulo (base reutilizada pelos badges de estudos). */
+/**
+ * Badge com ponto colorido + rótulo (base reutilizada pelos badges de estudos). A cor fica no
+ * PONTO; o texto usa o token neutro do Badge (07-B · D5): como cor de texto sobre `bg-muted`, as
+ * cores de status/prioridade/dificuldade/domínio reprovavam o contraste — todas no tema claro.
+ */
 function DotBadge({ color, label }: { color: string; label: string }) {
   return (
-    <Badge
-      variant="secondary"
-      className="gap-1.5 border-0 bg-muted"
-      style={{ color }}
-    >
+    <Badge variant="secondary" className="gap-1.5 border-0 bg-muted">
       <span
         aria-hidden
         className="size-2 rounded-full"
@@ -89,21 +89,25 @@ export function courseIcon(icon: string | null, category: StudyCategory): string
   return icon && icon.trim() ? icon : STUDY_CATEGORY_EMOJI[category];
 }
 
-/** Barra de progresso do curso (0–100%), com cor opcional da capa. */
+/** Barra de progresso do curso (0–100%), com cor opcional da capa. `rotulo` é o nome acessível. */
 export function StudyProgressBar({
   value,
   color,
   className,
+  rotulo,
 }: {
   value: number;
   color?: string | null;
   className?: string;
+  /** Obrigatório: `role="progressbar"` sem nome é anunciado só como "barra de progresso". */
+  rotulo: string;
 }) {
   const pct = Math.max(0, Math.min(100, Math.round(value)));
   return (
     <div
       className={cn("h-2 w-full overflow-hidden rounded-full bg-muted", className)}
       role="progressbar"
+      aria-label={rotulo}
       aria-valuenow={pct}
       aria-valuemin={0}
       aria-valuemax={100}

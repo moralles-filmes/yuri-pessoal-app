@@ -4,10 +4,11 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Languages, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
+import { EmptyState } from "@/components/shared/empty-state";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { SkillBadge, StudyProgressBar } from "@/components/studies/badges";
 import { deletePractice, setWeeklyGoal } from "@/lib/actions/studies";
@@ -69,7 +70,7 @@ export function PracticeView({
                 {formatMinutes(done)} / {formatMinutes(goal)} ({pct}%)
               </span>
             </div>
-            <StudyProgressBar value={pct} />
+            <StudyProgressBar value={pct} rotulo="Prática na semana" />
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
@@ -96,9 +97,11 @@ export function PracticeView({
           Histórico ({practice.length})
         </h3>
         {practice.length === 0 ? (
-          <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-            Nenhuma prática registrada ainda.
-          </p>
+          <EmptyState
+            icon={Languages}
+            title="Nenhuma prática registrada ainda"
+            className="py-8"
+          />
         ) : (
           <div className="space-y-2">
             {practice.map((p) => (

@@ -377,7 +377,7 @@ export function CourseFormDialog({
                       !field.value &&
                         "ring-2 ring-primary ring-offset-1 ring-offset-background",
                     )}
-                    aria-label="Cor padrão da categoria"
+                    aria-label="Sem cor própria (usa a cor de destaque)"
                   >
                     —
                   </button>
