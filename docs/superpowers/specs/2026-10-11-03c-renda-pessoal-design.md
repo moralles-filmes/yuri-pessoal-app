@@ -543,3 +543,65 @@ dois auditores; o P2 encontrado foi corrigido, os P3 abaixo ficam declarados):**
 gravada e coerente pelos dois caminhos da tela; que o motor a reparte sem conhecer
 `classificacao` nem categoria; que nenhum número muda sem o dono reclassificar; que a prova é
 mutação e não o verde; e que o que ficou de fora está no §8, e o que ela criou está aqui.
+
+---
+
+## 12. Resultado — medido na ponta da branch, 2026-10-11
+
+### 12.1 Os cinco comandos
+
+| Comando | Base `6c8aeab` | Ponta da 03-C |
+| --- | --- | --- |
+| `npm run test:run` | 201 arquivos / 4.099 testes | **205 arquivos / 4.155 testes** |
+| `npm run lint` | limpo | limpo |
+| `npx tsc --noEmit` | limpo | limpo |
+| `npm run build` | ok | ok |
+| `npm run perf:bundle` | mediana 214,2 KB · 68 rotas | mediana **214,2 KB** · 68 rotas |
+
+| Rota | Antes | Depois |
+| --- | --- | --- |
+| `/(app)/financeiro/lancamentos` | 218,7 | **220,9** (+2,2: o componente da A3; o formulário não é carregado sob demanda) |
+| `/(app)/dashboard/financeiro` | 201,0 | 201,1 |
+| `/(app)/dashboard` | 203,8 | 203,8 |
+| `/(app)/relatorios` | 204,1 | 204,2 |
+| `/(app)/financeiro` | 195,9 | 195,9 |
+
+`TZ=UTC npx vitest run src/lib/finance/ src/lib/notifications/`: 25 arquivos / 459 testes verdes.
+`dashboard.test.ts`: `git diff --quiet 6c8aeab` = 0, 24/24. Caracterização: blocos 2–4 e 7–10
+idênticos (conferido por segmento). `STATUS.md`, `supabase/`, `src/types/supabase.ts` e os
+`CLAUDE.md` intocados; as quatro assinaturas iguais. Contagem no banco repetida no fim: igual à
+do §2.1 (48 / 48 / 0 / 0 / 0 / 3).
+
+### 12.2 As mutações — todas derrubaram o que deviam
+
+Cada uma aplicada sozinha; restauração conferida por `git diff --quiet` em todas.
+
+| # | Testes que caíram (nome) |
+| --- | --- |
+| C1 | bloco 5 `[5 ⚠️] …`; bloco 6: compartilhada…, terceiro…, `meu` e `terceiros`…, a partição fecha…, trocar a categoria de uma RECEITA… |
+| C2 | bloco 6: a partição fecha: entradasMeu + entradasTerceiros === entradas |
+| C3 | bloco 1: congela o objeto completo…; bloco 6: estorno de cartão fica fora das três |
+| C4 | bloco 1: congela o objeto completo…; bloco 6: receita cancelada fica fora das três |
+| C5 | `services.test.ts`: receita sem os campos…, receita de terceiro…, receita compartilhada…, o payload da importação… |
+| C6 | `actions/transactions.test.ts`: receita pessoal reclassificada como de terceiro… |
+| C7 | A1: terceiro sem parte…; `services.test.ts`: receita de terceiro…; **e** `tsc` TS2578 no `@ts-expect-error` |
+| C8 | A1: parte = valor…, parte > valor…, toda recusa nomeia o campo…; `services.test.ts`: parte igual ao valor…; `actions`: valor reduzido abaixo da parte…, e a da fatura paga apontando para a transferência |
+| C9 | bloco 6: trocar a categoria de uma RECEITA… — **e só ele**: o bloco 7 ficou verde com a mutação aplicada (medido; é o desvio do §7) |
+| C10 | `registry.test.ts`: finance.get_spending declara os dois campos novos… |
+| C11 | `round-trip.test.ts`: null nos dois campos passa… |
+| C12a | `entradas-do-card.test.ts`: os três cards de Entradas leem só do apresentador (relatório) |
+| C12b | `entradas-do-card.test.ts`: com terceiros, a dica mostra a minha parte e a de terceiros |
+| C13 | `services.test.ts`: o payload da importação… continua gravando pessoal |
+| C14 | `actions`: receita de terceiro editada para despesa pessoal volta a pessoal… |
+| C15 | `actions`: com recebível cobrado…, com recebível pago… (RECUSA e não grava NADA) |
+
+### 12.3 Desvios deste desenho durante a execução
+
+- **§5.2, ordem da edição:** a A1 passou para antes do ramo de transferência (achado P2 da
+  auditoria do módulo, `95a16e9`). O texto do §5.2 foi corrigido no mesmo commit.
+- **§5.3, conferência visual:** feita sobre o componente renderizado em HTML estático com o CSS do
+  build, num iframe de 390 px (claro e escuro). O diálogo inteiro dentro do app logado **não** foi
+  conferido: a extensão do Chrome não conectou e a rota exige sessão.
+- **Roteador:** A1, A4 e A5 foram despachadas ao Codex e falharam no gate
+  `worker_modified_main_repository`; seguiram no principal. A2 foi TIER 0 (principal). A3 e as duas
+  metades da B1 vieram do Codex, revisadas e aplicadas no principal.
