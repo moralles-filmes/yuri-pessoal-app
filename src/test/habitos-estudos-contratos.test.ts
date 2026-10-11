@@ -26,6 +26,18 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "app/(app)/estudos/course-form.tsx", exige: /focus-visible:outline-solid/, porque: "Tailwind v4: sem outline-solid o contorno de foco da amostra não existe" },
   { arquivo: "components/studies/vocabulary-view.tsx", exige: /aria-pressed=\{filter === f\}/, porque: "filtro de domínio anuncia o ativo" },
   { arquivo: "app/(app)/habitos/habits-client.tsx", exige: /`Desativar \$\{h\.name\}`/, porque: "o botão Power diz o que faz e a quem" },
+  // D2 — heatmap e semana da água sem depender de cor
+  { arquivo: "components/habits/habit-heatmap.tsx", exige: /<ol\s+aria-label="Consistência diária das últimas 15 semanas"/, porque: "a grade do heatmap é uma lista com nome" },
+  { arquivo: "components/habits/habit-heatmap.tsx", exige: /<span className="sr-only">\{textoDaCelula\(cell, hoje\)\}<\/span>/, porque: "cada célula diz o estado em texto, não só em cor" },
+  { arquivo: "components/habits/habit-heatmap.tsx", exige: /aria-current=\{eHoje \? "date" : undefined\}/, porque: "hoje no heatmap é anunciado" },
+  { arquivo: "components/habits/habit-heatmap.tsx", exige: /const eHoje = ehHoje\(cell\.date, hoje\)/, porque: "hoje é o todayIso do servidor, não a última célula" },
+  { arquivo: "components/habits/habit-heatmap.tsx", exige: /cell\.scheduled === 0 \? SEM_HABITOS/, porque: "sem hábito agendado tem forma própria (tracejado): ausência não é 0%" },
+  { arquivo: "components/habits/habit-heatmap.tsx", exige: /<ul\s+aria-label="Legenda"/, porque: "a legenda tem rótulos visíveis" },
+  { arquivo: "components/habits/water-view.tsx", exige: /<ol\s+aria-label="Últimos 7 dias"/, porque: "a semana da água é uma lista com nome" },
+  { arquivo: "components/habits/water-view.tsx", exige: /aria-current=\{eHoje \? "date" : undefined\}/, porque: "hoje na semana da água é anunciado" },
+  { arquivo: "components/habits/water-view.tsx", exige: /const texto = textoDoDiaDaAgua\(d, hoje,/, porque: "cada dia diz valor, meta e se bateu, em texto" },
+  { arquivo: "components/habits/water-view.tsx", exige: /<span className="sr-only">\s*\{texto\}\s*<\/span>/, porque: "o texto do dia chega ao leitor de tela, não só ao title" },
+  { arquivo: "components/habits/water-view.tsx", exige: /\{d\.done && <Check\b/, porque: "meta batida tem ícone, não só cor" },
   // D3 — abas do curso
   { arquivo: "app/(app)/estudos/[id]/course-detail-client.tsx", exige: /<SeletorDeVisao\s+rotulo="Seções do curso"/, porque: "as abas do curso usam o seletor compartilhado (estado anunciado)" },
 ];

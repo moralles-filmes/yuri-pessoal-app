@@ -183,6 +183,7 @@ export function HabitsClient({
             <ConsistencyView
               consistency={consistency}
               activeCount={active.length}
+              todayIso={todayIso}
             />
           )}
 
