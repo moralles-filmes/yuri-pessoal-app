@@ -66,7 +66,6 @@ import {
   reopenSession,
 } from "@/lib/actions/training-sessions";
 import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
-import { sendSessionMutation } from "./session-mutations";
 import { podeEncerrar } from "./session-queue-view";
 import { SyncStatus } from "./sync-status";
 import { clearSessionQueue, useSessionQueue, type QueuedMutation } from "./use-session-queue";
@@ -100,8 +99,12 @@ export function SessionReviewClient({
   const [confirmDiscard, setConfirmDiscard] = React.useState(false);
   const [discardWord, setDiscardWord] = React.useState("");
 
+  // A tradução de cada mutação em action mora em `session-mutations.ts` (a revisão usa a mesma)
+  // e chega SOB DEMANDA: ela só serve quando há rede para enviar. Se o pedaço não carregar (sem
+  // conexão), a recusa cai no mesmo `catch` de falha de rede do laço e a mutação FICA na fila.
   const send = React.useCallback(
-    (mutation: QueuedMutation) => sendSessionMutation(session.id, mutation),
+    async (mutation: QueuedMutation) =>
+      (await import("./session-mutations")).sendSessionMutation(session.id, mutation),
     [session.id],
   );
   // O que chegar da fila muda o resumo (séries, descansos): buscamos de novo no servidor.

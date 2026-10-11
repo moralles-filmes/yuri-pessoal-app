@@ -81,7 +81,6 @@ import {
   type SetValuesDraft,
 } from "./set-editor";
 import { rotuloDoChipDeSerie } from "./rotulos-da-sessao";
-import { sendSessionMutation } from "./session-mutations";
 import {
   optimisticFromQueue,
   optimisticPatch,
@@ -126,9 +125,12 @@ export function SessionLiveClient({
 
   /* ───────────── Fila: cada mutação vira uma chamada de action ───────────── */
 
-  // A tradução de cada mutação em action mora em `session-mutations.ts`: a revisão usa a mesma.
+  // A tradução de cada mutação em action mora em `session-mutations.ts` (a revisão usa a mesma)
+  // e chega SOB DEMANDA: ela só serve quando há rede para enviar. Se o pedaço não carregar (sem
+  // conexão), a recusa cai no mesmo `catch` de falha de rede do laço e a mutação FICA na fila.
   const send = React.useCallback(
-    (mutation: QueuedMutation) => sendSessionMutation(session.id, mutation),
+    async (mutation: QueuedMutation) =>
+      (await import("./session-mutations")).sendSessionMutation(session.id, mutation),
     [session.id],
   );
 

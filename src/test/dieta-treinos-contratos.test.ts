@@ -188,6 +188,10 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "components/training/exercise-detail-sheet.tsx", exige: /Nenhuma alternativa cadastrada\./, porque: "dentro da gaveta continua <p>" },
   { arquivo: "components/training/workout-exercise-sheet.tsx", exige: /Nenhuma alternativa cadastrada\./, porque: "dentro da gaveta continua <p>" },
   { arquivo: "components/training/exercise-picker-dialog.tsx", exige: /Nenhum exercício encontrado com esses filtros\./, porque: "picker vazio continua <p>" },
+
+  // Bundle (passe da 07-C) — o que alguém desfaria sem ver o número subir
+  { arquivo: "components/training/session/session-live-client.tsx", exige: /\(await import\("\.\/session-mutations"\)\)\.sendSessionMutation\(session\.id, mutation\)/, porque: "as actions da fila chegam sob demanda; falha ao carregar cai no catch de rede e a mutação fica" },
+  { arquivo: "components/training/session/session-review-client.tsx", exige: /\(await import\("\.\/session-mutations"\)\)\.sendSessionMutation\(session\.id, mutation\)/, porque: "a revisão envia a fila pela MESMA tradução, sob demanda" },
 ];
 
 /**
@@ -227,6 +231,8 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /aria-valuenow=\{[^}]*Math\.round\(percent\)\}/, porque: "aria-valuenow sem limite passa de aria-valuemax com o consumo acima da meta" },
   { arquivo: "app/(app)/nutricao/medidas/measurements-client.tsx", exige: /aria-label="Progresso da meta"/, porque: "barra sem dizer qual medida" },
   { arquivo: "components/training/session/session-review-client.tsx", exige: /className="h-12 min-w-0 flex-1 text-base"/, porque: "com flex-1 sem quebra, o botão de finalizar vaza a 390 px" },
+  { arquivo: "components/training/session/session-live-client.tsx", exige: /^import [^;]*from "\.\/session-mutations"/m, porque: "import estático põe as 11 actions da fila no primeiro carregamento" },
+  { arquivo: "components/training/session/session-review-client.tsx", exige: /^import [^;]*from "\.\/session-mutations"/m, porque: "import estático põe as 11 actions da fila no primeiro carregamento" },
 ];
 
 const fonte = (arquivo: string) => semComentarios(fs.readFileSync(path.join(SRC, arquivo), "utf8"));
