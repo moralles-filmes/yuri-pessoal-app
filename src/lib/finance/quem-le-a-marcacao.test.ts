@@ -26,6 +26,9 @@ const ALLOWLIST: Record<string, string> = {
   "lib/validators/category.ts": "o schema da categoria recebe e valida a marcacao",
   "app/(app)/financeiro/categorias/category-form.tsx": "o campo que marca a categoria",
   "app/(app)/financeiro/categorias/categories-client.tsx": "o selo da categoria marcada",
+  "app/(app)/financeiro/lancamentos/page.tsx": "transporta a marcacao ao formulario (e, na A6, conta as marcadas para a lista vazia)",
+  "app/(app)/financeiro/lancamentos/transactions-client.tsx": "tipo da prop que leva a marcacao ao formulario",
+  "app/(app)/financeiro/lancamentos/transaction-form.tsx": "le a marcacao da categoria escolhida para a regra pura do atalho",
 };
 
 /**

@@ -83,7 +83,7 @@ export function TransactionsClient({
   dailyBalances: Record<string, number> | null;
   balanceScope: "conta" | "todas";
   accounts: AccountOption[];
-  categories: Pick<CategoryRow, "id" | "name" | "kind">[];
+  categories: Pick<CategoryRow, "id" | "name" | "kind" | "classificacao_padrao">[];
   subcategories: Pick<SubcategoryRow, "id" | "name" | "category_id">[];
   cards: CardOption[];
   people: PersonOption[];
@@ -225,7 +225,7 @@ function TransactionCard({
 }: {
   t: TransactionWithRelations;
   accounts: AccountOption[];
-  categories: Pick<CategoryRow, "id" | "name" | "kind">[];
+  categories: Pick<CategoryRow, "id" | "name" | "kind" | "classificacao_padrao">[];
   subcategories: Pick<SubcategoryRow, "id" | "name" | "category_id">[];
   cards: CardOption[];
   people: PersonOption[];

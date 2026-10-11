@@ -59,6 +59,7 @@ export default async function LancamentosPage({
         id: c.id,
         name: c.name,
         kind: c.kind,
+        classificacao_padrao: c.classificacao_padrao,
       }))}
       subcategories={subcategories.map((s) => ({
         id: s.id,

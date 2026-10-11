@@ -35,6 +35,7 @@ export function ReceitaResponsabilidadeEditor({
   totalReais,
   erroMinhaParte,
   disabled,
+  dica,
 }: {
   classificacao: Classificacao;
   onClassificacaoChange: (v: Classificacao) => void;
@@ -43,6 +44,7 @@ export function ReceitaResponsabilidadeEditor({
   totalReais: number;
   erroMinhaParte?: string;
   disabled?: boolean;
+  dica?: string;
 }) {
   const decisao = decidirResponsabilidadeDaReceita({
     classificacao,
@@ -75,6 +77,7 @@ export function ReceitaResponsabilidadeEditor({
             ))}
           </SelectContent>
         </Select>
+        {dica && <p className="text-xs font-medium text-primary">{dica}</p>}
         <p className="text-xs text-muted-foreground">
           Pessoal entra na sua renda. O que é de terceiros passa pela sua conta,
           mas não é renda sua.

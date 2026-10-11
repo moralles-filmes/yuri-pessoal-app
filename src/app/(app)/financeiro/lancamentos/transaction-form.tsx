@@ -50,6 +50,11 @@ import {
 } from "@/lib/format";
 import { resolverFatura } from "@/lib/finance/invoice";
 import {
+  aplicarAtalhoDaCategoria,
+  DICA_DO_ATALHO,
+  type OrigemDaClassificacao,
+} from "@/lib/finance/marcacao-da-categoria";
+import {
   planejarParcelamento,
   type ParcelaPlano,
 } from "@/lib/finance/installments";
@@ -177,7 +182,7 @@ export function TransactionFormDialog({
 }: {
   transaction?: TransactionRow;
   accounts: AccountOption[];
-  categories: Pick<CategoryRow, "id" | "name" | "kind">[];
+  categories: Pick<CategoryRow, "id" | "name" | "kind" | "classificacao_padrao">[];
   subcategories: Pick<SubcategoryRow, "id" | "name" | "category_id">[];
   cards?: CardOption[];
   people?: PersonOption[];
@@ -185,6 +190,7 @@ export function TransactionFormDialog({
 }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
+  const [origem, setOrigem] = React.useState<OrigemDaClassificacao>("padrao");
   const isEdit = Boolean(transaction);
 
   const {
@@ -193,6 +199,7 @@ export function TransactionFormDialog({
     handleSubmit,
     reset,
     setValue,
+    getValues,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ defaultValues: defaults(transaction) });
@@ -309,6 +316,21 @@ export function TransactionFormDialog({
     };
   }
 
+  // 03-C2 · A5 — a categoria PROPÕE (só em lançamento novo, só em receita); o lançamento REGISTRA.
+  function reavaliarAtalho(proximo: { categoryId: string; tipo: TransactionType }) {
+    const categoria = categories.find((c) => c.id === proximo.categoryId);
+    const atual = { classificacao: getValues("receita_classificacao"), origem };
+    const seguinte = aplicarAtalhoDaCategoria(atual, {
+      marcacao: categoria?.classificacao_padrao ?? null,
+      tipo: proximo.tipo,
+      modo: isEdit ? "editar" : "criar",
+    });
+    if (seguinte === atual) return;
+    setValue("receita_classificacao", seguinte.classificacao);
+    if (seguinte.classificacao !== "compartilhada") setValue("receita_minha_parte", "");
+    setOrigem(seguinte.origem);
+  }
+
   async function onSubmit(values: FormValues) {
     const splitPayload = buildSplitPayload(values);
 
@@ -402,7 +424,7 @@ export function TransactionFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { if (v) setOrigem("padrao"); setOpen(v); }}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -431,6 +453,7 @@ export function TransactionFormDialog({
                         setValue("subcategory_id", NONE);
                         setValue("parcelado", false);
                       }
+                      reavaliarAtalho({ categoryId: v === "transferencia" ? NONE : getValues("category_id"), tipo: v as TransactionType });
                     }}
                   >
                     <SelectTrigger className="w-full">
@@ -729,6 +752,7 @@ export function TransactionFormDialog({
                       onValueChange={(v) => {
                         field.onChange(v);
                         setValue("subcategory_id", NONE);
+                        reavaliarAtalho({ categoryId: v, tipo: getValues("type") });
                       }}
                     >
                       <SelectTrigger className="w-full">
@@ -812,7 +836,8 @@ export function TransactionFormDialog({
                     render={({ field: parteField }) => (
                       <ReceitaResponsabilidadeEditor
                         classificacao={classField.value}
-                        onClassificacaoChange={classField.onChange}
+                        onClassificacaoChange={(v) => { classField.onChange(v); setOrigem("usuario"); }}
+                        dica={origem === "atalho" ? DICA_DO_ATALHO : undefined}
                         minhaParte={parteField.value}
                         onMinhaParteChange={parteField.onChange}
                         totalReais={parseCurrencyToNumber(amount)}
