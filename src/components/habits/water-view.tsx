@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Droplets, Minus, Plus } from "lucide-react";
@@ -9,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ProgressRing } from "@/components/habits/progress-ring";
 import { StreakFlame, habitIcon } from "@/components/habits/badges";
-import { HabitLogDialog } from "@/components/habits/habit-log-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { incrementHabit } from "@/lib/actions/habits";
 import {
   HABIT_CATEGORY_COLORS,
@@ -20,6 +21,12 @@ import {
 } from "@/lib/habits/constants";
 import { formatDate } from "@/lib/format";
 import type { HabitWithStats } from "@/types/database";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const HabitLogDialog = dynamic(
+  () => import("@/components/habits/habit-log-dialog").then((m) => m.HabitLogDialog),
+  { ssr: false },
+);
 
 export function WaterView({
   habits,
@@ -68,6 +75,7 @@ function WaterCard({
 }) {
   const router = useRouter();
   const [logOpen, setLogOpen] = React.useState(false);
+  const logMontado = useLazyDialog(logOpen);
   const [busy, setBusy] = React.useState(false);
   const color = habit.color ?? HABIT_CATEGORY_COLORS.agua;
   const glass = glassesToUnit(1, habit.unit);
@@ -148,17 +156,19 @@ function WaterCard({
         <WeekStrip habit={habit} color={color} />
       </CardContent>
 
-      <HabitLogDialog
-        habitId={habit.id}
-        habitName={habit.name}
-        unit={habit.unit}
-        logDate={todayIso}
-        initialValue={habit.todayValue}
-        initialNotes={habit.todayLog?.notes ?? ""}
-        showNotes={false}
-        open={logOpen}
-        onOpenChange={setLogOpen}
-      />
+      {logMontado && (
+        <HabitLogDialog
+          habitId={habit.id}
+          habitName={habit.name}
+          unit={habit.unit}
+          logDate={todayIso}
+          initialValue={habit.todayValue}
+          initialNotes={habit.todayLog?.notes ?? ""}
+          showNotes={false}
+          open={logOpen}
+          onOpenChange={setLogOpen}
+        />
+      )}
     </Card>
   );
 }

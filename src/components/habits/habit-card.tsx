@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Clock, Plus, Pencil, RotateCcw } from "lucide-react";
@@ -16,7 +17,7 @@ import {
   frequencySummary,
   habitIcon,
 } from "@/components/habits/badges";
-import { HabitLogDialog } from "@/components/habits/habit-log-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import {
   incrementHabit,
   setHabitDone,
@@ -29,6 +30,12 @@ import {
   formatHabitValue,
 } from "@/lib/habits/constants";
 import type { HabitWithStats } from "@/types/database";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const HabitLogDialog = dynamic(
+  () => import("@/components/habits/habit-log-dialog").then((m) => m.HabitLogDialog),
+  { ssr: false },
+);
 
 function isMeasured(h: HabitWithStats): boolean {
   return h.target_value > 1 || h.unit !== "vezes";
@@ -45,6 +52,7 @@ export function HabitCard({
 }) {
   const router = useRouter();
   const [logOpen, setLogOpen] = React.useState(false);
+  const logMontado = useLazyDialog(logOpen);
   const [busy, setBusy] = React.useState(false);
 
   const measured = isMeasured(habit);
@@ -193,17 +201,19 @@ export function HabitCard({
         )}
       </CardContent>
 
-      <HabitLogDialog
-        habitId={habit.id}
-        habitName={habit.name}
-        unit={habit.unit}
-        logDate={todayIso}
-        initialValue={habit.todayValue}
-        initialNotes={habit.todayLog?.notes ?? ""}
-        showNotes
-        open={logOpen}
-        onOpenChange={setLogOpen}
-      />
+      {logMontado && (
+        <HabitLogDialog
+          habitId={habit.id}
+          habitName={habit.name}
+          unit={habit.unit}
+          logDate={todayIso}
+          initialValue={habit.todayValue}
+          initialNotes={habit.todayLog?.notes ?? ""}
+          showNotes
+          open={logOpen}
+          onOpenChange={setLogOpen}
+        />
+      )}
     </Card>
   );
 }

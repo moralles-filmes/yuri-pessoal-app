@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -36,7 +37,7 @@ import { HabitCard } from "@/components/habits/habit-card";
 import { WaterView } from "@/components/habits/water-view";
 import { SessionView } from "@/components/habits/session-view";
 import { ConsistencyView } from "@/components/habits/consistency-view";
-import { HabitFormDialog } from "./habit-form";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import {
   deleteHabit,
   reorderHabits,
@@ -51,6 +52,12 @@ import {
 } from "@/lib/habits/constants";
 import type { HabitRow, HabitsDashboard, HabitWithStats } from "@/types/database";
 
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const HabitFormDialog = dynamic(
+  () => import("./habit-form").then((m) => m.HabitFormDialog),
+  { ssr: false },
+);
+
 export function HabitsClient({
   dashboard,
   view,
@@ -64,6 +71,7 @@ export function HabitsClient({
   const { habits, consistency } = dashboard;
 
   const [formOpen, setFormOpen] = React.useState(false);
+  const formMontado = useLazyDialog(formOpen);
   const [editing, setEditing] = React.useState<HabitRow | undefined>();
 
   function openCreate() {
@@ -184,11 +192,13 @@ export function HabitsClient({
         </>
       )}
 
-      <HabitFormDialog
-        habit={editing}
-        open={formOpen}
-        onOpenChange={setFormOpen}
-      />
+      {formMontado && (
+        <HabitFormDialog
+          habit={editing}
+          open={formOpen}
+          onOpenChange={setFormOpen}
+        />
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import {
   ChevronDown,
@@ -13,36 +13,33 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import { cn } from "@/lib/utils";
-import { applyFieldErrors } from "@/components/financeiro/form-utils";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import {
-  createLesson,
-  createModule,
   deleteLesson,
   deleteModule,
   moveLesson,
   moveModule,
   toggleLessonDone,
-  updateLesson,
-  updateModule,
 } from "@/lib/actions/studies";
 import { formatMinutes } from "@/lib/studies/constants";
 import type { StudyLessonRow, StudyModuleWithLessons } from "@/types/database";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const ModuleFormDialog = dynamic(
+  () => import("./module-form-dialog").then((m) => m.ModuleFormDialog),
+  { ssr: false },
+);
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const LessonFormDialog = dynamic(
+  () => import("./lesson-form-dialog").then((m) => m.LessonFormDialog),
+  { ssr: false },
+);
 
 /** Árvore de módulos e aulas do curso, com CRUD, reordenação e marcar concluída. */
 export function CourseTree({
@@ -53,6 +50,7 @@ export function CourseTree({
   modules: StudyModuleWithLessons[];
 }) {
   const [moduleForm, setModuleForm] = React.useState(false);
+  const moduleFormMontado = useLazyDialog(moduleForm);
   const [editingModule, setEditingModule] = React.useState<StudyModuleWithLessons>();
 
   function openCreateModule() {
@@ -98,12 +96,14 @@ export function CourseTree({
         </div>
       )}
 
-      <ModuleFormDialog
-        courseId={courseId}
-        module={editingModule}
-        open={moduleForm}
-        onOpenChange={setModuleForm}
-      />
+      {moduleFormMontado && (
+        <ModuleFormDialog
+          courseId={courseId}
+          module={editingModule}
+          open={moduleForm}
+          onOpenChange={setModuleForm}
+        />
+      )}
     </div>
   );
 }
@@ -121,6 +121,7 @@ function ModuleBlock({
 }) {
   const router = useRouter();
   const [lessonForm, setLessonForm] = React.useState(false);
+  const lessonFormMontado = useLazyDialog(lessonForm);
   const [editingLesson, setEditingLesson] = React.useState<StudyLessonRow>();
   const done = module.lessons.filter((l) => l.is_done).length;
 
@@ -220,12 +221,14 @@ function ModuleBlock({
         </Button>
       </div>
 
-      <LessonFormDialog
-        moduleId={module.id}
-        lesson={editingLesson}
-        open={lessonForm}
-        onOpenChange={setLessonForm}
-      />
+      {lessonFormMontado && (
+        <LessonFormDialog
+          moduleId={module.id}
+          lesson={editingLesson}
+          open={lessonForm}
+          onOpenChange={setLessonForm}
+        />
+      )}
     </div>
   );
 }
@@ -345,226 +348,6 @@ function LessonRow({
         />
       </div>
     </div>
-  );
-}
-
-/* ───────────────────────────── Formulários ───────────────────────────── */
-
-type ModuleValues = { title: string; notes: string };
-
-function ModuleFormDialog({
-  courseId,
-  module,
-  open,
-  onOpenChange,
-}: {
-  courseId: string;
-  module?: StudyModuleWithLessons;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const router = useRouter();
-  const isEdit = Boolean(module);
-  const {
-    register,
-    handleSubmit,
-    reset,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<ModuleValues>({
-    defaultValues: { title: module?.title ?? "", notes: module?.notes ?? "" },
-  });
-
-  React.useEffect(() => {
-    if (open) reset({ title: module?.title ?? "", notes: module?.notes ?? "" });
-  }, [open, module, reset]);
-
-  async function onSubmit(values: ModuleValues) {
-    const res = isEdit
-      ? await updateModule(module!.id, values)
-      : await createModule(courseId, values);
-    if (res.ok) {
-      toast.success(isEdit ? "Módulo atualizado." : "Módulo criado.");
-      onOpenChange(false);
-      router.refresh();
-    } else {
-      applyFieldErrors(setError, res.fieldErrors);
-      toast.error(res.error);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar módulo" : "Novo módulo"}</DialogTitle>
-          <DialogDescription>Um agrupamento de aulas do curso.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="mod-title">Título</Label>
-            <Input
-              id="mod-title"
-              aria-invalid={Boolean(errors.title)}
-              {...register("title", { required: "Informe um título" })}
-            />
-            {errors.title && (
-              <p className="text-xs text-destructive">{errors.title.message}</p>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="mod-notes">Notas</Label>
-            <Textarea id="mod-notes" rows={2} {...register("notes")} />
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Salvando…" : "Salvar"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-type LessonValues = {
-  title: string;
-  url: string;
-  duration_minutes: string;
-  notes: string;
-};
-
-function LessonFormDialog({
-  moduleId,
-  lesson,
-  open,
-  onOpenChange,
-}: {
-  moduleId: string;
-  lesson?: StudyLessonRow;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const router = useRouter();
-  const isEdit = Boolean(lesson);
-  const {
-    register,
-    handleSubmit,
-    reset,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<LessonValues>({
-    defaultValues: {
-      title: lesson?.title ?? "",
-      url: lesson?.url ?? "",
-      duration_minutes: lesson ? String(lesson.duration_minutes) : "",
-      notes: lesson?.notes ?? "",
-    },
-  });
-
-  React.useEffect(() => {
-    if (open)
-      reset({
-        title: lesson?.title ?? "",
-        url: lesson?.url ?? "",
-        duration_minutes: lesson ? String(lesson.duration_minutes) : "",
-        notes: lesson?.notes ?? "",
-      });
-  }, [open, lesson, reset]);
-
-  async function onSubmit(values: LessonValues) {
-    const payload = {
-      title: values.title,
-      url: values.url,
-      duration_minutes: values.duration_minutes || "0",
-      notes: values.notes,
-    };
-    const res = isEdit
-      ? await updateLesson(lesson!.id, payload)
-      : await createLesson(moduleId, payload);
-    if (res.ok) {
-      toast.success(isEdit ? "Aula atualizada." : "Aula criada.");
-      onOpenChange(false);
-      router.refresh();
-    } else {
-      applyFieldErrors(setError, res.fieldErrors);
-      toast.error(res.error);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar aula" : "Nova aula"}</DialogTitle>
-          <DialogDescription>Título, link e duração da aula.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="lesson-title">Título</Label>
-            <Input
-              id="lesson-title"
-              aria-invalid={Boolean(errors.title)}
-              {...register("title", { required: "Informe um título" })}
-            />
-            {errors.title && (
-              <p className="text-xs text-destructive">{errors.title.message}</p>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto]">
-            <div className="space-y-1.5">
-              <Label htmlFor="lesson-url">Link</Label>
-              <Input
-                id="lesson-url"
-                placeholder="https://…"
-                aria-invalid={Boolean(errors.url)}
-                {...register("url")}
-              />
-              {errors.url && (
-                <p className="text-xs text-destructive">{errors.url.message}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="lesson-duration">Duração (min)</Label>
-              <Input
-                id="lesson-duration"
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step="1"
-                className="sm:w-28"
-                {...register("duration_minutes")}
-              />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="lesson-notes">Notas</Label>
-            <Textarea id="lesson-notes" rows={2} {...register("notes")} />
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Salvando…" : "Salvar"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 

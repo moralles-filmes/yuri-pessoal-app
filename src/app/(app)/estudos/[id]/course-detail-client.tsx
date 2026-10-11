@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -40,8 +41,7 @@ import {
 import { CourseTree } from "@/components/studies/course-tree";
 import { VocabularyView } from "@/components/studies/vocabulary-view";
 import { PracticeView } from "@/components/studies/practice-view";
-import { SessionFormDialog } from "@/components/studies/session-dialog";
-import { CourseFormDialog } from "../course-form";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { deleteCourse, deleteSession, setCourseStatus } from "@/lib/actions/studies";
 import {
   STUDY_STATUSES,
@@ -59,6 +59,17 @@ import type {
 
 type Tab = "conteudo" | "sessoes" | "idioma";
 
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const CourseFormDialog = dynamic(
+  () => import("../course-form").then((m) => m.CourseFormDialog),
+  { ssr: false },
+);
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const SessionFormDialog = dynamic(
+  () => import("@/components/studies/session-dialog").then((m) => m.SessionFormDialog),
+  { ssr: false },
+);
+
 export function CourseDetailClient({
   detail,
   todayIso,
@@ -70,6 +81,8 @@ export function CourseDetailClient({
   const [tab, setTab] = React.useState<Tab>("conteudo");
   const [courseForm, setCourseForm] = React.useState(false);
   const [sessionForm, setSessionForm] = React.useState(false);
+  const courseFormMontado = useLazyDialog(courseForm);
+  const sessionFormMontado = useLazyDialog(sessionForm);
   const [editingSession, setEditingSession] =
     React.useState<StudySessionWithRelations>();
 
@@ -320,20 +333,24 @@ export function CourseDetailClient({
         </div>
       )}
 
-      <CourseFormDialog
-        course={detail}
-        open={courseForm}
-        onOpenChange={setCourseForm}
-      />
-      <SessionFormDialog
-        open={sessionForm}
-        onOpenChange={setSessionForm}
-        todayIso={todayIso}
-        courseOptions={[courseOption]}
-        taskOptions={detail.taskOptions}
-        fixedCourseId={detail.id}
-        session={editingSession}
-      />
+      {courseFormMontado && (
+        <CourseFormDialog
+          course={detail}
+          open={courseForm}
+          onOpenChange={setCourseForm}
+        />
+      )}
+      {sessionFormMontado && (
+        <SessionFormDialog
+          open={sessionForm}
+          onOpenChange={setSessionForm}
+          todayIso={todayIso}
+          courseOptions={[courseOption]}
+          taskOptions={detail.taskOptions}
+          fixedCourseId={detail.id}
+          session={editingSession}
+        />
+      )}
     </div>
   );
 }
