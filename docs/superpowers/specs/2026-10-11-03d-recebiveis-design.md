@@ -696,7 +696,9 @@ Cada passo fecha com `npx vitest run` verde nos diretórios tocados — no míni
 2. **A2** — arquivo da M1 + teste → validador → **pedido de "aplique a M1"** (mensagem própria) →
    aplicação pelo MCP → tipos (commit próprio, diff lido, allowlist) → conferência no banco →
    backup (commit próprio).
-3. **A3** — leitura, serviço, schemas, actions, lote e o harness.
+3. **A3** — leitura, serviço, schemas, actions, lote e o harness, em **três commits** (A3a:
+   harness + leitura + tipo da linha; A3b: o serviço; A3c: schemas, actions e lote), porque o
+   pacote do roteador cabe em até 5 arquivos.
 4. **A4** — `protecao-do-recebivel.ts` e os cinco pontos.
 5. **A5** — a tela de terceiros, com o bundle medido.
 6. **A6** — o encanamento.
