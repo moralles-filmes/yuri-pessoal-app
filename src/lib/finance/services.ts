@@ -24,15 +24,53 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { AuthContext } from "@/lib/actions/helpers";
 import { transactionSchema } from "@/lib/validators/transaction";
-import { splitSchema } from "@/lib/validators/split";
+import { receitaResponsabilidadeSchema, splitSchema } from "@/lib/validators/split";
 import {
   getOrCreateStatementForCompetencia,
   resolveOrCreateStatement,
 } from "@/lib/finance/statements";
 import { applySplit } from "@/lib/finance/split-persist";
+import {
+  colunasDaReceita,
+  decidirResponsabilidadeDaReceita,
+} from "@/lib/finance/responsabilidade-da-receita";
+import type { Classificacao } from "@/lib/finance/constants";
 import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
 
 export type FinanceServiceContext = AuthContext;
+
+export type ColunasDaResponsabilidade = {
+  classificacao: Classificacao;
+  valor_pessoal: number | null;
+};
+
+/**
+ * REDESIGN-03-C · A2 — a responsabilidade de uma RECEITA, lida do payload cru e decidida pela
+ * A1. Criar e editar chamam esta função, ANTES de qualquer escrita: a recusa volta como erro
+ * de campo (`receita_minha_parte`) e nada é gravado.
+ *
+ * ⛔ Lê só as chaves PRÓPRIAS da receita (`receita_classificacao`, `receita_minha_parte`).
+ * A chave `classificacao` do mesmo payload é da despesa e continua ignorada aqui — é o que
+ * mantém a importação (que pode mandá-la numa linha virada receita) e a IA gravando `pessoal`.
+ */
+export function lerResponsabilidadeDaReceita(
+  input: unknown,
+  amountReais: number,
+):
+  | { ok: true; colunas: ColunasDaResponsabilidade }
+  | { ok: false; fieldErrors: Record<string, string[] | undefined> } {
+  const parsed = receitaResponsabilidadeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, fieldErrors: parsed.error.flatten().fieldErrors };
+
+  const parte = parsed.data.receita_minha_parte;
+  const decisao = decidirResponsabilidadeDaReceita({
+    classificacao: parsed.data.receita_classificacao,
+    minhaParteCentavos: parte == null ? null : reaisParaCentavos(parte),
+    valorCentavos: reaisParaCentavos(amountReais),
+  });
+  if (!decisao.ok) return { ok: false, fieldErrors: { [decisao.campo]: [decisao.mensagem] } };
+  return { ok: true, colunas: colunasDaReceita(decisao.responsabilidade) };
+}
 
 export type CriarTransacaoResultado =
   | { readonly ok: true; readonly id: string; readonly statementId: string | null }
@@ -94,6 +132,16 @@ export async function criarTransacao(
     return { ok: true, id: data.id, statementId: null };
   }
 
+  // REDESIGN-03-C · A2 — a receita decide de quem é o dinheiro ANTES de qualquer escrita.
+  let colunasDaReceitaDecididas: ColunasDaResponsabilidade | null = null;
+  if (d.type === "receita") {
+    const r = lerResponsabilidadeDaReceita(input, d.amount);
+    if (!r.ok) {
+      return { ok: false, erro: "Verifique os campos destacados.", fieldErrors: r.fieldErrors };
+    }
+    colunasDaReceitaDecididas = r.colunas;
+  }
+
   // Compra no cartão (Fase 03): resolve/cria a fatura e vincula statement_id. Na importação,
   // `statement_competencia` força a fatura sendo importada (evita derivar de uma data antiga).
   let cardId: string | null = null;
@@ -108,7 +156,10 @@ export async function criarTransacao(
     }
   }
 
-  // Divisão (Fase 05): só faz sentido em despesa; demais tipos ficam 'pessoal'.
+  // Divisão (Fase 05): a máquina de divisão é só da DESPESA. A receita tem responsabilidade
+  // própria (03-C, decidida acima), lida de chaves próprias — a chave `classificacao` do payload
+  // continua sendo só da despesa, e por isso a importação (que pode mandá-la numa linha que
+  // virou receita, imports.ts) e a IA continuam gravando receita `pessoal`. Ajuste fica pessoal.
   const split = splitSchema.safeParse(input);
   if (!split.success) {
     return {
@@ -139,7 +190,9 @@ export async function criarTransacao(
       notes: d.notes,
       tags: d.tags,
       status: d.status,
-      classificacao,
+      // Despesa e ajuste: o objeto de sempre (sem `valor_pessoal`, que a divisão deriva depois).
+      // Receita: as duas colunas da A1.
+      ...(colunasDaReceitaDecididas ?? { classificacao }),
     })
     .select("id")
     .single();

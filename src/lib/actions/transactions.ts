@@ -12,7 +12,11 @@ import {
 } from "@/lib/actions/helpers";
 import { resolveOrCreateStatement } from "@/lib/finance/statements";
 import { reapplySplit } from "@/lib/finance/split-reapply";
-import { criarTransacao } from "@/lib/finance/services";
+import {
+  criarTransacao,
+  lerResponsabilidadeDaReceita,
+  type ColunasDaResponsabilidade,
+} from "@/lib/finance/services";
 import {
   sharedExpensesToFormParts,
   type SharedExpenseLike,
@@ -70,7 +74,7 @@ export async function updateTransaction(
 
   const { data: existing, error: loadErr } = await ctx.supabase
     .from("transactions")
-    .select("id, transfer_group_id, parcelado, classificacao, amount")
+    .select("id, type, transfer_group_id, parcelado, classificacao, amount")
     .eq("id", id)
     .single();
   if (loadErr || !existing) return dbError("Lançamento não encontrado.");
@@ -104,6 +108,16 @@ export async function updateTransaction(
     return recriado;
   }
 
+  // REDESIGN-03-C · A2 — a receita decide de quem é o dinheiro ANTES de qualquer escrita: a
+  // recusa (ex.: o valor caiu abaixo da "minha parte" de uma compartilhada) não grava nada.
+  let colunasDaReceita: ColunasDaResponsabilidade | null = null;
+  if (d.type === "receita") {
+    const r = lerResponsabilidadeDaReceita(input, d.amount);
+    if (!r.ok) return invalid(r.fieldErrors);
+    colunasDaReceita = r.colunas;
+  }
+  const eraReceita = existing.type === "receita";
+
   // Re-resolve a fatura ao editar (ex.: mudou a data ou o cartão). Se deixar de ser
   // compra no cartão, limpa card_id/statement_id. O ajuste manual de fatura é à parte.
   let cardId: string | null = null;
@@ -116,6 +130,25 @@ export async function updateTransaction(
     cardId = d.card_id;
     statementId = await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
     if (!statementId) return dbError("Não foi possível resolver a fatura do cartão.");
+  }
+
+  // REDESIGN-03-C · A2(b) — alvo RECEITA: a divisão da despesa antiga sai ANTES do update.
+  // O caminho é o de sempre (`reapplySplit` → `limpar`, com a recusa por recebível cobrado/pago);
+  // o que muda é só a ordem. Com o update primeiro, a recusa chegava com o lançamento já
+  // gravado como receita e com o `valor_pessoal` da despesa antiga — e o motor, que passa a ler
+  // `valor_pessoal` de receita, contaria isso como renda parcial. Despesa → despesa mantém a
+  // ordem de hoje (risco residual RR6 do desenho da 03-C).
+  if (colunasDaReceita && !existing.parcelado) {
+    const res = await reapplySplit(ctx, {
+      transactionId: id,
+      totalCentavos: reaisParaCentavos(d.amount),
+      totalCentavosAtual: reaisParaCentavos(existing.amount),
+      classificacaoAtual: existing.classificacao as Classificacao,
+      classificacaoNova: "pessoal",
+      parts: [],
+      mode: { kind: "avista", statementId, cardId },
+    });
+    if (!res.ok) return dbError(res.error);
   }
 
   const { error } = await ctx.supabase
@@ -136,6 +169,12 @@ export async function updateTransaction(
       notes: d.notes,
       tags: d.tags,
       status: d.status,
+      // Receita: as colunas da A1. Saindo de receita: volta a pessoal/nulo — sem divisão
+      // gravada nem a gravar, `decidirReaplicacao` responde "nada", e uma receita de terceiro
+      // virada despesa pessoal ficaria `terceiro` com valor 0 (fora do "meu"). Despesa →
+      // despesa: nenhuma das duas chaves, como sempre (quem as grava é a divisão, abaixo).
+      ...(colunasDaReceita ??
+        (eraReceita ? { classificacao: "pessoal" as const, valor_pessoal: null } : {})),
     })
     .eq("id", id);
 
@@ -145,7 +184,8 @@ export async function updateTransaction(
   // é editada em /parcelamentos, por `updateInstallmentSplit`, que chama o MESMO núcleo.
   // Re-aplica apenas quando a divisão muda, então editar só descrição/categoria/data de um
   // gasto já dividido não encosta nos recebíveis. A "minha parte" é sempre derivada.
-  if (!existing.parcelado) {
+  // A receita já passou por aqui ANTES do update (A2(b), acima).
+  if (!colunasDaReceita && !existing.parcelado) {
     const split = splitSchema.safeParse(input);
     if (!split.success) return invalid(split.error.flatten().fieldErrors);
 
@@ -153,7 +193,8 @@ export async function updateTransaction(
       transactionId: id,
       totalCentavos: reaisParaCentavos(d.amount),
       totalCentavosAtual: reaisParaCentavos(existing.amount),
-      classificacaoAtual: existing.classificacao as Classificacao,
+      // Vindo de receita, as colunas acabaram de ser zeradas no update.
+      classificacaoAtual: eraReceita ? "pessoal" : (existing.classificacao as Classificacao),
       // Só despesa é divisível; receita/transferência/ajuste voltam a pessoal.
       classificacaoNova:
         d.type === "despesa" ? split.data.classificacao : "pessoal",
