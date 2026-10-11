@@ -70,6 +70,7 @@ import { estimateOneRm } from "@/lib/training/one-rm";
 import { isSetDone } from "@/lib/training/session-machine";
 import type { SessionEvent, SessionExercise, SessionSet, TrainingSession } from "@/lib/training/types";
 import { deleteTrainingSession } from "@/lib/actions/training-history";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 type ComparisonChoice = "anterior" | "melhor" | "media";
 
@@ -144,7 +145,7 @@ export function SessionDetailClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Treino excluído. Os recordes foram recalculados a partir do histórico restante.");

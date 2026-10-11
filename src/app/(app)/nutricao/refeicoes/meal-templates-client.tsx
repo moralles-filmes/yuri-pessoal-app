@@ -70,6 +70,7 @@ import {
   setMealTemplateArchived,
   setMealTemplateFavorite,
 } from "@/lib/actions/nutrition-meal-templates";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import type { PickerMeasure } from "@/components/nutrition/food-picker-dialog";
 import type { PickerRecipe } from "@/components/nutrition/recipe-picker-dialog";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
@@ -153,7 +154,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }
@@ -196,7 +197,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
     startTransition(async () => {
       const result = await bulkMealTemplateAction(ids, action);
       if (!result.ok) {
-        toast.error(result.error ?? "Não foi possível aplicar a ação.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível aplicar a ação." }));
         return;
       }
       const { afetadas, ignoradas, motivos } = result.data;
@@ -380,7 +381,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
                                 );
                                 router.refresh();
                               } else {
-                                toast.error(result.error ?? "Não foi possível duplicar.");
+                                toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível duplicar." }));
                               }
                             })
                           }
@@ -567,7 +568,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
               if (!editingId) setDetailId(result.data.id);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível salvar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
             }
           }}
         />
@@ -596,7 +597,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
               setFoodPickerFor(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível adicionar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
             }
           }}
         />
@@ -623,7 +624,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
               setRecipePickerFor(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível adicionar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
             }
           }}
         />
@@ -644,7 +645,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
               setFreeItemFor(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível adicionar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
             }
           }}
         />
@@ -663,7 +664,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
               setPlanFor(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível planejar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível planejar." }));
             }
           }}
         />

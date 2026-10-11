@@ -65,6 +65,7 @@ import {
   getTrainingWorkoutDependencies,
   moveWorkoutsToProgram,
 } from "@/lib/actions/training-workouts";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { useChaveDeAbertura, useItemRetido } from "@/components/shared/use-item-retido";
 import type { DependencyLine } from "@/components/training/delete-with-destination-dialog";
@@ -184,7 +185,7 @@ export function WorkoutsClient({
     });
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(
@@ -201,7 +202,7 @@ export function WorkoutsClient({
     const result = await duplicateTrainingWorkout({ id: workout.id });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Cópia criada, com os exercícios e as séries.");
@@ -217,7 +218,7 @@ export function WorkoutsClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(`${result.data.affected} treino(s) atualizados.`);
@@ -234,7 +235,7 @@ export function WorkoutsClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(

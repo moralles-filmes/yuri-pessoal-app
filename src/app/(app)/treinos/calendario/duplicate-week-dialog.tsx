@@ -30,6 +30,7 @@ import {
 import {
   duplicateTrainingWeek,
 } from "@/lib/actions/training-schedule";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { Field } from "@/components/training/field";
 import { shortDate } from "./calendar-client";
 
@@ -62,7 +63,7 @@ export function DuplicateWeekDialog({
     setSaving(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(

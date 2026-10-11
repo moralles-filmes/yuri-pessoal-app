@@ -24,6 +24,7 @@ import type { TrainingProgram, TrainingWorkout } from "@/lib/training/types";
 import {
   createScheduledWorkout,
 } from "@/lib/actions/training-schedule";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { Field } from "@/components/training/field";
 import { shortDate } from "./calendar-client";
 
@@ -64,7 +65,7 @@ export function NewEntryDialog({
     setSaving(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Dia planejado.");

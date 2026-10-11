@@ -132,6 +132,7 @@ import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
 import type { SubstitutionGroupWithTotals } from "@/lib/nutrition/recipe-queries";
 import { snapshotToBag } from "@/lib/nutrition/snapshot";
 import { sumNutrients } from "@/lib/nutrition/calc";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
 const FoodPickerDialog = dynamic(
@@ -275,7 +276,7 @@ export function DiaryClient(props: DiaryClientProps) {
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }
@@ -588,7 +589,7 @@ export function DiaryClient(props: DiaryClientProps) {
               setPickerMealId(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível registrar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível registrar." }));
             }
           }}
         />
@@ -614,7 +615,7 @@ export function DiaryClient(props: DiaryClientProps) {
               setRecipeMealId(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível registrar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível registrar." }));
             }
           }}
         />
@@ -633,7 +634,7 @@ export function DiaryClient(props: DiaryClientProps) {
               force: payload.force,
             });
             if (!result.ok) {
-              toast.error(result.error ?? "Não foi possível adicionar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
               return;
             }
             if (result.data.registrados === 0 && result.data.jaRegistrado) {
@@ -682,7 +683,7 @@ export function DiaryClient(props: DiaryClientProps) {
               setSubstituting(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível substituir.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível substituir." }));
             }
           }}
         />
@@ -699,7 +700,7 @@ export function DiaryClient(props: DiaryClientProps) {
               setFreeMealId(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível registrar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível registrar." }));
             }
           }}
         />
@@ -718,7 +719,7 @@ export function DiaryClient(props: DiaryClientProps) {
               setNewMealOpen(false);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível adicionar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
             }
           }}
         />
@@ -739,7 +740,7 @@ export function DiaryClient(props: DiaryClientProps) {
               setEditEntry(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível atualizar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível atualizar." }));
             }
           }}
         />

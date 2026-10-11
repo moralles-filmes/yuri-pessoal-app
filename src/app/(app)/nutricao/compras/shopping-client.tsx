@@ -105,6 +105,7 @@ import {
   reorderShoppingItems,
   updateShoppingItemQuantity,
 } from "@/lib/actions/nutrition-shopping";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { PantryPanel } from "@/components/nutrition/pantry-panel";
 
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
@@ -209,7 +210,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }
@@ -263,7 +264,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
         ...extra,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Não foi possível aplicar a ação.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível aplicar a ação." }));
         return;
       }
       toast.success(
@@ -372,7 +373,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
               router.refresh();
               return true;
             }
-            toast.error(result.error ?? "Não foi possível salvar.");
+            toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
             return false;
           }}
           onDelete={(id) => run(() => deletePantryItem(id), "Item removido da despensa.")}
@@ -387,7 +388,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
                       );
                       router.refresh();
                     } else {
-                      toast.error(result.error ?? "Não foi possível enviar.");
+                      toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível enviar." }));
                     }
                   })
               : null
@@ -461,7 +462,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
                     );
                     router.refresh();
                   } else {
-                    toast.error(result.error ?? "Não foi possível aplicar.");
+                    toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível aplicar." }));
                   }
                 })
               }
@@ -484,7 +485,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
                     goTo({ lista: result.data.id });
                     router.refresh();
                   } else {
-                    toast.error(result.error ?? "Não foi possível duplicar.");
+                    toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível duplicar." }));
                   }
                 })
               }
@@ -884,7 +885,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
               setItemDialog({ open: false, item: null });
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível salvar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
             }
           }}
         />
@@ -909,13 +910,13 @@ export function ShoppingClient(props: ShoppingClientProps) {
           onPreview={async (input) => {
             const result = await previewShoppingGeneration(input);
             if (result.ok) return result.data;
-            toast.error(result.error ?? "Não foi possível montar a prévia.");
+            toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível montar a prévia." }));
             return null;
           }}
           onGenerate={async (input) => {
             const result = await generateShoppingList(input);
             if (!result.ok) {
-              toast.error(result.error ?? "Não foi possível gerar a lista.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível gerar a lista." }));
               return false;
             }
             const { criados, atualizados, removidos, ajustesPreservados, separados, ignorados } =

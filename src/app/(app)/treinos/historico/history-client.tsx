@@ -84,6 +84,7 @@ import { SESSION_STATUS_LABELS, TRAINING_BASE_PATH } from "@/lib/training/consta
 import { addDaysIso, monthGridIso, startOfMonthIso } from "@/lib/training/schedule";
 import type { HistoryFacets } from "@/lib/training/history-queries";
 import { deleteTrainingSession } from "@/lib/actions/training-history";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 const ALL = "__todos__";
 
@@ -159,11 +160,16 @@ export function HistoryClient({
     setBusy(true);
     let removed = 0;
     let failed = 0;
+    // D5 (REDESIGN-07-C): o motivo da primeira recusa vai junto — antes só a contagem chegava.
+    let primeiroMotivo: string | null = null;
 
     for (const item of target) {
       const result = await deleteTrainingSession({ id: item.id, confirm: true });
       if (result.ok) removed += 1;
-      else failed += 1;
+      else {
+        failed += 1;
+        primeiroMotivo ??= mensagemDaAction(result);
+      }
     }
 
     setBusy(false);
@@ -171,7 +177,9 @@ export function HistoryClient({
     setBulkOpen(false);
     setSelected(new Set());
 
-    if (failed > 0) toast.error(`${failed} treino(s) não puderam ser excluídos.`);
+    if (failed > 0) {
+      toast.error(`${failed} treino(s) não puderam ser excluídos. ${primeiroMotivo ?? ""}`.trim());
+    }
     if (removed > 0) {
       toast.success(
         `${removed} treino(s) excluídos. Os recordes foram recalculados a partir do histórico restante.`,

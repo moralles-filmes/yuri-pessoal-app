@@ -74,6 +74,7 @@ import {
   updatePlannedMealInScope,
 } from "@/lib/actions/nutrition-plans";
 import { addRecipeToPlannedMeal } from "@/lib/actions/nutrition-meal-templates";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import type { PickerMeasure } from "@/components/nutrition/food-picker-dialog";
 import type { PickerRecipe } from "@/components/nutrition/recipe-picker-dialog";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
@@ -195,7 +196,7 @@ export function PlanningClient(props: PlanningClientProps) {
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }
@@ -433,7 +434,7 @@ export function PlanningClient(props: PlanningClientProps) {
               setPickerMealId(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível adicionar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
             }
           }}
         />
@@ -452,7 +453,7 @@ export function PlanningClient(props: PlanningClientProps) {
               setNewMealOpen(false);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível planejar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível planejar." }));
             }
           }}
         />
@@ -494,7 +495,7 @@ export function PlanningClient(props: PlanningClientProps) {
                 setScopeDialog(null);
                 router.refresh();
               } else {
-                toast.error(result.error ?? "Não foi possível salvar.");
+                toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
               }
               return;
             }
@@ -510,7 +511,7 @@ export function PlanningClient(props: PlanningClientProps) {
               setScopeDialog(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível excluir.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível excluir." }));
             }
           }}
         />
@@ -550,7 +551,7 @@ export function PlanningClient(props: PlanningClientProps) {
               setRecipeMealId(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível planejar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível planejar." }));
             }
           }}
         />
@@ -570,7 +571,7 @@ export function PlanningClient(props: PlanningClientProps) {
               setApplyOpen(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível aplicar o modelo.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível aplicar o modelo." }));
             }
           }}
         />
@@ -588,7 +589,7 @@ export function PlanningClient(props: PlanningClientProps) {
               setPlanDialog(false);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível criar o modelo.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível criar o modelo." }));
             }
           }}
         />
@@ -612,7 +613,7 @@ export function PlanningClient(props: PlanningClientProps) {
               setCopyOpen(false);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível copiar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível copiar." }));
             }
           }}
         />

@@ -52,6 +52,7 @@ import {
 } from "@/lib/nutrition/constants";
 import { nutritionFoodWithNutrientsSchema } from "@/lib/validators/nutrition";
 import { saveNutritionFood } from "@/lib/actions/nutrition-foods";
+import { errosDaAction, mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import type {
   FoodCategory,
   FoodDetail,
@@ -159,6 +160,15 @@ function valuesFromFood(food: FoodDetail): FormValues {
   };
 }
 
+/**
+ * G1 (REDESIGN-07-C, D5): o schema é aninhado (`{ food, nutrients }`), então a recusa do
+ * servidor chega em `food`/`nutrients` — raízes que a tela não destaca campo a campo (o
+ * `setError("food")` de antes não aparecia em lugar nenhum). A mensagem vai para o topo da
+ * seção correspondente e para o toast. O resolver continua sem rodar no envio: ligá-lo mudaria
+ * a validação (registrado no spec).
+ */
+const SECOES = ["food", "nutrients"] as const;
+
 export function FoodFormDialog({
   open,
   onOpenChange,
@@ -180,6 +190,7 @@ export function FoodFormDialog({
   onSaved: () => void;
 }) {
   const [saving, setSaving] = React.useState(false);
+  const [errosDaSecao, setErrosDaSecao] = React.useState<Record<string, string>>({});
   const [scannerOpen, setScannerOpen] = React.useState(false);
   const [addCode, setAddCode] = React.useState<string>(NONE);
 
@@ -197,6 +208,7 @@ export function FoodFormDialog({
   if (open && currentId !== loadedId) {
     setLoadedId(currentId);
     form.reset(food ? valuesFromFood(food) : emptyValues());
+    setErrosDaSecao({});
   }
 
   // `useWatch` em vez de `form.watch()`: o React Compiler está ligado e não consegue
@@ -212,6 +224,7 @@ export function FoodFormDialog({
   async function onSubmit() {
     const raw = form.getValues();
     setSaving(true);
+    setErrosDaSecao({});
 
     const payload = {
       food: {
@@ -243,12 +256,8 @@ export function FoodFormDialog({
     setSaving(false);
 
     if (!result.ok) {
-      toast.error(result.error);
-      if (result.fieldErrors) {
-        for (const [key, messages] of Object.entries(result.fieldErrors)) {
-          form.setError(key as never, { message: messages?.[0] });
-        }
-      }
+      setErrosDaSecao(errosDaAction(result, SECOES).porCampo);
+      toast.error(mensagemDaAction(result));
       return;
     }
 
@@ -282,6 +291,11 @@ export function FoodFormDialog({
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
               Identificação
             </h3>
+            {errosDaSecao.food && (
+              <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {errosDaSecao.food}
+              </p>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="f-nome">Nome *</Label>
               <Input id="f-nome" {...form.register("food.name")} placeholder="Ex.: Frango, peito, grelhado" />
@@ -441,6 +455,11 @@ export function FoodFormDialog({
                 Nutrientes por {values.food?.base_quantity || "100"} {values.food?.base_unit ?? "g"}
               </h3>
             </div>
+            {errosDaSecao.nutrients && (
+              <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {errosDaSecao.nutrients}
+              </p>
+            )}
             <p className="text-[11px] text-muted-foreground">
               Deixe em branco o que você não sabe — fica registrado como{" "}
               <strong>não informado</strong>, nunca como zero.

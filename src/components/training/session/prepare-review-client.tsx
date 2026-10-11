@@ -76,6 +76,7 @@ import {
   startSession,
   updateSessionPreparation,
 } from "@/lib/actions/training-sessions";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 /* ───────────────────────────── Rascunho local ───────────────────────────── */
 
@@ -354,7 +355,7 @@ export function PrepareReviewClient({
     const prepared = await updateSessionPreparation(buildPayload());
     if (!prepared.ok) {
       setBusy(false);
-      toast.error(prepared.error);
+      toast.error(mensagemDaAction(prepared));
       return;
     }
 
@@ -367,7 +368,7 @@ export function PrepareReviewClient({
         setRunningConflict(started.error);
         return;
       }
-      toast.error(started.error);
+      toast.error(mensagemDaAction(started));
       return;
     }
 
@@ -379,7 +380,7 @@ export function PrepareReviewClient({
     const result = await abandonSession({ id: session.id, mode: "descartar", confirm: true });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Preparação descartada.");

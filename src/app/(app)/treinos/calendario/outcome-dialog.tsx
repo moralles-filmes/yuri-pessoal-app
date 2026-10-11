@@ -18,6 +18,7 @@ import type { ScheduledWorkout } from "@/lib/training/types";
 import {
   setScheduledWorkoutOutcome,
 } from "@/lib/actions/training-schedule";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { shortDate } from "./calendar-client";
 
 export function OutcomeDialog({
@@ -43,7 +44,7 @@ export function OutcomeDialog({
     const result = await setScheduledWorkoutOutcome({ id: entry.id, status, reason });
     setSaving(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Registrado.");

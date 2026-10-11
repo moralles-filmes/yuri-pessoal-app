@@ -79,6 +79,7 @@ import {
   rescheduleScheduledWorkout,
   toggleRestDay,
 } from "@/lib/actions/training-schedule";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
 const NewEntryDialog = dynamic(
@@ -199,7 +200,7 @@ export function CalendarClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(`Movido para ${shortDate(targetDate)}. A data original ficou registrada.`);
@@ -211,7 +212,7 @@ export function CalendarClient({
     const result = await toggleRestDay(date);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(result.data.isRest ? "Dia marcado como descanso." : "Descanso desmarcado.");
@@ -224,7 +225,7 @@ export function CalendarClient({
     const result = await deleteScheduledWorkout(entry.id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     router.refresh();
@@ -242,7 +243,7 @@ export function CalendarClient({
     const result = await clearTrainingWeek(reference);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(

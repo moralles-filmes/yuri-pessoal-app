@@ -42,6 +42,7 @@ import { scaleNutrients } from "@/lib/nutrition/calc";
 import { convertToBase, CONVERSION_FAILURE_MESSAGES, describeMeasure, defaultMeasure } from "@/lib/nutrition/units";
 import type { FoodDetail, FoodMeasure, NutrientDefinition } from "@/lib/nutrition/types";
 import { deleteNutritionMeasure } from "@/lib/actions/nutrition-foods";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { NutrientValue } from "./nutrient-value";
 
 const BASE_MEASURE = "__base__";
@@ -367,7 +368,7 @@ export function FoodDetailSheet({
                                 toast.success("Medida excluída.");
                                 onChanged();
                               } else {
-                                toast.error(result.error);
+                                toast.error(mensagemDaAction(result));
                               }
                             }}
                           >

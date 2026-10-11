@@ -37,6 +37,7 @@ import {
   applyProgramToSchedule,
   generateTrainingSchedule,
 } from "@/lib/actions/training-schedule";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { Field } from "@/components/training/field";
 
 export function GenerateDialog({
@@ -97,7 +98,7 @@ export function GenerateDialog({
     setSaving(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     const { created, skipped, replaced } = result.data;

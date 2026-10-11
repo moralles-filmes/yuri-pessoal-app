@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createNutritionEvent } from "@/lib/actions/nutrition-integrations";
 import { shortTime } from "@/lib/nutrition/calendar";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 export function ScheduleMealDialog({
   open,
@@ -81,7 +82,7 @@ export function ScheduleMealDialog({
         router.refresh();
         onOpenChange(false);
       } else {
-        toast.error(result.error ?? "Não foi possível criar o bloco.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível criar o bloco." }));
       }
     });
   }

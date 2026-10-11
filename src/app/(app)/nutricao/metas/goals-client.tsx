@@ -66,6 +66,7 @@ import {
   saveNutritionProfile,
   startNewGoalPeriod,
 } from "@/lib/actions/nutrition-goals";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
 const PeriodDialog = dynamic(
@@ -120,7 +121,7 @@ export function GoalsClient({
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }
@@ -314,7 +315,7 @@ export function GoalsClient({
               if ("data" in result && result.data && "id" in result.data) setSelectedId(result.data.id);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível salvar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
             }
           }}
         />
@@ -333,7 +334,7 @@ export function GoalsClient({
               setProfileOpen(false);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível salvar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
             }
           }}
         />

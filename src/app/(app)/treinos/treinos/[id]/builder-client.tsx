@@ -65,6 +65,7 @@ import {
   removeWorkoutExercise,
   reorderWorkoutExercises,
 } from "@/lib/actions/training-workouts";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 
 // Os três diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form` junto.
@@ -128,7 +129,7 @@ export function WorkoutBuilderClient({
     const result = await reorderWorkoutExercises({ ids: orderedIds });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     router.refresh();
@@ -156,7 +157,7 @@ export function WorkoutBuilderClient({
     const result = await removeWorkoutExercise(item.id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Exercício removido do treino.");
@@ -175,7 +176,7 @@ export function WorkoutBuilderClient({
     const result = await createWorkoutVersion({ id: workout.id });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(`Versão ${result.data.version} criada. A anterior ficou arquivada e legível.`);
@@ -187,7 +188,7 @@ export function WorkoutBuilderClient({
     const result = await duplicateTrainingWorkout({ id: workout.id });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Cópia criada.");

@@ -22,9 +22,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ariaDoErro, ErroDoCampo } from "@/components/shared/erro-do-campo";
 import { GOAL_DIRECTION_LABELS, GOAL_DIRECTIONS } from "@/lib/body/constants";
 import { saveMeasurementGoal } from "@/lib/actions/body-measurements";
+import { errosDaAction } from "@/lib/forms/mensagem-da-action";
 import type { MeasurementGoal, MeasurementType } from "@/lib/body/types";
+
+/** Campos desta tela que a action pode recusar: a mensagem aparece sob eles (D5). */
+const CAMPOS = ["typeId", "direction", "targetValue", "startValue", "startsOn", "targetDate", "note"] as const;
 
 export function GoalDialog({
   open,
@@ -45,9 +50,11 @@ export function GoalDialog({
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
+  const [errosDeCampo, setErrosDeCampo] = React.useState<Record<string, string>>({});
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setErrosDeCampo({});
     const data = new FormData(event.currentTarget);
 
     startTransition(async () => {
@@ -66,8 +73,10 @@ export function GoalDialog({
         onOpenChange(false);
         onSaved();
       } else {
-        setError(result.error);
-        toast.error(result.error);
+        const erros = errosDaAction(result, CAMPOS);
+        setErrosDeCampo(erros.porCampo);
+        setError(erros.texto);
+        toast.error(erros.texto);
       }
     });
   }
@@ -87,7 +96,7 @@ export function GoalDialog({
           <div className="space-y-1.5">
             <Label htmlFor="g-type">Medida</Label>
             <Select name="typeId" defaultValue={editing?.typeId ?? defaultTypeId}>
-              <SelectTrigger id="g-type">
+              <SelectTrigger id="g-type" {...ariaDoErro("g-type-erro", errosDeCampo.typeId)}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -98,13 +107,14 @@ export function GoalDialog({
                 ))}
               </SelectContent>
             </Select>
+            <ErroDoCampo id="g-type-erro" mensagem={errosDeCampo.typeId} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="g-direction">Quero</Label>
               <Select name="direction" defaultValue={editing?.direction ?? "reduzir"}>
-                <SelectTrigger id="g-direction">
+                <SelectTrigger id="g-direction" {...ariaDoErro("g-direction-erro", errosDeCampo.direction)}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -115,16 +125,19 @@ export function GoalDialog({
                   ))}
                 </SelectContent>
               </Select>
+              <ErroDoCampo id="g-direction-erro" mensagem={errosDeCampo.direction} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="g-target">Alvo</Label>
               <Input
                 id="g-target"
+                {...ariaDoErro("g-target-erro", errosDeCampo.targetValue)}
                 name="targetValue"
                 inputMode="decimal"
                 defaultValue={editing ? String(editing.targetValue).replace(".", ",") : ""}
                 required
               />
+              <ErroDoCampo id="g-target-erro" mensagem={errosDeCampo.targetValue} />
             </div>
           </div>
 
@@ -139,11 +152,13 @@ export function GoalDialog({
                   ? String(editing.startValue).replace(".", ",")
                   : ""
               }
-              aria-describedby="g-start-hint"
+              aria-describedby={errosDeCampo.startValue ? "g-start-hint g-start-value-erro" : "g-start-hint"}
+              aria-invalid={errosDeCampo.startValue ? true : undefined}
             />
             <p id="g-start-hint" className="text-xs text-muted-foreground">
               Em branco, o sistema usa a primeira medição a partir da data de início.
             </p>
+            <ErroDoCampo id="g-start-value-erro" mensagem={errosDeCampo.startValue} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -151,26 +166,31 @@ export function GoalDialog({
               <Label htmlFor="g-starts">Início</Label>
               <Input
                 id="g-starts"
+                {...ariaDoErro("g-starts-erro", errosDeCampo.startsOn)}
                 name="startsOn"
                 type="date"
                 defaultValue={editing?.startsOn ?? hoje}
                 required
               />
+              <ErroDoCampo id="g-starts-erro" mensagem={errosDeCampo.startsOn} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="g-deadline">Prazo (opcional)</Label>
               <Input
                 id="g-deadline"
+                {...ariaDoErro("g-deadline-erro", errosDeCampo.targetDate)}
                 name="targetDate"
                 type="date"
                 defaultValue={editing?.targetDate ?? ""}
               />
+              <ErroDoCampo id="g-deadline-erro" mensagem={errosDeCampo.targetDate} />
             </div>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="g-note">Observação (opcional)</Label>
-            <Textarea id="g-note" name="note" rows={2} defaultValue={editing?.note ?? ""} maxLength={500} />
+            <Textarea id="g-note" {...ariaDoErro("g-note-erro", errosDeCampo.note)} name="note" rows={2} defaultValue={editing?.note ?? ""} maxLength={500} />
+            <ErroDoCampo id="g-note-erro" mensagem={errosDeCampo.note} />
           </div>
 
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

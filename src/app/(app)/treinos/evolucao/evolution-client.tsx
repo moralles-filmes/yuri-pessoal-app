@@ -91,6 +91,7 @@ import {
   deleteProgressionRule,
   generateProgressionSuggestions,
 } from "@/lib/actions/training-history";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 const ALL = "__todos__";
 
@@ -217,7 +218,7 @@ export function EvolutionClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     if (result.data.note) toast.info(result.data.note);
@@ -235,7 +236,7 @@ export function EvolutionClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(result.data.message);
@@ -249,7 +250,7 @@ export function EvolutionClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Regra excluída. As sugestões já geradas continuam registradas.");

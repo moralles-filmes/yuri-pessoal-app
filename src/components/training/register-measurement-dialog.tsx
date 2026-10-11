@@ -28,6 +28,7 @@ import {
 } from "@/lib/body/constants";
 import type { MeasurementType } from "@/lib/body/types";
 import { saveMeasurement } from "@/lib/actions/body-measurements";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 export function RegisterMeasurementDialog({
   open,
@@ -80,7 +81,7 @@ export function RegisterMeasurementDialog({
     setSaving(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Medida registrada. Ela também aparece no módulo de Dieta.");

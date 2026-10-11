@@ -42,6 +42,7 @@ import {
 import { longDateLabel, shortDateLabel } from "@/lib/nutrition/calendar";
 import { deleteProgressPhoto } from "@/lib/actions/body-measurements";
 import type { SignedProgressPhoto } from "@/lib/body/types";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
 const UploadDialog = dynamic(
@@ -94,7 +95,7 @@ export function ProgressPhotos({
         setViewing(null);
         onChanged();
       } else {
-        toast.error(result.error);
+        toast.error(mensagemDaAction(result));
       }
     });
   }

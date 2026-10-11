@@ -43,6 +43,7 @@ import type {
 } from "@/lib/training/types";
 import type { SessionListItem } from "@/lib/training/session-queries";
 import { createSession } from "@/lib/actions/training-sessions";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 export function PrepareChooseClient({
   scheduledToday,
@@ -77,7 +78,7 @@ export function PrepareChooseClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     router.push(`${TRAINING_BASE_PATH}/sessao/preparar?id=${result.data.id}`);

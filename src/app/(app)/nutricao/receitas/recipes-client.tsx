@@ -52,6 +52,7 @@ import {
   uploadRecipePhoto,
 } from "@/lib/actions/nutrition-recipes";
 import { createTemplateFromRecipe } from "@/lib/actions/nutrition-meal-templates";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import type { PickerMeasure } from "@/components/nutrition/food-picker-dialog";
 import type { RecipeWithCalc } from "@/components/nutrition/recipe-detail-sheet";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
@@ -121,7 +122,7 @@ export function RecipesClient(props: RecipesClientProps) {
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }
@@ -193,7 +194,7 @@ export function RecipesClient(props: RecipesClientProps) {
     startTransition(async () => {
       const result = await bulkRecipeAction(ids, action);
       if (!result.ok) {
-        toast.error(result.error ?? "Não foi possível aplicar a ação.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível aplicar a ação." }));
         return;
       }
       const { afetadas, ignoradas, motivos } = result.data;
@@ -448,7 +449,7 @@ export function RecipesClient(props: RecipesClientProps) {
               if (!editingId) setDetailId(result.data.id);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível salvar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
             }
           }}
         />
@@ -476,7 +477,7 @@ export function RecipesClient(props: RecipesClientProps) {
                 setDetailId(result.data.id);
                 router.refresh();
               } else {
-                toast.error(result.error ?? "Não foi possível duplicar.");
+                toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível duplicar." }));
               }
             })
           }
@@ -538,7 +539,7 @@ export function RecipesClient(props: RecipesClientProps) {
                 );
                 router.refresh();
               } else {
-                toast.error(result.error ?? "Não foi possível criar a refeição-modelo.");
+                toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível criar a refeição-modelo." }));
               }
             })
           }
@@ -568,7 +569,7 @@ export function RecipesClient(props: RecipesClientProps) {
               setIngredientFor(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível adicionar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
             }
           }}
         />

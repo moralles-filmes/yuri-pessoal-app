@@ -58,6 +58,7 @@ import {
 } from "@/lib/actions/nutrition-goals";
 import { deleteRecipeCategory, saveRecipeCategory } from "@/lib/actions/nutrition-recipes";
 import { deleteNutritionTag, saveNutritionTag } from "@/lib/actions/nutrition-foods";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 const nf = new Intl.NumberFormat("pt-BR");
 
@@ -86,7 +87,7 @@ export function NutritionSettingsClient({
       } else {
         // O servidor devolve a mensagem com a contagem de usos e a alternativa. Não a
         // substitua por um genérico: é ela que explica por que a exclusão foi recusada.
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }

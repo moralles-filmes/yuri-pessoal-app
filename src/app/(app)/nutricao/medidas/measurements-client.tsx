@@ -86,6 +86,7 @@ import type {
   MeasurementWithType,
   SignedProgressPhoto,
 } from "@/lib/body/types";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
 const MeasurementDialog = dynamic(
@@ -229,7 +230,7 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
         toast.success("Medição excluída.");
         refresh();
       } else {
-        toast.error(result.error);
+        toast.error(mensagemDaAction(result));
       }
     });
   }
@@ -251,7 +252,7 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
         toast.success(`${result.data.count} medição(ões) excluída(s).`);
         refresh();
       } else {
-        toast.error(result.error);
+        toast.error(mensagemDaAction(result));
       }
     });
   }
@@ -503,7 +504,7 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
                           startTransition(async () => {
                             const r = await setMeasurementGoalStatus({ id: goal.id, status: "pausada" });
                             if (r.ok) { toast.success("Meta pausada."); refresh(); }
-                            else toast.error(r.error);
+                            else toast.error(mensagemDaAction(r));
                           })
                         }
                       >
@@ -517,7 +518,7 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
                           startTransition(async () => {
                             const r = await setMeasurementGoalStatus({ id: goal.id, status: "concluida" });
                             if (r.ok) { toast.success("Meta concluída."); refresh(); }
-                            else toast.error(r.error);
+                            else toast.error(mensagemDaAction(r));
                           })
                         }
                       >
@@ -533,7 +534,7 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
                         startTransition(async () => {
                           const r = await setMeasurementGoalStatus({ id: goal.id, status: "ativa" });
                           if (r.ok) { toast.success("Meta reativada."); refresh(); }
-                          else toast.error(r.error);
+                          else toast.error(mensagemDaAction(r));
                         })
                       }
                     >
@@ -550,7 +551,7 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
                       startTransition(async () => {
                         const r = await deleteMeasurementGoal(goal.id);
                         if (r.ok) { toast.success("Meta excluída."); refresh(); }
-                        else toast.error(r.error);
+                        else toast.error(mensagemDaAction(r));
                       });
                     }}
                   >

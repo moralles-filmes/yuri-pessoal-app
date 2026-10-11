@@ -84,6 +84,7 @@ import {
   deleteTrainingGoal,
   setTrainingGoalStatus,
 } from "@/lib/actions/training-goals";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
 const RecordProgressDialog = dynamic(
@@ -158,7 +159,7 @@ export function GoalsClient({
     const result = await setTrainingGoalStatus({ id: goal.goal.id, status });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Situação atualizada. A alteração ficou no histórico da meta.");
@@ -171,7 +172,7 @@ export function GoalsClient({
     const result = await deleteTrainingGoal({ id: deleting.goal.id, confirm: true });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Meta excluída.");

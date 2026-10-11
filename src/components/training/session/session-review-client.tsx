@@ -64,6 +64,7 @@ import {
   finishSession,
   reopenSession,
 } from "@/lib/actions/training-sessions";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { sendSessionMutation } from "./session-mutations";
 import { podeEncerrar } from "./session-queue-view";
 import { SyncStatus } from "./sync-status";
@@ -197,7 +198,7 @@ export function SessionReviewClient({
         setConfirmActive(result.error);
         return;
       }
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
 
@@ -223,7 +224,7 @@ export function SessionReviewClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     clearSessionQueue(session.id);
@@ -237,7 +238,7 @@ export function SessionReviewClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     clearSessionQueue(session.id);
@@ -251,7 +252,7 @@ export function SessionReviewClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     router.push(`${TRAINING_BASE_PATH}/sessao`);

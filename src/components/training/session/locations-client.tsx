@@ -42,6 +42,7 @@ import {
   saveLocationPlates,
   updateTrainingLocation,
 } from "@/lib/actions/training-locations";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 type PlateRow = { kind: PlateKind; weight: string; quantity: string };
 
@@ -81,7 +82,7 @@ export function TrainingLocationsClient({ locations }: { locations: TrainingLoca
     const result = await createTrainingLocation({ name: newName.trim() });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     setNewName("");
@@ -98,7 +99,7 @@ export function TrainingLocationsClient({ locations }: { locations: TrainingLoca
     });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(`${location.name} agora é o local padrão.`);
@@ -120,7 +121,7 @@ export function TrainingLocationsClient({ locations }: { locations: TrainingLoca
     });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     setEditing(null);
@@ -133,7 +134,7 @@ export function TrainingLocationsClient({ locations }: { locations: TrainingLoca
     const result = await deleteTrainingLocation(confirmDelete.id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     setConfirmDelete(null);

@@ -48,6 +48,7 @@ import {
   reorderMeasurementTypes,
   saveMeasurementType,
 } from "@/lib/actions/body-measurements";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 type DeleteTarget = { type: MeasurementType; measurements: number };
 
@@ -77,7 +78,7 @@ export function MeasurementTypesDialog({
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }

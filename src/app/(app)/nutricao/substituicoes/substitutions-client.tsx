@@ -52,6 +52,7 @@ import {
   saveSubstitutionGroup,
   saveSubstitutionOption,
 } from "@/lib/actions/nutrition-substitutions";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import type { PickerMeasure } from "@/components/nutrition/food-picker-dialog";
 
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
@@ -95,7 +96,7 @@ export function SubstitutionsClient(props: SubstitutionsClientProps) {
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }
@@ -388,7 +389,7 @@ export function SubstitutionsClient(props: SubstitutionsClientProps) {
               setGroupDialog(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível salvar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
             }
           }}
         />
@@ -408,7 +409,7 @@ export function SubstitutionsClient(props: SubstitutionsClientProps) {
               setOptionFor(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível adicionar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
             }
           }}
         />

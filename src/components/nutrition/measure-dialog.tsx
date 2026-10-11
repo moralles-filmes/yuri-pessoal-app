@@ -9,6 +9,7 @@
  */
 import * as React from "react";
 import { useItemRetido } from "@/components/shared/use-item-retido";
+import { ariaDoErro, ErroDoCampo } from "@/components/shared/erro-do-campo";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,11 @@ import {
   MEASURE_UNIT_TYPE_LABELS,
 } from "@/lib/nutrition/constants";
 import { saveNutritionMeasure } from "@/lib/actions/nutrition-foods";
+import { errosDaAction } from "@/lib/forms/mensagem-da-action";
 import type { FoodDetail, FoodMeasure } from "@/lib/nutrition/types";
+
+/** Campos desta tela que a action pode recusar: a mensagem aparece sob eles (D5). */
+const CAMPOS = ["label", "unit_type", "grams", "milliliters", "is_default"] as const;
 
 export function MeasureDialog({
   open,
@@ -60,6 +65,7 @@ export function MeasureDialog({
   const [milliliters, setMilliliters] = React.useState("");
   const [isDefault, setIsDefault] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [errosDeCampo, setErrosDeCampo] = React.useState<Record<string, string>>({});
 
   // Recarrega ao abrir para outra medida (ajuste durante o render, sem useEffect).
   const [loadedKey, setLoadedKey] = React.useState<string | null>(null);
@@ -76,6 +82,7 @@ export function MeasureDialog({
     );
     setIsDefault(measure?.isDefault ?? false);
     setError(null);
+    setErrosDeCampo({});
   }
 
   if (!food) return null;
@@ -83,6 +90,7 @@ export function MeasureDialog({
   async function submit() {
     if (!food) return;
     setError(null);
+    setErrosDeCampo({});
     setSaving(true);
     const result = await saveNutritionMeasure(
       {
@@ -98,7 +106,11 @@ export function MeasureDialog({
     setSaving(false);
 
     if (!result.ok) {
-      setError(result.fieldErrors?.grams?.[0] ?? result.error);
+      // D5 (REDESIGN-07-C): cada campo recusado mostra a mensagem sob ele; antes só `grams`
+      // era lido, e um nome repetido ou um tipo inválido ficavam no genérico.
+      const erros = errosDaAction(result, CAMPOS);
+      setErrosDeCampo(erros.porCampo);
+      setError(erros.texto);
       return;
     }
     toast.success(measure ? "Medida atualizada." : "Medida criada.");
@@ -129,12 +141,14 @@ export function MeasureDialog({
             <Label htmlFor="m-label">Nome da medida *</Label>
             <Input
               id="m-label"
+              {...ariaDoErro("m-label-erro", errosDeCampo.label)}
               value={label}
               onChange={(event) => setLabel(event.target.value)}
               placeholder="Ex.: Colher de sopa cheia"
               list="medidas-sugeridas"
               required
             />
+            <ErroDoCampo id="m-label-erro" mensagem={errosDeCampo.label} />
             <datalist id="medidas-sugeridas">
               {MEASURE_LABEL_SUGGESTIONS.map((suggestion) => (
                 <option key={suggestion} value={suggestion} />
@@ -145,7 +159,7 @@ export function MeasureDialog({
           <div className="space-y-1.5">
             <Label htmlFor="m-tipo">Tipo</Label>
             <Select value={unitType} onValueChange={setUnitType}>
-              <SelectTrigger id="m-tipo">
+              <SelectTrigger id="m-tipo" {...ariaDoErro("m-tipo-erro", errosDeCampo.unit_type)}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -156,6 +170,7 @@ export function MeasureDialog({
                 ))}
               </SelectContent>
             </Select>
+            <ErroDoCampo id="m-tipo-erro" mensagem={errosDeCampo.unit_type} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -163,21 +178,25 @@ export function MeasureDialog({
               <Label htmlFor="m-g">Equivale a (g)</Label>
               <Input
                 id="m-g"
+                {...ariaDoErro("m-g-erro", errosDeCampo.grams)}
                 inputMode="decimal"
                 value={grams}
                 onChange={(event) => setGrams(event.target.value)}
                 placeholder="Ex.: 25"
               />
+              <ErroDoCampo id="m-g-erro" mensagem={errosDeCampo.grams} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="m-ml">Equivale a (ml)</Label>
               <Input
                 id="m-ml"
+                {...ariaDoErro("m-ml-erro", errosDeCampo.milliliters)}
                 inputMode="decimal"
                 value={milliliters}
                 onChange={(event) => setMilliliters(event.target.value)}
                 placeholder="Ex.: 200"
               />
+              <ErroDoCampo id="m-ml-erro" mensagem={errosDeCampo.milliliters} />
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
@@ -197,7 +216,11 @@ export function MeasureDialog({
             <Switch id="m-padrao" checked={isDefault} onCheckedChange={setIsDefault} />
           </div>
 
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { setTrainingHabit } from "@/lib/actions/training-integrations";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 const NENHUM = "__nenhum__";
 
@@ -59,7 +60,7 @@ export function TrainingIntegrationsCard({
     const res = await setTrainingHabit({ habit_id: next === NENHUM ? null : next });
     setSaving(false);
     if (!res.ok) {
-      toast.error(res.error);
+      toast.error(mensagemDaAction(res));
       setValue(habitId ?? NENHUM);
       return;
     }

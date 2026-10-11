@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ariaDoErro, ErroDoCampo } from "@/components/shared/erro-do-campo";
 import {
   PHOTO_ACCEPT_ATTRIBUTE,
   PHOTO_ALLOWED_MIME,
@@ -30,8 +31,12 @@ import {
   PHOTO_MAX_BYTES,
 } from "@/lib/body/constants";
 import { uploadProgressPhoto } from "@/lib/actions/body-measurements";
+import { errosDaAction } from "@/lib/forms/mensagem-da-action";
 
 export const MAX_MB = Math.round(PHOTO_MAX_BYTES / (1024 * 1024));
+
+/** Campos desta tela que a action pode recusar: a mensagem aparece sob eles (D5). */
+const CAMPOS = ["file", "takenOn", "angle", "weightKg", "note"] as const;
 
 export function UploadDialog({
   open,
@@ -54,6 +59,7 @@ export function UploadDialog({
    */
   const [chosen, setChosen] = React.useState<{ file: File; url: string } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [errosDeCampo, setErrosDeCampo] = React.useState<Record<string, string>>({});
   const [pending, startTransition] = React.useTransition();
   const formRef = React.useRef<HTMLFormElement>(null);
 
@@ -91,6 +97,7 @@ export function UploadDialog({
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setErrosDeCampo({});
     if (!file) {
       setError("Escolha uma imagem.");
       return;
@@ -106,8 +113,10 @@ export function UploadDialog({
         onOpenChange(false);
         onSaved();
       } else {
-        setError(result.error);
-        toast.error(result.error);
+        const erros = errosDaAction(result, CAMPOS);
+        setErrosDeCampo(erros.porCampo);
+        setError(erros.texto);
+        toast.error(erros.texto);
       }
     });
   }
@@ -128,12 +137,14 @@ export function UploadDialog({
             <Label htmlFor="photo-file">Imagem</Label>
             <Input
               id="photo-file"
+              {...ariaDoErro("photo-file-erro", errosDeCampo.file)}
               name="file"
               type="file"
               accept={PHOTO_ACCEPT_ATTRIBUTE}
               onChange={(event) => pick(event.target.files?.[0] ?? null)}
               required
             />
+            <ErroDoCampo id="photo-file-erro" mensagem={errosDeCampo.file} />
             <p className="text-xs text-muted-foreground">
               JPG, PNG, WEBP ou HEIC, até {MAX_MB} MB.
             </p>
@@ -159,12 +170,13 @@ export function UploadDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="photo-date">Data</Label>
-              <Input id="photo-date" name="takenOn" type="date" defaultValue={hoje} required />
+              <Input id="photo-date" {...ariaDoErro("photo-date-erro", errosDeCampo.takenOn)} name="takenOn" type="date" defaultValue={hoje} required />
+              <ErroDoCampo id="photo-date-erro" mensagem={errosDeCampo.takenOn} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="photo-angle">Ângulo</Label>
               <Select name="angle" defaultValue="frontal">
-                <SelectTrigger id="photo-angle">
+                <SelectTrigger id="photo-angle" {...ariaDoErro("photo-angle-erro", errosDeCampo.angle)}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -175,6 +187,7 @@ export function UploadDialog({
                   ))}
                 </SelectContent>
               </Select>
+              <ErroDoCampo id="photo-angle-erro" mensagem={errosDeCampo.angle} />
             </div>
           </div>
 
@@ -185,16 +198,19 @@ export function UploadDialog({
               name="weightKg"
               inputMode="decimal"
               placeholder="72,4"
-              aria-describedby="photo-weight-hint"
+              aria-describedby={errosDeCampo.weightKg ? "photo-weight-hint photo-weight-erro" : "photo-weight-hint"}
+              aria-invalid={errosDeCampo.weightKg ? true : undefined}
             />
             <p id="photo-weight-hint" className="text-xs text-muted-foreground">
               Só como contexto da foto. O histórico de peso continua sendo o das medidas.
             </p>
+            <ErroDoCampo id="photo-weight-erro" mensagem={errosDeCampo.weightKg} />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="photo-note">Observação (opcional)</Label>
-            <Textarea id="photo-note" name="note" rows={2} maxLength={500} />
+            <Textarea id="photo-note" {...ariaDoErro("photo-note-erro", errosDeCampo.note)} name="note" rows={2} maxLength={500} />
+            <ErroDoCampo id="photo-note-erro" mensagem={errosDeCampo.note} />
           </div>
 
           {error && (

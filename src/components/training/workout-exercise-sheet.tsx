@@ -52,6 +52,7 @@ import {
   setWorkoutSets,
   updateWorkoutExercise,
 } from "@/lib/actions/training-workouts";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { Field } from "./field";
 
 const NONE = "__nenhum__";
@@ -277,7 +278,7 @@ function Inner({
 
     if (!configResult.ok) {
       setSaving(false);
-      toast.error(configResult.error);
+      toast.error(mensagemDaAction(configResult));
       return;
     }
 
@@ -307,7 +308,7 @@ function Inner({
     setSaving(false);
 
     if (!setsResult.ok) {
-      toast.error(setsResult.error);
+      toast.error(mensagemDaAction(setsResult));
       return;
     }
     toast.success("Exercício do treino salvo.");
@@ -832,7 +833,7 @@ function AlternativesTab({
     });
     setWorking(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     onChanged();
@@ -841,7 +842,7 @@ function AlternativesTab({
   async function remove(id: string) {
     const result = await removeWorkoutAlternative(id);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     onChanged();

@@ -57,6 +57,7 @@ import {
   fetchNutritionFoodDetail,
   toggleNutritionFavorite,
 } from "@/lib/actions/nutrition-foods";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { FoodFilters } from "@/components/nutrition/food-filters";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 
@@ -166,7 +167,7 @@ export function FoodsClient({
     setDetailOpen(true);
     const result = await fetchNutritionFoodDetail(foodId);
     if (result.ok) setDetail(result.data);
-    else toast.error(result.error);
+    else toast.error(mensagemDaAction(result));
   }
 
   /** Recarrega o detalhe aberto e a lista do servidor após qualquer mutação. */
@@ -180,14 +181,14 @@ export function FoodsClient({
 
   async function handleFavorite(food: FoodListItem) {
     const result = await toggleNutritionFavorite(food.id, !food.isFavorite);
-    if (!result.ok) return toast.error(result.error);
+    if (!result.ok) return toast.error(mensagemDaAction(result));
     toast.success(food.isFavorite ? "Removido dos favoritos." : "Adicionado aos favoritos.");
     void refresh(food.id);
   }
 
   async function handleDuplicate(foodId: string) {
     const result = await duplicateNutritionFood({ food_id: foodId });
-    if (!result.ok) return toast.error(result.error);
+    if (!result.ok) return toast.error(mensagemDaAction(result));
     toast.success("Cópia criada.", {
       description: "A cópia é sua e pode ser editada à vontade.",
     });
@@ -198,7 +199,7 @@ export function FoodsClient({
   async function handleDelete(food: FoodListItem) {
     if (!confirm(`Excluir “${food.name}”? Esta ação não pode ser desfeita.`)) return;
     const result = await deleteNutritionFood(food.id);
-    if (!result.ok) return toast.error(result.error);
+    if (!result.ok) return toast.error(mensagemDaAction(result));
     toast.success("Alimento excluído.");
     setDetailOpen(false);
     router.refresh();
@@ -221,7 +222,7 @@ export function FoodsClient({
     const result = await bulkNutritionFoodAction({ action, ids });
     setBusy(false);
 
-    if (!result.ok) return toast.error(result.error);
+    if (!result.ok) return toast.error(mensagemDaAction(result));
     toast.success(`${result.data.affected} alimento(s) atualizado(s).`, {
       description:
         result.data.skipped > 0
@@ -334,7 +335,7 @@ export function FoodsClient({
                   onDuplicate={() => void handleDuplicate(food.id)}
                   onEdit={async () => {
                     const result = await fetchNutritionFoodDetail(food.id);
-                    if (!result.ok) return toast.error(result.error);
+                    if (!result.ok) return toast.error(mensagemDaAction(result));
                     setEditing(result.data);
                     setFormOpen(true);
                   }}
@@ -371,7 +372,7 @@ export function FoodsClient({
           onToggleFavorite={() => {
             if (!detail) return;
             void toggleNutritionFavorite(detail.id, !detail.isFavorite).then((result) => {
-              if (!result.ok) return toast.error(result.error);
+              if (!result.ok) return toast.error(mensagemDaAction(result));
               void refresh(detail.id);
             });
           }}

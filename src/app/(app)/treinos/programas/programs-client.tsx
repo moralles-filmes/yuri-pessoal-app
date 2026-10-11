@@ -78,6 +78,7 @@ import {
   setTrainingProgramStatus,
   updateProgramWorkout,
 } from "@/lib/actions/training-programs";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { useChaveDeAbertura, useItemRetido } from "@/components/shared/use-item-retido";
 import type { DependencyLine } from "@/components/training/delete-with-destination-dialog";
@@ -183,7 +184,7 @@ export function ProgramsClient({
     });
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(
@@ -200,7 +201,7 @@ export function ProgramsClient({
     const result = await setTrainingProgramStatus({ id: program.id, status });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(`Programa ${PROGRAM_STATUS_LABELS[status].toLowerCase()}.`);
@@ -212,7 +213,7 @@ export function ProgramsClient({
     const result = await activateTrainingProgram(program.id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     // Avisa, não bloqueia: ter mais de um programa em uso é escolha legítima do usuário.
@@ -229,7 +230,7 @@ export function ProgramsClient({
     const result = await duplicateTrainingProgram(program.id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Cópia criada como rascunho. Ajuste antes de usar.");
@@ -462,7 +463,7 @@ function ProgramCard({
     setWorking(false);
     setAdding("");
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     onChanged();
@@ -470,7 +471,7 @@ function ProgramCard({
 
   async function reorder(orderedIds: string[]) {
     const result = await reorderProgramWorkouts({ ids: orderedIds });
-    if (!result.ok) toast.error(result.error);
+    if (!result.ok) toast.error(mensagemDaAction(result));
     else onChanged();
   }
 
@@ -487,7 +488,7 @@ function ProgramCard({
   async function remove(linkId: string) {
     const result = await removeWorkoutFromProgram(linkId);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Treino tirado do programa. Ele continua existindo como avulso.");
@@ -499,7 +500,7 @@ function ProgramCard({
       ? current.filter((day) => day !== weekday)
       : [...current, weekday];
     const result = await updateProgramWorkout({ id: linkId, suggested_weekdays: next });
-    if (!result.ok) toast.error(result.error);
+    if (!result.ok) toast.error(mensagemDaAction(result));
     else onChanged();
   }
 

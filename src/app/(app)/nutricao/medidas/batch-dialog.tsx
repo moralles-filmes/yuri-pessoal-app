@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ariaDoErro, ErroDoCampo } from "@/components/shared/erro-do-campo";
 import {
   MEASUREMENT_CATEGORY_LABELS,
   MEASUREMENT_CATEGORY_ORDER,
@@ -29,7 +30,11 @@ import {
   MEASUREMENT_CONDITIONS,
 } from "@/lib/body/constants";
 import { saveMeasurementBatch } from "@/lib/actions/body-measurements";
+import { errosDaAction } from "@/lib/forms/mensagem-da-action";
 import type { MeasurementType } from "@/lib/body/types";
+
+/** Campos desta tela que a action pode recusar: a mensagem aparece sob eles (D5). */
+const CAMPOS = ["measuredOn", "measuredAt", "condition", "note", "values"] as const;
 
 export function BatchDialog({
   open,
@@ -46,9 +51,11 @@ export function BatchDialog({
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
+  const [errosDeCampo, setErrosDeCampo] = React.useState<Record<string, string>>({});
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setErrosDeCampo({});
     const data = new FormData(event.currentTarget);
 
     // Campo em branco é IGNORADO, não gravado como zero: quem não mediu o pescoço hoje não
@@ -75,8 +82,10 @@ export function BatchDialog({
         onOpenChange(false);
         onSaved();
       } else {
-        setError(result.error);
-        toast.error(result.error);
+        const erros = errosDaAction(result, CAMPOS);
+        setErrosDeCampo(erros.porCampo);
+        setError(erros.texto);
+        toast.error(erros.texto);
       }
     });
   }
@@ -96,16 +105,18 @@ export function BatchDialog({
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="b-date">Data</Label>
-              <Input id="b-date" name="measuredOn" type="date" defaultValue={hoje} required />
+              <Input id="b-date" {...ariaDoErro("b-date-erro", errosDeCampo.measuredOn)} name="measuredOn" type="date" defaultValue={hoje} required />
+              <ErroDoCampo id="b-date-erro" mensagem={errosDeCampo.measuredOn} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="b-time">Horário</Label>
-              <Input id="b-time" name="measuredAt" type="time" />
+              <Input id="b-time" {...ariaDoErro("b-time-erro", errosDeCampo.measuredAt)} name="measuredAt" type="time" />
+              <ErroDoCampo id="b-time-erro" mensagem={errosDeCampo.measuredAt} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="b-condition">Condição</Label>
               <Select name="condition" defaultValue="nenhuma">
-                <SelectTrigger id="b-condition">
+                <SelectTrigger id="b-condition" {...ariaDoErro("b-condition-erro", errosDeCampo.condition)}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -117,6 +128,7 @@ export function BatchDialog({
                   ))}
                 </SelectContent>
               </Select>
+              <ErroDoCampo id="b-condition-erro" mensagem={errosDeCampo.condition} />
             </div>
           </div>
 
@@ -150,10 +162,12 @@ export function BatchDialog({
               </div>
             ))}
           </div>
+          <ErroDoCampo id="b-values-erro" mensagem={errosDeCampo.values} />
 
           <div className="space-y-1.5">
             <Label htmlFor="b-note">Observação (opcional)</Label>
-            <Textarea id="b-note" name="note" rows={2} maxLength={500} />
+            <Textarea id="b-note" {...ariaDoErro("b-note-erro", errosDeCampo.note)} name="note" rows={2} maxLength={500} />
+            <ErroDoCampo id="b-note-erro" mensagem={errosDeCampo.note} />
           </div>
 
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

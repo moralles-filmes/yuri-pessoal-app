@@ -21,6 +21,7 @@ import type { ResolvedGoal } from "@/lib/training/goal-queries";
 import {
   recordGoalProgress,
 } from "@/lib/actions/training-goals";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 export function RecordProgressDialog({
   goal,
@@ -59,7 +60,7 @@ export function RecordProgressDialog({
     });
     setSaving(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Progresso registrado.");

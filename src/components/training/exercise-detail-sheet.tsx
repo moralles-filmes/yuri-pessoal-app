@@ -40,6 +40,7 @@ import {
   setTrainingExercisePref,
 } from "@/lib/actions/training-exercises";
 import type { ExerciseAlternative, ExerciseListItem } from "@/lib/training/types";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 export function ExerciseDetailSheet({
   open,
@@ -298,7 +299,7 @@ function AlternativesTab({
     });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     setSelected("");
@@ -312,7 +313,7 @@ function AlternativesTab({
     const result = await removeTrainingAlternative(id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Alternativa removida.");
@@ -414,7 +415,7 @@ function PersonalizeTab({
     });
     setSaving(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Preferência salva.");
