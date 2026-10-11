@@ -375,7 +375,7 @@ export function WorkoutBuilderClient({
             </ul>
             <p className="mt-3 text-xs text-muted-foreground">
               Versões antigas servem para comparar intenções. O que protege o histórico de
-              execução é o registro da sessão, que chega na Subfase 17-C.
+              execução é o registro de cada sessão, congelado quando o treino começa.
             </p>
           </CardContent>
         </Card>

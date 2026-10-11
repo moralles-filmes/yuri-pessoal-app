@@ -92,10 +92,15 @@ export function TrainingIntegrationsCard({
                 <Label htmlFor="training-habit" className="text-sm font-medium">
                   Hábito que reflete os treinos
                 </Label>
+                {/* T (REDESIGN-07-C): a frase anterior omitia o que o reflexo faz com o registro
+                    manual (substitui, e apaga o dia sem treino concluído) e o "abandonar". É a
+                    mesma substância de `components/habits/vinculo-treinos.tsx` (07-B), lida em
+                    `habit-sync.ts`; `vinculo-treinos-frases.test.ts` amarra as duas. */}
                 <p className="text-xs text-muted-foreground">
-                  Ao concluir um treino, o check-in daquele dia é preenchido a partir das
-                  sessões concluídas — sem você registrar a mesma coisa duas vezes. Excluir ou
-                  reabrir uma sessão atualiza o dia de volta.
+                  Ao concluir, reabrir, abandonar ou excluir um treino, o check-in daquele dia é
+                  recalculado a partir das sessões concluídas: o valor marcado à mão é
+                  substituído, e o registro do dia é apagado (com a observação) se não restar
+                  treino concluído.
                 </p>
               </div>
               {habits.length === 0 ? (

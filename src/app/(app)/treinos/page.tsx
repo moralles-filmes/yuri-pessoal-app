@@ -28,7 +28,6 @@ import { formatMeasurement } from "@/lib/body/measurements";
 import {
   DERIVED_SCHEDULE_STATUS_LABELS,
   TRAINING_BASE_PATH,
-  TRAINING_SECTIONS,
 } from "@/lib/training/constants";
 import { getTrainingPreferences } from "@/lib/training/queries";
 import {
@@ -173,7 +172,6 @@ export default async function TreinosPage() {
   const next = nextScheduledEntry(scheduled, hoje);
 
   const weightType = measurementTypes.find((type) => type.slug === "peso");
-  const upcoming = TRAINING_SECTIONS.filter((section) => section.status !== "pronto");
 
   return (
     <div className="space-y-6">
@@ -567,36 +565,6 @@ export default async function TreinosPage() {
           hint={`${openGoals.length} em andamento`}
         />
       </div>
-
-      {upcoming.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">O que ainda vem</CardTitle>
-            <CardDescription>
-              O módulo é entregue em 6 subfases. Cada seção abaixo já tem rota e diz em qual delas
-              chega — nada de link morto nem de tela que finge funcionar.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {upcoming.map((section) => (
-                <li
-                  key={section.slug}
-                  className="flex items-start justify-between gap-3 rounded-lg border p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{section.title}</p>
-                    <p className="text-xs text-muted-foreground">{section.description}</p>
-                  </div>
-                  <Badge variant="secondary" className="shrink-0 text-[10px]">
-                    {section.phase.replace("Subfase ", "")}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline" size="sm">

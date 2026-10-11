@@ -22,7 +22,6 @@ import {
   Trophy,
   type LucideIcon,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import type { NavegacaoDeModulo } from "@/components/shared/module-shell";
 import { TRAINING_SECTIONS } from "@/lib/training/constants";
 
@@ -72,35 +71,3 @@ export const NAV_DE_TREINOS: NavegacaoDeModulo = {
     }),
   })),
 };
-
-/**
- * Tela de seção ainda não implementada. Diz exatamente o que vem e em qual subfase — o
- * usuário nunca fica adivinhando se está quebrado ou se ainda não existe.
- *
- * ⚠️ REDESIGN-02-E: hoje as 13 seções estão `pronto` e este componente não tem chamador.
- * Ele ficou de pé porque removê-lo é limpeza de módulo (REDESIGN-07), não unificação de
- * navegação — mas saiba que ele não é exercitado por tela nenhuma.
- */
-export function TrainingSectionPlaceholder({ slug }: { slug: string }) {
-  const section = sectionBySlug.get(slug);
-  if (!section) return null;
-  const Icon = ICONS[section.icon] ?? Dumbbell;
-
-  return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-xl border border-dashed p-8 text-center">
-      <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
-        <Icon className="size-6" />
-      </div>
-      <h2 className="mt-4 text-lg font-semibold tracking-tight">{section.title}</h2>
-      <p className="mt-1 max-w-md text-sm text-muted-foreground">{section.description}</p>
-      <Badge variant="secondary" className="mt-4 gap-1.5">
-        <span className="size-1.5 rounded-full bg-primary" />
-        {section.phase}
-      </Badge>
-      <p className="mt-4 max-w-md text-xs text-muted-foreground">
-        Esta seção ainda não foi construída. O catálogo de exercícios, os treinos-modelo, os
-        programas e o planejamento semanal já estão prontos e são a base dela.
-      </p>
-    </div>
-  );
-}

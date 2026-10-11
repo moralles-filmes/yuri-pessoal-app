@@ -89,6 +89,16 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "app/(app)/treinos/historico/history-client.tsx", exige: /onChange=\{\(event\) => setDeTexto\(event\.target\.value\)\}/, porque: "a data De do histórico não grava na URL a cada segmento" },
   { arquivo: "app/(app)/treinos/historico/history-client.tsx", exige: /<Label htmlFor=\{id\}/, porque: "o rótulo do filtro do histórico é associado ao campo" },
   { arquivo: "components/nutrition/food-filters.tsx", exige: /<Label htmlFor="filtro-categoria"/, porque: "o rótulo do filtro de Alimentos é associado ao campo" },
+
+  // G — o gráfico nunca é a única leitura do dado
+  { arquivo: "components/training/training-charts.tsx", exige: /function EquivalentTable\(/, porque: "a tabela equivalente mora na fachada: sai no HTML do servidor, fora do recharts" },
+  { arquivo: "components/training/training-charts.tsx", exige: /<EquivalentTable points=\{props\.points\} valueLabel=\{props\.valueLabel\} \/>/, porque: "cada gráfico de Treinos traz a sua tabela" },
+  { arquivo: "app/(app)/nutricao/relatorios/reports-client.tsx", exige: /<TabelaDoGrafico caption="Energia por dia registrado"/, porque: "o gráfico de energia por dia tem leitura textual" },
+  { arquivo: "app/(app)/nutricao/relatorios/reports-client.tsx", exige: /<TabelaDoGrafico caption="Consumo de energia no período"/, porque: "o gráfico de consumo tem leitura textual" },
+  { arquivo: "app/(app)/nutricao/relatorios/reports-client.tsx", exige: /<MeasurementTable\b/, porque: "a medida corporal tem a tabela ao lado do gráfico" },
+  { arquivo: "app/(app)/nutricao/relatorios/reports-client.tsx", exige: /aria-label="Medida exibida no gráfico"/, porque: "o seletor da medida tem nome" },
+  // T — textos que descrevem o sistema de hoje
+  { arquivo: "app/(app)/treinos/sessao/revisar/page.tsx", exige: /O histórico completo fica em Treinos → Histórico\./, porque: "a revisão aponta para o histórico que existe" },
 ];
 
 /** O que não pode voltar. */
@@ -104,6 +114,13 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: "components/training/integrations-card.tsx", exige: /href="\/habitos"/, porque: "link para o topo de Hábitos: criar o hábito é em Gerenciar" },
   { arquivo: "components/nutrition/food-filters.tsx", exige: /onChange\(\{\s*\[key\]/, porque: "o campo numérico voltaria a gravar na URL a cada tecla" },
   { arquivo: "app/(app)/treinos/historico/history-client.tsx", exige: /setParam\("(?:min_min|min_volume|de|ate)", event\.target\.value/, porque: "o campo voltaria a gravar na URL a cada tecla" },
+  { arquivo: "components/training/training-charts-impl.tsx", exige: /EquivalentTable/, porque: "a tabela voltaria a existir só depois de o recharts carregar" },
+  { arquivo: "app/(app)/treinos/sessao/revisar/page.tsx", exige: /Subfase/, porque: "texto de quando o módulo estava em construção" },
+  { arquivo: "app/(app)/treinos/calendario/outcome-dialog.tsx", exige: /chega na Subfase/, porque: "texto de quando o módulo estava em construção" },
+  { arquivo: "app/(app)/treinos/treinos/[id]/builder-client.tsx", exige: /chega na Subfase/, porque: "texto de quando o módulo estava em construção" },
+  { arquivo: "app/(app)/treinos/page.tsx", exige: /O que ainda vem/, porque: "o card de subfases futuras: todas as seções estão prontas" },
+  { arquivo: "components/nutrition/nutrition-nav.tsx", exige: /SectionPlaceholder/, porque: "tela de espera sem chamador (todas as seções prontas)" },
+  { arquivo: "components/training/training-nav.tsx", exige: /SectionPlaceholder/, porque: "tela de espera sem chamador (todas as seções prontas)" },
 ];
 
 const fonte = (arquivo: string) => semComentarios(fs.readFileSync(path.join(SRC, arquivo), "utf8"));

@@ -57,8 +57,9 @@ export function OutcomeDialog({
         <DialogHeader>
           <DialogTitle>Desfecho de {shortDate(entry.scheduledDate)}</DialogTitle>
           <DialogDescription>
-            Registrar um treino como <strong>concluído</strong> é papel da sessão ao vivo, que
-            chega na Subfase 17-C. Aqui você marca o que não aconteceu — e por quê.
+            Registrar um treino como <strong>concluído</strong> é papel da sessão ao vivo: ele fica
+            concluído quando você finaliza o treino. Aqui você marca o que não aconteceu — e por
+            quê.
           </DialogDescription>
         </DialogHeader>
 
