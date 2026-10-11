@@ -23,6 +23,8 @@ function cardDoMes(mes: string): FinanceCardData {
     mes,
     saldo: 12345.67,
     entradas: 5000,
+    entradasMeu: 5000,
+    entradasTerceiros: 0,
     saidas: 3200,
     meu: 2700,
     terceiros: 500,

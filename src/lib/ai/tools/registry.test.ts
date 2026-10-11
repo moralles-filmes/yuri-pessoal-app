@@ -35,6 +35,29 @@ describe("03-B2 (B3) — a descrição de finance.get_balances acompanha o que e
   });
 });
 
+/**
+ * REDESIGN-03-C (A5) — a descrição vai ao modelo. Se ela não disser que a entrada agora é
+ * partida, o modelo vê `entradas_meu`/`entradas_terceiros` sem saber que somam `entradas` — e
+ * pode somar os três (o achado I1 da 03-B2 foi exatamente uma descrição que ficou para trás).
+ */
+describe("03-C (A5) — as descrições do Financeiro acompanham a separação da entrada", () => {
+  it("finance.get_spending declara os dois campos novos e que eles particionam as entradas", () => {
+    const ferramenta = AI_TOOL_REGISTRY.find((t) => t.name === "finance.get_spending");
+    expect(ferramenta).toBeDefined();
+    expect(ferramenta!.description).toContain("entradas_meu");
+    expect(ferramenta!.description).toContain("entradas_terceiros");
+    expect(ferramenta!.description).toContain("`entradas_meu` + `entradas_terceiros` = `entradas`");
+  });
+
+  it("finance.lancar_transacao declara que a receita lançada por ela é do usuário", () => {
+    // Invariante 100: a ferramenta não oferece de quem é a entrada — a frase diz onde se faz.
+    const ferramenta = AI_TOOL_REGISTRY.find((t) => t.name === "finance.lancar_transacao");
+    expect(ferramenta).toBeDefined();
+    expect(ferramenta!.description).toContain("registrada como renda do usuário");
+    expect(ferramenta!.description).toContain("dinheiro de terceiros é pela tela do Financeiro");
+  });
+});
+
 describe("integridade do registry (18-B)", () => {
   /**
    * ⚠️ ESTE TESTE MUDOU DE AFIRMAÇÃO NO BLOCO 4, E A MUDANÇA É O REGISTRO DE UMA DECISÃO.
