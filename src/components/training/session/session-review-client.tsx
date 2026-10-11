@@ -27,7 +27,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, Check, Flag, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Flag, ListOrdered, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { cn } from "@/lib/utils";
 import { formatDate, timeInSaoPaulo } from "@/lib/format";
@@ -314,7 +315,11 @@ export function SessionReviewClient({
         </CardHeader>
         <CardContent className="space-y-2">
           {session.exercises.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nenhum exercício registrado.</p>
+            <EmptyState
+              icon={ListOrdered}
+              title="Nenhum exercício registrado"
+              className="border-0 bg-transparent py-6"
+            />
           )}
           {session.exercises.map((exercise) => {
             const done = exercise.sets.filter((set) => isSetDone(set.status));
@@ -556,8 +561,11 @@ export function SessionReviewClient({
                 <Trash2 className="size-4" />
                 Descartar
               </Button>
+              {/* V (REDESIGN-07-C): com `flex-1` (base 0) o botão nunca quebrava de linha — a
+                  390 px ficava com 129 px para 137 px de conteúdo e o texto vazava. No celular ele
+                  ocupa a própria linha; do `sm` em diante volta a dividir a linha. */}
               <Button
-                className="h-12 min-w-0 flex-1 text-base"
+                className="h-12 w-full text-base sm:w-auto sm:min-w-0 sm:flex-1"
                 onClick={() => handleFinish(false)}
                 disabled={busy || !encerramento.ok}
               >

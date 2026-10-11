@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/shared/empty-state";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
@@ -298,9 +299,11 @@ export function PrepareChooseClient({
           </div>
 
           {filtered.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              Nenhum treino encontrado.
-            </p>
+            <EmptyState
+              icon={Search}
+              title="Nenhum treino encontrado"
+              className="border-0 bg-transparent py-6"
+            />
           ) : (
             filtered.map((workout) => {
               const summary = summarizeWorkout(workout.exercises, {

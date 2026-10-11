@@ -41,6 +41,7 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/shared/empty-state";
 import {
   Dialog,
   DialogContent,
@@ -276,15 +277,17 @@ export function SessionLiveClient({
           onPauseToggle={handlePauseToggle}
           isPaused={isPaused}
         />
-        <div className="rounded-2xl border border-dashed p-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            Este treino ainda não tem exercício. Adicione o primeiro para começar a registrar.
-          </p>
-          <Button className="mt-4 h-12" onClick={() => setPickerOpen(true)}>
+        <EmptyState
+          icon={ListOrdered}
+          title="Este treino ainda não tem exercício"
+          description="Adicione o primeiro para começar a registrar."
+          className="py-8"
+        >
+          <Button className="h-12" onClick={() => setPickerOpen(true)}>
             <Plus className="size-4" />
             Adicionar exercício
           </Button>
-        </div>
+        </EmptyState>
         <AddExerciseSheet
           open={pickerOpen}
           onOpenChange={setPickerOpen}

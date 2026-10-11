@@ -142,6 +142,15 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "components/nutrition/food-picker-dialog.tsx", exige: /results\.length === 0 && \(\s*<p\b/, porque: "picker vazio continua <p>" },
   { arquivo: "components/nutrition/recipe-picker-dialog.tsx", exige: /results\.length === 0 && \(\s*<p\b/, porque: "picker vazio continua <p>" },
   { arquivo: "components/nutrition/substitution-compare-dialog.tsx", exige: /options\.length === 0 \? \(\s*<p\b/, porque: "diálogo sem alternativa continua <p>" },
+
+  // V · Sessão, Preparar e Revisar
+  { arquivo: "components/training/session/session-review-client.tsx", exige: /className="h-12 w-full text-base sm:w-auto sm:min-w-0 sm:flex-1"/, porque: "a 390 px \"Finalizar e salvar\" ocupa a própria linha (com flex-1 ficava com 129 px para 137 de conteúdo)" },
+  { arquivo: "components/training/session/session-review-client.tsx", exige: /session\.exercises\.length === 0 && \(\s*<EmptyState[^>]*?className="border-0 bg-transparent py-6"/, porque: "revisão sem exercício usa o EmptyState dentro do Card" },
+  { arquivo: "components/training/session/session-live-client.tsx", exige: /<EmptyState\s+icon=\{ListOrdered\}\s+title="Este treino ainda não tem exercício"[^>]*?className="py-8"/, porque: "sessão sem exercício usa o EmptyState solto, com o botão de adicionar" },
+  { arquivo: "components/training/session/prepare-choose-client.tsx", exige: /filtered\.length === 0 \? \(\s*<EmptyState[^>]*?className="border-0 bg-transparent py-6"/, porque: "busca sem treino usa o EmptyState dentro do Card" },
+  // Exceção DECLARADA: gaveta fica <p>.
+  { arquivo: "components/training/session/add-exercise-sheet.tsx", exige: /results\.length === 0 \? \(\s*<p\b/, porque: "busca vazia dentro da gaveta continua <p>" },
+  { arquivo: "components/training/session/substitute-sheet.tsx", exige: /groups\.length === 0 && \(\s*<p\b/, porque: "busca vazia dentro da gaveta continua <p>" },
 ];
 
 /** O que não pode voltar. */
@@ -167,6 +176,7 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /percent \?\? 0/, porque: "meta zero viraria \"0% da meta\" no nome da barra" },
   { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /aria-valuenow=\{[^}]*Math\.round\(percent\)\}/, porque: "aria-valuenow sem limite passa de aria-valuemax com o consumo acima da meta" },
   { arquivo: "app/(app)/nutricao/medidas/measurements-client.tsx", exige: /aria-label="Progresso da meta"/, porque: "barra sem dizer qual medida" },
+  { arquivo: "components/training/session/session-review-client.tsx", exige: /className="h-12 min-w-0 flex-1 text-base"/, porque: "com flex-1 sem quebra, o botão de finalizar vaza a 390 px" },
 ];
 
 const fonte = (arquivo: string) => semComentarios(fs.readFileSync(path.join(SRC, arquivo), "utf8"));
