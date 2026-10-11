@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { StatementStatusBadge } from "@/components/financeiro/badges";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
 import { CategoriaChart } from "@/components/dashboard/categoria-chart";
 import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-chart";
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
@@ -110,6 +111,8 @@ export function DashboardClient({
     return [...map.values()];
   }, [faturas]);
 
+  const entradasNoCard = apresentarEntradas(resumo);
+
   return (
     <div className="space-y-6">
       {/* Filtro de período */}
@@ -163,9 +166,9 @@ export function DashboardClient({
         <StatCard label="Saldo atual" value={formatCurrency(saldo)} icon={Wallet} hint="Soma das contas" />
         <StatCard
           label="Entradas do mês"
-          value={formatCurrency(resumo.entradas)}
+          value={formatCurrency(entradasNoCard.valor)}
           icon={ArrowDownLeft}
-          hint="vs. mês anterior"
+          hint={entradasNoCard.detalhe ? `vs. mês anterior · ${entradasNoCard.detalhe}` : "vs. mês anterior"}
           trend={{
             value: pctText(comparativo.deltaEntradasPct),
             direction:
