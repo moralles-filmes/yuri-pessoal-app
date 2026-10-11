@@ -36,3 +36,16 @@ export const measurementsLink = () => "/nutricao/medidas";
  * Errar isso mandaria a notificação de validade para um 404.
  */
 export const pantryLink = () => "/nutricao/compras?aba=despensa";
+
+/**
+ * A água é do módulo Hábitos (invariante 8 da Dieta): a Dieta LINKA, não duplica — e linka
+ * para a visão da água, não para o topo de Hábitos (REDESIGN-07-C, D6).
+ */
+export const waterLink = () => "/habitos?view=agua";
+
+/**
+ * A semana do planejamento que começa em `weekStart`. Sem `visao=semana` a página abre a
+ * visão padrão (o dia) — a notificação "a semana que vem não tem refeições" caía num dia.
+ */
+export const planningWeekLink = (weekStart: string) =>
+  `/nutricao/planejamento?data=${weekStart}&visao=semana`;

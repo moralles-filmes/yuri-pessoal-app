@@ -111,7 +111,32 @@ export function HistoryClient({
   const [search, setSearch] = useUrlText(urlFilters.search, (value) =>
     setParam("q", value || null),
   );
-  const filters = React.useMemo(() => ({ ...urlFilters, search }), [urlFilters, search]);
+  // G5 (REDESIGN-07-C): duração mínima, volume mínimo e as datas De/Até gravavam na URL a cada
+  // tecla — o mesmo defeito da busca (página force-dynamic: digitar rápido perdia dígito, e o
+  // campo de data pulava de segmento). Mesmo caminho: texto local, URL depois da pausa.
+  const [deTexto, setDeTexto] = useUrlText(params.de ?? "", (value) => setParam("de", value || null));
+  const [ateTexto, setAteTexto] = useUrlText(params.ate ?? "", (value) => setParam("ate", value || null));
+  const [minutosTexto, setMinutosTexto] = useUrlText(params.min_min ?? "", (value) =>
+    setParam("min_min", value || null),
+  );
+  const [volumeTexto, setVolumeTexto] = useUrlText(params.min_volume ?? "", (value) =>
+    setParam("min_volume", value || null),
+  );
+  // O filtro aplicado lê o texto LOCAL pela mesma regra da URL (historyFiltersFromParams):
+  // a lista responde na hora, e a leitura não ganha uma segunda implementação.
+  const filters = React.useMemo(
+    () => ({
+      ...historyFiltersFromParams({
+        ...params,
+        de: deTexto || undefined,
+        ate: ateTexto || undefined,
+        min_min: minutosTexto || undefined,
+        min_volume: volumeTexto || undefined,
+      }),
+      search,
+    }),
+    [params, deTexto, ateTexto, minutosTexto, volumeTexto, search],
+  );
 
   const metricOptions: MetricOptions = {
     includeWarmup: preferences.includeWarmup,
@@ -271,19 +296,21 @@ export function HistoryClient({
 
               {filtersOpen && (
                 <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <FilterField label="De">
+                  <FilterField label="De" id="historico-de">
                     <Input
+                      id="historico-de"
                       type="date"
-                      value={filters.from ?? ""}
-                      onChange={(event) => setParam("de", event.target.value || null)}
+                      value={deTexto}
+                      onChange={(event) => setDeTexto(event.target.value)}
                       className="h-9"
                     />
                   </FilterField>
-                  <FilterField label="Até">
+                  <FilterField label="Até" id="historico-ate">
                     <Input
+                      id="historico-ate"
                       type="date"
-                      value={filters.to ?? ""}
-                      onChange={(event) => setParam("ate", event.target.value || null)}
+                      value={ateTexto}
+                      onChange={(event) => setAteTexto(event.target.value)}
                       className="h-9"
                     />
                   </FilterField>
@@ -331,23 +358,25 @@ export function HistoryClient({
                     ]}
                   />
 
-                  <FilterField label="Duração mínima (min)">
+                  <FilterField label="Duração mínima (min)" id="historico-min-minutos">
                     <Input
+                      id="historico-min-minutos"
                       type="number"
                       inputMode="numeric"
                       min={0}
-                      value={filters.minMinutes ?? ""}
-                      onChange={(event) => setParam("min_min", event.target.value || null)}
+                      value={minutosTexto}
+                      onChange={(event) => setMinutosTexto(event.target.value)}
                       className="h-9"
                     />
                   </FilterField>
-                  <FilterField label="Volume mínimo (kg)">
+                  <FilterField label="Volume mínimo (kg)" id="historico-min-volume">
                     <Input
+                      id="historico-min-volume"
                       type="number"
                       inputMode="numeric"
                       min={0}
-                      value={filters.minVolumeKg ?? ""}
-                      onChange={(event) => setParam("min_volume", event.target.value || null)}
+                      value={volumeTexto}
+                      onChange={(event) => setVolumeTexto(event.target.value)}
                       className="h-9"
                     />
                   </FilterField>
@@ -370,14 +399,14 @@ export function HistoryClient({
                     />
                   </div>
 
-                  <FilterField label="Agrupar por">
+                  <FilterField label="Agrupar por" id="historico-agrupar">
                     <Select
                       value={filters.grouping}
                       onValueChange={(value) =>
                         setParam("agrupar", value === "nenhum" ? null : value)
                       }
                     >
-                      <SelectTrigger className="h-9">
+                      <SelectTrigger id="historico-agrupar" className="h-9">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -390,14 +419,14 @@ export function HistoryClient({
                     </Select>
                   </FilterField>
 
-                  <FilterField label="Ordenar por">
+                  <FilterField label="Ordenar por" id="historico-ordem">
                     <Select
                       value={filters.sort}
                       onValueChange={(value) =>
                         setParam("ordem", value === "recentes" ? null : value)
                       }
                     >
-                      <SelectTrigger className="h-9">
+                      <SelectTrigger id="historico-ordem" className="h-9">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -922,10 +951,13 @@ function TimelineView({ items, options }: { items: HistoryItem[]; options: Metri
 
 /* ═══════════════════════════ Campos ═══════════════════════════ */
 
-function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+/** Rótulo ASSOCIADO ao campo (`htmlFor` → `id`): sem isso o campo não tinha nome (G5). */
+function FilterField({ label, id, children }: { label: string; id?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Label htmlFor={id} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
       {children}
     </div>
   );
@@ -949,7 +981,7 @@ function FilterSelect({
         onValueChange={(next) => onChange(next === ALL ? null : next)}
         disabled={options.length === 0}
       >
-        <SelectTrigger className="h-9">
+        <SelectTrigger aria-label={label} className="h-9">
           <SelectValue placeholder="Todos" />
         </SelectTrigger>
         <SelectContent>

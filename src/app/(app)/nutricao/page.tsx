@@ -48,6 +48,7 @@ import {
 import { getMealTemplates, getRecipes } from "@/lib/nutrition/recipe-queries";
 import { AdherenceBadge, GoalProgressBar } from "@/components/nutrition/goal-progress-bar";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
+import { waterLink } from "@/lib/search/nutrition-links";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Dieta e Alimentação" };
@@ -214,7 +215,7 @@ export default async function NutricaoPage() {
                   </span>
                 </p>
                 <Link
-                  href="/habitos"
+                  href={waterLink()}
                   className="text-xs text-primary underline-offset-4 hover:underline"
                 >
                   Registrar em Hábitos
@@ -224,7 +225,7 @@ export default async function NutricaoPage() {
               <>
                 <p className="text-sm">Sem hábito de água.</p>
                 <Link
-                  href="/habitos"
+                  href={waterLink()}
                   className="text-xs text-primary underline-offset-4 hover:underline"
                 >
                   Criar em Hábitos

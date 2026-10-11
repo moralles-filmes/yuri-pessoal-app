@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { setTrainingHabit } from "@/lib/actions/training-integrations";
 import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
+import { habitsManageLink } from "@/lib/search/training-links";
 
 const NENHUM = "__nenhum__";
 
@@ -100,7 +101,7 @@ export function TrainingIntegrationsCard({
               {habits.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   Nenhum hábito cadastrado ainda.{" "}
-                  <Link href="/habitos" className="underline underline-offset-2">
+                  <Link href={habitsManageLink()} className="underline underline-offset-2">
                     Criar em Hábitos
                   </Link>
                   .

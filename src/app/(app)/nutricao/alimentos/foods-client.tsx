@@ -58,7 +58,7 @@ import {
   toggleNutritionFavorite,
 } from "@/lib/actions/nutrition-foods";
 import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
-import { FoodFilters } from "@/components/nutrition/food-filters";
+import { FoodFilters, type CampoNumerico } from "@/components/nutrition/food-filters";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 
 // Os diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form`
@@ -79,6 +79,16 @@ const MeasureDialog = dynamic(
 import { MacroChip } from "@/components/nutrition/nutrient-value";
 
 const PAGE_SIZE = 60;
+
+/** Número da URL → texto do campo (vazio = sem filtro). */
+const numeroComoTexto = (valor: number | null) => (valor === null ? "" : String(valor));
+/** Texto digitado → número do filtro; vazio ou inválido = sem filtro (como antes: `""` → null). */
+const textoComoNumero = (texto: string): number | null => {
+  const t = texto.trim();
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
 
 export function FoodsClient({
   foods,
@@ -116,7 +126,37 @@ export function FoodsClient({
   const [search, setSearch] = useUrlText(urlFilters.search, (value) =>
     commitFilters({ ...urlFilters, search: value }),
   );
-  const filters = React.useMemo(() => ({ ...urlFilters, search }), [urlFilters, search]);
+  // L2 (REDESIGN-07-C): os quatro campos numéricos pelo mesmo caminho da busca.
+  const [minKcal, setMinKcal] = useUrlText(numeroComoTexto(urlFilters.minKcal), (value) =>
+    commitFilters({ ...urlFilters, minKcal: textoComoNumero(value) }),
+  );
+  const [maxKcal, setMaxKcal] = useUrlText(numeroComoTexto(urlFilters.maxKcal), (value) =>
+    commitFilters({ ...urlFilters, maxKcal: textoComoNumero(value) }),
+  );
+  const [minProtein, setMinProtein] = useUrlText(numeroComoTexto(urlFilters.minProtein), (value) =>
+    commitFilters({ ...urlFilters, minProtein: textoComoNumero(value) }),
+  );
+  const [maxProtein, setMaxProtein] = useUrlText(numeroComoTexto(urlFilters.maxProtein), (value) =>
+    commitFilters({ ...urlFilters, maxProtein: textoComoNumero(value) }),
+  );
+  const textosNumericos = { minKcal, maxKcal, minProtein, maxProtein };
+  const setters: Record<CampoNumerico, (texto: string) => void> = {
+    minKcal: setMinKcal,
+    maxKcal: setMaxKcal,
+    minProtein: setMinProtein,
+    maxProtein: setMaxProtein,
+  };
+  const filters = React.useMemo(
+    () => ({
+      ...urlFilters,
+      search,
+      minKcal: textoComoNumero(minKcal),
+      maxKcal: textoComoNumero(maxKcal),
+      minProtein: textoComoNumero(minProtein),
+      maxProtein: textoComoNumero(maxProtein),
+    }),
+    [urlFilters, search, minKcal, maxKcal, minProtein, maxProtein],
+  );
 
   const visible = React.useMemo(() => applyFoodFilters(foods, filters), [foods, filters]);
   const brands = React.useMemo(() => distinctBrands(foods), [foods]);
@@ -262,6 +302,8 @@ export function FoodsClient({
         brands={brands}
         resultCount={visible.length}
         totalCount={foods.length}
+        textosNumericos={textosNumericos}
+        onTextoNumerico={(campo, texto) => setters[campo](texto)}
       />
 
       {/* Barra de seleção — só aparece quando há algo selecionado. */}

@@ -54,3 +54,6 @@ export const evolutionLink = () => `${TRAINING_LINK_BASE}/evolucao`;
 
 /** Relatórios do módulo. */
 export const trainingReportsLink = () => `${TRAINING_LINK_BASE}/relatorios`;
+
+/** Onde se cria o hábito que o vínculo dos Treinos reflete: Hábitos → Gerenciar (D6). */
+export const habitsManageLink = () => "/habitos?view=gerenciar";

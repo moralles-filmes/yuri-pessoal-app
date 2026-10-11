@@ -58,7 +58,9 @@ const VARRIDOS = [
   { arquivo: "lib/search/queries.ts", piso: 15 },
   // 13 até a 07-A; o F2 (`const link = …`) passou a enxergar mais 3 (linhas 266 e 484).
   { arquivo: "lib/notifications/generate.ts", piso: 16 },
-  { arquivo: "lib/notifications/nutrition.ts", piso: 1 },
+  // 07-C · D6: o único link à mão daqui (planejamento sem `visao`) foi para planningWeekLink.
+  // O TETO zero mora em deep-links-query-string.test.ts (SO_CONSTRUTOR).
+  { arquivo: "lib/notifications/nutrition.ts", piso: 0 },
 ] as const;
 
 /**

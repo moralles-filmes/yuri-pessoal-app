@@ -52,6 +52,7 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
+import { waterLink } from "@/lib/search/nutrition-links";
 import { StatCard } from "@/components/shared/stat-card";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { cn } from "@/lib/utils";
@@ -1225,7 +1226,7 @@ function WaterCard({ water }: { water: WaterDay | null }) {
         <CardContent className="space-y-1.5 p-5">
           <p className="text-sm font-medium text-muted-foreground">Água</p>
           <p className="text-sm">Sem hábito de água cadastrado.</p>
-          <Link href="/habitos" className="text-xs text-primary underline-offset-4 hover:underline">
+          <Link href={waterLink()} className="text-xs text-primary underline-offset-4 hover:underline">
             Criar em Hábitos
           </Link>
         </CardContent>
@@ -1250,7 +1251,7 @@ function WaterCard({ water }: { water: WaterDay | null }) {
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
           <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
         </div>
-        <Link href="/habitos" className="text-xs text-primary underline-offset-4 hover:underline">
+        <Link href={waterLink()} className="text-xs text-primary underline-offset-4 hover:underline">
           Registrar em Hábitos
         </Link>
       </CardContent>

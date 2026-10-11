@@ -74,6 +74,21 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "components/nutrition/diary-month-view.tsx", exige: /role="group"/, porque: "a grade do mês é um grupo com nome (grid exigiria setas)" },
   { arquivo: "components/training/session/session-live-client.tsx", exige: /aria-label=\{rotuloDoChipDeSerie\(set\)\}/, porque: "o chip de série diz feita, pulada ou pendente" },
   { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /<span className="sr-only">aderência de <\/span>/, porque: "a aderência tem nome; a cor é só ênfase" },
+
+  // D6 — links pelos construtores (href= fica fora do extrator de links: G10 da 07-B)
+  { arquivo: "app/(app)/nutricao/page.tsx", exige: /href=\{waterLink\(\)\}/, porque: "\"Registrar em Hábitos\" abre a água, não o topo de Hábitos" },
+  { arquivo: "app/(app)/nutricao/diario/diary-client.tsx", exige: /href=\{waterLink\(\)\}/, porque: "o cartão da água do diário abre a água" },
+  { arquivo: "components/training/integrations-card.tsx", exige: /href=\{habitsManageLink\(\)\}/, porque: "\"Criar em Hábitos\" abre Gerenciar, onde o hábito se cria" },
+  { arquivo: "lib/notifications/nutrition.ts", exige: /link: planningWeekLink\(week\.weekStart\)/, porque: "a notificação do planejamento abre a SEMANA, não o dia" },
+
+  // L2/G5 — campo numérico e data: texto local, URL depois da pausa
+  { arquivo: "components/nutrition/food-filters.tsx", exige: /onChange=\{\(event\) => onTextoNumerico\(campo, event\.target\.value\)\}/, porque: "o campo numérico de Alimentos não grava na URL a cada tecla" },
+  { arquivo: "app/(app)/nutricao/alimentos/foods-client.tsx", exige: /useUrlText\(numeroComoTexto\(urlFilters\.minKcal\)/, porque: "kcal mínima pelo mesmo caminho da busca" },
+  { arquivo: "app/(app)/treinos/historico/history-client.tsx", exige: /onChange=\{\(event\) => setMinutosTexto\(event\.target\.value\)\}/, porque: "duração mínima do histórico não grava na URL a cada tecla" },
+  { arquivo: "app/(app)/treinos/historico/history-client.tsx", exige: /onChange=\{\(event\) => setVolumeTexto\(event\.target\.value\)\}/, porque: "volume mínimo do histórico não grava na URL a cada tecla" },
+  { arquivo: "app/(app)/treinos/historico/history-client.tsx", exige: /onChange=\{\(event\) => setDeTexto\(event\.target\.value\)\}/, porque: "a data De do histórico não grava na URL a cada segmento" },
+  { arquivo: "app/(app)/treinos/historico/history-client.tsx", exige: /<Label htmlFor=\{id\}/, porque: "o rótulo do filtro do histórico é associado ao campo" },
+  { arquivo: "components/nutrition/food-filters.tsx", exige: /<Label htmlFor="filtro-categoria"/, porque: "o rótulo do filtro de Alimentos é associado ao campo" },
 ];
 
 /** O que não pode voltar. */
@@ -84,6 +99,11 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: "app/(app)/treinos/metas/goals-client.tsx", exige: /Escondendo nada/, porque: "com aria-pressed o rótulo é fixo — trocar o texto apagava o nome do botão" },
   { arquivo: "app/(app)/treinos/calendario/calendar-client.tsx", exige: /derivePlannedStatus\(/, porque: "G2: o calendário lê statusExibido (descanso nunca vira \"Atrasado\")" },
   { arquivo: "components/nutrition/diary-month-view.tsx", exige: /role="grid"/, porque: "grid sem navegação por setas promete o que não entrega" },
+  { arquivo: "app/(app)/nutricao/page.tsx", exige: /href="\/habitos"/, porque: "link para o topo de Hábitos: a água é uma visão (waterLink)" },
+  { arquivo: "app/(app)/nutricao/diario/diary-client.tsx", exige: /href="\/habitos"/, porque: "link para o topo de Hábitos: a água é uma visão (waterLink)" },
+  { arquivo: "components/training/integrations-card.tsx", exige: /href="\/habitos"/, porque: "link para o topo de Hábitos: criar o hábito é em Gerenciar" },
+  { arquivo: "components/nutrition/food-filters.tsx", exige: /onChange\(\{\s*\[key\]/, porque: "o campo numérico voltaria a gravar na URL a cada tecla" },
+  { arquivo: "app/(app)/treinos/historico/history-client.tsx", exige: /setParam\("(?:min_min|min_volume|de|ate)", event\.target\.value/, porque: "o campo voltaria a gravar na URL a cada tecla" },
 ];
 
 const fonte = (arquivo: string) => semComentarios(fs.readFileSync(path.join(SRC, arquivo), "utf8"));

@@ -13,7 +13,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { lerLinks, VALOR_DE_EXEMPLO, semComentarios, type PontoDeLink } from "@/test/links-inline";
+import { lerLinks, pontosDeLink, VALOR_DE_EXEMPLO, semComentarios, type PontoDeLink } from "@/test/links-inline";
+import { parametrosLidosNoTexto } from "@/test/parametros-lidos";
 import { TASK_VIEWS } from "@/lib/tasks/constants";
 import { CALENDAR_VIEWS } from "@/lib/calendar/constants";
 import { HABIT_VIEWS } from "@/lib/habits/constants";
@@ -23,6 +24,15 @@ import { resolveRoute } from "@/app/(app)/todo/resolve-route";
 const SRC = path.resolve(__dirname, "..");
 /** Só lidos: os dois são da 03-B2. */
 const ARQUIVOS = ["lib/search/queries.ts", "lib/notifications/generate.ts"] as const;
+/**
+ * 07-C · D6 — as notificações de Dieta e Treinos montam TODO link pelos construtores
+ * (`nutrition-links.ts`/`training-links.ts`, cujos testes exigem que a página leia cada
+ * parâmetro). Link montado à mão aqui é o defeito que a 07-C fechou: a notificação do
+ * planejamento saía sem `visao` e abria o dia, não a semana. Teto: ZERO rotas inline.
+ */
+const SO_CONSTRUTOR = ["lib/notifications/nutrition.ts", "lib/notifications/training.ts"] as const;
+/** Páginas com `visao` que só recebem link por construtor (testado no arquivo do construtor). */
+const VISAO_SO_POR_CONSTRUTOR = ["/nutricao/diario", "/nutricao/planejamento", "/treinos/calendario"] as const;
 const ROTAS = ["/tarefas", "/agenda", "/todo", "/rotinas", "/habitos", "/estudos/[id]"] as const;
 type Rota = (typeof ROTAS)[number];
 /** Rotas com visão declarada que HOJE não recebem link nenhum (G9). Link novo ⇒ vai para ROTAS com piso. */
@@ -49,13 +59,20 @@ function viewAceita(literal: string, visoes: readonly string[]): boolean | null 
   return visoes.includes(view);
 }
 
-/** O que a página LÊ, derivado do `page.tsx` (`sp.<nome>`) — nunca escrito à mão. */
+/**
+ * O que a página LÊ, derivado do `page.tsx` — nunca escrito à mão. 07-C: além de `sp.<nome>`,
+ * aprende `params.<nome>`, `params?.<nome>` e a desestruturação de `await searchParams` (as
+ * páginas de Dieta e Treinos leem assim).
+ */
 function lidosPela(rota: Rota): Set<string> {
-  const fonte = fs.readFileSync(path.join(SRC, "app", "(app)", rota.slice(1), "page.tsx"), "utf8");
-  return new Set([...fonte.matchAll(/\bsp\.(\w+)/g)].map((m) => m[1]));
+  const fonte = semComentarios(fs.readFileSync(path.join(SRC, "app", "(app)", rota.slice(1), "page.tsx"), "utf8"));
+  return parametrosLidosNoTexto(fonte);
 }
 
-/** Páginas que validam `sp.view` contra uma constante `*_VIEWS` — derivado do código. */
+/**
+ * Páginas que validam a visão — `sp.view` contra `*_VIEWS` (07-A/07-B) ou, desde a 07-C,
+ * `visao` (`as*View(params.visao)` ou os ternários do calendário de Treinos). Derivado.
+ */
 function paginasComVisao(): string[] {
   const base = path.join(SRC, "app", "(app)");
   const achadas: string[] = [];
@@ -65,7 +82,11 @@ function paginasComVisao(): string[] {
       if (e.isDirectory()) andar(p);
       else if (e.name === "page.tsx") {
         const f = semComentarios(fs.readFileSync(p, "utf8"));
-        if (/\bsp\.view\b/.test(f) && /\b[A-Z][A-Z0-9_]*_VIEWS\b/.test(f)) {
+        const view = /\bsp\.view\b/.test(f) && /\b[A-Z][A-Z0-9_]*_VIEWS\b/.test(f);
+        const visao =
+          /\b(?:sp|params)\??\.visao\b/.test(f) &&
+          (/\bas[A-Z]\w*View\(/.test(f) || /\b[A-Z][A-Z0-9_]*_VIEWS\b/.test(f) || /\.visao\s*===\s*"/.test(f));
+        if (view || visao) {
           achadas.push("/" + path.relative(base, path.dirname(p)).split(path.sep).join("/"));
         }
       }
@@ -94,11 +115,34 @@ describe("V4 — o parâmetro do deep-link é aceito pela página", () => {
     expect(lidosPela("/estudos/[id]").size).toBe(0);
   });
 
-  it("toda página que valida `view` está coberta (ROTAS ∪ SEM_LINK_HOJE)", () => {
+  it("toda página que valida a visão está coberta (ROTAS ∪ SEM_LINK_HOJE ∪ VISAO_SO_POR_CONSTRUTOR)", () => {
     const paginas = paginasComVisao();
-    expect(paginas.length).toBeGreaterThanOrEqual(5);
-    const cobertas = new Set<string>([...ROTAS, ...SEM_LINK_HOJE]);
-    for (const p of paginas) expect(cobertas.has(p), `app/(app)${p}/page.tsx valida \`view\` e não está coberta`).toBe(true);
+    // 07-C: contadas aqui — 5 de `view` (07-A/07-B) + 3 de `visao` (Dieta e Treinos).
+    expect(paginas.length).toBeGreaterThanOrEqual(8);
+    const cobertas = new Set<string>([...ROTAS, ...SEM_LINK_HOJE, ...VISAO_SO_POR_CONSTRUTOR]);
+    for (const p of paginas) expect(cobertas.has(p), `app/(app)${p}/page.tsx valida a visão e não está coberta`).toBe(true);
+  });
+
+  it("as páginas de `visao` de Dieta e Treinos são vistas pela varredura (anti-tautologia)", () => {
+    const paginas = new Set(paginasComVisao());
+    for (const p of VISAO_SO_POR_CONSTRUTOR) expect(paginas.has(p), p).toBe(true);
+  });
+
+  it.each(SO_CONSTRUTOR)("%s não monta link à mão — todo link sai do construtor (07-C, D6)", (arquivo) => {
+    const { pontos } = lerLinks(arquivo);
+    expect(pontos.map(onde)).toEqual([]);
+  });
+
+  it("e o leitor ainda enxerga um link montado à mão (fixture)", () => {
+    const pontos = pontosDeLink("fixture.ts", "const n = { link: `/nutricao/planejamento?data=${w}` };");
+    expect(pontos.map((p) => p.literal)).toEqual(["/nutricao/planejamento?data=${w}"]);
+  });
+
+  it("a leitura do page.tsx aprendeu params.x e a desestruturação (07-C)", () => {
+    expect(parametrosLidosNoTexto("const params = await searchParams; params.visao; params?.data;")).toEqual(
+      new Set(["visao", "data"]),
+    );
+    expect(parametrosLidosNoTexto("const { alimento } = await searchParams;")).toEqual(new Set(["alimento"]));
   });
 
   it("/estudos não recebe link hoje — o primeiro que aparecer exige piso (G9)", () => {
