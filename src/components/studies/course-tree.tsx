@@ -270,7 +270,7 @@ function LessonRow({
         checked={lesson.is_done}
         disabled={busy}
         onCheckedChange={(v) => toggle(Boolean(v))}
-        aria-label={lesson.is_done ? "Marcar como não concluída" : "Marcar como concluída"}
+        aria-label={`Concluir ${lesson.title}`}
       />
       <div className="min-w-0 flex-1">
         <p

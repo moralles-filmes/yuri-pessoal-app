@@ -71,6 +71,12 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "components/studies/badges.tsx", exige: /role="progressbar"\s+aria-label=\{rotulo\}/, porque: "a barra de progresso tem nome acessível" },
   { arquivo: "app/(app)/estudos/course-form.tsx", exige: /aria-label="Sem cor própria \(usa a cor de destaque\)"/, porque: "a amostra \"—\" diz o que acontece (o fallback é var(--primary), não a cor da categoria)" },
   { arquivo: "components/studies/evolution-chart.tsx", exige: /<table className="sr-only">/, porque: "o gráfico tem alternativa textual na FACHADA (regra 1 do carregamento sob demanda)" },
+  // Alinhamento visual — Curso
+  { arquivo: "app/(app)/estudos/[id]/course-detail-client.tsx", exige: /detail\.sessions\.length === 0 \? \(\s*<EmptyState/, porque: "sessões vazias do curso usam o EmptyState compartilhado" },
+  { arquivo: "components/studies/course-tree.tsx", exige: /aria-label=\{`Concluir \$\{lesson\.title\}`\}/, porque: "o checkbox da aula diz QUAL aula (o estado já vem do aria-checked)" },
+  // Exceção DECLARADA (critério da 07-A): dentro de uma lista, o vazio de módulo é dica em linha,
+  // não seção. Se alguém o trocar por EmptyState, esta linha avisa que o critério mudou.
+  { arquivo: "components/studies/course-tree.tsx", exige: /module\.lessons\.length === 0 \? \(\s*<p\b/, porque: "módulo sem aula continua dica em linha (critério da 07-A), não EmptyState" },
 ];
 
 /** O que não pode VOLTAR. Mesma varredura, sentido contrário. */

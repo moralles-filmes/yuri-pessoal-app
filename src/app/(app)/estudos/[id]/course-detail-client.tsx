@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/shared/stat-card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import {
   Select,
@@ -299,9 +300,11 @@ export function CourseDetailClient({
             </Button>
           </div>
           {detail.sessions.length === 0 ? (
-            <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-              Nenhuma sessão registrada para este curso.
-            </p>
+            <EmptyState
+              icon={NotebookPen}
+              title="Nenhuma sessão registrada para este curso"
+              className="py-8"
+            />
           ) : (
             <div className="space-y-2">
               {detail.sessions.map((s) => (
