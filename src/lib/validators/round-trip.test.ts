@@ -22,6 +22,7 @@
  * aqui — é mais barato que descobrir pelo usuário.
  */
 import { describe, expect, it } from "vitest";
+import { categorySchema } from "@/lib/validators/category";
 import { optionalText } from "@/lib/validators/shared";
 import { receitaResponsabilidadeSchema } from "@/lib/validators/split";
 import {
@@ -586,5 +587,36 @@ describe("receita: a responsabilidade da entrada salva", () => {
         receita_minha_parte: "-1",
       }).success,
     ).toBe(false);
+  });
+});
+
+/**
+ * REDESIGN-03-C2 · A4 — `category-form.tsx` não usa `zodResolver`, mas a action valida o
+ * payload com o mesmo schema, e `classificacao_padrao` é obrigatório (P3): a saída tem de ser
+ * aceita de novo, com `null` e com a marcação.
+ */
+describe("categoria: o formulário de 'Nova categoria' salva", () => {
+  const doFormulario = {
+    name: "Categoria A",
+    kind: "receita",
+    color: "#112233",
+    icon: "tag",
+    classificacao_padrao: null,
+  };
+
+  it("sem sugestão faz a ida e volta e continua null", () => {
+    const { noCliente, noServidor } = roundTrip(categorySchema, doFormulario);
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noServidor.data).toEqual(noCliente.data);
+    expect((noCliente.data as { classificacao_padrao: unknown }).classificacao_padrao).toBeNull();
+  });
+
+  it("com a marcação de terceiros preserva a marcação na segunda passada", () => {
+    const { noCliente, noServidor } = roundTrip(categorySchema, {
+      ...doFormulario,
+      classificacao_padrao: "terceiro",
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noServidor.data).toEqual(noCliente.data);
   });
 });

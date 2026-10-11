@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { toDateInputValue } from "@/lib/format";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
+import { idsDasCategoriasMarcadas } from "@/lib/finance/categorias-marcadas";
 import {
   saldosPorDia,
   type MovimentoDeSaldo,
@@ -119,6 +120,8 @@ export type TransactionFilters = {
   cardId?: string;
   statementId?: string;
   month?: string; // 'yyyy-MM'
+  /** 03-C2 · A6 (K1): só lançamentos em categoria marcada como de terceiros. Peneira; não decide. */
+  categoriasMarcadas?: boolean;
 };
 
 export async function getTransactions(
@@ -143,6 +146,11 @@ export async function getTransactions(
     const start = `${filters.month}-01`;
     const end = toDateInputValue(new Date(y, m, 0));
     query = query.gte("competence_date", start).lte("competence_date", end);
+  }
+  if (filters.categoriasMarcadas) {
+    const ids = await idsDasCategoriasMarcadas(supabase);
+    if (ids.length === 0) return [];
+    query = query.in("category_id", ids);
   }
 
   const { data } = await query;

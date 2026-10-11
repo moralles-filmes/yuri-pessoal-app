@@ -259,3 +259,17 @@ describe("03-C A2 · despesa → despesa continua como hoje", () => {
     expect(linhaFinal()).toMatchObject({ classificacao: "compartilhada", valor_pessoal: 400 });
   });
 });
+
+describe("03-C2 A5 · updateTransaction NÃO lê a marcação da categoria (K2)", () => {
+  const MARCADA = "c0ffee00-0000-4000-8000-000000000001";
+
+  it("receita pessoal movida para uma categoria marcada, sem receita_*, continua pessoal", async () => {
+    fake = criarSupabaseEmMemoria({
+      transactions: [existente({ type: "receita" })],
+      categories: [{ id: MARCADA, user_id: "user-1", kind: "receita", classificacao_padrao: "terceiro" }],
+    });
+    const r = await updateTransaction(ID, payload({ category_id: MARCADA }));
+    expect(r.ok).toBe(true);
+    expect(linhaFinal()).toMatchObject({ category_id: MARCADA, classificacao: "pessoal", valor_pessoal: null });
+  });
+});

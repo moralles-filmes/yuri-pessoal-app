@@ -152,3 +152,24 @@ describe("03-C A2 · criarTransacao — a despesa grava como antes", () => {
     expect(Object.hasOwn(linha, "valor_pessoal")).toBe(false);
   });
 });
+
+describe("03-C2 A5 · criarTransacao NÃO lê a marcação da categoria (K2)", () => {
+  const MARCADA = "c0ffee00-0000-4000-8000-000000000001";
+
+  it("receita em categoria marcada, sem receita_classificacao, grava pessoal", async () => {
+    const fake = criarSupabaseEmMemoria({
+      categories: [{ id: MARCADA, user_id: "user-1", kind: "receita", classificacao_padrao: "terceiro" }],
+    });
+    const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
+    const r = await criarTransacao(ctx, {
+      ...BASE,
+      type: "receita",
+      status: "recebido",
+      category_id: MARCADA,
+    });
+    expect(r.ok).toBe(true);
+    const linha = inseridaEmTransactions(fake);
+    expect(linha.classificacao).toBe("pessoal");
+    expect(linha.valor_pessoal).toBeNull();
+  });
+});
