@@ -617,7 +617,7 @@ type RecorrenciaCrua = Awaited<ReturnType<typeof getRecurrences>>[number];
 export type ParametrosDaLeitura<E extends EscopoFinanceiro> = {
   escopo: E;
   owner?: LeituraDoDono;
-} & (E["transacoes"] extends true ? { janela: JanelaFinanceira } : { janela?: undefined });
+} & (E["transacoes"] extends false ? { janela?: undefined } : { janela: JanelaFinanceira });
 
 export type LeituraFinanceira<E extends EscopoFinanceiro> = {
   entradas: EntradasDoEscopo<E>;
@@ -673,7 +673,7 @@ export async function lerFinanceiro<E extends EscopoFinanceiro>(
     linhas.transacoes = transacoes.linhas;
     if (transacoes.situacao === "saturou") {
       motivos.push(
-        `A leitura de lançamentos traz no máximo ${TETO_DE_LANCAMENTOS} registros por janela e havia mais: os totais podem estar incompletos.`,
+        `A leitura de lançamentos trouxe ${transacoes.linhas.length} registros desta janela e havia mais: os totais podem estar incompletos.`,
       );
     } else if (transacoes.situacao === "sem_contagem") {
       motivos.push("Não foi possível confirmar que a leitura de lançamentos veio completa.");
@@ -690,7 +690,7 @@ export async function lerFinanceiro<E extends EscopoFinanceiro>(
     linhas.recebiveis = recebiveis.linhas;
     if (recebiveis.situacao === "saturou") {
       motivos.push(
-        `A leitura de recebíveis traz no máximo ${TETO_DE_RECEBIVEIS} registros e havia mais: os totais podem estar incompletos.`,
+        `A leitura de recebíveis trouxe ${recebiveis.linhas.length} registros e havia mais: os totais podem estar incompletos.`,
       );
     } else if (recebiveis.situacao === "sem_contagem") {
       motivos.push("Não foi possível confirmar que a leitura de recebíveis veio completa.");

@@ -16,7 +16,7 @@ function arquivosDeCodigo(dir: string): string[] {
   });
 }
 
-const SRC = path.resolve(process.cwd(), "src");
+const SRC = path.resolve(__dirname, "..", "..");
 const PROPRIO = path.join(SRC, "lib/finance/saldo-das-contas.ts");
 const SOMA_DE_SALDOS = /\.reduce\([\s\S]{0,200}?current_balance/;
 const DEPENDENCIA = /\bimport\b|\brequire\s*\(/;

@@ -265,8 +265,9 @@ export function lancamentosForaDoDominio(transacoes: readonly LinhaTx[]): number
  *  1. linhas ESTRITAS desde a 03-B2 (toda chave presente; lançamento fora do domínio sai da
  *     soma e é contado por `lancamentosForaDoDominio`);
  *  2. dinheiro aceita `number | string` e é normalizado aqui;
- *  3. `category_id` sai do DADO (`?? null`) — antes o Cron o escrevia como constante `null`,
- *     e um `gastosPorCategoria` chamado ali jogaria todo gasto em "sem categoria";
+ *  3. `category_id` sai do DADO (campo obrigatório da linha estrita, copiado como veio) —
+ *     antes o Cron o escrevia como constante `null`, e um `gastosPorCategoria` chamado ali
+ *     jogaria todo gasto em "sem categoria";
  *  4. `ref_month` é SEMPRE derivado dos embeds — sem eles, `null` (o card de faturas não o
  *     derivava, e `totalAReceber(recs, mes)` ali daria zero);
  *  5. `parent` da parcela é `{ category: null }`, nunca `null`.

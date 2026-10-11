@@ -393,7 +393,7 @@ describe("03-B2 A5 — tetos e completude (desenho, §5.5)", () => {
     expect(r.entradas.txs).toEqual(montarEntradas({ transacoes: transacoes.slice(0, 2000) }).txs);
     expect(r.completude).toEqual({
       estado: "parcial",
-      motivos: ["A leitura de lançamentos traz no máximo 2000 registros por janela e havia mais: os totais podem estar incompletos."],
+      motivos: ["A leitura de lançamentos trouxe 2000 registros desta janela e havia mais: os totais podem estar incompletos."],
     });
   });
 
@@ -403,7 +403,26 @@ describe("03-B2 A5 — tetos e completude (desenho, §5.5)", () => {
     expect(r.entradas.recs).toHaveLength(1000);
     expect(r.completude).toEqual({
       estado: "parcial",
-      motivos: ["A leitura de recebíveis traz no máximo 1000 registros e havia mais: os totais podem estar incompletos."],
+      motivos: ["A leitura de recebíveis trouxe 1000 registros e havia mais: os totais podem estar incompletos."],
+    });
+  });
+
+  it("o max_rows do PostgREST corta antes do limit: o motivo cita o que veio, não o teto", async () => {
+    const base = estado.dados.transactions[0] as LinhaTx;
+    const transacoes = Array.from({ length: 1000 }, (_, i) => ({
+      ...base,
+      competence_date: new Date(Date.UTC(2020, 0, i + 1)).toISOString().slice(0, 10),
+    }));
+    estado.dados.transactions = transacoes;
+    estado.contagens.transactions = 1500;
+    const r = await lerFinanceiro({
+      janela: { from: transacoes[0].competence_date, to: transacoes[999].competence_date },
+      escopo: ESCOPO_CARD_FINANCEIRO,
+    });
+    expect(r.entradas.txs).toHaveLength(1000);
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: ["A leitura de lançamentos trouxe 1000 registros desta janela e havia mais: os totais podem estar incompletos."],
     });
   });
 
@@ -493,8 +512,20 @@ describe("03-B2 A1 — contratos de tipo (conferidos pelo tsc --noEmit)", () => 
       void lerFinanceiro({ escopo: ESCOPO_CARD_FINANCEIRO });
       // @ts-expect-error — faturas não lê transações: não aceita janela.
       void lerFinanceiro({ escopo: ESCOPO_FATURAS, janela: JANELA });
+      const daUniao: EscopoFinanceiro = ESCOPO_FATURAS;
+      // O genérico explícito mantém a união apesar do estreitamento da const.
+      // @ts-expect-error — com escopo como união, a janela é exigida (pode ler transações).
+      void lerFinanceiro<EscopoFinanceiro>({ escopo: daUniao });
+      void lerFinanceiro<EscopoFinanceiro>({ escopo: daUniao, janela: JANELA });
     };
     expect(naoRoda).toBeTypeOf("function");
+  });
+
+  it("escopo que lê transações sem janela é recusado em runtime, sem tocar o banco", async () => {
+    const daUniao: EscopoFinanceiro = ESCOPO_CARD_FINANCEIRO;
+    // @ts-expect-error — a união exige janela; o throw é a defesa de runtime.
+    await expect(lerFinanceiro<EscopoFinanceiro>({ escopo: daUniao })).rejects.toThrow("A leitura de transações exige uma janela financeira.");
+    expect(estado.leituras).toEqual([]);
   });
 
   it("escopo como união só promete os campos comuns", () => {

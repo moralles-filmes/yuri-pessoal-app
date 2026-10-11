@@ -699,7 +699,7 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     kind: "leitura",
     risk: 1,
     description:
-      "Saldo de cada conta ativa e o total, em reais. ATENÇÃO: lançamento de cartão de crédito NÃO move saldo de conta — quem move é o pagamento da fatura. Nunca some este saldo com o valor de faturas.",
+      "Saldo de todas as contas e o total de todas, em reais — a conta inativa que ainda tem saldo vem na lista marcada com `inativa`, porque desativar a conta não faz o dinheiro sumir. ATENÇÃO: lançamento de cartão de crédito NÃO move saldo de conta — quem move é o pagamento da fatura. Nunca some este saldo com o valor de faturas.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     outputSchema: { type: "object" },
     allowedAgents: ["financeiro"],
