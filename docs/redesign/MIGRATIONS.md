@@ -1,8 +1,9 @@
 # Migrations do redesign — desenho
 
-⛔ **NENHUMA DESTAS FOI APLICADA.** Estão escritas para você ler e autorizar **uma a uma**.
-Aplicar exige `apply_migration` no projeto `yjvnlbjvippefvzgrxxw`, e só com o seu "aplique a M1"
-(ou M2, ou M3) explícito.
+⛔ **A M3 foi aplicada em 2026-10-11** (REDESIGN-03-C2, versão remota `20261011190803`), depois
+do "aplique a M3" literal do dono. **A M1 e a M2 NÃO foram aplicadas.** Estão escritas para você
+ler e autorizar **uma a uma**. Aplicar exige `apply_migration` no projeto
+`yjvnlbjvippefvzgrxxw`, e só com o seu "aplique a M1" (ou M2) explícito.
 
 As três são **aditivas**: nenhuma apaga tabela, apaga coluna, renomeia, muda tipo ou
 reinterpreta dado existente. Todas seguem as convenções do projeto conferidas no disco —
@@ -13,7 +14,7 @@ FK composta com `*_id_user_uk`, idempotência (`if not exists` / `drop constrain
 | --- | --- | --- | --- |
 | **M1** | `receivable_receipts` | D6 — recebimento parcial | Baixo. Tabela nova, ninguém depende dela ainda |
 | **M2** | `transactions.liquidado_em` | D9 — caixa exato | Baixo. Coluna nula em 377 linhas; nada lê ainda |
-| **M3** | `categories.classificacao_padrao` | D8 — marcação de terceiros | Baixo. Coluna nula em 26 linhas |
+| **M3** | `categories.classificacao_padrao` | D8 — marcação de terceiros | Baixo. Coluna nula em 26 linhas — ✅ **aplicada em 2026-10-11** |
 
 ---
 

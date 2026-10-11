@@ -7,19 +7,86 @@ REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · 
 (trabalho de outro chat, revisado e integrado aqui em `1b5aa28`) · **REDESIGN-03-A ✅**
 (`02aa54b`, integrada por merge `--no-ff`) · **REDESIGN-03-B ✅** (integrada por merge
 `--no-ff` em `ad9f359`) · **REDESIGN-03-B2 ✅** (integrada por merge `--no-ff` em `b06f160`)
-· **REDESIGN-03-C ✅** (integrada por merge `--no-ff` em `22ec12f`); **03-C2 liberada** —
-categorias: marcação de terceiros como atalho e filtro (E7/D8), **com a M3**
+· **REDESIGN-03-C ✅** (integrada por merge `--no-ff` em `22ec12f`) · **REDESIGN-03-C2 ✅**
+(integrada por merge `--no-ff` em `31bef87`, **com a M3 aplicada**); **03-D liberada** —
+reembolsos e recebíveis: recebimento parcial (E1, **com a M1**), `ignorado` visível e os três
+números de terceiros
 
-⛔ **As três migrations continuam sem ser aplicadas.** "Aprovado tudo" foi lido como aval do
+⛔ **A M3 foi aplicada em 2026-10-11** (03-C2), pelo MCP, depois do seu "aplique a M3" literal
+(D50). **A M1 e a M2 continuam sem ser aplicadas.** "Aprovado tudo" foi lido como aval do
 **visual** e do **dicionário**. Cada migration escreve no banco de produção e segue precisando
-de um "aplique a M1" (ou M2, ou M3) seu, separado. Serão pedidas uma a uma, no momento em que
-a subfase precisar delas.
+de um "aplique a M1" (ou M2) seu, separado. Serão pedidas uma a uma, no momento em que a
+subfase precisar delas — a M1 é da 03-D.
 
 ⚠️ **CORREÇÃO (D29): a M3 NÃO é da 03-B.** Este documento afirmava, em dois lugares, que a
 `categories.classificacao_padrao` seria pedida na 03-B. Não bate com as outras duas fontes:
 o `PLANO.md` descreve a 03-B como *"unificar o pipeline triplicado … **sem mudar número
 nenhum**"*, e `MIGRATIONS.md:16` liga a M3 à **D8**, que é a **03-C2**. **A 03-B não precisa
 de migration nenhuma.** A primeira a precisar é a 03-C2.
+
+---
+
+## REDESIGN-03-C2 — a categoria propõe, o lançamento registra ✅
+
+Branch própria a partir de `ade0dd0` (desenho `ae9516d`, plano `70660b5` + 8 commits),
+integrada por merge `--no-ff` em **`31bef87`**. Contrato:
+`docs/superpowers/specs/2026-10-11-03c2-categorias-design.md` (o §12 é o resultado).
+**Primeira subfase com migration: a M3**, aplicada pelo MCP em 2026-10-11 depois do seu
+"aplique a M3" literal (D50). Os parâmetros **e os retornos** das quatro assinaturas públicas
+intactos; `dashboard.ts`, `pipeline.ts` e o registry da IA sem diff.
+
+A categoria ganhou uma **opinião** (`classificacao_padrao`: nula ou `terceiro`), e a subfase
+inteira existe para ela nunca virar fato: ela **preenche** o formulário de uma receita nova e
+**peneira** a lista; o lançamento continua registrando no ato (`classificacao` +
+`valor_pessoal`, 03-C). ⛔ **Nada foi marcado nem reclassificado sozinho (D10):** a migration
+não marca nada, e no fim **zero** categorias estão marcadas — a de terceiros do §1 do
+dicionário é você quem marca, pela tela. **Nenhum número de tela nenhuma mudou, com ou sem
+marcação.**
+
+| Item | O que fechou | Muda número? |
+| --- | --- | --- |
+| A1 | a prova da D8 **antes** do primeiro leitor: varredura por **allowlist de arquivos** (nasceu vazia; 9 entradas no fim, cada uma com o motivo) e uma lista `NUNCA` de 17 arquivos — motor, pipeline, serviço, actions de lançamento, importação e registro rápido, relatórios, dashboards, IA e sino | não |
+| A2 | regra pura do atalho: só receita (K0), nunca em edição, nunca por cima da escolha do usuário; a sugestão do atalho acompanha a categoria e se desfaz se o tipo virar despesa | não |
+| A3 | a M3, com teste do arquivo (CHECK só `pessoal`/`terceiro`, nenhuma escrita), validador, **"aplique a M3"**, MCP e tipos com o diff lido — só as 3 linhas de `categories` | não (coluna nula) |
+| A4 | o campo na categoria (só `receita`/`ambos`; virar `despesa` limpa a marcação, com aviso) e a lista **agrupada por tipo**, com selo | não |
+| A5 | o atalho no formulário de lançamento, com a dica "Sugerido pela categoria"; **o servidor nunca lê a marcação** (testado no serviço e na action — K2) | não |
+| A6 | o filtro "Categorias marcadas como de terceiros" (`?marcadas=1`, só o valor exato), ignorado pelo saldo diário; a lista vazia diz por quê | não |
+
+**Prova:**
+- **`dashboard.test.ts` e `dashboard-caracterizacao.test.ts` byte a byte iguais**
+  (`git diff --quiet ade0dd0`).
+- **16 mutações do desenho + 3 extras — as 19 derrubaram o que deviam**, com o nome de cada
+  teste no §12.4 do contrato e a restauração conferida por `git diff --quiet`. A X8 (o motor
+  lendo a coluna) caiu no bloco 7 **e** no caso do bloco 6 que recusa `classificacao` no
+  motor; a X16 (o motor entrando na allowlist) caiu **só** no caso `NUNCA` — a segunda trava,
+  como desenhada.
+- **+9 arquivos, +74 casos** (205 / 4.155 → 214 / 4.229).
+- Banco no fim igual ao início: 26 categorias (19/6/1), 48 receitas, todas `pessoal`, nenhuma
+  com `valor_pessoal`; **0 categorias marcadas**.
+
+⚠️ **Desvios do desenho, declarados (§12.6 do contrato):** a conferência visual foi dos
+componentes isolados com o CSS do build, a 390 px, claro e escuro — **as telas inteiras no app
+logado não foram conferidas** (a extensão do Chrome não conectou) · o 6a seguiu no principal
+depois de o roteador falhar no gate, e dois desvios do 6b foram revertidos (D51) · o vermelho
+de `page.test.ts` e da varredura do formulário foi visto pelas mutações, não antes da
+implementação.
+
+### Risco residual da 03-C2
+
+| # | Risco | Destino |
+| --- | --- | --- |
+| RR2 (03-C) | receita que entra pela IA, importação, registro rápido, comprovante, estorno ou recorrência continua nascendo `pessoal` (K2) | **novo destino:** sugestão por linha na revisão da importação, numa subfase futura; os outros caminhos seguem `pessoal`, declarados |
+| RR-C2-1 | a varredura é textual: um valor copiado com outro nome passaria | aceito; o bloco 7 e os tipos fechados do motor são a segunda linha |
+| RR-C2-2 | `getCategories()` é `select("*")`: a coluna chega em memória ao preview da IA (que só usa id e nome) | aceito |
+| RR-C2-3 | erro ao ler as categorias marcadas devolve `[]`, e a frase pode dizer "nenhuma marcada" sem ser verdade | **03-G** |
+| RR-C2-4 | numa categoria `ambos` marcada, o filtro traz também as despesas dela | aceito, declarado |
+| RR-C2-5 | marcação alterada noutra aba não chega ao formulário aberto | aceito |
+| RR-C2-6 | o seletor de categoria oferece todas as categorias para qualquer tipo (anterior) | **04-A** ou subfase de formulário |
+| RR-C2-7 | **defeito anterior achado:** toda edição de categoria zera o `sort_order` (D53) | registrado, **não consertado** |
+| RR-C2-8 | editar uma receita e trocar para categoria marcada não sugere nada (D10) | aceito, declarado |
+| RR-C2-9 | `semComentarios` corta `//` dentro de string | aceito |
+| RR-C2-10 | no escuro, o botão do filtro ligado e o desligado diferem pouco (o estado vai em `aria-pressed`) | **04-A** |
+| RR-C2-11 | a fiação do atalho no formulário é provada por varredura de texto, não por teste de componente | quando houver teste de componente |
 
 ---
 
@@ -681,7 +748,8 @@ distinguem · horizonte de faturas declarado honestamente (6 ciclos × 3 cartõe
 
 1. `receivable_receipts` (E1)
 2. `transactions.liquidado_em` (E6)
-3. `categories.classificacao_padrao` (E7)
+3. `categories.classificacao_padrao` (E7) — **aplicada em 2026-10-11** (03-C2, versão
+   `20261011190803`)
 
 `transactions.classificacao`/`valor_pessoal` para receita (E2) **não precisa de migration** —
 as colunas já existem e o CHECK já aceita.
@@ -723,6 +791,11 @@ as colunas já existem e o CHECK já aceita.
 | D46 | **A auditoria do módulo achou um P2 que a própria A2 introduziu, e ele foi corrigido antes da A4.** O roteador marcou `audit_required` na A2; `saas-audit-br:module --audit-only` rodou com dois auditores. Editar uma **transferência** para **receita** apagava o lançamento antes de a A1 poder recusar — e, sendo pagamento de fatura, a fatura ficava "paga" sem lançamento. A A1 passou para antes do ramo de transferência (`95a16e9`, com teste vermelho → verde). Os cinco P3 viraram RR10–RR14, **sem conserto**, por estarem fora da lista |
 | D47 | **Roteador da 03-C:** 6 despachos ao Codex, **3 falharam** no gate `worker_modified_main_repository` (A1, A4 e A5) — o worker escreveu na árvore principal em vez da cópia dele; o roteador desfez a escrita e as três seguiram no principal. A3 e as duas metades da B1 vieram do Codex, revisadas e aplicadas no principal. A2 foi TIER 0. ⚠️ É a segunda subfase seguida com esse gate (D43): **conte com refazer no principal** |
 | D48 | **A 03-C foi integrada na sessão que a escreveu, com sua autorização** — com a auditoria do módulo (D46) mas **sem** revisão independente da branch inteira, ao contrário da 03-B2 (D44). A árvore integrada tem o **mesmo hash de tree** da ponta (`0dd3619`), e os cinco comandos rodaram depois do merge. ⚠️ **A conferência com dado real da D39/D44 passa a valer também para a 03-C**, e com uma ressalva: com o dado de hoje ela não mostra nada (nenhuma receita reclassificada); a dica da B1 só aparece depois de você reclassificar uma |
+| D49 | **As decisões da 03-C2 foram suas, uma de cada vez** (2026-10-11): **K0** — o atalho vale só para receita, e o campo aparece nas categorias `receita` e `ambos` · **K1** — um filtro só, "categoria marcada como de terceiros", ignorado pelo saldo e sem ação em lote · **K2** — o atalho mora só no formulário: o servidor nunca lê a marcação, e IA, importação e registro rápido continuam `pessoal` |
+| D50 | **A M3 é a primeira migration do redesign aplicada** (2026-10-11, versão remota `20261011190803`), pelo MCP, depois do seu "aplique a M3" literal. Um "Pode aplicar" anterior **não** foi tratado como a autorização, pela regra que você mesmo deu. Os tipos regenerados trouxeram mais que a M3 (a relationship `import_rows_transfer_account_owner_fkey` e a sintaxe nova dos genéricos) — ficou só o que é de `categories` (invariante 94) |
+| D51 | **Roteador da 03-C2:** 7 despachos ao Codex, **1 falhou** no gate `worker_modified_main_repository` (6a) e seguiu no principal. No 6b, dois desvios do worker foram **revertidos ao plano** — os dois vieram de uma restrição minha larga demais ("só `page.tsx` pode conter a string"): o worker ofuscou a chave de uma fixture e trocou um tipo para obedecê-la. ⚠️ **Restrição de pacote se escreve pelo arquivo exato que a varredura cobre.** A M3 (passo 3) ficou no principal por sua instrução; as mutações (passo 7) ficaram no principal **contra** o roteador, declarado: o worktree do worker não tem `node_modules`, e o entregável do passo é o resultado dos testes |
+| D52 | **A 03-C2 foi integrada na sessão que a escreveu**, a seu pedido (o prompt da próxima subfase), **sem** revisão independente da branch e **sem** auditoria de módulo. A árvore integrada tem o **mesmo hash de tree** da ponta (`8f01d63`), e os cinco comandos rodaram depois do merge. ⚠️ **A conferência com dado real da D39/D44/D48 vale também para a 03-C2**: marcar uma categoria pela tela, ver o atalho numa receita nova e o filtro — e conferir que nenhum número de dashboard, relatório ou sino mudou |
+| D53 | **Um defeito anterior foi achado e NÃO consertado** (RR-C2-7): `categorySchema` transforma `sort_order` ausente em `0` e o formulário não o manda, então **toda edição de categoria zera a ordem dela**. Fora da lista da subfase — registrado para uma subfase futura |
 
 ## Bloqueios
 
@@ -736,7 +809,9 @@ mutação · `R2` **3,1 KB** de folga de bundle na casca (eram 3,3; o link de pu
 (02-D → 02-E → merge `1b5aa28`), com mutação nas três etapas · **`R5` mudar número sem
 perceber — MITIGADO nas quatro funções do núcleo pela 03-A; o pipeline que as alimenta virou
 UM na 03-B, e os riscos dele foram fechados na 03-B2 (tela e sino com uma régua só no gasto
-alto); a entrada repartida da 03-C nasceu com a partição testada e 16 mutações; CONTINUA
+alto); a entrada repartida da 03-C nasceu com a partição testada e 16 mutações; a marcação da
+categoria (03-C2) nasceu com uma varredura por allowlist provando que nenhum motor, relatório,
+IA ou sino a lê, e 19 mutações; CONTINUA
 ABERTO no resto** (ver abaixo) · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
 Detalhe em `AUDITORIA.md` §4.
 
@@ -812,6 +887,17 @@ Delta de **+4 arquivos e +56 casos**, todos da 03-C. Na ponta da branch, `TZ=UTC
 `finance/` + `notifications/`: 25 arquivos / 459 verdes. A árvore integrada tem o **mesmo
 hash de tree** da ponta (`59d208f`), e os cinco rodaram depois do merge mesmo assim.
 
+**REDESIGN-03-C2, depois do merge `31bef87`:** `test:run` ✅ **214 / 4.229** (17,70 s) · `lint`
+✅ · `tsc` ✅ · `build` ✅ · `perf:bundle` ✅ mediana **214,2**, 68 rotas, todas dentro,
+`/(app)/configuracoes` **281,9/285** · `/(app)/financeiro/categorias` **213,1** (era 211,9: +1,2
+do campo, do agrupamento e do selo — o formulário recebe o próprio botão por `trigger` e não é
+carregado sob demanda) · `/(app)/financeiro/lancamentos` **221,7** (era 220,9: +0,8 do atalho e
+do filtro) · `/(app)/dashboard/financeiro` **201,1** · `/(app)/relatorios` **204,2** ·
+`/(app)/dashboard` **203,8** · `/(app)/financeiro` **195,9**. Delta de **+9 arquivos e +74
+casos**, todos da 03-C2. Na ponta da branch, `TZ=UTC` em `finance/` + `notifications/`: 32
+arquivos / 523 verdes. A árvore integrada tem o **mesmo hash de tree** da ponta (`8f01d63`), e
+os cinco rodaram depois do merge mesmo assim.
+
 ⚠️ **A 03-C é a primeira subfase a editar a caracterização da 03-A** — só no que foi escrito
 para virar ali (blocos 1–4 ganharam chaves, bloco 6 e [5 ⚠️] reescritos). Fora dela,
 `limiares-de-alerta.test.ts` e o teste do coletor de insight ganharam as duas chaves por
@@ -832,36 +918,35 @@ E o `perf:bundle` da 02-D ser idêntico ao da 02-C **é o resultado esperado, n�
 coincidência**: a subfase não altera um arquivo de runtime sequer. Ele foi rodado justamente
 para confirmar isso em vez de eu afirmar.
 
-## Próximo passo — REDESIGN-03-C2 (categorias: marcação de terceiros como atalho e filtro)
+## Próximo passo — REDESIGN-03-D (reembolsos e recebíveis: recebimento parcial, `ignorado` visível e os três números)
 
-**A 03-C está fechada e integrada** (`22ec12f`). A 03-C2 dá à categoria a marcação
-`classificacao_padrao` (E7, D8), que **preenche** o formulário de lançamento e **peneira** a
-lista, e a tela de categorias passa a separar receita de despesa. O briefing foi entregue; o
-primeiro entregável é o **desenho**, aprovado por você antes de qualquer linha de código.
+**A 03-C2 está fechada e integrada** (`31bef87`). A 03-D dá ao recebível um **histórico de
+recebimentos** (E1, D6: a M1, `receivable_receipts`), faz o `ignorado` aparecer como "não será
+cobrado" e virar despesa sua (D11), e separa os três números de terceiros que hoje dividem um
+rótulo (§6 e §13.4 do dicionário). O briefing foi entregue; o primeiro entregável é o
+**desenho**, aprovado por você antes de qualquer linha de código.
 
 | Parte | Itens | Muda número? |
 | --- | --- | --- |
-| **K0** | para quais lançamentos o atalho vale — a recomendação é **só receita**: despesa `terceiro` exige pessoa (`splitSchema`), que a categoria não carrega, pelo mesmo motivo que tirou `compartilhada` da M3 | decisão sua, no desenho |
-| **K1** | o filtro "categoria marcada como de terceiros" na lista de lançamentos, ignorado pelo saldo e **sem ação em lote** (o filtro por responsabilidade gravada é da 04-A) | decisão sua, no desenho |
-| **K2** | o RR2 da 03-C: a recomendação é **o atalho só no formulário** — o servidor nunca lê a marcação, e IA, importação e registro rápido continuam `pessoal` | decisão sua, no desenho |
-| **A** | a prova da D8 **antes** do primeiro leitor (varredura por allowlist de arquivos, nascendo vazia) · regra pura do atalho (nunca em edição, nunca sobrescreve escolha do usuário) · a M3 · campo na categoria + lista agrupada por tipo · atalho no formulário · filtro | **não** — se algum número mudar, a categoria começou a decidir |
+| **K0–K3** | os 169 pagos sem linha de recebimento · quem manda no `status` · o vínculo com o lançamento de caixa (E4, RR7 da 03-C) · o escopo da Parte B | decisão sua, no desenho |
+| **A** | regras puras (saldo, status derivado, os três números) · a M1 · registrar recebimento parcial · **proteger o recebível com recebimento** onde hoje só `cobrado`/`pago` é protegido · `/terceiros` com saldo e histórico | **não** |
+| **B** | D11 (`ignorado` sai da soma de terceiros) · rótulos distintos para os dois "A receber" · "Recebido no mês" saindo dos recebimentos · "a receber" virando saldo | **sim**, item a item — **efeito hoje: zero** (0 ignorados, 0 recebimentos parciais) |
 
-⛔ **A 03-C2 é a primeira subfase com migration.** O SQL é o da M3 em `MIGRATIONS.md`, sem
-`update`: **nenhuma categoria é marcada pela migration** — a de terceiros do §1 do dicionário
-é marcada por você, pela tela. Aplicar exige o seu **"aplique a M3"** literal, separado do
-"aprovado" do desenho, e só pelo MCP; sem MCP, a subfase para antes da migration.
+⛔ **A 03-D é a segunda subfase com migration.** O SQL é o da M1 em `MIGRATIONS.md`, sem
+backfill. Aplicar exige o seu **"aplique a M1"** literal, separado do "aprovado" do desenho, e
+só pelo MCP.
 
-⛔ **A 03-C2 não edita a caracterização da 03-A.** `dashboard.test.ts` e
-`dashboard-caracterizacao.test.ts` ficam byte a byte iguais — o bloco 7 é a prova que ela
-herda, e a varredura nova é mais larga que ele.
+⚠️ **A 03-D é a subfase para a qual o bloco 8 da caracterização foi escrito.** O caso "⚠️
+`ignorado` conta como terceiro hoje" e os casos com `ignorado` dos blocos 1–3 e 5 mudam **se**
+você aprovar a D11 na Parte B — cada asserção editada listada no contrato. `dashboard.test.ts`
+fica byte a byte igual (o único `ignorado` dele é de `totalAReceber`, que já o exclui).
 
-⚠️ **Pendência que é sua (D39, D44, D48):** a conferência com dado real da 03-B, da 03-B2 **e**
-da 03-C — card do dashboard, dashboard financeiro, relatórios e o sino da branch local contra
-o app no ar.
+⚠️ **Pendência que é sua (D39, D44, D48, D52):** a conferência com dado real da 03-B, da
+03-B2, da 03-C **e** da 03-C2.
 
 ⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` segue **sem upstream**.
-`feat/redesign-03c-renda-pessoal` já está contida nela e pode ser apagada quando você quiser
-(a `feat/redesign-03b2-riscos` já foi).
+`feat/redesign-03c2-categorias` e `feat/redesign-03c-renda-pessoal` já estão contidas nela e
+podem ser apagadas quando você quiser (a `feat/redesign-03b2-riscos` já foi).
 
 ⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA MAIS AQUI — meça** (D34):
 
