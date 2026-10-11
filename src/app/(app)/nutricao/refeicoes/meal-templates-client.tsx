@@ -240,6 +240,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
           />
         </div>
         <Button
+          aria-pressed={showArchived}
           variant={showArchived ? "default" : "outline"}
           size="sm"
           onClick={() => setShowArchived((v) => !v)}

@@ -37,6 +37,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { cn } from "@/lib/utils";
 import { roundForDisplay, type NutrientTotal } from "@/lib/nutrition/calc";
@@ -51,6 +52,8 @@ import {
 } from "@/lib/nutrition/calendar";
 import {
   CORE_NUTRIENTS,
+  PLANNING_VIEW_LABELS,
+  PLANNING_VIEWS,
   WEEKDAY_SHORT_LABELS,
 } from "@/lib/nutrition/constants";
 import { sortMealsByTime, type PlannedFoodData } from "@/lib/nutrition/diary";
@@ -312,23 +315,13 @@ export function PlanningClient(props: PlanningClientProps) {
               aria-label="Escolher data"
             />
           )}
-          <div className="flex rounded-lg border p-0.5">
-            {(["dia", "semana", "modelos"] as const).map((view) => (
-              <button
-                key={view}
-                type="button"
-                onClick={() => goTo({ view })}
-                className={cn(
-                  "rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors",
-                  props.view === view
-                    ? "bg-primary/10 text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {view}
-              </button>
-            ))}
-          </div>
+          <SeletorDeVisao
+            rotulo="Visão do planejamento"
+            visoes={PLANNING_VIEWS}
+            rotulos={PLANNING_VIEW_LABELS}
+            atual={props.view}
+            aoEscolher={(view) => goTo({ view })}
+          />
         </div>
       </div>
 

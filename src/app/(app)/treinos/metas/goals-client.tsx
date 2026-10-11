@@ -249,11 +249,14 @@ export function GoalsClient({
             </Select>
 
             <Button
+              aria-pressed={showClosed}
               variant={showClosed ? "secondary" : "ghost"}
               size="sm"
               onClick={() => setShowClosed((value) => !value)}
             >
-              {showClosed ? "Escondendo nada" : "Mostrar encerradas"}
+              {/* Rótulo FIXO (D3): o estado é o aria-pressed; trocar o texto junto fazia o leitor
+                  de tela ouvir "Escondendo nada, pressionado" — o nome deixava de dizer o quê. */}
+              Mostrar encerradas
             </Button>
           </div>
 

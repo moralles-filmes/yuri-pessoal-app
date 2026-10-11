@@ -307,6 +307,7 @@ export function ProgramsClient({
           </SelectContent>
         </Select>
         <Button
+          aria-pressed={showArchived}
           variant={showArchived ? "default" : "outline"}
           size="sm"
           onClick={() => setParam("arquivados", showArchived ? null : "1")}

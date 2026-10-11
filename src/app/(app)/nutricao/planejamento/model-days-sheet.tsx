@@ -70,6 +70,7 @@ export function ModelDaysSheet({
                   key={index}
                   type="button"
                   onClick={() => setWeekIndex(index)}
+                  aria-pressed={weekIndex === index}
                   className={cn(
                     "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
                     weekIndex === index

@@ -35,6 +35,26 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "app/(app)/treinos/treinos/workouts-client.tsx", exige: /key=\{chaveExclusao\}/, porque: "a escolha de destino nasce limpa a cada exclusão" },
   { arquivo: "app/(app)/treinos/programas/programs-client.tsx", exige: /const exclusaoExibida = useItemRetido\(deleting\);/, porque: "a exclusão com destino não fecha num corte seco" },
   { arquivo: "app/(app)/treinos/programas/programs-client.tsx", exige: /key=\{chaveExclusao\}/, porque: "a escolha de destino nasce limpa a cada exclusão" },
+
+  // D3 — alternâncias soltas (fora do alcance da V1: sem .map, ou com outra assinatura visual)
+  { arquivo: "app/(app)/nutricao/compras/shopping-client.tsx", exige: /aria-pressed=\{aba === "lista"\}/, porque: "a aba Lista anuncia se está escolhida" },
+  { arquivo: "app/(app)/nutricao/compras/shopping-client.tsx", exige: /aria-pressed=\{aba === "despensa"\}/, porque: "a aba Despensa anuncia se está escolhida" },
+  { arquivo: "app/(app)/nutricao/compras/shopping-client.tsx", exige: /aria-pressed=\{reordering\}/, porque: "\"Reordenar\" anuncia se está ligado" },
+  { arquivo: "app/(app)/nutricao/metas/goals-client.tsx", exige: /aria-current=\{selected\?\.id === period\.id \? "true" : undefined\}/, porque: "o período selecionado das metas é anunciado" },
+  { arquivo: "app/(app)/nutricao/planejamento/model-days-sheet.tsx", exige: /aria-pressed=\{weekIndex === index\}/, porque: "\"Semana N\" do modelo anuncia a escolhida (Array.from, fora da V1)" },
+  { arquivo: "app/(app)/nutricao/receitas/recipes-client.tsx", exige: /aria-pressed=\{onlyFavorites\}/, porque: "\"Favoritas\" anuncia se está ligado" },
+  { arquivo: "app/(app)/nutricao/receitas/recipes-client.tsx", exige: /aria-pressed=\{showArchived\}/, porque: "\"Arquivadas\" anuncia se está ligado" },
+  { arquivo: "app/(app)/nutricao/refeicoes/meal-templates-client.tsx", exige: /aria-pressed=\{showArchived\}/, porque: "\"Arquivadas\" anuncia se está ligado" },
+  { arquivo: "app/(app)/treinos/calendario/generate-dialog.tsx", exige: /aria-pressed=\{mode === "rotina"\}/, porque: "o modo de gerar a semana anuncia o escolhido" },
+  { arquivo: "app/(app)/treinos/calendario/generate-dialog.tsx", exige: /aria-pressed=\{mode === "programa"\}/, porque: "o modo de gerar a semana anuncia o escolhido" },
+  { arquivo: "app/(app)/treinos/metas/goals-client.tsx", exige: /aria-pressed=\{showClosed\}/, porque: "\"Mostrar encerradas\" anuncia se está ligado" },
+  { arquivo: "app/(app)/treinos/programas/programs-client.tsx", exige: /aria-pressed=\{showArchived\}/, porque: "\"Arquivados\" anuncia se está ligado" },
+  { arquivo: "app/(app)/treinos/treinos/workouts-client.tsx", exige: /aria-pressed=\{onlyFavorites\}/, porque: "\"Favoritos\" anuncia se está ligado" },
+  { arquivo: "app/(app)/treinos/treinos/workouts-client.tsx", exige: /aria-pressed=\{showSuperseded\}/, porque: "\"Versões antigas\" anuncia se está ligado" },
+  { arquivo: "app/(app)/treinos/treinos/workouts-client.tsx", exige: /aria-pressed=\{showArchived\}/, porque: "\"Arquivados\" anuncia se está ligado" },
+  { arquivo: "components/training/exercise-picker-dialog.tsx", exige: /aria-pressed=\{onlyFavorites\}/, porque: "\"Favoritos\" do seletor de exercícios anuncia se está ligado" },
+  { arquivo: "components/training/session/exercise-list-sheet.tsx", exige: /aria-current=\{isCurrent \? "step" : undefined\}/, porque: "o exercício atual da sessão é anunciado" },
+  { arquivo: "components/training/session/substitute-sheet.tsx", exige: /aria-pressed=\{selected === item\.id\}/, porque: "o substituto escolhido é anunciado (assinatura border-primary, fora da V1)" },
 ];
 
 /** O que não pode voltar. */
@@ -42,6 +62,7 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: "app/(app)/treinos/calendario/calendar-client.tsx", exige: /\{(newDate|outcomeEntry|generateOpen|duplicateOpen) && \(/, porque: "montagem condicional sem o hook quebra a animação de fechamento" },
   { arquivo: "app/(app)/treinos/treinos/workouts-client.tsx", exige: /\{deleting && \(/, porque: "montagem condicional sem o hook quebra a animação de fechamento" },
   { arquivo: "app/(app)/treinos/programas/programs-client.tsx", exige: /\{deleting && \(/, porque: "montagem condicional sem o hook quebra a animação de fechamento" },
+  { arquivo: "app/(app)/treinos/metas/goals-client.tsx", exige: /Escondendo nada/, porque: "com aria-pressed o rótulo é fixo — trocar o texto apagava o nome do botão" },
 ];
 
 const fonte = (arquivo: string) => semComentarios(fs.readFileSync(path.join(SRC, arquivo), "utf8"));

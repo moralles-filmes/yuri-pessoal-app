@@ -51,6 +51,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { StatCard } from "@/components/shared/stat-card";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { cn } from "@/lib/utils";
@@ -71,6 +72,7 @@ import {
   CHANGE_KIND_LABELS,
   CORE_NUTRIENTS,
   DIARY_VIEW_LABELS,
+  DIARY_VIEWS,
   EFFECTIVE_MEAL_STATUS_HINTS,
   EFFECTIVE_MEAL_STATUS_LABELS,
   MACRO_ORDER,
@@ -399,23 +401,13 @@ export function DiaryClient(props: DiaryClientProps) {
               Hoje
             </Button>
           )}
-          <div className="flex rounded-lg border p-0.5">
-            {(["dia", "semana", "mes"] as const).map((view) => (
-              <button
-                key={view}
-                type="button"
-                onClick={() => goTo({ view })}
-                className={cn(
-                  "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                  props.view === view
-                    ? "bg-primary/10 text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {DIARY_VIEW_LABELS[view]}
-              </button>
-            ))}
-          </div>
+          <SeletorDeVisao
+            rotulo="Visão do diário"
+            visoes={DIARY_VIEWS}
+            rotulos={DIARY_VIEW_LABELS}
+            atual={props.view}
+            aoEscolher={(view) => goTo({ view })}
+          />
         </div>
       </div>
 

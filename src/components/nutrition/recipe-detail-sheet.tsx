@@ -432,6 +432,7 @@ export function RecipeDetailSheet({
                     key={value}
                     type="button"
                     onClick={() => setScope(value)}
+                    aria-pressed={scope === value}
                     className={cn(
                       "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
                       scope === value

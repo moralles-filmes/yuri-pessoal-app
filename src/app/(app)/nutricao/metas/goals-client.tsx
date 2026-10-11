@@ -189,6 +189,7 @@ export function GoalsClient({
                     key={period.id}
                     type="button"
                     onClick={() => setSelectedId(period.id)}
+                    aria-current={selected?.id === period.id ? "true" : undefined}
                     className={cn(
                       "flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       selected?.id === period.id && "border-primary/40 bg-primary/5",

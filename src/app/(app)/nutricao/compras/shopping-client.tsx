@@ -336,6 +336,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
       {/* ── Abas: alvo de toque grande ── */}
       <div className="grid grid-cols-2 gap-2">
         <Button
+          aria-pressed={aba === "lista"}
           variant={aba === "lista" ? "default" : "outline"}
           className="h-11"
           onClick={() => {
@@ -347,6 +348,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
           Listas
         </Button>
         <Button
+          aria-pressed={aba === "despensa"}
           variant={aba === "despensa" ? "default" : "outline"}
           className="h-11"
           onClick={() => {
@@ -678,6 +680,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
             </select>
 
             <Button
+              aria-pressed={reordering}
               variant={reordering ? "default" : "outline"}
               size="sm"
               className="h-11"

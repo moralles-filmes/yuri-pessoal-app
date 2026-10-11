@@ -149,6 +149,7 @@ export function ExercisePickerDialog({
             </SelectContent>
           </Select>
           <Button
+            aria-pressed={onlyFavorites}
             variant={onlyFavorites ? "default" : "outline"}
             size="sm"
             onClick={() => setOnlyFavorites((value) => !value)}

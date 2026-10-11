@@ -52,6 +52,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PageHeader } from "@/components/shared/page-header";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { useChaveDeAbertura, useItemRetido } from "@/components/shared/use-item-retido";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { ConsistencyCalendar } from "@/components/training/consistency-calendar";
@@ -100,6 +101,7 @@ const DuplicateWeekDialog = dynamic(
 );
 
 type View = "semana" | "mes" | "lista" | "consistencia";
+const VIEWS: readonly View[] = ["semana", "mes", "lista", "consistencia"];
 
 const VIEW_LABELS: Record<View, string> = {
   semana: "Semana",
@@ -303,16 +305,13 @@ export function CalendarClient({
         </span>
 
         <div className="ml-auto flex flex-wrap items-center gap-1">
-          {(["semana", "mes", "lista", "consistencia"] as View[]).map((option) => (
-            <Button
-              key={option}
-              variant={view === option ? "default" : "outline"}
-              size="sm"
-              onClick={() => setParam("visao", option === "semana" ? null : option)}
-            >
-              {VIEW_LABELS[option]}
-            </Button>
-          ))}
+          <SeletorDeVisao
+            rotulo="Visão do calendário"
+            visoes={VIEWS}
+            rotulos={VIEW_LABELS}
+            atual={view}
+            aoEscolher={(option) => setParam("visao", option === "semana" ? null : option)}
+          />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

@@ -421,6 +421,7 @@ export function PrepareReviewClient({
                 <Button
                   key={source}
                   type="button"
+                  aria-pressed={previousSource === source}
                   variant={previousSource === source ? "default" : "outline"}
                   className="h-10"
                   onClick={() => setPreviousSource(source)}

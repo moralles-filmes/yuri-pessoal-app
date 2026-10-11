@@ -124,6 +124,7 @@ export function GenerateDialog({
         <div className="space-y-4">
           <div className="flex gap-2">
             <Button
+              aria-pressed={mode === "rotina"}
               variant={mode === "rotina" ? "default" : "outline"}
               size="sm"
               onClick={() => setMode("rotina")}
@@ -131,6 +132,7 @@ export function GenerateDialog({
               Montar rotina
             </Button>
             <Button
+              aria-pressed={mode === "programa"}
               variant={mode === "programa" ? "default" : "outline"}
               size="sm"
               onClick={() => setMode("programa")}

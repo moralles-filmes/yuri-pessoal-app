@@ -266,6 +266,7 @@ export function RecipesClient(props: RecipesClientProps) {
         </select>
 
         <Button
+          aria-pressed={onlyFavorites}
           variant={onlyFavorites ? "default" : "outline"}
           size="sm"
           onClick={() => setOnlyFavorites((v) => !v)}
@@ -274,6 +275,7 @@ export function RecipesClient(props: RecipesClientProps) {
           Favoritas
         </Button>
         <Button
+          aria-pressed={showArchived}
           variant={showArchived ? "default" : "outline"}
           size="sm"
           onClick={() => setShowArchived((v) => !v)}

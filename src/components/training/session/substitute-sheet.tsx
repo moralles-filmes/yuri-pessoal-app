@@ -183,6 +183,7 @@ export function SubstituteSheet({
                       key={item.id}
                       type="button"
                       onClick={() => setSelected(item.id)}
+                      aria-pressed={selected === item.id}
                       className={cn(
                         "flex w-full items-center gap-2 rounded-xl border p-3 text-left transition-colors",
                         selected === item.id

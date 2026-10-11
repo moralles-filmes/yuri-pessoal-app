@@ -308,6 +308,7 @@ export function WorkoutsClient({
           </SelectContent>
         </Select>
         <Button
+          aria-pressed={onlyFavorites}
           variant={onlyFavorites ? "default" : "outline"}
           size="sm"
           onClick={() => setParam("favoritos", onlyFavorites ? null : "1")}
@@ -316,6 +317,7 @@ export function WorkoutsClient({
           Favoritos
         </Button>
         <Button
+          aria-pressed={showSuperseded}
           variant={showSuperseded ? "default" : "outline"}
           size="sm"
           onClick={() => setParam("versoes", showSuperseded ? null : "1")}
@@ -323,6 +325,7 @@ export function WorkoutsClient({
           Versões antigas
         </Button>
         <Button
+          aria-pressed={showArchived}
           variant={showArchived ? "default" : "outline"}
           size="sm"
           onClick={() => setParam("arquivados", showArchived ? null : "1")}
