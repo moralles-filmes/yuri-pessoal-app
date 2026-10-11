@@ -156,6 +156,47 @@ describe("03-C A2(b) · despesa compartilhada que vira receita", () => {
   );
 });
 
+/**
+ * Achado P2 da auditoria do módulo (2026-10-11): o ramo de transferência APAGA o lançamento e
+ * recria pelo `criarTransacao`. Com a A1 recusando DEPOIS do delete, uma transferência editada
+ * para receita compartilhada sem parte sumia — e, sendo o pagamento de uma fatura, deixava a
+ * fatura "paga" apontando para o nada. A A1 roda antes de qualquer escrita, inclusive desta.
+ */
+describe("03-C A2 · transferência editada para receita: a recusa da A1 vem antes do delete", () => {
+  const transferencia = () =>
+    existente({
+      type: "transferencia",
+      payment_method: "transferencia",
+      transfer_group_id: "grupo-1",
+      transfer_account_id: "9c4e2a10-7b3d-4f61-8e25-1a2b3c4d5e6f",
+    });
+
+  it("recusa no campo e não apaga nada", async () => {
+    fake = criarSupabaseEmMemoria({ transactions: [transferencia()] });
+    const r = await updateTransaction(
+      ID,
+      payload({ receita_classificacao: "compartilhada" }),
+    );
+    expect(r).toMatchObject({ ok: false, fieldErrors: { receita_minha_parte: expect.any(Array) } });
+    expect(fake.escritas()).toEqual([]);
+    expect(linhaFinal()).toMatchObject({ type: "transferencia", transfer_group_id: "grupo-1" });
+  });
+
+  it("sendo o pagamento de uma fatura, a fatura continua apontando para ele", async () => {
+    fake = criarSupabaseEmMemoria({
+      transactions: [transferencia()],
+      card_statements: [{ id: "st-1", pago_transacao_id: ID, status: "paga" }],
+    });
+    const r = await updateTransaction(
+      ID,
+      payload({ receita_classificacao: "compartilhada", receita_minha_parte: 1000 }),
+    );
+    expect(r.ok).toBe(false);
+    expect(fake.escritas()).toEqual([]);
+    expect(fake.tabelas.card_statements[0]).toMatchObject({ pago_transacao_id: ID });
+  });
+});
+
 describe("03-C A2 · sair de receita zera a responsabilidade", () => {
   it("receita de terceiro editada para despesa pessoal volta a pessoal, com valor nulo", async () => {
     fake = criarSupabaseEmMemoria({

@@ -196,9 +196,14 @@ em `validators/round-trip.test.ts` (o schema aceita a própria saída).
 
 1. `transactionSchema` (como hoje).
 2. O `select` do existente ganha `type`.
-3. Transferência (era ou vira): remove e recria, como hoje. A receita recriada passa pelo
-   `criarTransacao` acima.
-4. **Alvo receita:** schema + A1 **antes de qualquer escrita**. Se recusar → `invalid(...)`.
+3. **Alvo receita:** schema + A1 **antes de qualquer escrita** — inclusive antes do passo 4,
+   que apaga. Se recusar → `invalid(...)`.
+   ⚠️ *Corrigido depois da auditoria do módulo (2026-10-11, achado P2):* a primeira versão
+   deste desenho punha a transferência antes da A1. Uma transferência editada para receita
+   compartilhada sem parte era apagada e só então recusada; sendo o pagamento de uma fatura, a
+   fatura ficava "paga" apontando para o nada.
+4. Transferência (era ou vira): remove e recria, como hoje. A receita recriada passa pelo
+   `criarTransacao` acima, que decide de novo e chega no mesmo lugar.
 5. **Alvo receita, existente não parcelado — A2(b):** `reapplySplit` com `pessoal` e
    `parts: []`, **antes** do `update`. Desfechos: `nada`, `limpar` (a despesa compartilhada que
    vira receita perde divisão e recebíveis, pelo caminho de hoje) ou `bloqueado` → erro, **e
@@ -522,6 +527,17 @@ três lições da 03-B2 valem:
 | RR7 | Reembolso marcado como receita `terceiro` não tem vínculo com o recebível. Quando a 03-D criar `receivable_receipts`, ele pode ser contado como "outras entradas de terceiros" **e** como reembolso | O §13.2 já exclui reembolso de "outras entradas" | 03-D |
 | RR8 | Na A2(b), se o `update` falhar **depois** do `limpar`, a despesa perde a divisão e fica pessoal (`valor_pessoal` nulo), com a mensagem de erro | Erra para "meu", nunca para "de terceiro" | Aceito; 03-G |
 | RR9 | O componente novo pesa no primeiro carregamento de `/financeiro/lancamentos` (o formulário não é carregado sob demanda) | Medido antes × depois | Aceito se dentro do teto; senão, reporto antes de seguir |
+
+**Acrescentados pela auditoria do módulo (2026-10-11, `saas-audit-br:module --audit-only`,
+dois auditores; o P2 encontrado foi corrigido, os P3 abaixo ficam declarados):**
+
+| # | Risco | Mitigação | Destino |
+| --- | --- | --- | --- |
+| RR10 | Na **edição** de uma receita, a ausência das chaves `receita_*` vira `pessoal` — um chamador futuro que não as mande (edição em lote, ferramenta da IA de edição) transformaria entrada de terceiro em renda, em silêncio | Hoje o único chamador (`transaction-form.tsx`) sempre as manda para receita | Decidir "preservar ou exigir" quando surgir um segundo chamador de `updateTransaction` |
+| RR11 | Editar um **estorno de cartão** (receita com `card_id`) pelo formulário zera `card_id`/`statement_id` — o estorno sai da fatura e passa a contar como entrada de conta. **Anterior à 03-C**; o que é novo é o formulário mostrar "De quem é esta entrada?" nesse lançamento | Nenhuma nesta subfase (3 estornos no banco hoje) | 03-G / REDESIGN-05 |
+| RR12 | Chamada **direta** à action trocando o tipo de um pai parcelado para receita grava as colunas da receita no pai e deixa parcelas e recebíveis vivos (a tela não oferece esse caminho) | A UI troca o lápis por link para `/parcelamentos` | 03-F/03-G (recusar troca de tipo de parcelado na própria action) |
+| RR13 | Valor digitado com 3+ casas decimais: a A1 decide sobre `Math.round` dos centavos e o `numeric(14,2)` arredonda por conta própria — diferença de 1 centavo na borda | `moneyAmount` aceita, mas o formulário digita 2 casas | Arredondar a 2 casas nos schemas de dinheiro (fora desta lista) |
+| RR14 | Detalhe do RR8: se o `update` falhar depois do `limpar`, somem também os **recebíveis pendentes**, e a mensagem de erro não diz isso | Erra para "meu" | 03-G, junto com a atomicidade |
 
 ⛔ **Esta subfase não promete "zero bugs".** Ela promete que a responsabilidade da receita nasce
 gravada e coerente pelos dois caminhos da tela; que o motor a reparte sem conhecer

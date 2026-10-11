@@ -79,6 +79,20 @@ export async function updateTransaction(
     .single();
   if (loadErr || !existing) return dbError("Lançamento não encontrado.");
 
+  // REDESIGN-03-C · A2 — a receita decide de quem é o dinheiro ANTES de qualquer escrita: a
+  // recusa (ex.: o valor caiu abaixo da "minha parte" de uma compartilhada) não grava nada.
+  // ⚠️ Antes INCLUSIVE do ramo de transferência, que apaga o lançamento e recria: com a recusa
+  // vindo de dentro do `criarTransacao`, uma transferência editada para receita sumia — e, sendo
+  // o pagamento de uma fatura, deixava a fatura "paga" apontando para o nada (achado P2 da
+  // auditoria do módulo, 2026-10-11). O `criarTransacao` decide de novo, e chega no mesmo lugar.
+  let colunasDaReceita: ColunasDaResponsabilidade | null = null;
+  if (d.type === "receita") {
+    const r = lerResponsabilidadeDaReceita(input, d.amount);
+    if (!r.ok) return invalid(r.fieldErrors);
+    colunasDaReceita = r.colunas;
+  }
+  const eraReceita = existing.type === "receita";
+
   const wasTransfer = !!existing.transfer_group_id;
   const isTransfer = d.type === "transferencia";
 
@@ -107,16 +121,6 @@ export async function updateTransaction(
     }
     return recriado;
   }
-
-  // REDESIGN-03-C · A2 — a receita decide de quem é o dinheiro ANTES de qualquer escrita: a
-  // recusa (ex.: o valor caiu abaixo da "minha parte" de uma compartilhada) não grava nada.
-  let colunasDaReceita: ColunasDaResponsabilidade | null = null;
-  if (d.type === "receita") {
-    const r = lerResponsabilidadeDaReceita(input, d.amount);
-    if (!r.ok) return invalid(r.fieldErrors);
-    colunasDaReceita = r.colunas;
-  }
-  const eraReceita = existing.type === "receita";
 
   // Re-resolve a fatura ao editar (ex.: mudou a data ou o cartão). Se deixar de ser
   // compra no cartão, limpa card_id/statement_id. O ajuste manual de fatura é à parte.
