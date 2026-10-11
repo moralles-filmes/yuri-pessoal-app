@@ -1,13 +1,13 @@
 # STATUS
 
-**Atualizado:** 2026-09-27
+**Atualizado:** 2026-10-11
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
 REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
 (trabalho de outro chat, revisado e integrado aqui em `1b5aa28`) · **REDESIGN-03-A ✅**
 (`02aa54b`, integrada por merge `--no-ff`) · **REDESIGN-03-B ✅** (integrada por merge
-`--no-ff` em `ad9f359`); **03-B2 liberada** — fecha os riscos residuais da 03-B antes da 03-C
-(D40)
+`--no-ff` em `ad9f359`) · **REDESIGN-03-B2 ✅** (integrada por merge `--no-ff` em `b06f160`);
+**03-C liberada** — renda pessoal × movimentação de terceiros (E2/E3)
 
 ⛔ **As três migrations continuam sem ser aplicadas.** "Aprovado tudo" foi lido como aval do
 **visual** e do **dicionário**. Cada migration escreve no banco de produção e segue precisando
@@ -19,6 +19,66 @@ a subfase precisar delas.
 o `PLANO.md` descreve a 03-B como *"unificar o pipeline triplicado … **sem mudar número
 nenhum**"*, e `MIGRATIONS.md:16` liga a M3 à **D8**, que é a **03-C2**. **A 03-B não precisa
 de migration nenhuma.** A primeira a precisar é a 03-C2.
+
+---
+
+## REDESIGN-03-B2 — todo risco da 03-B sai por uma de duas portas ✅
+
+Branch própria a partir de `704dc66` (desenho `eca91e3` + plano `7ceae40` + 16 commits),
+integrada por merge `--no-ff` em **`b06f160`**. Contrato:
+`docs/superpowers/specs/2026-09-27-03b2-riscos-residuais-design.md`. **Nenhuma migration; os
+parâmetros das quatro assinaturas públicas intactos** — o retorno só **ganhou** `completude`.
+
+Cada risco declarado pela 03-B saiu por uma de duas portas: **irrepresentável** (o tipo não
+compila, ou uma fronteira pega a forma) ou **decisão sua aplicada**, com o número que muda
+congelado em teste **antes** do conserto — dois commits, caracteriza → conserta.
+
+| Item | O que fechou | Muda número? |
+| --- | --- | --- |
+| A1 | o tipo das entradas depende do escopo lido: `inst` com o escopo do card **não compila** (R1); a janela só é exigida quando o escopo lê transações | não |
+| A2 | linhas estritas (`campo: T \| null`), estreitamento de domínio declarado (D41) e **zero cast** de linha no Cron (R2 + R4) | não |
+| A3 | fronteira do motor pela API do compilador **com checker**, ao lado da regex da 03-B (R3) | não |
+| A4 | `LeituraDoDono` nas três leituras que faltavam; o guard que lançava saiu | não |
+| A5 | tetos 2000/1000 **visíveis** por `count: "exact"` (D41) e `completude` real nos retornos, na IA e nos insights | não |
+| A6 | `saldoDasContas` num módulo **sem import**, usado pelas telas de conta — bundle das quatro rotas idêntico | não |
+| A7 + A8 | limiares do alerta num lugar só (tela e sino leem a mesma constante); o fim do mês da IA sai de `ultimoDiaDoMes` | não |
+| **B1** | fatura **vazia** sai do sino e da busca (`.gt("itens", 0)`): **2 → 1** `invoice_overdue` na fixture | **sim**, por decisão sua |
+| **B2** | **uma régua só** para o gasto alto — o sino adota a da tela. Cenário A: não disparava → **dispara 37%**; cenário B: disparava 50% → **não dispara**. A tela não mudou (equivalência) | **sim**, por decisão sua |
+| **B3** | a IA soma **todas** as contas via `saldoDasContas` e lista as inativas com saldo, marcadas. Fixture: 13.235,79 → 14.235,78. **Dado real: latente** (0 contas inativas) | **sim**, por decisão sua |
+
+**Prova:**
+- **Os 65 da 03-A e os 24 do `dashboard.test.ts` não mudaram uma linha** — `git diff --quiet`
+  contra `704dc66`, em todo passo.
+- **21 mutações, 21 vermelhas**, cada uma registrando o nome do teste que caiu e com a
+  restauração conferida por `git diff --quiet`. M1a/M1b/M3 são travas de tipo: a prova é o
+  `tsc` (TS2578/TS2344/TS2322), com o vitest verde — está dito.
+- **+6 arquivos, +66 casos** (195 / 4.033 → 201 / 4.099).
+- **Revisão final da branch inteira** (independente, somente leitura): 0 crítico, 2
+  importantes, 4 menores. Uma rodada de correção (`b1e6b88`, `3804875`) e uma re-revisão
+  restrita: **7 de 7 resolvidos**, nenhum importante novo (D42).
+
+⚠️ **Desvios do desenho, declarados:** a A5 devolve `situacao` com três estados
+(`completa | saturou | sem_contagem`) em vez de `saturou: boolean` — a contagem nula ganha
+motivo próprio · `janela?: undefined` em vez de `never` · uma defesa de runtime lança se um
+escopo que lê transações vier sem janela (o tipo também a exige desde a correção M2) · a A5
+em dois commits · a B2 consertada no principal depois de o roteador falhar no gate (D43) · a
+varredura da A2 cobre só os tipos `Linha*` que `pipeline.ts` exporta.
+
+### Risco residual da 03-B2
+
+| # | Risco | Destino |
+| --- | --- | --- |
+| RR1 | a fronteira com checker só vê quem importa o motor; escapam a reexportação, o objeto montado sem literal e empurrado numa lista, e a cadeia por `reduce` ou função auxiliar | aceito, declarado no teste |
+| RR1b | literal de array como **receptor** da cadeia (`[...a.map(…), ...b.map(…)].filter(ok)`) ou lista montada passada a `concat` — apontado na re-revisão, **não medido** | aceito (D42) |
+| RR2 | `max_rows` do PostgREST corta em silêncio as leituras **sem** `.limit` e as do Cron (cuja janela cresceu na B2) | **03-G** |
+| RR3 | um CHECK alargado sem atualizar `constants.ts` tira o lançamento novo da soma (tela e IA dizem "parcial"; o Cron, não) | aceito; o teste que compara as duas listas fica como sugestão |
+| RR4 | `usadoPorCartao` em centavos na tela × float no sino, na borda do limiar | **05** |
+| RR5 | `completude` chega à IA e aos insights, **não** às telas | **04 / 06** |
+| RR6 | dois `as` projetam o tipo pela forma lida (`lerFinanceiro`, `montarEntradas`), cada um com gêmeo de runtime | aceito, declarado no código |
+| RR7 | um COUNT por leitura com teto; o coletor de insight chama o card até 12× em série | aceito; medir se a geração de insight ficar lenta |
+| RR8 | a régua única compara o mês corrente **cheio, com pendentes**, contra meses fechados | **03-E** (§13.6) |
+| RR9 | notificações de fatura vazia gravadas antes da B1 continuam no sino | aceito |
+| RR10 | as três leituras aceitam `owner`; faturas e relatório não têm chamador que o use | aceito |
 
 ---
 
@@ -588,6 +648,10 @@ as colunas já existem e o CHECK já aceita.
 | D38 | **A N3 não derrubar nenhum dos 65 é estrutural, não fraqueza.** O critério do desenho ("equivalência + algum dos 65") era inatingível: os 65 chamam o motor com `Dash*` direto e nunca passam por `montarEntradas`. Medido, não suposto — quem prova a mudança de número são os testes do motor sobre a entrada montada |
 | D39 | **A 03-B foi integrada na mesma sessão que a escreveu, com sua autorização** — a primeira integração sem revisão independente com mutação própria (o R4 teve). A árvore integrada tem o **mesmo hash** da ponta da branch e os cinco comandos rodaram depois do merge. ⚠️ **Falta a conferência com dado real**: rodar a branch local (mesmo banco) e comparar card do dashboard, dashboard financeiro e relatórios com o app no ar. É sua — exige a sua sessão |
 | D40 | **Os riscos residuais da 03-B viram a 03-B2, ANTES da 03-C** (você, 2026-09-27). Três itens mudam número (B1–B3) e precisam de "sim" um a um; misturados às mudanças de sentido da 03-C, os dois tipos de mudança ficariam indistinguíveis no diff |
+| D41 | **As decisões da 03-B2 foram suas, uma de cada vez** (2026-09-27): **B1** — o sino **e** a busca leem faturas com `.gt("itens", 0)`, e as notificações já gravadas ficam · **B2** — o sino adota a régua da tela, e o "até a mesma altura" do §13.6 continua da 03-E · **B3** — o saldo da IA soma todas as contas via `saldoDasContas` · **A2** — estreitar o domínio e declarar o que fica de fora · **A5** — `count: "exact"` para tornar o teto visível |
+| D42 | **A revisão final achou uma forma que a fronteira com checker deixava passar, e o escape foi MEDIDO antes do conserto.** `map` encadeado com `filter` sob `Array<DashTx>` e spread de `map`: aplicados num importador direto do motor, `tsc` limpo e suíte verde (4.096/4.096). A regra (b) passou a descer pela cadeia (`filter/slice/sort/toSorted/reverse/toReversed/concat`) e o spread ganhou a regra (d); as duas formas viraram as mutações M5d/M5e, agora vermelhas. A re-revisão apontou mais uma forma combinada (receptor literal, `concat` com lista montada), **não medida** — aceita como RR1b em vez de uma segunda rodada de correção sem revisão. Na mesma rodada: a descrição de `finance.get_balances` ainda dizia "cada conta ativa" depois da B3 — a frase envelhece (invariante 100) e ganhou teste. `version` continua `"1"` porque nenhuma ferramenta do registry sobe versão por descrição |
+| D43 | **Roteador da 03-B2:** 13 despachos ao Codex, um com falha — a B2 (2/2) voltou `scope_violation` (`worker_modified_main_repository`) e o resultado **não** foi aproveitado; o conserto foi escrito no principal com TDD. ⚠️ **O worktree do worker não tem `node_modules`**: ele não consegue ver o vermelho, e um dos pacotes da correção voltou só com os testes. O vermelho é conferido no principal antes de aplicar a produção. E **a árvore principal não pode mudar enquanto um dispatch roda** — é o que o gate recusa |
+| D44 | **A 03-B2 foi integrada na sessão que a escreveu, com sua autorização** — desta vez **com** revisão independente da branch inteira e re-revisão restrita da correção. A árvore integrada tem o **mesmo hash de tree** da ponta (`3804875`), e os cinco comandos rodaram depois do merge. ⚠️ **A conferência com dado real da D39 vale agora para as duas subfases**: card do dashboard, dashboard financeiro, relatórios **e o sino** (B1 e B2 mudam o que ele avisa) da branch local contra o app no ar. É sua |
 
 ## Bloqueios
 
@@ -600,7 +664,8 @@ mutação · `R2` **3,1 KB** de folga de bundle na casca (eram 3,3; o link de pu
 `R3` ids de card do dashboard · ~~`R4` deep-link para rota inexistente~~ **FECHADO**
 (02-D → 02-E → merge `1b5aa28`), com mutação nas três etapas · **`R5` mudar número sem
 perceber — MITIGADO nas quatro funções do núcleo pela 03-A; o pipeline que as alimenta virou
-UM na 03-B (com os riscos dele indo para a 03-B2); CONTINUA ABERTO no resto** (ver abaixo) · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
+UM na 03-B, e os riscos dele foram fechados na 03-B2 (tela e sino com uma régua só no gasto
+alto); CONTINUA ABERTO no resto** (ver abaixo) · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
 Detalhe em `AUDITORIA.md` §4.
 
 **O que a 03-A fechou do `R5`, e o que ela não fechou.** Fechou: `resumoMes`,
@@ -655,6 +720,17 @@ alvo: a página do dashboard financeiro passou a importar `pipeline.ts`, e ele n
 nada para o cliente. Delta de **+3 arquivos e +46 casos**, todos da 03-B. A árvore integrada
 tem o **mesmo hash** da ponta da branch — e os cinco rodaram de novo mesmo assim.
 
+**REDESIGN-03-B2, depois do merge `b06f160`:** `test:run` ✅ **201 / 4.099** (19,92 s e 15,22 s
+na mesma árvore — a variação entre rodadas é maior que o efeito da subfase) · `lint` ✅ · `tsc`
+✅ · `build` ✅ · `perf:bundle` ✅ mediana **214,2**, 68 rotas, `/(app)/configuracoes`
+**281,9/285** · `/(app)/dashboard` **203,8** · `/(app)/relatorios` **204,1** ·
+`/(app)/financeiro` **195,9** · `/(app)/financeiro/contas` **214,0** ·
+`/(app)/dashboard/financeiro` **201,0** — o valor exato é 200,951 KB, na fronteira do
+arredondamento (era 200,9); o único texto novo que chega ao cliente está num chunk carregado
+só por `/(app)/ia/configuracoes`. Delta de **+6 arquivos e +66 casos**, todos da 03-B2. A
+árvore integrada tem o **mesmo hash de tree** da ponta da branch, e os cinco rodaram depois do
+merge mesmo assim.
+
 Em cada subfase o delta de testes é **exatamente** o que foi acrescentado (02-A: +1 arq./+7
 casos; 02-B: +1 arq./+12; 02-C: +1 arq./+13; 02-D: +1 arq./+48 — 27 do `nav.test.ts`, 9 da
 Dieta, 12 de Treinos; 02-E: +1 arq./+62, todos de `module-shell.test.ts`; **`R4`: +1 arq./+42**,
@@ -669,30 +745,34 @@ E o `perf:bundle` da 02-D ser idêntico ao da 02-C **é o resultado esperado, n�
 coincidência**: a subfase não altera um arquivo de runtime sequer. Ele foi rodado justamente
 para confirmar isso em vez de eu afirmar.
 
-## Próximo passo — REDESIGN-03-B2 (fechar os riscos residuais da 03-B)
+## Próximo passo — REDESIGN-03-C (renda pessoal × movimentação de terceiros)
 
-**A 03-B está fechada e integrada** (`ad9f359`). Antes da 03-C, você decidiu fechar os riscos
-que ela declarou (D40). O briefing foi entregue nesta sessão, e o primeiro entregável da 03-B2
-é o **desenho** (`docs/superpowers/specs/`), aprovado por você antes de qualquer linha de
-código.
+**A 03-B2 está fechada e integrada** (`b06f160`). A 03-C faz `classificacao` e
+`valor_pessoal` valerem para `type=receita`, gravados no lançamento (E2), e o motor reparte a
+entrada entre "minha" e "de terceiros" (E3). O briefing foi entregue; o primeiro entregável é
+o **desenho**, aprovado por você antes de qualquer linha de código.
 
 | Parte | Itens | Muda número? |
 | --- | --- | --- |
-| **A** | R1 vira erro de compilação (tipo das entradas por escopo) · linhas estritas e zero cast no Cron (R2 + R4) · fronteira pelo checker do TypeScript (R3) · `LeituraDoDono` nas 3 leituras, e o guard sai · tetos visíveis + `completude` real na IA · `saldoDasContas` nas telas de conta · limiares do alerta num lugar só · `periodo.ate` da IA | não |
-| **B** | **B1** `.gt("itens", 0)` no sino — some a "Fatura atrasada" urgente de fatura vazia · **B2** uma régua só para o gasto alto — o sino adota a da tela, e o "até a mesma altura" do §13.6 continua da 03-E · **B3** o saldo da IA passa a incluir conta inativa? | **sim — cada um só com o seu "sim"** |
+| **C0** | o que significa receita `terceiro`/`compartilhada` — a recomendação é **sem pessoa e sem recebível** (o "eu devo a alguém" não existe no modelo); reembolso continua sendo da 03-D | decisão sua, no desenho |
+| **A** | regra pura da responsabilidade da receita · gravação e edição por ela (IA, registro rápido, comprovante e importação continuam `pessoal`) · formulário + lista · `entradasMeu`/`entradasTerceiros` no motor (`entradasMeu + entradasTerceiros = entradas`) · retornos e IA com a descrição no mesmo commit | não — **nada é reclassificado sozinho (D10)** |
+| **B** | **B1** os cards de "Entradas" passam a mostrar a renda pessoal? · **B2** `saldo = entradas − saidas` muda já? (a recomendação é **não**: o Resultado do §13.3 depende do "perdoado" da 03-D, e "renda pessoal − despesa bruta" é proibido) | **sim — cada um só com o seu "sim"** |
 
-Cada item da parte B entra em **dois commits**: um que congela o comportamento de hoje em
-teste, e o conserto com o mesmo teste atualizado — o diff mostra o número que muda.
+⛔ **A 03-C edita a caracterização da 03-A — e é a primeira subfase autorizada a isso.** O
+bloco 6 ("receita NÃO é partida") e o caso [5 ⚠️] foram escritos para virar aqui; os objetos
+com `toEqual` cheio dos blocos 1–4 **ganham** as duas chaves novas e nada mais. Os blocos 7
+a 10 ficam idênticos, e o `dashboard.test.ts` também.
 
-⛔ **A 03-B2 NÃO precisa de migration.** A primeira continua sendo a **03-C2**, com a **M3**, e
-migration em produção continua exigindo um "aplique a M3" seu, separado.
+⛔ **A 03-C NÃO precisa de migration** — as colunas e o CHECK já existem. A primeira continua
+sendo a **03-C2**, com a **M3**, e migration em produção continua exigindo um "aplique a M3"
+seu, separado.
 
-⚠️ **Pendência da 03-B que é sua (D39):** a conferência com dado real — card do dashboard,
-dashboard financeiro e relatórios da branch local contra o app no ar.
+⚠️ **Pendência que é sua (D39, D44):** a conferência com dado real da 03-B **e** da 03-B2 —
+card do dashboard, dashboard financeiro, relatórios e o sino da branch local contra o app no
+ar.
 
 ⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` segue **sem upstream**.
-`feat/redesign-r4-deeplinks`, `feat/redesign-03a-caracterizacao` e
-`feat/redesign-03b-pipeline` já estão contidas nela e podem ser apagadas quando você quiser.
+`feat/redesign-03b2-riscos` já está contida nela e pode ser apagada quando você quiser.
 
 ⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA MAIS AQUI — meça** (D34):
 
