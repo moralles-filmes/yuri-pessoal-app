@@ -68,6 +68,13 @@ describe("a tela pinta célula e legenda só com TONS_DO_MES", () => {
     expect(fonte).not.toMatch(/size-2\.5 rounded-sm bg-(muted|primary|destructive)/);
   });
 
+  it("a amostra de cada item da legenda é a classe da MESMA fonte da célula (M11)", () => {
+    // Percorrer ORDEM_DOS_TONS não basta: com classes próprias na amostra, legenda e célula
+    // voltariam a discordar sem nada ficar vermelho — a mutação M11 da 07-C passava verde.
+    expect(fonte).toMatch(/ORDEM_DOS_TONS\.map\(\(tom\)[\s\S]{0,400}?TONS_DO_MES\[tom\]\.classe/);
+    expect(fonte).toMatch(/ORDEM_DOS_TONS\.map\(\(tom\)[\s\S]{0,600}?TONS_DO_MES\[tom\]\.rotulo/);
+  });
+
   it("o tom não é mais decidido na tela", () => {
     expect(fonte).not.toMatch(/function cellTone/);
   });
