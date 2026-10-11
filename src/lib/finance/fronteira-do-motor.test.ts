@@ -2,13 +2,15 @@
  * 03-B2 A3 — fronteira do motor pelo compiler API do TypeScript COM checker.
  * O tipo contextual revela montagens em Array<DashTx>, satisfies, argumentos inline
  * e callbacks com retorno anotado, sem depender de como o tipo foi escrito.
- * A regra (b) também olha a chamada: no map genérico o contexto do literal pode ser
- * o parâmetro U, não DashStatement; no flatMap o callback pode devolver [{ ... }].
+ * A regra (b) desce por filter/slice/sort/toSorted/reverse/toReversed/concat até map/flatMap.
+ * O spread num literal de array com contexto Dash*[] entra pela regra (d).
  *
  * Complementa a regex da 03-B em pipeline.test.ts, que continua varrendo TODOS os
  * arquivos, inclusive quem chega ao motor por reexportação. Aqui só entram imports
  * diretos do motor, mas as regras enxergam qualquer forma descrita acima e casts.
- * Risco residual: objeto construído sem literal e depois empurrado numa lista escapa.
+ * Risco residual: objeto construído sem literal e depois empurrado numa lista;
+ * cadeia por método fora da lista (ex.: reduce) ou função auxiliar; e quem chega
+ * ao motor por reexportação (só a regex de pipeline.test.ts vê).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -27,6 +29,15 @@ const TIPOS_DO_MOTOR = new Set([
   "DashBill",
   "DashInstallmentItem",
   "DashRecurrence",
+]);
+const PRESERVAM_ELEMENTO = new Set([
+  "filter",
+  "slice",
+  "sort",
+  "toSorted",
+  "reverse",
+  "toReversed",
+  "concat",
 ]);
 
 function semComentarios(codigo: string): string {
@@ -80,6 +91,16 @@ function callbackMontaLiteral(argumento: ts.Expression): boolean {
   return temRetornoLiteral(callback.body);
 }
 
+function cadeiaMontaLiteral(chamada: ts.CallExpression): boolean {
+  if (chamada.arguments.some(callbackMontaLiteral)) return true;
+  const alvo = semParenteses(chamada.expression);
+  if (!ts.isPropertyAccessExpression(alvo) || !PRESERVAM_ELEMENTO.has(alvo.name.text)) {
+    return false;
+  }
+  const receptor = semParenteses(alvo.expression);
+  return ts.isCallExpression(receptor) && cadeiaMontaLiteral(receptor);
+}
+
 function montagens(arquivo: ts.SourceFile, checker: ts.TypeChecker): string[] {
   function ehDash(tipo: ts.Type | undefined): boolean {
     if (!tipo) return false;
@@ -110,12 +131,20 @@ function montagens(arquivo: ts.SourceFile, checker: ts.TypeChecker): string[] {
       montagem = ehDash(checker.getContextualType(no));
     } else if (ts.isCallExpression(no)) {
       // (b) O contexto da chamada atravessa o U do map/flatMap genérico.
-      montagem =
-        ehListaDeDash(checker.getContextualType(no)) && no.arguments.some(callbackMontaLiteral);
+      montagem = ehListaDeDash(checker.getContextualType(no)) && cadeiaMontaLiteral(no);
     } else if (ts.isAsExpression(no) || ts.isTypeAssertionExpression(no)) {
       // (c) Inclui asserções duplas como linhas as unknown as DashTx[].
       const tipo = checker.getTypeFromTypeNode(no.type);
       montagem = ehDash(tipo) || ehListaDeDash(tipo);
+    } else if (ts.isArrayLiteralExpression(no)) {
+      // (d) O contexto da lista alcança a cadeia dentro do spread.
+      montagem =
+        ehListaDeDash(checker.getContextualType(no)) &&
+        no.elements.some((elemento) => {
+          if (!ts.isSpreadElement(elemento)) return false;
+          const chamada = semParenteses(elemento.expression);
+          return ts.isCallExpression(chamada) && cadeiaMontaLiteral(chamada);
+        });
     }
     if (montagem) {
       const { line } = arquivo.getLineAndCharacterOfPosition(no.getStart(arquivo));

@@ -512,6 +512,7 @@ fraqueza**.
 | M3 | `category_id` volta a ser `?:` em `LinhaTx` | `tsc` — TS2578 |
 | M4 | `as LinhaTx[]` volta ao Cron | varredura da A2 |
 | M5a/b/c | montagem com `Array<DashTx> =` · com `satisfies DashTx` · literal inline em `resumoMes({ transactions: [{…}] })`, cada uma num arquivo de runtime | fronteira da A3, nomeando arquivo e linha |
+| M5d/e | (revisão final, I2) `map` encadeado com `filter` sob retorno `Array<DashTx>` · spread de `map` num literal de array com contexto `Array<DashTx>`, num arquivo de runtime — **escapavam** das duas cercas na ponta da 03-B2 (medido: `tsc` limpo, suíte verde) | fronteira da A3, pela cadeia da regra (b) e pela regra (d) |
 | M6 | a N7 da 03-B reaplicada, nas duas formas | fronteira da A3 **e** a regex da 03-B |
 | M7 | uma das três leituras perde o `.eq("user_id")` com owner | teste de owner da A4 |
 | M8a | detecção de saturação desligada (`saturou` sempre falso) | teste de completude |
@@ -586,12 +587,12 @@ Cada passo fecha com `npx vitest run` verde nos diretórios que tocou (no mínim
 
 | # | Risco | Mitigação | Destino |
 | --- | --- | --- | --- |
-| RR1 | A fronteira com checker só enxerga arquivos que importam o motor; montagem por reexportação, ou por objeto construído sem literal (variável inferida empurrada numa lista), escapa dela | A regex da 03-B continua varrendo todos os arquivos | Aceito, declarado no teste |
+| RR1 | A fronteira com checker só enxerga arquivos que importam o motor; escapam dela: montagem por reexportação; objeto construído sem literal (variável inferida empurrada numa lista); e cadeia que passa por método fora de `filter`/`slice`/`sort`/`toSorted`/`reverse`/`toReversed`/`concat` (ex.: `reduce`) ou por função auxiliar. A cadeia por esses métodos e o spread num literal de array foram fechados depois da revisão final (M5d/e) | A regex da 03-B continua varrendo todos os arquivos | Aceito, declarado no teste |
 | RR2 | **`max_rows` do PostgREST** (padrão 1000, não verificável por SQL) corta em silêncio as leituras **sem** `.limit` — contas, faturas, contas fixas, cartões, recorrências, parcelas — e **todas** as do Cron, cuja janela de transações cresce na B2 | Nenhuma nesta subfase | **03-G** ("leituras que param de engolir falha") — registrar lá |
 | RR3 | Um CHECK alargado numa migration sem atualizar `constants.ts` faz o lançamento novo sair da soma | Tela e IA dizem "parcial" com motivo; o Cron exclui em silêncio | Aceito (impossível hoje); um teste que compare os CHECKs das migrations com os arrays fica como sugestão |
 | RR4 | `usadoPorCartao` centavos (tela) × float (sino) pode divergir na borda do limiar | Registrado no código (§5.7) | REDESIGN-05 |
 | RR5 | `completude` chega à IA e aos insights, mas **não** às telas | O campo existe nos retornos | REDESIGN-04/06 |
-| RR6 | `lerFinanceiro` tem **um** `as` para projetar o tipo por escopo | Teste de runtime comparando as chaves nos três escopos | Aceito, declarado no código |
+| RR6 | **Dois** `as` projetam o tipo pela forma lida: `as LeituraFinanceira<E>` em `lerFinanceiro` e `as EntradasDasLinhas<L>` em `montarEntradas` (caminho puro que o Cron também usa) | Teste de runtime comparando as chaves nos três escopos, no `{}` e na chamada do Cron | Aceito, declarado no código |
 | RR7 | `count: "exact"` custa um COUNT por leitura com teto; o coletor de insight chama o card até 12× em série | Índices de `user_id` + data; single-user | Aceito; medir se a geração de insight ficar lenta |
 | RR8 | A régua única compara o mês corrente **cheio, com pendentes** contra meses fechados | É a régua que a tela já usava | 03-E (§13.6) |
 | RR9 | Notificações de fatura vazia gravadas antes da B1 continuam no sino até o dono resolver | Decisão do dono | Aceito |
