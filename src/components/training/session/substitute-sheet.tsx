@@ -13,6 +13,7 @@
  * A ordem das alternativas cadastradas é a prioridade DELE (17-A), não um ranking calculado.
  */
 import * as React from "react";
+import { useItemRetido } from "@/components/shared/use-item-retido";
 import { Repeat, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,7 +50,7 @@ type Group = { title: string; hint: string; items: ExerciseListItem[] };
 export function SubstituteSheet({
   open,
   onOpenChange,
-  exercise,
+  exercise: exerciseAtual,
   catalog,
   alternativeIds,
   onConfirm,
@@ -68,15 +69,16 @@ export function SubstituteSheet({
   }) => void;
   busy?: boolean;
 }) {
+  const exercise = useItemRetido(exerciseAtual);
   const [search, setSearch] = React.useState("");
   const [selected, setSelected] = React.useState<string | null>(null);
   const [reason, setReason] = React.useState<SubstitutionReason | "">("");
   const [notes, setNotes] = React.useState("");
 
   // Reabrir a gaveta para outro exercício limpa a escolha (ajuste durante o render).
-  const [lastExerciseId, setLastExerciseId] = React.useState(exercise?.id ?? null);
-  if ((exercise?.id ?? null) !== lastExerciseId) {
-    setLastExerciseId(exercise?.id ?? null);
+  const [lastExerciseId, setLastExerciseId] = React.useState(exerciseAtual?.id ?? null);
+  if ((exerciseAtual?.id ?? null) !== lastExerciseId) {
+    setLastExerciseId(exerciseAtual?.id ?? null);
     setSelected(null);
     setReason("");
     setNotes("");

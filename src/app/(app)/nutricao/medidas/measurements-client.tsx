@@ -12,12 +12,12 @@
  * Estado de navegação (tipo selecionado, período) vive na URL, como no resto do app.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   CalendarRange,
   Download,
-  Loader2,
   Pencil,
   Plus,
   Ruler,
@@ -31,14 +31,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,20 +44,17 @@ import {
 } from "@/components/ui/select";
 import { StatCard } from "@/components/shared/stat-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { cn } from "@/lib/utils";
 import { MeasurementChart, MeasurementTable } from "@/components/body/measurement-chart";
-import { MeasurementTypesDialog } from "@/components/body/measurement-types-dialog";
 import { ProgressPhotos } from "@/components/body/progress-photos";
 import {
   CORRELATION_DISCLAIMER,
   EFFECTIVE_GOAL_STATUS_LABELS,
   GOAL_DIRECTION_LABELS,
-  GOAL_DIRECTIONS,
   MEASUREMENT_CATEGORY_LABELS,
   MEASUREMENT_CATEGORY_ORDER,
   MEASUREMENT_CONDITION_LABELS,
-  MEASUREMENT_CONDITIONS,
   MEASUREMENT_DISCLAIMER,
   MOVING_AVERAGE_HINT,
 } from "@/lib/body/constants";
@@ -85,9 +74,6 @@ import {
   deleteMeasurement,
   deleteMeasurementGoal,
   deleteMeasurements,
-  saveMeasurement,
-  saveMeasurementBatch,
-  saveMeasurementGoal,
   setMeasurementGoalStatus,
 } from "@/lib/actions/body-measurements";
 import { addDaysIso, longDateLabel, shortDateLabel } from "@/lib/nutrition/calendar";
@@ -100,6 +86,24 @@ import type {
   MeasurementWithType,
   SignedProgressPhoto,
 } from "@/lib/body/types";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const MeasurementDialog = dynamic(
+  () => import("./measurement-dialog").then((m) => m.MeasurementDialog),
+  { ssr: false },
+);
+const BatchDialog = dynamic(
+  () => import("./batch-dialog").then((m) => m.BatchDialog),
+  { ssr: false },
+);
+const GoalDialog = dynamic(
+  () => import("./goal-dialog").then((m) => m.GoalDialog),
+  { ssr: false },
+);
+const MeasurementTypesDialog = dynamic(
+  () => import("@/components/body/measurement-types-dialog").then((m) => m.MeasurementTypesDialog),
+  { ssr: false },
+);
 
 const MOVING_WINDOW = 5;
 
@@ -140,6 +144,10 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
     return map;
   }, [props.measurements]);
   const [goalOpen, setGoalOpen] = React.useState(false);
+  const measurementDialogMontado = useLazyDialog(formOpen);
+  const batchDialogMontado = useLazyDialog(batchOpen);
+  const goalDialogMontado = useLazyDialog(goalOpen);
+  const measurementTypesDialogMontado = useLazyDialog(typesOpen);
   const [editing, setEditing] = React.useState<MeasurementWithType | null>(null);
   const [editingGoal, setEditingGoal] = React.useState<MeasurementGoal | null>(null);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -716,42 +724,50 @@ export function MeasurementsClient(props: MeasurementsClientProps) {
         </>
       )}
 
-      <MeasurementDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        types={activeTypes}
-        defaultTypeId={selectedType?.id ?? ""}
-        hoje={props.hoje}
-        editing={editing}
-        onSaved={refresh}
-      />
+      {measurementDialogMontado && (
+        <MeasurementDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          types={activeTypes}
+          defaultTypeId={selectedType?.id ?? ""}
+          hoje={props.hoje}
+          editing={editing}
+          onSaved={refresh}
+        />
+      )}
 
-      <BatchDialog
-        open={batchOpen}
-        onOpenChange={setBatchOpen}
-        types={activeTypes}
-        hoje={props.hoje}
-        onSaved={refresh}
-      />
+      {batchDialogMontado && (
+        <BatchDialog
+          open={batchOpen}
+          onOpenChange={setBatchOpen}
+          types={activeTypes}
+          hoje={props.hoje}
+          onSaved={refresh}
+        />
+      )}
 
-      <GoalDialog
-        open={goalOpen}
-        onOpenChange={setGoalOpen}
-        types={activeTypes}
-        defaultTypeId={selectedType?.id ?? ""}
-        hoje={props.hoje}
-        editing={editingGoal}
-        onSaved={refresh}
-      />
+      {goalDialogMontado && (
+        <GoalDialog
+          open={goalOpen}
+          onOpenChange={setGoalOpen}
+          types={activeTypes}
+          defaultTypeId={selectedType?.id ?? ""}
+          hoje={props.hoje}
+          editing={editingGoal}
+          onSaved={refresh}
+        />
+      )}
 
       {/* Passa TODOS os tipos (inclusive os desativados): é aqui que se reativa um.
           A contagem por tipo decide se a exclusão precisa perguntar o destino do histórico. */}
-      <MeasurementTypesDialog
-        open={typesOpen}
-        onOpenChange={setTypesOpen}
-        types={props.types}
-        measurementCountByType={measurementCountByType}
-      />
+      {measurementTypesDialogMontado && (
+        <MeasurementTypesDialog
+          open={typesOpen}
+          onOpenChange={setTypesOpen}
+          types={props.types}
+          measurementCountByType={measurementCountByType}
+        />
+      )}
     </div>
   );
 }
@@ -861,452 +877,4 @@ function CompareDates({
 
 /* ───────────────────────────── Formulários ───────────────────────────── */
 
-function MeasurementDialog({
-  open,
-  onOpenChange,
-  types,
-  defaultTypeId,
-  hoje,
-  editing,
-  onSaved,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  types: MeasurementType[];
-  defaultTypeId: string;
-  hoje: string;
-  editing: MeasurementWithType | null;
-  onSaved: () => void;
-}) {
-  const [pending, startTransition] = React.useTransition();
-  const [error, setError] = React.useState<string | null>(null);
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const input = {
-      id: editing?.id,
-      typeId: data.get("typeId"),
-      measuredOn: data.get("measuredOn"),
-      measuredAt: data.get("measuredAt"),
-      value: data.get("value"),
-      condition: data.get("condition") === "nenhuma" ? "" : data.get("condition"),
-      note: data.get("note"),
-    };
-
-    startTransition(async () => {
-      const result = await saveMeasurement(input);
-      if (result.ok) {
-        toast.success(editing ? "Medição atualizada." : "Medição registrada.");
-        onOpenChange(false);
-        onSaved();
-      } else {
-        setError(result.error);
-        toast.error(result.error);
-      }
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Editar medição" : "Registrar medição"}</DialogTitle>
-          <DialogDescription>
-            Anote a condição da medição: comparar jejum com pós-treino mistura contextos.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4" key={editing?.id ?? "new"}>
-          <div className="space-y-1.5">
-            <Label htmlFor="m-type">Medida</Label>
-            <Select name="typeId" defaultValue={editing?.typeId ?? defaultTypeId}>
-              <SelectTrigger id="m-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {types.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    {type.name} ({type.unit})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="m-value">Valor</Label>
-              <Input
-                id="m-value"
-                name="value"
-                inputMode="decimal"
-                defaultValue={editing ? String(editing.value).replace(".", ",") : ""}
-                placeholder="72,4"
-                required
-                autoFocus
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="m-date">Data</Label>
-              <Input
-                id="m-date"
-                name="measuredOn"
-                type="date"
-                defaultValue={editing?.measuredOn ?? hoje}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="m-time">Horário (opcional)</Label>
-              <Input id="m-time" name="measuredAt" type="time" defaultValue={editing?.measuredAt ?? ""} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="m-condition">Condição</Label>
-              <Select name="condition" defaultValue={editing?.condition ?? "nenhuma"}>
-                <SelectTrigger id="m-condition">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nenhuma">Não informar</SelectItem>
-                  {MEASUREMENT_CONDITIONS.map((condition) => (
-                    <SelectItem key={condition} value={condition}>
-                      {MEASUREMENT_CONDITION_LABELS[condition]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="m-note">Observação (opcional)</Label>
-            <Textarea id="m-note" name="note" rows={2} defaultValue={editing?.note ?? ""} maxLength={500} />
-          </div>
-
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending && <Loader2 className="size-4 animate-spin" />}
-              Salvar
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 /** Sessão de medidas: a pessoa senta com a fita métrica e anota várias de uma vez. */
-function BatchDialog({
-  open,
-  onOpenChange,
-  types,
-  hoje,
-  onSaved,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  types: MeasurementType[];
-  hoje: string;
-  onSaved: () => void;
-}) {
-  const [pending, startTransition] = React.useTransition();
-  const [error, setError] = React.useState<string | null>(null);
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-
-    // Campo em branco é IGNORADO, não gravado como zero: quem não mediu o pescoço hoje não
-    // mediu 0 cm de pescoço.
-    const values = types
-      .map((type) => ({ typeId: type.id, value: String(data.get(`v-${type.id}`) ?? "").trim() }))
-      .filter((item) => item.value !== "");
-
-    if (values.length === 0) {
-      setError("Preencha ao menos uma medida.");
-      return;
-    }
-
-    startTransition(async () => {
-      const result = await saveMeasurementBatch({
-        measuredOn: data.get("measuredOn"),
-        measuredAt: data.get("measuredAt"),
-        condition: data.get("condition") === "nenhuma" ? "" : data.get("condition"),
-        note: data.get("note"),
-        values,
-      });
-      if (result.ok) {
-        toast.success(`${result.data.count} medida(s) registrada(s).`);
-        onOpenChange(false);
-        onSaved();
-      } else {
-        setError(result.error);
-        toast.error(result.error);
-      }
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Sessão de medidas</DialogTitle>
-          <DialogDescription>
-            Registre várias medidas do mesmo momento. Deixe em branco o que não mediu — campo
-            vazio não vira zero.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="b-date">Data</Label>
-              <Input id="b-date" name="measuredOn" type="date" defaultValue={hoje} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="b-time">Horário</Label>
-              <Input id="b-time" name="measuredAt" type="time" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="b-condition">Condição</Label>
-              <Select name="condition" defaultValue="nenhuma">
-                <SelectTrigger id="b-condition">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nenhuma">Não informar</SelectItem>
-                  {MEASUREMENT_CONDITIONS.map((condition) => (
-                    <SelectItem key={condition} value={condition}>
-                      {MEASUREMENT_CONDITION_LABELS[condition]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {MEASUREMENT_CATEGORY_ORDER.filter((category) =>
-              types.some((type) => type.category === category),
-            ).map((category) => (
-              <div key={category} className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {MEASUREMENT_CATEGORY_LABELS[category]}
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {types
-                    .filter((type) => type.category === category)
-                    .map((type) => (
-                      <div key={type.id} className="flex items-center gap-2">
-                        <Label htmlFor={`v-${type.id}`} className="min-w-0 flex-1 truncate text-sm font-normal">
-                          {type.name}
-                        </Label>
-                        <Input
-                          id={`v-${type.id}`}
-                          name={`v-${type.id}`}
-                          inputMode="decimal"
-                          className="w-24"
-                          placeholder={type.unit}
-                          aria-label={`${type.name} em ${type.unit}`}
-                        />
-                      </div>
-                    ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="b-note">Observação (opcional)</Label>
-            <Textarea id="b-note" name="note" rows={2} maxLength={500} />
-          </div>
-
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending && <Loader2 className="size-4 animate-spin" />}
-              Registrar
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function GoalDialog({
-  open,
-  onOpenChange,
-  types,
-  defaultTypeId,
-  hoje,
-  editing,
-  onSaved,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  types: MeasurementType[];
-  defaultTypeId: string;
-  hoje: string;
-  editing: MeasurementGoal | null;
-  onSaved: () => void;
-}) {
-  const [pending, startTransition] = React.useTransition();
-  const [error, setError] = React.useState<string | null>(null);
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-
-    startTransition(async () => {
-      const result = await saveMeasurementGoal({
-        id: editing?.id,
-        typeId: data.get("typeId"),
-        direction: data.get("direction"),
-        startValue: data.get("startValue"),
-        targetValue: data.get("targetValue"),
-        startsOn: data.get("startsOn"),
-        targetDate: data.get("targetDate"),
-        note: data.get("note"),
-      });
-      if (result.ok) {
-        toast.success(editing ? "Meta atualizada." : "Meta criada.");
-        onOpenChange(false);
-        onSaved();
-      } else {
-        setError(result.error);
-        toast.error(result.error);
-      }
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Editar meta" : "Definir meta"}</DialogTitle>
-          <DialogDescription>
-            A meta é sua: você escolhe a medida, a direção e o alvo. O sistema não sugere
-            valores nem avalia o resultado.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4" key={editing?.id ?? "new"}>
-          <div className="space-y-1.5">
-            <Label htmlFor="g-type">Medida</Label>
-            <Select name="typeId" defaultValue={editing?.typeId ?? defaultTypeId}>
-              <SelectTrigger id="g-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {types.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    {type.name} ({type.unit})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="g-direction">Quero</Label>
-              <Select name="direction" defaultValue={editing?.direction ?? "reduzir"}>
-                <SelectTrigger id="g-direction">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {GOAL_DIRECTIONS.map((direction) => (
-                    <SelectItem key={direction} value={direction}>
-                      {GOAL_DIRECTION_LABELS[direction]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="g-target">Alvo</Label>
-              <Input
-                id="g-target"
-                name="targetValue"
-                inputMode="decimal"
-                defaultValue={editing ? String(editing.targetValue).replace(".", ",") : ""}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="g-start-value">Valor de partida (opcional)</Label>
-            <Input
-              id="g-start-value"
-              name="startValue"
-              inputMode="decimal"
-              defaultValue={
-                editing?.startValue !== null && editing?.startValue !== undefined
-                  ? String(editing.startValue).replace(".", ",")
-                  : ""
-              }
-              aria-describedby="g-start-hint"
-            />
-            <p id="g-start-hint" className="text-xs text-muted-foreground">
-              Em branco, o sistema usa a primeira medição a partir da data de início.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="g-starts">Início</Label>
-              <Input
-                id="g-starts"
-                name="startsOn"
-                type="date"
-                defaultValue={editing?.startsOn ?? hoje}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="g-deadline">Prazo (opcional)</Label>
-              <Input
-                id="g-deadline"
-                name="targetDate"
-                type="date"
-                defaultValue={editing?.targetDate ?? ""}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="g-note">Observação (opcional)</Label>
-            <Textarea id="g-note" name="note" rows={2} defaultValue={editing?.note ?? ""} maxLength={500} />
-          </div>
-
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending && <Loader2 className="size-4 animate-spin" />}
-              Salvar meta
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}

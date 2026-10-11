@@ -66,6 +66,8 @@ import {
   moveWorkoutsToProgram,
 } from "@/lib/actions/training-workouts";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import { useChaveDeAbertura, useItemRetido } from "@/components/shared/use-item-retido";
+import type { DependencyLine } from "@/components/training/delete-with-destination-dialog";
 
 // Os diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form`
 // junto. Sob demanda, eles saem do primeiro byte da rota; `useLazyDialog` monta cada
@@ -74,10 +76,13 @@ const WorkoutFormDialog = dynamic(
   () => import("@/components/training/workout-form-dialog").then((m) => m.WorkoutFormDialog),
   { ssr: false },
 );
-import {
-  DeleteWithDestinationDialog,
-  type DependencyLine,
-} from "@/components/training/delete-with-destination-dialog";
+const DeleteWithDestinationDialog = dynamic(
+  () =>
+    import("@/components/training/delete-with-destination-dialog").then(
+      (m) => m.DeleteWithDestinationDialog,
+    ),
+  { ssr: false },
+);
 
 const ALL = "__todos__";
 const AVULSO = "__avulso__";
@@ -132,6 +137,11 @@ export function WorkoutsClient({
   const formMounted = useLazyDialog(formOpen);
   const [editing, setEditing] = React.useState<TrainingWorkout | null>(null);
   const [deleting, setDeleting] = React.useState<TrainingWorkout | null>(null);
+  // Exclusão com destino sob demanda (REDESIGN-07-C, D2): desenha o item até o fim da animação
+  // de saída e remonta a cada abertura — a escolha de destino continua nascendo limpa.
+  const exclusaoExibida = useItemRetido(deleting);
+  const exclusaoMontada = useLazyDialog(deleting !== null);
+  const chaveExclusao = useChaveDeAbertura(deleting !== null);
   const [dependencies, setDependencies] = React.useState<DependencyLine[] | null>(null);
   const [busy, setBusy] = React.useState(false);
 
@@ -516,12 +526,13 @@ export function WorkoutsClient({
         />
       )}
 
-      {deleting && (
+      {exclusaoMontada && exclusaoExibida && (
         <DeleteWithDestinationDialog
-          open
+          key={chaveExclusao}
+          open={deleting !== null}
           onOpenChange={(open) => !open && setDeleting(null)}
           title="Excluir treino-modelo"
-          itemName={deleting.name}
+          itemName={exclusaoExibida.name}
           dependencies={dependencies ?? []}
           loadingDependencies={dependencies === null}
           options={[
@@ -546,7 +557,7 @@ export function WorkoutsClient({
           ]}
           targetLabel="Treino substituto"
           targets={workouts
-            .filter((item) => item.id !== deleting.id && !item.isArchived && !item.isSuperseded)
+            .filter((item) => item.id !== exclusaoExibida.id && !item.isArchived && !item.isSuperseded)
             .map((item) => ({ id: item.id, name: item.name }))}
           confirmLabel="Excluir treino"
           onConfirm={confirmDelete}

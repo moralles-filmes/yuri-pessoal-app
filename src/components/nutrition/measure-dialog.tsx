@@ -8,6 +8,7 @@
  * nada, e estimar seria inventar dado.
  */
 import * as React from "react";
+import { useItemRetido } from "@/components/shared/use-item-retido";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,7 @@ import type { FoodDetail, FoodMeasure } from "@/lib/nutrition/types";
 export function MeasureDialog({
   open,
   onOpenChange,
-  food,
+  food: foodAtual,
   measure,
   onSaved,
 }: {
@@ -51,6 +52,7 @@ export function MeasureDialog({
   measure: FoodMeasure | null;
   onSaved: () => void;
 }) {
+  const food = useItemRetido(foodAtual);
   const [saving, setSaving] = React.useState(false);
   const [label, setLabel] = React.useState("");
   const [unitType, setUnitType] = React.useState<string>("unidade");

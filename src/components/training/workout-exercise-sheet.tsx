@@ -14,6 +14,7 @@
  * NAQUELE treino.
  */
 import * as React from "react";
+import { useItemRetido } from "@/components/shared/use-item-retido";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -96,7 +97,7 @@ function draftFrom(source: Partial<SetDraft> = {}, index = 0): SetDraft {
 export function WorkoutExerciseSheet({
   open,
   onOpenChange,
-  item,
+  item: itemAtual,
   catalog,
   onChanged,
 }: {
@@ -106,6 +107,7 @@ export function WorkoutExerciseSheet({
   catalog: ExerciseListItem[];
   onChanged: () => void;
 }) {
+  const item = useItemRetido(itemAtual);
   if (!item) return null;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

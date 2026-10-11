@@ -10,6 +10,7 @@
  * ou compartilhar o link preserva exatamente a mesma visão.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { Filter, ScanLine, Search, SlidersHorizontal, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { cn } from "@/lib/utils";
 import {
   FOOD_SORTS,
@@ -34,8 +36,13 @@ import {
   PREPARATION_STATE_LABELS,
 } from "@/lib/nutrition/constants";
 import { countActiveFilters } from "@/lib/nutrition/filters";
-import { BarcodeScannerDialog } from "@/components/nutrition/barcode-scanner-dialog";
 import type { FoodCategory, FoodFilterState, FoodSource, FoodTag } from "@/lib/nutrition/types";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const BarcodeScannerDialog = dynamic(
+  () => import("@/components/nutrition/barcode-scanner-dialog").then((m) => m.BarcodeScannerDialog),
+  { ssr: false },
+);
 
 /** Radix Select não aceita valor vazio; "__all__" é o sentinela de "sem filtro". */
 const ALL = "__all__";
@@ -65,6 +72,7 @@ export function FoodFilters({
   totalCount: number;
 }) {
   const [scannerOpen, setScannerOpen] = React.useState(false);
+  const barcodeScannerDialogMontado = useLazyDialog(scannerOpen);
 
   const activeCount = countActiveFilters(filters);
 
@@ -384,11 +392,13 @@ export function FoodFilters({
 
       {/* O código lido cai no MESMO campo de busca — que já casava com `barcode` desde a
           16-A. Nenhuma consulta a base externa de produto acontece aqui. */}
-      <BarcodeScannerDialog
-        open={scannerOpen}
-        onOpenChange={setScannerOpen}
-        onDetected={(code) => onChange({ search: code })}
-      />
+      {barcodeScannerDialogMontado && (
+        <BarcodeScannerDialog
+          open={scannerOpen}
+          onOpenChange={setScannerOpen}
+          onDetected={(code) => onChange({ search: code })}
+        />
+      )}
     </div>
   );
 }

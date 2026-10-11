@@ -15,6 +15,8 @@
  *    incompleta deixam o selo aparecer. O número é o mínimo conhecido.
  */
 import * as React from "react";
+import { useItemRetido } from "@/components/shared/use-item-retido";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Calendar, ChefHat, Copy, Plus, Search, Star, Trash2, Utensils, X } from "lucide-react";
 import { toast } from "sonner";
@@ -23,14 +25,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -38,12 +32,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { cn } from "@/lib/utils";
 import { formatNutrientAmount, roundForDisplay } from "@/lib/nutrition/calc";
 import {
@@ -58,7 +51,7 @@ import { normalizeText } from "@/lib/nutrition/filters";
 import { TEMPLATE_SKIP_MESSAGES } from "@/lib/nutrition/meal-template";
 import { describeRecipePortion } from "@/lib/nutrition/recipe";
 import { formatAmount } from "@/lib/nutrition/units";
-import { longDateLabel, shortTime } from "@/lib/nutrition/calendar";
+import { shortTime } from "@/lib/nutrition/calendar";
 import type {
   FoodListItem,
   MealType,
@@ -77,15 +70,31 @@ import {
   setMealTemplateArchived,
   setMealTemplateFavorite,
 } from "@/lib/actions/nutrition-meal-templates";
-import {
-  FoodPickerDialog,
-  type PickerMeasure,
-} from "@/components/nutrition/food-picker-dialog";
-import {
-  RecipePickerDialog,
-  type PickerRecipe,
-} from "@/components/nutrition/recipe-picker-dialog";
+import type { PickerMeasure } from "@/components/nutrition/food-picker-dialog";
+import type { PickerRecipe } from "@/components/nutrition/recipe-picker-dialog";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const TemplateFormDialog = dynamic(
+  () => import("./template-form-dialog").then((m) => m.TemplateFormDialog),
+  { ssr: false },
+);
+const FoodPickerDialog = dynamic(
+  () => import("@/components/nutrition/food-picker-dialog").then((m) => m.FoodPickerDialog),
+  { ssr: false },
+);
+const RecipePickerDialog = dynamic(
+  () => import("@/components/nutrition/recipe-picker-dialog").then((m) => m.RecipePickerDialog),
+  { ssr: false },
+);
+const FreeItemDialog = dynamic(
+  () => import("./free-item-dialog").then((m) => m.FreeItemDialog),
+  { ssr: false },
+);
+const PlanTemplateDialog = dynamic(
+  () => import("./plan-template-dialog").then((m) => m.PlanTemplateDialog),
+  { ssr: false },
+);
 
 export type MealTemplatesClientProps = {
   hoje: string;
@@ -127,8 +136,14 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
   const [recipePickerFor, setRecipePickerFor] = React.useState<string | null>(null);
   const [freeItemFor, setFreeItemFor] = React.useState<string | null>(null);
   const [planFor, setPlanFor] = React.useState<MealTemplateWithTotals | null>(null);
+  const templateFormDialogMontado = useLazyDialog(formOpen);
+  const foodPickerDialogMontado = useLazyDialog(foodPickerFor !== null);
+  const recipePickerDialogMontado = useLazyDialog(recipePickerFor !== null);
+  const freeItemDialogMontado = useLazyDialog(freeItemFor !== null);
+  const planTemplateDialogMontado = useLazyDialog(planFor !== null);
 
-  const detail = props.templates.find((template) => template.id === detailId) ?? null;
+  const detailAtual = props.templates.find((template) => template.id === detailId) ?? null;
+  const detail = useItemRetido(detailAtual);
   const editing = props.templates.find((template) => template.id === editingId) ?? null;
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
@@ -411,7 +426,7 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
       )}
 
       {/* ── Detalhe ── */}
-      <Sheet open={detail !== null} onOpenChange={(open) => !open && setDetailId(null)}>
+      <Sheet open={detailAtual !== null} onOpenChange={(open) => !open && setDetailId(null)}>
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
           {detail && (
             <>
@@ -537,431 +552,127 @@ export function MealTemplatesClient(props: MealTemplatesClientProps) {
       </Sheet>
 
       {/* ── Diálogos ── */}
-      <TemplateFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        template={editing}
-        categories={props.categories}
-        mealTypes={props.mealTypes}
-        onSubmit={async (values) => {
-          const result = await saveMealTemplate(values, editingId ?? undefined);
-          if (result.ok) {
-            toast.success(editingId ? "Salva." : "Criada. Agora adicione os itens.");
-            setFormOpen(false);
-            if (!editingId) setDetailId(result.data.id);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível salvar.");
-          }
-        }}
-      />
+      {templateFormDialogMontado && (
+        <TemplateFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          template={editing}
+          categories={props.categories}
+          mealTypes={props.mealTypes}
+          onSubmit={async (values) => {
+            const result = await saveMealTemplate(values, editingId ?? undefined);
+            if (result.ok) {
+              toast.success(editingId ? "Salva." : "Criada. Agora adicione os itens.");
+              setFormOpen(false);
+              if (!editingId) setDetailId(result.data.id);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível salvar.");
+            }
+          }}
+        />
+      )}
 
-      <FoodPickerDialog
-        open={foodPickerFor !== null}
-        onOpenChange={(open) => !open && setFoodPickerFor(null)}
-        foods={props.foods}
-        measures={measures}
-        title="Adicionar alimento ao modelo"
-        showOptional
-        onConfirm={async (picked) => {
-          const result = await saveMealTemplateItem({
-            template_id: foodPickerFor,
-            item_kind: "alimento",
-            food_id: picked.foodId,
-            quantity: picked.quantity,
-            measure_id: picked.measureId,
-            is_optional: picked.isOptional,
-            notes: picked.notes,
-          });
-          if (result.ok) {
-            toast.success("Item adicionado.");
-            setFoodPickerFor(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível adicionar.");
-          }
-        }}
-      />
+      {foodPickerDialogMontado && (
+        <FoodPickerDialog
+          open={foodPickerFor !== null}
+          onOpenChange={(open) => !open && setFoodPickerFor(null)}
+          foods={props.foods}
+          measures={measures}
+          title="Adicionar alimento ao modelo"
+          showOptional
+          onConfirm={async (picked) => {
+            const result = await saveMealTemplateItem({
+              template_id: foodPickerFor,
+              item_kind: "alimento",
+              food_id: picked.foodId,
+              quantity: picked.quantity,
+              measure_id: picked.measureId,
+              is_optional: picked.isOptional,
+              notes: picked.notes,
+            });
+            if (result.ok) {
+              toast.success("Item adicionado.");
+              setFoodPickerFor(null);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível adicionar.");
+            }
+          }}
+        />
+      )}
 
-      <RecipePickerDialog
-        open={recipePickerFor !== null}
-        onOpenChange={(open) => !open && setRecipePickerFor(null)}
-        recipes={props.recipes}
-        title="Adicionar receita ao modelo"
-        description="O modelo aponta para a receita: melhorar a receita melhora o modelo."
-        onConfirm={async (picked) => {
-          const result = await saveMealTemplateItem({
-            template_id: recipePickerFor,
-            item_kind: "receita",
-            recipe_id: picked.recipeId,
-            quantity: picked.quantity,
-            portion_unit: picked.portionUnit,
-            notes: picked.notes,
-          });
-          if (result.ok) {
-            toast.success("Receita adicionada ao modelo.");
-            setRecipePickerFor(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível adicionar.");
-          }
-        }}
-      />
+      {recipePickerDialogMontado && (
+        <RecipePickerDialog
+          open={recipePickerFor !== null}
+          onOpenChange={(open) => !open && setRecipePickerFor(null)}
+          recipes={props.recipes}
+          title="Adicionar receita ao modelo"
+          description="O modelo aponta para a receita: melhorar a receita melhora o modelo."
+          onConfirm={async (picked) => {
+            const result = await saveMealTemplateItem({
+              template_id: recipePickerFor,
+              item_kind: "receita",
+              recipe_id: picked.recipeId,
+              quantity: picked.quantity,
+              portion_unit: picked.portionUnit,
+              notes: picked.notes,
+            });
+            if (result.ok) {
+              toast.success("Receita adicionada ao modelo.");
+              setRecipePickerFor(null);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível adicionar.");
+            }
+          }}
+        />
+      )}
 
-      <FreeItemDialog
-        open={freeItemFor !== null}
-        onOpenChange={(open) => !open && setFreeItemFor(null)}
-        onConfirm={async (label) => {
-          const result = await saveMealTemplateItem({
-            template_id: freeItemFor,
-            item_kind: "livre",
-            custom_label: label,
-          });
-          if (result.ok) {
-            toast.success("Item livre adicionado. Ele não entra no cálculo.");
-            setFreeItemFor(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível adicionar.");
-          }
-        }}
-      />
+      {freeItemDialogMontado && (
+        <FreeItemDialog
+          open={freeItemFor !== null}
+          onOpenChange={(open) => !open && setFreeItemFor(null)}
+          onConfirm={async (label) => {
+            const result = await saveMealTemplateItem({
+              template_id: freeItemFor,
+              item_kind: "livre",
+              custom_label: label,
+            });
+            if (result.ok) {
+              toast.success("Item livre adicionado. Ele não entra no cálculo.");
+              setFreeItemFor(null);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível adicionar.");
+            }
+          }}
+        />
+      )}
 
-      <PlanTemplateDialog
-        template={planFor}
-        hoje={props.hoje}
-        mealTypes={props.mealTypes}
-        onOpenChange={(open) => !open && setPlanFor(null)}
-        onConfirm={async (payload) => {
-          const result = await addMealTemplateToPlan(payload);
-          if (result.ok) {
-            toast.success(`Refeição planejada com ${result.data.itens} item(ns).`);
-            setPlanFor(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível planejar.");
-          }
-        }}
-      />
+      {planTemplateDialogMontado && (
+        <PlanTemplateDialog
+          template={planFor}
+          hoje={props.hoje}
+          mealTypes={props.mealTypes}
+          onOpenChange={(open) => !open && setPlanFor(null)}
+          onConfirm={async (payload) => {
+            const result = await addMealTemplateToPlan(payload);
+            if (result.ok) {
+              toast.success(`Refeição planejada com ${result.data.itens} item(ns).`);
+              setPlanFor(null);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível planejar.");
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
 
 /* ═══════════════════════════ Diálogos ═══════════════════════════ */
-
-function TemplateFormDialog({
-  open,
-  onOpenChange,
-  template,
-  categories,
-  mealTypes,
-  onSubmit,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  template: MealTemplateWithTotals | null;
-  categories: RecipeCategory[];
-  mealTypes: MealType[];
-  onSubmit: (values: Record<string, unknown>) => Promise<void>;
-}) {
-  const [name, setName] = React.useState("");
-  const [description, setDescription] = React.useState("");
-  const [mealTypeId, setMealTypeId] = React.useState("");
-  const [categoryId, setCategoryId] = React.useState("");
-  const [time, setTime] = React.useState("");
-  const [notes, setNotes] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-
-  const seen = `${open}:${template?.id ?? "novo"}`;
-  const [lastSeen, setLastSeen] = React.useState(seen);
-  if (seen !== lastSeen) {
-    setLastSeen(seen);
-    if (open) {
-      setName(template?.name ?? "");
-      setDescription(template?.description ?? "");
-      setMealTypeId(template?.mealTypeId ?? "");
-      setCategoryId(template?.categoryId ?? "");
-      setTime(template?.suggestedTime ? template.suggestedTime.slice(0, 5) : "");
-      setNotes(template?.notes ?? "");
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{template ? "Editar refeição-modelo" : "Nova refeição-modelo"}</DialogTitle>
-          <DialogDescription>
-            Os itens (alimentos e receitas) são adicionados depois de salvar.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="template-name">Nome</Label>
-            <Input
-              id="template-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Ex.: café da manhã de sempre"
-              autoFocus
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="template-description">Descrição (opcional)</Label>
-            <Input
-              id="template-description"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="template-meal-type">Tipo de refeição</Label>
-              <select
-                id="template-meal-type"
-                value={mealTypeId}
-                onChange={(event) => setMealTypeId(event.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">Não definido</option>
-                {mealTypes
-                  .filter((type) => type.isActive)
-                  .map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.icon ? `${type.icon} ` : ""}
-                      {type.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="template-time">Horário sugerido</Label>
-              <Input
-                id="template-time"
-                type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="template-category">Categoria</Label>
-            <select
-              id="template-category"
-              value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Sem categoria</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="template-notes">Observações</Label>
-            <Textarea
-              id="template-notes"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              rows={2}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!name.trim() || saving}
-            onClick={async () => {
-              setSaving(true);
-              await onSubmit({
-                name: name.trim(),
-                description: description || undefined,
-                meal_type_id: mealTypeId || undefined,
-                category_id: categoryId || undefined,
-                suggested_time: time || undefined,
-                notes: notes || undefined,
-              });
-              setSaving(false);
-            }}
-          >
-            {saving ? "Salvando…" : template ? "Salvar" : "Criar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function FreeItemDialog({
-  open,
-  onOpenChange,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: (label: string) => Promise<void>;
-}) {
-  const [label, setLabel] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-
-  const [lastOpen, setLastOpen] = React.useState(open);
-  if (open !== lastOpen) {
-    setLastOpen(open);
-    if (open) {
-      setLabel("");
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Item livre</DialogTitle>
-          <DialogDescription>
-            Para o que faz parte da refeição mas não tem valor nutricional cadastrado. O item
-            aparece na lista e deixa o total do modelo marcado como parcial — em vez de fingir
-            que não existe.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="free-item">Descrição</Label>
-          <Input
-            id="free-item"
-            autoFocus
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-            placeholder="Ex.: café preto sem açúcar"
-          />
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!label.trim() || saving}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm(label.trim());
-              setSaving(false);
-            }}
-          >
-            {saving ? "Salvando…" : "Adicionar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function PlanTemplateDialog({
-  template,
-  hoje,
-  mealTypes,
-  onOpenChange,
-  onConfirm,
-}: {
-  template: MealTemplateWithTotals | null;
-  hoje: string;
-  mealTypes: MealType[];
-  onOpenChange: (open: boolean) => void;
-  onConfirm: (payload: Record<string, unknown>) => Promise<void>;
-}) {
-  const [date, setDate] = React.useState(hoje);
-  const [mealTypeId, setMealTypeId] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-
-  const seen = template?.id ?? null;
-  const [lastSeen, setLastSeen] = React.useState(seen);
-  if (seen !== lastSeen) {
-    setLastSeen(seen);
-    setDate(hoje);
-    setMealTypeId(template?.mealTypeId ?? "");
-    setSaving(false);
-  }
-
-  return (
-    <Dialog open={template !== null} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Planejar “{template?.name}”</DialogTitle>
-          <DialogDescription>
-            Os itens do modelo são copiados para o planejamento da data escolhida. Editar o
-            modelo depois não altera o que já foi planejado.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="plan-date">Data</Label>
-            <Input
-              id="plan-date"
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-            />
-            <p className="text-[11px] text-muted-foreground">{longDateLabel(date)}</p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="plan-meal-type">Tipo de refeição</Label>
-            <select
-              id="plan-meal-type"
-              value={mealTypeId}
-              onChange={(event) => setMealTypeId(event.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Escolha…</option>
-              {mealTypes
-                .filter((type) => type.isActive)
-                .map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.icon ? `${type.icon} ` : ""}
-                    {type.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!date || !mealTypeId || saving}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm({
-                template_id: template?.id,
-                planned_date: date,
-                meal_type_id: mealTypeId,
-              });
-              setSaving(false);
-            }}
-          >
-            {saving ? "Planejando…" : "Planejar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /** Exportado para o diário reusar os rótulos dos modos de registro. */
 export const TEMPLATE_MODE_OPTIONS = TEMPLATE_REGISTER_MODES.map((mode) => ({

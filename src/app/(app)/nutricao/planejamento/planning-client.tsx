@@ -16,6 +16,7 @@
  * O planejamento e o diário são tabelas separadas: nada nesta tela lê ou escreve consumo.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CalendarPlus,
@@ -33,20 +34,10 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { cn } from "@/lib/utils";
 import { roundForDisplay, type NutrientTotal } from "@/lib/nutrition/calc";
 import {
@@ -60,15 +51,11 @@ import {
 } from "@/lib/nutrition/calendar";
 import {
   CORE_NUTRIENTS,
-  PLAN_EDIT_SCOPES,
-  PLAN_EDIT_SCOPE_HINTS,
-  PLAN_EDIT_SCOPE_LABELS,
   WEEKDAY_SHORT_LABELS,
-  type PlanEditScope,
 } from "@/lib/nutrition/constants";
 import { sortMealsByTime, type PlannedFoodData } from "@/lib/nutrition/diary";
 import { templateTotals, type TemplateCalcContext } from "@/lib/nutrition/meal-template";
-import { countMaterialization, describeCycle } from "@/lib/nutrition/plan-recurrence";
+import { describeCycle } from "@/lib/nutrition/plan-recurrence";
 import type {
   FoodListItem,
   MealType,
@@ -78,27 +65,56 @@ import type {
 import {
   applyPlanToPeriod,
   copyPlannedDay,
-  deletePlanDay,
   deletePlannedMealInScope,
   duplicatePlannedWeek,
   deletePlannedMealItem,
-  savePlanDay,
   savePlannedMeal,
   savePlannedMealItem,
   saveNutritionPlan,
   updatePlannedMealInScope,
 } from "@/lib/actions/nutrition-plans";
 import { addRecipeToPlannedMeal } from "@/lib/actions/nutrition-meal-templates";
-import {
-  FoodPickerDialog,
-  type PickerMeasure,
-} from "@/components/nutrition/food-picker-dialog";
-import {
-  RecipePickerDialog,
-  type PickerRecipe,
-} from "@/components/nutrition/recipe-picker-dialog";
+import type { PickerMeasure } from "@/components/nutrition/food-picker-dialog";
+import type { PickerRecipe } from "@/components/nutrition/recipe-picker-dialog";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
-import { ScheduleMealDialog } from "@/components/nutrition/schedule-meal-dialog";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const FoodPickerDialog = dynamic(
+  () => import("@/components/nutrition/food-picker-dialog").then((m) => m.FoodPickerDialog),
+  { ssr: false },
+);
+const RecipePickerDialog = dynamic(
+  () => import("@/components/nutrition/recipe-picker-dialog").then((m) => m.RecipePickerDialog),
+  { ssr: false },
+);
+const ScheduleMealDialog = dynamic(
+  () => import("@/components/nutrition/schedule-meal-dialog").then((m) => m.ScheduleMealDialog),
+  { ssr: false },
+);
+const NewPlannedMealDialog = dynamic(
+  () => import("./new-planned-meal-dialog").then((m) => m.NewPlannedMealDialog),
+  { ssr: false },
+);
+const ScopeDialog = dynamic(
+  () => import("./scope-dialog").then((m) => m.ScopeDialog),
+  { ssr: false },
+);
+const ModelDaysSheet = dynamic(
+  () => import("./model-days-sheet").then((m) => m.ModelDaysSheet),
+  { ssr: false },
+);
+const ApplyPlanDialog = dynamic(
+  () => import("./apply-plan-dialog").then((m) => m.ApplyPlanDialog),
+  { ssr: false },
+);
+const PlanDialog = dynamic(
+  () => import("./plan-dialog").then((m) => m.PlanDialog),
+  { ssr: false },
+);
+const CopyDialog = dynamic(
+  () => import("./copy-dialog").then((m) => m.CopyDialog),
+  { ssr: false },
+);
 
 export type PlanningClientProps = {
   date: string;
@@ -155,6 +171,15 @@ export function PlanningClient(props: PlanningClientProps) {
   const [planDialog, setPlanDialog] = React.useState(false);
   const [copyOpen, setCopyOpen] = React.useState(false);
   const [scheduleFor, setScheduleFor] = React.useState<PlannedMeal | null>(null);
+  const foodPickerDialogMontado = useLazyDialog(pickerMealId !== null);
+  const recipePickerDialogMontado = useLazyDialog(recipeMealId !== null);
+  const scheduleMealDialogMontado = useLazyDialog(scheduleFor !== null);
+  const newPlannedMealDialogMontado = useLazyDialog(newMealOpen);
+  const scopeDialogMontado = useLazyDialog(scopeDialog !== null);
+  const modelDaysSheetMontado = useLazyDialog(daysPlanId !== null);
+  const applyPlanDialogMontado = useLazyDialog(applyOpen !== null);
+  const planDialogMontado = useLazyDialog(planDialog);
+  const copyDialogMontado = useLazyDialog(copyOpen);
 
   function goTo(next: { date?: string; view?: string }) {
     const search = new URLSearchParams(params.toString());
@@ -385,195 +410,213 @@ export function PlanningClient(props: PlanningClientProps) {
       )}
 
       {/* ── Diálogos ── */}
-      <FoodPickerDialog
-        open={pickerMealId !== null}
-        onOpenChange={(open) => !open && setPickerMealId(null)}
-        foods={props.foods}
-        measures={measures}
-        title="Planejar alimento"
-        description="O plano usa o catálogo como ele está hoje. O congelamento dos valores acontece só quando você registra o consumo."
-        showOptional
-        onConfirm={async (picked) => {
-          const result = await savePlannedMealItem({
-            planned_meal_id: pickerMealId,
-            food_id: picked.foodId,
-            quantity: picked.quantity,
-            measure_id: picked.measureId,
-            is_optional: picked.isOptional,
-            notes: picked.notes,
-          });
-          if (result.ok) {
-            toast.success("Item planejado.");
-            setPickerMealId(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível adicionar.");
-          }
-        }}
-      />
+      {foodPickerDialogMontado && (
+        <FoodPickerDialog
+          open={pickerMealId !== null}
+          onOpenChange={(open) => !open && setPickerMealId(null)}
+          foods={props.foods}
+          measures={measures}
+          title="Planejar alimento"
+          description="O plano usa o catálogo como ele está hoje. O congelamento dos valores acontece só quando você registra o consumo."
+          showOptional
+          onConfirm={async (picked) => {
+            const result = await savePlannedMealItem({
+              planned_meal_id: pickerMealId,
+              food_id: picked.foodId,
+              quantity: picked.quantity,
+              measure_id: picked.measureId,
+              is_optional: picked.isOptional,
+              notes: picked.notes,
+            });
+            if (result.ok) {
+              toast.success("Item planejado.");
+              setPickerMealId(null);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível adicionar.");
+            }
+          }}
+        />
+      )}
 
-      <NewPlannedMealDialog
-        open={newMealOpen}
-        onOpenChange={setNewMealOpen}
-        date={props.date}
-        mealTypes={props.mealTypes}
-        onConfirm={async (payload) => {
-          const result = await savePlannedMeal(payload);
-          if (result.ok) {
-            toast.success("Refeição planejada.");
-            setNewMealOpen(false);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível planejar.");
-          }
-        }}
-      />
+      {newPlannedMealDialogMontado && (
+        <NewPlannedMealDialog
+          open={newMealOpen}
+          onOpenChange={setNewMealOpen}
+          date={props.date}
+          mealTypes={props.mealTypes}
+          onConfirm={async (payload) => {
+            const result = await savePlannedMeal(payload);
+            if (result.ok) {
+              toast.success("Refeição planejada.");
+              setNewMealOpen(false);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível planejar.");
+            }
+          }}
+        />
+      )}
 
       {/* 16-F — ponte OPCIONAL com a agenda: um bloco, para uma data, por clique. */}
-      <ScheduleMealDialog
-        open={scheduleFor !== null}
-        onOpenChange={(open) => !open && setScheduleFor(null)}
-        defaultTitle={scheduleFor?.title || scheduleFor?.mealTypeName || "Refeição"}
-        defaultDate={scheduleFor?.plannedDate ?? props.date}
-        defaultTime={scheduleFor?.plannedTime ?? null}
-      />
+      {scheduleMealDialogMontado && (
+        <ScheduleMealDialog
+          open={scheduleFor !== null}
+          onOpenChange={(open) => !open && setScheduleFor(null)}
+          defaultTitle={scheduleFor?.title || scheduleFor?.mealTypeName || "Refeição"}
+          defaultDate={scheduleFor?.plannedDate ?? props.date}
+          defaultTime={scheduleFor?.plannedTime ?? null}
+        />
+      )}
 
-      <ScopeDialog
-        target={scopeDialog}
-        hoje={props.hoje}
-        patch={editPatch}
-        onPatchChange={setEditPatch}
-        onOpenChange={(open) => !open && setScopeDialog(null)}
-        onConfirm={async (scope) => {
-          if (!scopeDialog) return;
+      {scopeDialogMontado && (
+        <ScopeDialog
+          target={scopeDialog}
+          hoje={props.hoje}
+          patch={editPatch}
+          onPatchChange={setEditPatch}
+          onOpenChange={(open) => !open && setScopeDialog(null)}
+          onConfirm={async (scope) => {
+            if (!scopeDialog) return;
 
-          if (scopeDialog.action === "editar") {
-            const result = await updatePlannedMealInScope(
-              { planned_meal_id: scopeDialog.meal.id, scope },
-              {
-                planned_time: editPatch.time || null,
-                title: editPatch.title.trim() || null,
-              },
-            );
+            if (scopeDialog.action === "editar") {
+              const result = await updatePlannedMealInScope(
+                { planned_meal_id: scopeDialog.meal.id, scope },
+                {
+                  planned_time: editPatch.time || null,
+                  title: editPatch.title.trim() || null,
+                },
+              );
+              if (result.ok) {
+                toast.success(
+                  `${result.data.afetadas} refeição${result.data.afetadas > 1 ? "ões" : ""} atualizada${result.data.afetadas > 1 ? "s" : ""}. Nada do passado foi alterado.`,
+                );
+                setScopeDialog(null);
+                router.refresh();
+              } else {
+                toast.error(result.error ?? "Não foi possível salvar.");
+              }
+              return;
+            }
+
+            const result = await deletePlannedMealInScope({
+              planned_meal_id: scopeDialog.meal.id,
+              scope,
+            });
             if (result.ok) {
               toast.success(
-                `${result.data.afetadas} refeição${result.data.afetadas > 1 ? "ões" : ""} atualizada${result.data.afetadas > 1 ? "s" : ""}. Nada do passado foi alterado.`,
+                `${result.data.excluidas} refeição${result.data.excluidas > 1 ? "ões" : ""} excluída${result.data.excluidas > 1 ? "s" : ""}. Nada do passado foi alterado.`,
               );
               setScopeDialog(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível salvar.");
+              toast.error(result.error ?? "Não foi possível excluir.");
             }
-            return;
-          }
+          }}
+        />
+      )}
 
-          const result = await deletePlannedMealInScope({
-            planned_meal_id: scopeDialog.meal.id,
-            scope,
-          });
-          if (result.ok) {
-            toast.success(
-              `${result.data.excluidas} refeição${result.data.excluidas > 1 ? "ões" : ""} excluída${result.data.excluidas > 1 ? "s" : ""}. Nada do passado foi alterado.`,
-            );
-            setScopeDialog(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível excluir.");
-          }
-        }}
-      />
+      {modelDaysSheetMontado && (
+        <ModelDaysSheet
+          plan={props.plans.find((plan) => plan.id === daysPlanId) ?? null}
+          mealTypes={props.mealTypes}
+          foodNames={foodNames}
+          recipeNames={recipeNames}
+          pending={pending}
+          onOpenChange={(open) => !open && setDaysPlanId(null)}
+          onRun={run}
+          onAddFood={(mealId) => setPickerMealId(mealId)}
+          onAddRecipe={(mealId) => setRecipeMealId(mealId)}
+        />
+      )}
 
-      <ModelDaysSheet
-        plan={props.plans.find((plan) => plan.id === daysPlanId) ?? null}
-        mealTypes={props.mealTypes}
-        foodNames={foodNames}
-        recipeNames={recipeNames}
-        pending={pending}
-        onOpenChange={(open) => !open && setDaysPlanId(null)}
-        onRun={run}
-        onAddFood={(mealId) => setPickerMealId(mealId)}
-        onAddRecipe={(mealId) => setRecipeMealId(mealId)}
-      />
+      {recipePickerDialogMontado && (
+        <RecipePickerDialog
+          open={recipeMealId !== null}
+          onOpenChange={(open) => !open && setRecipeMealId(null)}
+          recipes={props.recipes}
+          title="Planejar receita"
+          description="O plano aponta para a receita como ela está hoje. O congelamento acontece só no registro do consumo."
+          onConfirm={async (picked) => {
+            const result = await addRecipeToPlannedMeal({
+              planned_meal_id: recipeMealId,
+              recipe_id: picked.recipeId,
+              quantity: picked.quantity,
+              portion_unit: picked.portionUnit,
+              notes: picked.notes,
+            });
+            if (result.ok) {
+              toast.success("Receita planejada.");
+              setRecipeMealId(null);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível planejar.");
+            }
+          }}
+        />
+      )}
 
-      <RecipePickerDialog
-        open={recipeMealId !== null}
-        onOpenChange={(open) => !open && setRecipeMealId(null)}
-        recipes={props.recipes}
-        title="Planejar receita"
-        description="O plano aponta para a receita como ela está hoje. O congelamento acontece só no registro do consumo."
-        onConfirm={async (picked) => {
-          const result = await addRecipeToPlannedMeal({
-            planned_meal_id: recipeMealId,
-            recipe_id: picked.recipeId,
-            quantity: picked.quantity,
-            portion_unit: picked.portionUnit,
-            notes: picked.notes,
-          });
-          if (result.ok) {
-            toast.success("Receita planejada.");
-            setRecipeMealId(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível planejar.");
-          }
-        }}
-      />
+      {applyPlanDialogMontado && (
+        <ApplyPlanDialog
+          plan={applyOpen}
+          hoje={props.hoje}
+          onOpenChange={(open) => !open && setApplyOpen(null)}
+          onConfirm={async (payload) => {
+            const result = await applyPlanToPeriod(payload);
+            if (result.ok) {
+              toast.success(
+                `${result.data.refeicoes} refeições e ${result.data.itens} itens criados em ${result.data.dias} dias.`,
+              );
+              setApplyOpen(null);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível aplicar o modelo.");
+            }
+          }}
+        />
+      )}
 
-      <ApplyPlanDialog
-        plan={applyOpen}
-        hoje={props.hoje}
-        onOpenChange={(open) => !open && setApplyOpen(null)}
-        onConfirm={async (payload) => {
-          const result = await applyPlanToPeriod(payload);
-          if (result.ok) {
-            toast.success(
-              `${result.data.refeicoes} refeições e ${result.data.itens} itens criados em ${result.data.dias} dias.`,
-            );
-            setApplyOpen(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível aplicar o modelo.");
-          }
-        }}
-      />
+      {planDialogMontado && (
+        <PlanDialog
+          open={planDialog}
+          onOpenChange={setPlanDialog}
+          hoje={props.hoje}
+          onConfirm={async (payload) => {
+            const result = await saveNutritionPlan(payload);
+            if (result.ok) {
+              toast.success("Modelo criado. Agora monte os dias dele.");
+              setPlanDialog(false);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível criar o modelo.");
+            }
+          }}
+        />
+      )}
 
-      <PlanDialog
-        open={planDialog}
-        onOpenChange={setPlanDialog}
-        hoje={props.hoje}
-        onConfirm={async (payload) => {
-          const result = await saveNutritionPlan(payload);
-          if (result.ok) {
-            toast.success("Modelo criado. Agora monte os dias dele.");
-            setPlanDialog(false);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível criar o modelo.");
-          }
-        }}
-      />
-
-      <CopyDialog
-        open={copyOpen}
-        onOpenChange={setCopyOpen}
-        date={props.date}
-        view={props.view === "semana" ? "semana" : "dia"}
-        onConfirm={async (payload) => {
-          const result =
-            props.view === "semana"
-              ? await duplicatePlannedWeek(payload)
-              : await copyPlannedDay(payload);
-          if (result.ok) {
-            toast.success(
-              `${result.data.refeicoes} refeições e ${result.data.itens} itens copiados.`,
-            );
-            setCopyOpen(false);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível copiar.");
-          }
-        }}
-      />
+      {copyDialogMontado && (
+        <CopyDialog
+          open={copyOpen}
+          onOpenChange={setCopyOpen}
+          date={props.date}
+          view={props.view === "semana" ? "semana" : "dia"}
+          onConfirm={async (payload) => {
+            const result =
+              props.view === "semana"
+                ? await duplicatePlannedWeek(payload)
+                : await copyPlannedDay(payload);
+            if (result.ok) {
+              toast.success(
+                `${result.data.refeicoes} refeições e ${result.data.itens} itens copiados.`,
+              );
+              setCopyOpen(false);
+              router.refresh();
+            } else {
+              toast.error(result.error ?? "Não foi possível copiar.");
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -902,864 +945,6 @@ function ModelsView({
 
 /* ═══════════════════════════ Diálogos ═══════════════════════════ */
 
-function NewPlannedMealDialog({
-  open,
-  onOpenChange,
-  date,
-  mealTypes,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  date: string;
-  mealTypes: MealType[];
-  onConfirm: (payload: Record<string, unknown>) => Promise<void>;
-}) {
-  const active = mealTypes.filter((type) => type.isActive);
-  const [mealTypeId, setMealTypeId] = React.useState(active[0]?.id ?? "");
-  const [time, setTime] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-
-  const [lastOpen, setLastOpen] = React.useState(open);
-  if (open !== lastOpen) {
-    setLastOpen(open);
-    if (open) {
-      const first = active[0];
-      setMealTypeId(first?.id ?? "");
-      setTime(first?.defaultTime ? first.defaultTime.slice(0, 5) : "");
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Planejar refeição</DialogTitle>
-          <DialogDescription>Em {longDateLabel(date)}.</DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="planned-type">Tipo</Label>
-            <select
-              id="planned-type"
-              value={mealTypeId}
-              onChange={(event) => {
-                setMealTypeId(event.target.value);
-                const type = active.find((t) => t.id === event.target.value);
-                setTime(type?.defaultTime ? type.defaultTime.slice(0, 5) : "");
-              }}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {active.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.icon ? `${type.icon} ` : ""}
-                  {type.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="planned-time">Horário previsto</Label>
-            <Input
-              id="planned-time"
-              type="time"
-              value={time}
-              onChange={(event) => setTime(event.target.value)}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!mealTypeId || saving}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm({
-                planned_date: date,
-                meal_type_id: mealTypeId,
-                planned_time: time || null,
-              });
-              setSaving(false);
-            }}
-          >
-            {saving ? "Salvando…" : "Planejar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * Escolha do escopo. Mostra o que cada opção significa em texto — o número exato de
- * refeições atingidas depende da série inteira e é resolvido no servidor pela função pura.
- */
-function ScopeDialog({
-  target,
-  hoje,
-  patch,
-  onPatchChange,
-  onOpenChange,
-  onConfirm,
-}: {
-  target: { meal: PlannedMeal; action: "excluir" | "editar" } | null;
-  hoje: string;
-  patch: { time: string; title: string };
-  onPatchChange: (patch: { time: string; title: string }) => void;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: (scope: PlanEditScope) => Promise<void>;
-}) {
-  const [scope, setScope] = React.useState<PlanEditScope>("somente_este_dia");
-  const [saving, setSaving] = React.useState(false);
-
-  const [lastId, setLastId] = React.useState<string | null>(target?.meal.id ?? null);
-  if ((target?.meal.id ?? null) !== lastId) {
-    setLastId(target?.meal.id ?? null);
-    setScope("somente_este_dia");
-    setSaving(false);
-  }
-
-  const isSeries = Boolean(target?.meal.planDayId);
-  const isEdit = target?.action === "editar";
-
-  return (
-    <Dialog open={target !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {isEdit ? "Editar refeição planejada" : "Excluir refeição planejada"}
-          </DialogTitle>
-          <DialogDescription>
-            {isSeries
-              ? `Esta refeição veio de um modelo. Escolha até onde ${isEdit ? "a alteração" : "a exclusão"} deve chegar — datas passadas nunca são alteradas.`
-              : `Esta refeição é avulsa, então só ela será ${isEdit ? "alterada" : "excluída"}.`}
-          </DialogDescription>
-        </DialogHeader>
-
-        {isEdit && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="scope-time">Horário previsto</Label>
-              <Input
-                id="scope-time"
-                type="time"
-                value={patch.time}
-                onChange={(event) => onPatchChange({ ...patch, time: event.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="scope-title">Título (opcional)</Label>
-              <Input
-                id="scope-title"
-                value={patch.title}
-                onChange={(event) => onPatchChange({ ...patch, title: event.target.value })}
-              />
-            </div>
-          </div>
-        )}
-
-        {isSeries && (
-          <div className="space-y-2">
-            {PLAN_EDIT_SCOPES.map((option) => (
-              <label
-                key={option}
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
-                  scope === option ? "border-primary/40 bg-primary/5" : "hover:bg-accent/50",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="plan-scope"
-                  value={option}
-                  checked={scope === option}
-                  onChange={() => setScope(option)}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="block text-sm font-medium">
-                    {PLAN_EDIT_SCOPE_LABELS[option]}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    {PLAN_EDIT_SCOPE_HINTS[option]}
-                  </span>
-                </span>
-              </label>
-            ))}
-            <p className="text-[11px] text-muted-foreground">
-              Referência de hoje: {longDateLabel(hoje)}.
-            </p>
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            variant={isEdit ? "default" : "destructive"}
-            disabled={saving}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm(isSeries ? scope : "somente_este_dia");
-              setSaving(false);
-            }}
-          >
-            {saving ? (isEdit ? "Salvando…" : "Excluindo…") : isEdit ? "Salvar" : "Excluir"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ApplyPlanDialog({
-  plan,
-  hoje,
-  onOpenChange,
-  onConfirm,
-}: {
-  plan: NutritionPlan | null;
-  hoje: string;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: (payload: Record<string, unknown>) => Promise<void>;
-}) {
-  const [from, setFrom] = React.useState(hoje);
-  const [to, setTo] = React.useState(addDaysIso(hoje, 27));
-  const [replace, setReplace] = React.useState(false);
-  const [saving, setSaving] = React.useState(false);
-
-  const [lastId, setLastId] = React.useState<string | null>(plan?.id ?? null);
-  if ((plan?.id ?? null) !== lastId) {
-    setLastId(plan?.id ?? null);
-    setFrom(hoje);
-    setTo(addDaysIso(hoje, 27));
-    setReplace(false);
-    setSaving(false);
-  }
-
-  // Impacto calculado com a MESMA função pura que o servidor usa para materializar.
-  const impact = plan && from && to && to >= from ? countMaterialization(plan, from, to) : null;
-
-  return (
-    <Dialog open={plan !== null} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Aplicar “{plan?.name}”</DialogTitle>
-          <DialogDescription>
-            As refeições são criadas com data concreta e ficam independentes do modelo: mudar o
-            modelo depois não reescreve o que já foi planejado.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="apply-from">De</Label>
-              <Input
-                id="apply-from"
-                type="date"
-                value={from}
-                onChange={(event) => setFrom(event.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="apply-to">Até</Label>
-              <Input
-                id="apply-to"
-                type="date"
-                value={to}
-                onChange={(event) => setTo(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
-            <span>
-              <span className="text-sm font-medium">Substituir o que já está planejado</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                Apaga o planejamento existente NESTAS datas antes de aplicar. O diário não é
-                afetado.
-              </span>
-            </span>
-            <Switch checked={replace} onCheckedChange={setReplace} />
-          </label>
-
-          {impact && (
-            <p className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
-              Serão criados{" "}
-              <strong className="text-foreground">
-                {impact.refeicoes} refeições e {impact.itens} itens
-              </strong>{" "}
-              em {impact.dias} dias.
-              {impact.dias === 0 && " O modelo não cobre nenhum dia deste período."}
-            </p>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={saving || !impact || impact.dias === 0}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm({ plan_id: plan?.id, from, to, replace });
-              setSaving(false);
-            }}
-          >
-            {saving ? "Aplicando…" : "Aplicar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function PlanDialog({
-  open,
-  onOpenChange,
-  hoje,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  hoje: string;
-  onConfirm: (payload: Record<string, unknown>) => Promise<void>;
-}) {
-  const [name, setName] = React.useState("");
-  const [description, setDescription] = React.useState("");
-  const [cycleWeeks, setCycleWeeks] = React.useState("1");
-  const [anchorDate, setAnchorDate] = React.useState(startOfWeekIso(hoje));
-  const [isDefault, setIsDefault] = React.useState(false);
-  const [saving, setSaving] = React.useState(false);
-
-  const [lastOpen, setLastOpen] = React.useState(open);
-  if (open !== lastOpen) {
-    setLastOpen(open);
-    if (open) {
-      setName("");
-      setDescription("");
-      setCycleWeeks("1");
-      setAnchorDate(startOfWeekIso(hoje));
-      setIsDefault(false);
-      setSaving(false);
-    }
-  }
-
-  const cycle = Number(cycleWeeks) || 1;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Novo modelo de semana</DialogTitle>
-          <DialogDescription>
-            Descreve a sua semana padrão. Depois de criar, monte os dias e aplique a um período.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="plan-name">Nome</Label>
-            <Input
-              id="plan-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Ex.: semana normal, semana de treino"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="plan-description">Descrição (opcional)</Label>
-            <Input
-              id="plan-description"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="plan-cycle">Semanas do ciclo</Label>
-              <Input
-                id="plan-cycle"
-                type="number"
-                min={1}
-                max={8}
-                value={cycleWeeks}
-                onChange={(event) => setCycleWeeks(event.target.value)}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                1 = toda semana igual. 2 = alterna semana A e B.
-              </p>
-            </div>
-
-            {cycle > 1 && (
-              <div className="space-y-1.5">
-                <Label htmlFor="plan-anchor">Semana inicial</Label>
-                <Input
-                  id="plan-anchor"
-                  type="date"
-                  value={anchorDate}
-                  onChange={(event) => setAnchorDate(event.target.value)}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Sem ela não há como saber em qual semana do ciclo cada data cai.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
-            <span className="text-sm font-medium">Usar como modelo padrão</span>
-            <Switch checked={isDefault} onCheckedChange={setIsDefault} />
-          </label>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!name.trim() || saving}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm({
-                name: name.trim(),
-                description: description || undefined,
-                cycle_weeks: cycle,
-                anchor_date: cycle > 1 ? anchorDate : undefined,
-                is_default: isDefault,
-              });
-              setSaving(false);
-            }}
-          >
-            {saving ? "Criando…" : "Criar modelo"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function CopyDialog({
-  open,
-  onOpenChange,
-  date,
-  view,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  date: string;
-  view: "dia" | "semana";
-  onConfirm: (payload: Record<string, unknown>) => Promise<void>;
-}) {
-  const isWeek = view === "semana";
-  const sourceStart = isWeek ? startOfWeekIso(date) : date;
-  const [target, setTarget] = React.useState(addDaysIso(sourceStart, isWeek ? 7 : 1));
-  const [replace, setReplace] = React.useState(false);
-  const [saving, setSaving] = React.useState(false);
-
-  const [lastOpen, setLastOpen] = React.useState(open);
-  if (open !== lastOpen) {
-    setLastOpen(open);
-    if (open) {
-      setTarget(addDaysIso(sourceStart, isWeek ? 7 : 1));
-      setReplace(false);
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{isWeek ? "Duplicar semana" : "Copiar dia"}</DialogTitle>
-          <DialogDescription>
-            {isWeek
-              ? `Copia tudo que está planejado na semana de ${shortDateLabel(sourceStart)}, preservando o dia da semana de cada refeição. A origem fica intacta.`
-              : `Copia o planejamento de ${longDateLabel(date)}. A origem fica intacta.`}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="copy-target">{isWeek ? "Semana de destino (segunda-feira)" : "Dia de destino"}</Label>
-            <Input
-              id="copy-target"
-              type="date"
-              value={target}
-              onChange={(event) => setTarget(event.target.value)}
-            />
-          </div>
-
-          <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
-            <span>
-              <span className="text-sm font-medium">Substituir o destino</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                Apaga o que já estiver planejado lá antes de copiar.
-              </span>
-            </span>
-            <Switch checked={replace} onCheckedChange={setReplace} />
-          </label>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!target || saving}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm(
-                isWeek
-                  ? {
-                      from_week_start: sourceStart,
-                      to_week_start: startOfWeekIso(target),
-                      replace,
-                    }
-                  : { from_date: date, to_date: target, replace },
-              );
-              setSaving(false);
-            }}
-          >
-            {saving ? "Copiando…" : "Copiar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 /* ═══════════════════════════ Montar os dias do modelo ═══════════════════════════ */
 
-/**
- * Pendência da 16-B fechada na 16-C: até aqui o modelo de semana podia ser CRIADO e APLICADO,
- * mas os seus dias só existiam se fossem inseridos direto no banco.
- *
- * Um dia do modelo NÃO tem data — ele é a receita da semana ("toda segunda-feira"). Aplicar o
- * modelo materializa esses dias em datas concretas, e a partir daí as duas coisas são
- * independentes: editar o modelo depois não reescreve o que já foi planejado.
- */
-function ModelDaysSheet({
-  plan,
-  mealTypes,
-  foodNames,
-  recipeNames,
-  pending,
-  onOpenChange,
-  onRun,
-  onAddFood,
-  onAddRecipe,
-}: {
-  plan: NutritionPlan | null;
-  mealTypes: MealType[];
-  foodNames: Map<string, string>;
-  recipeNames: Map<string, string>;
-  pending: boolean;
-  onOpenChange: (open: boolean) => void;
-  onRun: (action: () => Promise<{ ok: boolean; error?: string }>, success: string) => void;
-  onAddFood: (mealId: string) => void;
-  onAddRecipe: (mealId: string) => void;
-}) {
-  const [weekIndex, setWeekIndex] = React.useState(0);
-
-  const seen = plan?.id ?? null;
-  const [lastSeen, setLastSeen] = React.useState(seen);
-  if (seen !== lastSeen) {
-    setLastSeen(seen);
-    setWeekIndex(0);
-  }
-
-  if (!plan) return null;
-
-  const daysOfWeek = plan.days.filter((day) => day.weekIndex === weekIndex);
-  const dayByWeekday = new Map(daysOfWeek.map((day) => [day.weekday, day]));
-  const activeTypes = mealTypes.filter((type) => type.isActive);
-
-  return (
-    <Sheet open={plan !== null} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
-        <SheetHeader>
-          <SheetTitle className="pr-6 text-left">Dias de “{plan.name}”</SheetTitle>
-        </SheetHeader>
-
-        <div className="space-y-4 px-4 pb-8">
-          <p className="text-xs text-muted-foreground">
-            Um dia do modelo não tem data: ele descreve o que você come naquele dia da semana.
-            Aplicar o modelo cria refeições com data concreta, e elas ficam independentes daqui.
-          </p>
-
-          {plan.cycleWeeks > 1 && (
-            <div className="flex rounded-lg border p-0.5">
-              {Array.from({ length: plan.cycleWeeks }, (_, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => setWeekIndex(index)}
-                  className={cn(
-                    "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
-                    weekIndex === index
-                      ? "bg-primary/10 text-foreground"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  Semana {index + 1}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {/* Domingo(0) … sábado(6), na ordem da semana brasileira começando na segunda. */}
-            {[1, 2, 3, 4, 5, 6, 0].map((weekday) => {
-              const day = dayByWeekday.get(weekday);
-              return (
-                <Card key={weekday}>
-                  <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                    <CardTitle className="text-sm">{WEEKDAY_SHORT_LABELS[weekday]}</CardTitle>
-                    {day ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={pending}
-                        onClick={() => {
-                          if (
-                            !confirm(
-                              "Remover este dia do modelo? As refeições já materializadas em datas concretas continuam onde estão.",
-                            )
-                          ) {
-                            return;
-                          }
-                          onRun(() => deletePlanDay(day.id), "Dia removido do modelo.");
-                        }}
-                      >
-                        <Trash2 className="size-3.5" />
-                        Remover
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={pending}
-                        onClick={() =>
-                          onRun(
-                            () =>
-                              savePlanDay({
-                                plan_id: plan.id,
-                                week_index: weekIndex,
-                                weekday,
-                              }),
-                            "Dia adicionado ao modelo.",
-                          )
-                        }
-                      >
-                        <Plus className="size-3.5" />
-                        Usar este dia
-                      </Button>
-                    )}
-                  </CardHeader>
-
-                  {day && (
-                    <CardContent className="space-y-2">
-                      {day.meals.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          Nenhuma refeição neste dia do modelo.
-                        </p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {sortMealsByTime(day.meals).map((meal) => (
-                            <li key={meal.id} className="rounded-lg border p-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="min-w-0 truncate text-sm">
-                                  {meal.mealTypeIcon && <span aria-hidden>{meal.mealTypeIcon} </span>}
-                                  {meal.title || meal.mealTypeName}
-                                  {meal.plannedTime && (
-                                    <span className="ms-1.5 text-xs text-muted-foreground">
-                                      {shortTime(meal.plannedTime)}
-                                    </span>
-                                  )}
-                                </p>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-7 shrink-0"
-                                  aria-label="Excluir refeição do modelo"
-                                  disabled={pending}
-                                  onClick={() =>
-                                    onRun(
-                                      () =>
-                                        deletePlannedMealInScope({
-                                          planned_meal_id: meal.id,
-                                          scope: "todo_o_modelo",
-                                        }),
-                                      "Refeição removida do modelo.",
-                                    )
-                                  }
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </Button>
-                              </div>
-
-                              {meal.items.length > 0 && (
-                                <ul className="mt-1 space-y-0.5">
-                                  {meal.items.map((item) => (
-                                    <li
-                                      key={item.id}
-                                      className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
-                                    >
-                                      <span className="min-w-0 truncate">
-                                        {item.customLabel ??
-                                          (item.itemKind === "receita"
-                                            ? (item.recipeId ? recipeNames.get(item.recipeId) : null) ??
-                                              "Receita removida"
-                                            : item.foodId
-                                              ? (foodNames.get(item.foodId) ?? "Alimento removido")
-                                              : "Item")}
-                                        {item.quantity !== null &&
-                                          ` — ${item.quantity.toLocaleString("pt-BR")}${item.measureLabel ? ` × ${item.measureLabel}` : ""}`}
-                                      </span>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="size-6 shrink-0"
-                                        aria-label="Remover item"
-                                        disabled={pending}
-                                        onClick={() =>
-                                          onRun(
-                                            () => deletePlannedMealItem(item.id),
-                                            "Item removido.",
-                                          )
-                                        }
-                                      >
-                                        <Trash2 className="size-3" />
-                                      </Button>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-
-                              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-xs"
-                                  disabled={pending}
-                                  onClick={() => onAddFood(meal.id)}
-                                >
-                                  <Plus className="size-3.5" />
-                                  Alimento
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-xs"
-                                  disabled={pending}
-                                  onClick={() => onAddRecipe(meal.id)}
-                                >
-                                  <ChefHat className="size-3.5" />
-                                  Receita
-                                </Button>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-
-                      <AddModelMealForm
-                        mealTypes={activeTypes}
-                        pending={pending}
-                        onAdd={(mealTypeId, time) =>
-                          onRun(
-                            () =>
-                              savePlannedMeal({
-                                plan_id: plan.id,
-                                plan_day_id: day.id,
-                                meal_type_id: mealTypeId,
-                                planned_time: time || null,
-                              }),
-                            "Refeição adicionada ao modelo.",
-                          )
-                        }
-                      />
-                    </CardContent>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
 /** Linha compacta para acrescentar uma refeição a um dia do modelo. */
-function AddModelMealForm({
-  mealTypes,
-  pending,
-  onAdd,
-}: {
-  mealTypes: MealType[];
-  pending: boolean;
-  onAdd: (mealTypeId: string, time: string) => void;
-}) {
-  const [mealTypeId, setMealTypeId] = React.useState(mealTypes[0]?.id ?? "");
-  const [time, setTime] = React.useState(
-    mealTypes[0]?.defaultTime ? mealTypes[0].defaultTime.slice(0, 5) : "",
-  );
-
-  return (
-    <div className="flex flex-wrap items-end gap-2 border-t pt-2">
-      <div className="min-w-[9rem] flex-1 space-y-1">
-        <Label className="text-[11px]">Refeição</Label>
-        <select
-          value={mealTypeId}
-          onChange={(event) => {
-            setMealTypeId(event.target.value);
-            const type = mealTypes.find((t) => t.id === event.target.value);
-            setTime(type?.defaultTime ? type.defaultTime.slice(0, 5) : "");
-          }}
-          aria-label="Tipo de refeição"
-          className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {mealTypes.map((type) => (
-            <option key={type.id} value={type.id}>
-              {type.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="w-24 space-y-1">
-        <Label className="text-[11px]">Horário</Label>
-        <Input
-          type="time"
-          value={time}
-          onChange={(event) => setTime(event.target.value)}
-          aria-label="Horário previsto"
-          className="h-8 text-xs"
-        />
-      </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-8"
-        disabled={pending || !mealTypeId}
-        onClick={() => onAdd(mealTypeId, time)}
-      >
-        <Plus className="size-3.5" />
-        Refeição
-      </Button>
-    </div>
-  );
-}

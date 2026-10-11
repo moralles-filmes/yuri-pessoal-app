@@ -12,6 +12,7 @@
  *     citação exigida pela licença da TACO.
  */
 import * as React from "react";
+import { useItemRetido } from "@/components/shared/use-item-retido";
 import { Pencil, Plus, Ruler, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +47,7 @@ import { NutrientValue } from "./nutrient-value";
 const BASE_MEASURE = "__base__";
 
 export function FoodDetailSheet({
-  food,
+  food: foodAtual,
   nutrients,
   open,
   onOpenChange,
@@ -68,6 +69,7 @@ export function FoodDetailSheet({
   onEditMeasure: (measure: FoodMeasure) => void;
   onChanged: () => void;
 }) {
+  const food = useItemRetido(foodAtual);
   const [quantity, setQuantity] = React.useState("100");
   const [measureId, setMeasureId] = React.useState<string>(BASE_MEASURE);
 

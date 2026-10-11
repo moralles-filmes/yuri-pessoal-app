@@ -17,6 +17,7 @@
  *    tela registra "não realizado" (com motivo) e "cancelado" — fatos que o usuário decide.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -29,7 +30,6 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
-  CalendarRange,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -45,31 +45,15 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/shared/page-header";
+import { useChaveDeAbertura, useItemRetido } from "@/components/shared/use-item-retido";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { ConsistencyCalendar } from "@/components/training/consistency-calendar";
 import type { MetricOptions, MetricSession } from "@/lib/training/metrics";
 import { cn } from "@/lib/utils";
@@ -86,23 +70,33 @@ import {
   derivePlannedStatus,
   groupByDate,
   monthGridIso,
-  startOfWeekIso,
   summarizeAdherence,
-  weekDaysIso,
 } from "@/lib/training/schedule";
 import type { ScheduledWorkout, TrainingProgram, TrainingWorkout } from "@/lib/training/types";
 import {
-  applyProgramToSchedule,
   clearTrainingWeek,
-  createScheduledWorkout,
   deleteScheduledWorkout,
-  duplicateTrainingWeek,
-  generateTrainingSchedule,
   rescheduleScheduledWorkout,
-  setScheduledWorkoutOutcome,
   toggleRestDay,
 } from "@/lib/actions/training-schedule";
-import { Field } from "@/components/training/field";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const NewEntryDialog = dynamic(
+  () => import("./new-entry-dialog").then((m) => m.NewEntryDialog),
+  { ssr: false },
+);
+const OutcomeDialog = dynamic(
+  () => import("./outcome-dialog").then((m) => m.OutcomeDialog),
+  { ssr: false },
+);
+const GenerateDialog = dynamic(
+  () => import("./generate-dialog").then((m) => m.GenerateDialog),
+  { ssr: false },
+);
+const DuplicateWeekDialog = dynamic(
+  () => import("./duplicate-week-dialog").then((m) => m.DuplicateWeekDialog),
+  { ssr: false },
+);
 
 type View = "semana" | "mes" | "lista" | "consistencia";
 
@@ -124,7 +118,7 @@ const STATUS_STYLES: Record<DerivedScheduleStatus, string> = {
 };
 
 /** "03/08" a partir de data pura — sem converter para Date, sem fuso. */
-const shortDate = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+export const shortDate = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
 export function CalendarClient({
   entries,
@@ -156,6 +150,22 @@ export function CalendarClient({
   const [outcomeEntry, setOutcomeEntry] = React.useState<ScheduledWorkout | null>(null);
   const [generateOpen, setGenerateOpen] = React.useState(false);
   const [duplicateOpen, setDuplicateOpen] = React.useState(false);
+
+  // Diálogos sob demanda (REDESIGN-07-C, D2). Antes eram `{x && <Dialog open/>}`: nasciam
+  // limpos a cada abertura e fechavam num corte seco. Agora ficam montados depois da 1ª
+  // abertura (`useLazyDialog`), desenham o último item até o fim da animação
+  // (`useItemRetido`) e remontam a cada abertura (`useChaveDeAbertura`) — continuam nascendo
+  // limpos.
+  const novaDataExibida = useItemRetido(newDate);
+  const resultadoExibido = useItemRetido(outcomeEntry);
+  const novoMontado = useLazyDialog(newDate !== null);
+  const resultadoMontado = useLazyDialog(outcomeEntry !== null);
+  const gerarMontado = useLazyDialog(generateOpen);
+  const duplicarMontado = useLazyDialog(duplicateOpen);
+  const chaveNovo = useChaveDeAbertura(newDate !== null);
+  const chaveResultado = useChaveDeAbertura(outcomeEntry !== null);
+  const chaveGerar = useChaveDeAbertura(generateOpen);
+  const chaveDuplicar = useChaveDeAbertura(duplicateOpen);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -387,9 +397,11 @@ export function CalendarClient({
       )}
 
       {/* Diálogos */}
-      {newDate && (
+      {novoMontado && novaDataExibida && (
         <NewEntryDialog
-          date={newDate}
+          key={chaveNovo}
+          open={newDate !== null}
+          date={novaDataExibida}
           workouts={workouts}
           programs={programs}
           onClose={() => setNewDate(null)}
@@ -400,9 +412,11 @@ export function CalendarClient({
         />
       )}
 
-      {outcomeEntry && (
+      {resultadoMontado && resultadoExibido && (
         <OutcomeDialog
-          entry={outcomeEntry}
+          key={chaveResultado}
+          open={outcomeEntry !== null}
+          entry={resultadoExibido}
           onClose={() => setOutcomeEntry(null)}
           onSaved={() => {
             setOutcomeEntry(null);
@@ -411,8 +425,10 @@ export function CalendarClient({
         />
       )}
 
-      {generateOpen && (
+      {gerarMontado && (
         <GenerateDialog
+          key={chaveGerar}
+          open={generateOpen}
           workouts={workouts}
           programs={programs}
           reference={reference}
@@ -425,8 +441,10 @@ export function CalendarClient({
         />
       )}
 
-      {duplicateOpen && (
+      {duplicarMontado && (
         <DuplicateWeekDialog
+          key={chaveDuplicar}
+          open={duplicateOpen}
           reference={reference}
           weekStartsOn={weekStartsOn}
           onClose={() => setDuplicateOpen(false)}
@@ -808,543 +826,6 @@ function ListView({
 }
 
 /* ═══════════════════════════ Diálogos ═══════════════════════════ */
-
-function NewEntryDialog({
-  date,
-  workouts,
-  programs,
-  onClose,
-  onSaved,
-}: {
-  date: string;
-  workouts: TrainingWorkout[];
-  programs: TrainingProgram[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [workoutId, setWorkoutId] = React.useState("");
-  const [programId, setProgramId] = React.useState("");
-  const [time, setTime] = React.useState("");
-  const [notes, setNotes] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-
-  const available = workouts.filter((workout) => !workout.isArchived && !workout.isSuperseded);
-
-  async function save() {
-    setSaving(true);
-    const result = await createScheduledWorkout({
-      scheduled_date: date,
-      entry_kind: "treino",
-      workout_id: workoutId || null,
-      program_id: programId || null,
-      planned_time: time || null,
-      notes,
-    });
-    setSaving(false);
-
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success("Dia planejado.");
-    onSaved();
-  }
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Planejar {shortDate(date)}</DialogTitle>
-          <DialogDescription>
-            Escolha o treino do dia. Você pode deixar sem treino e decidir depois.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <Field label="Treino">
-            <Select value={workoutId} onValueChange={setWorkoutId}>
-              <SelectTrigger aria-label="Treino do dia">
-                <SelectValue placeholder="Escolher treino…" />
-              </SelectTrigger>
-              <SelectContent>
-                {available.map((workout) => (
-                  <SelectItem key={workout.id} value={workout.id}>
-                    {workout.shortName ? `${workout.shortName} — ${workout.name}` : workout.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          <Field label="Programa (opcional)">
-            <Select value={programId} onValueChange={setProgramId}>
-              <SelectTrigger aria-label="Programa">
-                <SelectValue placeholder="Nenhum" />
-              </SelectTrigger>
-              <SelectContent>
-                {programs
-                  .filter((program) => !program.isArchived)
-                  .map((program) => (
-                    <SelectItem key={program.id} value={program.id}>
-                      {program.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          <Field label="Horário previsto" hint="Horário de Brasília.">
-            <Input type="time" value={time} onChange={(event) => setTime(event.target.value)} />
-          </Field>
-
-          <Field label="Observação">
-            <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} />
-          </Field>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button disabled={saving} onClick={save}>
-            Planejar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function OutcomeDialog({
-  entry,
-  onClose,
-  onSaved,
-}: {
-  entry: ScheduledWorkout;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [status, setStatus] = React.useState<"planejado" | "nao_realizado" | "cancelado">(
-    entry.status === "nao_realizado" || entry.status === "cancelado" ? entry.status : "nao_realizado",
-  );
-  const [reason, setReason] = React.useState(entry.skipReason ?? "");
-  const [saving, setSaving] = React.useState(false);
-
-  async function save() {
-    setSaving(true);
-    const result = await setScheduledWorkoutOutcome({ id: entry.id, status, reason });
-    setSaving(false);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success("Registrado.");
-    onSaved();
-  }
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Desfecho de {shortDate(entry.scheduledDate)}</DialogTitle>
-          <DialogDescription>
-            Registrar um treino como <strong>concluído</strong> é papel da sessão ao vivo, que
-            chega na Subfase 17-C. Aqui você marca o que não aconteceu — e por quê.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          {(
-            [
-              ["nao_realizado", "Não realizado", "Estava planejado e não aconteceu."],
-              ["cancelado", "Cancelado", "Não conta como falha na aderência."],
-              ["planejado", "Voltar a pendente", "Desfaz o registro e limpa a justificativa."],
-            ] as const
-          ).map(([value, label, description]) => (
-            <label
-              key={value}
-              className={cn(
-                "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
-                status === value ? "border-primary/50 bg-primary/5" : "hover:bg-accent",
-              )}
-            >
-              <input
-                type="radio"
-                name="desfecho"
-                checked={status === value}
-                onChange={() => setStatus(value)}
-                className="mt-0.5 size-4 accent-primary"
-              />
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">{label}</span>
-                <span className="block text-xs text-muted-foreground">{description}</span>
-              </span>
-            </label>
-          ))}
-
-          {status !== "planejado" && (
-            <div>
-              <Label className="text-xs text-muted-foreground" htmlFor="justificativa">
-                Justificativa (opcional)
-              </Label>
-              <Textarea
-                id="justificativa"
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                rows={2}
-                className="mt-1.5"
-                placeholder="Viagem, dor no ombro, academia fechada…"
-              />
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button disabled={saving} onClick={save}>
-            Registrar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function GenerateDialog({
-  workouts,
-  programs,
-  reference,
-  weekStartsOn,
-  onClose,
-  onSaved,
-}: {
-  workouts: TrainingWorkout[];
-  programs: TrainingProgram[];
-  reference: string;
-  weekStartsOn: number;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const weekStart = startOfWeekIso(reference, weekStartsOn);
-
-  const [mode, setMode] = React.useState<"rotina" | "programa">("rotina");
-  const [from, setFrom] = React.useState(weekStart);
-  const [to, setTo] = React.useState(addDaysIso(weekStart, 27));
-  const [weekdays, setWeekdays] = React.useState<number[]>([1, 3, 5]);
-  const [rotation, setRotation] = React.useState<string[]>([]);
-  const [weekInterval, setWeekInterval] = React.useState("1");
-  const [includeRest, setIncludeRest] = React.useState(false);
-  const [time, setTime] = React.useState("");
-  const [programId, setProgramId] = React.useState("");
-  const [conflict, setConflict] = React.useState<"pular" | "substituir">("pular");
-  const [saving, setSaving] = React.useState(false);
-
-  const available = workouts.filter((workout) => !workout.isArchived && !workout.isSuperseded);
-
-  async function save() {
-    setSaving(true);
-    const result =
-      mode === "programa"
-        ? await applyProgramToSchedule({
-            program_id: programId,
-            from,
-            to,
-            conflict,
-            planned_time: time || null,
-          })
-        : await generateTrainingSchedule({
-            from,
-            to,
-            weekdays,
-            workout_ids: rotation,
-            week_interval: weekInterval,
-            include_rest_days: includeRest,
-            planned_time: time || null,
-            conflict,
-          });
-    setSaving(false);
-
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    const { created, skipped, replaced } = result.data;
-    toast.success(
-      `${created} dia(s) planejados${replaced > 0 ? ` · ${replaced} substituídos` : ""}${
-        skipped > 0 ? ` · ${skipped} dias preservados por já terem conteúdo` : ""
-      }.`,
-    );
-    onSaved();
-  }
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Gerar rotina</DialogTitle>
-          <DialogDescription>
-            Escolha os dias da semana e o rodízio de treinos. Nada que já está planejado é
-            sobrescrito sem você mandar.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <Button
-              variant={mode === "rotina" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setMode("rotina")}
-            >
-              Montar rotina
-            </Button>
-            <Button
-              variant={mode === "programa" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setMode("programa")}
-            >
-              Aplicar um programa
-            </Button>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="De">
-              <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-            </Field>
-            <Field label="Até">
-              <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-            </Field>
-          </div>
-
-          {mode === "programa" ? (
-            <Field
-              label="Programa"
-              hint="Usa os treinos do programa como rodízio e os dias sugeridos de cada um."
-            >
-              <Select value={programId} onValueChange={setProgramId}>
-                <SelectTrigger aria-label="Programa a aplicar">
-                  <SelectValue placeholder="Escolha o programa" />
-                </SelectTrigger>
-                <SelectContent>
-                  {programs
-                    .filter((program) => !program.isArchived)
-                    .map((program) => (
-                      <SelectItem key={program.id} value={program.id}>
-                        {program.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          ) : (
-            <>
-              <Field label="Dias de treino">
-                <div className="flex flex-wrap gap-1.5">
-                  {WEEKDAY_SHORT_LABELS.map((label, weekday) => {
-                    const on = weekdays.includes(weekday);
-                    return (
-                      <button
-                        key={weekday}
-                        type="button"
-                        onClick={() =>
-                          setWeekdays((current) =>
-                            current.includes(weekday)
-                              ? current.filter((day) => day !== weekday)
-                              : [...current, weekday],
-                          )
-                        }
-                        aria-pressed={on}
-                        className={cn(
-                          "rounded-lg border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          on ? "border-primary/50 bg-primary/10 font-medium" : "hover:bg-accent",
-                        )}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </Field>
-
-              <Field
-                label="Rodízio de treinos"
-                hint="Clique na ordem do rodízio (A, B, C). O ciclo continua de uma semana para a outra."
-              >
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {available.slice(0, 20).map((workout) => (
-                      <button
-                        key={workout.id}
-                        type="button"
-                        onClick={() => setRotation((current) => [...current, workout.id])}
-                        className="rounded-lg border px-2.5 py-1 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        {workout.shortName || workout.name}
-                      </button>
-                    ))}
-                  </div>
-                  {rotation.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-muted/40 p-2">
-                      {rotation.map((id, index) => {
-                        const workout = available.find((item) => item.id === id);
-                        return (
-                          <Badge key={`${id}-${index}`} variant="secondary" className="gap-1">
-                            {workout?.shortName || workout?.name || "?"}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setRotation((current) => current.filter((_, i) => i !== index))
-                              }
-                              aria-label={`Tirar ${workout?.name ?? "treino"} da posição ${index + 1}`}
-                            >
-                              <X className="size-3" />
-                            </button>
-                          </Badge>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </Field>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="A cada quantas semanas" hint="1 = toda semana.">
-                  <Input
-                    value={weekInterval}
-                    onChange={(event) => setWeekInterval(event.target.value)}
-                    inputMode="numeric"
-                  />
-                </Field>
-                <Field label="Horário previsto">
-                  <Input type="time" value={time} onChange={(event) => setTime(event.target.value)} />
-                </Field>
-              </div>
-
-              <label className="flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={includeRest}
-                  onChange={(event) => setIncludeRest(event.target.checked)}
-                  className="size-4 accent-primary"
-                />
-                Marcar os outros dias como descanso
-              </label>
-            </>
-          )}
-
-          <Field label="Quando o dia já tem algo planejado">
-            <Select value={conflict} onValueChange={(value) => setConflict(value as typeof conflict)}>
-              <SelectTrigger aria-label="Resolução de conflito">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pular">Preservar o que já está lá</SelectItem>
-                <SelectItem value="substituir">Substituir (só o que continua pendente)</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={saving || (mode === "programa" ? !programId : weekdays.length === 0)}
-            onClick={save}
-          >
-            <CalendarRange className="size-4" />
-            Gerar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function DuplicateWeekDialog({
-  reference,
-  weekStartsOn,
-  onClose,
-  onSaved,
-}: {
-  reference: string;
-  weekStartsOn: number;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const source = startOfWeekIso(reference, weekStartsOn);
-  const [target, setTarget] = React.useState(addDaysIso(source, 7));
-  const [conflict, setConflict] = React.useState<"pular" | "substituir">("pular");
-  const [saving, setSaving] = React.useState(false);
-
-  async function save() {
-    setSaving(true);
-    const result = await duplicateTrainingWeek({
-      from_week: source,
-      to_week: target,
-      conflict,
-    });
-    setSaving(false);
-
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success(
-      `${result.data.created} dia(s) copiados${result.data.skipped > 0 ? ` · ${result.data.skipped} preservados` : ""}.`,
-    );
-    onSaved();
-  }
-
-  const targetDays = weekDaysIso(target, weekStartsOn);
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Duplicar semana</DialogTitle>
-          <DialogDescription>
-            Copia a semana de {shortDate(source)} a {shortDate(addDaysIso(source, 6))}. A cópia
-            nasce toda <strong>pendente</strong> — desfecho e justificativa não são copiados.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <Field
-            label="Semana de destino"
-            hint={`A semana de ${shortDate(targetDays[0])} a ${shortDate(targetDays[6])}.`}
-          >
-            <Input type="date" value={target} onChange={(event) => setTarget(event.target.value)} />
-          </Field>
-
-          <Field label="Quando o dia já tem algo planejado">
-            <Select value={conflict} onValueChange={(value) => setConflict(value as typeof conflict)}>
-              <SelectTrigger aria-label="Resolução de conflito">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pular">Preservar o que já está lá</SelectItem>
-                <SelectItem value="substituir">Substituir (só o que continua pendente)</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button disabled={saving} onClick={save}>
-            <Copy className="size-4" />
-            Duplicar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /* ═══════════════════════════ Rótulos de período ═══════════════════════════ */
 

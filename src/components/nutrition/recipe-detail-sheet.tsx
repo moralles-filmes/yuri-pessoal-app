@@ -16,6 +16,7 @@
  *    porção, por 100 g) saem do MESMO total, escalado de formas diferentes.
  */
 import * as React from "react";
+import { useItemRetido } from "@/components/shared/use-item-retido";
 import {
   ArrowDown,
   ArrowUp,
@@ -61,7 +62,7 @@ export type RecipeWithCalc = Recipe & { calc: RecipeCalcResult };
 type Scope = "inteira" | "porcao" | "cem";
 
 export function RecipeDetailSheet({
-  recipe,
+  recipe: recipeAtual,
   nutrients,
   foodNames,
   pending,
@@ -97,11 +98,12 @@ export function RecipeDetailSheet({
   onRemovePhoto: (attachmentId: string) => void;
   onCreateTemplate: () => void;
 }) {
+  const recipe = useItemRetido(recipeAtual);
   const [scope, setScope] = React.useState<Scope>("porcao");
   const [dragId, setDragId] = React.useState<string | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
-  const seen = recipe?.id ?? null;
+  const seen = recipeAtual?.id ?? null;
   const [lastSeen, setLastSeen] = React.useState(seen);
   if (seen !== lastSeen) {
     setLastSeen(seen);

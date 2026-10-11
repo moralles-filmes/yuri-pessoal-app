@@ -52,7 +52,6 @@ import {
 import { DeepLinkHighlight } from "@/components/shared/deep-link-highlight";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
-import { SortableList } from "@/components/shared/sortable-list";
 import { cn } from "@/lib/utils";
 import { useUrlText } from "@/lib/forms/use-url-text";
 import { normalizeText } from "@/lib/training/filters";
@@ -80,10 +79,17 @@ import {
   updateProgramWorkout,
 } from "@/lib/actions/training-programs";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import { useChaveDeAbertura, useItemRetido } from "@/components/shared/use-item-retido";
 import type { DependencyLine } from "@/components/training/delete-with-destination-dialog";
 
 // Os dois diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form` junto.
 // Sob demanda, eles saem do primeiro byte da rota.
+// @dnd-kit só quando um programa é expandido para reordenar (REDESIGN-07-C, D2). O `as`
+// preserva o genérico de SortableList<T>, que o tipo devolvido por `dynamic` apagaria.
+const SortableList = dynamic(
+  () => import("@/components/shared/sortable-list").then((m) => m.SortableList),
+  { ssr: false },
+) as typeof import("@/components/shared/sortable-list").SortableList;
 const ProgramFormDialog = dynamic(
   () => import("@/components/training/program-form-dialog").then((m) => m.ProgramFormDialog),
   { ssr: false },
@@ -139,6 +145,11 @@ export function ProgramsClient({
   const [editing, setEditing] = React.useState<TrainingProgram | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState<TrainingProgram | null>(null);
+  // Exclusão com destino sob demanda (REDESIGN-07-C, D2): desenha o item até o fim da animação
+  // de saída e remonta a cada abertura — a escolha de destino continua nascendo limpa.
+  const exclusaoExibida = useItemRetido(deleting);
+  const exclusaoMontada = useLazyDialog(deleting !== null);
+  const chaveExclusao = useChaveDeAbertura(deleting !== null);
   const [dependencies, setDependencies] = React.useState<DependencyLine[] | null>(null);
   const [busy, setBusy] = React.useState(false);
 
@@ -366,12 +377,13 @@ export function ProgramsClient({
         />
       )}
 
-      {deleting && (
+      {exclusaoMontada && exclusaoExibida && (
         <DeleteWithDestinationDialog
-          open
+          key={chaveExclusao}
+          open={deleting !== null}
           onOpenChange={(open) => !open && setDeleting(null)}
           title="Excluir programa"
-          itemName={deleting.name}
+          itemName={exclusaoExibida.name}
           dependencies={dependencies ?? []}
           loadingDependencies={dependencies === null}
           options={[
@@ -395,7 +407,7 @@ export function ProgramsClient({
           ]}
           targetLabel="Programa de destino"
           targets={programs
-            .filter((item) => item.id !== deleting.id && !item.isArchived)
+            .filter((item) => item.id !== exclusaoExibida.id && !item.isArchived)
             .map((item) => ({ id: item.id, name: item.name }))}
           confirmLabel="Excluir programa"
           onConfirm={confirmDelete}

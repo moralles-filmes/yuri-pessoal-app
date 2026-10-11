@@ -16,7 +16,7 @@ const SRC = path.resolve(__dirname, "..", "..");
 
 /** Exceções DECLARADAS, com dono — e cada uma tem de continuar violando. */
 const EXCECOES = new Map<string, string>([
-  ["app/(app)/nutricao/planejamento/planning-client.tsx", "07-C"],
+  ["app/(app)/nutricao/planejamento/model-days-sheet.tsx", "07-C"],
   ["app/(app)/nutricao/refeicoes/meal-templates-client.tsx", "07-C"],
   ["components/nutrition/food-detail-sheet.tsx", "07-C"],
   ["components/nutrition/recipe-detail-sheet.tsx", "07-C"],

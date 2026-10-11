@@ -23,21 +23,12 @@
  * `MeasurementChart`) e a média móvel só aparece com a janela cheia.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Info, Loader2, Plus, Scale } from "lucide-react";
-import { toast } from "sonner";
+import { Info, Plus, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -45,16 +36,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { MeasurementChart, MeasurementTable } from "@/components/body/measurement-chart";
 import { ProgressPhotos } from "@/components/body/progress-photos";
-import { Field } from "@/components/training/field";
-import {
-  MEASUREMENT_CONDITION_LABELS,
-  MEASUREMENT_CONDITIONS,
-} from "@/lib/body/constants";
 import {
   buildSeries,
   formatDelta,
@@ -66,8 +52,13 @@ import {
   summarizeType,
 } from "@/lib/body/measurements";
 import type { MeasurementType, MeasurementWithType, SignedProgressPhoto } from "@/lib/body/types";
-import { saveMeasurement } from "@/lib/actions/body-measurements";
 import { addDaysIso } from "@/lib/training/schedule";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const RegisterMeasurementDialog = dynamic(
+  () => import("./register-measurement-dialog").then((m) => m.RegisterMeasurementDialog),
+  { ssr: false },
+);
 
 const MOVING_WINDOW = 7;
 
@@ -91,6 +82,7 @@ export function BodyEvolution({
     () => active.find((type) => type.slug === "peso")?.id ?? active[0]?.id ?? "",
   );
   const [registerOpen, setRegisterOpen] = React.useState(false);
+  const registerMeasurementDialogMontado = useLazyDialog(registerOpen);
 
   const type = active.find((item) => item.id === typeId) ?? active[0] ?? null;
   const ofType = React.useMemo(
@@ -265,161 +257,19 @@ export function BodyEvolution({
         </CardContent>
       </Card>
 
-      <RegisterMeasurementDialog
-        open={registerOpen}
-        onOpenChange={setRegisterOpen}
-        types={active}
-        defaultTypeId={type?.id ?? ""}
-        hoje={hoje}
-        onSaved={() => {
-          setRegisterOpen(false);
-          router.refresh();
-        }}
-      />
+      {registerMeasurementDialogMontado && (
+        <RegisterMeasurementDialog
+          open={registerOpen}
+          onOpenChange={setRegisterOpen}
+          types={active}
+          defaultTypeId={type?.id ?? ""}
+          hoje={hoje}
+          onSaved={() => {
+            setRegisterOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
-  );
-}
-
-/**
- * Registro rápido de uma medida, pelo serviço COMPARTILHADO.
- *
- * A unidade não é digitada: ela vem do tipo, resolvida no servidor. Gravar "80 cm" numa linha
- * de peso deixaria o histórico incomparável para sempre — por isso o schema da 16-E nem
- * aceita unidade vinda do cliente.
- */
-function RegisterMeasurementDialog({
-  open,
-  onOpenChange,
-  types,
-  defaultTypeId,
-  hoje,
-  onSaved,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  types: MeasurementType[];
-  defaultTypeId: string;
-  hoje: string;
-  onSaved: () => void;
-}) {
-  const [typeId, setTypeId] = React.useState(defaultTypeId);
-  const [value, setValue] = React.useState("");
-  const [date, setDate] = React.useState(hoje);
-  const [condition, setCondition] = React.useState<string>("");
-  const [note, setNote] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-
-  // Ajuste durante o render (React Compiler ligado) — sem setState em useEffect.
-  const key = `${open}:${defaultTypeId}`;
-  const [lastKey, setLastKey] = React.useState(key);
-  if (key !== lastKey) {
-    setLastKey(key);
-    setTypeId(defaultTypeId);
-    setValue("");
-    setDate(hoje);
-    setCondition("");
-    setNote("");
-  }
-
-  const type = types.find((item) => item.id === typeId);
-
-  async function submit() {
-    setSaving(true);
-    // As chaves são as do schema da 16-E (`measurementSchema`) — a unidade NÃO vai daqui:
-    // ela é copiada do tipo no servidor, para não haver "80 cm" gravado numa linha de peso.
-    const result = await saveMeasurement({
-      typeId,
-      measuredOn: date,
-      measuredAt: "",
-      value,
-      condition: condition || "",
-      note,
-    });
-    setSaving(false);
-
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success("Medida registrada. Ela também aparece no módulo de Dieta.");
-    onSaved();
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Registrar medida corporal</DialogTitle>
-          <DialogDescription>
-            O registro vai para o módulo central de medidas — o mesmo lugar que a Dieta lê. Não
-            existe uma segunda tabela de peso.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <Field label="Medida">
-            <Select value={typeId} onValueChange={setTypeId}>
-              <SelectTrigger aria-label="Tipo de medida">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {types.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name} ({item.unit})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          <Field label={`Valor${type ? ` (${type.unit})` : ""}`}>
-            <Input
-              inputMode="decimal"
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              placeholder="0"
-              autoFocus
-            />
-          </Field>
-
-          <Field label="Data">
-            <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-          </Field>
-
-          <Field
-            label="Condição (opcional)"
-            hint="Comparar jejum com pós-treino explica parte da diferença."
-          >
-            <Select value={condition || "__nenhuma__"} onValueChange={(v) => setCondition(v === "__nenhuma__" ? "" : v)}>
-              <SelectTrigger aria-label="Condição da medição">
-                <SelectValue placeholder="Não informada" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__nenhuma__">Não informada</SelectItem>
-                {MEASUREMENT_CONDITIONS.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {MEASUREMENT_CONDITION_LABELS[item]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          <Field label="Observação (opcional)">
-            <Textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} />
-          </Field>
-        </div>
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancelar
-          </Button>
-          <Button onClick={submit} disabled={saving || value.trim() === "" || !typeId}>
-            {saving && <Loader2 className="size-4 animate-spin" />}
-            Registrar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
