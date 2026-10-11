@@ -38,6 +38,17 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "components/habits/water-view.tsx", exige: /const texto = textoDoDiaDaAgua\(d, hoje,/, porque: "cada dia diz valor, meta e se bateu, em texto" },
   { arquivo: "components/habits/water-view.tsx", exige: /<span className="sr-only">\s*\{texto\}\s*<\/span>/, porque: "o texto do dia chega ao leitor de tela, não só ao title" },
   { arquivo: "components/habits/water-view.tsx", exige: /\{d\.done && <Check\b/, porque: "meta batida tem ícone, não só cor" },
+  // D1 — o hábito que reflete os treinos se identifica
+  { arquivo: "app/(app)/habitos/page.tsx", exige: /getTrainingPreferences\(\)/, porque: "a página lê qual hábito está vinculado aos Treinos (só leitura)" },
+  { arquivo: "app/(app)/habitos/page.tsx", exige: /habitoVinculadoId=\{treinos\.habitId\}/, porque: "o vínculo chega à tela" },
+  { arquivo: "components/habits/habit-card.tsx", exige: /refleteOsTreinos\(habit\.id, habitoVinculadoId\)/, porque: "o cartão de Hoje decide pela regra pura" },
+  { arquivo: "components/habits/habit-card.tsx", exige: /\{reflete && <AvisoReflexoDosTreinos \/>\}/, porque: "o cartão de Hoje diz o que o vínculo faz ao registro manual" },
+  { arquivo: "components/habits/water-view.tsx", exige: /\{reflete && <AvisoReflexoDosTreinos \/>\}/, porque: "o cartão da água diz o que o vínculo faz ao registro manual" },
+  { arquivo: "components/habits/session-view.tsx", exige: /\{reflete && <AvisoReflexoDosTreinos \/>\}/, porque: "o cartão de sessão diz o que o vínculo faz ao registro manual" },
+  { arquivo: "app/(app)/habitos/habits-client.tsx", exige: /refleteOsTreinos\(h\.id, habitoVinculadoId\) && <SeloReflexoDosTreinos \/>/, porque: "em Gerenciar, o hábito vinculado tem o selo" },
+  { arquivo: "components/habits/vinculo-treinos.tsx", exige: /o valor marcado à mão é substituído/, porque: "a frase diz a sobrescrita" },
+  { arquivo: "components/habits/vinculo-treinos.tsx", exige: /apagado \(com a observação\)/, porque: "a frase diz a exclusão, observação junto" },
+  { arquivo: "components/habits/vinculo-treinos.tsx", exige: /href="\/treinos\/configuracoes"/, porque: "o caminho para desligar o vínculo está na frase" },
   // D3 — abas do curso
   { arquivo: "app/(app)/estudos/[id]/course-detail-client.tsx", exige: /<SeletorDeVisao\s+rotulo="Seções do curso"/, porque: "as abas do curso usam o seletor compartilhado (estado anunciado)" },
 ];

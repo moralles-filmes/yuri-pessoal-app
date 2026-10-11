@@ -19,6 +19,11 @@ import {
 } from "@/components/habits/badges";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import {
+  AvisoReflexoDosTreinos,
+  SeloReflexoDosTreinos,
+} from "@/components/habits/vinculo-treinos";
+import { refleteOsTreinos } from "@/lib/habits/vinculo-treinos";
+import {
   incrementHabit,
   setHabitDone,
   undoHabitCheckIn,
@@ -45,10 +50,13 @@ export function HabitCard({
   habit,
   todayIso,
   onEdit,
+  habitoVinculadoId,
 }: {
   habit: HabitWithStats;
   todayIso: string;
   onEdit?: (habit: HabitWithStats) => void;
+  /** Hábito que reflete os treinos; `null` = vínculo desligado. */
+  habitoVinculadoId: string | null;
 }) {
   const router = useRouter();
   const [logOpen, setLogOpen] = React.useState(false);
@@ -59,6 +67,7 @@ export function HabitCard({
   const color = habit.color ?? HABIT_CATEGORY_COLORS[habit.category];
   const step = HABIT_UNIT_STEP[habit.unit];
   const hasLog = Boolean(habit.todayLog);
+  const reflete = refleteOsTreinos(habit.id, habitoVinculadoId);
 
   async function run(action: Promise<{ ok: boolean; error?: string }>) {
     setBusy(true);
@@ -100,6 +109,7 @@ export function HabitCard({
                 {habit.name}
               </span>
               <HabitCategoryBadge category={habit.category} />
+              {reflete && <SeloReflexoDosTreinos />}
               {habit.time_of_day && (
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="size-3" />
@@ -110,6 +120,7 @@ export function HabitCard({
             <p className="mt-0.5 text-xs text-muted-foreground">
               {frequencySummary(habit.frequency, habit.weekdays)}
             </p>
+            {reflete && <AvisoReflexoDosTreinos />}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <StreakFlame count={habit.streak} />

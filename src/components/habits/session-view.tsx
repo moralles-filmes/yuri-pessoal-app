@@ -18,6 +18,11 @@ import {
 } from "@/components/habits/badges";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import {
+  AvisoReflexoDosTreinos,
+  SeloReflexoDosTreinos,
+} from "@/components/habits/vinculo-treinos";
+import { refleteOsTreinos } from "@/lib/habits/vinculo-treinos";
+import {
   incrementHabit,
   setHabitDescription,
 } from "@/lib/actions/habits";
@@ -50,6 +55,7 @@ export function SessionView({
   emptyTitle,
   emptyHint,
   onCreate,
+  habitoVinculadoId,
 }: {
   habits: HabitWithStats[];
   todayIso: string;
@@ -59,6 +65,8 @@ export function SessionView({
   emptyTitle: string;
   emptyHint: string;
   onCreate: () => void;
+  /** Hábito que reflete os treinos; `null` = vínculo desligado. */
+  habitoVinculadoId: string | null;
 }) {
   if (habits.length === 0) {
     return (
@@ -79,6 +87,7 @@ export function SessionView({
           todayIso={todayIso}
           descriptionLabel={descriptionLabel}
           descriptionPlaceholder={descriptionPlaceholder}
+          habitoVinculadoId={habitoVinculadoId}
         />
       ))}
     </div>
@@ -90,11 +99,13 @@ function SessionCard({
   todayIso,
   descriptionLabel,
   descriptionPlaceholder,
+  habitoVinculadoId,
 }: {
   habit: HabitWithStats;
   todayIso: string;
   descriptionLabel: string;
   descriptionPlaceholder: string;
+  habitoVinculadoId: string | null;
 }) {
   const router = useRouter();
   const [logOpen, setLogOpen] = React.useState(false);
@@ -102,6 +113,7 @@ function SessionCard({
   const [busy, setBusy] = React.useState(false);
   const color = habit.color ?? HABIT_CATEGORY_COLORS[habit.category];
   const step = HABIT_UNIT_STEP[habit.unit];
+  const reflete = refleteOsTreinos(habit.id, habitoVinculadoId);
 
   async function bump() {
     setBusy(true);
@@ -117,13 +129,15 @@ function SessionCard({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex min-w-0 flex-wrap items-center gap-2 text-base">
           <span aria-hidden>{habitIcon(habit.icon, habit.category)}</span>
           {habit.name}
+          {reflete && <SeloReflexoDosTreinos />}
         </CardTitle>
         <StreakFlame count={habit.streak} />
       </CardHeader>
       <CardContent className="space-y-4">
+        {reflete && <AvisoReflexoDosTreinos />}
         <InlineDescription
           habitId={habit.id}
           value={habit.description ?? ""}

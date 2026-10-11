@@ -37,6 +37,7 @@ import { HabitCard } from "@/components/habits/habit-card";
 import { WaterView } from "@/components/habits/water-view";
 import { SessionView } from "@/components/habits/session-view";
 import { ConsistencyView } from "@/components/habits/consistency-view";
+import { SeloReflexoDosTreinos } from "@/components/habits/vinculo-treinos";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import {
   deleteHabit,
@@ -50,6 +51,7 @@ import {
   formatHabitValue,
   type HabitView,
 } from "@/lib/habits/constants";
+import { refleteOsTreinos } from "@/lib/habits/vinculo-treinos";
 import type { HabitRow, HabitsDashboard, HabitWithStats } from "@/types/database";
 
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
@@ -62,10 +64,13 @@ export function HabitsClient({
   dashboard,
   view,
   todayIso,
+  habitoVinculadoId,
 }: {
   dashboard: HabitsDashboard;
   view: HabitView;
   todayIso: string;
+  /** Hábito que reflete os treinos (`training_preferences.habit_id`); `null` = vínculo desligado. */
+  habitoVinculadoId: string | null;
 }) {
   const router = useRouter();
   const { habits, consistency } = dashboard;
@@ -146,11 +151,21 @@ export function HabitsClient({
           />
 
           {view === "hoje" && (
-            <TodayView habits={habits} todayIso={todayIso} onEdit={openEdit} />
+            <TodayView
+              habits={habits}
+              todayIso={todayIso}
+              onEdit={openEdit}
+              habitoVinculadoId={habitoVinculadoId}
+            />
           )}
 
           {view === "agua" && (
-            <WaterView habits={water} todayIso={todayIso} onCreate={openCreate} />
+            <WaterView
+              habits={water}
+              todayIso={todayIso}
+              onCreate={openCreate}
+              habitoVinculadoId={habitoVinculadoId}
+            />
           )}
 
           {view === "leitura" && (
@@ -163,6 +178,7 @@ export function HabitsClient({
               emptyTitle="Sem hábito de leitura"
               emptyHint="Crie um hábito na categoria Leitura (ex.: 10 páginas por dia) para acompanhar suas leituras aqui."
               onCreate={openCreate}
+              habitoVinculadoId={habitoVinculadoId}
             />
           )}
 
@@ -176,6 +192,7 @@ export function HabitsClient({
               emptyTitle="Sem hábito de exercícios"
               emptyHint="Crie um hábito na categoria Exercícios (ex.: 30 minutos) para acompanhar sua rotina aqui."
               onCreate={openCreate}
+              habitoVinculadoId={habitoVinculadoId}
             />
           )}
 
@@ -188,7 +205,12 @@ export function HabitsClient({
           )}
 
           {view === "gerenciar" && (
-            <ManageView habits={habits} onEdit={openEdit} run={run} />
+            <ManageView
+              habits={habits}
+              onEdit={openEdit}
+              run={run}
+              habitoVinculadoId={habitoVinculadoId}
+            />
           )}
         </>
       )}
@@ -210,10 +232,12 @@ function TodayView({
   habits,
   todayIso,
   onEdit,
+  habitoVinculadoId,
 }: {
   habits: HabitWithStats[];
   todayIso: string;
   onEdit: (h: HabitWithStats) => void;
+  habitoVinculadoId: string | null;
 }) {
   const todays = habits
     .filter((h) => h.is_active && h.scheduledToday)
@@ -273,6 +297,7 @@ function TodayView({
               habit={h}
               todayIso={todayIso}
               onEdit={onEdit}
+              habitoVinculadoId={habitoVinculadoId}
             />
           ))}
         </div>
@@ -287,8 +312,10 @@ function ManageView({
   habits,
   onEdit,
   run,
+  habitoVinculadoId,
 }: {
   habits: HabitWithStats[];
+  habitoVinculadoId: string | null;
   onEdit: (h: HabitRow) => void;
   run: (
     action: Promise<{ ok: boolean; error?: string }>,
@@ -344,6 +371,7 @@ function ManageView({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate font-medium">{h.name}</span>
                   <HabitCategoryBadge category={h.category} />
+                  {refleteOsTreinos(h.id, habitoVinculadoId) && <SeloReflexoDosTreinos />}
                   {!h.is_active && (
                     <Badge variant="outline" className="text-muted-foreground">
                       Inativo

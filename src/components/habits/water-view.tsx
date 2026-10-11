@@ -11,6 +11,11 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ProgressRing } from "@/components/habits/progress-ring";
 import { StreakFlame, habitIcon } from "@/components/habits/badges";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import {
+  AvisoReflexoDosTreinos,
+  SeloReflexoDosTreinos,
+} from "@/components/habits/vinculo-treinos";
+import { refleteOsTreinos } from "@/lib/habits/vinculo-treinos";
 import { ehHoje, textoDoDiaDaAgua } from "@/components/habits/rotulos-acessiveis";
 import { cn } from "@/lib/utils";
 import { incrementHabit } from "@/lib/actions/habits";
@@ -33,10 +38,13 @@ export function WaterView({
   habits,
   todayIso,
   onCreate,
+  habitoVinculadoId,
 }: {
   habits: HabitWithStats[];
   todayIso: string;
   onCreate: () => void;
+  /** Hábito que reflete os treinos; `null` = vínculo desligado. */
+  habitoVinculadoId: string | null;
 }) {
   if (habits.length === 0) {
     return (
@@ -60,7 +68,12 @@ export function WaterView({
       </p>
       <div className="grid gap-4 lg:grid-cols-2">
         {habits.map((h) => (
-          <WaterCard key={h.id} habit={h} todayIso={todayIso} />
+          <WaterCard
+            key={h.id}
+            habit={h}
+            todayIso={todayIso}
+            habitoVinculadoId={habitoVinculadoId}
+          />
         ))}
       </div>
     </div>
@@ -70,9 +83,11 @@ export function WaterView({
 function WaterCard({
   habit,
   todayIso,
+  habitoVinculadoId,
 }: {
   habit: HabitWithStats;
   todayIso: string;
+  habitoVinculadoId: string | null;
 }) {
   const router = useRouter();
   const [logOpen, setLogOpen] = React.useState(false);
@@ -80,6 +95,7 @@ function WaterCard({
   const [busy, setBusy] = React.useState(false);
   const color = habit.color ?? HABIT_CATEGORY_COLORS.agua;
   const glass = glassesToUnit(1, habit.unit);
+  const reflete = refleteOsTreinos(habit.id, habitoVinculadoId);
   const pct =
     habit.target_value > 0
       ? Math.min(100, Math.round((habit.todayValue / habit.target_value) * 100))
@@ -99,13 +115,15 @@ function WaterCard({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex min-w-0 flex-wrap items-center gap-2 text-base">
           <span aria-hidden>{habitIcon(habit.icon, habit.category)}</span>
           {habit.name}
+          {reflete && <SeloReflexoDosTreinos />}
         </CardTitle>
         <StreakFlame count={habit.streak} />
       </CardHeader>
       <CardContent className="space-y-4">
+        {reflete && <AvisoReflexoDosTreinos />}
         <div className="flex items-center gap-5">
           <ProgressRing
             value={habit.todayValue}
