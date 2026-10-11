@@ -90,7 +90,8 @@ export function ModelDaysSheet({
               const day = dayByWeekday.get(weekday);
               return (
                 <Card key={weekday}>
-                  <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                  {/* G6 (REDESIGN-07-C): a primitiva é `grid`; sem `flex`, o botão caía embaixo do dia. */}
+                  <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
                     <CardTitle className="text-sm">{WEEKDAY_SHORT_LABELS[weekday]}</CardTitle>
                     {day ? (
                       <Button

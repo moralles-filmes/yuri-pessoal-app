@@ -647,7 +647,9 @@ function PlannedMealCard({
 
   return (
     <Card>
-      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 pb-3">
+      {/* G6 (REDESIGN-07-C): a primitiva é `grid` — `flex-row` sem `flex` não fazia nada, e o
+          título e as ações empilhavam. Quebra de linha em vez de esmagar o título. */}
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-3">
         <div className="min-w-0">
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
             {meal.mealTypeIcon && <span aria-hidden>{meal.mealTypeIcon}</span>}
@@ -665,7 +667,7 @@ function PlannedMealCard({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {energia && (
             <span className="hidden items-center gap-1.5 text-sm font-semibold tabular-nums sm:inline-flex">
               {roundForDisplay(energia.amount, 0).toLocaleString("pt-BR")} kcal

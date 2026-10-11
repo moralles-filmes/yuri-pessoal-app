@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ariaDeProgresso } from "@/components/shared/aria-de-progresso";
 import { PageHeader } from "@/components/shared/page-header";
 import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { waterLink } from "@/lib/search/nutrition-links";
@@ -802,7 +803,9 @@ function MealCard({
 
   return (
     <Card className={cn(state.isLate && "border-amber-500/40")}>
-      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 pb-3">
+      {/* G6 (REDESIGN-07-C): a primitiva é `grid` — `flex-row` sem `flex` não fazia nada, e o
+          título e as ações empilhavam. Quebra de linha em vez de esmagar o título. */}
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-3">
         <div className="min-w-0">
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
             {meal.mealTypeIcon && <span aria-hidden>{meal.mealTypeIcon}</span>}
@@ -830,7 +833,7 @@ function MealCard({
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           {energia && (
             <span className="hidden items-center gap-1.5 text-sm font-semibold tabular-nums sm:inline-flex">
               {roundForDisplay(energia.amount, 0).toLocaleString("pt-BR")} kcal
@@ -905,7 +908,7 @@ function MealCard({
         ) : (
           <ul className="divide-y">
             {meal.entries.map((entry) => (
-              <li key={entry.id} className="flex items-start justify-between gap-3 py-2">
+              <li key={entry.id} className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 py-2">
                 <div className="min-w-0">
                   <p
                     className={cn(
@@ -930,7 +933,7 @@ function MealCard({
                   </p>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="ml-auto flex shrink-0 items-center gap-1">
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {entry.energyKcal === null
                       ? "—"
@@ -1248,7 +1251,14 @@ function WaterCard({ water }: { water: WaterDay | null }) {
             / {water.target.toLocaleString("pt-BR")} {water.unit}
           </span>
         </p>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+          {...ariaDeProgresso(
+            "Água do dia",
+            water.target > 0 ? (water.value / water.target) * 100 : null,
+            `${water.value.toLocaleString("pt-BR")} de ${water.target.toLocaleString("pt-BR")} ${water.unit}`,
+          )}
+        >
           <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
         </div>
         <Link href={waterLink()} className="text-xs text-primary underline-offset-4 hover:underline">

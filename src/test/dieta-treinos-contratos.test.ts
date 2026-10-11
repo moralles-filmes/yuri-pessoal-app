@@ -99,6 +99,23 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "app/(app)/nutricao/relatorios/reports-client.tsx", exige: /aria-label="Medida exibida no gráfico"/, porque: "o seletor da medida tem nome" },
   // T — textos que descrevem o sistema de hoje
   { arquivo: "app/(app)/treinos/sessao/revisar/page.tsx", exige: /O histórico completo fica em Treinos → Histórico\./, porque: "a revisão aponta para o histórico que existe" },
+
+  // V · Diário e Planejamento — G6 (CardHeader é grid: sem `flex`, título e ações empilham)
+  { arquivo: "app/(app)/nutricao/diario/diary-client.tsx", exige: /<CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-3">/, porque: "G6: o cabeçalho da refeição põe título e ações lado a lado" },
+  { arquivo: "app/(app)/nutricao/planejamento/planning-client.tsx", exige: /<CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-3">/, porque: "G6: o cabeçalho da refeição planejada põe título e ações lado a lado" },
+  { arquivo: "app/(app)/nutricao/planejamento/model-days-sheet.tsx", exige: /<CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">/, porque: "G6: o dia do modelo põe o nome e o botão lado a lado" },
+  { arquivo: "app/(app)/nutricao/diario/diary-client.tsx", exige: /<li key=\{entry\.id\} className="flex flex-wrap items-start justify-between/, porque: "o item do diário quebra linha em vez de esmagar o nome (regra 2)" },
+  // V · barras com nome
+  { arquivo: "app/(app)/nutricao/diario/diary-client.tsx", exige: /\{\.\.\.ariaDeProgresso\(\s*"Água do dia",/, porque: "a barra da água diz o que mede e quanto" },
+  { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /\{\.\.\.ariaDeProgresso\(\s*label,\s*percent,/, porque: "a barra da meta limita aria-valuenow e diz o valor real no texto" },
+  { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /"sem percentual: a meta é zero"/, porque: "meta zero não é anunciada como \"0% da meta\"" },
+  // V · vazios — seção usa EmptyState; dentro de Card, sem borda e com py-6
+  { arquivo: "components/nutrition/diary-month-view.tsx", exige: /registeredDays\.length === 0 \? \(\s*<EmptyState[^>]*?className="border-0 bg-transparent py-6"/, porque: "o mês sem registro usa o EmptyState, ajustado para dentro do Card" },
+  // Exceção DECLARADA (critério da 07-A): item de lista repetida, picker e diálogo ficam <p>.
+  { arquivo: "app/(app)/nutricao/diario/diary-client.tsx", exige: /meal\.entries\.length === 0 \? \(\s*<p\b/, porque: "refeição sem item é dica em linha dentro do cartão repetido, não seção" },
+  { arquivo: "app/(app)/nutricao/planejamento/planning-client.tsx", exige: /meal\.items\.length === 0 \? \(\s*<p\b/, porque: "refeição planejada sem item é dica em linha, não seção" },
+  { arquivo: "app/(app)/nutricao/planejamento/model-days-sheet.tsx", exige: /day\.meals\.length === 0 \? \(\s*<p\b/, porque: "dia do modelo sem refeição é dica em linha dentro da gaveta" },
+  { arquivo: "app/(app)/nutricao/diario/template-picker-dialog.tsx", exige: /active\.length === 0 \? \(\s*<p\b/, porque: "picker vazio continua <p> dentro do diálogo" },
 ];
 
 /** O que não pode voltar. */
@@ -121,6 +138,8 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: "app/(app)/treinos/page.tsx", exige: /O que ainda vem/, porque: "o card de subfases futuras: todas as seções estão prontas" },
   { arquivo: "components/nutrition/nutrition-nav.tsx", exige: /SectionPlaceholder/, porque: "tela de espera sem chamador (todas as seções prontas)" },
   { arquivo: "components/training/training-nav.tsx", exige: /SectionPlaceholder/, porque: "tela de espera sem chamador (todas as seções prontas)" },
+  { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /percent \?\? 0/, porque: "meta zero viraria \"0% da meta\" no nome da barra" },
+  { arquivo: "components/nutrition/goal-progress-bar.tsx", exige: /aria-valuenow=\{[^}]*Math\.round\(percent\)\}/, porque: "aria-valuenow sem limite passa de aria-valuemax com o consumo acima da meta" },
 ];
 
 const fonte = (arquivo: string) => semComentarios(fs.readFileSync(path.join(SRC, arquivo), "utf8"));

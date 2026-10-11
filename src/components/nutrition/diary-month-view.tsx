@@ -16,7 +16,9 @@
  *    quem não enxerga o mapa de cor.
  */
 import * as React from "react";
+import { CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 import { roundForDisplay, TOTAL_QUALITY_HINTS } from "@/lib/nutrition/calc";
 import { monthLabel, shortDateLabel } from "@/lib/nutrition/calendar";
@@ -209,9 +211,12 @@ export function DiaryMonthView({
         </CardHeader>
         <CardContent>
           {registeredDays.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhum registro neste mês. Escolha um dia no calendário para começar.
-            </p>
+            <EmptyState
+              icon={CalendarDays}
+              title="Nenhum registro neste mês"
+              description="Escolha um dia no calendário para começar."
+              className="border-0 bg-transparent py-6"
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
