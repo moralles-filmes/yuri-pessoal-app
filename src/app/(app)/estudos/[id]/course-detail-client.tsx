@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/shared/stat-card";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import {
   Select,
   SelectContent,
@@ -30,7 +31,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
-import { cn } from "@/lib/utils";
 import {
   StudyCategoryBadge,
   StudyDifficultyBadge,
@@ -59,6 +59,12 @@ import type {
 
 type Tab = "conteudo" | "sessoes" | "idioma";
 
+const ROTULOS_DAS_ABAS: Record<Tab, string> = {
+  conteudo: "Conteúdo",
+  sessoes: "Sessões",
+  idioma: "Idioma",
+};
+
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
 const CourseFormDialog = dynamic(
   () => import("../course-form").then((m) => m.CourseFormDialog),
@@ -86,13 +92,11 @@ export function CourseDetailClient({
   const [editingSession, setEditingSession] =
     React.useState<StudySessionWithRelations>();
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "conteudo", label: "Conteúdo" },
-    { key: "sessoes", label: "Sessões" },
-    ...(detail.is_language
-      ? [{ key: "idioma" as const, label: "Idioma" }]
-      : []),
-  ];
+  // "Idioma" só existe em curso de idioma. O estado continua local (D3): nenhum parâmetro novo
+  // na URL — nenhum link do sistema aponta para uma aba.
+  const abas: Tab[] = detail.is_language
+    ? ["conteudo", "sessoes", "idioma"]
+    : ["conteudo", "sessoes"];
 
   const courseOption: StudyCourseOption = {
     id: detail.id,
@@ -267,24 +271,14 @@ export function CourseDetailClient({
         </p>
       )}
 
-      {/* Abas */}
-      <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-              tab === t.key
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Abas — o seletor compartilhado (07-A V1): estado anunciado por aria-pressed, ✓ e peso. */}
+      <SeletorDeVisao
+        rotulo="Seções do curso"
+        visoes={abas}
+        rotulos={ROTULOS_DAS_ABAS}
+        atual={tab}
+        aoEscolher={setTab}
+      />
 
       {tab === "conteudo" && (
         <CourseTree courseId={detail.id} modules={detail.modules} />

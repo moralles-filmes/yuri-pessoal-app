@@ -42,15 +42,27 @@ import {
 } from "@/lib/habits/constants";
 import type { HabitRow } from "@/types/database";
 
+/** A letra é o que cabe no botão; o `nome` é o que o leitor de tela diz ("S" seria segunda, sexta ou sábado). */
 const WEEKDAYS = [
-  { value: 0, label: "D" },
-  { value: 1, label: "S" },
-  { value: 2, label: "T" },
-  { value: 3, label: "Q" },
-  { value: 4, label: "Q" },
-  { value: 5, label: "S" },
-  { value: 6, label: "S" },
+  { value: 0, label: "D", nome: "domingo" },
+  { value: 1, label: "S", nome: "segunda-feira" },
+  { value: 2, label: "T", nome: "terça-feira" },
+  { value: 3, label: "Q", nome: "quarta-feira" },
+  { value: 4, label: "Q", nome: "quinta-feira" },
+  { value: 5, label: "S", nome: "sexta-feira" },
+  { value: 6, label: "S", nome: "sábado" },
 ];
+
+/**
+ * Foco visível dos botões crus. Sem isto eles dependiam do `outline: auto` do navegador, que o
+ * Chrome headless nem pinta. Nos dias, o anel do sistema (o mesmo de `Button`/`Checkbox`); nas
+ * amostras de cor o anel já marca a ESCOLHIDA, então o foco é um contorno — e no Tailwind v4 o
+ * `outline-none` zera o estilo do contorno: sem `focus-visible:outline-solid` ele não aparece.
+ */
+const FOCO_DO_SISTEMA =
+  "outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+const FOCO_DA_AMOSTRA =
+  "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 // Campos que a tela tem: erro de campo fora desta lista sobe para o toast com o nome (mapServerFieldErrors).
 const FORM_FIELDS = [
@@ -253,14 +265,16 @@ export function HabitFormDialog({
               name="weekdays"
               render={({ field }) => (
                 <div className="space-y-1.5">
-                  <Label>Nos dias</Label>
-                  <div className="flex gap-1.5">
+                  <Label id="habit-form-dias">Nos dias</Label>
+                  <div role="group" aria-labelledby="habit-form-dias" className="flex gap-1.5">
                     {WEEKDAYS.map((d) => {
                       const active = field.value.includes(d.value);
                       return (
                         <button
                           key={d.value}
                           type="button"
+                          aria-pressed={active}
+                          aria-label={d.nome}
                           onClick={() =>
                             field.onChange(
                               active
@@ -270,6 +284,7 @@ export function HabitFormDialog({
                           }
                           className={cn(
                             "grid size-8 place-items-center rounded-full border text-xs font-medium transition-colors",
+                            FOCO_DO_SISTEMA,
                             active
                               ? "border-primary bg-primary text-primary-foreground"
                               : "text-muted-foreground hover:bg-accent",
@@ -356,8 +371,10 @@ export function HabitFormDialog({
                   <button
                     type="button"
                     onClick={() => field.onChange("")}
+                    aria-pressed={!field.value}
                     className={cn(
                       "grid size-7 place-items-center rounded-full border text-xs text-muted-foreground",
+                      FOCO_DA_AMOSTRA,
                       !field.value &&
                         "ring-2 ring-primary ring-offset-1 ring-offset-background",
                     )}
@@ -370,8 +387,10 @@ export function HabitFormDialog({
                       key={c}
                       type="button"
                       onClick={() => field.onChange(c)}
+                      aria-pressed={field.value === c}
                       className={cn(
                         "grid size-7 place-items-center rounded-full ring-offset-background transition",
+                        FOCO_DA_AMOSTRA,
                         field.value === c && "ring-2 ring-primary ring-offset-1",
                       )}
                       style={{ backgroundColor: c }}

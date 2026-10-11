@@ -63,6 +63,14 @@ const FORM_FIELDS = [
   "icon",
 ] as const;
 
+/**
+ * Foco visível das amostras de cor. O anel já marca a ESCOLHIDA, então o foco é um contorno — e
+ * no Tailwind v4 o `outline-none` zera o estilo do contorno: sem `focus-visible:outline-solid` ele
+ * não aparece. Sem isto o foco dependia do `outline: auto` do navegador.
+ */
+const FOCO_DA_AMOSTRA =
+  "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring";
+
 type FormValues = {
   title: string;
   platform: string;
@@ -362,8 +370,10 @@ export function CourseFormDialog({
                   <button
                     type="button"
                     onClick={() => field.onChange("")}
+                    aria-pressed={!field.value}
                     className={cn(
                       "grid size-7 place-items-center rounded-full border text-xs text-muted-foreground",
+                      FOCO_DA_AMOSTRA,
                       !field.value &&
                         "ring-2 ring-primary ring-offset-1 ring-offset-background",
                     )}
@@ -376,8 +386,10 @@ export function CourseFormDialog({
                       key={c}
                       type="button"
                       onClick={() => field.onChange(c)}
+                      aria-pressed={field.value === c}
                       className={cn(
                         "grid size-7 place-items-center rounded-full ring-offset-background transition",
+                        FOCO_DA_AMOSTRA,
                         field.value === c && "ring-2 ring-primary ring-offset-1",
                       )}
                       style={{ backgroundColor: c }}

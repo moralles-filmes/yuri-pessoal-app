@@ -88,9 +88,12 @@ export function VocabularyView({
           <button
             key={f}
             type="button"
+            aria-pressed={filter === f}
             onClick={() => setFilter(f)}
             className={cn(
               "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              // Foco visível: o anel do sistema (o mesmo de `Button`), não o `outline: auto`.
+              "outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
               filter === f
                 ? "border-primary bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent",

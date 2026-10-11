@@ -17,6 +17,8 @@ const TELAS = [
   "app/(app)/tarefas/tasks-client.tsx",
   "app/(app)/habitos/habits-client.tsx",
   "app/(app)/estudos/studies-client.tsx",
+  // 07-B · D3 — as abas do curso eram a quinta cópia, fora do alcance do `*_VIEWS.map`.
+  "app/(app)/estudos/[id]/course-detail-client.tsx",
 ];
 /** Exceções DECLARADAS, com dono. Cada uma tem de continuar casando (senão sai da lista). */
 const EXCECOES = new Map<string, string>([
@@ -27,7 +29,8 @@ const EXCECOES = new Map<string, string>([
 /** Fim do parêntese aberto em `i` (o caractere em `i` é `(`). Sem strings: JSX quebraria. */
 function fimDoParentese(fonte: string, i: number): number {
   let prof = 0;
-  for (let j = i; j < Math.min(fonte.length, i + 4000); j++) {
+  // 8000: o corpo de um `.map` de formulário (dias da semana com `onClick` e `cn`) passa de 1 KB.
+  for (let j = i; j < Math.min(fonte.length, i + 8000); j++) {
     if (fonte[j] === "(") prof++;
     else if (fonte[j] === ")" && --prof === 0) return j;
   }
@@ -106,5 +109,55 @@ describe("V1 — nenhuma tela monta o próprio bloco de visões", () => {
 
   it.each([...EXCECOES])("a exceção %s ainda existe (%s)", (arquivo) => {
     expect(blocosDeVisaoComBotao(ler(arquivo))).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * REDESIGN-07-B · D3 — a V1 só via `X_VIEWS.map`, e por isso não viu a quinta cópia (as abas do
+ * curso, `tabs.map`), nem os dias da semana do hábito, nem os filtros do vocabulário. A
+ * varredura estendida pega QUALQUER `.map(` cujo corpo monte botão com a assinatura do botão de
+ * alternância montado à mão — `bg-primary` + `text-primary-foreground` — e não anuncie o estado
+ * (`aria-pressed`, `aria-current` ou `aria-checked`).
+ *
+ * ⚠️ Ela enxerga UMA assinatura visual. Alternância com outra cor fica fora (G13 do spec:
+ * diário e planejamento da Dieta, calendário de Treinos, histórico de ações da IA) — registradas.
+ */
+function alternanciasMudas(fonte: string): number {
+  let n = 0;
+  for (const m of fonte.matchAll(/\.\s*map\s*\(/g)) {
+    const inicio = m.index + m[0].length - 1;
+    const fim = fimDoParentese(fonte, inicio);
+    if (fim < 0) continue;
+    const corpo = fonte.slice(inicio, fim);
+    if (!/<(button|Button)\b/.test(corpo)) continue;
+    if (!(/\bbg-primary\b/.test(corpo) && /\btext-primary-foreground\b/.test(corpo))) continue;
+    if (!/aria-pressed|aria-current|aria-checked/.test(corpo)) n++;
+  }
+  return n;
+}
+
+/** Exceções DECLARADAS, com dono. Cada uma tem de continuar muda (senão sai da lista). */
+const EXCECOES_MUDAS = new Map<string, string>([
+  ["components/dashboard/general/period-toolbar.tsx", "F3 — defeito vivo, é da REDESIGN-06"],
+]);
+
+describe("V1 estendida — nenhuma alternância montada à mão fica muda", () => {
+  it("a varredura sabe dizer sim e não (fixture)", () => {
+    const muda = '{tabs.map((t) => (<button key={t.k} className={t.k === a ? "bg-primary text-primary-foreground" : ""}>{t.l}</button>))}';
+    const anunciada = '{tabs.map((t) => (<button key={t.k} aria-pressed={t.k === a} className={t.k === a ? "bg-primary text-primary-foreground" : ""}>{t.l}</button>))}';
+    expect(alternanciasMudas(muda)).toBe(1);
+    expect(alternanciasMudas(anunciada)).toBe(0);
+    expect(alternanciasMudas("{xs.map((x) => (<SelectItem key={x} value={x}>{x}</SelectItem>))}")).toBe(0);
+  });
+
+  it("fora das exceções declaradas, nenhum arquivo tem alternância muda", () => {
+    const arquivos = [...tsxDe("app"), ...tsxDe("components")];
+    expect(arquivos.length).toBeGreaterThan(200);
+    const mudos = arquivos.filter((a) => !EXCECOES_MUDAS.has(a) && alternanciasMudas(ler(a)) > 0);
+    expect(mudos).toEqual([]);
+  });
+
+  it.each([...EXCECOES_MUDAS])("a exceção %s ainda é muda (%s)", (arquivo) => {
+    expect(alternanciasMudas(ler(arquivo))).toBeGreaterThan(0);
   });
 });

@@ -368,7 +368,7 @@ function ManageView({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={h.is_active ? "Desativar" : "Ativar"}
+                  aria-label={h.is_active ? `Desativar ${h.name}` : `Ativar ${h.name}`}
                   onClick={() =>
                     run(
                       toggleHabitActive(h.id, !h.is_active),
