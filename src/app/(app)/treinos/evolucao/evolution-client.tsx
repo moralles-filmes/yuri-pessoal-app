@@ -443,10 +443,12 @@ export function EvolutionClient({
             </div>
 
             {pending.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhuma sugestão aguardando decisão. Elas aparecem quando a condição da sua regra
-                é atendida nas últimas sessões — e nunca quando há dor registrada.
-              </p>
+              <EmptyState
+                icon={Sparkles}
+                title="Nenhuma sugestão aguardando decisão"
+                description="Elas aparecem quando a condição da sua regra é atendida nas últimas sessões — e nunca quando há dor registrada."
+                className="py-8"
+              />
             ) : (
               <div className="space-y-3">
                 {pending.map((suggestion) => (
@@ -512,10 +514,12 @@ export function EvolutionClient({
             </div>
 
             {rules.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhuma regra cadastrada. Uma regra descreve quando VOCÊ quer ser lembrado de
-                subir a carga — o sistema só confere a condição e explica o que viu.
-              </p>
+              <EmptyState
+                icon={TrendingUp}
+                title="Nenhuma regra cadastrada"
+                description="Uma regra descreve quando VOCÊ quer ser lembrado de subir a carga — o sistema só confere a condição e explica o que viu."
+                className="py-8"
+              />
             ) : (
               <div className="space-y-2">
                 {rules.map((rule) => (

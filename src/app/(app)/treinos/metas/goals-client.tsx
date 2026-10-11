@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ariaDeProgresso } from "@/components/shared/aria-de-progresso";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
@@ -261,9 +262,7 @@ export function GoalsClient({
           </div>
 
           {visible.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-              Nenhuma meta neste filtro.
-            </p>
+            <EmptyState icon={Target} title="Nenhuma meta neste filtro" className="py-8" />
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
               {visible.map((item) => (
@@ -401,7 +400,14 @@ function GoalCard({
 
         {/* Barra com os marcos marcados. Sem valor, a barra não aparece — 0% mentiria. */}
         {progress.percent !== null ? (
-          <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="relative h-2 overflow-hidden rounded-full bg-muted"
+            {...ariaDeProgresso(
+              goal.name,
+              progress.percent,
+              `${Math.round(progress.percent)}% do caminho`,
+            )}
+          >
             <div
               className={cn(
                 "h-full rounded-full",

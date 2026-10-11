@@ -845,8 +845,9 @@ function CalendarView({
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between gap-2 pb-2">
-        <CardTitle className="text-base capitalize">
+      {/* G6 (REDESIGN-07-C): a primitiva é `grid`; sem `flex`, as setas caíam embaixo do mês. */}
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
+        <CardTitle className="min-w-0 text-base capitalize">
           {monthNames[Number(month) - 1]} de {year}
         </CardTitle>
         <div className="flex gap-1">

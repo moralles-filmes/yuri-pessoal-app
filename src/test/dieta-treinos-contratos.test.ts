@@ -151,6 +151,56 @@ export const CONTRATOS: Contrato[] = [
   // Exceção DECLARADA: gaveta fica <p>.
   { arquivo: "components/training/session/add-exercise-sheet.tsx", exige: /results\.length === 0 \? \(\s*<p\b/, porque: "busca vazia dentro da gaveta continua <p>" },
   { arquivo: "components/training/session/substitute-sheet.tsx", exige: /groups\.length === 0 && \(\s*<p\b/, porque: "busca vazia dentro da gaveta continua <p>" },
+
+  // V · demais telas de Treinos — G6
+  { arquivo: "app/(app)/treinos/historico/history-client.tsx", exige: /<CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">\s*<CardTitle className="min-w-0 /, porque: "G6: o mês e as setas do calendário do histórico lado a lado" },
+  { arquivo: "app/(app)/treinos/historico/[id]/session-detail-client.tsx", exige: /<CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">\s*<CardTitle className="min-w-0 /, porque: "G6: \"Comparação\" e o seletor lado a lado" },
+  // V · linhas que quebram em vez de empurrar (regra 2)
+  { arquivo: "components/training/exercise-form-dialog.tsx", exige: /<div className="flex flex-wrap items-center justify-between gap-2">\s*<div className="min-w-0">\s*<Label className="text-sm">Grupos secundários/, porque: "a linha dos grupos secundários quebra em vez de empurrar o botão" },
+  { arquivo: "components/training/exercise-detail-sheet.tsx", exige: /<span className="ml-auto min-w-0 text-right font-medium">\{value\}<\/span>/, porque: "o valor longo do detalhe do exercício encolhe e quebra" },
+  // V · barras: progresso tem nome; distribuição é escondida (o número ao lado é a leitura)
+  { arquivo: "app/(app)/treinos/page.tsx", exige: /\{\.\.\.ariaDeProgresso\(\s*item\.goal\.name,/, porque: "a barra da meta no início de Treinos diz qual meta" },
+  { arquivo: "app/(app)/treinos/metas/goals-client.tsx", exige: /\{\.\.\.ariaDeProgresso\(\s*goal\.name,/, porque: "a barra da meta diz qual meta e o percentual" },
+  { arquivo: "app/(app)/treinos/treinos/[id]/builder-client.tsx", exige: /<span className="h-2 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">/, porque: "a barra de distribuição do construtor não finge ser progresso" },
+  { arquivo: "components/training/training-charts.tsx", exige: /<div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">/, porque: "a barra de DistributionBars não finge ser progresso" },
+  // V · recorde e favorito em palavra
+  { arquivo: "app/(app)/treinos/historico/[id]/session-detail-client.tsx", exige: /set\.isPersonalRecord && \([\s\S]{0,200}?<span className="sr-only">Recorde pessoal<\/span>/, porque: "a série recorde é anunciada no detalhe da sessão" },
+  { arquivo: "app/(app)/treinos/exercicios/[id]/exercise-history-client.tsx", exige: /set\.isPersonalRecord && \([\s\S]{0,200}?<span className="sr-only">Recorde pessoal<\/span>/, porque: "a série recorde é anunciada no histórico do exercício" },
+  { arquivo: "app/(app)/treinos/treinos/workouts-client.tsx", exige: /workout\.isFavorite && \([\s\S]{0,200}?<span className="sr-only">Favorito<\/span>/, porque: "o treino favorito é anunciado" },
+  // V · vazios de seção
+  { arquivo: "app/(app)/treinos/page.tsx", exige: /dashboard\.metrics\.sessionCount === 0 && \(\s*<EmptyState[^>]*?className="py-8"/, porque: "a semana sem treino usa o EmptyState solto" },
+  { arquivo: "app/(app)/treinos/page.tsx", exige: /openGoals\.length === 0 \? \(\s*<EmptyState[^>]*?className="border-0 bg-transparent py-6"/, porque: "sem meta em andamento usa o EmptyState dentro do Card" },
+  { arquivo: "app/(app)/treinos/hoje/page.tsx", exige: /title="Nada planejado para os próximos dias"\s+className="border-0 bg-transparent py-6"/, porque: "sem próximo treino usa o EmptyState dentro do Card" },
+  { arquivo: "app/(app)/treinos/hoje/page.tsx", exige: /overdue\.length === 0 \? \(\s*<EmptyState[^>]*?className="border-0 bg-transparent py-6"/, porque: "sem dia em aberto usa o EmptyState dentro do Card" },
+  { arquivo: "app/(app)/treinos/metas/goals-client.tsx", exige: /visible\.length === 0 \? \(\s*<EmptyState[^>]*?className="py-8"/, porque: "filtro de metas vazio usa o EmptyState" },
+  { arquivo: "app/(app)/treinos/calendario/calendar-client.tsx", exige: /<EmptyState icon=\{CalendarDays\} title="Nada planejado neste período" className="py-8" \/>/, porque: "a lista vazia do calendário usa o EmptyState" },
+  { arquivo: "app/(app)/treinos/evolucao/evolution-client.tsx", exige: /pending\.length === 0 \? \(\s*<EmptyState[^>]*?className="py-8"/, porque: "sem sugestão pendente usa o EmptyState" },
+  { arquivo: "app/(app)/treinos/evolucao/evolution-client.tsx", exige: /rules\.length === 0 \? \(\s*<EmptyState[^>]*?className="py-8"/, porque: "sem regra usa o EmptyState" },
+  { arquivo: "components/training/body-evolution.tsx", exige: /measuredCount === 0 \? \(\s*<EmptyState[^>]*?className="border-0 bg-transparent py-6"/, porque: "medida sem registro usa o EmptyState dentro do Card" },
+  { arquivo: "app/(app)/treinos/relatorios/reports-client.tsx", exige: /measurementsInRange\.length === 0 \? \(\s*<EmptyState/, porque: "período sem medição usa o EmptyState" },
+  { arquivo: "app/(app)/treinos/relatorios/reports-client.tsx", exige: /recordsInRange\.length === 0 \? \(\s*<EmptyState/, porque: "período sem recorde usa o EmptyState" },
+  { arquivo: "app/(app)/treinos/exercicios/[id]/exercise-history-client.tsx", exige: /records\.length === 0 \? \(\s*<EmptyState[^>]*?className="border-0 bg-transparent py-6"/, porque: "exercício sem recorde usa o EmptyState dentro do Card" },
+  { arquivo: "components/training/session/locations-client.tsx", exige: /locations\.length === 0 && \(\s*<EmptyState[^>]*?className="border-0 bg-transparent py-6"/, porque: "sem local cadastrado usa o EmptyState dentro do Card" },
+  // Exceção DECLARADA: item repetido, gaveta, diálogo e picker ficam <p>.
+  { arquivo: "app/(app)/treinos/historico/[id]/session-detail-client.tsx", exige: /exercise\.sets\.length === 0 \? \(\s*<p\b/, porque: "exercício sem série é dica dentro do cartão repetido" },
+  { arquivo: "app/(app)/treinos/programas/programs-client.tsx", exige: /linked\.length === 0 \? \(\s*<p\b/, porque: "programa sem treino é dica dentro do cartão expandido (repetido)" },
+  { arquivo: "app/(app)/treinos/treinos/[id]/builder-client.tsx", exige: /<p className="mt-1 text-sm text-muted-foreground">Nenhum\.<\/p>/, porque: "bloco de distribuição sem item é dica em linha, repetido por bloco" },
+  { arquivo: "components/training/exercise-detail-sheet.tsx", exige: /Nenhuma alternativa cadastrada\./, porque: "dentro da gaveta continua <p>" },
+  { arquivo: "components/training/workout-exercise-sheet.tsx", exige: /Nenhuma alternativa cadastrada\./, porque: "dentro da gaveta continua <p>" },
+  { arquivo: "components/training/exercise-picker-dialog.tsx", exige: /Nenhum exercício encontrado com esses filtros\./, porque: "picker vazio continua <p>" },
+];
+
+/**
+ * G6 em todo o lote: a primitiva `CardHeader` é `grid`, e `flex-row` sem `flex` não faz nada —
+ * título e ações empilham. Varre todo `.tsx` de Dieta, Treinos e `body`, inclusive os arquivos
+ * que ainda nem existem.
+ */
+const PASTAS_DO_LOTE = [
+  "app/(app)/nutricao",
+  "app/(app)/treinos",
+  "components/nutrition",
+  "components/training",
+  "components/body",
 ];
 
 /** O que não pode voltar. */
@@ -188,5 +238,52 @@ describe("07-C — contratos de Dieta e Treinos", () => {
 
   it.each(PROIBIDOS.map((c) => [c.arquivo, c.porque, c] as const))("%s não tem: %s", (_a, _p, c) => {
     expect(fonte(c.arquivo)).not.toMatch(c.exige);
+  });
+});
+
+function arquivosDoLote(): string[] {
+  const achados: string[] = [];
+  const andar = (rel: string) => {
+    for (const e of fs.readdirSync(path.join(SRC, rel), { withFileTypes: true })) {
+      const filho = `${rel}/${e.name}`;
+      if (e.isDirectory()) andar(filho);
+      else if (e.name.endsWith(".tsx")) achados.push(filho);
+    }
+  };
+  PASTAS_DO_LOTE.forEach(andar);
+  return achados.sort();
+}
+
+/** `className` de cada `<CardHeader>` cujo valor tem `flex-row` sem a classe `flex`. */
+export function cabecalhosSemFlex(codigo: string): string[] {
+  return [...codigo.matchAll(/<CardHeader\b[^>]*?className="([^"]*)"/g)]
+    .map((m) => m[1])
+    .filter((classes) => {
+      const lista = classes.split(/\s+/);
+      return lista.includes("flex-row") && !lista.includes("flex");
+    });
+}
+
+describe("07-C · V — varreduras do lote inteiro", () => {
+  const arquivos = arquivosDoLote();
+
+  it("o lote tem arquivos para varrer (a lista não está vazia por engano)", () => {
+    expect(arquivos.length).toBeGreaterThan(100);
+  });
+
+  it("G6: nenhum CardHeader pede flex-row sem ser flex", () => {
+    const fora = arquivos.flatMap((a) => cabecalhosSemFlex(fonte(a)).map((c) => `${a}: ${c}`));
+    expect(fora).toEqual([]);
+  });
+
+  it("toda barra de progresso passa por ariaDeProgresso (nome, limite e valor real)", () => {
+    const fora = arquivos.filter((a) => /role="progressbar"/.test(fonte(a)));
+    expect(fora).toEqual([]);
+  });
+
+  it("o detector de G6 pega o defeito e ignora o certo (fixture)", () => {
+    expect(cabecalhosSemFlex(`<CardHeader className="flex-row items-start gap-2">`)).toHaveLength(1);
+    expect(cabecalhosSemFlex(`<CardHeader className="flex flex-row items-start gap-2">`)).toEqual([]);
+    expect(cabecalhosSemFlex(`<CardHeader className="pb-3">`)).toEqual([]);
   });
 });

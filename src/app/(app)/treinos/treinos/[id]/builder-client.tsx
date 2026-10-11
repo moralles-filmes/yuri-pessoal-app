@@ -559,7 +559,9 @@ function MuscleBars({
         {rows.map((row) => (
           <li key={row.id} className="flex items-center gap-2">
             <span className="w-32 shrink-0 truncate text-sm">{row.name}</span>
-            <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+            {/* V (REDESIGN-07-C): distribuição, não progresso — o nome e o número ao lado já são
+                a leitura; um progressbar com máximo = maior grupo anunciaria "100%" de nada. */}
+            <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
               <span
                 className={cn("block h-full rounded-full bg-primary/70")}
                 style={{ width: `${(row.count / max) * 100}%` }}

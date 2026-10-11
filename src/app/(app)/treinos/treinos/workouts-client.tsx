@@ -447,7 +447,12 @@ export function WorkoutsClient({
                           v{workout.version} (substituída)
                         </Badge>
                       )}
-                      {workout.isFavorite && <Star className="size-3.5 fill-primary text-primary" />}
+                      {workout.isFavorite && (
+                        <>
+                          <Star className="size-3.5 fill-primary text-primary" aria-hidden="true" />
+                          <span className="sr-only">Favorito</span>
+                        </>
+                      )}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
                       {workout.exercises.length}{" "}

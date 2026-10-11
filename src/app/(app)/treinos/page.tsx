@@ -19,6 +19,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ariaDeProgresso } from "@/components/shared/aria-de-progresso";
+import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { hojeISO } from "@/lib/format";
@@ -340,10 +342,12 @@ export default async function TreinosPage() {
         </div>
 
         {dashboard.metrics.sessionCount === 0 && (
-          <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-            Nenhum treino registrado nesta semana ainda. Quando você finalizar uma sessão, o
-            volume, as séries e a aderência aparecem aqui.
-          </p>
+          <EmptyState
+            icon={Dumbbell}
+            title="Nenhum treino registrado nesta semana ainda"
+            description="Quando você finalizar uma sessão, o volume, as séries e a aderência aparecem aqui."
+            className="py-8"
+          />
         )}
       </section>
 
@@ -359,13 +363,15 @@ export default async function TreinosPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {openGoals.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhuma meta em andamento.{" "}
-                <Link href={`${TRAINING_BASE_PATH}/metas`} className="underline underline-offset-2">
-                  Criar uma meta
-                </Link>
-                .
-              </p>
+              <EmptyState
+                icon={Target}
+                title="Nenhuma meta em andamento"
+                className="border-0 bg-transparent py-6"
+              >
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`${TRAINING_BASE_PATH}/metas`}>Criar uma meta</Link>
+                </Button>
+              </EmptyState>
             ) : (
               <ul className="space-y-3">
                 {openGoals.map((item) => (
@@ -385,7 +391,14 @@ export default async function TreinosPage() {
                       </span>
                     </div>
                     {item.progress.percent !== null ? (
-                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-1.5 overflow-hidden rounded-full bg-muted"
+                        {...ariaDeProgresso(
+                          item.goal.name,
+                          item.progress.percent,
+                          `${Math.round(item.progress.percent)}% do caminho`,
+                        )}
+                      >
                         <div
                           className="h-full rounded-full bg-primary"
                           style={{ width: `${item.progress.percent}%` }}

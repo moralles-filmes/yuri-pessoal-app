@@ -174,7 +174,9 @@ export function DistributionBars({
             <span className="truncate">{item.label}</span>
             <span className="shrink-0 tabular-nums text-muted-foreground">{item.display}</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
+          {/* V (REDESIGN-07-C): distribuição, não progresso — o rótulo e o valor acima são a
+              leitura; um progressbar com máximo = maior item anunciaria "100%" de nada. */}
+          <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
             <div
               className="h-full rounded-full bg-primary/70"
               style={{ width: `${Math.round((item.value / max) * 100)}%` }}

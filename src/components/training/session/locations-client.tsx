@@ -15,6 +15,7 @@ import { Loader2, MapPin, Plus, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -156,10 +157,12 @@ export function TrainingLocationsClient({ locations }: { locations: TrainingLoca
 
       <CardContent className="space-y-3">
         {locations.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            Nenhum local cadastrado. Sem local, a sessão funciona normalmente — só a calculadora
-            de anilhas fica sem estoque para consultar.
-          </p>
+          <EmptyState
+            icon={MapPin}
+            title="Nenhum local cadastrado"
+            description="Sem local, a sessão funciona normalmente — só a calculadora de anilhas fica sem estoque para consultar."
+            className="border-0 bg-transparent py-6"
+          />
         )}
 
         {locations.map((location) => (

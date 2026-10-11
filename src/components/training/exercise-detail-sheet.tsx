@@ -244,9 +244,9 @@ function DetailBody({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 text-sm">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-sm">
       <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium">{value}</span>
+      <span className="ml-auto min-w-0 text-right font-medium">{value}</span>
     </div>
   );
 }

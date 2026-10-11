@@ -31,6 +31,7 @@ import {
 } from "@dnd-kit/core";
 import {
   Ban,
+  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -55,6 +56,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { useChaveDeAbertura, useItemRetido } from "@/components/shared/use-item-retido";
@@ -820,11 +822,7 @@ function ListView({
   );
 
   if (sorted.length === 0) {
-    return (
-      <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-        Nada planejado neste período.
-      </p>
-    );
+    return <EmptyState icon={CalendarDays} title="Nada planejado neste período" className="py-8" />;
   }
 
   return (

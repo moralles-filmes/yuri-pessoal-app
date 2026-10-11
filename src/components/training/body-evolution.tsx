@@ -212,9 +212,11 @@ export function BodyEvolution({
             </CardHeader>
             <CardContent>
               {measuredCount === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nenhuma medição de {type.name.toLowerCase()} nos últimos {days} dias.
-                </p>
+                <EmptyState
+                  icon={Scale}
+                  title={`Nenhuma medição de ${type.name.toLowerCase()} nos últimos ${days} dias`}
+                  className="border-0 bg-transparent py-6"
+                />
               ) : (
                 <>
                   <MeasurementChart
