@@ -146,7 +146,7 @@ function SessionCard({
         />
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-sm">
             <span className="font-medium tabular-nums">
               Hoje: {formatAmount(habit.todayValue)} /{" "}
               {formatHabitValue(habit.target_value, habit.unit)}
@@ -159,6 +159,7 @@ function SessionCard({
             value={habit.todayValue}
             target={habit.target_value}
             color={color}
+            rotulo={`Progresso de hoje — ${habit.name}`}
           />
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" disabled={busy} onClick={bump}>

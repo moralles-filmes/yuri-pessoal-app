@@ -51,11 +51,32 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "components/habits/vinculo-treinos.tsx", exige: /href="\/treinos\/configuracoes"/, porque: "o caminho para desligar o vínculo está na frase" },
   // D3 — abas do curso
   { arquivo: "app/(app)/estudos/[id]/course-detail-client.tsx", exige: /<SeletorDeVisao\s+rotulo="Seções do curso"/, porque: "as abas do curso usam o seletor compartilhado (estado anunciado)" },
+  // Alinhamento visual — Hábitos
+  { arquivo: "app/(app)/habitos/habits-client.tsx", exige: /todays\.length === 0 \? \(\s*<EmptyState/, porque: "seção vazia de Hoje usa o EmptyState compartilhado" },
+  { arquivo: "app/(app)/habitos/habits-client.tsx", exige: /<div className="min-w-0">\s*<p className="font-medium text-amber/, porque: "regra 2: a lista de esquecidos não empurra o ícone" },
+  { arquivo: "components/habits/consistency-view.tsx", exige: /consistency\.ranking\.length === 0 \? \(\s*<EmptyState/, porque: "ranking vazio usa o EmptyState compartilhado" },
+  { arquivo: "components/habits/badges.tsx", exige: /rotulo: string;/, porque: "a barra de progresso EXIGE nome (o TypeScript cobra cada uso)" },
+  { arquivo: "components/habits/badges.tsx", exige: /role="progressbar"\s+aria-label=\{rotulo\}/, porque: "a barra de progresso tem nome acessível" },
+  { arquivo: "components/habits/badges.tsx", exige: /<span className="sr-only">\{textoDaSequencia\(count\)\}<\/span>/, porque: "a chama diz \"dias seguidos\", não só o número" },
+  { arquivo: "components/habits/habit-card.tsx", exige: /flex flex-wrap items-center justify-between gap-x-3 gap-y-0\.5/, porque: "a linha de valor quebra em vez de empurrar" },
+  { arquivo: "components/habits/session-view.tsx", exige: /flex flex-wrap items-center justify-between gap-x-3 gap-y-0\.5/, porque: "a linha de valor quebra em vez de empurrar" },
+  { arquivo: "components/habits/consistency-chart.tsx", exige: /<table className="sr-only">/, porque: "o gráfico tem alternativa textual na FACHADA (regra 1 do carregamento sob demanda)" },
+];
+
+/** O que não pode VOLTAR. Mesma varredura, sentido contrário. */
+export const PROIBIDOS: { arquivo: string; proibe: RegExp; porque: string }[] = [
+  { arquivo: "components/habits/badges.tsx", proibe: /<Badge[^>]*style=\{\{\s*color/, porque: "D5: a cor da categoria fica no ponto; como texto ela reprova o contraste (20/20 no claro)" },
+  { arquivo: "components/habits/consistency-chart-impl.tsx", proibe: /sr-only/, porque: "a alternativa textual não pode ir para o -impl: sairia do HTML do servidor" },
 ];
 
 describe("07-B — contratos visuais de Hábitos e Estudos", () => {
   it.each(CONTRATOS)("$arquivo — $porque", ({ arquivo, exige }) => {
     const fonte = semComentarios(fs.readFileSync(path.join(SRC, arquivo), "utf8"));
     expect(fonte).toMatch(exige);
+  });
+
+  it.each(PROIBIDOS)("$arquivo NÃO — $porque", ({ arquivo, proibe }) => {
+    const fonte = semComentarios(fs.readFileSync(path.join(SRC, arquivo), "utf8"));
+    expect(fonte).not.toMatch(proibe);
   });
 });

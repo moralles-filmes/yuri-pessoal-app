@@ -1,6 +1,7 @@
 import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { textoDaSequencia } from "@/components/habits/rotulos-acessiveis";
 import {
   HABIT_CATEGORY_COLORS,
   HABIT_CATEGORY_EMOJI,
@@ -12,14 +13,14 @@ import {
 
 const WEEKDAY_SHORT = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
-/** Badge da categoria do hábito (cor por categoria, legível em dark/light). */
+/**
+ * Badge da categoria do hábito. A cor da categoria fica no PONTO; o texto usa o token neutro do
+ * Badge (07-B · D5): como cor de texto sobre `bg-muted`, as cores de categoria reprovavam o
+ * contraste — todas no tema claro (a pior, 2,34:1), metade no escuro.
+ */
 export function HabitCategoryBadge({ category }: { category: HabitCategory }) {
   return (
-    <Badge
-      variant="secondary"
-      className="gap-1.5 border-0 bg-muted"
-      style={{ color: HABIT_CATEGORY_COLORS[category] }}
-    >
+    <Badge variant="secondary" className="gap-1.5 border-0 bg-muted">
       <span
         aria-hidden
         className="size-2 rounded-full"
@@ -51,6 +52,7 @@ export function StreakFlame({
     >
       <Flame className="size-3.5 fill-primary/20" />
       {count}
+      <span className="sr-only">{textoDaSequencia(count)}</span>
     </span>
   );
 }
@@ -73,23 +75,27 @@ export function frequencySummary(
   return days || HABIT_FREQUENCY_LABELS[frequency];
 }
 
-/** Barra de progresso (feito x meta), com cor opcional do hábito. */
+/** Barra de progresso (feito x meta), com cor opcional do hábito. `rotulo` é o nome acessível. */
 export function HabitProgressBar({
   value,
   target,
   color,
   className,
+  rotulo,
 }: {
   value: number;
   target: number;
   color?: string | null;
   className?: string;
+  /** Obrigatório: `role="progressbar"` sem nome é anunciado só como "barra de progresso". */
+  rotulo: string;
 }) {
   const pct = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0;
   return (
     <div
       className={cn("h-2 w-full overflow-hidden rounded-full bg-muted", className)}
       role="progressbar"
+      aria-label={rotulo}
       aria-valuenow={value}
       aria-valuemin={0}
       aria-valuemax={target}

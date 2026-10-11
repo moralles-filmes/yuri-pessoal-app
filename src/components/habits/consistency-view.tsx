@@ -80,9 +80,11 @@ export function ConsistencyView({
         </CardHeader>
         <CardContent>
           {consistency.ranking.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              Nenhum hábito agendado nos últimos 30 dias.
-            </p>
+            <EmptyState
+              icon={Trophy}
+              title="Nenhum hábito agendado nos últimos 30 dias"
+              className="border-0 bg-transparent py-6"
+            />
           ) : (
             <ol className="space-y-1.5">
               {consistency.ranking.map((r, i) => (

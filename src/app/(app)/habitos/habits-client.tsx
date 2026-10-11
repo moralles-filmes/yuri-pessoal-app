@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   AlarmClockOff,
   BookOpen,
+  CalendarCheck,
   CheckCircle2,
   Dumbbell,
   Flame,
@@ -271,7 +272,7 @@ function TodayView({
       {forgotten.length > 0 && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
           <AlarmClockOff className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div>
+          <div className="min-w-0">
             <p className="font-medium text-amber-700 dark:text-amber-300">
               {forgotten.length} hábito(s) pendente(s) com horário marcado
             </p>
@@ -285,10 +286,12 @@ function TodayView({
       )}
 
       {todays.length === 0 ? (
-        <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-          Nenhum hábito agendado para hoje. Aproveite ou ajuste a frequência em
-          “Gerenciar”.
-        </p>
+        <EmptyState
+          icon={CalendarCheck}
+          title="Nenhum hábito agendado para hoje"
+          description="Aproveite ou ajuste a frequência em “Gerenciar”."
+          className="py-8"
+        />
       ) : (
         <div className="grid gap-3">
           {todays.map((h) => (
