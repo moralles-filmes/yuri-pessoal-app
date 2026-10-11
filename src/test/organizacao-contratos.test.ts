@@ -18,6 +18,7 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "app/(app)/agenda/agenda-client.tsx", exige: /<span className="[^"]*\bmin-w-0\b[^"]*\btruncate\b[^"]*">\{periodLabel\}/, porque: "regra 2: o rótulo do período não empurra os botões" },
   { arquivo: "app/(app)/agenda/event-details.tsx", exige: /<span className="min-w-0 break-words">\{event\.location\}<\/span>/, porque: "regra 2: local longo não empurra o ícone" },
   // Rotinas e tarefas
+  { arquivo: "components/tasks/rotinas-e-tarefas-abas.tsx", exige: /<div>\s*<AbasDeRota\b/, porque: "o -mb-px da fita vence o space-y do pai (:where não tem especificidade); quem recebe a margem é o invólucro" },
   { arquivo: "app/(app)/tarefas/tasks-client.tsx", exige: /aria-pressed=\{active\}/, porque: "chip de projeto anuncia o filtro ativo" },
   { arquivo: "app/(app)/tarefas/tasks-client.tsx", exige: /aria-current=\{day\.isToday \? "date" : undefined\}/, porque: "hoje na semana é anunciado" },
   { arquivo: "app/(app)/tarefas/tasks-client.tsx", exige: /<span className="min-w-0 flex-1 truncate text-sm font-medium">\{r\.name\}/, porque: "regra 2: nome da rotina não empurra o selo" },
