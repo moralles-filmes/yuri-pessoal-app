@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
+import { formatCurrency } from "@/lib/format";
 
 /**
- * Congela o hoje antes do conserto da B1; o diff do commit seguinte mostra
- * o detalhe que passa a existir.
+ * Preserva o número bruto e mostra a separação na dica quando há terceiros.
  */
 describe("apresentarEntradas", () => {
   const comTerceiros = { entradas: 1000, entradasMeu: 400, entradasTerceiros: 600 };
@@ -14,8 +14,10 @@ describe("apresentarEntradas", () => {
     expect(apresentarEntradas(comTerceiros).valor).toBe(1000);
   });
 
-  it("HOJE nenhuma linha de terceiros aparece, mesmo com R$ 600 de terceiros", () => {
-    expect(apresentarEntradas(comTerceiros).detalhe).toBeNull();
+  it("com terceiros, a dica mostra a minha parte e a de terceiros", () => {
+    expect(apresentarEntradas(comTerceiros).detalhe).toBe(
+      `minha ${formatCurrency(400)} · de terceiros ${formatCurrency(600)}`,
+    );
   });
 
   it("sem terceiros, nenhuma linha", () => {

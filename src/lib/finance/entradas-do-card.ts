@@ -6,6 +6,8 @@
  * lado de Saídas bruta convidaria à subtração renda pessoal − despesa bruta
  * que o §13.3 proíbe. Os gráficos (evolução, mês a mês) continuam brutos até a 04-A/06.
  */
+import { formatCurrency, reaisParaCentavos } from "@/lib/format";
+
 export type EntradasDoResumo = {
   entradas: number;
   entradasMeu: number;
@@ -15,7 +17,10 @@ export type EntradasDoResumo = {
 export type EntradasNoCard = { valor: number; detalhe: string | null };
 
 export function apresentarEntradas(r: EntradasDoResumo): EntradasNoCard {
-  // B1 commit 1 — CARACTERIZA o hoje: bruto no número e nenhuma linha de terceiros,
-  // mesmo quando há terceiros; o commit seguinte acende o detalhe.
-  return { valor: r.entradas, detalhe: null };
+  // B1 — conserto aprovado pelo dono: a dica aparece só quando há entrada de terceiros
+  // (comparada em centavos); o número principal continua o bruto.
+  const detalhe = reaisParaCentavos(r.entradasTerceiros) === 0
+    ? null
+    : `minha ${formatCurrency(r.entradasMeu)} · de terceiros ${formatCurrency(r.entradasTerceiros)}`;
+  return { valor: r.entradas, detalhe };
 }
