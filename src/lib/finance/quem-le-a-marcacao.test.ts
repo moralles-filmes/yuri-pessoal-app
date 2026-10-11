@@ -22,6 +22,10 @@ const COLUNA = "classificacao_padrao";
 /** Caminho relativo a `src/` → por que este arquivo pode mencionar a marcação. */
 const ALLOWLIST: Record<string, string> = {
   "types/supabase.ts": "tipos gerados do banco (M3)",
+  "types/database.ts": "estreita a coluna para MarcacaoDaCategoria, como ja faz com kind",
+  "lib/validators/category.ts": "o schema da categoria recebe e valida a marcacao",
+  "app/(app)/financeiro/categorias/category-form.tsx": "o campo que marca a categoria",
+  "app/(app)/financeiro/categorias/categories-client.tsx": "o selo da categoria marcada",
 };
 
 /**

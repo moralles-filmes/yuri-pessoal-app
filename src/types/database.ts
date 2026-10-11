@@ -5,6 +5,7 @@
  * o app, o banco (CHECK) e os schemas Zod ficam sempre em sincronia.
  */
 import type { Database } from "@/types/supabase";
+import type { MarcacaoDaCategoria } from "@/lib/finance/marcacao-da-categoria";
 import type {
   AccountType,
   CardBrand,
@@ -70,8 +71,10 @@ export type AccountRow = Omit<Row<"accounts">, "type"> & { type: AccountType };
 
 export type AccountWithBalance = AccountRow & { current_balance: number };
 
-export type CategoryRow = Omit<Row<"categories">, "kind"> & {
+export type CategoryRow = Omit<Row<"categories">, "kind" | "classificacao_padrao"> & {
   kind: CategoryKind;
+  /** 03-C2 · E7/D8 — atalho de preenchimento e filtro. NUNCA fonte de verdade. */
+  classificacao_padrao: MarcacaoDaCategoria;
 };
 
 export type SubcategoryRow = Row<"subcategories">;

@@ -15,6 +15,8 @@ import {
   deleteSubcategory,
   ensureDefaultCategories,
 } from "@/lib/actions/categories";
+import { agruparCategoriasPorTipo } from "@/lib/finance/categorias-agrupadas";
+import { sugereTerceiros } from "@/lib/finance/marcacao-da-categoria";
 import { CATEGORY_KIND_LABELS } from "@/lib/finance/constants";
 import { toast } from "sonner";
 import type { CategoryRow, SubcategoryRow } from "@/types/database";
@@ -28,6 +30,8 @@ export function CategoriesClient({
 }) {
   const router = useRouter();
   const [restoring, setRestoring] = React.useState(false);
+
+  const grupos = React.useMemo(() => agruparCategoriasPorTipo(categories), [categories]);
 
   const subsByCategory = React.useMemo(() => {
     const map = new Map<string, SubcategoryRow[]>();
@@ -94,112 +98,126 @@ export function CategoriesClient({
           </Button>
         </EmptyState>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {categories.map((category) => {
-            const subs = subsByCategory.get(category.id) ?? [];
-            return (
-              <Card key={category.id}>
-                <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span
-                      aria-hidden
-                      className="size-8 shrink-0 rounded-lg ring-1 ring-foreground/10"
-                      style={{ backgroundColor: category.color }}
-                    />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="truncate font-medium">
-                          {category.name}
-                        </span>
-                        {category.is_default && (
-                          <Badge variant="outline" className="text-muted-foreground">
-                            padrão
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {CATEGORY_KIND_LABELS[category.kind]}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <CategoryFormDialog
-                      category={category}
-                      trigger={
-                        <Button variant="ghost" size="icon-sm" aria-label="Editar">
-                          <Pencil />
-                        </Button>
-                      }
-                    />
-                    <DeleteConfirmDialog
-                      title="Excluir categoria"
-                      description={`Excluir "${category.name}" e suas subcategorias?`}
-                      successMessage="Categoria excluída."
-                      onConfirm={async () => {
-                        const res = await deleteCategory(category.id);
-                        if (res.ok) router.refresh();
-                        return res;
-                      }}
-                      trigger={
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Excluir"
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 />
-                        </Button>
-                      }
-                    />
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {subs.map((sub) => (
-                      <span
-                        key={sub.id}
-                        className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pr-1 pl-2.5 text-xs"
-                      >
-                        {sub.name}
-                        <DeleteConfirmDialog
-                          title="Excluir subcategoria"
-                          description={`Excluir "${sub.name}"?`}
-                          successMessage="Subcategoria excluída."
-                          onConfirm={async () => {
-                            const res = await deleteSubcategory(sub.id);
-                            if (res.ok) router.refresh();
-                            return res;
-                          }}
-                          trigger={
-                            <button
-                              type="button"
-                              aria-label="Excluir subcategoria"
-                              className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        <div className="space-y-6">
+          {grupos.map((grupo) => (
+            <section key={grupo.chave} aria-labelledby={`grupo-${grupo.chave}`} className="space-y-3">
+              <h2 id={`grupo-${grupo.chave}`} className="text-sm font-medium text-muted-foreground">
+                {grupo.titulo} <span className="tabular-nums">({grupo.categorias.length})</span>
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {grupo.categorias.map((category) => {
+                  const subs = subsByCategory.get(category.id) ?? [];
+                  return (
+                    <Card key={category.id}>
+                      <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span
+                            aria-hidden
+                            className="size-8 shrink-0 rounded-lg ring-1 ring-foreground/10"
+                            style={{ backgroundColor: category.color }}
+                          />
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="truncate font-medium">
+                                {category.name}
+                              </span>
+                              {category.is_default && (
+                                <Badge variant="outline" className="text-muted-foreground">
+                                  padrão
+                                </Badge>
+                              )}
+                              {sugereTerceiros(category.classificacao_padrao) && (
+                                <Badge variant="outline" className="text-muted-foreground">
+                                  sugere: de terceiros
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {CATEGORY_KIND_LABELS[category.kind]}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <CategoryFormDialog
+                            category={category}
+                            trigger={
+                              <Button variant="ghost" size="icon-sm" aria-label="Editar">
+                                <Pencil />
+                              </Button>
+                            }
+                          />
+                          <DeleteConfirmDialog
+                            title="Excluir categoria"
+                            description={`Excluir "${category.name}" e suas subcategorias?`}
+                            successMessage="Categoria excluída."
+                            onConfirm={async () => {
+                              const res = await deleteCategory(category.id);
+                              if (res.ok) router.refresh();
+                              return res;
+                            }}
+                            trigger={
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Excluir"
+                                className="text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2 />
+                              </Button>
+                            }
+                          />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {subs.map((sub) => (
+                            <span
+                              key={sub.id}
+                              className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pr-1 pl-2.5 text-xs"
                             >
-                              <Trash2 className="size-3" />
-                            </button>
+                              {sub.name}
+                              <DeleteConfirmDialog
+                                title="Excluir subcategoria"
+                                description={`Excluir "${sub.name}"?`}
+                                successMessage="Subcategoria excluída."
+                                onConfirm={async () => {
+                                  const res = await deleteSubcategory(sub.id);
+                                  if (res.ok) router.refresh();
+                                  return res;
+                                }}
+                                trigger={
+                                  <button
+                                    type="button"
+                                    aria-label="Excluir subcategoria"
+                                    className="grid size-4 place-items-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                  >
+                                    <Trash2 className="size-3" />
+                                  </button>
+                                }
+                              />
+                            </span>
+                          ))}
+                          {subs.length === 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              Sem subcategorias.
+                            </span>
+                          )}
+                        </div>
+                        <SubcategoryFormDialog
+                          categoryId={category.id}
+                          trigger={
+                            <Button variant="ghost" size="xs">
+                              <Plus /> Subcategoria
+                            </Button>
                           }
                         />
-                      </span>
-                    ))}
-                    {subs.length === 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        Sem subcategorias.
-                      </span>
-                    )}
-                  </div>
-                  <SubcategoryFormDialog
-                    categoryId={category.id}
-                    trigger={
-                      <Button variant="ghost" size="xs">
-                        <Plus /> Subcategoria
-                      </Button>
-                    }
-                  />
-                </CardContent>
-              </Card>
-            );
-          })}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </div>
