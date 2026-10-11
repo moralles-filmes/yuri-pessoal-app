@@ -11,6 +11,7 @@ import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dial
 import { AccountTypeBadge, SignedAmount } from "@/components/financeiro/badges";
 import { formatCurrency } from "@/lib/format";
 import { deleteAccount } from "@/lib/actions/accounts";
+import { saldoDasContas } from "@/lib/finance/saldo-das-contas";
 import type { AccountWithBalance } from "@/types/database";
 
 export function AccountsClient({
@@ -19,7 +20,7 @@ export function AccountsClient({
   accounts: AccountWithBalance[];
 }) {
   const router = useRouter();
-  const total = accounts.reduce((s, a) => s + (a.current_balance ?? 0), 0);
+  const total = saldoDasContas(accounts);
 
   return (
     <div className="space-y-4">

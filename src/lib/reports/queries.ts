@@ -32,6 +32,7 @@ import {
   ESCOPO_RELATORIO,
   janelaDoRelatorio,
   saldoDasContas,
+  type CompletudeFinanceira,
 } from "@/lib/finance/pipeline";
 import { getHabitsDashboard } from "@/lib/habits/queries";
 import { getStudyDashboard } from "@/lib/studies/queries";
@@ -48,6 +49,7 @@ import type {
 /* ───────────────────────────── Tipos de saída ───────────────────────────── */
 
 export type FinanceReport = {
+  completude: CompletudeFinanceira;
   mes: string;
   saldo: number;
   resumo: ResumoMes;
@@ -69,6 +71,7 @@ export type FaturaMes = {
 };
 
 export type CardReport = {
+  completude: CompletudeFinanceira;
   faturas: FaturaProvisao[];
   faturasPorMes: FaturaMes[];
   parcelasComprometidas: number;
@@ -127,7 +130,7 @@ async function getFinanceAndCardReport(
 
   // As recorrências voltam também CRUAS: "assinaturas" lê `description` e `category.name`, que
   // não são entrada do motor.
-  const { entradas, contas: accounts, recorrencias: recurrences } = await lerFinanceiro({
+  const { entradas, contas: accounts, recorrencias: recurrences, completude } = await lerFinanceiro({
     janela,
     escopo: ESCOPO_RELATORIO,
   });
@@ -189,6 +192,7 @@ async function getFinanceAndCardReport(
 
   return {
     finance: {
+      completude,
       mes: mesSel,
       saldo,
       resumo,
@@ -202,6 +206,7 @@ async function getFinanceAndCardReport(
       assinaturas,
     },
     card: {
+      completude,
       faturas,
       faturasPorMes,
       parcelasComprometidas,

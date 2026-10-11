@@ -250,6 +250,7 @@ export async function searchAll(
         .select(
           "id, card_id, competencia, data_vencimento, total_atual, card:credit_cards(nome)",
         )
+        .gt("itens", 0)
         .order("competencia", { ascending: false })
         .limit(120)
         .then((r) => r.data ?? []),

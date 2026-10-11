@@ -4,9 +4,9 @@
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
  * ║ O QUE ESTE ARQUIVO PROVA.                                                             ║
  * ║                                                                                       ║
- * ║  1. O GUARD: `owner` + escopo que peça cartões, recorrências ou parcelas LANÇA, e      ║
- * ║     lança ANTES de qualquer leitura. Essas três ainda não aceitam `LeituraDoDono`; sob ║
- * ║     service role elas leriam sem filtro de usuário.                                   ║
+ * ║  1. OWNER: os três escopos usam o client do dono e filtram user_id em cada leitura,    ║
+ * ║     inclusive nas parcelas com ids de fatura já filtrados (invariante 84).             ║
+ * ║     Sem owner, usam a sessão sem filtro explícito de user_id.                         ║
  * ║  2. NEM UMA LEITURA A MAIS: cada escopo lê exatamente as tabelas dele.                ║
  * ║  3. A FORMA DAS CHAMADAS: as parcelas vêm DEPOIS do `Promise.all`, com os ids das      ║
  * ║     faturas, e o `owner` chega a cada leitura que o aceita.                            ║
@@ -17,26 +17,36 @@
  * Fixture sintética.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
+import { gastosPorCategoria } from "@/lib/finance/dashboard";
 import {
   ESCOPO_CARD_FINANCEIRO,
   ESCOPO_FATURAS,
   ESCOPO_RELATORIO,
+  completudeDe,
   janelaDoMes,
   montarEntradas,
+  saldoDasContas,
+  type CompletudeFinanceira,
+  type EntradasDoEscopo,
+  type EscopoFinanceiro,
+  type LinhaTx,
 } from "@/lib/finance/pipeline";
 
 type Leitura = {
   tabela: string;
   origem: "sessao" | "dono";
   filtros: Array<[metodo: string, coluna: string, valor: unknown]>;
+  selecao?: { colunas: string; opcoes?: { count?: "exact" } };
+  limite?: number;
 };
 
 const estado = vi.hoisted(() => ({
   leituras: [] as Leitura[],
   clientsDaSessao: 0,
   dados: {} as Record<string, unknown[]>,
+  contagens: {} as Record<string, number | null | undefined>,
 }));
 
 /** Builder encadeável que registra a tabela e os filtros, e resolve com os dados da tabela. */
@@ -46,7 +56,15 @@ function clientFalso(origem: Leitura["origem"]) {
       const leitura: Leitura = { tabela, origem, filtros: [] };
       estado.leituras.push(leitura);
       const builder: Record<string, unknown> = {};
-      for (const metodo of ["select", "order", "limit"]) builder[metodo] = () => builder;
+      builder.select = (colunas: string, opcoes?: { count?: "exact" }) => {
+        leitura.selecao = { colunas, opcoes };
+        return builder;
+      };
+      builder.order = () => builder;
+      builder.limit = (n: number) => {
+        leitura.limite = n;
+        return builder;
+      };
       for (const metodo of ["eq", "gt", "gte", "lte", "in", "neq"]) {
         builder[metodo] = (coluna: string, valor: unknown) => {
           leitura.filtros.push([metodo, coluna, valor]);
@@ -54,9 +72,18 @@ function clientFalso(origem: Leitura["origem"]) {
         };
       }
       builder.then = (
-        resolve: (v: { data: unknown[]; error: null }) => unknown,
+        resolve: (v: { data: unknown[]; error: null; count: number | null }) => unknown,
         reject: (e: unknown) => unknown,
-      ) => Promise.resolve({ data: estado.dados[tabela] ?? [], error: null }).then(resolve, reject);
+      ) => {
+        const linhasAntesDoLimit = estado.dados[tabela] ?? [];
+        return Promise.resolve({
+          data: linhasAntesDoLimit.slice(0, leitura.limite),
+          error: null,
+          count: estado.contagens[tabela] !== undefined
+            ? estado.contagens[tabela]
+            : linhasAntesDoLimit.length,
+        }).then(resolve, reject);
+      };
       return builder;
     },
   };
@@ -69,7 +96,7 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 
-const { lerFinanceiro } = await import("@/lib/finance/queries");
+const { getReceivables, getTransactionsRange, lerFinanceiro } = await import("@/lib/finance/queries");
 
 const JANELA = janelaDoMes("2026-05");
 const DONO: LeituraDoDono = {
@@ -160,28 +187,41 @@ beforeEach(() => {
   estado.leituras.length = 0;
   estado.clientsDaSessao = 0;
   estado.dados = dadosSinteticos();
+  estado.contagens = {};
 });
 
-describe("03-B — lerFinanceiro: o guard do owner (desenho, §4.2)", () => {
-  it("owner + escopo de faturas LANÇA com o motivo, e nenhuma tabela é lida", async () => {
-    await expect(
-      lerFinanceiro({ janela: JANELA, escopo: ESCOPO_FATURAS, owner: DONO }),
-    ).rejects.toThrow(/"faturas" pede cartões \(getCreditCards\).*ainda não aceitam LeituraDoDono/);
-    expect(estado.leituras).toEqual([]);
+describe("03-B2 — lerFinanceiro: owner nos três escopos (desenho, §5.4)", () => {
+  it("owner + escopo de faturas lê as três tabelas pelo client do dono, todas com user_id", async () => {
+    await lerFinanceiro({ escopo: ESCOPO_FATURAS, owner: DONO });
+    expect(tabelasLidas()).toEqual(["card_statements_with_total", "credit_cards", "receivables"]);
     expect(estado.clientsDaSessao).toBe(0);
+    for (const leitura of estado.leituras) {
+      expect(leitura.origem).toBe("dono");
+      expect(leitura.filtros).toContainEqual(["eq", "user_id", DONO.userId]);
+    }
   });
 
-  it("owner + escopo do relatório LANÇA citando as três leituras sem dono", async () => {
-    const erro = await lerFinanceiro({
+  it("owner + relatório lê as oito tabelas pelo dono, incluindo user_id nas parcelas", async () => {
+    await lerFinanceiro({
       janela: JANELA,
       escopo: ESCOPO_RELATORIO,
       owner: DONO,
-    }).catch((e: unknown) => e);
-    expect(erro).toBeInstanceOf(Error);
-    expect((erro as Error).message).toContain("cartões (getCreditCards)");
-    expect((erro as Error).message).toContain("recorrências (getRecurrences)");
-    expect((erro as Error).message).toContain("parcelas (getStatementInstallmentItems)");
-    expect(estado.leituras).toEqual([]);
+    });
+    expect(tabelasLidas()).toEqual(
+      [
+        "accounts_with_balance", "bills", "card_statements_with_total", "credit_cards",
+        "receivables", "recurring_transactions", "transaction_installments", "transactions",
+      ].sort(),
+    );
+    expect(estado.clientsDaSessao).toBe(0);
+    for (const leitura of estado.leituras) {
+      expect(leitura.origem).toBe("dono");
+      expect(leitura.filtros).toContainEqual(["eq", "user_id", DONO.userId]);
+    }
+    const ultima = estado.leituras[estado.leituras.length - 1];
+    expect(ultima.tabela).toBe("transaction_installments");
+    expect(ultima.filtros).toContainEqual(["in", "statement_id", ["st-1"]]);
+    expect(ultima.filtros).toContainEqual(["neq", "status", "cancelada"]);
   });
 
   it("owner + escopo do card lê as cinco tabelas PELO CLIENT DO DONO, todas com user_id", async () => {
@@ -201,6 +241,20 @@ describe("03-B — lerFinanceiro: o guard do owner (desenho, §4.2)", () => {
 });
 
 describe("03-B — lerFinanceiro: cada escopo lê exatamente as suas tabelas", () => {
+  it.each([ESCOPO_CARD_FINANCEIRO, ESCOPO_FATURAS, ESCOPO_RELATORIO])(
+    "$nome sem owner usa a sessão e não filtra user_id explicitamente",
+    async (escopo) => {
+      await (escopo.transacoes
+        ? lerFinanceiro({ janela: JANELA, escopo })
+        : lerFinanceiro({ escopo }));
+      expect(estado.clientsDaSessao).toBe(estado.leituras.length);
+      for (const leitura of estado.leituras) {
+        expect(leitura.origem).toBe("sessao");
+        expect(leitura.filtros.some(([, coluna]) => coluna === "user_id")).toBe(false);
+      }
+    },
+  );
+
   it("card do dashboard: cinco leituras, nenhuma de cartões, recorrências ou parcelas", async () => {
     await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
     expect(tabelasLidas()).toEqual(
@@ -210,8 +264,8 @@ describe("03-B — lerFinanceiro: cada escopo lê exatamente as suas tabelas", (
     expect(estado.leituras.flatMap((l) => l.filtros)).not.toContainEqual(["eq", "user_id", "user-1"]);
   });
 
-  it("card de faturas: três leituras, e a janela não é lida (o escopo não pede transações)", async () => {
-    await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_FATURAS });
+  it("card de faturas: três leituras, sem janela (o escopo não pede transações)", async () => {
+    await lerFinanceiro({ escopo: ESCOPO_FATURAS });
     expect(tabelasLidas()).toEqual(["card_statements_with_total", "credit_cards", "receivables"]);
   });
 
@@ -236,13 +290,15 @@ describe("03-B — lerFinanceiro: cada escopo lê exatamente as suas tabelas", (
 
   it("relatório sem nenhuma fatura: as parcelas nem chegam a ser lidas", async () => {
     estado.dados.card_statements_with_total = [];
-    await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_RELATORIO });
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_RELATORIO });
     expect(tabelasLidas()).not.toContain("transaction_installments");
     expect(estado.leituras).toHaveLength(7);
+    expect(r.entradas.inst).toEqual([]);
+    expect(r.entradas).toHaveProperty("inst");
   });
 
   it("as faturas continuam filtradas por itens > 0 (getStatements, não uma leitura nova)", async () => {
-    await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_FATURAS });
+    await lerFinanceiro({ escopo: ESCOPO_FATURAS });
     const faturas = estado.leituras.find((l) => l.tabela === "card_statements_with_total");
     expect(faturas?.filtros).toContainEqual(["gt", "itens", 0]);
   });
@@ -268,23 +324,215 @@ describe("03-B — lerFinanceiro: o que volta", () => {
     // Cruas: o relatório monta "assinaturas" com `description`, que não é entrada do motor.
     expect(r.recorrencias).toEqual(dados.recurring_transactions);
     expect(r.contas).toEqual(dados.accounts_with_balance);
+    expect(Object.keys(r.entradas).sort()).toEqual([
+      "bills", "cards", "inst", "recorrencias", "recs", "sts", "txs",
+    ]);
+    expect(Object.keys(r).sort()).toEqual(["completude", "contas", "entradas", "recorrencias"]);
+    expectTypeOf<keyof typeof r.entradas>().toEqualTypeOf<
+      "bills" | "cards" | "inst" | "recs" | "recorrencias" | "sts" | "txs"
+    >();
+    expectTypeOf<keyof typeof r>().toEqualTypeOf<"completude" | "contas" | "entradas" | "recorrencias">();
   });
 
-  it("card do dashboard: sem parcelas, `inst` volta [] (risco R1) e as recorrências também", async () => {
+  it("card do dashboard: parcelas, cartões e recorrências ficam ausentes (R1)", async () => {
     const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
-    expect(r.entradas.inst).toEqual([]);
-    expect(r.entradas.cards).toEqual([]);
-    expect(r.entradas.recorrencias).toEqual([]);
-    expect(r.recorrencias).toEqual([]);
+    expect(Object.keys(r.entradas).sort()).toEqual(["bills", "recs", "sts", "txs"]);
+    expect(Object.keys(r).sort()).toEqual(["completude", "contas", "entradas"]);
+    expectTypeOf<keyof typeof r.entradas>().toEqualTypeOf<"bills" | "recs" | "sts" | "txs">();
+    expectTypeOf<keyof typeof r>().toEqualTypeOf<"completude" | "contas" | "entradas">();
     expect(r.entradas.txs).toHaveLength(1);
     expect(r.contas).toHaveLength(1);
+    const entradasDoCard = r.entradas;
+    const naoRoda = () => gastosPorCategoria({
+      mes: "2026-05",
+      transactions: entradasDoCard.txs,
+      statements: entradasDoCard.sts,
+      receivables: entradasDoCard.recs,
+      // @ts-expect-error — o card não lê parcelas: inst não existe (M1a).
+      installmentItems: entradasDoCard.inst,
+    });
+    expect(naoRoda).toBeTypeOf("function");
   });
 
-  it("card de faturas: contas não lidas voltam [] — ausência de leitura não vira saldo", async () => {
-    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_FATURAS });
-    expect(r.contas).toEqual([]);
-    expect(r.recorrencias).toEqual([]);
-    expect(r.entradas.txs).toEqual([]);
+  it("card de faturas: contas não lidas ficam ausentes — não há saldo a somar", async () => {
+    const r = await lerFinanceiro({ escopo: ESCOPO_FATURAS });
+    expect(Object.keys(r).sort()).toEqual(["completude", "entradas"]);
+    expect(Object.keys(r.entradas).sort()).toEqual(["cards", "recs", "sts"]);
+    expectTypeOf<keyof typeof r.entradas>().toEqualTypeOf<"cards" | "recs" | "sts">();
+    expectTypeOf<keyof typeof r>().toEqualTypeOf<"completude" | "entradas">();
     expect(r.entradas.cards).toHaveLength(1);
+    // @ts-expect-error — faturas não lê contas: ausência não pode virar saldo zero.
+    const naoRoda = () => saldoDasContas(r.contas);
+    expect(naoRoda).toBeTypeOf("function");
+  });
+});
+
+describe("03-B2 A5 — tetos e completude (desenho, §5.5)", () => {
+  it("card com dados normais é exato e pede count exact mantendo os limites", async () => {
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(r.completude).toEqual({ estado: "exato" });
+    for (const [tabela, limite] of [["transactions", 2000], ["receivables", 1000]] as const) {
+      const leitura = estado.leituras.find((l) => l.tabela === tabela);
+      expect(leitura?.selecao?.opcoes).toEqual({ count: "exact" });
+      expect(leitura?.limite).toBe(limite);
+    }
+  });
+
+  it("2001 lançamentos: parcial (M8a), com exatamente os 2000 primeiros no motor (M8b)", async () => {
+    const base = estado.dados.transactions[0] as LinhaTx;
+    const transacoes = Array.from({ length: 2001 }, (_, i) => ({
+      ...base,
+      competence_date: new Date(Date.UTC(2020, 0, i + 1)).toISOString().slice(0, 10),
+    }));
+    estado.dados.transactions = transacoes;
+    const r = await lerFinanceiro({
+      janela: { from: transacoes[0].competence_date, to: transacoes[2000].competence_date },
+      escopo: ESCOPO_CARD_FINANCEIRO,
+    });
+    expect(r.entradas.txs).toHaveLength(2000);
+    expect(r.entradas.txs).toEqual(montarEntradas({ transacoes: transacoes.slice(0, 2000) }).txs);
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: ["A leitura de lançamentos trouxe 2000 registros desta janela e havia mais: os totais podem estar incompletos."],
+    });
+  });
+
+  it("1001 recebíveis: parcial, preservando as 1000 linhas que entram no motor", async () => {
+    estado.dados.receivables = Array.from({ length: 1001 }, () => estado.dados.receivables[0]);
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(r.entradas.recs).toHaveLength(1000);
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: ["A leitura de recebíveis trouxe 1000 registros e havia mais: os totais podem estar incompletos."],
+    });
+  });
+
+  it("o max_rows do PostgREST corta antes do limit: o motivo cita o que veio, não o teto", async () => {
+    const base = estado.dados.transactions[0] as LinhaTx;
+    const transacoes = Array.from({ length: 1000 }, (_, i) => ({
+      ...base,
+      competence_date: new Date(Date.UTC(2020, 0, i + 1)).toISOString().slice(0, 10),
+    }));
+    estado.dados.transactions = transacoes;
+    estado.contagens.transactions = 1500;
+    const r = await lerFinanceiro({
+      janela: { from: transacoes[0].competence_date, to: transacoes[999].competence_date },
+      escopo: ESCOPO_CARD_FINANCEIRO,
+    });
+    expect(r.entradas.txs).toHaveLength(1000);
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: ["A leitura de lançamentos trouxe 1000 registros desta janela e havia mais: os totais podem estar incompletos."],
+    });
+  });
+
+  it.each([
+    ["transactions", "lançamentos"],
+    ["receivables", "recebíveis"],
+  ])("contagem nula de %s declara que não foi possível confirmar", async (tabela, nome) => {
+    estado.contagens[tabela] = null;
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: [`Não foi possível confirmar que a leitura de ${nome} veio completa.`],
+    });
+  });
+
+  it("lançamento de tipo desconhecido fica fora da conta com motivo", async () => {
+    estado.dados.transactions = [{ ...estado.dados.transactions[0] as LinhaTx, type: "desconhecido" }];
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(r.entradas.txs).toEqual([]);
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: ["1 lançamento(s) com tipo, status ou forma de pagamento fora do que o sistema conhece ficaram fora da conta."],
+    });
+  });
+
+  it.each([undefined, null, 1001])("faturas só refletem recebíveis (contagem %s)", async (count) => {
+    estado.contagens.transactions = null;
+    estado.dados.transactions = [{ ...estado.dados.transactions[0] as LinhaTx, type: "desconhecido" }];
+    estado.contagens.receivables = count;
+    const r = await lerFinanceiro({ escopo: ESCOPO_FATURAS });
+    expect(tabelasLidas()).not.toContain("transactions");
+    if (count === undefined) {
+      expect(r.completude).toEqual({ estado: "exato" });
+    } else {
+      expect(r.completude).toEqual({
+        estado: "parcial",
+        motivos: [expect.stringContaining("recebíveis")],
+      });
+    }
+  });
+
+  it.each([
+    [undefined, "completa"],
+    [null, "sem_contagem"],
+    [2, "saturou"],
+  ] as const)("getTransactionsRange distingue a contagem %s mesmo abaixo do teto", async (count, situacao) => {
+    estado.contagens.transactions = count;
+    const r = await getTransactionsRange(JANELA);
+    expect(r).toEqual({ linhas: estado.dados.transactions, situacao });
+  });
+
+  it("atingir os limites com contagens iguais às linhas ainda é exato", async () => {
+    estado.dados.transactions = Array.from({ length: 2000 }, () => estado.dados.transactions[0]);
+    estado.dados.receivables = Array.from({ length: 1000 }, () => estado.dados.receivables[0]);
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(r.entradas.txs).toHaveLength(2000);
+    expect(r.entradas.recs).toHaveLength(1000);
+    expect(r.completude).toEqual({ estado: "exato" });
+  });
+
+  it("getReceivables continua devolvendo array com o mesmo limite e owner", async () => {
+    estado.dados.receivables = Array.from({ length: 1001 }, () => estado.dados.receivables[0]);
+    const r = await getReceivables(DONO);
+    expect(r).toEqual(estado.dados.receivables.slice(0, 1000));
+    expect(estado.leituras).toHaveLength(1);
+    expect(estado.leituras[0].origem).toBe("dono");
+    expect(estado.leituras[0].filtros).toContainEqual(["eq", "user_id", DONO.userId]);
+    expect(estado.clientsDaSessao).toBe(0);
+  });
+
+  it("completudeDe exige motivos para parcial e preserva todos eles", () => {
+    expect(completudeDe([])).toEqual({ estado: "exato" });
+    expect(completudeDe(["Contagem indisponível.", "Leitura incompleta."])).toEqual({
+      estado: "parcial",
+      motivos: ["Contagem indisponível.", "Leitura incompleta."],
+    });
+    // @ts-expect-error — parcial sem motivo não é representável.
+    const semMotivo: CompletudeFinanceira = { estado: "parcial", motivos: [] };
+    expect(semMotivo.estado).toBe("parcial");
+  });
+});
+
+describe("03-B2 A1 — contratos de tipo (conferidos pelo tsc --noEmit)", () => {
+  it("a janela é exigida só quando o escopo lê transações", () => {
+    const naoRoda = () => {
+      // @ts-expect-error — o card lê transações: exige janela.
+      void lerFinanceiro({ escopo: ESCOPO_CARD_FINANCEIRO });
+      // @ts-expect-error — faturas não lê transações: não aceita janela.
+      void lerFinanceiro({ escopo: ESCOPO_FATURAS, janela: JANELA });
+      const daUniao: EscopoFinanceiro = ESCOPO_FATURAS;
+      // O genérico explícito mantém a união apesar do estreitamento da const.
+      // @ts-expect-error — com escopo como união, a janela é exigida (pode ler transações).
+      void lerFinanceiro<EscopoFinanceiro>({ escopo: daUniao });
+      void lerFinanceiro<EscopoFinanceiro>({ escopo: daUniao, janela: JANELA });
+    };
+    expect(naoRoda).toBeTypeOf("function");
+  });
+
+  it("escopo que lê transações sem janela é recusado em runtime, sem tocar o banco", async () => {
+    const daUniao: EscopoFinanceiro = ESCOPO_CARD_FINANCEIRO;
+    // @ts-expect-error — a união exige janela; o throw é a defesa de runtime.
+    await expect(lerFinanceiro<EscopoFinanceiro>({ escopo: daUniao })).rejects.toThrow("A leitura de transações exige uma janela financeira.");
+    expect(estado.leituras).toEqual([]);
+  });
+
+  it("escopo como união só promete os campos comuns", () => {
+    type DaUniao = EntradasDoEscopo<EscopoFinanceiro>;
+    expectTypeOf<keyof DaUniao>().toEqualTypeOf<"recs" | "sts">();
+    // @ts-expect-error — a união não garante leitura de parcelas: inst fica ausente.
+    const inst: DaUniao["inst"] = [];
+    expect(inst).toEqual([]);
   });
 });

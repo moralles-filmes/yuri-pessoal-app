@@ -24,6 +24,7 @@ import "server-only";
  */
 
 import { getFinanceCardData } from "@/lib/dashboard/queries";
+import type { CompletudeFinanceira } from "@/lib/finance/pipeline";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 
 import type { Indicador, PeriodoDoIndicador, SerieTemporal } from "../contracts";
@@ -48,6 +49,17 @@ export type ColetaDoFinanceiro = {
   readonly periodo: PeriodoDoIndicador;
 };
 
+function qualidadeDoCard(
+  completude: CompletudeFinanceira,
+): Pick<Indicador, "qualidade" | "motivo_incompleto"> {
+  return {
+    qualidade: completude.estado,
+    ...(completude.estado === "parcial"
+      ? { motivo_incompleto: completude.motivos.join(" ") }
+      : {}),
+  };
+}
+
 /**
  * Um indicador MEDIDO em reais. `getFinanceCardData` devolve número sempre — não há "não
  * medido" no Financeiro, porque mês sem lançamento é mês de zero movimentado, e isso é fato.
@@ -60,6 +72,7 @@ function emReais(
   rotulo: string,
   valor: number,
   periodo: PeriodoDoIndicador,
+  completude: CompletudeFinanceira,
   rota = ROTA,
 ): Indicador {
   return {
@@ -68,7 +81,7 @@ function emReais(
     rotulo,
     valor,
     unidade: "R$",
-    qualidade: "exato",
+    ...qualidadeDoCard(completude),
     periodo,
     n: 1,
     rota,
@@ -122,7 +135,7 @@ export async function coletarFinanceiro(
     pontos: dados.map((d) => ({
       periodo: d.periodo,
       valor: d.card.saidas,
-      qualidade: "exato" as const,
+      ...qualidadeDoCard(d.card.completude),
     })),
   };
 
@@ -133,13 +146,13 @@ export async function coletarFinanceiro(
     pontos: dados.map((d) => ({
       periodo: d.periodo,
       valor: d.card.meu,
-      qualidade: "exato" as const,
+      ...qualidadeDoCard(d.card.completude),
     })),
   };
 
   const indicadores: Indicador[] = [
-    emReais("financeiro.saidas_mes", "Saídas do mês", atual.card.saidas, atual.periodo),
-    emReais("financeiro.entradas_mes", "Entradas do mês", atual.card.entradas, atual.periodo),
+    emReais("financeiro.saidas_mes", "Saídas do mês", atual.card.saidas, atual.periodo, atual.card.completude),
+    emReais("financeiro.entradas_mes", "Entradas do mês", atual.card.entradas, atual.periodo, atual.card.completude),
     /**
      * ⚠️ `meu` e `terceiros` PARTICIONAM `saidas`, não se somam a ela. Os rótulos dizem isso
      * porque o texto que o modelo escreve é lido sem o contexto do código — a mesma razão
@@ -150,12 +163,14 @@ export async function coletarFinanceiro(
       "Gasto do mês que é seu (parte de terceiros já descontada)",
       atual.card.meu,
       atual.periodo,
+      atual.card.completude,
     ),
     emReais(
       "financeiro.no_cartao_mes",
       "Parte das saídas do mês que caiu no cartão",
       atual.card.cartao,
       atual.periodo,
+      atual.card.completude,
       ROTA_FATURAS,
     ),
     emReais(
@@ -163,14 +178,15 @@ export async function coletarFinanceiro(
       "A receber de terceiros",
       atual.card.aReceber,
       atual.periodo,
+      atual.card.completude,
     ),
   ];
 
   if (paraComparar.length === 2) {
     const [antes, depois] = paraComparar;
     const comparacao = comparar(
-      emReais("financeiro.saidas", "Saídas do mês", depois.card.saidas, depois.periodo),
-      emReais("financeiro.saidas", "Saídas do mês", antes.card.saidas, antes.periodo),
+      emReais("financeiro.saidas", "Saídas do mês", depois.card.saidas, depois.periodo, depois.card.completude),
+      emReais("financeiro.saidas", "Saídas do mês", antes.card.saidas, antes.periodo, antes.card.completude),
     );
     indicadores.push(comparacao.diferenca, comparacao.variacao);
   } else if (anterior === null) {

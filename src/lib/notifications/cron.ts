@@ -13,13 +13,8 @@ import { dateInSaoPaulo } from "@/lib/format";
 import { expandRowsToOccurrences } from "@/lib/calendar/expand";
 import { proximosCompromissos } from "@/lib/calendar/upcoming";
 import { habitOccursOn } from "@/lib/habits/streak";
-import { addMes, mediaDeSaidas, resumoMes } from "@/lib/finance/dashboard";
-import {
-  janelaDoCron,
-  montarEntradas,
-  type LinhaRecebivel,
-  type LinhaTx,
-} from "@/lib/finance/pipeline";
+import { reguaDoGastoAlto } from "@/lib/finance/dashboard";
+import { janelaDoGastoAlto, montarEntradas } from "@/lib/finance/pipeline";
 import type { CalendarEventRow } from "@/types/database";
 import {
   filterByPrefs,
@@ -55,8 +50,9 @@ export async function generateForUser(
   // configurado (a Vercel roda em UTC por padrão).
   const [horaSp, minutoSp] = timeInSaoPaulo(now).split(":").map(Number);
   const minutosAgora = (horaSp || 0) * 60 + (minutoSp || 0);
-  // REDESIGN-03-B — a janela das transações é DECLARADA (e o truncamento em hoje com ela).
-  const janelaTx = janelaDoCron({ mesAtual, ate: todayIso });
+  // REDESIGN-03-B2 (B2, decisão do dono) — a janela das transações é a da régua única do gasto
+  // alto: os 5 meses anteriores e o mês corrente CHEIO. Era "3 meses para trás até hoje".
+  const janelaTx = janelaDoGastoAlto(mesAtual);
 
   // Leituras em paralelo (todas filtradas por user_id).
   const [
@@ -78,12 +74,15 @@ export async function generateForUser(
     service
       .from("card_statements_with_total")
       .select("id, card_id, competencia, data_fechamento, data_vencimento, pago_em, total_atual")
-      .eq("user_id", userId),
+      .eq("user_id", userId)
+      // 03-B2 (B1, decisão do dono): fatura sem item não é fatura real — o sino deixa de
+      // avisar "Fatura atrasada" de R$ 0,00. É o mesmo filtro de `getStatements`.
+      .gt("itens", 0),
     service.from("bills").select("id, name, amount, due_day, is_active").eq("user_id", userId),
     service
       .from("receivables")
       .select(
-        "id, valor, status, installment_id, statement_id, data_prevista, person:people(nome), statement:card_statements(data_vencimento)",
+        "id, valor, status, installment_id, statement_id, data_prevista, person:people(nome), statement:card_statements(data_vencimento, competencia), transaction:transactions!receivables_transaction_id_fkey(purchase_date)",
       )
       .eq("user_id", userId),
     service
@@ -118,10 +117,13 @@ export async function generateForUser(
       .select("course_id, session_date")
       .eq("user_id", userId)
       .gte("session_date", spDateIso(addDays(now, -120))),
+    // A leitura de transações do Cron não tem .limit e continua sem: pôr teto agora
+    // truncaria os dados e mudaria o número. O max_rows do PostgREST (padrão 1000,
+    // configurado fora do alcance do SQL) também vale para o Cron.
     service
       .from("transactions")
       .select(
-        "amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado",
+        "amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado, category_id, category:categories(id,name,color)",
       )
       .eq("user_id", userId)
       .gte("competence_date", janelaTx.from)
@@ -285,35 +287,32 @@ export async function generateForUser(
     lastSessionIso: lastByCourse.get(c.id) ?? null,
   }));
 
-  /* ── Gasto alto (resumo do mês × média dos 3 anteriores) ── */
-  // REDESIGN-03-B — a tradução para o motor é a MESMA das telas (`montarEntradas`). Um cast por
-  // lista, nunca campo a campo: o `select` enxuto não traz `category`/`category_id` nem os
-  // embeds de `ref_month`, e as linhas tolerantes aceitam isso — `category_id` sai do dado
-  // (`null` enquanto o select não pedir a coluna), não de uma constante escrita aqui. O embed
-  // `statement` deste select é `{ data_vencimento }`, sem chave em comum com o que a linha lê
-  // (`competencia`), e por isso o TS pede o cast; o `ref_month` sai `null`, e o Cron não o lê.
+  /* ── Gasto alto (o mês × a média dos anteriores — a régua da tela) ── */
+  // REDESIGN-03-B — a tradução para o motor é a MESMA das telas (`montarEntradas`).
+  // 03-B2 (A2) — e SEM cast de linha: transações e recebíveis entram como o client os inferiu,
+  // e o `select` traz o que as linhas estritas pedem (`category_id`, `category`, `competencia`,
+  // `purchase_date`). Duas coisas declaradas:
+  //  • lançamento com tipo, status ou forma de pagamento fora do domínio conhecido fica FORA da
+  //    soma (`montarEntradas` estreita pelos arrays de `finance/constants.ts`, que batem com os
+  //    CHECKs). As telas e a IA dizem "parcial" quando isso acontece; o sino não tem onde dizer.
+  //  • as FATURAS continuam passando por `statements`, com o cast local lá de cima: a view
+  //    `card_statements_with_total` tem TODA coluna anulável no tipo gerado, e decidir o que é
+  //    uma fatura sem `id` está fora da 03-B2 (é o mesmo estreitamento de `getStatements`).
   const { txs, sts, recs } = montarEntradas({
-    transacoes: (txRes.data ?? []) as LinhaTx[],
+    transacoes: txRes.data ?? [],
     faturas: statements,
-    recebiveis: receivables as LinhaRecebivel[],
+    recebiveis: receivablesRes.data ?? [],
   });
-  const resumoAtual = resumoMes({
+  // 03-B2 (B2, decisão do dono) — o sino ADOTOU a régua da tela: a MESMA função que a página do
+  // dashboard financeiro chama. Até 5 meses anteriores, mês sem saída ignorado, e o mês corrente
+  // cheio (pendente incluído). Antes: 3 meses exatos, mês zerado dividindo, e o mês corrente
+  // cortado em hoje — o alerta de gasto alto pode disparar em outro dia do que disparava.
+  const regua = reguaDoGastoAlto({
     mes: mesAtual,
     transactions: txs,
     statements: sts,
     receivables: recs,
   });
-  // ⚠️ A régua do sino NÃO é a da tela, e continua não sendo (ver `mediaDeSaidas`): mês sem
-  // saída conta e divide, são exatamente 3 meses, e a base de cada um é a janela truncada em
-  // hoje. Unificar muda o alerta de gasto alto — decisão do dono, fora da 03-B.
-  const tresMesesAnteriores = [1, 2, 3].map((k) => {
-    const mes = addMes(mesAtual, -k);
-    return {
-      mes,
-      saidas: resumoMes({ mes, transactions: txs, statements: sts, receivables: recs }).saidas,
-    };
-  });
-  const mediaSaidas = mediaDeSaidas(tresMesesAnteriores, { ignorarMesesSemSaida: false });
 
   /* ── TO-DO (Fase 15) ── */
   const genTodoTasks = ((todoTasksRes.data ?? []) as Array<{
@@ -364,7 +363,7 @@ export async function generateForUser(
     events: genEvents,
     habits: genHabits,
     courses: genCourses,
-    spending: { mes: mesAtual, saidas: resumoAtual.saidas, mediaSaidas },
+    spending: { mes: mesAtual, saidas: regua.saidas, mediaSaidas: regua.mediaSaidas },
     todoTasks: genTodoTasks,
     todoReminders: genTodoReminders,
     // Fase 16-F — Dieta. Isolada num try: uma falha de leitura do módulo não pode impedir

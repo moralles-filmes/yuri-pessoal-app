@@ -29,9 +29,14 @@ import {
   type DashStatement,
   type DashTx,
 } from "@/lib/finance/dashboard";
+import {
+  PAYMENT_METHODS,
+  TRANSACTION_STATUSES,
+  TRANSACTION_TYPES,
+} from "@/lib/finance/constants";
 import { toDateInputValue } from "@/lib/format";
 
-/* ───────────────────────────── Tipos de linha (tolerantes) ───────────────────────────── */
+/* ───────────────────────────── Tipos de linha (estritos) ───────────────────────────── */
 
 /**
  * Dinheiro vem do banco como `numeric`. O client tipado entrega `number`; um `select` cru
@@ -43,22 +48,33 @@ type Dinheiro = number | string;
 type CategoriaEmbutida = { id: string; name: string; color: string | null };
 
 /**
- * Linha de lançamento. TOLERANTE, não frouxa: o que um chamador não traz é opcional (o
- * `select` do Cron não tem `category`, `category_id` nem embeds), mas os quatro campos sem os
- * quais `resumoMes` não tem o que somar continuam obrigatórios.
+ * Relação embutida pelo PostgREST. O client tipado pode entregá-la como objeto OU como lista
+ * (o `one()` do Cron existia por isso), e a linha não mente sobre a forma: `primeiro()`
+ * normaliza, num lugar só.
+ */
+export type Embutido<T> = T | readonly T[] | null;
+
+/**
+ * Linha de lançamento. ESTRITA (03-B2, A2): nenhuma chave é opcional — campo que um chamador
+ * não tem é `null` escrito, e chave ausente é erro de compilação, não `null` silencioso (o R4 da
+ * 03-B). Os quatro campos de `resumoMes` seguem obrigatórios e não anuláveis.
+ *
+ * ⚠️ `type`, `status` e `payment_method` são `string`: é o que o client gerado entrega para
+ * colunas `text` com CHECK. `montarEntradas` ESTREITA pelos arrays de `finance/constants.ts`, que
+ * batem com os CHECKs vigentes — ver `dominioDoLancamento`.
  */
 export type LinhaTx = {
   amount: Dinheiro;
-  type: DashTx["type"];
-  status: DashTx["status"];
+  type: string;
+  status: string;
   competence_date: string;
-  valor_pessoal?: Dinheiro | null;
-  payment_method?: DashTx["payment_method"];
-  card_id?: string | null;
-  statement_id?: string | null;
-  parcelado?: boolean | null;
-  category_id?: string | null;
-  category?: CategoriaEmbutida | null;
+  valor_pessoal: Dinheiro | null;
+  payment_method: string | null;
+  card_id: string | null;
+  statement_id: string | null;
+  parcelado: boolean | null;
+  category_id: string | null;
+  category: Embutido<CategoriaEmbutida>;
 };
 
 export type LinhaFatura = {
@@ -72,16 +88,16 @@ export type LinhaFatura = {
 };
 
 /**
- * Recebível. Os embeds `statement`/`transaction` só existem na leitura completa
- * (`getReceivables`); é deles que sai `ref_month`.
+ * Recebível. `ref_month` sai dos embeds `statement`/`transaction` — a leitura das telas
+ * (`getReceivables`) e, desde a 03-B2, também a do Cron os trazem.
  */
 export type LinhaRecebivel = {
   statement_id: string | null;
   installment_id: string | null;
   valor: Dinheiro;
   status: string;
-  statement?: { competencia?: string | null } | null;
-  transaction?: { purchase_date?: string | null } | null;
+  statement: Embutido<{ competencia: string | null }>;
+  transaction: Embutido<{ purchase_date: string | null }>;
 };
 
 export type LinhaParcela = {
@@ -89,7 +105,7 @@ export type LinhaParcela = {
   statement_id: string | null;
   valor: Dinheiro;
   status: string;
-  parent?: { category?: CategoriaEmbutida | null } | null;
+  parent: Embutido<{ category: Embutido<CategoriaEmbutida> }>;
 };
 
 export type LinhaCartao = {
@@ -129,24 +145,62 @@ export type LinhasFinanceiras = {
   contasFixas?: readonly LinhaContaFixa[];
 };
 
+export type CompletudeFinanceira =
+  | { readonly estado: "exato" }
+  | { readonly estado: "parcial"; readonly motivos: readonly [string, ...string[]] };
+
+/** Uma leitura parcial sempre declara ao menos um motivo. */
+export function completudeDe(motivos: readonly string[]): CompletudeFinanceira {
+  const [primeiro, ...restantes] = motivos;
+  return primeiro === undefined
+    ? { estado: "exato" }
+    : { estado: "parcial", motivos: [primeiro, ...restantes] };
+}
+
 export type EntradasDoMotor = {
   txs: DashTx[];
   sts: DashStatement[];
   recs: DashReceivable[];
   /**
-   * ⚠️ RISCO R1 DO DESENHO — `[]` QUANDO O ESCOPO NÃO LÊ PARCELAS.
-   *
-   * Parcela lançada não está em `transactions`: quem ocupa a fatura de cada mês é
-   * `transaction_installments`. `gastosPorCategoria`/`gastosPorForma` chamados com `inst` vazio
-   * perdem TODO gasto de parcelamento, em silêncio — comportamento que a 03-A congelou. Só
-   * `ESCOPO_RELATORIO` lê parcelas; a trava de verdade (recusar `inst` ausente havendo parcela
-   * no mês) muda comportamento e fica para a REDESIGN-05.
+   * ⚠️ R1 DA 03-B, FECHADO NA 03-B2 (A1). Parcela lançada não está em `transactions`: quem ocupa
+   * a fatura de cada mês é `transaction_installments`, e `gastosPorCategoria`/`gastosPorForma`
+   * com `inst` vazio perdem TODO gasto de parcelamento, em silêncio. Por isso quem não leu
+   * parcelas não recebe `inst` NENHUM — nem no tipo (`EntradasDasLinhas`/`EntradasDoEscopo`),
+   * nem no objeto. A trava de runtime que a 03-B empurrava para a REDESIGN-05 deixou de ser
+   * necessária: `inst` ausente é erro de compilação, e `inst` vazio só existe escrito à mão.
    */
   inst: DashInstallmentItem[];
   cards: DashCard[];
   recorrencias: DashRecurrence[];
   bills: DashBill[];
 };
+
+/** Qual campo do motor cada lista lida produz. */
+type SaidaDaLeitura = {
+  transacoes: "txs";
+  faturas: "sts";
+  recebiveis: "recs";
+  parcelas: "inst";
+  cartoes: "cards";
+  recorrencias: "recorrencias";
+  contasFixas: "bills";
+};
+
+/** Chave opcional ou que aceite undefined não garante uma leitura. */
+type ChavesInformadas<L> = {
+  [K in keyof L]-?: undefined extends L[K] ? never : K;
+}[keyof L];
+
+export type EntradasDasLinhas<L extends LinhasFinanceiras> = Pick<
+  EntradasDoMotor,
+  SaidaDaLeitura[ChavesInformadas<L> & keyof SaidaDaLeitura]
+>;
+
+/** Na união de escopos, promete apenas as leituras presentes em TODOS eles. */
+export type EntradasDoEscopo<E extends EscopoFinanceiro> = Pick<
+  EntradasDoMotor,
+  { [K in keyof SaidaDaLeitura]: E[K] extends true ? SaidaDaLeitura[K] : never }[keyof SaidaDaLeitura]
+>;
 
 /* ───────────────────────────── Normalização ───────────────────────────── */
 
@@ -163,114 +217,177 @@ function numOuNulo(v: Dinheiro | null | undefined): number | null {
   return v == null ? null : num(v);
 }
 
+function ehLista<T>(v: T | readonly T[]): v is readonly T[] {
+  return Array.isArray(v);
+}
+
+/** Embed → o objeto, ou `null`. Lista vazia é ausência, não objeto vazio. */
+function primeiro<T>(v: Embutido<T>): T | null {
+  if (v == null) return null;
+  return ehLista(v) ? (v[0] ?? null) : v;
+}
+
+function doConjunto<T extends string>(conjunto: readonly T[], v: string): v is T {
+  return (conjunto as readonly string[]).includes(v);
+}
+
+/**
+ * O ÚNICO predicado de domínio do lançamento — `montarEntradas` e `lancamentosForaDoDominio`
+ * usam este, e nenhum outro.
+ *
+ * ⚠️ DECISÃO DO DONO (03-B2, A2): ESTREITAR E DECLARAR. Lançamento com tipo, status ou forma de
+ * pagamento fora do que o sistema conhece NÃO entra na soma — e é contado, para que quem lê
+ * possa dizer "parcial" com o motivo. Nunca lança: um lançamento estranho não pode calar o sino
+ * inteiro de um usuário (o `catch` do Cron é por usuário, e levaria a fatura atrasada junto).
+ * Para dado real o número é idêntico: os arrays batem com os CHECKs de `transactions`.
+ */
+function dominioDoLancamento(
+  t: LinhaTx,
+): Pick<DashTx, "type" | "status" | "payment_method"> | null {
+  const { type, status, payment_method } = t;
+  if (!doConjunto(TRANSACTION_TYPES, type)) return null;
+  if (!doConjunto(TRANSACTION_STATUSES, status)) return null;
+  if (payment_method !== null && !doConjunto(PAYMENT_METHODS, payment_method)) return null;
+  return { type, status, payment_method };
+}
+
+/** Quantos lançamentos `montarEntradas` deixou fora da soma por estarem fora do domínio. */
+export function lancamentosForaDoDominio(transacoes: readonly LinhaTx[]): number {
+  return transacoes.filter((t) => dominioDoLancamento(t) === null).length;
+}
+
 /* ───────────────────────────── A montagem ───────────────────────────── */
 
 /**
- * Linha do banco → entrada do motor. Lista não informada volta `[]`.
+ * Linha do banco → entrada do motor. Lista não informada deixa a chave ausente.
  *
- * As cinco regras de forma (desenho, §4.1), cada uma existindo por um dos chamadores:
- *  1. linhas tolerantes, com os quatro campos de `resumoMes` obrigatórios;
+ * As cinco regras de forma (desenho da 03-B, §4.1), cada uma existindo por um dos chamadores:
+ *  1. linhas ESTRITAS desde a 03-B2 (toda chave presente; lançamento fora do domínio sai da
+ *     soma e é contado por `lancamentosForaDoDominio`);
  *  2. dinheiro aceita `number | string` e é normalizado aqui;
- *  3. `category_id` sai do DADO (`?? null`) — antes o Cron o escrevia como constante `null`,
- *     e um `gastosPorCategoria` chamado ali jogaria todo gasto em "sem categoria";
+ *  3. `category_id` sai do DADO (campo obrigatório da linha estrita, copiado como veio) —
+ *     antes o Cron o escrevia como constante `null`, e um `gastosPorCategoria` chamado ali
+ *     jogaria todo gasto em "sem categoria";
  *  4. `ref_month` é SEMPRE derivado dos embeds — sem eles, `null` (o card de faturas não o
  *     derivava, e `totalAReceber(recs, mes)` ali daria zero);
  *  5. `parent` da parcela é `{ category: null }`, nunca `null`.
  */
-export function montarEntradas(linhas: LinhasFinanceiras): EntradasDoMotor {
-  const txs: DashTx[] = (linhas.transacoes ?? []).map((t) => ({
-    amount: num(t.amount),
-    valor_pessoal: numOuNulo(t.valor_pessoal),
-    type: t.type,
-    payment_method: t.payment_method ?? null,
-    status: t.status,
-    competence_date: t.competence_date,
-    card_id: t.card_id ?? null,
-    statement_id: t.statement_id ?? null,
-    parcelado: Boolean(t.parcelado),
-    category_id: t.category_id ?? null,
-    category: t.category
-      ? { id: t.category.id, name: t.category.name, color: t.category.color }
-      : null,
-  }));
+export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): EntradasDasLinhas<L> {
+  const entradas: Partial<EntradasDoMotor> = {};
 
-  const sts: DashStatement[] = (linhas.faturas ?? []).map((s) => ({
-    id: s.id,
-    card_id: s.card_id,
-    competencia: s.competencia,
-    data_fechamento: s.data_fechamento,
-    data_vencimento: s.data_vencimento,
-    pago_em: s.pago_em,
-    total_atual: numOuNulo(s.total_atual),
-  }));
+  if (linhas.transacoes !== undefined) {
+    const txs: DashTx[] = linhas.transacoes.flatMap((t) => {
+      const dominio = dominioDoLancamento(t);
+      if (dominio === null) return [];
+      const categoria = primeiro(t.category);
+      return [
+        {
+          amount: num(t.amount),
+          valor_pessoal: numOuNulo(t.valor_pessoal),
+          type: dominio.type,
+          payment_method: dominio.payment_method,
+          status: dominio.status,
+          competence_date: t.competence_date,
+          card_id: t.card_id,
+          statement_id: t.statement_id,
+          parcelado: Boolean(t.parcelado),
+          category_id: t.category_id,
+          category: categoria
+            ? { id: categoria.id, name: categoria.name, color: categoria.color }
+            : null,
+        },
+      ];
+    });
+    entradas.txs = txs;
+  }
 
-  const recs: DashReceivable[] = (linhas.recebiveis ?? []).map((r) => ({
-    statement_id: r.statement_id,
-    installment_id: r.installment_id,
-    valor: num(r.valor),
-    status: r.status,
-    // `competencia` e `purchase_date` são DATAS PURAS (`date`): o `.slice(0, 7)` é correto aqui.
-    // A proibição do projeto é sobre `timestamptz`.
-    ref_month:
-      r.statement?.competencia?.slice(0, 7) ??
-      r.transaction?.purchase_date?.slice(0, 7) ??
-      null,
-  }));
+  if (linhas.faturas !== undefined) {
+    const sts: DashStatement[] = linhas.faturas.map((s) => ({
+      id: s.id,
+      card_id: s.card_id,
+      competencia: s.competencia,
+      data_fechamento: s.data_fechamento,
+      data_vencimento: s.data_vencimento,
+      pago_em: s.pago_em,
+      total_atual: numOuNulo(s.total_atual),
+    }));
+    entradas.sts = sts;
+  }
 
-  const inst: DashInstallmentItem[] = (linhas.parcelas ?? []).map((it) => ({
-    id: it.id,
-    statement_id: it.statement_id,
-    valor: num(it.valor),
-    status: it.status,
-    parent: it.parent?.category
-      ? {
-          category: {
-            id: it.parent.category.id,
-            name: it.parent.category.name,
-            color: it.parent.category.color,
-          },
-        }
-      : { category: null },
-  }));
+  if (linhas.recebiveis !== undefined) {
+    const recs: DashReceivable[] = linhas.recebiveis.map((r) => ({
+      statement_id: r.statement_id,
+      installment_id: r.installment_id,
+      valor: num(r.valor),
+      status: r.status,
+      // `competencia` e `purchase_date` são DATAS PURAS (`date`): o `.slice(0, 7)` é correto aqui.
+      // A proibição do projeto é sobre `timestamptz`.
+      ref_month:
+        primeiro(r.statement)?.competencia?.slice(0, 7) ??
+        primeiro(r.transaction)?.purchase_date?.slice(0, 7) ??
+        null,
+    }));
+    entradas.recs = recs;
+  }
 
-  const cards: DashCard[] = (linhas.cartoes ?? []).map((c) => ({
-    id: c.id,
-    nome: c.nome,
-    cor: c.cor,
-    limite_total: num(c.limite_total),
-    dia_fechamento: c.dia_fechamento,
-    dia_vencimento: c.dia_vencimento,
-  }));
+  if (linhas.parcelas !== undefined) {
+    const inst: DashInstallmentItem[] = linhas.parcelas.map((it) => {
+      const categoria = primeiro(primeiro(it.parent)?.category ?? null);
+      return {
+        id: it.id,
+        statement_id: it.statement_id,
+        valor: num(it.valor),
+        status: it.status,
+        parent: categoria
+          ? { category: { id: categoria.id, name: categoria.name, color: categoria.color } }
+          : { category: null },
+      };
+    });
+    entradas.inst = inst;
+  }
 
-  const recorrencias: DashRecurrence[] = (linhas.recorrencias ?? []).map((r) => ({
-    amount: num(r.amount),
-    type: r.type,
-    frequency: r.frequency,
-    interval_count: r.interval_count,
-    anchor_date: r.anchor_date,
-    next_due_date: r.next_due_date,
-    end_date: r.end_date,
-    is_active: r.is_active,
-  }));
+  if (linhas.cartoes !== undefined) {
+    const cards: DashCard[] = linhas.cartoes.map((c) => ({
+      id: c.id,
+      nome: c.nome,
+      cor: c.cor,
+      limite_total: num(c.limite_total),
+      dia_fechamento: c.dia_fechamento,
+      dia_vencimento: c.dia_vencimento,
+    }));
+    entradas.cards = cards;
+  }
 
-  const bills: DashBill[] = (linhas.contasFixas ?? []).map((b) => ({
-    name: b.name,
-    amount: num(b.amount),
-    due_day: b.due_day,
-    is_active: b.is_active,
-  }));
+  if (linhas.recorrencias !== undefined) {
+    const recorrencias: DashRecurrence[] = linhas.recorrencias.map((r) => ({
+      amount: num(r.amount),
+      type: r.type,
+      frequency: r.frequency,
+      interval_count: r.interval_count,
+      anchor_date: r.anchor_date,
+      next_due_date: r.next_due_date,
+      end_date: r.end_date,
+      is_active: r.is_active,
+    }));
+    entradas.recorrencias = recorrencias;
+  }
 
-  return { txs, sts, recs, inst, cards, recorrencias, bills };
+  if (linhas.contasFixas !== undefined) {
+    const bills: DashBill[] = linhas.contasFixas.map((b) => ({
+      name: b.name,
+      amount: num(b.amount),
+      due_day: b.due_day,
+      is_active: b.is_active,
+    }));
+    entradas.bills = bills;
+  }
+
+  // O TS não relaciona as atribuições condicionais às chaves obrigatórias de L.
+  // Cada chave só é escrita com lista !== undefined; pipeline.test.ts confere as chaves.
+  return entradas as EntradasDasLinhas<L>;
 }
 
-/**
- * Saldo somado das contas — a conta que o card do dashboard, o relatório e a página faziam cada
- * um com o seu `reduce`. Recebe as contas CRUAS: devolver `saldo: number` de `lerFinanceiro`
- * obrigaria a inventar `0` para "não pedi contas".
- */
-export function saldoDasContas(contas: readonly { current_balance: number | null }[]): number {
-  return contas.reduce((s, a) => s + (a.current_balance ?? 0), 0);
-}
+export { saldoDasContas } from "@/lib/finance/saldo-das-contas";
 
 /* ───────────────────────────── Janelas declaradas ───────────────────────────── */
 
@@ -313,15 +430,15 @@ export function janelaDoRelatorio(params: {
 }
 
 /**
- * A janela de transações do Cron: 3 meses para trás até `ate`.
+ * A janela da régua do gasto alto (`reguaDoGastoAlto`): os 5 meses anteriores e o mês `mes`
+ * CHEIO — o que a régua lê, nada a mais. É a janela de transações do Cron.
  *
- * ⚠️ O TRUNCAMENTO EM `ate` É DECLARADO, NÃO CONSERTADO. O Cron lê transações só até hoje, mas
- * lê TODAS as faturas — então a "saída do mês" do sino é, dentro do mês corrente,
- * estruturalmente MENOR que a da tela: o à vista conta até hoje, o cartão conta a fatura
- * inteira. Consertar muda número (e o alerta de gasto alto); é decisão do dono, fora da 03-B.
+ * 03-B2 (B2, decisão do dono): substitui a `janelaDoCron` da 03-B ("3 meses para trás até hoje"),
+ * cujo truncamento em hoje fazia a saída do mês do sino ser, dentro do mês corrente,
+ * estruturalmente MENOR que a da tela. A tela lê `janelaDoRelatorio`, que contém esta.
  */
-export function janelaDoCron(params: { mesAtual: string; ate: string }): JanelaFinanceira {
-  return { from: `${addMes(params.mesAtual, -3)}-01`, to: params.ate };
+export function janelaDoGastoAlto(mes: string): JanelaFinanceira {
+  return { from: `${addMes(mes, -5)}-01`, to: ultimoDiaDoMes(mes) };
 }
 
 /* ───────────────────────────── Escopos nomeados ───────────────────────────── */
@@ -329,7 +446,7 @@ export function janelaDoCron(params: { mesAtual: string; ate: string }): JanelaF
 /**
  * Card do dashboard: contas, faturas, recebíveis, contas fixas e transações do mês.
  *
- * ⚠️ NÃO LÊ PARCELAS: `entradas.inst` volta `[]` (risco R1 — ver `EntradasDoMotor.inst`).
+ * NÃO LÊ PARCELAS: `entradas.inst` fica ausente do tipo e do objeto (R1).
  * Serve para `resumoMes`/`totalAReceber`/`proximasContasPagar`; NÃO serve para
  * `gastosPorCategoria` nem `gastosPorForma`.
  */
@@ -345,7 +462,7 @@ export const ESCOPO_CARD_FINANCEIRO = {
   parcelas: false,
 } as const;
 
-/** Card de faturas: cartões, faturas e recebíveis. Não lê transações — a janela é ignorada. */
+/** Card de faturas: cartões, faturas e recebíveis. Não lê transações nem recebe janela. */
 export const ESCOPO_FATURAS = {
   nome: "faturas",
   contas: false,

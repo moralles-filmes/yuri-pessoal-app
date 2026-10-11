@@ -23,6 +23,7 @@
  */
 import { addMonths, format, getDaysInMonth, parseISO } from "date-fns";
 import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
+import { LIMIARES_DE_ALERTA } from "@/lib/finance/limiares-de-alerta";
 import { occurrenceOn } from "@/lib/finance/recurrence";
 import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
 import {
@@ -680,29 +681,49 @@ export function proximasContasPagar(params: {
 /* ───────────────────────────── Alertas ───────────────────────────── */
 
 /**
- * REDESIGN-03-B — Média de saídas dos meses de referência, a régua do alerta de gasto alto.
+ * Média de saídas dos meses de referência — a conta de dentro da régua do alerta de gasto alto.
  *
- * ⚠️ A TELA E O SINO USAM RÉGUAS DIFERENTES, E CONTINUAM USANDO. Até a 03-B eram duas contas
- * escritas à mão (a página do dashboard financeiro e o Cron) que discordavam em três eixos:
- *  1. mês sem saída — a tela IGNORA, o sino conta como 0 e DIVIDE;
- *  2. quantos meses — a tela usa até 5 (a janela da evolução), o sino exatamente 3;
- *  3. a base de cada mês — a tela lê a janela inteira, o sino a janela truncada em hoje.
- * O eixo 1 passou a ter nome (`ignorarMesesSemSaida`); os eixos 2 e 3 ficam visíveis nos pontos
- * que cada chamador monta. Unificá-los muda número — é decisão do dono, não desta função.
+ * ⚠️ UMA RÉGUA SÓ desde a 03-B2 (B2, decisão do dono em 2026-09-27). Até a 03-B a tela e o sino
+ * discordavam em três eixos (mês sem saída, quantos meses, base do mês corrente); a 03-B os
+ * pôs num parâmetro, e a 03-B2 os UNIFICOU na régua da tela — ver `reguaDoGastoAlto`, que é o
+ * que a página e o Cron chamam. Mês sem saída é IGNORADO.
  *
- * O filtro é `> 0`, não `!== 0`: saída NEGATIVA (estorno maior que o gasto) também é descartada
- * pela tela. Lista vazia devolve 0, nunca `NaN` — e `gerarAlertas` não alerta com média 0.
+ * O filtro é `> 0`, não `!== 0`: saída NEGATIVA (estorno maior que o gasto) também é descartada.
+ * Lista vazia devolve 0, nunca `NaN` — e `gerarAlertas` não alerta com média 0.
+ *
+ * A regra "até a mesma altura do mês anterior" (§13.6 das métricas) NÃO está aqui: é da 03-E,
+ * que passa a refinar esta régua — uma, não duas.
  */
-export function mediaDeSaidas(
-  pontos: readonly { mes: string; saidas: number }[],
-  opcoes: { ignorarMesesSemSaida: boolean },
-): number {
-  const considerados = opcoes.ignorarMesesSemSaida
-    ? pontos.filter((p) => p.saidas > 0)
-    : pontos;
+export function mediaDeSaidas(pontos: readonly { mes: string; saidas: number }[]): number {
+  const considerados = pontos.filter((p) => p.saidas > 0);
   return considerados.length > 0
     ? considerados.reduce((s, p) => s + p.saidas, 0) / considerados.length
     : 0;
+}
+
+/**
+ * REDESIGN-03-B2 (B2) — A régua do alerta de gasto alto, a MESMA para a tela e para o sino.
+ *
+ * `saidas` é o mês `mes` INTEIRO (base competência, pendente incluído — §13.3); `mediaSaidas` é a
+ * média dos até 5 meses ANTERIORES a `mes` que tiveram saída (`ultimosMeses(mes, 6)` sem o
+ * último). É a conta que a página do dashboard financeiro sempre fez — e o Cron passou a fazer.
+ *
+ * Quem chama lê pelo menos `janelaDoGastoAlto(mes)` (pipeline.ts): meses fora dela entram como
+ * sem saída, e seriam ignorados em silêncio.
+ */
+export function reguaDoGastoAlto(params: {
+  mes: string;
+  transactions: DashTx[];
+  statements: DashStatement[];
+  receivables: DashReceivable[];
+}): { saidas: number; mediaSaidas: number } {
+  const { mes, transactions, statements, receivables } = params;
+  const saidasDe = (m: string) => resumoMes({ mes: m, transactions, statements, receivables }).saidas;
+  const anteriores = ultimosMeses(mes, 6).slice(0, -1);
+  return {
+    saidas: saidasDe(mes),
+    mediaSaidas: mediaDeSaidas(anteriores.map((m) => ({ mes: m, saidas: saidasDe(m) }))),
+  };
 }
 
 export type Alerta = {
@@ -730,9 +751,9 @@ export function gerarAlertas(params: {
     mediaSaidas,
     cards,
     statements,
-    diasVencimentoAviso = 5,
-    limiarGastoAltoPct = 1.2,
-    limiarLimitePct = 0.8,
+    diasVencimentoAviso = LIMIARES_DE_ALERTA.diasDeAvisoDeVencimento,
+    limiarGastoAltoPct = LIMIARES_DE_ALERTA.gastoAlto,
+    limiarLimitePct = LIMIARES_DE_ALERTA.usoDoLimite,
   } = params;
 
   const alertas: Alerta[] = [];
@@ -752,6 +773,8 @@ export function gerarAlertas(params: {
 
   // Limite do cartão: soma das faturas não pagas vs limite total.
   const cardById = new Map(cards.map((c) => [c.id, c]));
+  // Registrado, não corrigido: usadoPorCartao soma em centavos aqui e em float no sino
+  // (notifications/generate.ts); isso pode mover o percentual na borda do limiar.
   const usadoPorCartao = new Map<string, number>();
   for (const s of statements) {
     if (!s.card_id) continue;

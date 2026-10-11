@@ -24,6 +24,17 @@ import { ROTULO_DA_FERRAMENTA, rotuloDaFerramenta } from "@/lib/ai/constants";
 import { EVENT_TYPES } from "@/lib/calendar/constants";
 import { MODULOS_DE_MEMORIA } from "@/lib/ai/memory/contracts";
 
+describe("03-B2 (B3) — a descrição de finance.get_balances acompanha o que ela devolve", () => {
+  it("inclui todas as contas e identifica as inativas", () => {
+    const ferramenta = AI_TOOL_REGISTRY.find((t) => t.name === "finance.get_balances");
+    expect(ferramenta).toBeDefined();
+    const description = ferramenta!.description.toLowerCase();
+    expect(description).not.toMatch(/conta ativa|contas ativas/);
+    expect(description).toContain("todas as contas");
+    expect(description).toContain("inativa");
+  });
+});
+
 describe("integridade do registry (18-B)", () => {
   /**
    * ⚠️ ESTE TESTE MUDOU DE AFIRMAÇÃO NO BLOCO 4, E A MUDANÇA É O REGISTRO DE UMA DECISÃO.
