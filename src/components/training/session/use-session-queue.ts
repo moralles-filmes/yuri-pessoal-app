@@ -24,6 +24,7 @@
  */
 import * as React from "react";
 import type { ActionResult } from "@/types/finance";
+import { drainQueue } from "./session-queue-drain";
 
 export type SyncState =
   | "salvo"
@@ -52,7 +53,7 @@ type Sender = (mutation: QueuedMutation) => Promise<ActionResult<unknown>>;
 
 const storageKey = (sessionId: string) => `treino:fila:${sessionId}`;
 
-function readQueue(sessionId: string): QueuedMutation[] {
+export function readQueue(sessionId: string): QueuedMutation[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(storageKey(sessionId));
@@ -65,7 +66,7 @@ function readQueue(sessionId: string): QueuedMutation[] {
   }
 }
 
-function writeQueue(sessionId: string, queue: QueuedMutation[]) {
+export function writeQueue(sessionId: string, queue: QueuedMutation[]) {
   if (typeof window === "undefined") return;
   try {
     if (queue.length === 0) window.localStorage.removeItem(storageKey(sessionId));
@@ -131,59 +132,20 @@ export function useSessionQueue(
     [sessionId],
   );
 
-  const drain = React.useCallback(async () => {
-    if (runningRef.current) return;
-    if (queueRef.current.length === 0) {
-      setState("salvo");
-      return;
-    }
-
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      setState("aguardando_conexao");
-      return;
-    }
-
-    runningRef.current = true;
-    setState("salvando");
-
-    try {
-      // Uma por vez, em ordem: fora de ordem, uma correção poderia ser sobrescrita pelo
-      // registro original que ficou preso na fila.
-      while (queueRef.current.length > 0) {
-        const [next, ...rest] = queueRef.current;
-
-        let result: ActionResult<unknown>;
-        try {
-          result = await sendRef.current(next);
-        } catch {
-          // Falha de rede: a mutação FICA na fila e tentamos de novo quando voltar.
-          setState(
-            typeof navigator !== "undefined" && navigator.onLine === false
-              ? "aguardando_conexao"
-              : "salvo_no_dispositivo",
-          );
-          return;
-        }
-
-        if (!result.ok) {
-          // Recusa do servidor (regra de negócio) não é problema de rede: insistir só
-          // repetiria o erro. A mutação sai da fila e o motivo aparece na tela.
-          persist(rest);
-          setLastError(result.error);
-          setState("erro");
-          return;
-        }
-
-        persist(rest);
-        setLastError(null);
-      }
-
-      setState("salvo");
-      settledRef.current?.();
-    } finally {
-      runningRef.current = false;
-    }
-  }, [persist]);
+  // O laço mora em `session-queue-drain.ts` (puro, testado em node); aqui só se ligam os refs.
+  const drain = React.useCallback(
+    () =>
+      drainQueue({
+        running: runningRef,
+        queue: () => queueRef.current,
+        persist,
+        send: (mutation) => sendRef.current(mutation),
+        setState,
+        setLastError,
+        onSettled: () => settledRef.current?.(),
+      }),
+    [persist],
+  );
 
   const enqueue = React.useCallback(
     (kind: string, payload: Record<string, unknown>, id?: string) => {
