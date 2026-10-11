@@ -9,6 +9,15 @@
  * • **Descartar apaga a sessão inteira** e exige confirmação reforçada: digitar a palavra.
  * • Abandonar preserva tudo o que foi registrado — é a saída para "não terminei, mas foi isso".
  *
+ * ═══════════ A FILA DO APARELHO CHEGA ANTES (REDESIGN-07-C, D1) ═══════════
+ *
+ * Até a 07-C esta tela só LIMPAVA a fila do aparelho depois de finalizar — e uma série que
+ * ainda não tinha chegado ao servidor sumia ali, em silêncio (o servidor recusaria o envio
+ * tardio: "Este treino já foi encerrado."). Agora, num treino não encerrado, a revisão
+ * ASSUME a fila (vira a dona dela, ver `session-queue-drain.ts`), envia na mesma ordem e só
+ * finaliza ou encerra com ela vazia (`podeEncerrar`). Descartar continua possível, dizendo
+ * que os registros do aparelho somem junto.
+ *
  * ═══════════ O QUE ESTA TELA NÃO FAZ ═══════════
  *
  * Não avalia, não elogia, não cobra e não sugere carga para a próxima vez. Ela mostra o que
@@ -55,7 +64,10 @@ import {
   finishSession,
   reopenSession,
 } from "@/lib/actions/training-sessions";
-import { clearSessionQueue } from "./use-session-queue";
+import { sendSessionMutation } from "./session-mutations";
+import { podeEncerrar } from "./session-queue-view";
+import { SyncStatus } from "./sync-status";
+import { clearSessionQueue, useSessionQueue, type QueuedMutation } from "./use-session-queue";
 import { useNow } from "./use-now";
 
 type SessionEventItem = {
@@ -85,6 +97,15 @@ export function SessionReviewClient({
   const [confirmActive, setConfirmActive] = React.useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = React.useState(false);
   const [discardWord, setDiscardWord] = React.useState("");
+
+  const send = React.useCallback(
+    (mutation: QueuedMutation) => sendSessionMutation(session.id, mutation),
+    [session.id],
+  );
+  // O que chegar da fila muda o resumo (séries, descansos): buscamos de novo no servidor.
+  const handleSettled = React.useCallback(() => router.refresh(), [router]);
+  const queue = useSessionQueue(session.id, send, handleSettled, { assumir: !isClosed });
+  const encerramento = podeEncerrar({ pending: queue.pending });
 
   const flow = session.exercises.map((exercise) => ({
     id: exercise.id,
@@ -153,6 +174,12 @@ export function SessionReviewClient({
   /* ───────────── Ações ───────────── */
 
   const handleFinish = async (confirmActiveSets = false) => {
+    const pode = podeEncerrar({ pending: queue.pending });
+    if (!pode.ok) {
+      toast.error(pode.motivo);
+      queue.flush();
+      return;
+    }
     setBusy(true);
     const result = await finishSession({
       id: session.id,
@@ -180,6 +207,12 @@ export function SessionReviewClient({
   };
 
   const handleAbandon = async () => {
+    const pode = podeEncerrar({ pending: queue.pending });
+    if (!pode.ok) {
+      toast.error(pode.motivo);
+      queue.flush();
+      return;
+    }
     setBusy(true);
     const result = await abandonSession({
       id: session.id,
@@ -474,6 +507,24 @@ export function SessionReviewClient({
 
       {/* ───────── Barra fixa ───────── */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur">
+        {!isClosed && (!encerramento.ok || queue.state === "erro") && (
+          <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <SyncStatus
+              state={queue.state}
+              pending={queue.pending}
+              lastError={queue.lastError}
+              onRetry={queue.flush}
+            />
+            {!encerramento.ok && (
+              <span className="text-muted-foreground">
+                {encerramento.motivo} Finalizar fica disponível assim que a fila do aparelho esvaziar.
+              </span>
+            )}
+            {queue.state === "erro" && queue.lastError && (
+              <span className="text-destructive">{queue.lastError}</span>
+            )}
+          </div>
+        )}
         <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2">
           {isClosed ? (
             <>
@@ -507,9 +558,13 @@ export function SessionReviewClient({
               <Button
                 className="h-12 min-w-0 flex-1 text-base"
                 onClick={() => handleFinish(false)}
-                disabled={busy}
+                disabled={busy || !encerramento.ok}
               >
-                {busy ? <Loader2 className="size-5 animate-spin" /> : <Flag className="size-5" />}
+                {busy || (!encerramento.ok && queue.state === "salvando") ? (
+                  <Loader2 className="size-5 animate-spin" />
+                ) : (
+                  <Flag className="size-5" />
+                )}
                 Finalizar e salvar
               </Button>
             </>
@@ -561,6 +616,15 @@ export function SessionReviewClient({
               <br />
               Se você só não terminou o treino, prefira <strong>encerrar</strong> — o que foi
               feito continua guardado.
+              {queue.pending > 0 && (
+                <>
+                  <br />
+                  <br />
+                  {queue.pending === 1
+                    ? "O registro que está só neste aparelho também será descartado."
+                    : `Os ${queue.pending} registros que estão só neste aparelho também serão descartados.`}
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
 

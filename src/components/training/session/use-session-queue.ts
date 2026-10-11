@@ -24,7 +24,12 @@
  */
 import * as React from "react";
 import type { ActionResult } from "@/types/finance";
-import { drainQueue } from "./session-queue-drain";
+import {
+  INSTANTANEO_DO_SERVIDOR,
+  criarRegistroDeFilas,
+  type InstantaneoDaFila,
+} from "./session-queue-drain";
+import { estadoExibido } from "./session-queue-view";
 
 export type SyncState =
   | "salvo"
@@ -76,10 +81,19 @@ export function writeQueue(sessionId: string, queue: QueuedMutation[]) {
   }
 }
 
-/** Limpa o rascunho local de uma sessão encerrada. */
+/**
+ * A fila de cada sessão, uma vez só nesta aba (REDESIGN-07-C, D1 — ver
+ * `session-queue-drain.ts`). A tela da sessão e a revisão leem e escrevem AQUI; o aparelho é
+ * onde ela sobrevive a recarregar.
+ */
+const filasDaAba = criarRegistroDeFilas({ ler: readQueue, gravar: writeQueue });
+
+/** Limpa a fila de uma sessão encerrada (ou descartada) — na aba e no aparelho. */
 export function clearSessionQueue(sessionId: string) {
-  writeQueue(sessionId, []);
+  filasDaAba.limpar(sessionId);
 }
+
+const lerNoServidor = (): InstantaneoDaFila => INSTANTANEO_DO_SERVIDOR;
 
 /** uuid do dispositivo — é ele que faz o retry convergir para uma linha só no servidor. */
 export function newMutationId(): string {
@@ -91,12 +105,15 @@ export function newMutationId(): string {
 }
 
 export type SessionQueue = {
+  /** Já passa por `estadoExibido`: "salvo" com fila pendente aparece como "salvo no dispositivo". */
   state: SyncState;
   pending: number;
   lastError: string | null;
+  /** A fila do aparelho (vazia no servidor e na hidratação; a de verdade no render seguinte). */
+  fila: QueuedMutation[];
   /** Enfileira e tenta enviar. Devolve o id da mutação (o `client_mutation_id`). */
   enqueue: (kind: string, payload: Record<string, unknown>, id?: string) => string;
-  /** Reenvia agora (botão "tentar de novo"). */
+  /** Reenvia agora (botão "tentar de novo" / "enviar agora"). */
   flush: () => void;
 };
 
@@ -105,13 +122,25 @@ export function useSessionQueue(
   send: Sender,
   /** Chamado quando a fila esvazia com sucesso — o momento de buscar o estado do servidor. */
   onSettled?: () => void,
+  /**
+   * `assumir: false` — a tela lê a fila mas não vira dona nem envia (a revisão de um treino já
+   * encerrado: não há o que enviar a ele).
+   */
+  opcoes: { assumir?: boolean } = {},
 ): SessionQueue {
-  const [queue, setQueue] = React.useState<QueuedMutation[]>(() => readQueue(sessionId));
-  const [state, setState] = React.useState<SyncState>("salvo");
-  const [lastError, setLastError] = React.useState<string | null>(null);
+  const assumir = opcoes.assumir ?? true;
+
+  // Instantâneo de servidor vazio: o servidor não vê o aparelho, e o primeiro render do
+  // cliente tem de ser igual ao HTML dele. A fila aparece no render seguinte.
+  const assinar = React.useCallback(
+    (ouvinte: () => void) => filasDaAba.assinar(sessionId, ouvinte),
+    [sessionId],
+  );
+  const ler = React.useCallback(() => filasDaAba.instantaneo(sessionId), [sessionId]);
+  const { fila, estado, ultimoErro } = React.useSyncExternalStore(assinar, ler, lerNoServidor);
 
   // Refs sincronizados em efeito (nunca durante o render): guardam a versão mais recente das
-  // funções e da fila para o `drain`, que roda fora do ciclo de render.
+  // funções para o laço, que roda fora do ciclo de render.
   const sendRef = React.useRef(send);
   const settledRef = React.useRef(onSettled);
   React.useEffect(() => {
@@ -119,32 +148,20 @@ export function useSessionQueue(
     settledRef.current = onSettled;
   }, [send, onSettled]);
 
-  const runningRef = React.useRef(false);
-  // `persist` é o ÚNICO escritor deste ref, então ele nunca fica defasado sem passar por lá.
-  const queueRef = React.useRef<QueuedMutation[]>(queue);
+  // A montagem mais recente é a dona da fila; ao desmontar, solta. Sem dona o laço para antes
+  // do próximo envio — nunca duas montagens enviando a mesma fila.
+  React.useEffect(() => {
+    if (!assumir) return;
+    const posse = filasDaAba.assumir(sessionId, {
+      send: (mutation) => sendRef.current(mutation),
+      onSettled: () => settledRef.current?.(),
+    });
+    return () => filasDaAba.soltar(sessionId, posse);
+  }, [sessionId, assumir]);
 
-  const persist = React.useCallback(
-    (next: QueuedMutation[]) => {
-      queueRef.current = next;
-      writeQueue(sessionId, next);
-      setQueue(next);
-    },
-    [sessionId],
-  );
-
-  // O laço mora em `session-queue-drain.ts` (puro, testado em node); aqui só se ligam os refs.
   const drain = React.useCallback(
-    () =>
-      drainQueue({
-        running: runningRef,
-        queue: () => queueRef.current,
-        persist,
-        send: (mutation) => sendRef.current(mutation),
-        setState,
-        setLastError,
-        onSettled: () => settledRef.current?.(),
-      }),
-    [persist],
+    () => (assumir ? filasDaAba.drenar(sessionId) : Promise.resolve()),
+    [sessionId, assumir],
   );
 
   const enqueue = React.useCallback(
@@ -155,16 +172,16 @@ export function useSessionQueue(
         payload,
         createdAt: Date.now(),
       };
-      persist([...queueRef.current, mutation]);
-      setState("salvo_no_dispositivo");
+      filasDaAba.enfileirar(sessionId, mutation);
       void drain();
       return mutation.id;
     },
-    [drain, persist],
+    [drain, sessionId],
   );
 
   // Reconectar, voltar para a aba ou recarregar dispara o reenvio.
   React.useEffect(() => {
+    if (!assumir) return;
     const retry = () => void drain();
 
     window.addEventListener("online", retry);
@@ -182,20 +199,21 @@ export function useSessionQueue(
       window.clearInterval(interval);
       window.clearTimeout(initial);
     };
-  }, [drain]);
+  }, [drain, assumir]);
 
   // Avisa antes de fechar a aba com coisa na fila. O navegador mostra o diálogo padrão dele.
   React.useEffect(() => {
-    if (queue.length === 0) return;
+    if (fila.length === 0) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [queue.length]);
+  }, [fila.length]);
 
   return {
-    state,
-    pending: queue.length,
-    lastError,
+    state: estadoExibido(estado, fila.length),
+    pending: fila.length,
+    lastError: ultimoErro,
+    fila,
     enqueue,
     flush: () => void drain(),
   };

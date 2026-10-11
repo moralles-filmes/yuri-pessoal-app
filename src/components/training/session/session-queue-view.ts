@@ -1,9 +1,9 @@
 /**
  * REDESIGN-07-C · D1 — as regras que a tela da sessão consome (puras, testadas em node).
  *
- * ⚠️ D1 (1/2): estas implementações REPRODUZEM O COMPORTAMENTO ATUAL da tela, para a
- * caracterização (`session-queue-view.test.ts`) ficar vermelha pelo motivo certo. Nenhuma
- * tela as importa ainda. O conserto é o (2/2).
+ * Moram fora dos componentes porque o projeto não tem teste de componente (invariante 25):
+ * aqui elas são executadas; a ligação com a tela é provada por varredura
+ * (`src/test/sessao-ao-vivo-contratos.test.ts`).
  */
 import type { SessionSet } from "@/lib/training/types";
 import type { draftToPayload } from "./set-editor";
@@ -14,30 +14,44 @@ export type OptimisticSet = { status: SessionSet["status"]; values: Partial<Sess
 
 type PayloadDaSerie = ReturnType<typeof draftToPayload>;
 
-/** Hoje: o estado aparece como veio — nasce "salvo" mesmo com a fila cheia. */
+const STATUS_REGISTRAVEIS: ReadonlySet<string> = new Set(["concluida", "falhou", "pulada", "pendente"]);
+
+/**
+ * S3 — o status nasce do tamanho da fila. "Salvo" com registro ainda no aparelho seria o
+ * "salvo" otimista que esta tela existe para não mostrar.
+ */
 export function estadoExibido(state: SyncState, pending: number): SyncState {
-  void pending;
-  return state;
+  return state === "salvo" && pending > 0 ? "salvo_no_dispositivo" : state;
 }
 
-/** Hoje: "· 3", sem dizer o quê. */
+/** "· 3" não dizia o quê. */
 export function pendentesTexto(n: number): string {
-  return String(n);
+  return `${n} a enviar`;
 }
 
-/** Hoje a tela não diz quantos registros estão só no aparelho. */
 export function registrosNoAparelhoTexto(n: number): string {
-  void n;
-  return "";
+  return n === 1
+    ? "1 registro ainda está só neste aparelho"
+    : `${n} registros ainda estão só neste aparelho`;
 }
 
-/** Hoje a revisão finaliza sem olhar a fila do aparelho. */
+/**
+ * S1 — a revisão só finaliza ou encerra com a fila do aparelho vazia. Finalizar antes fazia o
+ * servidor recusar o que chegasse depois ("Este treino já foi encerrado.") e a série sumia.
+ * Descartar continua possível (o diálogo avisa que os registros do aparelho somem junto).
+ */
 export function podeEncerrar(q: { pending: number }): { ok: true } | { ok: false; motivo: string } {
-  void q;
-  return { ok: true };
+  if (q.pending <= 0) return { ok: true };
+  return {
+    ok: false,
+    motivo:
+      q.pending === 1
+        ? "1 registro deste aparelho ainda não chegou ao servidor."
+        : `${q.pending} registros deste aparelho ainda não chegaram ao servidor.`,
+  };
 }
 
-/** A conversão que `registerSet` faz hoje (payload → valores da série), extraída sem mudança. */
+/** A conversão que `registerSet` sempre fez (payload → valores da série), num lugar só. */
 export function optimisticPatch(status: OptimisticSet["status"], payload: PayloadDaSerie): OptimisticSet {
   return {
     status,
@@ -55,13 +69,47 @@ export function optimisticPatch(status: OptimisticSet["status"], payload: Payloa
   };
 }
 
-/** Hoje: remontar perde a camada otimista — nada é refeito da fila. */
+const numeroOuNulo = (v: unknown): number | null => (typeof v === "number" ? v : null);
+
+/**
+ * S3 — remontar refaz a camada otimista a partir da fila do aparelho: a série confirmada e
+ * ainda não enviada continua feita, com os valores digitados (e não volta para a sugestão da
+ * última vez, que gravaria por cima no próximo "confirmar"). Na ordem; a última de cada
+ * série vence.
+ */
 export function optimisticFromQueue(fila: QueuedMutation[]): Record<string, OptimisticSet> {
-  void fila;
-  return {};
+  const camada: Record<string, OptimisticSet> = {};
+  for (const mutation of fila) {
+    if (mutation.kind !== "registrar_serie") continue;
+    const p = mutation.payload;
+    if (typeof p.session_set_id !== "string") continue;
+    if (typeof p.status !== "string" || !STATUS_REGISTRAVEIS.has(p.status)) continue;
+    camada[p.session_set_id] = optimisticPatch(p.status as OptimisticSet["status"], {
+      reps: numeroOuNulo(p.reps),
+      weight_kg: numeroOuNulo(p.weight_kg),
+      additional_weight_kg: numeroOuNulo(p.additional_weight_kg),
+      assistance_weight_kg: numeroOuNulo(p.assistance_weight_kg),
+      duration_seconds: numeroOuNulo(p.duration_seconds),
+      distance_m: numeroOuNulo(p.distance_m),
+      calories: numeroOuNulo(p.calories),
+      incline_percent: numeroOuNulo(p.incline_percent),
+      resistance_level: numeroOuNulo(p.resistance_level),
+      reps_left: numeroOuNulo(p.reps_left),
+      reps_right: numeroOuNulo(p.reps_right),
+      rir: numeroOuNulo(p.rir),
+      rpe: numeroOuNulo(p.rpe),
+      difficulty: (p.difficulty ?? null) as PayloadDaSerie["difficulty"],
+      notes: typeof p.notes === "string" ? p.notes : null,
+    });
+  }
+  return camada;
 }
 
-/** Hoje: um aviso só, com um ref — descanso já vencido ao montar toca de novo. */
+/**
+ * S4/(e') — o que fazer quando o descanso acaba. Descanso que JÁ TINHA ACABADO quando o
+ * painel montou (recarregou, voltou à tela) não toca nem vibra de novo — o aviso já foi
+ * dado, ou chegou tarde demais para ser útil. O avanço automático não muda: acontece uma vez.
+ */
 export function avisosDoFimDoDescanso(e: {
   isOver: boolean;
   isRunning: boolean;
@@ -70,6 +118,9 @@ export function avisosDoFimDoDescanso(e: {
   vencidoNaMontagem: boolean;
   deveAvancar: boolean;
 }): { tocar: boolean; avancar: boolean } {
-  const avisar = e.isOver && e.isRunning && !e.jaAvisou;
-  return { tocar: avisar, avancar: avisar && e.deveAvancar };
+  if (!e.isOver || !e.isRunning) return { tocar: false, avancar: false };
+  return {
+    tocar: !e.jaAvisou && !e.vencidoNaMontagem,
+    avancar: !e.jaAvancou && e.deveAvancar,
+  };
 }

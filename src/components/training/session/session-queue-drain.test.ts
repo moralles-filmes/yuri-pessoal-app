@@ -1,29 +1,24 @@
 /**
  * REDESIGN-07-C · D1 — a fila da sessão não perde o que o dono registrou.
  *
- * Roda o laço de envio REAL (`drainQueue`) e as funções REAIS de armazenamento
- * (`readQueue`/`writeQueue`/`clearSessionQueue`) com um `localStorage` em memória e um envio
- * falso. O projeto não tem teste de componente (invariante 25): `montar()` reproduz o que o
- * hook `useSessionQueue` faz na montagem, no registro, no envio e na desmontagem. As
- * ASSERÇÕES são o contrato; `montar()` acompanha o hook.
+ * Roda o registro de filas REAL (`criarRegistroDeFilas`, com o laço `drainQueue`) e as funções
+ * REAIS de armazenamento (`readQueue`/`writeQueue`) com um `localStorage` em memória e um
+ * envio falso. O projeto não tem teste de componente (invariante 25): `montar()` reproduz o
+ * que o hook `useSessionQueue` faz na montagem (`assumir`), no registro (`enfileirar` +
+ * `drenar`) e na desmontagem (`soltar`). As ASSERÇÕES são o contrato; `montar()` acompanha
+ * o hook (`sessao-ao-vivo-contratos.test.ts` prova que o hook usa o registro).
  *
- * ⚠️ D1 (1/2): `montar()` reproduz o hook de HOJE (cada instância com a sua cópia da fila,
- * nada interrompe o laço ao desmontar). Os testes de S1/S2 ficam vermelhos pelo motivo
- * certo; o (2/2) troca o hook e, com ele, `montar()`.
+ * Histórico: no D1 (1/2) estas mesmas asserções rodaram contra o hook de antes (cada
+ * montagem com a sua cópia da fila) e ficaram vermelhas pelo motivo certo — envio duplo,
+ * série apagada pela cópia velha, laço que seguia sem a tela, fila que ressuscitava.
  *
  * Dados sintéticos.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionResult } from "@/types/finance";
-import { drainQueue } from "./session-queue-drain";
+import { criarRegistroDeFilas, type RegistroDeFilas } from "./session-queue-drain";
 import { podeEncerrar } from "./session-queue-view";
-import {
-  clearSessionQueue,
-  readQueue,
-  writeQueue,
-  type QueuedMutation,
-  type SyncState,
-} from "./use-session-queue";
+import { readQueue, writeQueue, type QueuedMutation } from "./use-session-queue";
 
 class MemoryStorage {
   private map = new Map<string, string>();
@@ -63,38 +58,26 @@ const tique = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 type Envio = (m: QueuedMutation) => Promise<ActionResult<unknown>>;
 
-/** Uma instância do hook — como `useSessionQueue` (de hoje) monta, envia e desmonta. */
+let filas: RegistroDeFilas;
+
+/** Uma montagem do hook — como `useSessionQueue` assume, registra, envia e solta. */
 function montar(send: Envio, sessionId = SID) {
-  const estado = { atual: "salvo" as SyncState, erro: null as string | null };
-  const queueRef = { current: readQueue(sessionId) };
-  const running = { current: false };
-  const persist = (next: QueuedMutation[]) => {
-    queueRef.current = next;
-    writeQueue(sessionId, next);
-  };
-  const drenar = () =>
-    drainQueue({
-      running,
-      queue: () => queueRef.current,
-      persist,
-      send,
-      setState: (s) => (estado.atual = s),
-      setLastError: (e) => (estado.erro = e),
-      onSettled: () => {},
-    });
+  const posse = filas.assumir(sessionId, { send });
+  const drenar = () => filas.drenar(sessionId);
   return {
     drenar,
     enfileirar: (m: QueuedMutation) => {
-      persist([...queueRef.current, m]);
-      estado.atual = "salvo_no_dispositivo";
+      filas.enfileirar(sessionId, m);
       void drenar();
     },
-    // Hoje a desmontagem só limpa o intervalo de 15 s: um laço em andamento segue sozinho.
-    desmontar: () => {},
-    /** O que a revisão chama depois de finalizar, encerrar ou descartar. */
-    limpar: () => clearSessionQueue(sessionId),
-    fila: () => queueRef.current,
-    estado: () => estado,
+    desmontar: () => filas.soltar(sessionId, posse),
+    /** O que a revisão chama depois de finalizar, encerrar ou descartar (`clearSessionQueue`). */
+    limpar: () => filas.limpar(sessionId),
+    fila: () => filas.instantaneo(sessionId).fila,
+    estado: () => ({
+      atual: filas.instantaneo(sessionId).estado,
+      erro: filas.instantaneo(sessionId).ultimoErro,
+    }),
   };
 }
 
@@ -114,6 +97,7 @@ function redeControlada() {
 beforeEach(() => {
   vi.stubGlobal("window", { localStorage: new MemoryStorage() });
   vi.stubGlobal("navigator", { onLine: true });
+  filas = criarRegistroDeFilas({ ler: readQueue, gravar: writeQueue });
 });
 afterEach(() => vi.unstubAllGlobals());
 

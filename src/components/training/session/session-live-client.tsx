@@ -33,6 +33,8 @@ import {
   Pause,
   Play,
   Plus,
+  Send,
+  Smartphone,
   Timer,
   X,
 } from "lucide-react";
@@ -65,19 +67,6 @@ import type {
   TrainingSession,
 } from "@/lib/training/types";
 import type { PreviousSuggestion } from "@/lib/training/previous";
-import {
-  addSessionExercise,
-  addSet,
-  adjustActiveRest,
-  endRest,
-  moveSessionExercise,
-  pauseSession,
-  recordSet,
-  resumeSession,
-  setSessionExerciseStatus,
-  startRest,
-  substituteSessionExercise,
-} from "@/lib/actions/training-sessions";
 import { AddExerciseSheet } from "./add-exercise-sheet";
 import { ExerciseListSheet } from "./exercise-list-sheet";
 import { PlateCalculatorSheet } from "./plate-calculator";
@@ -90,15 +79,19 @@ import {
   draftToPayload,
   type SetValuesDraft,
 } from "./set-editor";
+import { sendSessionMutation } from "./session-mutations";
 import {
-  clearSessionQueue,
+  optimisticFromQueue,
+  optimisticPatch,
+  registrosNoAparelhoTexto,
+  type OptimisticSet,
+} from "./session-queue-view";
+import {
   useSessionQueue,
   type QueuedMutation,
+  type SessionQueue,
 } from "./use-session-queue";
 import { useWakeLock } from "./use-now";
-
-/** Camada otimista: o que o usuário fez e o servidor ainda não confirmou. */
-type OptimisticSet = { status: SessionSet["status"]; values: Partial<SessionSet> };
 
 export function SessionLiveClient({
   session,
@@ -131,35 +124,11 @@ export function SessionLiveClient({
 
   /* ───────────── Fila: cada mutação vira uma chamada de action ───────────── */
 
-  const send = React.useCallback(async (mutation: QueuedMutation) => {
-    const payload = { ...mutation.payload, session_id: session.id };
-    switch (mutation.kind) {
-      case "registrar_serie":
-        return recordSet({ ...payload, client_mutation_id: mutation.id });
-      case "adicionar_serie":
-        return addSet({ ...payload, client_mutation_id: mutation.id });
-      case "iniciar_descanso":
-        return startRest(payload);
-      case "ajustar_descanso":
-        return adjustActiveRest(payload);
-      case "encerrar_descanso":
-        return endRest(payload);
-      case "mover_exercicio":
-        return moveSessionExercise(payload);
-      case "status_exercicio":
-        return setSessionExerciseStatus(payload);
-      case "substituir_exercicio":
-        return substituteSessionExercise(payload);
-      case "adicionar_exercicio":
-        return addSessionExercise(payload);
-      case "pausar":
-        return pauseSession({ id: session.id, ...mutation.payload });
-      case "retomar":
-        return resumeSession({ id: session.id });
-      default:
-        return { ok: false as const, error: "Ação desconhecida." };
-    }
-  }, [session.id]);
+  // A tradução de cada mutação em action mora em `session-mutations.ts`: a revisão usa a mesma.
+  const send = React.useCallback(
+    (mutation: QueuedMutation) => sendSessionMutation(session.id, mutation),
+    [session.id],
+  );
 
   // Quando a fila esvazia, buscamos o estado do servidor: é ele a verdade, e é o que traz
   // séries criadas, exercícios substituídos e o descanso aberto. A camada otimista só some
@@ -170,6 +139,17 @@ export function SessionLiveClient({
   }, [router]);
 
   const queue = useSessionQueue(session.id, send, handleSettled);
+
+  // S3 (REDESIGN-07-C): remontar (voltar de outra seção de /treinos, recarregar) perdia a
+  // camada otimista — a série confirmada e ainda não enviada voltava a aparecer pendente, com
+  // a sugestão da última vez no campo. Ela é refeita UMA vez da fila do aparelho, assim que a
+  // fila aparece (no render seguinte à hidratação), por ajuste de estado durante o render (o
+  // padrão de `useLazyDialog`). O que o dono fizer depois vence.
+  const [semeado, setSemeado] = React.useState(false);
+  if (!semeado && queue.fila.length > 0) {
+    setSemeado(true);
+    setOptimistic((current) => ({ ...optimisticFromQueue(queue.fila), ...current }));
+  }
 
   /* ───────────── Estado renderizado = servidor + camada otimista ───────────── */
 
@@ -238,23 +218,7 @@ export function SessionLiveClient({
     const payload = draftToPayload(draft);
 
     // Otimismo primeiro: a tela responde na hora, mesmo sem rede.
-    setOptimistic((current) => ({
-      ...current,
-      [target.id]: {
-        status,
-        values: {
-          reps: payload.reps,
-          weightKg: payload.weight_kg,
-          additionalWeightKg: payload.additional_weight_kg,
-          assistanceWeightKg: payload.assistance_weight_kg,
-          durationSeconds: payload.duration_seconds,
-          distanceM: payload.distance_m,
-          rir: payload.rir,
-          rpe: payload.rpe,
-          difficulty: payload.difficulty,
-        },
-      },
-    }));
+    setOptimistic((current) => ({ ...current, [target.id]: optimisticPatch(status, payload) }));
 
     // O descanso só nasce sozinho para série FEITA, com descanso configurado e com o modo de
     // avanço ligado. "Nunca avançar" também significa "não abrir o cronômetro sem eu pedir".
@@ -326,12 +290,13 @@ export function SessionLiveClient({
           catalog={catalog}
           onConfirm={(id) => queue.enqueue("adicionar_exercicio", { exercise_id: id })}
         />
-        <FinishBar sessionId={session.id} progress={progress} onFinish={() => setConfirmFinish(true)} />
+        <FinishBar progress={progress} onFinish={() => setConfirmFinish(true)} />
         <ConfirmFinishDialog
           open={confirmFinish}
           onOpenChange={setConfirmFinish}
           progress={progress}
           sessionId={session.id}
+          queue={queue}
         />
       </div>
     );
@@ -348,8 +313,12 @@ export function SessionLiveClient({
         isPaused={isPaused}
       />
 
+      {/* `key`: `openRest` fecha um descanso e abre outro na mesma action. Sem ela o painel
+          seria o MESMO componente, com o aviso do anterior já dado — e o fim do segundo
+          descanso não avisava (modo "avisar"). */}
       {activeRest && (
         <RestPanel
+          key={activeRest.id}
           rest={activeRest}
           autoAdvance={session.autoAdvance}
           soundEnabled={session.soundEnabled}
@@ -480,11 +449,7 @@ export function SessionLiveClient({
         </div>
       )}
 
-      <FinishBar
-        sessionId={session.id}
-        progress={progress}
-        onFinish={() => setConfirmFinish(true)}
-      />
+      <FinishBar progress={progress} onFinish={() => setConfirmFinish(true)} />
 
       <ExerciseListSheet
         open={listOpen}
@@ -561,6 +526,7 @@ export function SessionLiveClient({
         onOpenChange={setConfirmFinish}
         progress={progress}
         sessionId={session.id}
+        queue={queue}
       />
     </div>
   );
@@ -578,7 +544,7 @@ function SessionHeader({
 }: {
   session: TrainingSession;
   progress: ReturnType<typeof summarizeFlow>;
-  queue: ReturnType<typeof useSessionQueue>;
+  queue: SessionQueue;
   onOpenList: () => void;
   onPauseToggle: () => void;
   isPaused: boolean;
@@ -702,11 +668,9 @@ function SetSummary({
 /* ───────────────────────────── Barra de finalização ───────────────────────────── */
 
 function FinishBar({
-  sessionId,
   progress,
   onFinish,
 }: {
-  sessionId: string;
   progress: ReturnType<typeof summarizeFlow>;
   onFinish: () => void;
 }) {
@@ -726,11 +690,12 @@ function FinishBar({
               : `${progress.setsPending} ${progress.setsPending === 1 ? "série" : "séries"} em aberto`}
           </p>
         </div>
-        <Button asChild variant="ghost" className="h-12 shrink-0">
-          <Link href={`${TRAINING_BASE_PATH}/sessao/revisar?id=${sessionId}`} onClick={onFinish}>
-            <Flag className="size-4" />
-            Finalizar
-          </Link>
+        {/* S1 (REDESIGN-07-C): era um <Link> com `onClick` — navegava no mesmo clique e o
+            diálogo de confirmação nunca chegava a ser visto. Agora o botão só abre o diálogo;
+            quem navega é o "Revisar e finalizar" dele. */}
+        <Button variant="ghost" className="h-12 shrink-0" onClick={onFinish}>
+          <Flag className="size-4" />
+          Finalizar
         </Button>
       </div>
     </div>
@@ -742,12 +707,16 @@ function ConfirmFinishDialog({
   onOpenChange,
   progress,
   sessionId,
+  queue,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   progress: ReturnType<typeof summarizeFlow>;
   sessionId: string;
+  queue: SessionQueue;
 }) {
+  // "Tentar de novo" do status já cobre erro e falta de conexão; ali o botão não se repete.
+  const ofereceEnviar = queue.state !== "erro" && queue.state !== "aguardando_conexao";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -759,6 +728,39 @@ function ConfirmFinishDialog({
               : "Você vai para a tela de revisão, onde confere o resumo, avalia e salva."}
           </DialogDescription>
         </DialogHeader>
+        {queue.pending > 0 && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+            <p className="flex items-start gap-2">
+              <Smartphone
+                aria-hidden
+                className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
+              />
+              <span>
+                <strong>{registrosNoAparelhoTexto(queue.pending)}</strong>. A revisão envia todos,
+                na ordem, antes de finalizar.
+              </span>
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <SyncStatus
+                state={queue.state}
+                pending={queue.pending}
+                lastError={queue.lastError}
+                onRetry={queue.flush}
+              />
+              {ofereceEnviar && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={queue.flush}
+                  disabled={queue.state === "salvando"}
+                >
+                  <Send className="size-3.5" />
+                  Enviar agora
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             <X className="size-4" />
@@ -805,13 +807,6 @@ function nextTargetLabelFor(
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join(" × ") : null;
-}
-
-/** Limpa o rascunho local ao sair de uma sessão encerrada. */
-export function useClearQueueOnFinish(sessionId: string, finished: boolean) {
-  React.useEffect(() => {
-    if (finished) clearSessionQueue(sessionId);
-  }, [sessionId, finished]);
 }
 
 export { formatDuration };
