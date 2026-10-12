@@ -153,6 +153,14 @@ export function perdoadoCentavos(r: RecebivelResumido): number {
   return estadoDoRecebivel(r) === "ignorado" ? cent(r.valor) - recebidoCentavos(r) : 0;
 }
 
+export function somaDaParteDosTerceiros(recs: readonly RecebivelComRecebimentos[]): number {
+  return centavosParaReais(recs.reduce((s, r) => s + parteDoTerceiroCentavos(resumirRecebivel(r)), 0));
+}
+
+export function somaDoPerdoado(recs: readonly RecebivelComRecebimentos[]): number {
+  return centavosParaReais(recs.reduce((s, r) => s + perdoadoCentavos(resumirRecebivel(r)), 0));
+}
+
 type ComMes = { readonly ref_month?: string | null };
 
 /** "Pendente referente a {mês}" — e, sem mês, o total em aberto. É o que `totalAReceber` chama no B4. */

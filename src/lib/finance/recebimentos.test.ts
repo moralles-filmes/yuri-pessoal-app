@@ -19,6 +19,8 @@ import {
   rotuloTotalPendenteAte,
   saldoCentavos,
   secoesDaLista,
+  somaDaParteDosTerceiros,
+  somaDoPerdoado,
   totalPendenteAte,
   ultimoRecebimento,
   type EstadoDoRecebivel,
@@ -115,6 +117,15 @@ describe("estadoDoRecebivel — a soma manda (K1)", () => {
 });
 
 describe("D3 e K3-a — parte do terceiro e perdoado", () => {
+  it("somas por lista: parte dos terceiros e perdoado (B1b)", () => {
+    const lista = [
+      rec({ valor: 600, status: "ignorado", recebimentos: [{ valor: 250, recebido_em: "2026-06-05" }] }),
+      rec({ valor: 100, status: "pago", pago_em: "2026-06-01" }),
+    ];
+    expect(somaDaParteDosTerceiros(lista)).toBe(350);
+    expect(somaDoPerdoado(lista)).toBe(350);
+  });
+
   it.each(["pendente", "cobrado", "pago", "inventado"])(
     "%s com recebimento parcial: a parte do terceiro é o VALOR, nunca o saldo (D3)",
     (status) => {

@@ -37,6 +37,12 @@ import { InstallmentSplitDialog } from "./installment-split-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { statusEfetivo } from "@/lib/finance/invoice";
 import {
+  fraseDoPerdoado,
+  parteDoTerceiroCentavos,
+  perdoadoCentavos,
+  resumirRecebivel,
+} from "@/lib/finance/recebimentos";
+import {
   INSTALLMENT_PURCHASE_STATUSES,
   INSTALLMENT_PURCHASE_STATUS_LABELS,
   type InstallmentPurchaseStatus,
@@ -74,7 +80,7 @@ type ParcelaView = {
 };
 
 /** Quanto uma pessoa paga — no parcelamento inteiro ou numa parcela. */
-type ParteDePessoa = { personId: string; nome: string; valor: number };
+type ParteDePessoa = { personId: string; nome: string; valor: number; perdoado: number };
 
 type Derived = {
   parcelas: ParcelaView[];
@@ -93,6 +99,7 @@ type Derived = {
   /** Parte de cada terceiro no parcelamento inteiro, e a minha (o resto). */
   terceiros: ParteDePessoa[];
   terceirosTotal: number;
+  perdoado: number;
   meu: number;
   /** Parte dos terceiros em CADA parcela, por `installment_id`. */
   terceirosPorParcela: Map<string, ParteDePessoa[]>;
@@ -146,18 +153,27 @@ function derive(
   );
   const nome = (id: string) => nomePorPessoa.get(id) ?? "Pessoa";
 
-  const porPessoa = new Map<string, number>();
+  const porPessoa = new Map<string, ParteDePessoa>();
   const terceirosPorParcela = new Map<string, ParteDePessoa[]>();
+  let perdoado = 0;
   for (const r of p.receivables ?? []) {
-    porPessoa.set(r.person_id, (porPessoa.get(r.person_id) ?? 0) + r.valor);
+    const resumo = resumirRecebivel({ ...r, recebimentos: r.recebimentos ?? [] });
+    const valor = parteDoTerceiroCentavos(resumo) / 100;
+    const perdoadoDoRecebivel = perdoadoCentavos(resumo) / 100;
+    perdoado += perdoadoDoRecebivel;
+    const pessoa = porPessoa.get(r.person_id) ?? {
+      personId: r.person_id, nome: nome(r.person_id), valor: 0, perdoado: 0,
+    };
+    pessoa.valor += valor;
+    pessoa.perdoado += perdoadoDoRecebivel;
+    porPessoa.set(r.person_id, pessoa);
     if (!r.installment_id) continue;
     const arr = terceirosPorParcela.get(r.installment_id) ?? [];
-    arr.push({ personId: r.person_id, nome: nome(r.person_id), valor: r.valor });
+    arr.push({ personId: r.person_id, nome: nome(r.person_id), valor, perdoado: perdoadoDoRecebivel });
     terceirosPorParcela.set(r.installment_id, arr);
   }
 
-  const terceiros: ParteDePessoa[] = [...porPessoa.entries()]
-    .map(([personId, valor]) => ({ personId, nome: nome(personId), valor }))
+  const terceiros: ParteDePessoa[] = [...porPessoa.values()]
     .sort((a, b) => b.valor - a.valor);
   const terceirosTotal = terceiros.reduce((acc, t) => acc + t.valor, 0);
   const totalAtivo = ativas.reduce((acc, x) => acc + x.inst.valor, 0);
@@ -177,6 +193,7 @@ function derive(
     ativasCount: ativas.length,
     terceiros,
     terceirosTotal,
+    perdoado,
     meu: totalAtivo - terceirosTotal,
     terceirosPorParcela,
   };
@@ -407,8 +424,12 @@ export function InstallmentsClient({
                               <span className="font-medium text-foreground tabular-nums">
                                 {formatCurrency(t.valor)}
                               </span>
+                              {t.perdoado > 0 && (
+                                <span> · não será cobrado {formatCurrency(t.perdoado)}</span>
+                              )}
                             </span>
                           ))}
+                          {d.perdoado > 0 && <span>{fraseDoPerdoado(d.perdoado)}</span>}
                         </p>
                       )}
                     </div>
@@ -565,6 +586,9 @@ export function InstallmentsClient({
                                     <span className="font-medium tabular-nums text-foreground">
                                       {formatCurrency(t.valor)}
                                     </span>
+                                    {t.perdoado > 0 && (
+                                      <span> · não será cobrado {formatCurrency(t.perdoado)}</span>
+                                    )}
                                   </span>
                                 ))}
                               </div>
