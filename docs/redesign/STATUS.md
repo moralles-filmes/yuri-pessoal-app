@@ -18,6 +18,11 @@ números de terceiros
 de um "aplique a M1" (ou M2) seu, separado. Serão pedidas uma a uma, no momento em que a
 subfase precisar delas — a M1 é da 03-D.
 
+🚀 **De 00 a 03-C2 vai para produção pelo PR #56** (D54). A regra do plano mudou por decisão
+sua em 2026-10-11: as subfases fechadas são publicadas **por partes**, cada uma por PR, em vez
+de esperar a 08. A 03-D entra quando fechar. As 07-A, 07-B e 07-C estão no GitHub só como
+backup.
+
 ⚠️ **CORREÇÃO (D29): a M3 NÃO é da 03-B.** Este documento afirmava, em dois lugares, que a
 `categories.classificacao_padrao` seria pedida na 03-B. Não bate com as outras duas fontes:
 o `PLANO.md` descreve a 03-B como *"unificar o pipeline triplicado … **sem mudar número
@@ -796,6 +801,7 @@ as colunas já existem e o CHECK já aceita.
 | D51 | **Roteador da 03-C2:** 7 despachos ao Codex, **1 falhou** no gate `worker_modified_main_repository` (6a) e seguiu no principal. No 6b, dois desvios do worker foram **revertidos ao plano** — os dois vieram de uma restrição minha larga demais ("só `page.tsx` pode conter a string"): o worker ofuscou a chave de uma fixture e trocou um tipo para obedecê-la. ⚠️ **Restrição de pacote se escreve pelo arquivo exato que a varredura cobre.** A M3 (passo 3) ficou no principal por sua instrução; as mutações (passo 7) ficaram no principal **contra** o roteador, declarado: o worktree do worker não tem `node_modules`, e o entregável do passo é o resultado dos testes |
 | D52 | **A 03-C2 foi integrada na sessão que a escreveu**, a seu pedido (o prompt da próxima subfase), **sem** revisão independente da branch e **sem** auditoria de módulo. A árvore integrada tem o **mesmo hash de tree** da ponta (`8f01d63`), e os cinco comandos rodaram depois do merge. ⚠️ **A conferência com dado real da D39/D44/D48 vale também para a 03-C2**: marcar uma categoria pela tela, ver o atalho numa receita nova e o filtro — e conferir que nenhum número de dashboard, relatório ou sino mudou |
 | D53 | **Um defeito anterior foi achado e NÃO consertado** (RR-C2-7): `categorySchema` transforma `sort_order` ausente em `0` e o formulário não o manda, então **toda edição de categoria zera a ordem dela**. Fora da lista da subfase — registrado para uma subfase futura |
+| D54 | **Publicação por partes** (2026-10-11, por pedido seu): as subfases fechadas vão a produção por PR assim que integradas, em vez de esperar a REDESIGN-08. A primeira leva é de 00 a 03-C2, no PR #56. O CI roda os cinco comandos e a Vercel gera uma prévia. **Reversão:** Instant Rollback para `dpl_8WeZ8o36fwziJYqn8k19VsrqDX1k` (`main` em `5de90d6`), sem mexer no banco, porque as migrations são aditivas. ⚠️ **A integração continua em `feat/redesign-00-auditoria`.** O portão de ancestral dos próximos prompts depende dela, e depois do merge ela segue viva, agora com upstream. A 08 continua existindo como regressão final, mas deixa de ser o momento da entrega |
 
 ## Bloqueios
 
@@ -944,9 +950,10 @@ fica byte a byte igual (o único `ignorado` dele é de `totalAReceber`, que já 
 ⚠️ **Pendência que é sua (D39, D44, D48, D52):** a conferência com dado real da 03-B, da
 03-B2, da 03-C **e** da 03-C2.
 
-⛔ **Nada foi empurrado.** A branch `feat/redesign-00-auditoria` segue **sem upstream**.
-`feat/redesign-03c2-categorias` e `feat/redesign-03c-renda-pessoal` já estão contidas nela e
-podem ser apagadas quando você quiser (a `feat/redesign-03b2-riscos` já foi).
+🚀 **Empurrado em 2026-10-11** (D54): `feat/redesign-00-auditoria` está no GitHub e vai a
+`main` pelo PR #56. `feat/redesign-03c2-categorias` e `feat/redesign-03c-renda-pessoal`
+ficam no GitHub e saem do disco local depois do merge. A integração das próximas subfases
+continua sendo merge `--no-ff` nesta branch, seguido de PR para `main`.
 
 ⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA MAIS AQUI — meça** (D34):
 
