@@ -3,34 +3,18 @@
 /**
  * Fase 16-A — Dieta e Alimentação · Casca do módulo.
  *
- * Só existe para segurar o estado da gaveta (que é client) e manter as páginas como Server
- * Components. O botão "Seções" aparece apenas abaixo de `lg`, onde a coluna some.
+ * REDESIGN-02-E: as três cascas de módulo eram idênticas até o comentário. O que sobrou
+ * aqui é o nome do módulo e a sua lista de seções; coluna, gaveta, botão "Seções" e estado
+ * vêm de `@/components/shared/module-shell`.
+ *
+ * ⚠️ A diretiva não é decoração: `NAV_DA_DIETA` carrega o ÍCONE de cada item, que é um
+ * componente — ou seja, uma função. Prop de Server para Client Component precisa ser
+ * serializável, e função não é. Com a casca no grafo do cliente, o objeto é só um objeto.
  */
-import * as React from "react";
-import { Menu } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { NutritionNav, NutritionNavDrawer } from "./nutrition-nav";
+import type { ReactNode } from "react";
+import { ModuleShell } from "@/components/shared/module-shell";
+import { NAV_DA_DIETA } from "./nutrition-nav";
 
-export function NutritionShell({ children }: { children: React.ReactNode }) {
-  const [drawerOpen, setDrawerOpen] = React.useState(false);
-
-  return (
-    <div className="flex gap-6">
-      <NutritionNav />
-      <NutritionNavDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
-
-      <div className="min-w-0 flex-1 space-y-4">
-        <Button
-          variant="outline"
-          size="sm"
-          className="lg:hidden"
-          onClick={() => setDrawerOpen(true)}
-        >
-          <Menu className="size-4" />
-          Seções
-        </Button>
-        {children}
-      </div>
-    </div>
-  );
+export function NutritionShell({ children }: { children: ReactNode }) {
+  return <ModuleShell nav={NAV_DA_DIETA}>{children}</ModuleShell>;
 }

@@ -33,6 +33,8 @@ import "server-only";
 
 import { z } from "zod";
 import { getAccounts } from "@/lib/finance/queries";
+import { ultimoDiaDoMes } from "@/lib/finance/pipeline";
+import { saldoDasContas } from "@/lib/finance/saldo-das-contas";
 import {
   getFinanceCardData,
   getInvoicesCardData,
@@ -62,25 +64,31 @@ const mesDe = (iso: string) => iso.slice(0, 7);
 
 export async function getBalances(): Promise<ToolOutput> {
   const contas = await getAccounts();
-  const ativas = contas.filter((c) => c.is_active);
 
-  if (ativas.length === 0) {
+  if (contas.length === 0) {
+    return emptyToolOutput("Ainda não há conta cadastrada.");
+  }
+
+  // Decisão do dono na 03-B2, B3: esconder a conta não faz o dinheiro sumir.
+  // A soma dos itens fecha com o total porque as contas omitidas têm saldo zero.
+  const visiveis = contas.filter((c) => c.is_active || (c.current_balance ?? 0) !== 0);
+
+  if (visiveis.length === 0) {
     return emptyToolOutput(
-      contas.length === 0
-        ? "Ainda não há conta cadastrada."
-        : `Não há conta ativa — as ${contas.length} existentes estão inativas.`,
+      `Não há conta ativa — as ${contas.length} existentes estão inativas.`,
     );
   }
 
   return {
     periodo: null,
-    contagem: ativas.length,
+    contagem: visiveis.length,
     completude: "exato",
     agregados: {
-      contas_ativas: ativas.length,
-      // A MESMA soma do card do dashboard: `accounts.reduce(...)` sobre `current_balance`,
-      // que vem da view `accounts_with_balance` (a fonte única do saldo).
-      saldo_total: ativas.reduce((s, c) => s + (c.current_balance ?? 0), 0),
+      contas_ativas: contas.filter((c) => c.is_active).length,
+      contas_inativas_com_saldo: visiveis.filter((c) => !c.is_active).length,
+      // A MESMA soma do card do dashboard: `saldoDasContas` sobre TODAS as contas,
+      // com saldo da view `accounts_with_balance` (a fonte única do saldo).
+      saldo_total: saldoDasContas(contas),
       moeda: "BRL",
       /**
        * ⚠️ Esta frase vai ao modelo de propósito. Sem ela, perguntado "quanto tenho?", ele
@@ -90,10 +98,11 @@ export async function getBalances(): Promise<ToolOutput> {
       observacao_do_saldo:
         "Este é o saldo das CONTAS. Lançamento de cartão de crédito não move saldo de conta — quem move é o pagamento da fatura. Para faturas, use a ferramenta de faturas.",
     },
-    itens: ativas.map((c) => ({
+    itens: visiveis.map((c) => ({
       conta: c.name,
       tipo: c.type,
       saldo: c.current_balance ?? 0,
+      inativa: !c.is_active,
     })),
     refs: [REF_CONTAS],
   };
@@ -108,15 +117,26 @@ export async function getSpending(input: { mes?: string }): Promise<ToolOutput> 
   const d = await getFinanceCardData(mes, hoje);
 
   return {
-    periodo: { de: `${mes}-01`, ate: mes === mesDe(hoje) ? hoje : `${mes}-31` },
+    periodo: { de: `${mes}-01`, ate: mes === mesDe(hoje) ? hoje : ultimoDiaDoMes(mes) },
     // Não é uma lista de transações: a ferramenta devolve o RESUMO do mês, e é isso que a
     // contagem representa. Uma lista de lançamentos é outra ferramenta, que não existe.
     contagem: 1,
-    completude: "exato",
+    completude: d.completude.estado,
+    ...(d.completude.estado === "parcial"
+      ? { motivo_incompleto: d.completude.motivos.join(" ") }
+      : {}),
     agregados: {
       mes,
       moeda: "BRL",
       entradas: d.entradas,
+      /**
+       * REDESIGN-03-C (A5) — ⚠️ `entradas_meu` e `entradas_terceiros` NÃO se somam a `entradas`:
+       * eles a PARTICIONAM. `entradas` é o bruto que passou pelas contas; `entradas_meu` é a
+       * renda do usuário; `entradas_terceiros` é dinheiro de outras pessoas que passou pela conta
+       * dele — e NÃO é renda dele. Os dois já vêm somados pelo motor (invariante 15).
+       */
+      entradas_meu: d.entradasMeu,
+      entradas_terceiros: d.entradasTerceiros,
       saidas: d.saidas,
       /**
        * ⚠️ `meu` e `terceiros` NÃO se somam a `saidas` — eles a PARTICIONAM. `saidas` é o
@@ -133,7 +153,7 @@ export async function getSpending(input: { mes?: string }): Promise<ToolOutput> 
       contas_a_pagar_quantidade: d.contasCount,
       proxima_conta: d.proximaConta,
       composicao:
-        "entradas e saídas são independentes; `gasto_meu` + `gasto_de_terceiros` = `saidas`; `no_cartao` + `a_vista` = `saidas`. Não some as partições entre si nem com o total.",
+        "entradas e saídas são independentes; `entradas_meu` + `entradas_terceiros` = `entradas`; `gasto_meu` + `gasto_de_terceiros` = `saidas`; `no_cartao` + `a_vista` = `saidas`. Não some as partições entre si nem com o total.",
       base_de_calculo:
         "Gasto no cartão é o total das FATURAS do mês (base fatura); o restante é base competência. Parcela de compra parcelada entra pela fatura do mês dela, não pelo mês da compra.",
     },
@@ -145,21 +165,33 @@ export async function getSpending(input: { mes?: string }): Promise<ToolOutput> 
 export async function getInvoice(): Promise<ToolOutput> {
   const hoje = hojeISO();
   const d = await getInvoicesCardData(hoje);
+  const completude = {
+    completude: d.completude.estado,
+    ...(d.completude.estado === "parcial"
+      ? { motivo_incompleto: d.completude.motivos.join(" ") }
+      : {}),
+  };
 
   if (!d.hasCards) {
-    return emptyToolOutput("Não há cartão de crédito cadastrado, então não há fatura.");
+    return {
+      ...emptyToolOutput("Não há cartão de crédito cadastrado, então não há fatura."),
+      ...completude,
+    };
   }
 
   if (d.proximas.length === 0) {
-    return emptyToolOutput(
-      "Há cartão cadastrado, mas nenhuma fatura para mostrar. Isso é ausência de fatura registrada, não uma fatura de valor zero.",
-    );
+    return {
+      ...emptyToolOutput(
+        "Há cartão cadastrado, mas nenhuma fatura para mostrar. Isso é ausência de fatura registrada, não uma fatura de valor zero.",
+      ),
+      ...completude,
+    };
   }
 
   return {
     periodo: null,
     contagem: d.proximas.length,
-    completude: "exato",
+    ...completude,
     agregados: {
       moeda: "BRL",
       faturas_abertas: d.abertas,

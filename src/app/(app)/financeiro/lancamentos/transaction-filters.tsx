@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { mostrarFiltroDeTerceiros } from "@/lib/finance/marcacao-da-categoria";
 import {
   Select,
   SelectContent,
@@ -25,14 +26,17 @@ export function TransactionFilters({
   accounts,
   categories,
   cards,
+  categoriasMarcadas,
 }: {
   accounts: { id: string; name: string }[];
   categories: { id: string; name: string }[];
   cards: { id: string; nome: string }[];
+  categoriasMarcadas: number;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const marcadasLigado = searchParams.get("marcadas") === "1";
 
   const setParam = React.useCallback(
     (key: string, value: string) => {
@@ -52,6 +56,7 @@ export function TransactionFilters({
     "card",
     "category",
     "month",
+    "marcadas",
   ].some((k) => searchParams.get(k));
 
   return (
@@ -142,6 +147,18 @@ export function TransactionFilters({
         onChange={(e) => setParam("month", e.target.value)}
         className="h-7 w-auto"
       />
+
+      {mostrarFiltroDeTerceiros({ ligado: marcadasLigado, categoriasMarcadas }) && (
+        <Button
+          type="button"
+          variant={marcadasLigado ? "secondary" : "outline"}
+          size="sm"
+          aria-pressed={marcadasLigado}
+          onClick={() => setParam("marcadas", marcadasLigado ? "" : "1")}
+        >
+          Categorias marcadas como de terceiros
+        </Button>
+      )}
 
       {hasFilters && (
         <Button

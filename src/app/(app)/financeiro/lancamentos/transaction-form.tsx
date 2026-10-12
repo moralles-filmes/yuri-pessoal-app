@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch, type Path } from "react-hook-form";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/financeiro/money-input";
+import { ReceitaResponsabilidadeEditor } from "@/components/financeiro/receita-responsabilidade";
 import { InstallmentBadge } from "@/components/financeiro/badges";
 import {
   SplitEditor,
@@ -33,6 +34,7 @@ import {
   type SplitPartValue,
 } from "@/components/financeiro/split-editor";
 import { applyFieldErrors } from "@/components/financeiro/form-utils";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 import {
   createTransaction,
   getTransactionSplit,
@@ -47,6 +49,11 @@ import {
   toDateInputValue,
 } from "@/lib/format";
 import { resolverFatura } from "@/lib/finance/invoice";
+import {
+  aplicarAtalhoDaCategoria,
+  DICA_DO_ATALHO,
+  type OrigemDaClassificacao,
+} from "@/lib/finance/marcacao-da-categoria";
 import {
   planejarParcelamento,
   type ParcelaPlano,
@@ -98,7 +105,33 @@ type FormValues = {
   override_ultima: string;
   classificacao: Classificacao;
   parts: SplitPartValue[];
+  receita_classificacao: Classificacao;
+  receita_minha_parte: string;
 };
+
+// Campo que não existe na tela sobe para o toast com o nome.
+const CAMPOS_DO_FORMULARIO = [
+  "type",
+  "amount",
+  "account_id",
+  "transfer_account_id",
+  "card_id",
+  "category_id",
+  "subcategory_id",
+  "payment_method",
+  "purchase_date",
+  "competence_date",
+  "status",
+  "description",
+  "notes",
+  "parcelado",
+  "qtd_parcelas",
+  "override_ultima",
+  "classificacao",
+  "parts",
+  "receita_classificacao",
+  "receita_minha_parte",
+] as const satisfies readonly (keyof FormValues)[];
 
 function defaults(tx?: TransactionRow): FormValues {
   const today = toDateInputValue(new Date());
@@ -119,8 +152,13 @@ function defaults(tx?: TransactionRow): FormValues {
     parcelado: false,
     qtd_parcelas: "2",
     override_ultima: "",
-    classificacao: tx?.classificacao ?? "pessoal",
+    classificacao: tx?.type === "despesa" ? tx.classificacao : "pessoal",
     parts: [],
+    receita_classificacao: tx?.type === "receita" ? tx.classificacao : "pessoal",
+    receita_minha_parte:
+      tx?.type === "receita" && tx.classificacao === "compartilhada" && tx.valor_pessoal != null
+        ? String(tx.valor_pessoal).replace(".", ",")
+        : "",
   };
 }
 
@@ -144,7 +182,7 @@ export function TransactionFormDialog({
 }: {
   transaction?: TransactionRow;
   accounts: AccountOption[];
-  categories: Pick<CategoryRow, "id" | "name" | "kind">[];
+  categories: Pick<CategoryRow, "id" | "name" | "kind" | "classificacao_padrao">[];
   subcategories: Pick<SubcategoryRow, "id" | "name" | "category_id">[];
   cards?: CardOption[];
   people?: PersonOption[];
@@ -152,6 +190,7 @@ export function TransactionFormDialog({
 }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
+  const [origem, setOrigem] = React.useState<OrigemDaClassificacao>("padrao");
   const isEdit = Boolean(transaction);
 
   const {
@@ -160,6 +199,7 @@ export function TransactionFormDialog({
     handleSubmit,
     reset,
     setValue,
+    getValues,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ defaultValues: defaults(transaction) });
@@ -169,7 +209,7 @@ export function TransactionFormDialog({
   React.useEffect(() => {
     if (!open) return;
     reset(defaults(transaction));
-    if (!transaction || transaction.classificacao === "pessoal") return;
+    if (!transaction || transaction.type !== "despesa" || transaction.classificacao === "pessoal") return;
     let active = true;
     getTransactionSplit(transaction.id).then((res) => {
       if (!active || !res.ok) return;
@@ -191,6 +231,7 @@ export function TransactionFormDialog({
   const qtdParcelas = useWatch({ control, name: "qtd_parcelas" });
   const overrideUltima = useWatch({ control, name: "override_ultima" });
   const isTransfer = type === "transferencia";
+  const isReceita = type === "receita";
   const isCard = !isTransfer && paymentMethod === "cartao_credito";
   // Parcelamento só na criação (edição de parcelamento é feita em /parcelamentos).
   const canParcelar = !isEdit && isCard;
@@ -275,6 +316,21 @@ export function TransactionFormDialog({
     };
   }
 
+  // 03-C2 · A5 — a categoria PROPÕE (só em lançamento novo, só em receita); o lançamento REGISTRA.
+  function reavaliarAtalho(proximo: { categoryId: string; tipo: TransactionType }) {
+    const categoria = categories.find((c) => c.id === proximo.categoryId);
+    const atual = { classificacao: getValues("receita_classificacao"), origem };
+    const seguinte = aplicarAtalhoDaCategoria(atual, {
+      marcacao: categoria?.classificacao_padrao ?? null,
+      tipo: proximo.tipo,
+      modo: isEdit ? "editar" : "criar",
+    });
+    if (seguinte === atual) return;
+    setValue("receita_classificacao", seguinte.classificacao);
+    if (seguinte.classificacao !== "compartilhada") setValue("receita_minha_parte", "");
+    setOrigem(seguinte.origem);
+  }
+
   async function onSubmit(values: FormValues) {
     const splitPayload = buildSplitPayload(values);
 
@@ -339,6 +395,15 @@ export function TransactionFormDialog({
       notes: values.notes,
       // Divisão aplicada na criação E na edição (o servidor re-aplica só quando muda).
       ...splitPayload,
+      ...(values.type === "receita"
+        ? {
+            receita_classificacao: values.receita_classificacao,
+            receita_minha_parte:
+              values.receita_classificacao === "compartilhada"
+                ? values.receita_minha_parte
+                : "",
+          }
+        : {}),
     };
 
     const res = isEdit
@@ -350,13 +415,16 @@ export function TransactionFormDialog({
       setOpen(false);
       router.refresh();
     } else {
-      applyFieldErrors(setError, res.fieldErrors);
-      toast.error(res.error);
+      const mapeado = mapServerFieldErrors(res.fieldErrors, CAMPOS_DO_FORMULARIO);
+      for (const { name, message } of mapeado.toSet) {
+        setError(name as Path<FormValues>, { message });
+      }
+      toast.error(serverErrorMessage(res.error, mapeado));
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { if (v) setOrigem("padrao"); setOpen(v); }}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -385,6 +453,7 @@ export function TransactionFormDialog({
                         setValue("subcategory_id", NONE);
                         setValue("parcelado", false);
                       }
+                      reavaliarAtalho({ categoryId: v === "transferencia" ? NONE : getValues("category_id"), tipo: v as TransactionType });
                     }}
                   >
                     <SelectTrigger className="w-full">
@@ -683,6 +752,7 @@ export function TransactionFormDialog({
                       onValueChange={(v) => {
                         field.onChange(v);
                         setValue("subcategory_id", NONE);
+                        reavaliarAtalho({ categoryId: v, tipo: getValues("type") });
                       }}
                     >
                       <SelectTrigger className="w-full">
@@ -746,6 +816,32 @@ export function TransactionFormDialog({
                         onPartsChange={partsField.onChange}
                         totalReais={parseCurrencyToNumber(amount)}
                         people={people}
+                      />
+                    )}
+                  />
+                )}
+              />
+            </div>
+          )}
+
+          {isReceita && (
+            <div className="rounded-xl border border-border bg-card/40 p-3">
+              <Controller
+                control={control}
+                name="receita_classificacao"
+                render={({ field: classField }) => (
+                  <Controller
+                    control={control}
+                    name="receita_minha_parte"
+                    render={({ field: parteField }) => (
+                      <ReceitaResponsabilidadeEditor
+                        classificacao={classField.value}
+                        onClassificacaoChange={(v) => { classField.onChange(v); setOrigem("usuario"); }}
+                        dica={origem === "atalho" ? DICA_DO_ATALHO : undefined}
+                        minhaParte={parteField.value}
+                        onMinhaParteChange={parteField.onChange}
+                        totalReais={parseCurrencyToNumber(amount)}
+                        erroMinhaParte={errors.receita_minha_parte?.message}
                       />
                     )}
                   />

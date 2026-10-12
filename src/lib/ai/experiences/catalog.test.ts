@@ -6,6 +6,25 @@ import { TOOL_PERMISSIONS } from "@/lib/ai/tools/contracts";
 import { EXPERIENCIAS, MAX_FERRAMENTAS_POR_EXPERIENCIA } from "./catalog";
 import { ATALHOS_DE_EXPERIENCIA } from "./atalhos";
 
+/**
+ * ⚠️ `await import` no TOPO DO MÓDULO, não dentro do `it` — que é o idioma dos outros
+ * quinze testes do módulo de IA (`habits.test.ts`, `todo.test.ts`, `memory.test.ts`,
+ * `route.test.ts`, …).
+ *
+ * `executors.ts` é `server-only` e arrasta a árvore de I/O das 30 ferramentas: carregá-lo
+ * custa ~1,6 s numa máquina ociosa. Enquanto esse `await` morava dentro do `it`, o custo
+ * contava como TEMPO DE TESTE contra o teto default de 5 s do Vitest (o projeto não
+ * declara `testTimeout`), e sob a carga da suíte completa — 192 arquivos disputando o
+ * mesmo servidor Vite — ele estourava de vez em quando, com `Test timed out in 5000ms`.
+ * Era o único `await import` do repositório dentro de um caso de teste, e por isso o
+ * único caso vulnerável: os outros seis deste arquivo são síncronos e levam 0–2 ms.
+ *
+ * ⛔ Isto NÃO é aumento de orçamento de tempo. O trabalho saiu de onde o relógio do teste
+ * o media e foi para o `collect`, que não tem esse teto. Dar um `testTimeout` maior
+ * trataria o sintoma e deixaria a corrida de pé, mais longe.
+ */
+const { TOOL_EXECUTORS } = await import("@/lib/ai/tools/executors");
+
 const HOJE = "2026-09-21"; // segunda-feira
 
 describe("18-F Bloco 4 — o catálogo das experiências", () => {
@@ -50,8 +69,7 @@ describe("18-F Bloco 4 — o catálogo das experiências", () => {
     }
   });
 
-  it("os argumentos saem de `hoje` INJETADO e passam no Zod da própria ferramenta", async () => {
-    const { TOOL_EXECUTORS } = await import("@/lib/ai/tools/executors");
+  it("os argumentos saem de `hoje` INJETADO e passam no Zod da própria ferramenta", () => {
     for (const e of EXPERIENCIAS) {
       for (const f of e.ferramentas) {
         const entrada = f.argumentos(HOJE);

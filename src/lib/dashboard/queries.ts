@@ -9,30 +9,20 @@
 import { addDays, format, startOfMonth, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
-import {
-  dateInSaoPaulo,
-  saoPauloWallClockToInstant,
-  toDateInputValue,
-} from "@/lib/format";
-import {
-  getAccounts,
-  getBills,
-  getCreditCards,
-  getReceivables,
-  getStatements,
-  getTransactionsRange,
-} from "@/lib/finance/queries";
+import { dateInSaoPaulo, saoPauloWallClockToInstant } from "@/lib/format";
+import { lerFinanceiro } from "@/lib/finance/queries";
 import {
   proximas6Faturas,
   proximasContasPagar,
   resumoMes,
   totalAReceber,
-  type DashBill,
-  type DashCard,
-  type DashReceivable,
-  type DashStatement,
-  type DashTx,
 } from "@/lib/finance/dashboard";
+import {
+  ESCOPO_CARD_FINANCEIRO,
+  ESCOPO_FATURAS,
+  janelaDoMes,
+  saldoDasContas,
+} from "@/lib/finance/pipeline";
 import { getCalendarEvents, getUpcomingCalendarEvents } from "@/lib/calendar/queries";
 import { getHabitsDashboard } from "@/lib/habits/queries";
 import { getRoutinesWithToday } from "@/lib/tasks/queries";
@@ -107,12 +97,6 @@ function fimDoDiaSP(dia: string): Date {
   return new Date(inicioDoDiaSP(dia).getTime() + UM_DIA_MS - 1);
 }
 
-/** Último dia do mês 'yyyy-MM' como 'yyyy-MM-dd'. */
-function fimDoMes(mes: string): string {
-  const [y, m] = mes.split("-").map(Number);
-  return toDateInputValue(new Date(y, m, 0));
-}
-
 /* ───────────────────────────── Financeiro ───────────────────────────── */
 
 /**
@@ -128,63 +112,26 @@ export async function getFinanceCardData(
   todayIso: string,
   owner?: LeituraDoDono,
 ): Promise<FinanceCardData> {
-  const [accounts, statements, receivables, bills, transactions] =
-    await Promise.all([
-      getAccounts(owner),
-      getStatements({}, owner),
-      getReceivables(owner),
-      getBills(owner),
-      getTransactionsRange({ from: `${mes}-01`, to: fimDoMes(mes) }, owner),
-    ]);
-
-  const txs: DashTx[] = transactions.map((t) => ({
-    amount: t.amount,
-    valor_pessoal: t.valor_pessoal,
-    type: t.type,
-    payment_method: t.payment_method,
-    status: t.status,
-    competence_date: t.competence_date,
-    card_id: t.card_id,
-    statement_id: t.statement_id,
-    parcelado: t.parcelado,
-    category_id: t.category_id,
-    category: t.category
-      ? { id: t.category.id, name: t.category.name, color: t.category.color }
-      : null,
-  }));
-  const sts: DashStatement[] = statements.map((s) => ({
-    id: s.id,
-    card_id: s.card_id,
-    competencia: s.competencia,
-    data_fechamento: s.data_fechamento,
-    data_vencimento: s.data_vencimento,
-    pago_em: s.pago_em,
-    total_atual: s.total_atual,
-  }));
-  const recs: DashReceivable[] = receivables.map((r) => ({
-    statement_id: r.statement_id,
-    installment_id: r.installment_id,
-    valor: r.valor,
-    status: r.status,
-    ref_month:
-      r.statement?.competencia?.slice(0, 7) ??
-      r.transaction?.purchase_date?.slice(0, 7) ??
-      null,
-  }));
-  const dashBills: DashBill[] = bills.map((b) => ({
-    name: b.name,
-    amount: b.amount,
-    due_day: b.due_day,
-    is_active: b.is_active,
-  }));
+  // REDESIGN-03-B — as mesmas cinco leituras, com o mesmo `owner` em cada uma. ⚠️ Este escopo
+  // NÃO lê parcelas (`entradas.inst` fica ausente): serve para o resumo; tentar usá-lo em
+  // `gastosPorCategoria` é erro de compilação (R1).
+  const { entradas, contas: accounts, completude } = await lerFinanceiro({
+    janela: janelaDoMes(mes),
+    escopo: ESCOPO_CARD_FINANCEIRO,
+    owner,
+  });
+  const { txs, sts, recs, bills } = entradas;
 
   const resumo = resumoMes({ mes, transactions: txs, statements: sts, receivables: recs });
-  const contas = proximasContasPagar({ hoje: todayIso, bills: dashBills });
-  const saldo = accounts.reduce((s, a) => s + (a.current_balance ?? 0), 0);
+  const contas = proximasContasPagar({ hoje: todayIso, bills });
+  const saldo = saldoDasContas(accounts);
 
   return {
+    completude,
     saldo,
     entradas: resumo.entradas,
+    entradasMeu: resumo.entradasMeu,
+    entradasTerceiros: resumo.entradasTerceiros,
     saidas: resumo.saidas,
     meu: resumo.meu,
     terceiros: resumo.terceiros,
@@ -203,45 +150,24 @@ export async function getFinanceCardData(
 export async function getInvoicesCardData(
   todayIso: string,
 ): Promise<InvoicesCardData> {
-  const [cards, statements, receivables] = await Promise.all([
-    getCreditCards(),
-    getStatements(),
-    getReceivables(),
-  ]);
-
-  const dashCards: DashCard[] = cards.map((c) => ({
-    id: c.id,
-    nome: c.nome,
-    cor: c.cor,
-    limite_total: c.limite_total,
-    dia_fechamento: c.dia_fechamento,
-    dia_vencimento: c.dia_vencimento,
-  }));
-  const sts: DashStatement[] = statements.map((s) => ({
-    id: s.id,
-    card_id: s.card_id,
-    competencia: s.competencia,
-    data_fechamento: s.data_fechamento,
-    data_vencimento: s.data_vencimento,
-    pago_em: s.pago_em,
-    total_atual: s.total_atual,
-  }));
-  const recs: DashReceivable[] = receivables.map((r) => ({
-    statement_id: r.statement_id,
-    installment_id: r.installment_id,
-    valor: r.valor,
-    status: r.status,
-  }));
+  // REDESIGN-03-B2 — sem janela: `ESCOPO_FATURAS` não pede transações. Os recebíveis
+  // passam a carregar `ref_month` como os das outras telas; este card chama `totalAReceber`
+  // SEM mês, então o número dele não muda.
+  const { entradas, completude } = await lerFinanceiro({
+    escopo: ESCOPO_FATURAS,
+  });
+  const { cards, sts, recs } = entradas;
 
   const faturas = proximas6Faturas({
     hoje: todayIso,
-    cards: dashCards,
+    cards,
     statements: sts,
     receivables: recs,
   });
   const reais = faturas.filter((f) => !f.virtual);
 
   return {
+    completude,
     abertas: reais.filter((f) => f.status === "aberta").length,
     fechadas: reais.filter((f) => f.status === "fechada" || f.status === "atrasada").length,
     pagas: reais.filter((f) => f.status === "paga").length,

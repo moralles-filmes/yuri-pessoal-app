@@ -2,7 +2,7 @@
  * Camada de leitura do financeiro (Fase 02). Server-only: usada por Server
  * Components. A RLS garante que cada query retorna apenas os dados do usuário.
  *
- * ⚠️ **Fase 18-E (Bloco 4) — cinco funções aceitam `owner`.** Quando ele vem, quem lê é o
+ * ⚠️ **Fase 18-E / 03-B2 — oito funções aceitam `owner`.** Quando ele vem, quem lê é o
  * Cron com service role, que IGNORA a RLS: a frase acima deixa de valer e o escopo do
  * usuário passa a ser o `.eq("user_id", …)` explícito. Sem `owner`, o caminho é byte por
  * byte o de antes. Ver `src/lib/supabase/owner.ts`.
@@ -11,10 +11,21 @@ import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { toDateInputValue } from "@/lib/format";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
+import { idsDasCategoriasMarcadas } from "@/lib/finance/categorias-marcadas";
 import {
   saldosPorDia,
   type MovimentoDeSaldo,
 } from "@/lib/finance/daily-balance";
+import {
+  completudeDe,
+  lancamentosForaDoDominio,
+  montarEntradas,
+  type CompletudeFinanceira,
+  type EntradasDoEscopo,
+  type EscopoFinanceiro,
+  type JanelaFinanceira,
+  type LinhasFinanceiras,
+} from "@/lib/finance/pipeline";
 import type {
   AccountWithBalance,
   BillRow,
@@ -109,6 +120,8 @@ export type TransactionFilters = {
   cardId?: string;
   statementId?: string;
   month?: string; // 'yyyy-MM'
+  /** 03-C2 · A6 (K1): só lançamentos em categoria marcada como de terceiros. Peneira; não decide. */
+  categoriasMarcadas?: boolean;
 };
 
 export async function getTransactions(
@@ -133,6 +146,11 @@ export async function getTransactions(
     const start = `${filters.month}-01`;
     const end = toDateInputValue(new Date(y, m, 0));
     query = query.gte("competence_date", start).lte("competence_date", end);
+  }
+  if (filters.categoriasMarcadas) {
+    const ids = await idsDasCategoriasMarcadas(supabase);
+    if (ids.length === 0) return [];
+    query = query.in("category_id", ids);
   }
 
   const { data } = await query;
@@ -225,6 +243,22 @@ export type TransactionRangeFilters = {
   to: string;
 };
 
+export const TETO_DE_LANCAMENTOS = 2000;
+export const TETO_DE_RECEBIVEIS = 1000;
+
+export type LeituraComTeto<T> = {
+  linhas: T[];
+  situacao: "completa" | "saturou" | "sem_contagem";
+};
+
+/** Compara com o recebido: o max_rows do PostgREST pode cortar antes do nosso limit. */
+function leituraComTeto<T>(linhas: T[], count: number | null): LeituraComTeto<T> {
+  return {
+    linhas,
+    situacao: count === null ? "sem_contagem" : count > linhas.length ? "saturou" : "completa",
+  };
+}
+
 /**
  * Lançamentos por intervalo de competência (Fase 07 — dashboard). Diferente de
  * `getTransactions` (single-month, limite 500), busca uma JANELA de meses (ex.: últimos 6
@@ -235,26 +269,27 @@ export type TransactionRangeFilters = {
 export async function getTransactionsRange(
   filters: TransactionRangeFilters,
   owner?: LeituraDoDono,
-): Promise<TransactionWithRelations[]> {
+): Promise<LeituraComTeto<TransactionWithRelations>> {
   const supabase = owner?.client ?? (await createClient());
   const base = supabase
     .from("transactions")
-    .select(TX_SELECT)
+    .select(TX_SELECT, { count: "exact" })
     .gte("competence_date", filters.from)
     .lte("competence_date", filters.to);
-  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
+  const { data, count } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("competence_date", { ascending: true })
-    .limit(2000);
-  return (data ?? []) as unknown as TransactionWithRelations[];
+    .limit(TETO_DE_LANCAMENTOS);
+  return leituraComTeto((data ?? []) as unknown as TransactionWithRelations[], count);
 }
 
 /* ───────────────────────── Fase 03 — Cartões & Faturas ───────────────────────── */
 
-export async function getCreditCards(): Promise<CreditCardRow[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("credit_cards")
-    .select("*")
+export async function getCreditCards(
+  owner?: LeituraDoDono,
+): Promise<CreditCardRow[]> {
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase.from("credit_cards").select("*");
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("ativo", { ascending: false })
     .order("nome", { ascending: true });
   return (data ?? []) as CreditCardRow[];
@@ -450,10 +485,11 @@ export async function getInstallmentPurchases(
  */
 export async function getStatementInstallmentItems(
   statementIds: string[],
+  owner?: LeituraDoDono,
 ): Promise<StatementInstallmentItem[]> {
   if (statementIds.length === 0) return [];
-  const supabase = await createClient();
-  const { data } = await supabase
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase
     .from("transaction_installments")
     .select(
       // `classificacao` vem do PAI porque é dele que a divisão é: a parcela herda o rateio,
@@ -462,7 +498,9 @@ export async function getStatementInstallmentItems(
       "*, parent:transactions!transaction_installments_parent_transaction_id_fkey(id,description,classificacao,category:categories(id,name,color))",
     )
     .in("statement_id", statementIds)
-    .neq("status", "cancelada")
+    .neq("status", "cancelada");
+  // Invariante 84: ids de faturas já filtrados não substituem o escopo explícito do dono.
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("numero", { ascending: true });
   return (data ?? []) as unknown as StatementInstallmentItem[];
 }
@@ -486,19 +524,20 @@ export async function getBills(owner?: LeituraDoDono): Promise<
   })[];
 }
 
-export async function getRecurrences(): Promise<
+export async function getRecurrences(owner?: LeituraDoDono): Promise<
   (RecurringTransactionRow & {
     account: { id: string; name: string } | null;
     card: { id: string; nome: string } | null;
     category: Pick<CategoryRow, "id" | "name" | "color"> | null;
   })[]
 > {
-  const supabase = await createClient();
-  const { data } = await supabase
+  const supabase = owner?.client ?? (await createClient());
+  const base = supabase
     .from("recurring_transactions")
     .select(
       "*, account:accounts(id,name), card:credit_cards(id,nome), category:categories(id,name,color)",
-    )
+    );
+  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("is_active", { ascending: false })
     .order("next_due_date", { ascending: true });
   return (data ?? []) as unknown as (RecurringTransactionRow & {
@@ -549,12 +588,18 @@ export async function getPeopleForSelect(): Promise<
 export async function getReceivables(
   owner?: LeituraDoDono,
 ): Promise<ReceivableWithRelations[]> {
+  return (await lerRecebiveis(owner)).linhas;
+}
+
+async function lerRecebiveis(
+  owner?: LeituraDoDono,
+): Promise<LeituraComTeto<ReceivableWithRelations>> {
   const supabase = owner?.client ?? (await createClient());
-  const base = supabase.from("receivables").select(RECEIVABLE_SELECT);
-  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
+  const base = supabase.from("receivables").select(RECEIVABLE_SELECT, { count: "exact" });
+  const { data, count } = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("created_at", { ascending: false })
-    .limit(1000);
-  return (data ?? []) as unknown as ReceivableWithRelations[];
+    .limit(TETO_DE_RECEBIVEIS);
+  return leituraComTeto((data ?? []) as unknown as ReceivableWithRelations[], count);
 }
 
 /**
@@ -571,6 +616,112 @@ export async function getReceivablesByStatements(
     .select("*, person:people(id,nome)")
     .in("statement_id", statementIds);
   return (data ?? []) as unknown as ReceivableWithPerson[];
+}
+
+/* ───────────────────── REDESIGN-03-B — a leitura do motor financeiro ───────────────────── */
+
+type RecorrenciaCrua = Awaited<ReturnType<typeof getRecurrences>>[number];
+
+export type ParametrosDaLeitura<E extends EscopoFinanceiro> = {
+  escopo: E;
+  owner?: LeituraDoDono;
+} & (E["transacoes"] extends false ? { janela?: undefined } : { janela: JanelaFinanceira });
+
+export type LeituraFinanceira<E extends EscopoFinanceiro> = {
+  entradas: EntradasDoEscopo<E>;
+  completude: CompletudeFinanceira;
+} & (E["contas"] extends true ? { contas: AccountWithBalance[] } : unknown) &
+  (E["recorrencias"] extends true ? { recorrencias: RecorrenciaCrua[] } : unknown);
+
+/**
+ * As leituras que o motor financeiro consome, já montadas por `montarEntradas` — a camada de
+ * I/O do pipeline (a pura é `pipeline.ts`). Usada pelos dois cards do dashboard, pelo
+ * relatório e pela página do dashboard financeiro. O Cron NÃO entra por aqui: ele mantém o
+ * `Promise.all` de 13 leituras e usa só a camada pura (desenho, §3.1).
+ *
+ * - UM `Promise.all` com exatamente as leituras que o `escopo` pede — nem uma a mais, para o
+ *   card do dashboard não passar a pagar pelas que só o relatório usa. Leitura fora do escopo
+ *   fica ausente do retorno, sem tocar o banco.
+ * - `getStatementInstallmentItems` fica DEPOIS do `Promise.all`, porque depende dos ids das
+ *   faturas. Preservar a forma das chamadas é parte de preservar o comportamento: uma ida e
+ *   volta em série a mais ou a menos é mudança de tempo de resposta.
+ * - `contas` voltam CRUAS (quem quer o número chama `saldoDasContas`), e `recorrencias`
+ *   também — além de entrarem em `entradas.recorrencias`. Decisão do dono, fechando uma lacuna
+ *   do desenho: o relatório monta "assinaturas" com `description` e `category.name`, que não
+ *   são entrada do motor. As duas ficam ausentes quando o escopo não as lê.
+ *
+ * Com `owner`, todas as leituras usam o client do dono e filtram `user_id` explicitamente,
+ * inclusive as parcelas cujos ids de fatura já vieram filtrados (invariante 84).
+ */
+export async function lerFinanceiro<E extends EscopoFinanceiro>(
+  params: ParametrosDaLeitura<E>,
+): Promise<LeituraFinanceira<E>> {
+  const { janela, escopo, owner } = params;
+
+  if (escopo.transacoes && janela === undefined) {
+    throw new Error("A leitura de transações exige uma janela financeira.");
+  }
+
+  const [contas, cartoes, faturas, recebiveis, contasFixas, recorrencias, transacoes] =
+    await Promise.all([
+      escopo.contas ? getAccounts(owner) : undefined,
+      escopo.cartoes ? getCreditCards(owner) : undefined,
+      escopo.faturas ? getStatements({}, owner) : undefined,
+      escopo.recebiveis ? lerRecebiveis(owner) : undefined,
+      escopo.contasFixas ? getBills(owner) : undefined,
+      escopo.recorrencias ? getRecurrences(owner) : undefined,
+      escopo.transacoes && janela !== undefined
+        ? getTransactionsRange({ from: janela.from, to: janela.to }, owner)
+        : undefined,
+    ]);
+
+  const linhas: LinhasFinanceiras = {};
+  const motivos: string[] = [];
+  if (transacoes !== undefined) {
+    linhas.transacoes = transacoes.linhas;
+    if (transacoes.situacao === "saturou") {
+      motivos.push(
+        `A leitura de lançamentos trouxe ${transacoes.linhas.length} registros desta janela e havia mais: os totais podem estar incompletos.`,
+      );
+    } else if (transacoes.situacao === "sem_contagem") {
+      motivos.push("Não foi possível confirmar que a leitura de lançamentos veio completa.");
+    }
+    const foraDoDominio = lancamentosForaDoDominio(transacoes.linhas);
+    if (foraDoDominio > 0) {
+      motivos.push(
+        `${foraDoDominio} lançamento(s) com tipo, status ou forma de pagamento fora do que o sistema conhece ficaram fora da conta.`,
+      );
+    }
+  }
+  if (faturas !== undefined) linhas.faturas = faturas;
+  if (recebiveis !== undefined) {
+    linhas.recebiveis = recebiveis.linhas;
+    if (recebiveis.situacao === "saturou") {
+      motivos.push(
+        `A leitura de recebíveis trouxe ${recebiveis.linhas.length} registros e havia mais: os totais podem estar incompletos.`,
+      );
+    } else if (recebiveis.situacao === "sem_contagem") {
+      motivos.push("Não foi possível confirmar que a leitura de recebíveis veio completa.");
+    }
+  }
+  if (cartoes !== undefined) linhas.cartoes = cartoes;
+  if (recorrencias !== undefined) linhas.recorrencias = recorrencias;
+  if (contasFixas !== undefined) linhas.contasFixas = contasFixas;
+  if (escopo.parcelas) {
+    linhas.parcelas = await getStatementInstallmentItems(
+      (faturas ?? []).map((s) => s.id).filter((id): id is string => Boolean(id)),
+      owner,
+    );
+  }
+
+  // O TS não relaciona as leituras condicionais acima ao tipo de E. Cada chave nasce
+  // somente de uma leitura pedida; ler-financeiro.test.ts confere Object.keys nos três escopos.
+  return {
+    entradas: montarEntradas(linhas),
+    completude: completudeDe(motivos),
+    ...(contas !== undefined ? { contas } : {}),
+    ...(recorrencias !== undefined ? { recorrencias } : {}),
+  } as LeituraFinanceira<E>;
 }
 
 /* ───────────────────── Fase 06 — Importação (Excel/CSV/OFX) ───────────────────── */

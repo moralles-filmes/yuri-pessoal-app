@@ -8,6 +8,7 @@ import {
   getTransactions,
   type TransactionFilters,
 } from "@/lib/finance/queries";
+import { sugereTerceiros } from "@/lib/finance/marcacao-da-categoria";
 import { TransactionsClient } from "./transactions-client";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,8 @@ export default async function LancamentosPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
+  // 03-C2 · A6 (P5): só o valor exato "1" liga o filtro de categoria marcada.
+  const filtroDeTerceirosLigado = sp.marcadas === "1";
   const filters: TransactionFilters = {
     type: str(sp.type),
     status: str(sp.status),
@@ -29,6 +32,7 @@ export default async function LancamentosPage({
     categoryId: str(sp.category),
     cardId: str(sp.card),
     month: str(sp.month),
+    categoriasMarcadas: filtroDeTerceirosLigado,
   };
 
   const [transactions, accounts, categories, subcategories, cards, people] =
@@ -41,6 +45,8 @@ export default async function LancamentosPage({
       getPeopleForSelect(),
     ]);
 
+  const categoriasMarcadas = categories.filter((c) => sugereTerceiros(c.classificacao_padrao)).length;
+
   // Saldo de cada dia visível (extrato). Depende dos dias que a lista trouxe, então vem
   // depois dela. Devolve null quando não há saldo a mostrar (filtro de cartão, lista vazia).
   const dailyBalances = await getDailyBalances({
@@ -52,6 +58,7 @@ export default async function LancamentosPage({
   return (
     <TransactionsClient
       transactions={transactions}
+      filtroDeTerceiros={{ ligado: filtroDeTerceirosLigado, categoriasMarcadas }}
       dailyBalances={dailyBalances}
       balanceScope={filters.accountId ? "conta" : "todas"}
       accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
@@ -59,6 +66,7 @@ export default async function LancamentosPage({
         id: c.id,
         name: c.name,
         kind: c.kind,
+        classificacao_padrao: c.classificacao_padrao,
       }))}
       subcategories={subcategories.map((s) => ({
         id: s.id,

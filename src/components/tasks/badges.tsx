@@ -31,10 +31,15 @@ export function TaskStatusBadge({ status }: { status: TaskStatus }) {
   );
 }
 
+/**
+ * Escala semântica, nunca a cor da marca: `alta` usava `primary` e ficaria igual a
+ * `media` (`sky`) no instante em que a identidade virasse azul. Ver a mesma regra em
+ * `src/lib/todo/constants.ts`.
+ */
 const PRIORITY_CLASSES: Record<TaskPriority, string> = {
   baixa: "bg-muted text-muted-foreground ring-1 ring-border",
   media: "bg-sky-500/10 text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/20",
-  alta: "bg-primary/10 text-primary ring-1 ring-primary/20",
+  alta: "bg-warning/10 text-warning-ink ring-1 ring-warning/20",
   urgente: "bg-destructive/10 text-destructive ring-1 ring-destructive/20",
 };
 

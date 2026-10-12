@@ -19,10 +19,13 @@
  * -------------------------------------------------------
  * - À vista / não-cartão: meu = `valor_pessoal ?? amount`; terceiros = `amount − meu`.
  * - Cartão (por fatura): terceiros = Σ `receivables.valor` da fatura; meu = `total_atual − terceiros`.
+ * - Entradas (REDESIGN-03-C, E3): `entradas` é BRUTA; `entradasMeu`/`entradasTerceiros` a
+ *   repartem pela mesma regra da saída à vista (`valor_pessoal ?? amount`), gravada no ato.
  * `cancelado`/`cancelada`, `transferencia` e `ajuste` ficam fora de entradas/saídas.
  */
 import { addMonths, format, getDaysInMonth, parseISO } from "date-fns";
 import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
+import { LIMIARES_DE_ALERTA } from "@/lib/finance/limiares-de-alerta";
 import { occurrenceOn } from "@/lib/finance/recurrence";
 import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
 import {
@@ -163,13 +166,25 @@ export function meuCentavos(t: { amount: number; valor_pessoal: number | null })
 /* ───────────────────────────── Resumo do mês ───────────────────────────── */
 
 export type ResumoMes = {
-  /** Entradas do mês (receitas, base competência). */
+  /** Entradas do mês (receitas, base competência). BRUTAS: incluem o dinheiro de terceiros. */
   entradas: number;
+  /**
+   * REDESIGN-03-C (E3) — a parte das entradas que é MINHA: Σ (`valor_pessoal ?? amount`), pela
+   * MESMA `meuCentavos` da despesa à vista, sobre EXATAMENTE as receitas de `entradas` (ativas,
+   * da competência do mês, sem cartão). Receita pessoal tem `valor_pessoal` nulo e entra
+   * inteira; de terceiro grava 0; compartilhada grava a parte informada.
+   *
+   * O motor NÃO lê a classificação gravada nem a categoria: quem decide é o `valor_pessoal`
+   * gravado no ato (D8). Trocar a marcação de uma categoria nunca reescreve o que entrou em março.
+   */
+  entradasMeu: number;
+  /** Entradas de terceiros: `entradas − entradasMeu`. A partição fecha por construção. */
+  entradasTerceiros: number;
   /** Saídas do mês = total movimentado (à vista + cartão). */
   saidas: number;
-  /** Quanto das saídas é realmente meu. */
+  /** Quanto das SAÍDAS é realmente meu (não fala das entradas — essas têm `entradasMeu`). */
   meu: number;
-  /** Quanto das saídas é de terceiros (saidas − meu). */
+  /** Quanto das SAÍDAS é de terceiros (saidas − meu). */
   terceiros: number;
   /** Gasto no cartão (Σ total das faturas do mês, base fatura). */
   cartao: number;
@@ -206,6 +221,7 @@ export function resumoMes(params: {
   const { mes, transactions, statements, receivables } = params;
 
   let entradasCent = 0;
+  let entradasMeuCent = 0;
   let aVistaCent = 0;
   let aVistaMeuCent = 0;
 
@@ -217,7 +233,11 @@ export function resumoMes(params: {
       // Estorno de cartão (receita vinculada à fatura) NÃO é entrada de caixa: já reduz o total
       // da fatura (total_atual = despesas − estornos + parcelas) e não cai em conta. Só receita
       // "de conta" (sem cartão) conta como entrada do mês — senão o estorno é contado em dobro.
-      if (t.card_id === null) entradasCent += cent(t.amount);
+      // A minha parte sai do MESMO `if`: as três (bruta, minha, de terceiros) têm um filtro só.
+      if (t.card_id === null) {
+        entradasCent += cent(t.amount);
+        entradasMeuCent += meuCentavos(t);
+      }
       continue;
     }
     if (t.type !== "despesa") continue; // transferencia/ajuste fora
@@ -238,6 +258,8 @@ export function resumoMes(params: {
 
   return {
     entradas: reais(entradasCent),
+    entradasMeu: reais(entradasMeuCent),
+    entradasTerceiros: reais(entradasCent - entradasMeuCent),
     saidas: reais(saidasCent),
     meu: reais(meuCent),
     terceiros: reais(saidasCent - meuCent),
@@ -457,6 +479,11 @@ export function evolucaoMensal(params: {
   const { meses, transactions, statements, receivables } = params;
   return meses.map((mes) => {
     const r = resumoMes({ mes, transactions, statements, receivables });
+    // ⚠️ REDESIGN-03-C · B2 — divergência DECLARADA, por decisão do dono: `saldo` continua
+    // `entradas − saidas`, bruto − bruto. O Resultado do §13.3 (renda pessoal − minha parte
+    // EFETIVA das despesas) depende do perdoado (D11), que é da 03-D; trocar um lado só
+    // (renda pessoal − despesa bruta) é a subtração que o próprio §13.3 proíbe. Congelado no
+    // bloco 6 de `dashboard-caracterizacao.test.ts`.
     return {
       mes,
       entradas: r.entradas,
@@ -679,6 +706,52 @@ export function proximasContasPagar(params: {
 
 /* ───────────────────────────── Alertas ───────────────────────────── */
 
+/**
+ * Média de saídas dos meses de referência — a conta de dentro da régua do alerta de gasto alto.
+ *
+ * ⚠️ UMA RÉGUA SÓ desde a 03-B2 (B2, decisão do dono em 2026-09-27). Até a 03-B a tela e o sino
+ * discordavam em três eixos (mês sem saída, quantos meses, base do mês corrente); a 03-B os
+ * pôs num parâmetro, e a 03-B2 os UNIFICOU na régua da tela — ver `reguaDoGastoAlto`, que é o
+ * que a página e o Cron chamam. Mês sem saída é IGNORADO.
+ *
+ * O filtro é `> 0`, não `!== 0`: saída NEGATIVA (estorno maior que o gasto) também é descartada.
+ * Lista vazia devolve 0, nunca `NaN` — e `gerarAlertas` não alerta com média 0.
+ *
+ * A regra "até a mesma altura do mês anterior" (§13.6 das métricas) NÃO está aqui: é da 03-E,
+ * que passa a refinar esta régua — uma, não duas.
+ */
+export function mediaDeSaidas(pontos: readonly { mes: string; saidas: number }[]): number {
+  const considerados = pontos.filter((p) => p.saidas > 0);
+  return considerados.length > 0
+    ? considerados.reduce((s, p) => s + p.saidas, 0) / considerados.length
+    : 0;
+}
+
+/**
+ * REDESIGN-03-B2 (B2) — A régua do alerta de gasto alto, a MESMA para a tela e para o sino.
+ *
+ * `saidas` é o mês `mes` INTEIRO (base competência, pendente incluído — §13.3); `mediaSaidas` é a
+ * média dos até 5 meses ANTERIORES a `mes` que tiveram saída (`ultimosMeses(mes, 6)` sem o
+ * último). É a conta que a página do dashboard financeiro sempre fez — e o Cron passou a fazer.
+ *
+ * Quem chama lê pelo menos `janelaDoGastoAlto(mes)` (pipeline.ts): meses fora dela entram como
+ * sem saída, e seriam ignorados em silêncio.
+ */
+export function reguaDoGastoAlto(params: {
+  mes: string;
+  transactions: DashTx[];
+  statements: DashStatement[];
+  receivables: DashReceivable[];
+}): { saidas: number; mediaSaidas: number } {
+  const { mes, transactions, statements, receivables } = params;
+  const saidasDe = (m: string) => resumoMes({ mes: m, transactions, statements, receivables }).saidas;
+  const anteriores = ultimosMeses(mes, 6).slice(0, -1);
+  return {
+    saidas: saidasDe(mes),
+    mediaSaidas: mediaDeSaidas(anteriores.map((m) => ({ mes: m, saidas: saidasDe(m) }))),
+  };
+}
+
 export type Alerta = {
   kind: "gasto_alto" | "limite_cartao" | "vencimento";
   severity: "warning" | "danger";
@@ -704,9 +777,9 @@ export function gerarAlertas(params: {
     mediaSaidas,
     cards,
     statements,
-    diasVencimentoAviso = 5,
-    limiarGastoAltoPct = 1.2,
-    limiarLimitePct = 0.8,
+    diasVencimentoAviso = LIMIARES_DE_ALERTA.diasDeAvisoDeVencimento,
+    limiarGastoAltoPct = LIMIARES_DE_ALERTA.gastoAlto,
+    limiarLimitePct = LIMIARES_DE_ALERTA.usoDoLimite,
   } = params;
 
   const alertas: Alerta[] = [];
@@ -726,6 +799,8 @@ export function gerarAlertas(params: {
 
   // Limite do cartão: soma das faturas não pagas vs limite total.
   const cardById = new Map(cards.map((c) => [c.id, c]));
+  // Registrado, não corrigido: usadoPorCartao soma em centavos aqui e em float no sino
+  // (notifications/generate.ts); isso pode mover o percentual na borda do limiar.
   const usadoPorCartao = new Map<string, number>();
   for (const s of statements) {
     if (!s.card_id) continue;

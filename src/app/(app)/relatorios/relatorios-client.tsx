@@ -41,6 +41,7 @@ import { ProjecaoChart } from "@/components/dashboard/projecao-chart";
 import { ReportBarChart, type BarPoint } from "@/components/reports/report-bar-chart";
 import { monthLabel } from "@/components/dashboard/chart-theme";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
 import { formatMinutes, STUDY_STATUS_LABELS } from "@/lib/studies/constants";
 import { toCsv } from "@/lib/reports/csv";
 import { downloadCsv, downloadJson } from "@/lib/reports/download";
@@ -65,6 +66,7 @@ function pct(value: number): string {
 export function RelatoriosClient({ data }: { data: ReportsData }) {
   const router = useRouter();
   const { finance, card, habits, studies, tasks, mes } = data;
+  const entradasNoCard = apresentarEntradas(finance.resumo);
 
   function setMes(value: string) {
     const params = new URLSearchParams();
@@ -126,7 +128,7 @@ export function RelatoriosClient({ data }: { data: ReportsData }) {
         <TabsContent value="financeiro" className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Saldo atual" value={formatCurrency(finance.saldo)} icon={Wallet} hint="Soma das contas" />
-            <StatCard label="Entradas do mês" value={formatCurrency(finance.resumo.entradas)} icon={ArrowDownLeft} />
+            <StatCard label="Entradas do mês" value={formatCurrency(entradasNoCard.valor)} icon={ArrowDownLeft} hint={entradasNoCard.detalhe ?? undefined} />
             <StatCard
               label="Saídas do mês"
               value={formatCurrency(finance.resumo.saidas)}

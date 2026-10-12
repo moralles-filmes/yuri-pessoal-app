@@ -6,17 +6,8 @@
  * A RLS garante o escopo por usuário. Tudo roda em paralelo (Promise.all), sem N+1.
  */
 import { createClient } from "@/lib/supabase/server";
-import { hojeISO, toDateInputValue } from "@/lib/format";
-import {
-  getAccounts,
-  getBills,
-  getCreditCards,
-  getRecurrences,
-  getReceivables,
-  getStatementInstallmentItems,
-  getStatements,
-  getTransactionsRange,
-} from "@/lib/finance/queries";
+import { hojeISO } from "@/lib/format";
+import { lerFinanceiro } from "@/lib/finance/queries";
 import {
   comparativoMesAMes,
   evolucaoMensal,
@@ -26,19 +17,10 @@ import {
   projecaoProximosMeses,
   proximas6Faturas,
   proximasContasPagar,
-  proximosMeses,
   resumoMes,
   totalAReceber,
-  ultimosMeses,
   type CategoriaSlice,
   type Comparativo,
-  type DashBill,
-  type DashCard,
-  type DashInstallmentItem,
-  type DashReceivable,
-  type DashRecurrence,
-  type DashStatement,
-  type DashTx,
   type EvolucaoPonto,
   type FaturaProvisao,
   type FormaSlice,
@@ -46,6 +28,12 @@ import {
   type ProximasContas,
   type ResumoMes,
 } from "@/lib/finance/dashboard";
+import {
+  ESCOPO_RELATORIO,
+  janelaDoRelatorio,
+  saldoDasContas,
+  type CompletudeFinanceira,
+} from "@/lib/finance/pipeline";
 import { getHabitsDashboard } from "@/lib/habits/queries";
 import { getStudyDashboard } from "@/lib/studies/queries";
 import { tasksReport, type ReportTask, type TasksReport } from "@/lib/reports/tasks";
@@ -58,15 +46,10 @@ import type {
   StudyWeekPoint,
 } from "@/types/database";
 
-/** Último dia do mês 'yyyy-MM' como 'yyyy-MM-dd'. */
-function fimDoMes(mes: string): string {
-  const [y, m] = mes.split("-").map(Number);
-  return toDateInputValue(new Date(y, m, 0));
-}
-
 /* ───────────────────────────── Tipos de saída ───────────────────────────── */
 
 export type FinanceReport = {
+  completude: CompletudeFinanceira;
   mes: string;
   saldo: number;
   resumo: ResumoMes;
@@ -88,6 +71,7 @@ export type FaturaMes = {
 };
 
 export type CardReport = {
+  completude: CompletudeFinanceira;
   faturas: FaturaProvisao[];
   faturasPorMes: FaturaMes[];
   parcelasComprometidas: number;
@@ -140,98 +124,17 @@ async function getFinanceAndCardReport(
   hoje: string,
 ): Promise<{ finance: FinanceReport; card: CardReport }> {
   const mesAtual = mesDe(hoje);
-  const evoMeses = ultimosMeses(mesSel, 6);
-  const projMeses = proximosMeses(mesAtual, 6);
-  const from = `${evoMeses[0]}-01`;
-  const to = fimDoMes(projMeses[projMeses.length - 1]);
+  // REDESIGN-03-B — a MESMA chamada da página do dashboard financeiro, não a mesma cópia.
+  const janela = janelaDoRelatorio({ mesSel, mesAtual });
+  const { evoMeses, projMeses } = janela;
 
-  const [accounts, cards, statements, receivables, bills, recurrences, transactions] =
-    await Promise.all([
-      getAccounts(),
-      getCreditCards(),
-      getStatements(),
-      getReceivables(),
-      getBills(),
-      getRecurrences(),
-      getTransactionsRange({ from, to }),
-    ]);
-
-  const statementIds = statements.map((s) => s.id).filter(Boolean) as string[];
-  const installmentItems = await getStatementInstallmentItems(statementIds);
-
-  const txs: DashTx[] = transactions.map((t) => ({
-    amount: t.amount,
-    valor_pessoal: t.valor_pessoal,
-    type: t.type,
-    payment_method: t.payment_method,
-    status: t.status,
-    competence_date: t.competence_date,
-    card_id: t.card_id,
-    statement_id: t.statement_id,
-    parcelado: t.parcelado,
-    category_id: t.category_id,
-    category: t.category
-      ? { id: t.category.id, name: t.category.name, color: t.category.color }
-      : null,
-  }));
-  const sts: DashStatement[] = statements.map((s) => ({
-    id: s.id,
-    card_id: s.card_id,
-    competencia: s.competencia,
-    data_fechamento: s.data_fechamento,
-    data_vencimento: s.data_vencimento,
-    pago_em: s.pago_em,
-    total_atual: s.total_atual,
-  }));
-  const recs: DashReceivable[] = receivables.map((r) => ({
-    statement_id: r.statement_id,
-    installment_id: r.installment_id,
-    valor: r.valor,
-    status: r.status,
-    ref_month:
-      r.statement?.competencia?.slice(0, 7) ??
-      r.transaction?.purchase_date?.slice(0, 7) ??
-      null,
-  }));
-  const inst: DashInstallmentItem[] = installmentItems.map((it) => ({
-    id: it.id,
-    statement_id: it.statement_id,
-    valor: it.valor,
-    status: it.status,
-    parent: it.parent?.category
-      ? {
-          category: {
-            id: it.parent.category.id,
-            name: it.parent.category.name,
-            color: it.parent.category.color,
-          },
-        }
-      : { category: null },
-  }));
-  const dashCards: DashCard[] = cards.map((c) => ({
-    id: c.id,
-    nome: c.nome,
-    cor: c.cor,
-    limite_total: c.limite_total,
-    dia_fechamento: c.dia_fechamento,
-    dia_vencimento: c.dia_vencimento,
-  }));
-  const recorrencias: DashRecurrence[] = recurrences.map((r) => ({
-    amount: r.amount,
-    type: r.type,
-    frequency: r.frequency,
-    interval_count: r.interval_count,
-    anchor_date: r.anchor_date,
-    next_due_date: r.next_due_date,
-    end_date: r.end_date,
-    is_active: r.is_active,
-  }));
-  const dashBills: DashBill[] = bills.map((b) => ({
-    name: b.name,
-    amount: b.amount,
-    due_day: b.due_day,
-    is_active: b.is_active,
-  }));
+  // As recorrências voltam também CRUAS: "assinaturas" lê `description` e `category.name`, que
+  // não são entrada do motor.
+  const { entradas, contas: accounts, recorrencias: recurrences, completude } = await lerFinanceiro({
+    janela,
+    escopo: ESCOPO_RELATORIO,
+  });
+  const { txs, sts, recs, inst, cards: dashCards, recorrencias, bills: dashBills } = entradas;
 
   const resumo = resumoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
   const comparativo = comparativoMesAMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
@@ -241,7 +144,7 @@ async function getFinanceAndCardReport(
   const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, recorrencias, bills: dashBills });
   const contas = proximasContasPagar({ hoje, bills: dashBills });
   const aReceber = totalAReceber(recs, mesSel);
-  const saldo = accounts.reduce((s, a) => s + (a.current_balance ?? 0), 0);
+  const saldo = saldoDasContas(accounts);
 
   const assinaturas = recurrences
     .filter((r) => r.is_active && r.type === "despesa")
@@ -280,7 +183,7 @@ async function getFinanceAndCardReport(
   const paidStatements = new Set(sts.filter((s) => s.pago_em).map((s) => s.id));
   let parcelasComprometidas = 0;
   let parcelasAtivas = 0;
-  for (const it of installmentItems) {
+  for (const it of inst) {
     if (it.status === "cancelada") continue;
     if (it.statement_id && paidStatements.has(it.statement_id)) continue;
     parcelasComprometidas += it.valor;
@@ -289,6 +192,7 @@ async function getFinanceAndCardReport(
 
   return {
     finance: {
+      completude,
       mes: mesSel,
       saldo,
       resumo,
@@ -302,12 +206,13 @@ async function getFinanceAndCardReport(
       assinaturas,
     },
     card: {
+      completude,
       faturas,
       faturasPorMes,
       parcelasComprometidas,
       parcelasAtivas,
       aReceber,
-      hasCards: cards.length > 0,
+      hasCards: dashCards.length > 0,
     },
   };
 }

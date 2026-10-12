@@ -13,6 +13,7 @@
  *   /treinos/calendario        → ?visao=&data= → abre o dia planejado
  */
 import { describe, expect, it } from "vitest";
+import { temPagina } from "@/test/rotas";
 import {
   evolutionLink,
   exerciseLink,
@@ -74,6 +75,41 @@ describe("deep-links de Treinos", () => {
       expect(link.startsWith("/treinos")).toBe(true);
       expect(link).not.toContain("http");
     }
+  });
+});
+
+/**
+ * REDESIGN-02-D — o cabeçalho deste arquivo afirma, desde a 17-F, que "cada rota daqui
+ * tem do outro lado uma página que existe" e que "se um dos dois mudar sem o outro,
+ * `training-links.test.ts` quebra". A segunda frase era falsa: o teste conferia o
+ * formato da string contra ela mesma e nunca abriu o disco.
+ *
+ * As duas armadilhas registradas lá no alto — o exercício que abre por ROTA e não por
+ * query, e `/treinos/evolucao` em vez de um `/treinos/medidas` inexistente — são
+ * exatamente as que só o disco sabe julgar.
+ */
+describe("o link abre uma tela que existe", () => {
+  it.each([
+    ["exercício", exerciseLink(ID)],
+    ["treino-modelo", workoutLink(ID)],
+    ["programa", programLink(ID)],
+    ["sessão do histórico", sessionLink(ID)],
+    ["meta", goalLink(ID)],
+    ["recorde", recordLink(ID)],
+    ["calendário", scheduleLink("2026-08-06")],
+    ["hoje", todayLink()],
+    ["sessão ao vivo", liveSessionLink()],
+    ["evolução", evolutionLink()],
+    ["relatórios", trainingReportsLink()],
+  ])("%s → %s", (_nome, link) => {
+    expect(temPagina(link)).toBe(true);
+  });
+
+  it("e as duas rotas que o módulo NÃO tem continuam não existindo", () => {
+    // Se qualquer uma passar a existir, a armadilha documentada no cabeçalho deixa de
+    // ser armadilha — e é melhor descobrir por um vermelho do que por um link morto.
+    expect(temPagina("/treinos/medidas")).toBe(false);
+    expect(temPagina("/treinos/exercicios/abc/def")).toBe(false);
   });
 });
 

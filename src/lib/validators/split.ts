@@ -78,3 +78,25 @@ export const splitSchema = z
 
 export type SplitInput = z.infer<typeof splitSchema>;
 export type SplitPartInput = z.infer<typeof splitPartSchema>;
+
+/**
+ * REDESIGN-03-C · A1 — a responsabilidade de uma RECEITA, lida do mesmo objeto cru que o
+ * `splitSchema` (segundo schema sobre o mesmo payload, mesmo padrão).
+ *
+ * ⛔ CHAVES PRÓPRIAS, e não `classificacao`. A chave `classificacao` do payload continua sendo
+ * só da despesa: a importação já a manda numa linha que foi dividida como despesa e depois
+ * virou receita na revisão (`imports.ts`, a troca de `tipo` não limpa a divisão), e a IA a
+ * manda fixa em "pessoal". Com chaves próprias, nenhum caminho que não conhece a receita
+ * consegue mudar de quem é uma entrada sem querer — ausente é `pessoal`, por construção.
+ *
+ * SEM refine: quem decide se a combinação fecha é `decidirResponsabilidadeDaReceita`
+ * (`finance/responsabilidade-da-receita.ts`), num lugar só. O schema só traduz a forma.
+ */
+export const receitaResponsabilidadeSchema = z.object({
+  receita_classificacao: z
+    .preprocess((v) => (v === "" || v === null ? undefined : v), z.enum(CLASSIFICACOES).optional())
+    .transform((v) => v ?? "pessoal"),
+  receita_minha_parte: optionalMoney,
+});
+
+export type ReceitaResponsabilidadeInput = z.infer<typeof receitaResponsabilidadeSchema>;

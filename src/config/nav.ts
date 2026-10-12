@@ -21,6 +21,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
+import { hrefAtivo } from "@/lib/nav/active";
 
 export type NavItem = {
   title: string;
@@ -95,9 +96,15 @@ export const navSections: NavSection[] = [
 /** Lista plana de todos os itens de navegação. */
 export const allNavItems: NavItem[] = navSections.flatMap((section) => section.items);
 
-/** Encontra o item de navegação cujo href casa com o pathname atual. */
+/** Os hrefs da navegação principal, na ordem em que aparecem. */
+export const navHrefs: string[] = allNavItems.map((item) => item.href);
+
+/**
+ * O item de navegação que responde por esta rota — o mais específico, nunca dois.
+ * A regra mora em `@/lib/nav/active`, que é a MESMA que pinta a sidebar; esta
+ * função já teve a sua própria cópia correta enquanto a tela usava outra errada.
+ */
 export function findNavItem(pathname: string): NavItem | undefined {
-  return allNavItems
-    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
-    .sort((a, b) => b.href.length - a.href.length)[0];
+  const ativo = hrefAtivo(pathname, navHrefs);
+  return ativo === null ? undefined : allNavItems.find((item) => item.href === ativo);
 }

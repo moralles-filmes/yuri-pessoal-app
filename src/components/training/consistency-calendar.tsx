@@ -36,14 +36,18 @@ import { addDaysIso, monthGridIso, startOfMonthIso } from "@/lib/training/schedu
 /**
  * Tons por estado.
  *
- * Treinado é dourado (a cor de destaque do sistema); parcial é o mesmo dourado mais fraco;
- * descanso é neutro azulado; planejado-sem-treino é um contorno tracejado — visível, mas sem
- * peso visual de erro; livre é o fundo neutro do card.
+ * Treinado é a cor de destaque do sistema; parcial é a mesma, mais fraca; descanso é violeta;
+ * planejado-sem-treino é um contorno tracejado — visível, mas sem peso visual de erro; livre é
+ * o fundo neutro do card.
+ *
+ * ⛔ Descanso era `sky`. Enquanto a marca foi dourada os dois conviviam; com a marca azul,
+ * `bg-primary/45` (parcial) e `bg-sky-500/20` (descanso) viram dois azuis pálidos lado a lado
+ * numa grade lida de relance. Estado que só se distingue por opacidade não se distingue.
  */
 const STATE_STYLE: Record<ConsistencyState, string> = {
   treinado: "bg-primary text-primary-foreground",
   parcial: "bg-primary/45 text-foreground",
-  descanso: "bg-sky-500/20 text-foreground",
+  descanso: "bg-violet-500/25 text-foreground",
   planejado_sem_execucao: "border border-dashed border-muted-foreground/50 bg-transparent",
   livre: "bg-muted/50",
   futuro: "bg-transparent text-muted-foreground/60",

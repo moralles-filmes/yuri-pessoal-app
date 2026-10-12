@@ -13,13 +13,8 @@ import { dateInSaoPaulo } from "@/lib/format";
 import { expandRowsToOccurrences } from "@/lib/calendar/expand";
 import { proximosCompromissos } from "@/lib/calendar/upcoming";
 import { habitOccursOn } from "@/lib/habits/streak";
-import {
-  addMes,
-  resumoMes,
-  type DashReceivable,
-  type DashStatement,
-  type DashTx,
-} from "@/lib/finance/dashboard";
+import { reguaDoGastoAlto } from "@/lib/finance/dashboard";
+import { janelaDoGastoAlto, montarEntradas } from "@/lib/finance/pipeline";
 import type { CalendarEventRow } from "@/types/database";
 import {
   filterByPrefs,
@@ -55,6 +50,9 @@ export async function generateForUser(
   // configurado (a Vercel roda em UTC por padrão).
   const [horaSp, minutoSp] = timeInSaoPaulo(now).split(":").map(Number);
   const minutosAgora = (horaSp || 0) * 60 + (minutoSp || 0);
+  // REDESIGN-03-B2 (B2, decisão do dono) — a janela das transações é a da régua única do gasto
+  // alto: os 5 meses anteriores e o mês corrente CHEIO. Era "3 meses para trás até hoje".
+  const janelaTx = janelaDoGastoAlto(mesAtual);
 
   // Leituras em paralelo (todas filtradas por user_id).
   const [
@@ -76,12 +74,15 @@ export async function generateForUser(
     service
       .from("card_statements_with_total")
       .select("id, card_id, competencia, data_fechamento, data_vencimento, pago_em, total_atual")
-      .eq("user_id", userId),
+      .eq("user_id", userId)
+      // 03-B2 (B1, decisão do dono): fatura sem item não é fatura real — o sino deixa de
+      // avisar "Fatura atrasada" de R$ 0,00. É o mesmo filtro de `getStatements`.
+      .gt("itens", 0),
     service.from("bills").select("id, name, amount, due_day, is_active").eq("user_id", userId),
     service
       .from("receivables")
       .select(
-        "id, valor, status, installment_id, statement_id, data_prevista, person:people(nome), statement:card_statements(data_vencimento)",
+        "id, valor, status, installment_id, statement_id, data_prevista, person:people(nome), statement:card_statements(data_vencimento, competencia), transaction:transactions!receivables_transaction_id_fkey(purchase_date)",
       )
       .eq("user_id", userId),
     service
@@ -116,14 +117,17 @@ export async function generateForUser(
       .select("course_id, session_date")
       .eq("user_id", userId)
       .gte("session_date", spDateIso(addDays(now, -120))),
+    // A leitura de transações do Cron não tem .limit e continua sem: pôr teto agora
+    // truncaria os dados e mudaria o número. O max_rows do PostgREST (padrão 1000,
+    // configurado fora do alcance do SQL) também vale para o Cron.
     service
       .from("transactions")
       .select(
-        "amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado",
+        "amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado, category_id, category:categories(id,name,color)",
       )
       .eq("user_id", userId)
-      .gte("competence_date", `${addMes(mesAtual, -3)}-01`)
-      .lte("competence_date", todayIso),
+      .gte("competence_date", janelaTx.from)
+      .lte("competence_date", janelaTx.to),
     // Fase 15 — TO-DO: só as tarefas ABERTAS interessam para alerta.
     service
       .from("todo_tasks")
@@ -283,49 +287,32 @@ export async function generateForUser(
     lastSessionIso: lastByCourse.get(c.id) ?? null,
   }));
 
-  /* ── Gasto alto (resumo do mês × média dos 3 anteriores) ── */
-  const dashStatements: DashStatement[] = statements.map((s) => ({
-    id: s.id,
-    card_id: s.card_id,
-    competencia: s.competencia,
-    data_fechamento: s.data_fechamento,
-    data_vencimento: s.data_vencimento,
-    pago_em: s.pago_em,
-    total_atual: s.total_atual,
-  }));
-  const dashReceivables: DashReceivable[] = receivables.map((r) => ({
-    statement_id: r.statement_id,
-    installment_id: r.installment_id,
-    valor: Number(r.valor),
-    status: r.status,
-  }));
-  const dashTx = ((txRes.data ?? []) as Array<Record<string, unknown>>).map(
-    (t): DashTx => ({
-      amount: Number(t.amount),
-      valor_pessoal: t.valor_pessoal === null ? null : Number(t.valor_pessoal),
-      type: t.type as DashTx["type"],
-      payment_method: (t.payment_method as DashTx["payment_method"]) ?? null,
-      status: t.status as DashTx["status"],
-      competence_date: t.competence_date as string,
-      card_id: (t.card_id as string | null) ?? null,
-      statement_id: (t.statement_id as string | null) ?? null,
-      parcelado: Boolean(t.parcelado),
-      category_id: null,
-    }),
-  );
-  const resumoAtual = resumoMes({
-    mes: mesAtual,
-    transactions: dashTx,
-    statements: dashStatements,
-    receivables: dashReceivables,
+  /* ── Gasto alto (o mês × a média dos anteriores — a régua da tela) ── */
+  // REDESIGN-03-B — a tradução para o motor é a MESMA das telas (`montarEntradas`).
+  // 03-B2 (A2) — e SEM cast de linha: transações e recebíveis entram como o client os inferiu,
+  // e o `select` traz o que as linhas estritas pedem (`category_id`, `category`, `competencia`,
+  // `purchase_date`). Duas coisas declaradas:
+  //  • lançamento com tipo, status ou forma de pagamento fora do domínio conhecido fica FORA da
+  //    soma (`montarEntradas` estreita pelos arrays de `finance/constants.ts`, que batem com os
+  //    CHECKs). As telas e a IA dizem "parcial" quando isso acontece; o sino não tem onde dizer.
+  //  • as FATURAS continuam passando por `statements`, com o cast local lá de cima: a view
+  //    `card_statements_with_total` tem TODA coluna anulável no tipo gerado, e decidir o que é
+  //    uma fatura sem `id` está fora da 03-B2 (é o mesmo estreitamento de `getStatements`).
+  const { txs, sts, recs } = montarEntradas({
+    transacoes: txRes.data ?? [],
+    faturas: statements,
+    recebiveis: receivablesRes.data ?? [],
   });
-  const priorMonths = [1, 2, 3].map((k) => addMes(mesAtual, -k));
-  const priorSaidas = priorMonths.map(
-    (mes) =>
-      resumoMes({ mes, transactions: dashTx, statements: dashStatements, receivables: dashReceivables })
-        .saidas,
-  );
-  const mediaSaidas = priorSaidas.reduce((a, b) => a + b, 0) / priorMonths.length;
+  // 03-B2 (B2, decisão do dono) — o sino ADOTOU a régua da tela: a MESMA função que a página do
+  // dashboard financeiro chama. Até 5 meses anteriores, mês sem saída ignorado, e o mês corrente
+  // cheio (pendente incluído). Antes: 3 meses exatos, mês zerado dividindo, e o mês corrente
+  // cortado em hoje — o alerta de gasto alto pode disparar em outro dia do que disparava.
+  const regua = reguaDoGastoAlto({
+    mes: mesAtual,
+    transactions: txs,
+    statements: sts,
+    receivables: recs,
+  });
 
   /* ── TO-DO (Fase 15) ── */
   const genTodoTasks = ((todoTasksRes.data ?? []) as Array<{
@@ -376,7 +363,7 @@ export async function generateForUser(
     events: genEvents,
     habits: genHabits,
     courses: genCourses,
-    spending: { mes: mesAtual, saidas: resumoAtual.saidas, mediaSaidas },
+    spending: { mes: mesAtual, saidas: regua.saidas, mediaSaidas: regua.mediaSaidas },
     todoTasks: genTodoTasks,
     todoReminders: genTodoReminders,
     // Fase 16-F — Dieta. Isolada num try: uma falha de leitura do módulo não pode impedir

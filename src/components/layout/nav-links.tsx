@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { navSections } from "@/config/nav";
+import { navSections, navHrefs } from "@/config/nav";
+import { hrefAtivo } from "@/lib/nav/active";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -23,6 +24,9 @@ export function NavLinks({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  // Uma pergunta para a lista inteira, não uma por item: o vencedor é no máximo
+  // um, então "dois itens acesos" não é um estado que esta tela consiga montar.
+  const ativo = hrefAtivo(pathname, navHrefs);
 
   return (
     <nav className="flex flex-col gap-5">
@@ -34,8 +38,7 @@ export function NavLinks({
             </p>
           )}
           {section.items.map((item) => {
-            const active =
-              pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const active = item.href === ativo;
             const Icon = item.icon;
 
             const link = (

@@ -12,6 +12,7 @@
  */
 import { getDaysInMonth, format } from "date-fns";
 import { statusEfetivo } from "@/lib/finance/invoice";
+import { LIMIARES_DE_ALERTA } from "@/lib/finance/limiares-de-alerta";
 import { isDueToday, isOverdue } from "@/lib/tasks/status";
 import { courseOverdueReason } from "@/lib/studies/progress";
 import {
@@ -202,12 +203,12 @@ export type NotificationCandidate = {
 };
 
 const DEFAULTS: Required<GenerateOptions> = {
-  diasVencimento: 5,
+  diasVencimento: LIMIARES_DE_ALERTA.diasDeAvisoDeVencimento,
   diasRecebivel: 7,
   diasContaVencida: 10,
   horasEvento: 24,
-  limiarLimite: 0.8,
-  limiarGastoAlto: 1.2,
+  limiarLimite: LIMIARES_DE_ALERTA.usoDoLimite,
+  limiarGastoAlto: LIMIARES_DE_ALERTA.gastoAlto,
   diasPrazoTodo: 3,
 };
 
@@ -256,6 +257,8 @@ export function generateNotifications(input: GenerateInput): NotificationCandida
 
   /* ── Faturas (a vencer / atrasada) + limite do cartão ── */
   const statements = input.statements ?? [];
+  // Registrado, não corrigido: usadoPorCartao soma em float aqui e em centavos na tela
+  // (finance/dashboard.ts); isso pode mover o percentual na borda do limiar.
   const usadoPorCartao = new Map<string, number>();
   for (const s of statements) {
     const eff = statusEfetivo(

@@ -71,8 +71,11 @@ beforeEach(() => {
     conta({ id: "c3", name: "Antiga", current_balance: 999.99, is_active: false }),
   ];
   resumoFalso = {
+    completude: { estado: "exato" },
     saldo: 13235.79,
     entradas: 5000,
+    entradasMeu: 4200,
+    entradasTerceiros: 800,
     saidas: 3200,
     meu: 2700,
     terceiros: 500,
@@ -85,6 +88,7 @@ beforeEach(() => {
     mes: "2026-08",
   };
   faturasFalsas = {
+    completude: { estado: "exato" },
     abertas: 1,
     fechadas: 1,
     pagas: 2,
@@ -134,11 +138,28 @@ describe("finance.get_balances", () => {
     expect(nubank.saldo).toBe(12345.67);
   });
 
-  it("soma só as contas ativas", async () => {
+  /**
+   * Decisão do dono na 03-B2, B3: esconder a conta não faz o dinheiro sumir.
+   * O total inclui todas as contas; as inativas com saldo aparecem nos itens, marcadas.
+   */
+  it("soma todas as contas e marca as inativas com saldo nos itens", async () => {
     const saida = await getBalances();
-    // 12345.67 + 890.12 = 13235.79. A conta inativa (999.99) fica fora.
-    expect(saida.agregados).toMatchObject({ contas_ativas: 2, saldo_total: 13235.79 });
-    expect(saida.contagem).toBe(2);
+    const itens = saida.itens as { conta: string; saldo: number; inativa: boolean }[];
+    // 12345.67 + 890.12 + 999.99 = 14235.78, incluindo a conta inativa.
+    expect(saida.agregados).toMatchObject({ contas_ativas: 2, contas_inativas_com_saldo: 1 });
+    expect((saida.agregados as { saldo_total: number }).saldo_total).toBeCloseTo(14235.78, 2);
+    expect(saida.contagem).toBe(3);
+    expect(itens).toEqual([
+      { conta: "Nubank", tipo: "corrente", saldo: 12345.67, inativa: false },
+      { conta: "Poupança", tipo: "poupanca", saldo: 890.12, inativa: false },
+      { conta: "Antiga", tipo: "corrente", saldo: 999.99, inativa: true },
+    ]);
+    const somaDosItens = itens.reduce((total, item) => total + item.saldo, 0);
+    expect(somaDosItens).toBeCloseTo(14235.78, 2);
+    expect(somaDosItens).toBeCloseTo(
+      (saida.agregados as { saldo_total: number }).saldo_total,
+      2,
+    );
   });
 
   /**
@@ -153,22 +174,79 @@ describe("finance.get_balances", () => {
 
   it("sem conta ativa, distingue 'nenhuma cadastrada' de 'todas inativas'", async () => {
     contasFalsas = [contasFalsas[2]];
-    expect((await getBalances()).observacao).toContain("inativas");
+    const comSaldo = await getBalances();
+    expect(comSaldo.contagem).toBe(1);
+    expect(comSaldo.agregados).toMatchObject({ contas_ativas: 0, contas_inativas_com_saldo: 1 });
+    expect((comSaldo.agregados as { saldo_total: number }).saldo_total).toBeCloseTo(999.99, 2);
+    expect(comSaldo.itens).toEqual([
+      { conta: "Antiga", tipo: "corrente", saldo: 999.99, inativa: true },
+    ]);
+
+    contasFalsas = [{ ...contasFalsas[0], current_balance: 0 }];
+    const semSaldo = await getBalances();
+    expect(semSaldo.contagem).toBe(0);
+    expect(semSaldo.itens).toEqual([]);
+    expect(semSaldo.observacao).toBe("Não há conta ativa — as 1 existentes estão inativas.");
 
     contasFalsas = [];
-    expect((await getBalances()).observacao).toContain("não há conta cadastrada");
+    const semContas = await getBalances();
+    expect(semContas.contagem).toBe(0);
+    expect(semContas.itens).toEqual([]);
+    expect(semContas.observacao).toBe("Ainda não há conta cadastrada.");
   });
 });
 
 describe("finance.get_spending", () => {
+  it("mantém a leitura exata sem motivo de incompletude", async () => {
+    const saida = await getSpending({});
+    expect(saida.completude).toBe("exato");
+    expect(saida).not.toHaveProperty("motivo_incompleto");
+  });
+
+  it("repassa a completude parcial e junta os motivos do card", async () => {
+    resumoFalso.completude = {
+      estado: "parcial",
+      motivos: ["Leitura de lançamentos incompleta.", "Leitura de recebíveis incompleta."],
+    };
+    const saida = await getSpending({});
+    expect(saida.completude).toBe("parcial");
+    expect(saida.motivo_incompleto).toBe(
+      "Leitura de lançamentos incompleta. Leitura de recebíveis incompleta.",
+    );
+    expect(saida.agregados).toMatchObject({ entradas: 5000, saidas: 3200 });
+  });
+
   it("usa o mês atual quando nenhum é pedido", async () => {
-    await getSpending({});
+    const saida = await getSpending({});
     expect(mesPedido).toBe("2026-08");
+    expect(saida.periodo?.ate).toBe(HOJE);
+  });
+
+  it.each([
+    { mes: "2026-09", ate: "2026-09-30" },
+    { mes: "2026-02", ate: "2026-02-28" },
+    { mes: HOJE.slice(0, 7), ate: HOJE },
+  ])("encerra o período de $mes em $ate", async ({ mes, ate }) => {
+    const saida = await getSpending({ mes });
+    expect(saida.periodo).toEqual({ de: `${mes}-01`, ate });
   });
 
   it("repassa o mês pedido para a leitura do dashboard", async () => {
     await getSpending({ mes: "2026-03" });
     expect(mesPedido).toBe("2026-03");
+  });
+
+  /** REDESIGN-03-C (A5) — a separação da entrada chega à IA já somada pelo motor. */
+  it("entradas_meu e entradas_terceiros chegam aos agregados, e a composição diz que particionam entradas", async () => {
+    const saida = await getSpending({});
+    expect(saida.agregados).toMatchObject({
+      entradas: 5000,
+      entradas_meu: 4200,
+      entradas_terceiros: 800,
+    });
+    expect(String(saida.agregados?.composicao)).toContain(
+      "`entradas_meu` + `entradas_terceiros` = `entradas`",
+    );
   });
 
   /** Os valores chegam idênticos aos do card — nenhum é recalculado nem reagrupado. */
@@ -210,6 +288,41 @@ describe("finance.get_spending", () => {
 });
 
 describe("finance.get_invoice", () => {
+  it("mantém a leitura exata sem motivo de incompletude", async () => {
+    const saida = await getInvoice();
+    expect(saida.completude).toBe("exato");
+    expect(saida).not.toHaveProperty("motivo_incompleto");
+  });
+
+  it("repassa a completude parcial e junta os motivos do card", async () => {
+    faturasFalsas.completude = {
+      estado: "parcial",
+      motivos: ["Leitura de recebíveis incompleta.", "Contagem indisponível."],
+    };
+    const saida = await getInvoice();
+    expect(saida.completude).toBe("parcial");
+    expect(saida.motivo_incompleto).toBe(
+      "Leitura de recebíveis incompleta. Contagem indisponível.",
+    );
+    expect(saida.agregados).toMatchObject({ total_das_nao_pagas: 1800 });
+    expect(saida.contagem).toBe(2);
+  });
+
+  it.each([false, true])("preserva completude parcial na saída vazia (hasCards=%s)", async (hasCards) => {
+    faturasFalsas = {
+      ...faturasFalsas,
+      hasCards,
+      proximas: [],
+      completude: { estado: "parcial", motivos: ["Leitura de recebíveis incompleta."] },
+    };
+    const saida = await getInvoice();
+    expect(saida).toMatchObject({
+      completude: "parcial",
+      motivo_incompleto: "Leitura de recebíveis incompleta.",
+      contagem: 0,
+    });
+  });
+
   it("repassa contagens e totais das faturas", async () => {
     const saida = await getInvoice();
     expect(saida.agregados).toMatchObject({

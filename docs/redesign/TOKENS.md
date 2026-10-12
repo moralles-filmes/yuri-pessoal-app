@@ -1,0 +1,299 @@
+# Tokens visuais — REDESIGN-01-B
+
+Direção: SaaS moderno, limpo, profissional, confortável para uso diário.
+Claro: azul de destaque, branco e cinzas **frios**. Escuro: grafite frio, texto claro, azul.
+
+Nenhum valor aqui foi escolhido no olho: os de contraste foram medidos e a paleta de gráficos
+passou pelo validador, com os comandos registrados na §7 para você refazer.
+
+---
+
+## 1. O que NÃO muda
+
+| Item | Valor | Por quê |
+| --- | --- | --- |
+| **Tipografia** | `--font-sans: Arial, "Helvetica Neue", Helvetica, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` | Exigência sua. **Copiar literalmente.** Não há `next/font` no projeto e não vai haver |
+| `--font-mono`, `--font-heading` | como estão | `--font-heading` é alias de `--font-sans` |
+| **Cores de entidade** | todos os hex em `lib/*/constants.ts`, `calendar/colors.ts`, o default `'#A98438'` de `categories`, cores de cartão/conta | São **suas escolhas**, não identidade do app |
+| **Semântica de alerta** | os ~120 usos de `amber-*` | Significam atenção, não marca |
+| **Escala de raio** | `--radius: 0.7rem` e os derivados | Já é discreta. Arredondamento excessivo está fora da direção |
+
+---
+
+## 2. ✅ A trava que caiu ANTES dos tokens — REDESIGN-02-A
+
+`"Dourado"` é uma cor que **você escolhe** para projetos e etiquetas, e estava implementada
+com o token de **marca** (`bg-primary`). Trocar `--primary` para azul faria todo item marcado
+como "Dourado" virar azul em silêncio, **indistinguível do item `"azul"` da mesma paleta**.
+
+**A varredura achou mais três casos do mesmo mecanismo**, que o plano não previa — todos
+invisíveis hoje porque a marca ainda é dourada, e todos quebrando no instante em que ela vira
+azul:
+
+| Onde | Era | Virou | Com quem colidia |
+| --- | --- | --- | --- |
+| `todo/constants.ts` `TODO_COLOR_DOT.gold` | `bg-primary` | `bg-yellow-600` | `azul` (`bg-sky-500`) |
+| `todo/constants.ts` `TODO_COLOR_CHIP.gold` | `bg-primary/15 text-primary` | `bg-yellow-500/15 text-yellow-700 dark:text-yellow-400` | `azul` |
+| `todo/constants.ts` prioridade **P2** | `text-primary` | `text-warning-ink` | **P3** (`text-sky-600`) |
+| `tasks/badges.tsx` prioridade **alta** | `bg-primary/10 text-primary` | `bg-warning/10 text-warning-ink` | **media** (`sky`) |
+| `training/consistency-calendar.tsx` **descanso** | `bg-sky-500/20` | `bg-violet-500/25` | **parcial** (`bg-primary/45`) |
+
+⚠️ **Por que `yellow` e não `amber`.** A 01-B propunha `bg-amber-500`. Amber-500 (`#f59e0b`) é
+vizinho de `orange-500` (`#f97316`), que já é o item **`laranja`** da mesma paleta — a correção
+trocaria uma colisão por outra. `yellow-600` (`#ca8a04`) é o que mais se aproxima do dourado
+real (`#C99A2E`) e se separa bem do laranja.
+
+⛔ **`treinado: "bg-primary"` continua certo e NÃO é violação.** Ali o destaque *é* a marca,
+não uma escolha sua. A regra proíbe a marca ocupar o lugar de um **dado**.
+
+**Prova:** `src/lib/theme/entity-colors.test.ts` (7 casos), **confirmado por 5 mutações** —
+cada uma das cinco linhas acima, revertida uma a uma, deixa a suíte vermelha.
+
+---
+
+## 3. Tokens — tema CLARO ✅ **aplicado na 02-B**
+
+⚠️ **A 01-B não especificou a sidebar.** Os oito `--sidebar-*` foram derivados na 02-B
+preservando as relações que o tema dourado já tinha (sidebar um pouco mais clara que o fundo;
+accent da sidebar igual ao accent geral), só re-matizadas. Medido: texto **13,25:1** e
+`muted-foreground` **5,70:1** sobre a sidebar; `--primary` como texto sobre `--accent` (o item
+ativo) **4,73:1**. Os 14 pares medidos passam AA.
+
+```css
+:root {
+  /* Neutros FRIOS (hue ~258). Os atuais são hue 70–95: dourado dessaturado,
+     que brigaria com um primário azul. */
+  --background: oklch(0.985 0.003 255);   /* #f9fafc */
+  --foreground: oklch(0.180 0.010 260);   /* #0f1216 */
+
+  --card: oklch(1 0 0);                   /* #ffffff — superfície VALIDADA, ver §7 */
+  --card-foreground: oklch(0.180 0.010 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.180 0.010 260);
+
+  /* Azul de destaque. Branco em cima mede 5,39:1 — passa AA para texto normal. */
+  --primary: oklch(0.527 0.150 256);      /* #256abf */
+  --primary-foreground: oklch(1 0 0);     /* ⚠️ BRANCO. O dourado usava texto ESCURO */
+
+  --secondary: oklch(0.966 0.005 255);    /* #f1f4f7 */
+  --secondary-foreground: oklch(0.240 0.010 260);
+
+  --muted: oklch(0.966 0.005 255);
+  --muted-foreground: oklch(0.505 0.014 258);  /* #60656d — 5,9:1 sobre o card */
+
+  --accent: oklch(0.955 0.020 255);
+  --accent-foreground: oklch(0.380 0.090 256);
+
+  --border: oklch(0.905 0.007 258);       /* #dde0e4 */
+  --input: oklch(0.905 0.007 258);
+  --ring: oklch(0.527 0.150 256);
+
+  --destructive: oklch(0.575 0.186 25);   /* #d03b3b — 4,80:1 sobre branco */
+}
+```
+
+## 4. Tokens — tema ESCURO ✅ **aplicado na 02-B**
+
+A sidebar do escuro ficou **entre** o fundo (0,177) e o card (0,217), em 0,197 — mesma
+relação do tema antigo. Texto **11,57:1** e `muted` **7,21:1** sobre ela.
+
+```css
+.dark {
+  --background: oklch(0.177 0.009 264);   /* #0f1115 — grafite frio, não preto puro */
+  --foreground: oklch(0.968 0.004 260);
+
+  --card: oklch(0.217 0.013 264);         /* #171a20 — superfície VALIDADA, ver §7 */
+  --card-foreground: oklch(0.968 0.004 260);
+  --popover: oklch(0.217 0.013 264);
+  --popover-foreground: oklch(0.968 0.004 260);
+
+  /* Azul mais claro + texto escuro, como o dourado já fazia no escuro. 5,94:1. */
+  --primary: oklch(0.717 0.118 254);      /* #6da7ec — 6,96:1 como texto no card */
+  --primary-foreground: oklch(0.274 0.066 254);  /* #0d2847 */
+
+  --secondary: oklch(0.265 0.012 262);
+  --secondary-foreground: oklch(0.968 0.004 260);
+
+  --muted: oklch(0.265 0.012 262);
+  --muted-foreground: oklch(0.715 0.015 260);
+
+  --accent: oklch(0.305 0.035 256);
+  --accent-foreground: oklch(0.900 0.045 256);
+
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.717 0.118 254);
+
+  --destructive: oklch(0.704 0.191 22);   /* mantido do tema atual, já calibrado */
+}
+```
+
+---
+
+## 5. Tokens SEMÂNTICOS — novos
+
+Hoje só existe `--destructive`. A ausência de `success`/`warning`/`info` é o que produziu
+**212 ocorrências** de `text-emerald`/`text-red-` em 105 arquivos e ~120 de `amber` em ~60.
+
+```css
+:root {
+  --success: oklch(0.621 0.207 143);        /* #0ca30c — 3,35:1 no branco */
+  --success-foreground: oklch(1 0 0);
+  --success-ink: oklch(0.433 0.147 143);    /* #006300 — 7,54:1. TEXTO usa este */
+
+  --warning: oklch(0.811 0.164 78);         /* #fab219 */
+  --warning-foreground: oklch(0.250 0.050 78);
+  --warning-ink: oklch(0.508 0.108 73);     /* #8a5a00 — 5,93:1. TEXTO usa este */
+
+  --info: oklch(0.575 0.163 256);           /* #2a78d6 */
+  --info-foreground: oklch(1 0 0);
+  --info-ink: oklch(0.527 0.150 256);
+}
+.dark {
+  --success: oklch(0.621 0.207 143);  --success-ink: oklch(0.621 0.207 143);  /* 5,19:1 */
+  --warning: oklch(0.811 0.164 78);   --warning-ink: oklch(0.811 0.164 78);   /* 9,50:1 */
+  --info: oklch(0.717 0.118 254);     --info-ink: oklch(0.717 0.118 254);     /* 6,96:1 */
+}
+```
+
+⛔ **Por que existe `-ink` separado.** `#0ca30c` sobre branco dá **3,35:1** — bom para um
+ponto, um ícone ou uma borda; **reprovado para texto**. Um token só levaria alguém a escrever
+`text-success` num rótulo e produzir texto ilegível que passa despercebido em revisão. `-ink`
+é a versão legível; o outro é para preenchimento.
+
+⛔ **Cor nunca sozinha.** Todo estado carrega ícone **e** palavra. Vale para claro, escuro,
+daltonismo e impressão.
+
+---
+
+## 6. `--gold` e `text-gradient-gold`
+
+`--gold`/`--gold-foreground` existem e têm **exatamente o mesmo valor** de `--primary` nos dois
+temas — duplicação pura. `text-gradient-gold` tem **um único consumidor**
+(`src/app/(auth)/layout.tsx:36`).
+
+**Decisão:** `--gold` vira **alias de `--primary`** na 02-B (some como conceito, sem quebrar
+nada que o use), e o utilitário é renomeado para `text-gradient-brand`, ajustando o único
+consumidor. `::selection` passa a usar `--primary`.
+
+✅ **Feito na 02-B.** A varredura confirmou o que a 01-B supunha: **`--gold` não tem um único
+consumidor em `src/`** — as utilitárias `bg-gold`/`text-gold` estavam registradas e nunca
+foram usadas. Sobraram os dois decorativos deste arquivo.
+
+⚠️ **O apelido é declarado nos DOIS temas, de propósito.** Uma custom property resolve o
+`var()` no elemento em que é declarada. Se a classe `.dark` não caísse no mesmo elemento que
+`:root`, uma declaração só faria o valor do tema **claro** vazar para o escuro. Duas linhas
+removem a dependência de onde o `.dark` é pendurado — e a mutação que devolve um literal ao
+escuro deixa `tokens.test.ts` vermelho.
+
+⚠️ **Renomear classe Tailwind não quebra build.** `text-gradient-gold` num arquivo esquecido
+compilaria, passaria no lint e no `tsc`, e simplesmente **não pintaria nada**. Por isso há um
+caso varrendo `src/` inteiro pelo nome antigo.
+
+✅ **A 02-A é o que torna isso seguro.** Enquanto `"Dourado"` do TO-DO dependesse do token de
+marca, transformar `--gold` em alias de `--primary` propagaria a mudança para um dado seu.
+Depois da 02-A, **nenhuma cor de entidade passa por `--gold` nem por `--primary`** — sobraram
+só `::selection` e o gradiente da tela de login, os dois decorativos.
+
+---
+
+## 7. Paleta de gráficos — **validada, não escolhida no olho**
+
+Ordem fixa, atribuída por identidade, **nunca ciclada**. Slot 1 é o azul da marca.
+
+| Slot | Hue | Claro | Escuro |
+| --- | --- | --- | --- |
+| 1 | azul | `#2a78d6` | `#3987e5` |
+| 2 | laranja | `#eb6834` | `#d95926` |
+| 3 | água | `#1baf7a` | `#199e70` |
+| 4 | amarelo | `#eda100` | `#c98500` |
+| 5 | magenta | `#e87ba4` | `#d55181` |
+| 6 | verde | `#008300` | `#008300` |
+| 7 | violeta | `#4a3aa7` | `#9085e9` |
+| 8 | vermelho | `#e34948` | `#e66767` |
+
+**Resultado real do validador nas SUAS superfícies:**
+
+```
+claro (#ffffff) — TODAS PASSAM
+  banda de luminosidade  8/8 · piso de croma 8/8
+  separação CVD          pior adjacente #eda100↔#1baf7a ΔE 9,1 (protan)
+  visão normal           pior adjacente #e87ba4↔#eda100 ΔE 19,6
+  contraste              WARN: #1baf7a 2,82 · #eda100 2,17 · #e87ba4 2,69
+
+escuro (#171a20) — TODAS PASSAM
+  separação CVD          pior adjacente #c98500↔#199e70 ΔE 8,4
+  visão normal           pior adjacente #d55181↔#c98500 ΔE 19,3
+  contraste              8/8 acima de 3:1
+```
+
+⚠️ **O WARN do claro não é dispensável: ele obriga relevo.** Os três slots abaixo de 3:1
+exigem **rótulo direto visível ou tabela de dados**. Na prática já está resolvido — a
+referência visual mostra a legenda com valor ao lado do donut, e essa legenda passa a ser
+obrigatória, não decorativa.
+
+**Para refazer a validação** (obrigatório se qualquer superfície ou hex mudar):
+
+⛔ **Correção da 02-B: o validador NÃO está no repositório.** A 01-B escreveu
+`node scripts/validate_palette.js`, que não existe aqui — `scripts/` tem só `nutrition/`,
+`perf/` e `training/`. Ele vem com a skill `dataviz`, e é de lá que se chama:
+
+```bash
+V="$CLAUDE_SKILLS/dataviz/scripts/validate_palette.js"   # ajuste o caminho da skill
+node "$V" "#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4,#008300,#4a3aa7,#e34948" \
+  --mode light --surface "#ffffff"
+node "$V" "#3987e5,#d95926,#199e70,#c98500,#d55181,#008300,#9085e9,#e66767" \
+  --mode dark  --surface "#171a20"
+```
+
+✅ **Re-executado na 02-B**, antes de instalar: os dois modos reproduzem o laudo acima linha
+por linha (claro com o WARN de relevo, escuro 8/8 acima de 3:1). Os contrastes das §3/§4/§5
+também foram remedidos um a um — 5,39 · 4,80 · 7,54 · 5,93 · 6,97 batem com o que estava
+escrito.
+
+⚠️ **Quem não roda o validador ainda é pego.** `src/lib/theme/tokens.test.ts` guarda os
+**oito hexes** e as **duas superfícies `--card`**: mexer em qualquer um deixa a suíte
+vermelha, com a instrução de revalidar no lugar da mensagem de erro. Sem isso, este laudo
+poderia continuar afirmando "todas passam" sobre cores que não existem mais.
+
+⛔ **`--card` é a superfície validada.** Mudar `--card` sem revalidar invalida a tabela acima.
+
+### O que isso corrige — e era mais grave do que "feio"
+
+`--chart-1..5` eram **dourado + neutros** (`chart-2` e `chart-4`, cinza). Para uma série
+categórica — gastos por categoria — é a pior escolha possível: duas fatias literalmente cinza,
+indistinguíveis. Mas a 02-B achou um segundo defeito, **que estava em produção**:
+
+⛔ **Com 5 slots, os gráficos repetiam cor DENTRO DO MESMO GRÁFICO.** Quem pinta indexa com
+`i % CHART_COLORS.length`, e os dois consumidores passam de 5:
+
+| Gráfico | Fatias/barras possíveis | Com 5 slots | Com 8 |
+| --- | --- | --- | --- |
+| Donut de categorias (`categoria-chart-impl`) | **7** (as 6 maiores + "Outros") | a 6ª repetia a cor da 1ª, e "Outros" a da 2ª | cabe |
+| Formas de pagamento (`forma-pagamento-chart-impl`) | **8** (7 formas + "outro") | **três** barras repetiam | cabe |
+
+Duas fatias da mesma cor no mesmo donut não são um problema estético: são duas categorias
+diferentes afirmando ser a mesma. Os dois limites agora são **derivados da fonte** em
+`tokens.test.ts` — acrescentar uma 8ª forma de pagamento, ou subir o corte do donut, deixa a
+suíte vermelha antes de a colisão chegar à tela.
+
+⚠️ **Oito slots não autorizam uma 9ª série.** Cor categórica é atribuída por identidade e
+**nunca ciclada**; série que não cabe vira "Outros" ou vários gráficos pequenos.
+
+⚠️ `categoria-chart-impl.tsx:66` usa `d.color ?? CHART_COLORS[...]` — **a cor da categoria
+escolhida por você continua vencendo**. A paleta é só o fallback.
+
+---
+
+## 8. Regras de uso
+
+1. **Uma linha de comando decide cor de gráfico**, não gosto. Paleta nova ⇒ validador.
+2. **Texto usa token de texto**, nunca a cor da série.
+3. **Sem dual-axis.** Duas medidas de escalas diferentes ⇒ dois gráficos.
+4. **Pizza nunca com negativo**, e nunca para comparar mais de ~6 fatias.
+5. **Série futura é visualmente projeção** (hachura/tracejado), com legenda dizendo.
+6. **Dinheiro em `tabular-nums`** em coluna de tabela. Número grande solto pode usar figuras
+   proporcionais.
+7. **Sem neon, sem gradiente forte, sem sombra pesada.**
+8. **`cn()` é `twMerge`:** a classe de fora **remove** a da primitiva. Em `DialogContent`,
+   `max-w-*` sem prefixo não tem efeito de `sm` para cima — use `sm:max-w-lg`.

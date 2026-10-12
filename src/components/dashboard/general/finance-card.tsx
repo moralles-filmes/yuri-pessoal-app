@@ -1,5 +1,6 @@
 import { getFinanceCardData } from "@/lib/dashboard/queries";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
 import { Metric, MetricRow } from "./primitives";
 import type { DashWindow } from "@/lib/dashboard/period";
 
@@ -12,6 +13,7 @@ export async function FinanceCard({
   todayIso: string;
 }) {
   const d = await getFinanceCardData(window.mes, todayIso);
+  const entradasNoCard = apresentarEntradas(d);
 
   return (
     <div className="space-y-3">
@@ -25,7 +27,7 @@ export async function FinanceCard({
         />
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Metric label="Entradas" value={formatCurrency(d.entradas)} />
+        <Metric label="Entradas" value={formatCurrency(entradasNoCard.valor)} hint={entradasNoCard.detalhe ?? undefined} />
         <Metric label="Saídas" value={formatCurrency(d.saidas)} />
       </div>
       <div className="space-y-2 border-t pt-3">

@@ -22,6 +22,7 @@ import { getAccounts, getTransactions } from "@/lib/finance/queries";
 import { catchUpRecurrences } from "@/lib/finance/generation";
 import { formatCurrency, hojeISO } from "@/lib/format";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
+import { saldoDasContas } from "@/lib/finance/saldo-das-contas";
 
 export const dynamic = "force-dynamic";
 
@@ -71,10 +72,7 @@ export default async function FinanceiroOverviewPage() {
     getTransactions({ month }),
   ]);
 
-  const totalBalance = accounts.reduce(
-    (sum, a) => sum + (a.current_balance ?? 0),
-    0,
-  );
+  const totalBalance = saldoDasContas(accounts);
   // Fluxo de caixa à vista: compras no cartão de crédito entram nas faturas, não no
   // caixa do mês (o dinheiro só sai quando a fatura é paga). Excluímos aqui para não
   // distorcer entradas/saídas — a consolidação de cartão vem no dashboard (Fase 07).

@@ -6,8 +6,17 @@
 
 /* ============================================================
    Sistema Pessoal Yuri — Design System
-   Identidade: preto / branco / dourado (premium). Dark + Light.
+   Identidade: azul / branco / grafite frio. Dark + Light.
    Fonte: Arial / system (simples e legível, conforme briefing).
+
+   ⛔ NENHUM VALOR AQUI FOI ESCOLHIDO NO OLHO.
+   Os contrastes foram medidos par a par e a paleta de gráficos passou pelo
+   validador (banda de luminosidade, piso de croma, separação para daltonismo e
+   contraste com a superfície). Os números e o comando estão em
+   `docs/redesign/TOKENS.md` §7. Mudou `--card`? A validação da paleta caduca:
+   `--card` É a superfície testada.
+
+   ⚠️ `--font-sans` é exigência do dono e não muda. Não há `next/font` aqui.
    ============================================================ */
 
 @theme inline {
@@ -26,6 +35,9 @@
   --color-sidebar: var(--sidebar);
   --color-gold: var(--gold);
   --color-gold-foreground: var(--gold-foreground);
+  --color-chart-8: var(--chart-8);
+  --color-chart-7: var(--chart-7);
+  --color-chart-6: var(--chart-6);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -35,6 +47,15 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-ink: var(--warning-ink);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-ink: var(--info-ink);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -64,98 +85,165 @@
 
   --radius: 0.7rem;
 
-  --background: oklch(0.985 0.003 95);
-  --foreground: oklch(0.18 0.006 70);
+  /* Neutros FRIOS (hue ~255–260). Os antigos eram hue 70–95 — dourado
+     dessaturado, que briga com um primário azul: o cinza puxava para bege e a
+     tela ficava com duas temperaturas ao mesmo tempo. */
+  --background: oklch(0.985 0.003 255); /* #f9fafc */
+  --foreground: oklch(0.18 0.01 260); /* #0f1216 — 18,78:1 no card */
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.006 70);
+  --card: oklch(1 0 0); /* #ffffff — ⛔ superfície da validação da paleta */
+  --card-foreground: oklch(0.18 0.01 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.006 70);
+  --popover-foreground: oklch(0.18 0.01 260);
 
-  /* Dourado como cor primária/destaque */
-  --primary: oklch(0.71 0.118 83);
-  --primary-foreground: oklch(0.2 0.012 75);
+  /* Azul de marca. Branco em cima mede 5,39:1 — passa AA para texto normal.
+     ⚠️ `--primary-foreground` é BRANCO agora; o dourado usava texto ESCURO.
+     Isso só é seguro porque TODA ocorrência de `text-primary-foreground` no
+     projeto está colada em `bg-primary` (conferido: 24 de 24). */
+  --primary: oklch(0.527 0.15 256); /* #256abf */
+  --primary-foreground: oklch(1 0 0);
 
-  --secondary: oklch(0.962 0.004 95);
-  --secondary-foreground: oklch(0.24 0.006 70);
+  --secondary: oklch(0.966 0.005 255); /* #f1f4f7 */
+  --secondary-foreground: oklch(0.24 0.01 260); /* 14,97:1 no secondary */
 
-  --muted: oklch(0.962 0.004 95);
-  --muted-foreground: oklch(0.5 0.008 75);
+  --muted: oklch(0.966 0.005 255);
+  --muted-foreground: oklch(0.505 0.014 258); /* #60656d — 5,87:1 no card */
 
-  --accent: oklch(0.945 0.024 88);
-  --accent-foreground: oklch(0.28 0.02 78);
+  --accent: oklch(0.955 0.02 255); /* #e7f1fe — fundo do item ativo */
+  --accent-foreground: oklch(0.38 0.09 256); /* 8,77:1 no accent */
 
-  --destructive: oklch(0.582 0.218 27.3);
+  --destructive: oklch(0.575 0.186 25); /* #d03b3b — 4,80:1 no card */
 
-  --border: oklch(0.9 0.005 90);
-  --input: oklch(0.9 0.005 90);
-  --ring: oklch(0.71 0.118 83);
+  /* Semânticos. `-ink` é a versão LEGÍVEL (texto); a outra é preenchimento.
+     Medido sobre --card (#ffffff): success 3,35:1 (ponto/borda) × success-ink 7,54:1;
+     warning-ink 5,93:1. Usar `text-success` num rótulo produz texto ilegível — use o -ink. */
+  --success: oklch(0.621 0.207 143);
+  --success-foreground: oklch(1 0 0);
+  --success-ink: oklch(0.433 0.147 143);
 
-  --gold: oklch(0.71 0.118 83);
-  --gold-foreground: oklch(0.2 0.012 75);
+  --warning: oklch(0.811 0.164 78);
+  --warning-foreground: oklch(0.25 0.05 78);
+  --warning-ink: oklch(0.508 0.108 73);
 
-  /* Gráficos: dourado + neutros */
-  --chart-1: oklch(0.71 0.118 83);
-  --chart-2: oklch(0.55 0.02 75);
-  --chart-3: oklch(0.79 0.1 86);
-  --chart-4: oklch(0.4 0.012 70);
-  --chart-5: oklch(0.62 0.07 80);
+  --info: oklch(0.575 0.163 256);
+  --info-foreground: oklch(1 0 0);
+  --info-ink: oklch(0.527 0.15 256);
 
-  --sidebar: oklch(0.99 0.003 95);
-  --sidebar-foreground: oklch(0.3 0.006 70);
-  --sidebar-primary: oklch(0.71 0.118 83);
-  --sidebar-primary-foreground: oklch(0.2 0.012 75);
-  --sidebar-accent: oklch(0.945 0.024 88);
-  --sidebar-accent-foreground: oklch(0.28 0.02 78);
-  --sidebar-border: oklch(0.9 0.005 90);
-  --sidebar-ring: oklch(0.71 0.118 83);
+  --border: oklch(0.905 0.007 258); /* #dde0e4 */
+  --input: oklch(0.905 0.007 258);
+  --ring: oklch(0.527 0.15 256);
+
+  /* `--gold` deixou de ser um conceito: virou apelido de `--primary`, para não
+     quebrar nada que o use (hoje: nada em `src/`, só `::selection` e o gradiente
+     da tela de login, ambos neste arquivo).
+     ⚠️ Declarado nos DOIS temas de propósito. Custom property resolve `var()`
+     no elemento onde é declarada; se `.dark` não caísse no mesmo elemento que
+     `:root`, uma declaração só faria o dourado CLARO vazar para o tema escuro.
+     Duas linhas removem a dependência de onde a classe `.dark` é pendurada. */
+  --gold: var(--primary);
+  --gold-foreground: var(--primary-foreground);
+
+  /* Paleta CATEGÓRICA de 8 slots — ordem fixa, atribuída por identidade.
+     Os valores ficam em HEX porque foi exatamente nestes hexes que o validador
+     rodou; reescrevê-los em oklch introduz arredondamento e invalida o laudo.
+     Antes eram 5 slots de "dourado + 2 cinzas" — e `chart-2`/`chart-4` eram
+     literalmente cinza, o que para gastos por categoria dava duas fatias
+     indistinguíveis. ⚠️ Três slots ficam abaixo de 3:1 no branco (#1baf7a,
+     #eda100, #e87ba4): isso OBRIGA rótulo direto visível ou tabela, não é
+     dispensável. Slot 1 não é `--primary`: ele é o azul que coube na banda de
+     luminosidade junto dos outros sete. */
+  --chart-1: #2a78d6; /* azul */
+  --chart-2: #eb6834; /* laranja */
+  --chart-3: #1baf7a; /* água */
+  --chart-4: #eda100; /* amarelo */
+  --chart-5: #e87ba4; /* magenta */
+  --chart-6: #008300; /* verde */
+  --chart-7: #4a3aa7; /* violeta */
+  --chart-8: #e34948; /* vermelho */
+
+  /* A 01-B não especificou a sidebar. Derivada preservando as RELAÇÕES que o
+     tema dourado já tinha (sidebar um pouco mais clara que o fundo; accent da
+     sidebar igual ao accent geral), só re-matizada. Medido: texto 13,25:1 e
+     muted 5,70:1 sobre a sidebar. */
+  --sidebar: oklch(0.99 0.003 255);
+  --sidebar-foreground: oklch(0.3 0.01 260);
+  --sidebar-primary: oklch(0.527 0.15 256);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.955 0.02 255);
+  --sidebar-accent-foreground: oklch(0.38 0.09 256);
+  --sidebar-border: oklch(0.905 0.007 258);
+  --sidebar-ring: oklch(0.527 0.15 256);
 }
 
-/* ---------- DARK (grafite/quase-preto / off-white / dourado) ---------- */
+/* ---------- DARK (grafite frio / off-white / azul) ---------- */
 .dark {
-  --background: oklch(0.15 0.006 75);
-  --foreground: oklch(0.968 0.004 90);
+  --background: oklch(0.177 0.009 264); /* #0f1115 — grafite, não preto puro */
+  --foreground: oklch(0.968 0.004 260); /* 15,85:1 no card */
 
-  --card: oklch(0.205 0.007 78);
-  --card-foreground: oklch(0.968 0.004 90);
-  --popover: oklch(0.205 0.007 78);
-  --popover-foreground: oklch(0.968 0.004 90);
+  --card: oklch(0.217 0.013 264); /* #171a20 — ⛔ superfície da validação */
+  --card-foreground: oklch(0.968 0.004 260);
+  --popover: oklch(0.217 0.013 264);
+  --popover-foreground: oklch(0.968 0.004 260);
 
-  --primary: oklch(0.8 0.128 84);
-  --primary-foreground: oklch(0.18 0.018 75);
+  /* Azul mais claro + texto escuro em cima, como o dourado já fazia aqui.
+     5,95:1 do texto sobre o botão; 6,97:1 do próprio azul como TEXTO no card. */
+  --primary: oklch(0.717 0.118 254); /* #6da7ec */
+  --primary-foreground: oklch(0.274 0.066 254); /* #0d2847 */
 
-  --secondary: oklch(0.26 0.007 78);
-  --secondary-foreground: oklch(0.968 0.004 90);
+  --secondary: oklch(0.265 0.012 262);
+  --secondary-foreground: oklch(0.968 0.004 260); /* 13,96:1 no secondary */
 
-  --muted: oklch(0.26 0.007 78);
-  --muted-foreground: oklch(0.71 0.012 85);
+  --muted: oklch(0.265 0.012 262);
+  --muted-foreground: oklch(0.715 0.015 260); /* 6,88:1 no card */
 
-  --accent: oklch(0.3 0.03 82);
-  --accent-foreground: oklch(0.92 0.04 88);
+  --accent: oklch(0.305 0.035 256);
+  --accent-foreground: oklch(0.9 0.045 256); /* 9,94:1 no accent */
 
-  --destructive: oklch(0.704 0.191 22.2);
+  --destructive: oklch(0.704 0.191 22); /* já calibrado, mantido */
+
+  /* No escuro o preenchimento já é legível como texto, então `-ink` repete o valor:
+     success 5,19:1 · warning 9,50:1 · info 6,96:1 sobre --card. */
+  --success: oklch(0.621 0.207 143);
+  --success-foreground: oklch(1 0 0);
+  --success-ink: oklch(0.621 0.207 143);
+
+  --warning: oklch(0.811 0.164 78);
+  --warning-foreground: oklch(0.25 0.05 78);
+  --warning-ink: oklch(0.811 0.164 78);
+
+  --info: oklch(0.717 0.118 254);
+  --info-foreground: oklch(1 0 0);
+  --info-ink: oklch(0.717 0.118 254);
 
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.8 0.128 84);
+  --ring: oklch(0.717 0.118 254);
 
-  --gold: oklch(0.8 0.128 84);
-  --gold-foreground: oklch(0.18 0.018 75);
+  /* Ver a nota no `:root`: apelido declarado nos dois temas de propósito. */
+  --gold: var(--primary);
+  --gold-foreground: var(--primary-foreground);
 
-  --chart-1: oklch(0.8 0.128 84);
-  --chart-2: oklch(0.72 0.018 88);
-  --chart-3: oklch(0.62 0.08 82);
-  --chart-4: oklch(0.5 0.012 72);
-  --chart-5: oklch(0.88 0.075 88);
+  /* Mesma paleta, re-passo para a superfície escura (#171a20): 8/8 acima de
+     3:1 aqui, então o escuro não precisa do relevo que o claro exige. */
+  --chart-1: #3987e5; /* azul */
+  --chart-2: #d95926; /* laranja */
+  --chart-3: #199e70; /* água */
+  --chart-4: #c98500; /* amarelo */
+  --chart-5: #d55181; /* magenta */
+  --chart-6: #008300; /* verde */
+  --chart-7: #9085e9; /* violeta */
+  --chart-8: #e66767; /* vermelho */
 
-  --sidebar: oklch(0.175 0.006 78);
-  --sidebar-foreground: oklch(0.85 0.005 90);
-  --sidebar-primary: oklch(0.8 0.128 84);
-  --sidebar-primary-foreground: oklch(0.18 0.018 75);
-  --sidebar-accent: oklch(0.27 0.022 82);
-  --sidebar-accent-foreground: oklch(0.92 0.04 88);
+  /* Derivada como no claro: a sidebar fica ENTRE o fundo (0,177) e o card
+     (0,217). Medido: texto 11,57:1 e muted 7,21:1 sobre ela. */
+  --sidebar: oklch(0.197 0.011 264);
+  --sidebar-foreground: oklch(0.85 0.006 260);
+  --sidebar-primary: oklch(0.717 0.118 254);
+  --sidebar-primary-foreground: oklch(0.274 0.066 254);
+  --sidebar-accent: oklch(0.275 0.03 256);
+  --sidebar-accent-foreground: oklch(0.9 0.045 256);
   --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.8 0.128 84);
+  --sidebar-ring: oklch(0.717 0.118 254);
 }
 
 @layer base {
@@ -171,7 +259,7 @@
     @apply bg-background text-foreground;
   }
   ::selection {
-    background: color-mix(in oklch, var(--gold) 30%, transparent);
+    background: color-mix(in oklch, var(--primary) 30%, transparent);
   }
   /* Scrollbar premium e discreta */
   * {
@@ -195,13 +283,15 @@
   }
 }
 
-/* Utilitário: leve gradiente dourado para títulos/realces premium */
-@utility text-gradient-gold {
+/* Leve gradiente da MARCA para títulos/realces. Era `text-gradient-gold`; o
+   nome citava a cor, então prometia dourado para sempre. Um único consumidor:
+   `src/app/(auth)/layout.tsx`. */
+@utility text-gradient-brand {
   background: linear-gradient(
     100deg,
-    var(--gold) 0%,
-    color-mix(in oklch, var(--gold) 70%, white) 50%,
-    var(--gold) 100%
+    var(--primary) 0%,
+    color-mix(in oklch, var(--primary) 70%, white) 50%,
+    var(--primary) 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
