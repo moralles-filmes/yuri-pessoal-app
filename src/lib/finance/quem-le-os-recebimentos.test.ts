@@ -15,7 +15,9 @@ const SRC = path.resolve(__dirname, "..", "..");
 const TABELA = "receivable_receipts";
 
 /** Caminho relativo a `src/` → por que este arquivo pode mencionar a tabela. */
-const ALLOWLIST: Record<string, string> = {};
+const ALLOWLIST: Record<string, string> = {
+  "types/supabase.ts": "tipos gerados do banco (M1)",
+};
 
 /** Os que NUNCA podem mencionar — nem entrar na allowlist. */
 const NUNCA = [
