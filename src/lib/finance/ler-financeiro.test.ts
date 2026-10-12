@@ -20,6 +20,7 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { gastosPorCategoria } from "@/lib/finance/dashboard";
+import { TETO_DE_RECEBIMENTOS } from "@/lib/finance/recebimentos-leitura";
 import {
   ESCOPO_CARD_FINANCEIRO,
   ESCOPO_FATURAS,
@@ -446,12 +447,27 @@ describe("03-B2 A5 — tetos e completude (desenho, §5.5)", () => {
   it.each([
     ["transactions", "lançamentos"],
     ["receivables", "recebíveis"],
+    ["receivable_receipts", "recebimentos"],
   ])("contagem nula de %s declara que não foi possível confirmar", async (tabela, nome) => {
     estado.contagens[tabela] = null;
     const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
     expect(r.completude).toEqual({
       estado: "parcial",
       motivos: [`Não foi possível confirmar que a leitura de ${nome} veio completa.`],
+    });
+  });
+
+  it("recebimentos saturados: o motivo cita o que veio, não o teto (o max_rows corta antes)", async () => {
+    estado.dados.receivable_receipts = [
+      { id: "rr-1", receivable_id: "rec-1", valor: 10, recebido_em: "2026-05-11", observacoes: null, created_at: "2026-05-11T12:00:00Z" },
+      { id: "rr-2", receivable_id: "rec-1", valor: 5, recebido_em: "2026-05-12", observacoes: null, created_at: "2026-05-12T12:00:00Z" },
+    ];
+    estado.contagens.receivable_receipts = 3;
+    const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
+    expect(TETO_DE_RECEBIMENTOS).toBeGreaterThan(2);
+    expect(r.completude).toEqual({
+      estado: "parcial",
+      motivos: ["A leitura de recebimentos trouxe 2 registros e havia mais: os saldos podem estar incompletos."],
     });
   });
 

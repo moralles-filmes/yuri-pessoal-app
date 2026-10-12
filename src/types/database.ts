@@ -198,6 +198,8 @@ export type InstallmentPurchaseWithRelations = TransactionRow & {
     person_id: string;
     valor: number;
     status: ReceivableStatus;
+    pago_em?: string | null;
+    recebimentos?: RecebimentoDoBanco[];
   }[];
 };
 
@@ -252,6 +254,7 @@ export type ReceivableWithRelations = ReceivableRow & {
 
 /** Recebível com a pessoa embutida — usado para agrupar "quem paga e quanto" na fatura. */
 export type ReceivableWithPerson = ReceivableRow & {
+  recebimentos: RecebimentoDoBanco[];
   person: Pick<PersonRow, "id" | "nome"> | null;
 };
 

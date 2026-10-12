@@ -434,7 +434,7 @@ export async function getStatements(
 // e ambiguidade de embedding do PostgREST só estoura em RUNTIME — como o `42P10` do
 // `ON CONFLICT` que a Fase 16 documentou.
 const INSTALLMENT_PURCHASE_SELECT =
-  "*, card:credit_cards(id,nome,cor,bandeira,dia_fechamento,dia_vencimento), category:categories(id,name,color,icon), installments:transaction_installments(*, statement:card_statements(id,competencia,data_fechamento,data_vencimento,pago_em)), shared:shared_expenses!shared_expenses_transaction_id_fkey(person_id,valor,person:people(id,nome)), receivables!receivables_transaction_id_fkey(id,installment_id,person_id,valor,status)";
+  "*, card:credit_cards(id,nome,cor,bandeira,dia_fechamento,dia_vencimento), category:categories(id,name,color,icon), installments:transaction_installments(*, statement:card_statements(id,competencia,data_fechamento,data_vencimento,pago_em)), shared:shared_expenses!shared_expenses_transaction_id_fkey(person_id,valor,person:people(id,nome)), receivables!receivables_transaction_id_fkey(id,installment_id,person_id,valor,status,pago_em)";
 
 export type InstallmentPurchaseFilters = {
   cardId?: string;
@@ -461,11 +461,12 @@ export async function getInstallmentPurchases(
   if (filters.cardId) query = query.eq("card_id", filters.cardId);
   if (filters.categoryId) query = query.eq("category_id", filters.categoryId);
 
-  const { data } = await query;
+  const [{ data }, recebimentos] = await Promise.all([query, lerRecebimentos()]);
   const rows = (data ?? []) as unknown as InstallmentPurchaseWithRelations[];
   // A embedding não garante ordem; ordena as parcelas por número.
   for (const r of rows) {
     r.installments?.sort((a, b) => a.numero - b.numero);
+    r.receivables = anexarRecebimentos(r.receivables ?? [], recebimentos.linhas);
   }
   return rows;
 }
@@ -585,7 +586,13 @@ export async function getReceivables(
 
 async function lerRecebiveis(
   owner?: LeituraDoDono,
-): Promise<LeituraComTeto<ReceivableWithRelations> & { situacaoDosRecebimentos: LeituraComTeto<unknown>["situacao"] }> {
+): Promise<
+  LeituraComTeto<ReceivableWithRelations> & {
+    situacaoDosRecebimentos: LeituraComTeto<unknown>["situacao"];
+    /** Quantos recebimentos VIERAM — o motivo cita o que veio, não o teto (o max_rows corta antes). */
+    recebimentosLidos: number;
+  }
+> {
   const supabase = owner?.client ?? (await createClient());
   const base = supabase.from("receivables").select(RECEIVABLE_SELECT, { count: "exact" });
   const [{ data, count }, recebimentos] = await Promise.all([
@@ -598,7 +605,11 @@ async function lerRecebiveis(
     (data ?? []) as unknown as Omit<ReceivableWithRelations, "recebimentos">[],
     recebimentos.linhas,
   );
-  return { ...leituraComTeto(linhas, count), situacaoDosRecebimentos: recebimentos.situacao };
+  return {
+    ...leituraComTeto(linhas, count),
+    situacaoDosRecebimentos: recebimentos.situacao,
+    recebimentosLidos: recebimentos.linhas.length,
+  };
 }
 
 /**
@@ -610,11 +621,17 @@ export async function getReceivablesByStatements(
 ): Promise<ReceivableWithPerson[]> {
   if (statementIds.length === 0) return [];
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("receivables")
-    .select("*, person:people(id,nome)")
-    .in("statement_id", statementIds);
-  return (data ?? []) as unknown as ReceivableWithPerson[];
+  const [{ data }, recebimentos] = await Promise.all([
+    supabase
+      .from("receivables")
+      .select("*, person:people(id,nome)")
+      .in("statement_id", statementIds),
+    lerRecebimentos(),
+  ]);
+  return anexarRecebimentos(
+    (data ?? []) as unknown as Omit<ReceivableWithPerson, "recebimentos">[],
+    recebimentos.linhas,
+  );
 }
 
 /* ───────────────────── REDESIGN-03-B — a leitura do motor financeiro ───────────────────── */
@@ -701,6 +718,13 @@ export async function lerFinanceiro<E extends EscopoFinanceiro>(
       );
     } else if (recebiveis.situacao === "sem_contagem") {
       motivos.push("Não foi possível confirmar que a leitura de recebíveis veio completa.");
+    }
+    if (recebiveis.situacaoDosRecebimentos === "saturou") {
+      motivos.push(
+        `A leitura de recebimentos trouxe ${recebiveis.recebimentosLidos} registros e havia mais: os saldos podem estar incompletos.`,
+      );
+    } else if (recebiveis.situacaoDosRecebimentos === "sem_contagem") {
+      motivos.push("Não foi possível confirmar que a leitura de recebimentos veio completa.");
     }
   }
   if (cartoes !== undefined) linhas.cartoes = cartoes;
