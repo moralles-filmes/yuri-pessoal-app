@@ -12,6 +12,8 @@ import {
 } from "@/lib/actions/helpers";
 import { resolveOrCreateStatement } from "@/lib/finance/statements";
 import { reapplySplit } from "@/lib/finance/split-reapply";
+import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
+import { motivoParaNaoApagar } from "@/lib/finance/protecao-do-recebivel";
 import {
   criarTransacao,
   lerResponsabilidadeDaReceita,
@@ -269,6 +271,12 @@ export async function deleteTransaction(id: string): Promise<ActionResult> {
     .select("transfer_group_id")
     .eq("id", id)
     .single();
+
+  // REDESIGN-03-D · A4 (decisão (b)) — o cascade levaria o registro do dinheiro que entrou.
+  const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: [id] });
+  if (protecao.erro) return dbError("Não foi possível conferir os recebíveis deste lançamento. Tente de novo.");
+  const motivo = motivoParaNaoApagar(protecao.recebiveis, "so-dinheiro-registrado", "excluir o lançamento");
+  if (motivo) return dbError(motivo);
 
   // Apagar o pagamento pela tela de Lançamentos reabre a fatura — mesmo efeito do
   // "Desfazer" em /faturas (o saldo da conta já estorna sozinho, junto com o lançamento).

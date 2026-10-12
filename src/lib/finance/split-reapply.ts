@@ -15,6 +15,8 @@
  * A "minha parte" continua sendo sempre DERIVADA (total − Σ terceiros), nunca informada.
  */
 import type { AuthContext } from "@/lib/actions/helpers";
+import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
+import { recebivelProtegido } from "@/lib/finance/protecao-do-recebivel";
 import {
   applySplit,
   applySplitParcelado,
@@ -99,14 +101,17 @@ export async function reapplySplit(
 
   // Sem divisão gravada não existe recebível desta transação — a consulta só é feita quando
   // pode haver algo a proteger.
+  // REDESIGN-03-D · A4 — a regra única: recebimento registrado, cobrado, pago ou ignorado.
   let temRecebivelFechado = false;
   if (divisaoAtual.size > 0) {
-    const { data: recs } = await ctx.supabase
-      .from("receivables")
-      .select("status")
-      .eq("transaction_id", args.transactionId);
-    temRecebivelFechado = (recs ?? []).some(
-      (r) => r.status === "cobrado" || r.status === "pago",
+    const protecao = await protecaoDosRecebiveis(ctx.supabase, {
+      transactionIds: [args.transactionId],
+    });
+    if (protecao.erro) {
+      return { ok: false, error: "Não foi possível conferir os recebíveis desta divisão. Tente de novo." };
+    }
+    temRecebivelFechado = protecao.recebiveis.some(
+      (r) => recebivelProtegido(r, "regra-cheia"),
     );
   }
 

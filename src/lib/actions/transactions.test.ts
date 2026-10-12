@@ -28,7 +28,7 @@ let fake = criarSupabaseEmMemoria({});
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.client }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-const { updateTransaction } = await import("@/lib/actions/transactions");
+const { updateTransaction, deleteTransaction } = await import("@/lib/actions/transactions");
 
 const ID = "tx-1";
 const CONTA = "3f1a7c60-9d2b-4a11-8f37-2c9a1b7e5d40";
@@ -271,5 +271,44 @@ describe("03-C2 A5 · updateTransaction NÃO lê a marcação da categoria (K2)"
     const r = await updateTransaction(ID, payload({ category_id: MARCADA }));
     expect(r.ok).toBe(true);
     expect(linhaFinal()).toMatchObject({ category_id: MARCADA, classificacao: "pessoal", valor_pessoal: null });
+  });
+});
+
+describe("03-D · A4 — recebimento registrado bloqueia", () => {
+  const recebimento = {
+    id: "rr-1", user_id: "user-1", receivable_id: "rc-1", valor: 100,
+    recebido_em: "2026-06-05", created_at: "2026-06-05T10:00:00Z",
+  };
+
+  it("reapplySplit: recebível PENDENTE com recebimento parcial recusa a mudança de divisão e não grava nada", async () => {
+    fake = criarSupabaseEmMemoria({ ...despesaCompartilhada("pendente"), receivable_receipts: [recebimento] });
+    const r = await updateTransaction(ID, payload({ receita_classificacao: "terceiro" }));
+    expect(r).toEqual({ ok: false, error: MOTIVO_RECEBIVEL_FECHADO });
+    expect(fake.escritas()).toHaveLength(0);
+  });
+
+  it("reapplySplit: recebível IGNORADO também bloqueia (D11)", async () => {
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("ignorado"));
+    const r = await updateTransaction(ID, payload({ receita_classificacao: "terceiro" }));
+    expect(r).toEqual({ ok: false, error: MOTIVO_RECEBIVEL_FECHADO });
+    expect(fake.escritas()).toHaveLength(0);
+  });
+
+  it("deleteTransaction: lançamento com recebimento registrado é recusado, sem escrita", async () => {
+    fake = criarSupabaseEmMemoria({ ...despesaCompartilhada("pendente"), receivable_receipts: [recebimento] });
+    const r = await deleteTransaction(ID);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/recebimento registrado/);
+    expect(fake.escritas()).toHaveLength(0);
+  });
+
+  it("deleteTransaction: recebível PAGO legado sem recebimento continua deixando excluir (b)", async () => {
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("pago"));
+    const r = await deleteTransaction(ID);
+    expect(r.ok).toBe(true);
+    expect(fake.escritas()).toEqual([
+      { tabela: "transactions", tipo: "delete", filtros: [["eq", "id", ID]] },
+    ]);
+    expect(fake.tabelas.transactions).toEqual([]);
   });
 });
