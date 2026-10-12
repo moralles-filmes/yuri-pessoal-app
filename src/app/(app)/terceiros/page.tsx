@@ -18,7 +18,8 @@ export default async function TerceirosPage() {
     getCreditCards(),
   ]);
 
-  const currentMonth = hojeISO().slice(0, 7);
+  const hoje = hojeISO();
+  const currentMonth = hoje.slice(0, 7);
 
   return (
     <div className="space-y-6">
@@ -31,6 +32,7 @@ export default async function TerceirosPage() {
         people={people}
         cards={cards.map((c) => ({ id: c.id, nome: c.nome }))}
         currentMonth={currentMonth}
+        hoje={hoje}
       />
     </div>
   );

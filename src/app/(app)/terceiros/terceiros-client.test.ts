@@ -12,6 +12,12 @@ const FONTE = semComentarios(
 );
 
 describe("03-D · A5 — a tela de terceiros", () => {
+  it("os KPIs de pendentes usam o saldo (B4)", () => {
+    expect(FONTE).toContain("totalPendenteAte(");
+    expect(FONTE).toContain("pendenteDoPeriodo(");
+    expect(FONTE).toContain("Pendente de ");
+    expect(FONTE).not.toContain("A receber de ${");
+  });
   it("o recebido no mês usa os recebimentos e o legado K0 (B3)", () => {
     expect(FONTE).toContain("reembolsosRecebidosNoPeriodo(");
     expect(FONTE).not.toContain("r.pago_em?.slice(0, 7) === currentMonth");

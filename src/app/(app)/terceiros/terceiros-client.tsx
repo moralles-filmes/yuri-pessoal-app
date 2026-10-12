@@ -53,9 +53,6 @@ import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dial
 import { PersonFormDialog } from "./person-form";
 import { formatCurrency, formatDate, getInitials, hojeISO } from "@/lib/format";
 import {
-  RECEIVABLE_OPEN_STATUSES,
-} from "@/lib/finance/constants";
-import {
   BULK_ACTION_LABELS,
   BULK_ACTION_TITLES,
   BULK_RECEIVABLE_ACTIONS,
@@ -83,6 +80,7 @@ import type {
 import {
   resumirRecebivel, estadoDoRecebivel, emAberto, saldoCentavos,
   perdoadoCentavos, secoesDaLista, ultimoRecebimento, reembolsosRecebidosNoPeriodo,
+  totalPendenteAte, rotuloTotalPendenteAte, pendenteDoPeriodo,
   ESTADO_LABELS, ESTADOS_DO_RECEBIVEL,
 } from "@/lib/finance/recebimentos";
 
@@ -112,11 +110,13 @@ export function TerceirosClient({
   people,
   cards,
   currentMonth,
+  hoje,
 }: {
   receivables: ReceivableWithRelations[];
   people: PersonWithCounts[];
   cards: CardOption[];
   currentMonth: string; // 'yyyy-MM'
+  hoje: string; // 'yyyy-MM-dd', do servidor
 }) {
   const router = useRouter();
   const [pessoa, setPessoa] = React.useState(ALL);
@@ -148,9 +148,7 @@ export function TerceirosClient({
   const [aplicando, setAplicando] = React.useState(false);
 
   // KPIs gerais (não filtrados): total ainda a receber e total recebido no mês corrente.
-  const totalAReceber = receivables
-    .filter((r) => RECEIVABLE_OPEN_STATUSES.includes(r.status))
-    .reduce((s, r) => s + r.valor, 0);
+  const totalAReceber = totalPendenteAte(receivables, hoje);
   const recebidoNoMes = reembolsosRecebidosNoPeriodo(receivables, {
     de: `${currentMonth}-01`,
     ate: `${currentMonth}-31`,
@@ -165,16 +163,17 @@ export function TerceirosClient({
   });
   const secoes = secoesDaLista(filtered, estadoDe);
 
-  // O KPI por pessoa preserva a soma por status persistido, respeitando os filtros.
+  // O KPI por pessoa soma o saldo dos em aberto pelo estado derivado, respeitando os filtros.
   const pessoaSel = pessoa !== ALL ? people.find((p) => p.id === pessoa) ?? null : null;
-  const aReceberPessoa = filtered
-    .filter((r) => RECEIVABLE_OPEN_STATUSES.includes(r.status))
-    .reduce((s, r) => s + r.valor, 0);
+  const aReceberPessoa = pendenteDoPeriodo(secoes.emAberto.map(resumirRecebivel));
 
   // ── Seleção em massa ──────────────────────────────────────────────────────────────
   // `visiveis` na mesma ordem em que a tela desenha: é ela que define o recorte de
   // `alcanceDaAcao` (nada fora do filtro é alterado) e a ordem dos ids enviados.
-  const visiveis = [...secoes.emAberto, ...secoes.naoSeraCobrado, ...secoes.historico];
+  const visiveis = [...secoes.emAberto, ...secoes.naoSeraCobrado, ...secoes.historico].map((r) => {
+    const res = resumirRecebivel(r);
+    return { ...r, valor: emAberto(res) ? saldoCentavos(res) / 100 : r.valor };
+  });
   const selecionadosVisiveis = visiveis.filter((r) => selecionados.has(r.id));
   const valorSelecionado = selecionadosVisiveis.reduce((s, r) => s + r.valor, 0);
   const foraDoFiltro = selecionados.size - selecionadosVisiveis.length;
@@ -259,10 +258,10 @@ export function TerceirosClient({
       <TabsContent value="receber" className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <StatCard
-            label="Total a receber"
+            label={rotuloTotalPendenteAte(hoje)}
             value={formatCurrency(totalAReceber)}
             icon={HandCoins}
-            hint="Pendente + cobrado"
+            hint="Pendente + cobrado, descontado o que já foi recebido"
           />
           <StatCard
             label={`Reembolsos recebidos em ${monthYearLabel(`${currentMonth}-01`)}`}
@@ -272,7 +271,7 @@ export function TerceirosClient({
           />
           {pessoaSel && (
             <StatCard
-              label={`A receber de ${pessoaSel.nome}`}
+              label={`Pendente de ${pessoaSel.nome}`}
               value={formatCurrency(aReceberPessoa)}
               icon={UserRound}
               hint={`${secoes.emAberto.length} em aberto`}
