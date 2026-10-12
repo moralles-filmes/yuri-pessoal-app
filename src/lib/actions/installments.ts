@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { motivoParaNaoApagar } from "@/lib/finance/protecao-do-recebivel";
+import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
 import {
   installmentPurchaseEditSchema,
   installmentPurchaseSchema,
@@ -308,21 +310,18 @@ export async function cancelInstallmentFuture(
 
   const ids = cancelaveis.map((p) => p.id);
 
-  // Recebíveis das parcelas que vão sumir da fatura. `cobrado`/`pago` barra a ação inteira:
-  // o acerto com a pessoa é decisão dela, não efeito colateral de um cancelamento.
-  const { data: recebiveis } = await ctx.supabase
-    .from("receivables")
-    .select("id, status")
-    .in("installment_id", ids);
-  if (
-    (recebiveis ?? []).some(
-      (r) => r.status === "cobrado" || r.status === "pago",
-    )
-  ) {
-    return dbError(
-      "Há recebíveis cobrados ou pagos nas parcelas futuras. Acerte-os em A Receber antes de cancelar.",
-    );
+  // REDESIGN-03-D · A4 — a regra única: recebimento registrado, cobrado, pago ou ignorado barra
+  // a ação inteira; o acerto com a pessoa é decisão do dono, não efeito colateral do cancelamento.
+  const protecao = await protecaoDosRecebiveis(ctx.supabase, { installmentIds: ids });
+  if (protecao.erro) {
+    return dbError("Não foi possível conferir os recebíveis das parcelas. Tente de novo.");
   }
+  const motivo = motivoParaNaoApagar(
+    protecao.recebiveis,
+    "regra-cheia",
+    "cancelar as parcelas futuras",
+  );
+  if (motivo) return dbError(motivo);
 
   const { error } = await ctx.supabase
     .from("transaction_installments")
@@ -330,7 +329,7 @@ export async function cancelInstallmentFuture(
     .in("id", ids);
   if (error) return dbError("Não foi possível cancelar as parcelas futuras.");
 
-  if ((recebiveis ?? []).length > 0) {
+  if (protecao.recebiveis.length > 0) {
     await ctx.supabase.from("receivables").delete().in("installment_id", ids);
     await recomputeParentValorPessoal(ctx, parentId);
   }
