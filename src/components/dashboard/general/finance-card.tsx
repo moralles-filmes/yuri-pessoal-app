@@ -1,7 +1,7 @@
 import { getFinanceCardData } from "@/lib/dashboard/queries";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
-import { fraseDoPerdoado } from "@/lib/finance/recebimentos";
+import { fraseDoPerdoado, rotuloPendenteDoMes } from "@/lib/finance/recebimentos";
 import { Metric, MetricRow } from "./primitives";
 import type { DashWindow } from "@/lib/dashboard/period";
 
@@ -35,7 +35,7 @@ export async function FinanceCard({
         <MetricRow label="No cartão" value={formatCurrency(d.cartao)} />
         <MetricRow label="À vista" value={formatCurrency(d.aVista)} />
         <MetricRow label="De terceiros" value={formatCurrency(d.terceiros)} />
-        <MetricRow label="A receber de terceiros" value={formatCurrency(d.aReceber)} />
+        <MetricRow label={rotuloPendenteDoMes(window.mes)} value={formatCurrency(d.aReceber)} />
       </div>
       <div className="border-t pt-3">
         <MetricRow label="Próximas contas a pagar" value={formatCurrency(d.contasTotal)} />

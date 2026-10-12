@@ -28,7 +28,7 @@ import { StatementStatusBadge } from "@/components/financeiro/badges";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
-import { fraseDoPerdoado } from "@/lib/finance/recebimentos";
+import { fraseDoPerdoado, rotuloPendenteDoMes } from "@/lib/finance/recebimentos";
 import { CategoriaChart } from "@/components/dashboard/categoria-chart";
 import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-chart";
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
@@ -187,7 +187,7 @@ export function DashboardClient({
           trend={{ value: pctText(comparativo.deltaSaidasPct), direction: "neutral" }}
         />
         <StatCard
-          label="A receber de terceiros"
+          label={rotuloPendenteDoMes(mesSel)}
           value={formatCurrency(aReceber)}
           icon={HandCoins}
           hint="Pendente de outras pessoas"

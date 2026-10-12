@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatementStatusBadge } from "@/components/financeiro/badges";
 import { getInvoicesCardData } from "@/lib/dashboard/queries";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { rotuloTotalPendenteAte } from "@/lib/finance/recebimentos";
 import { Metric, MetricRow, CardEmpty } from "./primitives";
 
 /** Corpo do card Cartões & Faturas — abertas/fechadas, próximos vencimentos, a receber. */
@@ -20,7 +21,7 @@ export async function InvoicesCard({ todayIso }: { todayIso: string }) {
         <Metric label="Pagas" value={String(d.pagas)} />
       </div>
       <MetricRow
-        label="A receber de terceiros"
+        label={rotuloTotalPendenteAte(todayIso)}
         value={formatCurrency(d.aReceber)}
         className="border-t pt-3"
       />
