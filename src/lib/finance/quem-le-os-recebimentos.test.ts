@@ -18,6 +18,8 @@ const TABELA = "receivable_receipts";
 const ALLOWLIST: Record<string, string> = {
   "types/supabase.ts": "tipos gerados do banco (M1)",
   "lib/settings/export-tables.ts": "a tabela entra no backup do usuario",
+  "types/database.ts": "o tipo da linha de recebimento (RecebimentoRow)",
+  "lib/finance/recebimentos-leitura.ts": "a UNICA leitura da tabela (P3), inclusive a da protecao (A4)",
 };
 
 /** Os que NUNCA podem mencionar — nem entrar na allowlist. */

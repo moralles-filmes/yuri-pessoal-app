@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { toDateInputValue } from "@/lib/format";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
+import { leituraComTeto, type LeituraComTeto } from "@/lib/finance/leitura-com-teto";
 import { idsDasCategoriasMarcadas } from "@/lib/finance/categorias-marcadas";
 import {
   saldosPorDia,
@@ -246,18 +247,7 @@ export type TransactionRangeFilters = {
 export const TETO_DE_LANCAMENTOS = 2000;
 export const TETO_DE_RECEBIVEIS = 1000;
 
-export type LeituraComTeto<T> = {
-  linhas: T[];
-  situacao: "completa" | "saturou" | "sem_contagem";
-};
-
-/** Compara com o recebido: o max_rows do PostgREST pode cortar antes do nosso limit. */
-function leituraComTeto<T>(linhas: T[], count: number | null): LeituraComTeto<T> {
-  return {
-    linhas,
-    situacao: count === null ? "sem_contagem" : count > linhas.length ? "saturou" : "completa",
-  };
-}
+export type { LeituraComTeto };
 
 /**
  * Lançamentos por intervalo de competência (Fase 07 — dashboard). Diferente de
