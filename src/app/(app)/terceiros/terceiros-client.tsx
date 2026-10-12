@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -46,14 +48,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
-import { ReceivableStatusBadge } from "@/components/financeiro/badges";
+import { EstadoDoRecebivelBadge, ReceivableStatusBadge } from "@/components/financeiro/badges";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import { PersonFormDialog } from "./person-form";
 import { formatCurrency, formatDate, getInitials, hojeISO } from "@/lib/format";
 import {
-  RECEIVABLE_STATUSES,
-  RECEIVABLE_STATUS_LABELS,
-  type ReceivableStatus,
+  RECEIVABLE_OPEN_STATUSES,
 } from "@/lib/finance/constants";
 import {
   BULK_ACTION_LABELS,
@@ -70,6 +70,7 @@ import {
 import {
   bulkSetReceivableStatus,
   markReceivableReceived,
+  desfazerRecebimentoAction,
   setReceivableStatus,
   updateReceivable,
 } from "@/lib/actions/receivables";
@@ -79,8 +80,15 @@ import type {
   ReceivableWithRelations,
 } from "@/types/database";
 
+import {
+  resumirRecebivel, estadoDoRecebivel, emAberto, saldoCentavos,
+  perdoadoCentavos, secoesDaLista, ultimoRecebimento,
+  ESTADO_LABELS, ESTADOS_DO_RECEBIVEL,
+} from "@/lib/finance/recebimentos";
+
 const ALL = "all";
-const OPEN_STATUSES: ReceivableStatus[] = ["pendente", "cobrado"];
+const RegistrarRecebimentoDialog = dynamic(() => import("./registrar-recebimento-dialog").then((m) => m.RegistrarRecebimentoDialog), { ssr: false });
+const estadoDe = (r: ReceivableWithRelations) => estadoDoRecebivel(resumirRecebivel(r));
 
 type CardOption = { id: string; nome: string };
 
@@ -115,6 +123,21 @@ export function TerceirosClient({
   const [mes, setMes] = React.useState("");
   const [cartao, setCartao] = React.useState(ALL);
   const [status, setStatus] = React.useState(ALL);
+  const [alvo, setAlvo] = React.useState<{
+    id: string; saldo: number; pessoa: string; dataPadrao: string;
+  } | null>(null);
+  const [aberto, setAberto] = React.useState(false);
+  const montado = useLazyDialog(aberto);
+
+  function abrirRegistro(r: ReceivableWithRelations) {
+    setAlvo({
+      id: r.id,
+      saldo: saldoCentavos(resumirRecebivel(r)) / 100,
+      pessoa: r.person?.nome ?? "Pessoa",
+      dataPadrao: hojeISO(),
+    });
+    setAberto(true);
+  }
 
   // Seleção em massa. Sobrevive à troca de filtro de propósito: o que saiu da tela não é
   // afetado, mas continua contado — a barra declara "N fora do filtro" antes de agir.
@@ -126,7 +149,7 @@ export function TerceirosClient({
 
   // KPIs gerais (não filtrados): total ainda a receber e total recebido no mês corrente.
   const totalAReceber = receivables
-    .filter((r) => OPEN_STATUSES.includes(r.status))
+    .filter((r) => RECEIVABLE_OPEN_STATUSES.includes(r.status))
     .reduce((s, r) => s + r.valor, 0);
   const recebidoNoMes = receivables
     .filter((r) => r.status === "pago" && r.pago_em?.slice(0, 7) === currentMonth)
@@ -135,22 +158,22 @@ export function TerceirosClient({
   const filtered = receivables.filter((r) => {
     if (pessoa !== ALL && r.person_id !== pessoa) return false;
     if (cartao !== ALL && r.card_id !== cartao) return false;
-    if (status !== ALL && r.status !== status) return false;
+    if (status !== ALL && estadoDe(r) !== status) return false;
     if (mes && refMonth(r) !== mes) return false;
     return true;
   });
-  const abertos = filtered.filter((r) => OPEN_STATUSES.includes(r.status));
-  const historico = filtered.filter((r) => !OPEN_STATUSES.includes(r.status));
+  const secoes = secoesDaLista(filtered, estadoDe);
 
-  // Card por pessoa: aparece só com uma pessoa selecionada; soma o que está em
-  // aberto dela já respeitando os filtros ativos (mês/cartão/status) — bate com a lista abaixo.
+  // O KPI por pessoa preserva a soma por status persistido, respeitando os filtros.
   const pessoaSel = pessoa !== ALL ? people.find((p) => p.id === pessoa) ?? null : null;
-  const aReceberPessoa = abertos.reduce((s, r) => s + r.valor, 0);
+  const aReceberPessoa = filtered
+    .filter((r) => RECEIVABLE_OPEN_STATUSES.includes(r.status))
+    .reduce((s, r) => s + r.valor, 0);
 
   // ── Seleção em massa ──────────────────────────────────────────────────────────────
   // `visiveis` na mesma ordem em que a tela desenha: é ela que define o recorte de
   // `alcanceDaAcao` (nada fora do filtro é alterado) e a ordem dos ids enviados.
-  const visiveis = [...abertos, ...historico];
+  const visiveis = [...secoes.emAberto, ...secoes.naoSeraCobrado, ...secoes.historico];
   const selecionadosVisiveis = visiveis.filter((r) => selecionados.has(r.id));
   const valorSelecionado = selecionadosVisiveis.reduce((s, r) => s + r.valor, 0);
   const foraDoFiltro = selecionados.size - selecionadosVisiveis.length;
@@ -251,7 +274,7 @@ export function TerceirosClient({
               label={`A receber de ${pessoaSel.nome}`}
               value={formatCurrency(aReceberPessoa)}
               icon={UserRound}
-              hint={`${abertos.length} em aberto`}
+              hint={`${secoes.emAberto.length} em aberto`}
             />
           )}
         </div>
@@ -308,9 +331,9 @@ export function TerceirosClient({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>Todos</SelectItem>
-                {RECEIVABLE_STATUSES.map((s) => (
+                {ESTADOS_DO_RECEBIVEL.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {RECEIVABLE_STATUS_LABELS[s]}
+                    {ESTADO_LABELS[s]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -384,49 +407,87 @@ export function TerceirosClient({
             <section className="space-y-2">
               <SectionHeader
                 titulo="Em aberto"
-                itens={abertos}
+                itens={secoes.emAberto}
                 selecionados={selecionados}
                 onAlternar={alternarGrupo}
               />
-              {abertos.length === 0 ? (
+              {secoes.emAberto.length === 0 ? (
                 <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
                   Nenhum recebível em aberto com os filtros atuais.
                 </p>
               ) : (
                 <div className="grid gap-2">
-                  {abertos.map((r) => (
+                  {secoes.emAberto.map((r) => (
                     <ReceivableCard
                       key={r.id}
                       receivable={r}
                       selecionado={selecionados.has(r.id)}
                       onSelecionar={alternarUm}
+                      onRegistrar={abrirRegistro}
                     />
                   ))}
                 </div>
               )}
             </section>
 
-            {historico.length > 0 && (
+            {secoes.naoSeraCobrado.length > 0 && (
               <section className="space-y-2">
                 <SectionHeader
-                  titulo="Histórico"
-                  itens={historico}
+                  titulo="Não será cobrado"
+                  itens={secoes.naoSeraCobrado}
                   selecionados={selecionados}
                   onAlternar={alternarGrupo}
                 />
+                <p className="text-sm text-muted-foreground">
+                  Você decidiu não cobrar. O valor conta como despesa sua.
+                </p>
                 <div className="grid gap-2">
-                  {historico.map((r) => (
+                  {secoes.naoSeraCobrado.map((r) => (
                     <ReceivableCard
                       key={r.id}
                       receivable={r}
                       selecionado={selecionados.has(r.id)}
                       onSelecionar={alternarUm}
+                      onRegistrar={abrirRegistro}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {secoes.historico.length > 0 && (
+              <section className="space-y-2">
+                <SectionHeader
+                  titulo="Histórico"
+                  itens={secoes.historico}
+                  selecionados={selecionados}
+                  onAlternar={alternarGrupo}
+                />
+                <div className="grid gap-2">
+                  {secoes.historico.map((r) => (
+                    <ReceivableCard
+                      key={r.id}
+                      receivable={r}
+                      selecionado={selecionados.has(r.id)}
+                      onSelecionar={alternarUm}
+                      onRegistrar={abrirRegistro}
                     />
                   ))}
                 </div>
               </section>
             )}
           </div>
+        )}
+
+        {montado && alvo && (
+          <RegistrarRecebimentoDialog
+            open={aberto}
+            onOpenChange={setAberto}
+            receivableId={alvo.id}
+            saldo={alvo.saldo}
+            pessoa={alvo.pessoa}
+            dataPadrao={alvo.dataPadrao}
+          />
         )}
 
         <BulkConfirmDialog
@@ -601,13 +662,20 @@ function ReceivableCard({
   receivable: r,
   selecionado,
   onSelecionar,
+  onRegistrar,
 }: {
   receivable: ReceivableWithRelations;
   selecionado: boolean;
   onSelecionar: (id: string, marcar: boolean) => void;
+  onRegistrar: (r: ReceivableWithRelations) => void;
 }) {
   const router = useRouter();
-  const isOpen = OPEN_STATUSES.includes(r.status);
+  const resumido = resumirRecebivel(r);
+  const estado = estadoDoRecebivel(resumido);
+  const aberto = emAberto(resumido);
+  const saldo = saldoCentavos(resumido) / 100;
+  const ultimo = ultimoRecebimento(r.recebimentos);
+  const legado = r.status === "pago" && r.recebimentos.length === 0;
 
   async function run(action: Promise<{ ok: boolean; error?: string }>, ok: string) {
     const res = await action;
@@ -620,112 +688,174 @@ function ReceivableCard({
   }
 
   return (
-    <Card className={selecionado ? "border-primary/50 bg-primary/5" : undefined}>
-      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <Checkbox
-            checked={selecionado}
-            onCheckedChange={(checked) => onSelecionar(r.id, checked === true)}
-            aria-label={`Selecionar recebível de ${r.person?.nome ?? "pessoa"} de ${formatCurrency(r.valor)}`}
-            className="shrink-0"
-          />
-          <Avatar size="sm">
-            <AvatarFallback>{getInitials(r.person?.nome)}</AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="truncate font-medium">
-                {r.person?.nome ?? "Pessoa"}
-              </span>
-              <ReceivableStatusBadge status={r.status} />
+    <Card className={selecionado ? "min-w-0 border-primary/50 bg-primary/5" : "min-w-0"}>
+      <CardContent className="flex min-w-0 flex-col gap-3 p-4">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <Checkbox
+              checked={selecionado}
+              onCheckedChange={(checked) => onSelecionar(r.id, checked === true)}
+              aria-label={`Selecionar recebível de ${r.person?.nome ?? "pessoa"} de ${formatCurrency(r.valor)}`}
+              className="shrink-0"
+            />
+            <Avatar size="sm">
+              <AvatarFallback>{getInitials(r.person?.nome)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 truncate font-medium">
+                  {r.person?.nome ?? "Pessoa"}
+                </span>
+                <EstadoDoRecebivelBadge estado={estado} />
+                {estado === "parcial" && r.status === "cobrado" && (
+                  <ReceivableStatusBadge status="cobrado" />
+                )}
+              </div>
+              <p className="truncate text-xs text-muted-foreground">
+                {r.transaction?.description || "Despesa"}
+                {r.card?.nome ? ` · ${r.card.nome}` : ""}
+                {r.statement?.competencia
+                  ? ` · fatura ${monthYearLabel(r.statement.competencia)}`
+                  : ""}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {r.transaction?.purchase_date
+                  ? `compra ${formatDate(r.transaction.purchase_date)}`
+                  : ""}
+                {r.data_prevista
+                  ? ` · prev. ${formatDate(r.data_prevista)}`
+                  : ""}
+              </p>
             </div>
-            <p className="truncate text-xs text-muted-foreground">
-              {r.transaction?.description || "Despesa"}
-              {r.card?.nome ? ` · ${r.card.nome}` : ""}
-              {r.statement?.competencia
-                ? ` · fatura ${monthYearLabel(r.statement.competencia)}`
-                : ""}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {r.transaction?.purchase_date
-                ? `compra ${formatDate(r.transaction.purchase_date)}`
-                : ""}
-              {r.data_prevista
-                ? ` · prev. ${formatDate(r.data_prevista)}`
-                : ""}
-              {r.pago_em ? ` · recebido ${formatDate(r.pago_em)}` : ""}
-            </p>
           </div>
-        </div>
 
-        <div className="flex items-center justify-between gap-3 sm:justify-end">
-          <span className="text-base font-semibold tabular-nums">
-            {formatCurrency(r.valor)}
-          </span>
-          <div className="flex items-center gap-1">
-            {isOpen ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-emerald-600 hover:text-emerald-700"
-                onClick={() =>
-                  run(markReceivableReceived(r.id), "Marcado como recebido.")
-                }
-              >
-                <CheckCircle2 /> Receber
-              </Button>
-            ) : r.status === "pago" ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  run(setReceivableStatus(r.id, "pendente"), "Pagamento desfeito.")
-                }
-              >
-                <RotateCcw /> Desfazer
-              </Button>
-            ) : null}
-
-            <ReceivableEditDialog receivable={r} />
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="Mais ações">
-                  <MoreVertical />
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 sm:justify-end">
+            <div className="min-w-0 sm:text-right">
+              <p className="truncate text-base font-semibold tabular-nums">{formatCurrency(r.valor)}</p>
+              {r.recebimentos.length > 0 && aberto && (
+                <p className="truncate text-xs text-muted-foreground">restam {formatCurrency(saldo)}</p>
+              )}
+              {estado === "ignorado" && (
+                <p className="truncate text-xs text-muted-foreground">
+                  não será cobrado: {formatCurrency(perdoadoCentavos(resumido) / 100)}
+                </p>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
+              {aberto && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-w-0 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                  onClick={() =>
+                    run(markReceivableReceived(r.id), "Marcado como recebido.")
+                  }
+                >
+                  <CheckCircle2 /> <span className="truncate">Receber</span>
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {r.status !== "cobrado" && isOpen && (
-                  <DropdownMenuItem
-                    onClick={() =>
-                      run(setReceivableStatus(r.id, "cobrado"), "Marcado como cobrado.")
-                    }
-                  >
-                    Marcar como cobrado
-                  </DropdownMenuItem>
-                )}
-                {r.status !== "ignorado" && (
-                  <DropdownMenuItem
-                    onClick={() =>
-                      run(setReceivableStatus(r.id, "ignorado"), "Recebível ignorado.")
-                    }
-                  >
-                    Ignorar
-                  </DropdownMenuItem>
-                )}
-                {r.status !== "pendente" && (
-                  <DropdownMenuItem
-                    onClick={() =>
-                      run(setReceivableStatus(r.id, "pendente"), "Voltou para pendente.")
-                    }
-                  >
-                    Voltar para pendente
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              )}
+              {(r.recebimentos.length > 0 || r.status === "pago") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-w-0"
+                  onClick={() =>
+                    run(desfazerRecebimentoAction(r.id), "Último recebimento desfeito.")
+                  }
+                >
+                  <RotateCcw /> <span className="truncate">Desfazer</span>
+                </Button>
+              )}
+
+              {aberto && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Registrar recebimento"
+                  title="Registrar recebimento"
+                  onClick={() => onRegistrar(r)}
+                >
+                  <HandCoins />
+                </Button>
+              )}
+              <ReceivableEditDialog receivable={r} />
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label="Mais ações">
+                    <MoreVertical />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {aberto && (
+                    <DropdownMenuItem onClick={() => onRegistrar(r)}>
+                      Registrar recebimento
+                    </DropdownMenuItem>
+                  )}
+                  {r.status === "pendente" && aberto && (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        run(setReceivableStatus(r.id, "cobrado"), "Marcado como cobrado.")
+                      }
+                    >
+                      Marcar como cobrado
+                    </DropdownMenuItem>
+                  )}
+                  {aberto && (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        run(setReceivableStatus(r.id, "ignorado"), "Recebível ignorado.")
+                      }
+                    >
+                      Ignorar
+                    </DropdownMenuItem>
+                  )}
+                  {(r.status === "cobrado" || r.status === "ignorado") && (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        run(setReceivableStatus(r.id, "pendente"), "Voltou para pendente.")
+                      }
+                    >
+                      Voltar para pendente
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
+        {r.recebimentos.length > 0 && (
+          <details className="min-w-0 text-xs text-muted-foreground">
+            <summary className="cursor-pointer">Recebimentos ({r.recebimentos.length})</summary>
+            <ul className="mt-2 space-y-2">
+              {[...r.recebimentos]
+                .sort((a, b) => a.recebido_em.localeCompare(b.recebido_em))
+                .map((recebimento) => (
+                  <li key={recebimento.id} className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="min-w-0 truncate">
+                      {formatDate(recebimento.recebido_em)} · {formatCurrency(recebimento.valor)}
+                      {recebimento.observacoes ? ` · ${recebimento.observacoes}` : ""}
+                    </span>
+                    {recebimento.id === ultimo?.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="min-w-0"
+                        onClick={() => run(desfazerRecebimentoAction(r.id), "Último recebimento desfeito.")}
+                      >
+                        <RotateCcw /> <span className="truncate">Desfazer o último</span>
+                      </Button>
+                    )}
+                  </li>
+                ))}
+            </ul>
+          </details>
+        )}
+        {legado && r.pago_em && (
+          <p className="text-xs text-muted-foreground">
+            Recebido em {formatDate(r.pago_em)} (registro anterior ao histórico)
+          </p>
+        )}
       </CardContent>
     </Card>
   );
