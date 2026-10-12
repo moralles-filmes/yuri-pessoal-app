@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/server";
 import { dividirEmBlocos, TAMANHO_DO_BLOCO } from "@/lib/finance/receivables-bulk";
 import { leituraComTeto, type LeituraComTeto } from "@/lib/finance/leitura-com-teto";
 import type { RecebimentoDoBanco } from "@/types/database";
+import type { RecebivelParaProteger } from "@/lib/finance/protecao-do-recebivel";
 
 export type ClienteSupabase = SupabaseClient<Database>;
 
@@ -48,4 +49,27 @@ export async function recebimentosDe(
     linhas.push(...((data ?? []) as RecebimentoDoBanco[]));
   }
   return { erro: false, linhas };
+}
+
+/** O que a A4 precisa saber: status de cada recebível do alvo e se ele já recebeu algo. */
+export async function protecaoDosRecebiveis(
+  client: ClienteSupabase,
+  filtro: { readonly transactionIds: readonly string[] } | { readonly installmentIds: readonly string[] },
+): Promise<{ erro: true } | { erro: false; recebiveis: RecebivelParaProteger[] }> {
+  const coluna = "transactionIds" in filtro ? "transaction_id" : "installment_id";
+  const alvo = "transactionIds" in filtro ? filtro.transactionIds : filtro.installmentIds;
+  const linhas: { id: string; status: string }[] = [];
+  for (const bloco of dividirEmBlocos([...new Set(alvo)], TAMANHO_DO_BLOCO)) {
+    if (bloco.length === 0) continue;
+    const { data, error } = await client.from("receivables").select("id, status").in(coluna, bloco);
+    if (error) return { erro: true };
+    linhas.push(...((data ?? []) as { id: string; status: string }[]));
+  }
+  const recs = await recebimentosDe(client, linhas.map((l) => l.id));
+  if (recs.erro) return { erro: true };
+  const comRecebimento = new Set(recs.linhas.map((x) => x.receivable_id));
+  return {
+    erro: false,
+    recebiveis: linhas.map((l) => ({ status: l.status, temRecebimento: comRecebimento.has(l.id) })),
+  };
 }
