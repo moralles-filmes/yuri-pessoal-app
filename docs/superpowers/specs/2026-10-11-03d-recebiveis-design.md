@@ -771,3 +771,276 @@ a ser fatos separados; que a coluna nunca afirma `pago` sem a soma fechar; que o
 mexe na minha despesa nem na fatura (D3); que o perdoado aparece e vira meu (D11); que nenhum
 caminho de exclusão leva dinheiro registrado sem dizer; que a prova é mutação e não o verde; e que o
 que ficou de fora está no §9, e o que ela criou está aqui.
+
+---
+
+## 13. Resultado — 2026-10-12, na ponta `93f7a23`
+
+### 13.1 Commits (branch `feat/redesign-03d-recebiveis`, locais, sem push)
+
+| Passo | Commit |
+| --- | --- |
+| 0 · desenho | `c1d5c5c` (+ plano `cde0451`) |
+| 1 · A1 | `147277f` |
+| 2 · A2 | `ddee65d` (arquivo da M1 + teste) · `89702db` (tipos) · `e6a3b91` (backup) |
+| 3 · A3 | `6f7833e` (A3a) · `306f23c` (A3b) · `1b95c87` (A3c) · `59111e8` (rodada de correção da A3b) |
+| 4 · A4 | `050b147` · `1954110` · `4c4ac17` · `53fa2a1` |
+| 5 · A5 | `6909a18` · `5f3fc24` |
+| 6 · A6 | `3709f50` · `9a457c0` |
+| 7 · B1a | `762e4ae` · `9f63422` · `9d668bd` |
+| 7 · B1b | `9d0de6d` |
+| 7 · B2 | `30a0467` |
+| 7 · B3 | `a6b9190` |
+| 7 · B4 | `1e70899` · `89c3a2c` · `9e35804` (rodada de correção: o sino ganha teste) |
+| 8 · mutações | `93f7a23` (o teste que faltava a `perdoadoDoMes`, §13.4) |
+| 8 · este registro | o commit que traz esta seção |
+
+**Quem executou** (o `summary_line` do roteador, literal):
+
+| Pacote | Roteador |
+| --- | --- |
+| A1 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 55,4 s` |
+| A2 (M1, tipos, backup) | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · fallback: DeepSeek (deepseek-flash) · classificação` → no principal, por ordem do dono |
+| A3a (harness) | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,1 min` |
+| A3a (leitura) | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,3 min` |
+| A3b | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,2 min` |
+| A3b (correção) | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,4 min` |
+| A3c | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,6 min` |
+| A4 1/4 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 46,8 s` |
+| A4 2/4 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,2 min` |
+| A4 3/4 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,4 min` |
+| A4 4/4 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,1 min` |
+| A5 1/2 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · falhou (scope_violation) · sem custo de API · 1,9 min` (falso alarme, §13.7, desvio 9) |
+| A5 2/2 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · falhou (scope_violation) · sem custo de API · 4,3 min` (falso alarme, §13.7, desvio 9) |
+| A6 1/2 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 2,6 min` |
+| A6 2/2 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,2 min` |
+| B1a 1/3 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,6 min` |
+| B1a 2/3 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,0 min` |
+| B1a 3/3 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,0 min` |
+| B1b | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,7 min` |
+| B2 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,0 min` |
+| B3 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 59,7 s` |
+| B4 1/2 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · falhou (scope_violation) · sem custo de API · 1,8 min` (falso alarme, §13.7, desvio 9) |
+| B4 2/2 | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 1,3 min` |
+| B4 (correção) | `🔀 Router · TIER 1 → Codex (gpt-6-astra) · sucesso · sem custo de API · 52,9 s` |
+| passo 8 (mutações) | no principal, por ordem do dono |
+
+### 13.2 A M1
+
+- O arquivo `supabase/migrations/20261011210000_receivable_receipts.sql` (`ddee65d`) passou pelo
+  `saas-shield-br:migration-validator`: **PASS_WITH_WARNINGS, 0 bloqueantes**, 7 atenções — as FKs
+  simples `conta_id`/`transaction_id` (= RR-D-2); o cascade levando recebimentos até a A4 entrar;
+  **a 2ª execução falha** em `drop constraint receivables_id_user_uk` (2BP01, aborta sem efeito —
+  contradiz o "idempotente" do §5.2); a trava só em READ COMMITTED; nenhum trigger do lado de
+  `receivables.valor`; FKs sem índice; grants/errcode/rollback não escritos.
+- O pedido de autorização foi em mensagem própria. "Autorizo!" e "Pode aplicarrr…" **não** foram
+  tratados como autorização; a frase literal veio depois: *"aplique a M1"*.
+- `apply_migration` pelo MCP voltou `{"status":"declined"}` — a confirmação de comando do próprio
+  MCP recusou. O banco foi conferido: nada aplicado.
+- O dono pediu o SQL (*"Me envie o sql e aplico por aqui"*) e o aplicou no SQL Editor do Supabase
+  (*"Apliquei"*). **Desvio declarado:** a M1 **não** passou pelo MCP e **não tem versão remota** —
+  `supabase_migrations.schema_migrations` termina em `20261011190803
+  categories_classificacao_padrao` (reconferido em 2026-10-12). Ver RR-D-11.
+- Conferido no banco depois: RLS + FORCE, policy por dono, trigger `BEFORE INSERT OR UPDATE`
+  (`nao_excede`) e `BEFORE UPDATE` (`set_updated_at`), FK composta com cascade,
+  `receivables_id_user_uk`, 3 índices, função `security invoker` com `search_path = ''`, 0 linhas,
+  133 tabelas no `public`.
+- Tipos regenerados **pelo MCP** (`generate_typescript_types`), diff lido: entrou **só o bloco de
+  `receivable_receipts`** (68 linhas). Ficaram fora (invariante 94): a relationship
+  `import_rows_transfer_account_owner_fkey` e a sintaxe nova dos genéricos.
+
+### 13.3 Os cinco comandos
+
+| Comando | Antes (`17a93e9`) | Depois (`93f7a23`) |
+| --- | --- | --- |
+| `npm run test:run` | 214 arquivos / 4.229 testes, 17,1 s | **228 arquivos / 4.408 testes**, 22,2 s |
+| `npm run lint` | limpo | **limpo** |
+| `npx tsc --noEmit` | limpo | **limpo** |
+| `npm run build` | ok | **ok** |
+| `npm run perf:bundle` | mediana 214,2 KB · 68 rotas · 1 com teto próprio · todas dentro | **mediana 215,1 KB · 68 rotas · 1 com teto próprio · todas dentro** |
+
+| Rota (KB gz, primeiro carregamento) | Antes | Depois |
+| --- | --- | --- |
+| `/(app)/terceiros` | 219,3 | **221,4** (+2,1) |
+| `/(app)/faturas` | 202,3 | **203,5** (+1,2) |
+| `/(app)/parcelamentos` | 203,4 | **204,6** (+1,2) |
+| `/(app)/dashboard` | 203,8 | 203,8 |
+| `/(app)/dashboard/financeiro` | 201,1 | **202,2** (+1,1) |
+| `/(app)/relatorios` | 204,2 | **205,3** (+1,1) |
+
+`TZ=UTC npx vitest run src/lib/finance/ src/lib/notifications/`: **39 arquivos / 664 testes**, verdes.
+
+### 13.4 Mutações — cada uma sozinha, compilando, restaurada por `git checkout` e conferida por `git diff --quiet`
+
+**33 de 33** (Y1–Y31, com Y11 e Y28 em duas metades): todas compilaram (`tsc` = 0), todas
+derrubaram ao menos um teste, todas foram restauradas — `git diff --quiet` = 0 depois de cada uma e
+ao fim. O Y31 derruba **só** o caso `NUNCA`, como desenhado: a igualdade com a allowlist passa,
+porque ela foi alargada junto.
+
+| # | Mutação aplicada | Testes que caíram |
+| --- | --- | --- |
+| Y1 | sem `alter table public.receivable_receipts force row level security;` | m1-recebimentos.test.ts › *03-D · A2 — a M1 (receivable_receipts) RLS E FORCE RLS* |
+| Y2 | FK simples `foreign key (receivable_id) references public.receivables (id)` | m1-recebimentos.test.ts › *03-D · A2 — a M1 (receivable_receipts) a FK do recebível é COMPOSTA com o dono e cascade (invariante 23)* |
+| Y3 | sem `for update` no `select r.valor into v_devido` | m1-recebimentos.test.ts › *03-D · A2 — a M1 (receivable_receipts) o trigger trava o excesso com FOR UPDATE, security invoker e search_path vazio* |
+| Y4 | a M1 ganha o backfill `insert into public.receivable_receipts … where status = 'pago'` | m1-recebimentos.test.ts › *03-D · A2 — a M1 (receivable_receipts) o arquivo NÃO escreve dado — sem backfill (K0)* |
+| Y5 | `saldoCentavos` devolve `cent(r.valor)` | recebimentos.test.ts › *saldo e recebido 600 − 250 = 350* · recebimentos.test.ts › *saldo e recebido recebido AUSENTE com status pago é legado: saldo zero (K0 sobre lista vazia)* · recebimentos.test.ts › *os três números do §13.4 + Perdoado pendente do período: saldo dos em aberto do mês, por ref_month* · recebimentos.test.ts › *os três números do §13.4 + Perdoado com o corte = hoje e nenhuma data no futuro, é igual ao pendente sem mês (equivalência)* |
+| Y6 | `registrarRecebimento`, ramo parcial: `update({ status: "parcial" })` | recebimentos-servico.test.ts › *registrar recebimento parcial grava SÓ o recebimento — a coluna não muda e nunca vira 'parcial'* |
+| Y7 | `split-reapply.ts`: `(r) => recebivelProtegido(r, "regra-cheia")` → `false` (ver §13.7) | transactions.test.ts › *03-C A2(b) · despesa compartilhada que vira receita com recebível cobrado, RECUSA e não grava NADA — a linha continua despesa compartilhada* · transactions.test.ts › *03-C A2(b) · despesa compartilhada que vira receita com recebível pago, RECUSA e não grava NADA — a linha continua despesa compartilhada* · transactions.test.ts › *03-D · A4 — recebimento registrado bloqueia reapplySplit: recebível PENDENTE com recebimento parcial recusa a mudança de divisão e não grava nada* · transactions.test.ts › *03-D · A4 — recebimento registrado bloqueia reapplySplit: recebível IGNORADO também bloqueia (D11)* |
+| Y8 | `installments.ts`: sem `if (motivo) return dbError(motivo);` | installments.test.ts › *03-D A4 · cancelar parcelas futuras com recebimento registrado é recusado, sem escrita* · installments.test.ts › *03-D A4 · cancelar parcelas futuras ignorado sem recebimento é recusado, sem escrita* |
+| Y9 | `parteDoTerceiroCentavos` devolve `saldoCentavos(r)` para não-ignorado | dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha pendente com recebimento parcial continua 400/600 (D3)* · dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha cobrado com recebimento parcial continua 400/600 (D3)* · dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha pago com recebimento parcial continua 400/600 (D3)* · dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha a conta fecha: saídas = meu + terceiros, e meu − perdoado = parte acordada* · dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha sem ignorado e sem recebimento, nada muda (equivalência com o dado de hoje)* · dashboard-recebimentos.test.ts › *B4 — 'a receber' é o saldo D3 — o [1] do §9 COM recebimento parcial: minha despesa continua 400* |
+| Y10 | `reembolsosRecebidosNoPeriodo` filtra por `ref_month` em vez de `e.data` | recebimentos.test.ts › *os três números do §13.4 + Perdoado reembolsos recebidos: pela DATA do recebimento, nunca por ref_month* · recebimentos.test.ts › *B3 — reembolsos recebidos no mês (§6.4) soma recebimentos pela data e o legado K0: junho 350 e julho 350* · recebimentos.test.ts › *B3 — reembolsos recebidos no mês (§6.4) só legados preservam a conta antiga em cada mês* |
+| Y11a | `entradasDoRecebivel` sem o `return` antecipado (conta recebimento **e** legado) | recebimentos.test.ts › *K0 — entradasDoRecebivel é o único lugar que conhece o legado pago COM recebimento conta SÓ pelos recebimentos — nunca pelos dois caminhos* · recebimentos.test.ts › *B3 — reembolsos recebidos no mês (§6.4) soma recebimentos pela data e o legado K0: junho 350 e julho 350* |
+| Y11b | `entradasDoRecebivel` sem o ramo do legado | recebimentos.test.ts › *K0 — entradasDoRecebivel é o único lugar que conhece o legado pago SEM recebimento conta como UMA entrada do valor inteiro em pago_em* · recebimentos.test.ts › *K0 — entradasDoRecebivel é o único lugar que conhece o legado legado sem pago_em zera o saldo mas não tem data* · recebimentos.test.ts › *saldo e recebido recebido AUSENTE com status pago é legado: saldo zero (K0 sobre lista vazia)* · recebimentos.test.ts › *estadoDoRecebivel — a soma manda (K1) legado pago* · recebimentos.test.ts › *estadoDoRecebivel — a soma manda (K1) em aberto = pendente, parcial ou cobrado* · recebimentos.test.ts › *os três números do §13.4 + Perdoado pendente do período: saldo dos em aberto do mês, por ref_month* · recebimentos.test.ts › *os três números do §13.4 + Perdoado reembolsos recebidos: pela DATA do recebimento, nunca por ref_month* · recebimentos.test.ts › *os três números do §13.4 + Perdoado legado pago DEPOIS do corte conta como pendente no corte* · recebimentos.test.ts › *B3 — reembolsos recebidos no mês (§6.4) soma recebimentos pela data e o legado K0: junho 350 e julho 350* · recebimentos.test.ts › *B3 — reembolsos recebidos no mês (§6.4) só legados preservam a conta antiga em cada mês* |
+| Y12 | `totalPendenteAte` sem o `.filter(...)` da data | recebimentos.test.ts › *os três números do §13.4 + Perdoado total pendente até o corte: recebimento DEPOIS do corte não reduz o saldo* · recebimentos.test.ts › *os três números do §13.4 + Perdoado legado pago DEPOIS do corte conta como pendente no corte* |
+| Y13 | `registrarRecebimento`: o ramo `23514` devolve `dbError(...)` | recebimentos-servico.test.ts › *registrar recebimento 23514 sem recebível na releitura não inventa saldo zero* · recebimentos-servico.test.ts › *registrar recebimento o 23514 do trigger (duas abas) vira erro NO CAMPO valor* |
+| Y14 | `"receivable_receipts"` sai de `EXPORT_TABLES` | export-tables.test.ts › *backup do usuário inclui receivable_receipts logo depois de receivables (03-D)* |
+| Y15 | `export const _t = "receivable_receipts";` em `lib/reports/queries.ts` | quem-le-os-recebimentos.test.ts › *03-D · A1 — quem menciona a tabela de recebimentos só os arquivos da allowlist mencionam receivable_receipts* · quem-le-os-recebimentos.test.ts › *03-D · A1 — quem menciona a tabela de recebimentos lib/reports/queries.ts não menciona a tabela e não está na allowlist* |
+| Y16 | `resumoMes`: `entradasCent += cent(r.recebido ?? 0)` por recebível | dashboard-recebimentos.test.ts › *B4 — 'a receber' é o saldo reembolso não é renda: entradas e entradasMeu não sobem com o recebido* |
+| Y17 | `parteDoTerceiroCentavos` devolve sempre `cent(r.valor)` | dashboard-caracterizacao.test.ts › *1 · resumoMes — contrato AS-IS congela o objeto completo e as duas bases usadas no mesmo resumo* · dashboard-caracterizacao.test.ts › *1 · resumoMes — contrato AS-IS soma responsabilidade original de terceiros sem filtrar status (exceto `ignorado`, D11) nem ref_month* · dashboard-caracterizacao.test.ts › *2 · gastosPorCategoria — contrato AS-IS agrega a vista por competencia e cartao/parcela pela competencia da fatura* · dashboard-caracterizacao.test.ts › *3 · proximas6Faturas — contrato AS-IS congela uma fatura real e uma virtual, incluindo datas, status e valores* · dashboard-caracterizacao.test.ts › *5 · §9 — cenário sintético obrigatório [1 ✅] minha despesa é R$ 400, e continua R$ 400 depois que o terceiro paga* · dashboard-caracterizacao.test.ts › *5 · §9 — cenário sintético obrigatório [2 ✅] a responsabilidade original do terceiro é R$ 600 enquanto ele deve; perdoado, é zero (D11)* · dashboard-caracterizacao.test.ts › *8 · 03-D — status de recebível, um a um D11 — `ignorado` vira despesa minha: 400 → 500* · dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha ignorado sem recebimento: 400/600 → 1000/0, perdoado 600* · dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha ignorado com 250 recebidos (K3-a): 750/250, perdoado 350* · dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha parcela: ignorado sai do desconto da parcela* · dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha próximas faturas: ignorado sai dos terceiros* · dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha a conta fecha: saídas = meu + terceiros, e meu − perdoado = parte acordada* |
+| Y18 | `secoesDaLista`: `ignorado` não vai para seção nenhuma | recebimentos.test.ts › *apoios secoesDaLista: ignorado vai para 'Não será cobrado' e NENHUM item some* |
+| Y19 | `totalAReceber` volta a Σ `cent(r.valor)` dos `pendente`/`cobrado` | dashboard-recebimentos.test.ts › *B4 — 'a receber' é o saldo totalAReceber: 600 com 250 recebidos → 350 (com e sem mês)* |
+| Y20 | `desfazerUltimoRecebimento` apaga por `.eq("receivable_id", lido.id)` (todos) | recebimentos-servico.test.ts › *desfazer reabre a coluna ANTES de apagar, e apaga SÓ o último* · recebimentos-servico.test.ts › *desfazer dois na mesma data: apaga o criado por último* |
+| Y21 | `desfazerUltimoRecebimento`: delete antes do update | recebimentos-servico.test.ts › *desfazer reabre a coluna ANTES de apagar, e apaga SÓ o último* · recebimentos-servico.test.ts › *K1 — a primeira escrita falha, a segunda nao acontece desfazerUltimoRecebimento: update recusado preserva todos os recebimentos* |
+| Y22 | `receberSaldo`: update antes do insert | recebimentos-servico.test.ts › *receber o saldo grava o recebimento do saldo restante ANTES da coluna* · recebimentos-servico.test.ts › *K1 — a primeira escrita falha, a segunda nao acontece receberSaldo: insert recusado impede atualizar a coluna* |
+| Y23 | sem `if (estado === "ignorado")` em `registrarRecebimento` | recebimentos-servico.test.ts › *registrar recebimento recusa recebimento em ignorado, sem gravar nada* |
+| Y24 | sem `if (dados.recebido_em > hoje)` | recebimentos-servico.test.ts › *registrar recebimento recusa data no futuro (hoje de Brasília injetado), no campo recebido_em* |
+| Y25 | `deleteTransaction`: sem `if (motivo) return dbError(motivo);` | transactions.test.ts › *03-D · A4 — recebimento registrado bloqueia deleteTransaction: lançamento com recebimento registrado é recusado, sem escrita* |
+| Y26 | `parteDoTerceiroCentavos`: `ignorado` **ou** `parcial` → recebido | recebimentos.test.ts › *D3 e K3-a — parte do terceiro e perdoado pendente com recebimento parcial: a parte do terceiro é o VALOR, nunca o saldo (D3)* · recebimentos.test.ts › *D3 e K3-a — parte do terceiro e perdoado cobrado com recebimento parcial: a parte do terceiro é o VALOR, nunca o saldo (D3)* · recebimentos.test.ts › *D3 e K3-a — parte do terceiro e perdoado pago com recebimento parcial: a parte do terceiro é o VALOR, nunca o saldo (D3)* · recebimentos.test.ts › *D3 e K3-a — parte do terceiro e perdoado parte do terceiro + perdoado = valor, sempre* |
+| Y27 | `perdoadoCentavos` sem o `- recebidoCentavos(r)` | recebimentos.test.ts › *D3 e K3-a — parte do terceiro e perdoado somas por lista: parte dos terceiros e perdoado (B1b)* · recebimentos.test.ts › *D3 e K3-a — parte do terceiro e perdoado perdoado = saldo do ignorado; 0 nos outros* · recebimentos.test.ts › *D3 e K3-a — parte do terceiro e perdoado parte do terceiro + perdoado = valor, sempre* · recebimentos.test.ts › *os três números do §13.4 + Perdoado perdoado no período: saldo dos ignorados do mês* |
+| Y28a | o insert de `registrarRecebimento` ganha `conta_id: null` | recebimentos-servico.test.ts › *registrar recebimento parcial grava SÓ o recebimento — a coluna não muda e nunca vira 'parcial'* |
+| Y28b | `registrarRecebimentoSchema` sem `.strict()` | receivable.test.ts › *registrarRecebimentoSchema K2: recusa conta_id (.strict)* · receivable.test.ts › *registrarRecebimentoSchema K2: recusa transaction_id (.strict)* |
+| Y29 | `ORIGENS_DA_ACAO.ignorar` volta a ter `"pago"` | receivables-bulk.test.ts › *alcanceDaAcao ignorar alcança só o que ainda se deve (pendente e cobrado) — K1* |
+| Y30 | `montarEntradas` não preenche `recebido` | pipeline.test.ts › *03-B — montarEntradas devolve o que cada chamador montava à mão (caso completo) A · card do dashboard (getFinanceCardData): txs, sts, recs e bills idênticos* · pipeline.test.ts › *03-B — montarEntradas devolve o que cada chamador montava à mão (caso completo) A' · card de faturas (getInvoicesCardData): cards e sts idênticos; recs ganham o ref_month que A já tinha* · pipeline.test.ts › *03-B — montarEntradas devolve o que cada chamador montava à mão (caso completo) B · relatório (getFinanceAndCardReport): as sete listas idênticas* · pipeline.test.ts › *03-B — montarEntradas devolve o que cada chamador montava à mão (caso completo) C · página do dashboard financeiro: as sete listas idênticas* · pipeline.test.ts › *03-B — montarEntradas devolve o que o Cron montava à mão (caso do Cron) D · recs: idênticos à referência, e ref_month sai dos embeds que o select passou a trazer (A2)* · pipeline.test.ts › *03-D · A6 — todo DashReceivable montado tem `recebido` e `transaction_id` definidos (P1)* · pipeline.test.ts › *03-B — montarEntradas: normalização dinheiro em texto vira número em todo campo de dinheiro; ausente vira null, não 0* |
+| Y31 | `"lib/finance/dashboard.ts"` na allowlist + a menção em `dashboard.ts` | quem-le-os-recebimentos.test.ts › *03-D · A1 — quem menciona a tabela de recebimentos lib/finance/dashboard.ts não menciona a tabela e não está na allowlist* |
+
+**Extras, fora da lista do §8:**
+
+| # | Mutação | Testes que caíram |
+| --- | --- | --- |
+| E1 | `cron.ts`: `valor: Number(r.valor)` (o sino volta ao valor cheio) | cron.test.ts › *03-D B4 — o sino com o saldo B4 — o sino avisa o saldo: 600 com 250 recebidos vira R$ 350,00* · › *… B4 — coluna `pago` com a soma aberta (RR-D-7) entra como pendente, com o saldo* |
+| E2 | `cron.ts`: sem `if (!emAberto(resumo)) return [];` | cron.test.ts › *… B4 — `pago` legado sem recebimento não vira aviso* |
+| E3 | `cron.ts`: `status: r.status` (sem o remapeamento) | cron.test.ts › *… B4 — coluna `pago` com a soma aberta (RR-D-7) entra como pendente, com o saldo* |
+| E4 | `perdoadoDoMes`: `statementsDoMes(statements, mes)` → `statements` | **verde** nos 583 testes de `finance/`, `dashboard/` e `reports/` → depois de `93f7a23`: dashboard-recebimentos.test.ts › *B1a — D11: o perdoado vira despesa minha perdoadoDoMes conta só o do mês: fatura de outro mês, à vista de outro mês e lançamento cancelado ficam de fora* |
+| E5 | `perdoadoDoMes`: à vista sem `mesDe(t.competence_date) !== mes` | **verde** → depois de `93f7a23`: o mesmo caso |
+| E6 | `perdoadoDoMes`: sem `!ativo(t)` | **verde** → depois de `93f7a23`: o mesmo caso |
+
+E1–E3 vieram da revisão da B4 (o sino não tinha teste; `9e35804`). E4–E6, da revisão da B1a, que
+pediu para medir o filtro de mês nesta rodada: as três saíram verdes, compilando e rodando no
+arquivo certo — fraqueza real, consertada por teste em `93f7a23` e refeita.
+
+### 13.5 Conferências da ponta
+
+- `git diff --quiet 17a93e9 -- src/lib/finance/dashboard.test.ts` = **0**. O diff de
+  `dashboard-caracterizacao.test.ts` contra `17a93e9` (11 hunks, +25/−24) é **exatamente C1–C12**,
+  cada um no commit do seu item (C1–C7 e C9–C12 no B1a, `762e4ae`; C8 no B4, `1e70899`). ⚠️ O C1
+  tem números diferentes dos do §7 — o erro é do §7 (ver §13.7, desvio 3).
+- Desde `17a93e9`: `supabase/` só com o arquivo da M1 (+101); `src/types/supabase.ts` com **um**
+  hunk, o bloco de `receivable_receipts` (+68, −0); `docs/redesign/STATUS.md`, `CLAUDE.md` e
+  `AGENTS.md` **intocados**.
+- Nenhum diff nas assinaturas de `getFinanceCardData(mes, todayIso, owner?)`,
+  `getInvoicesCardData(todayIso)`, `getReportsData(mesSel)` e `generateForUser(service, userId,
+  now)`. O retorno muda só pelo aprovado: o campo `perdoado` (B1a) e o valor de `aReceber` (B4).
+- `Date.now()`/`new Date()` sem argumento nas linhas acrescentadas: **só** a frase de um comentário
+  em `recebimentos.ts` ("sem `Date.now()`"). Nenhuma chamada.
+- Banco, só leitura, no fim (2026-10-12): recebíveis **241** — `pendente`/`cobrado`/`pago`/`ignorado`
+  = **72 / 0 / 169 / 0**, `pago` sem `pago_em` **0**; `receivable_receipts` **0** linhas (o dono não
+  registrou recebimento pela tela); receitas **48**, todas `pessoal`; **133** tabelas no `public`
+  (132 + a da M1), e a consulta por tabela sem RLS **ou** sem FORCE voltou **vazia**. Iguais ao
+  §2.1.
+- Fixtures: só sintéticas ("Pessoa A", "Cartao", valores redondos). Nenhum nome real de pessoa ou
+  categoria, nenhum valor ou saldo real no diff; cada `git diff` revisado antes do commit (sem
+  chave, token, `.env` nem `service_role`).
+- Conferência visual: ver §13.7, desvio 10.
+
+### 13.6 Parte B — antes × depois no sintético, e o efeito no dado de hoje
+
+O efeito no dado de hoje é **zero, item a item**, pelo mesmo motivo do §2.1: **0 `ignorado` e 0
+recebimento** (reconferido em 13.5). A equivalência está escrita como teste em cada item; três
+desses testes foram vistos vermelhos por mutação (Y9, Y10 e Y5, §13.4), os outros só verdes.
+
+| Item | Sintético — antes | Sintético — depois | Prova do efeito zero hoje |
+| --- | --- | --- | --- |
+| **B1a** · `ignorado` sem recebimento (cartão 1.000, terceiro 600) | `cartaoMeu` 400 · `terceiros` 600 | **1.000 · 0** · perdoado 600 | `dashboard-recebimentos.test.ts` › *sem ignorado e sem recebimento, nada muda (equivalência com o dado de hoje)* |
+| B1a · `ignorado` com 250 recebidos (K3-a) | 400 · 600 | **750 · 250** · perdoado 350 | idem |
+| B1a · `pendente`/`cobrado`/`pago` com 250 recebidos | 400 · 600 | **400 · 600** (D3) | idem; *… com recebimento parcial continua 400/600 (D3)* |
+| B1a · à vista em conta, `valor_pessoal` 400, recebível 600 `ignorado` | `aVistaMeu` 400 | **1.000** | idem |
+| B1a · a linha "inclui R$ X que você decidiu não cobrar" | não existe | aparece só com perdoado > 0 (`/dashboard`, `/dashboard/financeiro`, `/relatorios`) | `fraseDoPerdoado(0)` = `null` (*frase do perdoado só existe quando há perdoado*) |
+| **B1b** · `/faturas` e `/parcelamentos`, pessoa com parte perdoada | some da soma de terceiros | aparece com "não será cobrado R$ X"; terceiros = Σ parte do terceiro | `recebimentos.test.ts` › *somas por lista: parte dos terceiros e perdoado (B1b)*; sem `ignorado`, parte = valor |
+| **B2** · rótulos (card Financeiro, Cartões & Faturas, `/dashboard/financeiro`, `/relatorios` ×2) | "A receber de terceiros" | "Pendente referente a {mês}" / "Total pendente até DD/MM" | o número não muda; `rotulos-do-pendente.test.ts` |
+| **B3** · `/terceiros`, recebível de 600 com 250 (05/06) + 350 (20/07) e um legado de 100 (10/06) | junho 100 · julho 600 | **junho 350 · julho 350** | `recebimentos.test.ts` › *só legados preservam a conta antiga em cada mês* |
+| **B4** · recebível 600 `pendente`, 250 recebidos | `totalAReceber` 600 · sino "R$ 600,00" | **350** · sino "R$ 350,00" · `cartaoMeu` **400** (D3) · `entradas` **0** | `dashboard-recebimentos.test.ts` › *sem recebimento, o número é o de antes (equivalência com o dado de hoje)*; `recebimentos.test.ts` › *com o corte = hoje e nenhuma data no futuro, é igual ao pendente sem mês (equivalência)*; `cron.test.ts` › *B4 — `pago` legado sem recebimento não vira aviso* |
+
+### 13.7 Desvios do plano
+
+1. **Mais de um commit por passo** (A4 em 4, A5/A6 em 2, B1a em 3, B4 em 2 + a correção): o
+   pacote do roteador cabe em até 5 arquivos e o roteador recusa despachar sobre árvore suja. Só
+   a A3 já estava prevista em três. Efeito colateral declarado: entre `1e70899` e `89c3a2c`, o
+   `/dashboard` já mostrava o saldo e o `/terceiros` ainda a soma do valor — com 0 recebimento, sem
+   diferença numérica.
+2. **A M1 não passou pelo MCP** (§13.2): o `apply_migration` foi recusado pela confirmação do
+   próprio MCP e o dono a aplicou no SQL Editor. Por isso ela **não tem versão remota** (RR-D-11).
+   Os passos 2 e 3 ficaram no principal, por ordem do dono, sem revisor de task próprio: a A2 teve o
+   `migration-validator`, e tipos e backup foram conferidos por diff contra o gerador e pelo banco.
+3. **C1 do §7 com aritmética errada.** O §7 diz `meu` 300.55 · `terceiros` 120.05 · `cartaoMeu`
+   220.3; o código afirma **300.75 · 119.85 · 220.5**, porque o `ignorado` da fixture vale **20.2**,
+   e o §7 subtraiu 20. A revisão da B1a refez a conta de forma independente. O §7 aprovado não foi
+   reescrito.
+4. **Y7, detalhe do plano.** O plano manda trocar `recebivelProtegido(r, "so-dinheiro-registrado")`
+   em `split-reapply.ts`; lá a chamada usa `"regra-cheia"` (o modo "só dinheiro registrado" é o de
+   `deleteTransaction` e do desfazer da IA, a decisão (b)). A mutação foi aplicada na chamada real.
+5. **O motivo "saturou" dos recebimentos** cita quantos vieram (`recebimentosLidos`), não o teto —
+   a regra da 03-B2 ("o motivo cita o que veio, não o teto"); o plano dizia só "{N}".
+6. **O tipo do embed** (`pago_em?`, `recebimentos?`) entrou em `InstallmentPurchaseWithRelations`,
+   onde o embed mora, e não em `TransactionWithRelations`.
+7. **O Cron (B4):** o worker passou a lista com cast também a `montarEntradas` e reescreveu o
+   comentário da 03-B2 A2; os dois foram restaurados. O remapeamento de status do sino (coluna
+   `cobrado` → `cobrado`; qualquer outro em aberto → `pendente`) é meu: `generate.ts` só aceita
+   esses dois, e sem ele um em aberto com a coluna `pago` (RR-D-8) sumiria do sino. Ele não tinha
+   teste e a revisão da task o pegou: `9e35804` acrescentou três casos, com mutação.
+8. **Outros desvios de worker revertidos:** na A5, o desktop do cartão virava coluna (voltou o
+   `sm:flex-row`); na B1b, o nome de cada pessoa virou `block`, empurrando o valor para a linha de
+   baixo em todas as linhas (voltou inline, e "· não será cobrado X" só aparece com perdoado).
+9. **Três falsos `worker_modified_main_repository`** (A5 1/2, A5 2/2, B4 1/2): nas três a árvore
+   principal foi conferida intacta, e o diff foi tirado da worktree mantida, revisado, aplicado, com
+   a worktree removida em seguida. Duas coincidiram com um agente meu gravando arquivos ao mesmo
+   tempo; depois que parei de rodar revisor durante despacho, os seguintes passaram.
+10. **Conferência visual pelo caminho alternativo do §11.9.** A extensão do Chrome não conectou.
+    Conferi os componentes isolados num HTML estático com o CSS do build, em iframe de 390 px
+    (o Chrome headless no Windows prende a janela em 500 px; o iframe resolve), claro e escuro, sem
+    rolagem horizontal: o cartão do recebível (A5), a frase do perdoado (B1a), a linha "não será
+    cobrado" (B1b), os rótulos (B2) e os KPIs de `/terceiros` (B3/B4). Limitação: são dublês com as
+    mesmas classes. A tela inteira, com sessão e dado, **não** foi vista.
+11. **O worker da B1a não tinha `node_modules`** e não editou a caracterização. Eu a editei no
+    principal, depois de ver caírem exatamente os 11 casos esperados.
+12. **Mutações além das 31.** Três no sino (rodada da Task 14) e três em `perdoadoDoMes`. As três
+    de `perdoadoDoMes` saíram **verdes** nos 583 testes de `finance/`, `dashboard/` e `reports/`:
+    era fraqueza real. O teste veio em `93f7a23`, e as três passaram a derrubá-lo (§13.4).
+13. **`receberSaldo` em toast:** o `23514` do trigger vira "o saldo mudou" num toast, porque o
+    "Receber" não tem campo `valor` para destacar. No lote, uma falha num bloco descarta o
+    "N atualizados" dos blocos anteriores.
+
+### 13.8 Risco residual acrescentado na execução
+
+| # | Risco | Mitigação | Destino |
+| --- | --- | --- | --- |
+| RR-D-11 | A M1 está no banco mas **sem versão** em `supabase_migrations.schema_migrations`: um `supabase db push` futuro tentaria reaplicar o arquivo, e a 2ª execução falha em `drop constraint receivables_id_user_uk` (2BP01). Ela aborta sem efeito, mas o comando quebra | O conteúdo aplicado é o do arquivo (conferido no banco, §13.2) | **Decisão do dono, antes do próximo `db push`**: registrar a versão (`supabase migration repair --status applied 20261011210000`). Não fiz: é escrita no banco, fora do autorizado |
+| RR-D-12 | `lerRecebimentos` não olha `error`. Numa falha de leitura, `/terceiros`, `/faturas`, `/parcelamentos` e o sino mostram o recebível **sem** recebimentos, com o saldo cheio e sem aviso. `/dashboard` e `/relatorios` declaram, porque a leitura sai `sem_contagem` e `lerFinanceiro` rebaixa a completude | Erra para "pode faltar receber", e se resolve ao recarregar. As escritas usam `recebimentosDe`, que recusa em erro | 04-C, junto com a FK composta (RR-D-2), que já mexe nessa leitura |
+| RR-D-13 | Intercalação entre abas (Receber numa, Desfazer na outra) pode deixar a coluna `pago` com a soma aberta, porque os updates não guardam o status | É o estado do RR-D-8: conta como em aberto (o sino o avisa, ver desvio 7) e se conserta com "Receber" | Aceito |
+| RR-D-14 | `RECEIVABLE_OPEN_STATUSES` (`constants.ts`) ficou sem consumidor de produção, com a doc ainda dizendo que decide o "a receber", o que convida a reintroduzir o filtro pela coluna | `terceiros-client.test.ts` recusa cópia local de status em aberto na tela; quem decide é `ESTADOS_EM_ABERTO` pelo estado derivado | Remover (ou reescrever a doc) na 04-C; fora do plano aqui |
+| RR-D-15 | `finance.get_invoice` também devolve `a_receber_de_terceiros` (agora o saldo, todos os meses), e só a descrição de `get_spending` define o termo | É o mesmo número, pela mesma `getInvoicesCardData` | 07-D, com o RR-D-6 |
+| RR-D-16 | Em `/terceiros`, a barra "N selecionados · R$ X" soma o **saldo** dos em aberto e o **valor** dos demais, um número híbrido sem rótulo. O valor do lote fica cheio em dois estados de borda (`ignorado` com recebimento em "Cobrado"; RR-D-4 em "Receber") | Os três estados são 0 hoje. O servidor relê e recalcula o saldo, e o cliente manda só ids | Aceito; revisitar na 04-C |
+
+**Herdados, com o destino do §12:** **RR5 → 04-A** (o `saldo` da evolução continua bruto − bruto;
+a 03-D não mexe na evolução). **RR7 → 04-C** (o vínculo do reembolso marcado como receita com o
+recebível), com o aviso para a 03-E: "Reembolsos recebidos" + "Outras entradas de terceiros" podem
+contar o mesmo dinheiro duas vezes na base caixa, e a 03-E tem de declarar isso em vez de somar as
+duas em silêncio.
+
+⛔ **Esta subfase não promete "zero bugs".** O que ela entrega, com prova por mutação:
+- o que foi devido e o que voltou passam a ser fatos separados;
+- a coluna nunca afirma `pago` sem a soma fechar;
+- o recebimento não mexe na minha despesa nem na fatura;
+- o perdoado aparece e vira meu;
+- nenhum caminho de exclusão leva dinheiro registrado sem dizer.
+
+O que ficou de fora está no §9, e o que ela criou está no §12 e aqui.
