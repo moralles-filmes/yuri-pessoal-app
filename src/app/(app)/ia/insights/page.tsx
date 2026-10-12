@@ -8,7 +8,7 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { getAiPreferences } from "@/lib/ai/queries";
 import { getInsights, getUltimaVarredura } from "@/lib/ai/server/insight-queries";
 import { AVISO_DOS_INSIGHTS } from "@/lib/ai/constants";
-import { dateInSaoPaulo, timeInSaoPaulo } from "@/lib/format";
+import { dateInSaoPaulo, formatDate, timeInSaoPaulo } from "@/lib/format";
 import type { ModuloDeInsight } from "@/lib/ai/insights/contracts";
 
 export const metadata: Metadata = { title: "Insights · IA" };
@@ -88,13 +88,16 @@ export default async function InsightsPage() {
           ) : (
             <>
               Última varredura automática:{" "}
-              {dateInSaoPaulo(new Date(varredura.executadaEm))} às{" "}
+              {formatDate(dateInSaoPaulo(new Date(varredura.executadaEm)))} às{" "}
               {timeInSaoPaulo(new Date(varredura.executadaEm))}
               {" — "}
               {varredura.modulos
-                .map((m) =>
-                  m.motivo ? `${ROTULO[m.modulo]}: ${m.desfecho} (${m.motivo})` : `${ROTULO[m.modulo]}: ${m.desfecho}`,
-                )
+                .map((m) => {
+                  const desfecho = ROTULO_DO_DESFECHO_DA_VARREDURA[m.desfecho];
+                  return m.motivo
+                    ? `${ROTULO[m.modulo]}: ${desfecho} (${m.motivo})`
+                    : `${ROTULO[m.modulo]}: ${desfecho}`;
+                })
                 .join(" · ")}
             </>
           )}
@@ -103,6 +106,14 @@ export default async function InsightsPage() {
     </div>
   );
 }
+
+/** REDESIGN-07-D · E3 — o desfecho de cada módulo na última varredura, por extenso, não a chave. */
+const ROTULO_DO_DESFECHO_DA_VARREDURA = {
+  gerado: "análise gerada",
+  reaproveitado: "os números não mudaram, nada foi cobrado",
+  pulado: "pulado",
+  falhou: "falhou",
+} as const;
 
 /** Os mesmos nomes que o resto da tela usa. */
 const ROTULO: Record<ModuloDeInsight, string> = {

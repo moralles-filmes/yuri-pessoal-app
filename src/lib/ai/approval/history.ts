@@ -482,6 +482,13 @@ export function ehFiltroDoHistorico(valor: unknown): valor is FiltroDoHistorico 
  * É a mesma decisão do claim-first: erra para "pode não ter acontecido". Pô-lo entre as
  * aplicadas diria ao dono que está tudo certo sobre a única linha da tabela cujo desfecho o
  * sistema não conhece.
+ *
+ * ⛔ REDESIGN-07-D · D1 — `confirmada` (decisão gravada, SEM execução registrada) também fica em
+ * "problemas", e "aguardando" conta SÓ `pendente`. A confirmada sem execução não espera nada
+ * de ninguém: a execução foi recusada (`EFEITO_MUDOU`, prazo vencido pelo relógio do servidor —
+ * o banco não confere prazo na aprovação) ou nunca chegou (transporte). Pelo claim-first nada foi
+ * aplicado, e ela nunca mais executa — reconfirmar dá `PROPOSTA_JA_DECIDIDA`. Contá-la em
+ * "aguardando você" mandava o dono esperar por algo que não vai acontecer.
  */
 export function filtrarHistorico(
   linhas: readonly AcaoDaIa[],
@@ -493,10 +500,14 @@ export function filtrarHistorico(
     case "aplicadas":
       return linhas.filter((l) => l.estado === "executada");
     case "aguardando":
-      return linhas.filter((l) => l.estado === "pendente" || l.estado === "confirmada");
+      return linhas.filter((l) => l.estado === "pendente");
     case "problemas":
       return linhas.filter(
-        (l) => l.estado === "falhou" || l.estado === "parcial" || l.estado === "executando",
+        (l) =>
+          l.estado === "falhou" ||
+          l.estado === "parcial" ||
+          l.estado === "executando" ||
+          l.estado === "confirmada",
       );
   }
 }
@@ -509,6 +520,8 @@ export type ResumoDoHistorico = {
   readonly problemas: number;
   /** Quantas terminaram sem desfecho registrado. É o número que merece atenção. */
   readonly semDesfecho: number;
+  /** Confirmadas sem execução registrada — pelo registro, nada foi aplicado. */
+  readonly confirmadasSemExecucao: number;
 };
 
 export function resumirHistorico(linhas: readonly AcaoDaIa[]): ResumoDoHistorico {
@@ -518,5 +531,24 @@ export function resumirHistorico(linhas: readonly AcaoDaIa[]): ResumoDoHistorico
     aguardando: filtrarHistorico(linhas, "aguardando").length,
     problemas: filtrarHistorico(linhas, "problemas").length,
     semDesfecho: linhas.filter((l) => l.estado === "executando").length,
+    confirmadasSemExecucao: linhas.filter((l) => l.estado === "confirmada").length,
   };
+}
+
+/**
+ * A dica do cartão "Precisam de atenção": DO QUE é feito o número. Plural e zero escritos aqui,
+ * uma vez, em vez de na tela.
+ */
+export function composicaoDosProblemas(r: ResumoDoHistorico): string {
+  const falhas = r.problemas - r.semDesfecho - r.confirmadasSemExecucao;
+  const partes = [
+    falhas > 0 ? `${falhas} ${falhas === 1 ? "falha" : "falhas"}` : null,
+    r.confirmadasSemExecucao > 0
+      ? `${r.confirmadasSemExecucao} ${r.confirmadasSemExecucao === 1 ? "confirmada" : "confirmadas"} sem execução`
+      : null,
+    r.semDesfecho > 0 ? `${r.semDesfecho} sem desfecho registrado` : null,
+  ].filter((p): p is string => p !== null);
+  return partes.length > 0
+    ? partes.join(" · ")
+    : "falhas, execuções sem desfecho e confirmações sem execução";
 }

@@ -47,7 +47,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ProposalCard, type PropostaNaTela } from "@/components/ai/proposal-card";
+import type { PropostaNaTela } from "@/components/ai/proposal-card";
+import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
 import {
   anexarComprovanteAoLancamento,
   prepararLancamentoDoComprovante,
@@ -598,7 +599,7 @@ export function ReceiptReview({
             </p>
           )}
 
-          {proposta && <ProposalCard proposta={proposta} aoAplicar={anexar} />}
+          {proposta && <ProposalCardSobDemanda proposta={proposta} aoAplicar={anexar} />}
         </div>
       )}
     </div>

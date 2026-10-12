@@ -7,6 +7,7 @@ import { ActionHistoryClient } from "@/components/ai/action-history-client";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getAiActionHistory } from "@/lib/ai/approval/queries";
 import {
+  composicaoDosProblemas,
   ehFiltroDoHistorico,
   resumirHistorico,
   type FiltroDoHistorico,
@@ -69,11 +70,7 @@ export default async function AcoesPage({
           label="Precisam de atenção"
           value={String(resumo.problemas)}
           icon={TriangleAlert}
-          hint={
-            resumo.semDesfecho > 0
-              ? `${resumo.semDesfecho} sem desfecho registrado`
-              : "falhas e execuções sem desfecho"
-          }
+          hint={composicaoDosProblemas(resumo)}
         />
       </div>
 

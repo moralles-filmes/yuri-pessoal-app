@@ -119,7 +119,7 @@ describe("estadoDoCartao", () => {
   it("a recusa do servidor é final, mesmo dentro do prazo", () => {
     expect(vista({ tipo: "nao_aplicada", mensagem: "Os dados mudaram." })).toEqual({
       estado: "nao_aplicada",
-      rotulo: "não aplicada",
+      rotulo: "nada foi feito agora",
       final: true,
       podeConfirmar: false,
       podeRecusar: false,
@@ -146,6 +146,12 @@ describe("desfechoDaConfirmacao", () => {
     expect(desfechoDaConfirmacao({ ok: true, status: "falhou", rota: null })).toEqual({
       tipo: "falhou",
       rota: null,
+    });
+  });
+
+  it("'executando' (que o tipo permite) vira 'sem desfecho', nunca sucesso", () => {
+    expect(desfechoDaConfirmacao({ ok: true, status: "executando", rota: null })).toEqual({
+      tipo: "sem_desfecho",
     });
   });
 

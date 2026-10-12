@@ -33,7 +33,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ProposalCard, type PropostaNaTela } from "@/components/ai/proposal-card";
+import type { PropostaNaTela } from "@/components/ai/proposal-card";
+import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
@@ -47,6 +48,7 @@ import {
   ROTULO_DA_CONFIANCA,
   ROTULO_DO_ESTADO_DE_INSIGHT,
 } from "@/lib/ai/constants";
+import { AI_PROVIDER_LABEL, type AiProviderId } from "@/lib/ai/core/contracts";
 import type { ModuloDeInsight } from "@/lib/ai/insights/contracts";
 import {
   renderizarExplicacao,
@@ -66,6 +68,20 @@ const NOME_DO_MODULO: Record<ModuloDeInsight, string> = {
   treinos: "Treinos",
   dieta: "Dieta e Alimentação",
 };
+
+/**
+ * REDESIGN-07-D · E3 — a confiança pelo NOME, com acento; a chave crua ("media") não vai à tela.
+ * Mora aqui, e não em `@/lib/ai/constants`: só esta tela a lê, e a constante lá pesaria em toda
+ * rota que importa aquele módulo.
+ */
+const NOME_DA_CONFIANCA = { alta: "alta", media: "média", baixa: "baixa" } as const;
+
+/** O provedor pelo nome da tela; o identificador cru só se a coluna trouxer um que a lista não tem. */
+function rotuloDoProvedor(provider: string): string {
+  return Object.hasOwn(AI_PROVIDER_LABEL, provider)
+    ? AI_PROVIDER_LABEL[provider as AiProviderId]
+    : provider;
+}
 
 /** Adiar por uma semana. Data pura, aritmética em `Date.UTC`, sem passar por fuso local. */
 function daquiUmaSemana(): string {
@@ -176,15 +192,16 @@ export function InsightsClient({
           </>
         )}
         {ocultos > 0 ? (
+          // Alternância com rótulo FIXO e `aria-pressed`: um rótulo que troca de sentido a cada
+          // clique ("Mostrar só…" / "Mostrar as…") deixa quem ouve sem saber o que está valendo.
           <Button
             variant="ghost"
             size="sm"
             className="ml-auto"
+            aria-pressed={mostrarTodos}
             onClick={() => setMostrarTodos((v) => !v)}
           >
-            {mostrarTodos
-              ? "Mostrar só as vigentes"
-              : `Mostrar as ${ocultos} fora da lista`}
+            {`Mostrar também as ${ocultos} fora da lista`}
           </Button>
         ) : null}
       </div>
@@ -318,10 +335,9 @@ function CartaoDeInsight({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Confiança <strong>{insight.confianca}</strong> —{" "}
-          {ROTULO_DA_CONFIANCA[insight.confianca]}. Gerada em{" "}
-          {formatDate(insight.criadoEm)} por {insight.provider} · {insight.model} ·{" "}
-          {insight.promptVersion}.
+          Confiança <strong>{NOME_DA_CONFIANCA[insight.confianca]}</strong> —{" "}
+          {ROTULO_DA_CONFIANCA[insight.confianca]}. Gerada em {formatDate(insight.criadoEm)}{" "}
+          por {rotuloDoProvedor(insight.provider)} · {insight.model}.
         </p>
 
         {/* ⛔ Transformar em tarefa PROPÕE — quem executa é o cartão de proposta abaixo. */}
@@ -352,7 +368,7 @@ function CartaoDeInsight({
                 Preparar
               </Button>
             </div>
-            {proposta ? <ProposalCard proposta={proposta} /> : null}
+            {proposta ? <ProposalCardSobDemanda proposta={proposta} /> : null}
           </div>
         ) : null}
 
@@ -361,6 +377,7 @@ function CartaoDeInsight({
             variant="outline"
             size="sm"
             disabled={pendente}
+            aria-pressed={insight.estado.avaliacao === "util"}
             onClick={() => onDecidir(insight.id, "util")}
           >
             <ThumbsUp className="size-4" />
@@ -373,6 +390,7 @@ function CartaoDeInsight({
             variant="outline"
             size="sm"
             disabled={pendente}
+            aria-pressed={insight.estado.avaliacao === "inutil"}
             onClick={() => onDecidir(insight.id, "inutil")}
           >
             <ThumbsDown className="size-4" />

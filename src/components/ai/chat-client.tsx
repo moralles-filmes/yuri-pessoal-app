@@ -57,7 +57,9 @@ import {
   SourceChipsAoVivo,
   type FerramentaAoVivo,
 } from "@/components/ai/source-chips";
-import { ProposalCard, type PropostaNaTela } from "@/components/ai/proposal-card";
+import type { PropostaNaTela } from "@/components/ai/proposal-card";
+import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
+import { DESFECHO_INICIAL, type DesfechoDoCartao } from "@/lib/ai/cartao";
 import type { ConversationMessage, MessageRunInfo } from "@/lib/ai/types";
 
 type Evento =
@@ -195,6 +197,19 @@ export type ConversaDaIa = {
   /** 18-F Bloco 4 — dispara um panorama pelo MESMO endpoint e pelo mesmo leitor de SSE. */
   readonly iniciarExperiencia: (id: string) => Promise<void>;
   readonly cancelar: () => void;
+  /**
+   * REDESIGN-07-D · D1 — o desfecho de cada cartão de proposta, por id.
+   *
+   * ⛔ Mora AQUI, e não no cartão, pela mesma razão das bolhas: o cartão vive dentro da gaveta
+   * do painel, e fechar a gaveta o desmonta (invariante 95). Com o desfecho lá dentro, reabrir
+   * o painel mostrava "aguardando você" de novo — e confirmar outra vez dava "já foi decidida".
+   * Os ids são os de `ai_action_proposals`: uma proposta nova (inclusive a que nasce depois de
+   * um `switch`) nunca herda o desfecho de outra.
+   */
+  readonly desfechos: Readonly<Record<string, DesfechoDoCartao>>;
+  readonly registrarDesfecho: (proposalId: string, desfecho: DesfechoDoCartao) => void;
+  /** O cartão terminou: o selo do botão flutuante deixa de contar esta proposta. */
+  readonly avisarDecisao: (proposalId: string) => void;
 };
 
 export function useConversaDaIa({
@@ -242,6 +257,7 @@ export function useConversaDaIa({
    */
   const [caixaDeEntrada, setCaixaDeEntrada] = React.useState(false);
   const [conversa, setConversa] = React.useState<string | null>(conversationId);
+  const [desfechos, setDesfechos] = React.useState<Record<string, DesfechoDoCartao>>({});
   const abortRef = React.useRef<AbortController | null>(null);
   const contadorRef = React.useRef(0);
 
@@ -494,6 +510,14 @@ export function useConversaDaIa({
     await disparar({ experiencia: id }, atalho.titulo, null);
   }
 
+  function registrarDesfecho(proposalId: string, desfecho: DesfechoDoCartao) {
+    setDesfechos((atual) => ({ ...atual, [proposalId]: desfecho }));
+  }
+
+  function avisarDecisao(proposalId: string) {
+    onAtividade?.({ tipo: "decidiu", id: proposalId });
+  }
+
   function marcarFalha(idFallback: string, mensagem: string) {
     setBolhas((atual) =>
       atual.map((b, i) =>
@@ -516,6 +540,9 @@ export function useConversaDaIa({
     enviar,
     iniciarExperiencia,
     cancelar,
+    desfechos,
+    registrarDesfecho,
+    avisarDecisao,
   };
 }
 
@@ -548,6 +575,9 @@ export function ChatView({
     enviar,
     iniciarExperiencia,
     cancelar,
+    desfechos,
+    registrarDesfecho,
+    avisarDecisao,
   } = conversa;
   const fimRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -681,7 +711,13 @@ export function ChatView({
               */}
               {b.role === "assistant" &&
                 (b.propostas ?? []).map((p) => (
-                  <ProposalCard key={p.id} proposta={p} />
+                  <ProposalCardSobDemanda
+                    key={p.id}
+                    proposta={p}
+                    desfecho={desfechos[p.id] ?? DESFECHO_INICIAL}
+                    onDecidiu={avisarDecisao}
+                    onDesfecho={(d) => registrarDesfecho(p.id, d)}
+                  />
                 ))}
             </div>
           </div>

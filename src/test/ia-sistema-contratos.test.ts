@@ -26,8 +26,9 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: CARTAO, exige: /async function confirmar\(\)[\s\S]*?\}\s*catch\b/, porque: "a promise que rejeita vira 'sem desfecho registrado', não um spinner eterno (M26)" },
   { arquivo: CARTAO, exige: /onDecidiu\?\.\(/, porque: "o cartão avisa quem o hospeda quando a decisão termina (M11)" },
   { arquivo: CHAT, exige: /React\.useState<Record<string, DesfechoDoCartao>>/, porque: "o desfecho mora no hook, acima da gaveta — fechar o painel não o apaga (invariante 95)" },
-  { arquivo: CHAT, exige: /<ProposalCard\b[^>]*?\bdesfecho=\{/, porque: "no chat o cartão é controlado pelo hook (M28)" },
-  { arquivo: CHAT, exige: /<ProposalCard\b[^>]*?\bonDecidiu=\{/, porque: "o painel fica sabendo da decisão (M11)" },
+  { arquivo: CHAT, exige: /<ProposalCardSobDemanda\b[^>]*?\bdesfecho=\{/, porque: "no chat o cartão é controlado pelo hook (M28)" },
+  { arquivo: CHAT, exige: /<ProposalCardSobDemanda\b[^>]*?\bonDecidiu=\{/, porque: "o painel fica sabendo da decisão (M11)" },
+  { arquivo: "components/ai/proposal-card-sob-demanda.tsx", exige: /dynamic\(\s*\(\) => import\("@\/components\/ai\/proposal-card"\)/, porque: "o cartão sai do primeiro carregamento das telas da IA (orçamento de /ia, spec §6.3)" },
 
   // ── D1 — /ia/acoes ──
   { arquivo: ACOES, exige: /from "@\/components\/ai\/estado-da-acao"/, porque: "expirada e recusada deixam de dividir cor e ícone (M2)" },
@@ -42,6 +43,11 @@ export const CONTRATOS: Contrato[] = [
 ];
 
 export const PROIBIDOS: Contrato[] = [
+  ...[CHAT, ACOES, INSIGHTS, "components/ai/receipt-review.tsx"].map((arquivo) => ({
+    arquivo,
+    exige: /import \{[^}]*\bProposalCard\b[^}]*\} from "@\/components\/ai\/proposal-card"/,
+    porque: "o cartão entra pela fachada sob demanda; import estático o traria de volta ao primeiro carregamento",
+  })),
   { arquivo: CARTAO, exige: /Confirmar antes de aplicar/, porque: "o cabeçalho diz o estado, não um título fixo que mente no vencido (M1)" },
   { arquivo: CARTAO, exige: /status !== "sucesso"/, porque: "'diferente de sucesso' juntava falhou com em parte (M25)" },
   { arquivo: ACOES, exige: /const CLASSE_DO_ESTADO\b/, porque: "a cor do estado tem uma fonte só (estado-da-acao.tsx)" },

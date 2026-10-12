@@ -18,6 +18,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  composicaoDosProblemas,
   filtrarHistorico,
   montarHistorico,
   parseCamposTocados,
@@ -367,6 +368,7 @@ describe("ordem e recorte", () => {
       aguardando: 1,
       problemas: 2,
       semDesfecho: 1,
+      confirmadasSemExecucao: 0,
     });
   });
 
@@ -389,6 +391,19 @@ describe("ordem e recorte", () => {
    * reconfirmar dá `PROPOSTA_JA_DECIDIDA`. Contá-la em "aguardando" mandava o dono esperar por
    * algo que não vai acontecer; ela é um problema a olhar.
    */
+  it("a dica de 'precisam de atenção' diz do que o número é feito, com plural e sem zero", () => {
+    const base = { total: 9, aplicadas: 0, aguardando: 0 };
+    expect(
+      composicaoDosProblemas({ ...base, problemas: 4, semDesfecho: 1, confirmadasSemExecucao: 2 }),
+    ).toBe("1 falha · 2 confirmadas sem execução · 1 sem desfecho registrado");
+    expect(
+      composicaoDosProblemas({ ...base, problemas: 1, semDesfecho: 0, confirmadasSemExecucao: 1 }),
+    ).toBe("1 confirmada sem execução");
+    expect(
+      composicaoDosProblemas({ ...base, problemas: 0, semDesfecho: 0, confirmadasSemExecucao: 0 }),
+    ).toBe("falhas, execuções sem desfecho e confirmações sem execução");
+  });
+
   it("confirmada sem execução vai para 'precisam de atenção', não para 'aguardando você'", () => {
     const linhas = so([proposta()], [aprovacao("confirmada")], []);
     expect(linhas[0]?.estado).toBe("confirmada");
