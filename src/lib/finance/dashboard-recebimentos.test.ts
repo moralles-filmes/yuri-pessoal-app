@@ -57,6 +57,24 @@ describe("B1a — D11: o perdoado vira despesa minha", () => {
     expect(fatia.meu).toBe(1000);
   });
 
+  it("perdoadoDoMes conta só o do mês: fatura de outro mês, à vista de outro mês e lançamento cancelado ficam de fora", () => {
+    const transacoes = [
+      tx(),
+      tx({ id: "tx-julho", competence_date: "2026-07-15" }),
+      tx({ id: "tx-cancelado", status: "cancelado" }),
+    ];
+    const recs = [
+      rec({ valor: 100, status: "ignorado" }),
+      rec({ statement_id: "st-7", valor: 200, status: "ignorado" }),
+      rec({ statement_id: null, transaction_id: "tx-av", valor: 300, status: "ignorado" }),
+      rec({ statement_id: null, transaction_id: "tx-julho", valor: 400, status: "ignorado" }),
+      rec({ statement_id: null, transaction_id: "tx-cancelado", valor: 500, status: "ignorado" }),
+    ];
+    const statements = [st(), st({ id: "st-7", competencia: "2026-07-01" })];
+    // Só a fatura de junho (100) e o à vista de junho ativo (300).
+    expect(perdoadoDoMes({ mes: MES, transactions: transacoes, statements, receivables: recs })).toBe(400);
+  });
+
   it("parcela: ignorado sai do desconto da parcela", () => {
     const [fatia] = gastosPorCategoria({
       mes: MES, transactions: [], statements: [st()],
