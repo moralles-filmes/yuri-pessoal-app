@@ -42,6 +42,7 @@ import { ReportBarChart, type BarPoint } from "@/components/reports/report-bar-c
 import { monthLabel } from "@/components/dashboard/chart-theme";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
+import { fraseDoPerdoado } from "@/lib/finance/recebimentos";
 import { formatMinutes, STUDY_STATUS_LABELS } from "@/lib/studies/constants";
 import { toCsv } from "@/lib/reports/csv";
 import { downloadCsv, downloadJson } from "@/lib/reports/download";
@@ -133,7 +134,7 @@ export function RelatoriosClient({ data }: { data: ReportsData }) {
               label="Saídas do mês"
               value={formatCurrency(finance.resumo.saidas)}
               icon={ArrowUpRight}
-              hint={`meu ${formatCurrency(finance.resumo.meu)}`}
+              hint={[`meu ${formatCurrency(finance.resumo.meu)}`, fraseDoPerdoado(finance.perdoado)].filter(Boolean).join(" · ")}
             />
             <StatCard label="A receber de terceiros" value={formatCurrency(finance.aReceber)} icon={HandCoins} />
           </div>

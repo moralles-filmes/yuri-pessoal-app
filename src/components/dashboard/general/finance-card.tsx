@@ -1,6 +1,7 @@
 import { getFinanceCardData } from "@/lib/dashboard/queries";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
+import { fraseDoPerdoado } from "@/lib/finance/recebimentos";
 import { Metric, MetricRow } from "./primitives";
 import type { DashWindow } from "@/lib/dashboard/period";
 
@@ -23,7 +24,7 @@ export async function FinanceCard({
           label="Realmente meu"
           value={formatCurrency(d.meu)}
           accent
-          hint={`de ${formatCurrency(d.saidas)} movimentados`}
+          hint={[`de ${formatCurrency(d.saidas)} movimentados`, fraseDoPerdoado(d.perdoado)].filter(Boolean).join(" · ")}
         />
       </div>
       <div className="grid grid-cols-2 gap-3">

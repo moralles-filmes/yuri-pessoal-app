@@ -28,6 +28,7 @@ import { StatementStatusBadge } from "@/components/financeiro/badges";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
+import { fraseDoPerdoado } from "@/lib/finance/recebimentos";
 import { CategoriaChart } from "@/components/dashboard/categoria-chart";
 import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-chart";
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
@@ -61,6 +62,7 @@ export function DashboardClient({
   mesSel,
   saldo,
   resumo,
+  perdoado,
   comparativo,
   evolucao,
   categorias,
@@ -76,6 +78,7 @@ export function DashboardClient({
   mesSel: string;
   saldo: number;
   resumo: ResumoMes;
+  perdoado: number;
   comparativo: Comparativo;
   evolucao: EvolucaoPonto[];
   categorias: CategoriaSlice[];
@@ -112,6 +115,7 @@ export function DashboardClient({
   }, [faturas]);
 
   const entradasNoCard = apresentarEntradas(resumo);
+  const frase = fraseDoPerdoado(perdoado);
 
   return (
     <div className="space-y-6">
@@ -204,6 +208,9 @@ export function DashboardClient({
                 <p className="text-3xl font-semibold tracking-tight tabular-nums">
                   {formatCurrency(resumo.meu)}
                 </p>
+                {frase !== null && (
+                  <p className="text-xs break-words text-muted-foreground">{frase}</p>
+                )}
               </div>
               <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
                 <Scale className="size-5" />
