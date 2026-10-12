@@ -183,7 +183,6 @@ export function temAssinaturaDeAlternancia(corpo: string): boolean {
 /** Exceções DECLARADAS, com dono. Cada uma tem de continuar muda (senão sai da lista). */
 const EXCECOES_MUDAS = new Map<string, string>([
   ["components/dashboard/general/period-toolbar.tsx", "F3 — defeito vivo, é da REDESIGN-06"],
-  ["components/ai/action-history-client.tsx", '07-D — os filtros são <Link>: o anúncio certo é aria-current="page"'],
   [
     "app/(app)/terceiros/terceiros-client.tsx",
     "falso positivo da assinatura C: botões de AÇÃO em massa (o \"receber\" é o destaque), não alternância — arquivo da 03-C",

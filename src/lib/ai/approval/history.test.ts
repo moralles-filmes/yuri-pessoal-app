@@ -379,6 +379,23 @@ describe("ordem e recorte", () => {
     expect(filtrarHistorico(linhas, "aplicadas")).toHaveLength(0);
     expect(filtrarHistorico(linhas, "problemas")).toHaveLength(1);
   });
+
+  /**
+   * REDESIGN-07-D · D1 — ⛔ "AGUARDANDO VOCÊ" CONTA SÓ O QUE ESPERA O DONO.
+   *
+   * Uma confirmada SEM execução registrada não espera nada de ninguém: a decisão foi gravada e
+   * a execução foi recusada (`EFEITO_MUDOU`, prazo vencido pelo relógio do servidor) ou nunca
+   * chegou (transporte). Pelo claim-first nada foi aplicado, e ela nunca mais executa —
+   * reconfirmar dá `PROPOSTA_JA_DECIDIDA`. Contá-la em "aguardando" mandava o dono esperar por
+   * algo que não vai acontecer; ela é um problema a olhar.
+   */
+  it("confirmada sem execução vai para 'precisam de atenção', não para 'aguardando você'", () => {
+    const linhas = so([proposta()], [aprovacao("confirmada")], []);
+    expect(linhas[0]?.estado).toBe("confirmada");
+    expect(filtrarHistorico(linhas, "aguardando")).toHaveLength(0);
+    expect(filtrarHistorico(linhas, "problemas")).toHaveLength(1);
+    expect(resumirHistorico(linhas)).toMatchObject({ aguardando: 0, problemas: 1 });
+  });
 });
 
 describe("os parsers do jsonb", () => {
