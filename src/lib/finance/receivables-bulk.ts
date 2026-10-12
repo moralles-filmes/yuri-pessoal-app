@@ -50,9 +50,10 @@ export const BULK_ACTION_TITLES: Record<BulkReceivableAction, string> = {
  * número que a tela mostra.
  */
 export const ORIGENS_DA_ACAO: Record<BulkReceivableAction, ReceivableStatus[]> = {
-  receber: ["pendente", "cobrado", "ignorado"],
+  // K1 (03-D): só se recebe e só se perdoa o que ainda se deve.
+  receber: ["pendente", "cobrado"],
   cobrado: ["pendente", "ignorado"],
-  ignorar: ["pendente", "cobrado", "pago"],
+  ignorar: ["pendente", "cobrado"],
   desfazer: ["pago"],
 };
 

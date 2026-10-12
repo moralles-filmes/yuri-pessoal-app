@@ -16,6 +16,7 @@ const TABELA = "receivable_receipts";
 
 /** Caminho relativo a `src/` → por que este arquivo pode mencionar a tabela. */
 const ALLOWLIST: Record<string, string> = {
+  "lib/finance/recebimentos-servico.ts": "a UNICA escrita da tabela (A3)",
   "types/supabase.ts": "tipos gerados do banco (M1)",
   "lib/settings/export-tables.ts": "a tabela entra no backup do usuario",
   "types/database.ts": "o tipo da linha de recebimento (RecebimentoRow)",
