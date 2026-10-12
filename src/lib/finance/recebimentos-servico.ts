@@ -111,14 +111,15 @@ export async function registrarRecebimento(
   const { error } = await ctx.supabase.from("receivable_receipts").insert({
     user_id: ctx.userId,
     receivable_id: lido.id,
-    valor: dados.valor,
+    valor: centavosParaReais(valorCent),
     recebido_em: dados.recebido_em,
     observacoes: dados.observacoes,
   });
   if (error) {
     if (error.code === "23514") {
       const releitura = await lerRecebivel(ctx, lido.id);
-      return campoValor(releitura && releitura !== "erro" ? situacao(releitura).saldo : 0);
+      if (!releitura || releitura === "erro") return invalid({ valor: ["Passa do saldo deste recebível."] });
+      return campoValor(situacao(releitura).saldo);
     }
     return dbError("Não foi possível registrar o recebimento.");
   }
@@ -334,7 +335,7 @@ export async function aplicarAcaoEmMassa(
     if (ultimos.length > 0) {
       const { error: e2 } = await ctx.supabase.from("receivable_receipts").delete().in("id", ultimos);
       if (e2) {
-        return falhaNoMeio(afetados, "Os recebíveis voltaram para pendente, mas os recebimentos não foram removidos. Tente de novo.");
+        return falhaNoMeio(afetados, "Os recebíveis voltaram para pendente, mas os recebimentos não foram removidos. Use Desfazer em cada recebível para concluir.");
       }
     }
   }

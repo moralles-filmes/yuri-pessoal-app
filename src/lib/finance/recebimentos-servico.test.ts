@@ -42,13 +42,16 @@ function gatilhoNaoExcede(op: EscritaPretendida) {
   return null;
 }
 
-function cenario(sobre: Linha = {}, recebimentos: Linha[] = [], mais: Linha[] = []) {
+function cenario(
+  sobre: Linha = {}, recebimentos: Linha[] = [], mais: Linha[] = [],
+  antesDeGravar: (op: EscritaPretendida) => ReturnType<typeof gatilhoNaoExcede> = gatilhoNaoExcede,
+) {
   const fake = criarSupabaseEmMemoria(
     {
       receivables: [{ id: REC, user_id: "user-1", valor: 600, status: "pendente", pago_em: null, ...sobre }, ...mais],
       receivable_receipts: recebimentos,
     },
-    { antesDeGravar: gatilhoNaoExcede },
+    { antesDeGravar },
   );
   const ctx = { supabase: fake.client as AuthContext["supabase"], userId: "user-1" };
   return { fake, ctx };
@@ -59,6 +62,37 @@ const receb = (id: string, valor: number, recebido_em: string, created_at = `${r
 });
 
 describe("registrar recebimento", () => {
+  it.each([0, -10])("recusa valor %s no campo valor, sem escritas", async (valor) => {
+    const { fake, ctx } = cenario();
+    const r = await registrarRecebimento(ctx, { receivable_id: REC, valor, recebido_em: HOJE, observacoes: null }, HOJE);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.fieldErrors?.valor).toEqual(["Informe um valor maior que zero."]);
+    expect(fake.escritas()).toHaveLength(0);
+  });
+
+  it("grava o mesmo valor arredondado usado para decidir a quitação", async () => {
+    const { fake, ctx } = cenario({}, [receb("r1", 250, "2026-06-05")]);
+    const r = await registrarRecebimento(ctx, { receivable_id: REC, valor: 350.004, recebido_em: HOJE, observacoes: null }, HOJE);
+    expect(r.ok).toBe(true);
+    expect((fake.escritas("receivable_receipts")[0].valores as Linha).valor).toBe(350);
+    expect(fake.escritas("receivables")[0].valores).toEqual({ status: "pago", pago_em: HOJE });
+  });
+
+  it("23514 sem recebível na releitura não inventa saldo zero", async () => {
+    const { fake, ctx } = cenario({}, [], [], (op) => {
+      if (op.tabela !== "receivable_receipts" || op.tipo !== "insert") return null;
+      op.tabelas.receivables = [];
+      return { code: "23514", message: "Saldo alterado." };
+    });
+    const r = await registrarRecebimento(ctx, { receivable_id: REC, valor: 100, recebido_em: HOJE, observacoes: null }, HOJE);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.fieldErrors?.valor?.[0]).toBe("Passa do saldo deste recebível.");
+      expect(r.fieldErrors?.valor?.[0]).not.toContain("R$");
+    }
+    expect(fake.escritas()).toHaveLength(0);
+  });
+
   it("parcial grava SÓ o recebimento — a coluna não muda e nunca vira 'parcial'", async () => {
     const { fake, ctx } = cenario();
     const r = await registrarRecebimento(ctx, { receivable_id: REC, valor: 250, recebido_em: "2026-06-05", observacoes: null }, HOJE);
@@ -133,6 +167,9 @@ describe("receber o saldo", () => {
       "update:receivables",
     ]);
     expect((fake.escritas("receivable_receipts")[0].valores as Linha).valor).toBe(350);
+    expect(Object.keys(fake.escritas("receivable_receipts")[0].valores as Linha).sort()).toEqual(
+      ["observacoes", "recebido_em", "receivable_id", "user_id", "valor"],
+    );
   });
 
   it("com a soma já fechada e a coluna aberta, só conserta a coluna (data do último recebimento)", async () => {
@@ -219,6 +256,33 @@ describe("decidir (K1)", () => {
 });
 
 describe("lote", () => {
+  it("K2: cada linha do insert de receber contém somente as cinco chaves permitidas", async () => {
+    const { fake, ctx } = cenario({}, [], [
+      { id: "rec-2", user_id: "user-1", valor: 100, status: "cobrado", pago_em: null },
+    ]);
+    const r = await aplicarAcaoEmMassa(ctx, [REC, "rec-2"], "receber", HOJE, HOJE);
+    expect(r.ok).toBe(true);
+    const linhas = fake.escritas("receivable_receipts")[0].valores as Linha[];
+    expect(linhas).toHaveLength(2);
+    for (const linha of linhas) {
+      expect(Object.keys(linha).sort()).toEqual(["observacoes", "recebido_em", "receivable_id", "user_id", "valor"]);
+    }
+  });
+
+  it("desfazer: falha no delete orienta concluir individualmente", async () => {
+    const recebimentos = [receb("r1", 600, "2026-06-20")];
+    const { fake, ctx } = cenario({ status: "pago", pago_em: "2026-06-20" }, recebimentos, [], (op) =>
+      op.tabela === "receivable_receipts" && op.tipo === "delete"
+        ? { code: "57014", message: "Exclusão recusada." } : null,
+    );
+    const r = await aplicarAcaoEmMassa(ctx, [REC], "desfazer", HOJE, HOJE);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe("Os recebíveis voltaram para pendente, mas os recebimentos não foram removidos. Use Desfazer em cada recebível para concluir.");
+    expect(fake.tabelas.receivables[0].status).toBe("pendente");
+    expect(fake.tabelas.receivable_receipts).toEqual(recebimentos);
+    expect(fake.operacoes.map((o) => `${o.tipo}:${o.tabela}`)).toEqual(["update:receivables"]);
+  });
+
   it("receber: um recebimento do SALDO por recebível; ignorado fica de fora", async () => {
     const { fake, ctx } = cenario({}, [receb("r1", 250, "2026-06-05")], [
       { id: "rec-2", user_id: "user-1", valor: 100, status: "ignorado", pago_em: null },
@@ -247,4 +311,47 @@ describe("lote", () => {
     expect(r).toEqual({ ok: true, data: { afetados: 0, ignorados: 1 } });
     expect(fake.escritas("receivables")).toHaveLength(0);
   });
+});
+
+describe("K1 — a primeira escrita falha, a segunda nao acontece", () => {
+  it.each(["registrarRecebimento", "receberSaldo", "lote receber"] as const)(
+    "%s: insert recusado impede atualizar a coluna", async (acao) => {
+      const antesDeGravar = vi.fn((op: EscritaPretendida) =>
+        op.tabela === "receivable_receipts" && op.tipo === "insert"
+          ? { code: "57014", message: "Inserção recusada." } : null,
+      );
+      const { fake, ctx } = cenario({}, [receb("r1", 250, "2026-06-05")], [], antesDeGravar);
+      const r = acao === "registrarRecebimento"
+        ? await registrarRecebimento(ctx, { receivable_id: REC, valor: 350, recebido_em: HOJE, observacoes: null }, HOJE)
+        : acao === "receberSaldo"
+          ? await receberSaldo(ctx, REC, HOJE, HOJE)
+          : await aplicarAcaoEmMassa(ctx, [REC], "receber", HOJE, HOJE);
+      expect(r.ok).toBe(false);
+      expect(antesDeGravar).toHaveBeenCalledTimes(1);
+      expect(antesDeGravar.mock.calls[0][0]).toMatchObject({ tabela: "receivable_receipts", tipo: "insert" });
+      expect(fake.escritas("receivables")).toHaveLength(0);
+      expect(fake.escritas()).toHaveLength(0);
+    },
+  );
+
+  it.each(["desfazerUltimoRecebimento", "lote desfazer"] as const)(
+    "%s: update recusado preserva todos os recebimentos", async (acao) => {
+      const recebimentos = [receb("r1", 250, "2026-06-05"), receb("r2", 350, "2026-06-20")];
+      const antesDeGravar = vi.fn((op: EscritaPretendida) =>
+        op.tabela === "receivables" && op.tipo === "update"
+          ? { code: "57014", message: "Atualização recusada." } : null,
+      );
+      const { fake, ctx } = cenario({ status: "pago", pago_em: "2026-06-20" }, recebimentos, [], antesDeGravar);
+      const r = acao === "desfazerUltimoRecebimento"
+        ? await desfazerUltimoRecebimento(ctx, REC)
+        : await aplicarAcaoEmMassa(ctx, [REC], "desfazer", HOJE, HOJE);
+      expect(r.ok).toBe(false);
+      expect(antesDeGravar).toHaveBeenCalledTimes(1);
+      expect(antesDeGravar.mock.calls[0][0]).toMatchObject({ tabela: "receivables", tipo: "update" });
+      expect(fake.operacoes.filter((o) => o.tipo === "delete")).toHaveLength(0);
+      expect(fake.tabelas.receivable_receipts).toEqual(recebimentos);
+      expect(fake.tabelas.receivables[0].status).toBe("pago");
+      expect(fake.escritas()).toHaveLength(0);
+    },
+  );
 });
