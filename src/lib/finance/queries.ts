@@ -13,6 +13,8 @@ import { toDateInputValue } from "@/lib/format";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
 import { leituraComTeto, type LeituraComTeto } from "@/lib/finance/leitura-com-teto";
 import { idsDasCategoriasMarcadas } from "@/lib/finance/categorias-marcadas";
+import { anexarRecebimentos } from "@/lib/finance/recebimentos";
+import { lerRecebimentos } from "@/lib/finance/recebimentos-leitura";
 import {
   saldosPorDia,
   type MovimentoDeSaldo,
@@ -583,13 +585,20 @@ export async function getReceivables(
 
 async function lerRecebiveis(
   owner?: LeituraDoDono,
-): Promise<LeituraComTeto<ReceivableWithRelations>> {
+): Promise<LeituraComTeto<ReceivableWithRelations> & { situacaoDosRecebimentos: LeituraComTeto<unknown>["situacao"] }> {
   const supabase = owner?.client ?? (await createClient());
   const base = supabase.from("receivables").select(RECEIVABLE_SELECT, { count: "exact" });
-  const { data, count } = await (owner ? base.eq("user_id", owner.userId) : base)
-    .order("created_at", { ascending: false })
-    .limit(TETO_DE_RECEBIVEIS);
-  return leituraComTeto((data ?? []) as unknown as ReceivableWithRelations[], count);
+  const [{ data, count }, recebimentos] = await Promise.all([
+    (owner ? base.eq("user_id", owner.userId) : base)
+      .order("created_at", { ascending: false })
+      .limit(TETO_DE_RECEBIVEIS),
+    lerRecebimentos(owner),
+  ]);
+  const linhas = anexarRecebimentos(
+    (data ?? []) as unknown as Omit<ReceivableWithRelations, "recebimentos">[],
+    recebimentos.linhas,
+  );
+  return { ...leituraComTeto(linhas, count), situacaoDosRecebimentos: recebimentos.situacao };
 }
 
 /**

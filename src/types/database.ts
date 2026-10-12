@@ -237,6 +237,7 @@ export type RecebimentoDoBanco = Pick<
  * compra → fatura → pessoa: a pessoa, o cartão usado e a fatura/transação de origem.
  */
 export type ReceivableWithRelations = ReceivableRow & {
+  recebimentos: RecebimentoDoBanco[];
   person: Pick<PersonRow, "id" | "nome" | "email"> | null;
   card: Pick<CreditCardRow, "id" | "nome" | "cor" | "bandeira"> | null;
   statement: Pick<

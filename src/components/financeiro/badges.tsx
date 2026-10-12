@@ -1,6 +1,7 @@
 import { Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { ESTADO_LABELS, type EstadoDoRecebivel } from "@/lib/finance/recebimentos";
 import {
   ACCOUNT_TYPE_LABELS,
   CARD_BRAND_LABELS,
@@ -198,6 +199,25 @@ export function ReceivableStatusBadge({ status }: { status: ReceivableStatus }) 
       className={cn("border-0", RECEIVABLE_STATUS_CLASSES[status])}
     >
       {RECEIVABLE_STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
+const ESTADO_CLASSES: Record<EstadoDoRecebivel, string> = {
+  pendente: "bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20",
+  parcial: "bg-violet-500/10 text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20",
+  cobrado: "bg-sky-500/10 text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/20",
+  pago: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20",
+  // D11: o perdoado NÃO é riscado — ele conta, como despesa minha.
+  ignorado: "bg-muted text-muted-foreground ring-1 ring-border",
+  desconhecido: "bg-destructive/10 text-destructive ring-1 ring-destructive/20",
+};
+
+/** Selo do estado DERIVADO (03-D): a soma manda; `parcial` nunca é gravado. */
+export function EstadoDoRecebivelBadge({ estado }: { estado: EstadoDoRecebivel }) {
+  return (
+    <Badge variant="secondary" className={cn("border-0", ESTADO_CLASSES[estado])}>
+      {ESTADO_LABELS[estado]}
     </Badge>
   );
 }

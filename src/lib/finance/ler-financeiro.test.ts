@@ -191,9 +191,9 @@ beforeEach(() => {
 });
 
 describe("03-B2 — lerFinanceiro: owner nos três escopos (desenho, §5.4)", () => {
-  it("owner + escopo de faturas lê as três tabelas pelo client do dono, todas com user_id", async () => {
+  it("owner + escopo de faturas lê as quatro tabelas pelo client do dono, todas com user_id", async () => {
     await lerFinanceiro({ escopo: ESCOPO_FATURAS, owner: DONO });
-    expect(tabelasLidas()).toEqual(["card_statements_with_total", "credit_cards", "receivables"]);
+    expect(tabelasLidas()).toEqual(["card_statements_with_total", "credit_cards", "receivable_receipts", "receivables"]);
     expect(estado.clientsDaSessao).toBe(0);
     for (const leitura of estado.leituras) {
       expect(leitura.origem).toBe("dono");
@@ -201,7 +201,7 @@ describe("03-B2 — lerFinanceiro: owner nos três escopos (desenho, §5.4)", ()
     }
   });
 
-  it("owner + relatório lê as oito tabelas pelo dono, incluindo user_id nas parcelas", async () => {
+  it("owner + relatório lê as nove tabelas pelo dono, incluindo user_id nas parcelas", async () => {
     await lerFinanceiro({
       janela: JANELA,
       escopo: ESCOPO_RELATORIO,
@@ -210,7 +210,7 @@ describe("03-B2 — lerFinanceiro: owner nos três escopos (desenho, §5.4)", ()
     expect(tabelasLidas()).toEqual(
       [
         "accounts_with_balance", "bills", "card_statements_with_total", "credit_cards",
-        "receivables", "recurring_transactions", "transaction_installments", "transactions",
+        "receivable_receipts", "receivables", "recurring_transactions", "transaction_installments", "transactions",
       ].sort(),
     );
     expect(estado.clientsDaSessao).toBe(0);
@@ -224,10 +224,10 @@ describe("03-B2 — lerFinanceiro: owner nos três escopos (desenho, §5.4)", ()
     expect(ultima.filtros).toContainEqual(["neq", "status", "cancelada"]);
   });
 
-  it("owner + escopo do card lê as cinco tabelas PELO CLIENT DO DONO, todas com user_id", async () => {
+  it("owner + escopo do card lê as seis tabelas PELO CLIENT DO DONO, todas com user_id", async () => {
     await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO, owner: DONO });
     expect(tabelasLidas()).toEqual(
-      ["accounts_with_balance", "bills", "card_statements_with_total", "receivables", "transactions"].sort(),
+      ["accounts_with_balance", "bills", "card_statements_with_total", "receivable_receipts", "receivables", "transactions"].sort(),
     );
     expect(estado.clientsDaSessao).toBe(0);
     for (const leitura of estado.leituras) {
@@ -255,21 +255,21 @@ describe("03-B — lerFinanceiro: cada escopo lê exatamente as suas tabelas", (
     },
   );
 
-  it("card do dashboard: cinco leituras, nenhuma de cartões, recorrências ou parcelas", async () => {
+  it("card do dashboard: seis leituras, nenhuma de cartões, recorrências ou parcelas", async () => {
     await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_CARD_FINANCEIRO });
     expect(tabelasLidas()).toEqual(
-      ["accounts_with_balance", "bills", "card_statements_with_total", "receivables", "transactions"].sort(),
+      ["accounts_with_balance", "bills", "card_statements_with_total", "receivable_receipts", "receivables", "transactions"].sort(),
     );
     expect(estado.leituras.every((l) => l.origem === "sessao")).toBe(true);
     expect(estado.leituras.flatMap((l) => l.filtros)).not.toContainEqual(["eq", "user_id", "user-1"]);
   });
 
-  it("card de faturas: três leituras, sem janela (o escopo não pede transações)", async () => {
+  it("card de faturas: quatro leituras, sem janela (o escopo não pede transações)", async () => {
     await lerFinanceiro({ escopo: ESCOPO_FATURAS });
-    expect(tabelasLidas()).toEqual(["card_statements_with_total", "credit_cards", "receivables"]);
+    expect(tabelasLidas()).toEqual(["card_statements_with_total", "credit_cards", "receivable_receipts", "receivables"]);
   });
 
-  it("relatório: as oito, com as parcelas por ÚLTIMO e com os ids das faturas", async () => {
+  it("relatório: as nove, com as parcelas por ÚLTIMO e com os ids das faturas", async () => {
     await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_RELATORIO });
     expect(tabelasLidas()).toEqual(
       [
@@ -277,6 +277,7 @@ describe("03-B — lerFinanceiro: cada escopo lê exatamente as suas tabelas", (
         "bills",
         "card_statements_with_total",
         "credit_cards",
+        "receivable_receipts",
         "receivables",
         "recurring_transactions",
         "transaction_installments",
@@ -292,9 +293,21 @@ describe("03-B — lerFinanceiro: cada escopo lê exatamente as suas tabelas", (
     estado.dados.card_statements_with_total = [];
     const r = await lerFinanceiro({ janela: JANELA, escopo: ESCOPO_RELATORIO });
     expect(tabelasLidas()).not.toContain("transaction_installments");
-    expect(estado.leituras).toHaveLength(7);
+    expect(estado.leituras).toHaveLength(8);
     expect(r.entradas.inst).toEqual([]);
     expect(r.entradas).toHaveProperty("inst");
+  });
+
+  it("só lê recebimentos quando o escopo inclui recebíveis", async () => {
+    // Os escopos públicos incluem recebíveis; simula a ausência só para testar a guarda.
+    const semRecebiveis = { ...ESCOPO_FATURAS, recebiveis: false } as unknown as typeof ESCOPO_FATURAS;
+    await lerFinanceiro({ escopo: semRecebiveis, owner: DONO });
+    expect(tabelasLidas()).toEqual(["card_statements_with_total", "credit_cards"]);
+    expect(tabelasLidas()).not.toContain("receivable_receipts");
+
+    estado.leituras.length = 0;
+    await lerFinanceiro({ escopo: ESCOPO_FATURAS, owner: DONO });
+    expect(tabelasLidas()).toContain("receivable_receipts");
   });
 
   it("as faturas continuam filtradas por itens > 0 (getStatements, não uma leitura nova)", async () => {
@@ -486,10 +499,17 @@ describe("03-B2 A5 — tetos e completude (desenho, §5.5)", () => {
   it("getReceivables continua devolvendo array com o mesmo limite e owner", async () => {
     estado.dados.receivables = Array.from({ length: 1001 }, () => estado.dados.receivables[0]);
     const r = await getReceivables(DONO);
-    expect(r).toEqual(estado.dados.receivables.slice(0, 1000));
-    expect(estado.leituras).toHaveLength(1);
-    expect(estado.leituras[0].origem).toBe("dono");
-    expect(estado.leituras[0].filtros).toContainEqual(["eq", "user_id", DONO.userId]);
+    expect(r).toEqual(estado.dados.receivables.slice(0, 1000).map((linha) => ({
+      ...(linha as object), recebimentos: [],
+    })));
+    expect(estado.leituras).toHaveLength(2);
+    expect(tabelasLidas()).toEqual(["receivable_receipts", "receivables"]);
+    for (const leitura of estado.leituras) {
+      expect(leitura.origem).toBe("dono");
+      expect(leitura.filtros).toContainEqual(["eq", "user_id", DONO.userId]);
+      expect(leitura.selecao?.opcoes).toEqual({ count: "exact" });
+    }
+    expect(estado.leituras.find((l) => l.tabela === "receivables")?.limite).toBe(1000);
     expect(estado.clientsDaSessao).toBe(0);
   });
 
