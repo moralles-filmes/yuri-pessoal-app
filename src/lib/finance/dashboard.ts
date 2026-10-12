@@ -42,6 +42,8 @@ const ISO = "yyyy-MM-dd";
 /* ───────────────────────────── Tipos de entrada (estruturais) ───────────────────────────── */
 
 export type DashTx = {
+  /** 03-D (B1, à vista): liga o recebível ao lançamento. Opcional — `dashboard.test.ts` não muda. */
+  id?: string;
   amount: number;
   valor_pessoal: number | null;
   type: TransactionType;
@@ -66,6 +68,10 @@ export type DashStatement = {
 };
 
 export type DashReceivable = {
+  /** 03-D: o lançamento de origem (D11 à vista). Opcional pelo mesmo motivo; o pipeline sempre preenche. */
+  transaction_id?: string | null;
+  /** 03-D: Σ recebido em REAIS, já com a K0 aplicada. Sem data (P2). Ausente = K0 sobre lista vazia. */
+  recebido?: number;
   statement_id: string | null;
   installment_id: string | null;
   valor: number;

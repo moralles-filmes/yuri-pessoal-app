@@ -18,6 +18,7 @@
  * Fixture SINTÉTICA: o repositório é público. Nenhum valor, nome ou categoria real.
  */
 
+import type { RecebimentoLido } from "@/lib/finance/recebimentos";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -58,6 +59,7 @@ import {
 type Categoria = { id: string; name: string; color: string | null; icon: string | null };
 
 type TxCompleta = {
+  id: string;
   amount: number;
   valor_pessoal: number | null;
   type: DashTx["type"];
@@ -84,6 +86,10 @@ type FaturaCompleta = {
 };
 
 type RecebivelCompleto = {
+  id: string;
+  transaction_id: string | null;
+  pago_em: string | null;
+  recebimentos: readonly RecebimentoLido[];
   statement_id: string | null;
   installment_id: string | null;
   valor: number;
@@ -141,6 +147,7 @@ function referenciaCardFinanceiro(
   bills: ContaFixaCompleta[],
 ) {
   const txs: DashTx[] = transactions.map((t) => ({
+    id: t.id,
     amount: t.amount,
     valor_pessoal: t.valor_pessoal,
     type: t.type,
@@ -165,6 +172,8 @@ function referenciaCardFinanceiro(
     total_atual: s.total_atual,
   }));
   const recs: DashReceivable[] = receivables.map((r) => ({
+    transaction_id: r.transaction_id,
+    recebido: r.status === "pago" ? Number(r.valor) : 0,
     statement_id: r.statement_id,
     installment_id: r.installment_id,
     valor: r.valor,
@@ -207,6 +216,8 @@ function referenciaCardFaturas(
     total_atual: s.total_atual,
   }));
   const recs: DashReceivable[] = receivables.map((r) => ({
+    transaction_id: r.transaction_id,
+    recebido: r.status === "pago" ? Number(r.valor) : 0,
     statement_id: r.statement_id,
     installment_id: r.installment_id,
     valor: r.valor,
@@ -236,6 +247,7 @@ function referenciaRelatorio({
   bills,
 }: LinhasCompletas) {
   const txs: DashTx[] = transactions.map((t) => ({
+    id: t.id,
     amount: t.amount,
     valor_pessoal: t.valor_pessoal,
     type: t.type,
@@ -260,6 +272,8 @@ function referenciaRelatorio({
     total_atual: s.total_atual,
   }));
   const recs: DashReceivable[] = receivables.map((r) => ({
+    transaction_id: r.transaction_id,
+    recebido: r.status === "pago" ? Number(r.valor) : 0,
     statement_id: r.statement_id,
     installment_id: r.installment_id,
     valor: r.valor,
@@ -322,6 +336,7 @@ function referenciaPagina({
   bills,
 }: LinhasCompletas) {
   const txs: DashTx[] = transactions.map((t) => ({
+    id: t.id,
     amount: t.amount,
     valor_pessoal: t.valor_pessoal,
     type: t.type,
@@ -346,6 +361,8 @@ function referenciaPagina({
     total_atual: s.total_atual,
   }));
   const recs: DashReceivable[] = receivables.map((r) => ({
+    transaction_id: r.transaction_id,
+    recebido: r.status === "pago" ? Number(r.valor) : 0,
     statement_id: r.statement_id,
     installment_id: r.installment_id,
     valor: r.valor,
@@ -408,6 +425,9 @@ type FaturaDoCron = {
  * `transaction` — o que a linha estrita pede para derivar `ref_month`.
  */
 type RecebivelDoCron = {
+  transaction_id: string | null;
+  pago_em: string | null;
+  recebimentos: readonly RecebimentoLido[];
   id: string;
   valor: number;
   status: string;
@@ -437,6 +457,8 @@ function referenciaCron(
     total_atual: s.total_atual,
   }));
   const dashReceivables: DashReceivable[] = receivables.map((r) => ({
+    transaction_id: r.transaction_id,
+    recebido: r.status === "pago" ? Number(r.valor) : 0,
     statement_id: r.statement_id,
     installment_id: r.installment_id,
     valor: Number(r.valor),
@@ -444,6 +466,7 @@ function referenciaCron(
   }));
   const dashTx = txRows.map(
     (t): DashTx => ({
+      id: t.id as string,
       amount: Number(t.amount),
       valor_pessoal: t.valor_pessoal === null ? null : Number(t.valor_pessoal),
       type: t.type as DashTx["type"],
@@ -469,6 +492,7 @@ function linhasCompletas(): LinhasCompletas {
     transactions: [
       {
         // À vista, sem divisão: `valor_pessoal` nulo tem de continuar nulo (N3).
+        id: "tx-1",
         amount: 123.45,
         valor_pessoal: null,
         type: "despesa",
@@ -484,6 +508,7 @@ function linhasCompletas(): LinhasCompletas {
       },
       {
         // À vista dividida: a parte minha é `valor_pessoal`.
+        id: "tx-2",
         amount: 90,
         valor_pessoal: 30,
         type: "despesa",
@@ -499,6 +524,7 @@ function linhasCompletas(): LinhasCompletas {
       },
       {
         // À vista do cartão, sem categoria.
+        id: "tx-3",
         amount: 80,
         valor_pessoal: null,
         type: "despesa",
@@ -514,6 +540,7 @@ function linhasCompletas(): LinhasCompletas {
       },
       {
         // Compra-pai de parcelamento: nunca soma (as parcelas entram pela fatura).
+        id: "tx-4",
         amount: 600,
         valor_pessoal: null,
         type: "despesa",
@@ -528,6 +555,7 @@ function linhasCompletas(): LinhasCompletas {
         description: "Lancamento 4",
       },
       {
+        id: "tx-5",
         amount: 1000,
         valor_pessoal: null,
         type: "receita",
@@ -567,6 +595,10 @@ function linhasCompletas(): LinhasCompletas {
     receivables: [
       {
         // Com fatura: `ref_month` sai da competência da fatura, não da compra.
+        id: "rec-fixture-1",
+        transaction_id: "tx-4",
+        pago_em: null,
+        recebimentos: [],
         statement_id: "st-1",
         installment_id: "inst-1",
         valor: 50,
@@ -576,6 +608,10 @@ function linhasCompletas(): LinhasCompletas {
       },
       {
         // Sem fatura: `ref_month` sai de `purchase_date` (N2).
+        id: "rec-fixture-2",
+        transaction_id: "tx-2",
+        pago_em: null,
+        recebimentos: [],
         statement_id: null,
         installment_id: null,
         valor: 60,
@@ -585,6 +621,10 @@ function linhasCompletas(): LinhasCompletas {
       },
       {
         // Sem nenhum dos dois: `ref_month` nulo.
+        id: "rec-fixture-3",
+        transaction_id: null,
+        pago_em: null,
+        recebimentos: [],
         statement_id: null,
         installment_id: null,
         valor: 15,
@@ -693,6 +733,9 @@ const faturasDoCron: FaturaDoCron[] = [
 const recebiveisDoCron: RecebivelDoCron[] = [
   {
     id: "rec-1",
+    transaction_id: null,
+    pago_em: null,
+    recebimentos: [],
     valor: 50,
     status: "pendente",
     installment_id: "inst-1",
@@ -704,6 +747,9 @@ const recebiveisDoCron: RecebivelDoCron[] = [
   },
   {
     id: "rec-2",
+    transaction_id: null,
+    pago_em: null,
+    recebimentos: [],
     valor: "12.34" as unknown as number, // o tipo declarado mente; o `Number(...)` do Cron cobria isso
     status: "cobrado",
     installment_id: null,
@@ -717,6 +763,7 @@ const recebiveisDoCron: RecebivelDoCron[] = [
 
 const transacoesDoCron: LinhaTx[] = [
   {
+    id: "tx-cron-1",
     amount: "123.45",
     valor_pessoal: null,
     type: "despesa",
@@ -730,6 +777,7 @@ const transacoesDoCron: LinhaTx[] = [
     category: { id: "cat-a", name: "Categoria A", color: "#111111" },
   },
   {
+    id: "tx-cron-2",
     amount: "90.00",
     valor_pessoal: "30.10",
     type: "despesa",
@@ -743,6 +791,7 @@ const transacoesDoCron: LinhaTx[] = [
     category: null,
   },
   {
+    id: "tx-cron-3",
     amount: 80,
     valor_pessoal: null,
     type: "despesa",
@@ -820,6 +869,10 @@ describe("03-B — montarEntradas devolve o que cada chamador montava à mão (c
     expect(novo).toEqual(referenciaPagina(linhas));
   });
 
+  it("id de cada transação é o id da linha (03-D · A6)", () => {
+    expect(novo.txs.map((t) => t.id)).toEqual(linhas.transactions.map((t) => t.id));
+  });
+
   it("category_id sai do DADO, não de uma constante (N1)", () => {
     expect(novo.txs.map((t) => t.category_id)).toEqual(["cat-a", "cat-a", null, "cat-a", null]);
   });
@@ -840,6 +893,7 @@ describe("03-B — montarEntradas devolve o que cada chamador montava à mão (c
   it("nenhum campo além do que o tipo do motor tem é copiado", () => {
     expect(Object.keys(novo.txs[0]).sort()).toEqual(
       [
+        "id",
         "amount",
         "card_id",
         "category",
@@ -917,6 +971,24 @@ describe("03-B — montarEntradas devolve o que o Cron montava à mão (caso do 
 });
 
 /* ═══════════════════════════ 2. O motor sobre a entrada montada ═══════════════════════════ */
+
+it("03-D · A6 — todo DashReceivable montado tem `recebido` e `transaction_id` definidos (P1)", () => {
+  const { recs } = montarEntradas({
+    recebiveis: [
+      {
+        id: "r1", statement_id: "st", installment_id: null, transaction_id: "tx-1",
+        valor: 600, status: "pendente", pago_em: null, statement: null, transaction: null,
+        recebimentos: [{ valor: 250, recebido_em: "2026-06-05" }],
+      },
+      {
+        id: "r2", statement_id: "st", installment_id: null, transaction_id: null,
+        valor: "100.00", status: "pago", pago_em: "2026-06-10", statement: null,
+        transaction: null, recebimentos: [],
+      },
+    ],
+  });
+  expect(recs.map((r) => [r.transaction_id, r.recebido])).toEqual([["tx-1", 250], [null, 100]]);
+});
 
 describe("03-B — o motor lê a entrada montada como lia a montagem de referência", () => {
   const linhas = linhasCompletas();
@@ -1014,6 +1086,7 @@ describe("03-B — montarEntradas: normalização", () => {
     const e = montarEntradas({
       transacoes: [
         {
+          id: "tx-normalizacao",
           amount: "10.5",
           type: "despesa",
           status: "pago",
@@ -1040,6 +1113,10 @@ describe("03-B — montarEntradas: normalização", () => {
       ],
       recebiveis: [
         {
+          id: "rec-fixture-4",
+          transaction_id: null,
+          pago_em: null,
+          recebimentos: [],
           statement_id: null,
           installment_id: null,
           valor: "7.25",
@@ -1067,6 +1144,7 @@ describe("03-B — montarEntradas: normalização", () => {
       contasFixas: [{ name: "Conta fixa 1", amount: "200", due_day: 10, is_active: true }],
     });
     expect(e.txs[0]).toEqual({
+      id: "tx-normalizacao",
       amount: 10.5,
       valor_pessoal: null,
       type: "despesa",
@@ -1081,6 +1159,8 @@ describe("03-B — montarEntradas: normalização", () => {
     });
     expect(e.sts[0].total_atual).toBe(480.5);
     expect(e.recs[0]).toEqual({
+      transaction_id: null,
+      recebido: 0,
       statement_id: null,
       installment_id: null,
       valor: 7.25,
@@ -1108,6 +1188,7 @@ describe("03-B — montarEntradas: normalização", () => {
 
 describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
   const base: LinhaTx = {
+    id: "tx-base",
     amount: 10,
     type: "despesa",
     status: "pago",
@@ -1123,6 +1204,7 @@ describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
 
   it("linha sem category_id não compila — chave ausente não vira null em silêncio (M3, tsc --noEmit)", () => {
     const semCategoria: Omit<LinhaTx, "category_id"> = {
+      id: "tx-base",
       amount: 10,
       type: "despesa",
       status: "pago",
@@ -1163,6 +1245,10 @@ describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
     const e = montarEntradas({
       recebiveis: [
         {
+          id: "rec-fixture-5",
+          transaction_id: null,
+          pago_em: null,
+          recebimentos: [],
           statement_id: null,
           installment_id: null,
           valor: 1,
@@ -1171,6 +1257,10 @@ describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
           transaction: null,
         },
         {
+          id: "rec-fixture-6",
+          transaction_id: null,
+          pago_em: null,
+          recebimentos: [],
           statement_id: null,
           installment_id: null,
           valor: 2,

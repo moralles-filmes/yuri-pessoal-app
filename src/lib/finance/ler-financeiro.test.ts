@@ -131,10 +131,13 @@ function dadosSinteticos(): Record<string, unknown[]> {
     ],
     receivables: [
       {
+        id: "rec-1",
         statement_id: "st-1",
         installment_id: null,
+        transaction_id: null,
         valor: 50,
         status: "pendente",
+        pago_em: null,
         statement: { id: "st-1", competencia: "2026-05-01", data_vencimento: "2026-05-15" },
         transaction: null,
       },
@@ -325,7 +328,8 @@ describe("03-B — lerFinanceiro: o que volta", () => {
       montarEntradas({
         transacoes: dados.transactions as never,
         faturas: dados.card_statements_with_total as never,
-        recebiveis: dados.receivables as never,
+        // lerFinanceiro junta os recebimentos (nenhum na fixture) antes de montar.
+        recebiveis: (dados.receivables as object[]).map((r) => ({ ...r, recebimentos: [] })) as never,
         parcelas: dados.transaction_installments as never,
         cartoes: dados.credit_cards as never,
         recorrencias: dados.recurring_transactions as never,
