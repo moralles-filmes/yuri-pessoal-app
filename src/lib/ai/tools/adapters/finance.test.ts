@@ -78,6 +78,7 @@ beforeEach(() => {
     entradasTerceiros: 800,
     saidas: 3200,
     meu: 2700,
+    perdoado: 0,
     terceiros: 500,
     cartao: 1800,
     aVista: 1400,

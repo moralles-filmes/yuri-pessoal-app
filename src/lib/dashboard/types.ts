@@ -22,6 +22,8 @@ export type FinanceCardData = {
   entradasTerceiros: number;
   saidas: number;
   meu: number;
+  /** 03-D D11: entra em meu por decisão de não cobrar; resumo.meu − perdoado = parte acordada. */
+  perdoado: number;
   terceiros: number;
   cartao: number;
   aVista: number;

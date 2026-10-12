@@ -27,6 +27,7 @@ function cardDoMes(mes: string): FinanceCardData {
     entradasTerceiros: 0,
     saidas: 3200,
     meu: 2700,
+    perdoado: 0,
     terceiros: 500,
     cartao: 1800,
     aVista: 1400,

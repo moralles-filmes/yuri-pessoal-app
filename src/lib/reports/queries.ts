@@ -6,7 +6,8 @@
  * A RLS garante o escopo por usuário. Tudo roda em paralelo (Promise.all), sem N+1.
  */
 import { createClient } from "@/lib/supabase/server";
-import { hojeISO } from "@/lib/format";
+import { centavosParaReais, hojeISO } from "@/lib/format";
+import { parteDoTerceiroCentavos } from "@/lib/finance/recebimentos";
 import { lerFinanceiro } from "@/lib/finance/queries";
 import {
   comparativoMesAMes,
@@ -14,6 +15,7 @@ import {
   gastosPorCategoria,
   gastosPorForma,
   mesDe,
+  perdoadoDoMes,
   projecaoProximosMeses,
   proximas6Faturas,
   proximasContasPagar,
@@ -53,6 +55,8 @@ export type FinanceReport = {
   mes: string;
   saldo: number;
   resumo: ResumoMes;
+  /** 03-D D11: entra em meu por decisão de não cobrar; resumo.meu − perdoado = parte acordada. */
+  perdoado: number;
   comparativo: Comparativo;
   evolucao: EvolucaoPonto[];
   categorias: CategoriaSlice[];
@@ -162,7 +166,7 @@ async function getFinanceAndCardReport(
   const recByStatement = new Map<string, number>();
   for (const r of recs) {
     if (!r.statement_id) continue;
-    recByStatement.set(r.statement_id, (recByStatement.get(r.statement_id) ?? 0) + r.valor);
+    recByStatement.set(r.statement_id, (recByStatement.get(r.statement_id) ?? 0) + centavosParaReais(parteDoTerceiroCentavos(r)));
   }
   // Faturas reais agrupadas por mês de competência.
   const porMes = new Map<string, FaturaMes>();
@@ -196,6 +200,7 @@ async function getFinanceAndCardReport(
       mes: mesSel,
       saldo,
       resumo,
+      perdoado: perdoadoDoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs }),
       comparativo,
       evolucao,
       categorias,
