@@ -646,8 +646,8 @@ continua dentro de `disparar`.
 Vazios pelo `EmptyState` (chat, consumo, insights sem módulo, busca com menos de 2 caracteres);
 selos longos com `min-w-0 truncate` (`chat-client.tsx:640-655`, `proposal-card.tsx:199-201`);
 nome do arquivo do comprovante com `truncate`/quebra; PDF × imagem com texto, não só ícone;
-`opacity-70` do insight não vigente trocado por selo de texto. Grupos: chat e painel · ações e
-insights · comprovantes, consumo e memória · configurações, notificações e busca.
+`opacity-70` do insight não vigente trocado por selo de texto. Grupos (briefing §9, passo 10): chat e
+painel · subpáginas de `/ia` · Configurações, Notificações e Busca.
 
 ---
 
@@ -656,57 +656,68 @@ insights · comprovantes, consumo e memória · configurações, notificações 
 Aplicadas **uma a uma**, cada uma **compilando** (`npx tsc --noEmit` antes do vitest; em
 `.filter`, `(v): boolean =>` por causa do TS 5.5). Registra-se o **nome** de cada teste que cai.
 Restauração com `git restore`, conferida por `git diff --quiet`, **nunca** pelo verde. Mutação
-verde é **medida** antes de ser chamada de fraqueza, e não é aceita: o teste é reforçado. A árvore
-fica limpa antes (os testes já commitados).
+verde é **medida** antes de ser chamada de fraqueza, e não é aceita: o teste é reforçado e isso é
+declarado. A árvore fica limpa antes (os testes já commitados). Nenhuma decisão saiu "não", então
+nenhuma das 24 do briefing cai.
+
+**As 24 do briefing (§10):**
 
 | # | Mutação | Tem de derrubar |
 | --- | --- | --- |
-| M1 | o vencido volta a permitir Recusar | `cartao.test.ts` |
-| M2 | `falhou` volta a virar parcial (`status !== "sucesso"`) | `cartao.test.ts` |
-| M3 | a rejeição da promise volta a deixar o cartão em `enviando` | `cartao.test.ts` (+ contrato do `catch`) |
-| M4 | `nao_aplicada` volta a ser não final (Confirmar clicável) | `cartao.test.ts` |
-| M5 | o desfecho volta para um `useState` dentro do `ProposalCard` | `ia-sistema-contratos.test.ts` |
-| M6 | o hook deixa de despachar `decidiu` | `ia-sistema-contratos.test.ts` |
-| M7 | `aguardando` volta a incluir `confirmada` | `history.test.ts` |
-| M8 | os filtros de `/ia/acoes` perdem `aria-current` | `seletor-de-visao.test.ts` (V1 estendida, sem a exceção) |
-| M9 | o Útil perde `aria-pressed` | `seletor-de-visao.test.ts` / `ia-sistema-contratos.test.ts` |
-| M10 | o interruptor de escrita volta a `checked={ligada}` | `ia-sistema-contratos.test.ts` |
-| M11 | desligar a leitura deixa de desligar a escrita | `preferencias-cascata.test.ts` |
-| M12 | ligar a leitura religa a escrita | `preferencias-cascata.test.ts` |
-| M13 | `allowVision` sai da cascata | `preferencias-cascata.test.ts` |
-| M14 | um gatilho perde o `aria-describedby` da frase de gasto | `ia-sistema-contratos.test.ts` |
-| M15 | um `gerarInsight(` entra num `useEffect` | `ia-sistema-contratos.test.ts` (varredura) |
-| M16 | "Gerar análise" volta a dividir a transição do feedback | `ia-sistema-contratos.test.ts` |
-| M17 | o conversor volta a apagar todos os pontos | `numero.test.ts` |
-| M18 | branco em campo obrigatório volta a virar 0 | `numero.test.ts` + contrato do formulário |
-| M19 | a região de status passa a receber o texto da resposta | `ia-sistema-contratos.test.ts` |
-| M20 | o `role="log"` perde o `aria-live="off"` | `ia-sistema-contratos.test.ts` |
-| M21 | volta um `id="caixa-de-entrada"` fixo | `ia-sistema-contratos.test.ts` |
-| M22 | o botão flutuante volta ao `aria-label` fixo | `ia-sistema-contratos.test.ts` |
-| M23 | "Abrir em tela cheia" volta a `AI_LINK_BASE` fixo | `ia-sistema-contratos.test.ts` |
-| M24 | um formulário da Segurança volta a import estático | `ia-sistema-dialogos.test.ts` |
-| M25 | falha de rede volta a "Senha atual incorreta" | `erros-de-auth.test.ts` |
-| M26 | `ai_insight_available` perde o interruptor | `settings/constants.test.ts` |
-| M27 | o vazio com filtro perde "Limpar filtros" | `ia-sistema-contratos.test.ts` |
-| M28 | `/busca` volta a `router.replace` por tecla | `ia-sistema-contratos.test.ts` |
-| M29 | o erro da busca volta a "Nada encontrado" | `ia-sistema-contratos.test.ts` |
-| M30 | a paleta perde `role="combobox"` ou o "Ver todos" | `ia-sistema-contratos.test.ts` |
-| M31 | o sino volta ao `aria-label` fixo | `ia-sistema-contratos.test.ts` |
-| M32 | `rotaDoDiario` volta a `?date=` | `nutrition.test.ts` + `deep-links-query-string.test.ts` |
-| M33 | o diário deixa de aceitar `date` | `nutrition-links.test.ts` (leitura do apelido) |
-| M34 | `/tarefas?task=` volta | `deep-links-query-string.test.ts` |
-| M35 | uma tela volta a montar `/ia/…` à mão | `ia-sistema-contratos.test.ts` |
-| M36 | um href de `AI_SECTIONS` diverge de `ai-links` | `ai-links.test.ts` |
-| M37 | o extrator perde `rota:` | `deep-links-inline.test.ts` (piso por arquivo) |
-| M38 | um formulário do lote volta a `toast.error(res.error)` | `ia-sistema-formularios.test.ts` |
-| M39 | o formulário de memória para de mostrar o erro de `modulo` | `ia-sistema-contratos.test.ts` |
-| M40 | a exclusão de conversa perde a trava de `onOpenChange` | `ia-sistema-dialogos.test.ts` |
-| M41 | a retenção perde a trava de `onOpenChange` | `ia-sistema-dialogos.test.ts` |
-| M42 | a gaveta de módulo volta a `w-[17rem]` sem prefixo | `sheet-largura.test.ts` |
-| M43 | o painel volta a ter `w-full` | `sheet-largura.test.ts` |
-| M44 | volta "não consulta seus registros" | `ia-sistema-contratos.test.ts` (contrato de verdade) |
-| M45 | `resumirNota` volta a receber `?? 0` | `receipt-items.test.ts` + contrato |
-| M46 | o consumo volta a escrever "US$ 0,000000" para linha sem custo | teste de `textoDoCusto` |
+| M1 | o cartão vencido volta a mostrar "Confirmar antes de aplicar" ou Recusar habilitado | `cartao.test.ts` + `ia-sistema-contratos.test.ts` |
+| M2 | "aplicada em parte" volta ao mesmo tom e ícone de "aplicada" | `cartao.test.ts` / `estado-da-acao` + contrato |
+| M3 | "Aguardando você" volta a contar `confirmada` | `history.test.ts` |
+| M4 | um panorama ou o "Gerar análise" perde a frase de gasto | `ia-sistema-contratos.test.ts` (D2) |
+| M5 | um `useEffect` em `components/ai` passa a chamar `/api/ia/chat` | `ia-sistema-contratos.test.ts` (varredura) |
+| M6 | desligar a leitura volta a deixar a escrita marcada | `preferencias-cascata.test.ts` |
+| M7 | o orçamento volta a `Number(form.x)` | `numero.test.ts` + contrato |
+| M8 | a região de status do chat some | `ia-sistema-contratos.test.ts` (D3) |
+| M9 | um `id` estático volta à `ChatView` | `ia-sistema-contratos.test.ts` (D3) |
+| M10 | o botão flutuante volta a um nome fixo sem o selo | `ia-sistema-contratos.test.ts` (D3) |
+| M11 | o cartão deixa de avisar a decisão ao painel | `ia-sistema-contratos.test.ts` (D3) |
+| M12 | "Abrir em tela cheia" volta a abrir sem a conversa | `ia-sistema-contratos.test.ts` (D3) |
+| M13 | o formulário do `SecurityCard` volta a import estático | `ia-sistema-dialogos.test.ts` |
+| M14 | uma frase de ausência volta ("não cria nem altera nada", "não consulta seus registros") | `ia-sistema-contratos.test.ts` (derivado do registry) |
+| M15 | o resumo do comprovante volta a `?? 0` | `receipt-items.test.ts` |
+| M16 | o grupo da IA some das preferências | `settings/constants.test.ts` (todo opt-in tem interruptor) |
+| M17 | `/busca` volta a `router.replace` a cada tecla | `ia-sistema-contratos.test.ts` (D6) |
+| M18 | o erro da busca volta a "Nada encontrado" | `ia-sistema-contratos.test.ts` (D6) |
+| M19 | o sino volta a um nome fixo sem a contagem | `ia-sistema-contratos.test.ts` (D6) |
+| M20 | um link da IA volta a `?date=` | `nutrition.test.ts` + `deep-links-query-string.test.ts` |
+| M21 | um href `/ia/…` volta a ser montado à mão numa tela | `ia-sistema-contratos.test.ts` (D7) |
+| M22 | um formulário do lote volta a só `toast.error(result.error)` | `ia-sistema-formularios.test.ts` |
+| M23 | os filtros de `/ia/acoes` perdem `aria-current` | `seletor-de-visao.test.ts` (V1, sem a exceção) + contrato |
+| M24 | a gaveta do `module-shell` volta sem prefixo | `sheet-largura.test.ts` |
+
+**Acréscimos deste spec** (decisões e pontos do §3 que precisam de quem os segure):
+
+| # | Mutação | Tem de derrubar |
+| --- | --- | --- |
+| M25 | `falhou` volta a virar parcial (`status !== "sucesso"`) | `cartao.test.ts` |
+| M26 | a rejeição da promise volta a deixar o cartão girando | `cartao.test.ts` + contrato do `catch` |
+| M27 | `nao_aplicada` volta a ser não final (Confirmar clicável) | `cartao.test.ts` |
+| M28 | o desfecho volta para um `useState` dentro do `ProposalCard` no chat | `ia-sistema-contratos.test.ts` |
+| M29 | o Útil perde `aria-pressed` | `seletor-de-visao.test.ts` / contrato |
+| M30 | o interruptor de escrita volta a `checked={ligada}` | `ia-sistema-contratos.test.ts` |
+| M31 | ligar a leitura religa a escrita | `preferencias-cascata.test.ts` |
+| M32 | `allowVision` sai da cascata | `preferencias-cascata.test.ts` |
+| M33 | "Gerar análise" volta a dividir a transição do feedback | `ia-sistema-contratos.test.ts` |
+| M34 | o conversor volta a apagar todos os pontos ("12.50" vira 1250) | `numero.test.ts` |
+| M35 | branco em campo obrigatório volta a virar 0 | `numero.test.ts` + contrato do formulário |
+| M36 | a região de status passa a receber o texto da resposta | `ia-sistema-contratos.test.ts` |
+| M37 | o `role="log"` perde o `aria-live="off"` | `ia-sistema-contratos.test.ts` |
+| M38 | falha de rede volta a "Senha atual incorreta" | `erros-de-auth.test.ts` |
+| M39 | o vazio com filtro perde "Limpar filtros" | `ia-sistema-contratos.test.ts` |
+| M40 | a paleta perde `role="combobox"` ou o "Ver todos" | `ia-sistema-contratos.test.ts` |
+| M41 | o diário deixa de aceitar `date` | `nutrition-links.test.ts` (leitura do apelido) |
+| M42 | `/tarefas?task=` volta | `deep-links-query-string.test.ts` |
+| M43 | um href de `AI_SECTIONS` diverge de `ai-links` | `ai-links.test.ts` |
+| M44 | o extrator perde `rota:` | `deep-links-inline.test.ts` (piso por arquivo) |
+| M45 | o formulário de memória para de mostrar o erro de `modulo` | `ia-sistema-contratos.test.ts` |
+| M46 | a exclusão de conversa perde a trava de `onOpenChange` | `ia-sistema-dialogos.test.ts` |
+| M47 | a retenção perde a trava de `onOpenChange` | `ia-sistema-dialogos.test.ts` |
+| M48 | o painel volta a ter `w-full` | `sheet-largura.test.ts` |
+| M49 | o consumo volta a escrever "US$ 0,000000" para linha sem custo | teste de `textoDoCusto` |
 
 ---
 
@@ -845,42 +856,50 @@ refotografada a partir dele.
 
 ## 12. Ordem (um commit por passo)
 
-Cada passo fecha com `npx vitest run` verde nos diretórios tocados (salvo a falha de ambiente),
-`tsc`, `eslint` nos arquivos tocados e `git diff` revisado — nada de `.env`, chave, token,
-`service_role`, `AI_MASTER_KEYS` ou chave de provedor, nem em fixture. Passo que toca runtime
-mede build + bundle e escreve os números no corpo do commit. Cada defeito demonstrado sai em par:
-caracterização `(1/2)` vermelha pelo motivo certo, conserto `(2/2)`. ⛔ Nenhum arquivo é editado
-durante build ou dispatch do roteador.
+A ordem é a do briefing (§9). Cada passo fecha com `npx vitest run` verde nos diretórios tocados
+(salvo a falha de ambiente), `tsc`, `eslint` nos arquivos tocados e `git diff` revisado — nada de
+`.env`, chave, token, `service_role`, `AI_MASTER_KEYS` ou chave de provedor, nem em fixture.
+Passo que toca runtime mede build + bundle e escreve os números no corpo do commit. Cada defeito
+demonstrado sai em par: caracterização `(1/2)` vermelha pelo motivo certo, conserto `(2/2)`.
+⛔ Nenhum arquivo é editado durante build ou dispatch do roteador.
 
-0. Este desenho (só docs).
-1. **D1, no principal** — cartão (G-a…G-d) e `/ia/acoes` (E2): `(1/2)` + `(2/2)`. Bundle `/ia`.
-2. **D3, no principal** — painel e streaming (P1–P4, G-h): `(1/2)` + `(2/2)`. Bundle `/ia` e casca.
-3. **D2** — gasto, permissões (G-e) e números (G-f, G-g): `(1/2)` + `(2/2)`.
+0. Este desenho (só docs) + o plano.
+1. **D1, no principal** — cartão (G-a…G-d) e `/ia/acoes` (E2), com E3/E4: `(1/2)` + `(2/2)`.
+   Bundle `/ia`.
+2. **D2, no principal** — gasto, permissões (G-e) e números (G-f, G-g): `(1/2)` + `(2/2)`.
+3. **D3, no principal** — painel e streaming (P1–P4, G-h): `(1/2)` + `(2/2)`. Bundle `/ia` e casca.
 4. **D4** — Configurações: Segurança sob demanda, erros, `loading.tsx`, cascata. Bundle
-   `/configuracoes` (e o teto, se cair abaixo de 250).
+   `/configuracoes` antes × depois (e o teto, se cair abaixo de 250).
 5. **D5** — notificações.
-6. **D6** — `/busca`, paleta e sino. Custo de casca D3 + D6 medido.
-7. **D7** — links e contratos (extrator, V4, `ai-links`, apelido do diário).
+6. **D6** — `/busca`, paleta e sino, com as **68 rotas** antes × depois (custo de casca D3 + D6).
+7. **D7** — links e contrato da query string (extrator, V4, `ai-links`, apelido do diário).
 8. **D8** — diálogos, formulários e alternâncias + `ia-sistema-dialogos.test.ts` e
    `ia-sistema-formularios.test.ts`.
-9. **D9** — gavetas (+ `sheet-largura.test.ts` sem as 2 exceções, no mesmo commit).
-10. **T e Z** — textos e ausência (contrato de verdade derivado do registry).
-11. **V** — chat e painel · ações e insights · comprovantes, consumo e memória · configurações,
-    notificações e busca (um commit cada).
-12. Mutações M1–M46, uma a uma; os cinco comandos; `TZ=UTC npx vitest run` nos testes tocados;
-    prévia refotografada do código final.
+9. **D9 + C2 + Z** — gavetas (+ `sheet-largura.test.ts` sem as 2 exceções, no mesmo commit),
+   textos (contrato de verdade derivado do registry) e ausência.
+10. **V** — chat e painel · subpáginas de `/ia` · Configurações, Notificações e Busca (um commit
+    cada).
+11. Mutações M1–M49, uma a uma; os cinco comandos; `TZ=UTC npx vitest run` nos testes tocados;
+    prévia refeita do código final.
 
-**Roteador:** cada passo substancial passa pelo `ai-router-br:route`, com o pacote fatiado por
-passo. Desenho, decisões, acessibilidade, **os passos 1 e 2 inteiros** (D1 e D3 — Approval Engine
-na tela e streaming) e o que tocar `src/lib/ai/**` ficam no principal. Lições já pagas: o
-auto-init do roteador pode apagar o bloco "AI Router BR" do `CLAUDE.md` (`git restore CLAUDE.md`);
-nenhum arquivo é editado durante um dispatch.
+**Roteador:** cada tarefa substancial passa pelo `ai-router-br:route`, com o TASK PACKAGE
+**fatiado por passo**. Ficam no principal: desenho, decisões e acessibilidade, **os passos 1, 2 e
+3 inteiros** (o significado do estado, a permissão, o streaming e o painel) e qualquer coisa que
+toque `src/lib/ai/approval/**` (o que põe no principal a parte da D7 em
+`approval/commands/{nutrition,memory}*`). Cada `summary_line` é copiada literalmente no commit e
+na entrega, inclusive a do dry-run de passo que ficou no principal. Lições já pagas: o auto-init
+do roteador pode apagar o bloco "AI Router BR" do `CLAUDE.md` (`git restore CLAUDE.md`); dispatch
+em sequência, nunca em paralelo; `scope_violation` por commit de outra sessão leva a fatia ao
+principal.
 
 ---
 
 ## 13. O que o dono confere à mão (logado no `npm run dev` do worktree)
 
-Entregue como lista; **não** declarado feito.
+Entregue como lista; **não** declarado feito. A lista entregue é a do briefing (§11), que contém
+esta e acrescenta o cancelar, o Ctrl+I, fechar o painel no meio da resposta, o clique duplo no
+panorama (um run só em `/ia/consumo`), `?filtro=problemas`, voltar/avançar na busca, o chip de
+fonte da Dieta numa conversa antiga (`?date=`) e as gavetas de IA, Dieta e Treinos.
 
 - **Cartão:** confirmar uma proposta, fechar o painel e reabrir — o cartão continua "Aplicada" e o
   selo do botão baixou; deixar uma vencer — "Prazo encerrado", sem Recusar; com a rede desligada
