@@ -34,6 +34,9 @@ export const EXPORT_TABLES: ExportTableName[] = [
   "people",
   "shared_expenses",
   "receivables",
+  // REDESIGN-03-D — o histórico de recebimentos (M1). Sem ele, restaurar o backup perderia
+  // QUANDO e QUANTO cada terceiro pagou, e todo recebimento parcial voltaria como pendente.
+  "receivable_receipts",
   "import_batches",
   "import_rows",
   "calendar_events",

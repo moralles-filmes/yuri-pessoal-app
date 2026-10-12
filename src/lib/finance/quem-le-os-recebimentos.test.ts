@@ -17,6 +17,7 @@ const TABELA = "receivable_receipts";
 /** Caminho relativo a `src/` → por que este arquivo pode mencionar a tabela. */
 const ALLOWLIST: Record<string, string> = {
   "types/supabase.ts": "tipos gerados do banco (M1)",
+  "lib/settings/export-tables.ts": "a tabela entra no backup do usuario",
 };
 
 /** Os que NUNCA podem mencionar — nem entrar na allowlist. */
