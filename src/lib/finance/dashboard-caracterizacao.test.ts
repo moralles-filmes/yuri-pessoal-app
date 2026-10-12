@@ -698,7 +698,7 @@ describe("5 · §9 — cenário sintético obrigatório", () => {
     expect(resumo9("pendente", [reembolsoSemClassificar]).entradasMeu).toBe(250);
   });
 
-  it("[3+4 ❌] R$ 250 recebidos e R$ 350 restantes são IRREPRESENTÁVEIS — e o preço é medido", () => {
+  it("[3+4] reescrever o `valor` NÃO é o jeito de dizer 'restam R$ 350' — o preço continua medido (a 03-D os representa por recebimento)", () => {
     // `receivables` tem `valor` (um número) e `status` (quatro valores). Não tem
     // `valor_recebido`. Marcar `pago` afirma que os R$ 600 entraram; `pendente` afirma R$ 0.
     expect(totalAReceber([rec9("pendente")])).toBe(600);

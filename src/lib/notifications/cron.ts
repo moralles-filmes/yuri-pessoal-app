@@ -15,7 +15,7 @@ import { proximosCompromissos } from "@/lib/calendar/upcoming";
 import { habitOccursOn } from "@/lib/habits/streak";
 import { reguaDoGastoAlto } from "@/lib/finance/dashboard";
 import { janelaDoGastoAlto, montarEntradas } from "@/lib/finance/pipeline";
-import { anexarRecebimentos } from "@/lib/finance/recebimentos";
+import { anexarRecebimentos, emAberto, resumirRecebivel, saldoCentavos } from "@/lib/finance/recebimentos";
 import { lerRecebimentos } from "@/lib/finance/recebimentos-leitura";
 import type { CalendarEventRow } from "@/types/database";
 import {
@@ -189,19 +189,29 @@ export async function generateForUser(
     status: string;
     installment_id: string | null;
     statement_id: string | null;
+    transaction_id: string | null;
+    pago_em: string | null;
     data_prevista: string | null;
     person: { nome: string } | { nome: string }[] | null;
     statement: { data_vencimento: string } | { data_vencimento: string }[] | null;
   }>;
+  // B4 (03-D): o sino recebe só os EM ABERTO pelo estado derivado, com valor = SALDO.
+  const recebiveisJuntos = anexarRecebimentos(receivables, recebimentosDoDono.linhas);
   const one = <T>(v: T | T[] | null): T | null =>
     Array.isArray(v) ? (v[0] ?? null) : v;
-  const genReceivables = receivables.map((r) => ({
-    id: r.id,
-    personNome: one(r.person)?.nome ?? null,
-    valor: Number(r.valor),
-    status: r.status,
-    dataVencimento: one(r.statement)?.data_vencimento ?? r.data_prevista ?? null,
-  }));
+  const genReceivables = recebiveisJuntos.flatMap((r) => {
+    const resumo = resumirRecebivel(r);
+    if (!emAberto(resumo)) return [];
+    return [{
+      id: r.id,
+      personNome: one(r.person)?.nome ?? null,
+      valor: saldoCentavos(resumo) / 100,
+      // generate.ts só aceita pendente/cobrado; em aberto com a coluna `pago` (soma aberta) entra
+      // como pendente — senão "só os em aberto" deixaria de valer para ele.
+      status: r.status === "cobrado" ? "cobrado" : "pendente",
+      dataVencimento: one(r.statement)?.data_vencimento ?? r.data_prevista ?? null,
+    }];
+  });
 
   /* ── Tarefas ── */
   const genTasks = ((tasksRes.data ?? []) as Array<{

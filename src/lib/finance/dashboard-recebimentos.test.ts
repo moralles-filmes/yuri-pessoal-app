@@ -7,6 +7,7 @@ import {
   perdoadoDoMes,
   proximas6Faturas,
   resumoMes,
+  totalAReceber,
   type DashReceivable,
   type DashStatement,
   type DashTx,
@@ -91,5 +92,36 @@ describe("B1a — D11: o perdoado vira despesa minha", () => {
       const semCampos = resumo([{ statement_id: "st-9", installment_id: null, valor: 600, status }]);
       expect(comCampos).toEqual(semCampos);
     }
+  });
+});
+
+describe("B4 — 'a receber' é o saldo", () => {
+  it("totalAReceber: 600 com 250 recebidos → 350 (com e sem mês)", () => {
+    const recs = [rec({ recebido: 250, ref_month: "2026-06" })];
+    expect(totalAReceber(recs)).toBe(350);
+    expect(totalAReceber(recs, "2026-06")).toBe(350);
+  });
+
+  it("D3 — o [1] do §9 COM recebimento parcial: minha despesa continua 400", () => {
+    const r = resumo([rec({ recebido: 250 })]);
+    expect([r.cartaoMeu, r.terceiros]).toEqual([400, 600]);
+  });
+
+  it("reembolso não é renda: entradas e entradasMeu não sobem com o recebido", () => {
+    const r = resumo([rec({ recebido: 250 })]);
+    expect([r.entradas, r.entradasMeu]).toEqual([0, 0]);
+  });
+
+  it("sem recebimento, o número é o de antes (equivalência com o dado de hoje)", () => {
+    const recs = [
+      rec({ status: "pendente", valor: 10.1 }),
+      rec({ status: "cobrado", valor: 20.2 }),
+      { statement_id: null, installment_id: null, valor: 30.3, status: "pago" },
+      rec({ status: "ignorado", valor: 40.4 }),
+    ];
+    const antigo = recs
+      .filter((r) => r.status === "pendente" || r.status === "cobrado")
+      .reduce((s, r) => s + Math.round(r.valor * 100), 0) / 100;
+    expect(totalAReceber(recs)).toBe(antigo);
   });
 });

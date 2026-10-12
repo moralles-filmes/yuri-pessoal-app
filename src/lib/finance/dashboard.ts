@@ -18,7 +18,7 @@
  * VALOR MEU × TERCEIROS (fonte única, idêntica à /faturas)
  * -------------------------------------------------------
  * - À vista / não-cartão: meu = `valor_pessoal ?? amount`; terceiros = `amount − meu`.
- * - Cartão (por fatura): terceiros = Σ `receivables.valor` da fatura; meu = `total_atual − terceiros`.
+ * - Cartão (por fatura): terceiros = Σ parte do terceiro da fatura (o VALOR, D3; `ignorado` → só o que ele pagou, D11/K3-a); meu = `total_atual − terceiros`.
  * - Entradas (REDESIGN-03-C, E3): `entradas` é BRUTA; `entradasMeu`/`entradasTerceiros` a
  *   repartem pela mesma regra da saída à vista (`valor_pessoal ?? amount`), gravada no ato.
  * `cancelado`/`cancelada`, `transferencia` e `ajuste` ficam fora de entradas/saídas.
@@ -26,11 +26,10 @@
 import { addMonths, format, getDaysInMonth, parseISO } from "date-fns";
 import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
 import { LIMIARES_DE_ALERTA } from "@/lib/finance/limiares-de-alerta";
-import { parteDoTerceiroCentavos, perdoadoCentavos } from "@/lib/finance/recebimentos";
+import { parteDoTerceiroCentavos, pendenteDoPeriodo, perdoadoCentavos } from "@/lib/finance/recebimentos";
 import { occurrenceOn } from "@/lib/finance/recurrence";
 import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
 import {
-  RECEIVABLE_OPEN_STATUSES,
   type Frequency,
   type PaymentMethod,
   type StatementStatus,
@@ -698,15 +697,12 @@ export function projecaoProximosMeses(params: {
 /* ───────────────────────────── A receber & próximas contas ───────────────────────────── */
 
 /**
- * Total ainda a receber de terceiros (status pendente/cobrado). Se `mes` ('yyyy-MM')
- * for informado, conta só os recebíveis cujo mês de referência (`ref_month`) é `mes`.
+ * Total ainda a receber de terceiros: o SALDO dos recebíveis em aberto, pelo estado derivado.
+ * Se `mes` ('yyyy-MM') for informado, conta só os recebíveis cujo `ref_month` é `mes`.
  */
 export function totalAReceber(receivables: DashReceivable[], mes?: string): number {
-  const c = receivables
-    .filter((r) => (RECEIVABLE_OPEN_STATUSES as string[]).includes(r.status))
-    .filter((r) => !mes || r.ref_month === mes)
-    .reduce((s, r) => s + cent(r.valor), 0);
-  return reais(c);
+  // B4 (03-D): o saldo dos em aberto, pelo estado derivado — a soma manda
+  return pendenteDoPeriodo(receivables, mes);
 }
 
 export type ProximasContas = {
