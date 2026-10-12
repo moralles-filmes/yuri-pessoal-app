@@ -82,7 +82,7 @@ import type {
 
 import {
   resumirRecebivel, estadoDoRecebivel, emAberto, saldoCentavos,
-  perdoadoCentavos, secoesDaLista, ultimoRecebimento,
+  perdoadoCentavos, secoesDaLista, ultimoRecebimento, reembolsosRecebidosNoPeriodo,
   ESTADO_LABELS, ESTADOS_DO_RECEBIVEL,
 } from "@/lib/finance/recebimentos";
 
@@ -151,9 +151,10 @@ export function TerceirosClient({
   const totalAReceber = receivables
     .filter((r) => RECEIVABLE_OPEN_STATUSES.includes(r.status))
     .reduce((s, r) => s + r.valor, 0);
-  const recebidoNoMes = receivables
-    .filter((r) => r.status === "pago" && r.pago_em?.slice(0, 7) === currentMonth)
-    .reduce((s, r) => s + r.valor, 0);
+  const recebidoNoMes = reembolsosRecebidosNoPeriodo(receivables, {
+    de: `${currentMonth}-01`,
+    ate: `${currentMonth}-31`,
+  });
 
   const filtered = receivables.filter((r) => {
     if (pessoa !== ALL && r.person_id !== pessoa) return false;
@@ -264,10 +265,10 @@ export function TerceirosClient({
             hint="Pendente + cobrado"
           />
           <StatCard
-            label="Recebido no mês"
+            label={`Reembolsos recebidos em ${monthYearLabel(`${currentMonth}-01`)}`}
             value={formatCurrency(recebidoNoMes)}
             icon={Wallet2}
-            hint={monthYearLabel(`${currentMonth}-01`)}
+            hint="pela data do recebimento"
           />
           {pessoaSel && (
             <StatCard

@@ -210,6 +210,42 @@ describe("os três números do §13.4 + Perdoado", () => {
   });
 });
 
+describe("B3 — reembolsos recebidos no mês (§6.4)", () => {
+  it("soma recebimentos pela data e o legado K0: junho 350 e julho 350", () => {
+    const itens = [
+      rec({
+        valor: 600,
+        status: "pago",
+        pago_em: "2026-07-20",
+        recebimentos: [
+          { valor: 250, recebido_em: "2026-06-05" },
+          { valor: 350, recebido_em: "2026-07-20" },
+        ],
+      }),
+      rec({ valor: 100, status: "pago", pago_em: "2026-06-10", recebimentos: [] }),
+    ];
+    expect(reembolsosRecebidosNoPeriodo(itens, { de: "2026-06-01", ate: "2026-06-31" })).toBe(350);
+    expect(reembolsosRecebidosNoPeriodo(itens, { de: "2026-07-01", ate: "2026-07-31" })).toBe(350);
+  });
+
+  it("só legados preservam a conta antiga em cada mês", () => {
+    const itens = [
+      rec({ valor: 100, status: "pago", pago_em: "2026-05-31", recebimentos: [] }),
+      rec({ valor: 200, status: "pago", pago_em: "2026-06-01", recebimentos: [] }),
+      rec({ valor: 50, status: "pago", pago_em: "2026-06-30", recebimentos: [] }),
+      rec({ valor: 350, status: "pago", pago_em: "2026-07-20", recebimentos: [] }),
+      rec({ valor: 80, status: "pendente", recebimentos: [] }),
+      rec({ valor: 90, status: "ignorado", recebimentos: [] }),
+    ];
+    for (const mes of ["2026-05", "2026-06", "2026-07", "2026-08"]) {
+      const contaAntiga = itens
+        .filter((r) => r.status === "pago" && r.pago_em?.slice(0, 7) === mes)
+        .reduce((s, r) => s + Number(r.valor), 0);
+      expect(reembolsosRecebidosNoPeriodo(itens, { de: `${mes}-01`, ate: `${mes}-31` })).toBe(contaAntiga);
+    }
+  });
+});
+
 describe("apoios", () => {
   it("anexarRecebimentos junta por receivable_id e dá [] a quem não tem", () => {
     const juntos = anexarRecebimentos(

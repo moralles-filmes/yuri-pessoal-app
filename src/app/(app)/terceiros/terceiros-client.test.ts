@@ -12,6 +12,10 @@ const FONTE = semComentarios(
 );
 
 describe("03-D · A5 — a tela de terceiros", () => {
+  it("o recebido no mês usa os recebimentos e o legado K0 (B3)", () => {
+    expect(FONTE).toContain("reembolsosRecebidosNoPeriodo(");
+    expect(FONTE).not.toContain("r.pago_em?.slice(0, 7) === currentMonth");
+  });
   it("não declara cópia local de status em aberto", () => {
     expect(FONTE).not.toMatch(/const\s+OPEN_STATUSES\b/);
   });
