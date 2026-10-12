@@ -3,124 +3,92 @@
 import { revalidatePath } from "next/cache";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
 import { hojeISO } from "@/lib/format";
+import type { ReceivableStatus } from "@/lib/finance/constants";
 import {
-  RECEIVABLE_STATUSES,
-  type ReceivableStatus,
-} from "@/lib/finance/constants";
+  aplicarAcaoEmMassa,
+  decidirRecebivel,
+  desfazerUltimoRecebimento,
+  receberSaldo,
+  registrarRecebimento,
+} from "@/lib/finance/recebimentos-servico";
 import {
-  ORIGENS_DA_ACAO,
-  TAMANHO_DO_BLOCO,
-  dividirEmBlocos,
-  patchDaAcao,
-} from "@/lib/finance/receivables-bulk";
-import { bulkReceivablesSchema } from "@/lib/validators/receivable";
+  bulkReceivablesSchema,
+  receberSaldoSchema,
+  registrarRecebimentoSchema,
+} from "@/lib/validators/receivable";
 import type { ActionResult } from "@/types/finance";
 
 function revalidateReceivables() {
   revalidatePath("/terceiros");
   revalidatePath("/faturas");
+  revalidatePath("/parcelamentos");
 }
 
-/** Marca um recebível como recebido: status 'pago' + data (hoje por padrão), sem apagar nada. */
-export async function markReceivableReceived(
-  id: string,
-  pagoEm?: string,
-): Promise<ActionResult> {
+/** "Receber": recebimento do saldo restante + coluna em `pago` (K1). Data padrão: hoje. */
+export async function markReceivableReceived(id: string, pagoEm?: string): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
+  const parsed = receberSaldoSchema.safeParse({ id, ...(pagoEm ? { recebido_em: pagoEm } : {}) });
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+  const hoje = hojeISO();
+  const res = await receberSaldo(ctx, parsed.data.id, parsed.data.recebido_em ?? hoje, hoje);
+  if (res.ok) revalidateReceivables();
+  return res;
+}
 
-  const data =
-    pagoEm && /^\d{4}-\d{2}-\d{2}$/.test(pagoEm)
-      ? pagoEm
-      : hojeISO();
+/** Registrar um recebimento (parcial ou total). */
+export async function registrarRecebimentoAction(input: unknown): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+  const parsed = registrarRecebimentoSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+  const res = await registrarRecebimento(ctx, parsed.data, hojeISO());
+  if (res.ok) revalidateReceivables();
+  return res;
+}
 
-  const { error } = await ctx.supabase
-    .from("receivables")
-    .update({ status: "pago", pago_em: data })
-    .eq("id", id);
-
-  if (error) return dbError("Não foi possível marcar como recebido.");
-  revalidateReceivables();
-  return { ok: true, data: undefined };
+/** "Desfazer": remove o ÚLTIMO recebimento (ou reabre o legado). */
+export async function desfazerRecebimentoAction(id: string): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+  const parsed = receberSaldoSchema.safeParse({ id });
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+  const res = await desfazerUltimoRecebimento(ctx, parsed.data.id);
+  if (res.ok) revalidateReceivables();
+  return res;
 }
 
 /**
- * Altera o status do recebível. Ao voltar para um status em aberto (pendente/cobrado/ignorado)
- * limpa `pago_em`; ao marcar 'pago' grava a data de hoje. Preserva o restante do histórico.
+ * Decisões do dono: cobrado, ignorado e voltar para pendente. `pago` NÃO entra por aqui:
+ * quitar é sempre por recebimento (K1), e sair de `pago` é o Desfazer.
  */
-export async function setReceivableStatus(
-  id: string,
-  status: ReceivableStatus,
-): Promise<ActionResult> {
+export async function setReceivableStatus(id: string, status: ReceivableStatus): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
-  if (!RECEIVABLE_STATUSES.includes(status)) return dbError("Status inválido.");
-
-  const updates =
-    status === "pago"
-      ? { status, pago_em: hojeISO() }
-      : { status, pago_em: null };
-
-  const { error } = await ctx.supabase
-    .from("receivables")
-    .update(updates)
-    .eq("id", id);
-
-  if (error) return dbError("Não foi possível atualizar o recebível.");
-  revalidateReceivables();
-  return { ok: true, data: undefined };
+  if (status !== "pendente" && status !== "cobrado" && status !== "ignorado") {
+    return dbError("Use Receber para marcar como recebido.");
+  }
+  const res = await decidirRecebivel(ctx, id, status);
+  if (res.ok) revalidateReceivables();
+  return res;
 }
 
 /**
- * Ação em massa: aplica um mesmo status a vários recebíveis de uma vez.
- *
- * TRÊS GARANTIAS:
- * • O filtro de status de origem é REAPLICADO aqui (`.in("status", ORIGENS_DA_ACAO[acao])`).
- *   A conta que a tela fez com `alcanceDaAcao` existe para mostrar o número antes de
- *   confirmar; quem garante é o servidor. Efeito colateral bem-vindo: a ação é idempotente —
- *   rodar duas vezes não faz dano, porque o segundo passe não alcança mais nada.
- * • O UPDATE vai em BLOCOS. O PostgREST manda `id=in.(...)` na query string, que cresce
- *   linear com a seleção; em lote grande a requisição estoura no proxy antes de o banco ver
- *   qualquer coisa.
- * • `afetados` é contado pelas linhas que o banco DEVOLVEU, nunca pelo tamanho da seleção —
- *   senão o toast prometeria uma baixa que não aconteceu.
+ * Ação em massa. O filtro de status de origem é REAPLICADO no servidor, o UPDATE vai em
+ * BLOCOS e `afetados` é contado pelas linhas que o banco devolveu (garantias da Fase 05,
+ * agora dentro de `aplicarAcaoEmMassa`).
  */
 export async function bulkSetReceivableStatus(
   input: unknown,
 ): Promise<ActionResult<{ afetados: number; ignorados: number }>> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
-
   const parsed = bulkReceivablesSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
-  const { acao, pago_em } = parsed.data;
-
-  const ids = [...new Set(parsed.data.ids)];
-  const patch = patchDaAcao(acao, pago_em ?? hojeISO());
-
-  let afetados = 0;
-  for (const bloco of dividirEmBlocos(ids, TAMANHO_DO_BLOCO)) {
-    const { data, error } = await ctx.supabase
-      .from("receivables")
-      .update(patch)
-      .in("id", bloco)
-      .in("status", ORIGENS_DA_ACAO[acao])
-      .select("id");
-
-    if (error) {
-      // Blocos anteriores já foram gravados: informe o que passou em vez de fingir que
-      // nada aconteceu — a tela recarrega e mostra o estado real.
-      return dbError(
-        afetados > 0
-          ? `Falha no meio do lote. ${afetados} recebível(is) foram atualizados; tente novamente para o restante.`
-          : "Não foi possível aplicar a ação aos recebíveis.",
-      );
-    }
-    afetados += data?.length ?? 0;
-  }
-
-  revalidateReceivables();
-  return { ok: true, data: { afetados, ignorados: ids.length - afetados } };
+  const hoje = hojeISO();
+  const res = await aplicarAcaoEmMassa(ctx, parsed.data.ids, parsed.data.acao, parsed.data.pago_em ?? hoje, hoje);
+  if (res.ok) revalidateReceivables();
+  return res;
 }
 
 /** Atualiza a data prevista e/ou as observações de um recebível. */
