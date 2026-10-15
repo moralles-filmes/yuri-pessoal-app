@@ -91,7 +91,11 @@ export function FloatingAssistant({
         <Button
           type="button"
           size="icon"
-          aria-label="Abrir o assistente"
+          // D3 — o selo é um número; o NOME do botão leva a frase inteira. Um span sr-only dentro
+          // do botão seria lido como conteúdo depois do nome, e alguns leitores o omitem.
+          aria-label={
+            aviso ? `Abrir o assistente — ${aviso.texto}` : "Abrir o assistente"
+          }
           aria-keyshortcuts="Control+I Meta+I"
           aria-haspopup="dialog"
           aria-expanded={estado.aberto}
@@ -104,21 +108,17 @@ export function FloatingAssistant({
         >
           <Sparkles className="size-5" />
           {aviso && (
-            <>
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-medium",
-                  aviso.tipo === "proposta"
-                    ? "bg-destructive text-destructive-foreground"
-                    : "bg-primary text-primary-foreground",
-                )}
-              >
-                {aviso.quantas > 0 ? aviso.quantas : "•"}
-              </span>
-              {/* O selo é um número; o leitor de tela recebe a frase inteira. */}
-              <span className="sr-only">{aviso.texto}</span>
-            </>
+            <span
+              aria-hidden
+              className={cn(
+                "absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-medium",
+                aviso.tipo === "proposta"
+                  ? "bg-destructive text-destructive-foreground"
+                  : "bg-primary text-primary-foreground",
+              )}
+            >
+              {aviso.quantas > 0 ? aviso.quantas : "•"}
+            </span>
           )}
         </Button>
       )}

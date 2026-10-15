@@ -61,6 +61,7 @@ import type { PropostaNaTela } from "@/components/ai/proposal-card";
 import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
 import { FraseDeGasto } from "@/components/ai/frase-de-gasto";
 import { DESFECHO_INICIAL, type DesfechoDoCartao } from "@/lib/ai/cartao";
+import { faseDoEvento } from "@/lib/ai/fase-do-chat";
 import type { ConversationMessage, MessageRunInfo } from "@/lib/ai/types";
 
 type Evento =
@@ -211,6 +212,13 @@ export type ConversaDaIa = {
   readonly registrarDesfecho: (proposalId: string, desfecho: DesfechoDoCartao) => void;
   /** O cartão terminou: o selo do botão flutuante deixa de contar esta proposta. */
   readonly avisarDecisao: (proposalId: string) => void;
+  /**
+   * REDESIGN-07-D · D3 — a FASE da resposta (`faseDoEvento`), para a região `role="status"`.
+   * Muda por evento, nunca por delta: é o que o leitor de tela anuncia no lugar do streaming.
+   */
+  readonly fase: string | null;
+  /** A conversa aberta (nasce no evento `start`) — o painel a usa para "abrir em tela cheia". */
+  readonly conversaId: string | null;
 };
 
 export function useConversaDaIa({
@@ -259,6 +267,9 @@ export function useConversaDaIa({
   const [caixaDeEntrada, setCaixaDeEntrada] = React.useState(false);
   const [conversa, setConversa] = React.useState<string | null>(conversationId);
   const [desfechos, setDesfechos] = React.useState<Record<string, DesfechoDoCartao>>({});
+  const [fase, setFase] = React.useState<string | null>(null);
+  /** As propostas que ESTA resposta preparou — as que o `switch` zera junto com o texto. */
+  const propostasDaRespostaRef = React.useRef<string[]>([]);
   const abortRef = React.useRef<AbortController | null>(null);
   const contadorRef = React.useRef(0);
 
@@ -309,6 +320,10 @@ export function useConversaDaIa({
       },
     ]);
     setEnviando(true);
+    // Limpa a região antes da resposta nova: a mesma frase de antes ("Resposta concluída")
+    // não seria anunciada de novo se o conteúdo não mudasse.
+    setFase(null);
+    propostasDaRespostaRef.current = [];
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -330,6 +345,7 @@ export function useConversaDaIa({
           | null;
         const mensagem = corpo?.error ?? "Não foi possível iniciar a resposta.";
         marcarFalha(idProvisorioAssistente, mensagem);
+        setFase(faseDoEvento({ tipo: "error", mensagem }));
         toast.error(mensagem);
         return;
       }
@@ -337,6 +353,7 @@ export function useConversaDaIa({
       await consumirSse(resposta, {
         onStart: (e) => {
           setConversa(e.conversationId);
+          setFase(faseDoEvento({ tipo: "start" }));
           setBolhas((atual) =>
             atual.map((b) =>
               b.id === idProvisorioAssistente
@@ -378,6 +395,18 @@ export function useConversaDaIa({
           // 18-F Bloco 2 — o selo do botão acompanha a limpeza dos cartões, senão ele
           // contaria duas propostas onde o dono vê uma (mesma razão do `propostas: []`).
           onAtividade?.({ tipo: "recomecou" });
+          setFase(faseDoEvento({ tipo: "switch", motivo: e.motivo }));
+          // As propostas zeradas abaixo levam junto os desfechos delas: nenhum cartão as mostra
+          // mais, e o mapa não guarda o que a tela não tem como desenhar.
+          const zeradas = propostasDaRespostaRef.current;
+          propostasDaRespostaRef.current = [];
+          if (zeradas.length > 0) {
+            setDesfechos((atual) => {
+              const resto = { ...atual };
+              for (const id of zeradas) delete resto[id];
+              return resto;
+            });
+          }
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
@@ -408,7 +437,8 @@ export function useConversaDaIa({
             ),
           );
         },
-        onTool: (e) =>
+        onTool: (e) => {
+          setFase(faseDoEvento({ tipo: "tool", toolName: e.toolName }));
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
@@ -425,8 +455,11 @@ export function useConversaDaIa({
                   }
                 : b,
             ),
-          ),
+          );
+        },
         onProposta: (e) => {
+          propostasDaRespostaRef.current.push(e.proposta.id);
+          setFase(faseDoEvento({ tipo: "proposta" }));
           onAtividade?.({
             tipo: "propos",
             id: e.proposta.id,
@@ -442,6 +475,7 @@ export function useConversaDaIa({
         },
         onDone: (e) => {
           onAtividade?.({ tipo: "respondeu" });
+          setFase(faseDoEvento({ tipo: "done" }));
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
@@ -452,6 +486,7 @@ export function useConversaDaIa({
         },
         onError: (e) => {
           marcarFalha(idProvisorioAssistente, e.message);
+          setFase(faseDoEvento({ tipo: "error", mensagem: e.message }));
           toast.error(e.message);
         },
       });
@@ -462,8 +497,11 @@ export function useConversaDaIa({
             i === atual.length - 1 ? { ...b, status: "cancelled" } : b,
           ),
         );
+        setFase(faseDoEvento({ tipo: "cancelada" }));
       } else {
-        marcarFalha(idProvisorioAssistente, "A conexão caiu durante a resposta.");
+        const mensagem = "A conexão caiu durante a resposta.";
+        marcarFalha(idProvisorioAssistente, mensagem);
+        setFase(faseDoEvento({ tipo: "error", mensagem }));
       }
     } finally {
       setEnviando(false);
@@ -544,6 +582,8 @@ export function useConversaDaIa({
     desfechos,
     registrarDesfecho,
     avisarDecisao,
+    fase,
+    conversaId: conversa,
   };
 }
 
@@ -579,12 +619,36 @@ export function ChatView({
     desfechos,
     registrarDesfecho,
     avisarDecisao,
+    fase,
   } = conversa;
   const fimRef = React.useRef<HTMLDivElement | null>(null);
-  // A vista aparece em `/ia` e no painel flutuante: id escrito à mão colidiria entre os dois.
+  const campoRef = React.useRef<HTMLTextAreaElement | null>(null);
+  /*
+    A vista aparece em `/ia` e no painel flutuante: id escrito à mão colidiria entre os dois —
+    e pela regra do DOM o `<label for>` do painel ativava o PRIMEIRO elemento com o id, que era
+    o controle da página por baixo da gaveta (G-h).
+  */
   const idBase = React.useId();
   const idDoGastoPanorama = `${idBase}-gasto-panorama`;
   const idDoGastoEnvio = `${idBase}-gasto-envio`;
+  const idDoContexto = `${idBase}-contexto`;
+  const idDaCaixa = `${idBase}-caixa`;
+  const idDoCampo = `${idBase}-campo`;
+  const idDoAtalho = `${idBase}-atalho`;
+
+  /*
+    D3 — terminada a resposta, o foco volta ao campo para a próxima pergunta, mas SÓ se ele
+    estiver solto no `body` (o botão Enviar desabilitado o derruba ali). Quem já foi para outro
+    lugar — um cartão de proposta, um link — não é puxado de volta.
+  */
+  const enviandoAntesRef = React.useRef(enviando);
+  React.useEffect(() => {
+    const terminou = enviandoAntesRef.current && !enviando;
+    enviandoAntesRef.current = enviando;
+    if (!terminou) return;
+    const ativo = document.activeElement;
+    if (ativo === null || ativo === document.body) campoRef.current?.focus();
+  }, [enviando]);
 
   React.useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -615,7 +679,16 @@ export function ChatView({
         </div>
       )}
 
-      <div className="space-y-4">
+      {/*
+        D3 — QUEM ANUNCIA É ESTA REGIÃO, E ELA SÓ DIZ A FASE. A conversa abaixo é `role="log"`
+        com `aria-live="off"`: sem isso o papel `log` traz `polite` implícito e o leitor de
+        tela leria cada pedaço do streaming.
+      */}
+      <p role="status" className="sr-only">
+        {fase}
+      </p>
+
+      <div role="log" aria-live="off" aria-label="Conversa com o assistente" className="space-y-4">
         {bolhas.length === 0 && (
           <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
             Nenhuma mensagem ainda. Escreva abaixo para começar.
@@ -639,6 +712,10 @@ export function ChatView({
                 b.status === "failed" && "border-destructive/40",
               )}
             >
+              {/* Quem falou, para quem não vê o alinhamento das bolhas. */}
+              <span className="sr-only">
+                {b.role === "user" ? "Você disse: " : "O assistente respondeu: "}
+              </span>
               <p className="whitespace-pre-wrap break-words">
                 {b.content ||
                   (b.status === "streaming" ? (
@@ -777,10 +854,7 @@ export function ChatView({
           estática do servidor; nunca o que está escrito na tela.
         */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <Label
-            htmlFor="contexto-da-pagina"
-            className="shrink-0 text-xs text-muted-foreground"
-          >
+          <Label htmlFor={idDoContexto} className="shrink-0 text-xs text-muted-foreground">
             Contexto
           </Label>
           <Select
@@ -791,7 +865,7 @@ export function ChatView({
             disabled={!podeConversar || enviando}
           >
             <SelectTrigger
-              id="contexto-da-pagina"
+              id={idDoContexto}
               className="h-9 w-full min-w-0 sm:w-[15rem]"
               aria-label="Página que dá contexto à conversa"
             >
@@ -815,13 +889,13 @@ export function ChatView({
           */}
           <div className="flex shrink-0 items-center gap-2">
             <Switch
-              id="caixa-de-entrada"
+              id={idDaCaixa}
               checked={caixaDeEntrada}
               onCheckedChange={setCaixaDeEntrada}
               disabled={!podeConversar || enviando}
               aria-describedby={idDoGastoEnvio}
             />
-            <Label htmlFor="caixa-de-entrada" className="text-xs text-muted-foreground">
+            <Label htmlFor={idDaCaixa} className="text-xs text-muted-foreground">
               Caixa de entrada
             </Label>
           </div>
@@ -830,7 +904,13 @@ export function ChatView({
           </p>
         </div>
 
+        <label htmlFor={idDoCampo} className="sr-only">
+          Mensagem para o assistente
+        </label>
         <Textarea
+          id={idDoCampo}
+          ref={campoRef}
+          aria-describedby={`${idDoAtalho} ${idDoGastoEnvio}`}
           value={texto}
           onChange={(e) => setTexto(e.target.value.slice(0, MAX_CHAT_TEXT))}
           onKeyDown={(e) => {
@@ -844,7 +924,7 @@ export function ChatView({
               ? "Configure um provedor de IA para começar."
               : caixaDeEntrada
                 ? "Escreva o item solto — ele diz onde guardar e prepara a ação."
-                : "Escreva sua mensagem… (Ctrl+Enter envia)"
+                : "Escreva sua mensagem…"
           }
           rows={3}
           disabled={!podeConversar || enviando}
@@ -858,6 +938,8 @@ export function ChatView({
               restante < 500 ? "text-destructive" : "text-muted-foreground",
             )}
           >
+            {/* O atalho sai do placeholder (que some ao digitar) e descreve o campo. */}
+            <span id={idDoAtalho}>Ctrl+Enter envia</span> ·{" "}
             {restante.toLocaleString("pt-BR")} caracteres restantes
           </span>
 

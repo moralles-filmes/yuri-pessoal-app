@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import { ChatView, useConversaDaIa } from "@/components/ai/chat-client";
 import { definirBotaoFlutuante, estadoDoPainelDaIa } from "@/lib/actions/ai-panel";
-import { AI_LINK_BASE } from "@/lib/search/ai-links";
+import { AI_LINK_BASE, conversationLink } from "@/lib/search/ai-links";
 import {
   ATALHO_DO_PAINEL,
   ROTULO_DO_CANTO,
@@ -191,8 +191,16 @@ export function FloatingAssistantPanel({
           <SheetDescription>{RESUMO_DO_ASSISTENTE}</SheetDescription>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={AI_LINK_BASE} onClick={() => onOpenChange(false)}>
-                <SquareArrowOutUpRight className="size-4" /> Abrir em tela cheia
+              {/*
+                D3 — com a conversa já aberta, a tela cheia é ESTA conversa; antes da primeira
+                resposta ainda não há conversa, e o botão leva ao chat vazio.
+              */}
+              <Link
+                href={conversa.conversaId ? conversationLink(conversa.conversaId) : AI_LINK_BASE}
+                onClick={() => onOpenChange(false)}
+              >
+                <SquareArrowOutUpRight className="size-4" />{" "}
+                {conversa.conversaId ? "Abrir esta conversa em tela cheia" : "Abrir em tela cheia"}
               </Link>
             </Button>
             <Button
