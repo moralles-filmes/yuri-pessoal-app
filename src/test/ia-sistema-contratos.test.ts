@@ -117,6 +117,21 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: CHAT, exige: /conversaId: conversa\b/, porque: "o hook expõe a conversa aberta para o painel" },
   { arquivo: "components/ai/floating-assistant-panel.tsx", exige: /conversationLink\(conversa\.conversaId\)/, porque: "'Abrir em tela cheia' abre ESTA conversa (M12)" },
   { arquivo: "components/ai/floating-assistant.tsx", exige: /aria-label=\{\s*aviso \? `Abrir o assistente — \$\{aviso\.texto\}` : "Abrir o assistente"\s*\}/, porque: "o nome do botão inclui o que o selo diz (M10)" },
+
+  // ── D4 — Configurações ──
+  ...[
+    "app/(app)/configuracoes/loading.tsx",
+    "app/(app)/busca/loading.tsx",
+    "app/(app)/ia/consumo/loading.tsx",
+    "app/(app)/ia/configuracoes/loading.tsx",
+    "app/(app)/ia/conversas/loading.tsx",
+  ].map((arquivo) => ({
+    arquivo,
+    exige: /export default function \w+\(\)[\s\S]*?<Skeleton\b/,
+    porque: "a rota tem o esqueleto do próprio desenho, não o de bolhas de conversa herdado de /ia",
+  })),
+  { arquivo: "app/(app)/configuracoes/page.tsx", exige: /Promise\.all\(\[[\s\S]*?\.then\(\(u\) => \(u \? getProviderCards\(u\.id\) : \[\]\)\)/, porque: "as chaves dos provedores entram no Promise.all, encadeadas ao usuário (C1)" },
+  { arquivo: "components/settings/ai-card.tsx", exige: /settingsLink\(\)/, porque: "o link de /ia/configuracoes sai do construtor de ai-links" },
 ];
 
 export const PROIBIDOS: Contrato[] = [
@@ -155,6 +170,10 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: CHAT, exige: /\(Ctrl\+Enter envia\)/, porque: "o atalho sai do placeholder (some ao digitar) e vira descrição do campo" },
   { arquivo: "components/ai/floating-assistant.tsx", exige: /aria-label="Abrir o assistente"/, porque: "nome fixo esconde o selo de quem não o vê (M10)" },
   { arquivo: "components/ai/floating-assistant.tsx", exige: /<span className="sr-only">\{aviso\.texto\}<\/span>/, porque: "a frase do selo entra no nome, não num span que o leitor lê como conteúdo do botão" },
+
+  // ── D4 ──
+  { arquivo: "app/(app)/configuracoes/page.tsx", exige: /await getProviderCards\(/, porque: "a leitura das chaves não espera o Promise.all terminar para começar" },
+  { arquivo: "components/settings/ai-card.tsx", exige: /"\/ia\/configuracoes"/, porque: "href de /ia montado à mão diverge do construtor" },
 ];
 
 /**
