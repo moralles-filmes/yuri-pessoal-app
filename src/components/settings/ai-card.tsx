@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { AI_PROVIDER_LABEL } from "@/lib/ai/core/contracts";
 import type { ProviderCardView } from "@/lib/ai/types";
+import { settingsLink } from "@/lib/search/ai-links";
 
 /**
  * Fase 18-A — Card de IA dentro de **Configurações**.
@@ -46,7 +47,7 @@ export function AiCard({
             </CardDescription>
           </div>
           <Button asChild size="sm">
-            <Link href="/ia/configuracoes">Abrir configurações</Link>
+            <Link href={settingsLink()}>Abrir configurações</Link>
           </Button>
         </div>
       </CardHeader>

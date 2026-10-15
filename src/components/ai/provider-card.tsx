@@ -90,6 +90,7 @@ export function ProviderCard({
   const [erros, setErros] = React.useState<Partial<Record<CampoComErro, string>>>({});
   const [removerAberto, setRemoverAberto] = React.useState(false);
   const removerMontado = useLazyDialog(removerAberto);
+  const botaoDeRemover = React.useRef<HTMLButtonElement | null>(null);
 
   function limparErro(campo: CampoComErro) {
     setErros((e) => {
@@ -265,9 +266,11 @@ export function ProviderCard({
               Testar conexão
             </Button>
             <Button
+              ref={botaoDeRemover}
               type="button"
               variant="ghost"
               size="sm"
+              aria-haspopup="dialog"
               onClick={() => setRemoverAberto(true)}
               disabled={salvandoChave}
               className="text-destructive hover:text-destructive"
@@ -388,6 +391,7 @@ export function ProviderCard({
             onAbertoChange={setRemoverAberto}
             provider={card.provider}
             rotulo={card.label}
+            focoDeVolta={botaoDeRemover}
             onRemovida={() => {
               setRemoverAberto(false);
               router.refresh();

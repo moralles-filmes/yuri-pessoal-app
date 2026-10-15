@@ -32,12 +32,15 @@ export function RemoverChaveDialog({
   provider,
   rotulo,
   onRemovida,
+  focoDeVolta,
 }: {
   readonly aberto: boolean;
   readonly onAbertoChange: (aberto: boolean) => void;
   readonly provider: AiProviderId;
   readonly rotulo: string;
   readonly onRemovida: () => void;
+  /** O botão que abriu: sem `DialogTrigger`, o Radix não sabe para onde devolver o foco. */
+  readonly focoDeVolta?: React.RefObject<HTMLButtonElement | null>;
 }) {
   const [removendo, setRemovendo] = React.useState(false);
 
@@ -67,7 +70,14 @@ export function RemoverChaveDialog({
 
   return (
     <Dialog open={aberto} onOpenChange={aoMudarAbertura}>
-      <DialogContent showCloseButton={!removendo}>
+      <DialogContent
+        showCloseButton={!removendo}
+        onCloseAutoFocus={(e) => {
+          if (!focoDeVolta?.current) return;
+          e.preventDefault();
+          focoDeVolta.current.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Remover a chave de {rotulo}?</DialogTitle>
           <DialogDescription>

@@ -130,6 +130,7 @@ export const CONTRATOS: Contrato[] = [
     exige: /export default function \w+\(\)[\s\S]*?<Skeleton\b/,
     porque: "a rota tem o esqueleto do próprio desenho, não o de bolhas de conversa herdado de /ia",
   })),
+  { arquivo: "app/(app)/ia/conversas/[id]/loading.tsx", exige: /export \{ default \} from "\.\.\/\.\.\/loading"/, porque: "a conversa aberta é o chat: mantém o esqueleto de bolhas, não herda o da lista" },
   { arquivo: "app/(app)/configuracoes/page.tsx", exige: /Promise\.all\(\[[\s\S]*?\.then\(\(u\) => \(u \? getProviderCards\(u\.id\) : \[\]\)\)/, porque: "as chaves dos provedores entram no Promise.all, encadeadas ao usuário (C1)" },
   { arquivo: "components/settings/ai-card.tsx", exige: /settingsLink\(\)/, porque: "o link de /ia/configuracoes sai do construtor de ai-links" },
 ];

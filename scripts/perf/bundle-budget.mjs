@@ -39,20 +39,14 @@ const ORCAMENTO_KB = 250;
  * ⛔ Uma exceção sem motivo é um orçamento que não existe. Para acrescentar uma, meça primeiro
  * e escreva por que a rota não pode caber — não arredonde o teto para cima só para o CI passar.
  */
-const EXCECOES = {
-  "/(app)/configuracoes": {
-    tetoKb: 285,
-    porque:
-      "Mostra sete cartões de formulário ao mesmo tempo, todos visíveis sem interação. " +
-      "Carregá-los sob demanda trocaria peso por piscada numa tela onde não há clique para " +
-      "esconder o custo. Medido em 281,4 KB gz em 2026-09-19, depois do Bloco 2 da 18-F " +
-      "(o botão flutuante mora na casca, então ele e o ícone novo do lucide entram em toda " +
-      "rota `(app)` — o painel fica fora, atrás do `next/dynamic`); eram 279,2 KB depois do " +
-      "Bloco 1 e 276,8 KB antes dela. ⛔ A FOLGA CAIU PARA 3,6 KB, e este teto NÃO SOBE: " +
-      "uma exceção que cresce a cada bloco é um orçamento que não existe. O caminho é tirar " +
-      "import da casca.",
-  },
-};
+/**
+ * Vazio desde 2026-10-15 (REDESIGN-07-D · D4). A única exceção era `/(app)/configuracoes`
+ * (teto de 285 KB gz, medida em 282,1): o que a mantinha ali era a Segurança, o único cartão da
+ * rota que importava `react-hook-form` + `zod`. Com os dois formulários em diálogos sob demanda
+ * a rota caiu para 205,6 KB gz, e o teto próprio saiu no mesmo commit — exceção que sobra depois
+ * de o motivo sumir vira folga para a próxima regressão passar calada.
+ */
+const EXCECOES = {};
 
 const RAIZ = ".next";
 const MANIFESTS = join(RAIZ, "server/app/**/page_client-reference-manifest.js");

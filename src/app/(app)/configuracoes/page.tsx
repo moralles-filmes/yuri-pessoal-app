@@ -43,15 +43,17 @@ const SHORTCUTS = [
 ] as const;
 
 export default async function ConfiguracoesPage() {
-  const [user, settings, google] = await Promise.all([
-    getCurrentUser(),
-    getUserSettings(),
-    getGoogleConnectionStatus(),
-  ]);
-
   // Fase 18-A: as chaves dos provedores de IA moram aqui, em Configurações — é onde o
   // usuário procura por "chave de API". A tela completa fica em `/ia/configuracoes`.
-  const aiCards = user ? await getProviderCards(user.id) : [];
+  // REDESIGN-07-D · D4 — elas entram no MESMO `Promise.all`, encadeadas ao usuário: antes a
+  // leitura só começava depois de as outras três terminarem (C1).
+  const usuario = getCurrentUser();
+  const [user, settings, google, aiCards] = await Promise.all([
+    usuario,
+    getUserSettings(),
+    getGoogleConnectionStatus(),
+    usuario.then((u) => (u ? getProviderCards(u.id) : [])),
+  ]);
 
   return (
     <div className="space-y-6">

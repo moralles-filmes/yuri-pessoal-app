@@ -6,8 +6,9 @@
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
  * ║ ⛔ ESTE ARQUIVO MORA NA CASCA DO APP, ENTÃO TUDO QUE ELE IMPORTA ENTRA NAS 67 ROTAS.   ║
  * ║                                                                                       ║
- * ║ Medido em 2026-09-19, depois do Bloco 1: a rota mais apertada é `/(app)/configuracoes`║
- * ║ com 279,2 KB gz de um teto próprio de 285 — **5,8 KB de folga**. É esse o orçamento   ║
+ * ║ Medido em 2026-10-15 (REDESIGN-07-D · D4): `/(app)/configuracoes` saiu do teto próprio ║
+ * ║ (205,6 KB gz, sem a Segurança no 1º carregamento), e a rota mais apertada passou a ser ║
+ * ║ `/(app)/todo`, com 238,3 KB gz dos 250 — **11,7 KB de folga**. É esse o orçamento     ║
  * ║ deste arquivo e de tudo que ele alcança.                                              ║
  * ║                                                                                       ║
  * ║ Por isso ele NÃO importa: `@/lib/ai/constants` (texto grande, hoje só nas rotas de    ║
