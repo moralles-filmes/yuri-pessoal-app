@@ -13,7 +13,7 @@
  *  • NÃO oferece módulo cuja chave `allow_*` está desligada.
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { PropostaNaTela } from "@/components/ai/proposal-card";
 import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
+import { FraseDeGasto } from "@/components/ai/frase-de-gasto";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
@@ -103,6 +104,10 @@ export function InsightsClient({
 }) {
   const router = useRouter();
   const [pendente, startTransition] = useTransition();
+  // D2 — transição PRÓPRIA: clicar "Útil" num cartão não gira o botão de gerar, e gerar não
+  // trava o feedback dos cartões (M33).
+  const [gerando, iniciarGeracao] = useTransition();
+  const idDoGasto = useId();
   const [modulo, setModulo] = useState<ModuloDeInsight | "">(disponiveis[0] ?? "");
   const [mostrarTodos, setMostrarTodos] = useState(false);
 
@@ -118,7 +123,7 @@ export function InsightsClient({
 
   function gerar() {
     if (!modulo) return;
-    startTransition(async () => {
+    iniciarGeracao(async () => {
       const r = await gerarInsight({ modulo });
       if (!r.ok) {
         toast.error(r.error);
@@ -153,57 +158,65 @@ export function InsightsClient({
 
   return (
     <div className="space-y-4">
-      {/* ⚠️ `min-w-0` no lado do texto: sem ele o select empurra o botão para fora do card. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3">
-        {disponiveis.length === 0 ? (
-          <p className="min-w-0 text-sm text-muted-foreground">
-            Nenhum módulo está liberado para a IA ler.{" "}
-            <Link href="/ia/configuracoes" className="underline">
-              Ligue uma chave em Configurações
-            </Link>{" "}
-            para poder pedir uma análise.
-          </p>
-        ) : (
-          <>
-            <Select
-              value={modulo}
-              onValueChange={(v) => setModulo(v as ModuloDeInsight)}
-              disabled={pendente}
+      <div className="space-y-2 rounded-xl border p-3">
+        {/* ⚠️ `min-w-0` no lado do texto: sem ele o select empurra o botão para fora do card. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {disponiveis.length === 0 ? (
+            <p className="min-w-0 text-sm text-muted-foreground">
+              Nenhum módulo está liberado para a IA ler.{" "}
+              <Link href="/ia/configuracoes" className="underline">
+                Ligue uma chave em Configurações
+              </Link>{" "}
+              para poder pedir uma análise.
+            </p>
+          ) : (
+            <>
+              <Select
+                value={modulo}
+                onValueChange={(v) => setModulo(v as ModuloDeInsight)}
+                disabled={gerando}
+              >
+                <SelectTrigger className="w-full sm:w-64">
+                  <SelectValue placeholder="Escolha o módulo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {disponiveis.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {NOME_DO_MODULO[m]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                aria-describedby={idDoGasto}
+                onClick={gerar}
+                disabled={gerando || !modulo}
+              >
+                {gerando ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Sparkles className="size-4" />
+                )}
+                Gerar análise
+              </Button>
+            </>
+          )}
+          {ocultos > 0 ? (
+            // Alternância com rótulo FIXO e `aria-pressed`: um rótulo que troca de sentido a cada
+            // clique ("Mostrar só…" / "Mostrar as…") deixa quem ouve sem saber o que está valendo.
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              aria-pressed={mostrarTodos}
+              onClick={() => setMostrarTodos((v) => !v)}
             >
-              <SelectTrigger className="w-full sm:w-64">
-                <SelectValue placeholder="Escolha o módulo" />
-              </SelectTrigger>
-              <SelectContent>
-                {disponiveis.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {NOME_DO_MODULO[m]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={gerar} disabled={pendente || !modulo}>
-              {pendente ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Sparkles className="size-4" />
-              )}
-              Gerar análise
+              {`Mostrar também as ${ocultos} fora da lista`}
             </Button>
-          </>
-        )}
-        {ocultos > 0 ? (
-          // Alternância com rótulo FIXO e `aria-pressed`: um rótulo que troca de sentido a cada
-          // clique ("Mostrar só…" / "Mostrar as…") deixa quem ouve sem saber o que está valendo.
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto"
-            aria-pressed={mostrarTodos}
-            onClick={() => setMostrarTodos((v) => !v)}
-          >
-            {`Mostrar também as ${ocultos} fora da lista`}
-          </Button>
-        ) : null}
+          ) : null}
+        </div>
+        {/* D2 — gerar gasta, e isso fica dito sob o seletor, antes do clique. */}
+        {disponiveis.length > 0 ? <FraseDeGasto id={idDoGasto} /> : null}
       </div>
 
       {visiveis.length === 0 ? (

@@ -13,6 +13,7 @@
  */
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -43,17 +44,34 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ariaDoErro, ErroDoCampo } from "@/components/shared/erro-do-campo";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { formatDate } from "@/lib/format";
 import { activeModelsFor } from "@/lib/ai/core/models";
 import {
-  removeAiCredential,
   saveAiCredential,
   saveAiProviderConfig,
   testAiCredential,
 } from "@/lib/actions/ai-providers";
 import type { ProviderCardView } from "@/lib/ai/types";
+import { lerDecimal } from "@/lib/ai/numero";
+import { errosDaAction } from "@/lib/forms/mensagem-da-action";
 
 const NENHUM = "__nenhum__";
+
+/** Os campos deste cartão que podem receber erro (do conversor ou da action). */
+const CAMPOS_COM_ERRO = ["dailyLimit", "monthlyLimit"] as const;
+type CampoComErro = (typeof CAMPOS_COM_ERRO)[number];
+
+/**
+ * D2 — "Remover chave" confirma num diálogo próprio, que só baixa na primeira abertura
+ * (regra 2 do carregamento sob demanda). Objeto literal escrito AQUI: o compilador do Next o
+ * lê estaticamente e recusa constante compartilhada.
+ */
+const RemoverChaveDialog = dynamic(
+  () => import("@/components/ai/remover-chave-dialog").then((m) => m.RemoverChaveDialog),
+  { ssr: false, loading: () => null },
+);
 
 export function ProviderCard({
   card,
@@ -69,6 +87,17 @@ export function ProviderCard({
   const [salvandoChave, setSalvandoChave] = React.useState(false);
   const [testando, setTestando] = React.useState(false);
   const [salvandoConfig, setSalvandoConfig] = React.useState(false);
+  const [erros, setErros] = React.useState<Partial<Record<CampoComErro, string>>>({});
+  const [removerAberto, setRemoverAberto] = React.useState(false);
+  const removerMontado = useLazyDialog(removerAberto);
+
+  function limparErro(campo: CampoComErro) {
+    setErros((e) => {
+      const resto = { ...e };
+      delete resto[campo];
+      return resto;
+    });
+  }
 
   const [form, setForm] = React.useState({
     enabled: card.enabled,
@@ -116,19 +145,19 @@ export function ProviderCard({
     router.refresh();
   }
 
-  async function onRemover() {
-    setSalvandoChave(true);
-    const r = await removeAiCredential({ provider: card.provider });
-    setSalvandoChave(false);
-    if (!r.ok) {
-      toast.error(r.error);
+  async function onSalvarConfig() {
+    // Em branco é "sem limite próprio" (null), nunca zero; o que não é número fica no campo.
+    const dia = lerDecimal(form.dailyLimit);
+    const mes = lerDecimal(form.monthlyLimit);
+    if (!dia.ok || !mes.ok) {
+      setErros({
+        ...(dia.ok ? {} : { dailyLimit: dia.motivo }),
+        ...(mes.ok ? {} : { monthlyLimit: mes.motivo }),
+      });
+      document.getElementById(`${dia.ok ? "mes" : "dia"}-${card.provider}`)?.focus();
       return;
     }
-    toast.success("Credencial removida e provedor desativado.");
-    router.refresh();
-  }
-
-  async function onSalvarConfig() {
+    setErros({});
     setSalvandoConfig(true);
     const r = await saveAiProviderConfig({
       provider: card.provider,
@@ -140,16 +169,18 @@ export function ProviderCard({
       visionModel: null,
       timeoutMs: card.timeoutMs,
       maxRetries: card.maxRetries,
-      dailyLimit: form.dailyLimit.trim() === "" ? null : Number(form.dailyLimit),
-      monthlyLimit: form.monthlyLimit.trim() === "" ? null : Number(form.monthlyLimit),
+      dailyLimit: dia.valor,
+      monthlyLimit: mes.valor,
       fallbackAllowed: form.fallbackAllowed,
       fallbackOrder: card.fallbackOrder,
     });
     setSalvandoConfig(false);
 
     if (!r.ok) {
-      const primeiro = Object.values(r.fieldErrors ?? {})[0]?.[0];
-      toast.error(primeiro ?? r.error);
+      // Erro de campo que existe aqui fica sob o campo; o resto sobe com o nome do campo.
+      const { porCampo, texto } = errosDaAction(r, CAMPOS_COM_ERRO);
+      setErros(porCampo);
+      toast.error(texto);
       return;
     }
     toast.success("Configuração salva.");
@@ -237,7 +268,7 @@ export function ProviderCard({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => void onRemover()}
+              onClick={() => setRemoverAberto(true)}
               disabled={salvandoChave}
               className="text-destructive hover:text-destructive"
             >
@@ -279,9 +310,14 @@ export function ProviderCard({
               id={`dia-${card.provider}`}
               inputMode="decimal"
               value={form.dailyLimit}
-              onChange={(e) => setForm((f) => ({ ...f, dailyLimit: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, dailyLimit: e.target.value }));
+                limparErro("dailyLimit");
+              }}
               placeholder="sem limite"
+              {...ariaDoErro(`dia-${card.provider}-erro`, erros.dailyLimit)}
             />
+            <ErroDoCampo id={`dia-${card.provider}-erro`} mensagem={erros.dailyLimit} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`mes-${card.provider}`}>Limite mensal (USD)</Label>
@@ -289,9 +325,14 @@ export function ProviderCard({
               id={`mes-${card.provider}`}
               inputMode="decimal"
               value={form.monthlyLimit}
-              onChange={(e) => setForm((f) => ({ ...f, monthlyLimit: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, monthlyLimit: e.target.value }));
+                limparErro("monthlyLimit");
+              }}
               placeholder="sem limite"
+              {...ariaDoErro(`mes-${card.provider}-erro`, erros.monthlyLimit)}
             />
+            <ErroDoCampo id={`mes-${card.provider}-erro`} mensagem={erros.monthlyLimit} />
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -340,6 +381,19 @@ export function ProviderCard({
           {salvandoConfig && <Loader2 className="size-4 animate-spin" />}
           Salvar configuração
         </Button>
+
+        {removerMontado && (
+          <RemoverChaveDialog
+            aberto={removerAberto}
+            onAbertoChange={setRemoverAberto}
+            provider={card.provider}
+            rotulo={card.label}
+            onRemovida={() => {
+              setRemoverAberto(false);
+              router.refresh();
+            }}
+          />
+        )}
       </CardContent>
     </Card>
   );

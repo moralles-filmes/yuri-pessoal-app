@@ -70,18 +70,29 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: PREFERENCIAS, exige: /alternarLeitura\(/, porque: "desligar a leitura desliga a escrita que depende dela (M6)" },
   { arquivo: PREFERENCIAS, exige: /alternarEscrita\(/, porque: "desligar a escrita do Financeiro desliga o envio de comprovantes (M32)" },
   { arquivo: PREFERENCIAS, exige: /function PermissaoDeEscritaLinha[\s\S]*?checked=\{escritaVisivel\(/, porque: "o interruptor de escrita mostra leitura E escrita (M30)" },
-  { arquivo: PREFERENCIAS, exige: /checked=\{visaoVisivel\(form\)\}/, porque: "o envio de comprovantes mostra visão E as duas chaves do Financeiro" },
-  { arquivo: PREFERENCIAS, exige: /permissoesParaSalvar\(form\)/, porque: "o que se salva é o que se vê" },
+  { arquivo: PREFERENCIAS, exige: /checked=\{visaoVisivel\(form, catalogo\.escritas\)\}/, porque: "o envio de comprovantes mostra visão E as duas chaves do Financeiro" },
+  { arquivo: PREFERENCIAS, exige: /permissoesParaSalvar\(form, catalogo\.escritas\)/, porque: "o que se salva é o que se vê" },
   { arquivo: PREFERENCIAS, exige: /aria-describedby=\{[^}]*idDoAviso/, porque: "'Ligue antes a leitura de X' descreve o interruptor desabilitado" },
   { arquivo: PREFERENCIAS, exige: /text-warning-ink/, porque: "o aviso usa o token de tom, não uma cor solta" },
+  { arquivo: "app/(app)/ia/configuracoes/page.tsx", exige: /catalogo=\{catalogoDasPermissoes\(\)\}/, porque: "o catálogo das chaves é derivado do registry no servidor e chega por prop" },
   { arquivo: PREFERENCIAS, exige: /Com o botão oculto, o canto não se aplica/, porque: "o seletor de canto desabilitado diz por quê" },
 
   // ── D2 — números: um conversor só, e nada vira 0 por omissão (M7, M35) ──
   { arquivo: PREFERENCIAS, exige: /lerDecimal\(/, porque: "'1,5' é lido como 1,5, não como NaN em inglês num toast" },
-  { arquivo: PREFERENCIAS, exige: /exigirValor\(/, porque: "teto do job, margem e limites em branco são recusados no campo (M35)" },
-  { arquivo: PREFERENCIAS, exige: /lerInteiro\(/, porque: "os limites de taxa são inteiros, e fração é recusada com motivo" },
-  { arquivo: PREFERENCIAS, exige: /aria-invalid=/, porque: "o erro fica no campo, não num toast" },
+  ...(["jobMonthlyBudget", "reservationMargin"] as const).map((campo) => ({
+    arquivo: PREFERENCIAS,
+    exige: new RegExp(`exigirValor\\(\\s*lerDecimal\\(form\\.${campo}\\)`),
+    porque: `${campo} em branco é recusado no campo, nunca vira 0 (M35)`,
+  })),
+  ...(["rateLimitPerMinute", "rateLimitPerHour"] as const).map((campo) => ({
+    arquivo: PREFERENCIAS,
+    exige: new RegExp(`exigirValor\\(\\s*lerInteiro\\(form\\.${campo}\\)`),
+    porque: `${campo} é inteiro e obrigatório: fração e branco são recusados no campo (M35)`,
+  })),
+  { arquivo: PREFERENCIAS, exige: /ariaDoErro\("pref-job-teto-erro", erros\.jobMonthlyBudget\)/, porque: "o erro fica no campo (aria-invalid + aria-describedby), não num toast" },
+  { arquivo: PREFERENCIAS, exige: /<ErroDoCampo id="pref-job-teto-erro"/, porque: "a mensagem aparece sob o campo" },
   { arquivo: PROVEDOR, exige: /lerDecimal\(/, porque: "os limites do provedor passam pelo mesmo conversor" },
+  { arquivo: PROVEDOR, exige: /<ErroDoCampo\b/, porque: "o limite recusado é dito sob o campo" },
   { arquivo: REVISAO, exige: /lerCentavos\(/, porque: "'12.50' é R$ 12,50, não R$ 1.250,00 (G-g)" },
 
   // ── D2 — "Remover chave" confirma ──
@@ -114,6 +125,11 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: PREFERENCIAS, exige: /Number\(form\./, porque: "Number('') é 0 e Number('1,5') é NaN (M7)" },
   { arquivo: PREFERENCIAS, exige: /function PermissaoDeEscritaLinha[\s\S]*checked=\{ligada\}/, porque: "o interruptor de escrita não mostra a escrita sozinha (M30)" },
   { arquivo: PREFERENCIAS, exige: /text-amber-600/, porque: "o aviso usa o token de tom" },
+  ...[PREFERENCIAS, "components/ai/preferencias-cascata.ts"].map((arquivo) => ({
+    arquivo,
+    exige: /^import (?!type\b)[^;]*from "@\/lib\/ai\/(?:tools\/registry|permissoes-da-tela)"/m,
+    porque: "o registry (descrições e JSON Schemas das 30 ferramentas) não vai ao navegador — ~6,8 KB gz de /ia/configuracoes",
+  })),
   { arquivo: PROVEDOR, exige: /Number\(form\./, porque: "Number('1,5') é NaN" },
   { arquivo: PROVEDOR, exige: /removeAiCredential/, porque: "remover a chave só acontece pelo diálogo de confirmação" },
   { arquivo: REVISAO, exige: /function textoParaCentavos\b/, porque: "a conversão que apagava todos os pontos sai" },

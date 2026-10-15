@@ -58,6 +58,7 @@ import {
   type Confianca,
   type ExtracaoDeComprovante,
 } from "@/lib/ai/vision/contracts";
+import { lerCentavos } from "@/lib/ai/numero";
 import { revisar, type CorrecoesDoDono } from "@/lib/ai/vision/review";
 import type { AlertaDeDuplicidade } from "@/lib/ai/vision/duplicates";
 import {
@@ -114,16 +115,14 @@ function centavosParaTexto(centavos: number | null): string {
 }
 
 /**
- * O texto do input → centavos. `null` quando o dono apagou o campo ou digitou algo que não
- * é um valor — e `null` aqui significa "não identificado", que é o estado certo: um campo
- * de dinheiro em branco não vale zero.
+ * O texto do input → centavos, pelo conversor único (D2). `null` quando o dono apagou o campo
+ * ou digitou algo que não é um valor — e `null` aqui significa "não identificado", que é o
+ * estado certo: um campo de dinheiro em branco não vale zero. "12.50" é R$ 12,50 (a função
+ * antiga apagava todos os pontos e lia R$ 1.250,00).
  */
-function textoParaCentavos(texto: string): number | null {
-  const limpo = texto.trim().replace(/\./g, "").replace(",", ".");
-  if (limpo === "") return null;
-  const n = Number(limpo);
-  if (!Number.isFinite(n)) return null;
-  return Math.round(n * 100);
+function centavosDoCampo(texto: string): number | null {
+  const leitura = lerCentavos(texto);
+  return leitura.ok ? leitura.valor : null;
 }
 
 const SEM_ESCOLHA = "__nenhum__";
@@ -312,7 +311,7 @@ export function ReceiptReview({
               onChange={(e) => {
                 setCorrecoes((c) => ({
                   ...c,
-                  totalCentavos: textoParaCentavos(e.target.value),
+                  totalCentavos: centavosDoCampo(e.target.value),
                 }));
                 setProposta(null);
               }}

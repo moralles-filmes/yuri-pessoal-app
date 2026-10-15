@@ -451,6 +451,20 @@ notifications,search}` e nas 4 pastas de rota do lote contém `fetch(`, `dispara
 `iniciarExperiencia(`, `gerarInsight(` ou `extrairComprovante(`; e o único `fetch("/api/ia/chat"`
 continua dentro de `disparar`.
 
+**Ajustes de forma registrados na execução (medidos, 2026-10-15):**
+
+- A frase de gasto mora em `@/lib/ai/gasto` (puro, zero imports), não em `@/lib/ai/constants`:
+  aquele módulo entra em toda tela da IA, e duas strings que só quatro telas leem custariam bytes a
+  `/ia/consumo`, `/ia/acoes` e `/ia/memoria` (a lição do D1). O texto é o desta seção.
+- O Tool Registry sai do navegador. A primeira versão da cascata deixou `/ia/configuracoes` 2,6 KB gz
+  **acima** da base, e a medição mostrou por quê: o formulário importava `@/lib/ai/tools/registry`
+  só para saber rótulos e dependências, e levava os 30 descritores inteiros (descrições para o
+  modelo e JSON Schemas, ~6,8 KB gz). Agora `catalogoDasPermissoes()` (`src/lib/ai/permissoes-da-tela.ts`,
+  `server-only`) deriva do registry, no Server Component, o que cada chave libera e de qual leitura
+  cada escrita depende, e a tela recebe isso por prop. As funções da cascata recebem esse
+  `escritas` como último argumento. Continua **derivado do registry**, nunca lista à mão; o registry
+  não muda.
+
 ### 6.3 D3 — painel e streaming (no principal, sem roteador)
 
 - **Fase anunciada, nunca o texto.** O hook expõe `fase` (derivada dos eventos): `start` →

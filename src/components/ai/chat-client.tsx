@@ -59,6 +59,7 @@ import {
 } from "@/components/ai/source-chips";
 import type { PropostaNaTela } from "@/components/ai/proposal-card";
 import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
+import { FraseDeGasto } from "@/components/ai/frase-de-gasto";
 import { DESFECHO_INICIAL, type DesfechoDoCartao } from "@/lib/ai/cartao";
 import type { ConversationMessage, MessageRunInfo } from "@/lib/ai/types";
 
@@ -580,6 +581,10 @@ export function ChatView({
     avisarDecisao,
   } = conversa;
   const fimRef = React.useRef<HTMLDivElement | null>(null);
+  // A vista aparece em `/ia` e no painel flutuante: id escrito à mão colidiria entre os dois.
+  const idBase = React.useId();
+  const idDoGastoPanorama = `${idBase}-gasto-panorama`;
+  const idDoGastoEnvio = `${idBase}-gasto-envio`;
 
   React.useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -739,23 +744,27 @@ export function ChatView({
             Ou comece por um panorama — o assistente consulta os módulos que você liberou e
             escreve um resumo. O que estiver desligado fica de fora, e ele diz o que ficou.
           </p>
-          <div className="flex flex-wrap gap-2">
+          {/* D2 — o panorama gasta, e diz isso ANTES do clique. */}
+          <FraseDeGasto id={idDoGastoPanorama} />
+          <div className="grid gap-2 sm:grid-cols-3">
             {ATALHOS_DE_EXPERIENCIA.map((a) => (
               <Button
                 key={a.id}
                 type="button"
                 variant="outline"
-                size="sm"
-                // ⚠️ `min-w-0` + `truncate`: `Button` é `whitespace-nowrap`, e três rótulos
-                // longos numa linha empurrariam a página na horizontal no celular (regra 3
-                // do layout responsivo).
-                className="min-w-0"
-                title={a.descricao}
+                aria-describedby={idDoGastoPanorama}
+                // A descrição fica VISÍVEL (um `title` o toque não alcança). `whitespace-normal`
+                // + `min-w-0`: `Button` é `whitespace-nowrap`, e o texto longo empurraria a
+                // página na horizontal no celular (regra 3 do layout responsivo).
+                className="h-auto min-w-0 flex-col items-start gap-0.5 p-3 text-left whitespace-normal"
                 disabled={enviando}
                 onClick={() => void iniciarExperiencia(a.id)}
               >
-                <Sparkles className="size-4 shrink-0" />
-                <span className="truncate">{a.titulo}</span>
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Sparkles className="size-4 shrink-0" />
+                  {a.titulo}
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">{a.descricao}</span>
               </Button>
             ))}
           </div>
@@ -810,6 +819,7 @@ export function ChatView({
               checked={caixaDeEntrada}
               onCheckedChange={setCaixaDeEntrada}
               disabled={!podeConversar || enviando}
+              aria-describedby={idDoGastoEnvio}
             />
             <Label htmlFor="caixa-de-entrada" className="text-xs text-muted-foreground">
               Caixa de entrada
@@ -860,6 +870,7 @@ export function ChatView({
             <Button
               type="button"
               size="sm"
+              aria-describedby={idDoGastoEnvio}
               onClick={() => void enviar()}
               disabled={!podeConversar || enviando || texto.trim().length === 0}
             >
@@ -872,6 +883,8 @@ export function ChatView({
             </Button>
           </div>
         </div>
+        {/* D2 — enviar gasta (a Caixa de entrada também), e isso fica dito sob o campo. */}
+        <FraseDeGasto id={idDoGastoEnvio} />
       </div>
     </div>
   );

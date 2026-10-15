@@ -22,6 +22,7 @@ import { Loader2, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { extrairComprovante } from "@/lib/actions/ai-documents";
+import { CUSTO_DA_IA } from "@/lib/ai/gasto";
 
 export function ReceiptExtractButton({
   documentoId,
@@ -32,6 +33,7 @@ export function ReceiptExtractButton({
 }) {
   const router = useRouter();
   const [lendo, setLendo] = React.useState(false);
+  const idDoAviso = React.useId();
 
   async function extrair() {
     if (lendo) return;
@@ -52,16 +54,21 @@ export function ReceiptExtractButton({
 
   return (
     <div className="space-y-2">
-      <Button onClick={extrair} disabled={desligado || lendo} className="min-w-0">
+      <Button
+        onClick={extrair}
+        disabled={desligado || lendo}
+        aria-describedby={idDoAviso}
+        className="min-w-0"
+      >
         {lendo ? <Loader2 className="size-4 animate-spin" /> : <ScanLine className="size-4" />}
         <span className="truncate">
           {lendo ? "Lendo o comprovante…" : "Ler este comprovante"}
         </span>
       </Button>
-      <p className="text-xs text-muted-foreground">
+      <p id={idDoAviso} className="text-xs text-muted-foreground">
         Ao clicar, o arquivo é enviado ao provedor de IA que você configurou.{" "}
-        <strong className="text-foreground">Isso não tem como ser desfeito</strong> — o custo
-        estimado entra no seu orçamento e aparece em Consumo.
+        <strong className="text-foreground">Isso não tem como ser desfeito</strong> —{" "}
+        {CUSTO_DA_IA}.
       </p>
     </div>
   );
