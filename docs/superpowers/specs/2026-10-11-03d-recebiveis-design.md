@@ -1041,8 +1041,9 @@ duas em silêncio.
 - a coluna nunca afirma `pago` sem a soma fechar;
 - o recebimento não mexe na minha despesa nem na fatura;
 - o perdoado aparece e vira meu;
-- os **cinco** pontos de exclusão do F4 não levam dinheiro registrado sem dizer. ⚠️ **Dois
-  pontos fora do F4 levam** (RR-D-17, §13.9): a promessa do §1 ainda não vale para eles.
+- nenhum caminho de exclusão leva dinheiro registrado sem dizer — os **cinco** pontos do F4 e os
+  **dois** que ele esqueceu (RR-D-17, corrigido em `412be82`, §13.9), com o inventário congelado
+  por `quem-apaga-recebiveis.test.ts`.
 
 O que ficou de fora está no §9, e o que ela criou está no §12 e aqui.
 
@@ -1050,13 +1051,14 @@ O que ficou de fora está no §9, e o que ela criou está no §12 e aqui.
 
 Revisor read-only, no modelo mais capaz. Veredito: **"With fixes"**. Ele conferiu sozinho 56
 arquivos / 955 testes verdes nos diretórios tocados, `dashboard.test.ts` igual, a caracterização
-= C1–C12 e as quatro assinaturas intactas. **Nenhum conserto foi feito nesta rodada.** O C-1 é
-furo do inventário F4 deste desenho, não da execução, e a ordem da subfase é registrar e reportar
-o que está fora do plano.
+= C1–C12 e as quatro assinaturas intactas. O C-1 é furo do inventário F4 deste desenho, não da
+execução: ele foi registrado e reportado (`b816b6f`), e **corrigido só depois da autorização do
+dono** (*"Eu autorizo"*), numa rodada única — ver "A correção do RR-D-17", abaixo. Os menores
+ficam registrados, sem conserto.
 
 | # | Achado | Gravidade | Conferido | Destino |
 | --- | --- | --- | --- | --- |
-| RR-D-17 | **Dois caminhos de exclusão fora do F4 apagam recebimento sem checagem e sem aviso.** `deleteInstallmentPurchase` (`actions/installments.ts`, o botão de excluir de `/parcelamentos`) e o ramo de `updateTransaction` que apaga e recria quando o tipo vira `transferencia` (`actions/transactions.ts`). Os dois apagam `transactions`, e o cascade leva `transaction_installments`/`shared_expenses` → `receivables` → `receivable_receipts`. Assimetria: `deleteTransaction` **recusa** o mesmo pai de parcelamento (decisão (b)), e `deleteInstallmentPurchase` apaga. Cenário: parcelamento dividido com 3 recebimentos registrados é excluído → os três somem e "Reembolsos recebidos" dos três meses cai, retroativamente | Crítico (efeito hoje **zero**: 0 recebimentos) | sim, por leitura do código e das FKs | **Decisão do dono, antes do merge.** Conserto pequeno: `protecaoDosRecebiveis({ transactionIds: [parentId] })` + `motivoParaNaoApagar(…, "so-dinheiro-registrado", …)` nos dois pontos (o alcance da (b)), um teste de harness por ponto com mutação, e uma varredura (allowlist) de todo `delete` em `transactions`/`receivables` para o F4 não envelhecer de novo |
+| RR-D-17 | **Dois caminhos de exclusão fora do F4 apagam recebimento sem checagem e sem aviso.** `deleteInstallmentPurchase` (`actions/installments.ts`, o botão de excluir de `/parcelamentos`) e o ramo de `updateTransaction` que apaga e recria quando o tipo vira `transferencia` (`actions/transactions.ts`). Os dois apagam `transactions`, e o cascade leva `transaction_installments`/`shared_expenses` → `receivables` → `receivable_receipts`. Assimetria: `deleteTransaction` **recusa** o mesmo pai de parcelamento (decisão (b)), e `deleteInstallmentPurchase` apaga. Cenário: parcelamento dividido com 3 recebimentos registrados é excluído → os três somem e "Reembolsos recebidos" dos três meses cai, retroativamente | Crítico (efeito hoje **zero**: 0 recebimentos) | sim, por leitura do código e das FKs | **Corrigido** (`412be82` + `3f22259`), autorizado pelo dono |
 | RR-D-18 | Falha da 2ª escrita (RR-D-4) devolve `ok: false` e a tela não revalida. Depois de recarregar, o recebível vai para "Histórico" como "Recebido" (a soma fechou), e o cartão **não** mostra o "Receber" que a mensagem manda clicar. Só a barra em massa conserta | Menor | por leitura (o cartão só oferece ações com `aberto`) | 04-C |
 | RR-D-19 | P6: "desfazer o último" ordena por `recebido_em`, não pela ordem de registro. Um recebimento lançado com data retroativa faz o "Desfazer" apagar **outro** — o de data mais recente, que estava certo | Menor, **do desenho** | sim (`ultimoRecebimento` segue o P6 à letra) | Decisão do dono (`created_at desc`, ou remover o escolhido com confirmação) antes de o recurso ganhar uso |
 | RR-D-20 | `/faturas` e `/parcelamentos` leem **todos** os recebimentos do dono por `lerRecebimentos()` (teto 5.000, `recebido_em` asc): saturado, cortam os mais recentes sem aviso. A mitigação do RR-D-10 ("a completude declara") só vale para `/dashboard` e `/relatorios` | Menor | sim (`finance/queries.ts`) | 04-C, junto com o RR-D-12: `recebimentosDe(ids)` (dirigida, sem teto, devolve erro) |
@@ -1064,3 +1066,49 @@ o que está fora do plano.
 
 Os 12 itens que o revisor deixou de julgar já estão cobertos pelo desenho (K1, §5.3, P6) ou por
 RR-D-9, RR-D-11, RR-D-12, RR-D-13 e RR-D-16. Nenhum pede decisão nova.
+
+**A correção do RR-D-17**:
+
+- **`412be82`:** `deleteInstallmentPurchase` e o ramo de `updateTransaction` que apaga e recria
+  quando o lançamento vira transferência passam pela mesma proteção de `deleteTransaction`
+  (`protecaoDosRecebiveis` + `motivoParaNaoApagar`, alcance `"so-dinheiro-registrado"` — o da
+  decisão (b)). Só recebimento registrado bloqueia; `pago`/`cobrado`/`ignorado` sem recebimento
+  continuam deixando, como em `deleteTransaction`. Os recebíveis de parcelamento carregam
+  `transaction_id = parentId` desde o commit inicial, e o filtro por transação basta — a mesma
+  premissa da A4.
+- **Quatro testes de harness novos:** recusa sem escrita, e legado sem recebimento que continua
+  deixando, nos dois pontos.
+- **`3f22259`:** `quem-apaga-recebiveis.test.ts` varre todo `src/` de produção e exige que cada
+  `.from(<tabela>).delete(` sobre `transactions`, `transaction_installments`, `shared_expenses`,
+  `receivables` e `receivable_receipts` esteja numa allowlist por arquivo e tabela, com contagem
+  exata e motivo. Exige também que os arquivos protegidos chamem `protecaoDosRecebiveis` uma vez
+  por ponto. O F4 deixa de ser inventário à mão.
+- **Executores:**
+  - O pacote A ficou no principal:
+    `🔀 Router · TIER 2 → DeepSeek (deepseek-flash) · falhou (invalid_output) · US$0,0247 · 45,7 s`,
+    sem fallback.
+  - O pacote B:
+    `🔀 Router · TIER 1 → Codex (gpt-6-sol) indisponível → DeepSeek (deepseek-flash) · sucesso · US$0,0031 · 9,8 s`.
+    O patch **não** foi aplicado como veio (escaneava só duas pastas e usava `require` em ESM); as
+    funções de varredura foram trocadas pelas de `quem-le-os-recebimentos.test.ts`.
+  - O `audit_required` do roteador no pacote B ("migração sensível") é falso positivo: o pacote é
+    um teste e não toca migration. A revisão de segurança foi minha; **a auditoria externa não
+    rodou**.
+- **Mutações** (cada uma sozinha, compilando, restaurada, `git diff --quiet` = 0):
+
+  | # | Mutação | Testes que caíram |
+  | --- | --- | --- |
+  | Y32 | `deleteInstallmentPurchase` sem `if (motivo)` | installments.test.ts › *03-D RR-D-17 · excluir o parcelamento com recebimento registrado é recusado, sem escrita* |
+  | Y33 | `updateTransaction`, ramo de transferência, sem `if (motivo)` | transactions.test.ts › *03-D RR-D-17 · despesa dividida editada para transferência com recebimento registrado é recusada, sem escrita* |
+  | Y34 | `deleteInstallmentPurchase` sem chamar `protecaoDosRecebiveis` | o mesmo caso de installments.test.ts · quem-apaga-recebiveis.test.ts › *… os pontos protegidos chamam protecaoDosRecebiveis — um por ponto* |
+  | Y35 | um delete novo de `shared_expenses` em `deletePerson` | quem-apaga-recebiveis.test.ts › *… todo delete na cadeia do recebimento está na allowlist, com a contagem exata* |
+  | Y8r · Y25r | Y8 e Y25 refeitas com contexto (a linha `if (motivo)` passou a casar duas vezes) | continuam caindo, com os mesmos testes |
+
+- **Re-revisão escopada da correção:** C-1 **ADDRESSED**, nada novo quebrado, nada fora do
+  escopo.
+- **Os cinco comandos na ponta `3f22259`:**
+  - `test:run`: **229 arquivos / 4.415 testes** (+1 / +7, os desta correção), 18,3 s;
+  - lint e `tsc` limpos; build ok;
+  - `perf:bundle`: mediana **215,1 KB** · 68 rotas · todas dentro;
+  - as seis rotas, idênticas às de `93f7a23` (a correção é só de servidor);
+  - `TZ=UTC` em `finance/` + `notifications/`: **40 arquivos / 667 testes**, verdes.
