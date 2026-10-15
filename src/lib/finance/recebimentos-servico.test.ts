@@ -355,3 +355,25 @@ describe("K1 — a primeira escrita falha, a segunda nao acontece", () => {
     },
   );
 });
+
+describe("RR-D-19 — o último é o último REGISTRADO", () => {
+  it("desfazer: o recebimento retroativo registrado por último é o que sai", async () => {
+    const { fake, ctx } = cenario({}, [
+      receb("r1", 250, "2026-06-20", "2026-06-20T12:00:00Z"),
+      receb("r2", 100, "2026-06-05", "2026-06-30T09:00:00Z"),
+    ]);
+    const r = await desfazerUltimoRecebimento(ctx, REC);
+    expect(r.ok).toBe(true);
+    expect(fake.tabelas.receivable_receipts.map((x) => x.id)).toEqual(["r1"]);
+  });
+
+  it("receber com a soma fechada: pago_em é a data mais recente, não a do último registrado", async () => {
+    const { fake, ctx } = cenario({}, [
+      receb("r1", 350, "2026-06-20", "2026-06-20T12:00:00Z"),
+      receb("r2", 250, "2026-06-05", "2026-06-30T09:00:00Z"),
+    ]);
+    const r = await receberSaldo(ctx, REC, "2026-06-21", HOJE);
+    expect(r.ok).toBe(true);
+    expect(fake.escritas("receivables")[0].valores).toEqual({ status: "pago", pago_em: "2026-06-20" });
+  });
+});

@@ -23,6 +23,7 @@ import {
   somaDoPerdoado,
   totalPendenteAte,
   ultimoRecebimento,
+  dataDoUltimoRecebimento,
   type EstadoDoRecebivel,
   type RecebivelComRecebimentos,
 } from "@/lib/finance/recebimentos";
@@ -255,14 +256,24 @@ describe("apoios", () => {
     expect(juntos.map((r) => r.recebimentos.length)).toEqual([1, 0]);
   });
 
-  it("ultimoRecebimento: data mais recente; empate desempata por created_at", () => {
+  it("ultimoRecebimento: o último REGISTRADO, mesmo com data retroativa (RR-D-19); empate cai para a data", () => {
     const x = [
       { id: "r1", recebido_em: "2026-06-20", created_at: "2026-06-20T10:00:00Z" },
-      { id: "r2", recebido_em: "2026-06-20", created_at: "2026-06-20T11:00:00Z" },
-      { id: "r3", recebido_em: "2026-06-05", created_at: "2026-06-30T09:00:00Z" },
+      { id: "r2", recebido_em: "2026-06-05", created_at: "2026-06-30T09:00:00Z" },
     ];
     expect(ultimoRecebimento(x)?.id).toBe("r2");
+    const empate = [
+      { id: "r3", recebido_em: "2026-06-20", created_at: "2026-06-30T09:00:00Z" },
+      { id: "r4", recebido_em: "2026-06-05", created_at: "2026-06-30T09:00:00Z" },
+    ];
+    expect(ultimoRecebimento(empate)?.id).toBe("r3");
+    expect(ultimoRecebimento([{ id: "r5", recebido_em: "2026-06-01" }, { id: "r6", recebido_em: "2026-06-09" }])?.id).toBe("r6");
     expect(ultimoRecebimento([])).toBeNull();
+  });
+
+  it("dataDoUltimoRecebimento: a data mais recente, não a do último registrado", () => {
+    expect(dataDoUltimoRecebimento([{ recebido_em: "2026-06-20" }, { recebido_em: "2026-06-05" }])).toBe("2026-06-20");
+    expect(dataDoUltimoRecebimento([])).toBeNull();
   });
 
   it("secoesDaLista: ignorado vai para 'Não será cobrado' e NENHUM item some", () => {

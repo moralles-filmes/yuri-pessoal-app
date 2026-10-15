@@ -17,6 +17,7 @@ import type { ActionResult } from "@/types/finance";
 import { centavosParaReais, formatCurrency, reaisParaCentavos } from "@/lib/format";
 import {
   anexarRecebimentos,
+  dataDoUltimoRecebimento,
   emAberto,
   estadoDoRecebivel,
   resumirRecebivel,
@@ -155,7 +156,7 @@ export async function receberSaldo(
   if (saldo <= 0) {
     // Soma fechada com a coluna em aberto (falha anterior entre as duas escritas), ou
     // recebível de valor zero: só a coluna — nunca um recebimento de zero.
-    const data = ultimoRecebimento(lido.recebimentos)?.recebido_em ?? recebidoEm;
+    const data = dataDoUltimoRecebimento(lido.recebimentos) ?? recebidoEm;
     const { error } = await ctx.supabase
       .from("receivables")
       .update({ status: "pago", pago_em: data })

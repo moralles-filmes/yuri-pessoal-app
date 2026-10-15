@@ -224,21 +224,42 @@ export function anexarRecebimentos<
   return recebiveis.map((r) => ({ ...r, recebimentos: por.get(r.id) ?? [] }));
 }
 
-/** P6 — o último: `recebido_em` desc, depois `created_at` desc. */
+/**
+ * P6, revisto no RR-D-19 — o último REGISTRADO: `created_at` desc, que é o inverso da última
+ * ação. Pela data do recebimento, um lançamento retroativo fazia o "Desfazer" apagar outro, o de
+ * data mais recente. Sem `created_at`, ou no empate, cai para `recebido_em` desc.
+ */
 export function ultimoRecebimento<
   X extends { readonly recebido_em: string; readonly created_at?: string | null },
 >(recebimentos: readonly X[]): X | null {
   let ultimo: X | null = null;
   for (const x of recebimentos) {
-    if (
-      ultimo === null ||
-      x.recebido_em > ultimo.recebido_em ||
-      (x.recebido_em === ultimo.recebido_em && (x.created_at ?? "") > (ultimo.created_at ?? ""))
-    ) {
-      ultimo = x;
-    }
+    if (ultimo === null || registradoDepois(x, ultimo)) ultimo = x;
   }
   return ultimo;
+}
+
+type Registro = { readonly recebido_em: string; readonly created_at?: string | null };
+
+function instanteDoRegistro(x: Registro): number {
+  const t = x.created_at ? Date.parse(x.created_at) : Number.NaN;
+  return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
+}
+
+function registradoDepois(a: Registro, b: Registro): boolean {
+  const ta = instanteDoRegistro(a);
+  const tb = instanteDoRegistro(b);
+  if (ta !== tb) return ta > tb;
+  return a.recebido_em > b.recebido_em;
+}
+
+/** A data mais recente entre os recebimentos — o `pago_em` de quando a soma fecha (RR-D-19). */
+export function dataDoUltimoRecebimento(
+  recebimentos: readonly { readonly recebido_em: string }[],
+): string | null {
+  let data: string | null = null;
+  for (const x of recebimentos) if (data === null || x.recebido_em > data) data = x.recebido_em;
+  return data;
 }
 
 export type SecoesDaLista<T> = { emAberto: T[]; naoSeraCobrado: T[]; historico: T[] };
