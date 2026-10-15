@@ -1041,6 +1041,26 @@ duas em silêncio.
 - a coluna nunca afirma `pago` sem a soma fechar;
 - o recebimento não mexe na minha despesa nem na fatura;
 - o perdoado aparece e vira meu;
-- nenhum caminho de exclusão leva dinheiro registrado sem dizer.
+- os **cinco** pontos de exclusão do F4 não levam dinheiro registrado sem dizer. ⚠️ **Dois
+  pontos fora do F4 levam** (RR-D-17, §13.9): a promessa do §1 ainda não vale para eles.
 
 O que ficou de fora está no §9, e o que ela criou está no §12 e aqui.
+
+### 13.9 Revisão final da branch (`17a93e9..955234a`)
+
+Revisor read-only, no modelo mais capaz. Veredito: **"With fixes"**. Ele conferiu sozinho 56
+arquivos / 955 testes verdes nos diretórios tocados, `dashboard.test.ts` igual, a caracterização
+= C1–C12 e as quatro assinaturas intactas. **Nenhum conserto foi feito nesta rodada.** O C-1 é
+furo do inventário F4 deste desenho, não da execução, e a ordem da subfase é registrar e reportar
+o que está fora do plano.
+
+| # | Achado | Gravidade | Conferido | Destino |
+| --- | --- | --- | --- | --- |
+| RR-D-17 | **Dois caminhos de exclusão fora do F4 apagam recebimento sem checagem e sem aviso.** `deleteInstallmentPurchase` (`actions/installments.ts`, o botão de excluir de `/parcelamentos`) e o ramo de `updateTransaction` que apaga e recria quando o tipo vira `transferencia` (`actions/transactions.ts`). Os dois apagam `transactions`, e o cascade leva `transaction_installments`/`shared_expenses` → `receivables` → `receivable_receipts`. Assimetria: `deleteTransaction` **recusa** o mesmo pai de parcelamento (decisão (b)), e `deleteInstallmentPurchase` apaga. Cenário: parcelamento dividido com 3 recebimentos registrados é excluído → os três somem e "Reembolsos recebidos" dos três meses cai, retroativamente | Crítico (efeito hoje **zero**: 0 recebimentos) | sim, por leitura do código e das FKs | **Decisão do dono, antes do merge.** Conserto pequeno: `protecaoDosRecebiveis({ transactionIds: [parentId] })` + `motivoParaNaoApagar(…, "so-dinheiro-registrado", …)` nos dois pontos (o alcance da (b)), um teste de harness por ponto com mutação, e uma varredura (allowlist) de todo `delete` em `transactions`/`receivables` para o F4 não envelhecer de novo |
+| RR-D-18 | Falha da 2ª escrita (RR-D-4) devolve `ok: false` e a tela não revalida. Depois de recarregar, o recebível vai para "Histórico" como "Recebido" (a soma fechou), e o cartão **não** mostra o "Receber" que a mensagem manda clicar. Só a barra em massa conserta | Menor | por leitura (o cartão só oferece ações com `aberto`) | 04-C |
+| RR-D-19 | P6: "desfazer o último" ordena por `recebido_em`, não pela ordem de registro. Um recebimento lançado com data retroativa faz o "Desfazer" apagar **outro** — o de data mais recente, que estava certo | Menor, **do desenho** | sim (`ultimoRecebimento` segue o P6 à letra) | Decisão do dono (`created_at desc`, ou remover o escolhido com confirmação) antes de o recurso ganhar uso |
+| RR-D-20 | `/faturas` e `/parcelamentos` leem **todos** os recebimentos do dono por `lerRecebimentos()` (teto 5.000, `recebido_em` asc): saturado, cortam os mais recentes sem aviso. A mitigação do RR-D-10 ("a completude declara") só vale para `/dashboard` e `/relatorios` | Menor | sim (`finance/queries.ts`) | 04-C, junto com o RR-D-12: `recebimentosDe(ids)` (dirigida, sem teto, devolve erro) |
+| RR-D-21 | A agregação por pessoa de `/faturas` (duas cópias) e `/parcelamentos` continua dentro das telas e só é coberta por varredura do fonte. O §6.2 pedia função pura com teste; o plano (Task 11) estreitou para dois apoios de lista, e o §13.7 não registrou esse desvio | Menor | por leitura | 04-C: `partesPorPessoa(recs)` pura em `recebimentos.ts` |
+
+Os 12 itens que o revisor deixou de julgar já estão cobertos pelo desenho (K1, §5.3, P6) ou por
+RR-D-9, RR-D-11, RR-D-12, RR-D-13 e RR-D-16. Nenhum pede decisão nova.
