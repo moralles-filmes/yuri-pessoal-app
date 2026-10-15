@@ -1023,7 +1023,7 @@ desses testes foram vistos vermelhos por mutação (Y9, Y10 e Y5, §13.4), os ou
 
 | # | Risco | Mitigação | Destino |
 | --- | --- | --- | --- |
-| RR-D-11 | A M1 está no banco mas **sem versão** em `supabase_migrations.schema_migrations`: um `supabase db push` futuro tentaria reaplicar o arquivo, e a 2ª execução falha em `drop constraint receivables_id_user_uk` (2BP01). Ela aborta sem efeito, mas o comando quebra | O conteúdo aplicado é o do arquivo (conferido no banco, §13.2) | **Decisão do dono, antes do próximo `db push`**: registrar a versão (`supabase migration repair --status applied 20261011210000`). Não fiz: é escrita no banco, fora do autorizado |
+| RR-D-11 | A M1 está no banco mas **sem versão** em `supabase_migrations.schema_migrations`: um `supabase db push` futuro tentaria reaplicar o arquivo, e a 2ª execução falha em `drop constraint receivables_id_user_uk` (2BP01). Ela aborta sem efeito, mas o comando quebra | O conteúdo aplicado é o do arquivo (conferido no banco, §13.2) | **Decisão do dono, antes do próximo `db push`**: registrar a versão (`supabase migration repair --status applied 20261011210000`). **Feito depois, por decisão delegada do dono (§13.9)** |
 | RR-D-12 | `lerRecebimentos` não olha `error`. Numa falha de leitura, `/terceiros`, `/faturas`, `/parcelamentos` e o sino mostram o recebível **sem** recebimentos, com o saldo cheio e sem aviso. `/dashboard` e `/relatorios` declaram, porque a leitura sai `sem_contagem` e `lerFinanceiro` rebaixa a completude | Erra para "pode faltar receber", e se resolve ao recarregar. As escritas usam `recebimentosDe`, que recusa em erro | 04-C, junto com a FK composta (RR-D-2), que já mexe nessa leitura |
 | RR-D-13 | Intercalação entre abas (Receber numa, Desfazer na outra) pode deixar a coluna `pago` com a soma aberta, porque os updates não guardam o status | É o estado do RR-D-8: conta como em aberto (o sino o avisa, ver desvio 7) e se conserta com "Receber" | Aceito |
 | RR-D-14 | `RECEIVABLE_OPEN_STATUSES` (`constants.ts`) ficou sem consumidor de produção, com a doc ainda dizendo que decide o "a receber", o que convida a reintroduzir o filtro pela coluna | `terceiros-client.test.ts` recusa cópia local de status em aberto na tela; quem decide é `ESTADOS_EM_ABERTO` pelo estado derivado | Remover (ou reescrever a doc) na 04-C; fora do plano aqui |
@@ -1060,7 +1060,7 @@ ficam registrados, sem conserto.
 | --- | --- | --- | --- | --- |
 | RR-D-17 | **Dois caminhos de exclusão fora do F4 apagam recebimento sem checagem e sem aviso.** `deleteInstallmentPurchase` (`actions/installments.ts`, o botão de excluir de `/parcelamentos`) e o ramo de `updateTransaction` que apaga e recria quando o tipo vira `transferencia` (`actions/transactions.ts`). Os dois apagam `transactions`, e o cascade leva `transaction_installments`/`shared_expenses` → `receivables` → `receivable_receipts`. Assimetria: `deleteTransaction` **recusa** o mesmo pai de parcelamento (decisão (b)), e `deleteInstallmentPurchase` apaga. Cenário: parcelamento dividido com 3 recebimentos registrados é excluído → os três somem e "Reembolsos recebidos" dos três meses cai, retroativamente | Crítico (efeito hoje **zero**: 0 recebimentos) | sim, por leitura do código e das FKs | **Corrigido** (`412be82` + `3f22259`), autorizado pelo dono |
 | RR-D-18 | Falha da 2ª escrita (RR-D-4) devolve `ok: false` e a tela não revalida. Depois de recarregar, o recebível vai para "Histórico" como "Recebido" (a soma fechou), e o cartão **não** mostra o "Receber" que a mensagem manda clicar. Só a barra em massa conserta | Menor | por leitura (o cartão só oferece ações com `aberto`) | 04-C |
-| RR-D-19 | P6: "desfazer o último" ordena por `recebido_em`, não pela ordem de registro. Um recebimento lançado com data retroativa faz o "Desfazer" apagar **outro** — o de data mais recente, que estava certo | Menor, **do desenho** | sim (`ultimoRecebimento` segue o P6 à letra) | Decisão do dono (`created_at desc`, ou remover o escolhido com confirmação) antes de o recurso ganhar uso |
+| RR-D-19 | P6: "desfazer o último" ordena por `recebido_em`, não pela ordem de registro. Um recebimento lançado com data retroativa faz o "Desfazer" apagar **outro** — o de data mais recente, que estava certo | Menor, **do desenho** | sim (`ultimoRecebimento` segue o P6 à letra) | **Corrigido** (`45bdc13`), por decisão delegada do dono — ver abaixo |
 | RR-D-20 | `/faturas` e `/parcelamentos` leem **todos** os recebimentos do dono por `lerRecebimentos()` (teto 5.000, `recebido_em` asc): saturado, cortam os mais recentes sem aviso. A mitigação do RR-D-10 ("a completude declara") só vale para `/dashboard` e `/relatorios` | Menor | sim (`finance/queries.ts`) | 04-C, junto com o RR-D-12: `recebimentosDe(ids)` (dirigida, sem teto, devolve erro) |
 | RR-D-21 | A agregação por pessoa de `/faturas` (duas cópias) e `/parcelamentos` continua dentro das telas e só é coberta por varredura do fonte. O §6.2 pedia função pura com teste; o plano (Task 11) estreitou para dois apoios de lista, e o §13.7 não registrou esse desvio | Menor | por leitura | 04-C: `partesPorPessoa(recs)` pura em `recebimentos.ts` |
 
@@ -1112,3 +1112,49 @@ RR-D-9, RR-D-11, RR-D-12, RR-D-13 e RR-D-16. Nenhum pede decisão nova.
   - `perf:bundle`: mediana **215,1 KB** · 68 rotas · todas dentro;
   - as seis rotas, idênticas às de `93f7a23` (a correção é só de servidor);
   - `TZ=UTC` em `finance/` + `notifications/`: **40 arquivos / 667 testes**, verdes.
+
+**RR-D-19 e RR-D-11**: o dono delegou as duas decisões (*"Faz como achar mais recomendado"*).
+
+- **RR-D-19, `45bdc13`.**
+  - O P6 muda: "Desfazer o último" passa a desfazer o último **registrado** (`created_at`
+    desc; empate ou ausência caem para `recebido_em` desc). É o que a justificativa do próprio
+    P6 diz ("o inverso da última ação").
+  - O `pago_em` gravado quando a soma fecha (`receberSaldo`, ramo `saldo <= 0`) continua sendo a
+    data **mais recente**, por uma função pura nova, `dataDoUltimoRecebimento`. Usar
+    `ultimoRecebimento` ali trocaria o `pago_em` pela data do último registrado.
+  - A tela não muda: o botão "Desfazer o último" já aparece ao lado do recebimento que vai sair.
+  - O desfazer em lote segue a mesma função.
+  - Os testes foram escritos antes e vistos vermelhos (3 de 78).
+  - Executor: ficou no principal.
+    `🔀 Router · TIER 1 → Codex (gpt-6-sol) indisponível → DeepSeek (deepseek-flash) · falhou (invalid_output) · US$0,0262 · 46,9 s`.
+  - Mutações (cada uma sozinha, compilando, restaurada):
+
+    | # | Mutação | Testes que caíram |
+    | --- | --- | --- |
+    | Y36 | `ultimoRecebimento` volta a ordenar pela data | recebimentos.test.ts › *apoios ultimoRecebimento: o último REGISTRADO, mesmo com data retroativa (RR-D-19); empate cai para a data* · recebimentos-servico.test.ts › *RR-D-19 — o último é o último REGISTRADO desfazer: o recebimento retroativo registrado por último é o que sai* · recebimentos-servico.test.ts › *desfazer dois na mesma data: apaga o criado por último* |
+    | Y37 | `receberSaldo` volta a tirar o `pago_em` de `ultimoRecebimento` | recebimentos-servico.test.ts › *RR-D-19 — … receber com a soma fechada: pago_em é a data mais recente, não a do último registrado* |
+    | Y38 | sem o desempate pela data | recebimentos.test.ts › *apoios ultimoRecebimento: o último REGISTRADO, …* |
+
+  - Re-revisão: **ADDRESSED**, nada novo quebrado. Ela conferiu os quatro chamadores e
+    `Date.parse` sobre o `timestamptz` do PostgREST.
+- **RR-D-11.**
+  - `supabase link` (sem senha; `supabase/.temp` está no `.gitignore`), depois
+    `supabase migration repair --status applied 20261011210000 --linked` →
+    *"Repaired migration history: [20261011210000] => applied"*. O comando só registra a versão,
+    não executa o SQL.
+  - Conferido em `supabase migration list`: local = remoto para a M1.
+  - ⚠️ **Achado ao listar:** o histórico local × remoto está desalinhado no projeto **inteiro**.
+    São 347 linhas: 11 casam, 166 só locais, 170 só remotas. O MCP `apply_migration` registra a
+    hora da aplicação, não a versão do arquivo.
+  - Consequência: `supabase db push` nunca foi utilizável aqui. Ele aborta na primeira checagem
+    (versões remotas sem arquivo local), **antes** de aplicar qualquer coisa — então o risco
+    "reaplicar a M1" já estava bloqueado por uma condição anterior à 03-D.
+  - O registro serve à rastreabilidade: quem consulta o histórico agora vê a M1 aplicada. Alinhar
+    o histórico inteiro **não** foi feito: é decisão do dono, fora da 03-D.
+- **Os cinco comandos na ponta `45bdc13`:**
+  - `test:run`: **229 arquivos / 4.418 testes** (+3), 19,8 s;
+  - lint e `tsc` limpos; build ok;
+  - `perf:bundle`: mediana **215,1 KB** · 68 rotas · todas dentro;
+  - rotas: `/terceiros` 221,4 · `/faturas` 203,5 · `/parcelamentos` 204,6 · `/dashboard` 203,8 ·
+    `/dashboard/financeiro` 202,2 · `/relatorios` **205,4** (+0,1);
+  - `TZ=UTC` em `finance/` + `notifications/`: **40 / 670**, verdes.
