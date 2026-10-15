@@ -102,6 +102,21 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: REMOVER_CHAVE, exige: /Para voltar, cole a chave de novo\./, porque: "remover não tem desfazer; a tela diz o caminho de volta" },
   { arquivo: REMOVER_CHAVE, exige: /function aoMudarAbertura\([^)]*\)[^{]*\{\s*if \(removendo\) return;/, porque: "o diálogo não fecha no meio da remoção" },
   { arquivo: REMOVER_CHAVE, exige: /onOpenChange=\{aoMudarAbertura\}/, porque: "a trava vale para Esc e clique fora" },
+
+  // ── D3 — o chat anuncia a fase, nunca o texto ──
+  { arquivo: CHAT, exige: /<p role="status" className="sr-only">\s*\{fase\}\s*<\/p>/, porque: "a região de status existe e diz só a fase (M8)" },
+  { arquivo: CHAT, exige: /faseDoEvento\(/, porque: "a frase de cada fase sai de uma função pura testada" },
+  { arquivo: CHAT, exige: /<div\b(?:(?!>)[\s\S])*?role="log"(?:(?!>)[\s\S])*?aria-live="off"/, porque: "o log não lê cada pedaço do streaming — o papel log traz polite implícito (M37)" },
+  { arquivo: CHAT, exige: /Você disse: /, porque: "cada bolha diz quem falou para quem não vê o alinhamento" },
+  { arquivo: CHAT, exige: /O assistente respondeu: /, porque: "idem, do lado do assistente" },
+  { arquivo: CHAT, exige: /Mensagem para o assistente/, porque: "o campo tem rótulo, não só placeholder" },
+  { arquivo: CHAT, exige: /aria-describedby=\{`\$\{idDoAtalho\} \$\{idDoGastoEnvio\}`\}/, porque: "o atalho e o gasto descrevem o campo" },
+  { arquivo: CHAT, exige: /React\.useId\(\)/, porque: "ids por useId: a vista aparece em /ia e no painel ao mesmo tempo (M9, G-h)" },
+  { arquivo: CHAT, exige: /onAtividade\?\.\(\{ tipo: "decidiu"/, porque: "o hook avisa o painel quando um cartão termina (M11)" },
+  { arquivo: CHAT, exige: /onSwitch: \(e\) => \{(?:(?!\bonTool:)[\s\S])*?setDesfechos\(/, porque: "as propostas zeradas no switch levam junto os desfechos delas (invariante 46, Review Focus 4)" },
+  { arquivo: CHAT, exige: /conversaId: conversa\b/, porque: "o hook expõe a conversa aberta para o painel" },
+  { arquivo: "components/ai/floating-assistant-panel.tsx", exige: /conversationLink\(conversa\.conversaId\)/, porque: "'Abrir em tela cheia' abre ESTA conversa (M12)" },
+  { arquivo: "components/ai/floating-assistant.tsx", exige: /aria-label=\{\s*aviso \? `Abrir o assistente — \$\{aviso\.texto\}` : "Abrir o assistente"\s*\}/, porque: "o nome do botão inclui o que o selo diz (M10)" },
 ];
 
 export const PROIBIDOS: Contrato[] = [
@@ -133,6 +148,13 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: PROVEDOR, exige: /Number\(form\./, porque: "Number('1,5') é NaN" },
   { arquivo: PROVEDOR, exige: /removeAiCredential/, porque: "remover a chave só acontece pelo diálogo de confirmação" },
   { arquivo: REVISAO, exige: /function textoParaCentavos\b/, porque: "a conversão que apagava todos os pontos sai" },
+
+  // ── D3 ──
+  { arquivo: CHAT, exige: /role="status"[^>]*>[^<]*\{(?:texto|b\.content)\b/, porque: "a região de status nunca recebe o texto da resposta (M36)" },
+  { arquivo: CHAT, exige: /\b(?:id|htmlFor)="[^"]+"/, porque: "id escrito à mão colide entre /ia e o painel — o label do painel ativava o controle da página (M9, G-h)" },
+  { arquivo: CHAT, exige: /\(Ctrl\+Enter envia\)/, porque: "o atalho sai do placeholder (some ao digitar) e vira descrição do campo" },
+  { arquivo: "components/ai/floating-assistant.tsx", exige: /aria-label="Abrir o assistente"/, porque: "nome fixo esconde o selo de quem não o vê (M10)" },
+  { arquivo: "components/ai/floating-assistant.tsx", exige: /<span className="sr-only">\{aviso\.texto\}<\/span>/, porque: "a frase do selo entra no nome, não num span que o leitor lê como conteúdo do botão" },
 ];
 
 /**
@@ -235,4 +257,11 @@ describe("07-D — contratos de IA, Configurações, Notificações e Busca", ()
       expect(fonte(c.arquivo)).not.toMatch(c.exige);
     },
   );
+});
+
+describe("07-D · D3 — o painel continua guardado pelos mesmos testes", () => {
+  it("painel-persistencia.test.ts continua com os 6 testes (invariante 95)", () => {
+    const testes = fonte("lib/ai/painel-persistencia.test.ts").match(/\bit\(/g) ?? [];
+    expect(testes).toHaveLength(6);
+  });
 });
