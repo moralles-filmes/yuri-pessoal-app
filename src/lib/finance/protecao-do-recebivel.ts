@@ -1,11 +1,13 @@
 /**
- * REDESIGN-03-D · A4 — NINGUÉM APAGA DINHEIRO QUE ENTROU. Uma regra, pura; os cinco pontos que
- * apagam recebível (direto ou por cascade) a chamam e nenhum a reimplementa.
+ * REDESIGN-03-D · A4 — NINGUÉM APAGA DINHEIRO QUE ENTROU. Uma regra, pura; os sete pontos que
+ * apagam recebível (direto ou por cascade) a chamam e nenhum a reimplementa — os cinco do F4 e os
+ * dois do RR-D-17. `quem-apaga-recebiveis.test.ts` congela o inventário.
  *
  * - "regra-cheia": recebimento registrado, ou status `cobrado`/`pago`/`ignorado` (o `ignorado`
  *   entrou com o B1, D11: apagá-lo mudaria minha despesa em silêncio).
- * - "so-dinheiro-registrado": só recebimento registrado — `deleteTransaction` e o desfazer da IA
- *   (decisão (b) do dono): a regra cheia neles bloquearia hoje a exclusão de até 170 lançamentos.
+ * - "so-dinheiro-registrado": só recebimento registrado — `deleteTransaction`,
+ *   `deleteInstallmentPurchase`, a edição que vira transferência e o desfazer da IA (decisão (b) do
+ *   dono): a regra cheia neles bloquearia hoje a exclusão de até 170 lançamentos.
  */
 export type RecebivelParaProteger = { readonly status: string; readonly temRecebimento: boolean };
 export type AlcanceDaProtecao = "regra-cheia" | "so-dinheiro-registrado";
@@ -13,7 +15,9 @@ export type AcaoQueApaga =
   | "alterar a divisão"
   | "cancelar as parcelas futuras"
   | "desfazer a importação"
-  | "excluir o lançamento";
+  | "excluir o lançamento"
+  | "excluir o parcelamento"
+  | "transformar o lançamento em transferência";
 
 const STATUS_PROTEGIDOS = ["cobrado", "pago", "ignorado"];
 

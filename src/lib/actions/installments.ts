@@ -419,6 +419,14 @@ export async function deleteInstallmentPurchase(
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
+  // REDESIGN-03-D · RR-D-17 — o cascade (parcelas → recebíveis → recebimentos) levaria o registro
+  // do dinheiro que entrou. Mesmo alcance de `deleteTransaction` (decisão (b)): só recebimento
+  // registrado bloqueia; `pago` legado sem recebimento continua deixando excluir.
+  const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: [parentId] });
+  if (protecao.erro) return dbError("Não foi possível conferir os recebíveis deste parcelamento. Tente de novo.");
+  const motivo = motivoParaNaoApagar(protecao.recebiveis, "so-dinheiro-registrado", "excluir o parcelamento");
+  if (motivo) return dbError(motivo);
+
   const { error } = await ctx.supabase
     .from("transactions")
     .delete()

@@ -312,3 +312,28 @@ describe("03-D · A4 — recebimento registrado bloqueia", () => {
     expect(fake.tabelas.transactions).toEqual([]);
   });
 });
+
+const OUTRA_CONTA = "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a";
+
+describe("03-D RR-D-17 · despesa dividida editada para transferência", () => {
+  const recebimento = {
+    id: "rr-1", user_id: "user-1", receivable_id: "rc-1", valor: 100,
+    recebido_em: "2026-06-05", created_at: "2026-06-05T10:00:00Z",
+  };
+  const paraTransferencia = () =>
+    payload({ type: "transferencia", status: "pago", transfer_account_id: OUTRA_CONTA });
+
+  it("com recebimento registrado é recusada, sem escrita", async () => {
+    fake = criarSupabaseEmMemoria({ ...despesaCompartilhada("pendente"), receivable_receipts: [recebimento] });
+    const r = await updateTransaction(ID, paraTransferencia());
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/recebimento registrado/);
+    expect(fake.escritas()).toHaveLength(0);
+  });
+
+  it("pago legado sem recebimento continua deixando (b): a primeira escrita é o delete do lançamento", async () => {
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("pago"));
+    await updateTransaction(ID, paraTransferencia());
+    expect(fake.escritas()[0]).toEqual({ tabela: "transactions", tipo: "delete", filtros: [["eq", "id", ID]] });
+  });
+});

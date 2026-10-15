@@ -6,7 +6,7 @@ let fake = criarSupabaseEmMemoria({});
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.client }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-const { cancelInstallmentFuture } = await import("@/lib/actions/installments");
+const { cancelInstallmentFuture, deleteInstallmentPurchase } = await import("@/lib/actions/installments");
 
 // Fixture sintética: a fatura permanece aberta com o hojeISO real da ação.
 function parcelamento(status = "pendente", comRecebimento = false) {
@@ -55,5 +55,22 @@ describe("03-D A4 · cancelar parcelas futuras", () => {
     ]);
     expect(fake.tabelas.receivables).toEqual([]);
     expect(fake.tabelas.transactions[0]).toMatchObject({ id: "tx-p", valor_pessoal: null });
+  });
+});
+
+describe("03-D RR-D-17 · excluir o parcelamento", () => {
+  it("com recebimento registrado é recusado, sem escrita", async () => {
+    fake = criarSupabaseEmMemoria(parcelamento("pendente", true));
+    const r = await deleteInstallmentPurchase("tx-p");
+    expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/recebimento registrado/) });
+    expect(fake.escritas()).toHaveLength(0);
+  });
+
+  it("pago legado sem recebimento continua deixando excluir (b)", async () => {
+    fake = criarSupabaseEmMemoria(parcelamento("pago"));
+    const r = await deleteInstallmentPurchase("tx-p");
+    expect(r.ok).toBe(true);
+    expect(fake.escritas()).toHaveLength(1);
+    expect(fake.escritas()[0]).toMatchObject({ tabela: "transactions", tipo: "delete" });
   });
 });

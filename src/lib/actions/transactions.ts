@@ -101,6 +101,13 @@ export async function updateTransaction(
   // Transferências são substituídas (remove e recria) para manter as duas pernas
   // sempre consistentes; lançamentos simples são atualizados no lugar.
   if (wasTransfer || isTransfer) {
+    // REDESIGN-03-D · RR-D-17 — apagar e recriar leva a divisão por cascade (shared_expenses e
+    // parcelas → recebíveis → recebimentos). Mesmo alcance de `deleteTransaction` (decisão (b)).
+    const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: [id] });
+    if (protecao.erro) return dbError("Não foi possível conferir os recebíveis deste lançamento. Tente de novo.");
+    const motivo = motivoParaNaoApagar(protecao.recebiveis, "so-dinheiro-registrado", "transformar o lançamento em transferência");
+    if (motivo) return dbError(motivo);
+
     // Se for o pagamento de uma fatura, a fatura precisa apontar para o lançamento RECRIADO
     // (o delete abaixo zeraria `pago_transacao_id`). Editar o pagamento não desfaz o pagamento.
     const statementId = await statementPaidBy(ctx, id);
