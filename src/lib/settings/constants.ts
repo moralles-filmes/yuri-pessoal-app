@@ -87,6 +87,8 @@ export function normalizeNotificationPrefs(raw: unknown): NotificationPrefs {
 export const NOTIFICATION_PREF_GROUPS: {
   title: string;
   types: NotificationType[];
+  /** Frase sob o grupo, para o que ele NÃO oferece (REDESIGN-07-D · D5). */
+  nota?: string;
 }[] = [
   {
     title: "Financeiro",
@@ -142,7 +144,32 @@ export const NOTIFICATION_PREF_GROUPS: {
       "training_program_ending",
     ],
   },
+  {
+    /*
+      REDESIGN-07-D · D5 — as quatro famílias de IA (18-F Bloco 1) nunca entraram aqui. As três que
+      nascem ligadas seguiam ligadas (ausente = ligado), mas `ai_insight_available` é OPT-IN e não
+      tinha interruptor: nascia desligada e não havia como ligá-la. As outras três ficam FORA de
+      propósito (`NOTIFICATION_TYPES_SEM_INTERRUPTOR`, abaixo), e o grupo diz por quê.
+    */
+    title: "Inteligência Artificial",
+    types: ["ai_insight_available"],
+    nota: "Orçamento, provedor e ação sem desfecho não têm interruptor: avisam que algo está errado ou custando dinheiro.",
+  },
 ];
+
+/**
+ * REDESIGN-07-D · D5 — os tipos que NÃO ganham interruptor, cada um com o motivo.
+ *
+ * Eles avisam que algo está errado ou custando dinheiro (invariante 82 do CLAUDE.md), e isso não
+ * se desliga por preferência de rotina. Declarados aqui, e não só ausentes dos grupos: um teste
+ * confere que todo tipo de `NOTIFICATION_TYPES` está num grupo OU nesta lista — tipo novo sem
+ * nenhum dos dois derruba a suíte, em vez de nascer sem lugar na tela.
+ */
+export const NOTIFICATION_TYPES_SEM_INTERRUPTOR = {
+  ai_budget_threshold: "O gasto com IA chegou perto do teto (ou passou dele): é dinheiro seu.",
+  ai_provider_problem: "O provedor de IA parou de responder ou recusou a chave: o assistente está parado.",
+  ai_action_stuck: "Uma ação que você confirmou ficou sem desfecho registrado: pode não ter acontecido.",
+} as const satisfies Partial<Record<NotificationType, string>>;
 
 /** Explicação curta de cada tipo, exibida ao lado do interruptor em /configuracoes. */
 export const NOTIFICATION_TYPE_HINTS: Partial<Record<NotificationType, string>> = {
@@ -172,6 +199,9 @@ export const NOTIFICATION_TYPE_HINTS: Partial<Record<NotificationType, string>> 
     "Desligado por padrão. Quando ligado, acompanha o andamento das metas de período curto.",
   training_goal_deadline: "O prazo de uma meta de treino está chegando.",
   training_program_ending: "Um programa ativo está perto da data de fim que você planejou.",
+  // REDESIGN-07-D · D5 — "Insights" é o nome do item na navegação de /ia.
+  ai_insight_available:
+    "Desligado por padrão. Quando ligado, avisa que uma análise nova ficou pronta em Insights.",
 };
 
 export { NOTIFICATION_TYPE_LABELS };

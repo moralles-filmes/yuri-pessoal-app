@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { saveNotificationPrefs } from "@/lib/actions/settings";
 import {
   NOTIFICATION_PREF_GROUPS,
+  NOTIFICATION_TYPE_HINTS,
   NOTIFICATION_TYPE_LABELS,
   notificationEnabled,
   type NotificationPrefs,
@@ -62,27 +63,40 @@ export function NotificationsCard({ prefs }: { prefs: NotificationPrefs }) {
               {group.title}
             </p>
             <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              {group.types.map((type) => (
-                <div
-                  key={type}
-                  className="flex items-center justify-between gap-3"
-                >
-                  <Label
-                    htmlFor={`notif-${type}`}
-                    className="cursor-pointer text-sm font-normal"
-                  >
-                    {NOTIFICATION_TYPE_LABELS[type]}
-                  </Label>
-                  <Switch
-                    id={`notif-${type}`}
-                    checked={state[type]}
-                    onCheckedChange={(v) =>
-                      setState((s) => ({ ...s, [type]: v }))
-                    }
-                  />
-                </div>
-              ))}
+              {group.types.map((type) => {
+                // D5 — a dica existia (`NOTIFICATION_TYPE_HINTS`) e ninguém a lia. Ela fica sob o
+                // rótulo e descreve o interruptor para o leitor de tela.
+                const dica = NOTIFICATION_TYPE_HINTS[type];
+                const idDaDica = `notif-${type}-dica`;
+                return (
+                  <div key={type} className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-0.5">
+                      <Label
+                        htmlFor={`notif-${type}`}
+                        className="cursor-pointer text-sm font-normal"
+                      >
+                        {NOTIFICATION_TYPE_LABELS[type]}
+                      </Label>
+                      {dica ? (
+                        <p id={idDaDica} className="text-xs text-muted-foreground">
+                          {dica}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Switch
+                      id={`notif-${type}`}
+                      checked={state[type]}
+                      aria-describedby={dica ? idDaDica : undefined}
+                      onCheckedChange={(v) => setState((s) => ({ ...s, [type]: v }))}
+                      className="shrink-0"
+                    />
+                  </div>
+                );
+              })}
             </div>
+            {group.nota ? (
+              <p className="text-xs text-muted-foreground">{group.nota}</p>
+            ) : null}
           </div>
         ))}
 

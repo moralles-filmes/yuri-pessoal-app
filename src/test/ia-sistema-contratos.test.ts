@@ -24,6 +24,7 @@ const PREFERENCIAS = "components/ai/ai-preferences-form.tsx";
 const PROVEDOR = "components/ai/provider-card.tsx";
 const REMOVER_CHAVE = "components/ai/remover-chave-dialog.tsx";
 const REVISAO = "components/ai/receipt-review.tsx";
+const NOTIFICACOES = "app/(app)/notificacoes/notifications-client.tsx";
 
 /** Uma tag JSX inteira até o seu fechamento — sem atravessar o `</Tag>` para a próxima. */
 const dentroDe = (tag: string, ate: string) => `<${tag}\\b(?:(?!<\\/${tag}>)[\\s\\S])*?${ate}`;
@@ -133,6 +134,24 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "app/(app)/ia/conversas/[id]/loading.tsx", exige: /export \{ default \} from "\.\.\/\.\.\/loading"/, porque: "a conversa aberta é o chat: mantém o esqueleto de bolhas, não herda o da lista" },
   { arquivo: "app/(app)/configuracoes/page.tsx", exige: /Promise\.all\(\[[\s\S]*?\.then\(\(u\) => \(u \? getProviderCards\(u\.id\) : \[\]\)\)/, porque: "as chaves dos provedores entram no Promise.all, encadeadas ao usuário (C1)" },
   { arquivo: "components/settings/ai-card.tsx", exige: /settingsLink\(\)/, porque: "o link de /ia/configuracoes sai do construtor de ai-links" },
+
+  // ── D5 — Notificações ──
+  { arquivo: "components/settings/notifications-card.tsx", exige: /NOTIFICATION_TYPE_HINTS\[/, porque: "a dica de cada tipo aparece (existia e ninguém a lia)" },
+  { arquivo: "components/settings/notifications-card.tsx", exige: /aria-describedby=\{[^}]*dica/i, porque: "a dica descreve o interruptor para o leitor de tela" },
+  { arquivo: "components/settings/notifications-card.tsx", exige: /group\.nota\b/, porque: "o grupo da IA diz por que três avisos não têm interruptor" },
+  { arquivo: NOTIFICACOES, exige: />\s*Não lida\s*</, porque: "lida × não lida em texto, não só em cor e peso" },
+  ...(["Situação", "Tipo", "Prioridade"] as const).map((nome) => ({
+    arquivo: NOTIFICACOES,
+    exige: new RegExp(`aria-label="${nome}"`),
+    porque: `o filtro "${nome}" tem nome — "Todas" sozinho não diz o que está filtrando`,
+  })),
+  { arquivo: NOTIFICACOES, exige: /Nada com estes filtros/, porque: "com filtro ativo, o vazio não afirma que não há notificação nenhuma" },
+  { arquivo: NOTIFICACOES, exige: /<Link href=\{notificacoesLink\(\)\}>\s*Limpar filtros\s*<\/Link>/, porque: "o vazio com filtro oferece a saída (M39)" },
+  { arquivo: NOTIFICACOES, exige: /Inclui as não lidas que o filtro atual esconde\./, porque: "'Marcar todas' marca também o que o filtro esconde, e diz isso antes" },
+  { arquivo: NOTIFICACOES, exige: /notificacoesLink\(/, porque: "a URL dos filtros sai do construtor" },
+  { arquivo: NOTIFICACOES, exige: /dynamic\(\s*\(\) =>\s*import\("\.\/excluir-notificacao-dialog"\)/, porque: "a confirmação de exclusão é uma só e sai do primeiro carregamento" },
+  { arquivo: "app/(app)/notificacoes/excluir-notificacao-dialog.tsx", exige: /function aoMudarAbertura\([^)]*\)[^{]*\{\s*if \(excluindo\) return;/, porque: "o diálogo não fecha no meio da exclusão (o DeleteConfirmDialog não travava)" },
+  { arquivo: "app/(app)/notificacoes/excluir-notificacao-dialog.tsx", exige: /<DialogDescription>/, porque: "o diálogo diz o que vai ser removido" },
 ];
 
 export const PROIBIDOS: Contrato[] = [
@@ -175,6 +194,9 @@ export const PROIBIDOS: Contrato[] = [
   // ── D4 ──
   { arquivo: "app/(app)/configuracoes/page.tsx", exige: /await getProviderCards\(/, porque: "a leitura das chaves não espera o Promise.all terminar para começar" },
   { arquivo: "components/settings/ai-card.tsx", exige: /"\/ia\/configuracoes"/, porque: "href de /ia montado à mão diverge do construtor" },
+
+  // ── D5 ──
+  { arquivo: NOTIFICACOES, exige: /`\/notificacoes\?/, porque: "a URL dos filtros não é montada à mão na tela" },
 ];
 
 /**

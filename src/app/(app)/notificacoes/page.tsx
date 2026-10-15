@@ -1,8 +1,12 @@
 import { getNotifications } from "@/lib/notifications/queries";
 import {
+  NOTIFICATION_PRIORITY_LABELS,
+  NOTIFICATION_STATUS_FILTER_LABELS,
   NOTIFICATION_STATUS_FILTERS,
   NOTIFICATION_TYPES,
   NOTIFICATION_PRIORITIES,
+  notificationTypeLabel,
+  type NotificationPriority,
   type NotificationStatusFilter,
 } from "@/lib/notifications/constants";
 import { NotificationsClient } from "./notifications-client";
@@ -35,12 +39,27 @@ export default async function NotificacoesPage({
 
   const notifications = await getNotifications({ status, type, priority });
 
+  // REDESIGN-07-D · D5 — o texto do vazio. Com filtro, ele diz o que procurou (os filtros por
+  // extenso) em vez de afirmar que não há notificação nenhuma. Montado AQUI, no servidor: a tela
+  // só recebe a frase e não paga o código nem o texto de montá-la.
+  const resumoDoFiltro = [
+    status !== "todas" ? NOTIFICATION_STATUS_FILTER_LABELS[status] : null,
+    type ? notificationTypeLabel(type) : null,
+    priority ? NOTIFICATION_PRIORITY_LABELS[priority as NotificationPriority] : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const descricaoDoVazio = resumoDoFiltro
+    ? `Nenhuma notificação com “${resumoDoFiltro}”.`
+    : "Quando houver alertas (faturas, contas, tarefas, hábitos…), eles aparecem aqui. As checagens automáticas rodam periodicamente.";
+
   return (
     <NotificationsClient
       notifications={notifications}
       status={status}
       type={type ?? "todas"}
       priority={priority ?? "todas"}
+      descricaoDoVazio={descricaoDoVazio}
     />
   );
 }
