@@ -25,6 +25,9 @@ const PROVEDOR = "components/ai/provider-card.tsx";
 const REMOVER_CHAVE = "components/ai/remover-chave-dialog.tsx";
 const REVISAO = "components/ai/receipt-review.tsx";
 const NOTIFICACOES = "app/(app)/notificacoes/notifications-client.tsx";
+const BUSCA = "app/(app)/busca/busca-client.tsx";
+const PALETA = "components/search/search-command.tsx";
+const SINO = "components/notifications/notification-bell.tsx";
 
 /** Uma tag JSX inteira até o seu fechamento — sem atravessar o `</Tag>` para a próxima. */
 const dentroDe = (tag: string, ate: string) => `<${tag}\\b(?:(?!<\\/${tag}>)[\\s\\S])*?${ate}`;
@@ -152,6 +155,27 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: NOTIFICACOES, exige: /dynamic\(\s*\(\) =>\s*import\("\.\/excluir-notificacao-dialog"\)/, porque: "a confirmação de exclusão é uma só e sai do primeiro carregamento" },
   { arquivo: "app/(app)/notificacoes/excluir-notificacao-dialog.tsx", exige: /function aoMudarAbertura\([^)]*\)[^{]*\{\s*if \(excluindo\) return;/, porque: "o diálogo não fecha no meio da exclusão (o DeleteConfirmDialog não travava)" },
   { arquivo: "app/(app)/notificacoes/excluir-notificacao-dialog.tsx", exige: /<DialogDescription>/, porque: "o diálogo diz o que vai ser removido" },
+
+  // ── D6 — Busca, paleta e sino ──
+  { arquivo: BUSCA, exige: /const \[query, setQuery\] = React\.useState\(initialQuery\)/, porque: "o texto do campo é local: responde na hora e não espera o servidor (regra do campo de texto)" },
+  { arquivo: BUSCA, exige: /window\.history\.replaceState\(null, "", buscaLink\(/, porque: "digitar não busca o RSC a cada tecla (M17)" },
+  { arquivo: BUSCA, exige: /\.catch\(\(\) => \{[^}]*setErro\(true\)/, porque: "falha da busca vira estado de erro, não lista vazia" },
+  { arquivo: BUSCA, exige: /role="alert"/, porque: "o erro é anunciado" },
+  { arquivo: BUSCA, exige: /Não foi possível buscar agora\.[\s\S]{0,60}Isso não quer dizer que não haja resultado\./, porque: "erro ≠ 'Nada encontrado' (M18)" },
+  { arquivo: BUSCA, exige: /Tentar de novo/, porque: "o erro oferece a saída" },
+  { arquivo: BUSCA, exige: /<EmptyState\b[\s\S]*?Digite ao menos 2 caracteres/, porque: "menos de 2 caracteres é dica no vazio do projeto, não um parágrafo solto" },
+  { arquivo: "app/(app)/busca/page.tsx", exige: /<BuscaClient key=\{q\}/, porque: "navegação externa (paleta, voltar) remonta com os resultados do servidor" },
+  { arquivo: PALETA, exige: /role="combobox"/, porque: "o campo da paleta é uma caixa de combinação (M40)" },
+  { arquivo: PALETA, exige: /aria-activedescendant=\{/, porque: "o leitor acompanha o item escolhido pelas setas" },
+  { arquivo: PALETA, exige: /role="listbox"/, porque: "os resultados são uma lista de opções" },
+  { arquivo: PALETA, exige: /role="option"/, porque: "cada resultado é uma opção" },
+  { arquivo: PALETA, exige: /aria-selected=\{/, porque: "a opção ativa é anunciada" },
+  { arquivo: PALETA, exige: /scrollIntoView\(\{ block: "nearest" \}\)/, porque: "a opção ativa rola para a vista ao andar com as setas" },
+  { arquivo: PALETA, exige: /<DialogDescription className="sr-only">\s*Setas escolhem, Enter abre, Esc fecha\.\s*<\/DialogDescription>/, porque: "a paleta diz como se usa" },
+  { arquivo: SINO, exige: /aria-label=\{\s*unreadCount > 0 \? `Notificações — \$\{unreadCount\} não lidas` : "Notificações"\s*\}/, porque: "o nome do sino inclui a contagem (M19)" },
+  { arquivo: SINO, exige: /aria-hidden="true"[^>]*>\s*\{unreadCount > 9/, porque: "o selo numérico não é lido de novo" },
+  { arquivo: SINO, exige: /className="sr-only">\s*Não lida/, porque: "lida × não lida em texto no sino" },
+  { arquivo: SINO, exige: /disabled=\{pending \|\| unreadCount === 0\}/, porque: "'Marcar todas' sem nada a marcar fica desabilitado" },
 ];
 
 export const PROIBIDOS: Contrato[] = [
@@ -197,6 +221,11 @@ export const PROIBIDOS: Contrato[] = [
 
   // ── D5 ──
   { arquivo: NOTIFICACOES, exige: /`\/notificacoes\?/, porque: "a URL dos filtros não é montada à mão na tela" },
+
+  // ── D6 ──
+  { arquivo: BUSCA, exige: /router\.replace\(/, porque: "router.replace a cada tecla buscava o RSC no servidor (M17)" },
+  { arquivo: BUSCA, exige: /`\/busca\$\{/, porque: "a URL da busca não é montada à mão" },
+  { arquivo: SINO, exige: /aria-label="Notificações"/, porque: "nome fixo esconde a contagem (M19)" },
 ];
 
 /**
