@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { CalendarDays, CircleDollarSign, Clock, Info } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
+import { EmptyState } from "@/components/shared/empty-state";
 import {
   Card,
   CardContent,
@@ -145,9 +146,13 @@ export default async function ConsumoPage() {
         </CardHeader>
         <CardContent>
           {porModelo.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhuma execução registrada neste mês.
-            </p>
+            // V — o vazio pelo `EmptyState` de todo o app (página de servidor: não vai ao navegador).
+            <EmptyState
+              icon={CircleDollarSign}
+              title="Nenhuma execução registrada neste mês"
+              description="Cada tentativa de conversa, de leitura de comprovante ou de análise aparece aqui, por modelo."
+              className="py-8"
+            />
           ) : (
             // Tabela larga rola dentro do próprio contêiner — a página nunca rola na
             // horizontal.

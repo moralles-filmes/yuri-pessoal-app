@@ -215,6 +215,13 @@ export const CONTRATOS: Contrato[] = [
     exige: new RegExp(`<Badge variant="outline" className="max-w-full min-w-0 truncate[^"]*">\\s*\\{?${conteudo}`),
     porque: `o selo (${conteudo.replace(/\\/g, "")}) não empurra a bolha a 390`,
   })),
+
+  // ── V — subpáginas de /ia ──
+  { arquivo: INSIGHTS, exige: /<EmptyState\b[^>]*title="Nenhum módulo liberado para a IA ler"/, porque: "sem módulo liberado, o vazio é o EmptyState com o caminho para resolver" },
+  { arquivo: INSIGHTS, exige: /disponiveis\.length === 0 \? null : \(\s*<EmptyState/, porque: "o vazio da lista ('escolha um módulo') não aparece junto do 'nenhum módulo liberado'" },
+  { arquivo: CONSUMO, exige: /<EmptyState\b[^>]*title="Nenhuma execução registrada neste mês"/, porque: "o vazio do consumo pelo EmptyState" },
+  { arquivo: "app/(app)/ia/comprovantes/page.tsx", exige: /d\.mime === "application\/pdf" \? "PDF" : "Imagem"/, porque: "PDF × imagem em texto, não só pelo ícone" },
+  { arquivo: "app/(app)/ia/comprovantes/page.tsx", exige: /break-words[^"]*">\s*\{selecionado\.documento\.nomeArquivo\}/, porque: "nome de arquivo sem espaço quebra em vez de empurrar a tela" },
 ];
 
 export const PROIBIDOS: Contrato[] = [
@@ -274,6 +281,7 @@ export const PROIBIDOS: Contrato[] = [
   // ── V ──
   { arquivo: CHAT, exige: /from "@\/components\/(?:shared\/empty-state|ai\/vazio-da-conversa)"/, porque: "o EmptyState importado pela ChatView entraria no primeiro carregamento de /ia (~0,4 KB gz)" },
   { arquivo: CHAT, exige: /Nenhuma mensagem ainda/, porque: "o texto do vazio mora em VazioDaConversa, uma cópia só" },
+  { arquivo: INSIGHTS, exige: /opacity-70/, porque: "a opacidade apagava o insight não vigente para baixo do contraste mínimo; o selo de texto diz o estado" },
 ];
 
 /**

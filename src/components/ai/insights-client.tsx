@@ -162,77 +162,91 @@ export function InsightsClient({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2 rounded-xl border p-3">
-        {/* ⚠️ `min-w-0` no lado do texto: sem ele o select empurra o botão para fora do card. */}
-        <div className="flex flex-wrap items-center gap-2">
-          {disponiveis.length === 0 ? (
-            <p className="min-w-0 text-sm text-muted-foreground">
-              Nenhum módulo está liberado para a IA ler.{" "}
-              <Link href={settingsLink()} className="underline">
-                Ligue uma chave em Configurações
-              </Link>{" "}
-              para poder pedir uma análise.
-            </p>
-          ) : (
-            <>
-              {/* D8 — o seletor tem nome: o placeholder some assim que um módulo é escolhido. */}
-              <Label htmlFor={idDoModulo} className="sr-only">
-                Módulo da análise
-              </Label>
-              <Select
-                value={modulo}
-                onValueChange={(v) => setModulo(v as ModuloDeInsight)}
-                disabled={gerando}
-              >
-                <SelectTrigger id={idDoModulo} className="w-full sm:w-64">
-                  <SelectValue placeholder="Escolha o módulo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {disponiveis.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {NOME_DO_MODULO[m]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                aria-describedby={idDoGasto}
-                onClick={gerar}
-                disabled={gerando || !modulo}
-              >
-                {gerando ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Sparkles className="size-4" />
-                )}
-                Gerar análise
-              </Button>
-            </>
-          )}
-          {ocultos > 0 ? (
-            // Alternância com rótulo FIXO e `aria-pressed`: um rótulo que troca de sentido a cada
-            // clique ("Mostrar só…" / "Mostrar as…") deixa quem ouve sem saber o que está valendo.
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-auto"
-              aria-pressed={mostrarTodos}
-              onClick={() => setMostrarTodos((v) => !v)}
-            >
-              {`Mostrar também as ${ocultos} fora da lista`}
-            </Button>
-          ) : null}
-        </div>
-        {/* D2 — gerar gasta, e isso fica dito sob o seletor, antes do clique. */}
-        {disponiveis.length > 0 ? <FraseDeGasto id={idDoGasto} /> : null}
-      </div>
-
-      {visiveis.length === 0 ? (
+      {/*
+        V — sem módulo liberado, o vazio é o `EmptyState` de todo o app, com o caminho para
+        resolver. E ele SUBSTITUI o vazio da lista: "Escolha um módulo e peça uma" ao lado de
+        "nenhum módulo liberado" se contradizia.
+      */}
+      {disponiveis.length === 0 ? (
         <EmptyState
           icon={Sparkles}
-          title="Nenhuma análise aqui"
-          description="As análises não são geradas sozinhas. Escolha um módulo e peça uma — os números vêm dos seus registros, e nada é enviado antes disso."
-        />
+          title="Nenhum módulo liberado para a IA ler"
+          description="Ligue a leitura de um módulo nas configurações da IA para poder pedir uma análise."
+          className="py-8"
+        >
+          <Button asChild variant="outline" size="sm">
+            <Link href={settingsLink()}>Abrir as configurações da IA</Link>
+          </Button>
+        </EmptyState>
+      ) : null}
+
+      {disponiveis.length > 0 || ocultos > 0 ? (
+        <div className="space-y-2 rounded-xl border p-3">
+          {/* ⚠️ `min-w-0` no lado do texto: sem ele o select empurra o botão para fora do card. */}
+          <div className="flex flex-wrap items-center gap-2">
+            {disponiveis.length === 0 ? null : (
+              <>
+                {/* D8 — o seletor tem nome: o placeholder some assim que um módulo é escolhido. */}
+                <Label htmlFor={idDoModulo} className="sr-only">
+                  Módulo da análise
+                </Label>
+                <Select
+                  value={modulo}
+                  onValueChange={(v) => setModulo(v as ModuloDeInsight)}
+                  disabled={gerando}
+                >
+                  <SelectTrigger id={idDoModulo} className="w-full sm:w-64">
+                    <SelectValue placeholder="Escolha o módulo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {disponiveis.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {NOME_DO_MODULO[m]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  aria-describedby={idDoGasto}
+                  onClick={gerar}
+                  disabled={gerando || !modulo}
+                >
+                  {gerando ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  Gerar análise
+                </Button>
+              </>
+            )}
+            {ocultos > 0 ? (
+              // Alternância com rótulo FIXO e `aria-pressed`: um rótulo que troca de sentido a cada
+              // clique ("Mostrar só…" / "Mostrar as…") deixa quem ouve sem saber o que está valendo.
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                aria-pressed={mostrarTodos}
+                onClick={() => setMostrarTodos((v) => !v)}
+              >
+                {`Mostrar também as ${ocultos} fora da lista`}
+              </Button>
+            ) : null}
+          </div>
+          {/* D2 — gerar gasta, e isso fica dito sob o seletor, antes do clique. */}
+          {disponiveis.length > 0 ? <FraseDeGasto id={idDoGasto} /> : null}
+        </div>
+      ) : null}
+
+      {visiveis.length === 0 ? (
+        disponiveis.length === 0 ? null : (
+          <EmptyState
+            icon={Sparkles}
+            title="Nenhuma análise aqui"
+            description="As análises não são geradas sozinhas. Escolha um módulo e peça uma — os números vêm dos seus registros, e nada é enviado antes disso."
+          />
+        )
       ) : (
         <div className="space-y-3">
           {visiveis.map((insight) => (
@@ -302,7 +316,9 @@ function CartaoDeInsight({
   }
 
   return (
-    <Card className={vigente ? undefined : "opacity-70"}>
+    // V — o não vigente se distingue pelo fundo e pelo SELO de texto abaixo, não por
+    // `opacity-70`: a opacidade apagava o texto inteiro para baixo do contraste mínimo.
+    <Card className={vigente ? undefined : "bg-muted/30"}>
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-start gap-2">
           {/* `min-w-0` obrigatório: o título é longo e os badges são `shrink-0`. */}

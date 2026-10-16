@@ -172,7 +172,8 @@ export default async function ComprovantesPage({
       {selecionado && (
         <section className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="min-w-0 flex-1 text-base font-semibold">
+            {/* V — `break-words`: nome de arquivo sem espaço ("IMG_2026…") quebra, não empurra a tela a 390. */}
+            <h2 className="min-w-0 flex-1 break-words text-base font-semibold">
               {selecionado.documento.nomeArquivo}
             </h2>
             <Link
@@ -256,8 +257,10 @@ export default async function ComprovantesPage({
                     status={d.leitura?.status ?? null}
                   />
                 </div>
+                {/* V — o tipo em TEXTO: o ícone sozinho não diz nada a quem não o reconhece. */}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Enviado em {formatDate(d.enviadoEm)} ·{" "}
+                  {d.mime === "application/pdf" ? "PDF" : "Imagem"} · Enviado em{" "}
+                  {formatDate(d.enviadoEm)} ·{" "}
                   {(d.sizeBytes / (1024 * 1024)).toFixed(1)} MB
                   {d.observacao ? ` · "${d.observacao}"` : ""}
                 </p>
