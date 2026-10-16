@@ -186,7 +186,7 @@ export function distribuirTerceirosPorParcela(
  *
  *  - `nada`      — a divisão não mudou; não encoste nos recebíveis. É o que faz editar só a
  *                  descrição/categoria de um gasto dividido não reescrever nada.
- *  - `bloqueado` — a divisão mudaria, mas já existe recebível cobrado/pago. Recusa: o
+ *  - `bloqueado` — a divisão mudaria, mas já existe recebível protegido pela A4. Recusa: o
  *                  histórico de cobrança é do usuário, não nosso para reescrever.
  *  - `limpar`    — a despesa virou pessoal; apaga divisão e recebíveis.
  *  - `reaplicar` — apaga e regrava com os novos valores.
@@ -198,7 +198,7 @@ export type DecisaoReaplicacao =
   | { acao: "reaplicar" };
 
 export const MOTIVO_RECEBIVEL_FECHADO =
-  "Esta divisão já tem recebíveis cobrados ou pagos. Acerte-os em A Receber antes de alterar a divisão.";
+  "Esta divisão já tem recebível cobrado, recebido, com recebimento registrado ou que você decidiu não cobrar. Acerte-o em A Receber antes de alterar a divisão.";
 
 /** True se dois mapas pessoa→centavos têm exatamente as mesmas chaves e valores. */
 export function mesmaDivisaoCentavos(

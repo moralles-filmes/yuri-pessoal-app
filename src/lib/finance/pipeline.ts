@@ -35,6 +35,8 @@ import {
   TRANSACTION_TYPES,
 } from "@/lib/finance/constants";
 import { toDateInputValue } from "@/lib/format";
+import { resumirRecebivel } from "@/lib/finance/recebimentos";
+import type { RecebimentoLido } from "@/lib/finance/recebimentos";
 
 /* ───────────────────────────── Tipos de linha (estritos) ───────────────────────────── */
 
@@ -64,6 +66,7 @@ export type Embutido<T> = T | readonly T[] | null;
  * batem com os CHECKs vigentes — ver `dominioDoLancamento`.
  */
 export type LinhaTx = {
+  id: string;
   amount: Dinheiro;
   type: string;
   status: string;
@@ -92,6 +95,10 @@ export type LinhaFatura = {
  * (`getReceivables`) e, desde a 03-B2, também a do Cron os trazem.
  */
 export type LinhaRecebivel = {
+  id: string;
+  transaction_id: string | null;
+  pago_em: string | null;
+  recebimentos: readonly RecebimentoLido[];
   statement_id: string | null;
   installment_id: string | null;
   valor: Dinheiro;
@@ -282,6 +289,7 @@ export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): Entradas
       const categoria = primeiro(t.category);
       return [
         {
+          id: t.id,
           amount: num(t.amount),
           valor_pessoal: numOuNulo(t.valor_pessoal),
           type: dominio.type,
@@ -316,6 +324,13 @@ export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): Entradas
 
   if (linhas.recebiveis !== undefined) {
     const recs: DashReceivable[] = linhas.recebiveis.map((r) => ({
+      transaction_id: r.transaction_id,
+      recebido: resumirRecebivel({
+        valor: num(r.valor),
+        status: r.status,
+        pago_em: r.pago_em,
+        recebimentos: r.recebimentos,
+      }).recebido,
       statement_id: r.statement_id,
       installment_id: r.installment_id,
       valor: num(r.valor),

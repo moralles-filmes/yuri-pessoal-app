@@ -42,6 +42,7 @@ import { ReportBarChart, type BarPoint } from "@/components/reports/report-bar-c
 import { monthLabel } from "@/components/dashboard/chart-theme";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
+import { fraseDoPerdoado, rotuloPendenteDoMes } from "@/lib/finance/recebimentos";
 import { formatMinutes, STUDY_STATUS_LABELS } from "@/lib/studies/constants";
 import { toCsv } from "@/lib/reports/csv";
 import { downloadCsv, downloadJson } from "@/lib/reports/download";
@@ -133,9 +134,9 @@ export function RelatoriosClient({ data }: { data: ReportsData }) {
               label="Saídas do mês"
               value={formatCurrency(finance.resumo.saidas)}
               icon={ArrowUpRight}
-              hint={`meu ${formatCurrency(finance.resumo.meu)}`}
+              hint={[`meu ${formatCurrency(finance.resumo.meu)}`, fraseDoPerdoado(finance.perdoado)].filter(Boolean).join(" · ")}
             />
-            <StatCard label="A receber de terceiros" value={formatCurrency(finance.aReceber)} icon={HandCoins} />
+            <StatCard label={rotuloPendenteDoMes(finance.mes)} value={formatCurrency(finance.aReceber)} icon={HandCoins} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -259,7 +260,7 @@ export function RelatoriosClient({ data }: { data: ReportsData }) {
             <>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Comprometido em parcelas" value={formatCurrency(card.parcelasComprometidas)} icon={Layers} hint={`${card.parcelasAtivas} parcela(s) em aberto`} />
-                <StatCard label="A receber de terceiros" value={formatCurrency(card.aReceber)} icon={HandCoins} />
+                <StatCard label={rotuloPendenteDoMes(finance.mes)} value={formatCurrency(card.aReceber)} icon={HandCoins} />
                 <StatCard label="Próximas faturas" value={String(card.faturas.filter((f) => f.status !== "paga").length)} icon={CreditCard} hint="Provisão de 6 ciclos" />
                 <StatCard label="Total próximas faturas" value={formatCurrency(card.faturas.filter((f) => f.status !== "paga").reduce((s, f) => s + f.total, 0))} icon={CalendarClock} />
               </div>

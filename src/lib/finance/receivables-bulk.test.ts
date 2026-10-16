@@ -66,10 +66,14 @@ describe("alcanceDaAcao", () => {
     expect(r.naoAlcancados).toBe(2);
   });
 
-  it("ignorar alcança tudo menos o que já está ignorado", () => {
+  it("ignorar alcança só o que ainda se deve (pendente e cobrado) — K1", () => {
     const r = alcanceDaAcao(["a", "b", "c", "d"], visiveis, "ignorar");
-    expect(r.ids).toEqual(["a", "b", "c"]);
-    expect(r.naoAlcancados).toBe(1);
+    expect(r.ids).toEqual(["a", "b"]);
+    expect(r.naoAlcancados).toBe(2);
+  });
+
+  it("receber não alcança ignorado — volte para pendente antes (K1)", () => {
+    expect(alcanceDaAcao(["d"], visiveis, "receber").ids).toEqual([]);
   });
 
   it("seleção vazia devolve lote vazio, nunca a lista inteira", () => {

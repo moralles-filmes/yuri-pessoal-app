@@ -12,6 +12,7 @@ import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { dateInSaoPaulo, saoPauloWallClockToInstant } from "@/lib/format";
 import { lerFinanceiro } from "@/lib/finance/queries";
 import {
+  perdoadoDoMes,
   proximas6Faturas,
   proximasContasPagar,
   resumoMes,
@@ -134,6 +135,7 @@ export async function getFinanceCardData(
     entradasTerceiros: resumo.entradasTerceiros,
     saidas: resumo.saidas,
     meu: resumo.meu,
+    perdoado: perdoadoDoMes({ mes, transactions: txs, statements: sts, receivables: recs }),
     terceiros: resumo.terceiros,
     cartao: resumo.cartao,
     aVista: resumo.aVista,

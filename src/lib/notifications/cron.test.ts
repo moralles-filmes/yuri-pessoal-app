@@ -223,3 +223,74 @@ describe("03-B2 B2 — a régua do gasto alto no sino", () => {
     expect(inseridas("high_spending").map((n) => n.description)).toEqual([]);
   });
 });
+
+/** Prova a saída do sino do §6.5: só recebíveis em aberto, pelo saldo. */
+describe("03-D B4 — o sino com o saldo", () => {
+  function recebivelSintetico(sobre: Linha): Linha {
+    return {
+      user_id: USUARIO,
+      installment_id: null,
+      statement_id: null,
+      transaction_id: null,
+      pago_em: null,
+      data_prevista: "2026-09-12",
+      person: { nome: "Pessoa A" },
+      statement: null,
+      transaction: null,
+      ...sobre,
+    };
+  }
+
+  function recebimento(id: string, receivableId: string, valor: number, recebidoEm: string): Linha {
+    return {
+      id,
+      receivable_id: receivableId,
+      valor,
+      recebido_em: recebidoEm,
+      user_id: USUARIO,
+      observacoes: null,
+      created_at: `${recebidoEm}T12:00:00.000Z`,
+    };
+  }
+
+  it("B4 — o sino avisa o saldo: 600 com 250 recebidos vira R$ 350,00", async () => {
+    estado.tabelas = {
+      ...fixtureBase(),
+      receivables: [recebivelSintetico({ id: "rec-a", valor: 600, status: "pendente" })],
+      receivable_receipts: [recebimento("receipt-a", "rec-a", 250, "2026-09-05")],
+    };
+    await rodarOCron();
+    const avisos = inseridas("receivable_pending");
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0].dedupe_key).toBe("receivable_pending:rec-a");
+    expect(avisos[0].description).toContain(formatCurrency(350));
+    expect(avisos[0].description).not.toContain(formatCurrency(600));
+  });
+
+  it("B4 — `pago` legado sem recebimento não vira aviso", async () => {
+    estado.tabelas = {
+      ...fixtureBase(),
+      receivables: [
+        recebivelSintetico({ id: "rec-b", valor: 100, status: "pago", pago_em: "2026-09-01" }),
+      ],
+      receivable_receipts: [],
+    };
+    await rodarOCron();
+    expect(inseridas("receivable_pending")).toEqual([]);
+  });
+
+  it("B4 — coluna `pago` com a soma aberta (RR-D-7) entra como pendente, com o saldo", async () => {
+    estado.tabelas = {
+      ...fixtureBase(),
+      receivables: [
+        recebivelSintetico({ id: "rec-c", valor: 600, status: "pago", pago_em: "2026-09-05" }),
+      ],
+      receivable_receipts: [recebimento("receipt-c", "rec-c", 250, "2026-09-05")],
+    };
+    await rodarOCron();
+    const avisos = inseridas("receivable_pending");
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0].dedupe_key).toBe("receivable_pending:rec-c");
+    expect(avisos[0].description).toContain(formatCurrency(350));
+  });
+});

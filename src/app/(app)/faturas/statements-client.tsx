@@ -44,6 +44,14 @@ import {
 import { formatCurrency, formatDate, toDateInputValue } from "@/lib/format";
 import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
 import {
+  fraseDoPerdoado,
+  parteDoTerceiroCentavos,
+  perdoadoCentavos,
+  resumirRecebivel,
+  somaDaParteDosTerceiros,
+  somaDoPerdoado,
+} from "@/lib/finance/recebimentos";
+import {
   STATEMENT_STATUSES,
   STATEMENT_STATUS_LABELS,
   type Classificacao,
@@ -96,7 +104,7 @@ function nextDayISO(iso: string): string {
 }
 
 /** Quem paga uma parte de um item da fatura. */
-type ParteDoItem = { personId: string; nome: string; valor: number };
+type ParteDoItem = { personId: string; nome: string; valor: number; perdoado: number };
 
 /**
  * "Compartilhada · meu X · Fulano Y" de UM item da fatura. O rodapé da fatura já dizia quem
@@ -138,6 +146,9 @@ function PartesDoItem({
           <span className="font-medium tabular-nums text-foreground">
             {formatCurrency(p.valor)}
           </span>
+          {p.perdoado > 0 && (
+            <span> · não será cobrado {formatCurrency(p.perdoado)}</span>
+          )}
         </span>
       ))}
     </div>
@@ -158,8 +169,11 @@ function partesPorItem(
       personId: r.person_id,
       nome: r.person?.nome ?? "Pessoa",
       valor: 0,
+      perdoado: 0,
     };
-    atual.valor += r.valor;
+    const resumo = resumirRecebivel(r);
+    atual.valor += parteDoTerceiroCentavos(resumo) / 100;
+    atual.perdoado += perdoadoCentavos(resumo) / 100;
     pessoas.set(r.person_id, atual);
     porItem.set(k, pessoas);
   }
@@ -460,7 +474,8 @@ export function StatementsClient({
             const tx = s.id ? txByStatement.get(s.id) ?? [] : [];
             const inst = s.id ? instByStatement.get(s.id) ?? [] : [];
             const rec = s.id ? recByStatement.get(s.id) ?? [] : [];
-            const terceiros = rec.reduce((sum, r) => sum + r.valor, 0);
+            const terceiros = somaDaParteDosTerceiros(rec);
+            const perdoado = somaDoPerdoado(rec);
             const meu = s.total_atual - terceiros;
             const hasItems = tx.length > 0 || inst.length > 0;
             const isOpen = s.id != null && expanded === s.id;
@@ -494,7 +509,7 @@ export function StatementsClient({
                         Fecha {formatDate(s.data_fechamento)} · vence{" "}
                         {formatDate(s.data_vencimento)} · {s.itens} lançamento(s)
                       </p>
-                      {terceiros > 0 && (
+                      {(terceiros > 0 || perdoado > 0) && (
                         <p className="text-xs text-muted-foreground">
                           meu{" "}
                           <span className="font-medium text-foreground">
@@ -504,6 +519,7 @@ export function StatementsClient({
                           <span className="font-medium text-foreground">
                             {formatCurrency(terceiros)}
                           </span>
+                          {perdoado > 0 && ` · ${fraseDoPerdoado(perdoado)}`}
                         </p>
                       )}
                     </div>
@@ -635,14 +651,17 @@ export function StatementsClient({
                         (() => {
                           const byPerson = new Map<
                             string,
-                            { nome: string; valor: number }
+                            { nome: string; valor: number; perdoado: number }
                           >();
                           for (const r of rec) {
                             const cur = byPerson.get(r.person_id) ?? {
                               nome: r.person?.nome ?? "Pessoa",
                               valor: 0,
+                              perdoado: 0,
                             };
-                            cur.valor += r.valor;
+                            const resumo = resumirRecebivel(r);
+                            cur.valor += parteDoTerceiroCentavos(resumo) / 100;
+                            cur.perdoado += perdoadoCentavos(resumo) / 100;
                             byPerson.set(r.person_id, cur);
                           }
                           return (
@@ -673,8 +692,11 @@ export function StatementsClient({
                                     key={id}
                                     className="flex items-center justify-between gap-2 text-xs"
                                   >
-                                    <span className="min-w-0 truncate text-muted-foreground">
-                                      {p.nome}
+                                    <span className="min-w-0 text-muted-foreground">
+                                      <span className="block truncate">{p.nome}</span>
+                                      {p.perdoado > 0 && (
+                                        <span className="block">não será cobrado {formatCurrency(p.perdoado)}</span>
+                                      )}
                                     </span>
                                     <span className="shrink-0 font-medium tabular-nums">
                                       {formatCurrency(p.valor)}

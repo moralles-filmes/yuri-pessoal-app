@@ -15,6 +15,8 @@ import { proximosCompromissos } from "@/lib/calendar/upcoming";
 import { habitOccursOn } from "@/lib/habits/streak";
 import { reguaDoGastoAlto } from "@/lib/finance/dashboard";
 import { janelaDoGastoAlto, montarEntradas } from "@/lib/finance/pipeline";
+import { anexarRecebimentos, emAberto, resumirRecebivel, saldoCentavos } from "@/lib/finance/recebimentos";
+import { lerRecebimentos } from "@/lib/finance/recebimentos-leitura";
 import type { CalendarEventRow } from "@/types/database";
 import {
   filterByPrefs,
@@ -60,6 +62,7 @@ export async function generateForUser(
     statementsRes,
     billsRes,
     receivablesRes,
+    recebimentosDoDono,
     tasksRes,
     eventRowsRes,
     habitsRes,
@@ -82,9 +85,10 @@ export async function generateForUser(
     service
       .from("receivables")
       .select(
-        "id, valor, status, installment_id, statement_id, data_prevista, person:people(nome), statement:card_statements(data_vencimento, competencia), transaction:transactions!receivables_transaction_id_fkey(purchase_date)",
+        "id, valor, status, installment_id, statement_id, transaction_id, pago_em, data_prevista, person:people(nome), statement:card_statements(data_vencimento, competencia), transaction:transactions!receivables_transaction_id_fkey(purchase_date)",
       )
       .eq("user_id", userId),
+    lerRecebimentos({ client: service, userId }),
     service
       .from("tasks")
       .select("id, title, status, due_date, priority")
@@ -123,7 +127,7 @@ export async function generateForUser(
     service
       .from("transactions")
       .select(
-        "amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado, category_id, category:categories(id,name,color)",
+        "id, amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado, category_id, category:categories(id,name,color)",
       )
       .eq("user_id", userId)
       .gte("competence_date", janelaTx.from)
@@ -185,19 +189,29 @@ export async function generateForUser(
     status: string;
     installment_id: string | null;
     statement_id: string | null;
+    transaction_id: string | null;
+    pago_em: string | null;
     data_prevista: string | null;
     person: { nome: string } | { nome: string }[] | null;
     statement: { data_vencimento: string } | { data_vencimento: string }[] | null;
   }>;
+  // B4 (03-D): o sino recebe só os EM ABERTO pelo estado derivado, com valor = SALDO.
+  const recebiveisJuntos = anexarRecebimentos(receivables, recebimentosDoDono.linhas);
   const one = <T>(v: T | T[] | null): T | null =>
     Array.isArray(v) ? (v[0] ?? null) : v;
-  const genReceivables = receivables.map((r) => ({
-    id: r.id,
-    personNome: one(r.person)?.nome ?? null,
-    valor: Number(r.valor),
-    status: r.status,
-    dataVencimento: one(r.statement)?.data_vencimento ?? r.data_prevista ?? null,
-  }));
+  const genReceivables = recebiveisJuntos.flatMap((r) => {
+    const resumo = resumirRecebivel(r);
+    if (!emAberto(resumo)) return [];
+    return [{
+      id: r.id,
+      personNome: one(r.person)?.nome ?? null,
+      valor: saldoCentavos(resumo) / 100,
+      // generate.ts só aceita pendente/cobrado; em aberto com a coluna `pago` (soma aberta) entra
+      // como pendente — senão "só os em aberto" deixaria de valer para ele.
+      status: r.status === "cobrado" ? "cobrado" : "pendente",
+      dataVencimento: one(r.statement)?.data_vencimento ?? r.data_prevista ?? null,
+    }];
+  });
 
   /* ── Tarefas ── */
   const genTasks = ((tasksRes.data ?? []) as Array<{
@@ -301,7 +315,7 @@ export async function generateForUser(
   const { txs, sts, recs } = montarEntradas({
     transacoes: txRes.data ?? [],
     faturas: statements,
-    recebiveis: receivablesRes.data ?? [],
+    recebiveis: anexarRecebimentos(receivablesRes.data ?? [], recebimentosDoDono.linhas),
   });
   // 03-B2 (B2, decisão do dono) — o sino ADOTOU a régua da tela: a MESMA função que a página do
   // dashboard financeiro chama. Até 5 meses anteriores, mês sem saída ignorado, e o mês corrente
