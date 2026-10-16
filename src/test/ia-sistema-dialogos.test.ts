@@ -122,6 +122,16 @@ const SEM_TRAVA = new Map<string, string>([
   ],
 ]);
 
+/**
+ * Dispara uma ação: importa de `@/lib/actions/` OU aguarda uma função. A segunda metade existe
+ * por causa do `ConfirmarExclusaoDialog`, que recebe a action por prop (`acao`) e não importa
+ * nada de lá — o filtro só por import o deixava fora, e tirar a trava dele ficava verde (M46).
+ */
+const DISPARA_ACAO = /from "@\/lib\/actions\/|\bawait\s+[\w.]+\(/;
+const COM_TRAVA_OBRIGATORIA = COM_CONTEUDO_DE_DIALOGO.filter(
+  (a) => DISPARA_ACAO.test(fonte(a)) && !SEM_TRAVA.has(a),
+);
+
 /** A trava: `onOpenChange={fn}` com `function fn(...) { if (<estado>) return; … }`. */
 function temTrava(codigo: string): boolean {
   for (const m of codigo.matchAll(/onOpenChange=\{(\w+)\}/g)) {
@@ -146,11 +156,13 @@ describe("07-D · D8 — os diálogos do lote", () => {
     expect(fonte(arquivo)).toMatch(/<(?:Dialog|Sheet)Description\b|aria-describedby=\{undefined\}/);
   });
 
-  it.each(
-    COM_CONTEUDO_DE_DIALOGO.filter((a) => /from "@\/lib\/actions\//.test(fonte(a)) && !SEM_TRAVA.has(a)).map(
-      (a) => [a] as const,
-    ),
-  )("%s trava o onOpenChange enquanto a action roda", (arquivo) => {
+  it("a varredura da trava alcança o diálogo que recebe a action por prop (M46)", () => {
+    expect(COM_TRAVA_OBRIGATORIA).toContain("components/ai/confirmar-exclusao-dialog.tsx");
+    // 7 medidos: confirmar-exclusao, memória, remover chave, retenção, e-mail, senha, notificação.
+    expect(COM_TRAVA_OBRIGATORIA.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it.each(COM_TRAVA_OBRIGATORIA.map((a) => [a] as const))("%s trava o onOpenChange enquanto a action roda", (arquivo) => {
     expect(temTrava(fonte(arquivo))).toBe(true);
   });
 

@@ -41,7 +41,6 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: CARTAO, exige: /estadoDoCartao\(/, porque: "o estado do cartão sai de uma função pura com o vocabulário de approval/state.ts (M1)" },
   { arquivo: CARTAO, exige: /desfechoDaConfirmacao\(/, porque: "cada status da execução vira o seu desfecho — falhou não vira 'em parte' (M25)" },
   { arquivo: CARTAO, exige: /from "@\/components\/ai\/estado-da-acao"/, porque: "tom e ícone de cada estado vêm da MESMA fonte de /ia/acoes (M2)" },
-  { arquivo: CARTAO, exige: /async function confirmar\(\)[\s\S]*?\}\s*catch\b/, porque: "a promise que rejeita vira 'sem desfecho registrado', não um spinner eterno (M26)" },
   { arquivo: CARTAO, exige: /onDecidiu\?\.\(/, porque: "o cartão avisa quem o hospeda quando a decisão termina (M11)" },
   { arquivo: CHAT, exige: /React\.useState<Record<string, DesfechoDoCartao>>/, porque: "o desfecho mora no hook, acima da gaveta — fechar o painel não o apaga (invariante 95)" },
   { arquivo: CHAT, exige: /<ProposalCardSobDemanda\b[^>]*?\bdesfecho=\{/, porque: "no chat o cartão é controlado pelo hook (M28)" },
@@ -372,6 +371,45 @@ describe("07-D · D2 — nenhum efeito chama o modelo (M5)", () => {
   });
 });
 
+
+/** O corpo de `async function <nome>(…)`, recortado por casamento de chaves. */
+function corpoDaFuncao(codigo: string, nome: string): string {
+  const inicio = codigo.search(new RegExp(String.raw`async function ${nome}\(`));
+  expect(inicio, `async function ${nome}`).toBeGreaterThan(-1);
+  const fimDosParametros = fechamento(codigo, codigo.indexOf("(", inicio), "(", ")");
+  const abre = codigo.indexOf("{", fimDosParametros);
+  const fecha = fechamento(codigo, abre, "{", "}");
+  expect(fecha, `fim de ${nome}`).toBeGreaterThan(abre);
+  return codigo.slice(abre, fecha + 1);
+}
+
+/**
+ * M26 — a regex que vivia em `CONTRATOS` (`confirmar\(\)[\s\S]*?\}\s*catch`) não parava no fim
+ * de `confirmar()`: sem o try dela, atravessava para `recusar()` e casava o catch de lá. A
+ * mutação que tirava o try ficou verde. Agora o corpo é recortado antes de procurar.
+ */
+describe("07-D · D1 — a confirmação que não volta vira 'sem desfecho' (M26)", () => {
+  it("o recorte pega confirmar() e só ela (anti-tautologia)", () => {
+    const confirmar = corpoDaFuncao(fonte(CARTAO), "confirmar");
+    expect(confirmar).toMatch(/confirmarAcaoDaIa\(/);
+    expect(confirmar).not.toMatch(/recusarAcaoDaIa\(/);
+  });
+
+  it("a chamada da action fica dentro do try, e o catch dele registra sem_desfecho", () => {
+    const confirmar = corpoDaFuncao(fonte(CARTAO), "confirmar");
+    expect(confirmar.match(/confirmarAcaoDaIa\(/g)).toHaveLength(1);
+    const tentativa = confirmar.search(/\btry\s*\{/);
+    expect(tentativa, "try em confirmar()").toBeGreaterThan(-1);
+    const abreTry = confirmar.indexOf("{", tentativa);
+    const fechaTry = fechamento(confirmar, abreTry, "{", "}");
+    expect(confirmar.slice(abreTry, fechaTry)).toMatch(/await confirmarAcaoDaIa\(/);
+    const depois = confirmar.slice(fechaTry + 1);
+    expect(depois).toMatch(/^\s*catch\b/);
+    const abreCatch = depois.indexOf("{");
+    const corpoDoCatch = depois.slice(abreCatch, fechamento(depois, abreCatch, "{", "}") + 1);
+    expect(corpoDoCatch).toMatch(/registrar\(\{ tipo: "sem_desfecho" \}\)/);
+  });
+});
 
 describe("07-D — contratos de IA, Configurações, Notificações e Busca", () => {
   it.each(CONTRATOS.map((c) => [c.arquivo, c.porque, c] as const))("%s — %s", (_a, _p, c) => {
