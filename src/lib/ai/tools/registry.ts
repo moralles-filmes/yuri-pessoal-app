@@ -717,7 +717,7 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     kind: "leitura",
     risk: 1,
     description:
-      "Resumo financeiro de um mês (AAAA-MM; ausente = mês atual): entradas (com quanto delas é seu — `entradas_meu` — e quanto é dinheiro de terceiros que passou pela sua conta — `entradas_terceiros`), saídas, quanto do gasto é seu e quanto é de terceiros, cartão × à vista, a receber e contas a pagar. Todos os totais já vêm somados pelo sistema — não refaça nenhuma conta. `meu` + `de terceiros` = `saídas`, `entradas_meu` + `entradas_terceiros` = `entradas`, e `cartão` + `à vista` = `saídas`: são partições, não parcelas a somar.",
+      "Resumo financeiro de um mês (AAAA-MM; ausente = mês atual): entradas (com quanto delas é seu — `entradas_meu` — e quanto é dinheiro de terceiros que passou pela sua conta — `entradas_terceiros`), saídas, quanto do gasto é seu e quanto é de terceiros, cartão × à vista, a receber (o que ainda falta receber de terceiros: o devido menos o que já foi recebido) e contas a pagar. Todos os totais já vêm somados pelo sistema — não refaça nenhuma conta. `meu` + `de terceiros` = `saídas`, `entradas_meu` + `entradas_terceiros` = `entradas`, e `cartão` + `à vista` = `saídas`: são partições, não parcelas a somar.",
     inputSchema: {
       type: "object",
       properties: {

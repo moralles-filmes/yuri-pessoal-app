@@ -167,16 +167,16 @@ describe("1 · resumoMes — contrato AS-IS", () => {
       entradasMeu: 550,
       entradasTerceiros: 0,
       saidas: 420.6,
-      meu: 280.55,
-      terceiros: 140.05,
+      meu: 300.75,
+      terceiros: 119.85,
       cartao: 300.3,
-      cartaoMeu: 200.3,
+      cartaoMeu: 220.5,
       aVista: 120.3,
       aVistaMeu: 80.25,
     });
   });
 
-  it("soma responsabilidade original de terceiros sem filtrar status ou ref_month", () => {
+  it("soma responsabilidade original de terceiros sem filtrar status (exceto `ignorado`, D11) nem ref_month", () => {
     const statements = [statement({ id: "st", total_atual: 100 })];
     const receivables = [
       receivable({ statement_id: "st", valor: 10, status: "pendente", ref_month: "2026-06" }),
@@ -190,10 +190,10 @@ describe("1 · resumoMes — contrato AS-IS", () => {
       entradasMeu: 0,
       entradasTerceiros: 0,
       saidas: 100,
-      meu: 0,
-      terceiros: 100,
+      meu: 40,
+      terceiros: 60,
       cartao: 100,
-      cartaoMeu: 0,
+      cartaoMeu: 40,
       aVista: 0,
       aVistaMeu: 0,
     });
@@ -204,7 +204,7 @@ describe("1 · resumoMes — contrato AS-IS", () => {
       mes: "2026-06",
       transactions: [],
       statements: [statement({ id: "st", total_atual: 50 })],
-      receivables: [receivable({ statement_id: "st", valor: 75, status: "ignorado" })],
+      receivables: [receivable({ statement_id: "st", valor: 75, status: "pendente" })],
     });
 
     expect(result).toEqual({
@@ -308,7 +308,7 @@ describe("2 · gastosPorCategoria — contrato AS-IS", () => {
         name: "Viagem",
         color: "#bbbbbb",
         movimentado: 300,
-        meu: 220,
+        meu: 230,
       },
       {
         categoryId: "a",
@@ -462,8 +462,8 @@ describe("3 · proximas6Faturas — contrato AS-IS", () => {
         dataFechamento: "2026-07-10",
         dataVencimento: "2026-07-20",
         total: 100.25,
-        meu: 50,
-        terceiros: 50.25,
+        meu: 80.15,
+        terceiros: 20.1,
         status: "aberta",
         virtual: false,
       },
@@ -623,13 +623,15 @@ describe("5 · §9 — cenário sintético obrigatório", () => {
     expect(resumo9("pendente").cartaoMeu).toBe(400);
     expect(resumo9("cobrado").cartaoMeu).toBe(400);
     expect(resumo9("pago").cartaoMeu).toBe(400);
-    expect(resumo9("ignorado").cartaoMeu).toBe(400);
+    // D11 (03-D): perdoar não é "o terceiro paga" — o valor perdoado vira despesa minha.
+    expect(resumo9("ignorado").cartaoMeu).toBe(1000);
   });
 
-  it("[2 ✅] a responsabilidade original do terceiro é R$ 600 nos quatro status", () => {
-    for (const status of ["pendente", "cobrado", "pago", "ignorado"]) {
+  it("[2 ✅] a responsabilidade original do terceiro é R$ 600 enquanto ele deve; perdoado, é zero (D11)", () => {
+    for (const status of ["pendente", "cobrado", "pago"]) {
       expect(resumo9(status).terceiros).toBe(600);
     }
+    expect(resumo9("ignorado").terceiros).toBe(0);
   });
 
   it("[6 ✅] o reembolso não reduz a fatura devida ao banco", () => {
@@ -696,7 +698,7 @@ describe("5 · §9 — cenário sintético obrigatório", () => {
     expect(resumo9("pendente", [reembolsoSemClassificar]).entradasMeu).toBe(250);
   });
 
-  it("[3+4 ❌] R$ 250 recebidos e R$ 350 restantes são IRREPRESENTÁVEIS — e o preço é medido", () => {
+  it("[3+4] reescrever o `valor` NÃO é o jeito de dizer 'restam R$ 350' — o preço continua medido (a 03-D os representa por recebimento)", () => {
     // `receivables` tem `valor` (um número) e `status` (quatro valores). Não tem
     // `valor_recebido`. Marcar `pago` afirma que os R$ 600 entraram; `pendente` afirma R$ 0.
     expect(totalAReceber([rec9("pendente")])).toBe(600);
@@ -1030,7 +1032,7 @@ describe("8 · 03-D — status de recebível, um a um", () => {
     expect(totalAReceber(um(""))).toBe(0);
   });
 
-  it.each(["pendente", "cobrado", "pago", "ignorado", "status-inventado"])(
+  it.each(["pendente", "cobrado", "pago", "status-inventado"])(
     "resumoMes conta o recebível %s como terceiros — sem filtro nenhum",
     (status) => {
       const r = resumoMes({
@@ -1044,7 +1046,7 @@ describe("8 · 03-D — status de recebível, um a um", () => {
     },
   );
 
-  it.each(["pendente", "cobrado", "pago", "ignorado"])(
+  it.each(["pendente", "cobrado", "pago"])(
     "proximas6Faturas conta o recebível %s como terceiros — sem filtro nenhum",
     (status) => {
       const [f] = proximas6Faturas({
@@ -1059,7 +1061,7 @@ describe("8 · 03-D — status de recebível, um a um", () => {
     },
   );
 
-  it.each(["pendente", "cobrado", "pago", "ignorado"])(
+  it.each(["pendente", "cobrado", "pago"])(
     "gastosPorCategoria desconta o recebível %s da parcela — sem filtro nenhum",
     (status) => {
       const [fatia] = gastosPorCategoria({
@@ -1081,18 +1083,17 @@ describe("8 · 03-D — status de recebível, um a um", () => {
     },
   );
 
-  it("⚠️ `ignorado` conta como terceiro hoje — a D11 decidiu que deve virar despesa minha", () => {
-    // CONGELADO COMO ESTÁ. Hoje o valor perdoado continua sendo contado como dele; a D11
-    // manda a tela passar a mostrar a parte EFETIVA (acordada + perdoado). Quando a 03-D
-    // implementar, este número muda de 400 para 500 — e a mudança será visível AQUI.
+  it("D11 — `ignorado` vira despesa minha: 400 → 500", () => {
+    // A 03-D implementou a D11: a tela mostra a parte EFETIVA (acordada + perdoado). Antes o
+    // valor perdoado era contado como dele (400); agora é meu (500) — a mudança aparece AQUI.
     const r = resumoMes({
       mes: "2026-06",
       transactions: [],
       statements: [statement({ id: "st", total_atual: 500 })],
       receivables: [receivable({ statement_id: "st", valor: 100, status: "ignorado" })],
     });
-    expect(r.cartaoMeu).toBe(400);
-    expect(r.cartaoMeu).not.toBe(500);
+    expect(r.cartaoMeu).toBe(500);
+    expect(r.cartaoMeu).not.toBe(400);
   });
 
   it("recebível de FATURA e recebível de PARCELA são somados por chaves diferentes", () => {

@@ -10,10 +10,13 @@
  *
  * `applySplit` roda de verdade sobre o client falso. Fixture sintética.
  */
-import { describe, expect, it } from "vitest";
-import { criarTransacao, type FinanceServiceContext } from "@/lib/finance/services";
+import { describe, expect, it, vi } from "vitest";
+import { criarTransacao, excluirTransacaoSimples, type FinanceServiceContext } from "@/lib/finance/services";
 import { MSG_PARTE_AUSENTE, MSG_PARTE_TOTAL } from "@/lib/finance/responsabilidade-da-receita";
 import { criarSupabaseEmMemoria, type Linha } from "@/test/supabase-em-memoria";
+
+// A leitura usa o client em memória do ctx; neutraliza apenas o client de servidor.
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}) }));
 
 const CONTA = "3f1a7c60-9d2b-4a11-8f37-2c9a1b7e5d40";
 const PESSOA = "8b2e4d10-1c3f-4e55-9a02-6d7b8c9e0f11";
@@ -32,6 +35,42 @@ function rodar(payload: Linha) {
   const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
   return { fake, resultado: criarTransacao(ctx, payload) };
 }
+
+describe("03-D · A4 — o desfazer da IA não apaga dinheiro registrado", () => {
+  function cenario(status: string, recebimentos: Linha[]) {
+    const fake = criarSupabaseEmMemoria({
+      transactions: [{ id: "tx-ia", user_id: "user-1", transfer_group_id: null }],
+      receivables: [{ id: "rec-ia", user_id: "user-1", transaction_id: "tx-ia", status, valor: 100 }],
+      receivable_receipts: recebimentos,
+    });
+    const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
+    return { fake, ctx };
+  }
+
+  it("recusa recebível pendente com recebimento registrado, sem nenhuma escrita", async () => {
+    const { fake, ctx } = cenario("pendente", [{
+      id: "receb-ia", user_id: "user-1", receivable_id: "rec-ia", valor: 40,
+      recebido_em: "2026-06-05", created_at: "2026-06-05T10:00:00Z",
+    }]);
+
+    const resultado = await excluirTransacaoSimples(ctx, "tx-ia");
+
+    expect(resultado).toEqual({ ok: false, erro: expect.stringContaining("recebimento registrado") });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("permite pago legado sem recebimento e escreve somente o delete do lançamento (decisão b)", async () => {
+    const { fake, ctx } = cenario("pago", []);
+
+    const resultado = await excluirTransacaoSimples(ctx, "tx-ia");
+
+    expect(resultado).toEqual({ ok: true });
+    expect(fake.escritas()).toEqual([
+      { tabela: "transactions", tipo: "delete", filtros: [["eq", "id", "tx-ia"]] },
+    ]);
+    expect(fake.tabelas.transactions).toEqual([]);
+  });
+});
 
 /** A linha que o insert de `transactions` recebeu (a primeira, e só pode haver uma). */
 function inseridaEmTransactions(fake: ReturnType<typeof criarSupabaseEmMemoria>): Linha {

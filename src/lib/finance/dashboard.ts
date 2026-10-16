@@ -18,7 +18,7 @@
  * VALOR MEU × TERCEIROS (fonte única, idêntica à /faturas)
  * -------------------------------------------------------
  * - À vista / não-cartão: meu = `valor_pessoal ?? amount`; terceiros = `amount − meu`.
- * - Cartão (por fatura): terceiros = Σ `receivables.valor` da fatura; meu = `total_atual − terceiros`.
+ * - Cartão (por fatura): terceiros = Σ parte do terceiro da fatura (o VALOR, D3; `ignorado` → só o que ele pagou, D11/K3-a); meu = `total_atual − terceiros`.
  * - Entradas (REDESIGN-03-C, E3): `entradas` é BRUTA; `entradasMeu`/`entradasTerceiros` a
  *   repartem pela mesma regra da saída à vista (`valor_pessoal ?? amount`), gravada no ato.
  * `cancelado`/`cancelada`, `transferencia` e `ajuste` ficam fora de entradas/saídas.
@@ -26,10 +26,10 @@
 import { addMonths, format, getDaysInMonth, parseISO } from "date-fns";
 import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
 import { LIMIARES_DE_ALERTA } from "@/lib/finance/limiares-de-alerta";
+import { parteDoTerceiroCentavos, pendenteDoPeriodo, perdoadoCentavos } from "@/lib/finance/recebimentos";
 import { occurrenceOn } from "@/lib/finance/recurrence";
 import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
 import {
-  RECEIVABLE_OPEN_STATUSES,
   type Frequency,
   type PaymentMethod,
   type StatementStatus,
@@ -42,6 +42,8 @@ const ISO = "yyyy-MM-dd";
 /* ───────────────────────────── Tipos de entrada (estruturais) ───────────────────────────── */
 
 export type DashTx = {
+  /** 03-D (B1, à vista): liga o recebível ao lançamento. Opcional — `dashboard.test.ts` não muda. */
+  id?: string;
   amount: number;
   valor_pessoal: number | null;
   type: TransactionType;
@@ -66,6 +68,10 @@ export type DashStatement = {
 };
 
 export type DashReceivable = {
+  /** 03-D: o lançamento de origem (D11 à vista). Opcional pelo mesmo motivo; o pipeline sempre preenche. */
+  transaction_id?: string | null;
+  /** 03-D: Σ recebido em REAIS, já com a K0 aplicada. Sem data (P2). Ausente = K0 sobre lista vazia. */
+  recebido?: number;
   statement_id: string | null;
   installment_id: string | null;
   valor: number;
@@ -200,6 +206,17 @@ function statementsDoMes(statements: DashStatement[], mes: string): DashStatemen
   return statements.filter((s) => s.card_id && mesDe(s.competencia) === mes);
 }
 
+/** D11 à vista: o perdoado dos recebíveis de UM lançamento sem parcela, por `transaction_id`. */
+function perdoadoPorLancamento(receivables: DashReceivable[]): Map<string, number> {
+  const mapa = new Map<string, number>();
+  for (const r of receivables) {
+    if (r.installment_id || !r.transaction_id) continue;
+    const p = perdoadoCentavos(r);
+    if (p !== 0) mapa.set(r.transaction_id, (mapa.get(r.transaction_id) ?? 0) + p);
+  }
+  return mapa;
+}
+
 function somaTerceirosDasFaturas(
   statements: DashStatement[],
   receivables: DashReceivable[],
@@ -207,7 +224,7 @@ function somaTerceirosDasFaturas(
   const ids = new Set(statements.map((s) => s.id));
   let total = 0;
   for (const r of receivables) {
-    if (r.statement_id && ids.has(r.statement_id)) total += cent(r.valor);
+    if (r.statement_id && ids.has(r.statement_id)) total += parteDoTerceiroCentavos(r);
   }
   return total;
 }
@@ -219,6 +236,8 @@ export function resumoMes(params: {
   receivables: DashReceivable[];
 }): ResumoMes {
   const { mes, transactions, statements, receivables } = params;
+
+  const perdoadoAVista = perdoadoPorLancamento(receivables);
 
   let entradasCent = 0;
   let entradasMeuCent = 0;
@@ -244,7 +263,7 @@ export function resumoMes(params: {
     // Saída à vista: não-cartão e não-parcelado (parcelas entram pela fatura).
     if (t.card_id === null && !t.parcelado) {
       aVistaCent += cent(t.amount);
-      aVistaMeuCent += meuCentavos(t);
+      aVistaMeuCent += meuCentavos(t) + (t.id ? perdoadoAVista.get(t.id) ?? 0 : 0);
     }
   }
 
@@ -268,6 +287,30 @@ export function resumoMes(params: {
     aVista: reais(aVistaCent),
     aVistaMeu: reais(aVistaMeuCent),
   };
+}
+
+/**
+ * 03-D (B1a, P11) — o perdoado do mês: o que entra em `meu` por causa da D11. Mesmas regras de
+ * `resumoMes` (à vista pela competência do lançamento; cartão pela competência da fatura), então
+ * `resumoMes(...).meu − perdoadoDoMes(...)` é a parte ACORDADA. Função, e não chave de
+ * `ResumoMes`: a chave mudaria `toEqual` sem número nenhum mudar.
+ */
+export function perdoadoDoMes(params: {
+  mes: string;
+  transactions: DashTx[];
+  statements: DashStatement[];
+  receivables: DashReceivable[];
+}): number {
+  const { mes, transactions, statements, receivables } = params;
+  const porLancamento = perdoadoPorLancamento(receivables);
+  let total = 0;
+  for (const t of transactions) {
+    if (!ativo(t) || t.type !== "despesa" || mesDe(t.competence_date) !== mes) continue;
+    if (t.card_id === null && !t.parcelado && t.id) total += porLancamento.get(t.id) ?? 0;
+  }
+  const ids = new Set(statementsDoMes(statements, mes).map((s) => s.id));
+  for (const r of receivables) if (r.statement_id && ids.has(r.statement_id)) total += perdoadoCentavos(r);
+  return reais(total);
 }
 
 /* ───────────────────────────── Itens de gasto (categoria/forma) ───────────────────────────── */
@@ -303,16 +346,17 @@ function buildSpendItems(params: {
     if (!r.installment_id) continue;
     recByInstallment.set(
       r.installment_id,
-      (recByInstallment.get(r.installment_id) ?? 0) + cent(r.valor),
+      (recByInstallment.get(r.installment_id) ?? 0) + parteDoTerceiroCentavos(r),
     );
   }
 
+  const perdoado = perdoadoPorLancamento(receivables);
   const items: SpendItem[] = [];
 
   for (const t of transactions) {
     if (!ativo(t) || t.type !== "despesa" || t.parcelado) continue;
     const movCent = cent(t.amount);
-    const meuCent = meuCentavos(t);
+    const meuCent = meuCentavos(t) + (t.id ? perdoado.get(t.id) ?? 0 : 0);
     if (t.card_id === null) {
       // À vista (base competência).
       items.push({
@@ -523,7 +567,7 @@ export function proximas6Faturas(params: {
     if (!r.statement_id) continue;
     recByStatement.set(
       r.statement_id,
-      (recByStatement.get(r.statement_id) ?? 0) + cent(r.valor),
+      (recByStatement.get(r.statement_id) ?? 0) + parteDoTerceiroCentavos(r),
     );
   }
   const stmtByKey = new Map<string, DashStatement>();
@@ -653,15 +697,12 @@ export function projecaoProximosMeses(params: {
 /* ───────────────────────────── A receber & próximas contas ───────────────────────────── */
 
 /**
- * Total ainda a receber de terceiros (status pendente/cobrado). Se `mes` ('yyyy-MM')
- * for informado, conta só os recebíveis cujo mês de referência (`ref_month`) é `mes`.
+ * Total ainda a receber de terceiros: o SALDO dos recebíveis em aberto, pelo estado derivado.
+ * Se `mes` ('yyyy-MM') for informado, conta só os recebíveis cujo `ref_month` é `mes`.
  */
 export function totalAReceber(receivables: DashReceivable[], mes?: string): number {
-  const c = receivables
-    .filter((r) => (RECEIVABLE_OPEN_STATUSES as string[]).includes(r.status))
-    .filter((r) => !mes || r.ref_month === mes)
-    .reduce((s, r) => s + cent(r.valor), 0);
-  return reais(c);
+  // B4 (03-D): o saldo dos em aberto, pelo estado derivado — a soma manda
+  return pendenteDoPeriodo(receivables, mes);
 }
 
 export type ProximasContas = {

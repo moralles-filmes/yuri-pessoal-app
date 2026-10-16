@@ -1,9 +1,12 @@
 # Migrations do redesign — desenho
 
 ⛔ **A M3 foi aplicada em 2026-10-11** (REDESIGN-03-C2, versão remota `20261011190803`), depois
-do "aplique a M3" literal do dono. **A M1 e a M2 NÃO foram aplicadas.** Estão escritas para você
-ler e autorizar **uma a uma**. Aplicar exige `apply_migration` no projeto
-`yjvnlbjvippefvzgrxxw`, e só com o seu "aplique a M1" (ou M2) explícito.
+do "aplique a M3" literal do dono. **A M1 foi aplicada em 2026-10-12** (REDESIGN-03-D), depois do
+"aplique a M1" literal — **pelo SQL Editor**, porque o `apply_migration` do MCP foi recusado pela
+confirmação do próprio MCP; a versão `20261011210000` foi registrada no histórico em 2026-10-15
+(`supabase migration repair --status applied`). **A M2 NÃO foi aplicada.** Está escrita para
+você ler e autorizar. Aplicar exige `apply_migration` no projeto `yjvnlbjvippefvzgrxxw`, e só
+com o seu "aplique a M2" explícito.
 
 As três são **aditivas**: nenhuma apaga tabela, apaga coluna, renomeia, muda tipo ou
 reinterpreta dado existente. Todas seguem as convenções do projeto conferidas no disco —

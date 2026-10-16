@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { motivoParaNaoApagar } from "@/lib/finance/protecao-do-recebivel";
+import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
 import {
   authContext,
   dbError,
@@ -975,16 +977,16 @@ export async function undoImportBatch(
     }
   }
 
-  const { data: recs } = await ctx.supabase
-    .from("receivables")
-    .select("id, status")
-    .in("transaction_id", txIds)
-    .in("status", ["cobrado", "pago"]);
-  if ((recs ?? []).length > 0) {
-    return dbError(
-      `Há ${(recs ?? []).length} recebível(is) já cobrado(s) ou pago(s) nestes lançamentos. Acerte-os em A Receber antes de desfazer.`,
-    );
+  const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: txIds });
+  if (protecao.erro) {
+    return dbError("Não foi possível conferir os recebíveis deste lote. Tente de novo.");
   }
+  const motivo = motivoParaNaoApagar(
+    protecao.recebiveis,
+    "regra-cheia",
+    "desfazer a importação",
+  );
+  if (motivo) return dbError(motivo);
 
   const { error } = await ctx.supabase
     .from("transactions")

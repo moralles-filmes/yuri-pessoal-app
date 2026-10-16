@@ -11,7 +11,10 @@ import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { toDateInputValue } from "@/lib/format";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
+import { leituraComTeto, type LeituraComTeto } from "@/lib/finance/leitura-com-teto";
 import { idsDasCategoriasMarcadas } from "@/lib/finance/categorias-marcadas";
+import { anexarRecebimentos } from "@/lib/finance/recebimentos";
+import { lerRecebimentos } from "@/lib/finance/recebimentos-leitura";
 import {
   saldosPorDia,
   type MovimentoDeSaldo,
@@ -246,18 +249,7 @@ export type TransactionRangeFilters = {
 export const TETO_DE_LANCAMENTOS = 2000;
 export const TETO_DE_RECEBIVEIS = 1000;
 
-export type LeituraComTeto<T> = {
-  linhas: T[];
-  situacao: "completa" | "saturou" | "sem_contagem";
-};
-
-/** Compara com o recebido: o max_rows do PostgREST pode cortar antes do nosso limit. */
-function leituraComTeto<T>(linhas: T[], count: number | null): LeituraComTeto<T> {
-  return {
-    linhas,
-    situacao: count === null ? "sem_contagem" : count > linhas.length ? "saturou" : "completa",
-  };
-}
+export type { LeituraComTeto };
 
 /**
  * Lançamentos por intervalo de competência (Fase 07 — dashboard). Diferente de
@@ -442,7 +434,7 @@ export async function getStatements(
 // e ambiguidade de embedding do PostgREST só estoura em RUNTIME — como o `42P10` do
 // `ON CONFLICT` que a Fase 16 documentou.
 const INSTALLMENT_PURCHASE_SELECT =
-  "*, card:credit_cards(id,nome,cor,bandeira,dia_fechamento,dia_vencimento), category:categories(id,name,color,icon), installments:transaction_installments(*, statement:card_statements(id,competencia,data_fechamento,data_vencimento,pago_em)), shared:shared_expenses!shared_expenses_transaction_id_fkey(person_id,valor,person:people(id,nome)), receivables!receivables_transaction_id_fkey(id,installment_id,person_id,valor,status)";
+  "*, card:credit_cards(id,nome,cor,bandeira,dia_fechamento,dia_vencimento), category:categories(id,name,color,icon), installments:transaction_installments(*, statement:card_statements(id,competencia,data_fechamento,data_vencimento,pago_em)), shared:shared_expenses!shared_expenses_transaction_id_fkey(person_id,valor,person:people(id,nome)), receivables!receivables_transaction_id_fkey(id,installment_id,person_id,valor,status,pago_em)";
 
 export type InstallmentPurchaseFilters = {
   cardId?: string;
@@ -469,11 +461,12 @@ export async function getInstallmentPurchases(
   if (filters.cardId) query = query.eq("card_id", filters.cardId);
   if (filters.categoryId) query = query.eq("category_id", filters.categoryId);
 
-  const { data } = await query;
+  const [{ data }, recebimentos] = await Promise.all([query, lerRecebimentos()]);
   const rows = (data ?? []) as unknown as InstallmentPurchaseWithRelations[];
   // A embedding não garante ordem; ordena as parcelas por número.
   for (const r of rows) {
     r.installments?.sort((a, b) => a.numero - b.numero);
+    r.receivables = anexarRecebimentos(r.receivables ?? [], recebimentos.linhas);
   }
   return rows;
 }
@@ -593,13 +586,30 @@ export async function getReceivables(
 
 async function lerRecebiveis(
   owner?: LeituraDoDono,
-): Promise<LeituraComTeto<ReceivableWithRelations>> {
+): Promise<
+  LeituraComTeto<ReceivableWithRelations> & {
+    situacaoDosRecebimentos: LeituraComTeto<unknown>["situacao"];
+    /** Quantos recebimentos VIERAM — o motivo cita o que veio, não o teto (o max_rows corta antes). */
+    recebimentosLidos: number;
+  }
+> {
   const supabase = owner?.client ?? (await createClient());
   const base = supabase.from("receivables").select(RECEIVABLE_SELECT, { count: "exact" });
-  const { data, count } = await (owner ? base.eq("user_id", owner.userId) : base)
-    .order("created_at", { ascending: false })
-    .limit(TETO_DE_RECEBIVEIS);
-  return leituraComTeto((data ?? []) as unknown as ReceivableWithRelations[], count);
+  const [{ data, count }, recebimentos] = await Promise.all([
+    (owner ? base.eq("user_id", owner.userId) : base)
+      .order("created_at", { ascending: false })
+      .limit(TETO_DE_RECEBIVEIS),
+    lerRecebimentos(owner),
+  ]);
+  const linhas = anexarRecebimentos(
+    (data ?? []) as unknown as Omit<ReceivableWithRelations, "recebimentos">[],
+    recebimentos.linhas,
+  );
+  return {
+    ...leituraComTeto(linhas, count),
+    situacaoDosRecebimentos: recebimentos.situacao,
+    recebimentosLidos: recebimentos.linhas.length,
+  };
 }
 
 /**
@@ -611,11 +621,17 @@ export async function getReceivablesByStatements(
 ): Promise<ReceivableWithPerson[]> {
   if (statementIds.length === 0) return [];
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("receivables")
-    .select("*, person:people(id,nome)")
-    .in("statement_id", statementIds);
-  return (data ?? []) as unknown as ReceivableWithPerson[];
+  const [{ data }, recebimentos] = await Promise.all([
+    supabase
+      .from("receivables")
+      .select("*, person:people(id,nome)")
+      .in("statement_id", statementIds),
+    lerRecebimentos(),
+  ]);
+  return anexarRecebimentos(
+    (data ?? []) as unknown as Omit<ReceivableWithPerson, "recebimentos">[],
+    recebimentos.linhas,
+  );
 }
 
 /* ───────────────────── REDESIGN-03-B — a leitura do motor financeiro ───────────────────── */
@@ -702,6 +718,13 @@ export async function lerFinanceiro<E extends EscopoFinanceiro>(
       );
     } else if (recebiveis.situacao === "sem_contagem") {
       motivos.push("Não foi possível confirmar que a leitura de recebíveis veio completa.");
+    }
+    if (recebiveis.situacaoDosRecebimentos === "saturou") {
+      motivos.push(
+        `A leitura de recebimentos trouxe ${recebiveis.recebimentosLidos} registros e havia mais: os saldos podem estar incompletos.`,
+      );
+    } else if (recebiveis.situacaoDosRecebimentos === "sem_contagem") {
+      motivos.push("Não foi possível confirmar que a leitura de recebimentos veio completa.");
     }
   }
   if (cartoes !== undefined) linhas.cartoes = cartoes;

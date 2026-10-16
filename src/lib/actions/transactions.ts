@@ -12,6 +12,8 @@ import {
 } from "@/lib/actions/helpers";
 import { resolveOrCreateStatement } from "@/lib/finance/statements";
 import { reapplySplit } from "@/lib/finance/split-reapply";
+import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
+import { motivoParaNaoApagar } from "@/lib/finance/protecao-do-recebivel";
 import {
   criarTransacao,
   lerResponsabilidadeDaReceita,
@@ -99,6 +101,13 @@ export async function updateTransaction(
   // Transferências são substituídas (remove e recria) para manter as duas pernas
   // sempre consistentes; lançamentos simples são atualizados no lugar.
   if (wasTransfer || isTransfer) {
+    // REDESIGN-03-D · RR-D-17 — apagar e recriar leva a divisão por cascade (shared_expenses e
+    // parcelas → recebíveis → recebimentos). Mesmo alcance de `deleteTransaction` (decisão (b)).
+    const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: [id] });
+    if (protecao.erro) return dbError("Não foi possível conferir os recebíveis deste lançamento. Tente de novo.");
+    const motivo = motivoParaNaoApagar(protecao.recebiveis, "so-dinheiro-registrado", "transformar o lançamento em transferência");
+    if (motivo) return dbError(motivo);
+
     // Se for o pagamento de uma fatura, a fatura precisa apontar para o lançamento RECRIADO
     // (o delete abaixo zeraria `pago_transacao_id`). Editar o pagamento não desfaz o pagamento.
     const statementId = await statementPaidBy(ctx, id);
@@ -269,6 +278,12 @@ export async function deleteTransaction(id: string): Promise<ActionResult> {
     .select("transfer_group_id")
     .eq("id", id)
     .single();
+
+  // REDESIGN-03-D · A4 (decisão (b)) — o cascade levaria o registro do dinheiro que entrou.
+  const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: [id] });
+  if (protecao.erro) return dbError("Não foi possível conferir os recebíveis deste lançamento. Tente de novo.");
+  const motivo = motivoParaNaoApagar(protecao.recebiveis, "so-dinheiro-registrado", "excluir o lançamento");
+  if (motivo) return dbError(motivo);
 
   // Apagar o pagamento pela tela de Lançamentos reabre a fatura — mesmo efeito do
   // "Desfazer" em /faturas (o saldo da conta já estorna sozinho, junto com o lançamento).

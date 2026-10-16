@@ -8,6 +8,10 @@
  * ║ • `insert` guarda a linha na tabela (com `id` = `<tabela>-<n>` quando ausente); com   ║
  * ║   `.select()` encadeado, devolve as linhas inseridas.                                 ║
  * ║ • `update` faz merge nas linhas filtradas; `delete` as remove.                        ║
+ * ║   `update().select()` devolve as linhas alteradas.                                   ║
+ * ║ • `not(coluna, op, alvo)` nega o filtro indicado.                                    ║
+ * ║ • `antesDeGravar` simula constraint/trigger: a escrita recusada não é gravada        ║
+ * ║   nem registrada como operação.                                                     ║
  * ║ • Filtros `eq`, `neq`, `in`, `is`, `gt`, `gte`, `lt`, `lte` são APLICADOS — é isso    ║
  * ║   que torna visível um `.eq("transaction_id", …)` esquecido.                          ║
  * ║ • `limit` corta; `single()` sem linha devolve erro (como o PostgREST); `maybeSingle`  ║
@@ -24,6 +28,14 @@
  */
 
 export type Linha = Record<string, unknown>;
+
+export type ErroSimulado = { code: string; message: string };
+export type EscritaPretendida = {
+  tabela: string;
+  tipo: "insert" | "update" | "delete";
+  valores?: Linha | Linha[];
+  tabelas: Record<string, Linha[]>;
+};
 
 export type Operacao = {
   tabela: string;
@@ -55,7 +67,7 @@ const TESTES: Record<string, (valor: unknown, alvo: unknown) => boolean> = {
 
 export function criarSupabaseEmMemoria(
   tabelasIniciais: Record<string, Linha[]>,
-  opcoes: { userId?: string } = {},
+  opcoes: { userId?: string; antesDeGravar?: (op: EscritaPretendida) => ErroSimulado | null } = {},
 ) {
   const tabelas: Record<string, Linha[]> = Object.fromEntries(
     Object.entries(tabelasIniciais).map(([nome, linhas]) => [nome, linhas.map((l) => ({ ...l }))]),
@@ -66,16 +78,32 @@ export function criarSupabaseEmMemoria(
   function from(tabela: string) {
     let modo: "select" | "insert" | "update" | "delete" = "select";
     let devolveInseridas = false;
+    let devolveAlteradas = false;
     let valores: Linha | Linha[] | undefined;
     let limite: number | undefined;
     const filtros: Array<[string, string, unknown]> = [];
     let executado: Resultado | undefined;
 
-    const casa = (l: Linha) => filtros.every(([op, col, alvo]) => TESTES[op](l[col], alvo));
+    const casa = (l: Linha) =>
+      filtros.every(([op, col, alvo]) => {
+        if (op === "not") {
+          const [opInterno, valor] = alvo as [string, unknown];
+          return !TESTES[opInterno](l[col], valor);
+        }
+        return TESTES[op](l[col], alvo);
+      });
 
     function executar(): Resultado {
       if (executado) return executado;
       const linhas = (tabelas[tabela] ??= []);
+
+      if (modo !== "select") {
+        const erro = opcoes.antesDeGravar?.({ tabela, tipo: modo, valores, tabelas });
+        if (erro) {
+          executado = { data: null, error: erro };
+          return executado;
+        }
+      }
 
       if (modo === "insert") {
         const novas = (Array.isArray(valores) ? valores : [valores ?? {}]).map((v) => {
@@ -89,9 +117,15 @@ export function criarSupabaseEmMemoria(
       }
 
       if (modo === "update") {
-        for (const l of linhas) if (casa(l)) Object.assign(l, valores);
+        const alteradas: Linha[] = [];
+        for (const l of linhas) {
+          if (casa(l)) {
+            Object.assign(l, valores);
+            alteradas.push({ ...l });
+          }
+        }
         operacoes.push({ tabela, tipo: "update", valores, filtros: [...filtros] });
-        executado = { data: null, error: null };
+        executado = { data: devolveAlteradas ? alteradas : null, error: null };
         return executado;
       }
 
@@ -118,8 +152,13 @@ export function criarSupabaseEmMemoria(
         return builder;
       };
     }
+    builder.not = (coluna: string, op: string, alvo: unknown) => {
+      filtros.push(["not", coluna, [op, alvo]]);
+      return builder;
+    };
     builder.select = () => {
       if (modo === "insert") devolveInseridas = true;
+      if (modo === "update") devolveAlteradas = true;
       return builder;
     };
     builder.insert = (v: Linha | Linha[]) => {

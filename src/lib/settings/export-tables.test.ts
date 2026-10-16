@@ -109,6 +109,12 @@ describe("backup do usuário", () => {
       expect(reason.length, table).toBeGreaterThan(20);
     }
   });
+
+  it("inclui receivable_receipts logo depois de receivables (03-D)", () => {
+    const i = EXPORT_TABLES.indexOf("receivables");
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(EXPORT_TABLES[i + 1]).toBe("receivable_receipts");
+  });
 });
 
 describe("Fase 18-F — seção de IA", () => {

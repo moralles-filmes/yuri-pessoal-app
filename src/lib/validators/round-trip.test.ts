@@ -23,6 +23,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { categorySchema } from "@/lib/validators/category";
+import { registrarRecebimentoSchema } from "@/lib/validators/receivable";
 import { optionalText } from "@/lib/validators/shared";
 import { receitaResponsabilidadeSchema } from "@/lib/validators/split";
 import {
@@ -56,6 +57,20 @@ import {
 } from "@/lib/validators/training-goals";
 
 const UUID = "11111111-2222-4333-8444-555555555555";
+
+describe("recebimento: o formulário aceita a própria saída", () => {
+  it("preserva o valor e aceita observações null na segunda volta", () => {
+    const { noCliente, noServidor } = roundTrip(registrarRecebimentoSchema, {
+      receivable_id: UUID,
+      valor: "250,00",
+      recebido_em: "2026-06-05",
+      observacoes: "",
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noCliente.data).toMatchObject({ valor: 250, observacoes: null });
+    expect(noServidor.data).toEqual(noCliente.data);
+  });
+});
 
 /**
  * Faz a viagem inteira: valida como o resolver faria, manda a SAÍDA para a action e valida

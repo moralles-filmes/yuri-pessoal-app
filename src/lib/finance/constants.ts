@@ -211,7 +211,7 @@ export const RECEIVABLE_STATUS_LABELS: Record<ReceivableStatus, string> = {
   pendente: "Pendente",
   cobrado: "Cobrado",
   pago: "Recebido",
-  ignorado: "Ignorado",
+  ignorado: "Não será cobrado",
 };
 
 /** Status que contam como "ainda a receber" (entram no total pendente). */

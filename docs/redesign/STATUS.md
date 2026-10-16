@@ -1,6 +1,6 @@
 # STATUS
 
-**Atualizado:** 2026-10-11
+**Atualizado:** 2026-10-15
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
 REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
@@ -8,19 +8,20 @@ REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · 
 (`02aa54b`, integrada por merge `--no-ff`) · **REDESIGN-03-B ✅** (integrada por merge
 `--no-ff` em `ad9f359`) · **REDESIGN-03-B2 ✅** (integrada por merge `--no-ff` em `b06f160`)
 · **REDESIGN-03-C ✅** (integrada por merge `--no-ff` em `22ec12f`) · **REDESIGN-03-C2 ✅**
-(integrada por merge `--no-ff` em `31bef87`, **com a M3 aplicada**); **03-D liberada** —
-reembolsos e recebíveis: recebimento parcial (E1, **com a M1**), `ignorado` visível e os três
-números de terceiros
+(integrada por merge `--no-ff` em `31bef87`, **com a M3 aplicada**) · **REDESIGN-03-D ✅**
+(integrada por merge `--no-ff` em `545acf4`, **com a M1 aplicada**); **03-E liberada** — modo
+caixa exato × competência com rótulo (E6, **com a M2**)
 
-⛔ **A M3 foi aplicada em 2026-10-11** (03-C2), pelo MCP, depois do seu "aplique a M3" literal
-(D50). **A M1 e a M2 continuam sem ser aplicadas.** "Aprovado tudo" foi lido como aval do
-**visual** e do **dicionário**. Cada migration escreve no banco de produção e segue precisando
-de um "aplique a M1" (ou M2) seu, separado. Serão pedidas uma a uma, no momento em que a
-subfase precisar delas — a M1 é da 03-D.
+⛔ **A M1 foi aplicada em 2026-10-12** (03-D), depois do seu "aplique a M1" literal — **pelo
+SQL Editor, não pelo MCP** (D55). A M3 foi aplicada em 2026-10-11 (03-C2), pelo MCP (D50).
+**A M2 continua sem ser aplicada.** "Aprovado tudo" foi lido como aval do **visual** e do
+**dicionário**. Cada migration escreve no banco de produção e segue precisando de um "aplique
+a M2" seu, separado, no momento em que a subfase precisar dela — a M2 é da 03-E.
 
-🚀 **De 00 a 03-C2 vai para produção pelo PR #56** (D54). A regra do plano mudou por decisão
-sua em 2026-10-11: as subfases fechadas são publicadas **por partes**, cada uma por PR, em vez
-de esperar a 08. A 03-D entra quando fechar. As 07-A, 07-B e 07-C estão no GitHub só como
+🚀 **De 00 a 03-C2 foi para produção pelo PR #56** (D54, mergeado em 2026-10-12). A regra do
+plano mudou por decisão sua em 2026-10-11: as subfases fechadas são publicadas **por partes**,
+cada uma por PR, em vez de esperar a 08. **A 03-D vai pelo PR #57** (D60), com o seu aval
+para o push e o PR; o merge em `main` é seu. As 07-A, 07-B e 07-C estão no GitHub só como
 backup.
 
 ⚠️ **CORREÇÃO (D29): a M3 NÃO é da 03-B.** Este documento afirmava, em dois lugares, que a
@@ -28,6 +29,76 @@ backup.
 o `PLANO.md` descreve a 03-B como *"unificar o pipeline triplicado … **sem mudar número
 nenhum**"*, e `MIGRATIONS.md:16` liga a M3 à **D8**, que é a **03-C2**. **A 03-B não precisa
 de migration nenhuma.** A primeira a precisar é a 03-C2.
+
+---
+
+## REDESIGN-03-D — o que foi devido e o que voltou passam a ser dois fatos ✅
+
+Branch própria a partir de `17a93e9` (desenho `c1d5c5c`, plano `cde0451` + 33 commits),
+integrada por merge `--no-ff` em **`545acf4`**. Contrato:
+`docs/superpowers/specs/2026-10-11-03d-recebiveis-design.md` (o §13 é o resultado).
+**Segunda subfase com migration: a M1** (`receivable_receipts`), aplicada em 2026-10-12 depois
+do seu "aplique a M1" literal — **pelo SQL Editor, não pelo MCP** (D55). Os parâmetros das
+quatro assinaturas públicas intactos; o retorno mudou só no aprovado (`perdoado` na B1a, o valor
+de `aReceber` na B4).
+
+Até aqui um recebível era `valor` + `status`: "deve R$ 600, pagou R$ 250" era irrepresentável.
+A 03-D dá a ele um **histórico de recebimentos** e deriva o estado da **soma** — `parcial`
+nunca é gravado (K1), e o `pago` legado sem recebimento é derivado num ponto só, sem backfill
+(K0). ⛔ **Nada foi recebido nem reclassificado sozinho:** com o dado de hoje (241 recebíveis,
+0 `ignorado`, 0 recebimentos — contado no início e no fim), **nenhum número de tela mudou**.
+Muda quando você registrar um recebimento parcial ou decidir não cobrar alguém.
+
+| Item | O que fechou | Muda número? |
+| --- | --- | --- |
+| A1 | módulo puro `recebimentos.ts` (saldo, estado derivado, legado K0, parte do terceiro, perdoado, os três números) e a varredura por allowlist de quem menciona a tabela | não |
+| A2 | a M1 (FK composta com cascade, trigger que trava o excesso com `FOR UPDATE`, RLS + FORCE), tipos com o diff lido — só o bloco da tabela — e a tabela no backup | não (tabela vazia) |
+| A3 | uma leitura e uma escrita: registrar, receber o saldo e desfazer **só o último** — recebimento ANTES da coluna ao receber, coluna ANTES do recebimento ao desfazer (K1); o recebimento só registra (K2) | não |
+| A4 | proteção única nos cinco pontos de exclusão do F4 — e, depois da revisão final, nos dois que o F4 esqueceu (D57) | não |
+| A5/A6 | `/terceiros` com saldo, histórico e o diálogo de registrar; o pipeline entrega `recebido` ao motor | não |
+| **B1** | D11: `ignorado` vira despesa sua e aparece como "não será cobrado R$ X"; perdoar um parcial perdoa o saldo (K3-a) | **sim** — efeito hoje: zero |
+| **B2** | os dois "A receber" ganham rótulos distintos ("Pendente referente a {mês}" / "Total pendente até DD/MM"), também em `/dashboard/financeiro` e `/relatorios` | só rótulo |
+| **B3** | "Reembolsos recebidos" sai dos recebimentos, pela data | **sim** — efeito hoje: zero |
+| **B4** | "a receber" vira o **saldo** no motor, no sino e na IA | **sim** — efeito hoje: zero |
+
+**Prova:**
+- **`dashboard.test.ts` byte a byte igual** (`git diff --quiet 17a93e9`); a caracterização
+  mudou **só** C1–C12, cada um no commit do seu item. ⚠️ O C1 do contrato tinha a aritmética
+  errada; o código está certo e o contrato aprovado não foi reescrito.
+- **33 mutações do contrato + 6 extras + 9 das correções pós-revisão — todas derrubaram o que
+  deviam**, com o nome de cada teste no §13.4 e no §13.9 do contrato e a restauração conferida
+  por `git diff --quiet`. ⚠️ Três extras em `perdoadoDoMes` saíram **verdes** na primeira
+  rodada — fraqueza real, consertada com teste e refeita.
+- **+15 arquivos, +189 casos** (214 / 4.229 → 229 / 4.418).
+- Banco no fim (2026-10-12): 241 recebíveis (72 pendente / 0 cobrado / 169 pago / 0 ignorado),
+  `receivable_receipts` com 0 linhas, 48 receitas todas `pessoal`, **133 tabelas**, RLS + FORCE
+  em todas.
+- **Revisão independente da branch inteira**, no modelo mais capaz: "With fixes" — 1 crítico
+  (D57) e 4 menores. O crítico e um menor (D58) foram corrigidos com o seu aval, cada um com
+  re-revisão restrita (ADDRESSED); os outros três menores viraram risco residual.
+
+⚠️ **Desvios do desenho, declarados (§13.7 do contrato):** a M1 pelo SQL Editor (D55) · a
+conferência visual foi dos componentes isolados com o CSS do build, a 390 px, claro e escuro —
+**as telas inteiras no app logado não foram conferidas** (a extensão do Chrome não conectou) ·
+mais de um commit por passo (pacotes de até 5 arquivos) · três falsos alarmes do gate do
+roteador · vários pacotes ficaram no principal (D56).
+
+### Risco residual da 03-D
+
+RR-D-1 a RR-D-10 estão no §12 do contrato; os da execução, no §13.8 e no §13.9.
+
+| # | Risco | Destino |
+| --- | --- | --- |
+| RR-D-12 | `lerRecebimentos` não olha `error`: numa falha de leitura, `/terceiros`, `/faturas`, `/parcelamentos` e o sino mostram o saldo cheio, sem aviso | **04-C** |
+| RR-D-13 | receber numa aba e desfazer noutra pode deixar a coluna `pago` com a soma aberta (conta como em aberto) | aceito |
+| RR-D-14 | `RECEIVABLE_OPEN_STATUSES` sem consumidor de produção, com a doc desatualizada | **04-C** |
+| RR-D-15 | `finance.get_invoice` da IA também devolve o saldo, e só `get_spending` define o termo | **07-D** |
+| RR-D-16 | a barra "N selecionados" de `/terceiros` soma um número híbrido sem rótulo | aceito; **04-C** |
+| RR-D-18 | falha da 2ª escrita: o cartão não oferece o "Receber" que a mensagem manda clicar | **04-C** |
+| RR-D-20 | `/faturas` e `/parcelamentos` leem todos os recebimentos, com teto e sem aviso | **04-C** |
+| RR-D-21 | a soma por pessoa continua dentro das telas, sem teste de comportamento | **04-C** |
+| RR5 (03-C) | o `saldo` da evolução continua bruto − bruto | **04-A** |
+| RR7 (03-C) | o vínculo do reembolso marcado como receita com o recebível | **04-C** — ⚠️ **aviso para a 03-E:** "Reembolsos recebidos" + "Outras entradas de terceiros" podem contar o mesmo dinheiro duas vezes na base caixa, e a 03-E tem de declarar isso em vez de somar as duas em silêncio |
 
 ---
 
@@ -751,7 +822,8 @@ distinguem · horizonte de faturas declarado honestamente (6 ciclos × 3 cartõe
 
 ## Migrations aprovadas (aditivas, nenhuma apaga ou reinterpreta dado)
 
-1. `receivable_receipts` (E1)
+1. `receivable_receipts` (E1) — **aplicada em 2026-10-12** (03-D, pelo SQL Editor — D55; versão
+   `20261011210000` registrada no histórico em 2026-10-15 — D59)
 2. `transactions.liquidado_em` (E6)
 3. `categories.classificacao_padrao` (E7) — **aplicada em 2026-10-11** (03-C2, versão
    `20261011190803`)
@@ -802,6 +874,12 @@ as colunas já existem e o CHECK já aceita.
 | D52 | **A 03-C2 foi integrada na sessão que a escreveu**, a seu pedido (o prompt da próxima subfase), **sem** revisão independente da branch e **sem** auditoria de módulo. A árvore integrada tem o **mesmo hash de tree** da ponta (`8f01d63`), e os cinco comandos rodaram depois do merge. ⚠️ **A conferência com dado real da D39/D44/D48 vale também para a 03-C2**: marcar uma categoria pela tela, ver o atalho numa receita nova e o filtro — e conferir que nenhum número de dashboard, relatório ou sino mudou |
 | D53 | **Um defeito anterior foi achado e NÃO consertado** (RR-C2-7): `categorySchema` transforma `sort_order` ausente em `0` e o formulário não o manda, então **toda edição de categoria zera a ordem dela**. Fora da lista da subfase — registrado para uma subfase futura |
 | D54 | **Publicação por partes** (2026-10-11, por pedido seu): as subfases fechadas vão a produção por PR assim que integradas, em vez de esperar a REDESIGN-08. A primeira leva é de 00 a 03-C2, no PR #56. O CI roda os cinco comandos e a Vercel gera uma prévia. **Reversão:** Instant Rollback para `dpl_8WeZ8o36fwziJYqn8k19VsrqDX1k` (`main` em `5de90d6`), sem mexer no banco, porque as migrations são aditivas. ⚠️ **A integração continua em `feat/redesign-00-auditoria`.** O portão de ancestral dos próximos prompts depende dela, e depois do merge ela segue viva, agora com upstream. A 08 continua existindo como regressão final, mas deixa de ser o momento da entrega |
+| D55 | **A M1 foi aplicada em 2026-10-12 pelo SQL Editor, não pelo MCP.** A autorização foi o seu "aplique a M1" literal — "Autorizo!" e "Pode aplicarrr…", antes dele, **não** foram tratados como ela. O `apply_migration` do MCP voltou `declined` (a confirmação do próprio MCP recusou; conferido que nada foi aplicado), você pediu o SQL e o aplicou. Conferida no banco depois: RLS + FORCE, policy por dono, os dois triggers, FK composta com cascade, índices, 0 linhas, **133 tabelas**. Tipos regenerados pelo MCP com o diff lido: só o bloco de `receivable_receipts` — de novo ficaram de fora a relationship `import_rows_transfer_account_owner_fkey` e a sintaxe nova dos genéricos (D50, invariante 94) |
+| D56 | **Roteador da 03-D:** 23 despachos de A1 a B4 e da correção do sino. **3 falharam** no gate (`scope_violation`, A5 1/2 e 2/2, B4 1/2) por falso alarme — a árvore principal estava intacta, e o diff foi tirado da worktree, revisado e aplicado. Desvios de worker revertidos ao plano (layout do cartão, nome de pessoa em `block`, o comentário da 03-B2 no Cron). A A2 (M1, tipos, backup) e as mutações ficaram no principal por sua instrução. Depois da revisão final, o Codex esteve **indisponível** duas vezes e o DeepSeek devolveu **saída inválida** duas: as correções seguiram no principal, e um patch de worker **não** foi aplicado como veio |
+| D57 | **A revisão final da branch achou um crítico que era do DESENHO, não da execução:** o F4 listou cinco pontos de exclusão e esqueceu `deleteInstallmentPurchase` (o botão de excluir de `/parcelamentos`) e a edição que vira transferência — os dois apagavam recebimento registrado por cascade, sem aviso. Foi registrado e reportado, e corrigido só depois do seu "Eu autorizo", com o alcance da decisão (b) (só recebimento registrado bloqueia). E o inventário deixou de ser à mão: `quem-apaga-recebiveis.test.ts` exige que todo `delete` da cadeia esteja numa allowlist, com contagem e motivo |
+| D58 | **O P6 mudou (RR-D-19), por decisão sua, delegada** ("Faz como achar mais recomendado"): "Desfazer o último" desfaz o último **registrado** (`created_at`), não o de data mais recente — pela data, um lançamento retroativo fazia o Desfazer apagar outro. O `pago_em` da soma fechada continua sendo a data mais recente |
+| D59 | **RR-D-11, decisão delegada:** a versão da M1 foi registrada no histórico remoto por `supabase migration repair --status applied 20261011210000` (só registra, não executa SQL). ⚠️ **Achado:** o histórico local × remoto está desalinhado no projeto **inteiro** — 11 de 347 linhas casam —, porque o MCP grava a hora da aplicação, não a versão do arquivo. `supabase db push` nunca foi utilizável aqui (aborta antes de aplicar qualquer coisa). Alinhar o histórico é decisão sua, fora do redesign |
+| D60 | **A 03-D foi integrada na sessão que a escreveu, a seu pedido** ("Pode mergear"), **com** revisão independente da branch inteira (D57) e re-revisão restrita de cada correção, **sem** auditoria de módulo. A branch nasceu antes da D54, então a árvore integrada é a da ponta (`c7798ae`) **mais exatamente** a mudança da D54 no STATUS — conferido por patch-id —, e os cinco comandos rodaram depois do merge. O push e o PR #57 vieram com o seu aval explícito; **o merge em `main` é seu**. ⚠️ **A conferência com dado real da D39/D44/D48/D52 vale também para a 03-D**: registrar um recebimento parcial pela tela, desfazê-lo, e conferir que nenhum número de dashboard, relatório ou sino mudou além do que a B1–B4 prometem |
 
 ## Bloqueios
 
@@ -817,7 +895,8 @@ perceber — MITIGADO nas quatro funções do núcleo pela 03-A; o pipeline que 
 UM na 03-B, e os riscos dele foram fechados na 03-B2 (tela e sino com uma régua só no gasto
 alto); a entrada repartida da 03-C nasceu com a partição testada e 16 mutações; a marcação da
 categoria (03-C2) nasceu com uma varredura por allowlist provando que nenhum motor, relatório,
-IA ou sino a lê, e 19 mutações; CONTINUA
+IA ou sino a lê, e 19 mutações; o recebimento parcial (03-D) nasceu com o estado derivado da soma,
+uma leitura e uma escrita provadas por varredura, e 48 mutações; CONTINUA
 ABERTO no resto** (ver abaixo) · `R6` estado vivo (sessão de treino, chat) · `R7` salvar layout sequestra o período.
 Detalhe em `AUDITORIA.md` §4.
 
@@ -904,6 +983,22 @@ casos**, todos da 03-C2. Na ponta da branch, `TZ=UTC` em `finance/` + `notificat
 arquivos / 523 verdes. A árvore integrada tem o **mesmo hash de tree** da ponta (`8f01d63`), e
 os cinco rodaram depois do merge mesmo assim.
 
+**REDESIGN-03-D, depois do merge `545acf4`** (numa worktree em `C:\tmp`, com o checkout em LF
+como o índice e o CI): `lint` ✅ · `tsc` ✅ · `build` ✅ · `perf:bundle` ✅ mediana **214,9**, 68
+rotas, todas dentro, `/(app)/configuracoes` **281,7/285** · `/(app)/terceiros` **221,3** (era
+219,3: +2,0 do saldo, do histórico e do diálogo) · `/(app)/faturas` **203,3** (era 202,3) ·
+`/(app)/parcelamentos` **204,4** (era 203,4) · `/(app)/dashboard/financeiro` **202,1** (era
+201,1) · `/(app)/relatorios` **205,2** (era 204,2) · `/(app)/dashboard` **203,7** · `TZ=UTC` em
+`finance/` + `notifications/`: **40 / 670** verdes. ⚠️ `test:run`: **4.416 / 4.418** — os dois
+que caíram são `boundaries.test.ts` estourando o limite de 5 s (ele lê todo o `src/`, e o disco
+do caminho novo estava frio); sozinho ele passa 26/26, e a suíte com `--testTimeout=30000` dá
+**229 / 4.418** verdes. Na ponta da branch, no diretório principal, os cinco tinham passado sem
+ressalva: **229 / 4.418**, mediana **215,1** (a worktree não tem `.env.local`, daí 0,1–0,2 KB a
+menos por rota). Delta de **+15 arquivos e +189 casos**, todos da 03-D. A árvore integrada é a
+da ponta mais a D54 (ver D60). ⚠️ Uma primeira tentativa, num caminho longo e com o checkout em
+CRLF, quebrou o build (limite de caminho do Windows) e `schema.test.ts` (ele procura texto com
+LF numa migration) — ambiente, não código.
+
 ⚠️ **A 03-C é a primeira subfase a editar a caracterização da 03-A** — só no que foi escrito
 para virar ali (blocos 1–4 ganharam chaves, bloco 6 e [5 ⚠️] reescritos). Fora dela,
 `limiares-de-alerta.test.ts` e o teste do coletor de insight ganharam as duas chaves por
@@ -924,36 +1019,31 @@ E o `perf:bundle` da 02-D ser idêntico ao da 02-C **é o resultado esperado, n�
 coincidência**: a subfase não altera um arquivo de runtime sequer. Ele foi rodado justamente
 para confirmar isso em vez de eu afirmar.
 
-## Próximo passo — REDESIGN-03-D (reembolsos e recebíveis: recebimento parcial, `ignorado` visível e os três números)
+## Próximo passo — REDESIGN-03-E (modo caixa exato × competência, com rótulo)
 
-**A 03-C2 está fechada e integrada** (`31bef87`). A 03-D dá ao recebível um **histórico de
-recebimentos** (E1, D6: a M1, `receivable_receipts`), faz o `ignorado` aparecer como "não será
-cobrado" e virar despesa sua (D11), e separa os três números de terceiros que hoje dividem um
-rótulo (§6 e §13.4 do dicionário). O briefing foi entregue; o primeiro entregável é o
-**desenho**, aprovado por você antes de qualquer linha de código.
+**A 03-D está fechada e integrada** (`545acf4`), e vai a `main` pelo PR #57. A 03-E dá ao
+financeiro o modo **caixa exato × competência** com rótulo (E6, D9: a M2,
+`transactions.liquidado_em`): `liquidado_em` nulo cai para `competence_date` **com a
+aproximação declarada na tela**, nunca em silêncio, e a regra de comparação de mês parcial. O
+primeiro entregável é o **desenho**, aprovado por você antes de qualquer linha de código.
 
-| Parte | Itens | Muda número? |
-| --- | --- | --- |
-| **K0–K3** | os 169 pagos sem linha de recebimento · quem manda no `status` · o vínculo com o lançamento de caixa (E4, RR7 da 03-C) · o escopo da Parte B | decisão sua, no desenho |
-| **A** | regras puras (saldo, status derivado, os três números) · a M1 · registrar recebimento parcial · **proteger o recebível com recebimento** onde hoje só `cobrado`/`pago` é protegido · `/terceiros` com saldo e histórico | **não** |
-| **B** | D11 (`ignorado` sai da soma de terceiros) · rótulos distintos para os dois "A receber" · "Recebido no mês" saindo dos recebimentos · "a receber" virando saldo | **sim**, item a item — **efeito hoje: zero** (0 ignorados, 0 recebimentos parciais) |
+⛔ **A 03-E é a terceira subfase com migration.** O SQL é o da M2 em `MIGRATIONS.md`. Aplicar
+exige o seu **"aplique a M2"** literal, separado do "aprovado" do desenho. ⚠️ Na 03-D o MCP
+recusou o `apply_migration` e a M1 entrou pelo SQL Editor (D55): se acontecer de novo, o
+caminho é decisão sua — e a versão vai ao histórico logo depois (D59).
 
-⛔ **A 03-D é a segunda subfase com migration.** O SQL é o da M1 em `MIGRATIONS.md`, sem
-backfill. Aplicar exige o seu **"aplique a M1"** literal, separado do "aprovado" do desenho, e
-só pelo MCP.
+⚠️ **Aviso que a 03-D deixou para a 03-E (RR7):** "Reembolsos recebidos" (03-D) e "Outras
+entradas de terceiros" (03-C) podem contar o mesmo dinheiro duas vezes na base caixa, quando o
+reembolso também foi lançado como receita. O vínculo entre os dois é da 04-C; a 03-E tem de
+**declarar** a sobreposição em vez de somar as duas em silêncio.
 
-⚠️ **A 03-D é a subfase para a qual o bloco 8 da caracterização foi escrito.** O caso "⚠️
-`ignorado` conta como terceiro hoje" e os casos com `ignorado` dos blocos 1–3 e 5 mudam **se**
-você aprovar a D11 na Parte B — cada asserção editada listada no contrato. `dashboard.test.ts`
-fica byte a byte igual (o único `ignorado` dele é de `totalAReceber`, que já o exclui).
+⚠️ **Pendência que é sua (D39, D44, D48, D52, D60):** a conferência com dado real da 03-B, da
+03-B2, da 03-C, da 03-C2 **e** da 03-D.
 
-⚠️ **Pendência que é sua (D39, D44, D48, D52):** a conferência com dado real da 03-B, da
-03-B2, da 03-C **e** da 03-C2.
-
-🚀 **Empurrado em 2026-10-11** (D54): `feat/redesign-00-auditoria` está no GitHub e vai a
-`main` pelo PR #56. `feat/redesign-03c2-categorias` e `feat/redesign-03c-renda-pessoal`
-ficam no GitHub e saem do disco local depois do merge. A integração das próximas subfases
-continua sendo merge `--no-ff` nesta branch, seguido de PR para `main`.
+🚀 **Publicação (D54):** de 00 a 03-C2 foi a `main` pelo PR #56 (mergeado em 2026-10-12); a
+03-D vai pelo **PR #57**, e o merge é seu. `feat/redesign-03d-recebiveis` fica no disco local
+até o merge em `main`. A integração das próximas subfases continua sendo merge `--no-ff` nesta
+branch, seguido de PR para `main`.
 
 ⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA MAIS AQUI — meça** (D34):
 

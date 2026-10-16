@@ -4703,6 +4703,74 @@ export type Database = {
         }
         Relationships: []
       }
+      receivable_receipts: {
+        Row: {
+          conta_id: string | null
+          created_at: string
+          id: string
+          observacoes: string | null
+          recebido_em: string
+          receivable_id: string
+          transaction_id: string | null
+          updated_at: string
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          conta_id?: string | null
+          created_at?: string
+          id?: string
+          observacoes?: string | null
+          recebido_em: string
+          receivable_id: string
+          transaction_id?: string | null
+          updated_at?: string
+          user_id: string
+          valor: number
+        }
+        Update: {
+          conta_id?: string | null
+          created_at?: string
+          id?: string
+          observacoes?: string | null
+          recebido_em?: string
+          receivable_id?: string
+          transaction_id?: string | null
+          updated_at?: string
+          user_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receivable_receipts_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_receipts_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "accounts_with_balance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_receipts_owner_fk"
+            columns: ["receivable_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "receivables"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "receivable_receipts_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       receivables: {
         Row: {
           card_id: string | null

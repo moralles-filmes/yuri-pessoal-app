@@ -198,6 +198,8 @@ export type InstallmentPurchaseWithRelations = TransactionRow & {
     person_id: string;
     valor: number;
     status: ReceivableStatus;
+    pago_em?: string | null;
+    recebimentos?: RecebimentoDoBanco[];
   }[];
 };
 
@@ -224,11 +226,20 @@ export type ReceivableRow = Omit<Row<"receivables">, "status"> & {
   status: ReceivableStatus;
 };
 
+/** REDESIGN-03-D (M1) — uma linha de recebimento. `valor` em REAIS; `recebido_em` é data pura. */
+export type RecebimentoRow = Row<"receivable_receipts">;
+/** O que as leituras trazem de cada recebimento (sem `user_id`, sem as colunas da 04-C). */
+export type RecebimentoDoBanco = Pick<
+  RecebimentoRow,
+  "id" | "receivable_id" | "valor" | "recebido_em" | "observacoes" | "created_at"
+>;
+
 /**
  * Recebível já com as relações resolvidas para a aba "A Receber" e a rastreabilidade
  * compra → fatura → pessoa: a pessoa, o cartão usado e a fatura/transação de origem.
  */
 export type ReceivableWithRelations = ReceivableRow & {
+  recebimentos: RecebimentoDoBanco[];
   person: Pick<PersonRow, "id" | "nome" | "email"> | null;
   card: Pick<CreditCardRow, "id" | "nome" | "cor" | "bandeira"> | null;
   statement: Pick<
@@ -243,6 +254,7 @@ export type ReceivableWithRelations = ReceivableRow & {
 
 /** Recebível com a pessoa embutida — usado para agrupar "quem paga e quanto" na fatura. */
 export type ReceivableWithPerson = ReceivableRow & {
+  recebimentos: RecebimentoDoBanco[];
   person: Pick<PersonRow, "id" | "nome"> | null;
 };
 

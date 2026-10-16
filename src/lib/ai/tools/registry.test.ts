@@ -58,6 +58,14 @@ describe("03-C (A5) — as descrições do Financeiro acompanham a separação d
   });
 });
 
+describe("03-D (B4) — a receber é o saldo", () => {
+  it("finance.get_spending explica o que ainda falta receber", () => {
+    const ferramenta = AI_TOOL_REGISTRY.find((t) => t.name === "finance.get_spending");
+    expect(ferramenta).toBeDefined();
+    expect(ferramenta!.description).toContain("o devido menos o que já foi recebido");
+  });
+});
+
 describe("integridade do registry (18-B)", () => {
   /**
    * ⚠️ ESTE TESTE MUDOU DE AFIRMAÇÃO NO BLOCO 4, E A MUDANÇA É O REGISTRO DE UMA DECISÃO.

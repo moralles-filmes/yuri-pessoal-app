@@ -8,6 +8,7 @@ import {
   gastosPorForma,
   gerarAlertas,
   mesDe,
+  perdoadoDoMes,
   proximas6Faturas,
   projecaoProximosMeses,
   proximasContasPagar,
@@ -57,6 +58,7 @@ export default async function DashboardFinanceiroPage({
 
   // Agregações (no servidor — módulo puro, determinístico).
   const resumo = resumoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
+  const perdoado = perdoadoDoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
   const comparativo = comparativoMesAMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
   const evolucao = evolucaoMensal({ meses: evoMeses, transactions: txs, statements: sts, receivables: recs });
   const categorias = gastosPorCategoria({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
@@ -100,6 +102,7 @@ export default async function DashboardFinanceiroPage({
         mesSel={mesSel}
         saldo={saldo}
         resumo={resumo}
+        perdoado={perdoado}
         comparativo={comparativo}
         evolucao={evolucao}
         categorias={categorias}

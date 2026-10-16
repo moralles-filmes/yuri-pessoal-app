@@ -30,6 +30,8 @@ import {
   resolveOrCreateStatement,
 } from "@/lib/finance/statements";
 import { applySplit } from "@/lib/finance/split-persist";
+import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
+import { motivoParaNaoApagar } from "@/lib/finance/protecao-do-recebivel";
 import {
   colunasDaReceita,
   decidirResponsabilidadeDaReceita,
@@ -251,6 +253,11 @@ export async function excluirTransacaoSimples(
       erro: "Este lançamento é uma transferência e não pode ser desfeito por aqui.",
     };
   }
+
+  const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: [id] });
+  if (protecao.erro) return { ok: false, erro: "Não foi possível conferir os recebíveis deste lançamento." };
+  const motivo = motivoParaNaoApagar(protecao.recebiveis, "so-dinheiro-registrado", "excluir o lançamento");
+  if (motivo) return { ok: false, erro: motivo };
 
   const { error } = await ctx.supabase.from("transactions").delete().eq("id", id);
   if (error) return { ok: false, erro: "Não foi possível excluir o lançamento." };

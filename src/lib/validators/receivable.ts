@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateString, normalizeBRMoney, optionalText } from "@/lib/validators/shared";
 import { BULK_RECEIVABLE_ACTIONS } from "@/lib/finance/receivables-bulk";
 
 /**
@@ -26,3 +27,30 @@ export const bulkReceivablesSchema = z
   .strict();
 
 export type BulkReceivablesInput = z.infer<typeof bulkReceivablesSchema>;
+
+/**
+ * REDESIGN-03-D — registrar um recebimento. ⛔ `.strict()` e SEM `conta_id`/`transaction_id`
+ * (K2: o recebimento só registra; o vínculo com o lançamento é da 04-C). `user_id` vem sempre
+ * de `auth.getUser()`. A data no futuro é recusada no SERVIÇO, com `hoje` de Brasília.
+ */
+export const registrarRecebimentoSchema = z
+  .object({
+    receivable_id: z.uuid("Recebível inválido"),
+    valor: z.preprocess(
+      normalizeBRMoney,
+      z.coerce
+        .number({ message: "Informe um valor" })
+        .finite("Valor inválido")
+        .positive("Informe um valor maior que zero."),
+    ),
+    recebido_em: dateString,
+    observacoes: optionalText(500),
+  })
+  .strict();
+
+export type RegistrarRecebimentoInput = z.infer<typeof registrarRecebimentoSchema>;
+
+/** "Receber" o saldo restante. Data ausente → hoje (na action). */
+export const receberSaldoSchema = z
+  .object({ id: z.uuid("Recebível inválido"), recebido_em: dateString.optional() })
+  .strict();
