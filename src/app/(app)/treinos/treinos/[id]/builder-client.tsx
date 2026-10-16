@@ -65,6 +65,7 @@ import {
   removeWorkoutExercise,
   reorderWorkoutExercises,
 } from "@/lib/actions/training-workouts";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 
 // Os três diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form` junto.
@@ -128,7 +129,7 @@ export function WorkoutBuilderClient({
     const result = await reorderWorkoutExercises({ ids: orderedIds });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     router.refresh();
@@ -156,7 +157,7 @@ export function WorkoutBuilderClient({
     const result = await removeWorkoutExercise(item.id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Exercício removido do treino.");
@@ -175,7 +176,7 @@ export function WorkoutBuilderClient({
     const result = await createWorkoutVersion({ id: workout.id });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(`Versão ${result.data.version} criada. A anterior ficou arquivada e legível.`);
@@ -187,7 +188,7 @@ export function WorkoutBuilderClient({
     const result = await duplicateTrainingWorkout({ id: workout.id });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Cópia criada.");
@@ -374,7 +375,7 @@ export function WorkoutBuilderClient({
             </ul>
             <p className="mt-3 text-xs text-muted-foreground">
               Versões antigas servem para comparar intenções. O que protege o histórico de
-              execução é o registro da sessão, que chega na Subfase 17-C.
+              execução é o registro de cada sessão, congelado quando o treino começa.
             </p>
           </CardContent>
         </Card>
@@ -558,7 +559,9 @@ function MuscleBars({
         {rows.map((row) => (
           <li key={row.id} className="flex items-center gap-2">
             <span className="w-32 shrink-0 truncate text-sm">{row.name}</span>
-            <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+            {/* V (REDESIGN-07-C): distribuição, não progresso — o nome e o número ao lado já são
+                a leitura; um progressbar com máximo = maior grupo anunciaria "100%" de nada. */}
+            <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
               <span
                 className={cn("block h-full rounded-full bg-primary/70")}
                 style={{ width: `${(row.count / max) * 100}%` }}

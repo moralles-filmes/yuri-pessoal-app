@@ -9,6 +9,7 @@ import "server-only";
  */
 
 import { saoPauloWallClockToInstant } from "@/lib/format";
+import { memoryLink } from "@/lib/search/ai-links";
 import { criarMemoria, esquecerMemoria } from "@/lib/ai/memory/services";
 import { type Command } from "../contracts";
 import {
@@ -21,7 +22,7 @@ import {
   type LembrarPreferenciaEntrada,
 } from "./memory-preview";
 
-const ROTA_DO_PAINEL = "/ia/memoria";
+const ROTA_DO_PAINEL = memoryLink();
 
 /**
  * O prazo informado é uma DATA, e ela vale até o FIM daquele dia em Brasília.

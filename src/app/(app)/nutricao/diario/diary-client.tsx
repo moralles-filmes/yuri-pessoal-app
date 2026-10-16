@@ -19,6 +19,7 @@
  * nenhum componente chama `Date.now()`, que faria servidor e cliente divergirem na hidratação.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -41,14 +42,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -56,10 +49,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ariaDeProgresso } from "@/components/shared/aria-de-progresso";
 import { PageHeader } from "@/components/shared/page-header";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
+import { waterLink } from "@/lib/search/nutrition-links";
 import { StatCard } from "@/components/shared/stat-card";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { cn } from "@/lib/utils";
 import {
   formatNutrientAmount,
@@ -78,13 +74,13 @@ import {
   CHANGE_KIND_LABELS,
   CORE_NUTRIENTS,
   DIARY_VIEW_LABELS,
+  DIARY_VIEWS,
   EFFECTIVE_MEAL_STATUS_HINTS,
   EFFECTIVE_MEAL_STATUS_LABELS,
   MACRO_ORDER,
   MEAL_STATUSES,
   MEAL_STATUS_LABELS,
   type DayKind,
-  type MealStatus,
 } from "@/lib/nutrition/constants";
 // 16-E — visão de mês do diário (a pendência que `?visao=mes` carregava desde a 16-B).
 import { buildMonthView } from "@/lib/nutrition/diary-month";
@@ -133,29 +129,44 @@ import {
 } from "@/lib/actions/nutrition-meal-templates";
 import { applySubstitution } from "@/lib/actions/nutrition-substitutions";
 import { AdherenceBadge, GoalProgressBar } from "@/components/nutrition/goal-progress-bar";
-import {
-  FoodPickerDialog,
-  type PickerMeasure,
-} from "@/components/nutrition/food-picker-dialog";
-import {
-  RecipePickerDialog,
-  type PickerRecipe,
-} from "@/components/nutrition/recipe-picker-dialog";
-import {
-  SubstitutionCompareDialog,
-  type CompareTarget,
-} from "@/components/nutrition/substitution-compare-dialog";
+import type { PickerMeasure } from "@/components/nutrition/food-picker-dialog";
+import type { PickerRecipe } from "@/components/nutrition/recipe-picker-dialog";
+import type { CompareTarget } from "@/components/nutrition/substitution-compare-dialog";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
 import type { SubstitutionGroupWithTotals } from "@/lib/nutrition/recipe-queries";
 import { snapshotToBag } from "@/lib/nutrition/snapshot";
 import { sumNutrients } from "@/lib/nutrition/calc";
-import {
-  TEMPLATE_REGISTER_MODE_HINTS,
-  TEMPLATE_REGISTER_MODE_LABELS,
-  TEMPLATE_REGISTER_MODES,
-  type TemplateRegisterMode,
-} from "@/lib/nutrition/constants";
-import { Switch } from "@/components/ui/switch";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const FoodPickerDialog = dynamic(
+  () => import("@/components/nutrition/food-picker-dialog").then((m) => m.FoodPickerDialog),
+  { ssr: false },
+);
+const RecipePickerDialog = dynamic(
+  () => import("@/components/nutrition/recipe-picker-dialog").then((m) => m.RecipePickerDialog),
+  { ssr: false },
+);
+const SubstitutionCompareDialog = dynamic(
+  () => import("@/components/nutrition/substitution-compare-dialog").then((m) => m.SubstitutionCompareDialog),
+  { ssr: false },
+);
+const TemplatePickerDialog = dynamic(
+  () => import("./template-picker-dialog").then((m) => m.TemplatePickerDialog),
+  { ssr: false },
+);
+const FreeEntryDialog = dynamic(
+  () => import("./free-entry-dialog").then((m) => m.FreeEntryDialog),
+  { ssr: false },
+);
+const NewMealDialog = dynamic(
+  () => import("./new-meal-dialog").then((m) => m.NewMealDialog),
+  { ssr: false },
+);
+const EditQuantityDialog = dynamic(
+  () => import("./edit-quantity-dialog").then((m) => m.EditQuantityDialog),
+  { ssr: false },
+);
 
 /** Refeição-modelo, reduzida ao que o diário precisa mostrar. */
 export type DiaryTemplate = {
@@ -269,7 +280,7 @@ export function DiaryClient(props: DiaryClientProps) {
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }
@@ -284,6 +295,13 @@ export function DiaryClient(props: DiaryClientProps) {
   const [substituting, setSubstituting] = React.useState<
     (CompareTarget & { diaryMealId: string; diaryEntryId: string | null }) | null
   >(null);
+  const foodPickerDialogMontado = useLazyDialog(pickerMealId !== null);
+  const recipePickerDialogMontado = useLazyDialog(recipeMealId !== null);
+  const substitutionCompareDialogMontado = useLazyDialog(substituting !== null);
+  const templatePickerDialogMontado = useLazyDialog(templateMealId !== null);
+  const freeEntryDialogMontado = useLazyDialog(freeMealId !== null);
+  const newMealDialogMontado = useLazyDialog(newMealOpen);
+  const editQuantityDialogMontado = useLazyDialog(editEntry !== null);
 
   /**
    * Grupos de substituição por item original.
@@ -385,29 +403,20 @@ export function DiaryClient(props: DiaryClientProps) {
               Hoje
             </Button>
           )}
-          <div className="flex rounded-lg border p-0.5">
-            {(["dia", "semana", "mes"] as const).map((view) => (
-              <button
-                key={view}
-                type="button"
-                onClick={() => goTo({ view })}
-                className={cn(
-                  "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                  props.view === view
-                    ? "bg-primary/10 text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {DIARY_VIEW_LABELS[view]}
-              </button>
-            ))}
-          </div>
+          <SeletorDeVisao
+            rotulo="Visão do diário"
+            visoes={DIARY_VIEWS}
+            rotulos={DIARY_VIEW_LABELS}
+            atual={props.view}
+            aoEscolher={(view) => goTo({ view })}
+          />
         </div>
       </div>
 
       {props.view === "mes" ? (
         <DiaryMonthView
           view={monthView}
+          hoje={props.hoje}
           onPickDay={(day) => goTo({ date: day, view: "dia" })}
         />
       ) : props.view === "semana" ? (
@@ -554,169 +563,183 @@ export function DiaryClient(props: DiaryClientProps) {
       )}
 
       {/* ── Diálogos ── */}
-      <FoodPickerDialog
-        open={pickerMealId !== null}
-        onOpenChange={(open) => !open && setPickerMealId(null)}
-        foods={props.foods}
-        measures={measures}
-        title="Registrar consumo"
-        description="Escolha o alimento e a porção. Os valores nutricionais são congelados agora — editar o alimento depois não muda este registro."
-        onConfirm={async (picked) => {
-          const result = await addDiaryEntry({
-            diary_meal_id: pickerMealId,
-            food_id: picked.foodId,
-            quantity: picked.quantity,
-            measure_id: picked.measureId,
-            notes: picked.notes,
-          });
-          if (result.ok) {
-            toast.success("Consumo registrado.");
-            setPickerMealId(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível registrar.");
-          }
-        }}
-      />
+      {foodPickerDialogMontado && (
+        <FoodPickerDialog
+          open={pickerMealId !== null}
+          onOpenChange={(open) => !open && setPickerMealId(null)}
+          foods={props.foods}
+          measures={measures}
+          title="Registrar consumo"
+          description="Escolha o alimento e a porção. Os valores nutricionais são congelados agora — editar o alimento depois não muda este registro."
+          onConfirm={async (picked) => {
+            const result = await addDiaryEntry({
+              diary_meal_id: pickerMealId,
+              food_id: picked.foodId,
+              quantity: picked.quantity,
+              measure_id: picked.measureId,
+              notes: picked.notes,
+            });
+            if (result.ok) {
+              toast.success("Consumo registrado.");
+              setPickerMealId(null);
+              router.refresh();
+            } else {
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível registrar." }));
+            }
+          }}
+        />
+      )}
 
-      <RecipePickerDialog
-        open={recipeMealId !== null}
-        onOpenChange={(open) => !open && setRecipeMealId(null)}
-        recipes={props.recipes}
-        title="Registrar receita"
-        description="O valor é calculado a partir dos ingredientes AGORA e congelado neste registro. Editar a receita depois não muda o que já foi comido."
-        onConfirm={async (picked) => {
-          const result = await addRecipeToDiary({
-            diary_meal_id: recipeMealId,
-            recipe_id: picked.recipeId,
-            quantity: picked.quantity,
-            portion_unit: picked.portionUnit,
-            notes: picked.notes,
-          });
-          if (result.ok) {
-            toast.success("Receita registrada.");
-            setRecipeMealId(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível registrar.");
-          }
-        }}
-      />
+      {recipePickerDialogMontado && (
+        <RecipePickerDialog
+          open={recipeMealId !== null}
+          onOpenChange={(open) => !open && setRecipeMealId(null)}
+          recipes={props.recipes}
+          title="Registrar receita"
+          description="O valor é calculado a partir dos ingredientes AGORA e congelado neste registro. Editar a receita depois não muda o que já foi comido."
+          onConfirm={async (picked) => {
+            const result = await addRecipeToDiary({
+              diary_meal_id: recipeMealId,
+              recipe_id: picked.recipeId,
+              quantity: picked.quantity,
+              portion_unit: picked.portionUnit,
+              notes: picked.notes,
+            });
+            if (result.ok) {
+              toast.success("Receita registrada.");
+              setRecipeMealId(null);
+              router.refresh();
+            } else {
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível registrar." }));
+            }
+          }}
+        />
+      )}
 
-      <TemplatePickerDialog
-        open={templateMealId !== null}
-        onOpenChange={(open) => !open && setTemplateMealId(null)}
-        templates={props.templates}
-        onConfirm={async (payload) => {
-          const result = await addMealTemplateToDiary({
-            diary_meal_id: templateMealId,
-            template_id: payload.templateId,
-            mode: payload.mode,
-            force: payload.force,
-          });
-          if (!result.ok) {
-            toast.error(result.error ?? "Não foi possível adicionar.");
-            return;
-          }
-          if (result.data.registrados === 0 && result.data.jaRegistrado) {
-            // A não-duplicação é dita com todas as letras, em vez de "nada aconteceu".
-            toast.warning(
-              "Esta refeição-modelo já foi registrada nesta refeição. Marque “adicionar mesmo assim” se você comeu de novo.",
+      {templatePickerDialogMontado && (
+        <TemplatePickerDialog
+          open={templateMealId !== null}
+          onOpenChange={(open) => !open && setTemplateMealId(null)}
+          templates={props.templates}
+          onConfirm={async (payload) => {
+            const result = await addMealTemplateToDiary({
+              diary_meal_id: templateMealId,
+              template_id: payload.templateId,
+              mode: payload.mode,
+              force: payload.force,
+            });
+            if (!result.ok) {
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
+              return;
+            }
+            if (result.data.registrados === 0 && result.data.jaRegistrado) {
+              // A não-duplicação é dita com todas as letras, em vez de "nada aconteceu".
+              toast.warning(
+                "Esta refeição-modelo já foi registrada nesta refeição. Marque “adicionar mesmo assim” se você comeu de novo.",
+              );
+              return;
+            }
+            toast.success(
+              `${result.data.registrados} item${result.data.registrados === 1 ? "" : "ns"} registrado${result.data.registrados === 1 ? "" : "s"}.`,
             );
-            return;
-          }
-          toast.success(
-            `${result.data.registrados} item${result.data.registrados === 1 ? "" : "ns"} registrado${result.data.registrados === 1 ? "" : "s"}.`,
-          );
-          if (result.data.falhas.length > 0) toast.warning(result.data.falhas.join(" "));
-          setTemplateMealId(null);
-          router.refresh();
-        }}
-      />
-
-      <SubstitutionCompareDialog
-        target={substituting}
-        nutrients={props.nutrients}
-        onOpenChange={(open) => !open && setSubstituting(null)}
-        onConfirm={async ({ option, reason }) => {
-          if (!substituting) return;
-          const result = await applySubstitution({
-            diary_entry_id: substituting.diaryEntryId ?? undefined,
-            diary_meal_id: substituting.diaryMealId,
-            applied_on: props.date,
-            level: substituting.level,
-            group_id: substituting.groupId ?? undefined,
-            option_id: option.id,
-            replacement_kind: option.optionKind,
-            replacement_food_id: option.foodId ?? undefined,
-            replacement_recipe_id: option.recipeId ?? undefined,
-            replacement_meal_template_id: option.mealTemplateId ?? undefined,
-            replacement_label: option.label,
-            replacement_quantity: option.quantity ?? 1,
-            replacement_measure_id: option.measureId ?? undefined,
-            replacement_portion_unit: option.portionUnit ?? undefined,
-            reason: reason ?? undefined,
-          });
-          if (result.ok) {
-            toast.success("Substituição registrada no diário e no histórico.");
-            setSubstituting(null);
+            if (result.data.falhas.length > 0) toast.warning(result.data.falhas.join(" "));
+            setTemplateMealId(null);
             router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível substituir.");
-          }
-        }}
-      />
+          }}
+        />
+      )}
 
-      <FreeEntryDialog
-        open={freeMealId !== null}
-        onOpenChange={(open) => !open && setFreeMealId(null)}
-        onConfirm={async (label) => {
-          const result = await addDiaryFreeEntry({ diary_meal_id: freeMealId, label });
-          if (result.ok) {
-            toast.success("Item registrado sem valor nutricional.");
-            setFreeMealId(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível registrar.");
-          }
-        }}
-      />
+      {substitutionCompareDialogMontado && (
+        <SubstitutionCompareDialog
+          target={substituting}
+          nutrients={props.nutrients}
+          onOpenChange={(open) => !open && setSubstituting(null)}
+          onConfirm={async ({ option, reason }) => {
+            if (!substituting) return;
+            const result = await applySubstitution({
+              diary_entry_id: substituting.diaryEntryId ?? undefined,
+              diary_meal_id: substituting.diaryMealId,
+              applied_on: props.date,
+              level: substituting.level,
+              group_id: substituting.groupId ?? undefined,
+              option_id: option.id,
+              replacement_kind: option.optionKind,
+              replacement_food_id: option.foodId ?? undefined,
+              replacement_recipe_id: option.recipeId ?? undefined,
+              replacement_meal_template_id: option.mealTemplateId ?? undefined,
+              replacement_label: option.label,
+              replacement_quantity: option.quantity ?? 1,
+              replacement_measure_id: option.measureId ?? undefined,
+              replacement_portion_unit: option.portionUnit ?? undefined,
+              reason: reason ?? undefined,
+            });
+            if (result.ok) {
+              toast.success("Substituição registrada no diário e no histórico.");
+              setSubstituting(null);
+              router.refresh();
+            } else {
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível substituir." }));
+            }
+          }}
+        />
+      )}
 
-      <NewMealDialog
-        open={newMealOpen}
-        onOpenChange={setNewMealOpen}
-        date={props.date}
-        mealTypes={props.mealTypes}
-        onConfirm={async (payload) => {
-          const result = await saveDiaryMeal(payload);
-          if (result.ok) {
-            toast.success("Refeição adicionada.");
-            setNewMealOpen(false);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível adicionar.");
-          }
-        }}
-      />
+      {freeEntryDialogMontado && (
+        <FreeEntryDialog
+          open={freeMealId !== null}
+          onOpenChange={(open) => !open && setFreeMealId(null)}
+          onConfirm={async (label) => {
+            const result = await addDiaryFreeEntry({ diary_meal_id: freeMealId, label });
+            if (result.ok) {
+              toast.success("Item registrado sem valor nutricional.");
+              setFreeMealId(null);
+              router.refresh();
+            } else {
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível registrar." }));
+            }
+          }}
+        />
+      )}
 
-      <EditQuantityDialog
-        entry={editEntry}
-        onOpenChange={(open) => !open && setEditEntry(null)}
-        onConfirm={async (quantity) => {
-          if (!editEntry) return;
-          const result = await updateDiaryEntryQuantity({
-            entry_id: editEntry.id,
-            quantity,
-          });
-          if (result.ok) {
-            toast.success("Quantidade atualizada.");
-            setEditEntry(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível atualizar.");
-          }
-        }}
-      />
+      {newMealDialogMontado && (
+        <NewMealDialog
+          open={newMealOpen}
+          onOpenChange={setNewMealOpen}
+          date={props.date}
+          mealTypes={props.mealTypes}
+          onConfirm={async (payload) => {
+            const result = await saveDiaryMeal(payload);
+            if (result.ok) {
+              toast.success("Refeição adicionada.");
+              setNewMealOpen(false);
+              router.refresh();
+            } else {
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
+            }
+          }}
+        />
+      )}
+
+      {editQuantityDialogMontado && (
+        <EditQuantityDialog
+          entry={editEntry}
+          onOpenChange={(open) => !open && setEditEntry(null)}
+          onConfirm={async (quantity) => {
+            if (!editEntry) return;
+            const result = await updateDiaryEntryQuantity({
+              entry_id: editEntry.id,
+              quantity,
+            });
+            if (result.ok) {
+              toast.success("Quantidade atualizada.");
+              setEditEntry(null);
+              router.refresh();
+            } else {
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível atualizar." }));
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -780,7 +803,9 @@ function MealCard({
 
   return (
     <Card className={cn(state.isLate && "border-amber-500/40")}>
-      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 pb-3">
+      {/* G6 (REDESIGN-07-C): a primitiva é `grid` — `flex-row` sem `flex` não fazia nada, e o
+          título e as ações empilhavam. Quebra de linha em vez de esmagar o título. */}
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-3">
         <div className="min-w-0">
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
             {meal.mealTypeIcon && <span aria-hidden>{meal.mealTypeIcon}</span>}
@@ -808,7 +833,7 @@ function MealCard({
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           {energia && (
             <span className="hidden items-center gap-1.5 text-sm font-semibold tabular-nums sm:inline-flex">
               {roundForDisplay(energia.amount, 0).toLocaleString("pt-BR")} kcal
@@ -883,7 +908,7 @@ function MealCard({
         ) : (
           <ul className="divide-y">
             {meal.entries.map((entry) => (
-              <li key={entry.id} className="flex items-start justify-between gap-3 py-2">
+              <li key={entry.id} className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 py-2">
                 <div className="min-w-0">
                   <p
                     className={cn(
@@ -908,7 +933,7 @@ function MealCard({
                   </p>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="ml-auto flex shrink-0 items-center gap-1">
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {entry.energyKcal === null
                       ? "—"
@@ -1165,6 +1190,7 @@ function WeekView({
               key={day}
               type="button"
               onClick={() => onPickDay(day)}
+              aria-current={day === hoje ? "date" : undefined}
               className={cn(
                 "rounded-lg border p-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 day === hoje && "border-primary/40 bg-primary/5",
@@ -1203,7 +1229,7 @@ function WaterCard({ water }: { water: WaterDay | null }) {
         <CardContent className="space-y-1.5 p-5">
           <p className="text-sm font-medium text-muted-foreground">Água</p>
           <p className="text-sm">Sem hábito de água cadastrado.</p>
-          <Link href="/habitos" className="text-xs text-primary underline-offset-4 hover:underline">
+          <Link href={waterLink()} className="text-xs text-primary underline-offset-4 hover:underline">
             Criar em Hábitos
           </Link>
         </CardContent>
@@ -1225,10 +1251,17 @@ function WaterCard({ water }: { water: WaterDay | null }) {
             / {water.target.toLocaleString("pt-BR")} {water.unit}
           </span>
         </p>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+          {...ariaDeProgresso(
+            "Água do dia",
+            water.target > 0 ? (water.value / water.target) * 100 : null,
+            `${water.value.toLocaleString("pt-BR")} de ${water.target.toLocaleString("pt-BR")} ${water.unit}`,
+          )}
+        >
           <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
         </div>
-        <Link href="/habitos" className="text-xs text-primary underline-offset-4 hover:underline">
+        <Link href={waterLink()} className="text-xs text-primary underline-offset-4 hover:underline">
           Registrar em Hábitos
         </Link>
       </CardContent>
@@ -1237,385 +1270,3 @@ function WaterCard({ water }: { water: WaterDay | null }) {
 }
 
 /* ═══════════════════════════ Diálogos ═══════════════════════════ */
-
-function NewMealDialog({
-  open,
-  onOpenChange,
-  date,
-  mealTypes,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  date: string;
-  mealTypes: MealType[];
-  onConfirm: (payload: Record<string, unknown>) => Promise<void>;
-}) {
-  const active = mealTypes.filter((type) => type.isActive);
-  const [mealTypeId, setMealTypeId] = React.useState(active[0]?.id ?? "");
-  const [time, setTime] = React.useState("");
-  const [status, setStatus] = React.useState<MealStatus>("fora_do_planejamento");
-  const [saving, setSaving] = React.useState(false);
-
-  const [lastOpen, setLastOpen] = React.useState(open);
-  if (open !== lastOpen) {
-    setLastOpen(open);
-    if (open) {
-      const first = active[0];
-      setMealTypeId(first?.id ?? "");
-      setTime(first?.defaultTime ? first.defaultTime.slice(0, 5) : "");
-      setStatus("fora_do_planejamento");
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Nova refeição</DialogTitle>
-          <DialogDescription>
-            Em {longDateLabel(date)}. Você registra os alimentos depois de criar.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="meal-type">Tipo</Label>
-            <select
-              id="meal-type"
-              value={mealTypeId}
-              onChange={(event) => {
-                setMealTypeId(event.target.value);
-                const type = active.find((t) => t.id === event.target.value);
-                setTime(type?.defaultTime ? type.defaultTime.slice(0, 5) : "");
-              }}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {active.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.icon ? `${type.icon} ` : ""}
-                  {type.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="meal-time">Horário previsto</Label>
-              <Input
-                id="meal-time"
-                type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="meal-status">Situação</Label>
-              <select
-                id="meal-status"
-                value={status}
-                onChange={(event) => setStatus(event.target.value as MealStatus)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {MEAL_STATUSES.map((value) => (
-                  <option key={value} value={value}>
-                    {MEAL_STATUS_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!mealTypeId || saving}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm({
-                diary_date: date,
-                meal_type_id: mealTypeId,
-                planned_time: time || null,
-                status,
-              });
-              setSaving(false);
-            }}
-          >
-            {saving ? "Salvando…" : "Adicionar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function FreeEntryDialog({
-  open,
-  onOpenChange,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: (label: string) => Promise<void>;
-}) {
-  const [label, setLabel] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-
-  const [lastOpen, setLastOpen] = React.useState(open);
-  if (open !== lastOpen) {
-    setLastOpen(open);
-    if (open) {
-      setLabel("");
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Item sem valor nutricional</DialogTitle>
-          <DialogDescription>
-            Para o que você comeu mas não sabe a composição. O item fica registrado, e o total
-            do dia passa a ser marcado como parcial — em vez de fingir que ele não existiu ou
-            de inventar calorias para ele.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="free-label">O que foi consumido</Label>
-          <Input
-            id="free-label"
-            autoFocus
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-            placeholder="Ex.: almoço na casa da minha mãe"
-          />
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!label.trim() || saving}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm(label.trim());
-              setSaving(false);
-            }}
-          >
-            {saving ? "Salvando…" : "Registrar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * Escolher uma refeição-modelo para registrar.
- *
- * Dois modos: DETALHADO (cada item vira uma linha, e você pode ajustar depois) e RESUMIDO
- * (uma linha só com o total). O interruptor "adicionar mesmo assim" existe porque a ação é
- * idempotente por padrão — clicar duas vezes não dobra a refeição.
- */
-function TemplatePickerDialog({
-  open,
-  onOpenChange,
-  templates,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  templates: DiaryTemplate[];
-  onConfirm: (payload: {
-    templateId: string;
-    mode: TemplateRegisterMode;
-    force: boolean;
-  }) => Promise<void>;
-}) {
-  const active = templates.filter((template) => !template.isArchived && template.itemCount > 0);
-  const [templateId, setTemplateId] = React.useState("");
-  const [mode, setMode] = React.useState<TemplateRegisterMode>("detalhado");
-  const [force, setForce] = React.useState(false);
-  const [saving, setSaving] = React.useState(false);
-
-  const [lastOpen, setLastOpen] = React.useState(open);
-  if (open !== lastOpen) {
-    setLastOpen(open);
-    if (open) {
-      setTemplateId(active[0]?.id ?? "");
-      setMode("detalhado");
-      setForce(false);
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Registrar refeição-modelo</DialogTitle>
-          <DialogDescription>
-            Os valores são congelados agora. Adicionar o mesmo modelo duas vezes na mesma
-            refeição não duplica o consumo.
-          </DialogDescription>
-        </DialogHeader>
-
-        {active.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Nenhuma refeição-modelo com itens. Monte uma em Refeições-modelo.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="template-pick">Refeição-modelo</Label>
-              <select
-                id="template-pick"
-                value={templateId}
-                onChange={(event) => setTemplateId(event.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {active.map((template) => {
-                  const energia = template.totals[CORE_NUTRIENTS.energia];
-                  return (
-                    <option key={template.id} value={template.id}>
-                      {template.name} — {template.itemCount} item
-                      {template.itemCount === 1 ? "" : "ns"}
-                      {energia
-                        ? ` · ${roundForDisplay(energia.amount, 0).toLocaleString("pt-BR")} kcal`
-                        : ""}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Como registrar</Label>
-              {TEMPLATE_REGISTER_MODES.map((value) => (
-                <label
-                  key={value}
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
-                    mode === value ? "border-primary/40 bg-primary/5" : "hover:bg-accent/50",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="template-mode"
-                    value={value}
-                    checked={mode === value}
-                    onChange={() => setMode(value)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="block text-sm font-medium">
-                      {TEMPLATE_REGISTER_MODE_LABELS[value]}
-                    </span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      {TEMPLATE_REGISTER_MODE_HINTS[value]}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
-              <span>
-                <span className="text-sm font-medium">Adicionar mesmo assim</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Use só se você comeu este modelo mais de uma vez nesta refeição.
-                </span>
-              </span>
-              <Switch checked={force} onCheckedChange={setForce} />
-            </label>
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!templateId || saving}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm({ templateId, mode, force });
-              setSaving(false);
-            }}
-          >
-            {saving ? "Registrando…" : "Registrar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function EditQuantityDialog({
-  entry,
-  onOpenChange,
-  onConfirm,
-}: {
-  entry: { id: string; label: string; quantity: number } | null;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: (quantity: number) => Promise<void>;
-}) {
-  const [quantity, setQuantity] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-
-  const [lastId, setLastId] = React.useState<string | null>(entry?.id ?? null);
-  if ((entry?.id ?? null) !== lastId) {
-    setLastId(entry?.id ?? null);
-    setQuantity(entry ? String(entry.quantity) : "");
-    setSaving(false);
-  }
-
-  return (
-    <Dialog open={entry !== null} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Ajustar quantidade</DialogTitle>
-          <DialogDescription>
-            {entry?.label}. Os valores nutricionais são recalculados agora, a partir do
-            catálogo atual, e congelados de novo.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="edit-quantity">Quantidade</Label>
-          <Input
-            id="edit-quantity"
-            autoFocus
-            inputMode="decimal"
-            value={quantity}
-            onChange={(event) => setQuantity(event.target.value)}
-          />
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={saving || !Number(quantity.replace(",", "."))}
-            onClick={async () => {
-              setSaving(true);
-              await onConfirm(Number(quantity.replace(",", ".")));
-              setSaving(false);
-            }}
-          >
-            {saving ? "Salvando…" : "Salvar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}

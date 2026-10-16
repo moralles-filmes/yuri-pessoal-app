@@ -70,6 +70,7 @@ import { estimateOneRm } from "@/lib/training/one-rm";
 import { isSetDone } from "@/lib/training/session-machine";
 import type { SessionEvent, SessionExercise, SessionSet, TrainingSession } from "@/lib/training/types";
 import { deleteTrainingSession } from "@/lib/actions/training-history";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 type ComparisonChoice = "anterior" | "melhor" | "media";
 
@@ -144,7 +145,7 @@ export function SessionDetailClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Treino excluído. Os recordes foram recalculados a partir do histórico restante.");
@@ -217,8 +218,9 @@ export function SessionDetailClient({
 
       {/* ── Comparação ── */}
       <Card>
-        <CardHeader className="flex-row items-center justify-between gap-2 pb-2">
-          <CardTitle className="text-base">Comparação</CardTitle>
+        {/* G6 (REDESIGN-07-C): a primitiva é `grid`; sem `flex`, o seletor caía embaixo. */}
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
+          <CardTitle className="min-w-0 text-base">Comparação</CardTitle>
           <Select
             value={comparisonChoice}
             onValueChange={(value) => setComparisonChoice(value as ComparisonChoice)}
@@ -601,7 +603,12 @@ function SetRow({
             {SET_TYPE_LABELS[set.setType]}
           </Badge>
         )}
-        {set.isPersonalRecord && <Trophy className="ml-1.5 inline size-3 text-primary" />}
+        {set.isPersonalRecord && (
+          <>
+            <Trophy className="ml-1.5 inline size-3 text-primary" aria-hidden="true" />
+            <span className="sr-only">Recorde pessoal</span>
+          </>
+        )}
         {!done && (
           <span className="ml-1.5 text-xs">{SESSION_SET_STATUS_LABELS[set.status]}</span>
         )}

@@ -24,6 +24,7 @@ import "server-only";
 import { NUTRIENT_TOTAL_QUALITIES } from "@/lib/nutrition/constants";
 import { dayTotals } from "@/lib/nutrition/diary";
 import { getDiaryMeals } from "@/lib/nutrition/diary-queries";
+import { diaryLink } from "@/lib/search/nutrition-links";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 import type { NutrientTotal, NutrientTotalQuality } from "@/lib/nutrition/calc";
 
@@ -43,7 +44,7 @@ import { comparar, janelaDeDias, media, somarDias } from "../temporal";
 export const MAX_DIAS = 60;
 export const DIAS_PADRAO = 14;
 
-const ROTA = "/nutricao/diario";
+const ROTA = diaryLink();
 
 /** Os dois nutrientes que a série acompanha. Energia é o que a tela mostra primeiro. */
 const CODIGO_ENERGIA = "energia";

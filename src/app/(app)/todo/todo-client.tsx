@@ -674,7 +674,7 @@ export function TodoClient({
             >
               <Menu />
             </Button>
-            <PageHeader title={headerInfo.title} description={headerInfo.description} className="flex-1">
+            <PageHeader title={headerInfo.title} description={headerInfo.description} className="min-w-0 flex-1">
               {currentProject && (
                 <ProjectMenu
                   project={currentProject}
@@ -815,7 +815,7 @@ export function TodoClient({
                   className={cn(
                     "rounded-md px-2 py-1 text-xs transition-colors",
                     view === v
-                      ? "bg-primary/15 text-primary"
+                      ? "bg-primary/15 text-primary shadow-[inset_0_-2px_0_currentColor]"
                       : "text-muted-foreground hover:bg-muted",
                   )}
                 >

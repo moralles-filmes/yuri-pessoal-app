@@ -2,11 +2,11 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Loader2, Search, SearchX } from "lucide-react";
-import { PageHeader } from "@/components/shared/page-header";
+import { CircleAlert, Loader2, Search, SearchX } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { buscaLink } from "@/components/search/busca-links";
 import { globalSearch } from "@/lib/actions/search";
 import { searchIcon } from "@/components/search/search-meta";
 import type { SearchGroup } from "@/lib/search/types";
@@ -15,6 +15,15 @@ import type { SearchGroup } from "@/lib/search/types";
  * Página de busca global (Fase 13): caixa de busca + resultados agrupados por tipo.
  * Os resultados iniciais vêm do servidor (?q=); ao digitar, refaz a busca (debounce)
  * via Server Action e atualiza a URL para ficar compartilhável.
+ *
+ * REDESIGN-07-D · D6 — ⛔ DIGITAR NÃO BUSCA O RSC. O `router.replace` a cada tecla fazia o
+ * Next refazer a página no servidor (`searchAll` por tecla) e o `value` só voltava com a
+ * resposta — a regra do campo de texto do projeto. Agora o texto é LOCAL e alcança a URL depois
+ * da pausa (o mesmo debounce da busca) por `window.history.replaceState`, que o Next 16 integra
+ * ao roteador sem ir ao servidor. A página monta este componente com `key={q}`: uma navegação de
+ * fora (voltar, link colado) remonta com os resultados do servidor — é o que dispensa aqui a
+ * reconciliação do `useUrlText` (adotar mudança externa, reconhecer o eco), e o que mantém a
+ * rota abaixo da linha de base. Erro ≠ vazio: falha da busca é dita como falha.
  */
 export function BuscaClient({
   initialQuery,
@@ -23,22 +32,26 @@ export function BuscaClient({
   initialQuery: string;
   initialGroups: SearchGroup[];
 }) {
-  const router = useRouter();
   const [query, setQuery] = React.useState(initialQuery);
   const [groups, setGroups] = React.useState<SearchGroup[]>(initialGroups);
   const [loading, setLoading] = React.useState(false);
+  const [erro, setErro] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const reqId = React.useRef(0);
 
   function runSearch(value: string) {
     const id = ++reqId.current;
     setLoading(true);
+    setErro(false);
     globalSearch(value)
       .then((res) => {
         if (id === reqId.current) setGroups(res);
       })
       .catch(() => {
-        if (id === reqId.current) setGroups([]);
+        if (id === reqId.current) {
+          setGroups([]);
+          setErro(true);
+        }
       })
       .finally(() => {
         if (id === reqId.current) setLoading(false);
@@ -49,27 +62,27 @@ export function BuscaClient({
     setQuery(value);
     if (timer.current) clearTimeout(timer.current);
     const trimmed = value.trim();
-    const qs = trimmed.length >= 2 ? `?q=${encodeURIComponent(trimmed)}` : "";
-    router.replace(`/busca${qs}`, { scroll: false });
     if (trimmed.length < 2) {
       reqId.current++;
       setGroups([]);
+      setErro(false);
       setLoading(false);
+      window.history.replaceState(null, "", buscaLink());
       return;
     }
-    timer.current = setTimeout(() => runSearch(trimmed), 220);
+    timer.current = setTimeout(() => {
+      // A URL acompanha depois da pausa, sem ir ao servidor: link, voltar e recarregar seguem valendo.
+      window.history.replaceState(null, "", buscaLink(trimmed));
+      runSearch(trimmed);
+    }, 220);
   }
 
   const total = groups.reduce((s, g) => s + g.results.length, 0);
-  const showEmpty = !loading && query.trim().length >= 2 && total === 0;
+  const showEmpty = !loading && !erro && query.trim().length >= 2 && total === 0;
 
   return (
+    // O cabeçalho é desenhado pela página (servidor): estático, não precisa vir no JS da tela.
     <div className="space-y-6">
-      <PageHeader
-        title="Busca"
-        description="Encontre transações, faturas, pessoas, tarefas, hábitos, estudos, eventos e mais."
-      />
-
       <div className="relative max-w-xl">
         {loading ? (
           <Loader2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
@@ -86,9 +99,24 @@ export function BuscaClient({
       </div>
 
       {query.trim().length < 2 ? (
-        <p className="text-sm text-muted-foreground">
-          Digite ao menos 2 caracteres para buscar.
-        </p>
+        <EmptyState
+          icon={Search}
+          title="Comece a digitar"
+          description="Digite ao menos 2 caracteres para buscar."
+        />
+      ) : erro ? (
+        // D6 — falha não é "nada encontrado": a tela não afirma que não existe resultado.
+        <div role="alert">
+          <EmptyState
+            icon={CircleAlert}
+            title="Não foi possível buscar agora."
+            description="Isso não quer dizer que não haja resultado."
+          >
+            <Button variant="outline" size="sm" onClick={() => runSearch(query.trim())}>
+              Tentar de novo
+            </Button>
+          </EmptyState>
+        </div>
       ) : showEmpty ? (
         <EmptyState
           icon={SearchX}

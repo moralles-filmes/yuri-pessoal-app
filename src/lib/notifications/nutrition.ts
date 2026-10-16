@@ -36,6 +36,7 @@ import {
   foodLink,
   measurementsLink,
   pantryLink,
+  planningWeekLink,
   shoppingListLink,
 } from "@/lib/search/nutrition-links";
 import type { NotificationPriority, NotificationType } from "./constants";
@@ -252,7 +253,7 @@ export function generateNutritionNotifications(input: NutritionGenInput): Candid
         priority: "low",
         title: "A semana que vem ainda não tem refeições planejadas",
         description: `A semana começa em ${formatDate(week.weekStart)}. Planejar é opcional — o diário funciona sem plano.`,
-        link: `/nutricao/planejamento?data=${week.weekStart}`,
+        link: planningWeekLink(week.weekStart),
         entity_type: "nutrition_plan",
         entity_id: null,
         // Uma por semana: a chave é o início da semana, não o dia em que o Cron rodou.

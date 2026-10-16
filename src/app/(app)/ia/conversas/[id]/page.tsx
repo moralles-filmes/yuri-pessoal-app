@@ -5,12 +5,14 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChatClient } from "@/components/ai/chat-client";
+import { VazioDaConversa } from "@/components/ai/vazio-da-conversa";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getConversation, getRouterConfigs, getRunSources } from "@/lib/ai/queries";
 import { usableProviders } from "@/lib/ai/core/router";
 import { formatUsdOrUnavailable } from "@/lib/ai/constants";
 import { cryptoProblemMessage } from "@/lib/ai/server/crypto-readiness";
 import { reconcileOwnRuns } from "@/lib/ai/server/reconcile";
+import { conversationsLink } from "@/lib/search/ai-links";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +80,7 @@ export default async function ConversaPage({
         <div className="flex flex-wrap items-center gap-2">
           {arquivada && <Badge variant="outline">arquivada</Badge>}
           <Button asChild variant="outline" size="sm">
-            <Link href="/ia/conversas">
+            <Link href={conversationsLink()}>
               <ArrowLeft className="size-4" /> Voltar
             </Link>
           </Button>
@@ -92,6 +94,7 @@ export default async function ConversaPage({
         sources={fontes}
         podeConversar={motivoBloqueio === null}
         motivoBloqueio={motivoBloqueio}
+        vazio={<VazioDaConversa />}
       />
     </div>
   );

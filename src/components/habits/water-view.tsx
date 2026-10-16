@@ -1,15 +1,23 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Droplets, Minus, Plus } from "lucide-react";
+import { Check, Droplets, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ProgressRing } from "@/components/habits/progress-ring";
 import { StreakFlame, habitIcon } from "@/components/habits/badges";
-import { HabitLogDialog } from "@/components/habits/habit-log-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import {
+  AvisoReflexoDosTreinos,
+  SeloReflexoDosTreinos,
+} from "@/components/habits/vinculo-treinos";
+import { refleteOsTreinos } from "@/lib/habits/vinculo-treinos";
+import { ehHoje, textoDoDiaDaAgua } from "@/components/habits/rotulos-acessiveis";
+import { cn } from "@/lib/utils";
 import { incrementHabit } from "@/lib/actions/habits";
 import {
   HABIT_CATEGORY_COLORS,
@@ -18,17 +26,25 @@ import {
   formatHabitValue,
   glassesToUnit,
 } from "@/lib/habits/constants";
-import { formatDate } from "@/lib/format";
 import type { HabitWithStats } from "@/types/database";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const HabitLogDialog = dynamic(
+  () => import("@/components/habits/habit-log-dialog").then((m) => m.HabitLogDialog),
+  { ssr: false },
+);
 
 export function WaterView({
   habits,
   todayIso,
   onCreate,
+  habitoVinculadoId,
 }: {
   habits: HabitWithStats[];
   todayIso: string;
   onCreate: () => void;
+  /** Hábito que reflete os treinos; `null` = vínculo desligado. */
+  habitoVinculadoId: string | null;
 }) {
   if (habits.length === 0) {
     return (
@@ -52,7 +68,12 @@ export function WaterView({
       </p>
       <div className="grid gap-4 lg:grid-cols-2">
         {habits.map((h) => (
-          <WaterCard key={h.id} habit={h} todayIso={todayIso} />
+          <WaterCard
+            key={h.id}
+            habit={h}
+            todayIso={todayIso}
+            habitoVinculadoId={habitoVinculadoId}
+          />
         ))}
       </div>
     </div>
@@ -62,15 +83,19 @@ export function WaterView({
 function WaterCard({
   habit,
   todayIso,
+  habitoVinculadoId,
 }: {
   habit: HabitWithStats;
   todayIso: string;
+  habitoVinculadoId: string | null;
 }) {
   const router = useRouter();
   const [logOpen, setLogOpen] = React.useState(false);
+  const logMontado = useLazyDialog(logOpen);
   const [busy, setBusy] = React.useState(false);
   const color = habit.color ?? HABIT_CATEGORY_COLORS.agua;
   const glass = glassesToUnit(1, habit.unit);
+  const reflete = refleteOsTreinos(habit.id, habitoVinculadoId);
   const pct =
     habit.target_value > 0
       ? Math.min(100, Math.round((habit.todayValue / habit.target_value) * 100))
@@ -90,13 +115,15 @@ function WaterCard({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex min-w-0 flex-wrap items-center gap-2 text-base">
           <span aria-hidden>{habitIcon(habit.icon, habit.category)}</span>
           {habit.name}
+          {reflete && <SeloReflexoDosTreinos />}
         </CardTitle>
         <StreakFlame count={habit.streak} />
       </CardHeader>
       <CardContent className="space-y-4">
+        {reflete && <AvisoReflexoDosTreinos />}
         <div className="flex items-center gap-5">
           <ProgressRing
             value={habit.todayValue}
@@ -145,58 +172,105 @@ function WaterCard({
           </div>
         </div>
 
-        <WeekStrip habit={habit} color={color} />
+        <WeekStrip habit={habit} color={color} hoje={todayIso} />
       </CardContent>
 
-      <HabitLogDialog
-        habitId={habit.id}
-        habitName={habit.name}
-        unit={habit.unit}
-        logDate={todayIso}
-        initialValue={habit.todayValue}
-        initialNotes={habit.todayLog?.notes ?? ""}
-        showNotes={false}
-        open={logOpen}
-        onOpenChange={setLogOpen}
-      />
+      {logMontado && (
+        <HabitLogDialog
+          habitId={habit.id}
+          habitName={habit.name}
+          unit={habit.unit}
+          logDate={todayIso}
+          initialValue={habit.todayValue}
+          initialNotes={habit.todayLog?.notes ?? ""}
+          showNotes={false}
+          open={logOpen}
+          onOpenChange={setLogOpen}
+        />
+      )}
     </Card>
   );
 }
 
-/** Tira da semana: 7 dias com o valor do dia e marca de meta atingida. */
+/** Anel de hoje — o mesmo do heatmap: hoje se distingue pela FORMA, não pela cor. */
+const ANEL_HOJE = "ring-2 ring-foreground ring-offset-1 ring-offset-card";
+
+/**
+ * Tira da semana: 7 dias com o valor do dia e marca de meta atingida.
+ *
+ * REDESIGN-07-B · D2 — "meta batida" ganha ✓ (forma) além da cor; hoje ganha anel, rótulo em
+ * negrito e `aria-current="date"`; cada dia diz valor, meta e se bateu em texto (`sr-only`).
+ * A altura e a cor da barra NÃO mudam, e `done` chega pronto (nada é recalculado aqui).
+ */
 function WeekStrip({
   habit,
   color,
+  hoje,
 }: {
   habit: HabitWithStats;
   color: string;
+  hoje: string;
 }) {
   return (
-    <div className="grid grid-cols-7 gap-1.5">
-      {habit.last7.map((d) => (
-        <div key={d.date} className="space-y-1 text-center">
-          <div
-            title={`${formatDate(d.date)} — ${formatAmount(d.value)}`}
-            className="grid h-12 place-items-end rounded-md bg-muted/60 p-1"
-          >
-            <div
-              className="w-full rounded-sm"
-              style={{
-                height: `${
-                  habit.target_value > 0
-                    ? Math.min(100, (d.value / habit.target_value) * 100)
-                    : 0
-                }%`,
-                backgroundColor: d.done ? color : "var(--muted-foreground)",
-                minHeight: d.value > 0 ? 4 : 0,
-              }}
-            />
-          </div>
-          <span className="text-[10px] text-muted-foreground">
-            {d.date.slice(8)}
-          </span>
-        </div>
-      ))}
+    <div className="space-y-1.5">
+      <ol aria-label="Últimos 7 dias" className="grid grid-cols-7 gap-1.5">
+        {habit.last7.map((d) => {
+          const eHoje = ehHoje(d.date, hoje);
+          const texto = textoDoDiaDaAgua(d, hoje, habit.target_value, habit.unit);
+          return (
+            <li
+              key={d.date}
+              aria-current={eHoje ? "date" : undefined}
+              className="space-y-1 text-center"
+            >
+              <div
+                title={texto}
+                className={cn(
+                  "grid h-12 place-items-end rounded-md bg-muted/60 p-1",
+                  eHoje && ANEL_HOJE,
+                )}
+              >
+                <div
+                  className="w-full rounded-sm"
+                  style={{
+                    height: `${
+                      habit.target_value > 0
+                        ? Math.min(100, (d.value / habit.target_value) * 100)
+                        : 0
+                    }%`,
+                    backgroundColor: d.done ? color : "var(--muted-foreground)",
+                    minHeight: d.value > 0 ? 4 : 0,
+                  }}
+                />
+              </div>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "inline-flex items-center justify-center gap-0.5 text-[10px] text-muted-foreground",
+                  eHoje && "font-semibold text-foreground",
+                )}
+              >
+                {d.done && <Check className="size-2.5" strokeWidth={3} />}
+                {d.date.slice(8)}
+              </span>
+              <span className="sr-only">
+                {texto}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      <p
+        aria-hidden="true"
+        className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[10px] text-muted-foreground"
+      >
+        <span className="inline-flex items-center gap-1">
+          <Check className="size-2.5" strokeWidth={3} /> meta batida
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className={cn("size-2.5 rounded-sm", ANEL_HOJE)} /> hoje
+        </span>
+      </p>
     </div>
   );
 }

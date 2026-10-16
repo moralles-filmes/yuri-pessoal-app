@@ -18,6 +18,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  composicaoDosProblemas,
   filtrarHistorico,
   montarHistorico,
   parseCamposTocados,
@@ -367,6 +368,7 @@ describe("ordem e recorte", () => {
       aguardando: 1,
       problemas: 2,
       semDesfecho: 1,
+      confirmadasSemExecucao: 0,
     });
   });
 
@@ -378,6 +380,36 @@ describe("ordem e recorte", () => {
     const linhas = so([proposta()], [aprovacao("confirmada")], [execucao({ status: "executando" })]);
     expect(filtrarHistorico(linhas, "aplicadas")).toHaveLength(0);
     expect(filtrarHistorico(linhas, "problemas")).toHaveLength(1);
+  });
+
+  /**
+   * REDESIGN-07-D · D1 — ⛔ "AGUARDANDO VOCÊ" CONTA SÓ O QUE ESPERA O DONO.
+   *
+   * Uma confirmada SEM execução registrada não espera nada de ninguém: a decisão foi gravada e
+   * a execução foi recusada (`EFEITO_MUDOU`, prazo vencido pelo relógio do servidor) ou nunca
+   * chegou (transporte). Pelo claim-first nada foi aplicado, e ela nunca mais executa —
+   * reconfirmar dá `PROPOSTA_JA_DECIDIDA`. Contá-la em "aguardando" mandava o dono esperar por
+   * algo que não vai acontecer; ela é um problema a olhar.
+   */
+  it("a dica de 'precisam de atenção' diz do que o número é feito, com plural e sem zero", () => {
+    const base = { total: 9, aplicadas: 0, aguardando: 0 };
+    expect(
+      composicaoDosProblemas({ ...base, problemas: 4, semDesfecho: 1, confirmadasSemExecucao: 2 }),
+    ).toBe("1 falha · 2 confirmadas sem execução · 1 sem desfecho registrado");
+    expect(
+      composicaoDosProblemas({ ...base, problemas: 1, semDesfecho: 0, confirmadasSemExecucao: 1 }),
+    ).toBe("1 confirmada sem execução");
+    expect(
+      composicaoDosProblemas({ ...base, problemas: 0, semDesfecho: 0, confirmadasSemExecucao: 0 }),
+    ).toBe("falhas, execuções sem desfecho e confirmações sem execução");
+  });
+
+  it("confirmada sem execução vai para 'precisam de atenção', não para 'aguardando você'", () => {
+    const linhas = so([proposta()], [aprovacao("confirmada")], []);
+    expect(linhas[0]?.estado).toBe("confirmada");
+    expect(filtrarHistorico(linhas, "aguardando")).toHaveLength(0);
+    expect(filtrarHistorico(linhas, "problemas")).toHaveLength(1);
+    expect(resumirHistorico(linhas)).toMatchObject({ aguardando: 0, problemas: 1 });
   });
 });
 

@@ -25,6 +25,7 @@
  * 5. EXCLUIR SEMPRE CONFIRMA; a ação em massa oferecida em primeiro lugar é marcar.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -52,9 +53,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
-import { MarketCategoriesDialog } from "@/components/nutrition/market-categories-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { createShoppingTodo } from "@/lib/actions/nutrition-integrations";
-import { SortableList } from "@/components/shared/sortable-list";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -105,9 +105,26 @@ import {
   reorderShoppingItems,
   updateShoppingItemQuantity,
 } from "@/lib/actions/nutrition-shopping";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { PantryPanel } from "@/components/nutrition/pantry-panel";
-import { ShoppingGenerateDialog } from "@/components/nutrition/shopping-generate-dialog";
-import { ShoppingItemDialog } from "@/components/nutrition/shopping-item-dialog";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const SortableList = dynamic(
+  () => import("@/components/shared/sortable-list").then((m) => m.SortableList),
+  { ssr: false },
+) as typeof import("@/components/shared/sortable-list").SortableList;
+const ShoppingItemDialog = dynamic(
+  () => import("@/components/nutrition/shopping-item-dialog").then((m) => m.ShoppingItemDialog),
+  { ssr: false },
+);
+const MarketCategoriesDialog = dynamic(
+  () => import("@/components/nutrition/market-categories-dialog").then((m) => m.MarketCategoriesDialog),
+  { ssr: false },
+);
+const ShoppingGenerateDialog = dynamic(
+  () => import("@/components/nutrition/shopping-generate-dialog").then((m) => m.ShoppingGenerateDialog),
+  { ssr: false },
+);
 
 const selectClass =
   "h-11 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -143,6 +160,9 @@ export function ShoppingClient(props: ShoppingClientProps) {
   });
   const [generateOpen, setGenerateOpen] = React.useState(false);
   const [categoriesOpen, setCategoriesOpen] = React.useState(false);
+  const shoppingItemDialogMontado = useLazyDialog(itemDialog.open);
+  const marketCategoriesDialogMontado = useLazyDialog(categoriesOpen);
+  const shoppingGenerateDialogMontado = useLazyDialog(generateOpen);
   const [regenerate, setRegenerate] = React.useState(false);
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
 
@@ -190,7 +210,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }
@@ -244,7 +264,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
         ...extra,
       });
       if (!result.ok) {
-        toast.error(result.error ?? "Não foi possível aplicar a ação.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível aplicar a ação." }));
         return;
       }
       toast.success(
@@ -316,6 +336,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
       {/* ── Abas: alvo de toque grande ── */}
       <div className="grid grid-cols-2 gap-2">
         <Button
+          aria-pressed={aba === "lista"}
           variant={aba === "lista" ? "default" : "outline"}
           className="h-11"
           onClick={() => {
@@ -327,6 +348,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
           Listas
         </Button>
         <Button
+          aria-pressed={aba === "despensa"}
           variant={aba === "despensa" ? "default" : "outline"}
           className="h-11"
           onClick={() => {
@@ -353,7 +375,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
               router.refresh();
               return true;
             }
-            toast.error(result.error ?? "Não foi possível salvar.");
+            toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
             return false;
           }}
           onDelete={(id) => run(() => deletePantryItem(id), "Item removido da despensa.")}
@@ -368,7 +390,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
                       );
                       router.refresh();
                     } else {
-                      toast.error(result.error ?? "Não foi possível enviar.");
+                      toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível enviar." }));
                     }
                   })
               : null
@@ -442,7 +464,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
                     );
                     router.refresh();
                   } else {
-                    toast.error(result.error ?? "Não foi possível aplicar.");
+                    toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível aplicar." }));
                   }
                 })
               }
@@ -465,7 +487,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
                     goTo({ lista: result.data.id });
                     router.refresh();
                   } else {
-                    toast.error(result.error ?? "Não foi possível duplicar.");
+                    toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível duplicar." }));
                   }
                 })
               }
@@ -658,6 +680,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
             </select>
 
             <Button
+              aria-pressed={reordering}
               variant={reordering ? "default" : "outline"}
               size="sm"
               className="h-11"
@@ -846,81 +869,87 @@ export function ShoppingClient(props: ShoppingClientProps) {
       )}
 
       {/* ── Diálogos ── */}
-      <ShoppingItemDialog
-        open={itemDialog.open}
-        onOpenChange={(open) => setItemDialog((current) => ({ ...current, open }))}
-        item={itemDialog.item}
-        categories={props.categories}
-        foods={props.foods}
-        stores={stores}
-        onSubmit={async (values) => {
-          if (!list) return;
-          const result = await saveShoppingItem(
-            { ...values, list_id: list.id },
-            itemDialog.item?.id,
-          );
-          if (result.ok) {
-            toast.success(itemDialog.item ? "Item salvo." : "Item adicionado.");
-            setItemDialog({ open: false, item: null });
+      {shoppingItemDialogMontado && (
+        <ShoppingItemDialog
+          open={itemDialog.open}
+          onOpenChange={(open) => setItemDialog((current) => ({ ...current, open }))}
+          item={itemDialog.item}
+          categories={props.categories}
+          foods={props.foods}
+          stores={stores}
+          onSubmit={async (values) => {
+            if (!list) return;
+            const result = await saveShoppingItem(
+              { ...values, list_id: list.id },
+              itemDialog.item?.id,
+            );
+            if (result.ok) {
+              toast.success(itemDialog.item ? "Item salvo." : "Item adicionado.");
+              setItemDialog({ open: false, item: null });
+              router.refresh();
+            } else {
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
+            }
+          }}
+        />
+      )}
+
+      {marketCategoriesDialogMontado && (
+        <MarketCategoriesDialog
+          open={categoriesOpen}
+          onOpenChange={setCategoriesOpen}
+          categories={props.categories}
+        />
+      )}
+
+      {shoppingGenerateDialogMontado && (
+        <ShoppingGenerateDialog
+          open={generateOpen}
+          onOpenChange={setGenerateOpen}
+          hoje={props.hoje}
+          recipes={props.recipes}
+          listId={regenerate ? (list?.id ?? null) : null}
+          listName={regenerate ? (list?.name ?? null) : null}
+          onPreview={async (input) => {
+            const result = await previewShoppingGeneration(input);
+            if (result.ok) return result.data;
+            toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível montar a prévia." }));
+            return null;
+          }}
+          onGenerate={async (input) => {
+            const result = await generateShoppingList(input);
+            if (!result.ok) {
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível gerar a lista." }));
+              return false;
+            }
+            const { criados, atualizados, removidos, ajustesPreservados, separados, ignorados } =
+              result.data;
+            toast.success(
+              `${criados} ${criados === 1 ? "item novo" : "itens novos"}` +
+                (atualizados > 0 ? `, ${atualizados} atualizados` : "") +
+                (removidos > 0 ? `, ${removidos} removidos` : "") +
+                ".",
+              {
+                description: [
+                  ajustesPreservados > 0
+                    ? `${ajustesPreservados} ajuste(s) manual(is) preservado(s).`
+                    : null,
+                  separados > 0
+                    ? `${separados} item(ns) em linhas separadas por unidades que não se convertem.`
+                    : null,
+                  ignorados.length > 0 ? `${ignorados.length} ficou(aram) de fora.` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
+              },
+            );
+            setListId(result.data.listId);
+            goTo({ lista: result.data.listId });
             router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível salvar.");
-          }
-        }}
-      />
-
-      <MarketCategoriesDialog
-        open={categoriesOpen}
-        onOpenChange={setCategoriesOpen}
-        categories={props.categories}
-      />
-
-      <ShoppingGenerateDialog
-        open={generateOpen}
-        onOpenChange={setGenerateOpen}
-        hoje={props.hoje}
-        recipes={props.recipes}
-        listId={regenerate ? (list?.id ?? null) : null}
-        listName={regenerate ? (list?.name ?? null) : null}
-        onPreview={async (input) => {
-          const result = await previewShoppingGeneration(input);
-          if (result.ok) return result.data;
-          toast.error(result.error ?? "Não foi possível montar a prévia.");
-          return null;
-        }}
-        onGenerate={async (input) => {
-          const result = await generateShoppingList(input);
-          if (!result.ok) {
-            toast.error(result.error ?? "Não foi possível gerar a lista.");
-            return false;
-          }
-          const { criados, atualizados, removidos, ajustesPreservados, separados, ignorados } =
-            result.data;
-          toast.success(
-            `${criados} ${criados === 1 ? "item novo" : "itens novos"}` +
-              (atualizados > 0 ? `, ${atualizados} atualizados` : "") +
-              (removidos > 0 ? `, ${removidos} removidos` : "") +
-              ".",
-            {
-              description: [
-                ajustesPreservados > 0
-                  ? `${ajustesPreservados} ajuste(s) manual(is) preservado(s).`
-                  : null,
-                separados > 0
-                  ? `${separados} item(ns) em linhas separadas por unidades que não se convertem.`
-                  : null,
-                ignorados.length > 0 ? `${ignorados.length} ficou(aram) de fora.` : null,
-              ]
-                .filter(Boolean)
-                .join(" "),
-            },
-          );
-          setListId(result.data.listId);
-          goTo({ lista: result.data.listId });
-          router.refresh();
-          return true;
-        }}
-      />
+            return true;
+          }}
+        />
+      )}
     </div>
   );
 }

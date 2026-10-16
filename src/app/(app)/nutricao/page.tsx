@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { hojeISO, timeInSaoPaulo } from "@/lib/format";
@@ -48,6 +49,7 @@ import {
 import { getMealTemplates, getRecipes } from "@/lib/nutrition/recipe-queries";
 import { AdherenceBadge, GoalProgressBar } from "@/components/nutrition/goal-progress-bar";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
+import { waterLink } from "@/lib/search/nutrition-links";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Dieta e Alimentação" };
@@ -214,7 +216,7 @@ export default async function NutricaoPage() {
                   </span>
                 </p>
                 <Link
-                  href="/habitos"
+                  href={waterLink()}
                   className="text-xs text-primary underline-offset-4 hover:underline"
                 >
                   Registrar em Hábitos
@@ -224,7 +226,7 @@ export default async function NutricaoPage() {
               <>
                 <p className="text-sm">Sem hábito de água.</p>
                 <Link
-                  href="/habitos"
+                  href={waterLink()}
                   className="text-xs text-primary underline-offset-4 hover:underline"
                 >
                   Criar em Hábitos
@@ -307,15 +309,15 @@ export default async function NutricaoPage() {
                 </Button>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                Nada pendente para hoje.{" "}
-                <Link
-                  href="/nutricao/planejamento"
-                  className="text-primary underline-offset-4 hover:underline"
-                >
-                  Planejar refeições
-                </Link>
-              </p>
+              <EmptyState
+                icon={CalendarRange}
+                title="Nada pendente para hoje"
+                className="border-0 bg-transparent py-6"
+              >
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/nutricao/planejamento">Planejar refeições</Link>
+                </Button>
+              </EmptyState>
             )}
           </CardContent>
         </Card>

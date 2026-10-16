@@ -55,7 +55,8 @@ const TETO_TAREFAS_DA_CONSULTA = 2000;
 const refDaTarefa = (id: string): ToolRef => ({
   tipo: "tarefa",
   id,
-  rota: `/tarefas?task=${id}`,
+  // REDESIGN-07-D · D7 — `/tarefas` não lê `task`: o parâmetro era ignorado em silêncio.
+  rota: "/tarefas",
 });
 
 const REF_DAS_ROTINAS: ToolRef = {

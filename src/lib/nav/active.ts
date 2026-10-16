@@ -21,6 +21,9 @@
  *
  * Módulo puro e SEM IMPORTS: ele é lido pela casca do app, e o que a casca
  * importa entra nas 67 rotas.
+ *
+ * Desde a REDESIGN-07-A um alvo pode ser um OBJETO com `tambem`: as rotas que ele representa
+ * além do próprio href. Continua uma decisão só, com no máximo um vencedor.
  */
 
 /**
@@ -33,18 +36,34 @@ function casa(pathname: string, href: string): boolean {
 }
 
 /**
- * O href mais específico da lista que cobre esta rota, ou `null` se nenhum cobre.
- *
- * Comparar por comprimento aqui é exato, não heurística: todo href que casa é
- * ancestral-ou-igual da MESMA rota, então dois quaisquer deles são prefixos um do
- * outro — o mais longo é o mais fundo, e empate só aconteceria entre hrefs
- * idênticos.
+ * Um alvo de navegação: o href que ele abre e, opcionalmente, outras rotas que ele
+ * REPRESENTA (07-A). "Rotinas e tarefas" abre `/rotinas` e acende também em `/tarefas`;
+ * a 05 vai fazer o mesmo com `/cartoes` representando `/faturas` e `/parcelamentos`.
  */
-export function hrefAtivo(pathname: string, hrefs: readonly string[]): string | null {
+export type AlvoDeNavegacao =
+  | string
+  | { readonly href: string; readonly tambem?: readonly string[] };
+
+/** Todas as rotas que um alvo reivindica: o href e as que ele representa. */
+export function rotasDeclaradas(alvo: AlvoDeNavegacao): readonly string[] {
+  return typeof alvo === "string" ? [alvo] : [alvo.href, ...(alvo.tambem ?? [])];
+}
+
+/**
+ * O `href` do alvo que cobre esta rota com a rota declarada mais funda, ou `null`.
+ * Continua UMA decisão com no máximo um vencedor: cada rota declarada de cada alvo disputa,
+ * e a comparação por comprimento segue exata (todas as que casam são ancestrais-ou-iguais
+ * do mesmo pathname).
+ */
+export function hrefAtivo(pathname: string, alvos: readonly AlvoDeNavegacao[]): string | null {
   let vencedor: string | null = null;
-  for (const href of hrefs) {
-    if (casa(pathname, href) && (vencedor === null || href.length > vencedor.length)) {
-      vencedor = href;
+  let profundidade = -1;
+  for (const alvo of alvos) {
+    for (const rota of rotasDeclaradas(alvo)) {
+      if (casa(pathname, rota) && rota.length > profundidade) {
+        profundidade = rota.length;
+        vencedor = typeof alvo === "string" ? alvo : alvo.href;
+      }
     }
   }
   return vencedor;

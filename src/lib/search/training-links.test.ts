@@ -18,15 +18,19 @@ import {
   evolutionLink,
   exerciseLink,
   goalLink,
+  habitsManageLink,
   liveSessionLink,
   programLink,
   recordLink,
   scheduleLink,
+  historyLink,
   sessionLink,
   todayLink,
   trainingReportsLink,
   workoutLink,
 } from "./training-links";
+import { HABIT_VIEWS } from "@/lib/habits/constants";
+import { parametrosLidos, rotaEParametros } from "@/test/parametros-lidos";
 import { SEARCH_TYPES, SEARCH_TYPE_LABELS } from "./types";
 
 const ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -140,5 +144,34 @@ describe("tipos novos da busca global (Treinos)", () => {
     for (const type of NOVOS) {
       expect(indice(type)).toBeLessThan(indice("notificacao"));
     }
+  });
+});
+
+/** REDESIGN-07-C · D6 — a LEITURA de cada parâmetro, e o link de Hábitos dos Treinos. */
+describe("D6 — cada parâmetro de cada link é LIDO pela página de destino", () => {
+  // G4 — fora daqui, registrado: `programs-client.tsx` linka /treinos/calendario?programa=…,
+  // que a página declara e não lê. Não é construtor deste arquivo (spec 07-C §4, R).
+  it.each([
+    ["programa", programLink(ID)],
+    ["meta", goalLink(ID)],
+    ["recorde", recordLink(ID)],
+    ["calendário", scheduleLink("2026-08-06")],
+  ])("%s → %s", (_nome, link) => {
+    const [rota, chaves] = rotaEParametros(link);
+    const lidos = parametrosLidos(rota);
+    for (const chave of chaves) expect(lidos.has(chave), `${rota} não lê "${chave}"`).toBe(true);
+  });
+
+  it('o vínculo do hábito "Treinar" manda criar em Hábitos → Gerenciar', () => {
+    expect(habitsManageLink()).toBe("/habitos?view=gerenciar");
+    expect(HABIT_VIEWS).toContain("gerenciar");
+    expect(temPagina(habitsManageLink())).toBe(true);
+  });
+});
+/** REDESIGN-07-D · D7 — o histórico de sessões ganha construtor (insights/collectors/training). */
+describe("07-D — historyLink", () => {
+  it("abre o histórico, que tem página no disco", () => {
+    expect(historyLink()).toBe("/treinos/historico");
+    expect(temPagina(historyLink())).toBe(true);
   });
 });

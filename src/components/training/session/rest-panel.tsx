@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { formatClock, restTimer, sessionTimes, shouldAutoAdvance } from "@/lib/training/timers";
 import { REST_ADJUSTMENTS } from "@/lib/training/constants";
 import type { SessionRest } from "@/lib/training/types";
+import { avisosDoFimDoDescanso } from "./session-queue-view";
 import { useNow, vibrate } from "./use-now";
 
 export function RestPanel({
@@ -61,16 +62,33 @@ export function RestPanel({
     now,
   );
 
-  // Avisa uma vez quando o tempo acaba. `alerted` é ref para o aviso não repetir a cada tique.
-  const alerted = React.useRef(false);
+  // Avisa uma vez quando o tempo acaba; os refs impedem repetir a cada tique. O que fazer sai
+  // de `avisosDoFimDoDescanso` (pura, testada): descanso que JÁ TINHA ACABADO quando o painel
+  // montou (recarregou, voltou à tela) não toca de novo, e o avanço automático acontece uma
+  // vez. O painel é remontado a cada descanso novo (`key` pelo id, na tela da sessão).
+  const [vencidoNaMontagem] = React.useState(timer.isOver);
+  const avisou = React.useRef(false);
+  const avancou = React.useRef(false);
   React.useEffect(() => {
-    if (!timer.isOver || alerted.current || !timer.isRunning) return;
-    alerted.current = true;
+    const { tocar, avancar } = avisosDoFimDoDescanso({
+      isOver: timer.isOver,
+      isRunning: timer.isRunning,
+      jaAvisou: avisou.current,
+      jaAvancou: avancou.current,
+      vencidoNaMontagem,
+      deveAvancar: shouldAutoAdvance(timer, autoAdvance),
+    });
 
-    if (vibrationEnabled) vibrate([200, 80, 200]);
-    if (soundEnabled) playBeep();
-    if (shouldAutoAdvance(timer, autoAdvance)) onFinish();
-  }, [timer, autoAdvance, soundEnabled, vibrationEnabled, onFinish]);
+    if (tocar) {
+      avisou.current = true;
+      if (vibrationEnabled) vibrate([200, 80, 200]);
+      if (soundEnabled) playBeep();
+    }
+    if (avancar) {
+      avancou.current = true;
+      onFinish();
+    }
+  }, [timer, autoAdvance, soundEnabled, vibrationEnabled, onFinish, vencidoNaMontagem]);
 
   const over = timer.isOver;
 

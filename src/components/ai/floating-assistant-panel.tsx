@@ -26,8 +26,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ChatView, useConversaDaIa } from "@/components/ai/chat-client";
+import { VazioDaConversa } from "@/components/ai/vazio-da-conversa";
 import { definirBotaoFlutuante, estadoDoPainelDaIa } from "@/lib/actions/ai-panel";
-import { AI_LINK_BASE } from "@/lib/search/ai-links";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
+import { AI_LINK_BASE, conversationLink } from "@/lib/search/ai-links";
 import {
   ATALHO_DO_PAINEL,
   ROTULO_DO_CANTO,
@@ -158,7 +160,7 @@ export function FloatingAssistantPanel({
       // Desfaz a aposta e diz o que aconteceu — preferência que "salvou" e voltou sozinha no
       // próximo carregamento é pior que preferência que recusou na cara.
       onPreferencia({ canto, oculto });
-      toast.error(r.error);
+      toast.error(mensagemDaAction(r));
       return;
     }
     if (proximo.oculto) {
@@ -178,8 +180,10 @@ export function FloatingAssistantPanel({
           primitiva traz `data-[side=right]:sm:max-w-sm`, e o `twMerge` só substitui classe do
           MESMO conjunto de modificadores. Sem o prefixo, as duas sobrevivem e quem decide é a
           ordem do CSS gerado — que o minificador reescreve.
+          REDESIGN-07-D · D9 — e sem `w-full`: à direita o `data-[side=right]:w-3/4` da primitiva
+          já o vencia; embaixo, o `inset-x-0` já ocupa a largura. Era classe morta.
         */
-        className="flex w-full flex-col gap-0 p-0 data-[side=bottom]:h-[85svh] data-[side=right]:sm:max-w-lg"
+        className="flex flex-col gap-0 p-0 data-[side=bottom]:h-[85svh] data-[side=right]:sm:max-w-lg"
       >
         {/* `pr-12`: o botão de fechar da primitiva fica em `absolute top-3 right-3`. */}
         <SheetHeader className="shrink-0 border-b pr-12">
@@ -191,8 +195,16 @@ export function FloatingAssistantPanel({
           <SheetDescription>{RESUMO_DO_ASSISTENTE}</SheetDescription>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={AI_LINK_BASE} onClick={() => onOpenChange(false)}>
-                <SquareArrowOutUpRight className="size-4" /> Abrir em tela cheia
+              {/*
+                D3 — com a conversa já aberta, a tela cheia é ESTA conversa; antes da primeira
+                resposta ainda não há conversa, e o botão leva ao chat vazio.
+              */}
+              <Link
+                href={conversa.conversaId ? conversationLink(conversa.conversaId) : AI_LINK_BASE}
+                onClick={() => onOpenChange(false)}
+              >
+                <SquareArrowOutUpRight className="size-4" />{" "}
+                {conversa.conversaId ? "Abrir esta conversa em tela cheia" : "Abrir em tela cheia"}
               </Link>
             </Button>
             <Button
@@ -230,6 +242,7 @@ export function FloatingAssistantPanel({
               podeConversar={prontidao.podeConversar}
               motivoBloqueio={prontidao.motivoBloqueio}
               compacto
+              vazio={<VazioDaConversa />}
             />
           )}
         </div>

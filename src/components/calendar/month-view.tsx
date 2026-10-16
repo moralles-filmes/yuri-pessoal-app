@@ -50,6 +50,7 @@ export function MonthView({
               <button
                 type="button"
                 onClick={() => onSelectDay(day.date)}
+                aria-current={day.isToday ? "date" : undefined}
                 className={cn(
                   "mb-1 flex size-6 items-center justify-center rounded-full text-xs font-medium tabular-nums transition-colors hover:bg-muted",
                   day.isToday && "bg-primary text-primary-foreground hover:bg-primary",

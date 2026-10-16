@@ -179,9 +179,11 @@ export function ExerciseHistoryClient({
               </CardHeader>
               <CardContent>
                 {records.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum recorde consolidado ainda para este exercício.
-                  </p>
+                  <EmptyState
+                    icon={Trophy}
+                    title="Nenhum recorde consolidado ainda para este exercício"
+                    className="border-0 bg-transparent py-6"
+                  />
                 ) : (
                   <ul className="space-y-2">
                     {records.map((record) => (
@@ -350,7 +352,12 @@ function SetsTable({
                       Aquec.
                     </Badge>
                   )}
-                  {set.isPersonalRecord && <Trophy className="ml-1.5 inline size-3 text-primary" />}
+                  {set.isPersonalRecord && (
+                    <>
+                      <Trophy className="ml-1.5 inline size-3 text-primary" aria-hidden="true" />
+                      <span className="sr-only">Recorde pessoal</span>
+                    </>
+                  )}
                 </td>
                 <td className="px-2 py-1.5 tabular-nums">{registered.join(" · ") || "—"}</td>
                 <td className="px-2 py-1.5 text-muted-foreground">{effort.join(" · ") || "—"}</td>

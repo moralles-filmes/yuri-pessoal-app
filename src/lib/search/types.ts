@@ -51,7 +51,7 @@ export const SEARCH_TYPE_LABELS: Record<SearchType, string> = {
   fatura: "Faturas",
   pessoa: "Pessoas",
   conta: "Contas",
-  tarefa: "Tarefas (Fase 09)",
+  tarefa: "Tarefas",
   rotina: "Rotinas",
   habito: "Hábitos",
   estudo: "Estudos",

@@ -365,8 +365,8 @@ export function ExerciseFormDialog({
 
           {/* Grupos secundários */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
                 <Label className="text-sm">Grupos secundários</Label>
                 <p className="text-xs text-muted-foreground">
                   O grupo principal não pode se repetir aqui.

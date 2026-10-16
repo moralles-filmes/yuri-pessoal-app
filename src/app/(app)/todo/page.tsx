@@ -10,27 +10,15 @@ import {
   summarizeTodo,
 } from "@/lib/todo/queries";
 import { addDaysIso, weekdayOf } from "@/lib/todo/recurrence";
-import { TODO_NAV_VIEWS, TODO_VIEWS, type TodoView } from "@/lib/todo/constants";
-import type { TodoRoute } from "@/components/todo/todo-nav";
+import { TODO_VIEWS, type TodoView } from "@/lib/todo/constants";
 import { TodoClient } from "./todo-client";
+import { resolveRoute } from "./resolve-route";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "TO-DO" };
 
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
-}
-
-/** Resolve a rota interna a partir da URL (`?v=` + `?id=`). */
-function resolveRoute(v: string | undefined, id: string | undefined): TodoRoute {
-  if (v === "projeto" && id) return { kind: "projeto", id };
-  if (v === "etiqueta" && id) return { kind: "etiqueta", id };
-  if (v === "filtro" && id) return { kind: "filtro", id };
-  if (v === "arquivados") return { kind: "arquivados" };
-  if (v && (TODO_NAV_VIEWS as readonly string[]).includes(v)) {
-    return { kind: "view", value: v as (typeof TODO_NAV_VIEWS)[number] };
-  }
-  return { kind: "view", value: "hoje" };
 }
 
 export default async function TodoPage({

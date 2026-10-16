@@ -40,6 +40,7 @@ import {
   setTrainingExercisePref,
 } from "@/lib/actions/training-exercises";
 import type { ExerciseAlternative, ExerciseListItem } from "@/lib/training/types";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 export function ExerciseDetailSheet({
   open,
@@ -58,7 +59,7 @@ export function ExerciseDetailSheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
+      <SheetContent side="right" className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
         {exercise ? (
           <DetailBody
             exercise={exercise}
@@ -243,9 +244,9 @@ function DetailBody({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 text-sm">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-sm">
       <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium">{value}</span>
+      <span className="ml-auto min-w-0 text-right font-medium">{value}</span>
     </div>
   );
 }
@@ -298,7 +299,7 @@ function AlternativesTab({
     });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     setSelected("");
@@ -312,7 +313,7 @@ function AlternativesTab({
     const result = await removeTrainingAlternative(id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Alternativa removida.");
@@ -414,7 +415,7 @@ function PersonalizeTab({
     });
     setSaving(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Preferência salva.");

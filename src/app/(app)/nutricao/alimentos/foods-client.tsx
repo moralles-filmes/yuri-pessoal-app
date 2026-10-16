@@ -57,7 +57,8 @@ import {
   fetchNutritionFoodDetail,
   toggleNutritionFavorite,
 } from "@/lib/actions/nutrition-foods";
-import { FoodFilters } from "@/components/nutrition/food-filters";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
+import { FoodFilters, type CampoNumerico } from "@/components/nutrition/food-filters";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 
 // Os diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form`
@@ -78,6 +79,16 @@ const MeasureDialog = dynamic(
 import { MacroChip } from "@/components/nutrition/nutrient-value";
 
 const PAGE_SIZE = 60;
+
+/** Número da URL → texto do campo (vazio = sem filtro). */
+const numeroComoTexto = (valor: number | null) => (valor === null ? "" : String(valor));
+/** Texto digitado → número do filtro; vazio ou inválido = sem filtro (como antes: `""` → null). */
+const textoComoNumero = (texto: string): number | null => {
+  const t = texto.trim();
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
 
 export function FoodsClient({
   foods,
@@ -115,7 +126,37 @@ export function FoodsClient({
   const [search, setSearch] = useUrlText(urlFilters.search, (value) =>
     commitFilters({ ...urlFilters, search: value }),
   );
-  const filters = React.useMemo(() => ({ ...urlFilters, search }), [urlFilters, search]);
+  // L2 (REDESIGN-07-C): os quatro campos numéricos pelo mesmo caminho da busca.
+  const [minKcal, setMinKcal] = useUrlText(numeroComoTexto(urlFilters.minKcal), (value) =>
+    commitFilters({ ...urlFilters, minKcal: textoComoNumero(value) }),
+  );
+  const [maxKcal, setMaxKcal] = useUrlText(numeroComoTexto(urlFilters.maxKcal), (value) =>
+    commitFilters({ ...urlFilters, maxKcal: textoComoNumero(value) }),
+  );
+  const [minProtein, setMinProtein] = useUrlText(numeroComoTexto(urlFilters.minProtein), (value) =>
+    commitFilters({ ...urlFilters, minProtein: textoComoNumero(value) }),
+  );
+  const [maxProtein, setMaxProtein] = useUrlText(numeroComoTexto(urlFilters.maxProtein), (value) =>
+    commitFilters({ ...urlFilters, maxProtein: textoComoNumero(value) }),
+  );
+  const textosNumericos = { minKcal, maxKcal, minProtein, maxProtein };
+  const setters: Record<CampoNumerico, (texto: string) => void> = {
+    minKcal: setMinKcal,
+    maxKcal: setMaxKcal,
+    minProtein: setMinProtein,
+    maxProtein: setMaxProtein,
+  };
+  const filters = React.useMemo(
+    () => ({
+      ...urlFilters,
+      search,
+      minKcal: textoComoNumero(minKcal),
+      maxKcal: textoComoNumero(maxKcal),
+      minProtein: textoComoNumero(minProtein),
+      maxProtein: textoComoNumero(maxProtein),
+    }),
+    [urlFilters, search, minKcal, maxKcal, minProtein, maxProtein],
+  );
 
   const visible = React.useMemo(() => applyFoodFilters(foods, filters), [foods, filters]);
   const brands = React.useMemo(() => distinctBrands(foods), [foods]);
@@ -166,7 +207,7 @@ export function FoodsClient({
     setDetailOpen(true);
     const result = await fetchNutritionFoodDetail(foodId);
     if (result.ok) setDetail(result.data);
-    else toast.error(result.error);
+    else toast.error(mensagemDaAction(result));
   }
 
   /** Recarrega o detalhe aberto e a lista do servidor após qualquer mutação. */
@@ -180,14 +221,14 @@ export function FoodsClient({
 
   async function handleFavorite(food: FoodListItem) {
     const result = await toggleNutritionFavorite(food.id, !food.isFavorite);
-    if (!result.ok) return toast.error(result.error);
+    if (!result.ok) return toast.error(mensagemDaAction(result));
     toast.success(food.isFavorite ? "Removido dos favoritos." : "Adicionado aos favoritos.");
     void refresh(food.id);
   }
 
   async function handleDuplicate(foodId: string) {
     const result = await duplicateNutritionFood({ food_id: foodId });
-    if (!result.ok) return toast.error(result.error);
+    if (!result.ok) return toast.error(mensagemDaAction(result));
     toast.success("Cópia criada.", {
       description: "A cópia é sua e pode ser editada à vontade.",
     });
@@ -198,7 +239,7 @@ export function FoodsClient({
   async function handleDelete(food: FoodListItem) {
     if (!confirm(`Excluir “${food.name}”? Esta ação não pode ser desfeita.`)) return;
     const result = await deleteNutritionFood(food.id);
-    if (!result.ok) return toast.error(result.error);
+    if (!result.ok) return toast.error(mensagemDaAction(result));
     toast.success("Alimento excluído.");
     setDetailOpen(false);
     router.refresh();
@@ -221,7 +262,7 @@ export function FoodsClient({
     const result = await bulkNutritionFoodAction({ action, ids });
     setBusy(false);
 
-    if (!result.ok) return toast.error(result.error);
+    if (!result.ok) return toast.error(mensagemDaAction(result));
     toast.success(`${result.data.affected} alimento(s) atualizado(s).`, {
       description:
         result.data.skipped > 0
@@ -261,6 +302,8 @@ export function FoodsClient({
         brands={brands}
         resultCount={visible.length}
         totalCount={foods.length}
+        textosNumericos={textosNumericos}
+        onTextoNumerico={(campo, texto) => setters[campo](texto)}
       />
 
       {/* Barra de seleção — só aparece quando há algo selecionado. */}
@@ -334,7 +377,7 @@ export function FoodsClient({
                   onDuplicate={() => void handleDuplicate(food.id)}
                   onEdit={async () => {
                     const result = await fetchNutritionFoodDetail(food.id);
-                    if (!result.ok) return toast.error(result.error);
+                    if (!result.ok) return toast.error(mensagemDaAction(result));
                     setEditing(result.data);
                     setFormOpen(true);
                   }}
@@ -371,7 +414,7 @@ export function FoodsClient({
           onToggleFavorite={() => {
             if (!detail) return;
             void toggleNutritionFavorite(detail.id, !detail.isFavorite).then((result) => {
-              if (!result.ok) return toast.error(result.error);
+              if (!result.ok) return toast.error(mensagemDaAction(result));
               void refresh(detail.id);
             });
           }}

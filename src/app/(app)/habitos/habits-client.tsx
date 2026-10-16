@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlarmClockOff,
   BookOpen,
+  CalendarCheck,
   CheckCircle2,
   Dumbbell,
   Flame,
@@ -20,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { SortableList } from "@/components/shared/sortable-list";
@@ -35,7 +38,8 @@ import { HabitCard } from "@/components/habits/habit-card";
 import { WaterView } from "@/components/habits/water-view";
 import { SessionView } from "@/components/habits/session-view";
 import { ConsistencyView } from "@/components/habits/consistency-view";
-import { HabitFormDialog } from "./habit-form";
+import { SeloReflexoDosTreinos } from "@/components/habits/vinculo-treinos";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import {
   deleteHabit,
   reorderHabits,
@@ -48,21 +52,32 @@ import {
   formatHabitValue,
   type HabitView,
 } from "@/lib/habits/constants";
+import { refleteOsTreinos } from "@/lib/habits/vinculo-treinos";
 import type { HabitRow, HabitsDashboard, HabitWithStats } from "@/types/database";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const HabitFormDialog = dynamic(
+  () => import("./habit-form").then((m) => m.HabitFormDialog),
+  { ssr: false },
+);
 
 export function HabitsClient({
   dashboard,
   view,
   todayIso,
+  habitoVinculadoId,
 }: {
   dashboard: HabitsDashboard;
   view: HabitView;
   todayIso: string;
+  /** Hábito que reflete os treinos (`training_preferences.habit_id`); `null` = vínculo desligado. */
+  habitoVinculadoId: string | null;
 }) {
   const router = useRouter();
   const { habits, consistency } = dashboard;
 
   const [formOpen, setFormOpen] = React.useState(false);
+  const formMontado = useLazyDialog(formOpen);
   const [editing, setEditing] = React.useState<HabitRow | undefined>();
 
   function openCreate() {
@@ -128,31 +143,30 @@ export function HabitsClient({
         </EmptyState>
       ) : (
         <>
-          {/* Navegação de visões */}
-          <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1">
-            {HABIT_VIEWS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => navigate(v)}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-                  view === v
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {HABIT_VIEW_LABELS[v]}
-              </button>
-            ))}
-          </div>
+          <SeletorDeVisao
+            rotulo="Visão dos hábitos"
+            visoes={HABIT_VIEWS}
+            rotulos={HABIT_VIEW_LABELS}
+            atual={view}
+            aoEscolher={navigate}
+          />
 
           {view === "hoje" && (
-            <TodayView habits={habits} todayIso={todayIso} onEdit={openEdit} />
+            <TodayView
+              habits={habits}
+              todayIso={todayIso}
+              onEdit={openEdit}
+              habitoVinculadoId={habitoVinculadoId}
+            />
           )}
 
           {view === "agua" && (
-            <WaterView habits={water} todayIso={todayIso} onCreate={openCreate} />
+            <WaterView
+              habits={water}
+              todayIso={todayIso}
+              onCreate={openCreate}
+              habitoVinculadoId={habitoVinculadoId}
+            />
           )}
 
           {view === "leitura" && (
@@ -165,6 +179,7 @@ export function HabitsClient({
               emptyTitle="Sem hábito de leitura"
               emptyHint="Crie um hábito na categoria Leitura (ex.: 10 páginas por dia) para acompanhar suas leituras aqui."
               onCreate={openCreate}
+              habitoVinculadoId={habitoVinculadoId}
             />
           )}
 
@@ -178,6 +193,7 @@ export function HabitsClient({
               emptyTitle="Sem hábito de exercícios"
               emptyHint="Crie um hábito na categoria Exercícios (ex.: 30 minutos) para acompanhar sua rotina aqui."
               onCreate={openCreate}
+              habitoVinculadoId={habitoVinculadoId}
             />
           )}
 
@@ -185,20 +201,28 @@ export function HabitsClient({
             <ConsistencyView
               consistency={consistency}
               activeCount={active.length}
+              todayIso={todayIso}
             />
           )}
 
           {view === "gerenciar" && (
-            <ManageView habits={habits} onEdit={openEdit} run={run} />
+            <ManageView
+              habits={habits}
+              onEdit={openEdit}
+              run={run}
+              habitoVinculadoId={habitoVinculadoId}
+            />
           )}
         </>
       )}
 
-      <HabitFormDialog
-        habit={editing}
-        open={formOpen}
-        onOpenChange={setFormOpen}
-      />
+      {formMontado && (
+        <HabitFormDialog
+          habit={editing}
+          open={formOpen}
+          onOpenChange={setFormOpen}
+        />
+      )}
     </div>
   );
 }
@@ -209,10 +233,12 @@ function TodayView({
   habits,
   todayIso,
   onEdit,
+  habitoVinculadoId,
 }: {
   habits: HabitWithStats[];
   todayIso: string;
   onEdit: (h: HabitWithStats) => void;
+  habitoVinculadoId: string | null;
 }) {
   const todays = habits
     .filter((h) => h.is_active && h.scheduledToday)
@@ -246,7 +272,7 @@ function TodayView({
       {forgotten.length > 0 && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
           <AlarmClockOff className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div>
+          <div className="min-w-0">
             <p className="font-medium text-amber-700 dark:text-amber-300">
               {forgotten.length} hábito(s) pendente(s) com horário marcado
             </p>
@@ -260,10 +286,12 @@ function TodayView({
       )}
 
       {todays.length === 0 ? (
-        <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-          Nenhum hábito agendado para hoje. Aproveite ou ajuste a frequência em
-          “Gerenciar”.
-        </p>
+        <EmptyState
+          icon={CalendarCheck}
+          title="Nenhum hábito agendado para hoje"
+          description="Aproveite ou ajuste a frequência em “Gerenciar”."
+          className="py-8"
+        />
       ) : (
         <div className="grid gap-3">
           {todays.map((h) => (
@@ -272,6 +300,7 @@ function TodayView({
               habit={h}
               todayIso={todayIso}
               onEdit={onEdit}
+              habitoVinculadoId={habitoVinculadoId}
             />
           ))}
         </div>
@@ -286,8 +315,10 @@ function ManageView({
   habits,
   onEdit,
   run,
+  habitoVinculadoId,
 }: {
   habits: HabitWithStats[];
+  habitoVinculadoId: string | null;
   onEdit: (h: HabitRow) => void;
   run: (
     action: Promise<{ ok: boolean; error?: string }>,
@@ -343,6 +374,7 @@ function ManageView({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate font-medium">{h.name}</span>
                   <HabitCategoryBadge category={h.category} />
+                  {refleteOsTreinos(h.id, habitoVinculadoId) && <SeloReflexoDosTreinos />}
                   {!h.is_active && (
                     <Badge variant="outline" className="text-muted-foreground">
                       Inativo
@@ -368,7 +400,7 @@ function ManageView({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={h.is_active ? "Desativar" : "Ativar"}
+                  aria-label={h.is_active ? `Desativar ${h.name}` : `Ativar ${h.name}`}
                   onClick={() =>
                     run(
                       toggleHabitActive(h.id, !h.is_active),

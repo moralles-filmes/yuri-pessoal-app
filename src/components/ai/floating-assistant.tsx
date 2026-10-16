@@ -6,8 +6,9 @@
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
  * ║ ⛔ ESTE ARQUIVO MORA NA CASCA DO APP, ENTÃO TUDO QUE ELE IMPORTA ENTRA NAS 67 ROTAS.   ║
  * ║                                                                                       ║
- * ║ Medido em 2026-09-19, depois do Bloco 1: a rota mais apertada é `/(app)/configuracoes`║
- * ║ com 279,2 KB gz de um teto próprio de 285 — **5,8 KB de folga**. É esse o orçamento   ║
+ * ║ Medido em 2026-10-15 (REDESIGN-07-D · D4): `/(app)/configuracoes` saiu do teto próprio ║
+ * ║ (205,6 KB gz, sem a Segurança no 1º carregamento), e a rota mais apertada passou a ser ║
+ * ║ `/(app)/todo`, com 238,3 KB gz dos 250 — **11,7 KB de folga**. É esse o orçamento     ║
  * ║ deste arquivo e de tudo que ele alcança.                                              ║
  * ║                                                                                       ║
  * ║ Por isso ele NÃO importa: `@/lib/ai/constants` (texto grande, hoje só nas rotas de    ║
@@ -91,7 +92,11 @@ export function FloatingAssistant({
         <Button
           type="button"
           size="icon"
-          aria-label="Abrir o assistente"
+          // D3 — o selo é um número; o NOME do botão leva a frase inteira. Um span sr-only dentro
+          // do botão seria lido como conteúdo depois do nome, e alguns leitores o omitem.
+          aria-label={
+            aviso ? `Abrir o assistente — ${aviso.texto}` : "Abrir o assistente"
+          }
           aria-keyshortcuts="Control+I Meta+I"
           aria-haspopup="dialog"
           aria-expanded={estado.aberto}
@@ -104,21 +109,17 @@ export function FloatingAssistant({
         >
           <Sparkles className="size-5" />
           {aviso && (
-            <>
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-medium",
-                  aviso.tipo === "proposta"
-                    ? "bg-destructive text-destructive-foreground"
-                    : "bg-primary text-primary-foreground",
-                )}
-              >
-                {aviso.quantas > 0 ? aviso.quantas : "•"}
-              </span>
-              {/* O selo é um número; o leitor de tela recebe a frase inteira. */}
-              <span className="sr-only">{aviso.texto}</span>
-            </>
+            <span
+              aria-hidden
+              className={cn(
+                "absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-medium",
+                aviso.tipo === "proposta"
+                  ? "bg-destructive text-destructive-foreground"
+                  : "bg-primary text-primary-foreground",
+              )}
+            >
+              {aviso.quantas > 0 ? aviso.quantas : "•"}
+            </span>
           )}
         </Button>
       )}

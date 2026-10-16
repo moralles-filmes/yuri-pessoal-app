@@ -387,6 +387,7 @@ export function SetEditor({
               <Button
                 key={level}
                 type="button"
+                aria-pressed={draft.difficulty === level}
                 variant={draft.difficulty === level ? "default" : "outline"}
                 className="h-12 px-1 text-[11px] leading-tight"
                 onClick={() => patch({ difficulty: draft.difficulty === level ? null : level })}

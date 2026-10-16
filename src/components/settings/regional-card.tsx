@@ -21,6 +21,8 @@ import {
   type DateFormatPreference,
 } from "@/lib/settings/constants";
 import { formatCurrency, formatDateWith, hojeISO } from "@/lib/format";
+import { errosDaAction } from "@/lib/forms/mensagem-da-action";
+import { ariaDoErro, ErroDoCampo } from "@/components/shared/erro-do-campo";
 
 /** Card regional: moeda (BRL, fixa) + formato de data com pré-visualização ao vivo. */
 export function RegionalCard({
@@ -31,6 +33,7 @@ export function RegionalCard({
   const router = useRouter();
   const [fmt, setFmt] = React.useState<DateFormatPreference>(dateFormat);
   const [pending, startTransition] = React.useTransition();
+  const [erroDoFormato, setErroDoFormato] = React.useState<string | undefined>(undefined);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,7 +43,10 @@ export function RegionalCard({
         toast.success("Preferências regionais salvas.");
         router.refresh();
       } else {
-        toast.error(res.error);
+        // D8 — o erro do formato fica sob o campo; o resto sobe com o nome do campo.
+        const { porCampo, texto } = errosDaAction(res, ["date_format"]);
+        setErroDoFormato(porCampo.date_format);
+        toast.error(texto);
       }
     });
   }
@@ -76,6 +82,7 @@ export function RegionalCard({
                 value={fmt}
                 onChange={(e) => setFmt(e.target.value as DateFormatPreference)}
                 className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+                {...ariaDoErro("date_format-erro", erroDoFormato)}
               >
                 {DATE_FORMATS.map((f) => (
                   <option key={f} value={f}>
@@ -83,6 +90,7 @@ export function RegionalCard({
                   </option>
                 ))}
               </select>
+              <ErroDoCampo id="date_format-erro" mensagem={erroDoFormato} />
               <p className="text-xs text-muted-foreground">
                 Pré-visualização:{" "}
                 <span className="font-medium text-foreground tabular-nums">

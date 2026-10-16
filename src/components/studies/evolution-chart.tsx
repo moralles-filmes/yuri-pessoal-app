@@ -16,6 +16,7 @@
 import type * as React from "react";
 import dynamic from "next/dynamic";
 import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
+import { formatMinutes } from "@/lib/studies/constants";
 
 type Props = React.ComponentProps<typeof import("./evolution-chart-impl").EvolutionChart>;
 
@@ -28,8 +29,29 @@ const LazyEvolutionChart = dynamic(() => import("./evolution-chart-impl").then((
 
 export function EvolutionChart(props: Props) {
   return (
-    <div style={chartSkeletonHeightVar(240)}>
-      <LazyEvolutionChart {...props} />
-    </div>
+    <>
+      <div style={chartSkeletonHeightVar(240)}>
+        <LazyEvolutionChart {...props} />
+      </div>
+      {/* 07-B — a leitura textual do gráfico mora AQUI, não no -impl: atrás do carregamento sob
+          demanda ela sairia do HTML do servidor (regra 1). Os minutos chegam somados; só se formata. */}
+      <table className="sr-only">
+        <caption>Tempo estudado por semana</caption>
+        <thead>
+          <tr>
+            <th scope="col">Semana</th>
+            <th scope="col">Tempo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {props.weekly.map((w) => (
+            <tr key={w.weekStart}>
+              <th scope="row">{w.label}</th>
+              <td>{formatMinutes(w.minutes)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }

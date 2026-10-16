@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { apagarDadosDaIa, contarDadosDaIa } from "@/lib/actions/ai-retention";
 import {
   ESCOPOS_DE_EXCLUSAO,
@@ -89,7 +90,15 @@ export function RetentionCard() {
     const r = await contarDadosDaIa(alvo);
     setContando(false);
     if (r.ok) setQuantidade(r.data.quantidade);
-    else toast.error(r.error);
+    // Este cartão não tem os campos do filtro como campos da action: o erro de campo sobe com o
+    // nome dele (regra 2 de formulário).
+    else toast.error(mensagemDaAction(r));
+  }
+
+  // REDESIGN-07-D · D8 — Esc e clique fora não fecham no meio da exclusão.
+  function aoMudarAbertura(proximo: boolean) {
+    if (enviando) return;
+    setAberto(proximo);
   }
 
   async function confirmar() {
@@ -98,7 +107,7 @@ export function RetentionCard() {
     setEnviando(false);
 
     if (!r.ok) {
-      toast.error(r.error);
+      toast.error(mensagemDaAction(r));
       return;
     }
     setAberto(false);
@@ -195,7 +204,7 @@ export function RetentionCard() {
         )}
 
         {montado && (
-          <Dialog open={aberto} onOpenChange={setAberto}>
+          <Dialog open={aberto} onOpenChange={aoMudarAbertura}>
             <DialogContent showCloseButton={false}>
               <DialogHeader>
                 <DialogTitle>{ROTULO[escopo]}</DialogTitle>

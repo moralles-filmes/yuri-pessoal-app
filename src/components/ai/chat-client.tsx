@@ -57,7 +57,11 @@ import {
   SourceChipsAoVivo,
   type FerramentaAoVivo,
 } from "@/components/ai/source-chips";
-import { ProposalCard, type PropostaNaTela } from "@/components/ai/proposal-card";
+import type { PropostaNaTela } from "@/components/ai/proposal-card";
+import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
+import { FraseDeGasto } from "@/components/ai/frase-de-gasto";
+import { DESFECHO_INICIAL, type DesfechoDoCartao } from "@/lib/ai/cartao";
+import { faseDoEvento } from "@/lib/ai/fase-do-chat";
 import type { ConversationMessage, MessageRunInfo } from "@/lib/ai/types";
 
 type Evento =
@@ -163,6 +167,12 @@ export type ChatClientProps = {
    * do mesmo texto.
    */
   readonly compacto?: boolean;
+  /**
+   * REDESIGN-07-D · V — o vazio da conversa, DESENHADO POR QUEM HOSPEDA (`VazioDaConversa`):
+   * as páginas o montam no servidor e o painel no chunk sob demanda, para o `EmptyState` não
+   * entrar no primeiro carregamento de `/ia`. Sem ele, nada ocupa o lugar da conversa vazia.
+   */
+  readonly vazio?: React.ReactNode;
 };
 
 /**
@@ -195,6 +205,26 @@ export type ConversaDaIa = {
   /** 18-F Bloco 4 — dispara um panorama pelo MESMO endpoint e pelo mesmo leitor de SSE. */
   readonly iniciarExperiencia: (id: string) => Promise<void>;
   readonly cancelar: () => void;
+  /**
+   * REDESIGN-07-D · D1 — o desfecho de cada cartão de proposta, por id.
+   *
+   * ⛔ Mora AQUI, e não no cartão, pela mesma razão das bolhas: o cartão vive dentro da gaveta
+   * do painel, e fechar a gaveta o desmonta (invariante 95). Com o desfecho lá dentro, reabrir
+   * o painel mostrava "aguardando você" de novo — e confirmar outra vez dava "já foi decidida".
+   * Os ids são os de `ai_action_proposals`: uma proposta nova (inclusive a que nasce depois de
+   * um `switch`) nunca herda o desfecho de outra.
+   */
+  readonly desfechos: Readonly<Record<string, DesfechoDoCartao>>;
+  readonly registrarDesfecho: (proposalId: string, desfecho: DesfechoDoCartao) => void;
+  /** O cartão terminou: o selo do botão flutuante deixa de contar esta proposta. */
+  readonly avisarDecisao: (proposalId: string) => void;
+  /**
+   * REDESIGN-07-D · D3 — a FASE da resposta (`faseDoEvento`), para a região `role="status"`.
+   * Muda por evento, nunca por delta: é o que o leitor de tela anuncia no lugar do streaming.
+   */
+  readonly fase: string | null;
+  /** A conversa aberta (nasce no evento `start`) — o painel a usa para "abrir em tela cheia". */
+  readonly conversaId: string | null;
 };
 
 export function useConversaDaIa({
@@ -242,6 +272,10 @@ export function useConversaDaIa({
    */
   const [caixaDeEntrada, setCaixaDeEntrada] = React.useState(false);
   const [conversa, setConversa] = React.useState<string | null>(conversationId);
+  const [desfechos, setDesfechos] = React.useState<Record<string, DesfechoDoCartao>>({});
+  const [fase, setFase] = React.useState<string | null>(null);
+  /** As propostas que ESTA resposta preparou — as que o `switch` zera junto com o texto. */
+  const propostasDaRespostaRef = React.useRef<string[]>([]);
   const abortRef = React.useRef<AbortController | null>(null);
   const contadorRef = React.useRef(0);
 
@@ -292,6 +326,10 @@ export function useConversaDaIa({
       },
     ]);
     setEnviando(true);
+    // Limpa a região antes da resposta nova: a mesma frase de antes ("Resposta concluída")
+    // não seria anunciada de novo se o conteúdo não mudasse.
+    setFase(null);
+    propostasDaRespostaRef.current = [];
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -313,6 +351,7 @@ export function useConversaDaIa({
           | null;
         const mensagem = corpo?.error ?? "Não foi possível iniciar a resposta.";
         marcarFalha(idProvisorioAssistente, mensagem);
+        setFase(faseDoEvento({ tipo: "error", mensagem }));
         toast.error(mensagem);
         return;
       }
@@ -320,6 +359,7 @@ export function useConversaDaIa({
       await consumirSse(resposta, {
         onStart: (e) => {
           setConversa(e.conversationId);
+          setFase(faseDoEvento({ tipo: "start" }));
           setBolhas((atual) =>
             atual.map((b) =>
               b.id === idProvisorioAssistente
@@ -361,6 +401,18 @@ export function useConversaDaIa({
           // 18-F Bloco 2 — o selo do botão acompanha a limpeza dos cartões, senão ele
           // contaria duas propostas onde o dono vê uma (mesma razão do `propostas: []`).
           onAtividade?.({ tipo: "recomecou" });
+          setFase(faseDoEvento({ tipo: "switch", motivo: e.motivo }));
+          // As propostas zeradas abaixo levam junto os desfechos delas: nenhum cartão as mostra
+          // mais, e o mapa não guarda o que a tela não tem como desenhar.
+          const zeradas = propostasDaRespostaRef.current;
+          propostasDaRespostaRef.current = [];
+          if (zeradas.length > 0) {
+            setDesfechos((atual) => {
+              const resto = { ...atual };
+              for (const id of zeradas) delete resto[id];
+              return resto;
+            });
+          }
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
@@ -391,7 +443,8 @@ export function useConversaDaIa({
             ),
           );
         },
-        onTool: (e) =>
+        onTool: (e) => {
+          setFase(faseDoEvento({ tipo: "tool", toolName: e.toolName }));
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
@@ -408,8 +461,11 @@ export function useConversaDaIa({
                   }
                 : b,
             ),
-          ),
+          );
+        },
         onProposta: (e) => {
+          propostasDaRespostaRef.current.push(e.proposta.id);
+          setFase(faseDoEvento({ tipo: "proposta" }));
           onAtividade?.({
             tipo: "propos",
             id: e.proposta.id,
@@ -425,6 +481,7 @@ export function useConversaDaIa({
         },
         onDone: (e) => {
           onAtividade?.({ tipo: "respondeu" });
+          setFase(faseDoEvento({ tipo: "done" }));
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
@@ -435,6 +492,7 @@ export function useConversaDaIa({
         },
         onError: (e) => {
           marcarFalha(idProvisorioAssistente, e.message);
+          setFase(faseDoEvento({ tipo: "error", mensagem: e.message }));
           toast.error(e.message);
         },
       });
@@ -445,8 +503,11 @@ export function useConversaDaIa({
             i === atual.length - 1 ? { ...b, status: "cancelled" } : b,
           ),
         );
+        setFase(faseDoEvento({ tipo: "cancelada" }));
       } else {
-        marcarFalha(idProvisorioAssistente, "A conexão caiu durante a resposta.");
+        const mensagem = "A conexão caiu durante a resposta.";
+        marcarFalha(idProvisorioAssistente, mensagem);
+        setFase(faseDoEvento({ tipo: "error", mensagem }));
       }
     } finally {
       setEnviando(false);
@@ -494,6 +555,14 @@ export function useConversaDaIa({
     await disparar({ experiencia: id }, atalho.titulo, null);
   }
 
+  function registrarDesfecho(proposalId: string, desfecho: DesfechoDoCartao) {
+    setDesfechos((atual) => ({ ...atual, [proposalId]: desfecho }));
+  }
+
+  function avisarDecisao(proposalId: string) {
+    onAtividade?.({ tipo: "decidiu", id: proposalId });
+  }
+
   function marcarFalha(idFallback: string, mensagem: string) {
     setBolhas((atual) =>
       atual.map((b, i) =>
@@ -516,6 +585,11 @@ export function useConversaDaIa({
     enviar,
     iniciarExperiencia,
     cancelar,
+    desfechos,
+    registrarDesfecho,
+    avisarDecisao,
+    fase,
+    conversaId: conversa,
   };
 }
 
@@ -533,6 +607,7 @@ export function ChatView({
   podeConversar,
   motivoBloqueio,
   compacto = false,
+  vazio,
 }: Omit<ChatClientProps, "conversationId" | "initialMessages" | "onAtividade"> & {
   readonly conversa: ConversaDaIa;
 }) {
@@ -548,8 +623,39 @@ export function ChatView({
     enviar,
     iniciarExperiencia,
     cancelar,
+    desfechos,
+    registrarDesfecho,
+    avisarDecisao,
+    fase,
   } = conversa;
   const fimRef = React.useRef<HTMLDivElement | null>(null);
+  const campoRef = React.useRef<HTMLTextAreaElement | null>(null);
+  /*
+    A vista aparece em `/ia` e no painel flutuante: id escrito à mão colidiria entre os dois —
+    e pela regra do DOM o `<label for>` do painel ativava o PRIMEIRO elemento com o id, que era
+    o controle da página por baixo da gaveta (G-h).
+  */
+  const idBase = React.useId();
+  const idDoGastoPanorama = `${idBase}-gasto-panorama`;
+  const idDoGastoEnvio = `${idBase}-gasto-envio`;
+  const idDoContexto = `${idBase}-contexto`;
+  const idDaCaixa = `${idBase}-caixa`;
+  const idDoCampo = `${idBase}-campo`;
+  const idDoAtalho = `${idBase}-atalho`;
+
+  /*
+    D3 — terminada a resposta, o foco volta ao campo para a próxima pergunta, mas SÓ se ele
+    estiver solto no `body` (o botão Enviar desabilitado o derruba ali). Quem já foi para outro
+    lugar — um cartão de proposta, um link — não é puxado de volta.
+  */
+  const enviandoAntesRef = React.useRef(enviando);
+  React.useEffect(() => {
+    const terminou = enviandoAntesRef.current && !enviando;
+    enviandoAntesRef.current = enviando;
+    if (!terminou) return;
+    const ativo = document.activeElement;
+    if (ativo === null || ativo === document.body) campoRef.current?.focus();
+  }, [enviando]);
 
   React.useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -580,12 +686,17 @@ export function ChatView({
         </div>
       )}
 
-      <div className="space-y-4">
-        {bolhas.length === 0 && (
-          <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-            Nenhuma mensagem ainda. Escreva abaixo para começar.
-          </div>
-        )}
+      {/*
+        D3 — QUEM ANUNCIA É ESTA REGIÃO, E ELA SÓ DIZ A FASE. A conversa abaixo é `role="log"`
+        com `aria-live="off"`: sem isso o papel `log` traz `polite` implícito e o leitor de
+        tela leria cada pedaço do streaming.
+      */}
+      <p role="status" className="sr-only">
+        {fase}
+      </p>
+
+      <div role="log" aria-live="off" aria-label="Conversa com o assistente" className="space-y-4">
+        {bolhas.length === 0 && vazio}
 
         {bolhas.map((b) => (
           <div
@@ -604,6 +715,10 @@ export function ChatView({
                 b.status === "failed" && "border-destructive/40",
               )}
             >
+              {/* Quem falou, para quem não vê o alinhamento das bolhas. */}
+              <span className="sr-only">
+                {b.role === "user" ? "Você disse: " : "O assistente respondeu: "}
+              </span>
               <p className="whitespace-pre-wrap break-words">
                 {b.content ||
                   (b.status === "streaming" ? (
@@ -635,22 +750,29 @@ export function ChatView({
               */}
               {b.role === "assistant" &&
                 (b.contexto || ((b.provider || b.model) && b.status !== "streaming")) && (
+                // V — id de modelo e rótulo de contexto longos não empurram a bolha a 390 (molde
+                // do selo de ferramenta do `ProposalCard`). `max-w-full min-w-0` no selo e
+                // `truncate` num span DENTRO dele: o `Badge` é `inline-flex justify-center`, e
+                // reticências não funcionam no próprio contêiner flex — o texto era cortado dos
+                // dois lados, sem "…" (visto na prévia).
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   {b.provider && b.status !== "streaming" && (
-                    <Badge variant="outline" className="text-[11px] font-normal">
-                      {AI_PROVIDER_LABEL[b.provider]}
+                    <Badge variant="outline" className="max-w-full min-w-0 text-[11px] font-normal">
+                      <span className="min-w-0 truncate">{AI_PROVIDER_LABEL[b.provider]}</span>
                     </Badge>
                   )}
                   {b.model && b.status !== "streaming" && (
-                    <Badge variant="outline" className="text-[11px] font-normal">
-                      {b.model}
+                    <Badge variant="outline" className="max-w-full min-w-0 text-[11px] font-normal">
+                      <span className="min-w-0 truncate">{b.model}</span>
                     </Badge>
                   )}
                   {/* "enviada com", não "usou": quem decide o que fazer com o contexto é o
                       servidor, e a tela não tem como afirmar mais do que sabe. */}
                   {b.contexto && (
-                    <Badge variant="outline" className="text-[11px] font-normal">
-                      enviada com o contexto de {ROTULO_DA_ROTA_DE_CONTEXTO[b.contexto]}
+                    <Badge variant="outline" className="max-w-full min-w-0 text-[11px] font-normal">
+                      <span className="min-w-0 truncate">
+                        enviada com o contexto de {ROTULO_DA_ROTA_DE_CONTEXTO[b.contexto]}
+                      </span>
                     </Badge>
                   )}
                 </div>
@@ -681,7 +803,13 @@ export function ChatView({
               */}
               {b.role === "assistant" &&
                 (b.propostas ?? []).map((p) => (
-                  <ProposalCard key={p.id} proposta={p} />
+                  <ProposalCardSobDemanda
+                    key={p.id}
+                    proposta={p}
+                    desfecho={desfechos[p.id] ?? DESFECHO_INICIAL}
+                    onDecidiu={avisarDecisao}
+                    onDesfecho={(d) => registrarDesfecho(p.id, d)}
+                  />
                 ))}
             </div>
           </div>
@@ -703,23 +831,27 @@ export function ChatView({
             Ou comece por um panorama — o assistente consulta os módulos que você liberou e
             escreve um resumo. O que estiver desligado fica de fora, e ele diz o que ficou.
           </p>
-          <div className="flex flex-wrap gap-2">
+          {/* D2 — o panorama gasta, e diz isso ANTES do clique. */}
+          <FraseDeGasto id={idDoGastoPanorama} />
+          <div className="grid gap-2 sm:grid-cols-3">
             {ATALHOS_DE_EXPERIENCIA.map((a) => (
               <Button
                 key={a.id}
                 type="button"
                 variant="outline"
-                size="sm"
-                // ⚠️ `min-w-0` + `truncate`: `Button` é `whitespace-nowrap`, e três rótulos
-                // longos numa linha empurrariam a página na horizontal no celular (regra 3
-                // do layout responsivo).
-                className="min-w-0"
-                title={a.descricao}
+                aria-describedby={idDoGastoPanorama}
+                // A descrição fica VISÍVEL (um `title` o toque não alcança). `whitespace-normal`
+                // + `min-w-0`: `Button` é `whitespace-nowrap`, e o texto longo empurraria a
+                // página na horizontal no celular (regra 3 do layout responsivo).
+                className="h-auto min-w-0 flex-col items-start gap-0.5 p-3 text-left whitespace-normal"
                 disabled={enviando}
                 onClick={() => void iniciarExperiencia(a.id)}
               >
-                <Sparkles className="size-4 shrink-0" />
-                <span className="truncate">{a.titulo}</span>
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Sparkles className="size-4 shrink-0" />
+                  {a.titulo}
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">{a.descricao}</span>
               </Button>
             ))}
           </div>
@@ -732,10 +864,7 @@ export function ChatView({
           estática do servidor; nunca o que está escrito na tela.
         */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <Label
-            htmlFor="contexto-da-pagina"
-            className="shrink-0 text-xs text-muted-foreground"
-          >
+          <Label htmlFor={idDoContexto} className="shrink-0 text-xs text-muted-foreground">
             Contexto
           </Label>
           <Select
@@ -746,7 +875,7 @@ export function ChatView({
             disabled={!podeConversar || enviando}
           >
             <SelectTrigger
-              id="contexto-da-pagina"
+              id={idDoContexto}
               className="h-9 w-full min-w-0 sm:w-[15rem]"
               aria-label="Página que dá contexto à conversa"
             >
@@ -770,12 +899,13 @@ export function ChatView({
           */}
           <div className="flex shrink-0 items-center gap-2">
             <Switch
-              id="caixa-de-entrada"
+              id={idDaCaixa}
               checked={caixaDeEntrada}
               onCheckedChange={setCaixaDeEntrada}
               disabled={!podeConversar || enviando}
+              aria-describedby={idDoGastoEnvio}
             />
-            <Label htmlFor="caixa-de-entrada" className="text-xs text-muted-foreground">
+            <Label htmlFor={idDaCaixa} className="text-xs text-muted-foreground">
               Caixa de entrada
             </Label>
           </div>
@@ -784,7 +914,13 @@ export function ChatView({
           </p>
         </div>
 
+        <label htmlFor={idDoCampo} className="sr-only">
+          Mensagem para o assistente
+        </label>
         <Textarea
+          id={idDoCampo}
+          ref={campoRef}
+          aria-describedby={`${idDoAtalho} ${idDoGastoEnvio}`}
           value={texto}
           onChange={(e) => setTexto(e.target.value.slice(0, MAX_CHAT_TEXT))}
           onKeyDown={(e) => {
@@ -798,7 +934,7 @@ export function ChatView({
               ? "Configure um provedor de IA para começar."
               : caixaDeEntrada
                 ? "Escreva o item solto — ele diz onde guardar e prepara a ação."
-                : "Escreva sua mensagem… (Ctrl+Enter envia)"
+                : "Escreva sua mensagem…"
           }
           rows={3}
           disabled={!podeConversar || enviando}
@@ -812,6 +948,8 @@ export function ChatView({
               restante < 500 ? "text-destructive" : "text-muted-foreground",
             )}
           >
+            {/* O atalho sai do placeholder (que some ao digitar) e descreve o campo. */}
+            <span id={idDoAtalho}>Ctrl+Enter envia</span> ·{" "}
             {restante.toLocaleString("pt-BR")} caracteres restantes
           </span>
 
@@ -824,6 +962,7 @@ export function ChatView({
             <Button
               type="button"
               size="sm"
+              aria-describedby={idDoGastoEnvio}
               onClick={() => void enviar()}
               disabled={!podeConversar || enviando || texto.trim().length === 0}
             >
@@ -836,6 +975,8 @@ export function ChatView({
             </Button>
           </div>
         </div>
+        {/* D2 — enviar gasta (a Caixa de entrada também), e isso fica dito sob o campo. */}
+        <FraseDeGasto id={idDoGastoEnvio} />
       </div>
     </div>
   );
@@ -858,6 +999,7 @@ export function ChatClient(props: ChatClientProps) {
       podeConversar={props.podeConversar}
       motivoBloqueio={props.motivoBloqueio}
       compacto={props.compacto}
+      vazio={props.vazio}
     />
   );
 }

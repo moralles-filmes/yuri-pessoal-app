@@ -230,7 +230,7 @@ export function TaskDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl"
+        className="flex flex-col gap-0 overflow-y-auto p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
       >
         <SheetHeader className="border-b border-border">
           <SheetTitle className="text-base">Detalhes da tarefa</SheetTitle>

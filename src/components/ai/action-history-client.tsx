@@ -25,31 +25,31 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
-  CheckCircle2,
-  CircleHelp,
-  Clock,
   History,
   Loader2,
   MessageSquare,
   Undo2,
-  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
-import { ProposalCard, type PropostaNaTela } from "@/components/ai/proposal-card";
+import type { PropostaNaTela } from "@/components/ai/proposal-card";
+import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
+import { IconeDoEstado, classeDoSelo } from "@/components/ai/estado-da-acao";
+import { rotuloDoCampo, textoDoCampo } from "@/components/ai/texto-do-campo";
 import { prepararDesfazerDaIa } from "@/lib/actions/ai-actions";
 import { ROTULO_DO_ESTADO_DA_ACAO } from "@/lib/ai/constants";
 import { formatDate, timeInSaoPaulo } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { actionsLink, conversationLink } from "@/lib/search/ai-links";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import {
   FILTROS_DO_HISTORICO,
   filtrarHistorico,
   type AcaoDaIa,
   type FiltroDoHistorico,
 } from "@/lib/ai/approval/history";
-import type { EstadoDaProposta } from "@/lib/ai/approval/state";
 
 /**
  * ⚠️ INSTANTE LIDO EM BRASÍLIA, nunca `.slice(0,10)` de `timestamptz`. `started_at`,
@@ -67,77 +67,6 @@ const ROTULO_DO_FILTRO: Record<FiltroDoHistorico, string> = {
   aguardando: "Aguardando você",
   problemas: "Precisam de atenção",
 };
-
-/**
- * A cor de cada estado. `executando` é âmbar de propósito — nem verde (não sabemos se deu
- * certo) nem vermelho (não sabemos se falhou).
- */
-const CLASSE_DO_ESTADO: Record<EstadoDaProposta, string> = {
-  pendente: "border-primary/40 bg-primary/10 text-primary",
-  confirmada: "border-primary/40 bg-primary/10 text-primary",
-  executada: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  parcial: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  executando: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  falhou: "border-destructive/40 bg-destructive/10 text-destructive",
-  recusada: "border-border bg-muted text-muted-foreground",
-  expirada: "border-border bg-muted text-muted-foreground",
-};
-
-function IconeDoEstado({ estado }: { readonly estado: EstadoDaProposta }) {
-  const classe = "size-4 shrink-0";
-  switch (estado) {
-    case "executada":
-      return <CheckCircle2 className={classe} />;
-    case "falhou":
-      return <XCircle className={classe} />;
-    case "executando":
-    case "parcial":
-      return <AlertTriangle className={classe} />;
-    case "pendente":
-    case "confirmada":
-      return <Clock className={classe} />;
-    default:
-      return <CircleHelp className={classe} />;
-  }
-}
-
-/** Rótulo legível de um campo tocado. A coluna é técnica; a tela não precisa ser. */
-const ROTULO_DO_CAMPO: Record<string, string> = {
-  title: "Título",
-  scheduled_date: "Data",
-  scheduled_date_anterior: "Data anterior",
-  scheduled_time: "Hora",
-  scheduled_for: "Concluída em",
-  next_scheduled_date: "Próxima ocorrência",
-  recurred: "Tarefa recorrente",
-  deadline_at: "Prazo",
-  priority: "Prioridade",
-  project_id: "Projeto",
-  status: "Situação",
-  value: "Valor registrado",
-  is_done: "Marcado como feito",
-  log_date: "Dia",
-  start_at: "Início",
-  end_at: "Fim",
-  all_day: "Dia inteiro",
-  tipo: "Tipo",
-  food_name: "Alimento",
-  quantity: "Quantidade",
-  measure_label: "Medida",
-  diary_date: "Dia do diário",
-  meal_name: "Refeição",
-  type: "Tipo",
-  amount: "Valor",
-  description: "Descrição",
-  purchase_date: "Data da compra",
-  account_or_card: "Conta ou cartão",
-};
-
-function textoDoCampo(valor: string | number | boolean | null): string {
-  if (valor === null) return "sem valor";
-  if (typeof valor === "boolean") return valor ? "sim" : "não";
-  return String(valor);
-}
 
 // ══════════════════════════════════════════════════════════════════════════════════════
 // O desfazer — dois cliques, e o segundo é o mesmo de qualquer outra alteração
@@ -167,7 +96,7 @@ function BotaoDesfazer({
     setPreparando(false);
 
     if (!r.ok) {
-      toast.error(r.error);
+      toast.error(mensagemDaAction(r));
       return;
     }
     setProposta({
@@ -184,7 +113,7 @@ function BotaoDesfazer({
     });
   }
 
-  if (proposta) return <ProposalCard proposta={proposta} />;
+  if (proposta) return <ProposalCardSobDemanda proposta={proposta} />;
 
   return (
     <Button
@@ -229,7 +158,7 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
       <div className="flex flex-wrap items-center gap-2">
         <Badge
           variant="outline"
-          className={cn("gap-1 text-[11px] font-normal", CLASSE_DO_ESTADO[acao.estado])}
+          className={cn("gap-1 text-[11px] font-normal", classeDoSelo(acao.estado))}
         >
           <IconeDoEstado estado={acao.estado} />
           {ROTULO_DO_ESTADO_DA_ACAO[acao.estado]}
@@ -238,6 +167,11 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
         {acao.ehDesfazer && (
           <Badge variant="outline" className="text-[11px] font-normal">
             desfazer
+          </Badge>
+        )}
+        {acao.semTrilha && (
+          <Badge variant="outline" className="text-[11px] font-normal">
+            sem trilha
           </Badge>
         )}
         <span className="shrink-0 text-xs text-muted-foreground">
@@ -273,6 +207,20 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
           </p>
         ))}
 
+      {/*
+        REDESIGN-07-D · D1 — a confirmada SEM execução registrada. Ela não espera mais nada de
+        ninguém (por isso saiu de "Aguardando você"), e o selo sozinho não diz o que houve.
+        "Não há execução registrada", e não "não foi executada": a lista lê propostas e execuções
+        em janelas independentes, e a frase não afirma mais do que o registro diz.
+      */}
+      {acao.estado === "confirmada" && !acao.execucao && (
+        <p className="mt-2 rounded-lg border bg-muted/40 p-2 text-xs text-muted-foreground">
+          Você confirmou e <strong className="text-foreground">não há execução registrada</strong>{" "}
+          — pelo registro, nada foi aplicado. Isso acontece quando os dados mudaram ou o prazo
+          terminou entre a previsão e a confirmação. Peça de novo na conversa.
+        </p>
+      )}
+
       {acao.semTrilha && (
         <p className="mt-2 rounded-lg border bg-muted/40 p-2 text-xs text-muted-foreground">
           A conversa que originou esta ação foi excluída, então a previsão que você confirmou
@@ -285,7 +233,7 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
       {acao.execucao && (
         <div className="mt-3 rounded-lg border bg-muted/30 p-2">
           {acao.execucao.status === "executando" ? (
-            <p className="text-xs text-amber-600 dark:text-amber-400">
+            <p className="text-xs text-warning-ink">
               Esta execução começou e <strong>não registrou o desfecho</strong>. Ela pode ter
               sido aplicada ou não — confira o registro no módulo antes de refazer qualquer
               coisa.
@@ -299,7 +247,6 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
                   : acao.execucao.status === "falhou"
                     ? "Não foi aplicada. Nada mudou nos seus dados."
                     : "O desfecho foi gravado num formato que esta versão não reconhece."}
-              {acao.execucao.durationMs !== null && ` · ${acao.execucao.durationMs} ms`}
             </p>
           )}
 
@@ -307,9 +254,7 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
             <dl className="mt-1.5 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
               {campos.map(([chave, valor]) => (
                 <React.Fragment key={chave}>
-                  <dt className="text-muted-foreground">
-                    {ROTULO_DO_CAMPO[chave] ?? chave}
-                  </dt>
+                  <dt className="text-muted-foreground">{rotuloDoCampo(chave)}</dt>
                   <dd className="min-w-0 break-words">{textoDoCampo(valor)}</dd>
                 </React.Fragment>
               ))}
@@ -346,7 +291,7 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
 
       {/* ─── A decisão em aberto: o mesmo cartão do chat, com o mesmo hash. ─── */}
       {decidirAqui && acao.previsao && (
-        <ProposalCard
+        <ProposalCardSobDemanda
           proposta={{
             id: acao.propostaId as string,
             effectHash: acao.effectHash as string,
@@ -389,7 +334,7 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
 
         {acao.conversationId && (
           <Link
-            href={`/ia/conversas/${acao.conversationId}`}
+            href={conversationLink(acao.conversationId)}
             className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
           >
             <MessageSquare className="size-3" /> Ver a conversa
@@ -435,7 +380,10 @@ export function ActionHistoryClient({
             variant={f === filtro ? "default" : "outline"}
             className="min-w-0"
           >
-            <Link href={f === "todas" ? "/ia/acoes" : `/ia/acoes?filtro=${f}`}>
+            <Link
+              href={actionsLink(f)}
+              aria-current={f === filtro ? "page" : undefined}
+            >
               <span className="truncate">{ROTULO_DO_FILTRO[f]}</span>
             </Link>
           </Button>

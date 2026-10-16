@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -21,6 +22,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/shared/stat-card";
+import { EmptyState } from "@/components/shared/empty-state";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import {
   Select,
   SelectContent,
@@ -29,7 +32,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
-import { cn } from "@/lib/utils";
 import {
   StudyCategoryBadge,
   StudyDifficultyBadge,
@@ -40,8 +42,7 @@ import {
 import { CourseTree } from "@/components/studies/course-tree";
 import { VocabularyView } from "@/components/studies/vocabulary-view";
 import { PracticeView } from "@/components/studies/practice-view";
-import { SessionFormDialog } from "@/components/studies/session-dialog";
-import { CourseFormDialog } from "../course-form";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { deleteCourse, deleteSession, setCourseStatus } from "@/lib/actions/studies";
 import {
   STUDY_STATUSES,
@@ -59,6 +60,23 @@ import type {
 
 type Tab = "conteudo" | "sessoes" | "idioma";
 
+const ROTULOS_DAS_ABAS: Record<Tab, string> = {
+  conteudo: "Conteúdo",
+  sessoes: "Sessões",
+  idioma: "Idioma",
+};
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const CourseFormDialog = dynamic(
+  () => import("../course-form").then((m) => m.CourseFormDialog),
+  { ssr: false },
+);
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const SessionFormDialog = dynamic(
+  () => import("@/components/studies/session-dialog").then((m) => m.SessionFormDialog),
+  { ssr: false },
+);
+
 export function CourseDetailClient({
   detail,
   todayIso,
@@ -70,16 +88,16 @@ export function CourseDetailClient({
   const [tab, setTab] = React.useState<Tab>("conteudo");
   const [courseForm, setCourseForm] = React.useState(false);
   const [sessionForm, setSessionForm] = React.useState(false);
+  const courseFormMontado = useLazyDialog(courseForm);
+  const sessionFormMontado = useLazyDialog(sessionForm);
   const [editingSession, setEditingSession] =
     React.useState<StudySessionWithRelations>();
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "conteudo", label: "Conteúdo" },
-    { key: "sessoes", label: "Sessões" },
-    ...(detail.is_language
-      ? [{ key: "idioma" as const, label: "Idioma" }]
-      : []),
-  ];
+  // "Idioma" só existe em curso de idioma. O estado continua local (D3): nenhum parâmetro novo
+  // na URL — nenhum link do sistema aponta para uma aba.
+  const abas: Tab[] = detail.is_language
+    ? ["conteudo", "sessoes", "idioma"]
+    : ["conteudo", "sessoes"];
 
   const courseOption: StudyCourseOption = {
     id: detail.id,
@@ -222,7 +240,11 @@ export function CourseDetailClient({
         />
       </div>
 
-      <StudyProgressBar value={detail.progressPct} color={detail.cover_color} />
+      <StudyProgressBar
+        value={detail.progressPct}
+        color={detail.cover_color}
+        rotulo={`Progresso de ${detail.title}`}
+      />
 
       {detail.nextLessonTitle && (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
@@ -254,24 +276,14 @@ export function CourseDetailClient({
         </p>
       )}
 
-      {/* Abas */}
-      <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-              tab === t.key
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Abas — o seletor compartilhado (07-A V1): estado anunciado por aria-pressed, ✓ e peso. */}
+      <SeletorDeVisao
+        rotulo="Seções do curso"
+        visoes={abas}
+        rotulos={ROTULOS_DAS_ABAS}
+        atual={tab}
+        aoEscolher={setTab}
+      />
 
       {tab === "conteudo" && (
         <CourseTree courseId={detail.id} modules={detail.modules} />
@@ -288,9 +300,11 @@ export function CourseDetailClient({
             </Button>
           </div>
           {detail.sessions.length === 0 ? (
-            <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-              Nenhuma sessão registrada para este curso.
-            </p>
+            <EmptyState
+              icon={NotebookPen}
+              title="Nenhuma sessão registrada para este curso"
+              className="py-8"
+            />
           ) : (
             <div className="space-y-2">
               {detail.sessions.map((s) => (
@@ -320,20 +334,24 @@ export function CourseDetailClient({
         </div>
       )}
 
-      <CourseFormDialog
-        course={detail}
-        open={courseForm}
-        onOpenChange={setCourseForm}
-      />
-      <SessionFormDialog
-        open={sessionForm}
-        onOpenChange={setSessionForm}
-        todayIso={todayIso}
-        courseOptions={[courseOption]}
-        taskOptions={detail.taskOptions}
-        fixedCourseId={detail.id}
-        session={editingSession}
-      />
+      {courseFormMontado && (
+        <CourseFormDialog
+          course={detail}
+          open={courseForm}
+          onOpenChange={setCourseForm}
+        />
+      )}
+      {sessionFormMontado && (
+        <SessionFormDialog
+          open={sessionForm}
+          onOpenChange={setSessionForm}
+          todayIso={todayIso}
+          courseOptions={[courseOption]}
+          taskOptions={detail.taskOptions}
+          fixedCourseId={detail.id}
+          session={editingSession}
+        />
+      )}
     </div>
   );
 }

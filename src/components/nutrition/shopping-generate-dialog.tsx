@@ -169,6 +169,7 @@ export function ShoppingGenerateDialog({
               <Button
                 key={value}
                 type="button"
+                aria-pressed={source === value}
                 variant={source === value ? "default" : "outline"}
                 className="h-11"
                 onClick={() => changeSource(value)}

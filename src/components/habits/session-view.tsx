@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, type LucideIcon } from "lucide-react";
@@ -15,7 +16,12 @@ import {
   frequencySummary,
   habitIcon,
 } from "@/components/habits/badges";
-import { HabitLogDialog } from "@/components/habits/habit-log-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import {
+  AvisoReflexoDosTreinos,
+  SeloReflexoDosTreinos,
+} from "@/components/habits/vinculo-treinos";
+import { refleteOsTreinos } from "@/lib/habits/vinculo-treinos";
 import {
   incrementHabit,
   setHabitDescription,
@@ -28,6 +34,12 @@ import {
 } from "@/lib/habits/constants";
 import { formatDate } from "@/lib/format";
 import type { HabitWithStats } from "@/types/database";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const HabitLogDialog = dynamic(
+  () => import("@/components/habits/habit-log-dialog").then((m) => m.HabitLogDialog),
+  { ssr: false },
+);
 
 /**
  * Tela especializada para hábitos mensuráveis com "sessões" (leitura, exercícios).
@@ -43,6 +55,7 @@ export function SessionView({
   emptyTitle,
   emptyHint,
   onCreate,
+  habitoVinculadoId,
 }: {
   habits: HabitWithStats[];
   todayIso: string;
@@ -52,6 +65,8 @@ export function SessionView({
   emptyTitle: string;
   emptyHint: string;
   onCreate: () => void;
+  /** Hábito que reflete os treinos; `null` = vínculo desligado. */
+  habitoVinculadoId: string | null;
 }) {
   if (habits.length === 0) {
     return (
@@ -72,6 +87,7 @@ export function SessionView({
           todayIso={todayIso}
           descriptionLabel={descriptionLabel}
           descriptionPlaceholder={descriptionPlaceholder}
+          habitoVinculadoId={habitoVinculadoId}
         />
       ))}
     </div>
@@ -83,17 +99,21 @@ function SessionCard({
   todayIso,
   descriptionLabel,
   descriptionPlaceholder,
+  habitoVinculadoId,
 }: {
   habit: HabitWithStats;
   todayIso: string;
   descriptionLabel: string;
   descriptionPlaceholder: string;
+  habitoVinculadoId: string | null;
 }) {
   const router = useRouter();
   const [logOpen, setLogOpen] = React.useState(false);
+  const logMontado = useLazyDialog(logOpen);
   const [busy, setBusy] = React.useState(false);
   const color = habit.color ?? HABIT_CATEGORY_COLORS[habit.category];
   const step = HABIT_UNIT_STEP[habit.unit];
+  const reflete = refleteOsTreinos(habit.id, habitoVinculadoId);
 
   async function bump() {
     setBusy(true);
@@ -109,13 +129,15 @@ function SessionCard({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex min-w-0 flex-wrap items-center gap-2 text-base">
           <span aria-hidden>{habitIcon(habit.icon, habit.category)}</span>
           {habit.name}
+          {reflete && <SeloReflexoDosTreinos />}
         </CardTitle>
         <StreakFlame count={habit.streak} />
       </CardHeader>
       <CardContent className="space-y-4">
+        {reflete && <AvisoReflexoDosTreinos />}
         <InlineDescription
           habitId={habit.id}
           value={habit.description ?? ""}
@@ -124,7 +146,7 @@ function SessionCard({
         />
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-sm">
             <span className="font-medium tabular-nums">
               Hoje: {formatAmount(habit.todayValue)} /{" "}
               {formatHabitValue(habit.target_value, habit.unit)}
@@ -137,6 +159,7 @@ function SessionCard({
             value={habit.todayValue}
             target={habit.target_value}
             color={color}
+            rotulo={`Progresso de hoje — ${habit.name}`}
           />
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" disabled={busy} onClick={bump}>
@@ -181,17 +204,19 @@ function SessionCard({
         )}
       </CardContent>
 
-      <HabitLogDialog
-        habitId={habit.id}
-        habitName={habit.name}
-        unit={habit.unit}
-        logDate={todayIso}
-        initialValue={habit.todayValue}
-        initialNotes={habit.todayLog?.notes ?? ""}
-        showNotes
-        open={logOpen}
-        onOpenChange={setLogOpen}
-      />
+      {logMontado && (
+        <HabitLogDialog
+          habitId={habit.id}
+          habitName={habit.name}
+          unit={habit.unit}
+          logDate={todayIso}
+          initialValue={habit.todayValue}
+          initialNotes={habit.todayLog?.notes ?? ""}
+          showNotes
+          open={logOpen}
+          onOpenChange={setLogOpen}
+        />
+      )}
     </Card>
   );
 }

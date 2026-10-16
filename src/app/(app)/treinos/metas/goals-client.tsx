@@ -41,7 +41,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -49,11 +48,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ariaDeProgresso } from "@/components/shared/aria-de-progresso";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
-import { Field } from "@/components/training/field";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 
 // Os diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form`
@@ -85,9 +83,15 @@ import { TodoLinkDialog } from "@/components/training/todo-link-dialog";
 import type { MeasurementType } from "@/lib/body/types";
 import {
   deleteTrainingGoal,
-  recordGoalProgress,
   setTrainingGoalStatus,
 } from "@/lib/actions/training-goals";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const RecordProgressDialog = dynamic(
+  () => import("./record-progress-dialog").then((m) => m.RecordProgressDialog),
+  { ssr: false },
+);
 
 const ALL = "__todas__";
 
@@ -129,6 +133,7 @@ export function GoalsClient({
   const [editing, setEditing] = React.useState<ResolvedGoal | null>(null);
   const [deleting, setDeleting] = React.useState<ResolvedGoal | null>(null);
   const [recording, setRecording] = React.useState<ResolvedGoal | null>(null);
+  const recordProgressDialogMontado = useLazyDialog(recording !== null);
   const [kindFilter, setKindFilter] = React.useState<string>(ALL);
   const [showClosed, setShowClosed] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -155,7 +160,7 @@ export function GoalsClient({
     const result = await setTrainingGoalStatus({ id: goal.goal.id, status });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Situação atualizada. A alteração ficou no histórico da meta.");
@@ -168,7 +173,7 @@ export function GoalsClient({
     const result = await deleteTrainingGoal({ id: deleting.goal.id, confirm: true });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Meta excluída.");
@@ -245,18 +250,19 @@ export function GoalsClient({
             </Select>
 
             <Button
+              aria-pressed={showClosed}
               variant={showClosed ? "secondary" : "ghost"}
               size="sm"
               onClick={() => setShowClosed((value) => !value)}
             >
-              {showClosed ? "Escondendo nada" : "Mostrar encerradas"}
+              {/* Rótulo FIXO (D3): o estado é o aria-pressed; trocar o texto junto fazia o leitor
+                  de tela ouvir "Escondendo nada, pressionado" — o nome deixava de dizer o quê. */}
+              Mostrar encerradas
             </Button>
           </div>
 
           {visible.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-              Nenhuma meta neste filtro.
-            </p>
+            <EmptyState icon={Target} title="Nenhuma meta neste filtro" className="py-8" />
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
               {visible.map((item) => (
@@ -297,15 +303,17 @@ export function GoalsClient({
         />
       )}
 
-      <RecordProgressDialog
-        goal={recording}
-        hoje={hoje}
-        onClose={() => setRecording(null)}
-        onSaved={() => {
-          setRecording(null);
-          router.refresh();
-        }}
-      />
+      {recordProgressDialogMontado && (
+        <RecordProgressDialog
+          goal={recording}
+          hoje={hoje}
+          onClose={() => setRecording(null)}
+          onSaved={() => {
+            setRecording(null);
+            router.refresh();
+          }}
+        />
+      )}
 
       <Dialog open={Boolean(deleting)} onOpenChange={(value) => !value && setDeleting(null)}>
         <DialogContent>
@@ -392,7 +400,14 @@ function GoalCard({
 
         {/* Barra com os marcos marcados. Sem valor, a barra não aparece — 0% mentiria. */}
         {progress.percent !== null ? (
-          <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="relative h-2 overflow-hidden rounded-full bg-muted"
+            {...ariaDeProgresso(
+              goal.name,
+              progress.percent,
+              `${Math.round(progress.percent)}% do caminho`,
+            )}
+          >
             <div
               className={cn(
                 "h-full rounded-full",
@@ -582,96 +597,3 @@ function GoalCard({
 }
 
 /* ═══════════════════════════ Registro manual ═══════════════════════════ */
-
-/**
- * Só aparece na meta PERSONALIZADA.
- *
- * Numa meta de volume ou de frequência o valor vem dos treinos registrados — digitar o número
- * ali permitiria "atingir" a meta sem treinar, e a action recusa mesmo que a tela deixasse.
- */
-function RecordProgressDialog({
-  goal,
-  hoje,
-  onClose,
-  onSaved,
-}: {
-  goal: ResolvedGoal | null;
-  hoje: string;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [value, setValue] = React.useState("");
-  const [date, setDate] = React.useState(hoje);
-  const [note, setNote] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-
-  // Ajuste durante o render (React Compiler ligado) — sem setState em useEffect.
-  const key = goal?.goal.id ?? "";
-  const [lastKey, setLastKey] = React.useState(key);
-  if (key !== lastKey) {
-    setLastKey(key);
-    setValue("");
-    setDate(hoje);
-    setNote("");
-  }
-
-  async function submit() {
-    if (!goal) return;
-    setSaving(true);
-    const result = await recordGoalProgress({
-      goal_id: goal.goal.id,
-      recorded_on: date,
-      value,
-      note,
-    });
-    setSaving(false);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success("Progresso registrado.");
-    onSaved();
-  }
-
-  return (
-    <Dialog open={Boolean(goal)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Registrar progresso</DialogTitle>
-          <DialogDescription>
-            {goal?.goal.name}. O valor entra no histórico da meta com a data informada — nada é
-            sobrescrito.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <Field label={`Valor (${goal?.unit ?? ""})`}>
-            <Input
-              inputMode="decimal"
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              placeholder="0"
-              autoFocus
-            />
-          </Field>
-          <Field label="Data">
-            <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-          </Field>
-          <Field label="Observação (opcional)">
-            <Textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} />
-          </Field>
-        </div>
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>
-            Cancelar
-          </Button>
-          <Button onClick={submit} disabled={saving || value.trim() === ""}>
-            {saving && <Loader2 className="size-4 animate-spin" />}
-            Registrar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}

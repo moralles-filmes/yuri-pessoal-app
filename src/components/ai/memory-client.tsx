@@ -22,15 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
-/**
- * ⚠️ O componente de confirmação que o projeto JÁ TEM (Financeiro). Reusá-lo é a regra do
- * projeto — e aqui tem um efeito concreto: a frase de confirmação, o estado de carregamento e
- * o toast de erro saem do mesmo lugar em que saem para transação, cartão e conta.
- *
- * ⛔ Ele recebe o próprio botão por `trigger`, então NÃO pode entrar por `next/dynamic`: o
- * botão sumiria da tela. É a exceção declarada na regra 2 do carregamento sob demanda.
- */
-import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import {
   alternarMemoriaAction,
   esquecerMemoriaAction,
@@ -46,6 +37,17 @@ import type { MemoriaNaLista } from "./memory-types";
  */
 const MemoryFormDialog = dynamic(
   () => import("./memory-form-dialog").then((m) => m.MemoryFormDialog),
+  { ssr: false, loading: () => null },
+);
+
+/**
+ * REDESIGN-07-D · D8 — apagar sai de DENTRO da linha. O `DeleteConfirmDialog` (03-D) recebia o
+ * próprio botão e vivia na linha: o `revalidatePath` da action atualizava a lista antes do
+ * `setOpen(false)` dele, e a linha sumia com o diálogo aberto dentro. Agora é um diálogo único
+ * da tela, controlado (`paraApagar`), sob demanda, com trava de `onOpenChange`.
+ */
+const ConfirmarExclusaoDialog = dynamic(
+  () => import("@/components/ai/confirmar-exclusao-dialog").then((m) => m.ConfirmarExclusaoDialog),
   { ssr: false, loading: () => null },
 );
 
@@ -75,6 +77,8 @@ export function MemoryClient({ memorias }: { readonly memorias: readonly Memoria
   const [aberto, setAberto] = React.useState(false);
   const montado = useLazyDialog(aberto);
   const [emEdicao, setEmEdicao] = React.useState<MemoriaNaLista | null>(null);
+  const [paraApagar, setParaApagar] = React.useState<string | null>(null);
+  const exclusaoMontada = useLazyDialog(paraApagar !== null);
 
   const visiveis = memorias.filter((m) => {
     if (filtro === "todas") return true;
@@ -93,14 +97,14 @@ export function MemoryClient({ memorias }: { readonly memorias: readonly Memoria
   }
 
   /** As três ações que só precisam do id. Uma função, três chamadores. */
-  function executar(
-    acao: () => Promise<{ ok: boolean; error?: string }>,
-    sucesso: string,
-  ) {
+  // ⚠️ Desativar, reativar e esquecer recebem só o id da linha: exceção declarada em
+  // `ia-sistema-formularios.test.ts` (o mapa custaria ~0,45 KB gz a esta rota). Apagar passa pelo
+  // mapa no diálogo sob demanda.
+  function executar(acao: () => Promise<{ ok: true } | { ok: false; error: string }>, sucesso: string) {
     startTransition(async () => {
       const r = await acao();
       if (!r.ok) {
-        toast.error(r.error ?? "Não foi possível concluir.");
+        toast.error(r.error);
         return;
       }
       toast.success(sucesso);
@@ -265,39 +269,19 @@ export function MemoryClient({ memorias }: { readonly memorias: readonly Memoria
                   <span className="truncate">Esquecer</span>
                 </Button>
 
-                {/*
-                  ⛔ APAGAR PEDE CONFIRMAÇÃO, e o texto diz o que sobrevive e qual é a
-                  alternativa. É o único dado do sistema que o dono escreveu à mão e que não
-                  tem como recuperar de lugar nenhum — nem do backup de outro módulo, nem de
-                  um registro que o sistema tenha produzido.
-                */}
-                <DeleteConfirmDialog
-                  trigger={
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="min-w-0 text-destructive"
-                      disabled={pendente}
-                    >
-                      <Trash2 className="size-4 shrink-0" />
-                      <span className="truncate">Apagar</span>
-                    </Button>
-                  }
-                  title="Apagar esta preferência?"
-                  description={
-                    "A frase sai daqui e não volta. Fica registrado que ela existiu e quando foi apagada — sem o texto. " +
-                    'Se você só quer que o assistente pare de usá-la, use "Esquecer": ela continua legível nesta tela.'
-                  }
-                  confirmLabel="Apagar"
-                  loadingLabel="Apagando…"
-                  successMessage="Preferência apagada."
-                  onConfirm={async () => {
-                    const r = await excluirMemoriaAction({ id: m.id });
-                    if (r.ok) router.refresh();
-                    return r;
-                  }}
-                />
+                {/* Abre a confirmação única da tela (abaixo da lista). */}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="min-w-0 text-destructive"
+                  disabled={pendente}
+                  aria-haspopup="dialog"
+                  onClick={() => setParaApagar(m.id)}
+                >
+                  <Trash2 className="size-4 shrink-0" />
+                  <span className="truncate">Apagar</span>
+                </Button>
               </div>
             </li>
           ))}
@@ -316,6 +300,25 @@ export function MemoryClient({ memorias }: { readonly memorias: readonly Memoria
         />
       )}
 
+      {/*
+        ⛔ APAGAR PEDE CONFIRMAÇÃO, e o texto diz o que sobrevive e qual é a alternativa. É o único
+        dado do sistema que o dono escreveu à mão e que não tem como recuperar de lugar nenhum.
+      */}
+      {exclusaoMontada && (
+        <ConfirmarExclusaoDialog
+          alvoId={paraApagar}
+          onFechar={() => setParaApagar(null)}
+          titulo="Apagar esta preferência?"
+          descricao={
+            "A frase sai daqui e não volta. Fica registrado que ela existiu e quando foi apagada — sem o texto. " +
+            'Se você só quer que o assistente pare de usá-la, use "Esquecer": ela continua legível nesta tela.'
+          }
+          rotuloConfirmar="Apagar"
+          rotuloEnviando="Apagando…"
+          mensagemDeSucesso="Preferência apagada."
+          acao={(id) => excluirMemoriaAction({ id })}
+        />
+      )}
     </div>
   );
 }

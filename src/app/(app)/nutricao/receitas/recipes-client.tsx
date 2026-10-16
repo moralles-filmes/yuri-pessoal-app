@@ -15,6 +15,7 @@
  *    arquivar primeiro.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ChefHat, Plus, Search, Star } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { cn } from "@/lib/utils";
 import { roundForDisplay } from "@/lib/nutrition/calc";
 import {
@@ -50,16 +52,24 @@ import {
   uploadRecipePhoto,
 } from "@/lib/actions/nutrition-recipes";
 import { createTemplateFromRecipe } from "@/lib/actions/nutrition-meal-templates";
-import {
-  FoodPickerDialog,
-  type PickerMeasure,
-} from "@/components/nutrition/food-picker-dialog";
-import { RecipeFormDialog } from "@/components/nutrition/recipe-form-dialog";
-import {
-  RecipeDetailSheet,
-  type RecipeWithCalc,
-} from "@/components/nutrition/recipe-detail-sheet";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
+import type { PickerMeasure } from "@/components/nutrition/food-picker-dialog";
+import type { RecipeWithCalc } from "@/components/nutrition/recipe-detail-sheet";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const RecipeFormDialog = dynamic(
+  () => import("@/components/nutrition/recipe-form-dialog").then((m) => m.RecipeFormDialog),
+  { ssr: false },
+);
+const RecipeDetailSheet = dynamic(
+  () => import("@/components/nutrition/recipe-detail-sheet").then((m) => m.RecipeDetailSheet),
+  { ssr: false },
+);
+const FoodPickerDialog = dynamic(
+  () => import("@/components/nutrition/food-picker-dialog").then((m) => m.FoodPickerDialog),
+  { ssr: false },
+);
 
 export type RecipesClientProps = {
   recipes: RecipeWithCalc[];
@@ -100,6 +110,9 @@ export function RecipesClient(props: RecipesClientProps) {
   const [ingredientFor, setIngredientFor] = React.useState<string | null>(null);
 
   const detail = props.recipes.find((recipe) => recipe.id === detailId) ?? null;
+  const recipeFormDialogMontado = useLazyDialog(formOpen);
+  const recipeDetailSheetMontado = useLazyDialog(detail !== null);
+  const foodPickerDialogMontado = useLazyDialog(ingredientFor !== null);
   const editing = props.recipes.find((recipe) => recipe.id === editingId) ?? null;
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
@@ -109,7 +122,7 @@ export function RecipesClient(props: RecipesClientProps) {
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }
@@ -181,7 +194,7 @@ export function RecipesClient(props: RecipesClientProps) {
     startTransition(async () => {
       const result = await bulkRecipeAction(ids, action);
       if (!result.ok) {
-        toast.error(result.error ?? "Não foi possível aplicar a ação.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível aplicar a ação." }));
         return;
       }
       const { afetadas, ignoradas, motivos } = result.data;
@@ -253,6 +266,7 @@ export function RecipesClient(props: RecipesClientProps) {
         </select>
 
         <Button
+          aria-pressed={onlyFavorites}
           variant={onlyFavorites ? "default" : "outline"}
           size="sm"
           onClick={() => setOnlyFavorites((v) => !v)}
@@ -261,6 +275,7 @@ export function RecipesClient(props: RecipesClientProps) {
           Favoritas
         </Button>
         <Button
+          aria-pressed={showArchived}
           variant={showArchived ? "default" : "outline"}
           size="sm"
           onClick={() => setShowArchived((v) => !v)}
@@ -367,7 +382,10 @@ export function RecipesClient(props: RecipesClientProps) {
                         </p>
                       </button>
                       {recipe.isFavorite && (
-                        <Star className="size-4 shrink-0 fill-current text-primary" />
+                        <>
+                          <Star className="size-4 shrink-0 fill-current text-primary" aria-hidden="true" />
+                          <span className="sr-only">Favorito</span>
+                        </>
                       )}
                     </div>
 
@@ -420,141 +438,147 @@ export function RecipesClient(props: RecipesClientProps) {
       )}
 
       {/* ── Diálogos ── */}
-      <RecipeFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        recipe={editing}
-        categories={props.categories}
-        rawWeightG={editing?.calc.rawWeightG ?? null}
-        rawWeightComplete={editing?.calc.rawWeightComplete}
-        onSubmit={async (values) => {
-          const result = await saveRecipe(values, editingId ?? undefined);
-          if (result.ok) {
-            toast.success(editingId ? "Receita salva." : "Receita criada. Agora adicione os ingredientes.");
-            setFormOpen(false);
-            if (!editingId) setDetailId(result.data.id);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível salvar.");
-          }
-        }}
-      />
-
-      <RecipeDetailSheet
-        recipe={detail}
-        nutrients={props.nutrients}
-        foodNames={foodNames}
-        pending={pending}
-        onOpenChange={(open) => !open && setDetailId(null)}
-        onEdit={() => {
-          setEditingId(detail?.id ?? null);
-          setFormOpen(true);
-        }}
-        onDuplicate={() =>
-          startTransition(async () => {
-            if (!detail) return;
-            const result = await duplicateRecipe(detail.id);
+      {recipeFormDialogMontado && (
+        <RecipeFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          recipe={editing}
+          categories={props.categories}
+          rawWeightG={editing?.calc.rawWeightG ?? null}
+          rawWeightComplete={editing?.calc.rawWeightComplete}
+          onSubmit={async (values) => {
+            const result = await saveRecipe(values, editingId ?? undefined);
             if (result.ok) {
-              toast.success(
-                `Criada “${result.data.name}”. A cópia não herda o histórico de uso da original.`,
-              );
-              setDetailId(result.data.id);
+              toast.success(editingId ? "Receita salva." : "Receita criada. Agora adicione os ingredientes.");
+              setFormOpen(false);
+              if (!editingId) setDetailId(result.data.id);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível duplicar.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível salvar." }));
             }
-          })
-        }
-        onToggleFavorite={() =>
-          detail &&
-          run(() => setRecipeFavorite(detail.id, !detail.isFavorite), "Favorito atualizado.")
-        }
-        onToggleArchive={() =>
-          detail &&
-          run(
-            () => setRecipeArchived(detail.id, !detail.isArchived),
-            detail.isArchived ? "Receita desarquivada." : "Receita arquivada.",
-          )
-        }
-        onDelete={() => {
-          if (!detail) return;
-          if (
-            !confirm(
-              `Excluir “${detail.name}”? O que já foi registrado no diário continua lá, com os valores congelados — só o vínculo com a receita se perde.`,
+          }}
+        />
+      )}
+
+      {recipeDetailSheetMontado && (
+        <RecipeDetailSheet
+          recipe={detail}
+          nutrients={props.nutrients}
+          foodNames={foodNames}
+          pending={pending}
+          onOpenChange={(open) => !open && setDetailId(null)}
+          onEdit={() => {
+            setEditingId(detail?.id ?? null);
+            setFormOpen(true);
+          }}
+          onDuplicate={() =>
+            startTransition(async () => {
+              if (!detail) return;
+              const result = await duplicateRecipe(detail.id);
+              if (result.ok) {
+                toast.success(
+                  `Criada “${result.data.name}”. A cópia não herda o histórico de uso da original.`,
+                );
+                setDetailId(result.data.id);
+                router.refresh();
+              } else {
+                toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível duplicar." }));
+              }
+            })
+          }
+          onToggleFavorite={() =>
+            detail &&
+            run(() => setRecipeFavorite(detail.id, !detail.isFavorite), "Favorito atualizado.")
+          }
+          onToggleArchive={() =>
+            detail &&
+            run(
+              () => setRecipeArchived(detail.id, !detail.isArchived),
+              detail.isArchived ? "Receita desarquivada." : "Receita arquivada.",
             )
-          ) {
-            return;
           }
-          run(() => deleteRecipe(detail.id), "Receita excluída.");
-          setDetailId(null);
-        }}
-        onAddIngredient={() => setIngredientFor(detail?.id ?? null)}
-        onRemoveIngredient={(ingredientId) =>
-          run(() => deleteRecipeIngredient(ingredientId), "Ingrediente removido.")
-        }
-        // 16-F: `reorderRecipeIngredients` existia e era testada desde a 16-C; faltava o
-        // gatilho. A tela manda a ordem INTEIRA — a action recusa lista incompleta.
-        onReorderIngredients={(orderedIds) =>
-          detail &&
-          run(
-            () => reorderRecipeIngredients({ recipe_id: detail.id, ids: orderedIds }),
-            "Ordem dos ingredientes atualizada.",
-          )
-        }
-        onUploadPhoto={(file) => {
-          if (!detail) return;
-          // FormData: o BINÁRIO passa pelo servidor, que valida MIME e tamanho sobre o
-          // arquivo real. O navegador não decide nada aqui.
-          const formData = new FormData();
-          formData.append("recipe_id", detail.id);
-          formData.append("file", file);
-          run(() => uploadRecipePhoto(formData), "Foto enviada.");
-        }}
-        onRemovePhoto={(attachmentId) =>
-          run(() => deleteRecipePhoto(attachmentId), "Foto removida.")
-        }
-        onCreateTemplate={() =>
-          startTransition(async () => {
+          onDelete={() => {
             if (!detail) return;
-            const result = await createTemplateFromRecipe(detail.id);
+            if (
+              !confirm(
+                `Excluir “${detail.name}”? O que já foi registrado no diário continua lá, com os valores congelados — só o vínculo com a receita se perde.`,
+              )
+            ) {
+              return;
+            }
+            run(() => deleteRecipe(detail.id), "Receita excluída.");
+            setDetailId(null);
+          }}
+          onAddIngredient={() => setIngredientFor(detail?.id ?? null)}
+          onRemoveIngredient={(ingredientId) =>
+            run(() => deleteRecipeIngredient(ingredientId), "Ingrediente removido.")
+          }
+          // 16-F: `reorderRecipeIngredients` existia e era testada desde a 16-C; faltava o
+          // gatilho. A tela manda a ordem INTEIRA — a action recusa lista incompleta.
+          onReorderIngredients={(orderedIds) =>
+            detail &&
+            run(
+              () => reorderRecipeIngredients({ recipe_id: detail.id, ids: orderedIds }),
+              "Ordem dos ingredientes atualizada.",
+            )
+          }
+          onUploadPhoto={(file) => {
+            if (!detail) return;
+            // FormData: o BINÁRIO passa pelo servidor, que valida MIME e tamanho sobre o
+            // arquivo real. O navegador não decide nada aqui.
+            const formData = new FormData();
+            formData.append("recipe_id", detail.id);
+            formData.append("file", file);
+            run(() => uploadRecipePhoto(formData), "Foto enviada.");
+          }}
+          onRemovePhoto={(attachmentId) =>
+            run(() => deleteRecipePhoto(attachmentId), "Foto removida.")
+          }
+          onCreateTemplate={() =>
+            startTransition(async () => {
+              if (!detail) return;
+              const result = await createTemplateFromRecipe(detail.id);
+              if (result.ok) {
+                toast.success(
+                  `Refeição-modelo “${result.data.name}” criada. Ela aponta para a receita: melhorar a receita melhora o modelo.`,
+                );
+                router.refresh();
+              } else {
+                toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível criar a refeição-modelo." }));
+              }
+            })
+          }
+        />
+      )}
+
+      {foodPickerDialogMontado && (
+        <FoodPickerDialog
+          open={ingredientFor !== null}
+          onOpenChange={(open) => !open && setIngredientFor(null)}
+          foods={props.foods}
+          measures={measures}
+          title="Adicionar ingrediente"
+          description="A receita usa o catálogo como ele está hoje. O congelamento dos valores acontece só quando você registra o consumo."
+          showOptional
+          onConfirm={async (picked) => {
+            const result = await saveRecipeIngredient({
+              recipe_id: ingredientFor,
+              food_id: picked.foodId,
+              quantity: picked.quantity,
+              measure_id: picked.measureId,
+              is_optional: picked.isOptional,
+              note: picked.notes,
+            });
             if (result.ok) {
-              toast.success(
-                `Refeição-modelo “${result.data.name}” criada. Ela aponta para a receita: melhorar a receita melhora o modelo.`,
-              );
+              toast.success("Ingrediente adicionado.");
+              setIngredientFor(null);
               router.refresh();
             } else {
-              toast.error(result.error ?? "Não foi possível criar a refeição-modelo.");
+              toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível adicionar." }));
             }
-          })
-        }
-      />
-
-      <FoodPickerDialog
-        open={ingredientFor !== null}
-        onOpenChange={(open) => !open && setIngredientFor(null)}
-        foods={props.foods}
-        measures={measures}
-        title="Adicionar ingrediente"
-        description="A receita usa o catálogo como ele está hoje. O congelamento dos valores acontece só quando você registra o consumo."
-        showOptional
-        onConfirm={async (picked) => {
-          const result = await saveRecipeIngredient({
-            recipe_id: ingredientFor,
-            food_id: picked.foodId,
-            quantity: picked.quantity,
-            measure_id: picked.measureId,
-            is_optional: picked.isOptional,
-            note: picked.notes,
-          });
-          if (result.ok) {
-            toast.success("Ingrediente adicionado.");
-            setIngredientFor(null);
-            router.refresh();
-          } else {
-            toast.error(result.error ?? "Não foi possível adicionar.");
-          }
-        }}
-      />
+          }}
+        />
+      )}
     </div>
   );
 }

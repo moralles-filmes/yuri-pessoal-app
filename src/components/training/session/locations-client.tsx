@@ -15,6 +15,7 @@ import { Loader2, MapPin, Plus, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -42,6 +43,7 @@ import {
   saveLocationPlates,
   updateTrainingLocation,
 } from "@/lib/actions/training-locations";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 type PlateRow = { kind: PlateKind; weight: string; quantity: string };
 
@@ -81,7 +83,7 @@ export function TrainingLocationsClient({ locations }: { locations: TrainingLoca
     const result = await createTrainingLocation({ name: newName.trim() });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     setNewName("");
@@ -98,7 +100,7 @@ export function TrainingLocationsClient({ locations }: { locations: TrainingLoca
     });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(`${location.name} agora é o local padrão.`);
@@ -120,7 +122,7 @@ export function TrainingLocationsClient({ locations }: { locations: TrainingLoca
     });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     setEditing(null);
@@ -133,7 +135,7 @@ export function TrainingLocationsClient({ locations }: { locations: TrainingLoca
     const result = await deleteTrainingLocation(confirmDelete.id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     setConfirmDelete(null);
@@ -155,10 +157,12 @@ export function TrainingLocationsClient({ locations }: { locations: TrainingLoca
 
       <CardContent className="space-y-3">
         {locations.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            Nenhum local cadastrado. Sem local, a sessão funciona normalmente — só a calculadora
-            de anilhas fica sem estoque para consultar.
-          </p>
+          <EmptyState
+            icon={MapPin}
+            title="Nenhum local cadastrado"
+            description="Sem local, a sessão funciona normalmente — só a calculadora de anilhas fica sem estoque para consultar."
+            className="border-0 bg-transparent py-6"
+          />
         )}
 
         {locations.map((location) => (

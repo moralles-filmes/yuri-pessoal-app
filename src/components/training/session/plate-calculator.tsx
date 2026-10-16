@@ -110,6 +110,7 @@ export function PlateCalculatorSheet({
                     <Button
                       key={bar.id}
                       type="button"
+                      aria-pressed={bar.weightKg === barKg}
                       variant={bar.weightKg === barKg ? "default" : "outline"}
                       className="h-12"
                       onClick={() => setBarKg(bar.weightKg)}

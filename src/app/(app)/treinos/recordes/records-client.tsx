@@ -43,6 +43,7 @@ import {
 import { DeepLinkHighlight } from "@/components/shared/deep-link-highlight";
 import type { PersonalRecord } from "@/lib/training/history-queries";
 import { rebuildPersonalRecords } from "@/lib/actions/training-history";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 type GroupMode = "exercicio" | "tipo";
 
@@ -69,7 +70,7 @@ export function RecordsClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     const { created, improved, removed } = result.data;

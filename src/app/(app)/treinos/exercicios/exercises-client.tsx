@@ -62,6 +62,7 @@ import {
   duplicateTrainingExercise,
   setTrainingExercisePref,
 } from "@/lib/actions/training-exercises";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { ExerciseFilters } from "@/components/training/exercise-filters";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 
@@ -166,7 +167,7 @@ export function ExercisesClient({
       is_favorite: !exercise.isFavorite,
     });
     setBusy(false);
-    if (!result.ok) toast.error(result.error);
+    if (!result.ok) toast.error(mensagemDaAction(result));
     else router.refresh();
   }
 
@@ -177,7 +178,7 @@ export function ExercisesClient({
       archived: !exercise.isArchived,
     });
     setBusy(false);
-    if (!result.ok) toast.error(result.error);
+    if (!result.ok) toast.error(mensagemDaAction(result));
     else {
       toast.success(exercise.isArchived ? "Restaurado." : "Arquivado.");
       router.refresh();
@@ -189,7 +190,7 @@ export function ExercisesClient({
     const result = await duplicateTrainingExercise({ exercise_id: exercise.id });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Cópia criada. Agora ela é sua e pode ser editada.");
@@ -202,7 +203,7 @@ export function ExercisesClient({
     const result = await deleteTrainingExercise(exercise.id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Exercício excluído.");
@@ -224,7 +225,7 @@ export function ExercisesClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     const { affected, skipped, reason } = result.data;

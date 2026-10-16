@@ -32,6 +32,7 @@ import {
   createTrainingTodo,
   createWorkoutTodo,
 } from "@/lib/actions/training-integrations";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 type Kind = "treino" | "meta" | "avulsa";
 
@@ -94,7 +95,7 @@ export function TodoLinkDialog({
         setOpen(false);
         router.refresh();
       } else {
-        toast.error(res.error ?? "Não foi possível criar a tarefa.");
+        toast.error(mensagemDaAction({ ...res, error: res.error ?? "Não foi possível criar a tarefa." }));
       }
     });
   }
