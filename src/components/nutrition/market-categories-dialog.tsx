@@ -33,6 +33,7 @@ import {
   saveMarketCategory,
 } from "@/lib/actions/nutrition-shopping";
 import type { MarketCategory } from "@/lib/nutrition/types";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 export function MarketCategoriesDialog({
   open,
@@ -55,7 +56,7 @@ export function MarketCategoriesDialog({
         toast.success(success);
         router.refresh();
       } else {
-        toast.error(result.error ?? "Não foi possível concluir.");
+        toast.error(mensagemDaAction({ ...result, error: result.error ?? "Não foi possível concluir." }));
       }
     });
   }

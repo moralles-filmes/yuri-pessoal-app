@@ -167,6 +167,15 @@ export function SourceChips({
         )}
       </p>
 
+      {/*
+        REDESIGN-07-D · E4 — a regra da legenda "Inferência e sugestão", visível SEM expandir.
+        Ela só aparecia depois de "Ver dados usados", e é justamente ela que separa o que veio dos
+        registros do que é opinião do assistente.
+      */}
+      <p className="min-w-0 text-[11px] text-muted-foreground">
+        O que não estiver amparado por uma consulta é inferência do assistente.
+      </p>
+
       <button
         type="button"
         onClick={() => setAberto((a) => !a)}

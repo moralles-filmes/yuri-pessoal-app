@@ -10,7 +10,6 @@ import {
   HandCoins,
   FileUp,
   CalendarDays,
-  ListChecks,
   ListTodo,
   Repeat,
   Target,
@@ -26,6 +25,8 @@ import { hrefAtivo } from "@/lib/nav/active";
 export type NavItem = {
   title: string;
   href: string;
+  /** Outras rotas que este item representa — acendem ele. Sem query, sem barra final; há teste no disco. */
+  tambem?: readonly string[];
   icon: LucideIcon;
   /** Fase do roadmap em que o módulo é implementado (usado nos placeholders). */
   phase?: string;
@@ -61,12 +62,12 @@ export const navSections: NavSection[] = [
   {
     title: "Organização",
     items: [
-      // TO-DO é o gerenciador principal de execução (Fase 15). "Tarefas" (Fase 09)
-      // continua disponível como módulo legado, ligado às rotinas e à agenda.
+      // TO-DO é o gerenciador principal de execução. "Rotinas e tarefas" agrupa as duas telas
+      // do outro módulo — AGRUPAR NÃO É FUNDIR: `todo_*` e `tasks` seguem separadas, e
+      // `/tarefas` continua existindo com todos os parâmetros (a busca e o sino linkam para lá).
       { title: "TO-DO", href: "/todo", icon: ListTodo, phase: "Fase 15" },
       { title: "Agenda", href: "/agenda", icon: CalendarDays, phase: "Fase 08" },
-      { title: "Tarefas", href: "/tarefas", icon: ListChecks, phase: "Fase 09" },
-      { title: "Rotinas", href: "/rotinas", icon: Repeat, phase: "Fase 09" },
+      { title: "Rotinas e tarefas", href: "/rotinas", tambem: ["/tarefas"], icon: Repeat, phase: "Fase 09" },
       { title: "Hábitos", href: "/habitos", icon: Target, phase: "Fase 10" },
       { title: "Estudos", href: "/estudos", icon: GraduationCap, phase: "Fase 11" },
     ],
@@ -105,6 +106,6 @@ export const navHrefs: string[] = allNavItems.map((item) => item.href);
  * função já teve a sua própria cópia correta enquanto a tela usava outra errada.
  */
 export function findNavItem(pathname: string): NavItem | undefined {
-  const ativo = hrefAtivo(pathname, navHrefs);
+  const ativo = hrefAtivo(pathname, allNavItems);
   return ativo === null ? undefined : allNavItems.find((item) => item.href === ativo);
 }

@@ -28,8 +28,31 @@ const LazyConsistencyChart = dynamic(() => import("./consistency-chart-impl").th
 
 export function ConsistencyChart(props: Props) {
   return (
-    <div style={chartSkeletonHeightVar(240)}>
-      <LazyConsistencyChart {...props} />
-    </div>
+    <>
+      <div style={chartSkeletonHeightVar(240)}>
+        <LazyConsistencyChart {...props} />
+      </div>
+      {/* 07-B — a leitura textual do gráfico mora AQUI, não no -impl: atrás do carregamento sob
+          demanda ela sairia do HTML do servidor (regra 1). Só apresenta o que já veio calculado. */}
+      <table className="sr-only">
+        <caption>Consistência por semana</caption>
+        <thead>
+          <tr>
+            <th scope="col">Semana</th>
+            <th scope="col">Concluídos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {props.weekly.map((w) => (
+            <tr key={w.weekStart}>
+              <th scope="row">{w.label}</th>
+              <td>
+                {w.done} de {w.scheduled} ({Math.round(w.rate * 100)}%)
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }

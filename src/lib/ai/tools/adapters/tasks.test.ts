@@ -183,7 +183,8 @@ describe("tasks.get_pending", () => {
     expect(saida.refs[0]).toEqual({
       tipo: "tarefa",
       id: "t1",
-      rota: "/tarefas?task=t1",
+      // REDESIGN-07-D · D7 — `/tarefas` não lê `task`: o parâmetro era ignorado em silêncio.
+      rota: "/tarefas",
     });
   });
 

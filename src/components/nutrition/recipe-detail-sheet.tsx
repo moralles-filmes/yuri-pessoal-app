@@ -16,6 +16,7 @@
  *    porção, por 100 g) saem do MESMO total, escalado de formas diferentes.
  */
 import * as React from "react";
+import { useItemRetido } from "@/components/shared/use-item-retido";
 import {
   ArrowDown,
   ArrowUp,
@@ -61,7 +62,7 @@ export type RecipeWithCalc = Recipe & { calc: RecipeCalcResult };
 type Scope = "inteira" | "porcao" | "cem";
 
 export function RecipeDetailSheet({
-  recipe,
+  recipe: recipeAtual,
   nutrients,
   foodNames,
   pending,
@@ -97,11 +98,12 @@ export function RecipeDetailSheet({
   onRemovePhoto: (attachmentId: string) => void;
   onCreateTemplate: () => void;
 }) {
+  const recipe = useItemRetido(recipeAtual);
   const [scope, setScope] = React.useState<Scope>("porcao");
   const [dragId, setDragId] = React.useState<string | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
-  const seen = recipe?.id ?? null;
+  const seen = recipeAtual?.id ?? null;
   const [lastSeen, setLastSeen] = React.useState(seen);
   if (seen !== lastSeen) {
     setLastSeen(seen);
@@ -146,7 +148,7 @@ export function RecipeDetailSheet({
 
   return (
     <Sheet open={recipe !== null} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent side="right" className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         <SheetHeader>
           <SheetTitle className="flex items-start gap-2 pr-6 text-left">
             <ChefHat className="mt-0.5 size-5 shrink-0 text-primary" />
@@ -430,6 +432,7 @@ export function RecipeDetailSheet({
                     key={value}
                     type="button"
                     onClick={() => setScope(value)}
+                    aria-pressed={scope === value}
                     className={cn(
                       "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
                       scope === value

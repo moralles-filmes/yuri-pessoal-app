@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { CalendarDays, CircleDollarSign, Clock, Info } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
+import { EmptyState } from "@/components/shared/empty-state";
 import {
   Card,
   CardContent,
@@ -14,6 +15,7 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { getAiPreferences, getUsageByModel, getUsageSummary } from "@/lib/ai/queries";
 import { AI_PROVIDER_LABEL } from "@/lib/ai/core/contracts";
 import { AVISO_MOEDA, formatUsd } from "@/lib/ai/constants";
+import { textoDoCusto } from "@/lib/ai/usage/texto-do-custo";
 import { reconcileOwnRuns } from "@/lib/ai/server/reconcile";
 
 export const metadata: Metadata = { title: "Consumo · IA" };
@@ -144,9 +146,13 @@ export default async function ConsumoPage() {
         </CardHeader>
         <CardContent>
           {porModelo.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhuma execução registrada neste mês.
-            </p>
+            // V — o vazio pelo `EmptyState` de todo o app (página de servidor: não vai ao navegador).
+            <EmptyState
+              icon={CircleDollarSign}
+              title="Nenhuma execução registrada neste mês"
+              description="Cada tentativa de conversa, de leitura de comprovante ou de análise aparece aqui, por modelo."
+              className="py-8"
+            />
           ) : (
             // Tabela larga rola dentro do próprio contêiner — a página nunca rola na
             // horizontal.
@@ -172,12 +178,14 @@ export default async function ConsumoPage() {
                       <td className="py-2 pr-3 text-right tabular-nums">
                         {linha.execucoes}
                       </td>
+                      {/*
+                        REDESIGN-07-D · Z — linha sem nenhum custo informado é "não medido",
+                        nunca "US$ 0,000000" (invariante 11); "sem custo" zero é zero medido.
+                      */}
                       <td className="py-2 pr-3 text-right tabular-nums">
-                        {formatUsd(linha.custoUsd)}
+                        {textoDoCusto(linha)}
                       </td>
-                      <td className="py-2 text-right tabular-nums">
-                        {linha.semCusto > 0 ? linha.semCusto : "—"}
-                      </td>
+                      <td className="py-2 text-right tabular-nums">{linha.semCusto}</td>
                     </tr>
                   ))}
                 </tbody>

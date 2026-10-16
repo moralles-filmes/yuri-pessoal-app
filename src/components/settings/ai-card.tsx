@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { AI_PROVIDER_LABEL } from "@/lib/ai/core/contracts";
 import type { ProviderCardView } from "@/lib/ai/types";
+import { settingsLink } from "@/lib/search/ai-links";
 
 /**
  * Fase 18-A — Card de IA dentro de **Configurações**.
@@ -46,7 +47,7 @@ export function AiCard({
             </CardDescription>
           </div>
           <Button asChild size="sm">
-            <Link href="/ia/configuracoes">Abrir configurações</Link>
+            <Link href={settingsLink()}>Abrir configurações</Link>
           </Button>
         </div>
       </CardHeader>
@@ -96,8 +97,13 @@ export function AiCard({
               ? "Nenhuma chave cadastrada ainda."
               : "Há chave cadastrada, mas nenhum provedor está ativo."
             : `${prontos.length} de ${cards.length} provedores prontos para conversar.`}{" "}
-          Nesta versão o assistente <strong>não consulta seus registros</strong> e não cria
-          nem altera nada.
+          {/*
+            REDESIGN-07-D · D9 — "não consulta seus registros e não cria nem altera nada" virou
+            mentira na 18-B e na 18-C; `ia-sistema-contratos.test.ts` deriva do registry o que
+            nenhum texto do lote pode negar (M14).
+          */}
+          O assistente lê só os módulos que você liberou, e nenhuma alteração acontece sem
+          você confirmar na tela.
         </p>
       </CardContent>
     </Card>

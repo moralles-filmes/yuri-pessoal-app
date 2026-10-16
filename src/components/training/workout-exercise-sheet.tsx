@@ -14,6 +14,7 @@
  * NAQUELE treino.
  */
 import * as React from "react";
+import { useItemRetido } from "@/components/shared/use-item-retido";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,7 @@ import {
   setWorkoutSets,
   updateWorkoutExercise,
 } from "@/lib/actions/training-workouts";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { Field } from "./field";
 
 const NONE = "__nenhum__";
@@ -96,7 +98,7 @@ function draftFrom(source: Partial<SetDraft> = {}, index = 0): SetDraft {
 export function WorkoutExerciseSheet({
   open,
   onOpenChange,
-  item,
+  item: itemAtual,
   catalog,
   onChanged,
 }: {
@@ -106,10 +108,11 @@ export function WorkoutExerciseSheet({
   catalog: ExerciseListItem[];
   onChanged: () => void;
 }) {
+  const item = useItemRetido(itemAtual);
   if (!item) return null;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent side="right" className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         <Inner key={item.id} item={item} catalog={catalog} onChanged={onChanged} />
       </SheetContent>
     </Sheet>
@@ -275,7 +278,7 @@ function Inner({
 
     if (!configResult.ok) {
       setSaving(false);
-      toast.error(configResult.error);
+      toast.error(mensagemDaAction(configResult));
       return;
     }
 
@@ -305,7 +308,7 @@ function Inner({
     setSaving(false);
 
     if (!setsResult.ok) {
-      toast.error(setsResult.error);
+      toast.error(mensagemDaAction(setsResult));
       return;
     }
     toast.success("Exercício do treino salvo.");
@@ -830,7 +833,7 @@ function AlternativesTab({
     });
     setWorking(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     onChanged();
@@ -839,7 +842,7 @@ function AlternativesTab({
   async function remove(id: string) {
     const result = await removeWorkoutAlternative(id);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     onChanged();

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Clock, Plus, Pencil, RotateCcw } from "lucide-react";
@@ -16,7 +17,12 @@ import {
   frequencySummary,
   habitIcon,
 } from "@/components/habits/badges";
-import { HabitLogDialog } from "@/components/habits/habit-log-dialog";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import {
+  AvisoReflexoDosTreinos,
+  SeloReflexoDosTreinos,
+} from "@/components/habits/vinculo-treinos";
+import { refleteOsTreinos } from "@/lib/habits/vinculo-treinos";
 import {
   incrementHabit,
   setHabitDone,
@@ -30,6 +36,12 @@ import {
 } from "@/lib/habits/constants";
 import type { HabitWithStats } from "@/types/database";
 
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const HabitLogDialog = dynamic(
+  () => import("@/components/habits/habit-log-dialog").then((m) => m.HabitLogDialog),
+  { ssr: false },
+);
+
 function isMeasured(h: HabitWithStats): boolean {
   return h.target_value > 1 || h.unit !== "vezes";
 }
@@ -38,19 +50,24 @@ export function HabitCard({
   habit,
   todayIso,
   onEdit,
+  habitoVinculadoId,
 }: {
   habit: HabitWithStats;
   todayIso: string;
   onEdit?: (habit: HabitWithStats) => void;
+  /** Hábito que reflete os treinos; `null` = vínculo desligado. */
+  habitoVinculadoId: string | null;
 }) {
   const router = useRouter();
   const [logOpen, setLogOpen] = React.useState(false);
+  const logMontado = useLazyDialog(logOpen);
   const [busy, setBusy] = React.useState(false);
 
   const measured = isMeasured(habit);
   const color = habit.color ?? HABIT_CATEGORY_COLORS[habit.category];
   const step = HABIT_UNIT_STEP[habit.unit];
   const hasLog = Boolean(habit.todayLog);
+  const reflete = refleteOsTreinos(habit.id, habitoVinculadoId);
 
   async function run(action: Promise<{ ok: boolean; error?: string }>) {
     setBusy(true);
@@ -92,6 +109,7 @@ export function HabitCard({
                 {habit.name}
               </span>
               <HabitCategoryBadge category={habit.category} />
+              {reflete && <SeloReflexoDosTreinos />}
               {habit.time_of_day && (
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="size-3" />
@@ -102,6 +120,7 @@ export function HabitCard({
             <p className="mt-0.5 text-xs text-muted-foreground">
               {frequencySummary(habit.frequency, habit.weekdays)}
             </p>
+            {reflete && <AvisoReflexoDosTreinos />}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <StreakFlame count={habit.streak} />
@@ -120,7 +139,7 @@ export function HabitCard({
 
         {measured && (
           <div className="space-y-2 pl-7">
-            <div className="flex items-center justify-between text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs">
               <span className="font-medium tabular-nums">
                 {formatAmount(habit.todayValue)} / {formatHabitValue(habit.target_value, habit.unit)}
               </span>
@@ -133,6 +152,7 @@ export function HabitCard({
               value={habit.todayValue}
               target={habit.target_value}
               color={color}
+              rotulo={`Progresso de hoje — ${habit.name}`}
             />
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -193,17 +213,19 @@ export function HabitCard({
         )}
       </CardContent>
 
-      <HabitLogDialog
-        habitId={habit.id}
-        habitName={habit.name}
-        unit={habit.unit}
-        logDate={todayIso}
-        initialValue={habit.todayValue}
-        initialNotes={habit.todayLog?.notes ?? ""}
-        showNotes
-        open={logOpen}
-        onOpenChange={setLogOpen}
-      />
+      {logMontado && (
+        <HabitLogDialog
+          habitId={habit.id}
+          habitName={habit.name}
+          unit={habit.unit}
+          logDate={todayIso}
+          initialValue={habit.todayValue}
+          initialNotes={habit.todayLog?.notes ?? ""}
+          showNotes
+          open={logOpen}
+          onOpenChange={setLogOpen}
+        />
+      )}
     </Card>
   );
 }

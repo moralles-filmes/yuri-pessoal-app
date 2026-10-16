@@ -19,6 +19,7 @@
  * aparece como "não dá para comparar" — porque desconhecido não é zero.
  */
 import * as React from "react";
+import { useItemRetido } from "@/components/shared/use-item-retido";
 import { ArrowRight, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,7 @@ const STATUS_TONE: Record<ToleranceStatus, string> = {
 };
 
 export function SubstitutionCompareDialog({
-  target,
+  target: targetAtual,
   nutrients,
   onOpenChange,
   onConfirm,
@@ -97,6 +98,7 @@ export function SubstitutionCompareDialog({
     reason: string | null;
   }) => Promise<void>;
 }) {
+  const target = useItemRetido(targetAtual);
   const [optionId, setOptionId] = React.useState<string | null>(null);
   const [reason, setReason] = React.useState("");
   const [saving, setSaving] = React.useState(false);
@@ -106,7 +108,7 @@ export function SubstitutionCompareDialog({
     [target],
   );
 
-  const seen = target?.originalLabel ?? null;
+  const seen = targetAtual?.originalLabel ?? null;
   const [lastSeen, setLastSeen] = React.useState(seen);
   if (seen !== lastSeen) {
     setLastSeen(seen);

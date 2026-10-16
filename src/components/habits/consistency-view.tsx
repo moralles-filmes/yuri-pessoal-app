@@ -15,9 +15,12 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 export function ConsistencyView({
   consistency,
   activeCount,
+  todayIso,
 }: {
   consistency: HabitsConsistency;
   activeCount: number;
+  /** "Hoje" do servidor — é ele que marca a célula de hoje no heatmap (D2). */
+  todayIso: string;
 }) {
   const top = consistency.ranking[0];
 
@@ -67,7 +70,7 @@ export function ConsistencyView({
           <CardTitle className="text-base">Heatmap (15 semanas)</CardTitle>
         </CardHeader>
         <CardContent>
-          <HabitHeatmap cells={consistency.heatmap} />
+          <HabitHeatmap cells={consistency.heatmap} hoje={todayIso} />
         </CardContent>
       </Card>
 
@@ -77,9 +80,11 @@ export function ConsistencyView({
         </CardHeader>
         <CardContent>
           {consistency.ranking.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              Nenhum hábito agendado nos últimos 30 dias.
-            </p>
+            <EmptyState
+              icon={Trophy}
+              title="Nenhum hábito agendado nos últimos 30 dias"
+              className="border-0 bg-transparent py-6"
+            />
           ) : (
             <ol className="space-y-1.5">
               {consistency.ranking.map((r, i) => (

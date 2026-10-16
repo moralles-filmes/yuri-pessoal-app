@@ -38,6 +38,7 @@ import { MACRO_ORDER, NUTRIENT_TOTAL_QUALITIES } from "@/lib/nutrition/constants
 import { addDaysIso } from "@/lib/nutrition/calendar";
 import type { NutrientTotal, NutrientTotalQuality } from "@/lib/nutrition/calc";
 import { hojeISO } from "@/lib/format";
+import { diaryLink, goalsLink } from "@/lib/search/nutrition-links";
 import { emptyToolOutput, type ToolOutput, type ToolRef } from "../contracts";
 
 /** ⚠️ `.strict()` em todos: campo a mais é erro, e é por aqui que `user_id` seria barrado. */
@@ -63,10 +64,11 @@ const JANELA_PADRAO_DIAS = 7;
 const REF_DIARIO = (dia: string): ToolRef => ({
   tipo: "diario_alimentar",
   id: dia,
-  rota: `/nutricao/diario?date=${dia}`,
+  // REDESIGN-07-D · D7 — `?data=`, que a página lê (`?date=` abria hoje em vez do dia).
+  rota: diaryLink(dia),
 });
 
-const REF_METAS: ToolRef = { tipo: "metas_nutricionais", id: "metas", rota: "/nutricao/metas" };
+const REF_METAS: ToolRef = { tipo: "metas_nutricionais", id: "metas", rota: goalsLink() };
 
 /**
  * A pior qualidade entre os totais relatados — é ela que vira `completude`.

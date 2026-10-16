@@ -10,6 +10,7 @@ import { getAiPreferences } from "@/lib/ai/queries";
 import { getMemorias } from "@/lib/ai/memory/queries";
 import { AVISO_DA_MEMORIA, ROTULO_DO_ESTADO_DA_MEMORIA } from "@/lib/ai/memory/contracts";
 import { dateInSaoPaulo } from "@/lib/format";
+import { settingsLink } from "@/lib/search/ai-links";
 
 export const metadata: Metadata = { title: "Memória · IA" };
 export const dynamic = "force-dynamic";
@@ -103,7 +104,7 @@ export default async function MemoriaPage() {
               </p>
             ) : null}
             <Link
-              href="/ia/configuracoes"
+              href={settingsLink()}
               className="inline-block font-medium text-foreground underline underline-offset-4"
             >
               Abrir as preferências de IA

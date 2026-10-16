@@ -12,6 +12,7 @@
  *     citação exigida pela licença da TACO.
  */
 import * as React from "react";
+import { useItemRetido } from "@/components/shared/use-item-retido";
 import { Pencil, Plus, Ruler, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -41,12 +42,13 @@ import { scaleNutrients } from "@/lib/nutrition/calc";
 import { convertToBase, CONVERSION_FAILURE_MESSAGES, describeMeasure, defaultMeasure } from "@/lib/nutrition/units";
 import type { FoodDetail, FoodMeasure, NutrientDefinition } from "@/lib/nutrition/types";
 import { deleteNutritionMeasure } from "@/lib/actions/nutrition-foods";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { NutrientValue } from "./nutrient-value";
 
 const BASE_MEASURE = "__base__";
 
 export function FoodDetailSheet({
-  food,
+  food: foodAtual,
   nutrients,
   open,
   onOpenChange,
@@ -68,6 +70,7 @@ export function FoodDetailSheet({
   onEditMeasure: (measure: FoodMeasure) => void;
   onChanged: () => void;
 }) {
+  const food = useItemRetido(foodAtual);
   const [quantity, setQuantity] = React.useState("100");
   const [measureId, setMeasureId] = React.useState<string>(BASE_MEASURE);
 
@@ -99,7 +102,7 @@ export function FoodDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent side="right" className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         <SheetHeader className="space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
@@ -365,7 +368,7 @@ export function FoodDetailSheet({
                                 toast.success("Medida excluída.");
                                 onChanged();
                               } else {
-                                toast.error(result.error);
+                                toast.error(mensagemDaAction(result));
                               }
                             }}
                           >

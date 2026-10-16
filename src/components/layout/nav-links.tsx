@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { navSections, navHrefs } from "@/config/nav";
+import { allNavItems, navSections } from "@/config/nav";
 import { hrefAtivo } from "@/lib/nav/active";
 import { cn } from "@/lib/utils";
 import {
@@ -26,7 +26,7 @@ export function NavLinks({
   const pathname = usePathname();
   // Uma pergunta para a lista inteira, não uma por item: o vencedor é no máximo
   // um, então "dois itens acesos" não é um estado que esta tela consiga montar.
-  const ativo = hrefAtivo(pathname, navHrefs);
+  const ativo = hrefAtivo(pathname, allNavItems);
 
   return (
     <nav className="flex flex-col gap-5">

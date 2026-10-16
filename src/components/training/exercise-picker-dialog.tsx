@@ -33,6 +33,7 @@ import { TRACKING_TYPE_LABELS } from "@/lib/training/constants";
 import { applyExerciseFilters, exercisePickerFilters } from "@/lib/training/filters";
 import type { ExerciseListItem, MuscleGroup } from "@/lib/training/types";
 import { addExercisesToWorkout } from "@/lib/actions/training-workouts";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 const ALL = "__todos__";
 const LIMIT = 40;
@@ -94,7 +95,7 @@ export function ExercisePickerDialog({
     setSaving(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(
@@ -148,6 +149,7 @@ export function ExercisePickerDialog({
             </SelectContent>
           </Select>
           <Button
+            aria-pressed={onlyFavorites}
             variant={onlyFavorites ? "default" : "outline"}
             size="sm"
             onClick={() => setOnlyFavorites((value) => !value)}

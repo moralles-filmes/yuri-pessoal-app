@@ -85,6 +85,7 @@ export function ExerciseListSheet({
             return (
               <div
                 key={exercise.id}
+                aria-current={isCurrent ? "step" : undefined}
                 className={cn(
                   "rounded-xl border p-3",
                   isCurrent && "border-primary bg-primary/5",

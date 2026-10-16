@@ -10,6 +10,7 @@ import { getAiPreferences, getProviderCards } from "@/lib/ai/queries";
 import { isCatalogStale, oldestVerification } from "@/lib/ai/core/models";
 import { hojeISO } from "@/lib/format";
 import { cryptoProblemMessage } from "@/lib/ai/server/crypto-readiness";
+import { catalogoDasPermissoes } from "@/lib/ai/permissoes-da-tela";
 
 export const metadata: Metadata = { title: "Configurações · IA" };
 export const dynamic = "force-dynamic";
@@ -74,7 +75,9 @@ export default async function IaConfiguracoesPage() {
         </div>
       )}
 
-      <AiPreferencesForm prefs={prefs} cards={cards} />
+      {/* D2 — o catálogo das chaves sai do registry AQUI, no servidor: o registry não vai ao
+          navegador só para a tela saber rótulos e dependências. */}
+      <AiPreferencesForm prefs={prefs} cards={cards} catalogo={catalogoDasPermissoes()} />
 
       <div className="space-y-4">
         <h2 className="text-sm font-semibold">Provedores</h2>

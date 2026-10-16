@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Archive,
@@ -10,6 +11,7 @@ import {
   ListChecks,
   Pencil,
   Plus,
+  Repeat,
   Search,
   Settings2,
   Trash2,
@@ -35,6 +37,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { PageHeader } from "@/components/shared/page-header";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
+import { RotinasETarefasAbas } from "@/components/tasks/rotinas-e-tarefas-abas";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import { cn } from "@/lib/utils";
@@ -187,7 +191,7 @@ export function TasksClient({
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Tarefas & Rotinas"
+        title="Rotinas e tarefas"
         description="Demandas, projetos, kanban e visões — organize o que precisa ser feito."
       >
         <ProjectsManager projects={projects} />
@@ -195,6 +199,8 @@ export function TasksClient({
           <Plus /> Nova tarefa
         </Button>
       </PageHeader>
+
+      <RotinasETarefasAbas />
 
       {/* Filtro por projeto (chips) */}
       <div className="flex flex-wrap items-center gap-2">
@@ -224,25 +230,13 @@ export function TasksClient({
       </div>
 
       {/* Seletor de visão */}
-      <div className="-mx-1 overflow-x-auto px-1">
-        <div className="inline-flex rounded-lg border p-0.5">
-          {TASK_VIEWS.map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => navigate({ view: v })}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-                view === v
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {TASK_VIEW_LABELS[v]}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SeletorDeVisao
+        rotulo="Visão das tarefas"
+        visoes={TASK_VIEWS}
+        rotulos={TASK_VIEW_LABELS}
+        atual={view}
+        aoEscolher={(v) => navigate({ view: v })}
+      />
 
       {/* Conteúdo por visão */}
       {view === "lista" && (
@@ -410,10 +404,11 @@ function ProjectChip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
         active
-          ? "border-primary bg-primary/10 text-foreground"
+          ? "border-primary bg-primary/10 font-semibold text-foreground"
           : "text-muted-foreground hover:bg-accent",
       )}
     >
@@ -564,14 +559,16 @@ function RoutinesTodayCard({
   const router = useRouter();
   if (routines.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-4 text-sm text-muted-foreground">
-          Nenhuma rotina para hoje.{" "}
-          <a href="/rotinas" className="text-primary hover:underline">
-            Gerenciar rotinas
-          </a>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={Repeat}
+        title="Nenhuma rotina para hoje"
+        description="As rotinas ativas aparecem aqui nos dias em que estão agendadas."
+        className="py-8"
+      >
+        <Button asChild size="sm" variant="outline">
+          <Link href="/rotinas">Gerenciar rotinas</Link>
+        </Button>
+      </EmptyState>
     );
   }
   return (
@@ -591,7 +588,7 @@ function RoutinesTodayCard({
                 else toast.error(res.error);
               }}
             />
-            <span className="flex-1 text-sm font-medium">{r.name}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">{r.name}</span>
             <RoutineTypeBadge type={r.type} />
           </label>
         ))}
@@ -627,6 +624,7 @@ function WeekView({
           <div key={iso} className="space-y-2">
             <div className="flex items-center justify-between">
               <h3
+                aria-current={day.isToday ? "date" : undefined}
                 className={cn(
                   "text-sm font-medium capitalize",
                   day.isToday && "text-primary",
@@ -694,7 +692,7 @@ function ProjectsManager({ projects }: { projects: ProjectWithCount[] }) {
           <Settings2 /> Listas
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+      <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md">
         <SheetHeader>
           <SheetTitle>Projetos & listas</SheetTitle>
           <SheetDescription>

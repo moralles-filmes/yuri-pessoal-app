@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,13 @@ import { searchIcon } from "./search-meta";
  * Busca global (Fase 13): triggers no header (caixa no desktop, ícone no mobile) +
  * command palette em Dialog. Abre com Ctrl/Cmd+K. Busca server-side (RLS) com debounce
  * e navegação por teclado (↑/↓/Enter). Resultados agrupados por tipo.
+ *
+ * REDESIGN-07-D · D6 — o padrão de caixa de combinação (`combobox` + `listbox` + `option` e
+ * `aria-activedescendant`): o foco fica no campo, e o leitor de tela acompanha o item que as
+ * setas escolhem. Esta é a CASCA (68 rotas): só atributos e texto.
+ *
+ * ⚠️ O rodapé "Ver todos os resultados" (que levaria à /busca) ficou DE FORA: medido, ele custava
+ * ~0,13 KB gz em todas as rotas e levava o custo de casca da 07-D acima do teto de +0,3 KB.
  */
 export function SearchCommand() {
   const router = useRouter();
@@ -29,6 +37,9 @@ export function SearchCommand() {
 
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const reqId = React.useRef(0);
+  // A lista usa o id do `useId`; cada opção, ele + a posição na lista plana.
+  const idDaLista = React.useId();
+  const idDoItem = (i: number) => idDaLista + i;
 
   // Lista plana (na ordem visual) para a navegação por teclado.
   const flat = React.useMemo<SearchResult[]>(
@@ -95,12 +106,13 @@ export function SearchCommand() {
 
   function onInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (flat.length === 0) return;
-    if (e.key === "ArrowDown") {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((i) => Math.min(i + 1, flat.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive((i) => Math.max(i - 1, 0));
+      const proximo =
+        e.key === "ArrowDown" ? Math.min(active + 1, flat.length - 1) : Math.max(active - 1, 0);
+      setActive(proximo);
+      // O item escolhido pelas setas rola para a vista (a lista tem altura limitada).
+      document.getElementById(idDoItem(proximo))?.scrollIntoView({ block: "nearest" });
     } else if (e.key === "Enter") {
       e.preventDefault();
       const r = flat[active];
@@ -109,7 +121,6 @@ export function SearchCommand() {
   }
 
   const showEmpty = !loading && query.trim().length >= 2 && flat.length === 0;
-  let runningIndex = -1;
 
   return (
     <>
@@ -142,6 +153,9 @@ export function SearchCommand() {
           className="top-[12%] max-h-[76vh] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
         >
           <DialogTitle className="sr-only">Busca global</DialogTitle>
+          <DialogDescription className="sr-only">
+            Setas escolhem, Enter abre, Esc fecha.
+          </DialogDescription>
 
           <div className="flex items-center gap-2 border-b border-border px-3">
             {loading ? (
@@ -157,6 +171,11 @@ export function SearchCommand() {
               placeholder="Buscar em todo o sistema…"
               className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               aria-label="Buscar"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={flat.length > 0}
+              aria-controls={idDaLista}
+              aria-activedescendant={flat[active] ? idDoItem(active) : undefined}
             />
           </div>
 
@@ -173,47 +192,53 @@ export function SearchCommand() {
                 </p>
               </div>
             ) : (
-              groups.map((group) => {
-                const Icon = searchIcon(group.type);
-                return (
-                  <div key={group.type} className="mb-1">
-                    <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                      {group.label}
-                    </p>
-                    <ul>
-                      {group.results.map((r) => {
-                        runningIndex += 1;
-                        const idx = runningIndex;
-                        return (
-                          <li key={`${r.type}-${r.id}`}>
-                            <button
-                              type="button"
-                              onClick={() => go(r)}
-                              onMouseEnter={() => setActive(idx)}
-                              className={cn(
-                                "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
-                                idx === active ? "bg-muted" : "hover:bg-muted/60",
-                              )}
-                            >
-                              <span className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
-                                <Icon className="size-4" />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm">{r.title}</span>
-                                {r.subtitle && (
-                                  <span className="block truncate text-xs text-muted-foreground">
-                                    {r.subtitle}
-                                  </span>
+              <div id={idDaLista} role="listbox" aria-label="Resultados">
+                {groups.map((group) => {
+                  const Icon = searchIcon(group.type);
+                  return (
+                    <div key={group.type} className="mb-1">
+                      <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                        {group.label}
+                      </p>
+                      <ul role="group" aria-label={group.label}>
+                        {group.results.map((r) => {
+                          // A posição na lista plana (a ordem das setas), sem mutar no render.
+                          const idx = flat.indexOf(r);
+                          return (
+                            <li key={`${r.type}-${r.id}`} role="presentation">
+                              <button
+                                type="button"
+                                id={idDoItem(idx)}
+                                role="option"
+                                aria-selected={idx === active}
+                                tabIndex={-1}
+                                onClick={() => go(r)}
+                                onMouseEnter={() => setActive(idx)}
+                                className={cn(
+                                  "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
+                                  idx === active ? "bg-muted" : "hover:bg-muted/60",
                                 )}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              })
+                              >
+                                <span className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+                                  <Icon className="size-4" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-sm">{r.title}</span>
+                                  {r.subtitle && (
+                                    <span className="block truncate text-xs text-muted-foreground">
+                                      {r.subtitle}
+                                    </span>
+                                  )}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </DialogContent>

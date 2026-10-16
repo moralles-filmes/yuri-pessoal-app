@@ -76,7 +76,11 @@ export function CourseCard({
               {formatPercent(course.progressPct)}
             </span>
           </div>
-          <StudyProgressBar value={course.progressPct} color={course.cover_color} />
+          <StudyProgressBar
+            value={course.progressPct}
+            color={course.cover_color}
+            rotulo={`Progresso de ${course.title}`}
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">

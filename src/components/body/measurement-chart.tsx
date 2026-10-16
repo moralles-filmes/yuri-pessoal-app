@@ -23,7 +23,9 @@
  */
 import * as React from "react";
 import dynamic from "next/dynamic";
+import { LineChart } from "lucide-react";
 import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
+import { EmptyState } from "@/components/shared/empty-state";
 import { shortDateLabel } from "@/lib/nutrition/calendar";
 import { formatMeasurement, measuredPoints, type SeriesPoint } from "@/lib/body/measurements";
 
@@ -50,10 +52,15 @@ const LazyMeasurementChart = dynamic(
 
 export function MeasurementChart(props: MeasurementChartProps) {
   if (measuredPoints(props.series).length === 0) {
+    // Sempre dentro de um Card (medidas, relatórios da Dieta, evolução de Treinos): sem a borda
+    // do EmptyState e com o respiro menor (critério da 07-A/07-B).
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        Ainda não há medições neste período para desenhar o gráfico.
-      </p>
+      <EmptyState
+        icon={LineChart}
+        title="Ainda não há medições neste período"
+        description="Sem medição, não há gráfico para desenhar."
+        className="border-0 bg-transparent py-6"
+      />
     );
   }
 

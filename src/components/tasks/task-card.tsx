@@ -13,6 +13,7 @@ import {
   Repeat,
   RotateCcw,
   Trash2,
+  TriangleAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -124,8 +125,13 @@ export function TaskCard({
             )}
             {task.due_date && (
               <span className={cn("inline-flex items-center gap-1", overdue && "text-destructive font-medium")}>
-                <CalendarClock className="size-3" />
+                {overdue ? (
+                  <TriangleAlert className="size-3" aria-hidden />
+                ) : (
+                  <CalendarClock className="size-3" aria-hidden />
+                )}
                 {formatDate(task.due_date)}
+                {overdue && <span className="sr-only"> (atrasada)</span>}
               </span>
             )}
             {checklistTotal > 0 && (

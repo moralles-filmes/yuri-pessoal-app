@@ -83,7 +83,7 @@ export function EventDetailsDialog({
           {event.location && (
             <p className="flex items-center gap-2 text-muted-foreground">
               <MapPin className="size-4 shrink-0" />
-              {event.location}
+              <span className="min-w-0 break-words">{event.location}</span>
             </p>
           )}
           {reminder && (

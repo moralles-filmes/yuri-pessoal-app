@@ -22,6 +22,8 @@ import { Loader2, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { extrairComprovante } from "@/lib/actions/ai-documents";
+import { CUSTO_DA_IA } from "@/lib/ai/custo-da-ia";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 
 export function ReceiptExtractButton({
   documentoId,
@@ -32,6 +34,7 @@ export function ReceiptExtractButton({
 }) {
   const router = useRouter();
   const [lendo, setLendo] = React.useState(false);
+  const idDoAviso = React.useId();
 
   async function extrair() {
     if (lendo) return;
@@ -40,7 +43,8 @@ export function ReceiptExtractButton({
     setLendo(false);
 
     if (!r.ok) {
-      toast.error(r.error);
+      // Esta tela não tem campo: erro de campo sobe com o nome dele (regra 2 de formulário).
+      toast.error(serverErrorMessage(r.error, mapServerFieldErrors(r.fieldErrors, [])));
       // ⚠️ `refresh` também na FALHA: ela virou linha em `ai_document_extractions`, e a tela
       // precisa mostrá-la. Uma falha sem rastro é indistinguível de um botão que não fez nada.
       router.refresh();
@@ -52,16 +56,21 @@ export function ReceiptExtractButton({
 
   return (
     <div className="space-y-2">
-      <Button onClick={extrair} disabled={desligado || lendo} className="min-w-0">
+      <Button
+        onClick={extrair}
+        disabled={desligado || lendo}
+        aria-describedby={idDoAviso}
+        className="min-w-0"
+      >
         {lendo ? <Loader2 className="size-4 animate-spin" /> : <ScanLine className="size-4" />}
         <span className="truncate">
           {lendo ? "Lendo o comprovante…" : "Ler este comprovante"}
         </span>
       </Button>
-      <p className="text-xs text-muted-foreground">
+      <p id={idDoAviso} className="text-xs text-muted-foreground">
         Ao clicar, o arquivo é enviado ao provedor de IA que você configurou.{" "}
-        <strong className="text-foreground">Isso não tem como ser desfeito</strong> — o custo
-        estimado entra no seu orçamento e aparece em Consumo.
+        <strong className="text-foreground">Isso não tem como ser desfeito</strong> —{" "}
+        {CUSTO_DA_IA}.
       </p>
     </div>
   );

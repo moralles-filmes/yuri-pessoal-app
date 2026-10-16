@@ -17,6 +17,8 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { saveProfile } from "@/lib/actions/settings";
 import { getInitials } from "@/lib/format";
+import { errosDaAction } from "@/lib/forms/mensagem-da-action";
+import { ariaDoErro, ErroDoCampo } from "@/components/shared/erro-do-campo";
 
 /** Card de perfil: nome de exibição + URL de avatar. Validação no servidor (Zod). */
 export function ProfileCard({
@@ -31,7 +33,7 @@ export function ProfileCard({
   const router = useRouter();
   const [name, setName] = React.useState(displayName ?? "");
   const [avatar, setAvatar] = React.useState(avatarUrl ?? "");
-  const [errors, setErrors] = React.useState<Record<string, string[]>>({});
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [pending, startTransition] = React.useTransition();
 
   function onSubmit(e: React.FormEvent) {
@@ -43,8 +45,10 @@ export function ProfileCard({
         toast.success("Perfil atualizado.");
         router.refresh();
       } else {
-        if (res.fieldErrors) setErrors(res.fieldErrors);
-        toast.error(res.error);
+        // D8 — erro de campo que existe aqui fica sob o campo; o resto sobe com o nome.
+        const { porCampo, texto } = errosDaAction(res, ["display_name", "avatar_url"]);
+        setErrors(porCampo);
+        toast.error(texto);
       }
     });
   }
@@ -85,10 +89,9 @@ export function ProfileCard({
                 maxLength={120}
                 placeholder="Seu nome"
                 onChange={(e) => setName(e.target.value)}
+                {...ariaDoErro("display_name-erro", errors.display_name)}
               />
-              {errors.display_name && (
-                <p className="text-xs text-destructive">{errors.display_name[0]}</p>
-              )}
+              <ErroDoCampo id="display_name-erro" mensagem={errors.display_name} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="avatar_url">URL do avatar (opcional)</Label>
@@ -98,10 +101,9 @@ export function ProfileCard({
                 inputMode="url"
                 placeholder="https://…"
                 onChange={(e) => setAvatar(e.target.value)}
+                {...ariaDoErro("avatar_url-erro", errors.avatar_url)}
               />
-              {errors.avatar_url && (
-                <p className="text-xs text-destructive">{errors.avatar_url[0]}</p>
-              )}
+              <ErroDoCampo id="avatar_url-erro" mensagem={errors.avatar_url} />
             </div>
           </div>
 

@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/shared/empty-state";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/format";
@@ -43,6 +44,7 @@ import type {
 } from "@/lib/training/types";
 import type { SessionListItem } from "@/lib/training/session-queries";
 import { createSession } from "@/lib/actions/training-sessions";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 export function PrepareChooseClient({
   scheduledToday,
@@ -77,7 +79,7 @@ export function PrepareChooseClient({
     setBusy(false);
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     router.push(`${TRAINING_BASE_PATH}/sessao/preparar?id=${result.data.id}`);
@@ -297,9 +299,11 @@ export function PrepareChooseClient({
           </div>
 
           {filtered.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              Nenhum treino encontrado.
-            </p>
+            <EmptyState
+              icon={Search}
+              title="Nenhum treino encontrado"
+              className="border-0 bg-transparent py-6"
+            />
           ) : (
             filtered.map((workout) => {
               const summary = summarizeWorkout(workout.exercises, {

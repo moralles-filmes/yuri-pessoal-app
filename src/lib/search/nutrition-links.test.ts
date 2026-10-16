@@ -16,14 +16,20 @@ import { describe, expect, it } from "vitest";
 import { temPagina } from "@/test/rotas";
 import {
   diaryLink,
+  goalsLink,
   foodLink,
   mealTemplateLink,
   measurementsLink,
   pantryLink,
   planLink,
+  planningWeekLink,
   recipeLink,
   shoppingListLink,
+  waterLink,
 } from "./nutrition-links";
+import { HABIT_VIEWS } from "@/lib/habits/constants";
+import { PLANNING_VIEWS } from "@/lib/nutrition/constants";
+import { parametrosLidos, parametrosLidosNoTexto, rotaEParametros } from "@/test/parametros-lidos";
 import { SEARCH_TYPES, SEARCH_TYPE_LABELS } from "./types";
 
 const ID = "11111111-2222-3333-4444-555555555555";
@@ -120,5 +126,73 @@ describe("tipos novos da busca global", () => {
     for (const type of NOVOS) {
       expect(indice(type)).toBeLessThan(indice("notificacao"));
     }
+  });
+});
+
+/**
+ * REDESIGN-07-C · D6 — os dois construtores novos e a LEITURA de cada parâmetro.
+ *
+ * Até aqui o arquivo provava o formato e que a rota existe; o cabeçalho prometia que "cada
+ * página lê exatamente esse parâmetro" e ninguém conferia. A notificação do planejamento era
+ * montada à mão sem `visao` e caía no dia; os links da água iam ao topo de Hábitos.
+ */
+describe("D6 — a água e a semana do planejamento", () => {
+  it("a água abre a visão da água em Hábitos (a Dieta linka, não duplica)", () => {
+    expect(waterLink()).toBe("/habitos?view=agua");
+    expect(HABIT_VIEWS).toContain("agua");
+    expect(temPagina(waterLink())).toBe(true);
+  });
+
+  it("a semana do planejamento abre a visão SEMANA na data pedida", () => {
+    expect(planningWeekLink("2026-10-12")).toBe("/nutricao/planejamento?data=2026-10-12&visao=semana");
+    const visao = new URLSearchParams(planningWeekLink("2026-10-12").split("?")[1]).get("visao");
+    expect(PLANNING_VIEWS as readonly (string | null)[]).toContain(visao);
+    expect(temPagina(planningWeekLink("2026-10-12"))).toBe(true);
+  });
+});
+
+describe("D6 — cada parâmetro de cada link é LIDO pela página de destino", () => {
+  it("o leitor sabe dizer sim e não (fixture)", () => {
+    const pagina = "const params = await searchParams; const d = params.data; const { alimento } = await searchParams;";
+    expect(parametrosLidosNoTexto(pagina)).toEqual(new Set(["data", "alimento"]));
+    expect(parametrosLidosNoTexto("const [{ meta }, x] = await Promise.all([searchParams, y]);")).toEqual(new Set(["meta"]));
+    expect(parametrosLidosNoTexto("", ['const q = searchParams.get("q");'])).toEqual(new Set(["q"]));
+    expect(parametrosLidosNoTexto("const x = 1;").size).toBe(0);
+  });
+
+  it.each([
+    ["alimento", foodLink(ID)],
+    ["receita", recipeLink(ID)],
+    ["refeição-modelo", mealTemplateLink(ID)],
+    ["plano", planLink(ID)],
+    ["lista de compras", shoppingListLink(ID)],
+    ["diário", diaryLink("2026-08-04")],
+    ["despensa (aba)", pantryLink()],
+    ["água", waterLink()],
+    ["semana do planejamento", planningWeekLink("2026-10-12")],
+  ])("%s → %s", (_nome, link) => {
+    const [rota, chaves] = rotaEParametros(link);
+    const lidos = parametrosLidos(rota);
+    for (const chave of chaves) expect(lidos.has(chave), `${rota} não lê "${chave}"`).toBe(true);
+  });
+});
+
+/**
+ * REDESIGN-07-D · D7 — o diário sem data, as metas e o apelido legado (spec §6.7).
+ */
+describe("07-D — diário sem data, metas e o apelido `date`", () => {
+  it("diaryLink sem data é o diário de hoje; goalsLink abre as metas", () => {
+    expect(diaryLink()).toBe("/nutricao/diario");
+    expect(goalsLink()).toBe("/nutricao/metas");
+    expect(temPagina(diaryLink())).toBe(true);
+    expect(temPagina(goalsLink())).toBe(true);
+  });
+
+  it("o diário aceita `date` como apelido legado — `data` vence (M41)", () => {
+    // `ai_tool_calls.refs` e `ai_action_executions.target_route` gravados com `?date=` são
+    // imutáveis: sem o apelido, o link antigo abriria hoje em vez do dia do registro.
+    const lidos = parametrosLidos("/nutricao/diario");
+    expect(lidos.has("data")).toBe(true);
+    expect(lidos.has("date")).toBe(true);
   });
 });

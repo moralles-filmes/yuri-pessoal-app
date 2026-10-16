@@ -13,6 +13,7 @@
 import { AlertTriangle, Check, CloudOff, Loader2, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { pendentesTexto } from "./session-queue-view";
 import { SYNC_LABELS, type SyncState } from "./use-session-queue";
 
 const ICONS = {
@@ -49,19 +50,17 @@ export function SyncStatus({
   return (
     <div className={cn("flex items-center gap-1.5 text-xs", TONE[state], className)}>
       <Icon className={cn("size-3.5 shrink-0", state === "salvando" && "animate-spin")} />
-      <span className="truncate">
+      {/* Região viva (REDESIGN-07-C): o leitor de tela ouve "Salvo no dispositivo · 2 a enviar"
+          quando muda — antes o estado só existia na cor e no ícone. O erro vai junto. */}
+      <span className="truncate" role="status" aria-live="polite">
         {SYNC_LABELS[state]}
-        {pending > 0 && state !== "salvo" ? ` · ${pending}` : ""}
+        {pending > 0 && state !== "salvo" ? ` · ${pendentesTexto(pending)}` : ""}
+        {state === "erro" && lastError ? <span className="sr-only"> · {lastError}</span> : null}
       </span>
       {(state === "erro" || state === "aguardando_conexao") && (
         <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onRetry}>
           Tentar de novo
         </Button>
-      )}
-      {state === "erro" && lastError && (
-        <span className="sr-only" role="status">
-          {lastError}
-        </span>
       )}
     </div>
   );

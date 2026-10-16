@@ -884,12 +884,6 @@ export const NUTRITION_SECTIONS: NutritionSection[] = [
   },
 ];
 
-export const NUTRITION_SECTION_STATUS_LABELS: Record<NutritionSectionStatus, string> = {
-  pronto: "Disponível",
-  proxima: "Próxima subfase",
-  planejada: "Planejada",
-};
-
 /* ───────────────────────────── Ordenação do catálogo ───────────────────────────── */
 export const FOOD_SORTS = [
   "nome",

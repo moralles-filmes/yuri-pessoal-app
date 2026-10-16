@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -20,10 +21,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
-import { cn } from "@/lib/utils";
 import { CourseCard } from "@/components/studies/course-card";
 import {
   StudyDifficultyBadge,
@@ -31,8 +32,7 @@ import {
   courseIcon,
 } from "@/components/studies/badges";
 import { EvolutionChart } from "@/components/studies/evolution-chart";
-import { SessionFormDialog } from "@/components/studies/session-dialog";
-import { CourseFormDialog } from "./course-form";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { deleteSession } from "@/lib/actions/studies";
 import {
   STUDY_VIEWS,
@@ -49,6 +49,17 @@ import type {
   StudySessionWithRelations,
 } from "@/types/database";
 
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const CourseFormDialog = dynamic(
+  () => import("./course-form").then((m) => m.CourseFormDialog),
+  { ssr: false },
+);
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const SessionFormDialog = dynamic(
+  () => import("@/components/studies/session-dialog").then((m) => m.SessionFormDialog),
+  { ssr: false },
+);
+
 export function StudiesClient({
   dashboard,
   view,
@@ -63,6 +74,8 @@ export function StudiesClient({
   const [courseForm, setCourseForm] = React.useState(false);
   const [editingCourse, setEditingCourse] = React.useState<StudyCourseRow>();
   const [sessionForm, setSessionForm] = React.useState(false);
+  const courseFormMontado = useLazyDialog(courseForm);
+  const sessionFormMontado = useLazyDialog(sessionForm);
   const [editingSession, setEditingSession] =
     React.useState<StudySessionWithRelations>();
 
@@ -119,23 +132,13 @@ export function StudiesClient({
         </EmptyState>
       ) : (
         <>
-          <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1">
-            {STUDY_VIEWS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => navigate(v)}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-                  view === v
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {STUDY_VIEW_LABELS[v]}
-              </button>
-            ))}
-          </div>
+          <SeletorDeVisao
+            rotulo="Visão dos estudos"
+            visoes={STUDY_VIEWS}
+            rotulos={STUDY_VIEW_LABELS}
+            atual={view}
+            aoEscolher={navigate}
+          />
 
           {view === "painel" && <PanelView dashboard={dashboard} />}
           {view === "cursos" && (
@@ -152,19 +155,23 @@ export function StudiesClient({
         </>
       )}
 
-      <CourseFormDialog
-        course={editingCourse}
-        open={courseForm}
-        onOpenChange={setCourseForm}
-      />
-      <SessionFormDialog
-        open={sessionForm}
-        onOpenChange={setSessionForm}
-        todayIso={todayIso}
-        courseOptions={dashboard.courseOptions}
-        taskOptions={dashboard.taskOptions}
-        session={editingSession}
-      />
+      {courseFormMontado && (
+        <CourseFormDialog
+          course={editingCourse}
+          open={courseForm}
+          onOpenChange={setCourseForm}
+        />
+      )}
+      {sessionFormMontado && (
+        <SessionFormDialog
+          open={sessionForm}
+          onOpenChange={setSessionForm}
+          todayIso={todayIso}
+          courseOptions={dashboard.courseOptions}
+          taskOptions={dashboard.taskOptions}
+          session={editingSession}
+        />
+      )}
     </div>
   );
 }
@@ -218,9 +225,11 @@ function PanelView({ dashboard }: { dashboard: StudyDashboard }) {
           </CardHeader>
           <CardContent>
             {dashboard.nextLessons.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Nenhuma aula pendente em cursos em andamento.
-              </p>
+              <EmptyState
+                icon={Layers}
+                title="Nenhuma aula pendente em cursos em andamento"
+                className="border-0 bg-transparent py-6"
+              />
             ) : (
               <ul className="space-y-2">
                 {dashboard.nextLessons.map((n) => (
@@ -254,9 +263,7 @@ function PanelView({ dashboard }: { dashboard: StudyDashboard }) {
           </CardHeader>
           <CardContent>
             {dashboard.overdue.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Tudo em dia. 🎯
-              </p>
+              <EmptyState icon={CalendarClock} title="Tudo em dia. 🎯" className="border-0 bg-transparent py-6" />
             ) : (
               <ul className="space-y-2">
                 {dashboard.overdue.map((c) => (
@@ -289,9 +296,12 @@ function PanelView({ dashboard }: { dashboard: StudyDashboard }) {
         </CardHeader>
         <CardContent>
           {inProgress.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Nenhum curso em andamento. Mude o status de um curso para começar.
-            </p>
+            <EmptyState
+              icon={GraduationCap}
+              title="Nenhum curso em andamento"
+              description="Mude o status de um curso para começar."
+              className="border-0 bg-transparent py-6"
+            />
           ) : (
             <div className="space-y-3">
               {inProgress.map((c) => (
@@ -308,7 +318,11 @@ function PanelView({ dashboard }: { dashboard: StudyDashboard }) {
                       {formatPercent(c.progressPct)}
                     </span>
                   </div>
-                  <StudyProgressBar value={c.progressPct} color={c.cover_color} />
+                  <StudyProgressBar
+                    value={c.progressPct}
+                    color={c.cover_color}
+                    rotulo={`Progresso de ${c.title}`}
+                  />
                 </div>
               ))}
             </div>
@@ -496,7 +510,11 @@ function LanguagesView({ dashboard }: { dashboard: StudyDashboard }) {
                   </span>
                 </div>
                 {goal > 0 ? (
-                  <StudyProgressBar value={pct} color={c.cover_color} />
+                  <StudyProgressBar
+                    value={pct}
+                    color={c.cover_color}
+                    rotulo={`Prática na semana — ${c.title}`}
+                  />
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     Defina uma meta semanal no curso para acompanhar o progresso.

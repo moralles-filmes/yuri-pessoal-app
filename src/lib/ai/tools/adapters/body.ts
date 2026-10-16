@@ -34,6 +34,7 @@ import { getMeasurements, getMeasurementTypes } from "@/lib/body/queries";
 import type { MeasurementWithType } from "@/lib/body/types";
 import { normalizarTexto } from "@/lib/ai/core/text";
 import { hojeISO } from "@/lib/format";
+import { measurementsLink } from "@/lib/search/nutrition-links";
 import { emptyToolOutput, type ToolOutput, type ToolRef } from "../contracts";
 
 /** ⚠️ `.strict()` nos dois: campo a mais é erro, e é por aqui que `user_id` seria barrado. */
@@ -60,7 +61,7 @@ const JANELA_PADRAO_DIAS = 90;
 const REF_DO_PAINEL: ToolRef = {
   tipo: "painel_de_medidas",
   id: "medidas",
-  rota: "/nutricao/medidas",
+  rota: measurementsLink(),
 };
 
 /** Subtrai dias de uma data pura, em `Date.UTC` — nunca `new Date()` no fuso local. */

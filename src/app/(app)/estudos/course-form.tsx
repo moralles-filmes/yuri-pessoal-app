@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
+import { Controller, useFieldArray, useForm, useWatch, type Path } from "react-hook-form";
 import { toast } from "sonner";
 import { Check, Plus, Trash2 } from "lucide-react";
 import {
@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { applyFieldErrors } from "@/components/financeiro/form-utils";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 import { createCourse, updateCourse } from "@/lib/actions/studies";
 import {
   STUDY_CATEGORIES,
@@ -41,6 +41,35 @@ import {
   type StudyStatus,
 } from "@/lib/studies/constants";
 import type { StudyCourseRow } from "@/types/database";
+
+// Campos que a tela tem: erro de campo fora desta lista sobe para o toast com o nome (mapServerFieldErrors).
+// ⚠️ `materials` fica DE FORA de propósito: o payload filtra as linhas vazias antes de enviar, então
+// o índice que o servidor devolve ("materials.1.url") não é o da tela — destacaria a linha errada.
+// E `workload_hours` vai como `workload_minutes`: erro nele também sobe para o toast, com o nome.
+const FORM_FIELDS = [
+  "title",
+  "platform",
+  "url",
+  "category",
+  "status",
+  "priority",
+  "workload_hours",
+  "weekly_goal_minutes",
+  "start_date",
+  "target_date",
+  "notes",
+  "is_language",
+  "cover_color",
+  "icon",
+] as const;
+
+/**
+ * Foco visível das amostras de cor. O anel já marca a ESCOLHIDA, então o foco é um contorno — e
+ * no Tailwind v4 o `outline-none` zera o estilo do contorno: sem `focus-visible:outline-solid` ele
+ * não aparece. Sem isto o foco dependia do `outline: auto` do navegador.
+ */
+const FOCO_DA_AMOSTRA =
+  "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 type FormValues = {
   title: string;
@@ -143,8 +172,10 @@ export function CourseFormDialog({
       onOpenChange(false);
       router.refresh();
     } else {
-      applyFieldErrors(setError, res.fieldErrors);
-      toast.error(res.error);
+      const mapped = mapServerFieldErrors(res.fieldErrors, FORM_FIELDS);
+      for (const { name, message } of mapped.toSet)
+        setError(name as Path<FormValues>, { message });
+      toast.error(serverErrorMessage(res.error, mapped));
     }
   }
 
@@ -339,12 +370,14 @@ export function CourseFormDialog({
                   <button
                     type="button"
                     onClick={() => field.onChange("")}
+                    aria-pressed={!field.value}
                     className={cn(
                       "grid size-7 place-items-center rounded-full border text-xs text-muted-foreground",
+                      FOCO_DA_AMOSTRA,
                       !field.value &&
                         "ring-2 ring-primary ring-offset-1 ring-offset-background",
                     )}
-                    aria-label="Cor padrão da categoria"
+                    aria-label="Sem cor própria (usa a cor de destaque)"
                   >
                     —
                   </button>
@@ -353,8 +386,10 @@ export function CourseFormDialog({
                       key={c}
                       type="button"
                       onClick={() => field.onChange(c)}
+                      aria-pressed={field.value === c}
                       className={cn(
                         "grid size-7 place-items-center rounded-full ring-offset-background transition",
+                        FOCO_DA_AMOSTRA,
                         field.value === c && "ring-2 ring-primary ring-offset-1",
                       )}
                       style={{ backgroundColor: c }}

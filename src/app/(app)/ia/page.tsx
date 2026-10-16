@@ -4,12 +4,14 @@ import { MessagesSquare, Settings } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { ChatClient } from "@/components/ai/chat-client";
+import { VazioDaConversa } from "@/components/ai/vazio-da-conversa";
 import { BudgetAlert } from "@/components/ai/budget-alert";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getAiPreferences, getUsageSummary } from "@/lib/ai/queries";
 import { RESUMO_DO_ASSISTENTE } from "@/lib/ai/constants";
 import { prontidaoDoChat } from "@/lib/ai/server/chat-readiness";
 import { reconcileOwnRuns } from "@/lib/ai/server/reconcile";
+import { conversationsLink, settingsLink } from "@/lib/search/ai-links";
 
 export const dynamic = "force-dynamic";
 
@@ -55,12 +57,12 @@ export default async function IaPage() {
       <PageHeader title="Conversar" description={RESUMO_DO_ASSISTENTE}>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link href="/ia/conversas">
+            <Link href={conversationsLink()}>
               <MessagesSquare className="size-4" /> Conversas
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">
-            <Link href="/ia/configuracoes">
+            <Link href={settingsLink()}>
               <Settings className="size-4" /> Configurações
             </Link>
           </Button>
@@ -79,6 +81,7 @@ export default async function IaPage() {
         runs={{}}
         podeConversar={prontidao.podeConversar}
         motivoBloqueio={prontidao.motivoBloqueio}
+        vazio={<VazioDaConversa />}
       />
     </div>
   );

@@ -21,6 +21,7 @@ import {
   FileSpreadsheet,
   Percent,
   Repeat,
+  Ruler,
   ShoppingCart,
   UtensilsCrossed,
 } from "lucide-react";
@@ -42,7 +43,7 @@ import {
 import { StatCard } from "@/components/shared/stat-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReportBarChart } from "@/components/reports/report-bar-chart";
-import { MeasurementChart } from "@/components/body/measurement-chart";
+import { MeasurementChart, MeasurementTable } from "@/components/body/measurement-chart";
 import { TotalQualityBadge } from "@/components/nutrition/nutrient-value";
 import { formatCurrency } from "@/lib/format";
 import { roundForDisplay, TOTAL_QUALITY_HINTS } from "@/lib/nutrition/calc";
@@ -159,6 +160,17 @@ export function ReportsClient(props: ReportsClientProps) {
    * A biblioteca é carregada só aqui dentro, por import dinâmico.
    */
   const [exportando, setExportando] = React.useState(false);
+
+  const energiaPorDia = React.useMemo(
+    () =>
+      props.daily
+        .filter((day) => day.hasRecord)
+        .map((day) => ({
+          label: shortDateLabel(day.date),
+          value: Math.round(day.totals[MACRO_CODES.energia]?.amount ?? 0),
+        })),
+    [props.daily],
+  );
 
   async function exportWorkbook() {
     setExportando(true);
@@ -336,15 +348,11 @@ export function ReportsClient(props: ReportsClientProps) {
             </CardHeader>
             <CardContent>
               <ReportBarChart
-                data={props.daily
-                  .filter((day) => day.hasRecord)
-                  .map((day) => ({
-                    label: shortDateLabel(day.date),
-                    value: Math.round(day.totals[MACRO_CODES.energia]?.amount ?? 0),
-                  }))}
+                data={energiaPorDia}
                 name="Energia"
-                formatValue={(v) => `${v.toLocaleString("pt-BR")} kcal`}
+                formatValue={kcalTexto}
               />
+              <TabelaDoGrafico caption="Energia por dia registrado" coluna="Energia" pontos={energiaPorDia} formatar={kcalTexto} />
             </CardContent>
           </Card>
 
@@ -472,8 +480,8 @@ export function ReportsClient(props: ReportsClientProps) {
         {/* ═══ Micronutrientes ═══ */}
         <TabsContent value="micro" className="mt-4 space-y-4">
           <Card>
-            <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
-              <div>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
+              <div className="min-w-0">
                 <CardTitle className="text-base">Micronutrientes no período</CardTitle>
                 <CardDescription>
                   A coluna &ldquo;dias incompletos&rdquo; diz em quantos dias algum item não
@@ -498,8 +506,8 @@ export function ReportsClient(props: ReportsClientProps) {
         {/* ═══ Alimentos e refeições ═══ */}
         <TabsContent value="alimentos" className="mt-4 space-y-4">
           <Card>
-            <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
-              <div>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
+              <div className="min-w-0">
                 <CardTitle className="text-base">Mais consumidos</CardTitle>
                 <CardDescription>
                   Agrupado pelo nome registrado na época — o histórico sobrevive à exclusão do
@@ -525,6 +533,7 @@ export function ReportsClient(props: ReportsClientProps) {
               {props.topFoods.length === 0 ? (
                 <EmptyState
                   icon={UtensilsCrossed}
+                  className="border-0 bg-transparent py-6"
                   title="Nenhum registro no período"
                   description="Registre refeições no diário para ver o que mais aparece."
                 />
@@ -556,7 +565,11 @@ export function ReportsClient(props: ReportsClientProps) {
             </CardHeader>
             <CardContent>
               {props.topMeals.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhuma refeição registrada.</p>
+                <EmptyState
+                  icon={UtensilsCrossed}
+                  title="Nenhuma refeição registrada"
+                  className="border-0 bg-transparent py-6"
+                />
               ) : (
                 <ul className="divide-y">
                   {props.topMeals.map((meal) => (
@@ -581,8 +594,8 @@ export function ReportsClient(props: ReportsClientProps) {
         {/* ═══ Substituições ═══ */}
         <TabsContent value="substituicoes" className="mt-4">
           <Card>
-            <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
-              <div>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
+              <div className="min-w-0">
                 <CardTitle className="text-base">Substituições mais realizadas</CardTitle>
                 <CardDescription>
                   Contagem do que você trocou. Os rótulos e as diferenças ficaram congelados na
@@ -608,6 +621,7 @@ export function ReportsClient(props: ReportsClientProps) {
               {props.substitutions.length === 0 ? (
                 <EmptyState
                   icon={Repeat}
+                  className="border-0 bg-transparent py-6"
                   title="Nenhuma substituição no período"
                   description="Quando você troca um item por uma alternativa, a troca fica registrada e aparece aqui."
                 />
@@ -659,6 +673,7 @@ export function ReportsClient(props: ReportsClientProps) {
               {props.market.lists === 0 ? (
                 <EmptyState
                   icon={ShoppingCart}
+                  className="border-0 bg-transparent py-6"
                   title="Nenhuma lista no período"
                   description="Gere uma lista de compras a partir do planejamento para acompanhar o gasto."
                 />
@@ -763,6 +778,45 @@ export function ReportsClient(props: ReportsClientProps) {
 
 /* ───────────────────────────── Tabela de nutrientes ───────────────────────────── */
 
+const kcalTexto = (v: number) => `${v.toLocaleString("pt-BR")} kcal`;
+
+/**
+ * Leitura textual de um gráfico de barras (G, REDESIGN-07-C). O gráfico mora em
+ * `components/reports/` (compartilhado com /relatorios, da 03-C, que não é editado aqui), então
+ * a alternativa nasce no client da Dieta: os MESMOS pontos, com a mesma formatação.
+ */
+function TabelaDoGrafico({
+  caption,
+  coluna,
+  pontos,
+  formatar,
+}: {
+  caption: string;
+  coluna: string;
+  pontos: { label: string; value: number }[];
+  formatar: (v: number) => string;
+}) {
+  return (
+    <table className="sr-only">
+      <caption>{caption}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Dia</th>
+          <th scope="col">{coluna}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {pontos.map((ponto) => (
+          <tr key={ponto.label}>
+            <th scope="row">{ponto.label}</th>
+            <td>{formatar(ponto.value)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function NutrientTable({
   rows,
   definitions,
@@ -772,10 +826,12 @@ function NutrientTable({
 }) {
   if (rows.length === 0) {
     return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        Nenhum micronutriente registrado no período. Eles aparecem conforme os alimentos
-        consumidos tenham esses valores publicados pela fonte.
-      </p>
+      <EmptyState
+        icon={BarChart3}
+        title="Nenhum micronutriente registrado no período"
+        description="Eles aparecem conforme os alimentos consumidos tenham esses valores publicados pela fonte."
+        className="border-0 bg-transparent py-6"
+      />
     );
   }
 
@@ -870,6 +926,17 @@ function EvolutionPanel({
   const [typeId, setTypeId] = React.useState<string>("");
   const selected = withData.find((type) => type.id === (typeId || withData[0]?.id)) ?? null;
 
+  const consumoPorDia = React.useMemo(
+    () =>
+      daily
+        .filter((day) => day.hasRecord)
+        .map((day) => ({
+          label: shortDateLabel(day.date),
+          value: Math.round(day.totals[CORE_NUTRIENTS.energia]?.amount ?? 0),
+        })),
+    [daily],
+  );
+
   const series = React.useMemo(
     () =>
       selected
@@ -889,23 +956,14 @@ function EvolutionPanel({
           <CardTitle className="text-base">Consumo no período</CardTitle>
         </CardHeader>
         <CardContent>
-          <ReportBarChart
-            data={daily
-              .filter((day) => day.hasRecord)
-              .map((day) => ({
-                label: shortDateLabel(day.date),
-                value: Math.round(day.totals[CORE_NUTRIENTS.energia]?.amount ?? 0),
-              }))}
-            name="Energia"
-            formatValue={(v) => `${v.toLocaleString("pt-BR")} kcal`}
-            height={200}
-          />
+          <ReportBarChart data={consumoPorDia} name="Energia" formatValue={kcalTexto} height={200} />
+          <TabelaDoGrafico caption="Consumo de energia no período" coluna="Energia" pontos={consumoPorDia} formatar={kcalTexto} />
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
-          <div>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0 pb-2">
+          <div className="min-w-0">
             <CardTitle className="text-base">Evolução corporal no mesmo período</CardTitle>
             <CardDescription>
               Dias sem medição ficam vazios: a linha é interrompida, não ligada por cima.
@@ -913,7 +971,7 @@ function EvolutionPanel({
           </div>
           {withData.length > 1 && (
             <Select value={selected?.id ?? ""} onValueChange={setTypeId}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-44" aria-label="Medida exibida no gráfico">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -928,19 +986,31 @@ function EvolutionPanel({
         </CardHeader>
         <CardContent>
           {selected ? (
-            <MeasurementChart
-              series={series}
-              unit={selected.unit}
-              decimals={selected.decimals}
-              height={200}
-            />
+            <>
+              <MeasurementChart
+                series={series}
+                unit={selected.unit}
+                decimals={selected.decimals}
+                height={200}
+              />
+              {/* A leitura textual da medida (regra 6 da 16-E): o gráfico não é a única forma. */}
+              <MeasurementTable
+                series={series}
+                unit={selected.unit}
+                decimals={selected.decimals}
+                caption={`${selected.name} no período`}
+              />
+            </>
           ) : (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Nenhuma medida corporal registrada neste período.{" "}
-              <a href="/nutricao/medidas" className="underline underline-offset-2">
-                Registrar medidas
-              </a>
-            </p>
+            <EmptyState
+              icon={Ruler}
+              title="Nenhuma medida corporal registrada neste período"
+              className="border-0 bg-transparent py-6"
+            >
+              <Button asChild size="sm" variant="outline">
+                <a href="/nutricao/medidas">Registrar medidas</a>
+              </Button>
+            </EmptyState>
           )}
         </CardContent>
       </Card>

@@ -14,7 +14,7 @@
  * de "+100%" ou de um `NaN` disfarçado de zero.
  */
 import * as React from "react";
-import { BarChart3, Download, Info, Printer } from "lucide-react";
+import { BarChart3, Download, Info, Printer, Scale, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -445,9 +445,11 @@ export function ReportsClient({
                 </CardHeader>
                 <CardContent>
                   {measurementsInRange.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Nenhuma medição registrada neste período.
-                    </p>
+                    <EmptyState
+                      icon={Scale}
+                      title="Nenhuma medição registrada neste período"
+                      className="border-0 bg-transparent py-6"
+                    />
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[380px] text-sm">
@@ -490,9 +492,11 @@ export function ReportsClient({
                 </CardHeader>
                 <CardContent>
                   {recordsInRange.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Nenhum recorde novo neste período.
-                    </p>
+                    <EmptyState
+                      icon={Trophy}
+                      title="Nenhum recorde novo neste período"
+                      className="border-0 bg-transparent py-6"
+                    />
                   ) : (
                     <ul className="space-y-1.5 text-sm">
                       {recordsInRange.map((record) => (

@@ -10,6 +10,7 @@
  * ou compartilhar o link preserva exatamente a mesma visão.
  */
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { Filter, ScanLine, Search, SlidersHorizontal, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { cn } from "@/lib/utils";
 import {
   FOOD_SORTS,
@@ -34,11 +36,19 @@ import {
   PREPARATION_STATE_LABELS,
 } from "@/lib/nutrition/constants";
 import { countActiveFilters } from "@/lib/nutrition/filters";
-import { BarcodeScannerDialog } from "@/components/nutrition/barcode-scanner-dialog";
 import type { FoodCategory, FoodFilterState, FoodSource, FoodTag } from "@/lib/nutrition/types";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const BarcodeScannerDialog = dynamic(
+  () => import("@/components/nutrition/barcode-scanner-dialog").then((m) => m.BarcodeScannerDialog),
+  { ssr: false },
+);
 
 /** Radix Select não aceita valor vazio; "__all__" é o sentinela de "sem filtro". */
 const ALL = "__all__";
+
+/** Os quatro campos numéricos: o texto é local e alcança a URL depois da pausa (L2). */
+export type CampoNumerico = "minKcal" | "maxKcal" | "minProtein" | "maxProtein";
 
 const toValue = (value: string | null) => value ?? ALL;
 const fromValue = (value: string) => (value === ALL ? null : value);
@@ -53,9 +63,14 @@ export function FoodFilters({
   brands,
   resultCount,
   totalCount,
+  textosNumericos,
+  onTextoNumerico,
 }: {
   filters: FoodFilterState;
   onChange: (patch: Partial<FoodFilterState>) => void;
+  /** O que está digitado em cada campo numérico (local; a URL vem depois da pausa). */
+  textosNumericos: Record<CampoNumerico, string>;
+  onTextoNumerico: (campo: CampoNumerico, texto: string) => void;
   onClear: () => void;
   categories: FoodCategory[];
   sources: FoodSource[];
@@ -65,23 +80,23 @@ export function FoodFilters({
   totalCount: number;
 }) {
   const [scannerOpen, setScannerOpen] = React.useState(false);
+  const barcodeScannerDialogMontado = useLazyDialog(scannerOpen);
 
   const activeCount = countActiveFilters(filters);
 
-  const numberField = (
-    key: keyof FoodFilterState,
-    placeholder: string,
-  ) => (
+  // L2 (REDESIGN-07-C): o campo gravava na URL a cada tecla — página force-dynamic, então
+  // digitar "150" rápido perdia dígito. Agora o texto é local (`useUrlText` em foods-client)
+  // e só depois alcança a URL; o filtro da lista lê o número já, do texto local.
+  const numberField = (campo: CampoNumerico, placeholder: string, rotulo: string) => (
     <Input
+      id={`filtro-${campo}`}
+      aria-label={rotulo}
       type="number"
       inputMode="decimal"
       min={0}
       placeholder={placeholder}
-      value={(filters[key] as number | null) ?? ""}
-      onChange={(event) => {
-        const raw = event.target.value;
-        onChange({ [key]: raw === "" ? null : Number(raw) } as Partial<FoodFilterState>);
-      }}
+      value={textosNumericos[campo]}
+      onChange={(event) => onTextoNumerico(campo, event.target.value)}
       className="h-9"
     />
   );
@@ -152,12 +167,12 @@ export function FoodFilters({
             </PopoverTrigger>
             <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] space-y-4">
               <div className="space-y-2">
-                <Label className="text-xs">Categoria</Label>
+                <Label htmlFor="filtro-categoria" className="text-xs">Categoria</Label>
                 <Select
                   value={toValue(filters.categoryId)}
                   onValueChange={(value) => onChange({ categoryId: fromValue(value) })}
                 >
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger id="filtro-categoria" className="h-9">
                     <SelectValue placeholder="Todas" />
                   </SelectTrigger>
                   <SelectContent>
@@ -173,14 +188,14 @@ export function FoodFilters({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label className="text-xs">Tipo</Label>
+                  <Label htmlFor="filtro-tipo" className="text-xs">Tipo</Label>
                   <Select
                     value={toValue(filters.foodType)}
                     onValueChange={(value) =>
                       onChange({ foodType: fromValue(value) as FoodFilterState["foodType"] })
                     }
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger id="filtro-tipo" className="h-9">
                       <SelectValue placeholder="Todos" />
                     </SelectTrigger>
                     <SelectContent>
@@ -195,7 +210,7 @@ export function FoodFilters({
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-xs">Preparo</Label>
+                  <Label htmlFor="filtro-preparo" className="text-xs">Preparo</Label>
                   <Select
                     value={toValue(filters.preparationState)}
                     onValueChange={(value) =>
@@ -204,7 +219,7 @@ export function FoodFilters({
                       })
                     }
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger id="filtro-preparo" className="h-9">
                       <SelectValue placeholder="Todos" />
                     </SelectTrigger>
                     <SelectContent>
@@ -221,12 +236,12 @@ export function FoodFilters({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label className="text-xs">Fonte</Label>
+                  <Label htmlFor="filtro-fonte" className="text-xs">Fonte</Label>
                   <Select
                     value={toValue(filters.sourceId)}
                     onValueChange={(value) => onChange({ sourceId: fromValue(value) })}
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger id="filtro-fonte" className="h-9">
                       <SelectValue placeholder="Todas" />
                     </SelectTrigger>
                     <SelectContent>
@@ -241,14 +256,14 @@ export function FoodFilters({
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-xs">Código de barras</Label>
+                  <Label htmlFor="filtro-codigo-de-barras" className="text-xs">Código de barras</Label>
                   <Select
                     value={filters.barcode}
                     onValueChange={(value) =>
                       onChange({ barcode: value as FoodFilterState["barcode"] })
                     }
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger id="filtro-codigo-de-barras" className="h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -262,12 +277,12 @@ export function FoodFilters({
 
               {brands.length > 0 && (
                 <div className="space-y-2">
-                  <Label className="text-xs">Marca</Label>
+                  <Label htmlFor="filtro-marca" className="text-xs">Marca</Label>
                   <Select
                     value={toValue(filters.brand)}
                     onValueChange={(value) => onChange({ brand: fromValue(value) })}
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger id="filtro-marca" className="h-9">
                       <SelectValue placeholder="Todas" />
                     </SelectTrigger>
                     <SelectContent>
@@ -284,12 +299,12 @@ export function FoodFilters({
 
               {tags.length > 0 && (
                 <div className="space-y-2">
-                  <Label className="text-xs">Etiqueta</Label>
+                  <Label htmlFor="filtro-etiqueta" className="text-xs">Etiqueta</Label>
                   <Select
                     value={toValue(filters.tagId)}
                     onValueChange={(value) => onChange({ tagId: fromValue(value) })}
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger id="filtro-etiqueta" className="h-9">
                       <SelectValue placeholder="Todas" />
                     </SelectTrigger>
                     <SelectContent>
@@ -305,20 +320,24 @@ export function FoodFilters({
               )}
 
               <div className="space-y-2">
-                <Label className="text-xs">Calorias por 100 g/ml (kcal)</Label>
-                <div className="flex items-center gap-2">
-                  {numberField("minKcal", "mín.")}
+                <Label id="filtro-kcal-rotulo" className="text-xs">
+                  Calorias por 100 g/ml (kcal)
+                </Label>
+                <div role="group" aria-labelledby="filtro-kcal-rotulo" className="flex items-center gap-2">
+                  {numberField("minKcal", "mín.", "Calorias mínimas por 100 g/ml (kcal)")}
                   <span className="text-xs text-muted-foreground">até</span>
-                  {numberField("maxKcal", "máx.")}
+                  {numberField("maxKcal", "máx.", "Calorias máximas por 100 g/ml (kcal)")}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs">Proteína por 100 g/ml (g)</Label>
-                <div className="flex items-center gap-2">
-                  {numberField("minProtein", "mín.")}
+                <Label id="filtro-proteina-rotulo" className="text-xs">
+                  Proteína por 100 g/ml (g)
+                </Label>
+                <div role="group" aria-labelledby="filtro-proteina-rotulo" className="flex items-center gap-2">
+                  {numberField("minProtein", "mín.", "Proteína mínima por 100 g/ml (g)")}
                   <span className="text-xs text-muted-foreground">até</span>
-                  {numberField("maxProtein", "máx.")}
+                  {numberField("maxProtein", "máx.", "Proteína máxima por 100 g/ml (g)")}
                 </div>
               </div>
 
@@ -384,11 +403,13 @@ export function FoodFilters({
 
       {/* O código lido cai no MESMO campo de busca — que já casava com `barcode` desde a
           16-A. Nenhuma consulta a base externa de produto acontece aqui. */}
-      <BarcodeScannerDialog
-        open={scannerOpen}
-        onOpenChange={setScannerOpen}
-        onDetected={(code) => onChange({ search: code })}
-      />
+      {barcodeScannerDialogMontado && (
+        <BarcodeScannerDialog
+          open={scannerOpen}
+          onOpenChange={setScannerOpen}
+          onDetected={(code) => onChange({ search: code })}
+        />
+      )}
     </div>
   );
 }

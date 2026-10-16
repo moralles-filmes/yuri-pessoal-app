@@ -36,7 +36,6 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,7 +46,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ProposalCard, type PropostaNaTela } from "@/components/ai/proposal-card";
+import type { PropostaNaTela } from "@/components/ai/proposal-card";
+import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
 import {
   anexarComprovanteAoLancamento,
   prepararLancamentoDoComprovante,
@@ -57,6 +57,9 @@ import {
   type Confianca,
   type ExtracaoDeComprovante,
 } from "@/lib/ai/vision/contracts";
+import { lerCentavos } from "@/lib/ai/numero-centavos";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
+import { ariaDoErro, ErroDoCampo } from "@/components/shared/erro-do-campo";
 import { revisar, type CorrecoesDoDono } from "@/lib/ai/vision/review";
 import type { AlertaDeDuplicidade } from "@/lib/ai/vision/duplicates";
 import {
@@ -86,14 +89,22 @@ const TOM_DA_CONFIANCA: Record<Confianca, string> = {
   nao_identificado: "border-muted-foreground/30 text-muted-foreground",
 };
 
+/**
+ * O selo é um `span` com as MESMAS classes que o `Badge outline` resolve aqui (o mesmo desenho):
+ * o componente (cva + variantes) era o único motivo de o módulo do `Badge` entrar no primeiro
+ * carregamento de `/ia/comprovantes` (REDESIGN-07-D · D8, orçamento medido).
+ */
 function SeloDeConfianca({ confianca }: { readonly confianca: Confianca }) {
   return (
-    <Badge
-      variant="outline"
-      className={cn("shrink-0 text-[11px] font-normal", TOM_DA_CONFIANCA[confianca])}
+    <span
+      data-slot="badge"
+      className={cn(
+        "inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-4xl border px-2 py-0.5 text-[11px] font-normal",
+        TOM_DA_CONFIANCA[confianca],
+      )}
     >
       {ROTULO_DA_CONFIANCA[confianca]}
-    </Badge>
+    </span>
   );
 }
 
@@ -113,16 +124,14 @@ function centavosParaTexto(centavos: number | null): string {
 }
 
 /**
- * O texto do input → centavos. `null` quando o dono apagou o campo ou digitou algo que não
- * é um valor — e `null` aqui significa "não identificado", que é o estado certo: um campo
- * de dinheiro em branco não vale zero.
+ * O texto do input → centavos, pelo conversor único (D2). `null` quando o dono apagou o campo
+ * ou digitou algo que não é um valor — e `null` aqui significa "não identificado", que é o
+ * estado certo: um campo de dinheiro em branco não vale zero. "12.50" é R$ 12,50 (a função
+ * antiga apagava todos os pontos e lia R$ 1.250,00).
  */
-function textoParaCentavos(texto: string): number | null {
-  const limpo = texto.trim().replace(/\./g, "").replace(",", ".");
-  if (limpo === "") return null;
-  const n = Number(limpo);
-  if (!Number.isFinite(n)) return null;
-  return Math.round(n * 100);
+function centavosDoCampo(texto: string): number | null {
+  const leitura = lerCentavos(texto);
+  return leitura.ok ? leitura.valor : null;
 }
 
 const SEM_ESCOLHA = "__nenhum__";
@@ -154,6 +163,7 @@ export function ReceiptReview({
     classificacaoInicial(extracao.itens),
   );
   const [preparando, setPreparando] = React.useState(false);
+  const [errosDoPreparo, setErrosDoPreparo] = React.useState<Record<string, string>>({});
   const [proposta, setProposta] = React.useState<PropostaNaTela | null>(null);
 
   // A MESMA função pura que o servidor roda antes de gravar. Aqui ela só decide o que a tela
@@ -163,7 +173,9 @@ export function ReceiptReview({
   const escolheuOrigem =
     ondeEntra === "conta" ? conta !== SEM_ESCOLHA : cartao !== SEM_ESCOLHA;
 
-  const resumo = resumirNota(efetiva.totalCentavos.valor ?? 0, classificacao);
+  // Total não identificado chega como ausência (REDESIGN-07-D · Z): `?? 0` fazia o resumo
+  // escrever "o total de R$ 0,00".
+  const resumo = resumirNota(efetiva.totalCentavos.valor, classificacao);
 
   function corrigirTexto(chave: ChaveDeTexto, valor: string) {
     setCorrecoes((c) => ({ ...c, [chave]: valor.trim() === "" ? null : valor }));
@@ -184,9 +196,13 @@ export function ReceiptReview({
     setPreparando(false);
 
     if (!r.ok) {
-      toast.error(r.error);
+      // D8 — conta, cartão e categoria têm campo aqui: o erro fica sob ele.
+      const mapeado = mapServerFieldErrors(r.fieldErrors, ["conta", "cartao", "categoria"]);
+      setErrosDoPreparo(Object.fromEntries(mapeado.toSet.map((e) => [e.name, e.message])));
+      toast.error(serverErrorMessage(r.error, mapeado));
       return;
     }
+    setErrosDoPreparo({});
     setProposta({
       id: r.data.id,
       effectHash: r.data.effectHash,
@@ -211,7 +227,7 @@ export function ReceiptReview({
       documentoId,
       transacaoId: registro.targetId,
     });
-    if (!r.ok) toast.warning(r.error);
+    if (!r.ok) toast.warning(serverErrorMessage(r.error, mapServerFieldErrors(r.fieldErrors, [])));
     else toast.success("Comprovante anexado ao lançamento.");
     router.refresh();
   }
@@ -306,12 +322,12 @@ export function ReceiptReview({
           >
             <Input
               inputMode="decimal"
-              placeholder="0,00"
+              placeholder="não identificado"
               defaultValue={centavosParaTexto(extracao.totalCentavos.valor)}
               onChange={(e) => {
                 setCorrecoes((c) => ({
                   ...c,
-                  totalCentavos: textoParaCentavos(e.target.value),
+                  totalCentavos: centavosDoCampo(e.target.value),
                 }));
                 setProposta(null);
               }}
@@ -359,8 +375,8 @@ export function ReceiptReview({
         <div className="rounded-xl border p-4">
           <h2 className="text-sm font-semibold">Itens da nota</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Classifique para conferir a nota. ⚠️ Nesta versão o lançamento é{" "}
-            <strong>um só</strong>, com o valor total e como despesa pessoal — separar
+            Classifique para conferir a nota. O lançamento é <strong>um só</strong>, com o
+            valor total e como despesa pessoal — separar
             categorias ou dividir com terceiros continua sendo feito na tela do Financeiro,
             pelo mesmo motor de sempre.
           </p>
@@ -389,7 +405,10 @@ export function ReceiptReview({
                       )
                     }
                   >
-                    <SelectTrigger className="w-36 shrink-0">
+                    <SelectTrigger
+                      className="w-36 shrink-0"
+                      aria-label={`Para onde vai “${c.item.descricao}”`}
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -431,7 +450,14 @@ export function ReceiptReview({
                         )
                       }
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger
+                        className="w-full"
+                        aria-label={
+                          c.destino.tipo === "categoria"
+                            ? `Categoria de “${c.item.descricao}”`
+                            : `Pessoa de “${c.item.descricao}”`
+                        }
+                      >
                         <SelectValue
                           placeholder={
                             c.destino.tipo === "categoria"
@@ -497,7 +523,9 @@ export function ReceiptReview({
 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label className="text-xs">Origem</Label>
+            <Label htmlFor="rev-origem" className="text-xs">
+              Origem
+            </Label>
             <Select
               value={ondeEntra}
               onValueChange={(v) => {
@@ -505,7 +533,7 @@ export function ReceiptReview({
                 setProposta(null);
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger id="rev-origem">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -516,7 +544,7 @@ export function ReceiptReview({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">
+            <Label htmlFor="rev-conta" className="text-xs">
               {ondeEntra === "conta" ? "Conta" : "Cartão"}
             </Label>
             <Select
@@ -527,7 +555,10 @@ export function ReceiptReview({
                 setProposta(null);
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger
+                id="rev-conta"
+                {...ariaDoErro("rev-conta-erro", errosDoPreparo.conta ?? errosDoPreparo.cartao)}
+              >
                 <SelectValue placeholder="Escolha…" />
               </SelectTrigger>
               <SelectContent>
@@ -538,10 +569,16 @@ export function ReceiptReview({
                 ))}
               </SelectContent>
             </Select>
+            <ErroDoCampo
+              id="rev-conta-erro"
+              mensagem={errosDoPreparo.conta ?? errosDoPreparo.cartao}
+            />
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs">Categoria (opcional)</Label>
+            <Label htmlFor="rev-categoria" className="text-xs">
+              Categoria (opcional)
+            </Label>
             <Select
               value={categoria}
               onValueChange={(v) => {
@@ -549,7 +586,10 @@ export function ReceiptReview({
                 setProposta(null);
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger
+                id="rev-categoria"
+                {...ariaDoErro("rev-categoria-erro", errosDoPreparo.categoria)}
+              >
                 <SelectValue placeholder="Sem categoria" />
               </SelectTrigger>
               <SelectContent>
@@ -598,7 +638,7 @@ export function ReceiptReview({
             </p>
           )}
 
-          {proposta && <ProposalCard proposta={proposta} aoAplicar={anexar} />}
+          {proposta && <ProposalCardSobDemanda proposta={proposta} aoAplicar={anexar} />}
         </div>
       )}
     </div>

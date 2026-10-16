@@ -44,14 +44,17 @@ export const metadata: Metadata = { title: "Diário alimentar · Dieta" };
 export default async function DiarioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data?: string; visao?: string }>;
+  searchParams: Promise<{ data?: string; date?: string; visao?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const params = await searchParams;
   const hoje = hojeISO();
-  const date = isDateIso(params.data) ? params.data : hoje;
+  // REDESIGN-07-D · D7 — `date` é APELIDO LEGADO, e `data` vence. As referências que a IA gravou
+  // com `?date=` (`ai_tool_calls.refs`, `ai_action_executions.target_route`) são imutáveis: sem o
+  // apelido, o link antigo abriria hoje em vez do dia do registro.
+  const date = isDateIso(params.data) ? params.data : isDateIso(params.date) ? params.date : hoje;
   const view = asDiaryView(params.visao);
 
   // Cria os 8 tipos padrão na primeira visita. Idempotente pelo unique (user_id, slug).

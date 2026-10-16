@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getHabitsDashboard } from "@/lib/habits/queries";
+import { getTrainingPreferences } from "@/lib/training/queries";
 import { HABIT_VIEWS, type HabitView } from "@/lib/habits/constants";
 import { hojeISO } from "@/lib/format";
 import { HabitsClient } from "./habits-client";
@@ -25,9 +26,19 @@ export default async function HabitosPage({
     : "hoje";
 
   const todayIso = hojeISO();
-  const dashboard = await getHabitsDashboard(todayIso);
+  // 07-B · D1 — qual hábito REFLETE os treinos (17-F). Só leitura: sem linha de preferências,
+  // `getTrainingPreferences` devolve o padrão (`habitId: null`) e não cria nada.
+  const [dashboard, treinos] = await Promise.all([
+    getHabitsDashboard(todayIso),
+    getTrainingPreferences(),
+  ]);
 
   return (
-    <HabitsClient dashboard={dashboard} view={view} todayIso={todayIso} />
+    <HabitsClient
+      dashboard={dashboard}
+      view={view}
+      todayIso={todayIso}
+      habitoVinculadoId={treinos.habitId}
+    />
   );
 }

@@ -27,6 +27,7 @@ import {
   getTransactionsForReceiptMatch,
 } from "@/lib/finance/queries";
 import { formatDate } from "@/lib/format";
+import { receiptLink, receiptsLink, settingsLink } from "@/lib/search/ai-links";
 
 export const metadata: Metadata = { title: "Comprovantes · IA" };
 export const dynamic = "force-dynamic";
@@ -157,7 +158,7 @@ export default async function ComprovantesPage({
           <p className="min-w-0">
             Faltam autorizações para usar esta tela: <strong>{faltando.join(", ")}</strong>.
             Ligue em{" "}
-            <Link href="/ia/configuracoes" className="font-medium text-primary hover:underline">
+            <Link href={settingsLink()} className="font-medium text-primary hover:underline">
               Configurações da IA
             </Link>
             .
@@ -171,11 +172,12 @@ export default async function ComprovantesPage({
       {selecionado && (
         <section className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="min-w-0 flex-1 text-base font-semibold">
+            {/* V — `break-words`: nome de arquivo sem espaço ("IMG_2026…") quebra, não empurra a tela a 390. */}
+            <h2 className="min-w-0 flex-1 break-words text-base font-semibold">
               {selecionado.documento.nomeArquivo}
             </h2>
             <Link
-              href="/ia/comprovantes"
+              href={receiptsLink()}
               className="shrink-0 text-xs font-medium text-primary hover:underline"
             >
               Fechar
@@ -245,7 +247,7 @@ export default async function ComprovantesPage({
                   )}
                   {/* `min-w-0` + `truncate`: nome longo não empurra os selos para fora. */}
                   <Link
-                    href={`/ia/comprovantes?doc=${d.id}`}
+                    href={receiptLink(d.id)}
                     className="min-w-0 flex-1 truncate text-sm font-medium hover:underline"
                   >
                     {d.nomeArquivo}
@@ -255,8 +257,10 @@ export default async function ComprovantesPage({
                     status={d.leitura?.status ?? null}
                   />
                 </div>
+                {/* V — o tipo em TEXTO: o ícone sozinho não diz nada a quem não o reconhece. */}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Enviado em {formatDate(d.enviadoEm)} ·{" "}
+                  {d.mime === "application/pdf" ? "PDF" : "Imagem"} · Enviado em{" "}
+                  {formatDate(d.enviadoEm)} ·{" "}
                   {(d.sizeBytes / (1024 * 1024)).toFixed(1)} MB
                   {d.observacao ? ` · "${d.observacao}"` : ""}
                 </p>

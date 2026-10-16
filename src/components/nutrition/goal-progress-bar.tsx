@@ -15,6 +15,7 @@
  */
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { ariaDeProgresso } from "@/components/shared/aria-de-progresso";
 import { formatNutrientAmount, roundForDisplay, type NutrientTotalQuality } from "@/lib/nutrition/calc";
 import type { GoalProgress } from "@/lib/nutrition/goals";
 import type { NutrientDefinition } from "@/lib/nutrition/types";
@@ -71,13 +72,15 @@ export function GoalProgressBar({
 
       {target !== null && (
         <>
+          {/* V (REDESIGN-07-C): `aria-valuenow` passava de 100 com o consumo acima da meta, e com
+              meta zero (`percent` nulo) o nome dizia "0% da meta". O valor real vai no texto. */}
           <div
             className="h-2 w-full overflow-hidden rounded-full bg-muted"
-            role="progressbar"
-            aria-valuenow={percent === null ? undefined : Math.round(percent)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`${label}: ${Math.round(percent ?? 0)}% da meta`}
+            {...ariaDeProgresso(
+              label,
+              percent,
+              percent === null ? "sem percentual: a meta é zero" : `${Math.round(percent)}% da meta`,
+            )}
           >
             <div
               className={cn(
@@ -144,6 +147,9 @@ export function AdherenceBadge({
               : "bg-muted text-muted-foreground",
         )}
       >
+        {/* Nome acessível (D4): "aderência de N%". A cor é só ênfase do número — as faixas não
+            ganham palavra (seria julgamento; invariante 25 da Dieta). */}
+        <span className="sr-only">aderência de </span>
         {rounded}%
       </span>
       <TotalQualityBadge quality={quality} />

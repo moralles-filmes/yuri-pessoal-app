@@ -27,14 +27,22 @@ export const conversationsLink = () => `${AI_LINK_BASE}/conversas`;
 /** Análises geradas pelo Insight Engine (18-E). */
 export const insightsLink = () => `${AI_LINK_BASE}/insights`;
 
-/** O que a IA preparou, o que foi decidido e o que foi aplicado (18-C · Bloco 5). */
-export const actionsLink = () => `${AI_LINK_BASE}/acoes`;
+/**
+ * O que a IA preparou, o que foi decidido e o que foi aplicado (18-C · Bloco 5).
+ *
+ * REDESIGN-07-D · D7 — aceita um filtro, que TEM de ser um valor de `FILTROS_DO_HISTORICO`
+ * (`lib/ai/approval/history.ts`): fora da lista, a página ignora em silêncio e mostra todas.
+ * O tipo é `string` para este módulo continuar sem import; quem trava a lista é
+ * `ai-links.test.ts`. "todas" é a rota pura.
+ */
+export const actionsLink = (filtro?: string) =>
+  filtro && filtro !== "todas" ? `${AI_LINK_BASE}/acoes?filtro=${filtro}` : `${AI_LINK_BASE}/acoes`;
 
 /**
  * As ações que precisam de atenção — inclui `executando` sem desfecho, que NÃO é sucesso nem
  * falha (invariante 52). É para cá que o aviso `ai_action_stuck` aponta.
  */
-export const stuckActionsLink = () => `${AI_LINK_BASE}/acoes?filtro=problemas`;
+export const stuckActionsLink = () => actionsLink("problemas");
 
 /** Custo por período, modelo e tentativa (18-A). */
 export const usageLink = () => `${AI_LINK_BASE}/consumo`;
@@ -44,6 +52,9 @@ export const settingsLink = () => `${AI_LINK_BASE}/configuracoes`;
 
 /** Envio e revisão de comprovante (18-D). */
 export const receiptsLink = () => `${AI_LINK_BASE}/comprovantes`;
+
+/** Um comprovante aberto para revisão (`?doc=`, que a página lê) — REDESIGN-07-D · D7. */
+export const receiptLink = (docId: string) => `${AI_LINK_BASE}/comprovantes?doc=${docId}`;
 
 /** As preferências que o assistente leva para toda conversa (18-F Bloco 3). */
 export const memoryLink = () => `${AI_LINK_BASE}/memoria`;

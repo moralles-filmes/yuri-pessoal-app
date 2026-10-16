@@ -232,6 +232,7 @@ describe("umSo — o sistema nunca desempata sozinho", () => {
 
 describe("a rota que a tela recebe", () => {
   it("leva ao DIA do registro no diário", () => {
-    expect(rotaDoDiario("2026-08-07")).toBe("/nutricao/diario?date=2026-08-07");
+    // REDESIGN-07-D · D7 — `?data=`, que a página lê (`?date=` só sobrevive como apelido legado).
+    expect(rotaDoDiario("2026-08-07")).toBe("/nutricao/diario?data=2026-08-07");
   });
 });

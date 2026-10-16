@@ -25,14 +25,34 @@ export const planLink = (id: string) =>
 /** Lista de compras aberta. */
 export const shoppingListLink = (id: string) => `/nutricao/compras?lista=${id}`;
 
-/** Diário num dia específico (data pura 'yyyy-MM-dd'). */
-export const diaryLink = (date: string) => `/nutricao/diario?data=${date}`;
+/**
+ * Diário num dia específico (data pura 'yyyy-MM-dd'). Sem data, o diário de hoje — o que a
+ * página mostra quando não recebe `data` (REDESIGN-07-D · D7: a IA também linka assim).
+ */
+export const diaryLink = (date?: string) =>
+  date ? `/nutricao/diario?data=${date}` : "/nutricao/diario";
 
 /** Medidas corporais. */
 export const measurementsLink = () => "/nutricao/medidas";
+
+/** Metas nutricionais (REDESIGN-07-D · D7 — a referência de metas da IA). */
+export const goalsLink = () => "/nutricao/metas";
 
 /**
  * Despensa. NÃO é rota própria — é a aba `?aba=despensa` de `/nutricao/compras` (16-D).
  * Errar isso mandaria a notificação de validade para um 404.
  */
 export const pantryLink = () => "/nutricao/compras?aba=despensa";
+
+/**
+ * A água é do módulo Hábitos (invariante 8 da Dieta): a Dieta LINKA, não duplica — e linka
+ * para a visão da água, não para o topo de Hábitos (REDESIGN-07-C, D6).
+ */
+export const waterLink = () => "/habitos?view=agua";
+
+/**
+ * A semana do planejamento que começa em `weekStart`. Sem `visao=semana` a página abre a
+ * visão padrão (o dia) — a notificação "a semana que vem não tem refeições" caía num dia.
+ */
+export const planningWeekLink = (weekStart: string) =>
+  `/nutricao/planejamento?data=${weekStart}&visao=semana`;

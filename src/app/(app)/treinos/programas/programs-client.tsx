@@ -52,7 +52,6 @@ import {
 import { DeepLinkHighlight } from "@/components/shared/deep-link-highlight";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
-import { SortableList } from "@/components/shared/sortable-list";
 import { cn } from "@/lib/utils";
 import { useUrlText } from "@/lib/forms/use-url-text";
 import { normalizeText } from "@/lib/training/filters";
@@ -79,11 +78,19 @@ import {
   setTrainingProgramStatus,
   updateProgramWorkout,
 } from "@/lib/actions/training-programs";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import { useChaveDeAbertura, useItemRetido } from "@/components/shared/use-item-retido";
 import type { DependencyLine } from "@/components/training/delete-with-destination-dialog";
 
 // Os dois diálogos desta tela só abrem por clique e arrastam `zod` + `react-hook-form` junto.
 // Sob demanda, eles saem do primeiro byte da rota.
+// @dnd-kit só quando um programa é expandido para reordenar (REDESIGN-07-C, D2). O `as`
+// preserva o genérico de SortableList<T>, que o tipo devolvido por `dynamic` apagaria.
+const SortableList = dynamic(
+  () => import("@/components/shared/sortable-list").then((m) => m.SortableList),
+  { ssr: false },
+) as typeof import("@/components/shared/sortable-list").SortableList;
 const ProgramFormDialog = dynamic(
   () => import("@/components/training/program-form-dialog").then((m) => m.ProgramFormDialog),
   { ssr: false },
@@ -139,6 +146,11 @@ export function ProgramsClient({
   const [editing, setEditing] = React.useState<TrainingProgram | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState<TrainingProgram | null>(null);
+  // Exclusão com destino sob demanda (REDESIGN-07-C, D2): desenha o item até o fim da animação
+  // de saída e remonta a cada abertura — a escolha de destino continua nascendo limpa.
+  const exclusaoExibida = useItemRetido(deleting);
+  const exclusaoMontada = useLazyDialog(deleting !== null);
+  const chaveExclusao = useChaveDeAbertura(deleting !== null);
   const [dependencies, setDependencies] = React.useState<DependencyLine[] | null>(null);
   const [busy, setBusy] = React.useState(false);
 
@@ -172,7 +184,7 @@ export function ProgramsClient({
     });
 
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(
@@ -189,7 +201,7 @@ export function ProgramsClient({
     const result = await setTrainingProgramStatus({ id: program.id, status });
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success(`Programa ${PROGRAM_STATUS_LABELS[status].toLowerCase()}.`);
@@ -201,7 +213,7 @@ export function ProgramsClient({
     const result = await activateTrainingProgram(program.id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     // Avisa, não bloqueia: ter mais de um programa em uso é escolha legítima do usuário.
@@ -218,7 +230,7 @@ export function ProgramsClient({
     const result = await duplicateTrainingProgram(program.id);
     setBusy(false);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Cópia criada como rascunho. Ajuste antes de usar.");
@@ -295,6 +307,7 @@ export function ProgramsClient({
           </SelectContent>
         </Select>
         <Button
+          aria-pressed={showArchived}
           variant={showArchived ? "default" : "outline"}
           size="sm"
           onClick={() => setParam("arquivados", showArchived ? null : "1")}
@@ -366,12 +379,13 @@ export function ProgramsClient({
         />
       )}
 
-      {deleting && (
+      {exclusaoMontada && exclusaoExibida && (
         <DeleteWithDestinationDialog
-          open
+          key={chaveExclusao}
+          open={deleting !== null}
           onOpenChange={(open) => !open && setDeleting(null)}
           title="Excluir programa"
-          itemName={deleting.name}
+          itemName={exclusaoExibida.name}
           dependencies={dependencies ?? []}
           loadingDependencies={dependencies === null}
           options={[
@@ -395,7 +409,7 @@ export function ProgramsClient({
           ]}
           targetLabel="Programa de destino"
           targets={programs
-            .filter((item) => item.id !== deleting.id && !item.isArchived)
+            .filter((item) => item.id !== exclusaoExibida.id && !item.isArchived)
             .map((item) => ({ id: item.id, name: item.name }))}
           confirmLabel="Excluir programa"
           onConfirm={confirmDelete}
@@ -450,7 +464,7 @@ function ProgramCard({
     setWorking(false);
     setAdding("");
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     onChanged();
@@ -458,7 +472,7 @@ function ProgramCard({
 
   async function reorder(orderedIds: string[]) {
     const result = await reorderProgramWorkouts({ ids: orderedIds });
-    if (!result.ok) toast.error(result.error);
+    if (!result.ok) toast.error(mensagemDaAction(result));
     else onChanged();
   }
 
@@ -475,7 +489,7 @@ function ProgramCard({
   async function remove(linkId: string) {
     const result = await removeWorkoutFromProgram(linkId);
     if (!result.ok) {
-      toast.error(result.error);
+      toast.error(mensagemDaAction(result));
       return;
     }
     toast.success("Treino tirado do programa. Ele continua existindo como avulso.");
@@ -487,7 +501,7 @@ function ProgramCard({
       ? current.filter((day) => day !== weekday)
       : [...current, weekday];
     const result = await updateProgramWorkout({ id: linkId, suggested_weekdays: next });
-    if (!result.ok) toast.error(result.error);
+    if (!result.ok) toast.error(mensagemDaAction(result));
     else onChanged();
   }
 

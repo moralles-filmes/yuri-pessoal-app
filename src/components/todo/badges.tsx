@@ -52,15 +52,28 @@ export function PriorityBadge({
   );
 }
 
-/** Bandeira só-ícone para o botão de troca rápida de prioridade (tem aria-label próprio). */
+/** Bandeira da prioridade. Com `rotulo`, P1–P3 ganham a palavra curta ao lado (P4 é a padrão). */
 export function PriorityFlag({
   priority,
   className,
+  rotulo = false,
 }: {
   priority: TodoPriority;
   className?: string;
+  rotulo?: boolean;
 }) {
-  return <Flag className={cn("size-4", TODO_PRIORITY_FLAG[priority], className)} aria-hidden />;
+  const bandeira = <Flag className={cn("size-4", TODO_PRIORITY_FLAG[priority], !rotulo && className)} aria-hidden />;
+  if (!rotulo) return bandeira;
+  return (
+    <span className={cn("inline-flex items-center gap-0.5", className)} title={TODO_PRIORITY_LABELS[priority]}>
+      {bandeira}
+      {priority < 4 && (
+        <span className="text-[0.7rem] font-semibold leading-none text-muted-foreground">
+          {TODO_PRIORITY_SHORT[priority]}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function StatusBadge({
@@ -195,7 +208,7 @@ export function DeadlineChip({
       title={`Prazo final: ${formatDate(deadlineIso)}`}
     >
       <AlarmClock className="size-3" aria-hidden />
-      Prazo {vencido ? "vencido" : formatDate(deadlineIso)}
+      Prazo {vencido ? "vencido" : proximo ? `próximo · ${formatDate(deadlineIso)}` : formatDate(deadlineIso)}
     </span>
   );
 }

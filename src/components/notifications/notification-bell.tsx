@@ -70,12 +70,23 @@ export function NotificationBell({ unreadCount = 0 }: { unreadCount?: number }) 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Notificações">
+        {/*
+          REDESIGN-07-D · D6 — a contagem vai no NOME do botão: o `aria-label` do botão substitui o
+          conteúdo dele, então o "3 não lidas" do selo nunca era lido. O selo fica `aria-hidden`.
+        */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative"
+          aria-label={
+            unreadCount > 0 ? `Notificações — ${unreadCount} não lidas` : "Notificações"
+          }
+        >
           <Bell className="size-5" />
           {unreadCount > 0 && (
             <span
+              aria-hidden="true"
               className="absolute -right-0.5 -top-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[0.6rem] font-semibold leading-4 text-primary-foreground ring-2 ring-background"
-              aria-label={`${unreadCount} não lidas`}
             >
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
@@ -88,7 +99,7 @@ export function NotificationBell({ unreadCount = 0 }: { unreadCount?: number }) 
           <button
             type="button"
             onClick={handleMarkAll}
-            disabled={pending}
+            disabled={pending || unreadCount === 0}
             className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
           >
             <Check className="size-3.5" /> Marcar todas
@@ -128,6 +139,8 @@ export function NotificationBell({ unreadCount = 0 }: { unreadCount?: number }) 
                             !n.is_read && "font-medium",
                           )}
                         >
+                          {/* Lida × não lida em texto: o ponto e o fundo sozinhos não chegam ao leitor. */}
+                          {!n.is_read && <span className="sr-only">Não lida: </span>}
                           {n.title}
                         </span>
                         {n.description && (

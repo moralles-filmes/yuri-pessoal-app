@@ -55,7 +55,7 @@ export default async function RevisarPage({
         title={session.status === "concluida" ? "Treino concluído" : "Revisar e finalizar"}
         description={
           session.status === "concluida"
-            ? "Resumo do que foi registrado. O histórico navegável chega na Subfase 17-D."
+            ? "Resumo do que foi registrado. O histórico completo fica em Treinos → Histórico."
             : "Confira o resumo, avalie o treino e salve. Nada é encerrado em silêncio."
         }
       />

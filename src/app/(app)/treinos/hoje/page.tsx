@@ -214,9 +214,11 @@ export default async function HojePage() {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                Nada planejado para os próximos dias.
-              </p>
+              <EmptyState
+                icon={CalendarRange}
+                title="Nada planejado para os próximos dias"
+                className="border-0 bg-transparent py-6"
+              />
             )}
           </CardContent>
         </Card>
@@ -230,7 +232,11 @@ export default async function HojePage() {
           </CardHeader>
           <CardContent>
             {overdue.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum dia em aberto. 👌</p>
+              <EmptyState
+                icon={CalendarRange}
+                title="Nenhum dia em aberto. 👌"
+                className="border-0 bg-transparent py-6"
+              />
             ) : (
               <ul className="space-y-1.5">
                 {overdue.map((entry) => (

@@ -13,7 +13,7 @@
  *  • NÃO oferece módulo cuja chave `allow_*` está desligada.
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -33,7 +33,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ProposalCard, type PropostaNaTela } from "@/components/ai/proposal-card";
+import { Label } from "@/components/ui/label";
+import type { PropostaNaTela } from "@/components/ai/proposal-card";
+import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
+import { FraseDeGasto } from "@/components/ai/frase-de-gasto";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
@@ -47,6 +50,7 @@ import {
   ROTULO_DA_CONFIANCA,
   ROTULO_DO_ESTADO_DE_INSIGHT,
 } from "@/lib/ai/constants";
+import { AI_PROVIDER_LABEL, type AiProviderId } from "@/lib/ai/core/contracts";
 import type { ModuloDeInsight } from "@/lib/ai/insights/contracts";
 import {
   renderizarExplicacao,
@@ -60,12 +64,28 @@ import {
   registrarDecisaoDeInsight,
 } from "@/lib/actions/ai-insights";
 import { formatDate } from "@/lib/format";
+import { settingsLink } from "@/lib/search/ai-links";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 const NOME_DO_MODULO: Record<ModuloDeInsight, string> = {
   financeiro: "Financeiro",
   treinos: "Treinos",
   dieta: "Dieta e Alimentação",
 };
+
+/**
+ * REDESIGN-07-D · E3 — a confiança pelo NOME, com acento; a chave crua ("media") não vai à tela.
+ * Mora aqui, e não em `@/lib/ai/constants`: só esta tela a lê, e a constante lá pesaria em toda
+ * rota que importa aquele módulo.
+ */
+const NOME_DA_CONFIANCA = { alta: "alta", media: "média", baixa: "baixa" } as const;
+
+/** O provedor pelo nome da tela; o identificador cru só se a coluna trouxer um que a lista não tem. */
+function rotuloDoProvedor(provider: string): string {
+  return Object.hasOwn(AI_PROVIDER_LABEL, provider)
+    ? AI_PROVIDER_LABEL[provider as AiProviderId]
+    : provider;
+}
 
 /** Adiar por uma semana. Data pura, aritmética em `Date.UTC`, sem passar por fuso local. */
 function daquiUmaSemana(): string {
@@ -87,6 +107,11 @@ export function InsightsClient({
 }) {
   const router = useRouter();
   const [pendente, startTransition] = useTransition();
+  // D2 — transição PRÓPRIA: clicar "Útil" num cartão não gira o botão de gerar, e gerar não
+  // trava o feedback dos cartões (M33).
+  const [gerando, iniciarGeracao] = useTransition();
+  const idDoGasto = useId();
+  const idDoModulo = useId();
   const [modulo, setModulo] = useState<ModuloDeInsight | "">(disponiveis[0] ?? "");
   const [mostrarTodos, setMostrarTodos] = useState(false);
 
@@ -102,10 +127,10 @@ export function InsightsClient({
 
   function gerar() {
     if (!modulo) return;
-    startTransition(async () => {
+    iniciarGeracao(async () => {
       const r = await gerarInsight({ modulo });
       if (!r.ok) {
-        toast.error(r.error);
+        toast.error(mensagemDaAction(r));
         return;
       }
       toast.success(
@@ -128,7 +153,7 @@ export function InsightsClient({
         ...(decisao === "adiado" ? { adiadoAte: daquiUmaSemana() } : {}),
       });
       if (!r.ok) {
-        toast.error(r.error);
+        toast.error(mensagemDaAction(r));
         return;
       }
       router.refresh();
@@ -137,64 +162,91 @@ export function InsightsClient({
 
   return (
     <div className="space-y-4">
-      {/* ⚠️ `min-w-0` no lado do texto: sem ele o select empurra o botão para fora do card. */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3">
-        {disponiveis.length === 0 ? (
-          <p className="min-w-0 text-sm text-muted-foreground">
-            Nenhum módulo está liberado para a IA ler.{" "}
-            <Link href="/ia/configuracoes" className="underline">
-              Ligue uma chave em Configurações
-            </Link>{" "}
-            para poder pedir uma análise.
-          </p>
-        ) : (
-          <>
-            <Select
-              value={modulo}
-              onValueChange={(v) => setModulo(v as ModuloDeInsight)}
-              disabled={pendente}
-            >
-              <SelectTrigger className="w-full sm:w-64">
-                <SelectValue placeholder="Escolha o módulo" />
-              </SelectTrigger>
-              <SelectContent>
-                {disponiveis.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {NOME_DO_MODULO[m]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={gerar} disabled={pendente || !modulo}>
-              {pendente ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Sparkles className="size-4" />
-              )}
-              Gerar análise
-            </Button>
-          </>
-        )}
-        {ocultos > 0 ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto"
-            onClick={() => setMostrarTodos((v) => !v)}
-          >
-            {mostrarTodos
-              ? "Mostrar só as vigentes"
-              : `Mostrar as ${ocultos} fora da lista`}
-          </Button>
-        ) : null}
-      </div>
-
-      {visiveis.length === 0 ? (
+      {/*
+        V — sem módulo liberado, o vazio é o `EmptyState` de todo o app, com o caminho para
+        resolver. E ele SUBSTITUI o vazio da lista: "Escolha um módulo e peça uma" ao lado de
+        "nenhum módulo liberado" se contradizia.
+      */}
+      {disponiveis.length === 0 ? (
         <EmptyState
           icon={Sparkles}
-          title="Nenhuma análise aqui"
-          description="As análises não são geradas sozinhas. Escolha um módulo e peça uma — os números vêm dos seus registros, e nada é enviado antes disso."
-        />
+          title="Nenhum módulo liberado para a IA ler"
+          description="Ligue a leitura de um módulo nas configurações da IA para poder pedir uma análise."
+          className="py-8"
+        >
+          <Button asChild variant="outline" size="sm">
+            <Link href={settingsLink()}>Abrir as configurações da IA</Link>
+          </Button>
+        </EmptyState>
+      ) : null}
+
+      {disponiveis.length > 0 || ocultos > 0 ? (
+        <div className="space-y-2 rounded-xl border p-3">
+          {/* ⚠️ `min-w-0` no lado do texto: sem ele o select empurra o botão para fora do card. */}
+          <div className="flex flex-wrap items-center gap-2">
+            {disponiveis.length === 0 ? null : (
+              <>
+                {/* D8 — o seletor tem nome: o placeholder some assim que um módulo é escolhido. */}
+                <Label htmlFor={idDoModulo} className="sr-only">
+                  Módulo da análise
+                </Label>
+                <Select
+                  value={modulo}
+                  onValueChange={(v) => setModulo(v as ModuloDeInsight)}
+                  disabled={gerando}
+                >
+                  <SelectTrigger id={idDoModulo} className="w-full sm:w-64">
+                    <SelectValue placeholder="Escolha o módulo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {disponiveis.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {NOME_DO_MODULO[m]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  aria-describedby={idDoGasto}
+                  onClick={gerar}
+                  disabled={gerando || !modulo}
+                >
+                  {gerando ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  Gerar análise
+                </Button>
+              </>
+            )}
+            {ocultos > 0 ? (
+              // Alternância com rótulo FIXO e `aria-pressed`: um rótulo que troca de sentido a cada
+              // clique ("Mostrar só…" / "Mostrar as…") deixa quem ouve sem saber o que está valendo.
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                aria-pressed={mostrarTodos}
+                onClick={() => setMostrarTodos((v) => !v)}
+              >
+                {`Mostrar também as ${ocultos} fora da lista`}
+              </Button>
+            ) : null}
+          </div>
+          {/* D2 — gerar gasta, e isso fica dito sob o seletor, antes do clique. */}
+          {disponiveis.length > 0 ? <FraseDeGasto id={idDoGasto} /> : null}
+        </div>
+      ) : null}
+
+      {visiveis.length === 0 ? (
+        disponiveis.length === 0 ? null : (
+          <EmptyState
+            icon={Sparkles}
+            title="Nenhuma análise aqui"
+            description="As análises não são geradas sozinhas. Escolha um módulo e peça uma — os números vêm dos seus registros, e nada é enviado antes disso."
+          />
+        )
       ) : (
         <div className="space-y-3">
           {visiveis.map((insight) => (
@@ -227,6 +279,7 @@ function CartaoDeInsight({
   const resumo = renderizarExplicacao(insight.resumo, insight.fontes);
   const vigente = insight.estado.estado === "vigente";
   const [titulo, setTitulo] = useState("");
+  const idDoTitulo = useId();
   const [proposta, setProposta] = useState<PropostaNaTela | null>(null);
   const [preparando, startPreparo] = useTransition();
 
@@ -245,7 +298,7 @@ function CartaoDeInsight({
     startPreparo(async () => {
       const r = await prepararTarefaDoInsight({ insightId: insight.id, titulo });
       if (!r.ok) {
-        toast.error(r.error);
+        toast.error(mensagemDaAction(r));
         return;
       }
       setProposta({
@@ -263,7 +316,9 @@ function CartaoDeInsight({
   }
 
   return (
-    <Card className={vigente ? undefined : "opacity-70"}>
+    // V — o não vigente se distingue pelo fundo e pelo SELO de texto abaixo, não por
+    // `opacity-70`: a opacidade apagava o texto inteiro para baixo do contraste mínimo.
+    <Card className={vigente ? undefined : "bg-muted/30"}>
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-start gap-2">
           {/* `min-w-0` obrigatório: o título é longo e os badges são `shrink-0`. */}
@@ -318,10 +373,9 @@ function CartaoDeInsight({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Confiança <strong>{insight.confianca}</strong> —{" "}
-          {ROTULO_DA_CONFIANCA[insight.confianca]}. Gerada em{" "}
-          {formatDate(insight.criadoEm)} por {insight.provider} · {insight.model} ·{" "}
-          {insight.promptVersion}.
+          Confiança <strong>{NOME_DA_CONFIANCA[insight.confianca]}</strong> —{" "}
+          {ROTULO_DA_CONFIANCA[insight.confianca]}. Gerada em {formatDate(insight.criadoEm)}{" "}
+          por {rotuloDoProvedor(insight.provider)} · {insight.model}.
         </p>
 
         {/* ⛔ Transformar em tarefa PROPÕE — quem executa é o cartão de proposta abaixo. */}
@@ -331,7 +385,11 @@ function CartaoDeInsight({
               Transformar em tarefa
             </p>
             <div className="flex flex-wrap gap-2">
+              <Label htmlFor={idDoTitulo} className="sr-only">
+                Título da tarefa
+              </Label>
               <Input
+                id={idDoTitulo}
                 value={titulo}
                 onChange={(e) => setTitulo(e.target.value)}
                 placeholder="O que você quer fazer?"
@@ -352,7 +410,7 @@ function CartaoDeInsight({
                 Preparar
               </Button>
             </div>
-            {proposta ? <ProposalCard proposta={proposta} /> : null}
+            {proposta ? <ProposalCardSobDemanda proposta={proposta} /> : null}
           </div>
         ) : null}
 
@@ -361,6 +419,7 @@ function CartaoDeInsight({
             variant="outline"
             size="sm"
             disabled={pendente}
+            aria-pressed={insight.estado.avaliacao === "util"}
             onClick={() => onDecidir(insight.id, "util")}
           >
             <ThumbsUp className="size-4" />
@@ -373,6 +432,7 @@ function CartaoDeInsight({
             variant="outline"
             size="sm"
             disabled={pendente}
+            aria-pressed={insight.estado.avaliacao === "inutil"}
             onClick={() => onDecidir(insight.id, "inutil")}
           >
             <ThumbsDown className="size-4" />

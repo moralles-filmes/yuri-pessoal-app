@@ -369,6 +369,7 @@ export function TaskFormDialog({
                           <button
                             key={d.value}
                             type="button"
+                            aria-pressed={active}
                             onClick={() =>
                               field.onChange(
                                 active

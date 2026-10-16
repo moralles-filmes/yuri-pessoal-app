@@ -161,7 +161,7 @@ export function TaskRow({
           >
             {task.title}
           </button>
-          <PriorityFlag priority={task.priority} className="mt-0.5 shrink-0" />
+          <PriorityFlag priority={task.priority} className="mt-0.5 shrink-0" rotulo />
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">

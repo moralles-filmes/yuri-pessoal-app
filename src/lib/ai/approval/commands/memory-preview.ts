@@ -13,12 +13,13 @@ import "server-only";
 
 import { z } from "zod";
 import { hojeISO } from "@/lib/format";
+import { memoryLink } from "@/lib/search/ai-links";
 import { MAX_MEMORIA, MODULOS_DE_MEMORIA } from "@/lib/ai/memory/contracts";
 import { formaDaMemoria, MOTIVO_DA_RECUSA } from "@/lib/ai/memory/forma";
 import { getMemorias } from "@/lib/ai/memory/queries";
 import { EfeitoImpossivel, type CommandContext, type EfeitoProposto } from "../contracts";
 
-const ROTA_DO_PAINEL = "/ia/memoria";
+const ROTA_DO_PAINEL = memoryLink();
 
 /* ══════════════════════════════════════════════════════════════════════════════════════
    Entrada

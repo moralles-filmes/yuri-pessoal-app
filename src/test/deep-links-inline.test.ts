@@ -40,13 +40,10 @@
  * R4 nomeia, e não adiantaria nada trocá-lo por uma segunda cópia de si mesmo.
  */
 
-import fs from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { temPagina } from "@/test/rotas";
-
-const SRC = path.resolve(__dirname, "..");
+import { lerLinks, pontosDeLink, VALOR_DE_EXEMPLO } from "@/test/links-inline";
 
 /**
  * Os arquivos que montam rota inline, com o PISO de literais que cada um tinha quando
@@ -59,12 +56,26 @@ const SRC = path.resolve(__dirname, "..");
  */
 const VARRIDOS = [
   { arquivo: "lib/search/queries.ts", piso: 15 },
-  { arquivo: "lib/notifications/generate.ts", piso: 13 },
-  { arquivo: "lib/notifications/nutrition.ts", piso: 1 },
+  // 13 até a 07-A; o F2 (`const link = …`) passou a enxergar mais 3 (linhas 266 e 484).
+  { arquivo: "lib/notifications/generate.ts", piso: 16 },
+  // 07-C · D6: o único link à mão daqui (planejamento sem `visao`) foi para planningWeekLink.
+  // O TETO zero mora em deep-links-query-string.test.ts (SO_CONSTRUTOR).
+  { arquivo: "lib/notifications/nutrition.ts", piso: 0 },
+  /*
+    REDESIGN-07-D · D7 — os arquivos da IA que guardam rota em `rota:` (`ToolRef`, as refs da
+    previsão). O extrator passou a ler essa chave; o piso de cada um foi contado no commit que
+    os trouxe. Os que só têm a rota numa constante (`ROTA_DO_PAINEL`, `rotaDaTarefa`) não
+    aparecem aqui — limite registrado no spec.
+  */
+  { arquivo: "lib/ai/approval/commands/finance-preview.ts", piso: 2 },
+  { arquivo: "lib/ai/approval/commands/todo-preview.ts", piso: 1 },
+  { arquivo: "lib/ai/tools/adapters/calendar.ts", piso: 1 },
+  { arquivo: "lib/ai/tools/adapters/finance.ts", piso: 2 },
+  { arquivo: "lib/ai/tools/adapters/habits.ts", piso: 1 },
+  { arquivo: "lib/ai/tools/adapters/studies.ts", piso: 2 },
+  { arquivo: "lib/ai/tools/adapters/tasks.ts", piso: 2 },
+  { arquivo: "lib/ai/tools/adapters/todo.ts", piso: 2 },
 ] as const;
-
-/** O que ocupa um `${…}` para a rota ficar concreta. Um segmento dinâmico casa com um. */
-const VALOR_DE_EXEMPLO = "abc123";
 
 /**
  * O maior número de rotas que UM `link:` pode render. O caso mais largo do código é o
@@ -78,139 +89,7 @@ const VALOR_DE_EXEMPLO = "abc123";
  */
 const MAXIMO_POR_LINK = 2;
 
-/**
- * A varredura olha CÓDIGO, não prosa: sem isto, um `link: "/rota-que-morreu"` citado
- * dentro de um comentário explicativo entraria na conta e o teste cobraria uma rota que
- * ninguém mais abre — ou pior, passaria a aprovar o comentário em vez do código.
- *
- * Cada comentário vira espaço do MESMO tamanho, e não uma string vazia, para que os
- * deslocamentos não andem: é assim que a linha relatada no erro é a linha de verdade.
- *
- * ⚠️ Esta limpeza não conhece string: um `"https://…"` dentro de um literal seria
- * mutilado pelo `//`. Hoje nenhum dos três arquivos tem `://` — e o primeiro teste abaixo
- * afirma isso, para que o dia em que isso mudar seja um vermelho e não um silêncio.
- */
-function semComentarios(codigo: string): string {
-  return codigo
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-    .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));
-}
-
-/** Índice da aspa que FECHA o literal aberto em `i` (crase entende `${…}`). */
-function fimDoLiteral(fonte: string, i: number): number {
-  const aspa = fonte[i];
-  for (let j = i + 1; j < fonte.length; j++) {
-    const c = fonte[j];
-    if (c === "\\") {
-      j++;
-      continue;
-    }
-    if (aspa === "`" && c === "$" && fonte[j + 1] === "{") {
-      j = fimDaInterpolacao(fonte, j + 2);
-      continue;
-    }
-    if (c === aspa) return j;
-  }
-  return fonte.length;
-}
-
-/** Índice da chave que FECHA a interpolação aberta em `i` (já depois do `${`). */
-function fimDaInterpolacao(fonte: string, i: number): number {
-  let profundidade = 0;
-  for (let j = i; j < fonte.length; j++) {
-    const c = fonte[j];
-    if (c === '"' || c === "'" || c === "`") {
-      j = fimDoLiteral(fonte, j);
-      continue;
-    }
-    if (c === "{") profundidade++;
-    else if (c === "}") {
-      if (profundidade === 0) return j;
-      profundidade--;
-    }
-  }
-  return fonte.length;
-}
-
-/**
- * A expressão atribuída ao `link:` que começa em `i` (logo depois dos dois pontos).
- *
- * Para na vírgula que fecha a propriedade, ou no fecha-chaves do objeto quando o `link:`
- * é a última. Respeita aspas e aninhamento — senão o `}` de um `${…}` encerraria a
- * leitura no meio do próprio link, e o ternário de três linhas perderia a segunda ponta.
- */
-function expressaoDoLink(fonte: string, i: number): string {
-  let profundidade = 0;
-  let j = i;
-  for (; j < fonte.length; j++) {
-    const c = fonte[j];
-    if (c === '"' || c === "'" || c === "`") {
-      j = fimDoLiteral(fonte, j);
-      continue;
-    }
-    if (c === "(" || c === "[" || c === "{") profundidade++;
-    else if (c === ")" || c === "]" || c === "}") {
-      if (profundidade === 0) break;
-      profundidade--;
-    } else if (c === "," && profundidade === 0) break;
-  }
-  return fonte.slice(i, j);
-}
-
-/**
- * Todo literal da expressão que comece por `/` — string ou template.
- *
- * O que NÃO começa por `/` fica de fora de propósito: `link: foodLink(f.id)` é rota
- * montada pela fonte única do módulo, e a 02-D já a cobre pelo teste daquele arquivo;
- * `link: string | null` é declaração de tipo. Repescá-los aqui seria conferir duas vezes
- * o que já tem dono, e deixar de conferir continua sendo o defeito que este teste fecha.
- */
-function rotasDaExpressao(expressao: string): string[] {
-  const achadas: string[] = [];
-  for (let j = 0; j < expressao.length; j++) {
-    const c = expressao[j];
-    if (c !== '"' && c !== "'" && c !== "`") continue;
-    const fim = fimDoLiteral(expressao, j);
-    const conteudo = expressao.slice(j + 1, fim);
-    if (conteudo.startsWith("/")) achadas.push(conteudo);
-    j = fim;
-  }
-  return achadas;
-}
-
-type PontoDeLink = {
-  arquivo: string;
-  linha: number;
-  /** Como está escrito no código, com `${…}` preservado — é o que o erro precisa mostrar. */
-  literal: string;
-  /** Pronto para `temPagina`, com cada `${…}` trocado por um valor. */
-  concreta: string;
-};
-
-/** Toda rota inline do texto, com o arquivo e a linha de onde saiu. */
-function pontosDeLink(arquivo: string, fonte: string): PontoDeLink[] {
-  const pontos: PontoDeLink[] = [];
-  for (const m of fonte.matchAll(/\blink\s*:/g)) {
-    const inicio = m.index + m[0].length;
-    const linha = fonte.slice(0, m.index).split("\n").length;
-    for (const literal of rotasDaExpressao(expressaoDoLink(fonte, inicio))) {
-      pontos.push({
-        arquivo,
-        linha,
-        literal,
-        // Interpolação não aninha em nenhum destes links; o `[^}]` basta e diz isso.
-        concreta: literal.replace(/\$\{[^}]*\}/g, VALOR_DE_EXEMPLO),
-      });
-    }
-  }
-  return pontos;
-}
-
-const LIDOS = VARRIDOS.map((alvo) => {
-  const bruto = fs.readFileSync(path.join(SRC, alvo.arquivo), "utf8");
-  const fonte = semComentarios(bruto);
-  return { ...alvo, bruto, fonte, pontos: pontosDeLink(alvo.arquivo, fonte) };
-});
+const LIDOS = VARRIDOS.map((alvo) => ({ ...alvo, ...lerLinks(alvo.arquivo) }));
 
 const TODOS = LIDOS.flatMap((a) => a.pontos);
 
@@ -221,8 +100,8 @@ describe("R4 — os deep-links montados à mão abrem telas que existem", () => 
       // Sem esta afirmação, um caminho errado devolveria zero ponto e todo `toBe(true)`
       // abaixo viraria tautologia sobre uma lista vazia.
       expect(bruto.length, `${arquivo} está vazio`).toBeGreaterThan(0);
-      expect(fonte, `${arquivo} não tem \`link:\` — o alvo mudou de forma`).toMatch(
-        /\blink\s*:/,
+      expect(fonte, `${arquivo} não tem \`link:\`/\`rota:\` — o alvo mudou de forma`).toMatch(
+        /\b(?:link|rota|targetRoute)\s*:/,
       );
       // A pré-condição de `semComentarios`: ela não conhece string, então um `//` dentro
       // de um literal a faria comer o resto da linha — e o link sumiria da varredura sem
@@ -349,5 +228,59 @@ describe("R4 — o extrator, medido contra texto conhecido", () => {
     // arquivo inteiro — é a mesma falha que `MAXIMO_POR_LINK` vigia no código real.
     const doTernario = pontosDeLink("fixture.ts", FIXTURE).filter((p) => p.linha === 3);
     expect(doTernario).toHaveLength(2);
+  });
+});
+
+/**
+ * F2 (07-A): `generate.ts` monta alguns links numa variável e os entrega abreviados
+ * (`const link = …` e depois `{ link, … }`). O extrator só lia `link:`, então esses
+ * nunca foram conferidos — nem pelo R4, nem pelo contrato da query string.
+ */
+const FIXTURE_ATRIBUICAO = [
+  "const link = t.projectId ? `/todo?v=projeto&id=${t.projectId}` : `/todo?v=todas`;",
+  "out.push({ link, titulo: \"/nao-e-um-link\" });",
+  'if (link === "/comparacao") {}',
+  "const f = (link) => link;",
+  'const deepLink = "/outra-chave";',
+].join("\n");
+
+/**
+ * REDESIGN-07-D · D7 — a IA guarda a rota em `rota:` (`ToolRef`) e o destino da execução em
+ * `targetRoute:`. Sem estas chaves, `/tarefas?task=` e `/nutricao/diario?date=` passavam por
+ * fora dos dois contratos de link (M44).
+ */
+const FIXTURE_ROTA = [
+  "const r = { tipo: \"tarefa\", id, rota: `/tarefas?task=${id}` };",
+  "const e = { targetRoute: \"/nutricao/diario\", x: 1 };",
+  "const rotaDaTarefa = (id) => `/todo?v=todas&task=${id}`;",
+  "const ROTA_DO_PAINEL = \"/ia/memoria\";",
+  "const s = { rotaDoDia: \"/nao-e-a-chave\" };",
+].join("\n");
+
+describe("R4 — o extrator lê `rota:` e `targetRoute:` (07-D, D7)", () => {
+  const achadas = pontosDeLink("fixture.ts", FIXTURE_ROTA).map((p) => p.literal);
+
+  it("acha a rota da ref e o destino da execução", () => {
+    expect(achadas).toEqual(["/tarefas?task=${id}", "/nutricao/diario"]);
+  });
+
+  it("não confunde a chave com nomes que só começam por ela", () => {
+    expect(achadas).not.toContain("/nao-e-a-chave");
+    expect(achadas).not.toContain("/ia/memoria");
+  });
+});
+
+describe("R4 — o extrator também lê `const link = …` (F2, 07-A)", () => {
+  const achadas = pontosDeLink("fixture.ts", FIXTURE_ATRIBUICAO).map((p) => p.literal);
+
+  it("acha as duas pontas de um ternário atribuído", () => {
+    // `generate.ts` monta `/faturas?…` e `/todo?…` assim e usa `link,` abreviado — o R4 não via.
+    expect(achadas).toEqual(["/todo?v=projeto&id=${t.projectId}", "/todo?v=todas"]);
+  });
+
+  it("não confunde comparação, parâmetro de arrow nem outra chave", () => {
+    expect(achadas).not.toContain("/comparacao");
+    expect(achadas).not.toContain("/outra-chave");
+    expect(achadas).not.toContain("/nao-e-um-link");
   });
 });

@@ -9,7 +9,8 @@ REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · 
 `--no-ff` em `ad9f359`) · **REDESIGN-03-B2 ✅** (integrada por merge `--no-ff` em `b06f160`)
 · **REDESIGN-03-C ✅** (integrada por merge `--no-ff` em `22ec12f`) · **REDESIGN-03-C2 ✅**
 (integrada por merge `--no-ff` em `31bef87`, **com a M3 aplicada**) · **REDESIGN-03-D ✅**
-(integrada por merge `--no-ff` em `545acf4`, **com a M1 aplicada**); **03-E liberada** — modo
+(integrada por merge `--no-ff` em `545acf4`, **com a M1 aplicada**) · **REDESIGN-07 (A–D) ✅**
+(integrada por merge `--no-ff` em `598b475`, sem migration); **03-E liberada** — modo
 caixa exato × competência com rótulo (E6, **com a M2**)
 
 ⛔ **A M1 foi aplicada em 2026-10-12** (03-D), depois do seu "aplique a M1" literal — **pelo
@@ -21,14 +22,46 @@ a M2" seu, separado, no momento em que a subfase precisar dela — a M2 é da 03
 🚀 **De 00 a 03-C2 foi para produção pelo PR #56** (D54, mergeado em 2026-10-12). A regra do
 plano mudou por decisão sua em 2026-10-11: as subfases fechadas são publicadas **por partes**,
 cada uma por PR, em vez de esperar a 08. **A 03-D vai pelo PR #57** (D60), com o seu aval
-para o push e o PR; o merge em `main` é seu. As 07-A, 07-B e 07-C estão no GitHub só como
-backup.
+para o push e o PR; o merge em `main` é seu. **A REDESIGN-07 (A–D) foi integrada em
+`598b475`** e vai a `main` por PR próprio, depois do #57 — os dois merges em `main` são seus.
 
 ⚠️ **CORREÇÃO (D29): a M3 NÃO é da 03-B.** Este documento afirmava, em dois lugares, que a
 `categories.classificacao_padrao` seria pedida na 03-B. Não bate com as outras duas fontes:
 o `PLANO.md` descreve a 03-B como *"unificar o pipeline triplicado … **sem mudar número
 nenhum**"*, e `MIGRATIONS.md:16` liga a M3 à **D8**, que é a **03-C2**. **A 03-B não precisa
 de migration nenhuma.** A primeira a precisar é a 03-C2.
+
+---
+
+## REDESIGN-07 (A–D) — os demais módulos ✅
+
+Os quatro lotes formam uma linha só (07-A ⊂ 07-B ⊂ 07-C ⊂ 07-D), nascida de `704dc66` (03-B),
+e entraram juntos por merge `--no-ff` em **`598b475`** (59 commits). O resultado de cada lote
+está no contrato dele:
+
+| Lote | Módulos | Contrato |
+| --- | --- | --- |
+| 07-A | TO-DO, Agenda, Rotinas e tarefas | `docs/superpowers/specs/2026-09-27-07a-organizacao-design.md` |
+| 07-B | Hábitos, Estudos | `docs/superpowers/specs/2026-10-11-07b-habitos-estudos-design.md` |
+| 07-C | Dieta, Treinos | `docs/superpowers/specs/2026-10-11-07c-dieta-treinos-design.md` |
+| 07-D | IA, Configurações, Notificações, Busca | `docs/superpowers/specs/2026-10-11-07d-ia-configuracoes-design.md` |
+
+**Nenhuma migration, nenhuma dependência nova, nenhuma Server Action ou Route Handler novo.** O
+merge com a 03-B2, a 03-C, a 03-C2 e a 03-D (82 commits da integração desde a base) não teve
+conflito textual.
+
+**Verificado sobre a árvore integrada (`598b475`):** `tsc` ✅ · `lint` ✅ · `test:run` 268
+arquivos / 6.368 testes — 6.367 ✅, 1 ❌ (a de ambiente: CRLF em `schema.test.ts`, verde no CI)
+· `build` ✅ · `perf:bundle` 68 rotas, mediana 214,2 KB, a maior `/todo` com 239,0, nenhuma acima
+de 250 e **nenhuma com teto próprio** (o de `/configuracoes` saiu na 07-D).
+
+⚠️ **O que fica aberto:**
+- **RR-D-15** (`finance.get_invoice` da IA também devolve o saldo) foi destinado à 07-D pela
+  03-D, mas a 07-D nasceu antes da 03-D e **não o cobriu**. Continua aberto.
+- A conferência à mão da 07-D (§13 do contrato) é sua e **não foi feita**; o rodapé "Ver todos
+  os resultados" da paleta ficou fora, então aquele item não tem o que conferir.
+- A invariante 91 do `CLAUDE.md` ainda cita o teto de 285 de `/configuracoes`, que não existe
+  mais. Os demais achados de cada lote estão no contrato dele.
 
 ---
 

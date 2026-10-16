@@ -1,44 +1,33 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Languages, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
+import { EmptyState } from "@/components/shared/empty-state";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { SkillBadge, StudyProgressBar } from "@/components/studies/badges";
-import { applyFieldErrors } from "@/components/financeiro/form-utils";
-import { createPractice, deletePractice, setWeeklyGoal } from "@/lib/actions/studies";
+import { deletePractice, setWeeklyGoal } from "@/lib/actions/studies";
 import {
   LANGUAGE_SKILLS,
   LANGUAGE_SKILL_LABELS,
   formatMinutes,
-  type LanguageSkill,
 } from "@/lib/studies/constants";
 import { formatDate } from "@/lib/format";
 import type {
   LanguageWeekProgress,
   StudyLanguagePracticeRow,
 } from "@/types/database";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const PracticeFormDialog = dynamic(
+  () => import("./practice-form-dialog").then((m) => m.PracticeFormDialog),
+  { ssr: false },
+);
 
 export function PracticeView({
   courseId,
@@ -52,6 +41,7 @@ export function PracticeView({
   todayIso: string;
 }) {
   const [formOpen, setFormOpen] = React.useState(false);
+  const formMontado = useLazyDialog(formOpen);
   const goal = languageWeek.goalMinutes ?? 0;
   const done = languageWeek.doneMinutes;
   const pct = goal > 0 ? Math.min(100, Math.round((done / goal) * 100)) : 0;
@@ -80,7 +70,7 @@ export function PracticeView({
                 {formatMinutes(done)} / {formatMinutes(goal)} ({pct}%)
               </span>
             </div>
-            <StudyProgressBar value={pct} />
+            <StudyProgressBar value={pct} rotulo="Prática na semana" />
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
@@ -107,9 +97,11 @@ export function PracticeView({
           Histórico ({practice.length})
         </h3>
         {practice.length === 0 ? (
-          <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-            Nenhuma prática registrada ainda.
-          </p>
+          <EmptyState
+            icon={Languages}
+            title="Nenhuma prática registrada ainda"
+            className="py-8"
+          />
         ) : (
           <div className="space-y-2">
             {practice.map((p) => (
@@ -151,12 +143,14 @@ export function PracticeView({
         )}
       </div>
 
-      <PracticeFormDialog
-        courseId={courseId}
-        todayIso={todayIso}
-        open={formOpen}
-        onOpenChange={setFormOpen}
-      />
+      {formMontado && (
+        <PracticeFormDialog
+          courseId={courseId}
+          todayIso={todayIso}
+          open={formOpen}
+          onOpenChange={setFormOpen}
+        />
+      )}
     </div>
   );
 }
@@ -217,138 +211,5 @@ function WeeklyGoalEditor({
         {saving ? "salvando…" : "min"}
       </span>
     </div>
-  );
-}
-
-type PracticeValues = {
-  skill: LanguageSkill;
-  duration_minutes: string;
-  practice_date: string;
-  notes: string;
-};
-
-function PracticeFormDialog({
-  courseId,
-  todayIso,
-  open,
-  onOpenChange,
-}: {
-  courseId: string;
-  todayIso: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const router = useRouter();
-  const {
-    register,
-    control,
-    handleSubmit,
-    reset,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<PracticeValues>({
-    defaultValues: {
-      skill: "listening",
-      duration_minutes: "20",
-      practice_date: todayIso,
-      notes: "",
-    },
-  });
-
-  React.useEffect(() => {
-    if (open)
-      reset({
-        skill: "listening",
-        duration_minutes: "20",
-        practice_date: todayIso,
-        notes: "",
-      });
-  }, [open, todayIso, reset]);
-
-  async function onSubmit(values: PracticeValues) {
-    const res = await createPractice(courseId, values);
-    if (res.ok) {
-      toast.success("Prática registrada.");
-      onOpenChange(false);
-      router.refresh();
-    } else {
-      applyFieldErrors(setError, res.fieldErrors);
-      toast.error(res.error);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Registrar prática</DialogTitle>
-          <DialogDescription>
-            Habilidade, tempo e data da prática.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5 sm:col-span-1">
-              <Label>Habilidade</Label>
-              <Controller
-                control={control}
-                name="skill"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LANGUAGE_SKILLS.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {LANGUAGE_SKILL_LABELS[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="practice-duration">Duração (min)</Label>
-              <Input
-                id="practice-duration"
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step="1"
-                aria-invalid={Boolean(errors.duration_minutes)}
-                {...register("duration_minutes")}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="practice-date">Data</Label>
-              <Input
-                id="practice-date"
-                type="date"
-                {...register("practice_date")}
-              />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="practice-notes">Notas</Label>
-            <Textarea id="practice-notes" rows={2} {...register("notes")} />
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Salvando…" : "Salvar"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }

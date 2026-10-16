@@ -38,6 +38,7 @@ import {
 } from "@/lib/training/constants";
 import { saveTrainingPreferences } from "@/lib/actions/training-preferences";
 import type { TrainingPreferences } from "@/lib/training/types";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 export function TrainingPreferencesClient({
   preferences,
@@ -77,7 +78,7 @@ export function TrainingPreferencesClient({
       progression_enabled: values.progressionEnabled,
     });
     setSaving(false);
-    if (!result.ok) toast.error(result.error);
+    if (!result.ok) toast.error(mensagemDaAction(result));
     else toast.success("Preferências salvas.");
   }
 

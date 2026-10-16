@@ -102,6 +102,52 @@ describe("⛔ item ILEGÍVEL torna a conta indeterminada", () => {
   });
 });
 
+/**
+ * REDESIGN-07-D · Z — o TOTAL não identificado é ausência, e o resumo diz isso (spec §6.10, M15).
+ *
+ * A tela passava `efetiva.totalCentavos.valor ?? 0`, e o resumo escrevia "o lançamento usa o
+ * total de R$ 0,00" ou "MAIS que o total impresso de R$ 0,00" — a invariante 57 (não
+ * identificado não é zero) quebrada no texto que o dono lê para decidir.
+ */
+describe("⛔ total NÃO IDENTIFICADO não vira zero", () => {
+  it("sem item: diz que o total não foi identificado, sem R$ 0,00", () => {
+    const r = resumirNota(null, []);
+    expect(r.totalDeclarado).toBeNull();
+    expect(r.naoAtribuidoCentavos).toBeNull();
+    expect(r.fecha).toBe(false);
+    expect(r.explicacao).toContain("o total impresso não foi identificado");
+    expect(r.explicacao).not.toMatch(/R\$\s*0,00/);
+  });
+
+  it("com itens legíveis: a soma continua conhecida, a sobra não", () => {
+    const r = resumirNota(null, [meu(item("a", 6_000)), meu(item("b", 1_250))]);
+    expect(r.somaClassificada).toBe(7_250);
+    expect(r.meuCentavos).toBe(7_250);
+    // Sem total, "quanto falta atribuir" não tem resposta — nem 0 nem -7.250.
+    expect(r.naoAtribuidoCentavos).toBeNull();
+    expect(r.fecha).toBe(false);
+    expect(r.explicacao).toContain("o total impresso não foi identificado");
+    expect(r.explicacao).toContain("72,50");
+    expect(r.explicacao).not.toMatch(/R\$\s*0,00|MAIS que/);
+  });
+
+  it("com item ilegível: as duas ausências são ditas", () => {
+    const r = resumirNota(null, [meu(item("a", null))]);
+    expect(r.somaClassificada).toBeNull();
+    expect(r.naoAtribuidoCentavos).toBeNull();
+    expect(r.explicacao).toContain("indeterminada");
+    expect(r.explicacao).toContain("o total impresso não foi identificado");
+    expect(r.explicacao).not.toMatch(/R\$\s*0,00/);
+  });
+
+  it("total ZERO medido continua sendo zero (não é ausência)", () => {
+    const r = resumirNota(0, []);
+    expect(r.totalDeclarado).toBe(0);
+    expect(r.naoAtribuidoCentavos).toBe(0);
+    expect(r.explicacao).not.toContain("não foi identificado");
+  });
+});
+
 describe("categorias separadas", () => {
   it("agrupa por categoria", () => {
     const r = resumirNota(10_000, [

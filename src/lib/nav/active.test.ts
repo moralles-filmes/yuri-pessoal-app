@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { hrefAtivo } from "./active";
-import { findNavItem, navHrefs } from "@/config/nav";
+import { hrefAtivo, rotasDeclaradas } from "./active";
+import { allNavItems, findNavItem, navHrefs } from "@/config/nav";
 import { ROTAS_DO_APP as ROTAS } from "@/test/rotas";
 
 /**
@@ -84,6 +84,17 @@ describe("hrefAtivo — a regra", () => {
     // Sub-rota não listada cai na seção que a contém — e não em duas.
     expect(hrefAtivo("/nutricao/diario/2026-09-20", secoes)).toBe("/nutricao/diario");
   });
+
+  it("um alvo pode representar outras rotas, e continua vencendo UM", () => {
+    const alvos = [{ href: "/a" }, { href: "/b", tambem: ["/a/x"] }];
+    expect(hrefAtivo("/a/x/y", alvos)).toBe("/b");
+    expect(hrefAtivo("/a/z", alvos)).toBe("/a");
+    expect(hrefAtivo("/b", alvos)).toBe("/b");
+    // A ordem da lista não decide.
+    expect(hrefAtivo("/a/x/y", [...alvos].reverse())).toBe("/b");
+    // String pura continua como antes.
+    expect(hrefAtivo("/a/x", ["/a", "/a/x"])).toBe("/a/x");
+  });
 });
 
 describe("a sidebar sobre as rotas reais", () => {
@@ -99,28 +110,48 @@ describe("a sidebar sobre as rotas reais", () => {
 
   it("nenhuma rota real acende mais de um item", () => {
     for (const rota of ROTAS) {
-      const acesos = navHrefs.filter((href) => href === hrefAtivo(rota, navHrefs));
+      const acesos = allNavItems.filter((item) => item.href === hrefAtivo(rota, allNavItems));
       expect(acesos.length, `rota ${rota}`).toBeLessThanOrEqual(1);
     }
   });
 
+  it("nenhuma rota real é reivindicada por dois itens na mesma profundidade", () => {
+    // O desempate da função esconderia um dos dois; numa decisão item a item, os dois acenderiam.
+    for (const rota of ROTAS) {
+      const profundidade = (item: (typeof allNavItems)[number]) =>
+        Math.max(-1, ...rotasDeclaradas(item).filter((r) => rota === r || rota.startsWith(`${r}/`)).map((r) => r.length));
+      const melhor = Math.max(...allNavItems.map(profundidade));
+      if (melhor < 0) continue;
+      const empatados = allNavItems.filter((item) => profundidade(item) === melhor).map((i) => i.title);
+      expect(empatados, `rota ${rota}`).toHaveLength(1);
+    }
+  });
+
   it("toda rota real acende um item, salvo as declaradas", () => {
-    const orfas = ROTAS.filter((rota) => hrefAtivo(rota, navHrefs) === null);
+    const orfas = ROTAS.filter((rota) => hrefAtivo(rota, allNavItems) === null);
     expect(new Set(orfas)).toEqual(SEM_ITEM_NO_MENU);
   });
 
-  it("o item aceso é sempre ancestral-ou-igual da rota aberta", () => {
+  it("a rota declarada que acendeu o item é ancestral-ou-igual da rota aberta", () => {
+    // Com `tambem`, o href do item (/rotinas) não é ancestral de /tarefas — a afirmação
+    // antiga seria falsa, não mais fraca. O que continua valendo: alguma rota DELE cobre esta.
     for (const rota of ROTAS) {
-      const ativo = hrefAtivo(rota, navHrefs);
-      if (ativo === null) continue;
-      expect(rota === ativo || rota.startsWith(`${ativo}/`), `rota ${rota}`).toBe(true);
+      const ativo = allNavItems.find((i) => i.href === hrefAtivo(rota, allNavItems));
+      if (!ativo) continue;
+      expect(rotasDeclaradas(ativo).some((r) => rota === r || rota.startsWith(`${r}/`)), `rota ${rota}`).toBe(true);
     }
   });
 
   it("findNavItem responde o mesmo que a tela pinta", () => {
     for (const rota of ROTAS) {
-      expect(findNavItem(rota)?.href ?? null, `rota ${rota}`).toBe(hrefAtivo(rota, navHrefs));
+      expect(findNavItem(rota)?.href ?? null, `rota ${rota}`).toBe(hrefAtivo(rota, allNavItems));
     }
+  });
+
+  it("Rotinas e tarefas: as duas telas acendem o mesmo item; o TO-DO segue separado", () => {
+    expect(findNavItem("/rotinas")?.title).toBe("Rotinas e tarefas");
+    expect(findNavItem("/tarefas")?.title).toBe("Rotinas e tarefas");
+    expect(findNavItem("/todo")?.title).toBe("TO-DO");
   });
 });
 
