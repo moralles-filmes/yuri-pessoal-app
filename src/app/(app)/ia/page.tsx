@@ -4,6 +4,7 @@ import { MessagesSquare, Settings } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { ChatClient } from "@/components/ai/chat-client";
+import { VazioDaConversa } from "@/components/ai/vazio-da-conversa";
 import { BudgetAlert } from "@/components/ai/budget-alert";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getAiPreferences, getUsageSummary } from "@/lib/ai/queries";
@@ -80,6 +81,7 @@ export default async function IaPage() {
         runs={{}}
         podeConversar={prontidao.podeConversar}
         motivoBloqueio={prontidao.motivoBloqueio}
+        vazio={<VazioDaConversa />}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChatClient } from "@/components/ai/chat-client";
+import { VazioDaConversa } from "@/components/ai/vazio-da-conversa";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getConversation, getRouterConfigs, getRunSources } from "@/lib/ai/queries";
 import { usableProviders } from "@/lib/ai/core/router";
@@ -93,6 +94,7 @@ export default async function ConversaPage({
         sources={fontes}
         podeConversar={motivoBloqueio === null}
         motivoBloqueio={motivoBloqueio}
+        vazio={<VazioDaConversa />}
       />
     </div>
   );

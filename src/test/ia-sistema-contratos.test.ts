@@ -202,6 +202,19 @@ export const CONTRATOS: Contrato[] = [
   // ── Z — ausência não vira zero ──
   { arquivo: REVISAO, exige: /resumirNota\(efetiva\.totalCentavos\.valor,/, porque: "o total não identificado chega ao resumo como ausência — `?? 0` escrevia 'o total de R$ 0,00' (M15)" },
   { arquivo: CONSUMO, exige: /textoDoCusto\(linha\)/, porque: "a célula de custo sai de uma função pura: linha sem custo medido é 'não medido' (M49)" },
+
+  // ── V — chat e painel ──
+  { arquivo: CHAT, exige: /\{bolhas\.length === 0 && vazio\}/, porque: "o vazio da conversa é o que quem hospeda desenhou (EmptyState)" },
+  ...["app/(app)/ia/page.tsx", "app/(app)/ia/conversas/[id]/page.tsx", "components/ai/floating-assistant-panel.tsx"].map((arquivo) => ({
+    arquivo,
+    exige: /vazio=\{<VazioDaConversa \/>\}/,
+    porque: "o chat vazio mostra o EmptyState de todo o app, nos três lugares em que aparece",
+  })),
+  ...["AI_PROVIDER_LABEL\\[b\\.provider\\]", "b\\.model", "enviada com o contexto"].map((conteudo) => ({
+    arquivo: CHAT,
+    exige: new RegExp(`<Badge variant="outline" className="max-w-full min-w-0 truncate[^"]*">\\s*\\{?${conteudo}`),
+    porque: `o selo (${conteudo.replace(/\\/g, "")}) não empurra a bolha a 390`,
+  })),
 ];
 
 export const PROIBIDOS: Contrato[] = [
@@ -257,6 +270,10 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: REVISAO, exige: /placeholder="0,00"/, porque: "o total vazio é 'não identificado', não um zero sugerido" },
   { arquivo: CONSUMO, exige: /formatUsd\(linha\.custoUsd\)/, porque: "linha sem nenhum custo informado virava 'US$ 0,000000' (M49)" },
   { arquivo: CONSUMO, exige: /linha\.semCusto > 0 \? linha\.semCusto : "—"/, porque: "'sem custo' zero é zero medido: escreve 0, não traço" },
+
+  // ── V ──
+  { arquivo: CHAT, exige: /from "@\/components\/(?:shared\/empty-state|ai\/vazio-da-conversa)"/, porque: "o EmptyState importado pela ChatView entraria no primeiro carregamento de /ia (~0,4 KB gz)" },
+  { arquivo: CHAT, exige: /Nenhuma mensagem ainda/, porque: "o texto do vazio mora em VazioDaConversa, uma cópia só" },
 ];
 
 /**

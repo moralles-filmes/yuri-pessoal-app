@@ -26,6 +26,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ChatView, useConversaDaIa } from "@/components/ai/chat-client";
+import { VazioDaConversa } from "@/components/ai/vazio-da-conversa";
 import { definirBotaoFlutuante, estadoDoPainelDaIa } from "@/lib/actions/ai-panel";
 import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { AI_LINK_BASE, conversationLink } from "@/lib/search/ai-links";
@@ -241,6 +242,7 @@ export function FloatingAssistantPanel({
               podeConversar={prontidao.podeConversar}
               motivoBloqueio={prontidao.motivoBloqueio}
               compacto
+              vazio={<VazioDaConversa />}
             />
           )}
         </div>

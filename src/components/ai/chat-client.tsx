@@ -167,6 +167,12 @@ export type ChatClientProps = {
    * do mesmo texto.
    */
   readonly compacto?: boolean;
+  /**
+   * REDESIGN-07-D · V — o vazio da conversa, DESENHADO POR QUEM HOSPEDA (`VazioDaConversa`):
+   * as páginas o montam no servidor e o painel no chunk sob demanda, para o `EmptyState` não
+   * entrar no primeiro carregamento de `/ia`. Sem ele, nada ocupa o lugar da conversa vazia.
+   */
+  readonly vazio?: React.ReactNode;
 };
 
 /**
@@ -601,6 +607,7 @@ export function ChatView({
   podeConversar,
   motivoBloqueio,
   compacto = false,
+  vazio,
 }: Omit<ChatClientProps, "conversationId" | "initialMessages" | "onAtividade"> & {
   readonly conversa: ConversaDaIa;
 }) {
@@ -689,11 +696,7 @@ export function ChatView({
       </p>
 
       <div role="log" aria-live="off" aria-label="Conversa com o assistente" className="space-y-4">
-        {bolhas.length === 0 && (
-          <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-            Nenhuma mensagem ainda. Escreva abaixo para começar.
-          </div>
-        )}
+        {bolhas.length === 0 && vazio}
 
         {bolhas.map((b) => (
           <div
@@ -747,21 +750,23 @@ export function ChatView({
               */}
               {b.role === "assistant" &&
                 (b.contexto || ((b.provider || b.model) && b.status !== "streaming")) && (
+                // V — `max-w-full min-w-0 truncate`: id de modelo e rótulo de contexto longos não
+                // empurram a bolha a 390 (molde do selo de ferramenta do `ProposalCard`).
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   {b.provider && b.status !== "streaming" && (
-                    <Badge variant="outline" className="text-[11px] font-normal">
+                    <Badge variant="outline" className="max-w-full min-w-0 truncate text-[11px] font-normal">
                       {AI_PROVIDER_LABEL[b.provider]}
                     </Badge>
                   )}
                   {b.model && b.status !== "streaming" && (
-                    <Badge variant="outline" className="text-[11px] font-normal">
+                    <Badge variant="outline" className="max-w-full min-w-0 truncate text-[11px] font-normal">
                       {b.model}
                     </Badge>
                   )}
                   {/* "enviada com", não "usou": quem decide o que fazer com o contexto é o
                       servidor, e a tela não tem como afirmar mais do que sabe. */}
                   {b.contexto && (
-                    <Badge variant="outline" className="text-[11px] font-normal">
+                    <Badge variant="outline" className="max-w-full min-w-0 truncate text-[11px] font-normal">
                       enviada com o contexto de {ROTULO_DA_ROTA_DE_CONTEXTO[b.contexto]}
                     </Badge>
                   )}
@@ -989,6 +994,7 @@ export function ChatClient(props: ChatClientProps) {
       podeConversar={props.podeConversar}
       motivoBloqueio={props.motivoBloqueio}
       compacto={props.compacto}
+      vazio={props.vazio}
     />
   );
 }
