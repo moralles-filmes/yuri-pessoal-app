@@ -32,6 +32,8 @@ import {
   LIMITE_MEGAPIXELS,
 } from "@/lib/ai/vision/limits";
 import { cn } from "@/lib/utils";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
+import { ariaDoErro, ErroDoCampo } from "@/components/shared/erro-do-campo";
 
 const ACEITOS_NO_INPUT = "image/jpeg,image/png,image/webp,application/pdf";
 
@@ -44,6 +46,7 @@ export function ReceiptUpload({ desligado }: { readonly desligado: boolean }) {
   const [observacao, setObservacao] = React.useState("");
   const [arrastando, setArrastando] = React.useState(false);
   const [enviando, setEnviando] = React.useState(false);
+  const [erros, setErros] = React.useState<Record<string, string>>({});
 
   async function enviar() {
     if (!arquivo || enviando) return;
@@ -60,10 +63,14 @@ export function ReceiptUpload({ desligado }: { readonly desligado: boolean }) {
       // `fieldErrors` traz a recusa por conteúdo (HEIC, MIME que mente, tamanho); `error`
       // traz falha de infraestrutura. Descartar o primeiro deixaria o dono sem saída —
       // é a regra de `mapServerFieldErrors`, aplicada a um formulário sem resolver.
-      const campo = r.fieldErrors?.arquivo?.[0] ?? r.fieldErrors?.observacao?.[0];
-      toast.error(campo ?? r.error);
+      // Só o arquivo tem erro sob o campo; a observação (cujo limite o campo já impõe) sobe para
+      // o toast com o nome, se um dia vier.
+      const mapeado = mapServerFieldErrors(r.fieldErrors, ["arquivo"]);
+      setErros(Object.fromEntries(mapeado.toSet.map((e) => [e.name, e.message])));
+      toast.error(serverErrorMessage(r.error, mapeado));
       return;
     }
+    setErros({});
 
     setArquivo(null);
     setObservacao("");
@@ -103,9 +110,15 @@ export function ReceiptUpload({ desligado }: { readonly desligado: boolean }) {
         </p>
 
         <div className="mt-3 flex flex-col items-center gap-2">
+          {/* D8 — o seletor de arquivo tem rótulo (o texto de cima não é associado a ele). */}
+          <Label htmlFor="arquivo-comprovante" className="sr-only">
+            Arquivo do comprovante (foto ou PDF)
+          </Label>
           <Input
+            id="arquivo-comprovante"
             ref={inputRef}
             type="file"
+            {...ariaDoErro("arquivo-comprovante-erro", erros.arquivo)}
             accept={ACEITOS_NO_INPUT}
             // Abre a câmera traseira no celular — é onde um comprovante é fotografado.
             capture="environment"
@@ -113,6 +126,7 @@ export function ReceiptUpload({ desligado }: { readonly desligado: boolean }) {
             onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
             className="max-w-sm"
           />
+          <ErroDoCampo id="arquivo-comprovante-erro" mensagem={erros.arquivo} />
           {arquivo && (
             <p className="min-w-0 max-w-full truncate text-xs text-muted-foreground">
               {arquivo.name} · {(arquivo.size / (1024 * 1024)).toFixed(1)} MB

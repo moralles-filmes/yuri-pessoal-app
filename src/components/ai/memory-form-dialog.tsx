@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ariaDoErro, ErroDoCampo } from "@/components/shared/erro-do-campo";
 import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 import { memoriaSchema } from "@/lib/validators/ai";
 import { salvarMemoria } from "@/lib/actions/ai-memory";
@@ -100,6 +101,12 @@ export function MemoryFormDialog({
   const valores = useWatch({ control: form.control });
   const escrito = [...(valores.conteudo ?? "")].length;
 
+  // REDESIGN-07-D · D8 — Esc, clique fora e o X não fecham no meio do salvamento.
+  function aoMudarAbertura(proximo: boolean) {
+    if (salvando) return;
+    onAbertoChange(proximo);
+  }
+
   async function onSubmit(values: FormValues) {
     setSalvando(true);
     const r = await salvarMemoria({
@@ -127,9 +134,9 @@ export function MemoryFormDialog({
   }
 
   return (
-    <Dialog open={aberto} onOpenChange={onAbertoChange}>
+    <Dialog open={aberto} onOpenChange={aoMudarAbertura}>
       {/* ⚠️ `sm:max-w-lg` para crescer no desktop: o limite do celular já vem da primitiva. */}
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg" showCloseButton={!salvando}>
         <DialogHeader>
           <DialogTitle>
             {editando ? "Editar preferência" : "Nova preferência"}
@@ -182,7 +189,11 @@ export function MemoryFormDialog({
                 value={valores.modulo ?? TODAS}
                 onValueChange={(v) => form.setValue("modulo", v)}
               >
-                <SelectTrigger id="modulo" className="w-full">
+                <SelectTrigger
+                  id="modulo"
+                  className="w-full"
+                  {...ariaDoErro("modulo-erro", form.formState.errors.modulo?.message)}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -195,6 +206,8 @@ export function MemoryFormDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {/* D8 — o erro de `modulo` ia para `setError` e não aparecia em lugar nenhum. */}
+              <ErroDoCampo id="modulo-erro" mensagem={form.formState.errors.modulo?.message} />
               {/*
                 ⚠️ A ressalva que o dono precisa ler ANTES de escolher: memória de módulo ANDa
                 com a chave daquele módulo. Sem isso, ele amarraria a preferência a Treinos e

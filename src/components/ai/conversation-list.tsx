@@ -9,27 +9,19 @@
  */
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Archive,
   ArchiveRestore,
   Loader2,
-  MessagesSquare,
   Star,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { EmptyState } from "@/components/shared/empty-state";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -39,6 +31,16 @@ import {
 } from "@/lib/actions/ai-conversations";
 import type { ConversationListItem } from "@/lib/ai/types";
 
+/**
+ * REDESIGN-07-D · D8 — a confirmação de exclusão é um diálogo único, sob demanda, com trava de
+ * `onOpenChange`, botões desabilitados durante o envio e "fecha, depois recarrega". Objeto
+ * literal escrito aqui: o compilador do Next o lê estaticamente.
+ */
+const ConfirmarExclusaoDialog = dynamic(
+  () => import("@/components/ai/confirmar-exclusao-dialog").then((m) => m.ConfirmarExclusaoDialog),
+  { ssr: false, loading: () => null },
+);
+
 export function ConversationList({
   conversas,
 }: {
@@ -47,28 +49,23 @@ export function ConversationList({
 }) {
   const router = useRouter();
   const [ocupado, setOcupado] = React.useState<string | null>(null);
-  const [paraExcluir, setParaExcluir] = React.useState<ConversationListItem | null>(null);
+  const [paraExcluir, setParaExcluir] = React.useState<string | null>(null);
+  const exclusaoMontada = useLazyDialog(paraExcluir !== null);
 
-  async function executar(id: string, fn: () => Promise<{ ok: boolean; error?: string }>) {
+  /**
+   * Favoritar e arquivar: recebem só o id e o estado da própria linha. ⚠️ Exceção declarada em
+   * `ia-sistema-formularios.test.ts` — erro de campo aqui só nasce de defeito de programação, e o
+   * mapa custaria ~0,45 KB gz a esta rota. A exclusão passa pelo mapa no diálogo sob demanda.
+   */
+  async function executar(id: string, fn: () => Promise<{ ok: true } | { ok: false; error: string }>) {
     setOcupado(id);
     const r = await fn();
     setOcupado(null);
     if (!r.ok) {
-      toast.error(r.error ?? "Não foi possível concluir a ação.");
-      return false;
+      toast.error(r.error);
+      return;
     }
     router.refresh();
-    return true;
-  }
-
-  if (conversas.length === 0) {
-    return (
-      <EmptyState
-        icon={MessagesSquare}
-        title="Nenhuma conversa ainda"
-        description="Comece uma conversa na aba Conversar."
-      />
-    );
   }
 
   return (
@@ -96,7 +93,10 @@ export function ConversationList({
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={c.isFavorite ? "Desfavoritar" : "Favoritar"}
+                // D8 — alternância com nome FIXO e estado em `aria-pressed`: um rótulo que troca
+                // de sentido a cada clique deixa quem ouve sem saber o que está valendo.
+                aria-label="Favorita"
+                aria-pressed={c.isFavorite}
                 disabled={ocupado === c.id}
                 onClick={() =>
                   void executar(c.id, () =>
@@ -141,7 +141,8 @@ export function ConversationList({
                 size="icon"
                 aria-label="Excluir"
                 disabled={ocupado === c.id}
-                onClick={() => setParaExcluir(c)}
+                aria-haspopup="dialog"
+                onClick={() => setParaExcluir(c.id)}
                 className="text-destructive hover:text-destructive"
               >
                 {ocupado === c.id ? (
@@ -155,44 +156,18 @@ export function ConversationList({
         ))}
       </ul>
 
-      <Dialog
-        open={paraExcluir !== null}
-        onOpenChange={(aberto) => !aberto && setParaExcluir(null)}
-      >
-        {/* `sm:max-w-lg` porque em `DialogContent` um `max-w-*` sem prefixo não vence o
-            `sm:max-w-sm` da primitiva — o twMerge deixa a classe da base ganhar de `sm` para
-            cima. O limite do celular já vem da primitiva. */}
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Excluir esta conversa?</DialogTitle>
-            <DialogDescription>
-              Isso apaga as mensagens, as execuções e o histórico de custo desta conversa.
-              O consumo já registrado nos relatórios do período deixará de aparecer. Não há
-              como desfazer.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setParaExcluir(null)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                if (!paraExcluir) return;
-                const ok = await executar(paraExcluir.id, () =>
-                  deleteConversation({ conversationId: paraExcluir.id }),
-                );
-                if (ok) {
-                  toast.success("Conversa excluída.");
-                  setParaExcluir(null);
-                }
-              }}
-            >
-              Excluir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {exclusaoMontada && (
+        <ConfirmarExclusaoDialog
+          alvoId={paraExcluir}
+          onFechar={() => setParaExcluir(null)}
+          titulo="Excluir esta conversa?"
+          descricao="Isso apaga as mensagens, as execuções e o histórico de custo desta conversa. O consumo já registrado nos relatórios do período deixará de aparecer. Não há como desfazer."
+          rotuloConfirmar="Excluir"
+          rotuloEnviando="Excluindo…"
+          mensagemDeSucesso="Conversa excluída."
+          acao={(id) => deleteConversation({ conversationId: id })}
+        />
+      )}
     </>
   );
 }

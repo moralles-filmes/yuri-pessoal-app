@@ -16,8 +16,11 @@ describe("a frase de gasto", () => {
     expect(AVISO_DE_GASTO).toBe(`Usa o provedor de IA que você configurou: ${CUSTO_DA_IA}.`);
   });
 
-  it("o módulo não tem import — cada tela que o lê paga só duas strings", () => {
-    const codigo = fs.readFileSync(path.join(__dirname, "gasto.ts"), "utf8");
-    expect(codigo).not.toMatch(/^\s*import\b/m);
+  it("os módulos são puros — gasto.ts só importa a frase de custo, que não importa nada", () => {
+    const gasto = fs.readFileSync(path.join(__dirname, "gasto.ts"), "utf8");
+    const imports = [...gasto.matchAll(/^\s*import\b[^;]*from "([^"]+)"/gm)].map((m) => m[1]);
+    expect(imports).toEqual(["./custo-da-ia"]);
+    const custo = fs.readFileSync(path.join(__dirname, "custo-da-ia.ts"), "utf8");
+    expect(custo).not.toMatch(/^\s*import\b/m);
   });
 });

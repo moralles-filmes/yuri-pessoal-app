@@ -55,7 +55,7 @@ import {
 } from "@/lib/actions/ai-providers";
 import type { ProviderCardView } from "@/lib/ai/types";
 import { lerDecimal } from "@/lib/ai/numero";
-import { errosDaAction } from "@/lib/forms/mensagem-da-action";
+import { errosDaAction, mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 const NENHUM = "__nenhum__";
 
@@ -84,6 +84,7 @@ export function ProviderCard({
   const modelos = React.useMemo(() => activeModelsFor(card.provider), [card.provider]);
 
   const [chave, setChave] = React.useState("");
+  const [erroDaChave, setErroDaChave] = React.useState<string | undefined>(undefined);
   const [salvandoChave, setSalvandoChave] = React.useState(false);
   const [testando, setTestando] = React.useState(false);
   const [salvandoConfig, setSalvandoConfig] = React.useState(false);
@@ -122,9 +123,13 @@ export function ProviderCard({
     setSalvandoChave(false);
 
     if (!r.ok) {
-      toast.error(r.fieldErrors?.apiKey?.[0] ?? r.error);
+      // D8 — o erro da chave fica sob o campo; o resto sobe com o nome do campo.
+      const { porCampo, texto } = errosDaAction(r, ["apiKey"]);
+      setErroDaChave(porCampo.apiKey);
+      toast.error(texto);
       return;
     }
+    setErroDaChave(undefined);
     setChave("");
     toast.success(
       r.data.substituiu
@@ -139,7 +144,7 @@ export function ProviderCard({
     const r = await testAiCredential({ provider: card.provider });
     setTestando(false);
     if (!r.ok) {
-      toast.error(r.error);
+      toast.error(mensagemDaAction(r));
       return;
     }
     toast.success(`Conexão validada. ${r.data.modelosVistos} modelos visíveis.`);
@@ -227,10 +232,14 @@ export function ProviderCard({
               type="password"
               autoComplete="off"
               value={chave}
-              onChange={(e) => setChave(e.target.value)}
+              onChange={(e) => {
+                setChave(e.target.value);
+                setErroDaChave(undefined);
+              }}
               placeholder={card.keyHint}
               disabled={!criptoOk || salvandoChave}
               className="min-w-0 flex-1"
+              {...ariaDoErro(`chave-${card.provider}-erro`, erroDaChave)}
             />
             <Button
               type="button"
@@ -245,6 +254,7 @@ export function ProviderCard({
               Guardar
             </Button>
           </div>
+          <ErroDoCampo id={`chave-${card.provider}-erro`} mensagem={erroDaChave} />
           <p className="text-xs text-muted-foreground">
             A chave é cifrada antes de ir para o banco e nunca volta para a tela.{" "}
             {temCredencial

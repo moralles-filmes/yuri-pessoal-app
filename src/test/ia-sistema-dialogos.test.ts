@@ -105,3 +105,76 @@ describe("07-D · D4 — a Segurança recolhida", () => {
     },
   );
 });
+
+/**
+ * REDESIGN-07-D · D8 — todo diálogo do lote diz o que faz e não fecha no meio do envio
+ * (spec §6.8). Nenhum teste do projeto exigia `DialogDescription` nem a trava de
+ * `onOpenChange`: fechar no meio deixa o dono sem saber se a exclusão aconteceu.
+ */
+const COM_CONTEUDO_DE_DIALOGO = ARQUIVOS.filter((a) => /<(?:Dialog|Sheet)Content\b/.test(fonte(a)));
+
+/** Diálogos que disparam action e NÃO precisam da trava — cada um com o motivo. */
+const SEM_TRAVA = new Map<string, string>([
+  ["components/search/search-command.tsx", "a paleta só LÊ (busca); não há escrita a interromper ao fechar"],
+  [
+    "components/ai/floating-assistant-panel.tsx",
+    "o painel não fecha por causa de uma action: mudar o canto é otimista e fecha só ao ocultar, depois do sucesso",
+  ],
+]);
+
+/** A trava: `onOpenChange={fn}` com `function fn(...) { if (<estado>) return; … }`. */
+function temTrava(codigo: string): boolean {
+  for (const m of codigo.matchAll(/onOpenChange=\{(\w+)\}/g)) {
+    const corpo = new RegExp(String.raw`function ${m[1]}\([^)]*\)[^{]*\{\s*if \([\w.!]+\) return;`);
+    if (corpo.test(codigo)) return true;
+  }
+  return false;
+}
+
+describe("07-D · D8 — os diálogos do lote", () => {
+  it("a varredura acha os diálogos do lote (anti-tautologia)", () => {
+    expect(COM_CONTEUDO_DE_DIALOGO.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("a trava sabe dizer sim e não (fixture)", () => {
+    expect(temTrava("function a(v) { if (enviando) return; set(v); } <Dialog onOpenChange={a}>")).toBe(true);
+    expect(temTrava("<Dialog onOpenChange={setAberto}>")).toBe(false);
+    expect(temTrava("<Dialog onOpenChange={(v) => !v && fechar()}>")).toBe(false);
+  });
+
+  it.each(COM_CONTEUDO_DE_DIALOGO.map((a) => [a] as const))("%s tem DialogDescription", (arquivo) => {
+    expect(fonte(arquivo)).toMatch(/<(?:Dialog|Sheet)Description\b|aria-describedby=\{undefined\}/);
+  });
+
+  it.each(
+    COM_CONTEUDO_DE_DIALOGO.filter((a) => /from "@\/lib\/actions\//.test(fonte(a)) && !SEM_TRAVA.has(a)).map(
+      (a) => [a] as const,
+    ),
+  )("%s trava o onOpenChange enquanto a action roda", (arquivo) => {
+    expect(temTrava(fonte(arquivo))).toBe(true);
+  });
+
+  it.each([...SEM_TRAVA.keys()].map((a) => [a] as const))(
+    "a exceção %s continua existindo e continuando sem trava (senão sai da lista)",
+    (arquivo) => {
+      expect(COM_CONTEUDO_DE_DIALOGO).toContain(arquivo);
+      expect(temTrava(fonte(arquivo))).toBe(false);
+    },
+  );
+
+  it("a exclusão de conversa e a de memória saem da linha para o diálogo único sob demanda", () => {
+    for (const lista of ["components/ai/conversation-list.tsx", "components/ai/memory-client.tsx"]) {
+      expect(fonte(lista), lista).toMatch(
+        /dynamic\(\s*\(\) =>\s*import\("@\/components\/ai\/confirmar-exclusao-dialog"\)/,
+      );
+      expect(fonte(lista), lista).not.toMatch(/DeleteConfirmDialog|<DialogContent\b/);
+    }
+  });
+
+  it("o formulário de memória mostra o erro de `modulo` e não fecha enquanto salva (M45)", () => {
+    const codigo = fonte("components/ai/memory-form-dialog.tsx");
+    expect(codigo).toMatch(/<ErroDoCampo\b[^>]*mensagem=\{[^}]*modulo/);
+    expect(codigo).toMatch(/<SelectTrigger\b[^>]*\{\.\.\.ariaDoErro\(/);
+    expect(temTrava(codigo)).toBe(true);
+  });
+});

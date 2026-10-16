@@ -156,6 +156,18 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: "app/(app)/notificacoes/excluir-notificacao-dialog.tsx", exige: /function aoMudarAbertura\([^)]*\)[^{]*\{\s*if \(excluindo\) return;/, porque: "o diálogo não fecha no meio da exclusão (o DeleteConfirmDialog não travava)" },
   { arquivo: "app/(app)/notificacoes/excluir-notificacao-dialog.tsx", exige: /<DialogDescription>/, porque: "o diálogo diz o que vai ser removido" },
 
+  // ── D8 — rótulos e alternâncias ──
+  { arquivo: "components/ai/conversation-list.tsx", exige: /aria-label="Favorita"\s*aria-pressed=\{c\.isFavorite\}/, porque: "o favorito é alternância com nome fixo e estado anunciado (M29)" },
+  { arquivo: "components/ai/receipt-upload.tsx", exige: /<Label htmlFor="arquivo-comprovante"/, porque: "o seletor de arquivo tem rótulo" },
+  ...(["rev-origem", "rev-conta", "rev-categoria"] as const).map((id) => ({
+    arquivo: REVISAO,
+    exige: new RegExp(`<Label htmlFor="${id}"[\\s\\S]*?<SelectTrigger\\s+id="${id}"`),
+    porque: `o rótulo "${id}" está associado ao seletor`,
+  })),
+  { arquivo: REVISAO, exige: /aria-label=\{`Para onde vai/, porque: "o seletor de destino de cada item diz de qual item é" },
+  { arquivo: INSIGHTS, exige: /className="sr-only">\s*Módulo da análise/, porque: "o seletor de módulo tem nome (o placeholder some ao escolher)" },
+  { arquivo: INSIGHTS, exige: /className="sr-only">\s*Título da tarefa/, porque: "o campo da tarefa tem rótulo, não só placeholder" },
+
   // ── D6 — Busca, paleta e sino ──
   { arquivo: BUSCA, exige: /const \[query, setQuery\] = React\.useState\(initialQuery\)/, porque: "o texto do campo é local: responde na hora e não espera o servidor (regra do campo de texto)" },
   { arquivo: BUSCA, exige: /window\.history\.replaceState\(null, "", buscaLink\(/, porque: "digitar não busca o RSC a cada tecla (M17)" },

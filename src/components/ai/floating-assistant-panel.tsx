@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import { ChatView, useConversaDaIa } from "@/components/ai/chat-client";
 import { definirBotaoFlutuante, estadoDoPainelDaIa } from "@/lib/actions/ai-panel";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { AI_LINK_BASE, conversationLink } from "@/lib/search/ai-links";
 import {
   ATALHO_DO_PAINEL,
@@ -158,7 +159,7 @@ export function FloatingAssistantPanel({
       // Desfaz a aposta e diz o que aconteceu — preferência que "salvou" e voltou sozinha no
       // próximo carregamento é pior que preferência que recusou na cara.
       onPreferencia({ canto, oculto });
-      toast.error(r.error);
+      toast.error(mensagemDaAction(r));
       return;
     }
     if (proximo.oculto) {

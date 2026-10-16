@@ -43,6 +43,7 @@ import { ROTULO_DO_ESTADO_DA_ACAO } from "@/lib/ai/constants";
 import { formatDate, timeInSaoPaulo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { actionsLink, conversationLink } from "@/lib/search/ai-links";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import {
   FILTROS_DO_HISTORICO,
   filtrarHistorico,
@@ -95,7 +96,7 @@ function BotaoDesfazer({
     setPreparando(false);
 
     if (!r.ok) {
-      toast.error(r.error);
+      toast.error(mensagemDaAction(r));
       return;
     }
     setProposta({

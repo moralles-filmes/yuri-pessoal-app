@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { removeAiCredential } from "@/lib/actions/ai-providers";
 import type { AiProviderId } from "@/lib/ai/core/contracts";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 export function RemoverChaveDialog({
   aberto,
@@ -56,7 +57,7 @@ export function RemoverChaveDialog({
     try {
       const r = await removeAiCredential({ provider });
       if (!r.ok) {
-        toast.error(r.error);
+        toast.error(mensagemDaAction(r));
         return;
       }
       toast.success("Credencial removida e provedor desativado.");

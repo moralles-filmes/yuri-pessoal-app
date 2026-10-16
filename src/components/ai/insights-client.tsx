@@ -33,6 +33,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { PropostaNaTela } from "@/components/ai/proposal-card";
 import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demanda";
 import { FraseDeGasto } from "@/components/ai/frase-de-gasto";
@@ -64,6 +65,7 @@ import {
 } from "@/lib/actions/ai-insights";
 import { formatDate } from "@/lib/format";
 import { settingsLink } from "@/lib/search/ai-links";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 const NOME_DO_MODULO: Record<ModuloDeInsight, string> = {
   financeiro: "Financeiro",
@@ -109,6 +111,7 @@ export function InsightsClient({
   // trava o feedback dos cartões (M33).
   const [gerando, iniciarGeracao] = useTransition();
   const idDoGasto = useId();
+  const idDoModulo = useId();
   const [modulo, setModulo] = useState<ModuloDeInsight | "">(disponiveis[0] ?? "");
   const [mostrarTodos, setMostrarTodos] = useState(false);
 
@@ -127,7 +130,7 @@ export function InsightsClient({
     iniciarGeracao(async () => {
       const r = await gerarInsight({ modulo });
       if (!r.ok) {
-        toast.error(r.error);
+        toast.error(mensagemDaAction(r));
         return;
       }
       toast.success(
@@ -150,7 +153,7 @@ export function InsightsClient({
         ...(decisao === "adiado" ? { adiadoAte: daquiUmaSemana() } : {}),
       });
       if (!r.ok) {
-        toast.error(r.error);
+        toast.error(mensagemDaAction(r));
         return;
       }
       router.refresh();
@@ -172,12 +175,16 @@ export function InsightsClient({
             </p>
           ) : (
             <>
+              {/* D8 — o seletor tem nome: o placeholder some assim que um módulo é escolhido. */}
+              <Label htmlFor={idDoModulo} className="sr-only">
+                Módulo da análise
+              </Label>
               <Select
                 value={modulo}
                 onValueChange={(v) => setModulo(v as ModuloDeInsight)}
                 disabled={gerando}
               >
-                <SelectTrigger className="w-full sm:w-64">
+                <SelectTrigger id={idDoModulo} className="w-full sm:w-64">
                   <SelectValue placeholder="Escolha o módulo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -258,6 +265,7 @@ function CartaoDeInsight({
   const resumo = renderizarExplicacao(insight.resumo, insight.fontes);
   const vigente = insight.estado.estado === "vigente";
   const [titulo, setTitulo] = useState("");
+  const idDoTitulo = useId();
   const [proposta, setProposta] = useState<PropostaNaTela | null>(null);
   const [preparando, startPreparo] = useTransition();
 
@@ -276,7 +284,7 @@ function CartaoDeInsight({
     startPreparo(async () => {
       const r = await prepararTarefaDoInsight({ insightId: insight.id, titulo });
       if (!r.ok) {
-        toast.error(r.error);
+        toast.error(mensagemDaAction(r));
         return;
       }
       setProposta({
@@ -361,7 +369,11 @@ function CartaoDeInsight({
               Transformar em tarefa
             </p>
             <div className="flex flex-wrap gap-2">
+              <Label htmlFor={idDoTitulo} className="sr-only">
+                Título da tarefa
+              </Label>
               <Input
+                id={idDoTitulo}
                 value={titulo}
                 onChange={(e) => setTitulo(e.target.value)}
                 placeholder="O que você quer fazer?"

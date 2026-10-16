@@ -23,6 +23,7 @@ import {
   type NotificationPrefs,
 } from "@/lib/settings/constants";
 import type { NotificationType } from "@/lib/notifications/constants";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
 /** Card de notificações: liga/desliga cada tipo de alerta in-app, por área. */
 export function NotificationsCard({ prefs }: { prefs: NotificationPrefs }) {
@@ -43,7 +44,7 @@ export function NotificationsCard({ prefs }: { prefs: NotificationPrefs }) {
         toast.success("Preferências de notificação salvas.");
         router.refresh();
       } else {
-        toast.error(res.error);
+        toast.error(mensagemDaAction(res));
       }
     });
   }

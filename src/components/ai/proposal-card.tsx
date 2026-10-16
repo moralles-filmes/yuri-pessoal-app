@@ -40,6 +40,7 @@ import {
   type DesfechoDoCartao,
 } from "@/lib/ai/cartao";
 import { actionsLink, stuckActionsLink } from "@/lib/search/ai-links";
+import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 import { cn } from "@/lib/utils";
 
 export type PropostaNaTela = {
@@ -169,12 +170,12 @@ export function ProposalCard({
     const proximo = desfechoDaConfirmacao(
       r.ok
         ? { ok: true, status: r.data.status, rota: r.data.targetRoute }
-        : { ok: false, mensagem: r.error },
+        : { ok: false, mensagem: mensagemDaAction(r) },
     );
     registrar(proximo);
 
     if (!r.ok) {
-      toast.error(r.error);
+      toast.error(mensagemDaAction(r));
       return;
     }
     if (proximo.tipo === "executada") toast.success("Feito.");
@@ -202,8 +203,9 @@ export function ProposalCard({
       return;
     }
     if (!r.ok) {
-      registrar({ tipo: "nao_aplicada", mensagem: r.error });
-      toast.error(r.error);
+      const texto = mensagemDaAction(r);
+      registrar({ tipo: "nao_aplicada", mensagem: texto });
+      toast.error(texto);
       return;
     }
     registrar({ tipo: "recusada" });

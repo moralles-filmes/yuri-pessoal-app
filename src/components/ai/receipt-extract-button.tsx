@@ -22,7 +22,8 @@ import { Loader2, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { extrairComprovante } from "@/lib/actions/ai-documents";
-import { CUSTO_DA_IA } from "@/lib/ai/gasto";
+import { CUSTO_DA_IA } from "@/lib/ai/custo-da-ia";
+import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
 
 export function ReceiptExtractButton({
   documentoId,
@@ -42,7 +43,8 @@ export function ReceiptExtractButton({
     setLendo(false);
 
     if (!r.ok) {
-      toast.error(r.error);
+      // Esta tela não tem campo: erro de campo sobe com o nome dele (regra 2 de formulário).
+      toast.error(serverErrorMessage(r.error, mapServerFieldErrors(r.fieldErrors, [])));
       // ⚠️ `refresh` também na FALHA: ela virou linha em `ai_document_extractions`, e a tela
       // precisa mostrá-la. Uma falha sem rastro é indistinguível de um botão que não fez nada.
       router.refresh();
