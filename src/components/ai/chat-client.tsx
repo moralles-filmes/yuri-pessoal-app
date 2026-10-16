@@ -750,24 +750,29 @@ export function ChatView({
               */}
               {b.role === "assistant" &&
                 (b.contexto || ((b.provider || b.model) && b.status !== "streaming")) && (
-                // V — `max-w-full min-w-0 truncate`: id de modelo e rótulo de contexto longos não
-                // empurram a bolha a 390 (molde do selo de ferramenta do `ProposalCard`).
+                // V — id de modelo e rótulo de contexto longos não empurram a bolha a 390 (molde
+                // do selo de ferramenta do `ProposalCard`). `max-w-full min-w-0` no selo e
+                // `truncate` num span DENTRO dele: o `Badge` é `inline-flex justify-center`, e
+                // reticências não funcionam no próprio contêiner flex — o texto era cortado dos
+                // dois lados, sem "…" (visto na prévia).
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   {b.provider && b.status !== "streaming" && (
-                    <Badge variant="outline" className="max-w-full min-w-0 truncate text-[11px] font-normal">
-                      {AI_PROVIDER_LABEL[b.provider]}
+                    <Badge variant="outline" className="max-w-full min-w-0 text-[11px] font-normal">
+                      <span className="min-w-0 truncate">{AI_PROVIDER_LABEL[b.provider]}</span>
                     </Badge>
                   )}
                   {b.model && b.status !== "streaming" && (
-                    <Badge variant="outline" className="max-w-full min-w-0 truncate text-[11px] font-normal">
-                      {b.model}
+                    <Badge variant="outline" className="max-w-full min-w-0 text-[11px] font-normal">
+                      <span className="min-w-0 truncate">{b.model}</span>
                     </Badge>
                   )}
                   {/* "enviada com", não "usou": quem decide o que fazer com o contexto é o
                       servidor, e a tela não tem como afirmar mais do que sabe. */}
                   {b.contexto && (
-                    <Badge variant="outline" className="max-w-full min-w-0 truncate text-[11px] font-normal">
-                      enviada com o contexto de {ROTULO_DA_ROTA_DE_CONTEXTO[b.contexto]}
+                    <Badge variant="outline" className="max-w-full min-w-0 text-[11px] font-normal">
+                      <span className="min-w-0 truncate">
+                        enviada com o contexto de {ROTULO_DA_ROTA_DE_CONTEXTO[b.contexto]}
+                      </span>
                     </Badge>
                   )}
                 </div>

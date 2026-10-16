@@ -217,9 +217,11 @@ export function ProposalCard({
       <div className="flex flex-wrap items-center gap-2">
         <IconeDoEstado estado={vista.estado} className={tom.cor} />
         <span className="min-w-0 flex-1 font-medium">{maiuscula(vista.rotulo)}</span>
-        {/* `max-w-full min-w-0 truncate`: rótulo longo de ferramenta não empurra a tela a 390. */}
-        <Badge variant="outline" className="max-w-full min-w-0 truncate text-[11px] font-normal">
-          {proposta.rotulo ?? rotuloDaFerramenta(proposta.toolName)}
+        {/* Rótulo longo de ferramenta não empurra a tela a 390. `truncate` no span, não no
+            `Badge`: ele é `inline-flex justify-center`, e ali o texto era cortado dos dois lados,
+            sem reticências. */}
+        <Badge variant="outline" className="max-w-full min-w-0 text-[11px] font-normal">
+          <span className="min-w-0 truncate">{proposta.rotulo ?? rotuloDaFerramenta(proposta.toolName)}</span>
         </Badge>
       </div>
 

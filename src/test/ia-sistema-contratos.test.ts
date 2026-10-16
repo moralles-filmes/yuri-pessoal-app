@@ -211,9 +211,16 @@ export const CONTRATOS: Contrato[] = [
   })),
   ...["AI_PROVIDER_LABEL\\[b\\.provider\\]", "b\\.model", "enviada com o contexto"].map((conteudo) => ({
     arquivo: CHAT,
-    exige: new RegExp(`<Badge variant="outline" className="max-w-full min-w-0 truncate[^"]*">\\s*\\{?${conteudo}`),
-    porque: `o selo (${conteudo.replace(/\\/g, "")}) não empurra a bolha a 390`,
+    exige: new RegExp(
+      `<Badge variant="outline" className="max-w-full min-w-0 [^"]*">\\s*<span className="min-w-0 truncate">\\s*\\{?${conteudo}`,
+    ),
+    porque: `o selo (${conteudo.replace(/\\/g, "")}) não empurra a bolha a 390, e as reticências ficam no span de dentro`,
   })),
+  {
+    arquivo: CARTAO,
+    exige: /<Badge variant="outline" className="max-w-full min-w-0 [^"]*">\s*<span className="min-w-0 truncate">\{proposta\.rotulo \?\? rotuloDaFerramenta/,
+    porque: "o rótulo da ferramenta não empurra o cartão a 390, e as reticências ficam no span de dentro",
+  },
 
   // ── V — subpáginas de /ia ──
   { arquivo: INSIGHTS, exige: /<EmptyState\b[^>]*title="Nenhum módulo liberado para a IA ler"/, porque: "sem módulo liberado, o vazio é o EmptyState com o caminho para resolver" },
@@ -422,6 +429,25 @@ describe("07-D — contratos de IA, Configurações, Notificações e Busca", ()
       expect(fonte(c.arquivo)).not.toMatch(c.exige);
     },
   );
+});
+
+/**
+ * V — o `Badge` é `inline-flex justify-center`: `truncate` nele corta o texto dos DOIS lados e
+ * não desenha "…" (reticências não funcionam no próprio contêiner flex). A prévia pegou isso no
+ * selo do modelo e no da ferramenta; o `truncate` vai num span dentro do selo.
+ */
+describe("07-D · V — reticências no texto, não no selo", () => {
+  const comSelo = PASTAS_DO_LOTE.flatMap(arquivosDe).filter((a) => /<Badge\b/.test(fonte(a)));
+
+  it("a varredura acha os selos do lote (anti-tautologia)", () => {
+    expect(comSelo).toContain(CHAT);
+    expect(comSelo).toContain(CARTAO);
+    expect(comSelo.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it.each(comSelo.map((a) => [a] as const))("%s — nenhum Badge leva truncate", (arquivo) => {
+    expect(fonte(arquivo)).not.toMatch(/<Badge\b[^>]*\btruncate\b/);
+  });
 });
 
 describe("07-D · D3 — o painel continua guardado pelos mesmos testes", () => {
