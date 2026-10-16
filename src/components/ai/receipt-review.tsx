@@ -173,7 +173,9 @@ export function ReceiptReview({
   const escolheuOrigem =
     ondeEntra === "conta" ? conta !== SEM_ESCOLHA : cartao !== SEM_ESCOLHA;
 
-  const resumo = resumirNota(efetiva.totalCentavos.valor ?? 0, classificacao);
+  // Total não identificado chega como ausência (REDESIGN-07-D · Z): `?? 0` fazia o resumo
+  // escrever "o total de R$ 0,00".
+  const resumo = resumirNota(efetiva.totalCentavos.valor, classificacao);
 
   function corrigirTexto(chave: ChaveDeTexto, valor: string) {
     setCorrecoes((c) => ({ ...c, [chave]: valor.trim() === "" ? null : valor }));
@@ -320,7 +322,7 @@ export function ReceiptReview({
           >
             <Input
               inputMode="decimal"
-              placeholder="0,00"
+              placeholder="não identificado"
               defaultValue={centavosParaTexto(extracao.totalCentavos.valor)}
               onChange={(e) => {
                 setCorrecoes((c) => ({
@@ -373,8 +375,8 @@ export function ReceiptReview({
         <div className="rounded-xl border p-4">
           <h2 className="text-sm font-semibold">Itens da nota</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Classifique para conferir a nota. ⚠️ Nesta versão o lançamento é{" "}
-            <strong>um só</strong>, com o valor total e como despesa pessoal — separar
+            Classifique para conferir a nota. O lançamento é <strong>um só</strong>, com o
+            valor total e como despesa pessoal — separar
             categorias ou dividir com terceiros continua sendo feito na tela do Financeiro,
             pelo mesmo motor de sempre.
           </p>

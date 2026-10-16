@@ -567,9 +567,10 @@ export function AiPreferencesForm({
               <SelectItem value="rapido">Rápido</SelectItem>
             </SelectContent>
           </Select>
+          {/* REDESIGN-07-D · D9 — a IA escreve desde a 18-C; o que não existe é o modo (M14). */}
           <p className="text-xs text-muted-foreground">
-            Guardado desde já, mas ainda <strong>sem efeito</strong>: nesta versão a IA não
-            cria nem altera nada, então não há o que confirmar.
+            Guardado, mas ainda <strong>sem efeito</strong>: toda alteração da IA pede a sua
+            confirmação, uma de cada vez, qualquer que seja o modo.
           </p>
         </div>
 

@@ -179,8 +179,10 @@ export function FloatingAssistantPanel({
           primitiva traz `data-[side=right]:sm:max-w-sm`, e o `twMerge` só substitui classe do
           MESMO conjunto de modificadores. Sem o prefixo, as duas sobrevivem e quem decide é a
           ordem do CSS gerado — que o minificador reescreve.
+          REDESIGN-07-D · D9 — e sem `w-full`: à direita o `data-[side=right]:w-3/4` da primitiva
+          já o vencia; embaixo, o `inset-x-0` já ocupa a largura. Era classe morta.
         */
-        className="flex w-full flex-col gap-0 p-0 data-[side=bottom]:h-[85svh] data-[side=right]:sm:max-w-lg"
+        className="flex flex-col gap-0 p-0 data-[side=bottom]:h-[85svh] data-[side=right]:sm:max-w-lg"
       >
         {/* `pr-12`: o botão de fechar da primitiva fica em `absolute top-3 right-3`. */}
         <SheetHeader className="shrink-0 border-b pr-12">

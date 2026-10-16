@@ -15,14 +15,10 @@ import { semComentarios } from "@/test/links-inline";
 const SRC = path.resolve(__dirname, "..", "..");
 
 /** Exceções DECLARADAS, com dono — e cada uma tem de continuar violando. */
+// REDESIGN-07-D · D9 — saíram `module-shell.tsx` (a gaveta passa a `data-[side=left]:w-[17rem]`)
+// e `floating-assistant-panel.tsx` (o `w-full` morto saiu), no mesmo commit do conserto.
 const EXCECOES = new Map<string, string>([
   ["components/layout/mobile-nav.tsx", "casca — fora da 07-A"],
-  ["components/shared/module-shell.tsx", "07-D"],
-  // `side={desktop ? "right" : "bottom"}`: a varredura não lê lado dinâmico e assume "right".
-  // No desktop o `w-full` é mesmo morto (`data-[side=right]:w-3/4` vence), mas o
-  // `data-[side=right]:sm:max-w-lg` limita no mesmo valor e nada muda na tela; na gaveta de
-  // baixo o `inset-x-0` da primitiva já ocupa a largura. `floating-assistant*` é intocável na 07-A.
-  ["components/ai/floating-assistant-panel.tsx", "07-D — lado dinâmico, sem efeito visível"],
 ]);
 
 /** Texto da abertura `<SheetContent …>` a partir de `i`, respeitando `{…}` e aspas. */

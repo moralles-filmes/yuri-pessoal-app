@@ -14,6 +14,7 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { getAiPreferences, getUsageByModel, getUsageSummary } from "@/lib/ai/queries";
 import { AI_PROVIDER_LABEL } from "@/lib/ai/core/contracts";
 import { AVISO_MOEDA, formatUsd } from "@/lib/ai/constants";
+import { textoDoCusto } from "@/lib/ai/usage/texto-do-custo";
 import { reconcileOwnRuns } from "@/lib/ai/server/reconcile";
 
 export const metadata: Metadata = { title: "Consumo · IA" };
@@ -172,12 +173,14 @@ export default async function ConsumoPage() {
                       <td className="py-2 pr-3 text-right tabular-nums">
                         {linha.execucoes}
                       </td>
+                      {/*
+                        REDESIGN-07-D · Z — linha sem nenhum custo informado é "não medido",
+                        nunca "US$ 0,000000" (invariante 11); "sem custo" zero é zero medido.
+                      */}
                       <td className="py-2 pr-3 text-right tabular-nums">
-                        {formatUsd(linha.custoUsd)}
+                        {textoDoCusto(linha)}
                       </td>
-                      <td className="py-2 text-right tabular-nums">
-                        {linha.semCusto > 0 ? linha.semCusto : "—"}
-                      </td>
+                      <td className="py-2 text-right tabular-nums">{linha.semCusto}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -147,14 +147,22 @@ export function ModuleNavDrawer({
   nav,
   open,
   onOpenChange,
+  id,
 }: {
   nav: NavegacaoDeModulo;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** O id que o gatilho "Seções" cita em `aria-controls` (REDESIGN-07-D · D9). */
+  id?: string;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-[17rem] overflow-y-auto">
+      {/*
+        REDESIGN-07-D · D9 — a largura com o prefixo de lado: a primitiva traz
+        `data-[side=left]:w-3/4`, e um `w-[17rem]` sem prefixo é OUTRO grupo do `twMerge` que o
+        seletor de atributo vence (a 390 a gaveta media 292 px, ¾ da tela, e não 272).
+      */}
+      <SheetContent side="left" id={id} className="data-[side=left]:w-[17rem] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-base">{nav.nome}</SheetTitle>
         </SheetHeader>
@@ -180,11 +188,17 @@ export function ModuleShell({
   children: React.ReactNode;
 }) {
   const [gavetaAberta, setGavetaAberta] = React.useState(false);
+  const idDaGaveta = React.useId();
 
   return (
     <div className="flex gap-6">
       <ModuleNav nav={nav} />
-      <ModuleNavDrawer nav={nav} open={gavetaAberta} onOpenChange={setGavetaAberta} />
+      <ModuleNavDrawer
+        nav={nav}
+        open={gavetaAberta}
+        onOpenChange={setGavetaAberta}
+        id={idDaGaveta}
+      />
 
       {/* `min-w-0` é o que impede um conteúdo largo de empurrar a página na horizontal. */}
       <div className="min-w-0 flex-1 space-y-4">
@@ -192,6 +206,8 @@ export function ModuleShell({
           variant="outline"
           size="sm"
           className="lg:hidden"
+          aria-expanded={gavetaAberta}
+          aria-controls={idDaGaveta}
           onClick={() => setGavetaAberta(true)}
         >
           <Menu className="size-4" />

@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { semComentarios } from "@/test/links-inline";
+import { TOOL_PERMISSIONS, TOOL_WRITE_PERMISSIONS } from "@/lib/ai/tools/contracts";
+import { toolsForPermission, toolsForWritePermission } from "@/lib/ai/tools/registry";
 
 /**
  * REDESIGN-07-D — o que alguém desfaria sem perceber em IA, Configurações, Notificações e
@@ -28,6 +30,8 @@ const NOTIFICACOES = "app/(app)/notificacoes/notifications-client.tsx";
 const BUSCA = "app/(app)/busca/busca-client.tsx";
 const PALETA = "components/search/search-command.tsx";
 const SINO = "components/notifications/notification-bell.tsx";
+const MODULO = "components/shared/module-shell.tsx";
+const CONSUMO = "app/(app)/ia/consumo/page.tsx";
 
 /** Uma tag JSX inteira até o seu fechamento — sem atravessar o `</Tag>` para a próxima. */
 const dentroDe = (tag: string, ate: string) => `<${tag}\\b(?:(?!<\\/${tag}>)[\\s\\S])*?${ate}`;
@@ -188,6 +192,16 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: SINO, exige: /aria-hidden="true"[^>]*>\s*\{unreadCount > 9/, porque: "o selo numérico não é lido de novo" },
   { arquivo: SINO, exige: /className="sr-only">\s*Não lida/, porque: "lida × não lida em texto no sino" },
   { arquivo: SINO, exige: /disabled=\{pending \|\| unreadCount === 0\}/, porque: "'Marcar todas' sem nada a marcar fica desabilitado" },
+
+  // ── D9 — a gaveta do módulo anuncia o estado ──
+  { arquivo: MODULO, exige: /aria-expanded=\{gavetaAberta\}/, porque: "o gatilho 'Seções' diz se a gaveta está aberta" },
+  { arquivo: MODULO, exige: /aria-controls=\{idDaGaveta\}/, porque: "e aponta para a gaveta" },
+  { arquivo: MODULO, exige: /<ModuleNavDrawer\b[^>]*\bid=\{idDaGaveta\}/, porque: "pelo mesmo id que a gaveta recebe" },
+  { arquivo: MODULO, exige: /<SheetContent\b[^>]*\bid=\{id\}/, porque: "e que o conteúdo da gaveta usa" },
+
+  // ── Z — ausência não vira zero ──
+  { arquivo: REVISAO, exige: /resumirNota\(efetiva\.totalCentavos\.valor,/, porque: "o total não identificado chega ao resumo como ausência — `?? 0` escrevia 'o total de R$ 0,00' (M15)" },
+  { arquivo: CONSUMO, exige: /textoDoCusto\(linha\)/, porque: "a célula de custo sai de uma função pura: linha sem custo medido é 'não medido' (M49)" },
 ];
 
 export const PROIBIDOS: Contrato[] = [
@@ -238,6 +252,11 @@ export const PROIBIDOS: Contrato[] = [
   { arquivo: BUSCA, exige: /router\.replace\(/, porque: "router.replace a cada tecla buscava o RSC no servidor (M17)" },
   { arquivo: BUSCA, exige: /`\/busca\$\{/, porque: "a URL da busca não é montada à mão" },
   { arquivo: SINO, exige: /aria-label="Notificações"/, porque: "nome fixo esconde a contagem (M19)" },
+
+  // ── Z ──
+  { arquivo: REVISAO, exige: /placeholder="0,00"/, porque: "o total vazio é 'não identificado', não um zero sugerido" },
+  { arquivo: CONSUMO, exige: /formatUsd\(linha\.custoUsd\)/, porque: "linha sem nenhum custo informado virava 'US$ 0,000000' (M49)" },
+  { arquivo: CONSUMO, exige: /linha\.semCusto > 0 \? linha\.semCusto : "—"/, porque: "'sem custo' zero é zero medido: escreve 0, não traço" },
 ];
 
 /**
@@ -373,5 +392,63 @@ describe("07-D · D7 — o lote linka /ia só pelos construtores (M21)", () => {
       .filter((l) => ROTA_DE_IA_A_MAO.test(l))
       .map((l) => l.trim());
     expect(linhas, arquivo).toEqual([]);
+  });
+});
+
+/**
+ * REDESIGN-07-D · D9 — nenhum texto do lote nega o que o registry tem (spec §6.10, M14).
+ *
+ * "Não consulta seus registros" e "não cria nem altera nada" eram verdade na 18-A e viraram
+ * mentira na 18-B e na 18-C — a quarta vez que uma frase de ausência envelhece neste módulo
+ * (invariante 100). A premissa sai do REGISTRY, nunca de uma lista à mão: enquanto houver
+ * ferramenta de leitura, a primeira frase é proibida; enquanto houver de escrita, a segunda.
+ */
+const temLeitura = TOOL_PERMISSIONS.some((p) => toolsForPermission(p).some((t) => t.kind === "leitura"));
+const temEscrita = TOOL_WRITE_PERMISSIONS.some((p) => toolsForWritePermission(p).length > 0);
+const NAO_CONSULTA = /não consulta (?:os )?seus registros/i;
+const NAO_ALTERA = /não cria nem altera nada/i;
+
+/** O texto como se lê: sem as tags de ênfase, sem `{" "}`, espaços colapsados. */
+function textoCorrido(codigo: string): string {
+  return codigo
+    .replace(/\{"\s*"\}/g, " ")
+    .replace(/<\/?(?:strong|em|b|i|span|code)\b[^>]*>/g, "")
+    .replace(/\s+/g, " ");
+}
+
+describe("07-D · D9 — os textos dizem o que o sistema faz hoje (M14)", () => {
+  const arquivos = PASTAS_DO_LOTE.flatMap(arquivosDe);
+
+  it("a premissa medida hoje: o registry tem leitura E escrita (senão o contrato não diria nada)", () => {
+    expect(temLeitura).toBe(true);
+    expect(temEscrita).toBe(true);
+  });
+
+  it("a varredura sabe dizer sim (fixture com a frase antiga do ai-card)", () => {
+    const antiga = textoCorrido(
+      'Nesta versão o assistente <strong>não consulta seus registros</strong> e não cria\n          nem altera nada.',
+    );
+    expect(antiga).toMatch(NAO_CONSULTA);
+    expect(antiga).toMatch(NAO_ALTERA);
+    expect(textoCorrido("ela não altera nada nos seus módulos")).not.toMatch(NAO_ALTERA);
+  });
+
+  it.each(arquivos.map((a) => [a] as const))("%s não nega leitura nem escrita que existem", (arquivo) => {
+    const texto = textoCorrido(fonte(arquivo));
+    if (temLeitura) expect(texto, arquivo).not.toMatch(NAO_CONSULTA);
+    if (temEscrita) expect(texto, arquivo).not.toMatch(NAO_ALTERA);
+  });
+
+  it("os textos novos dizem o que vale (ai-card, modo de confirmação, comprovante)", () => {
+    expect(textoCorrido(fonte("components/settings/ai-card.tsx"))).toContain(
+      "O assistente lê só os módulos que você liberou, e nenhuma alteração acontece sem você confirmar na tela.",
+    );
+    expect(textoCorrido(fonte(PREFERENCIAS))).toContain(
+      "toda alteração da IA pede a sua confirmação, uma de cada vez, qualquer que seja o modo.",
+    );
+    const revisao = textoCorrido(fonte(REVISAO));
+    expect(revisao).toContain("O lançamento é um só, com o valor total e como despesa pessoal");
+    expect(revisao).not.toMatch(/nesta versão/i);
+    expect(revisao).not.toContain("⚠️");
   });
 });
