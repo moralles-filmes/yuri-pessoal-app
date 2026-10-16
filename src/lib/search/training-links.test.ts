@@ -23,6 +23,7 @@ import {
   programLink,
   recordLink,
   scheduleLink,
+  historyLink,
   sessionLink,
   todayLink,
   trainingReportsLink,
@@ -165,5 +166,12 @@ describe("D6 — cada parâmetro de cada link é LIDO pela página de destino", 
     expect(habitsManageLink()).toBe("/habitos?view=gerenciar");
     expect(HABIT_VIEWS).toContain("gerenciar");
     expect(temPagina(habitsManageLink())).toBe(true);
+  });
+});
+/** REDESIGN-07-D · D7 — o histórico de sessões ganha construtor (insights/collectors/training). */
+describe("07-D — historyLink", () => {
+  it("abre o histórico, que tem página no disco", () => {
+    expect(historyLink()).toBe("/treinos/historico");
+    expect(temPagina(historyLink())).toBe(true);
   });
 });

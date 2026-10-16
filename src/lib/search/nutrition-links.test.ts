@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import { temPagina } from "@/test/rotas";
 import {
   diaryLink,
+  goalsLink,
   foodLink,
   mealTemplateLink,
   measurementsLink,
@@ -173,5 +174,25 @@ describe("D6 — cada parâmetro de cada link é LIDO pela página de destino", 
     const [rota, chaves] = rotaEParametros(link);
     const lidos = parametrosLidos(rota);
     for (const chave of chaves) expect(lidos.has(chave), `${rota} não lê "${chave}"`).toBe(true);
+  });
+});
+
+/**
+ * REDESIGN-07-D · D7 — o diário sem data, as metas e o apelido legado (spec §6.7).
+ */
+describe("07-D — diário sem data, metas e o apelido `date`", () => {
+  it("diaryLink sem data é o diário de hoje; goalsLink abre as metas", () => {
+    expect(diaryLink()).toBe("/nutricao/diario");
+    expect(goalsLink()).toBe("/nutricao/metas");
+    expect(temPagina(diaryLink())).toBe(true);
+    expect(temPagina(goalsLink())).toBe(true);
+  });
+
+  it("o diário aceita `date` como apelido legado — `data` vence (M41)", () => {
+    // `ai_tool_calls.refs` e `ai_action_executions.target_route` gravados com `?date=` são
+    // imutáveis: sem o apelido, o link antigo abriria hoje em vez do dia do registro.
+    const lidos = parametrosLidos("/nutricao/diario");
+    expect(lidos.has("data")).toBe(true);
+    expect(lidos.has("date")).toBe(true);
   });
 });

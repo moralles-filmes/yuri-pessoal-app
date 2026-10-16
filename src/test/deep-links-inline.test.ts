@@ -61,6 +61,20 @@ const VARRIDOS = [
   // 07-C · D6: o único link à mão daqui (planejamento sem `visao`) foi para planningWeekLink.
   // O TETO zero mora em deep-links-query-string.test.ts (SO_CONSTRUTOR).
   { arquivo: "lib/notifications/nutrition.ts", piso: 0 },
+  /*
+    REDESIGN-07-D · D7 — os arquivos da IA que guardam rota em `rota:` (`ToolRef`, as refs da
+    previsão). O extrator passou a ler essa chave; o piso de cada um foi contado no commit que
+    os trouxe. Os que só têm a rota numa constante (`ROTA_DO_PAINEL`, `rotaDaTarefa`) não
+    aparecem aqui — limite registrado no spec.
+  */
+  { arquivo: "lib/ai/approval/commands/finance-preview.ts", piso: 2 },
+  { arquivo: "lib/ai/approval/commands/todo-preview.ts", piso: 1 },
+  { arquivo: "lib/ai/tools/adapters/calendar.ts", piso: 1 },
+  { arquivo: "lib/ai/tools/adapters/finance.ts", piso: 2 },
+  { arquivo: "lib/ai/tools/adapters/habits.ts", piso: 1 },
+  { arquivo: "lib/ai/tools/adapters/studies.ts", piso: 2 },
+  { arquivo: "lib/ai/tools/adapters/tasks.ts", piso: 2 },
+  { arquivo: "lib/ai/tools/adapters/todo.ts", piso: 2 },
 ] as const;
 
 /**
@@ -86,8 +100,8 @@ describe("R4 — os deep-links montados à mão abrem telas que existem", () => 
       // Sem esta afirmação, um caminho errado devolveria zero ponto e todo `toBe(true)`
       // abaixo viraria tautologia sobre uma lista vazia.
       expect(bruto.length, `${arquivo} está vazio`).toBeGreaterThan(0);
-      expect(fonte, `${arquivo} não tem \`link:\` — o alvo mudou de forma`).toMatch(
-        /\blink\s*:/,
+      expect(fonte, `${arquivo} não tem \`link:\`/\`rota:\` — o alvo mudou de forma`).toMatch(
+        /\b(?:link|rota|targetRoute)\s*:/,
       );
       // A pré-condição de `semComentarios`: ela não conhece string, então um `//` dentro
       // de um literal a faria comer o resto da linha — e o link sumiria da varredura sem
@@ -229,6 +243,32 @@ const FIXTURE_ATRIBUICAO = [
   "const f = (link) => link;",
   'const deepLink = "/outra-chave";',
 ].join("\n");
+
+/**
+ * REDESIGN-07-D · D7 — a IA guarda a rota em `rota:` (`ToolRef`) e o destino da execução em
+ * `targetRoute:`. Sem estas chaves, `/tarefas?task=` e `/nutricao/diario?date=` passavam por
+ * fora dos dois contratos de link (M44).
+ */
+const FIXTURE_ROTA = [
+  "const r = { tipo: \"tarefa\", id, rota: `/tarefas?task=${id}` };",
+  "const e = { targetRoute: \"/nutricao/diario\", x: 1 };",
+  "const rotaDaTarefa = (id) => `/todo?v=todas&task=${id}`;",
+  "const ROTA_DO_PAINEL = \"/ia/memoria\";",
+  "const s = { rotaDoDia: \"/nao-e-a-chave\" };",
+].join("\n");
+
+describe("R4 — o extrator lê `rota:` e `targetRoute:` (07-D, D7)", () => {
+  const achadas = pontosDeLink("fixture.ts", FIXTURE_ROTA).map((p) => p.literal);
+
+  it("acha a rota da ref e o destino da execução", () => {
+    expect(achadas).toEqual(["/tarefas?task=${id}", "/nutricao/diario"]);
+  });
+
+  it("não confunde a chave com nomes que só começam por ela", () => {
+    expect(achadas).not.toContain("/nao-e-a-chave");
+    expect(achadas).not.toContain("/ia/memoria");
+  });
+});
 
 describe("R4 — o extrator também lê `const link = …` (F2, 07-A)", () => {
   const achadas = pontosDeLink("fixture.ts", FIXTURE_ATRIBUICAO).map((p) => p.literal);

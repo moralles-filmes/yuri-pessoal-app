@@ -30,6 +30,7 @@ import {
 } from "@/lib/nutrition/diary-queries";
 import { roundForDisplay } from "@/lib/nutrition/calc";
 import { NUTRITION_BASE_PATH } from "@/lib/nutrition/constants";
+import { diaryLink } from "@/lib/search/nutrition-links";
 import { hojeISO } from "@/lib/format";
 import type { DiaryEntrySnapshot } from "@/lib/nutrition/types";
 import { EfeitoImpossivel, type EfeitoProposto } from "../contracts";
@@ -303,7 +304,11 @@ export async function preverDesfazerConsumo(payload: unknown): Promise<EfeitoPro
   };
 }
 
-/** A rota que a tela usa para levar ao dia do registro. */
+/**
+ * A rota que a tela usa para levar ao dia do registro — pelo construtor da Dieta, com `?data=`
+ * (a página lê `data`; `?date=` era ignorado e abria hoje). REDESIGN-07-D · D7. Não entra no
+ * hash: é o `targetRoute` da execução, gravado depois de confirmar.
+ */
 export function rotaDoDiario(data: string): string {
-  return `${ROTA_DO_DIARIO}?date=${data}`;
+  return diaryLink(data);
 }

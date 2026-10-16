@@ -26,6 +26,7 @@ import {
 } from "@/lib/training/metrics";
 import { getTrainingPreferences } from "@/lib/training/queries";
 import type { TrainingPreferences } from "@/lib/training/types";
+import { historyLink } from "@/lib/search/training-links";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 
 import type { Indicador, PeriodoDoIndicador, SerieTemporal } from "../contracts";
@@ -44,7 +45,7 @@ export const TETO_SESSOES = 500;
 export const MAX_MESES = 12;
 export const MESES_PADRAO = 4;
 
-const ROTA = "/treinos/historico";
+const ROTA = historyLink();
 
 const opcoesDe = (prefs: TrainingPreferences): Required<MetricOptions> => ({
   includeWarmup: prefs.countWarmupInVolume,

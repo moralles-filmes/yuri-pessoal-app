@@ -41,6 +41,7 @@ import type { TrainingPreferences } from "@/lib/training/types";
 import type { VolumeUnit } from "@/lib/training/tracking";
 import { normalizarTexto } from "@/lib/ai/core/text";
 import { hojeISO } from "@/lib/format";
+import { sessionLink } from "@/lib/search/training-links";
 import { emptyToolOutput, type ToolOutput, type ToolRef } from "../contracts";
 
 /** ⚠️ `.strict()` em todos: campo a mais é erro, e é por aqui que `user_id` seria barrado. */
@@ -91,7 +92,7 @@ const ANOS_DO_HISTORICO_COMPLETO = Math.round(JANELA_HISTORICO_COMPLETO_DIAS / 3
 const refDaSessao = (id: string): ToolRef => ({
   tipo: "sessao_de_treino",
   id,
-  rota: `/treinos/historico/${id}`,
+  rota: sessionLink(id),
 });
 
 /**

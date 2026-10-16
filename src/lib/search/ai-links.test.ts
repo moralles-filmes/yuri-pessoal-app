@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { temPagina } from "@/test/rotas";
+import { parametrosLidos, rotaEParametros } from "@/test/parametros-lidos";
+import { AI_SECTIONS } from "@/lib/ai/constants";
 import {
+  AI_LINK_BASE,
   actionsLink,
   conversationLink,
   conversationsLink,
   insightsLink,
   memoryLink,
+  receiptLink,
   receiptsLink,
   settingsLink,
   stuckActionsLink,
@@ -51,5 +55,44 @@ describe("ai-links", () => {
     // o caminho à mão continuaria verde se `conversationLink` passasse a apontar para
     // outro lugar.
     expect(temPagina(conversationLink("9f8e7d6c-1234"))).toBe(true);
+  });
+});
+
+/**
+ * REDESIGN-07-D · D7 — os construtores que as telas do lote passam a usar (spec §6.7).
+ */
+describe("ai-links — 07-D", () => {
+  it("actionsLink aceita um filtro de FILTROS_DO_HISTORICO; 'todas' é a rota pura", async () => {
+    const { FILTROS_DO_HISTORICO } = await import("@/lib/ai/approval/history");
+    expect(actionsLink()).toBe("/ia/acoes");
+    expect(actionsLink("todas")).toBe("/ia/acoes");
+    for (const filtro of FILTROS_DO_HISTORICO.filter((f) => f !== "todas")) {
+      expect(actionsLink(filtro)).toBe(`/ia/acoes?filtro=${filtro}`);
+    }
+    // O aviso do sino continua apontando para o mesmo lugar, agora pelo mesmo construtor.
+    expect(stuckActionsLink()).toBe(actionsLink("problemas"));
+  });
+
+  it("a página de ações lê `filtro`, e a de comprovantes lê `doc` (o link não é ignorado em silêncio)", () => {
+    expect(parametrosLidos("/ia/acoes").has("filtro")).toBe(true);
+    const [rota, chaves] = rotaEParametros(receiptLink("doc-1"));
+    expect(receiptLink("doc-1")).toBe("/ia/comprovantes?doc=doc-1");
+    for (const chave of chaves) expect(parametrosLidos(rota).has(chave), chave).toBe(true);
+  });
+
+  it("os 8 itens da navegação de /ia são exatamente os construtores de base (M43)", () => {
+    // AI_SECTIONS mora num módulo puro sem import; este teste é o que o amarra a ai-links.
+    expect(AI_SECTIONS.map((s) => s.href).sort()).toEqual(
+      [
+        AI_LINK_BASE,
+        conversationsLink(),
+        actionsLink(),
+        receiptsLink(),
+        insightsLink(),
+        memoryLink(),
+        usageLink(),
+        settingsLink(),
+      ].sort(),
+    );
   });
 });

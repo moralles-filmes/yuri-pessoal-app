@@ -25,11 +25,18 @@ export const planLink = (id: string) =>
 /** Lista de compras aberta. */
 export const shoppingListLink = (id: string) => `/nutricao/compras?lista=${id}`;
 
-/** Diário num dia específico (data pura 'yyyy-MM-dd'). */
-export const diaryLink = (date: string) => `/nutricao/diario?data=${date}`;
+/**
+ * Diário num dia específico (data pura 'yyyy-MM-dd'). Sem data, o diário de hoje — o que a
+ * página mostra quando não recebe `data` (REDESIGN-07-D · D7: a IA também linka assim).
+ */
+export const diaryLink = (date?: string) =>
+  date ? `/nutricao/diario?data=${date}` : "/nutricao/diario";
 
 /** Medidas corporais. */
 export const measurementsLink = () => "/nutricao/medidas";
+
+/** Metas nutricionais (REDESIGN-07-D · D7 — a referência de metas da IA). */
+export const goalsLink = () => "/nutricao/metas";
 
 /**
  * Despensa. NÃO é rota própria — é a aba `?aba=despensa` de `/nutricao/compras` (16-D).

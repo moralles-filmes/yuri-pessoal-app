@@ -29,6 +29,9 @@ export const programLink = (id: string) => `${TRAINING_LINK_BASE}/programas?prog
 /** Sessão registrada (histórico imutável). */
 export const sessionLink = (id: string) => `${TRAINING_LINK_BASE}/historico/${id}`;
 
+/** O histórico de sessões (REDESIGN-07-D · D7 — a fonte dos insights de Treinos). */
+export const historyLink = () => `${TRAINING_LINK_BASE}/historico`;
+
 /** Meta destacada na lista de metas. */
 export const goalLink = (id: string) => `${TRAINING_LINK_BASE}/metas?meta=${id}`;
 

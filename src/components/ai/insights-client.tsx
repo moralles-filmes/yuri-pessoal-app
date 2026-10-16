@@ -63,6 +63,7 @@ import {
   registrarDecisaoDeInsight,
 } from "@/lib/actions/ai-insights";
 import { formatDate } from "@/lib/format";
+import { settingsLink } from "@/lib/search/ai-links";
 
 const NOME_DO_MODULO: Record<ModuloDeInsight, string> = {
   financeiro: "Financeiro",
@@ -164,7 +165,7 @@ export function InsightsClient({
           {disponiveis.length === 0 ? (
             <p className="min-w-0 text-sm text-muted-foreground">
               Nenhum módulo está liberado para a IA ler.{" "}
-              <Link href="/ia/configuracoes" className="underline">
+              <Link href={settingsLink()} className="underline">
                 Ligue uma chave em Configurações
               </Link>{" "}
               para poder pedir uma análise.

@@ -336,3 +336,30 @@ describe("07-D · D3 — o painel continua guardado pelos mesmos testes", () => 
     expect(testes).toHaveLength(6);
   });
 });
+
+/**
+ * REDESIGN-07-D · D7 — nenhuma tela do lote monta rota de `/ia` à mão (spec §6.7, M21).
+ *
+ * `src/lib/search/ai-links.ts` é a fonte única dos links de `/ia` (invariante 85). Um href
+ * escrito à mão continua verde no dia em que a rota muda — e `?filtro=` fora de
+ * `FILTROS_DO_HISTORICO` nem dá 404: mostra todas as ações em silêncio.
+ */
+describe("07-D · D7 — o lote linka /ia só pelos construtores (M21)", () => {
+  const arquivos = PASTAS_DO_LOTE.flatMap(arquivosDe);
+  const ROTA_DE_IA_A_MAO = /["'`]\/ia(?=[/"'`?])/;
+
+  it("a varredura sabe dizer sim (fixture)", () => {
+    expect('<Link href="/ia/configuracoes">').toMatch(ROTA_DE_IA_A_MAO);
+    expect("href={`/ia/acoes?filtro=${f}`}").toMatch(ROTA_DE_IA_A_MAO);
+    expect('fetch("/api/ia/chat")').not.toMatch(ROTA_DE_IA_A_MAO);
+    expect("href={settingsLink()}").not.toMatch(ROTA_DE_IA_A_MAO);
+  });
+
+  it.each(arquivos.map((a) => [a] as const))("%s não escreve rota de /ia à mão", (arquivo) => {
+    const linhas = fonte(arquivo)
+      .split("\n")
+      .filter((l) => ROTA_DE_IA_A_MAO.test(l))
+      .map((l) => l.trim());
+    expect(linhas, arquivo).toEqual([]);
+  });
+});

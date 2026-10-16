@@ -131,10 +131,16 @@ export type PontoDeLink = {
  *
  * Casa `link:` (propriedade) e `link =` (atribuição, F2 da 07-A). O `(?![=>])` deixa de
  * fora `link ===` (comparação) e `(link) => …` (parâmetro de arrow).
+ *
+ * REDESIGN-07-D · D7 — também `rota:` e `targetRoute:`: é assim que a IA guarda a rota de
+ * cada referência (`ToolRef.rota`, as refs da previsão) e o destino da execução. Sem isso,
+ * `/tarefas?task=` e `/nutricao/diario?date=` passavam por fora dos dois contratos de link.
+ * O `\b` mantém `rotaDaTarefa =` e `ROTA_DO_PAINEL =` fora (a rota guardada em constante é
+ * registrada como limite no spec).
  */
 export function pontosDeLink(arquivo: string, fonte: string): PontoDeLink[] {
   const pontos: PontoDeLink[] = [];
-  for (const m of fonte.matchAll(/\blink\s*(?::|=(?![=>]))/g)) {
+  for (const m of fonte.matchAll(/\b(?:link|rota|targetRoute)\s*(?::|=(?![=>]))/g)) {
     const inicio = m.index + m[0].length;
     const linha = fonte.slice(0, m.index).split("\n").length;
     for (const literal of rotasDaExpressao(expressaoDoLink(fonte, inicio))) {

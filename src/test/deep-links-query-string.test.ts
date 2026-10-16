@@ -22,24 +22,61 @@ import { STUDY_VIEWS } from "@/lib/studies/constants";
 import { resolveRoute } from "@/app/(app)/todo/resolve-route";
 
 const SRC = path.resolve(__dirname, "..");
-/** Só lidos: os dois são da 03-B2. */
-const ARQUIVOS = ["lib/search/queries.ts", "lib/notifications/generate.ts"] as const;
+/**
+ * Só lidos. Os dois primeiros são da 03-B2; os da IA entraram na 07-D (D7), quando o extrator
+ * passou a ler `rota:` — o V4 agora confere que `/agenda`, `/todo`, `/habitos`, `/estudos`,
+ * `/estudos/[id]`, `/tarefas` e `/rotinas` leem cada parâmetro que a IA manda.
+ */
+const ARQUIVOS = [
+  "lib/search/queries.ts",
+  "lib/notifications/generate.ts",
+  "lib/ai/approval/commands/todo-preview.ts",
+  "lib/ai/tools/adapters/calendar.ts",
+  "lib/ai/tools/adapters/habits.ts",
+  "lib/ai/tools/adapters/studies.ts",
+  "lib/ai/tools/adapters/tasks.ts",
+  "lib/ai/tools/adapters/todo.ts",
+] as const;
 /**
  * 07-C · D6 — as notificações de Dieta e Treinos montam TODO link pelos construtores
  * (`nutrition-links.ts`/`training-links.ts`, cujos testes exigem que a página leia cada
  * parâmetro). Link montado à mão aqui é o defeito que a 07-C fechou: a notificação do
  * planejamento saía sem `visao` e abria o dia, não a semana. Teto: ZERO rotas inline.
  */
-const SO_CONSTRUTOR = ["lib/notifications/nutrition.ts", "lib/notifications/training.ts"] as const;
+const SO_CONSTRUTOR = [
+  "lib/notifications/nutrition.ts",
+  "lib/notifications/training.ts",
+  // 07-D · D7 — as notificações da IA já usavam os construtores de `ai-links`; agora é trava.
+  "lib/notifications/ai.ts",
+] as const;
+/**
+ * 07-D · D7 — rotas do lote que só recebem link por construtor (`actionsLink`, `receiptLink`,
+ * `buscaLink`, cujos testes conferem que a página lê cada chave — e que `filtro` pertence a
+ * `FILTROS_DO_HISTORICO`). Link inline para elas é o defeito que a D7 fechou.
+ */
+const LOTE_SO_POR_CONSTRUTOR = ["/ia/acoes", "/ia/comprovantes", "/busca"] as const;
 /** Páginas com `visao` que só recebem link por construtor (testado no arquivo do construtor). */
 const VISAO_SO_POR_CONSTRUTOR = ["/nutricao/diario", "/nutricao/planejamento", "/treinos/calendario"] as const;
-const ROTAS = ["/tarefas", "/agenda", "/todo", "/rotinas", "/habitos", "/estudos/[id]"] as const;
+const ROTAS = [
+  "/tarefas",
+  "/agenda",
+  "/todo",
+  "/rotinas",
+  "/habitos",
+  "/estudos/[id]",
+  // 07-D · D7 — `/estudos` saiu de SEM_LINK_HOJE: a ref do painel de estudos da IA linka para lá.
+  "/estudos",
+  // 07-D · D7 — a busca global linka a central de notificações.
+  "/notificacoes",
+] as const;
 type Rota = (typeof ROTAS)[number];
 /** Rotas com visão declarada que HOJE não recebem link nenhum (G9). Link novo ⇒ vai para ROTAS com piso. */
-const SEM_LINK_HOJE = ["/estudos"] as const;
+const SEM_LINK_HOJE = [] as const;
 /** Contado pela varredura no commit que a introduz. Piso: link novo é bem-vindo. */
 const PISO: Record<Rota, number> = {
-  "/todo": 8, "/tarefas": 3, "/agenda": 2, "/rotinas": 1, "/habitos": 3, "/estudos/[id]": 2,
+  // 07-D · D7: + os da IA (todo-preview 1, todo 2, tasks 1+1, calendar 1, habits 1, studies 1+1).
+  "/todo": 11, "/tarefas": 4, "/agenda": 3, "/rotinas": 2, "/habitos": 4, "/estudos/[id]": 3,
+  "/estudos": 1, "/notificacoes": 1,
 };
 
 /** Caminho concreto → rota declarada. `[id]` é o único segmento dinâmico coberto. */
@@ -143,6 +180,10 @@ describe("V4 — o parâmetro do deep-link é aceito pela página", () => {
       new Set(["visao", "data"]),
     );
     expect(parametrosLidosNoTexto("const { alimento } = await searchParams;")).toEqual(new Set(["alimento"]));
+  });
+
+  it.each(LOTE_SO_POR_CONSTRUTOR)("%s só recebe link por construtor (07-D, D7)", (rota) => {
+    expect(PONTOS_TODOS.filter((p): boolean => caminho(p) === rota).map(onde)).toEqual([]);
   });
 
   it("/estudos não recebe link hoje — o primeiro que aparecer exige piso (G9)", () => {

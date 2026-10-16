@@ -5,6 +5,7 @@ import { ConversationList } from "@/components/ai/conversation-list";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { listConversations } from "@/lib/ai/queries";
 import { reconcileOwnRuns } from "@/lib/ai/server/reconcile";
+import { conversationLink } from "@/lib/search/ai-links";
 
 export const metadata: Metadata = { title: "Conversas · IA" };
 export const dynamic = "force-dynamic";
@@ -29,7 +30,13 @@ export default async function ConversasPage() {
         title="Conversas"
         description="Histórico das suas conversas com o assistente. Favoritar, arquivar e excluir."
       />
-      <ConversationList conversas={conversas} />
+      {/*
+        REDESIGN-07-D · D7 — o link de cada conversa sai do construtor AQUI, no servidor: a lista é
+        cliente, e importar `ai-links` nela poria o módulo no primeiro carregamento da rota.
+      */}
+      <ConversationList
+        conversas={conversas.map((c) => ({ ...c, href: conversationLink(c.id) }))}
+      />
     </div>
   );
 }

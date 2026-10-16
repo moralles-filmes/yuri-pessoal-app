@@ -42,7 +42,8 @@ import type { ConversationListItem } from "@/lib/ai/types";
 export function ConversationList({
   conversas,
 }: {
-  conversas: readonly ConversationListItem[];
+  /** Com o `href` de cada uma já montado pelo construtor, no servidor (REDESIGN-07-D · D7). */
+  conversas: readonly (ConversationListItem & { readonly href: string })[];
 }) {
   const router = useRouter();
   const [ocupado, setOcupado] = React.useState<string | null>(null);
@@ -79,7 +80,7 @@ export function ConversationList({
             className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3"
           >
             <Link
-              href={`/ia/conversas/${c.id}`}
+              href={c.href}
               className="min-w-0 flex-1 hover:text-primary"
             >
               <p className="truncate font-medium">{c.title ?? "Conversa sem título"}</p>

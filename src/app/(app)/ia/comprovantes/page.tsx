@@ -27,6 +27,7 @@ import {
   getTransactionsForReceiptMatch,
 } from "@/lib/finance/queries";
 import { formatDate } from "@/lib/format";
+import { receiptLink, receiptsLink, settingsLink } from "@/lib/search/ai-links";
 
 export const metadata: Metadata = { title: "Comprovantes · IA" };
 export const dynamic = "force-dynamic";
@@ -157,7 +158,7 @@ export default async function ComprovantesPage({
           <p className="min-w-0">
             Faltam autorizações para usar esta tela: <strong>{faltando.join(", ")}</strong>.
             Ligue em{" "}
-            <Link href="/ia/configuracoes" className="font-medium text-primary hover:underline">
+            <Link href={settingsLink()} className="font-medium text-primary hover:underline">
               Configurações da IA
             </Link>
             .
@@ -175,7 +176,7 @@ export default async function ComprovantesPage({
               {selecionado.documento.nomeArquivo}
             </h2>
             <Link
-              href="/ia/comprovantes"
+              href={receiptsLink()}
               className="shrink-0 text-xs font-medium text-primary hover:underline"
             >
               Fechar
@@ -245,7 +246,7 @@ export default async function ComprovantesPage({
                   )}
                   {/* `min-w-0` + `truncate`: nome longo não empurra os selos para fora. */}
                   <Link
-                    href={`/ia/comprovantes?doc=${d.id}`}
+                    href={receiptLink(d.id)}
                     className="min-w-0 flex-1 truncate text-sm font-medium hover:underline"
                   >
                     {d.nomeArquivo}

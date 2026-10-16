@@ -42,6 +42,7 @@ import { prepararDesfazerDaIa } from "@/lib/actions/ai-actions";
 import { ROTULO_DO_ESTADO_DA_ACAO } from "@/lib/ai/constants";
 import { formatDate, timeInSaoPaulo } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { actionsLink, conversationLink } from "@/lib/search/ai-links";
 import {
   FILTROS_DO_HISTORICO,
   filtrarHistorico,
@@ -332,7 +333,7 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
 
         {acao.conversationId && (
           <Link
-            href={`/ia/conversas/${acao.conversationId}`}
+            href={conversationLink(acao.conversationId)}
             className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
           >
             <MessageSquare className="size-3" /> Ver a conversa
@@ -379,7 +380,7 @@ export function ActionHistoryClient({
             className="min-w-0"
           >
             <Link
-              href={f === "todas" ? "/ia/acoes" : `/ia/acoes?filtro=${f}`}
+              href={actionsLink(f)}
               aria-current={f === filtro ? "page" : undefined}
             >
               <span className="truncate">{ROTULO_DO_FILTRO[f]}</span>
