@@ -7,6 +7,7 @@ import {
 import {
   dateString,
   moneyAmount,
+  optionalDate,
   optionalText,
   optionalUuid,
   tagsArray,
@@ -32,6 +33,11 @@ export const transactionSchema = z
     notes: optionalText(1000),
     tags: tagsArray,
     status: z.enum(TRANSACTION_STATUSES).optional().transform((v) => v ?? "pago"),
+    // REDESIGN-03-E (K0) — "Data do pagamento": quando o dinheiro de fato mexeu. Opcional e
+    // vazia por padrão; "" / ausente / null viram null (o schema aceita a própria saída). Quem
+    // decide se ela é GRAVADA é o servidor (`dataDeLiquidacaoAGravar`: só liquidado, nunca
+    // cartão), e quem recusa data futura também (P8 — o schema não tem `hoje` injetado).
+    liquidado_em: optionalDate,
     // Importação: força a fatura do cartão para uma competência explícita ('yyyy-MM-01'), em vez
     // de derivar da data da compra (que numa última parcela "N/N" é a data da compra original).
     // Uso interno (não vem de formulário); ignorado quando não é compra no cartão.

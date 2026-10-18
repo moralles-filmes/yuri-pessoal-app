@@ -9,6 +9,9 @@ import { reembolsosRecebidosNoPeriodo } from "@/lib/finance/recebimentos";
 import {
   comparativoAteODia,
   dataDeCaixa,
+  dataDePagamentoFutura,
+  dataDoExtratoAGravar,
+  MSG_DATA_PAGAMENTO_FUTURA,
   dataDeLiquidacaoAGravar,
   diaDeCorte,
   liquidadoNoBotao,
@@ -546,6 +549,32 @@ describe("03-E · dataDeLiquidacaoAGravar", () => {
   it("pago/recebido com data e sem cartão → a data", () => {
     expect(dataDeLiquidacaoAGravar({ status: "pago", card_id: null, liquidado_em: "2026-10-10" })).toBe("2026-10-10");
     expect(dataDeLiquidacaoAGravar({ status: "recebido", card_id: null, liquidado_em: "2026-10-11" })).toBe("2026-10-11");
+  });
+});
+
+describe("03-E · dataDePagamentoFutura e dataDoExtratoAGravar (P8, K0.3)", () => {
+  const HOJE = "2026-10-18";
+
+  it("só a data posterior a hoje é futura; hoje e antes não são", () => {
+    expect(dataDePagamentoFutura("2026-10-19", HOJE)).toBe(true);
+    expect(dataDePagamentoFutura("2026-10-18", HOJE)).toBe(false);
+    expect(dataDePagamentoFutura("2025-01-01", HOJE)).toBe(false);
+  });
+
+  it("sem data não é futura", () => {
+    expect(dataDePagamentoFutura(null, HOJE)).toBe(false);
+    expect(dataDePagamentoFutura(undefined, HOJE)).toBe(false);
+    expect(dataDePagamentoFutura("", HOJE)).toBe(false);
+  });
+
+  it("o extrato grava a data da linha, e a linha futura entra sem data (aproximada)", () => {
+    expect(dataDoExtratoAGravar("2026-10-05", HOJE)).toBe("2026-10-05");
+    expect(dataDoExtratoAGravar("2026-10-18", HOJE)).toBe("2026-10-18");
+    expect(dataDoExtratoAGravar("2026-11-02", HOJE)).toBeNull();
+  });
+
+  it("a mensagem diz o que fazer", () => {
+    expect(MSG_DATA_PAGAMENTO_FUTURA).toMatch(/não pode ser futura/);
   });
 });
 

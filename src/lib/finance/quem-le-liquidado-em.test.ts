@@ -21,6 +21,10 @@ const COLUNA = "liquidado_em";
 /** Caminho relativo a `src/` → por que este arquivo pode mencionar a coluna. */
 const ALLOWLIST: Record<string, string> = {
   "lib/finance/caixa.ts": "as regras puras da base caixa: a ÚNICA que decide a data de caixa (A1)",
+  "types/supabase.ts": "tipos GERADOS pelo MCP depois da M2 (A2): Row/Insert/Update de transactions",
+  "lib/validators/transaction.ts":
+    "o campo \"Data do pagamento\" do formulário (A3, K0.1): só aceita a forma; quem decide gravar é o servidor",
+  "test/check-liquidado-em.ts": "o CHECK da M2 simulado para o harness (P12) — só para teste",
 };
 
 /** Os que NUNCA podem mencionar — nem entrar na allowlist. */

@@ -333,6 +333,27 @@ export function dataDeLiquidacaoAGravar(params: {
   return typeof data === "string" && data !== "" ? data : null;
 }
 
+/** P8 — a mensagem de campo quando a "Data do pagamento" é posterior a hoje. */
+export const MSG_DATA_PAGAMENTO_FUTURA =
+  "A data do pagamento não pode ser futura. Deixe vazio se ainda não foi pago.";
+
+/**
+ * P8 — data futura num lançamento liquidado é previsão, não caixa. Comparação de texto
+ * 'yyyy-MM-dd' contra o `hoje` injetado. Data anterior à compra é aceita (pagamento antecipado).
+ */
+export function dataDePagamentoFutura(data: string | null | undefined, hoje: string): boolean {
+  return typeof data === "string" && data !== "" && data > hoje;
+}
+
+/**
+ * K0.3 — o extrato de conta importado grava a data da linha, que é quando o dinheiro mexeu.
+ * Uma linha com data FUTURA (agendamento no extrato) não vira recusa da importação: entra sem a
+ * data e fica aproximada, contada — nunca com uma data que ainda não aconteceu.
+ */
+export function dataDoExtratoAGravar(dataDaLinha: string, hoje: string): string | null {
+  return dataDePagamentoFutura(dataDaLinha, hoje) ? null : dataDaLinha;
+}
+
 /**
  * P9 — o botão rápido de status só mexe na data ao ENTRAR ou SAIR do estado liquidado
  * (`limpar`). Entre `pago` e `recebido`, ou entre dois estados não liquidados, a coluna fica
