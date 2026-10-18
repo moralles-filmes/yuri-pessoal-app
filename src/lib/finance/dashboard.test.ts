@@ -6,6 +6,7 @@ import {
   faturasPorMes,
   gastosPorCategoria,
   parteDosTerceirosPorFatura,
+  paresDoMesAMes,
   gastosPorForma,
   gerarAlertas,
   mesAnterior,
@@ -271,11 +272,24 @@ describe("comparativoMesAMes / evolucaoMensal", () => {
     expect(ev).toHaveLength(3);
     expect(ev.map((p) => p.mes)).toEqual(["2026-05", "2026-06", "2026-07"]);
     const junho = ev.find((p) => p.mes === "2026-06");
-    expect(junho?.saidas).toBe(300);
-    expect(junho?.saldo).toBe(200); // 500 − 300
+    const r = resumoMes({ mes: "2026-06", transactions, statements, receivables });
+    // Só a minha parte, da MESMA fonte do card: entradasMeu e meu do resumo do mês.
+    expect(junho?.entradas).toBe(r.entradasMeu);
+    expect(junho?.saidas).toBe(r.meu);
+    expect(junho?.saidas).toBe(250); // 100 à vista + (200 − 50) da fatura
+    expect(junho?.saldo).toBe(250); // 500 − 250
     for (const p of ev) {
       expect(Number.isFinite(p.saldo)).toBe(true);
     }
+  });
+
+  it("paresDoMesAMes devolve as minhas entradas e saídas de cada lado", () => {
+    const c = comparativoMesAMes({ mes: "2026-07", transactions, statements, receivables });
+    expect(paresDoMesAMes(c)).toEqual({
+      anterior: { entradas: c.anterior.entradasMeu, saidas: c.anterior.meu },
+      atual: { entradas: c.atual.entradasMeu, saidas: c.atual.meu },
+    });
+    expect(paresDoMesAMes(c).anterior.saidas).toBe(250);
   });
 });
 

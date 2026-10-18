@@ -512,6 +512,11 @@ export function comparativoMesAMes(params: {
   };
 }
 
+/**
+ * Um ponto da evolução, em REAIS — e é MEU dos dois lados (desenho 2026-10-18): `entradas` é a
+ * minha parte das entradas, `saidas` a minha parte efetiva das saídas (com o perdoado) e `saldo`
+ * a diferença das duas — o "Resultado do período" do §13.3. A base caixa produz a mesma forma.
+ */
 export type EvolucaoPonto = { mes: string; entradas: number; saidas: number; saldo: number };
 
 export function evolucaoMensal(params: {
@@ -523,18 +528,35 @@ export function evolucaoMensal(params: {
   const { meses, transactions, statements, receivables } = params;
   return meses.map((mes) => {
     const r = resumoMes({ mes, transactions, statements, receivables });
-    // ⚠️ REDESIGN-03-C · B2 — divergência DECLARADA, por decisão do dono: `saldo` continua
-    // `entradas − saidas`, bruto − bruto. O Resultado do §13.3 (renda pessoal − minha parte
-    // EFETIVA das despesas) depende do perdoado (D11), que é da 03-D; trocar um lado só
-    // (renda pessoal − despesa bruta) é a subtração que o próprio §13.3 proíbe. Congelado no
-    // bloco 6 de `dashboard-caracterizacao.test.ts`.
+    // A divergência B2 da 03-C ("saldo bruto − bruto", que esperava o perdoado da 03-D) caiu em
+    // 2026-10-18 por pedido do dono: os dois lados são meus, da MESMA fonte do card "Minhas
+    // saídas". Um lado meu e o outro bruto é a subtração que o §13.3 proíbe. Bloco 6 da
+    // caracterização.
     return {
       mes,
-      entradas: r.entradas,
-      saidas: r.saidas,
-      saldo: r.entradas - r.saidas,
+      entradas: r.entradasMeu,
+      saidas: r.meu,
+      saldo: reais(cent(r.entradasMeu) - cent(r.meu)),
     };
   });
+}
+
+/** As duas barras de cada lado do gráfico "Meu mês a mês", em REAIS. Caixa produz a mesma forma. */
+export type MesAMesDados = {
+  anterior: { entradas: number; saidas: number };
+  atual: { entradas: number; saidas: number };
+};
+
+/**
+ * As minhas entradas e saídas de cada lado de um `Comparativo` de competência. No corte "até o
+ * dia D" o comparativo vem de `resumoMes` com `statements: []`, então `meu` já é só o à vista —
+ * o cartão fica fora sem regra nova.
+ */
+export function paresDoMesAMes(c: Comparativo): MesAMesDados {
+  return {
+    anterior: { entradas: c.anterior.entradasMeu, saidas: c.anterior.meu },
+    atual: { entradas: c.atual.entradasMeu, saidas: c.atual.meu },
+  };
 }
 
 /* ───────────────────────────── Próximas 6 faturas ───────────────────────────── */
