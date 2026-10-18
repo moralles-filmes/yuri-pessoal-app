@@ -27,7 +27,7 @@ plano: `docs/superpowers/plans/2026-10-18-graficos-meus-e-base.md`. **Sem migrat
 - Card-âncora virou **"Minhas saídas · {mês} · {base}"** e segue a base.
 - **Todo `<YAxis` do sistema usa `width="auto"`** (recharts 3.9) e `brlCompact` não escreve ",0" —
   o rótulo "R$ 10,0 mil" quebrava. Teste de varredura em `chart-theme.test.ts`.
-- Verificação: `test:run` 6.590 ✅ · lint ✅ · tsc ✅ · build ✅ · perf:bundle ✅ (68 rotas no
+- Verificação: `test:run` 6.596 ✅ · lint ✅ · tsc ✅ · build ✅ · perf:bundle ✅ (68 rotas no
   orçamento) · `TZ=UTC` finance ✅. **Conferência visual com dados reais pendente** (o localhost
   pede login).
 

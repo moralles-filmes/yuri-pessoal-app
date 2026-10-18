@@ -524,7 +524,7 @@ export function DashboardClient({
             <EvolucaoChart data={graficosCaixa ? graficosCaixa.evolucao : evolucao} />
           )}
           {graficosCaixa && (
-            <RodapeDasFaturasSemTotal quantidade={graficosCaixa.minha.faturasSemTotal} />
+            <RodapeDasFaturasSemTotal meses={graficosCaixa.semTotal.evolucao} />
           )}
         </CardContent>
       </Card>
@@ -543,6 +543,7 @@ export function DashboardClient({
                 dados={graficosCaixa ? graficosCaixa.mesAMes.dados : mesAMesCompetencia}
               />
             )}
+            {graficosCaixa && <RodapeDasFaturasSemTotal meses={graficosCaixa.semTotal.mesAMes} />}
           </CardContent>
         </Card>
         <Card>

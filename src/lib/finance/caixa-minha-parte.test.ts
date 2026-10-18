@@ -8,6 +8,7 @@ import type { DashReceivable, DashStatement, DashTx, DashInstallmentItem } from 
 import { numerosDoCaixa, type TxDeCaixa } from "@/lib/finance/caixa";
 import {
   evolucaoDoCaixa,
+  faturasSemTotalPorMes,
   gastosDeCaixa,
   mesAMesDoCaixa,
   minhaParteDoCaixa,
@@ -196,6 +197,27 @@ describe("evolucaoDoCaixa", () => {
     expect(ev).toEqual([
       { mes: "2026-09", entradas: 0, saidas: 50, saldo: -50 },
       { mes: "2026-10", entradas: 400, saidas: 126.71, saldo: 273.29 },
+    ]);
+  });
+});
+
+describe("faturasSemTotalPorMes", () => {
+  it("declara em QUE mês houve pagamento contado cheio, só os meses com algum", () => {
+    const r = faturasSemTotalPorMes({
+      meses: ["2026-08", "2026-09", "2026-10"],
+      transactions: [
+        pagamento(80, { liquidado_em: "2026-08-05", competence_date: "2026-08-05" }),
+        tx({ id: "pag2", type: "transferencia", amount: 50, liquidado_em: "2026-10-05" }),
+      ],
+      pagamentos: new Map([
+        ["pag", "st-out"],
+        ["pag2", "st-x"],
+      ]),
+      motor: motorVazio({ statements: [fatura({ total_atual: 0 })] }),
+    });
+    expect(r).toEqual([
+      { mes: "2026-08", quantidade: 1 },
+      { mes: "2026-10", quantidade: 1 },
     ]);
   });
 });

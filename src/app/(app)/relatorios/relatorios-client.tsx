@@ -41,6 +41,7 @@ import { ProjecaoChart } from "@/components/dashboard/projecao-chart";
 import { FaturasChart } from "@/components/dashboard/faturas-chart";
 import { CaixaNaoLido, RodapeDasFaturasSemTotal } from "@/components/financeiro/caixa-nos-graficos";
 import { rotulosDosGraficos } from "@/lib/finance/rotulos-dos-graficos";
+import { dadosDaBase } from "@/lib/finance/dados-da-base";
 import { ReportBarChart, type BarPoint } from "@/components/reports/report-bar-chart";
 import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { BlocoDoCaixa } from "@/components/financeiro/bloco-do-caixa";
@@ -196,7 +197,12 @@ export function RelatoriosClient({
         ? (graficosCaixa?.mesAMes.ateODia ?? null)
         : (finance.graficoAteODia?.ateODia ?? null),
   });
-  const categoriasDaBase = graficosCaixa ? graficosCaixa.categorias : finance.categorias;
+  // `null` com o caixa sem leitura: a lista diz que não leu e o CSV não é oferecido.
+  const categoriasDaBase = dadosDaBase({
+    base,
+    caixa: graficosCaixa ? graficosCaixa.categorias : null,
+    competencia: finance.categorias,
+  });
 
   return (
     <div className="space-y-6">
@@ -253,7 +259,7 @@ export function RelatoriosClient({
 
           <div className="grid gap-4 lg:grid-cols-2">
             <ChartCard title={rotulos.categorias.titulo} description={rotulos.categorias.descricao}>
-              {caixaErro ? <CaixaNaoLido /> : <CategoriaChart data={categoriasDaBase} />}
+              {categoriasDaBase === null ? <CaixaNaoLido /> : <CategoriaChart data={categoriasDaBase} />}
             </ChartCard>
             <ChartCard title={rotulos.formas.titulo} description={rotulos.formas.descricao}>
               {caixaErro ? (
@@ -271,7 +277,7 @@ export function RelatoriosClient({
               <EvolucaoChart data={graficosCaixa ? graficosCaixa.evolucao : finance.evolucao} />
             )}
             {graficosCaixa && (
-              <RodapeDasFaturasSemTotal quantidade={graficosCaixa.minha.faturasSemTotal} />
+              <RodapeDasFaturasSemTotal meses={graficosCaixa.semTotal.evolucao} />
             )}
           </ChartCard>
 
@@ -282,6 +288,7 @@ export function RelatoriosClient({
               ) : (
                 <MesAMesChart dados={graficosCaixa ? graficosCaixa.mesAMes.dados : finance.mesAMes} />
               )}
+              {graficosCaixa && <RodapeDasFaturasSemTotal meses={graficosCaixa.semTotal.mesAMes} />}
             </ChartCard>
             <ChartCard title={rotulos.projecao.titulo} description={rotulos.projecao.descricao}>
               <ProjecaoChart data={finance.projecao} />
@@ -301,7 +308,7 @@ export function RelatoriosClient({
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {caixaErro ? (
+                {categoriasDaBase === null ? (
                   <CaixaNaoLido />
                 ) : categoriasDaBase.length === 0 ? (
                   <EmptyState icon={Scale} title="Sem gastos no período" className="py-8" />
@@ -365,6 +372,7 @@ export function RelatoriosClient({
             </Card>
           </div>
 
+          {categoriasDaBase !== null && (
           <ExportBar
             onCsv={() =>
               downloadCsv(
@@ -381,6 +389,7 @@ export function RelatoriosClient({
             }
             label="Exportar gastos por categoria (CSV)"
           />
+          )}
         </TabsContent>
 
         {/* ───────────── Cartões ───────────── */}

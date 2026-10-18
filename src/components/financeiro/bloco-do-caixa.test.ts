@@ -53,6 +53,7 @@ function ok(atual: NumerosDoCaixa, parcial = false): EstadoDoCaixa {
       mesAMes: { ateODia: null, dados: { anterior: { entradas: 0, saidas: 0 }, atual: { entradas: 0, saidas: 0 } } },
       categorias: [],
       formas: [],
+      semTotal: { evolucao: [], mesAMes: [] },
     },
   };
 }

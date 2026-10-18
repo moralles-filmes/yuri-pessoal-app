@@ -229,7 +229,7 @@ function ehLista<T>(v: T | readonly T[]): v is readonly T[] {
 }
 
 /** Embed → o objeto, ou `null`. Lista vazia é ausência, não objeto vazio. */
-function primeiro<T>(v: Embutido<T>): T | null {
+export function primeiro<T>(v: Embutido<T>): T | null {
   if (v == null) return null;
   return ehLista(v) ? (v[0] ?? null) : v;
 }

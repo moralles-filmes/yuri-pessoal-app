@@ -199,6 +199,26 @@ export function evolucaoDoCaixa(params: {
 }
 
 /**
+ * Em QUE meses houve pagamento de fatura contado cheio por falta de total (só os meses com algum).
+ * O rodapé de cada gráfico declara os meses DELE — um contador só do mês selecionado sob uma
+ * evolução de 6 meses deixaria um ponto inflado sem aviso.
+ */
+export function faturasSemTotalPorMes(params: {
+  meses: string[];
+  transactions: readonly TxDeCaixa[];
+  pagamentos: PagamentoDeFatura;
+  motor: MotorDoCaixa;
+}): { mes: string; quantidade: number }[] {
+  const { meses, ...resto } = params;
+  return meses
+    .map((mes) => ({
+      mes,
+      quantidade: minhaParteDoCaixa({ ...resto, periodo: periodoAteODia(mes, 31) }).faturasSemTotal,
+    }))
+    .filter((m) => m.quantidade > 0);
+}
+
+/**
  * "Meu mês a mês" na base caixa. Mês em andamento: os dois lados cortados no MESMO dia
  * (`diaDeCorte` + `periodoAteODia`, as regras do K3); mês fechado: os dois meses cheios.
  */

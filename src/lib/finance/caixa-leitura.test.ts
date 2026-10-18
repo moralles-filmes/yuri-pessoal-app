@@ -116,6 +116,27 @@ describe("lerCaixaDoMes", () => {
     expect(r.transactions.map((t) => t.id)).toEqual(["maio"]);
   });
 
+  it("lê as compras das faturas pagas na janela, mesmo com competência fora dela (§4.3)", async () => {
+    fake = criarSupabaseEmMemoria({
+      transactions: [
+        tx("pag", { type: "transferencia", amount: "100.00" }),
+        tx("antiga", {
+          card_id: "card",
+          statement_id: "f1",
+          account_id: null,
+          competence_date: "2026-04-10",
+          liquidado_em: null,
+        }),
+      ],
+      card_statements: [{ id: "f1", pago_transacao_id: "pag" }],
+      receivables: [],
+      receivable_receipts: [],
+    });
+    const r = await lerCaixaDoMes("2026-10");
+    if (!r.ok) throw new Error("esperava ok");
+    expect(r.comprasDasFaturasPagas.map((t) => t.id)).toEqual(["antiga"]);
+  });
+
   it("converte amount e valor_pessoal (texto do PostgREST) para número", async () => {
     fake = criarSupabaseEmMemoria({
       transactions: [tx("a", { amount: "47.90", valor_pessoal: "12.30" }), tx("b", { valor_pessoal: null })],
@@ -244,5 +265,66 @@ describe("lerCaixaDoMes", () => {
           : (fake.client as { from: (t: string) => unknown }).from(tabela),
     };
     expect(await lerCaixaDoMes("2026-10")).toEqual({ ok: false });
+  });
+});
+
+describe("estadoDoCaixa — gráficos (desenho 2026-10-18)", () => {
+  const CAT_A = { id: "A", name: "Mercado", color: null };
+  const CAT_B = { id: "B", name: "Restaurante", color: null };
+
+  it("abre a fatura paga pelas compras lidas fora da janela do motor, e normaliza a categoria embutida", async () => {
+    fake = criarSupabaseEmMemoria({
+      transactions: [
+        tx("pag", { type: "transferencia", amount: "100.00" }),
+        // À vista no caixa, com a categoria embutida vindo como ARRAY (forma que o PostgREST pode dar).
+        tx("d1", { amount: "30.00", payment_method: "pix", category_id: "A", category: [CAT_A] }),
+        // Compra da fatura paga, de competência antiga: o motor (janela evo..proj) não a tem.
+        tx("antiga", {
+          amount: "100.00",
+          card_id: "card",
+          statement_id: "f1",
+          account_id: null,
+          competence_date: "2026-04-10",
+          liquidado_em: null,
+          payment_method: "cartao_credito",
+          parcelado: false,
+          category_id: "B",
+          category: [CAT_B],
+        }),
+      ],
+      card_statements: [{ id: "f1", pago_transacao_id: "pag" }],
+      receivables: [],
+      receivable_receipts: [],
+    });
+    const { estadoDoCaixa } = await import("@/lib/finance/caixa-leitura");
+    const e = await estadoDoCaixa(
+      "2026-10",
+      "2026-11-02",
+      {
+        statements: [
+          {
+            id: "f1",
+            card_id: "card",
+            competencia: "2026-04-01",
+            data_fechamento: "2026-04-28",
+            data_vencimento: "2026-05-05",
+            pago_em: "2026-10-05",
+            total_atual: 100,
+          },
+        ],
+        receivables: [],
+        transactions: [],
+        installmentItems: [],
+      },
+      ["2026-10"],
+    );
+    if (e.estado !== "ok") throw new Error("esperava ok");
+    const porId = Object.fromEntries(e.graficos.categorias.map((c) => [c.categoryId, c]));
+    expect(porId.A?.name).toBe("Mercado");
+    expect(porId.A?.meu).toBe(30);
+    expect(porId.B?.name).toBe("Restaurante");
+    expect(porId.B?.meu).toBe(100);
+    expect(porId.__fatura_sem_detalhe__).toBeUndefined();
+    expect(porId.__diferenca_fatura__).toBeUndefined();
   });
 });
