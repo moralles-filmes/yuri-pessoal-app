@@ -359,6 +359,18 @@ describe("03-E A3 · status e liquidado_em (K0, P9)", () => {
     expect(linhaFinal()).toMatchObject({ status: "pendente", liquidado_em: null });
   });
 
+  it("(Z11) updateTransaction para 'pendente' descarta a data que o formulário ainda carrega", async () => {
+    // O campo some da tela quando o status deixa de ser pago, mas o valor pode continuar no
+    // payload: quem decide se a data é gravada é o STATUS, nunca a presença do campo.
+    fake = comCheck({ transactions: [existente({ liquidado_em: DATA })] });
+    const r = await updateTransaction(
+      ID,
+      payload({ type: "despesa", status: "pendente", liquidado_em: DATA }),
+    );
+    expect(r.ok).toBe(true);
+    expect(linhaFinal()).toMatchObject({ status: "pendente", liquidado_em: null });
+  });
+
   it("(Z11) setTransactionStatus de pago (com data) para 'pendente' limpa a data", async () => {
     fake = comCheck({ transactions: [existente({ liquidado_em: DATA })] });
     const r = await setTransactionStatus(ID, "pendente");
