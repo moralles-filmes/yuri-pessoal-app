@@ -20,14 +20,15 @@ export default async function RelatoriosPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const mesAtual = mesDe(hojeISO());
+  const hoje = hojeISO();
+  const mesAtual = mesDe(hoje);
   const mesSel = (() => {
     const v = str(sp.mes);
     return v && /^\d{4}-\d{2}$/.test(v) ? v : mesAtual;
   })();
 
   const base = baseDaUrl(sp.base);
-  const caixa = base === "caixa" ? await estadoDoCaixa(mesSel) : null;
+  const caixa = base === "caixa" ? await estadoDoCaixa(mesSel, hoje) : null;
 
   const data = await getReportsData(mesSel);
 

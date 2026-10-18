@@ -75,7 +75,7 @@ export default async function DashboardFinanceiroPage({
   const saldo = saldoDasContas(accounts);
 
   // A leitura da base caixa só acontece quando ela está selecionada.
-  const caixa = base === "caixa" ? await estadoDoCaixa(mesSel) : null;
+  const caixa = base === "caixa" ? await estadoDoCaixa(mesSel, hoje) : null;
 
   // A régua do alerta de gasto alto — a MESMA que o sino usa desde a 03-B2 (B2, decisão do dono):
   // até 5 meses anteriores ao selecionado, mês sem saída ignorado. O número desta tela não mudou.

@@ -8,6 +8,7 @@ import type { RecebivelComRecebimentos } from "@/lib/finance/recebimentos";
 import { reembolsosRecebidosNoPeriodo } from "@/lib/finance/recebimentos";
 import {
   comparativoAteODia,
+  comparativoDoGraficoAteODia,
   dataDeCaixa,
   entradasDoCaixa,
   dataDePagamentoFutura,
@@ -520,6 +521,130 @@ describe("03-E · comparativoAteODia — caixa", () => {
     expect(c.ateODia).toBeNull();
     expect(c.saidas).toEqual({ atual: 0, anterior: 0, pct: null });
     expect(c.cartaoFora).toBe(false);
+  });
+});
+
+/* ───────────────────────────── comparativoDoGraficoAteODia ───────────────────────────── */
+
+describe("03-E B2 · comparativoDoGraficoAteODia", () => {
+  it("mês fechado -> null", () => {
+    const r = comparativoDoGraficoAteODia({
+      mes: "2026-09",
+      hoje: "2026-10-18",
+      transactions: [dash({ competence_date: "2026-09-05", amount: 100 })],
+      receivables: [],
+    });
+    expect(r).toBeNull();
+  });
+
+  it("mês em andamento: o lado anterior é cortado no D (Z16) e a compra no cartão fica fora das saídas", () => {
+    const r = comparativoDoGraficoAteODia({
+      mes: "2026-10",
+      hoje: "2026-10-18",
+      transactions: [
+        dash({ competence_date: "2026-10-05", amount: 100 }),
+        dash({ competence_date: "2026-10-06", amount: 400, card_id: "cartao-a", statement_id: "fat-1" }),
+        dash({ competence_date: "2026-10-25", amount: 999 }), // depois do D: fora
+        dash({ competence_date: "2026-09-10", amount: 200 }),
+        dash({ competence_date: "2026-09-18", amount: 50 }), // exatamente o dia D: entra
+        dash({ competence_date: "2026-09-19", amount: 700 }), // depois do dia D no anterior: fora (Z16)
+        dash({ type: "receita", competence_date: "2026-10-02", amount: 1000 }),
+        dash({ type: "receita", competence_date: "2026-09-02", amount: 800 }),
+      ],
+      receivables: [],
+    });
+    expect(r).not.toBeNull();
+    expect(r?.ateODia).toBe(18);
+    expect(r?.comparativo.atual.entradas).toBe(1000);
+    expect(r?.comparativo.atual.saidas).toBe(100);
+    expect(r?.comparativo.atual.cartao).toBe(0);
+    expect(r?.comparativo.anterior.entradas).toBe(800);
+    expect(r?.comparativo.anterior.saidas).toBe(250);
+    expect(r?.comparativo.deltaSaidas).toBe(-150);
+    expect(r?.comparativo.deltaSaidasPct).toBe(-60);
+    expect(r?.comparativo.deltaEntradas).toBe(200);
+    expect(r?.comparativo.deltaEntradasPct).toBe(25);
+  });
+
+  it("as entradas e o à vista batem com comparativoAteODia({base:'competencia'}) nos mesmos dados", () => {
+    const hoje = "2026-10-18";
+    const transactions = [
+      dash({ competence_date: "2026-10-05", amount: 100 }),
+      dash({ competence_date: "2026-10-25", amount: 999 }),
+      dash({ competence_date: "2026-09-10", amount: 200 }),
+      dash({ competence_date: "2026-09-19", amount: 700 }),
+      dash({ type: "receita", competence_date: "2026-10-02", amount: 1000 }),
+      dash({ type: "receita", competence_date: "2026-09-02", amount: 800 }),
+    ];
+    const receivables = [
+      { valor: 100, status: "pago", statement_id: null, installment_id: null, ref_month: "2026-10" },
+    ];
+
+    const g = comparativoDoGraficoAteODia({ mes: "2026-10", hoje, transactions, receivables });
+    const c = comparativoAteODia({ base: "competencia", mes: "2026-10", hoje, transactions, receivables });
+
+    expect(g).not.toBeNull();
+    expect(g?.ateODia).toBe(c.ateODia);
+    expect(g?.comparativo.atual.entradas).toBe(c.entradas.atual);
+    expect(g?.comparativo.anterior.entradas).toBe(c.entradas.anterior);
+    expect(g?.comparativo.atual.saidas).toBe(c.saidas.atual);
+    expect(g?.comparativo.anterior.saidas).toBe(c.saidas.anterior);
+  });
+
+  it("mês anterior mais curto: hoje 2026-03-31 corta fevereiro em 28", () => {
+    const r = comparativoDoGraficoAteODia({
+      mes: "2026-03",
+      hoje: "2026-03-31",
+      transactions: [
+        dash({ competence_date: "2026-02-28", amount: 60 }),
+        dash({ competence_date: "2026-03-31", amount: 90 }),
+      ],
+      receivables: [],
+    });
+    expect(r?.ateODia).toBe(31);
+    expect(r?.comparativo.anterior.saidas).toBe(60);
+    expect(r?.comparativo.atual.saidas).toBe(90);
+  });
+
+  it("bissexto: hoje 2028-03-30 corta fevereiro de 2028 em 29", () => {
+    const r = comparativoDoGraficoAteODia({
+      mes: "2028-03",
+      hoje: "2028-03-30",
+      transactions: [
+        dash({ competence_date: "2028-02-29", amount: 40 }),
+        dash({ competence_date: "2028-03-30", amount: 70 }),
+      ],
+      receivables: [],
+    });
+    expect(r?.ateODia).toBe(30);
+    expect(r?.comparativo.anterior.saidas).toBe(40);
+    expect(r?.comparativo.atual.saidas).toBe(70);
+  });
+
+  it("base zero: deltaEntradasPct é null (Z17)", () => {
+    const r = comparativoDoGraficoAteODia({
+      mes: "2026-10",
+      hoje: "2026-10-18",
+      transactions: [dash({ competence_date: "2026-10-05", amount: 100 })],
+      receivables: [],
+    });
+    expect(r?.comparativo.anterior.entradas).toBe(0);
+    expect(r?.comparativo.deltaEntradasPct).toBeNull();
+    expect(r?.comparativo.deltaSaidasPct).toBeNull();
+  });
+
+  it("último dia do mês ainda corta (P7): hoje '2026-10-31' -> ateODia 31 e o cartão continua fora", () => {
+    const r = comparativoDoGraficoAteODia({
+      mes: "2026-10",
+      hoje: "2026-10-31",
+      transactions: [
+        dash({ competence_date: "2026-10-31", amount: 100 }),
+        dash({ competence_date: "2026-10-20", amount: 400, card_id: "cartao-a", statement_id: "fat-1" }),
+      ],
+      receivables: [],
+    });
+    expect(r?.ateODia).toBe(31);
+    expect(r?.comparativo.atual.saidas).toBe(100);
   });
 });
 

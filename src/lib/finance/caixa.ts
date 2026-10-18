@@ -18,6 +18,8 @@
  * por dentro e só vira reais na saída.
  */
 import {
+  type Comparativo,
+  type ResumoMes,
   type DashReceivable,
   type DashTx,
   meuCentavos,
@@ -248,6 +250,26 @@ export function mesAnteriorDe(mes: string): string {
     : `${String(ano).padStart(4, "0")}-${String(m - 1).padStart(2, "0")}`;
 }
 
+/**
+ * O corte de COMPETÊNCIA até o dia D: o mesmo para `comparativoAteODia` e para o gráfico
+ * "Mês a mês". Quem soma é o próprio `resumoMes` (P4), sobre os lançamentos cortados e
+ * `statements: []` — entradas = `entradas`, saídas = só o à vista; o cartão fica fora sem
+ * reimplementar regra nenhuma.
+ */
+function resumoAteODia(
+  lado: string,
+  dia: number,
+  transactions: DashTx[],
+  receivables: DashReceivable[],
+): ResumoMes {
+  const p = periodoAteODia(lado, dia);
+  const cortadas = transactions.filter(
+    (t) => t.competence_date >= p.de && t.competence_date <= p.ate,
+  );
+  // `statements: []`: a parte do cartão vem das faturas, então `saidas` aqui é só o à vista.
+  return resumoMes({ mes: lado, transactions: cortadas, statements: [], receivables });
+}
+
 export type ComparativoAteODia = {
   /** O dia de corte; `null` com o mês fechado (a tela usa o comparativo de sempre). */
   ateODia: number | null;
@@ -289,16 +311,7 @@ export function comparativoAteODia(params: {
   }
 
   const ladoCompetencia = (lado: string) => {
-    const p = periodoAteODia(lado, dia);
-    const cortadas = (params.transactions ?? []).filter(
-      (t) => t.competence_date >= p.de && t.competence_date <= p.ate,
-    );
-    const r = resumoMes({
-      mes: lado,
-      transactions: cortadas,
-      statements: [],
-      receivables: params.receivables ?? [],
-    });
+    const r = resumoAteODia(lado, dia, params.transactions ?? [], params.receivables ?? []);
     return { entradas: r.entradas, saidas: r.aVista };
   };
 
@@ -332,6 +345,41 @@ export function comparativoAteODia(params: {
       pct: variacaoPct(atual.saidas, anterior.saidas),
     },
     cartaoFora: base === "competencia",
+  };
+}
+
+/**
+ * O corte "até o dia D" para o gráfico "Mês a mês" (competência): devolve o `Comparativo` na
+ * MESMA forma de `comparativoMesAMes`, para a tela trocar só a fonte quando o mês está em
+ * andamento. `null` com o mês fechado — aí a tela usa o comparativo de sempre.
+ *
+ * Os dois lados são cortados na MESMA altura (D) pelo mesmo `resumoAteODia` de
+ * `comparativoAteODia` (uma regra só): o lado anterior é cortado em D no mês anterior (Z16) e o
+ * cartão fica fora das saídas (P4).
+ */
+export function comparativoDoGraficoAteODia(params: {
+  mes: string;
+  hoje: string;
+  transactions: DashTx[];
+  receivables: DashReceivable[];
+}): { ateODia: number; comparativo: Comparativo } | null {
+  const { mes, hoje, transactions, receivables } = params;
+  const dia = diaDeCorte(mes, hoje);
+  if (dia === null) return null;
+
+  const atual = resumoAteODia(mes, dia, transactions, receivables);
+  const anterior = resumoAteODia(mesAnteriorDe(mes), dia, transactions, receivables);
+
+  return {
+    ateODia: dia,
+    comparativo: {
+      atual,
+      anterior,
+      deltaSaidas: atual.saidas - anterior.saidas,
+      deltaSaidasPct: variacaoPct(atual.saidas, anterior.saidas),
+      deltaEntradas: atual.entradas - anterior.entradas,
+      deltaEntradasPct: variacaoPct(atual.entradas, anterior.entradas),
+    },
   };
 }
 

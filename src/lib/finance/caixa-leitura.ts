@@ -21,12 +21,14 @@ import "server-only";
  */
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
 import {
+  comparativoAteODia,
   dataDeCaixa,
   entradasDoCaixa,
   filtroDaJanelaDeCaixa,
   mesAnteriorDe,
   numerosDoCaixa,
   periodoAteODia,
+  type ComparativoAteODia,
   type NumerosDoCaixa,
   type Periodo,
   type TxDeCaixa,
@@ -75,6 +77,8 @@ export type EstadoDoCaixa =
       entradasPct: number | null;
       /** Variação % das saídas vs. o mês anterior. */
       saidasPct: number | null;
+      /** K3b: o corte "até o dia D" do mês em andamento (`ateODia` null com o mês fechado). */
+      corte: ComparativoAteODia;
     }
   | { estado: "erro" };
 
@@ -131,9 +135,10 @@ export async function lerCaixaDoMes(mesSel: string): Promise<LeituraDoCaixa> {
 /**
  * Os números da base caixa prontos para a tela: mês selecionado, mês anterior (P6) e as
  * variações percentuais dos cards do topo. A leitura é a MESMA (`lerCaixaDoMes`); o recorte de
- * cada mês é `numerosDoCaixa` com o período até o dia 31 (mês cheio).
+ * cada mês é `numerosDoCaixa` com o período até o dia 31 (mês cheio). O `corte` é o "até o dia D"
+ * do mês em andamento (K3b), sobre os dados já lidos — a janela cobre o mês anterior inteiro.
  */
-export async function estadoDoCaixa(mesSel: string): Promise<EstadoDoCaixa> {
+export async function estadoDoCaixa(mesSel: string, hoje: string): Promise<EstadoDoCaixa> {
   const leitura = await lerCaixaDoMes(mesSel);
   if (!leitura.ok) return { estado: "erro" };
 
@@ -161,5 +166,11 @@ export async function estadoDoCaixa(mesSel: string): Promise<EstadoDoCaixa> {
     entradasDeCaixa,
     entradasPct: variacaoPct(entradasDeCaixa, entradasDoCaixa(anterior)),
     saidasPct: variacaoPct(atual.saidasDeCaixa, anterior.saidasDeCaixa),
+    corte: comparativoAteODia({
+      base: "caixa",
+      mes: mesSel,
+      hoje,
+      caixa: { transactions, pagamentosDeFatura, recebiveis },
+    }),
   };
 }

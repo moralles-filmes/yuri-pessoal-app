@@ -41,6 +41,12 @@ function ok(atual: NumerosDoCaixa, parcial = false): EstadoDoCaixa {
     entradasDeCaixa: 0,
     entradasPct: null,
     saidasPct: null,
+    corte: {
+      ateODia: null,
+      entradas: { atual: 0, anterior: 0, pct: null },
+      saidas: { atual: 0, anterior: 0, pct: null },
+      cartaoFora: false,
+    },
   };
 }
 
