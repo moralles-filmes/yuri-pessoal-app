@@ -23,6 +23,7 @@ import {
 } from "@/lib/finance/pipeline";
 import { baseDaUrl } from "@/lib/finance/base";
 import { estadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import { comparativoAteODia, comparativoDoGraficoAteODia } from "@/lib/finance/caixa";
 import { hojeISO } from "@/lib/format";
 import { DashboardClient } from "./financial-dashboard-client";
 
@@ -77,6 +78,21 @@ export default async function DashboardFinanceiroPage({
   // A leitura da base caixa só acontece quando ela está selecionada.
   const caixa = base === "caixa" ? await estadoDoCaixa(mesSel, hoje) : null;
 
+  // Corte "até o dia D" do mês em andamento (K3/K3b) — calculado no servidor, viaja por prop.
+  const corteCompetencia = comparativoAteODia({
+    base: "competencia",
+    mes: mesSel,
+    hoje,
+    transactions: txs,
+    receivables: recs,
+  });
+  const graficoAteODia = comparativoDoGraficoAteODia({
+    mes: mesSel,
+    hoje,
+    transactions: txs,
+    receivables: recs,
+  });
+
   // A régua do alerta de gasto alto — a MESMA que o sino usa desde a 03-B2 (B2, decisão do dono):
   // até 5 meses anteriores ao selecionado, mês sem saída ignorado. O número desta tela não mudou.
   const regua = reguaDoGastoAlto({
@@ -114,6 +130,8 @@ export default async function DashboardFinanceiroPage({
         resumo={resumo}
         perdoado={perdoado}
         comparativo={comparativo}
+        corteCompetencia={corteCompetencia}
+        graficoAteODia={graficoAteODia}
         evolucao={evolucao}
         categorias={categorias}
         formas={formas}

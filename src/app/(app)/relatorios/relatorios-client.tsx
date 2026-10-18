@@ -182,6 +182,9 @@ export function RelatoriosClient({
     );
   })();
 
+  // Gráfico "Mês a mês": até o dia D quando o mês está em andamento (K3b); senão, como hoje.
+  const ateODia = finance.graficoAteODia;
+
   return (
     <div className="space-y-6">
       {/* Período + base + exportar tudo */}
@@ -249,9 +252,18 @@ export function RelatoriosClient({
           </ChartCard>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <ChartCard title="Mês a mês" description="Comparativo com o mês anterior. Competência.">
-              <MesAMesChart comparativo={finance.comparativo} />
-            </ChartCard>
+            {ateODia !== null ? (
+              <ChartCard
+                title={`Mês a mês · até o dia ${ateODia.ateODia}`}
+                description="Competência. Os dois meses até o mesmo dia; saídas só à vista — o cartão não entra (a fatura não se divide por dia)."
+              >
+                <MesAMesChart comparativo={ateODia.comparativo} />
+              </ChartCard>
+            ) : (
+              <ChartCard title="Mês a mês" description="Comparativo com o mês anterior. Competência.">
+                <MesAMesChart comparativo={finance.comparativo} />
+              </ChartCard>
+            )}
             <ChartCard title="Projeção dos próximos meses" description="Faturas, recorrências e contas fixas. Pelo vencimento.">
               <ProjecaoChart data={finance.projecao} />
             </ChartCard>

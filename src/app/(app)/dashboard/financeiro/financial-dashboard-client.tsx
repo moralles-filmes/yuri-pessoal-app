@@ -33,6 +33,7 @@ import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
 import { fraseDoPerdoado, rotuloPendenteDoMes } from "@/lib/finance/recebimentos";
 import { ROTULO_DA_BASE, type BaseFinanceira } from "@/lib/finance/base";
 import type { EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import type { ComparativoAteODia } from "@/lib/finance/caixa";
 import { CategoriaChart } from "@/components/dashboard/categoria-chart";
 import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-chart";
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
@@ -57,9 +58,28 @@ function monthYearLabel(mes: string): string {
   );
 }
 
+/** Mês anterior em texto 'yyyy-MM' (vira o ano em janeiro), sem depender do relógio. */
+function mesAnteriorTexto(mes: string): string {
+  const [y, m] = mes.split("-").map(Number);
+  const ano = m === 1 ? y - 1 : y;
+  const mesNum = m === 1 ? 12 : m - 1;
+  return `${ano}-${String(mesNum).padStart(2, "0")}`;
+}
+
+/** Nome do mês anterior por extenso em pt-BR (mesmo Intl de monthYearLabel). */
+function nomeDoMesAnterior(mes: string): string {
+  return monthYearLabel(mesAnteriorTexto(mes));
+}
+
 function pctText(pct: number | null): string {
   if (pct === null) return "—";
   return `${pct > 0 ? "+" : ""}${pct.toFixed(0)}%`;
+}
+
+/** Direção da seta a partir do sinal da porcentagem (null = neutral). */
+function direcaoDoPct(pct: number | null): "up" | "down" | "neutral" {
+  if (pct === null || pct === 0) return "neutral";
+  return pct > 0 ? "up" : "down";
 }
 
 /** Monta a URL do dashboard preservando o mês e a base caixa quando ativa. */
@@ -80,6 +100,8 @@ export function DashboardClient({
   resumo,
   perdoado,
   comparativo,
+  corteCompetencia,
+  graficoAteODia,
   evolucao,
   categorias,
   formas,
@@ -98,6 +120,8 @@ export function DashboardClient({
   resumo: ResumoMes;
   perdoado: number;
   comparativo: Comparativo;
+  corteCompetencia: ComparativoAteODia;
+  graficoAteODia: { ateODia: number; comparativo: Comparativo } | null;
   evolucao: EvolucaoPonto[];
   categorias: CategoriaSlice[];
   formas: FormaSlice[];
@@ -139,23 +163,45 @@ export function DashboardClient({
   const caixaOk = base === "caixa" && caixa?.estado === "ok" ? caixa : null;
   const caixaErro = base === "caixa" && caixa?.estado === "erro";
 
+  // Corte "até o dia D" do mês em andamento (K3). Mês fechado => null => tela de hoje.
+  const corte: ComparativoAteODia | null = caixaOk ? caixaOk.corte : caixaErro ? null : corteCompetencia;
+  const corteAtivo = corte !== null && corte.ateODia !== null;
+  const diaDoCorte = corteAtivo ? corte.ateODia : null;
+  const mesAnteriorRotulo = nomeDoMesAnterior(mesSel);
+
+  function hintDoPeriodo(pct: number | null): string {
+    return pct === null
+      ? `sem base de comparação com ${mesAnteriorRotulo}`
+      : `vs. o mesmo período de ${mesAnteriorRotulo}`;
+  }
+
   const entradasCard = caixaOk
-    ? {
-        label: "Entradas de caixa",
-        value: formatCurrency(caixaOk.entradasDeCaixa),
-        hint: "Caixa realizado · vs. mês anterior",
-        trend: {
-          value: pctText(caixaOk.entradasPct),
-          direction:
-            caixaOk.entradasPct === null
-              ? ("neutral" as const)
-              : caixaOk.entradasPct > 0
-                ? ("up" as const)
-                : caixaOk.entradasPct < 0
-                  ? ("down" as const)
-                  : ("neutral" as const),
-        },
-      }
+    ? corteAtivo && corte
+      ? {
+          label: "Entradas de caixa",
+          value: formatCurrency(caixaOk.entradasDeCaixa),
+          hint: `até o dia ${diaDoCorte}: ${hintDoPeriodo(corte.entradas.pct)} · Caixa realizado`,
+          trend: {
+            value: pctText(corte.entradas.pct),
+            direction: direcaoDoPct(corte.entradas.pct),
+          },
+        }
+      : {
+          label: "Entradas de caixa",
+          value: formatCurrency(caixaOk.entradasDeCaixa),
+          hint: "Caixa realizado · vs. mês anterior",
+          trend: {
+            value: pctText(caixaOk.entradasPct),
+            direction:
+              caixaOk.entradasPct === null
+                ? ("neutral" as const)
+                : caixaOk.entradasPct > 0
+                  ? ("up" as const)
+                  : caixaOk.entradasPct < 0
+                    ? ("down" as const)
+                    : ("neutral" as const),
+          },
+        }
     : caixaErro
       ? {
           label: "Entradas de caixa",
@@ -163,30 +209,50 @@ export function DashboardClient({
           hint: "Não foi possível ler o caixa",
           trend: undefined,
         }
-      : {
-          label: "Entradas do mês",
-          value: formatCurrency(entradasNoCard.valor),
-          hint: entradasNoCard.detalhe
-            ? `Competência · vs. mês anterior · ${entradasNoCard.detalhe}`
-            : "Competência · vs. mês anterior",
-          trend: {
-            value: pctText(comparativo.deltaEntradasPct),
-            direction:
-              comparativo.deltaEntradas > 0
-                ? ("up" as const)
-                : comparativo.deltaEntradas < 0
-                  ? ("down" as const)
-                  : ("neutral" as const),
-          },
-        };
+      : corteAtivo && corte
+        ? {
+            label: "Entradas do mês",
+            value: formatCurrency(entradasNoCard.valor),
+            hint: [
+              `até o dia ${diaDoCorte}: ${hintDoPeriodo(corte.entradas.pct)}`,
+              entradasNoCard.detalhe ? `Competência · ${entradasNoCard.detalhe}` : "Competência",
+            ].join(" · "),
+            trend: {
+              value: pctText(corte.entradas.pct),
+              direction: direcaoDoPct(corte.entradas.pct),
+            },
+          }
+        : {
+            label: "Entradas do mês",
+            value: formatCurrency(entradasNoCard.valor),
+            hint: entradasNoCard.detalhe
+              ? `Competência · vs. mês anterior · ${entradasNoCard.detalhe}`
+              : "Competência · vs. mês anterior",
+            trend: {
+              value: pctText(comparativo.deltaEntradasPct),
+              direction:
+                comparativo.deltaEntradas > 0
+                  ? ("up" as const)
+                  : comparativo.deltaEntradas < 0
+                    ? ("down" as const)
+                    : ("neutral" as const),
+            },
+          };
 
   const saidasCard = caixaOk
-    ? {
-        label: "Saídas de caixa",
-        value: formatCurrency(caixaOk.atual.saidasDeCaixa),
-        hint: "Caixa realizado · vs. mês anterior",
-        trend: { value: pctText(caixaOk.saidasPct), direction: "neutral" as const },
-      }
+    ? corteAtivo && corte
+      ? {
+          label: "Saídas de caixa",
+          value: formatCurrency(caixaOk.atual.saidasDeCaixa),
+          hint: `até o dia ${diaDoCorte}: ${hintDoPeriodo(corte.saidas.pct)} · Caixa realizado`,
+          trend: { value: pctText(corte.saidas.pct), direction: "neutral" as const },
+        }
+      : {
+          label: "Saídas de caixa",
+          value: formatCurrency(caixaOk.atual.saidasDeCaixa),
+          hint: "Caixa realizado · vs. mês anterior",
+          trend: { value: pctText(caixaOk.saidasPct), direction: "neutral" as const },
+        }
     : caixaErro
       ? {
           label: "Saídas de caixa",
@@ -194,12 +260,19 @@ export function DashboardClient({
           hint: "Não foi possível ler o caixa",
           trend: undefined,
         }
-      : {
-          label: "Saídas do mês",
-          value: formatCurrency(resumo.saidas),
-          hint: `Competência · meu ${formatCurrency(resumo.meu)}`,
-          trend: { value: pctText(comparativo.deltaSaidasPct), direction: "neutral" as const },
-        };
+      : corteAtivo && corte
+        ? {
+            label: "Saídas do mês",
+            value: formatCurrency(resumo.saidas),
+            hint: `Saídas à vista até o dia ${diaDoCorte} · o cartão não entra (a fatura não se divide por dia)`,
+            trend: { value: pctText(corte.saidas.pct), direction: "neutral" as const },
+          }
+        : {
+            label: "Saídas do mês",
+            value: formatCurrency(resumo.saidas),
+            hint: `Competência · meu ${formatCurrency(resumo.meu)}`,
+            trend: { value: pctText(comparativo.deltaSaidasPct), direction: "neutral" as const },
+          };
 
   return (
     <div className="space-y-6">
@@ -398,11 +471,25 @@ export function DashboardClient({
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Mês a mês</CardTitle>
-            <CardDescription>Comparativo com o mês anterior. Competência.</CardDescription>
+            {graficoAteODia !== null ? (
+              <>
+                <CardTitle>Mês a mês · até o dia {graficoAteODia.ateODia}</CardTitle>
+                <CardDescription>
+                  Competência. Os dois meses até o mesmo dia; saídas só à vista — o cartão não entra
+                  (a fatura não se divide por dia).
+                </CardDescription>
+              </>
+            ) : (
+              <>
+                <CardTitle>Mês a mês</CardTitle>
+                <CardDescription>Comparativo com o mês anterior. Competência.</CardDescription>
+              </>
+            )}
           </CardHeader>
           <CardContent>
-            <MesAMesChart comparativo={comparativo} />
+            <MesAMesChart
+              comparativo={graficoAteODia !== null ? graficoAteODia.comparativo : comparativo}
+            />
           </CardContent>
         </Card>
         <Card>
