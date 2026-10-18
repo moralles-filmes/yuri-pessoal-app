@@ -99,6 +99,17 @@ export function dataDeCaixa(t: Pick<TxDeCaixa, "liquidado_em" | "competence_date
     : { data: t.competence_date, aproximada: true };
 }
 
+/**
+ * O filtro `or` do PostgREST para a janela: com data de liquidação, vale ela; sem, vale a
+ * competência. Afunila a consulta — a decisão final é `dataDeCaixa` (P11).
+ */
+export function filtroDaJanelaDeCaixa(p: Periodo): string {
+  return (
+    `and(liquidado_em.is.null,competence_date.gte.${p.de},competence_date.lte.${p.ate}),` +
+    `and(liquidado_em.gte.${p.de},liquidado_em.lte.${p.ate})`
+  );
+}
+
 /* ───────────────────────────── Os números do caixa ───────────────────────────── */
 
 /**

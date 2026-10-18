@@ -23,6 +23,7 @@ import { SETTLED_STATUSES } from "@/lib/finance/constants";
 import {
   dataDeCaixa,
   entradasDoCaixa,
+  filtroDaJanelaDeCaixa,
   mesAnteriorDe,
   numerosDoCaixa,
   periodoAteODia,
@@ -34,6 +35,10 @@ import { variacaoPct } from "@/lib/finance/dashboard";
 import { getReceivables } from "@/lib/finance/queries";
 import type { RecebivelComRecebimentos } from "@/lib/finance/recebimentos";
 import { createClient } from "@/lib/supabase/server";
+
+// `filtroDaJanelaDeCaixa` mora em `caixa.ts` (puro, com `dataDeCaixa`); continua exportado por
+// aqui para quem já importava deste módulo (caixa-leitura.test.ts).
+export { filtroDaJanelaDeCaixa } from "@/lib/finance/caixa";
 
 /** Linhas lidas por consulta. Saturou ⇒ `parcial`. */
 export const TETO_DO_CAIXA = 5000;
@@ -72,17 +77,6 @@ export type EstadoDoCaixa =
       saidasPct: number | null;
     }
   | { estado: "erro" };
-
-/**
- * O filtro `or` do PostgREST para a janela: com data de liquidação, vale ela; sem, vale a
- * competência. Afunila a consulta — a decisão final é `dataDeCaixa` (P11).
- */
-export function filtroDaJanelaDeCaixa(p: Periodo): string {
-  return (
-    `and(liquidado_em.is.null,competence_date.gte.${p.de},competence_date.lte.${p.ate}),` +
-    `and(liquidado_em.gte.${p.de},liquidado_em.lte.${p.ate})`
-  );
-}
 
 type LinhaBruta = Omit<TxDeCaixa, "amount" | "valor_pessoal"> & {
   // O PostgREST pode devolver `numeric` como texto.
