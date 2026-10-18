@@ -34,7 +34,21 @@ import {
   type Periodo,
   type TxDeCaixa,
 } from "@/lib/finance/caixa";
-import { variacaoPct } from "@/lib/finance/dashboard";
+import {
+  variacaoPct,
+  type CategoriaSlice,
+  type EvolucaoPonto,
+  type FormaSlice,
+  type MesAMesDados,
+} from "@/lib/finance/dashboard";
+import {
+  evolucaoDoCaixa,
+  gastosDeCaixa,
+  mesAMesDoCaixa,
+  minhaParteDoCaixa,
+  type MinhaParteDoCaixa,
+  type MotorDoCaixa,
+} from "@/lib/finance/caixa-minha-parte";
 import { leituraComTeto } from "@/lib/finance/leitura-com-teto";
 import { getReceivables } from "@/lib/finance/queries";
 import type { RecebivelComRecebimentos } from "@/lib/finance/recebimentos";
@@ -48,13 +62,16 @@ export { filtroDaJanelaDeCaixa } from "@/lib/finance/caixa";
 export const TETO_DO_CAIXA = 5000;
 
 const COLUNAS =
-  "id,type,status,amount,valor_pessoal,competence_date,liquidado_em,account_id,transfer_account_id,card_id";
+  "id,type,status,amount,valor_pessoal,competence_date,liquidado_em,account_id,transfer_account_id,card_id," +
+  "payment_method,category:categories(id,name,color)";
 
 export type LeituraDoCaixa =
   | {
       ok: true;
       transactions: TxDeCaixa[];
       pagamentosDeFatura: Set<string>;
+      /** Id do lançamento que pagou → id da fatura (desenho 2026-10-18: abrir a fatura paga). */
+      pagamentos: Map<string, string>;
       recebiveis: RecebivelComRecebimentos[];
       /** O teto cortou: há lançamentos na janela que não vieram. */
       parcial: boolean;
@@ -81,8 +98,20 @@ export type EstadoDoCaixa =
       saidasPct: number | null;
       /** K3b: o corte "até o dia D" do mês em andamento (`ateODia` null com o mês fechado). */
       corte: ComparativoAteODia;
+      /** Desenho 2026-10-18: os gráficos da base caixa, só com a parte do dono. */
+      graficos: GraficosDoCaixa;
     }
   | { estado: "erro" };
+
+/** Os gráficos da base caixa, prontos do servidor (mesmas formas dos de competência). */
+export type GraficosDoCaixa = {
+  /** O mês selecionado: card "Minhas saídas" e o rodapé das faturas sem total. */
+  minha: MinhaParteDoCaixa;
+  evolucao: EvolucaoPonto[];
+  mesAMes: { ateODia: number | null; dados: MesAMesDados };
+  categorias: CategoriaSlice[];
+  formas: FormaSlice[];
+};
 
 type LinhaBruta = Omit<TxDeCaixa, "amount" | "valor_pessoal"> & {
   // O PostgREST pode devolver `numeric` como texto.
@@ -90,10 +119,17 @@ type LinhaBruta = Omit<TxDeCaixa, "amount" | "valor_pessoal"> & {
   valor_pessoal: number | string | null;
 };
 
-/** Lê os lançamentos liquidados da janela, os pagamentos de fatura e os recebíveis. */
-export async function lerCaixaDoMes(mesSel: string): Promise<LeituraDoCaixa> {
+/**
+ * Lê os lançamentos liquidados da janela, os pagamentos de fatura e os recebíveis. A janela vai
+ * do dia 1 de `desdeMes` (padrão: o mês anterior, o mínimo do comparativo K3) ao fim de `mesSel`;
+ * a evolução de 6 meses (desenho 2026-10-18) pede `desdeMes` = o primeiro mês dela.
+ */
+export async function lerCaixaDoMes(
+  mesSel: string,
+  desdeMes: string = mesAnteriorDe(mesSel),
+): Promise<LeituraDoCaixa> {
   const periodoLido: Periodo = {
-    de: `${mesAnteriorDe(mesSel)}-01`,
+    de: `${desdeMes < mesSel ? desdeMes : mesAnteriorDe(mesSel)}-01`,
     ate: periodoAteODia(mesSel, 31).ate,
   };
 
@@ -107,7 +143,7 @@ export async function lerCaixaDoMes(mesSel: string): Promise<LeituraDoCaixa> {
       .limit(TETO_DO_CAIXA),
     supabase
       .from("card_statements")
-      .select("pago_transacao_id", { count: "exact" })
+      .select("id,pago_transacao_id", { count: "exact" })
       .not("pago_transacao_id", "is", null),
     getReceivables(),
   ]);
@@ -116,7 +152,7 @@ export async function lerCaixaDoMes(mesSel: string): Promise<LeituraDoCaixa> {
 
   const leituraTx = leituraComTeto((lancamentos.data ?? []) as unknown as LinhaBruta[], lancamentos.count);
   const leituraFaturas = leituraComTeto(
-    (faturas.data ?? []) as { pago_transacao_id: string | null }[],
+    (faturas.data ?? []) as { id: string; pago_transacao_id: string | null }[],
     faturas.count,
   );
   // Sem contagem também é parcial: errar para "pode faltar coisa" é o único erro aceitável.
@@ -134,11 +170,14 @@ export async function lerCaixaDoMes(mesSel: string): Promise<LeituraDoCaixa> {
     });
 
   const pagamentosDeFatura = new Set<string>();
+  const pagamentos = new Map<string, string>();
   for (const f of leituraFaturas.linhas) {
-    if (f.pago_transacao_id) pagamentosDeFatura.add(f.pago_transacao_id);
+    if (!f.pago_transacao_id) continue;
+    pagamentosDeFatura.add(f.pago_transacao_id);
+    pagamentos.set(f.pago_transacao_id, f.id);
   }
 
-  return { ok: true, transactions, pagamentosDeFatura, recebiveis, parcial, periodoLido };
+  return { ok: true, transactions, pagamentosDeFatura, pagamentos, recebiveis, parcial, periodoLido };
 }
 
 /**
@@ -147,11 +186,19 @@ export async function lerCaixaDoMes(mesSel: string): Promise<LeituraDoCaixa> {
  * cada mês é `numerosDoCaixa` com o período até o dia 31 (mês cheio). O `corte` é o "até o dia D"
  * do mês em andamento (K3b), sobre os dados já lidos — a janela cobre o mês anterior inteiro.
  */
-export async function estadoDoCaixa(mesSel: string, hoje: string): Promise<EstadoDoCaixa> {
-  const leitura = await lerCaixaDoMes(mesSel);
+export async function estadoDoCaixa(
+  mesSel: string,
+  hoje: string,
+  /** As entradas do motor (`lerFinanceiro`): faturas, recebíveis e itens — para abrir a fatura paga. */
+  motor: MotorDoCaixa,
+  /** Os meses da evolução (o primeiro decide o começo da janela lida). */
+  evoMeses: string[],
+): Promise<EstadoDoCaixa> {
+  const leitura = await lerCaixaDoMes(mesSel, evoMeses[0]);
   if (!leitura.ok) return { estado: "erro" };
 
-  const { transactions, pagamentosDeFatura, recebiveis, parcial } = leitura;
+  const { transactions, pagamentosDeFatura, pagamentos, recebiveis, parcial } = leitura;
+  const doMes = { transactions, pagamentos, motor };
 
   const atual = numerosDoCaixa({
     periodo: periodoAteODia(mesSel, 31),
@@ -181,5 +228,11 @@ export async function estadoDoCaixa(mesSel: string, hoje: string): Promise<Estad
       hoje,
       caixa: { transactions, pagamentosDeFatura, recebiveis },
     }),
+    graficos: {
+      minha: minhaParteDoCaixa({ ...doMes, periodo: periodoAteODia(mesSel, 31) }),
+      evolucao: evolucaoDoCaixa({ ...doMes, meses: evoMeses }),
+      mesAMes: mesAMesDoCaixa({ ...doMes, mes: mesSel, hoje }),
+      ...gastosDeCaixa({ ...doMes, periodo: periodoAteODia(mesSel, 31) }),
+    },
   };
 }

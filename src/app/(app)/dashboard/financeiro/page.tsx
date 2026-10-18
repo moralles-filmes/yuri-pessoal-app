@@ -76,7 +76,15 @@ export default async function DashboardFinanceiroPage({
   const saldo = saldoDasContas(accounts);
 
   // A leitura da base caixa só acontece quando ela está selecionada.
-  const caixa = base === "caixa" ? await estadoDoCaixa(mesSel, hoje) : null;
+  const caixa =
+    base === "caixa"
+      ? await estadoDoCaixa(
+          mesSel,
+          hoje,
+          { statements: sts, receivables: recs, transactions: txs, installmentItems: inst },
+          evoMeses,
+        )
+      : null;
 
   // Corte "até o dia D" do mês em andamento (K3/K3b) — calculado no servidor, viaja por prop.
   const corteCompetencia = comparativoAteODia({

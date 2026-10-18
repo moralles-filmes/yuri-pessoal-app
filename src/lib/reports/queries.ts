@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/server";
 import { hojeISO } from "@/lib/format";
 import { comparativoDoGraficoAteODia } from "@/lib/finance/caixa";
 import { lerFinanceiro } from "@/lib/finance/queries";
+import { estadoDoCaixa, type EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import type { BaseFinanceira } from "@/lib/finance/base";
 import {
   comparativoMesAMes,
   evolucaoMensal,
@@ -114,6 +116,8 @@ export type ReportsData = {
   mes: string;
   hoje: string;
   finance: FinanceReport;
+  /** Só com a base caixa selecionada; `null` em competência. */
+  caixa: EstadoDoCaixa | null;
   card: CardReport;
   habits: HabitsReport;
   studies: StudiesReport;
@@ -125,7 +129,8 @@ export type ReportsData = {
 async function getFinanceAndCardReport(
   mesSel: string,
   hoje: string,
-): Promise<{ finance: FinanceReport; card: CardReport }> {
+  base: BaseFinanceira,
+): Promise<{ finance: FinanceReport; caixa: EstadoDoCaixa | null; card: CardReport }> {
   const mesAtual = mesDe(hoje);
   // REDESIGN-03-B — a MESMA chamada da página do dashboard financeiro, não a mesma cópia.
   const janela = janelaDoRelatorio({ mesSel, mesAtual });
@@ -158,6 +163,16 @@ async function getFinanceAndCardReport(
       frequency: r.frequency,
     }))
     .sort((a, b) => b.valor - a.valor);
+
+  const caixa =
+    base === "caixa"
+      ? await estadoDoCaixa(
+          mesSel,
+          hoje,
+          { statements: sts, receivables: recs, transactions: txs, installmentItems: inst },
+          evoMeses,
+        )
+      : null;
 
   // ── Cartão ──
   const faturas = proximas6Faturas({ hoje, cards: dashCards, statements: sts, receivables: recs });
@@ -193,6 +208,7 @@ async function getFinanceAndCardReport(
       aReceber,
       assinaturas,
     },
+    caixa,
     card: {
       completude,
       faturas,
@@ -272,10 +288,13 @@ async function getTasksReportData(todayIso: string): Promise<TasksReport> {
 
 /* ───────────────────────────── Orquestrador ───────────────────────────── */
 
-export async function getReportsData(mesSel: string): Promise<ReportsData> {
+export async function getReportsData(
+  mesSel: string,
+  base: BaseFinanceira = "competencia",
+): Promise<ReportsData> {
   const hoje = hojeISO();
   const [financeAndCard, habits, studies, tasks] = await Promise.all([
-    getFinanceAndCardReport(mesSel, hoje),
+    getFinanceAndCardReport(mesSel, hoje, base),
     getHabitsReport(hoje),
     getStudiesReport(hoje),
     getTasksReportData(hoje),
@@ -285,6 +304,7 @@ export async function getReportsData(mesSel: string): Promise<ReportsData> {
     mes: mesSel,
     hoje,
     finance: financeAndCard.finance,
+    caixa: financeAndCard.caixa,
     card: financeAndCard.card,
     habits,
     studies,

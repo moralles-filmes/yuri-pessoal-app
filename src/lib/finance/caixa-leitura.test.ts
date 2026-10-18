@@ -88,6 +88,34 @@ describe("lerCaixaDoMes", () => {
     expect(r.recebiveis).toEqual([]);
   });
 
+  it("mapeia cada pagamento à fatura que ele quitou", async () => {
+    fake = criarSupabaseEmMemoria({
+      transactions: [tx("pag")],
+      card_statements: [
+        { id: "f1", pago_transacao_id: "pag" },
+        { id: "f2", pago_transacao_id: null },
+      ],
+      receivables: [],
+      receivable_receipts: [],
+    });
+    const r = await lerCaixaDoMes("2026-10");
+    if (!r.ok) throw new Error("esperava ok");
+    expect(r.pagamentos).toEqual(new Map([["pag", "f1"]]));
+  });
+
+  it("com `desdeMes`, a janela começa no dia 1 dele (a evolução lê 6 meses)", async () => {
+    fake = criarSupabaseEmMemoria({
+      transactions: [tx("maio", { competence_date: "2026-05-03", liquidado_em: "2026-05-03" })],
+      card_statements: [],
+      receivables: [],
+      receivable_receipts: [],
+    });
+    const r = await lerCaixaDoMes("2026-10", "2026-05");
+    if (!r.ok) throw new Error("esperava ok");
+    expect(r.periodoLido).toEqual({ de: "2026-05-01", ate: "2026-10-31" });
+    expect(r.transactions.map((t) => t.id)).toEqual(["maio"]);
+  });
+
   it("converte amount e valor_pessoal (texto do PostgREST) para número", async () => {
     fake = criarSupabaseEmMemoria({
       transactions: [tx("a", { amount: "47.90", valor_pessoal: "12.30" }), tx("b", { valor_pessoal: null })],
