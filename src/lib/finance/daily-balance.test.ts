@@ -216,3 +216,58 @@ describe("saldosPorDia", () => {
     }
   });
 });
+
+/**
+ * REDESIGN-03-E · B1 — CARACTERIZAÇÃO, escrita ANTES de o saldo passar a cortar pela data de
+ * caixa (K1). Com `liquidado_em` nulo em tudo (o estado do banco depois da M2), o saldo de cada
+ * dia tem de ser EXATAMENTE o de antes da troca. Este bloco é escrito verde e não muda depois.
+ * Valores à mão, sintéticos.
+ */
+describe("03-E B1 · caracterização do saldo por dia (antes da data de caixa)", () => {
+  const movimentos: MovimentoDeSaldo[] = [
+    mov({ competence_date: "2026-07-01", type: "receita", amount: 500 }),
+    mov({ competence_date: "2026-07-03", type: "despesa", amount: 120.5 }),
+    mov({
+      competence_date: "2026-07-03",
+      type: "transferencia",
+      amount: 300,
+      account_id: CONTA_A,
+      transfer_account_id: CONTA_B,
+    }),
+    // pagamento de fatura: transferência sem destino
+    mov({ competence_date: "2026-07-05", type: "transferencia", amount: 200 }),
+    mov({ competence_date: "2026-07-06", type: "despesa", amount: 50, status: "pendente" }),
+    mov({
+      competence_date: "2026-07-08",
+      type: "receita",
+      status: "recebido",
+      amount: 80,
+      account_id: CONTA_B,
+    }),
+  ];
+  const dias = ["2026-07-01", "2026-07-02", "2026-07-03", "2026-07-05", "2026-07-06", "2026-07-08"];
+
+  it("todas as contas somadas", () => {
+    const s = saldosPorDia({ abertura: 1000, escopo: null, dias, movimentos });
+    expect(Object.fromEntries(s)).toEqual({
+      "2026-07-01": 1500,
+      "2026-07-02": 1500,
+      "2026-07-03": 1379.5,
+      "2026-07-05": 1179.5,
+      "2026-07-06": 1179.5,
+      "2026-07-08": 1259.5,
+    });
+  });
+
+  it("uma conta só", () => {
+    const s = saldosPorDia({ abertura: 1000, escopo: CONTA_A, dias, movimentos });
+    expect(Object.fromEntries(s)).toEqual({
+      "2026-07-01": 1500,
+      "2026-07-02": 1500,
+      "2026-07-03": 1079.5,
+      "2026-07-05": 879.5,
+      "2026-07-06": 879.5,
+      "2026-07-08": 879.5,
+    });
+  });
+});
