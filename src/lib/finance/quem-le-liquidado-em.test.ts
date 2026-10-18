@@ -31,6 +31,8 @@ const ALLOWLIST: Record<string, string> = {
   "lib/actions/imports.ts": "o extrato de conta importado grava a data da linha (K0.3); cartão não",
   "lib/actions/transactions.ts":
     "a edição e o botão rápido mantêm a data coerente com o status (K0.6, P8, P9) — os dois caminhos que mudam status",
+  "lib/finance/caixa-leitura.ts":
+    "a LEITURA da base caixa (A4): a janela por data de caixa no PostgREST, refiltrada por dataDeCaixa (P11)",
   "app/(app)/financeiro/lancamentos/transaction-form.tsx":
     "o campo \"Data do pagamento\" (K0.1): só com pago/recebido e sem cartão, pré-preenchido com o GRAVADO",
 };
