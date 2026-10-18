@@ -15,6 +15,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { StatCard } from "@/components/shared/stat-card";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import {
   Card,
   CardContent,
@@ -25,10 +26,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { StatementStatusBadge } from "@/components/financeiro/badges";
+import { BlocoDoCaixa } from "@/components/financeiro/bloco-do-caixa";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
 import { fraseDoPerdoado, rotuloPendenteDoMes } from "@/lib/finance/recebimentos";
+import { ROTULO_DA_BASE, type BaseFinanceira } from "@/lib/finance/base";
+import type { EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
 import { CategoriaChart } from "@/components/dashboard/categoria-chart";
 import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-chart";
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
@@ -58,8 +62,20 @@ function pctText(pct: number | null): string {
   return `${pct > 0 ? "+" : ""}${pct.toFixed(0)}%`;
 }
 
+/** Monta a URL do dashboard preservando o mês e a base caixa quando ativa. */
+function urlDoDashboard(mes: string, base: BaseFinanceira): string {
+  const params = new URLSearchParams();
+  if (mes) params.set("mes", mes);
+  if (base === "caixa") params.set("base", "caixa");
+  return params.toString()
+    ? `/dashboard/financeiro?${params.toString()}`
+    : "/dashboard/financeiro";
+}
+
 export function DashboardClient({
   mesSel,
+  base,
+  caixa,
   saldo,
   resumo,
   perdoado,
@@ -76,6 +92,8 @@ export function DashboardClient({
   faturasFechadas,
 }: {
   mesSel: string;
+  base: BaseFinanceira;
+  caixa: EstadoDoCaixa | null;
   saldo: number;
   resumo: ResumoMes;
   perdoado: number;
@@ -94,13 +112,13 @@ export function DashboardClient({
   const router = useRouter();
 
   function setMes(mes: string) {
-    const params = new URLSearchParams();
-    if (mes) params.set("mes", mes);
-    router.push(
-      params.toString()
-        ? `/dashboard/financeiro?${params.toString()}`
-        : "/dashboard/financeiro",
-    );
+    // Preserva a base caixa (?base=caixa) quando ativa.
+    router.push(urlDoDashboard(mes, base));
+  }
+
+  function setBase(b: BaseFinanceira) {
+    // Competência = sem o parâmetro; caixa = ?base=caixa.
+    router.replace(urlDoDashboard(mesSel, b));
   }
 
   // Próximas 6 faturas agrupadas por cartão (mantém a ordem por vencimento).
@@ -117,18 +135,96 @@ export function DashboardClient({
   const entradasNoCard = apresentarEntradas(resumo);
   const frase = fraseDoPerdoado(perdoado);
 
+  // Cards do topo: com competência nada muda nos números, só os hints declaram a base (K2).
+  const caixaOk = base === "caixa" && caixa?.estado === "ok" ? caixa : null;
+  const caixaErro = base === "caixa" && caixa?.estado === "erro";
+
+  const entradasCard = caixaOk
+    ? {
+        label: "Entradas de caixa",
+        value: formatCurrency(caixaOk.entradasDeCaixa),
+        hint: "Caixa realizado · vs. mês anterior",
+        trend: {
+          value: pctText(caixaOk.entradasPct),
+          direction:
+            caixaOk.entradasPct === null
+              ? ("neutral" as const)
+              : caixaOk.entradasPct > 0
+                ? ("up" as const)
+                : caixaOk.entradasPct < 0
+                  ? ("down" as const)
+                  : ("neutral" as const),
+        },
+      }
+    : caixaErro
+      ? {
+          label: "Entradas de caixa",
+          value: "—",
+          hint: "Não foi possível ler o caixa",
+          trend: undefined,
+        }
+      : {
+          label: "Entradas do mês",
+          value: formatCurrency(entradasNoCard.valor),
+          hint: entradasNoCard.detalhe
+            ? `Competência · vs. mês anterior · ${entradasNoCard.detalhe}`
+            : "Competência · vs. mês anterior",
+          trend: {
+            value: pctText(comparativo.deltaEntradasPct),
+            direction:
+              comparativo.deltaEntradas > 0
+                ? ("up" as const)
+                : comparativo.deltaEntradas < 0
+                  ? ("down" as const)
+                  : ("neutral" as const),
+          },
+        };
+
+  const saidasCard = caixaOk
+    ? {
+        label: "Saídas de caixa",
+        value: formatCurrency(caixaOk.atual.saidasDeCaixa),
+        hint: "Caixa realizado · vs. mês anterior",
+        trend: { value: pctText(caixaOk.saidasPct), direction: "neutral" as const },
+      }
+    : caixaErro
+      ? {
+          label: "Saídas de caixa",
+          value: "—",
+          hint: "Não foi possível ler o caixa",
+          trend: undefined,
+        }
+      : {
+          label: "Saídas do mês",
+          value: formatCurrency(resumo.saidas),
+          hint: `Competência · meu ${formatCurrency(resumo.meu)}`,
+          trend: { value: pctText(comparativo.deltaSaidasPct), direction: "neutral" as const },
+        };
+
   return (
     <div className="space-y-6">
-      {/* Filtro de período */}
-      <div className="flex flex-col gap-1.5 sm:max-w-xs">
-        <Label htmlFor="dash-mes">Período (mês)</Label>
-        <input
-          id="dash-mes"
-          type="month"
-          value={mesSel}
-          onChange={(e) => setMes(e.target.value || mesSel)}
-          className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
-        />
+      {/* Filtro de período e base dos números */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+        <div className="flex flex-col gap-1.5 sm:max-w-xs">
+          <Label htmlFor="dash-mes">Período (mês)</Label>
+          <input
+            id="dash-mes"
+            type="month"
+            value={mesSel}
+            onChange={(e) => setMes(e.target.value || mesSel)}
+            className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <span className="text-sm font-medium">Base:</span>
+          <SeletorDeVisao
+            rotulo="Base dos números"
+            visoes={["competencia", "caixa"] as const}
+            rotulos={ROTULO_DA_BASE}
+            atual={base}
+            aoEscolher={setBase}
+          />
+        </div>
       </div>
 
       {/* Alertas */}
@@ -167,32 +263,38 @@ export function DashboardClient({
 
       {/* Cards de resumo */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Saldo atual" value={formatCurrency(saldo)} icon={Wallet} hint="Soma das contas" />
         <StatCard
-          label="Entradas do mês"
-          value={formatCurrency(entradasNoCard.valor)}
-          icon={ArrowDownLeft}
-          hint={entradasNoCard.detalhe ? `vs. mês anterior · ${entradasNoCard.detalhe}` : "vs. mês anterior"}
-          trend={{
-            value: pctText(comparativo.deltaEntradasPct),
-            direction:
-              comparativo.deltaEntradas > 0 ? "up" : comparativo.deltaEntradas < 0 ? "down" : "neutral",
-          }}
+          label="Saldo atual"
+          value={formatCurrency(saldo)}
+          icon={Wallet}
+          hint="Hoje, todas as contas"
         />
         <StatCard
-          label="Saídas do mês"
-          value={formatCurrency(resumo.saidas)}
+          label={entradasCard.label}
+          value={entradasCard.value}
+          icon={ArrowDownLeft}
+          hint={entradasCard.hint}
+          trend={entradasCard.trend}
+        />
+        <StatCard
+          label={saidasCard.label}
+          value={saidasCard.value}
           icon={ArrowUpRight}
-          hint={`meu ${formatCurrency(resumo.meu)}`}
-          trend={{ value: pctText(comparativo.deltaSaidasPct), direction: "neutral" }}
+          hint={saidasCard.hint}
+          trend={saidasCard.trend}
         />
         <StatCard
           label={rotuloPendenteDoMes(mesSel)}
           value={formatCurrency(aReceber)}
           icon={HandCoins}
-          hint="Pendente de outras pessoas"
+          hint="Recebíveis em aberto"
         />
       </div>
+
+      {/* Bloco do caixa (só na base caixa) */}
+      {base === "caixa" && caixa && (
+        <BlocoDoCaixa mesRotulo={monthYearLabel(mesSel)} caixa={caixa} />
+      )}
 
       {/* Card-âncora: valor pessoal × terceiros + cartão × à vista + faturas + contas */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -203,7 +305,7 @@ export function DashboardClient({
                   para fora e o `overflow-hidden` do Card corta o ícone pela metade. */}
               <div className="min-w-0 space-y-1">
                 <p className="text-sm font-medium break-words text-muted-foreground">
-                  Valor realmente meu · {monthYearLabel(mesSel)}
+                  Valor realmente meu · {monthYearLabel(mesSel)} · Competência
                 </p>
                 <p className="text-3xl font-semibold tracking-tight tabular-nums">
                   {formatCurrency(resumo.meu)}
@@ -234,13 +336,13 @@ export function DashboardClient({
             label="Gasto no cartão"
             value={formatCurrency(resumo.cartao)}
             icon={CreditCard}
-            hint={`à vista ${formatCurrency(resumo.aVista)}`}
+            hint={`Pela fatura · à vista ${formatCurrency(resumo.aVista)}`}
           />
           <StatCard
             label="Faturas (aberta/fechada)"
             value={`${faturasAbertas}/${faturasFechadas}`}
             icon={ReceiptText}
-            hint="No período em diante"
+            hint="Pela fatura · no período em diante"
           />
           <StatCard
             label="Próximas contas a pagar"
@@ -248,15 +350,15 @@ export function DashboardClient({
             icon={CalendarClock}
             hint={
               contas.proxima
-                ? `${contas.count} conta(s) · 1ª em ${formatDate(contas.proxima.data)}`
-                : "Nenhuma nos próximos 31 dias"
+                ? `Pelo vencimento · ${contas.count} conta(s) · 1ª em ${formatDate(contas.proxima.data)}`
+                : "Pelo vencimento · nenhuma nos próximos 31 dias"
             }
           />
           <StatCard
             label="Cartão realmente meu"
             value={formatCurrency(resumo.cartaoMeu)}
             icon={Scale}
-            hint={`terceiros ${formatCurrency(resumo.cartao - resumo.cartaoMeu)}`}
+            hint={`Pela fatura · terceiros ${formatCurrency(resumo.cartao - resumo.cartaoMeu)}`}
           />
         </div>
       </div>
@@ -266,7 +368,7 @@ export function DashboardClient({
         <Card>
           <CardHeader>
             <CardTitle>Gastos por categoria</CardTitle>
-            <CardDescription>Distribuição de {monthYearLabel(mesSel)}.</CardDescription>
+            <CardDescription>Distribuição de {monthYearLabel(mesSel)}. Competência.</CardDescription>
           </CardHeader>
           <CardContent>
             <CategoriaChart data={categorias} />
@@ -275,7 +377,7 @@ export function DashboardClient({
         <Card>
           <CardHeader>
             <CardTitle>Por forma de pagamento</CardTitle>
-            <CardDescription>Cartão, débito, pix, dinheiro e mais.</CardDescription>
+            <CardDescription>Cartão, débito, pix, dinheiro e mais. Competência.</CardDescription>
           </CardHeader>
           <CardContent>
             <FormaPagamentoChart data={formas} />
@@ -286,7 +388,7 @@ export function DashboardClient({
       <Card>
         <CardHeader>
           <CardTitle>Evolução mensal</CardTitle>
-          <CardDescription>Entradas, saídas e saldo dos últimos 6 meses.</CardDescription>
+          <CardDescription>Entradas, saídas e saldo dos últimos 6 meses. Competência.</CardDescription>
         </CardHeader>
         <CardContent>
           <EvolucaoChart data={evolucao} />
@@ -297,7 +399,7 @@ export function DashboardClient({
         <Card>
           <CardHeader>
             <CardTitle>Mês a mês</CardTitle>
-            <CardDescription>Comparativo com o mês anterior.</CardDescription>
+            <CardDescription>Comparativo com o mês anterior. Competência.</CardDescription>
           </CardHeader>
           <CardContent>
             <MesAMesChart comparativo={comparativo} />
@@ -306,7 +408,7 @@ export function DashboardClient({
         <Card>
           <CardHeader>
             <CardTitle>Projeção dos próximos meses</CardTitle>
-            <CardDescription>Faturas, recorrências e contas fixas.</CardDescription>
+            <CardDescription>Faturas, recorrências e contas fixas. Pelo vencimento.</CardDescription>
           </CardHeader>
           <CardContent>
             <ProjecaoChart data={projecao} />

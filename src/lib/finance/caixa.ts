@@ -196,6 +196,17 @@ export function numerosDoCaixa(params: {
   };
 }
 
+/**
+ * O total que ENTROU no caixa: renda pessoal + reembolsos + outras entradas de terceiros, somados
+ * em centavos. Só para o card do topo e para a comparação — a tela continua mostrando as três
+ * linhas SEPARADAS (K4), e este total nunca substitui nenhuma delas.
+ */
+export function entradasDoCaixa(n: NumerosDoCaixa): number {
+  return reais(
+    cent(n.rendaPessoalRecebida) + cent(n.reembolsosRecebidos) + cent(n.outrasEntradasDeTerceiros),
+  );
+}
+
 /* ───────────────────────────── Corte "até o dia D" ───────────────────────────── */
 
 /** O dia de `hoje` (número) quando `hoje` está em `mesSel` ('yyyy-MM'); senão `null` (mês fechado). */
@@ -288,9 +299,7 @@ export function comparativoAteODia(params: {
       recebiveis: params.caixa?.recebiveis ?? [],
     });
     return {
-      entradas: reais(
-        cent(n.rendaPessoalRecebida) + cent(n.reembolsosRecebidos) + cent(n.outrasEntradasDeTerceiros),
-      ),
+      entradas: entradasDoCaixa(n),
       saidas: n.saidasDeCaixa,
     };
   };

@@ -9,6 +9,7 @@ import { reembolsosRecebidosNoPeriodo } from "@/lib/finance/recebimentos";
 import {
   comparativoAteODia,
   dataDeCaixa,
+  entradasDoCaixa,
   dataDePagamentoFutura,
   dataDoExtratoAGravar,
   MSG_DATA_PAGAMENTO_FUTURA,
@@ -549,6 +550,24 @@ describe("03-E · dataDeLiquidacaoAGravar", () => {
   it("pago/recebido com data e sem cartão → a data", () => {
     expect(dataDeLiquidacaoAGravar({ status: "pago", card_id: null, liquidado_em: "2026-10-10" })).toBe("2026-10-10");
     expect(dataDeLiquidacaoAGravar({ status: "recebido", card_id: null, liquidado_em: "2026-10-11" })).toBe("2026-10-11");
+  });
+});
+
+describe("03-E · entradasDoCaixa", () => {
+  it("soma as três linhas em centavos, sem deriva de ponto flutuante", () => {
+    const n = numeros([
+      tx({ type: "receita", status: "recebido", amount: 0.1, valor_pessoal: null }),
+      tx({ type: "receita", status: "recebido", amount: 0.2, valor_pessoal: 0 }),
+    ]);
+    expect(entradasDoCaixa(n)).toBe(0.3);
+  });
+
+  it("é a soma de renda + reembolsos + outras, nada mais (saídas não entram)", () => {
+    const n = numeros([
+      tx({ type: "receita", status: "recebido", amount: 300, valor_pessoal: 100 }),
+      tx({ type: "despesa", amount: 50 }),
+    ]);
+    expect(entradasDoCaixa(n)).toBe(300);
   });
 });
 

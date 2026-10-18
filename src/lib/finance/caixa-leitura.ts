@@ -22,11 +22,15 @@ import "server-only";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
 import {
   dataDeCaixa,
+  entradasDoCaixa,
   mesAnteriorDe,
+  numerosDoCaixa,
   periodoAteODia,
+  type NumerosDoCaixa,
   type Periodo,
   type TxDeCaixa,
 } from "@/lib/finance/caixa";
+import { variacaoPct } from "@/lib/finance/dashboard";
 import { getReceivables } from "@/lib/finance/queries";
 import type { RecebivelComRecebimentos } from "@/lib/finance/recebimentos";
 import { createClient } from "@/lib/supabase/server";
@@ -48,6 +52,26 @@ export type LeituraDoCaixa =
       periodoLido: Periodo;
     }
   | { ok: false };
+
+/**
+ * O resultado da base caixa para a tela (§5.4): números do mês selecionado, do mês anterior
+ * (P6: caixa × caixa, mês cheio) e as variações percentuais para os cards do topo.
+ * `{ estado: 'erro' }` nunca vira zero — a tela declara que não leu.
+ */
+export type EstadoDoCaixa =
+  | {
+      estado: "ok";
+      atual: NumerosDoCaixa;
+      anterior: NumerosDoCaixa;
+      parcial: boolean;
+      /** `entradasDoCaixa(atual)` — pronto do servidor, para a tela não refazer a soma. */
+      entradasDeCaixa: number;
+      /** Variação % das entradas vs. o mês anterior (null quando o anterior é 0 — `variacaoPct`). */
+      entradasPct: number | null;
+      /** Variação % das saídas vs. o mês anterior. */
+      saidasPct: number | null;
+    }
+  | { estado: "erro" };
 
 /**
  * O filtro `or` do PostgREST para a janela: com data de liquidação, vale ela; sem, vale a
@@ -108,4 +132,40 @@ export async function lerCaixaDoMes(mesSel: string): Promise<LeituraDoCaixa> {
   }
 
   return { ok: true, transactions, pagamentosDeFatura, recebiveis, parcial, periodoLido };
+}
+
+/**
+ * Os números da base caixa prontos para a tela: mês selecionado, mês anterior (P6) e as
+ * variações percentuais dos cards do topo. A leitura é a MESMA (`lerCaixaDoMes`); o recorte de
+ * cada mês é `numerosDoCaixa` com o período até o dia 31 (mês cheio).
+ */
+export async function estadoDoCaixa(mesSel: string): Promise<EstadoDoCaixa> {
+  const leitura = await lerCaixaDoMes(mesSel);
+  if (!leitura.ok) return { estado: "erro" };
+
+  const { transactions, pagamentosDeFatura, recebiveis, parcial } = leitura;
+
+  const atual = numerosDoCaixa({
+    periodo: periodoAteODia(mesSel, 31),
+    transactions,
+    pagamentosDeFatura,
+    recebiveis,
+  });
+  const anterior = numerosDoCaixa({
+    periodo: periodoAteODia(mesAnteriorDe(mesSel), 31),
+    transactions,
+    pagamentosDeFatura,
+    recebiveis,
+  });
+
+  const entradasDeCaixa = entradasDoCaixa(atual);
+  return {
+    estado: "ok",
+    atual,
+    anterior,
+    parcial,
+    entradasDeCaixa,
+    entradasPct: variacaoPct(entradasDeCaixa, entradasDoCaixa(anterior)),
+    saidasPct: variacaoPct(atual.saidasDeCaixa, anterior.saidasDeCaixa),
+  };
 }
