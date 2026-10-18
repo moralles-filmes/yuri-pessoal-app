@@ -10,7 +10,8 @@ import "server-only";
  * ║    afunilamento — quem decide se um lançamento entra é `dataDeCaixa`, em memória      ║
  * ║    (P11). Por isso as linhas são REFILTRADAS aqui.                                    ║
  * ║ ⛔ Falha de leitura NUNCA vira zero: `{ ok: false }`, e a tela diz que não leu.       ║
- * ║ ⛔ Teto visível: saturou (`TETO_DO_CAIXA + 1` linhas) ⇒ `parcial: true`.              ║
+ * ║ ⛔ Teto visível: `count` exato maior que o que chegou ⇒ `parcial: true` — o max_rows   ║
+ * ║   do PostgREST corta antes do nosso `limit` (leituraComTeto, 03-B2).                  ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
  * `card_statements.pago_transacao_id` vem de TODAS as faturas, sem filtro de data (P10): o
@@ -34,6 +35,7 @@ import {
   type TxDeCaixa,
 } from "@/lib/finance/caixa";
 import { variacaoPct } from "@/lib/finance/dashboard";
+import { leituraComTeto } from "@/lib/finance/leitura-com-teto";
 import { getReceivables } from "@/lib/finance/queries";
 import type { RecebivelComRecebimentos } from "@/lib/finance/recebimentos";
 import { createClient } from "@/lib/supabase/server";
@@ -99,21 +101,28 @@ export async function lerCaixaDoMes(mesSel: string): Promise<LeituraDoCaixa> {
   const [lancamentos, faturas, recebiveis] = await Promise.all([
     supabase
       .from("transactions")
-      .select(COLUNAS)
+      .select(COLUNAS, { count: "exact" })
       .in("status", [...SETTLED_STATUSES])
       .or(filtroDaJanelaDeCaixa(periodoLido))
-      .limit(TETO_DO_CAIXA + 1),
-    supabase.from("card_statements").select("pago_transacao_id").not("pago_transacao_id", "is", null),
+      .limit(TETO_DO_CAIXA),
+    supabase
+      .from("card_statements")
+      .select("pago_transacao_id", { count: "exact" })
+      .not("pago_transacao_id", "is", null),
     getReceivables(),
   ]);
 
   if (lancamentos.error || faturas.error) return { ok: false };
 
-  const brutas = (lancamentos.data ?? []) as unknown as LinhaBruta[];
-  const parcial = brutas.length > TETO_DO_CAIXA;
+  const leituraTx = leituraComTeto((lancamentos.data ?? []) as unknown as LinhaBruta[], lancamentos.count);
+  const leituraFaturas = leituraComTeto(
+    (faturas.data ?? []) as { pago_transacao_id: string | null }[],
+    faturas.count,
+  );
+  // Sem contagem também é parcial: errar para "pode faltar coisa" é o único erro aceitável.
+  const parcial = leituraTx.situacao !== "completa" || leituraFaturas.situacao !== "completa";
 
-  const transactions: TxDeCaixa[] = brutas
-    .slice(0, TETO_DO_CAIXA)
+  const transactions: TxDeCaixa[] = leituraTx.linhas
     .map((l) => ({
       ...l,
       amount: Number(l.amount),
@@ -125,7 +134,7 @@ export async function lerCaixaDoMes(mesSel: string): Promise<LeituraDoCaixa> {
     });
 
   const pagamentosDeFatura = new Set<string>();
-  for (const f of (faturas.data ?? []) as { pago_transacao_id: string | null }[]) {
+  for (const f of leituraFaturas.linhas) {
     if (f.pago_transacao_id) pagamentosDeFatura.add(f.pago_transacao_id);
   }
 

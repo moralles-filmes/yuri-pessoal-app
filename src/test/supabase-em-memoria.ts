@@ -67,7 +67,12 @@ const TESTES: Record<string, (valor: unknown, alvo: unknown) => boolean> = {
 
 export function criarSupabaseEmMemoria(
   tabelasIniciais: Record<string, Linha[]>,
-  opcoes: { userId?: string; antesDeGravar?: (op: EscritaPretendida) => ErroSimulado | null } = {},
+  opcoes: {
+    userId?: string;
+    antesDeGravar?: (op: EscritaPretendida) => ErroSimulado | null;
+    /** Simula o `max_rows` do PostgREST: corta a leitura ANTES do `limit`; o `count` não muda. */
+    maxRows?: number;
+  } = {},
 ) {
   const tabelas: Record<string, Linha[]> = Object.fromEntries(
     Object.entries(tabelasIniciais).map(([nome, linhas]) => [nome, linhas.map((l) => ({ ...l }))]),
@@ -138,7 +143,7 @@ export function criarSupabaseEmMemoria(
 
       const todas = linhas.filter(casa).map((l) => ({ ...l }));
       executado = {
-        data: limite === undefined ? todas : todas.slice(0, limite),
+        data: todas.slice(0, Math.min(limite ?? Infinity, opcoes.maxRows ?? Infinity)),
         error: null,
         count: todas.length,
       };

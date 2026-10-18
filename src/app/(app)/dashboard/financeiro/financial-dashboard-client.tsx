@@ -264,7 +264,13 @@ export function DashboardClient({
         ? {
             label: "Saídas do mês",
             value: formatCurrency(resumo.saidas),
-            hint: `Saídas à vista até o dia ${diaDoCorte} · o cartão não entra (a fatura não se divide por dia)`,
+            // O VALOR é o mês inteiro, com cartão; só a SETA é do corte, e ela fala das saídas à
+            // vista — por isso o hint diz de quem é cada número.
+            hint: [
+              `Competência · meu ${formatCurrency(resumo.meu)}`,
+              `seta: saídas à vista até o dia ${diaDoCorte}, ${hintDoPeriodo(corte.saidas.pct)}`,
+              "o cartão não entra (a fatura não se divide por dia)",
+            ].join(" · "),
             trend: { value: pctText(corte.saidas.pct), direction: "neutral" as const },
           }
         : {

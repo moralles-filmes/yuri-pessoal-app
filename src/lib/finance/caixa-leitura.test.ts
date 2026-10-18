@@ -137,6 +137,30 @@ describe("lerCaixaDoMes", () => {
     expect(r.transactions).toHaveLength(TETO_DO_CAIXA);
   });
 
+  it("o max_rows do PostgREST corta antes do teto: parcial verdadeiro (invariante 29)", async () => {
+    // Fixture sintética: 1001 lançamentos na janela, o servidor entrega só 1000.
+    const linhas = Array.from({ length: 1001 }, (_, i) => tx(`t-${i}`));
+    fake = criarSupabaseEmMemoria(
+      { transactions: linhas, card_statements: [], receivables: [], receivable_receipts: [] },
+      { maxRows: 1000 },
+    );
+    const r = await lerCaixaDoMes("2026-10");
+    if (!r.ok) throw new Error("esperava ok");
+    expect(r.transactions).toHaveLength(1000);
+    expect(r.parcial).toBe(true);
+  });
+
+  it("o max_rows cortando os pagamentos de fatura também deixa a leitura parcial", async () => {
+    const faturas = Array.from({ length: 3 }, (_, i) => ({ id: `f-${i}`, pago_transacao_id: `t-${i}` }));
+    fake = criarSupabaseEmMemoria(
+      { transactions: [tx("t-0")], card_statements: faturas, receivables: [], receivable_receipts: [] },
+      { maxRows: 2 },
+    );
+    const r = await lerCaixaDoMes("2026-10");
+    if (!r.ok) throw new Error("esperava ok");
+    expect(r.parcial).toBe(true);
+  });
+
   it("exatamente o teto de linhas não é parcial", async () => {
     const linhas = Array.from({ length: TETO_DO_CAIXA }, (_, i) => tx(`t-${i}`));
     fake = criarSupabaseEmMemoria({
