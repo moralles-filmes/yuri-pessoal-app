@@ -77,6 +77,27 @@ describe("03-E · A4 — BlocoDoCaixa", () => {
     }
   });
 
+  it.each([
+    { caso: "só reembolso > 0", reembolsos: 100, outras: 0, aviso: false },
+    { caso: "só outras entradas > 0", reembolsos: 0, outras: 100, aviso: false },
+    { caso: "os dois > 0", reembolsos: 100, outras: 100, aviso: true },
+    { caso: "nenhum dos dois", reembolsos: 0, outras: 0, aviso: false },
+  ])("B3 · a nota da sobreposição (K4, Z18): $caso", ({ reembolsos, outras, aviso }) => {
+    // O bloco mostra o que `numerosDoCaixa` decidiu; a regra dos quatro casos é testada lá.
+    const h = html(
+      ok(
+        numeros({
+          reembolsosRecebidos: reembolsos,
+          outrasEntradasDeTerceiros: outras,
+          avisoDeSobreposicao: reembolsos > 0 && outras > 0,
+        }),
+      ),
+    );
+    const nota = "pode contar duas vezes um reembolso que também foi lançado como receita";
+    if (aviso) expect(h).toContain(nota);
+    else expect(h).not.toContain(nota);
+  });
+
   it("erro de leitura não vira zero: diz que não leu e não mostra valor nenhum", () => {
     const h = html({ estado: "erro" });
     expect(h).toContain("não puderam ser lidos");

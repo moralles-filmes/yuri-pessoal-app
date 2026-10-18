@@ -87,6 +87,15 @@ export function BlocoDoCaixa({ mesRotulo, caixa }: { mesRotulo: string; caixa: E
           </span>
         </div>
 
+        {/* K4 / B3 — a sobreposição do RR7: o sistema não casa reembolso com receita (valor e data
+            não bastam para afirmar que são o mesmo dinheiro), então DIZ que pode haver dobra, sem
+            dizer quanto. O vínculo é da 04-C. */}
+        {n.avisoDeSobreposicao && (
+          <p className="text-xs break-words text-amber-700 dark:text-amber-400">
+            O resultado pode contar duas vezes um reembolso que também foi lançado como receita.
+          </p>
+        )}
+
         <div className="space-y-1 text-xs text-muted-foreground">
           {n.aproximados > 0 && (
             <p className="break-words">
