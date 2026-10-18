@@ -13,7 +13,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { criarTransacao, excluirTransacaoSimples, type FinanceServiceContext } from "@/lib/finance/services";
 import { MSG_PARTE_AUSENTE, MSG_PARTE_TOTAL } from "@/lib/finance/responsabilidade-da-receita";
+import { MSG_DATA_PAGAMENTO_FUTURA } from "@/lib/finance/caixa";
 import { criarSupabaseEmMemoria, type Linha } from "@/test/supabase-em-memoria";
+import { checkLiquidadoEmCoerente } from "@/test/check-liquidado-em";
 
 // A leitura usa o client em memória do ctx; neutraliza apenas o client de servidor.
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}) }));
@@ -189,6 +191,110 @@ describe("03-C A2 · criarTransacao — a despesa grava como antes", () => {
     const linha = inseridaEmTransactions(fake);
     expect(linha.classificacao).toBe("pessoal");
     expect(Object.hasOwn(linha, "valor_pessoal")).toBe(false);
+  });
+});
+
+describe("03-E A3 · criarTransacao grava liquidado_em pela regra (K0)", () => {
+  const CARTAO = "5d9c2e44-7a10-4b6f-8e21-0f3a9b6c1d72";
+
+  /** Como `rodar`, mas com o CHECK da M2 simulado (e fixture opcional). */
+  function rodarComCheck(payload: Linha, tabelas: Record<string, Linha[]> = {}) {
+    const fake = criarSupabaseEmMemoria(tabelas, { antesDeGravar: checkLiquidadoEmCoerente });
+    const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
+    return { fake, resultado: criarTransacao(ctx, payload) };
+  }
+
+  it("despesa paga com conta e SEM data informada grava liquidado_em nulo (Z12)", async () => {
+    const { fake, resultado } = rodarComCheck({ ...BASE, type: "despesa", status: "pago" });
+    expect((await resultado).ok).toBe(true);
+    expect(inseridaEmTransactions(fake).liquidado_em).toBeNull();
+  });
+
+  it("despesa paga com a data informada grava essa data", async () => {
+    const { fake, resultado } = rodarComCheck({
+      ...BASE,
+      type: "despesa",
+      status: "pago",
+      liquidado_em: "2026-06-12",
+    });
+    expect((await resultado).ok).toBe(true);
+    expect(inseridaEmTransactions(fake).liquidado_em).toBe("2026-06-12");
+  });
+
+  it("despesa pendente com data informada grava nulo, e o CHECK não recusa a escrita", async () => {
+    const { fake, resultado } = rodarComCheck({
+      ...BASE,
+      type: "despesa",
+      status: "pendente",
+      liquidado_em: "2026-06-12",
+    });
+    expect((await resultado).ok).toBe(true);
+    expect(inseridaEmTransactions(fake).liquidado_em).toBeNull();
+  });
+
+  it("compra no cartão com data informada grava nulo (Z19: o cartão nunca guarda a data)", async () => {
+    const { fake, resultado } = rodarComCheck(
+      {
+        type: "despesa",
+        payment_method: "cartao_credito",
+        card_id: CARTAO,
+        account_id: "",
+        amount: 150,
+        purchase_date: "2026-06-10",
+        competence_date: "2026-06-10",
+        description: "compra",
+        status: "pago",
+        liquidado_em: "2026-06-12",
+      },
+      { credit_cards: [{ id: CARTAO, user_id: "user-1", dia_fechamento: 5, dia_vencimento: 12 }] },
+    );
+    const r = await resultado;
+    expect(r.ok).toBe(true);
+    const linha = inseridaEmTransactions(fake);
+    expect(linha.card_id).toBe(CARTAO);
+    expect(linha.statement_id).not.toBeNull();
+    expect(linha.liquidado_em).toBeNull();
+  });
+
+  it("data futura é recusada no campo, com a mensagem do P8, e NADA é gravado", async () => {
+    const { fake, resultado } = rodarComCheck({
+      ...BASE,
+      type: "despesa",
+      status: "pago",
+      liquidado_em: "2999-01-01",
+    });
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.fieldErrors?.liquidado_em).toEqual([MSG_DATA_PAGAMENTO_FUTURA]);
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("transferência paga com data informada grava essa data", async () => {
+    const { fake, resultado } = rodarComCheck({
+      type: "transferencia",
+      payment_method: "transferencia",
+      account_id: CONTA,
+      transfer_account_id: "9a4b6c20-3e1d-4f87-b5a2-1c8d7e6f0a93",
+      amount: 300,
+      purchase_date: "2026-06-10",
+      competence_date: "2026-06-10",
+      description: "mover",
+      status: "pago",
+      liquidado_em: "2026-06-12",
+    });
+    expect((await resultado).ok).toBe(true);
+    expect(inseridaEmTransactions(fake).liquidado_em).toBe("2026-06-12");
+  });
+
+  it("receita recebida com data ANTERIOR à da compra é aceita (pagamento antecipado, P8)", async () => {
+    const { fake, resultado } = rodarComCheck({
+      ...BASE,
+      type: "receita",
+      status: "recebido",
+      liquidado_em: "2026-06-01",
+    });
+    expect((await resultado).ok).toBe(true);
+    expect(inseridaEmTransactions(fake).liquidado_em).toBe("2026-06-01");
   });
 });
 

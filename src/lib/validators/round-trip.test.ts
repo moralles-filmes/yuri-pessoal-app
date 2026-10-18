@@ -666,7 +666,7 @@ describe("lançamento (03-E): a \"Data do pagamento\" aceita a própria saída",
   });
 
   it("preenchida sobrevive às duas passadas", () => {
-    const { noCliente, noServidor } = roundTrip(transactionSchema, {
+    const { noServidor } = roundTrip(transactionSchema, {
       ...doFormulario,
       liquidado_em: "2026-10-12",
     });

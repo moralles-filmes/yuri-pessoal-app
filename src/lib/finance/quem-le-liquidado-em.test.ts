@@ -25,6 +25,10 @@ const ALLOWLIST: Record<string, string> = {
   "lib/validators/transaction.ts":
     "o campo \"Data do pagamento\" do formulário (A3, K0.1): só aceita a forma; quem decide gravar é o servidor",
   "test/check-liquidado-em.ts": "o CHECK da M2 simulado para o harness (P12) — só para teste",
+  "lib/finance/services.ts":
+    "criarTransacao GRAVA a data pela regra (K0.1, K0.5) e recusa data futura (P8) — formulário, IA e quick-add",
+  "lib/finance/statement-payment.ts": "o pagamento de fatura grava a data do pagamento (K0.2)",
+  "lib/actions/imports.ts": "o extrato de conta importado grava a data da linha (K0.3); cartão não",
 };
 
 /** Os que NUNCA podem mencionar — nem entrar na allowlist. */

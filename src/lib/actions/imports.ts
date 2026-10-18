@@ -17,6 +17,7 @@ import {
   resolveOrCreateStatement,
 } from "@/lib/finance/statements";
 import { resolverFatura } from "@/lib/finance/invoice";
+import { dataDoExtratoAGravar } from "@/lib/finance/caixa";
 import { detectarCompetenciaFatura } from "@/lib/import/competencia";
 import {
   importUploadSchema,
@@ -746,6 +747,8 @@ export async function commitImport(
 
   let importadas = 0;
   let falhas = 0;
+  // K0.3 — "hoje" uma vez só: linha de extrato com data futura entra sem a data de caixa.
+  const hoje = hojeISO();
 
   for (const r of rows ?? []) {
     if (r.data_norm == null || r.valor == null) {
@@ -870,6 +873,7 @@ export async function commitImport(
         amount: r.valor,
         purchase_date: r.data_norm,
         competence_date: r.data_norm,
+        liquidado_em: dataDoExtratoAGravar(r.data_norm, hoje),
         description: r.descricao ?? "",
         status: "pago",
       });
@@ -885,6 +889,8 @@ export async function commitImport(
         amount: r.valor,
         purchase_date: r.data_norm,
         competence_date: r.data_norm,
+        // K0.3 — a data da linha do extrato é quando o dinheiro mexeu na conta.
+        liquidado_em: dataDoExtratoAGravar(r.data_norm, hoje),
         description: r.descricao ?? "",
         status: tipo === "receita" ? "recebido" : "pago",
         ...split,
