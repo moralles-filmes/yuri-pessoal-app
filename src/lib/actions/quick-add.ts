@@ -6,6 +6,8 @@ export type QuickAddOptions = {
   accounts: { id: string; name: string }[];
   cards: { id: string; nome: string }[];
   categories: { id: string; name: string; kind: string }[];
+  /** Subcategorias ativas (Financeiro) — escolhidas no mesmo seletor da categoria. */
+  subcategories: { id: string; name: string; category_id: string }[];
   projects: { id: string; name: string }[];
   courses: { id: string; title: string }[];
   habits: { id: string; name: string; unit: string; target: number; category: string }[];
@@ -18,6 +20,7 @@ const EMPTY: QuickAddOptions = {
   accounts: [],
   cards: [],
   categories: [],
+  subcategories: [],
   projects: [],
   courses: [],
   habits: [],
@@ -34,11 +37,16 @@ export async function loadQuickAddOptions(): Promise<QuickAddOptions> {
   if (!ctx) return EMPTY;
   const { supabase } = ctx;
 
-  const [accounts, cards, categories, projects, courses, habits, people, todoProjects] =
+  const [accounts, cards, categories, subcategories, projects, courses, habits, people, todoProjects] =
     await Promise.all([
     supabase.from("accounts").select("id, name").eq("is_active", true).order("name"),
     supabase.from("credit_cards").select("id, nome").eq("ativo", true).order("nome"),
     supabase.from("categories").select("id, name, kind").order("sort_order").order("name"),
+    supabase
+      .from("subcategories")
+      .select("id, name, category_id")
+      .eq("is_active", true)
+      .order("name"),
     supabase.from("projects").select("id, name").eq("is_archived", false).order("name"),
     supabase
       .from("study_courses")
@@ -62,6 +70,7 @@ export async function loadQuickAddOptions(): Promise<QuickAddOptions> {
     accounts: (accounts.data ?? []) as QuickAddOptions["accounts"],
     cards: (cards.data ?? []) as QuickAddOptions["cards"],
     categories: (categories.data ?? []) as QuickAddOptions["categories"],
+    subcategories: (subcategories.data ?? []) as QuickAddOptions["subcategories"],
     projects: (projects.data ?? []) as QuickAddOptions["projects"],
     courses: ((courses.data ?? []) as { id: string; title: string }[]).map((c) => ({
       id: c.id,

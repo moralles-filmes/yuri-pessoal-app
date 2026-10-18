@@ -40,6 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MoneyInput } from "@/components/financeiro/money-input";
+import { CategoryPicker } from "@/components/finance/category-picker";
 import {
   centavosParaReais,
   formatCurrency,
@@ -1134,6 +1135,7 @@ function ExpenseForm({
   const [cardId, setCardId] = React.useState("");
   const [method, setMethod] = React.useState<string>("pix");
   const [categoryId, setCategoryId] = React.useState("");
+  const [subcategoryId, setSubcategoryId] = React.useState("");
   const [date, setDate] = React.useState(today());
   const [classificacao, setClassificacao] = React.useState<Classificacao>("pessoal");
   const [parts, setParts] = React.useState<PartValue[]>([]);
@@ -1152,6 +1154,7 @@ function ExpenseForm({
         account_id: mode === "account" ? accountId : null,
         card_id: mode === "card" ? cardId : null,
         category_id: categoryId || null,
+        subcategory_id: subcategoryId || null,
         amount,
         purchase_date: date,
         competence_date: date,
@@ -1207,16 +1210,16 @@ function ExpenseForm({
         </Field>
       )}
       <Field label="Categoria (opcional)">
-        <Select value={categoryId} onValueChange={setCategoryId}>
-          <SelectTrigger><SelectValue placeholder="Sem categoria" /></SelectTrigger>
-          <SelectContent>
-            {options.categories
-              .filter((c) => c.kind !== "receita")
-              .map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+        <CategoryPicker
+          categories={options.categories.filter((c) => c.kind !== "receita")}
+          subcategories={options.subcategories}
+          value={{ categoryId: categoryId || null, subcategoryId: subcategoryId || null }}
+          onChange={(v) => {
+            setCategoryId(v.categoryId ?? "");
+            setSubcategoryId(v.subcategoryId ?? "");
+          }}
+          aria-label="Categoria"
+        />
       </Field>
       <Field label="Data">
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -1240,6 +1243,7 @@ function IncomeForm({ options, onDone }: { options: QuickAddOptions; onDone: () 
   const [amount, setAmount] = React.useState("");
   const [accountId, setAccountId] = React.useState("");
   const [categoryId, setCategoryId] = React.useState("");
+  const [subcategoryId, setSubcategoryId] = React.useState("");
   const [date, setDate] = React.useState(today());
 
   if (options.accounts.length === 0)
@@ -1253,6 +1257,7 @@ function IncomeForm({ options, onDone }: { options: QuickAddOptions; onDone: () 
         payment_method: null,
         account_id: accountId,
         category_id: categoryId || null,
+        subcategory_id: subcategoryId || null,
         amount,
         purchase_date: date,
         competence_date: date,
@@ -1282,16 +1287,16 @@ function IncomeForm({ options, onDone }: { options: QuickAddOptions; onDone: () 
         </Select>
       </Field>
       <Field label="Categoria (opcional)">
-        <Select value={categoryId} onValueChange={setCategoryId}>
-          <SelectTrigger><SelectValue placeholder="Sem categoria" /></SelectTrigger>
-          <SelectContent>
-            {options.categories
-              .filter((c) => c.kind !== "despesa")
-              .map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+        <CategoryPicker
+          categories={options.categories.filter((c) => c.kind !== "despesa")}
+          subcategories={options.subcategories}
+          value={{ categoryId: categoryId || null, subcategoryId: subcategoryId || null }}
+          onChange={(v) => {
+            setCategoryId(v.categoryId ?? "");
+            setSubcategoryId(v.subcategoryId ?? "");
+          }}
+          aria-label="Categoria"
+        />
       </Field>
       <Field label="Data">
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />

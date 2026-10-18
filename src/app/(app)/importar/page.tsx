@@ -8,6 +8,7 @@ import {
   getImportBatches,
   getImportRows,
   getPeopleForSelect,
+  getSubcategories,
 } from "@/lib/finance/queries";
 import { hojeISO } from "@/lib/format";
 import { ImportUpload } from "./import-upload";
@@ -30,9 +31,10 @@ export default async function ImportarPage({
     if (batch) {
       // `accounts` só é usado no extrato (marcar linha como transferência), mas é buscado
       // sempre: a consulta é pequena e um `if` aqui ramificaria o Promise.all sem ganho.
-      const [rows, categories, people, contas] = await Promise.all([
+      const [rows, categories, subcategories, people, contas] = await Promise.all([
         getImportRows(batchId),
         getCategories(),
+        getSubcategories(),
         getPeopleForSelect(),
         getAccounts(),
       ]);
@@ -50,7 +52,16 @@ export default async function ImportarPage({
               id: c.id,
               name: c.name,
               color: c.color,
+              kind: c.kind,
             }))}
+            // A inativa continua quando já está escolhida numa linha — senão o rótulo sumiria.
+            subcategories={subcategories
+              .filter(
+                (s) =>
+                  s.is_active ||
+                  rows.some((r) => r.subcategoria_sugerida_id === s.id),
+              )
+              .map((s) => ({ id: s.id, name: s.name, category_id: s.category_id }))}
             people={people}
             // A conta ARQUIVADA continua na lista quando já é o destino de alguma linha: tirá-la
             // faria o chip da linha perder o nome e virar "outra conta".

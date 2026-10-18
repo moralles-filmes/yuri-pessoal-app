@@ -14,6 +14,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CategoryPicker } from "@/components/finance/category-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -321,22 +322,15 @@ export function InstallmentsClient({
         </div>
         <div className="space-y-1.5">
           <Label>Categoria</Label>
-          <Select
-            value={selectedCategoryId ?? ALL}
-            onValueChange={(v) => navigate({ category: v === ALL ? null : v })}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Todas" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Todas as categorias</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Filtro só de categoria (sem subcategoria): com pesquisa. Null = todas. */}
+          <CategoryPicker
+            categories={categories}
+            value={{ categoryId: selectedCategoryId, subcategoryId: null }}
+            onChange={(v) => navigate({ category: v.categoryId })}
+            placeholder="Todas"
+            noneLabel="Todas as categorias"
+            aria-label="Categoria"
+          />
         </div>
         <div className="space-y-1.5">
           <Label>Status</Label>
