@@ -634,3 +634,48 @@ no principal.
 | RR-E-6 | O "Saldo atual" continua sem corte de data (soma liquidado com data futura) | **04-A** |
 | RR-E-7 | O RR8 (régua do gasto alto comparando mês parcial com meses cheios, com pendentes) continua | **04-A** |
 | RR-E-8 | A prova do "efeito zero" contra dado real é fraca enquanto o banco estiver vazio; a comparação com dado sintético é o substituto declarado | reconferir quando o dono reimportar |
+| RR-E-9 | `getReceivables` não expõe o teto nem o erro: se a leitura dos recebíveis falhar, "Reembolsos recebidos" sai 0 sem aviso | **03-G** |
+| RR-E-10 | O `coalesce(liquidado_em, competence_date)` da M2b não usa o índice por data | medir quando o volume justificar |
+| RR-E-11 | Transferência com só a conta de destino cai em "sem conta", mas o saldo credita a conta: caixa e saldo divergiriam | aceito: **0** linhas assim no banco em 2026-10-18 (`pernasDaTransferencia` preenche as duas pontas) |
+| RR-E-12 | `markStatementPaid` aceita data de pagamento futura, e ela vai para `liquidado_em`; o P8 só cobre o formulário | aceito: nenhum número muda (a competência já é essa data); reavaliar na 04-A |
+| RR-E-13 | As telas novas não foram conferidas a 390 px | conferir à mão |
+
+---
+
+## 13. Resultado da execução (2026-10-18)
+
+**Banco.** M2 e M2b aplicadas pelo MCP, cada uma depois do "aplique" literal do dono; tipos
+regenerados pelo MCP com só as 3 linhas da coluna aceitas. No fim, só leitura: 60 lançamentos,
+**0** com `liquidado_em`, 5 notificações — iguais ao início.
+
+**Provas com dado sintético (§10, passo 6).** 11 lançamentos marcados `[03E-SINT]` em maio, junho e
+setembro de 2026 (meses sem dado real, exceto o lado anterior do corte), numa conta e num cartão
+existentes. O SQL bateu todos os números previstos: renda pessoal, outras entradas, saídas (com a
+transferência sem vínculo), entre contas fora do resultado, 2 aproximados, o caixa de junho e o
+corte "até o dia 18". O saldo pela M2b: a despesa de competência 03 paga em 05 fica fora do saldo
+de 03 e 04 e entra no de 05 (K1). O dono conferiu pela tela. Removidos pelo marcador (11 → 0); os
+hashes do saldo (432 pontos, e o saldo atual de cada conta) voltaram **iguais** aos de partida.
+Nenhum valor no repositório. Fora das provas no banco, por exigirem escrever em linhas reais:
+reembolso, pagamento de fatura e a nota da sobreposição — cobertos por Z10 e Z18.
+
+**Mutações.** Z1–Z20 (23 variantes: Z5 na regra e na tela, Z11 no botão e na edição, Z15 no TS e
+no SQL): todas compilam, derrubam o teste nomeado e são restauradas (`git diff --quiet`). A
+Z11-edição saiu verde na primeira rodada — o teste mandava "pendente" **sem** data — e ganhou o caso
+do formulário que ainda carrega a data.
+
+**Revisão final da branch (modelo mais capaz).** As 8 restrições do dono conferidas, nenhuma
+violada. Dois achados corrigidos: o teto da leitura de caixa não via o corte do `max_rows`
+(passou a `count` exato + `leituraComTeto`) e o hint do card "Saídas do mês" em competência no mês
+em andamento não dizia que o valor inclui o cartão. Os demais viraram RR-E-9 a RR-E-12.
+
+**Os cinco comandos na ponta:** 277 arquivos / 6.546 testes · lint limpo · `tsc` limpo · build ok
+· `perf:bundle` com todas as rotas no orçamento, mediana **216,3 KB** (igual à linha de base).
+Seis rotas, antes → depois (KB gz): lancamentos 226,0 → 226,4 · contas 218,3 = · relatorios
+208,5 → 210,3 · dashboard/financeiro 205,4 → 207,2 · dashboard 207,0 = · financeiro 199,1 =.
+`TZ=UTC` em finance/notifications/reports: 51 arquivos, 835 testes. `dashboard.test.ts` e
+`dashboard-caracterizacao.test.ts` sem diff.
+
+**Achado fora do escopo (não corrigido, por regra):** em todos os gráficos de valor em reais, o
+rótulo do eixo vertical é cortado ("R$ 10,5 mil" quebra e perde o topo) — `YAxis width={78}` em
+`evolucao`, `mes-a-mes` e `projecao-chart-impl.tsx`, anterior a esta branch. Relatado pelo dono
+em 2026-10-18; vira tarefa própria.
