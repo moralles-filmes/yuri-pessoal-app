@@ -22,13 +22,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { criarSupabaseEmMemoria, type Linha } from "@/test/supabase-em-memoria";
 import { MOTIVO_RECEBIVEL_FECHADO } from "@/lib/finance/split";
 import { MSG_PARTE_TOTAL } from "@/lib/finance/responsabilidade-da-receita";
+import { MSG_DATA_PAGAMENTO_FUTURA } from "@/lib/finance/caixa";
+import { checkLiquidadoEmCoerente } from "@/test/check-liquidado-em";
 
 let fake = criarSupabaseEmMemoria({});
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.client }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-const { updateTransaction, deleteTransaction } = await import("@/lib/actions/transactions");
+const { updateTransaction, deleteTransaction, setTransactionStatus } = await import(
+  "@/lib/actions/transactions"
+);
 
 const ID = "tx-1";
 const CONTA = "3f1a7c60-9d2b-4a11-8f37-2c9a1b7e5d40";
@@ -335,5 +339,165 @@ describe("03-D RR-D-17 · despesa dividida editada para transferência", () => {
     fake = criarSupabaseEmMemoria(despesaCompartilhada("pago"));
     await updateTransaction(ID, paraTransferencia());
     expect(fake.escritas()[0]).toEqual({ tabela: "transactions", tipo: "delete", filtros: [["eq", "id", ID]] });
+  });
+});
+
+/**
+ * REDESIGN-03-E · A3 (K0, P9) — a edição e o botão rápido de status mantêm `liquidado_em`
+ * coerente com o status. O dublê aplica o CHECK da M2 (`checkLiquidadoEmCoerente`): um caminho
+ * que tira o lançamento de `pago` sem limpar a data é recusado com 23514, como no banco.
+ */
+describe("03-E A3 · status e liquidado_em (K0, P9)", () => {
+  const DATA = "2026-06-12";
+  const comCheck = (tabelas: Record<string, Linha[]>) =>
+    criarSupabaseEmMemoria(tabelas, { antesDeGravar: checkLiquidadoEmCoerente });
+
+  it("(Z11) updateTransaction de despesa paga com data para 'pendente' limpa a data", async () => {
+    fake = comCheck({ transactions: [existente({ liquidado_em: DATA })] });
+    const r = await updateTransaction(ID, payload({ type: "despesa", status: "pendente" }));
+    expect(r.ok).toBe(true);
+    expect(linhaFinal()).toMatchObject({ status: "pendente", liquidado_em: null });
+  });
+
+  it("(Z11) updateTransaction para 'pendente' descarta a data que o formulário ainda carrega", async () => {
+    // O campo some da tela quando o status deixa de ser pago, mas o valor pode continuar no
+    // payload: quem decide se a data é gravada é o STATUS, nunca a presença do campo.
+    fake = comCheck({ transactions: [existente({ liquidado_em: DATA })] });
+    const r = await updateTransaction(
+      ID,
+      payload({ type: "despesa", status: "pendente", liquidado_em: DATA }),
+    );
+    expect(r.ok).toBe(true);
+    expect(linhaFinal()).toMatchObject({ status: "pendente", liquidado_em: null });
+  });
+
+  it("(Z11) setTransactionStatus de pago (com data) para 'pendente' limpa a data", async () => {
+    fake = comCheck({ transactions: [existente({ liquidado_em: DATA })] });
+    const r = await setTransactionStatus(ID, "pendente");
+    expect(r.ok).toBe(true);
+    expect(linhaFinal()).toMatchObject({ status: "pendente", liquidado_em: null });
+  });
+
+  it("(Z20) setTransactionStatus de pendente (sem data) para 'pago' grava null — não inventa data", async () => {
+    fake = comCheck({ transactions: [existente({ status: "pendente" })] });
+    const r = await setTransactionStatus(ID, "pago");
+    expect(r.ok).toBe(true);
+    expect(linhaFinal()).toMatchObject({ status: "pago", liquidado_em: null });
+    const updates = fake.escritas("transactions");
+    expect(updates).toHaveLength(1);
+    expect(updates[0].valores).toEqual({ status: "pago", liquidado_em: null });
+  });
+
+  it("(P9) setTransactionStatus de pago para 'recebido' mantém a data e nem a menciona", async () => {
+    fake = comCheck({ transactions: [existente({ liquidado_em: DATA })] });
+    const r = await setTransactionStatus(ID, "recebido");
+    expect(r.ok).toBe(true);
+    expect(linhaFinal()).toMatchObject({ status: "recebido", liquidado_em: DATA });
+    const updates = fake.escritas("transactions");
+    expect(updates).toHaveLength(1);
+    expect(Object.hasOwn(updates[0].valores as Linha, "liquidado_em")).toBe(false);
+  });
+
+  it("setTransactionStatus de transferência legada para 'cancelado' limpa a data das duas linhas", async () => {
+    const perna = (id: string) =>
+      existente({
+        id,
+        type: "transferencia",
+        transfer_group_id: "grupo-1",
+        liquidado_em: DATA,
+      });
+    fake = comCheck({ transactions: [perna(ID), perna("tx-2")] });
+    const r = await setTransactionStatus(ID, "cancelado");
+    expect(r.ok).toBe(true);
+    expect(fake.tabelas.transactions).toHaveLength(2);
+    for (const linha of fake.tabelas.transactions) {
+      expect(linha).toMatchObject({ status: "cancelado", liquidado_em: null });
+    }
+  });
+
+  it("updateTransaction de despesa paga que continua paga grava a data informada", async () => {
+    fake = comCheck({ transactions: [existente({})] });
+    const r = await updateTransaction(
+      ID,
+      payload({ type: "despesa", status: "pago", liquidado_em: DATA }),
+    );
+    expect(r.ok).toBe(true);
+    expect(linhaFinal()).toMatchObject({ status: "pago", liquidado_em: DATA });
+  });
+
+  it("(P8) updateTransaction com data de pagamento futura é recusada no campo, sem nenhuma escrita", async () => {
+    fake = comCheck({ transactions: [existente({ liquidado_em: DATA })] });
+    const r = await updateTransaction(
+      ID,
+      payload({ type: "despesa", status: "pago", liquidado_em: "2999-01-01" }),
+    );
+    expect(r).toEqual({
+      ok: false,
+      error: expect.any(String),
+      fieldErrors: { liquidado_em: [MSG_DATA_PAGAMENTO_FUTURA] },
+    });
+    expect(fake.escritas()).toEqual([]);
+    expect(linhaFinal()).toMatchObject({ status: "pago", liquidado_em: DATA });
+  });
+
+  it("(P8) a recusa de data futura vem antes do apaga-e-recria: a transferência não é apagada", async () => {
+    fake = comCheck({
+      transactions: [
+        existente({ type: "transferencia", transfer_group_id: "grupo-1", transfer_account_id: OUTRA_CONTA }),
+      ],
+    });
+    const r = await updateTransaction(
+      ID,
+      payload({
+        type: "transferencia",
+        status: "pago",
+        transfer_account_id: OUTRA_CONTA,
+        liquidado_em: "2999-01-01",
+      }),
+    );
+    expect(r.ok).toBe(false);
+    expect(fake.escritas()).toEqual([]);
+    expect(linhaFinal()).toMatchObject({ transfer_group_id: "grupo-1" });
+  });
+
+  it("updateTransaction de transferência (apaga e recria) preserva a data informada", async () => {
+    fake = comCheck({
+      transactions: [
+        existente({
+          type: "transferencia",
+          payment_method: "transferencia",
+          transfer_group_id: "grupo-1",
+          transfer_account_id: OUTRA_CONTA,
+        }),
+      ],
+    });
+    const r = await updateTransaction(
+      ID,
+      payload({
+        type: "transferencia",
+        status: "pago",
+        transfer_account_id: OUTRA_CONTA,
+        liquidado_em: DATA,
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(fake.tabelas.transactions).toHaveLength(1);
+    expect(fake.tabelas.transactions[0]).toMatchObject({
+      type: "transferencia",
+      status: "pago",
+      liquidado_em: DATA,
+    });
+  });
+
+  it("controle do dublê: sem limpar a data, o CHECK simulado recusa (23514)", async () => {
+    fake = comCheck({ transactions: [existente({ liquidado_em: DATA })] });
+    const client = fake.client as {
+      from: (t: string) => {
+        update: (v: Linha) => { eq: (c: string, v: string) => PromiseLike<{ error: { code: string } | null }> };
+      };
+    };
+    const { error } = await client.from("transactions").update({ status: "pendente" }).eq("id", ID);
+    expect(error?.code).toBe("23514");
+    expect(linhaFinal()).toMatchObject({ status: "pago", liquidado_em: DATA });
   });
 });

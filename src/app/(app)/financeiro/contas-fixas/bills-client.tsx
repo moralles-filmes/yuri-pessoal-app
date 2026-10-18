@@ -33,7 +33,7 @@ export function BillsClient({
   accounts,
 }: {
   bills: BillWithRel[];
-  categories: Option[];
+  categories: (Option & { kind: string })[];
   accounts: Option[];
 }) {
   const router = useRouter();

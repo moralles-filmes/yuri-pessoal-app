@@ -2178,6 +2178,7 @@ export type Database = {
           raw: Json
           split_parts: Json
           status: string
+          subcategoria_sugerida_id: string | null
           tipo: string | null
           transaction_id: string | null
           transfer_account_id: string | null
@@ -2202,6 +2203,7 @@ export type Database = {
           raw?: Json
           split_parts?: Json
           status?: string
+          subcategoria_sugerida_id?: string | null
           tipo?: string | null
           transaction_id?: string | null
           transfer_account_id?: string | null
@@ -2226,6 +2228,7 @@ export type Database = {
           raw?: Json
           split_parts?: Json
           status?: string
+          subcategoria_sugerida_id?: string | null
           tipo?: string | null
           transaction_id?: string | null
           transfer_account_id?: string | null
@@ -2247,6 +2250,17 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "import_batches"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_rows_subcategoria_owner_fkey"
+            columns: [
+              "subcategoria_sugerida_id",
+              "categoria_sugerida_id",
+              "user_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "subcategories"
+            referencedColumns: ["id", "category_id", "user_id"]
           },
           {
             foreignKeyName: "import_rows_transaction_id_fkey"
@@ -8732,6 +8746,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          liquidado_em: string | null
           notes: string | null
           parcelado: boolean
           payment_method: string | null
@@ -8760,6 +8775,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          liquidado_em?: string | null
           notes?: string | null
           parcelado?: boolean
           payment_method?: string | null
@@ -8788,6 +8804,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          liquidado_em?: string | null
           notes?: string | null
           parcelado?: boolean
           payment_method?: string | null

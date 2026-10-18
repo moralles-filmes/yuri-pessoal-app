@@ -24,7 +24,13 @@ import {
   type SharedExpenseLike,
   type SplitFormPart,
 } from "@/lib/finance/split";
-import { reaisParaCentavos } from "@/lib/format";
+import {
+  dataDeLiquidacaoAGravar,
+  dataDePagamentoFutura,
+  liquidadoNoBotao,
+  MSG_DATA_PAGAMENTO_FUTURA,
+} from "@/lib/finance/caixa";
+import { hojeISO, reaisParaCentavos } from "@/lib/format";
 import type { ActionResult } from "@/types/finance";
 import {
   TRANSACTION_STATUSES,
@@ -73,6 +79,13 @@ export async function updateTransaction(
   const parsed = transactionSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
   const d = parsed.data;
+
+  // REDESIGN-03-E · P8 — data de pagamento futura é previsão, não caixa. A recusa vem ANTES de
+  // qualquer leitura ou escrita — em especial antes do ramo de transferência, que apaga o
+  // lançamento e recria: com a recusa vindo da recriação, o delete já teria acontecido.
+  if (dataDePagamentoFutura(d.liquidado_em, hojeISO())) {
+    return invalid({ liquidado_em: [MSG_DATA_PAGAMENTO_FUTURA] });
+  }
 
   const { data: existing, error: loadErr } = await ctx.supabase
     .from("transactions")
@@ -182,6 +195,13 @@ export async function updateTransaction(
       notes: d.notes,
       tags: d.tags,
       status: d.status,
+      // REDESIGN-03-E · K0 — a data do pagamento acompanha o status: sair de pago/recebido (ou
+      // virar compra de cartão) LIMPA a coluna, que o CHECK do banco exige coerente.
+      liquidado_em: dataDeLiquidacaoAGravar({
+        status: d.status,
+        card_id: cardId,
+        liquidado_em: d.liquidado_em,
+      }),
       // Receita: as colunas da A1. Saindo de receita: volta a pessoal/nulo — sem divisão
       // gravada nem a gravar, `decidirReaplicacao` responde "nada", e uma receita de terceiro
       // virada despesa pessoal ficaria `terceiro` com valor 0 (fora do "meu"). Despesa →
@@ -323,16 +343,22 @@ export async function setTransactionStatus(
 
   const { data: existing } = await ctx.supabase
     .from("transactions")
-    .select("transfer_group_id")
+    .select("transfer_group_id, status")
     .eq("id", id)
     .single();
+
+  // REDESIGN-03-E · P9 — entrar ou sair do estado liquidado grava `liquidado_em = null`: o botão
+  // não inventa uma data, e a coluna fica coerente com o CHECK. Entre `pago` e `recebido` a data
+  // que o dono informou fica. Sem ler o status atual, limpa (o lado seguro).
+  const acao = existing ? liquidadoNoBotao(existing.status as TransactionStatus, status) : "limpar";
+  const mudanca = acao === "limpar" ? { status, liquidado_em: null } : { status };
 
   const { error } = existing?.transfer_group_id
     ? await ctx.supabase
         .from("transactions")
-        .update({ status })
+        .update(mudanca)
         .eq("transfer_group_id", existing.transfer_group_id)
-    : await ctx.supabase.from("transactions").update({ status }).eq("id", id);
+    : await ctx.supabase.from("transactions").update(mudanca).eq("id", id);
 
   if (error) return dbError("Não foi possível atualizar o status.");
   revalidateTransactions();

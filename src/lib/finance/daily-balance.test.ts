@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   efeitoNoSaldo,
+  filtroDoExtrato,
   saldosPorDia,
   type MovimentoDeSaldo,
 } from "@/lib/finance/daily-balance";
@@ -214,5 +216,165 @@ describe("saldosPorDia", () => {
       expect(direto.get(dia)).toBe(valor);
       expect(invertido.get(dia)).toBe(valor);
     }
+  });
+});
+
+/**
+ * REDESIGN-03-E · B1 — CARACTERIZAÇÃO, escrita ANTES de o saldo passar a cortar pela data de
+ * caixa (K1). Com `liquidado_em` nulo em tudo (o estado do banco depois da M2), o saldo de cada
+ * dia tem de ser EXATAMENTE o de antes da troca. Este bloco é escrito verde e não muda depois.
+ * Valores à mão, sintéticos.
+ */
+describe("03-E B1 · caracterização do saldo por dia (antes da data de caixa)", () => {
+  const movimentos: MovimentoDeSaldo[] = [
+    mov({ competence_date: "2026-07-01", type: "receita", amount: 500 }),
+    mov({ competence_date: "2026-07-03", type: "despesa", amount: 120.5 }),
+    mov({
+      competence_date: "2026-07-03",
+      type: "transferencia",
+      amount: 300,
+      account_id: CONTA_A,
+      transfer_account_id: CONTA_B,
+    }),
+    // pagamento de fatura: transferência sem destino
+    mov({ competence_date: "2026-07-05", type: "transferencia", amount: 200 }),
+    mov({ competence_date: "2026-07-06", type: "despesa", amount: 50, status: "pendente" }),
+    mov({
+      competence_date: "2026-07-08",
+      type: "receita",
+      status: "recebido",
+      amount: 80,
+      account_id: CONTA_B,
+    }),
+  ];
+  const dias = ["2026-07-01", "2026-07-02", "2026-07-03", "2026-07-05", "2026-07-06", "2026-07-08"];
+
+  it("todas as contas somadas", () => {
+    const s = saldosPorDia({ abertura: 1000, escopo: null, dias, movimentos });
+    expect(Object.fromEntries(s)).toEqual({
+      "2026-07-01": 1500,
+      "2026-07-02": 1500,
+      "2026-07-03": 1379.5,
+      "2026-07-05": 1179.5,
+      "2026-07-06": 1179.5,
+      "2026-07-08": 1259.5,
+    });
+  });
+
+  it("uma conta só", () => {
+    const s = saldosPorDia({ abertura: 1000, escopo: CONTA_A, dias, movimentos });
+    expect(Object.fromEntries(s)).toEqual({
+      "2026-07-01": 1500,
+      "2026-07-02": 1500,
+      "2026-07-03": 1079.5,
+      "2026-07-05": 879.5,
+      "2026-07-06": 879.5,
+      "2026-07-08": 879.5,
+    });
+  });
+});
+
+/**
+ * REDESIGN-03-E · B1 — o saldo passa a cortar pela DATA DE CAIXA (K1), espelhando
+ * `account_balance_before` desde a M2b. O filtro do extrato afunila por escopo + janela; a
+ * refiltragem em memória (P11) fica em `queries.ts`.
+ */
+describe("03-E B1 · saldo pela data de caixa (K1)", () => {
+  /** Remove comentários de linha e de bloco do fonte, para o espelho olhar só o código. */
+  function semComentarios(fonte: string): string {
+    return fonte.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  }
+
+  it("competência 03 paga em 05: o saldo do 03 e do 04 não inclui; o do 05 inclui", () => {
+    const saldos = saldosPorDia({
+      abertura: 1000,
+      escopo: CONTA_A,
+      dias: ["2026-07-03", "2026-07-04", "2026-07-05"],
+      movimentos: [
+        mov({
+          competence_date: "2026-07-03",
+          liquidado_em: "2026-07-05",
+          type: "despesa",
+          amount: 120,
+        }),
+      ],
+    });
+    expect(saldos.get("2026-07-03")).toBe(1000);
+    expect(saldos.get("2026-07-04")).toBe(1000);
+    expect(saldos.get("2026-07-05")).toBe(880);
+  });
+
+  it("pagamento antecipado (liquidado antes da competência) entra na data de caixa", () => {
+    const saldos = saldosPorDia({
+      abertura: 500,
+      escopo: CONTA_A,
+      dias: ["2026-07-02", "2026-07-05"],
+      movimentos: [
+        mov({
+          competence_date: "2026-07-05",
+          liquidado_em: "2026-07-02",
+          type: "despesa",
+          amount: 100,
+        }),
+      ],
+    });
+    expect(saldos.get("2026-07-02")).toBe(400);
+    expect(saldos.get("2026-07-05")).toBe(400);
+  });
+
+  it("liquidado_em nulo cai na competência, como antes", () => {
+    const comNulo = saldosPorDia({
+      abertura: 1000,
+      escopo: CONTA_A,
+      dias: ["2026-07-03", "2026-07-05"],
+      movimentos: [
+        mov({
+          competence_date: "2026-07-03",
+          liquidado_em: null,
+          type: "despesa",
+          amount: 120,
+        }),
+      ],
+    });
+    const semCampo = saldosPorDia({
+      abertura: 1000,
+      escopo: CONTA_A,
+      dias: ["2026-07-03", "2026-07-05"],
+      movimentos: [mov({ competence_date: "2026-07-03", type: "despesa", amount: 120 })],
+    });
+    expect(Object.fromEntries(comNulo)).toEqual({
+      "2026-07-03": 880,
+      "2026-07-05": 880,
+    });
+    expect(Object.fromEntries(semCampo)).toEqual(Object.fromEntries(comNulo));
+  });
+
+  it("filtroDoExtrato com escopo desmonta em and(escopo, janela por data de caixa)", () => {
+    expect(filtroDoExtrato(CONTA_A, { de: "2026-07-03", ate: "2026-07-05" })).toBe(
+      "and(or(account_id.eq.aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,transfer_account_id.eq.aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa),or(and(liquidado_em.is.null,competence_date.gte.2026-07-03,competence_date.lte.2026-07-05),and(liquidado_em.gte.2026-07-03,liquidado_em.lte.2026-07-05)))",
+    );
+  });
+
+  it("filtroDoExtrato sem escopo exige que a linha toque alguma conta", () => {
+    expect(filtroDoExtrato(null, { de: "2026-07-03", ate: "2026-07-05" })).toBe(
+      "and(or(account_id.not.is.null,transfer_account_id.not.is.null),or(and(liquidado_em.is.null,competence_date.gte.2026-07-03,competence_date.lte.2026-07-05),and(liquidado_em.gte.2026-07-03,liquidado_em.lte.2026-07-05)))",
+    );
+  });
+
+  it("ESPELHO (Z15): a M2b e o saldosPorDia cortam pela data de caixa", () => {
+    const migracao = semComentarios(
+      readFileSync(
+        "supabase/migrations/20261018210000_account_balance_before_data_de_caixa.sql",
+        "utf8",
+      ),
+    );
+    expect(migracao).toContain("coalesce(t.liquidado_em, t.competence_date) < p_date");
+
+    const fonte = semComentarios(
+      readFileSync("src/lib/finance/daily-balance.ts", "utf8"),
+    );
+    expect(fonte).toContain("dataDeCaixa(");
+    expect(fonte).not.toContain(".competence_date <= dia");
+    expect(fonte).not.toContain("a.competence_date < b.competence_date");
   });
 });

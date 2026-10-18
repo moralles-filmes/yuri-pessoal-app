@@ -34,11 +34,13 @@ export function RecurringClient({
   recurrences,
   accounts,
   categories,
+  subcategories,
   cards,
 }: {
   recurrences: RecWithRel[];
   accounts: Option[];
-  categories: Option[];
+  categories: (Option & { kind: string })[];
+  subcategories: (Option & { category_id: string })[];
   cards: CardOption[];
 }) {
   const router = useRouter();
@@ -48,6 +50,7 @@ export function RecurringClient({
     <RecurringFormDialog
       accounts={accounts}
       categories={categories}
+      subcategories={subcategories}
       cards={cards}
       trigger={
         <Button size="sm">
@@ -157,6 +160,7 @@ export function RecurringClient({
                     recurrence={rec}
                     accounts={accounts}
                     categories={categories}
+                    subcategories={subcategories}
                     cards={cards}
                     trigger={
                       <Button variant="ghost" size="icon-sm" aria-label="Editar">

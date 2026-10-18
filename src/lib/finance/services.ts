@@ -37,7 +37,12 @@ import {
   decidirResponsabilidadeDaReceita,
 } from "@/lib/finance/responsabilidade-da-receita";
 import type { Classificacao } from "@/lib/finance/constants";
-import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
+import {
+  dataDeLiquidacaoAGravar,
+  dataDePagamentoFutura,
+  MSG_DATA_PAGAMENTO_FUTURA,
+} from "@/lib/finance/caixa";
+import { centavosParaReais, hojeISO, reaisParaCentavos } from "@/lib/format";
 
 export type FinanceServiceContext = AuthContext;
 
@@ -101,6 +106,16 @@ export async function criarTransacao(
   }
   const d = parsed.data;
 
+  // REDESIGN-03-E · A3 (P8) — data do pagamento futura é previsão, não caixa: recusa ANTES de
+  // qualquer escrita, como erro do campo. O schema não tem `hoje` injetado, por isso é aqui.
+  if (dataDePagamentoFutura(d.liquidado_em, hojeISO())) {
+    return {
+      ok: false,
+      erro: "Verifique os campos destacados.",
+      fieldErrors: { liquidado_em: [MSG_DATA_PAGAMENTO_FUTURA] },
+    };
+  }
+
   if (d.type === "transferencia") {
     // UMA linha por transferência: `public.account_balance` já deriva os dois lados da
     // mesma linha (-amount na conta de origem `account_id`, +amount no destino
@@ -123,6 +138,12 @@ export async function criarTransacao(
         notes: d.notes,
         tags: d.tags,
         status: d.status,
+        // K0: a transferência nunca tem cartão; só liquidada guarda a data.
+        liquidado_em: dataDeLiquidacaoAGravar({
+          status: d.status,
+          card_id: null,
+          liquidado_em: d.liquidado_em,
+        }),
         category_id: null,
         subcategory_id: null,
       })
@@ -192,6 +213,12 @@ export async function criarTransacao(
       notes: d.notes,
       tags: d.tags,
       status: d.status,
+      // K0: compra de cartão nunca guarda a data; fora de pago/recebido também é nulo.
+      liquidado_em: dataDeLiquidacaoAGravar({
+        status: d.status,
+        card_id: cardId,
+        liquidado_em: d.liquidado_em,
+      }),
       // Despesa e ajuste: o objeto de sempre (sem `valor_pessoal`, que a divisão deriva depois).
       // Receita: as duas colunas da A1.
       ...(colunasDaReceitaDecididas ?? { classificacao }),

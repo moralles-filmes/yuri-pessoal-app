@@ -25,6 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CategoryPicker } from "@/components/finance/category-picker";
+import { categoriaServeAoTipo, categoriasDoTipo } from "@/lib/finance/category-search";
 import { MoneyInput } from "@/components/financeiro/money-input";
 import { ReceitaResponsabilidadeEditor } from "@/components/financeiro/receita-responsabilidade";
 import { InstallmentBadge } from "@/components/financeiro/badges";
@@ -98,6 +100,8 @@ type FormValues = {
   purchase_date: string;
   competence_date: string;
   status: TransactionStatus;
+  /** "Data do pagamento" (03-E · K0): 'yyyy-MM-dd' ou vazio. */
+  liquidado_em: string;
   description: string;
   notes: string;
   parcelado: boolean;
@@ -122,6 +126,7 @@ const CAMPOS_DO_FORMULARIO = [
   "purchase_date",
   "competence_date",
   "status",
+  "liquidado_em",
   "description",
   "notes",
   "parcelado",
@@ -147,6 +152,9 @@ function defaults(tx?: TransactionRow): FormValues {
     purchase_date: tx?.purchase_date ?? today,
     competence_date: tx?.competence_date ?? today,
     status: tx?.status ?? "pago",
+    // O GRAVADO, nunca a data da compra: sem data gravada o campo nasce vazio e o caixa usa a
+    // competência (aproximada), em vez de afirmar uma data que ninguém informou.
+    liquidado_em: tx?.liquidado_em ?? "",
     description: tx?.description ?? "",
     notes: tx?.notes ?? "",
     parcelado: false,
@@ -223,6 +231,7 @@ export function TransactionFormDialog({
 
   const type = useWatch({ control, name: "type" });
   const categoryId = useWatch({ control, name: "category_id" });
+  const subcategoryId = useWatch({ control, name: "subcategory_id" });
   const paymentMethod = useWatch({ control, name: "payment_method" });
   const cardId = useWatch({ control, name: "card_id" });
   const purchaseDate = useWatch({ control, name: "purchase_date" });
@@ -230,6 +239,7 @@ export function TransactionFormDialog({
   const parcelado = useWatch({ control, name: "parcelado" });
   const qtdParcelas = useWatch({ control, name: "qtd_parcelas" });
   const overrideUltima = useWatch({ control, name: "override_ultima" });
+  const status = useWatch({ control, name: "status" });
   const isTransfer = type === "transferencia";
   const isReceita = type === "receita";
   const isCard = !isTransfer && paymentMethod === "cartao_credito";
@@ -239,6 +249,11 @@ export function TransactionFormDialog({
   // Divisão de gastos (Fase 05): em despesa, na criação OU na edição de despesa simples.
   // Compra parcelada já criada é gerida em /parcelamentos (mesmo núcleo no servidor).
   const canSplit = type === "despesa" && !(isEdit && transaction?.parcelado);
+  // 03-E · K0 — "Data do pagamento": só onde o dinheiro mexe numa conta de uma vez. Compra de
+  // cartão nunca guarda a data (quem move a conta é o pagamento da fatura) e a compra parcelada
+  // nasce sem status; fora de pago/recebido a coluna não existe (CHECK do banco).
+  const mostraDataDoPagamento =
+    !isCard && !isParcelado && (status === "pago" || status === "recebido");
 
   const selectedCardObj = cards.find((c) => c.id === cardId);
   const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(purchaseDate);
@@ -291,14 +306,6 @@ export function TransactionFormDialog({
       }
     }
   }
-
-  const availableSubs = React.useMemo(
-    () =>
-      categoryId && categoryId !== NONE
-        ? subcategories.filter((s) => s.category_id === categoryId)
-        : [],
-    [categoryId, subcategories],
-  );
 
   // Monta o bloco de divisão a enviar ao servidor (vazio quando pessoal/não aplicável).
   function buildSplitPayload(values: FormValues) {
@@ -391,6 +398,7 @@ export function TransactionFormDialog({
       purchase_date: values.purchase_date,
       competence_date: values.competence_date,
       status: values.status,
+      liquidado_em: mostraDataDoPagamento ? values.liquidado_em : "",
       description: values.description,
       notes: values.notes,
       // Divisão aplicada na criação E na edição (o servidor re-aplica só quando muda).
@@ -452,6 +460,14 @@ export function TransactionFormDialog({
                         setValue("category_id", NONE);
                         setValue("subcategory_id", NONE);
                         setValue("parcelado", false);
+                      } else {
+                        // Categoria de despesa não serve a uma receita (e vice-versa): trocar o
+                        // tipo limpa a escolha que deixou de servir, com a subcategoria junto.
+                        const atual = categories.find((c) => c.id === getValues("category_id"));
+                        if (atual && !categoriaServeAoTipo(atual.kind, v)) {
+                          setValue("category_id", NONE);
+                          setValue("subcategory_id", NONE);
+                        }
                       }
                       reavaliarAtalho({ categoryId: v === "transferencia" ? NONE : getValues("category_id"), tipo: v as TransactionType });
                     }}
@@ -741,59 +757,32 @@ export function TransactionFormDialog({
 
           {!isTransfer && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
+              {/* Um seletor só: categoria com pesquisa e subcategoria no mesmo lugar. Escolher
+                  a subcategoria grava a categoria dela junto (nunca "Delivery" sob outra). */}
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label>Categoria</Label>
-                <Controller
-                  control={control}
-                  name="category_id"
-                  render={({ field }) => (
-                    <Select
-                      value={field.value}
-                      onValueChange={(v) => {
-                        field.onChange(v);
-                        setValue("subcategory_id", NONE);
-                        reavaliarAtalho({ categoryId: v, tipo: getValues("type") });
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Sem categoria" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NONE}>Sem categoria</SelectItem>
-                        {categories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Subcategoria</Label>
-                <Controller
-                  control={control}
-                  name="subcategory_id"
-                  render={({ field }) => (
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      disabled={availableSubs.length === 0}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Sem subcategoria" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NONE}>Sem subcategoria</SelectItem>
-                        {availableSubs.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+                <CategoryPicker
+                  // Só as categorias do tipo do lançamento (despesa ou receita; "ambos" serve aos
+                  // dois). A já escolhida fica, para um lançamento antigo não perder o rótulo.
+                  categories={categoriasDoTipo(categories, type, categoryId)}
+                  subcategories={subcategories}
+                  value={{
+                    categoryId: categoryId && categoryId !== NONE ? categoryId : null,
+                    subcategoryId:
+                      subcategoryId && subcategoryId !== NONE ? subcategoryId : null,
+                  }}
+                  onChange={(v) => {
+                    const anterior = getValues("category_id");
+                    const proxima = v.categoryId ?? NONE;
+                    setValue("category_id", proxima, { shouldDirty: true });
+                    setValue("subcategory_id", v.subcategoryId ?? NONE, { shouldDirty: true });
+                    // Só reavalia o atalho quando a CATEGORIA muda — trocar só a subcategoria
+                    // dentro da mesma categoria não é uma nova marcação.
+                    if (proxima !== anterior) {
+                      reavaliarAtalho({ categoryId: proxima, tipo: getValues("type") });
+                    }
+                  }}
+                  aria-label="Categoria"
                 />
               </div>
             </div>
@@ -891,6 +880,29 @@ export function TransactionFormDialog({
               </div>
             )}
           </div>
+
+          {/* 03-E · K0 — numa linha própria, em uma das duas colunas: o diálogo tem 512 px e três
+              campos de data já ocupam a grade acima; quatro colunas estourariam em 390 px. */}
+          {mostraDataDoPagamento && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="tx-liquidado">Data do pagamento</Label>
+                <Input
+                  id="tx-liquidado"
+                  type="date"
+                  aria-invalid={Boolean(errors.liquidado_em)}
+                  {...register("liquidado_em")}
+                />
+                {errors.liquidado_em ? (
+                  <p className="text-xs text-destructive">{errors.liquidado_em.message}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Deixe vazio se não souber — o caixa usa a competência e avisa.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="tx-desc">Descrição</Label>

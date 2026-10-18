@@ -15,6 +15,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { StatCard } from "@/components/shared/stat-card";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import {
   Card,
   CardContent,
@@ -25,10 +26,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { StatementStatusBadge } from "@/components/financeiro/badges";
+import { BlocoDoCaixa } from "@/components/financeiro/bloco-do-caixa";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
 import { fraseDoPerdoado, rotuloPendenteDoMes } from "@/lib/finance/recebimentos";
+import { ROTULO_DA_BASE, type BaseFinanceira } from "@/lib/finance/base";
+import type { EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import type { ComparativoAteODia } from "@/lib/finance/caixa";
 import { CategoriaChart } from "@/components/dashboard/categoria-chart";
 import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-chart";
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
@@ -53,17 +58,50 @@ function monthYearLabel(mes: string): string {
   );
 }
 
+/** Mês anterior em texto 'yyyy-MM' (vira o ano em janeiro), sem depender do relógio. */
+function mesAnteriorTexto(mes: string): string {
+  const [y, m] = mes.split("-").map(Number);
+  const ano = m === 1 ? y - 1 : y;
+  const mesNum = m === 1 ? 12 : m - 1;
+  return `${ano}-${String(mesNum).padStart(2, "0")}`;
+}
+
+/** Nome do mês anterior por extenso em pt-BR (mesmo Intl de monthYearLabel). */
+function nomeDoMesAnterior(mes: string): string {
+  return monthYearLabel(mesAnteriorTexto(mes));
+}
+
 function pctText(pct: number | null): string {
   if (pct === null) return "—";
   return `${pct > 0 ? "+" : ""}${pct.toFixed(0)}%`;
 }
 
+/** Direção da seta a partir do sinal da porcentagem (null = neutral). */
+function direcaoDoPct(pct: number | null): "up" | "down" | "neutral" {
+  if (pct === null || pct === 0) return "neutral";
+  return pct > 0 ? "up" : "down";
+}
+
+/** Monta a URL do dashboard preservando o mês e a base caixa quando ativa. */
+function urlDoDashboard(mes: string, base: BaseFinanceira): string {
+  const params = new URLSearchParams();
+  if (mes) params.set("mes", mes);
+  if (base === "caixa") params.set("base", "caixa");
+  return params.toString()
+    ? `/dashboard/financeiro?${params.toString()}`
+    : "/dashboard/financeiro";
+}
+
 export function DashboardClient({
   mesSel,
+  base,
+  caixa,
   saldo,
   resumo,
   perdoado,
   comparativo,
+  corteCompetencia,
+  graficoAteODia,
   evolucao,
   categorias,
   formas,
@@ -76,10 +114,14 @@ export function DashboardClient({
   faturasFechadas,
 }: {
   mesSel: string;
+  base: BaseFinanceira;
+  caixa: EstadoDoCaixa | null;
   saldo: number;
   resumo: ResumoMes;
   perdoado: number;
   comparativo: Comparativo;
+  corteCompetencia: ComparativoAteODia;
+  graficoAteODia: { ateODia: number; comparativo: Comparativo } | null;
   evolucao: EvolucaoPonto[];
   categorias: CategoriaSlice[];
   formas: FormaSlice[];
@@ -94,13 +136,13 @@ export function DashboardClient({
   const router = useRouter();
 
   function setMes(mes: string) {
-    const params = new URLSearchParams();
-    if (mes) params.set("mes", mes);
-    router.push(
-      params.toString()
-        ? `/dashboard/financeiro?${params.toString()}`
-        : "/dashboard/financeiro",
-    );
+    // Preserva a base caixa (?base=caixa) quando ativa.
+    router.push(urlDoDashboard(mes, base));
+  }
+
+  function setBase(b: BaseFinanceira) {
+    // Competência = sem o parâmetro; caixa = ?base=caixa.
+    router.replace(urlDoDashboard(mesSel, b));
   }
 
   // Próximas 6 faturas agrupadas por cartão (mantém a ordem por vencimento).
@@ -117,18 +159,151 @@ export function DashboardClient({
   const entradasNoCard = apresentarEntradas(resumo);
   const frase = fraseDoPerdoado(perdoado);
 
+  // Cards do topo: com competência nada muda nos números, só os hints declaram a base (K2).
+  const caixaOk = base === "caixa" && caixa?.estado === "ok" ? caixa : null;
+  const caixaErro = base === "caixa" && caixa?.estado === "erro";
+
+  // Corte "até o dia D" do mês em andamento (K3). Mês fechado => null => tela de hoje.
+  const corte: ComparativoAteODia | null = caixaOk ? caixaOk.corte : caixaErro ? null : corteCompetencia;
+  const corteAtivo = corte !== null && corte.ateODia !== null;
+  const diaDoCorte = corteAtivo ? corte.ateODia : null;
+  const mesAnteriorRotulo = nomeDoMesAnterior(mesSel);
+
+  function hintDoPeriodo(pct: number | null): string {
+    return pct === null
+      ? `sem base de comparação com ${mesAnteriorRotulo}`
+      : `vs. o mesmo período de ${mesAnteriorRotulo}`;
+  }
+
+  const entradasCard = caixaOk
+    ? corteAtivo && corte
+      ? {
+          label: "Entradas de caixa",
+          value: formatCurrency(caixaOk.entradasDeCaixa),
+          hint: `até o dia ${diaDoCorte}: ${hintDoPeriodo(corte.entradas.pct)} · Caixa realizado`,
+          trend: {
+            value: pctText(corte.entradas.pct),
+            direction: direcaoDoPct(corte.entradas.pct),
+          },
+        }
+      : {
+          label: "Entradas de caixa",
+          value: formatCurrency(caixaOk.entradasDeCaixa),
+          hint: "Caixa realizado · vs. mês anterior",
+          trend: {
+            value: pctText(caixaOk.entradasPct),
+            direction:
+              caixaOk.entradasPct === null
+                ? ("neutral" as const)
+                : caixaOk.entradasPct > 0
+                  ? ("up" as const)
+                  : caixaOk.entradasPct < 0
+                    ? ("down" as const)
+                    : ("neutral" as const),
+          },
+        }
+    : caixaErro
+      ? {
+          label: "Entradas de caixa",
+          value: "—",
+          hint: "Não foi possível ler o caixa",
+          trend: undefined,
+        }
+      : corteAtivo && corte
+        ? {
+            label: "Entradas do mês",
+            value: formatCurrency(entradasNoCard.valor),
+            hint: [
+              `até o dia ${diaDoCorte}: ${hintDoPeriodo(corte.entradas.pct)}`,
+              entradasNoCard.detalhe ? `Competência · ${entradasNoCard.detalhe}` : "Competência",
+            ].join(" · "),
+            trend: {
+              value: pctText(corte.entradas.pct),
+              direction: direcaoDoPct(corte.entradas.pct),
+            },
+          }
+        : {
+            label: "Entradas do mês",
+            value: formatCurrency(entradasNoCard.valor),
+            hint: entradasNoCard.detalhe
+              ? `Competência · vs. mês anterior · ${entradasNoCard.detalhe}`
+              : "Competência · vs. mês anterior",
+            trend: {
+              value: pctText(comparativo.deltaEntradasPct),
+              direction:
+                comparativo.deltaEntradas > 0
+                  ? ("up" as const)
+                  : comparativo.deltaEntradas < 0
+                    ? ("down" as const)
+                    : ("neutral" as const),
+            },
+          };
+
+  const saidasCard = caixaOk
+    ? corteAtivo && corte
+      ? {
+          label: "Saídas de caixa",
+          value: formatCurrency(caixaOk.atual.saidasDeCaixa),
+          hint: `até o dia ${diaDoCorte}: ${hintDoPeriodo(corte.saidas.pct)} · Caixa realizado`,
+          trend: { value: pctText(corte.saidas.pct), direction: "neutral" as const },
+        }
+      : {
+          label: "Saídas de caixa",
+          value: formatCurrency(caixaOk.atual.saidasDeCaixa),
+          hint: "Caixa realizado · vs. mês anterior",
+          trend: { value: pctText(caixaOk.saidasPct), direction: "neutral" as const },
+        }
+    : caixaErro
+      ? {
+          label: "Saídas de caixa",
+          value: "—",
+          hint: "Não foi possível ler o caixa",
+          trend: undefined,
+        }
+      : corteAtivo && corte
+        ? {
+            label: "Saídas do mês",
+            value: formatCurrency(resumo.saidas),
+            // O VALOR é o mês inteiro, com cartão; só a SETA é do corte, e ela fala das saídas à
+            // vista — por isso o hint diz de quem é cada número.
+            hint: [
+              `Competência · meu ${formatCurrency(resumo.meu)}`,
+              `seta: saídas à vista até o dia ${diaDoCorte}, ${hintDoPeriodo(corte.saidas.pct)}`,
+              "o cartão não entra (a fatura não se divide por dia)",
+            ].join(" · "),
+            trend: { value: pctText(corte.saidas.pct), direction: "neutral" as const },
+          }
+        : {
+            label: "Saídas do mês",
+            value: formatCurrency(resumo.saidas),
+            hint: `Competência · meu ${formatCurrency(resumo.meu)}`,
+            trend: { value: pctText(comparativo.deltaSaidasPct), direction: "neutral" as const },
+          };
+
   return (
     <div className="space-y-6">
-      {/* Filtro de período */}
-      <div className="flex flex-col gap-1.5 sm:max-w-xs">
-        <Label htmlFor="dash-mes">Período (mês)</Label>
-        <input
-          id="dash-mes"
-          type="month"
-          value={mesSel}
-          onChange={(e) => setMes(e.target.value || mesSel)}
-          className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
-        />
+      {/* Filtro de período e base dos números */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+        <div className="flex flex-col gap-1.5 sm:max-w-xs">
+          <Label htmlFor="dash-mes">Período (mês)</Label>
+          <input
+            id="dash-mes"
+            type="month"
+            value={mesSel}
+            onChange={(e) => setMes(e.target.value || mesSel)}
+            className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <span className="text-sm font-medium">Base:</span>
+          <SeletorDeVisao
+            rotulo="Base dos números"
+            visoes={["competencia", "caixa"] as const}
+            rotulos={ROTULO_DA_BASE}
+            atual={base}
+            aoEscolher={setBase}
+          />
+        </div>
       </div>
 
       {/* Alertas */}
@@ -167,32 +342,38 @@ export function DashboardClient({
 
       {/* Cards de resumo */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Saldo atual" value={formatCurrency(saldo)} icon={Wallet} hint="Soma das contas" />
         <StatCard
-          label="Entradas do mês"
-          value={formatCurrency(entradasNoCard.valor)}
-          icon={ArrowDownLeft}
-          hint={entradasNoCard.detalhe ? `vs. mês anterior · ${entradasNoCard.detalhe}` : "vs. mês anterior"}
-          trend={{
-            value: pctText(comparativo.deltaEntradasPct),
-            direction:
-              comparativo.deltaEntradas > 0 ? "up" : comparativo.deltaEntradas < 0 ? "down" : "neutral",
-          }}
+          label="Saldo atual"
+          value={formatCurrency(saldo)}
+          icon={Wallet}
+          hint="Hoje, todas as contas"
         />
         <StatCard
-          label="Saídas do mês"
-          value={formatCurrency(resumo.saidas)}
+          label={entradasCard.label}
+          value={entradasCard.value}
+          icon={ArrowDownLeft}
+          hint={entradasCard.hint}
+          trend={entradasCard.trend}
+        />
+        <StatCard
+          label={saidasCard.label}
+          value={saidasCard.value}
           icon={ArrowUpRight}
-          hint={`meu ${formatCurrency(resumo.meu)}`}
-          trend={{ value: pctText(comparativo.deltaSaidasPct), direction: "neutral" }}
+          hint={saidasCard.hint}
+          trend={saidasCard.trend}
         />
         <StatCard
           label={rotuloPendenteDoMes(mesSel)}
           value={formatCurrency(aReceber)}
           icon={HandCoins}
-          hint="Pendente de outras pessoas"
+          hint="Recebíveis em aberto"
         />
       </div>
+
+      {/* Bloco do caixa (só na base caixa) */}
+      {base === "caixa" && caixa && (
+        <BlocoDoCaixa mesRotulo={monthYearLabel(mesSel)} caixa={caixa} />
+      )}
 
       {/* Card-âncora: valor pessoal × terceiros + cartão × à vista + faturas + contas */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -203,7 +384,7 @@ export function DashboardClient({
                   para fora e o `overflow-hidden` do Card corta o ícone pela metade. */}
               <div className="min-w-0 space-y-1">
                 <p className="text-sm font-medium break-words text-muted-foreground">
-                  Valor realmente meu · {monthYearLabel(mesSel)}
+                  Valor realmente meu · {monthYearLabel(mesSel)} · Competência
                 </p>
                 <p className="text-3xl font-semibold tracking-tight tabular-nums">
                   {formatCurrency(resumo.meu)}
@@ -234,13 +415,13 @@ export function DashboardClient({
             label="Gasto no cartão"
             value={formatCurrency(resumo.cartao)}
             icon={CreditCard}
-            hint={`à vista ${formatCurrency(resumo.aVista)}`}
+            hint={`Pela fatura · à vista ${formatCurrency(resumo.aVista)}`}
           />
           <StatCard
             label="Faturas (aberta/fechada)"
             value={`${faturasAbertas}/${faturasFechadas}`}
             icon={ReceiptText}
-            hint="No período em diante"
+            hint="Pela fatura · no período em diante"
           />
           <StatCard
             label="Próximas contas a pagar"
@@ -248,15 +429,15 @@ export function DashboardClient({
             icon={CalendarClock}
             hint={
               contas.proxima
-                ? `${contas.count} conta(s) · 1ª em ${formatDate(contas.proxima.data)}`
-                : "Nenhuma nos próximos 31 dias"
+                ? `Pelo vencimento · ${contas.count} conta(s) · 1ª em ${formatDate(contas.proxima.data)}`
+                : "Pelo vencimento · nenhuma nos próximos 31 dias"
             }
           />
           <StatCard
             label="Cartão realmente meu"
             value={formatCurrency(resumo.cartaoMeu)}
             icon={Scale}
-            hint={`terceiros ${formatCurrency(resumo.cartao - resumo.cartaoMeu)}`}
+            hint={`Pela fatura · terceiros ${formatCurrency(resumo.cartao - resumo.cartaoMeu)}`}
           />
         </div>
       </div>
@@ -266,7 +447,7 @@ export function DashboardClient({
         <Card>
           <CardHeader>
             <CardTitle>Gastos por categoria</CardTitle>
-            <CardDescription>Distribuição de {monthYearLabel(mesSel)}.</CardDescription>
+            <CardDescription>Distribuição de {monthYearLabel(mesSel)}. Competência.</CardDescription>
           </CardHeader>
           <CardContent>
             <CategoriaChart data={categorias} />
@@ -275,7 +456,7 @@ export function DashboardClient({
         <Card>
           <CardHeader>
             <CardTitle>Por forma de pagamento</CardTitle>
-            <CardDescription>Cartão, débito, pix, dinheiro e mais.</CardDescription>
+            <CardDescription>Cartão, débito, pix, dinheiro e mais. Competência.</CardDescription>
           </CardHeader>
           <CardContent>
             <FormaPagamentoChart data={formas} />
@@ -286,7 +467,7 @@ export function DashboardClient({
       <Card>
         <CardHeader>
           <CardTitle>Evolução mensal</CardTitle>
-          <CardDescription>Entradas, saídas e saldo dos últimos 6 meses.</CardDescription>
+          <CardDescription>Entradas, saídas e saldo dos últimos 6 meses. Competência.</CardDescription>
         </CardHeader>
         <CardContent>
           <EvolucaoChart data={evolucao} />
@@ -296,17 +477,31 @@ export function DashboardClient({
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Mês a mês</CardTitle>
-            <CardDescription>Comparativo com o mês anterior.</CardDescription>
+            {graficoAteODia !== null ? (
+              <>
+                <CardTitle>Mês a mês · até o dia {graficoAteODia.ateODia}</CardTitle>
+                <CardDescription>
+                  Competência. Os dois meses até o mesmo dia; saídas só à vista — o cartão não entra
+                  (a fatura não se divide por dia).
+                </CardDescription>
+              </>
+            ) : (
+              <>
+                <CardTitle>Mês a mês</CardTitle>
+                <CardDescription>Comparativo com o mês anterior. Competência.</CardDescription>
+              </>
+            )}
           </CardHeader>
           <CardContent>
-            <MesAMesChart comparativo={comparativo} />
+            <MesAMesChart
+              comparativo={graficoAteODia !== null ? graficoAteODia.comparativo : comparativo}
+            />
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>Projeção dos próximos meses</CardTitle>
-            <CardDescription>Faturas, recorrências e contas fixas.</CardDescription>
+            <CardDescription>Faturas, recorrências e contas fixas. Pelo vencimento.</CardDescription>
           </CardHeader>
           <CardContent>
             <ProjecaoChart data={projecao} />

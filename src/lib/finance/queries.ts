@@ -16,9 +16,11 @@ import { idsDasCategoriasMarcadas } from "@/lib/finance/categorias-marcadas";
 import { anexarRecebimentos } from "@/lib/finance/recebimentos";
 import { lerRecebimentos } from "@/lib/finance/recebimentos-leitura";
 import {
+  filtroDoExtrato,
   saldosPorDia,
   type MovimentoDeSaldo,
 } from "@/lib/finance/daily-balance";
+import { dataDeCaixa } from "@/lib/finance/caixa";
 import {
   completudeDe,
   lancamentosForaDoDominio,
@@ -181,6 +183,11 @@ export type DailyBalanceFilters = {
  *
  * Duas idas ao banco: o saldo de abertura (um escalar, via `account_balance_before`) e os
  * movimentos da janela. A acumulação dia a dia é pura (`saldosPorDia`).
+ *
+ * K1: desde a M2b o saldo corta pela DATA DE CAIXA (`liquidado_em` ?? `competence_date`), o
+ * mesmo corte de `account_balance_before`. `dias` segue vindo das competências da lista (o
+ * cabeçalho do grupo é o dia da competência); o saldo dele é o do FIM daquele dia pela data
+ * de caixa.
  */
 export async function getDailyBalances(
   filters: DailyBalanceFilters,
@@ -196,24 +203,19 @@ export async function getDailyBalances(
 
   const supabase = await createClient();
 
+  // P11: o `.or(...)` só AFUNILA (escopo + janela por data de caixa); a decisão final é a
+  // refiltragem em memória logo abaixo. K1: a janela é por data de caixa, não por competência.
   let movimentosQuery = supabase
     .from("transactions")
     .select(
-      "competence_date,type,status,amount,account_id,transfer_account_id",
+      "competence_date,liquidado_em,type,status,amount,account_id,transfer_account_id",
     )
-    .gte("competence_date", from)
-    .lte("competence_date", to)
     .in("status", SETTLED_STATUSES)
     .limit(5000);
 
-  // Espelha o join de `account_balance_before`: só entra o que toca alguma conta.
-  movimentosQuery = escopo
-    ? movimentosQuery.or(
-        `account_id.eq.${escopo},transfer_account_id.eq.${escopo}`,
-      )
-    : movimentosQuery.or(
-        "account_id.not.is.null,transfer_account_id.not.is.null",
-      );
+  movimentosQuery = movimentosQuery.or(
+    filtroDoExtrato(escopo, { de: from, ate: to }),
+  );
 
   const [aberturaRes, movimentosRes] = await Promise.all([
     supabase.rpc("account_balance_before", {
@@ -229,11 +231,21 @@ export async function getDailyBalances(
   if (aberturaRes.error || aberturaRes.data == null) return null;
   if (movimentosRes.error) return null;
 
+  const lidas = (movimentosRes.data ?? []) as unknown as MovimentoDeSaldo[];
+  // P11: refiltra pela data de caixa, em memória — o PostgREST afunila, não decide.
+  const movimentos = lidas.filter((m) => {
+    const { data } = dataDeCaixa({
+      liquidado_em: m.liquidado_em ?? null,
+      competence_date: m.competence_date,
+    });
+    return data >= from && data <= to;
+  });
+
   const saldos = saldosPorDia({
     abertura: Number(aberturaRes.data),
     escopo,
     dias,
-    movimentos: (movimentosRes.data ?? []) as unknown as MovimentoDeSaldo[],
+    movimentos,
   });
 
   return Object.fromEntries(saldos);

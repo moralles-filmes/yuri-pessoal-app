@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { TransactionFormDialog } from "./transaction-form";
 import { TransactionFilters } from "./transaction-filters";
 import { motivoDaListaVazia } from "@/lib/finance/marcacao-da-categoria";
+import { marcaDaLiquidacao } from "@/lib/finance/base";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import {
   CategoryPill,
@@ -249,6 +250,8 @@ function TransactionCard({
   const isTransfer = t.type === "transferencia";
   // Estorno = receita vinculada a uma fatura de cartão (não é entrada em conta).
   const isEstorno = t.type === "receita" && t.card_id != null;
+  // K1 — a linha continua no dia da COMPETÊNCIA; a marca só diz quando o dinheiro mexeu.
+  const liquidacao = marcaDaLiquidacao(t);
 
   return (
 <Card>
@@ -285,6 +288,7 @@ function TransactionCard({
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {/* A data saiu daqui: agora é o cabeçalho do dia que a carrega. */}
+        {liquidacao && <span>{liquidacao}</span>}
         {isTransfer ? (
           <span className="inline-flex items-center gap-1">
             {t.account?.name ?? "—"}

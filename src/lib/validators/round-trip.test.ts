@@ -23,6 +23,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { categorySchema } from "@/lib/validators/category";
+import { transactionSchema } from "@/lib/validators/transaction";
 import { registrarRecebimentoSchema } from "@/lib/validators/receivable";
 import { optionalText } from "@/lib/validators/shared";
 import { receitaResponsabilidadeSchema } from "@/lib/validators/split";
@@ -633,5 +634,49 @@ describe("categoria: o formulário de 'Nova categoria' salva", () => {
     });
     expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
     expect(noServidor.data).toEqual(noCliente.data);
+  });
+});
+
+describe("lançamento (03-E): a \"Data do pagamento\" aceita a própria saída", () => {
+  const doFormulario = {
+    type: "despesa",
+    payment_method: "pix",
+    account_id: UUID,
+    card_id: "",
+    category_id: "",
+    subcategory_id: "",
+    amount: 100,
+    purchase_date: "2026-10-10",
+    competence_date: "2026-10-10",
+    description: "x",
+    status: "pago",
+  };
+
+  it("vazia (o padrão) vira null e continua null na segunda passada", () => {
+    const { noCliente, noServidor } = roundTrip(transactionSchema, { ...doFormulario, liquidado_em: "" });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noServidor.data).toEqual(noCliente.data);
+    expect((noCliente.data as { liquidado_em: unknown }).liquidado_em).toBeNull();
+  });
+
+  it("ausente vira null", () => {
+    const { noCliente, noServidor } = roundTrip(transactionSchema, doFormulario);
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect((noCliente.data as { liquidado_em: unknown }).liquidado_em).toBeNull();
+  });
+
+  it("preenchida sobrevive às duas passadas", () => {
+    const { noServidor } = roundTrip(transactionSchema, {
+      ...doFormulario,
+      liquidado_em: "2026-10-12",
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect((noServidor.data as { liquidado_em: unknown }).liquidado_em).toBe("2026-10-12");
+  });
+
+  it("formato inválido é recusado no campo", () => {
+    const r = transactionSchema.safeParse({ ...doFormulario, liquidado_em: "12/10/2026" });
+    expect(r.success).toBe(false);
+    expect(r.error?.flatten().fieldErrors.liquidado_em).toBeDefined();
   });
 });
