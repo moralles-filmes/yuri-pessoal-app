@@ -1,6 +1,6 @@
 # STATUS
 
-**Atualizado:** 2026-10-15
+**Atualizado:** 2026-10-18
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
 REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
@@ -10,20 +10,60 @@ REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · 
 · **REDESIGN-03-C ✅** (integrada por merge `--no-ff` em `22ec12f`) · **REDESIGN-03-C2 ✅**
 (integrada por merge `--no-ff` em `31bef87`, **com a M3 aplicada**) · **REDESIGN-03-D ✅**
 (integrada por merge `--no-ff` em `545acf4`, **com a M1 aplicada**) · **REDESIGN-07 (A–D) ✅**
-(integrada por merge `--no-ff` em `598b475`, sem migration); **03-E liberada** — modo
-caixa exato × competência com rótulo (E6, **com a M2**)
+(integrada por merge `--no-ff` em `598b475`, sem migration) · **REDESIGN-03-E ✅** (integrada
+por merge `--no-ff` em `de6ef19`, **com a M2 e a M2b aplicadas**); **03-F liberada** —
+idempotência do pagamento de fatura (P0-4) e confirmação no desfazer (P1-8)
 
-⛔ **A M1 foi aplicada em 2026-10-12** (03-D), depois do seu "aplique a M1" literal — **pelo
-SQL Editor, não pelo MCP** (D55). A M3 foi aplicada em 2026-10-11 (03-C2), pelo MCP (D50).
-**A M2 continua sem ser aplicada.** "Aprovado tudo" foi lido como aval do **visual** e do
-**dicionário**. Cada migration escreve no banco de produção e segue precisando de um "aplique
-a M2" seu, separado, no momento em que a subfase precisar dela — a M2 é da 03-E.
+⛔ **A M2 e a M2b foram aplicadas em 2026-10-18** (03-E), pelo MCP, cada uma depois do seu
+"aplique a M2" / "aplique a M2b" literal, em mensagens separadas (D61). A M1 foi aplicada em
+2026-10-12 (03-D) **pelo SQL Editor** (D55); a M3 em 2026-10-11 (03-C2), pelo MCP (D50). As
+quatro migrations previstas no `MIGRATIONS.md` estão aplicadas; **a M2b não estava lá** — nasceu
+da K1 da 03-E, com o SQL aprovado no desenho. Nenhuma migration nova sem um "aplique" seu.
 
 🚀 **De 00 a 03-C2 foi para produção pelo PR #56** (D54, mergeado em 2026-10-12). A regra do
 plano mudou por decisão sua em 2026-10-11: as subfases fechadas são publicadas **por partes**,
 cada uma por PR, em vez de esperar a 08. **A 03-D vai pelo PR #57** (D60), com o seu aval
 para o push e o PR; o merge em `main` é seu. **A REDESIGN-07 (A–D) foi integrada em
-`598b475`** e vai a `main` por PR próprio, depois do #57 — os dois merges em `main` são seus.
+`598b475`** e foi a `main` pelo PR #58. **A 03-E vai a `main` por PR próprio, com o seu aval
+explícito para push, PR **e** merge** ("Pode subir para o git em uma branch, fazer pr e merge",
+D62).
+
+---
+
+## REDESIGN-03-E — o caixa ganha data, e toda tela diz a base ✅
+
+Branch `feat/redesign-03e-caixa`, nascida de `main` em `7d37305` (19 commits), integrada por merge
+`--no-ff` em **`de6ef19`** — a árvore integrada é **idêntica** à da ponta (`319b45f`). O contrato,
+com o resultado da execução no §13, é
+`docs/superpowers/specs/2026-10-18-03e-caixa-design.md`; o plano,
+`docs/superpowers/plans/2026-10-18-03e-caixa.md`.
+
+**O que mudou de natureza.** `transactions.liquidado_em` (M2) separa **quando o dinheiro mexeu**
+de **a que mês o lançamento pertence**. A data de caixa é `liquidado_em ?? competence_date`, e a
+tela declara quantos estão na data aproximada. **Nada foi preenchido por dedução:** 0 linhas com
+a coluna no fim, e o CHECK do banco exige que só lançamento `pago`/`recebido` a tenha.
+
+| Item | Entrega | Muda número? |
+| --- | --- | --- |
+| A1 | `caixa.ts`: data de caixa, os números do §13.2, aproximados, corte até o dia D | não |
+| A2 | M2 + tipos (só as 3 linhas da coluna) | não |
+| A3 | quem grava a data (K0): formulário (campo vazio por padrão), pagamento de fatura, extrato importado; o resto nulo. Inventário de escrita congelado por varredura (30 escritas, 8 arquivos) | não |
+| A4 | seletor **Caixa realizado × Competência** em `/dashboard/financeiro` e `/relatorios` (`?base=caixa`, competência é o padrão), "Base: competência" no card do `/dashboard`, "pago em DD/MM" no extrato | não |
+| B1 | saldo do extrato pela data de caixa: `account_balance_before` (M2b) **e** `daily-balance.ts`, com teste de espelho | efeito hoje: **zero**, provado por hash |
+| B2 | setas e "Mês a mês" **até o dia D** no mês em andamento | ⚠️ **sim** — o "vs. mês anterior" de hoje mudou |
+| B3 | a nota da sobreposição reembolso × outra entrada de terceiro (RR7) | só nota |
+
+**Provado:** 23 mutações (Z1–Z20) derrubando o teste nomeado; provas com dado sintético no banco
+(11 lançamentos marcados, conferidos por SQL e pela tela, removidos, hashes do saldo iguais aos
+de partida); revisão final da branch no modelo mais capaz, com dois achados corrigidos.
+
+**Risco residual novo:** RR-E-1 a RR-E-13 no §12 do contrato. Os com destino: RR-E-4
+(quanto a sobreposição dobra) → **04-C**; RR-E-6 ("Saldo atual" sem corte de data) e RR-E-7
+(régua do gasto alto) → **04-A**; RR-E-9 (`getReceivables` sem teto nem erro visível) → **03-G**.
+
+⚠️ **Achado fora do escopo, não corrigido:** em todos os gráficos de valor em reais o rótulo do
+eixo vertical é cortado (`YAxis width={78}` não cabe "R$ 10,5 mil"), anterior à 03-E. Relatado
+por você em 2026-10-18; precisa de tarefa própria.
 
 ⚠️ **CORREÇÃO (D29): a M3 NÃO é da 03-B.** Este documento afirmava, em dois lugares, que a
 `categories.classificacao_padrao` seria pedida na 03-B. Não bate com as outras duas fontes:
@@ -913,6 +953,8 @@ as colunas já existem e o CHECK já aceita.
 | D58 | **O P6 mudou (RR-D-19), por decisão sua, delegada** ("Faz como achar mais recomendado"): "Desfazer o último" desfaz o último **registrado** (`created_at`), não o de data mais recente — pela data, um lançamento retroativo fazia o Desfazer apagar outro. O `pago_em` da soma fechada continua sendo a data mais recente |
 | D59 | **RR-D-11, decisão delegada:** a versão da M1 foi registrada no histórico remoto por `supabase migration repair --status applied 20261011210000` (só registra, não executa SQL). ⚠️ **Achado:** o histórico local × remoto está desalinhado no projeto **inteiro** — 11 de 347 linhas casam —, porque o MCP grava a hora da aplicação, não a versão do arquivo. `supabase db push` nunca foi utilizável aqui (aborta antes de aplicar qualquer coisa). Alinhar o histórico é decisão sua, fora do redesign |
 | D60 | **A 03-D foi integrada na sessão que a escreveu, a seu pedido** ("Pode mergear"), **com** revisão independente da branch inteira (D57) e re-revisão restrita de cada correção, **sem** auditoria de módulo. A branch nasceu antes da D54, então a árvore integrada é a da ponta (`c7798ae`) **mais exatamente** a mudança da D54 no STATUS — conferido por patch-id —, e os cinco comandos rodaram depois do merge. O push e o PR #57 vieram com o seu aval explícito; **o merge em `main` é seu**. ⚠️ **A conferência com dado real da D39/D44/D48/D52 vale também para a 03-D**: registrar um recebimento parcial pela tela, desfazê-lo, e conferir que nenhum número de dashboard, relatório ou sino mudou além do que a B1–B4 prometem |
+| D61 | **03-E: K0–K4 decididas por você, uma de cada vez, e o desenho aprovado** ("Aprovado! Nao precisa me apresentar o plano, pode implementar."). A M2 entrou com o seu "aplique a M2" e a **M2b** (o `create or replace` de `account_balance_before` pela data de caixa, que **não** estava no `MIGRATIONS.md`) com o seu "aplique a M2b", separado — as duas pelo MCP, conferidas pelo objeto e não pela versão do histórico (D59). O gerador de tipos trouxe de novo a relationship de `import_rows` e a sintaxe nova dos genéricos; **só as 3 linhas da coluna** entraram. A prova de efeito zero da B1 contra dado real ficou fraca porque você tinha apagado o financeiro para reimportar; a comparação com **dado sintético** (autorizada por você, plano mostrado antes) é o substituto, e o MCP recusou o `delete` final — os 11 marcados saíram pelo SQL Editor, por você |
+| D62 | **A 03-E foi integrada na sessão que a escreveu, a seu pedido** ("Pode subir para o git em uma branch, fazer pr e merge"), **com** revisão final da branch no modelo mais capaz e **sem** auditoria de módulo. Pela primeira vez o aval cobriu **também o merge em `main`**. A branch nasceu de `main` (`7d37305`, que já tinha os PRs #58 e #59), então o merge trouxe esses commits para esta branch e a árvore integrada é **igual** à da ponta |
 
 ## Bloqueios
 
@@ -1052,43 +1094,47 @@ E o `perf:bundle` da 02-D ser idêntico ao da 02-C **é o resultado esperado, n�
 coincidência**: a subfase não altera um arquivo de runtime sequer. Ele foi rodado justamente
 para confirmar isso em vez de eu afirmar.
 
-## Próximo passo — REDESIGN-03-E (modo caixa exato × competência, com rótulo)
+**Depois do merge da 03-E (`de6ef19`), na árvore integrada** — idêntica à da ponta
+`319b45f`: `lint` ✅ · `tsc` ✅ · `build` ✅ · `perf:bundle` ✅ mediana **216,3**, 68 rotas,
+todas dentro · `test:run` **277 / 6.546**, 6.545 ✅ e 1 ❌ — de novo a de ambiente
+(`schema.test.ts` lendo migration com CRLF na cópia de trabalho desta worktree; 32/32 no
+diretório principal). Na ponta, no diretório principal, os cinco tinham passado sem ressalva:
+**277 / 6.546**, mediana **216,3**; `TZ=UTC` em finance/notifications/reports **51 / 835**.
+Rotas tocadas, antes → depois (KB gz): `/financeiro/lancamentos` 226,0 → 226,4 ·
+`/relatorios` 208,5 → 210,3 · `/dashboard/financeiro` 205,4 → 207,2; `/dashboard`,
+`/financeiro` e `/financeiro/contas` iguais.
 
-**A 03-D está fechada e integrada** (`545acf4`), e vai a `main` pelo PR #57. A 03-E dá ao
-financeiro o modo **caixa exato × competência** com rótulo (E6, D9: a M2,
-`transactions.liquidado_em`): `liquidado_em` nulo cai para `competence_date` **com a
-aproximação declarada na tela**, nunca em silêncio, e a regra de comparação de mês parcial. O
-primeiro entregável é o **desenho**, aprovado por você antes de qualquer linha de código.
+## Próximo passo — REDESIGN-03-F (idempotência do pagamento de fatura e confirmação no desfazer)
 
-⛔ **A 03-E é a terceira subfase com migration.** O SQL é o da M2 em `MIGRATIONS.md`. Aplicar
-exige o seu **"aplique a M2"** literal, separado do "aprovado" do desenho. ⚠️ Na 03-D o MCP
-recusou o `apply_migration` e a M1 entrou pelo SQL Editor (D55): se acontecer de novo, o
-caminho é decisão sua — e a versão vai ao histórico logo depois (D59).
+**A 03-E está fechada, integrada** (`de6ef19`) **e vai a `main` por PR com o seu aval.** A
+03-F fecha dois achados da auditoria: **P0-4** — pagar a fatura é *check-then-act* sem
+constraint, e duas requisições concorrentes inserem duas transferências debitando a conta (a
+primeira fica órfã); e **P1-8** — "Desfazer pagamento" não pede confirmação, o único movimento
+de dinheiro a um clique. O primeiro entregável é o **desenho**, aprovado por você antes de
+qualquer linha de código.
 
-⚠️ **Aviso que a 03-D deixou para a 03-E (RR7):** "Reembolsos recebidos" (03-D) e "Outras
-entradas de terceiros" (03-C) podem contar o mesmo dinheiro duas vezes na base caixa, quando o
-reembolso também foi lançado como receita. O vínculo entre os dois é da 04-C; a 03-E tem de
-**declarar** a sobreposição em vez de somar as duas em silêncio.
+⚠️ **A trava de idempotência mora no banco** (invariante 36), então a 03-F provavelmente pede
+uma migration que **não está** no `MIGRATIONS.md` (um índice único, ou uma RPC transacional).
+O SQL vai ao desenho e precisa do seu "aplique" literal, separado do "aprovado". **Antes de
+qualquer índice único: contar as duplicatas existentes**, só leitura — um índice sobre dado que
+já viola a regra falha na criação.
+
+⚠️ **O que a 03-E deixou para a 03-F:** o pagamento de fatura agora grava `liquidado_em` com a
+data do pagamento, e desfazer o pagamento apaga a transferência — a coerência entre os dois
+caminhos tem de continuar provada pelo inventário de escrita (`quem-escreve-transactions.test.ts`).
+RR-E-12 (data de pagamento futura aceita em `markStatementPaid`) é vizinho e **não** é da 03-F,
+salvo decisão sua no desenho.
 
 ⚠️ **Pendência que é sua (D39, D44, D48, D52, D60):** a conferência com dado real da 03-B, da
-03-B2, da 03-C, da 03-C2 **e** da 03-D.
+03-B2, da 03-C, da 03-C2 **e** da 03-D. Da 03-E, a conferência visual a 390 px (RR-E-13).
 
-🚀 **Publicação (D54):** de 00 a 03-C2 foi a `main` pelo PR #56 (mergeado em 2026-10-12); a
-03-D vai pelo **PR #57**, e o merge é seu. `feat/redesign-03d-recebiveis` fica no disco local
-até o merge em `main`. A integração das próximas subfases continua sendo merge `--no-ff` nesta
-branch, seguido de PR para `main`.
+🚀 **Publicação (D54, D62):** a integração das próximas subfases continua sendo merge
+`--no-ff` nesta branch, seguido de PR para `main`.
 
-⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA MAIS AQUI — meça** (D34):
+⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA AQUI — meça** (D34):
 
 ```bash
 git rev-list --count main..feat/redesign-00-auditoria
 ```
 
-Eram **16** no merge `d4d4faf`. Antes dele este documento dizia **11**, e `a4bed98` já era
-**12** — sendo que `a4bed98` se chama literalmente *"corrige a contagem de commits locais
-(11, não 10)"*: a contagem foi corrigida uma vez e **continuou errada**. Terceira vez que um
-número contado à mão erra nesta branch (as outras duas na D27).
-
-⛔ **E há um motivo estrutural para não cravá-lo:** o commit que escreve o número o torna
-obsoleto no ato. Cravar 16 fez virar 17; corrigir para 17 faria virar 18. **Número que o
-próprio ato de registrar invalida não é um fato a documentar, é um comando a documentar.**
+Número que o próprio ato de registrar invalida não é um fato a documentar, é um comando.
