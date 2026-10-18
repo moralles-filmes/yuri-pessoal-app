@@ -29,6 +29,10 @@ const ALLOWLIST: Record<string, string> = {
     "criarTransacao GRAVA a data pela regra (K0.1, K0.5) e recusa data futura (P8) — formulário, IA e quick-add",
   "lib/finance/statement-payment.ts": "o pagamento de fatura grava a data do pagamento (K0.2)",
   "lib/actions/imports.ts": "o extrato de conta importado grava a data da linha (K0.3); cartão não",
+  "lib/actions/transactions.ts":
+    "a edição e o botão rápido mantêm a data coerente com o status (K0.6, P8, P9) — os dois caminhos que mudam status",
+  "app/(app)/financeiro/lancamentos/transaction-form.tsx":
+    "o campo \"Data do pagamento\" (K0.1): só com pago/recebido e sem cartão, pré-preenchido com o GRAVADO",
 };
 
 /** Os que NUNCA podem mencionar — nem entrar na allowlist. */
