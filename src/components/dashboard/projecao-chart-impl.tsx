@@ -52,7 +52,7 @@ export function ProjecaoChart({ data }: { data: ProjecaoPonto[] }) {
       <BarChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
         <CartesianGrid vertical={false} stroke={GRID_COLOR} />
         <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width={78} />
+        <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width="auto" />
         <Tooltip
           cursor={{ fill: "var(--muted)", opacity: 0.4 }}
           formatter={(value) => formatCurrency(Number(value))}

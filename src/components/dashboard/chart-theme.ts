@@ -51,14 +51,25 @@ export const axisTick = { fill: AXIS_COLOR, fontSize: 12 } as const;
 /** Formata um valor de eixo/tooltip como BRL. */
 export const brl = (v: number | string) => formatCurrency(Number(v));
 
-/** Abrevia BRL para eixos estreitos (ex.: R$ 1,2 mil / R$ 3 M). */
+/** Uma casa decimal só quando ela existe: 10 → "10", 2,5 → "2,5". */
+function curto(n: number): string {
+  const arred = Math.round(n * 10) / 10;
+  return Number.isInteger(arred) ? String(arred) : arred.toFixed(1).replace(".", ",");
+}
+
+/**
+ * Abrevia BRL para eixos (ex.: R$ 10 mil / R$ 2,5 mil / R$ 1,2 mi). Sem ",0" — o rótulo de
+ * eixo é o que mais aperta, e "R$ 10,0 mil" quebrava em duas linhas (desenho 2026-10-18, §6).
+ * O tooltip continua com o valor exato (`formatCurrency`).
+ */
 export function brlCompact(v: number | string): string {
   const n = Number(v);
   if (!Number.isFinite(n)) return "R$ 0";
+  const sinal = n < 0 ? "-" : "";
   const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `R$ ${(n / 1_000_000).toFixed(1).replace(".", ",")} M`;
-  if (abs >= 1_000) return `R$ ${(n / 1_000).toFixed(1).replace(".", ",")} mil`;
-  return `R$ ${Math.round(n)}`;
+  if (abs >= 1_000_000) return `${sinal}R$ ${curto(abs / 1_000_000)} mi`;
+  if (abs >= 1_000) return `${sinal}R$ ${curto(abs / 1_000)} mil`;
+  return `${sinal}R$ ${Math.round(abs)}`;
 }
 
 /** 'yyyy-MM' → rótulo curto pt-BR (ex.: "jun/26"). */

@@ -51,7 +51,7 @@ export function ConsistencyChart({ weekly }: { weekly: HabitWeekPoint[] }) {
           tick={axisTick}
           axisLine={false}
           tickLine={false}
-          width={44}
+          width="auto"
         />
         <Tooltip
           cursor={{ fill: "var(--muted)", opacity: 0.4 }}

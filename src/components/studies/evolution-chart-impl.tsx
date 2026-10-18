@@ -48,7 +48,7 @@ export function EvolutionChart({ weekly }: { weekly: StudyWeekPoint[] }) {
           tick={axisTick}
           axisLine={false}
           tickLine={false}
-          width={40}
+          width="auto"
           tickFormatter={(v) => `${v}h`}
           allowDecimals
         />

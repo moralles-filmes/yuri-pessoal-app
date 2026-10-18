@@ -57,7 +57,7 @@ export function FormaPagamentoChart({ data }: { data: FormaSlice[] }) {
         <YAxis
           type="category"
           dataKey="nome"
-          width={104}
+          width="auto"
           tick={axisTick}
           axisLine={false}
           tickLine={false}
