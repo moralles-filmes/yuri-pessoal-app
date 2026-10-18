@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import { getReportsData } from "@/lib/reports/queries";
 import { mesDe } from "@/lib/finance/dashboard";
+import { estadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import { baseDaUrl } from "@/lib/finance/base";
 import { hojeISO } from "@/lib/format";
 import { RelatoriosClient } from "./relatorios-client";
 
@@ -24,6 +26,9 @@ export default async function RelatoriosPage({
     return v && /^\d{4}-\d{2}$/.test(v) ? v : mesAtual;
   })();
 
+  const base = baseDaUrl(sp.base);
+  const caixa = base === "caixa" ? await estadoDoCaixa(mesSel) : null;
+
   const data = await getReportsData(mesSel);
 
   return (
@@ -32,7 +37,7 @@ export default async function RelatoriosPage({
         title="Relatórios e análises"
         description="Visão consolidada de finanças, cartões, hábitos, estudos e tarefas — com gráficos, filtros e exportação."
       />
-      <RelatoriosClient data={data} />
+      <RelatoriosClient data={data} base={base} caixa={caixa} />
     </div>
   );
 }

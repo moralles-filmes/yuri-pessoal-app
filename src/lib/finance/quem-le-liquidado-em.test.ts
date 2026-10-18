@@ -33,6 +33,8 @@ const ALLOWLIST: Record<string, string> = {
     "a edição e o botão rápido mantêm a data coerente com o status (K0.6, P8, P9) — os dois caminhos que mudam status",
   "lib/finance/caixa-leitura.ts":
     "a LEITURA da base caixa (A4): a janela por data de caixa no PostgREST, refiltrada por dataDeCaixa (P11)",
+  "lib/finance/base.ts":
+    "a marca \"pago em DD/MM\" do extrato (K1) — pura, sem imports de runtime, a tela lê",
   "app/(app)/financeiro/lancamentos/transaction-form.tsx":
     "o campo \"Data do pagamento\" (K0.1): só com pago/recebido e sem cartão, pré-preenchido com o GRAVADO",
 };

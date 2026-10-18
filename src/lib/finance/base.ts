@@ -20,3 +20,32 @@ export const ROTULO_DA_BASE: Record<BaseFinanceira, string> = {
   competencia: "Competência",
   caixa: "Caixa realizado",
 };
+
+/**
+ * K1 — a marca de quando o dinheiro mexeu.
+ *
+ * A lista continua agrupada pela COMPETÊNCIA (o mês a que o lançamento pertence é a espinha
+ * dorsal do extrato). A marca só declara, em texto, a data em que o dinheiro efetivamente
+ * entrou/saiu — que pode ser outro dia, ou outro mês.
+ *
+ * Devolve `null` quando não há liquidação (`liquidado_em` nulo/vazio) ou quando ela coincide com
+ * a competência — repetir a data do cabeçalho do dia seria ruído.
+ *
+ * Data pura `yyyy-MM-dd` manipulada como TEXTO (split), sem `Date`: nada de fuso horário
+ * roubando um dia da data que veio do banco.
+ */
+export function marcaDaLiquidacao(t: {
+  liquidado_em: string | null;
+  competence_date: string;
+  status: string;
+}): string | null {
+  const liquidado = t.liquidado_em;
+  if (!liquidado || liquidado.length === 0) return null;
+  if (liquidado === t.competence_date) return null;
+
+  const [, mes, dia] = liquidado.split("-");
+  if (!mes || !dia) return null;
+
+  const verbo = t.status === "recebido" ? "recebido" : "pago";
+  return `${verbo} em ${dia}/${mes}`;
+}

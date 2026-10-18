@@ -39,6 +39,8 @@ import { EvolucaoChart } from "@/components/dashboard/evolucao-chart";
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
 import { ProjecaoChart } from "@/components/dashboard/projecao-chart";
 import { ReportBarChart, type BarPoint } from "@/components/reports/report-bar-chart";
+import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
+import { BlocoDoCaixa } from "@/components/financeiro/bloco-do-caixa";
 import { monthLabel } from "@/components/dashboard/chart-theme";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
@@ -47,6 +49,8 @@ import { formatMinutes, STUDY_STATUS_LABELS } from "@/lib/studies/constants";
 import { toCsv } from "@/lib/reports/csv";
 import { downloadCsv, downloadJson } from "@/lib/reports/download";
 import { cn } from "@/lib/utils";
+import { ROTULO_DA_BASE, type BaseFinanceira } from "@/lib/finance/base";
+import type { EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
 import type { ReportsData } from "@/lib/reports/queries";
 
 const FREQ_LABELS: Record<string, string> = {
@@ -64,7 +68,15 @@ function pct(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-export function RelatoriosClient({ data }: { data: ReportsData }) {
+export function RelatoriosClient({
+  data,
+  base,
+  caixa,
+}: {
+  data: ReportsData;
+  base: BaseFinanceira;
+  caixa: EstadoDoCaixa | null;
+}) {
   const router = useRouter();
   const { finance, card, habits, studies, tasks, mes } = data;
   const entradasNoCard = apresentarEntradas(finance.resumo);
@@ -72,7 +84,15 @@ export function RelatoriosClient({ data }: { data: ReportsData }) {
   function setMes(value: string) {
     const params = new URLSearchParams();
     if (value) params.set("mes", value);
+    if (base === "caixa") params.set("base", "caixa");
     router.push(params.toString() ? `/relatorios?${params}` : "/relatorios");
+  }
+
+  function setBase(value: BaseFinanceira) {
+    const params = new URLSearchParams();
+    if (mes) params.set("mes", mes);
+    if (value === "caixa") params.set("base", "caixa");
+    router.replace(params.toString() ? `/relatorios?${params}` : "/relatorios");
   }
 
   const habitsWeekly: BarPoint[] = habits.weekly.map((w) => ({
@@ -92,19 +112,101 @@ export function RelatoriosClient({ data }: { data: ReportsData }) {
     value: f.total,
   }));
 
+  // Aba Financeiro — os quatro cards do topo, por base.
+  // Com competência, NENHUM número muda: só os hints passam a declarar a base.
+  const cardsDaBase = (() => {
+    const saldo = (
+      <StatCard
+        key="saldo"
+        label="Saldo atual"
+        value={formatCurrency(finance.saldo)}
+        icon={Wallet}
+        hint="Hoje, todas as contas"
+      />
+    );
+    const pendente = (
+      <StatCard
+        key="pendente"
+        label={rotuloPendenteDoMes(finance.mes)}
+        value={formatCurrency(finance.aReceber)}
+        icon={HandCoins}
+        hint="Recebíveis em aberto"
+      />
+    );
+
+    if (base === "caixa") {
+      const ok = caixa?.estado === "ok";
+      return (
+        <>
+          {saldo}
+          <StatCard
+            label="Entradas de caixa"
+            value={caixa?.estado === "ok" ? formatCurrency(caixa.entradasDeCaixa) : "—"}
+            icon={ArrowDownLeft}
+            hint={ok ? "Caixa realizado" : "Não foi possível ler o caixa"}
+          />
+          <StatCard
+            label="Saídas de caixa"
+            value={caixa?.estado === "ok" ? formatCurrency(caixa.atual.saidasDeCaixa) : "—"}
+            icon={ArrowUpRight}
+            hint={ok ? "Caixa realizado" : "Não foi possível ler o caixa"}
+          />
+          {pendente}
+        </>
+      );
+    }
+
+    return (
+      <>
+        {saldo}
+        <StatCard
+          label="Entradas do mês"
+          value={formatCurrency(entradasNoCard.valor)}
+          icon={ArrowDownLeft}
+          hint={["Competência", entradasNoCard.detalhe].filter(Boolean).join(" · ")}
+        />
+        <StatCard
+          label="Saídas do mês"
+          value={formatCurrency(finance.resumo.saidas)}
+          icon={ArrowUpRight}
+          hint={[
+            "Competência",
+            `meu ${formatCurrency(finance.resumo.meu)}`,
+            fraseDoPerdoado(finance.perdoado),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        />
+        {pendente}
+      </>
+    );
+  })();
+
   return (
     <div className="space-y-6">
-      {/* Filtro de período + exportar tudo */}
+      {/* Período + base + exportar tudo */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1.5 sm:max-w-xs">
-          <Label htmlFor="rel-mes">Período (mês de referência)</Label>
-          <input
-            id="rel-mes"
-            type="month"
-            value={mes}
-            onChange={(e) => setMes(e.target.value || mes)}
-            className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-1.5 sm:max-w-xs">
+            <Label htmlFor="rel-mes">Período (mês de referência)</Label>
+            <input
+              id="rel-mes"
+              type="month"
+              value={mes}
+              onChange={(e) => setMes(e.target.value || mes)}
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+            />
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-sm font-medium">Base:</span>
+            <SeletorDeVisao
+              rotulo="Base dos números"
+              visoes={["competencia", "caixa"] as const}
+              rotulos={ROTULO_DA_BASE}
+              atual={base}
+              aoEscolher={setBase}
+            />
+          </div>
         </div>
         <Button
           variant="outline"
@@ -128,35 +230,29 @@ export function RelatoriosClient({ data }: { data: ReportsData }) {
         {/* ───────────── Financeiro ───────────── */}
         <TabsContent value="financeiro" className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Saldo atual" value={formatCurrency(finance.saldo)} icon={Wallet} hint="Soma das contas" />
-            <StatCard label="Entradas do mês" value={formatCurrency(entradasNoCard.valor)} icon={ArrowDownLeft} hint={entradasNoCard.detalhe ?? undefined} />
-            <StatCard
-              label="Saídas do mês"
-              value={formatCurrency(finance.resumo.saidas)}
-              icon={ArrowUpRight}
-              hint={[`meu ${formatCurrency(finance.resumo.meu)}`, fraseDoPerdoado(finance.perdoado)].filter(Boolean).join(" · ")}
-            />
-            <StatCard label={rotuloPendenteDoMes(finance.mes)} value={formatCurrency(finance.aReceber)} icon={HandCoins} />
+            {cardsDaBase}
           </div>
 
+          {base === "caixa" && caixa && <BlocoDoCaixa mesRotulo={monthLabel(mes)} caixa={caixa} />}
+
           <div className="grid gap-4 lg:grid-cols-2">
-            <ChartCard title="Gastos por categoria" description="Distribuição do mês selecionado.">
+            <ChartCard title="Gastos por categoria" description="Distribuição do mês selecionado. Competência.">
               <CategoriaChart data={finance.categorias} />
             </ChartCard>
-            <ChartCard title="Por forma de pagamento" description="Cartão, débito, pix, dinheiro e mais.">
+            <ChartCard title="Por forma de pagamento" description="Cartão, débito, pix, dinheiro e mais. Competência.">
               <FormaPagamentoChart data={finance.formas} />
             </ChartCard>
           </div>
 
-          <ChartCard title="Evolução mensal" description="Entradas, saídas e saldo dos últimos 6 meses.">
+          <ChartCard title="Evolução mensal" description="Entradas, saídas e saldo dos últimos 6 meses. Competência.">
             <EvolucaoChart data={finance.evolucao} />
           </ChartCard>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <ChartCard title="Mês a mês" description="Comparativo com o mês anterior.">
+            <ChartCard title="Mês a mês" description="Comparativo com o mês anterior. Competência.">
               <MesAMesChart comparativo={finance.comparativo} />
             </ChartCard>
-            <ChartCard title="Projeção dos próximos meses" description="Faturas, recorrências e contas fixas.">
+            <ChartCard title="Projeção dos próximos meses" description="Faturas, recorrências e contas fixas. Pelo vencimento.">
               <ProjecaoChart data={finance.projecao} />
             </ChartCard>
           </div>
@@ -165,7 +261,7 @@ export function RelatoriosClient({ data }: { data: ReportsData }) {
             <Card>
               <CardHeader>
                 <CardTitle>Maiores gastos por categoria</CardTitle>
-                <CardDescription>Movimentado x valor realmente seu (mês).</CardDescription>
+                <CardDescription>Movimentado x valor realmente seu (mês). Competência.</CardDescription>
               </CardHeader>
               <CardContent>
                 {finance.categorias.length === 0 ? (

@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { baseDaUrl, ROTULO_DA_BASE } from "@/lib/finance/base";
+import { baseDaUrl, marcaDaLiquidacao, ROTULO_DA_BASE } from "@/lib/finance/base";
 
 describe("baseDaUrl", () => {
   it("'caixa' exato liga a base caixa", () => {
@@ -39,5 +39,27 @@ describe("base.ts é lido pela tela", () => {
     const imports = fonte.split("\n").filter((l) => /^\s*import\s/.test(l));
     const deRuntime = imports.filter((l) => !/^\s*import\s+type\s/.test(l));
     expect(deRuntime).toEqual([]);
+  });
+});
+
+describe("03-E · A4 — marcaDaLiquidacao (K1)", () => {
+  it("data de pagamento diferente da competência vira 'pago em DD/MM', do texto e sem Date", () => {
+    expect(
+      marcaDaLiquidacao({ liquidado_em: "2026-10-05", competence_date: "2026-10-03", status: "pago" }),
+    ).toBe("pago em 05/10");
+  });
+
+  it("numa receita recebida, 'recebido em'", () => {
+    expect(
+      marcaDaLiquidacao({ liquidado_em: "2026-11-01", competence_date: "2026-10-30", status: "recebido" }),
+    ).toBe("recebido em 01/11");
+  });
+
+  it("sem data, ou igual à competência, não há marca", () => {
+    expect(marcaDaLiquidacao({ liquidado_em: null, competence_date: "2026-10-03", status: "pago" })).toBeNull();
+    expect(marcaDaLiquidacao({ liquidado_em: "", competence_date: "2026-10-03", status: "pago" })).toBeNull();
+    expect(
+      marcaDaLiquidacao({ liquidado_em: "2026-10-03", competence_date: "2026-10-03", status: "pago" }),
+    ).toBeNull();
   });
 });
