@@ -5,6 +5,32 @@
 > memória, 18-F Bloco 2 · botão flutuante, 18-F Bloco 1 + auditoria de performance + iteração:
 > transferência na importação de extrato).
 
+## 🟡 Tarefa avulsa · gráficos financeiros "meus" seguindo a base (2026-10-18)
+
+Branch `feat/graficos-meus-e-base` (a partir de `feat/redesign-03e-caixa`, porque usa o código de
+caixa da 03-E). Desenho: `docs/superpowers/specs/2026-10-18-graficos-meus-e-base-design.md`;
+plano: `docs/superpowers/plans/2026-10-18-graficos-meus-e-base.md`. **Sem migration.**
+
+- **Os gráficos de `/dashboard/financeiro` e `/relatorios` mostram só a parte do dono** e o
+  título diz isso (*Meus gastos por categoria*, *Minhas entradas e saídas mês a mês*, *Meu mês a
+  mês*, *Minha projeção*). Textos numa fonte única: `src/lib/finance/rotulos-dos-graficos.ts`.
+- **A troca de base muda os gráficos.** Caixa: `src/lib/finance/caixa-minha-parte.ts` — fatura
+  paga entra com `amount × meu ÷ total_atual`; categorias/formas abrem a fatura paga pelas
+  compras dela (estorno negativo, sobra na fatia visível "Diferença da fatura"); entradas = só
+  renda pessoal. A leitura de caixa passou a cobrir os 6 meses da evolução.
+- ⚠️ **A divergência B2 da 03-C caiu**: o `saldo` da evolução é `entradasMeu − meu` (Resultado do
+  §13.3), não mais bruto − bruto. Bloco 6 da caracterização reescrito.
+- ⚠️ **As projeções agrupam faturas pelo mês de VENCIMENTO** (antes: competência, apesar do rótulo
+  "Pelo vencimento") e a série de faturas é a minha parte. Regra única de meu × terceiros por
+  fatura: `parteDosTerceirosPorFatura` + `faturasPorMes` (`dashboard.ts`).
+- Gráfico novo **"Faturas dos próximos meses — valor cheio"** (meu + terceiros empilhados).
+- Card-âncora virou **"Minhas saídas · {mês} · {base}"** e segue a base.
+- **Todo `<YAxis` do sistema usa `width="auto"`** (recharts 3.9) e `brlCompact` não escreve ",0" —
+  o rótulo "R$ 10,0 mil" quebrava. Teste de varredura em `chart-theme.test.ts`.
+- Verificação: `test:run` 6.590 ✅ · lint ✅ · tsc ✅ · build ✅ · perf:bundle ✅ (68 rotas no
+  orçamento) · `TZ=UTC` finance ✅. **Conferência visual com dados reais pendente** (o localhost
+  pede login).
+
 ## ✅ 18-F · Bloco 5 — o fechamento da Fase 18 (2026-09-20)
 
 Plano em `docs/superpowers/plans/2026-09-22-18f-bloco5-fechamento.md` (§8 da spec).
