@@ -207,7 +207,7 @@ function statementsDoMes(statements: DashStatement[], mes: string): DashStatemen
 }
 
 /** D11 à vista: o perdoado dos recebíveis de UM lançamento sem parcela, por `transaction_id`. */
-function perdoadoPorLancamento(receivables: DashReceivable[]): Map<string, number> {
+export function perdoadoPorLancamento(receivables: DashReceivable[]): Map<string, number> {
   const mapa = new Map<string, number>();
   for (const r of receivables) {
     if (r.installment_id || !r.transaction_id) continue;
@@ -323,6 +323,8 @@ type SpendItem = {
   paymentMethod: PaymentMethod | "cartao_credito" | null;
   movCent: number;
   meuCent: number;
+  /** A fatura do item de cartão; `null` no à vista. */
+  statementId: string | null;
 };
 
 /**
@@ -367,6 +369,7 @@ function buildSpendItems(params: {
         paymentMethod: t.payment_method,
         movCent,
         meuCent,
+        statementId: null,
       });
     } else if (t.statement_id && compByStatement.has(t.statement_id)) {
       // À-vista do cartão (base fatura).
@@ -378,6 +381,7 @@ function buildSpendItems(params: {
         paymentMethod: "cartao_credito",
         movCent,
         meuCent,
+        statementId: t.statement_id,
       });
     }
   }
@@ -395,10 +399,62 @@ function buildSpendItems(params: {
       paymentMethod: "cartao_credito",
       movCent,
       meuCent: movCent - terceiros,
+      statementId: it.statement_id,
     });
   }
 
   return items;
+}
+
+/** Um item que compõe uma fatura, em CENTAVOS (o estorno vem negativo). */
+export type ItemDaFatura = {
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryColor: string | null;
+  movCent: number;
+  meuCent: number;
+};
+
+/**
+ * Os itens de cada fatura, por `statement_id`: os MESMOS itens de cartão que `buildSpendItems`
+ * atribui à fatura (à-vista do cartão + parcelas), mais os estornos (receita vinculada à fatura,
+ * que reduz `total_atual`) com valores negativos. É o que a base caixa usa para abrir um
+ * pagamento de fatura pelas compras dela (desenho 2026-10-18, §4.3).
+ */
+export function itensDasFaturas(params: {
+  transactions: DashTx[];
+  statements: DashStatement[];
+  installmentItems: DashInstallmentItem[];
+  receivables: DashReceivable[];
+}): Map<string, ItemDaFatura[]> {
+  const mapa = new Map<string, ItemDaFatura[]>();
+  const push = (statementId: string, item: ItemDaFatura) => {
+    const lista = mapa.get(statementId) ?? [];
+    lista.push(item);
+    mapa.set(statementId, lista);
+  };
+  for (const i of buildSpendItems(params)) {
+    if (!i.statementId) continue;
+    push(i.statementId, {
+      categoryId: i.categoryId,
+      categoryName: i.categoryName,
+      categoryColor: i.categoryColor,
+      movCent: i.movCent,
+      meuCent: i.meuCent,
+    });
+  }
+  const faturas = new Set(params.statements.map((s) => s.id));
+  for (const t of params.transactions) {
+    if (!ativo(t) || t.type !== "receita" || !t.statement_id || !faturas.has(t.statement_id)) continue;
+    push(t.statement_id, {
+      categoryId: t.category_id,
+      categoryName: t.category?.name ?? null,
+      categoryColor: t.category?.color ?? null,
+      movCent: -cent(t.amount),
+      meuCent: -meuCentavos(t),
+    });
+  }
+  return mapa;
 }
 
 export type CategoriaSlice = {
