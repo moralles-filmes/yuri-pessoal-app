@@ -24,6 +24,7 @@ export type PagamentoFaturaPayload = {
   amount: number;
   purchase_date: string;
   competence_date: string;
+  liquidado_em: string;
   description: string;
 };
 
@@ -64,6 +65,8 @@ export function montarPagamentoFatura(params: {
     amount: total,
     purchase_date: dataPagamento,
     competence_date: dataPagamento,
+    // K0.2 — o pagamento de fatura é o dinheiro saindo da conta naquele dia: data de caixa exata.
+    liquidado_em: dataPagamento,
     description: descricaoPagamentoFatura(cartaoNome, competencia),
   };
 }

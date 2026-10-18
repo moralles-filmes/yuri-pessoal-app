@@ -18,6 +18,8 @@ export async function FinanceCard({
 
   return (
     <div className="space-y-3">
+      {/* A base em que este card lê os números. Sem seletor aqui: o card é vitrine, não painel. */}
+      <p className="text-xs text-muted-foreground">Base: competência</p>
       <div className="grid grid-cols-2 gap-3">
         <Metric label="Saldo das contas" value={formatCurrency(d.saldo)} />
         <Metric

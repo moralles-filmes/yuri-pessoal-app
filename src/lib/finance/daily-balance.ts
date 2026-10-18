@@ -2,9 +2,11 @@
  * Saldo por dia da lista de lançamentos (extrato). Lógica pura, sem I/O e sem `Date.now()`
  * — o saldo de abertura e os dias vêm injetados por quem lê o banco (`getDailyBalances`).
  *
- * O contrato do saldo é o MESMO da função `public.account_balance` (migration
- * 20260625120600_account_balance.sql): saldo do dia D = saldo inicial da(s) conta(s) +
- * soma dos lançamentos LIQUIDADOS (`pago`/`recebido`) com `competence_date <= D`.
+ * O contrato do saldo é o MESMO da função `public.account_balance_before` (migration
+ * 20261018210000_account_balance_before_data_de_caixa.sql, a M2b): o saldo do dia D soma os
+ * lançamentos LIQUIDADOS (`pago`/`recebido`) com DATA DE CAIXA (`liquidado_em` ??
+ * `competence_date`) <= D. Antes da M2b a função SQL cortava pela competência; agora corta
+ * pela data de caixa, e este módulo a espelha.
  * A tabela de sinais vive aqui e lá — `efeitoNoSaldo` é a versão testável dela, e o teste
  * co-localizado a fixa. Ao mexer numa das duas, mexa na outra.
  *
@@ -18,12 +20,15 @@
  */
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
 import type { TransactionStatus, TransactionType } from "@/lib/finance/constants";
+import { dataDeCaixa, filtroDaJanelaDeCaixa, type Periodo } from "@/lib/finance/caixa";
 import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
 
 /** O mínimo de um lançamento para decidir seu efeito no saldo. */
 export type MovimentoDeSaldo = {
   /** Data pura 'yyyy-MM-dd' (coluna `date`) — comparada como TEXTO, nunca como `Date`. */
   competence_date: string;
+  /** 'yyyy-MM-dd' | null — quando o dinheiro de fato mexeu na conta. Ausente = nulo. */
+  liquidado_em?: string | null;
   type: TransactionType;
   status: TransactionStatus;
   /** Sempre positivo no banco (`check (amount >= 0)`); o sinal vem de `type`. */
@@ -85,6 +90,20 @@ function efeitoEmCentavos(
   }
 }
 
+/**
+ * O filtro `or` do PostgREST do extrato: UMA expressão que combina o ESCOPO (só o que toca
+ * alguma conta, como o join de `account_balance_before`) e a JANELA por data de caixa
+ * (`filtroDaJanelaDeCaixa`). É afunilamento: quem decide se a linha entra é `dataDeCaixa`, em
+ * memória (P11).
+ */
+export function filtroDoExtrato(escopo: EscopoDeSaldo, p: Periodo): string {
+  const escopoFiltro =
+    escopo === null
+      ? "or(account_id.not.is.null,transfer_account_id.not.is.null)"
+      : `or(account_id.eq.${escopo},transfer_account_id.eq.${escopo})`;
+  return `and(${escopoFiltro},or(${filtroDaJanelaDeCaixa(p)}))`;
+}
+
 export type SaldosPorDiaParams = {
   /** Saldo em reais no fim do dia ANTERIOR ao primeiro dia pedido (vem do banco). */
   abertura: number;
@@ -95,12 +114,21 @@ export type SaldosPorDiaParams = {
   movimentos: MovimentoDeSaldo[];
 };
 
+/** A data em que o movimento mexe no saldo: a data de caixa (`liquidado_em` ?? competência). */
+function dataDoMovimento(m: MovimentoDeSaldo): string {
+  return dataDeCaixa({
+    liquidado_em: m.liquidado_em ?? null,
+    competence_date: m.competence_date,
+  }).data;
+}
+
 /**
  * Saldo do FIM de cada dia pedido — todos os lançamentos daquele dia já entraram.
  *
  * Devolve um saldo para CADA dia pedido, inclusive dias sem movimento na conta (um dia que
  * na lista só tem compra de cartão tem saldo: o mesmo do dia anterior). Comparar as datas
  * como texto funciona porque 'yyyy-MM-dd' ordena lexicograficamente igual a cronologicamente.
+ * O corte é pela DATA DE CAIXA, espelhando `account_balance_before` desde a M2b.
  */
 export function saldosPorDia({
   abertura,
@@ -112,19 +140,15 @@ export function saldosPorDia({
   const pedidos = [...new Set(dias)].sort();
   if (pedidos.length === 0) return saldos;
 
-  const ordenados = [...movimentos].sort((a, b) =>
-    a.competence_date < b.competence_date
-      ? -1
-      : a.competence_date > b.competence_date
-        ? 1
-        : 0,
-  );
+  const ordenados = movimentos
+    .map((m) => ({ mov: m, data: dataDoMovimento(m) }))
+    .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
 
   let saldo = reaisParaCentavos(abertura);
   let i = 0;
   for (const dia of pedidos) {
-    while (i < ordenados.length && ordenados[i].competence_date <= dia) {
-      saldo += efeitoEmCentavos(ordenados[i], escopo);
+    while (i < ordenados.length && ordenados[i].data <= dia) {
+      saldo += efeitoEmCentavos(ordenados[i].mov, escopo);
       i += 1;
     }
     saldos.set(dia, centavosParaReais(saldo));

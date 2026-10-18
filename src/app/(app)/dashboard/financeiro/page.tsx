@@ -21,6 +21,9 @@ import {
   janelaDoRelatorio,
   saldoDasContas,
 } from "@/lib/finance/pipeline";
+import { baseDaUrl } from "@/lib/finance/base";
+import { estadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import { comparativoAteODia, comparativoDoGraficoAteODia } from "@/lib/finance/caixa";
 import { hojeISO } from "@/lib/format";
 import { DashboardClient } from "./financial-dashboard-client";
 
@@ -43,6 +46,9 @@ export default async function DashboardFinanceiroPage({
     const v = str(sp.mes);
     return v && /^\d{4}-\d{2}$/.test(v) ? v : mesAtual;
   })();
+
+  // Base dos números (?base=caixa); sem o parâmetro, competência.
+  const base = baseDaUrl(sp.base);
 
   // Janela de leitura: 6 meses para trás (evolução) até 6 meses à frente (projeção).
   const janela = janelaDoRelatorio({ mesSel, mesAtual });
@@ -68,6 +74,24 @@ export default async function DashboardFinanceiroPage({
   const contas = proximasContasPagar({ hoje, bills: dashBills });
   const aReceber = totalAReceber(recs, mesSel);
   const saldo = saldoDasContas(accounts);
+
+  // A leitura da base caixa só acontece quando ela está selecionada.
+  const caixa = base === "caixa" ? await estadoDoCaixa(mesSel, hoje) : null;
+
+  // Corte "até o dia D" do mês em andamento (K3/K3b) — calculado no servidor, viaja por prop.
+  const corteCompetencia = comparativoAteODia({
+    base: "competencia",
+    mes: mesSel,
+    hoje,
+    transactions: txs,
+    receivables: recs,
+  });
+  const graficoAteODia = comparativoDoGraficoAteODia({
+    mes: mesSel,
+    hoje,
+    transactions: txs,
+    receivables: recs,
+  });
 
   // A régua do alerta de gasto alto — a MESMA que o sino usa desde a 03-B2 (B2, decisão do dono):
   // até 5 meses anteriores ao selecionado, mês sem saída ignorado. O número desta tela não mudou.
@@ -100,10 +124,14 @@ export default async function DashboardFinanceiroPage({
       />
       <DashboardClient
         mesSel={mesSel}
+        base={base}
+        caixa={caixa}
         saldo={saldo}
         resumo={resumo}
         perdoado={perdoado}
         comparativo={comparativo}
+        corteCompetencia={corteCompetencia}
+        graficoAteODia={graficoAteODia}
         evolucao={evolucao}
         categorias={categorias}
         formas={formas}

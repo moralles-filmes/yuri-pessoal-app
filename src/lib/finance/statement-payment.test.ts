@@ -37,6 +37,12 @@ describe("montarPagamentoFatura", () => {
     expect(p.competence_date).toBe("2026-06-27");
   });
 
+  it("grava a data do pagamento como data de caixa (K0.2) e o status é pago", () => {
+    const p = montarPagamentoFatura(base);
+    expect(p.liquidado_em).toBe(base.dataPagamento);
+    expect(p.status).toBe("pago");
+  });
+
   it("aceita data retroativa (pagamento lançado depois, batendo com o extrato)", () => {
     const p = montarPagamentoFatura({ ...base, dataPagamento: "2026-06-10" });
     expect(p.purchase_date).toBe("2026-06-10");

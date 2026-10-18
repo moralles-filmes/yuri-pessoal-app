@@ -7,6 +7,7 @@
  */
 import { createClient } from "@/lib/supabase/server";
 import { centavosParaReais, hojeISO } from "@/lib/format";
+import { comparativoDoGraficoAteODia } from "@/lib/finance/caixa";
 import { parteDoTerceiroCentavos } from "@/lib/finance/recebimentos";
 import { lerFinanceiro } from "@/lib/finance/queries";
 import {
@@ -58,6 +59,8 @@ export type FinanceReport = {
   /** 03-D D11: entra em meu por decisão de não cobrar; resumo.meu − perdoado = parte acordada. */
   perdoado: number;
   comparativo: Comparativo;
+  /** K3b: o corte "até o dia D" do mês em andamento para o gráfico "Mês a mês"; null no fechado. */
+  graficoAteODia: { ateODia: number; comparativo: Comparativo } | null;
   evolucao: EvolucaoPonto[];
   categorias: CategoriaSlice[];
   formas: FormaSlice[];
@@ -142,6 +145,7 @@ async function getFinanceAndCardReport(
 
   const resumo = resumoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
   const comparativo = comparativoMesAMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
+  const graficoAteODia = comparativoDoGraficoAteODia({ mes: mesSel, hoje, transactions: txs, receivables: recs });
   const evolucao = evolucaoMensal({ meses: evoMeses, transactions: txs, statements: sts, receivables: recs });
   const categorias = gastosPorCategoria({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
   const formas = gastosPorForma({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
@@ -202,6 +206,7 @@ async function getFinanceAndCardReport(
       resumo,
       perdoado: perdoadoDoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs }),
       comparativo,
+      graficoAteODia,
       evolucao,
       categorias,
       formas,

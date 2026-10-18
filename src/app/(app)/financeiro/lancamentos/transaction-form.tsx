@@ -100,6 +100,8 @@ type FormValues = {
   purchase_date: string;
   competence_date: string;
   status: TransactionStatus;
+  /** "Data do pagamento" (03-E · K0): 'yyyy-MM-dd' ou vazio. */
+  liquidado_em: string;
   description: string;
   notes: string;
   parcelado: boolean;
@@ -124,6 +126,7 @@ const CAMPOS_DO_FORMULARIO = [
   "purchase_date",
   "competence_date",
   "status",
+  "liquidado_em",
   "description",
   "notes",
   "parcelado",
@@ -149,6 +152,9 @@ function defaults(tx?: TransactionRow): FormValues {
     purchase_date: tx?.purchase_date ?? today,
     competence_date: tx?.competence_date ?? today,
     status: tx?.status ?? "pago",
+    // O GRAVADO, nunca a data da compra: sem data gravada o campo nasce vazio e o caixa usa a
+    // competência (aproximada), em vez de afirmar uma data que ninguém informou.
+    liquidado_em: tx?.liquidado_em ?? "",
     description: tx?.description ?? "",
     notes: tx?.notes ?? "",
     parcelado: false,
@@ -233,6 +239,7 @@ export function TransactionFormDialog({
   const parcelado = useWatch({ control, name: "parcelado" });
   const qtdParcelas = useWatch({ control, name: "qtd_parcelas" });
   const overrideUltima = useWatch({ control, name: "override_ultima" });
+  const status = useWatch({ control, name: "status" });
   const isTransfer = type === "transferencia";
   const isReceita = type === "receita";
   const isCard = !isTransfer && paymentMethod === "cartao_credito";
@@ -242,6 +249,11 @@ export function TransactionFormDialog({
   // Divisão de gastos (Fase 05): em despesa, na criação OU na edição de despesa simples.
   // Compra parcelada já criada é gerida em /parcelamentos (mesmo núcleo no servidor).
   const canSplit = type === "despesa" && !(isEdit && transaction?.parcelado);
+  // 03-E · K0 — "Data do pagamento": só onde o dinheiro mexe numa conta de uma vez. Compra de
+  // cartão nunca guarda a data (quem move a conta é o pagamento da fatura) e a compra parcelada
+  // nasce sem status; fora de pago/recebido a coluna não existe (CHECK do banco).
+  const mostraDataDoPagamento =
+    !isCard && !isParcelado && (status === "pago" || status === "recebido");
 
   const selectedCardObj = cards.find((c) => c.id === cardId);
   const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(purchaseDate);
@@ -386,6 +398,7 @@ export function TransactionFormDialog({
       purchase_date: values.purchase_date,
       competence_date: values.competence_date,
       status: values.status,
+      liquidado_em: mostraDataDoPagamento ? values.liquidado_em : "",
       description: values.description,
       notes: values.notes,
       // Divisão aplicada na criação E na edição (o servidor re-aplica só quando muda).
@@ -867,6 +880,29 @@ export function TransactionFormDialog({
               </div>
             )}
           </div>
+
+          {/* 03-E · K0 — numa linha própria, em uma das duas colunas: o diálogo tem 512 px e três
+              campos de data já ocupam a grade acima; quatro colunas estourariam em 390 px. */}
+          {mostraDataDoPagamento && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="tx-liquidado">Data do pagamento</Label>
+                <Input
+                  id="tx-liquidado"
+                  type="date"
+                  aria-invalid={Boolean(errors.liquidado_em)}
+                  {...register("liquidado_em")}
+                />
+                {errors.liquidado_em ? (
+                  <p className="text-xs text-destructive">{errors.liquidado_em.message}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Deixe vazio se não souber — o caixa usa a competência e avisa.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="tx-desc">Descrição</Label>
