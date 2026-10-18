@@ -507,6 +507,7 @@ export async function updateImportRow(
   const update: {
     status?: string;
     categoria_sugerida_id?: string | null;
+    subcategoria_sugerida_id?: string | null;
     import_as?: string;
     descricao?: string | null;
     data_norm?: string;
@@ -515,8 +516,29 @@ export async function updateImportRow(
     transfer_account_id?: string | null;
   } = {};
   if (d.status !== undefined) update.status = d.status;
-  if (d.categoria_sugerida_id !== undefined)
+  if (d.categoria_sugerida_id !== undefined) {
     update.categoria_sugerida_id = d.categoria_sugerida_id;
+    // Trocar a categoria sem dizer a subcategoria limpa a subcategoria: a antiga é de outra
+    // categoria, e a FK composta recusaria a combinação.
+    update.subcategoria_sugerida_id = null;
+  }
+  if (d.subcategoria_sugerida_id) {
+    // A categoria SAI da subcategoria (RLS: só a do próprio dono é lida). Escolher as duas
+    // separadamente deixaria o cliente montar "Delivery sob Moradia"; o banco recusaria, mas a
+    // mensagem chegaria como erro genérico.
+    const { data: sub } = await ctx.supabase
+      .from("subcategories")
+      .select("id, category_id")
+      .eq("id", d.subcategoria_sugerida_id)
+      .maybeSingle();
+    if (!sub) {
+      return invalid({ subcategoria_sugerida_id: ["Subcategoria não encontrada."] });
+    }
+    update.categoria_sugerida_id = sub.category_id;
+    update.subcategoria_sugerida_id = sub.id;
+  } else if (d.subcategoria_sugerida_id === null) {
+    update.subcategoria_sugerida_id = null;
+  }
   if (d.import_as !== undefined) update.import_as = d.import_as;
   if (d.descricao !== undefined) update.descricao = d.descricao || null;
   if (d.data_norm !== undefined) update.data_norm = d.data_norm;
@@ -527,7 +549,10 @@ export async function updateImportRow(
     // Transferência não tem categoria — o lançamento gravado também não terá
     // (`criarTransacao` força `category_id: null`). Deixar a sugestão na linha faria a revisão
     // prometer uma categoria que o lançamento não vai ter.
-    if (d.transfer_account_id) update.categoria_sugerida_id = null;
+    if (d.transfer_account_id) {
+      update.categoria_sugerida_id = null;
+      update.subcategoria_sugerida_id = null;
+    }
   }
 
   if (Object.keys(update).length === 0) {
@@ -614,6 +639,7 @@ async function createCardEstorno(
     date: string;
     description: string;
     categoryId: string | null;
+    subcategoryId: string | null;
     competencia?: string | null;
   },
 ): Promise<ActionResult<{ id: string }>> {
@@ -633,6 +659,7 @@ async function createCardEstorno(
       card_id: args.cardId,
       statement_id: statementId,
       category_id: args.categoryId,
+      subcategory_id: args.subcategoryId,
       amount: args.amount,
       purchase_date: args.date,
       competence_date: args.date,
@@ -675,7 +702,7 @@ export async function commitImport(
   const { data: rows } = await ctx.supabase
     .from("import_rows")
     .select(
-      "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, parcela, parcelas_total, import_as, classificacao, split_parts, transfer_account_id",
+      "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, subcategoria_sugerida_id, parcela, parcelas_total, import_as, classificacao, split_parts, transfer_account_id",
     )
     .eq("import_batch_id", batchId)
     .eq("status", "para_importar")
@@ -730,6 +757,8 @@ export async function commitImport(
       continue;
     }
     const category = r.categoria_sugerida_id ?? "";
+    // Só existe com a categoria (FK composta); transferência nunca chega aqui com uma.
+    const subcategory = r.subcategoria_sugerida_id ?? "";
     // Divisão configurada na revisão (Fase 05): repassa para os motores reusados. `parts` vai cru
     // (splitSchema revalida no destino); só faz efeito em despesa compartilhada/de terceiro.
     const split =
@@ -751,6 +780,7 @@ export async function commitImport(
         date: r.data_norm,
         description: r.descricao ?? "",
         categoryId: r.categoria_sugerida_id ?? null,
+        subcategoryId: r.subcategoria_sugerida_id ?? null,
         competencia: competenciaAlvo,
       });
     } else if (
@@ -791,6 +821,7 @@ export async function commitImport(
         purchase_date: r.data_norm,
         competence_date: r.data_norm,
         category_id: category,
+        subcategory_id: subcategory,
         description: r.descricao ?? "",
         ...splitParcelado,
       });
@@ -803,6 +834,7 @@ export async function commitImport(
         card_id: batch.credit_card_id,
         account_id: "",
         category_id: category,
+        subcategory_id: subcategory,
         amount: r.valor,
         purchase_date: r.data_norm,
         competence_date: r.data_norm,
@@ -849,6 +881,7 @@ export async function commitImport(
         card_id: "",
         account_id: batch.account_id,
         category_id: category,
+        subcategory_id: subcategory,
         amount: r.valor,
         purchase_date: r.data_norm,
         competence_date: r.data_norm,

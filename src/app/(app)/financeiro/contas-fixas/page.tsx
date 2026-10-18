@@ -13,7 +13,7 @@ export default async function ContasFixasPage() {
   return (
     <BillsClient
       bills={bills}
-      categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+      categories={categories.map((c) => ({ id: c.id, name: c.name, kind: c.kind }))}
       accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
     />
   );

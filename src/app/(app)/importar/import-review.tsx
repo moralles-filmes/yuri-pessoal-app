@@ -47,6 +47,12 @@ import { ImportRowSplitDialog } from "./import-split-dialog";
 import { InstallmentBadge } from "@/components/financeiro/badges";
 import { CLASSIFICACAO_LABELS } from "@/lib/finance/constants";
 import { centavosParaReais, formatCurrency, formatDate } from "@/lib/format";
+import { CategoryPicker } from "@/components/finance/category-picker";
+import {
+  categoriaServeAoTipo,
+  categoriasDoTipo,
+  rotuloDaCategoria,
+} from "@/lib/finance/category-search";
 import {
   IMPORT_FORMAT_LABELS,
   IMPORT_ORIGEM_LABELS,
@@ -79,7 +85,40 @@ import type {
 
 const NONE = "none";
 
-type Categoria = { id: string; name: string; color: string | null };
+/**
+ * Duas convenções de exibição, de propósito:
+ * - Extrato de conta: entrada positiva em verde, saída negativa ("−") em vermelho.
+ * - Fatura de cartão: o total é o que se deve (positivo, neutro); compra é neutra e o estorno
+ *   aparece com "−" em verde, porque abate a fatura.
+ */
+function exibirValor(
+  origem: "cartao" | "conta",
+  sentido: "entrada" | "saida" | "liquido",
+  valor: number,
+): { texto: string; cor: string } {
+  if (origem === "cartao") {
+    if (sentido === "entrada") return { texto: `−${formatCurrency(Math.abs(valor))}`, cor: COR_ENTRADA };
+    return { texto: formatCurrency(valor), cor: "text-foreground" };
+  }
+  if (sentido === "entrada") return valorComSinal(Math.abs(valor));
+  if (sentido === "saida") return valorComSinal(-Math.abs(valor));
+  // líquido do lote vem como despesas − receitas
+  return valorComSinal(-valor);
+}
+
+/** Entrada é positiva em verde, saída é negativa ("−") em vermelho. */
+const COR_ENTRADA = "text-emerald-600 dark:text-emerald-400";
+const COR_SAIDA = "text-red-600 dark:text-red-400";
+
+/** Valor com sinal (positivo = entrada) → texto e cor. Zero fica neutro. */
+function valorComSinal(valor: number): { texto: string; cor: string } {
+  if (valor > 0) return { texto: formatCurrency(valor), cor: COR_ENTRADA };
+  if (valor < 0) return { texto: `−${formatCurrency(-valor)}`, cor: COR_SAIDA };
+  return { texto: formatCurrency(0), cor: "text-foreground" };
+}
+
+type Categoria = { id: string; name: string; color: string | null; kind: string };
+type Subcategoria = { id: string; name: string; category_id: string };
 type PersonOption = { id: string; nome: string };
 type AccountOption = { id: string; name: string };
 
@@ -87,6 +126,7 @@ export function ImportReview({
   batch,
   rows,
   categories,
+  subcategories,
   people,
   accounts,
   today,
@@ -94,6 +134,7 @@ export function ImportReview({
   batch: ImportBatchWithTarget;
   rows: ImportRowWithRelations[];
   categories: Categoria[];
+  subcategories: Subcategoria[];
   people: PersonOption[];
   /** Contas do dono, para marcar uma linha do extrato como transferência. */
   accounts: AccountOption[];
@@ -170,11 +211,18 @@ export function ImportReview({
                   ? "Soma das linhas efetivamente importadas."
                   : "Soma das linhas marcadas para importar — ignoradas e duplicadas fora."}
                 {temReceitas &&
-                  ` Líquido (despesas − ${creditoLabel.toLowerCase()}).`}
+                  (batch.origem === "cartao"
+                    ? ` Líquido (despesas − ${creditoLabel.toLowerCase()}).`
+                    : ` Líquido (${creditoLabel.toLowerCase()} − despesas).`)}
               </span>
             </div>
-            <span className="text-lg font-semibold tabular-nums">
-              {formatCurrency(totais.liquido)}
+            <span
+              className={cn(
+                "text-lg font-semibold tabular-nums",
+                exibirValor(batch.origem, "liquido", totais.liquido).cor,
+              )}
+            >
+              {exibirValor(batch.origem, "liquido", totais.liquido).texto}
             </span>
           </div>
 
@@ -182,15 +230,15 @@ export function ImportReview({
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
               <span>
                 Despesas{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatCurrency(totais.despesas)}
+                <span className={cn("font-medium tabular-nums", exibirValor(batch.origem, "saida", totais.despesas).cor)}>
+                  {exibirValor(batch.origem, "saida", totais.despesas).texto}
                 </span>
               </span>
               {temReceitas && (
                 <span>
                   {creditoLabel}{" "}
-                  <span className="font-medium text-emerald-600 tabular-nums dark:text-emerald-400">
-                    −{formatCurrency(totais.receitas)}
+                  <span className={cn("font-medium tabular-nums", exibirValor(batch.origem, "entrada", totais.receitas).cor)}>
+                    {exibirValor(batch.origem, "entrada", totais.receitas).texto}
                   </span>
                 </span>
               )}
@@ -218,7 +266,7 @@ export function ImportReview({
                 <strong>não entraram</strong> nesta fatura.
               </span>
               <span className="font-semibold tabular-nums text-amber-700 dark:text-amber-400">
-                {formatCurrency(pendentes.liquido)}
+                {exibirValor(batch.origem, "liquido", pendentes.liquido).texto}
               </span>
             </div>
           )}
@@ -318,6 +366,7 @@ export function ImportReview({
                   key={r.id}
                   row={r}
                   categories={categories}
+                  subcategories={subcategories}
                   people={people}
                   loteCancelado={isCancelado}
                   origem={batch.origem}
@@ -1039,6 +1088,7 @@ function TransferenciaDaLinha({
 function RowLine({
   row,
   categories,
+  subcategories,
   people,
   loteCancelado,
   origem,
@@ -1048,6 +1098,7 @@ function RowLine({
 }: {
   row: ImportRowWithRelations;
   categories: Categoria[];
+  subcategories: Subcategoria[];
   people: PersonOption[];
   loteCancelado: boolean;
   origem: "cartao" | "conta";
@@ -1177,20 +1228,23 @@ function RowLine({
       </td>
       <td className="px-3 py-2 text-right whitespace-nowrap">
         <div className="flex flex-col items-end gap-0.5">
-          {/* Transferência não ganha cor de receita nem o "−": ela não entra no líquido do lote
-              (ver `totaisPorStatus`), então pintá-la de entrada faria a tela sugerir que ela
-              abate o total. */}
-          <span
-            className={cn(
-              "tabular-nums",
-              row.tipo === "receita" && !isTransferencia
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-foreground",
-            )}
-          >
-            {row.tipo === "receita" && !isTransferencia ? "−" : ""}
-            {row.valor != null ? formatCurrency(row.valor) : "—"}
-          </span>
+          {/* Receita/estorno: positivo em verde. Despesa: "−" em vermelho. Transferência fica
+              neutra e sem sinal: ela não entra no líquido do lote (ver `totaisPorStatus`), então
+              colori-la faria a tela sugerir que ela mexe no total. */}
+          {row.valor == null ? (
+            <span className="tabular-nums text-foreground">—</span>
+          ) : isTransferencia || !row.tipo ? (
+            <span className="tabular-nums text-foreground">{formatCurrency(row.valor)}</span>
+          ) : (
+            (() => {
+              const v = exibirValor(
+                origem,
+                row.tipo === "receita" ? "entrada" : "saida",
+                row.valor,
+              );
+              return <span className={cn("tabular-nums", v.cor)}>{v.texto}</span>;
+            })()
+          )}
           {/* Sentido da linha, sempre visível e corrigível: um arquivo com convenção de sinal
               fora do padrão fazia compra virar estorno sem que a tela desse saída. Estorno não
               é parcelável nem divisível — por isso trocar aqui reabre as duas opções. */}
@@ -1201,9 +1255,17 @@ function RowLine({
               transferencia={isTransferencia}
               editavel={isOpenForEdit}
               disabled={busy}
-              onToggle={() =>
-                patch({ tipo: row.tipo === "despesa" ? "receita" : "despesa" })
-              }
+              onToggle={() => {
+                const tipo = row.tipo === "despesa" ? "receita" : "despesa";
+                // A categoria que não serve ao novo sentido sai junto (com a subcategoria):
+                // estorno/receita não fica com categoria de despesa.
+                const atual = categories.find((c) => c.id === row.categoria_sugerida_id);
+                patch(
+                  atual && !categoriaServeAoTipo(atual.kind, tipo)
+                    ? { tipo, categoria_sugerida_id: "" }
+                    : { tipo },
+                );
+              }}
             />
           )}
         </div>
@@ -1215,27 +1277,34 @@ function RowLine({
           <span className="text-xs text-muted-foreground">Sem categoria</span>
         ) : !editavel ? (
           <span className="text-xs text-muted-foreground">
-            {row.categoria?.name ?? "—"}
+            {rotuloDaCategoria(categories, subcategories, {
+              categoryId: row.categoria_sugerida_id,
+              subcategoryId: row.subcategoria_sugerida_id,
+            }) ??
+              row.categoria?.name ??
+              "—"}
           </span>
         ) : (
-          <Select
-            value={row.categoria_sugerida_id ?? NONE}
-            onValueChange={(v) =>
-              patch({ categoria_sugerida_id: v === NONE ? "" : v })
+          <CategoryPicker
+            // Só as do sentido da linha; a já escolhida fica, para não perder o rótulo.
+            categories={categoriasDoTipo(categories, row.tipo, row.categoria_sugerida_id)}
+            subcategories={subcategories}
+            value={{
+              categoryId: row.categoria_sugerida_id,
+              subcategoryId: row.subcategoria_sugerida_id,
+            }}
+            onChange={(v) =>
+              // Com subcategoria, o servidor deriva a categoria dela (updateImportRow).
+              patch(
+                v.subcategoryId
+                  ? { subcategoria_sugerida_id: v.subcategoryId }
+                  : { categoria_sugerida_id: v.categoryId ?? "" },
+              )
             }
-          >
-            <SelectTrigger className="h-8 w-full min-w-[10rem]" disabled={busy}>
-              <SelectValue placeholder="Sem categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>Sem categoria</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            disabled={busy}
+            className="min-w-[10rem]"
+            aria-label="Categoria"
+          />
         )}
       </td>
       <td className="px-3 py-2">

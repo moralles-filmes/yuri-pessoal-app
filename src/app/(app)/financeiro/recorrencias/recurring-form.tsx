@@ -39,6 +39,8 @@ import {
   type Frequency,
 } from "@/lib/finance/constants";
 import type { RecurringTransactionRow } from "@/types/database";
+import { CategoryPicker } from "@/components/finance/category-picker";
+import { categoriaServeAoTipo, categoriasDoTipo } from "@/lib/finance/category-search";
 
 const NONE = "none";
 const CARD_METHOD = "cartao_credito";
@@ -46,6 +48,7 @@ const TYPES = ["despesa", "receita", "ajuste"] as const;
 
 type Option = { id: string; name: string };
 type CardOption = Option & { ativo: boolean };
+type SubOption = Option & { category_id: string };
 
 type FormValues = {
   type: (typeof TYPES)[number];
@@ -53,6 +56,7 @@ type FormValues = {
   account_id: string;
   card_id: string;
   category_id: string;
+  subcategory_id: string;
   payment_method: string;
   frequency: Frequency;
   interval_count: string;
@@ -73,6 +77,7 @@ function defaults(rec?: RecurringTransactionRow): FormValues {
     account_id: rec?.account_id ?? NONE,
     card_id: rec?.card_id ?? NONE,
     category_id: rec?.category_id ?? NONE,
+    subcategory_id: rec?.subcategory_id ?? NONE,
     payment_method: rec?.payment_method ?? NONE,
     frequency: rec?.frequency ?? "mensal",
     interval_count: rec ? String(rec.interval_count) : "1",
@@ -88,12 +93,14 @@ export function RecurringFormDialog({
   recurrence,
   accounts,
   categories,
+  subcategories,
   cards,
   trigger,
 }: {
   recurrence?: RecurringTransactionRow;
   accounts: Option[];
-  categories: Option[];
+  categories: (Option & { kind: string })[];
+  subcategories: SubOption[];
   cards: CardOption[];
   trigger: React.ReactNode;
 }) {
@@ -106,6 +113,7 @@ export function RecurringFormDialog({
     control,
     handleSubmit,
     reset,
+    getValues,
     setValue,
     setError,
     formState: { errors, isSubmitting },
@@ -117,6 +125,19 @@ export function RecurringFormDialog({
 
   const paymentMethod = useWatch({ control, name: "payment_method" });
   const isCard = paymentMethod === CARD_METHOD;
+  const subcategoryId = useWatch({ control, name: "subcategory_id" });
+  const type = useWatch({ control, name: "type" });
+
+  // Categoria de despesa não serve a uma receita (e vice-versa): trocar o tipo — inclusive pelo
+  // cartão, que força despesa — limpa a escolha que deixou de servir, com a subcategoria junto.
+  // `getValues` (e não o valor observado): logo depois do `reset` o observado ainda é o antigo.
+  React.useEffect(() => {
+    const atual = categories.find((c) => c.id === getValues("category_id"));
+    if (atual && !categoriaServeAoTipo(atual.kind, type)) {
+      setValue("category_id", NONE);
+      setValue("subcategory_id", NONE);
+    }
+  }, [type, categories, getValues, setValue]);
 
   // Cartão só comporta despesa (só despesa resolve fatura) e não abate conta;
   // ao sair do cartão, limpa o cartão escolhido.
@@ -149,6 +170,10 @@ export function RecurringFormDialog({
       account_id: card || values.account_id === NONE ? "" : values.account_id,
       card_id: card && values.card_id !== NONE ? values.card_id : "",
       category_id: values.category_id === NONE ? "" : values.category_id,
+      subcategory_id:
+        values.category_id === NONE || values.subcategory_id === NONE
+          ? ""
+          : values.subcategory_id,
       payment_method:
         values.payment_method === NONE ? "" : values.payment_method,
       frequency: values.frequency,
@@ -292,19 +317,27 @@ export function RecurringFormDialog({
                 control={control}
                 name="category_id"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Sem categoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>Sem categoria</SelectItem>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  // Um seletor só: categoria com pesquisa e subcategoria juntas.
+                  <CategoryPicker
+                    // Só as do tipo da recorrência; a já escolhida fica, para não perder o rótulo.
+                    categories={categoriasDoTipo(
+                      categories,
+                      type,
+                      field.value === NONE ? null : field.value,
+                    )}
+                    subcategories={subcategories}
+                    value={{
+                      categoryId: field.value === NONE ? null : field.value,
+                      subcategoryId: subcategoryId === NONE ? null : subcategoryId,
+                    }}
+                    onChange={(v) => {
+                      field.onChange(v.categoryId ?? NONE);
+                      setValue("subcategory_id", v.subcategoryId ?? NONE, {
+                        shouldDirty: true,
+                      });
+                    }}
+                    aria-label="Categoria"
+                  />
                 )}
               />
             </div>

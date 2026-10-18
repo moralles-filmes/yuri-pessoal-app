@@ -78,6 +78,12 @@ export type RemapInput = z.infer<typeof remapSchema>;
 export const updateImportRowSchema = z.object({
   status: z.enum(["para_importar", "ignorada", "duplicada"]).optional(),
   categoria_sugerida_id: patchUuid,
+  /**
+   * Subcategoria (mesma semântica de `patchUuid`). Quando vem preenchida, o servidor DERIVA a
+   * categoria dela — o cliente não escolhe as duas separadamente, e a FK composta no banco
+   * recusa uma subcategoria de outra categoria.
+   */
+  subcategoria_sugerida_id: patchUuid,
   import_as: z.enum(IMPORT_AS_OPTIONS).optional(),
   descricao: z.string().trim().max(200, "Máximo de 200 caracteres").optional(),
   data_norm: dateString.optional(),

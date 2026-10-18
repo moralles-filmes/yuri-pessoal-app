@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CategoryPicker } from "@/components/finance/category-picker";
 import { mostrarFiltroDeTerceiros } from "@/lib/finance/marcacao-da-categoria";
 import {
   Select,
@@ -123,22 +124,17 @@ export function TransactionFilters({
         </SelectContent>
       </Select>
 
-      <Select
-        value={current("category")}
-        onValueChange={(v) => setParam("category", v)}
-      >
-        <SelectTrigger size="sm" className="w-auto min-w-28">
-          <SelectValue placeholder="Categoria" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Todas as categorias</SelectItem>
-          {categories.map((c) => (
-            <SelectItem key={c.id} value={c.id}>
-              {c.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Filtro só de categoria (sem subcategoria): com pesquisa. Null = todas. */}
+      <CategoryPicker
+        categories={categories}
+        value={{ categoryId: searchParams.get("category"), subcategoryId: null }}
+        onChange={(v) => setParam("category", v.categoryId ?? ALL)}
+        placeholder="Todas"
+        noneLabel="Todas as categorias"
+        size="sm"
+        className="w-auto min-w-40"
+        aria-label="Categoria"
+      />
 
       <Input
         type="month"

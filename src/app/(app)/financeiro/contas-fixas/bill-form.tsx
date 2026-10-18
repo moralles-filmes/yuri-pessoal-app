@@ -25,6 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CategoryPicker } from "@/components/finance/category-picker";
+import { categoriasDoTipo } from "@/lib/finance/category-search";
 import { MoneyInput } from "@/components/financeiro/money-input";
 import { applyFieldErrors } from "@/components/financeiro/form-utils";
 import { createBill, updateBill } from "@/lib/actions/bills";
@@ -72,7 +74,7 @@ export function BillFormDialog({
   trigger,
 }: {
   bill?: BillRow;
-  categories: Option[];
+  categories: (Option & { kind: string })[];
   accounts: Option[];
   trigger: React.ReactNode;
 }) {
@@ -211,19 +213,21 @@ export function BillFormDialog({
                 control={control}
                 name="category_id"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Sem categoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>Sem categoria</SelectItem>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  // Conta fixa não tem subcategoria: o seletor só pesquisa categorias.
+                  <CategoryPicker
+                    // Conta fixa é sempre despesa: só categorias de despesa (e "ambos").
+                    categories={categoriasDoTipo(
+                      categories,
+                      "despesa",
+                      field.value === NONE ? null : field.value,
+                    )}
+                    value={{
+                      categoryId: field.value === NONE ? null : field.value,
+                      subcategoryId: null,
+                    }}
+                    onChange={(v) => field.onChange(v.categoryId ?? NONE)}
+                    aria-label="Categoria"
+                  />
                 )}
               />
             </div>
