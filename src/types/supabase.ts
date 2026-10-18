@@ -8746,6 +8746,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          liquidado_em: string | null
           notes: string | null
           parcelado: boolean
           payment_method: string | null
@@ -8774,6 +8775,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          liquidado_em?: string | null
           notes?: string | null
           parcelado?: boolean
           payment_method?: string | null
@@ -8802,6 +8804,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          liquidado_em?: string | null
           notes?: string | null
           parcelado?: boolean
           payment_method?: string | null
