@@ -31,7 +31,7 @@ import {
   tooltipStyle,
 } from "./chart-theme";
 
-/** Projeção dos próximos meses: faturas + recorrências + contas fixas (barras empilhadas). */
+/** Minha projeção: a minha parte das faturas + recorrências + contas fixas (barras empilhadas). */
 export function ProjecaoChart({ data }: { data: ProjecaoPonto[] }) {
   const temDados = data.some((p) => p.total > 0);
   if (!temDados) {
@@ -61,7 +61,7 @@ export function ProjecaoChart({ data }: { data: ProjecaoPonto[] }) {
           itemStyle={tooltipItemStyle}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }} />
-        <Bar dataKey="faturas" name="Faturas" stackId="p" fill={CHART_COLORS[0]} maxBarSize={48} />
+        <Bar dataKey="faturas" name="Minha parte das faturas" stackId="p" fill={CHART_COLORS[0]} maxBarSize={48} />
         <Bar dataKey="recorrencias" name="Recorrências" stackId="p" fill={CHART_COLORS[2]} maxBarSize={48} />
         <Bar dataKey="contasFixas" name="Contas fixas" stackId="p" fill={CHART_COLORS[4]} radius={[4, 4, 0, 0]} maxBarSize={48} />
       </BarChart>

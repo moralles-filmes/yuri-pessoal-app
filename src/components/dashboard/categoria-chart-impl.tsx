@@ -18,9 +18,12 @@ import {
   tooltipStyle,
 } from "./chart-theme";
 
-/** Distribuição dos gastos por categoria (donut). Mostra as 6 maiores + "Outros". */
+/**
+ * Distribuição dos MEUS gastos por categoria (donut): desenha `meu`, nunca o movimentado com a
+ * parte de terceiros (desenho 2026-10-18). Mostra as 6 maiores + "Outros".
+ */
 export function CategoriaChart({ data }: { data: CategoriaSlice[] }) {
-  const positivos = data.filter((d) => d.movimentado > 0);
+  const positivos = data.filter((d) => d.meu > 0).sort((a, b) => b.meu - a.meu);
   if (positivos.length === 0) {
     return (
       <EmptyState
@@ -53,7 +56,7 @@ export function CategoriaChart({ data }: { data: CategoriaSlice[] }) {
       <PieChart>
         <Pie
           data={chartData}
-          dataKey="movimentado"
+          dataKey="meu"
           nameKey="name"
           innerRadius={58}
           outerRadius={92}

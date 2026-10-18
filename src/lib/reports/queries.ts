@@ -19,6 +19,8 @@ import {
   gastosPorCategoria,
   gastosPorForma,
   mesDe,
+  paresDoMesAMes,
+  type MesAMesDados,
   perdoadoDoMes,
   projecaoProximosMeses,
   proximas6Faturas,
@@ -64,10 +66,14 @@ export type FinanceReport = {
   comparativo: Comparativo;
   /** K3b: o corte "até o dia D" do mês em andamento para o gráfico "Mês a mês"; null no fechado. */
   graficoAteODia: { ateODia: number; comparativo: Comparativo } | null;
+  /** As minhas entradas/saídas do "Meu mês a mês" em competência (desenho 2026-10-18). */
+  mesAMes: MesAMesDados;
   evolucao: EvolucaoPonto[];
   categorias: CategoriaSlice[];
   formas: FormaSlice[];
   projecao: ProjecaoPonto[];
+  /** As faturas dos meses da projeção com o valor CHEIO (meu + terceiros), pelo vencimento. */
+  faturasFuturas: FaturaDoMes[];
   contas: ProximasContas;
   aReceber: number;
   assinaturas: { nome: string; valor: number; frequency: Frequency }[];
@@ -200,10 +206,12 @@ async function getFinanceAndCardReport(
       perdoado: perdoadoDoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs }),
       comparativo,
       graficoAteODia,
+      mesAMes: paresDoMesAMes(graficoAteODia !== null ? graficoAteODia.comparativo : comparativo),
       evolucao,
       categorias,
       formas,
       projecao,
+      faturasFuturas: faturasPorMes({ statements: sts, receivables: recs, meses: projMeses, agrupar: "vencimento" }),
       contas,
       aReceber,
       assinaturas,

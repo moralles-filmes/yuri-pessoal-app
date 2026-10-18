@@ -39,11 +39,16 @@ import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-char
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
 import { EvolucaoChart } from "@/components/dashboard/evolucao-chart";
 import { ProjecaoChart } from "@/components/dashboard/projecao-chart";
+import { FaturasChart } from "@/components/dashboard/faturas-chart";
+import { CaixaNaoLido, RodapeDasFaturasSemTotal } from "@/components/financeiro/caixa-nos-graficos";
+import { rotulosDosGraficos } from "@/lib/finance/rotulos-dos-graficos";
 import type {
   Alerta,
   CategoriaSlice,
   Comparativo,
   EvolucaoPonto,
+  FaturaDoMes,
+  MesAMesDados,
   FaturaProvisao,
   FormaSlice,
   ProjecaoPonto,
@@ -102,11 +107,13 @@ export function DashboardClient({
   comparativo,
   corteCompetencia,
   graficoAteODia,
+  mesAMesCompetencia,
   evolucao,
   categorias,
   formas,
   faturas,
   projecao,
+  faturasFuturas,
   alertas,
   contas,
   aReceber,
@@ -122,11 +129,14 @@ export function DashboardClient({
   comparativo: Comparativo;
   corteCompetencia: ComparativoAteODia;
   graficoAteODia: { ateODia: number; comparativo: Comparativo } | null;
+  /** As minhas entradas/saídas do "Meu mês a mês" em competência, prontas do servidor. */
+  mesAMesCompetencia: MesAMesDados;
   evolucao: EvolucaoPonto[];
   categorias: CategoriaSlice[];
   formas: FormaSlice[];
   faturas: FaturaProvisao[];
   projecao: ProjecaoPonto[];
+  faturasFuturas: FaturaDoMes[];
   alertas: Alerta[];
   contas: ProximasContas;
   aReceber: number;
@@ -168,6 +178,29 @@ export function DashboardClient({
   const corteAtivo = corte !== null && corte.ateODia !== null;
   const diaDoCorte = corteAtivo ? corte.ateODia : null;
   const mesAnteriorRotulo = nomeDoMesAnterior(mesSel);
+
+  // Desenho 2026-10-18: os gráficos seguem a base e mostram só a parte do dono. Em caixa com
+  // erro de leitura, os gráficos que dependem da base dizem que não leram — nunca desenham zero.
+  const graficosCaixa = caixaOk ? caixaOk.graficos : null;
+  const rotulos = rotulosDosGraficos({
+    base,
+    ateODia:
+      base === "caixa" ? (graficosCaixa?.mesAMes.ateODia ?? null) : (graficoAteODia?.ateODia ?? null),
+  });
+  const minhasSaidasCard =
+    base === "caixa"
+      ? graficosCaixa
+        ? {
+            valor: formatCurrency(graficosCaixa.minha.saidas),
+            bruto: formatCurrency(graficosCaixa.minha.saidasBrutas),
+            terceiros: formatCurrency(graficosCaixa.minha.terceirosNasSaidas),
+          }
+        : { valor: "—", bruto: "—", terceiros: "—" }
+      : {
+          valor: formatCurrency(resumo.meu),
+          bruto: formatCurrency(resumo.saidas),
+          terceiros: formatCurrency(resumo.terceiros),
+        };
 
   function hintDoPeriodo(pct: number | null): string {
     return pct === null
@@ -384,13 +417,18 @@ export function DashboardClient({
                   para fora e o `overflow-hidden` do Card corta o ícone pela metade. */}
               <div className="min-w-0 space-y-1">
                 <p className="text-sm font-medium break-words text-muted-foreground">
-                  Valor realmente meu · {monthYearLabel(mesSel)} · Competência
+                  {rotulos.cardMinhasSaidas.titulo(monthYearLabel(mesSel))}
                 </p>
                 <p className="text-3xl font-semibold tracking-tight tabular-nums">
-                  {formatCurrency(resumo.meu)}
+                  {minhasSaidasCard.valor}
                 </p>
-                {frase !== null && (
+                {base === "competencia" && frase !== null && (
                   <p className="text-xs break-words text-muted-foreground">{frase}</p>
+                )}
+                {caixaErro && (
+                  <p className="text-xs break-words text-muted-foreground">
+                    Não foi possível ler o caixa.
+                  </p>
                 )}
               </div>
               <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -399,12 +437,12 @@ export function DashboardClient({
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Total movimentado</p>
-                <p className="font-semibold tabular-nums">{formatCurrency(resumo.saidas)}</p>
+                <p className="text-xs text-muted-foreground">{rotulos.cardMinhasSaidas.bruto}</p>
+                <p className="font-semibold tabular-nums">{minhasSaidasCard.bruto}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">De terceiros</p>
-                <p className="font-semibold tabular-nums">{formatCurrency(resumo.terceiros)}</p>
+                <p className="text-xs text-muted-foreground">{rotulos.cardMinhasSaidas.terceiros}</p>
+                <p className="font-semibold tabular-nums">{minhasSaidasCard.terceiros}</p>
               </div>
             </div>
           </CardContent>
@@ -442,72 +480,91 @@ export function DashboardClient({
         </div>
       </div>
 
-      {/* Gráficos */}
+      {/* Gráficos — seguem a base e mostram só a parte do dono (desenho 2026-10-18) */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Gastos por categoria</CardTitle>
-            <CardDescription>Distribuição de {monthYearLabel(mesSel)}. Competência.</CardDescription>
+            <CardTitle>{rotulos.categorias.titulo}</CardTitle>
+            <CardDescription>
+              {monthYearLabel(mesSel)}. {rotulos.categorias.descricao}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <CategoriaChart data={categorias} />
+            {caixaErro ? (
+              <CaixaNaoLido />
+            ) : (
+              <CategoriaChart data={graficosCaixa ? graficosCaixa.categorias : categorias} />
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Por forma de pagamento</CardTitle>
-            <CardDescription>Cartão, débito, pix, dinheiro e mais. Competência.</CardDescription>
+            <CardTitle>{rotulos.formas.titulo}</CardTitle>
+            <CardDescription>{rotulos.formas.descricao}</CardDescription>
           </CardHeader>
           <CardContent>
-            <FormaPagamentoChart data={formas} />
+            {caixaErro ? (
+              <CaixaNaoLido />
+            ) : (
+              <FormaPagamentoChart data={graficosCaixa ? graficosCaixa.formas : formas} />
+            )}
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Evolução mensal</CardTitle>
-          <CardDescription>Entradas, saídas e saldo dos últimos 6 meses. Competência.</CardDescription>
+          <CardTitle>{rotulos.evolucao.titulo}</CardTitle>
+          <CardDescription>{rotulos.evolucao.descricao}</CardDescription>
         </CardHeader>
         <CardContent>
-          <EvolucaoChart data={evolucao} />
+          {caixaErro ? (
+            <CaixaNaoLido />
+          ) : (
+            <EvolucaoChart data={graficosCaixa ? graficosCaixa.evolucao : evolucao} />
+          )}
+          {graficosCaixa && (
+            <RodapeDasFaturasSemTotal quantidade={graficosCaixa.minha.faturasSemTotal} />
+          )}
         </CardContent>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            {graficoAteODia !== null ? (
-              <>
-                <CardTitle>Mês a mês · até o dia {graficoAteODia.ateODia}</CardTitle>
-                <CardDescription>
-                  Competência. Os dois meses até o mesmo dia; saídas só à vista — o cartão não entra
-                  (a fatura não se divide por dia).
-                </CardDescription>
-              </>
-            ) : (
-              <>
-                <CardTitle>Mês a mês</CardTitle>
-                <CardDescription>Comparativo com o mês anterior. Competência.</CardDescription>
-              </>
-            )}
+            <CardTitle>{rotulos.mesAMes.titulo}</CardTitle>
+            <CardDescription>{rotulos.mesAMes.descricao}</CardDescription>
           </CardHeader>
           <CardContent>
-            <MesAMesChart
-              comparativo={graficoAteODia !== null ? graficoAteODia.comparativo : comparativo}
-            />
+            {caixaErro ? (
+              <CaixaNaoLido />
+            ) : (
+              <MesAMesChart
+                dados={graficosCaixa ? graficosCaixa.mesAMes.dados : mesAMesCompetencia}
+              />
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Projeção dos próximos meses</CardTitle>
-            <CardDescription>Faturas, recorrências e contas fixas. Pelo vencimento.</CardDescription>
+            <CardTitle>{rotulos.projecao.titulo}</CardTitle>
+            <CardDescription>{rotulos.projecao.descricao}</CardDescription>
           </CardHeader>
           <CardContent>
             <ProjecaoChart data={projecao} />
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{rotulos.faturas.titulo}</CardTitle>
+          <CardDescription>{rotulos.faturas.descricao}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FaturasChart data={faturasFuturas} />
+        </CardContent>
+      </Card>
 
       {/* Próximas 6 faturas por cartão */}
       {faturasPorCartao.length > 0 && (

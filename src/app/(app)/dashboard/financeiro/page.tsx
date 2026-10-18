@@ -4,10 +4,12 @@ import { lerFinanceiro } from "@/lib/finance/queries";
 import {
   comparativoMesAMes,
   evolucaoMensal,
+  faturasPorMes,
   gastosPorCategoria,
   gastosPorForma,
   gerarAlertas,
   mesDe,
+  paresDoMesAMes,
   perdoadoDoMes,
   proximas6Faturas,
   projecaoProximosMeses,
@@ -71,6 +73,8 @@ export default async function DashboardFinanceiroPage({
   const formas = gastosPorForma({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
   const faturas = proximas6Faturas({ hoje, cards: dashCards, statements: sts, receivables: recs });
   const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, receivables: recs, recorrencias, bills: dashBills });
+  // Gráfico novo: as faturas dos meses da projeção com o valor CHEIO, pelo vencimento.
+  const faturasFuturas = faturasPorMes({ statements: sts, receivables: recs, meses: projMeses, agrupar: "vencimento" });
   const contas = proximasContasPagar({ hoje, bills: dashBills });
   const aReceber = totalAReceber(recs, mesSel);
   const saldo = saldoDasContas(accounts);
@@ -140,11 +144,13 @@ export default async function DashboardFinanceiroPage({
         comparativo={comparativo}
         corteCompetencia={corteCompetencia}
         graficoAteODia={graficoAteODia}
+        mesAMesCompetencia={paresDoMesAMes(graficoAteODia !== null ? graficoAteODia.comparativo : comparativo)}
         evolucao={evolucao}
         categorias={categorias}
         formas={formas}
         faturas={faturas}
         projecao={projecao}
+        faturasFuturas={faturasFuturas}
         alertas={alertas}
         contas={contas}
         aReceber={aReceber}

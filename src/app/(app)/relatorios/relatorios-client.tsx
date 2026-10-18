@@ -38,6 +38,9 @@ import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-char
 import { EvolucaoChart } from "@/components/dashboard/evolucao-chart";
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
 import { ProjecaoChart } from "@/components/dashboard/projecao-chart";
+import { FaturasChart } from "@/components/dashboard/faturas-chart";
+import { CaixaNaoLido, RodapeDasFaturasSemTotal } from "@/components/financeiro/caixa-nos-graficos";
+import { rotulosDosGraficos } from "@/lib/finance/rotulos-dos-graficos";
 import { ReportBarChart, type BarPoint } from "@/components/reports/report-bar-chart";
 import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { BlocoDoCaixa } from "@/components/financeiro/bloco-do-caixa";
@@ -182,8 +185,18 @@ export function RelatoriosClient({
     );
   })();
 
-  // Gráfico "Mês a mês": até o dia D quando o mês está em andamento (K3b); senão, como hoje.
-  const ateODia = finance.graficoAteODia;
+  // Desenho 2026-10-18: os gráficos seguem a base e mostram só a parte do dono — os mesmos
+  // textos do dashboard (`rotulosDosGraficos`). Caixa com erro: o gráfico diz que não leu.
+  const graficosCaixa = base === "caixa" && caixa?.estado === "ok" ? caixa.graficos : null;
+  const caixaErro = base === "caixa" && caixa?.estado === "erro";
+  const rotulos = rotulosDosGraficos({
+    base,
+    ateODia:
+      base === "caixa"
+        ? (graficosCaixa?.mesAMes.ateODia ?? null)
+        : (finance.graficoAteODia?.ateODia ?? null),
+  });
+  const categoriasDaBase = graficosCaixa ? graficosCaixa.categorias : finance.categorias;
 
   return (
     <div className="space-y-6">
@@ -239,48 +252,62 @@ export function RelatoriosClient({
           {base === "caixa" && caixa && <BlocoDoCaixa mesRotulo={monthLabel(mes)} caixa={caixa} />}
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <ChartCard title="Gastos por categoria" description="Distribuição do mês selecionado. Competência.">
-              <CategoriaChart data={finance.categorias} />
+            <ChartCard title={rotulos.categorias.titulo} description={rotulos.categorias.descricao}>
+              {caixaErro ? <CaixaNaoLido /> : <CategoriaChart data={categoriasDaBase} />}
             </ChartCard>
-            <ChartCard title="Por forma de pagamento" description="Cartão, débito, pix, dinheiro e mais. Competência.">
-              <FormaPagamentoChart data={finance.formas} />
+            <ChartCard title={rotulos.formas.titulo} description={rotulos.formas.descricao}>
+              {caixaErro ? (
+                <CaixaNaoLido />
+              ) : (
+                <FormaPagamentoChart data={graficosCaixa ? graficosCaixa.formas : finance.formas} />
+              )}
             </ChartCard>
           </div>
 
-          <ChartCard title="Evolução mensal" description="Entradas, saídas e saldo dos últimos 6 meses. Competência.">
-            <EvolucaoChart data={finance.evolucao} />
+          <ChartCard title={rotulos.evolucao.titulo} description={rotulos.evolucao.descricao}>
+            {caixaErro ? (
+              <CaixaNaoLido />
+            ) : (
+              <EvolucaoChart data={graficosCaixa ? graficosCaixa.evolucao : finance.evolucao} />
+            )}
+            {graficosCaixa && (
+              <RodapeDasFaturasSemTotal quantidade={graficosCaixa.minha.faturasSemTotal} />
+            )}
           </ChartCard>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            {ateODia !== null ? (
-              <ChartCard
-                title={`Mês a mês · até o dia ${ateODia.ateODia}`}
-                description="Competência. Os dois meses até o mesmo dia; saídas só à vista — o cartão não entra (a fatura não se divide por dia)."
-              >
-                <MesAMesChart comparativo={ateODia.comparativo} />
-              </ChartCard>
-            ) : (
-              <ChartCard title="Mês a mês" description="Comparativo com o mês anterior. Competência.">
-                <MesAMesChart comparativo={finance.comparativo} />
-              </ChartCard>
-            )}
-            <ChartCard title="Projeção dos próximos meses" description="Faturas, recorrências e contas fixas. Pelo vencimento.">
+            <ChartCard title={rotulos.mesAMes.titulo} description={rotulos.mesAMes.descricao}>
+              {caixaErro ? (
+                <CaixaNaoLido />
+              ) : (
+                <MesAMesChart dados={graficosCaixa ? graficosCaixa.mesAMes.dados : finance.mesAMes} />
+              )}
+            </ChartCard>
+            <ChartCard title={rotulos.projecao.titulo} description={rotulos.projecao.descricao}>
               <ProjecaoChart data={finance.projecao} />
             </ChartCard>
           </div>
+
+          <ChartCard title={rotulos.faturas.titulo} description={rotulos.faturas.descricao}>
+            <FaturasChart data={finance.faturasFuturas} />
+          </ChartCard>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle>Maiores gastos por categoria</CardTitle>
-                <CardDescription>Movimentado x valor realmente seu (mês). Competência.</CardDescription>
+                <CardDescription>
+                  Movimentado (com terceiros) × valor realmente seu (mês). {ROTULO_DA_BASE[base]}.
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                {finance.categorias.length === 0 ? (
+                {caixaErro ? (
+                  <CaixaNaoLido />
+                ) : categoriasDaBase.length === 0 ? (
                   <EmptyState icon={Scale} title="Sem gastos no período" className="py-8" />
                 ) : (
                   <ul className="space-y-2">
-                    {finance.categorias.slice(0, 8).map((c) => (
+                    {categoriasDaBase.slice(0, 8).map((c) => (
                       <li
                         key={c.categoryId ?? c.name}
                         className="flex items-center justify-between gap-3 rounded-lg border bg-card/40 px-3 py-2 text-sm"
@@ -341,9 +368,9 @@ export function RelatoriosClient({
           <ExportBar
             onCsv={() =>
               downloadCsv(
-                `gastos-por-categoria-${mes}.csv`,
+                `gastos-por-categoria-${mes}${base === "caixa" ? "-caixa" : ""}.csv`,
                 toCsv(
-                  finance.categorias.map((c) => ({
+                  categoriasDaBase.map((c) => ({
                     categoria: c.name,
                     movimentado: c.movimentado,
                     meu: c.meu,

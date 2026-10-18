@@ -17,7 +17,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatCurrency } from "@/lib/format";
-import type { Comparativo } from "@/lib/finance/dashboard";
+import type { MesAMesDados } from "@/lib/finance/dashboard";
 import {
   axisTick,
   brlCompact,
@@ -28,19 +28,14 @@ import {
   tooltipStyle,
 } from "./chart-theme";
 
-/** Comparativo do mês atual com o anterior (barras agrupadas: entradas e saídas). */
-export function MesAMesChart({ comparativo }: { comparativo: Comparativo }) {
+/**
+ * "Meu mês a mês": as MINHAS entradas e saídas do mês contra o anterior (barras agrupadas).
+ * A fonte decide a base — competência (`paresDoMesAMes`) ou caixa (`mesAMesDoCaixa`).
+ */
+export function MesAMesChart({ dados }: { dados: MesAMesDados }) {
   const data = [
-    {
-      nome: "Entradas",
-      anterior: comparativo.anterior.entradas,
-      atual: comparativo.atual.entradas,
-    },
-    {
-      nome: "Saídas",
-      anterior: comparativo.anterior.saidas,
-      atual: comparativo.atual.saidas,
-    },
+    { nome: "Minhas entradas", anterior: dados.anterior.entradas, atual: dados.atual.entradas },
+    { nome: "Minhas saídas", anterior: dados.anterior.saidas, atual: dados.atual.saidas },
   ];
 
   return (

@@ -31,9 +31,9 @@ import {
 
 const LABELS: Record<string, string> = { ...PAYMENT_METHOD_LABELS, outro: "Outro" };
 
-/** Gastos por forma de pagamento (barras horizontais). */
+/** MEUS gastos por forma de pagamento (barras horizontais) — desenha `meu` (desenho 2026-10-18). */
 export function FormaPagamentoChart({ data }: { data: FormaSlice[] }) {
-  const positivos = data.filter((d) => d.movimentado > 0);
+  const positivos = data.filter((d) => d.meu > 0).sort((a, b) => b.meu - a.meu);
   if (positivos.length === 0) {
     return (
       <EmptyState
@@ -47,7 +47,7 @@ export function FormaPagamentoChart({ data }: { data: FormaSlice[] }) {
 
   const chartData = positivos.map((d) => ({
     nome: LABELS[d.paymentMethod] ?? d.paymentMethod,
-    valor: d.movimentado,
+    valor: d.meu,
   }));
 
   return (
@@ -64,7 +64,7 @@ export function FormaPagamentoChart({ data }: { data: FormaSlice[] }) {
         />
         <Tooltip
           cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-          formatter={(value) => [formatCurrency(Number(value)), "Movimentado"]}
+          formatter={(value) => [formatCurrency(Number(value)), "Minha parte"]}
           contentStyle={tooltipStyle}
           labelStyle={tooltipLabelStyle}
           itemStyle={tooltipItemStyle}

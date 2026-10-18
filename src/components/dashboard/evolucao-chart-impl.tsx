@@ -31,7 +31,7 @@ import {
   tooltipStyle,
 } from "./chart-theme";
 
-/** Evolução mensal de entradas, saídas e saldo (série histórica). */
+/** Evolução mensal das MINHAS entradas, saídas e resultado (série histórica; desenho 2026-10-18). */
 export function EvolucaoChart({ data }: { data: EvolucaoPonto[] }) {
   const temDados = data.some((p) => p.entradas > 0 || p.saidas > 0);
   if (!temDados) {
@@ -60,9 +60,9 @@ export function EvolucaoChart({ data }: { data: EvolucaoPonto[] }) {
           itemStyle={tooltipItemStyle}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }} />
-        <Line type="monotone" dataKey="entradas" name="Entradas" stroke={CHART_COLORS[0]} strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="saidas" name="Saídas" stroke="var(--destructive)" strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="saldo" name="Saldo" stroke={CHART_COLORS[1]} strokeWidth={2} strokeDasharray="4 3" dot={false} />
+        <Line type="monotone" dataKey="entradas" name="Minhas entradas" stroke={CHART_COLORS[0]} strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="saidas" name="Minhas saídas" stroke="var(--destructive)" strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="saldo" name="Meu resultado" stroke={CHART_COLORS[1]} strokeWidth={2} strokeDasharray="4 3" dot={false} />
       </LineChart>
     </ResponsiveContainer>
   );
