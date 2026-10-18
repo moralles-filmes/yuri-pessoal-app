@@ -70,7 +70,7 @@ export default async function DashboardFinanceiroPage({
   const categorias = gastosPorCategoria({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
   const formas = gastosPorForma({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
   const faturas = proximas6Faturas({ hoje, cards: dashCards, statements: sts, receivables: recs });
-  const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, recorrencias, bills: dashBills });
+  const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, receivables: recs, recorrencias, bills: dashBills });
   const contas = proximasContasPagar({ hoje, bills: dashBills });
   const aReceber = totalAReceber(recs, mesSel);
   const saldo = saldoDasContas(accounts);

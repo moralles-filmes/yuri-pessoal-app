@@ -553,6 +553,58 @@ export type FaturaProvisao = {
   virtual: boolean;
 };
 
+/**
+ * A parte dos terceiros de cada fatura, em CENTAVOS, por `statement_id` — a regra ÚNICA de
+ * "meu × terceiros" da fatura (`meu = total_atual − isto`). `ignorado` conta só o que o terceiro
+ * pagou (D11): o perdoado fica com o dono. Próximas 6 faturas, projeção, faturas por mês e o
+ * caixa (pagamento de fatura) leem daqui — nenhuma cópia.
+ */
+export function parteDosTerceirosPorFatura(receivables: DashReceivable[]): Map<string, number> {
+  const mapa = new Map<string, number>();
+  for (const r of receivables) {
+    if (!r.statement_id) continue;
+    mapa.set(r.statement_id, (mapa.get(r.statement_id) ?? 0) + parteDoTerceiroCentavos(r));
+  }
+  return mapa;
+}
+
+/** Faturas de um mês, em REAIS: o total cheio e a partição meu + terceiros (fecha por construção). */
+export type FaturaDoMes = { mes: string; total: number; meu: number; terceiros: number };
+
+/**
+ * Faturas de cartão agrupadas por mês — de COMPETÊNCIA (histórico, aba Cartões) ou de
+ * VENCIMENTO (projeção: o mês em que o dinheiro sai). Com `meses`, devolve exatamente esses meses
+ * (mês sem fatura = zeros); sem, só os meses que têm fatura, em ordem.
+ */
+export function faturasPorMes(params: {
+  statements: DashStatement[];
+  receivables: DashReceivable[];
+  meses?: string[];
+  agrupar: "competencia" | "vencimento";
+}): FaturaDoMes[] {
+  const { statements, receivables, meses, agrupar } = params;
+  const terceirosPorFatura = parteDosTerceirosPorFatura(receivables);
+  const porMes = new Map<string, { totalCent: number; terceirosCent: number }>();
+  for (const s of statements) {
+    if (!s.card_id) continue;
+    const mes = mesDe(agrupar === "vencimento" ? s.data_vencimento : s.competencia);
+    const cur = porMes.get(mes) ?? { totalCent: 0, terceirosCent: 0 };
+    cur.totalCent += cent(s.total_atual ?? 0);
+    cur.terceirosCent += terceirosPorFatura.get(s.id) ?? 0;
+    porMes.set(mes, cur);
+  }
+  const lista = meses ?? [...porMes.keys()].sort();
+  return lista.map((mes) => {
+    const v = porMes.get(mes) ?? { totalCent: 0, terceirosCent: 0 };
+    return {
+      mes,
+      total: reais(v.totalCent),
+      meu: reais(v.totalCent - v.terceirosCent),
+      terceiros: reais(v.terceirosCent),
+    };
+  });
+}
+
 export function proximas6Faturas(params: {
   hoje: string;
   cards: DashCard[];
@@ -562,14 +614,7 @@ export function proximas6Faturas(params: {
 }): FaturaProvisao[] {
   const { hoje, cards, statements, receivables, n = 6 } = params;
 
-  const recByStatement = new Map<string, number>();
-  for (const r of receivables) {
-    if (!r.statement_id) continue;
-    recByStatement.set(
-      r.statement_id,
-      (recByStatement.get(r.statement_id) ?? 0) + parteDoTerceiroCentavos(r),
-    );
-  }
+  const recByStatement = parteDosTerceirosPorFatura(receivables);
   const stmtByKey = new Map<string, DashStatement>();
   for (const s of statements) {
     if (s.card_id) stmtByKey.set(`${s.card_id}|${mesDe(s.competencia)}`, s);
@@ -657,20 +702,24 @@ function ocorrenciasNoMes(rec: DashRecurrence, mes: string): number {
   return count;
 }
 
+/**
+ * A projeção é "pelo vencimento" e é MINHA (desenho 2026-10-18): a série `faturas` é a minha
+ * parte de cada fatura (`faturasPorMes`, a regra única), no mês em que ela VENCE. Recorrências e
+ * contas fixas não guardam parte de terceiro no schema e entram cheias.
+ */
 export function projecaoProximosMeses(params: {
   hoje: string;
   meses: string[];
   statements: DashStatement[];
+  receivables: DashReceivable[];
   recorrencias: DashRecurrence[];
   bills: DashBill[];
 }): ProjecaoPonto[] {
-  const { meses, statements, recorrencias, bills } = params;
+  const { meses, statements, receivables, recorrencias, bills } = params;
 
   const faturaCentPorMes = new Map<string, number>();
-  for (const s of statements) {
-    if (!s.card_id) continue;
-    const m = mesDe(s.competencia);
-    faturaCentPorMes.set(m, (faturaCentPorMes.get(m) ?? 0) + cent(s.total_atual ?? 0));
+  for (const f of faturasPorMes({ statements, receivables, meses, agrupar: "vencimento" })) {
+    faturaCentPorMes.set(f.mes, cent(f.meu));
   }
 
   const contasFixasCent = bills

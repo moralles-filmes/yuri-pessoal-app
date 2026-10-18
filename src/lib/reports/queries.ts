@@ -6,13 +6,14 @@
  * A RLS garante o escopo por usuário. Tudo roda em paralelo (Promise.all), sem N+1.
  */
 import { createClient } from "@/lib/supabase/server";
-import { centavosParaReais, hojeISO } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import { comparativoDoGraficoAteODia } from "@/lib/finance/caixa";
-import { parteDoTerceiroCentavos } from "@/lib/finance/recebimentos";
 import { lerFinanceiro } from "@/lib/finance/queries";
 import {
   comparativoMesAMes,
   evolucaoMensal,
+  faturasPorMes,
+  type FaturaDoMes,
   gastosPorCategoria,
   gastosPorForma,
   mesDe,
@@ -70,12 +71,7 @@ export type FinanceReport = {
   assinaturas: { nome: string; valor: number; frequency: Frequency }[];
 };
 
-export type FaturaMes = {
-  mes: string;
-  total: number;
-  meu: number;
-  terceiros: number;
-};
+export type FaturaMes = FaturaDoMes;
 
 export type CardReport = {
   completude: CompletudeFinanceira;
@@ -149,7 +145,7 @@ async function getFinanceAndCardReport(
   const evolucao = evolucaoMensal({ meses: evoMeses, transactions: txs, statements: sts, receivables: recs });
   const categorias = gastosPorCategoria({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
   const formas = gastosPorForma({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
-  const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, recorrencias, bills: dashBills });
+  const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, receivables: recs, recorrencias, bills: dashBills });
   const contas = proximasContasPagar({ hoje, bills: dashBills });
   const aReceber = totalAReceber(recs, mesSel);
   const saldo = saldoDasContas(accounts);
@@ -166,26 +162,8 @@ async function getFinanceAndCardReport(
   // ── Cartão ──
   const faturas = proximas6Faturas({ hoje, cards: dashCards, statements: sts, receivables: recs });
 
-  // Terceiros por fatura (somatório de recebíveis por statement_id).
-  const recByStatement = new Map<string, number>();
-  for (const r of recs) {
-    if (!r.statement_id) continue;
-    recByStatement.set(r.statement_id, (recByStatement.get(r.statement_id) ?? 0) + centavosParaReais(parteDoTerceiroCentavos(r)));
-  }
-  // Faturas reais agrupadas por mês de competência.
-  const porMes = new Map<string, FaturaMes>();
-  for (const s of sts) {
-    if (!s.card_id) continue;
-    const mes = mesDe(s.competencia);
-    const total = s.total_atual ?? 0;
-    const terceiros = recByStatement.get(s.id) ?? 0;
-    const cur = porMes.get(mes) ?? { mes, total: 0, meu: 0, terceiros: 0 };
-    cur.total += total;
-    cur.terceiros += terceiros;
-    cur.meu += total - terceiros;
-    porMes.set(mes, cur);
-  }
-  const faturasPorMes = [...porMes.values()].sort((a, b) => a.mes.localeCompare(b.mes));
+  // Faturas reais agrupadas por mês de competência (histórico) — a regra única de meu × terceiros.
+  const faturasDoHistorico = faturasPorMes({ statements: sts, receivables: recs, agrupar: "competencia" });
 
   // Parcelas comprometidas (em faturas ainda não pagas).
   const paidStatements = new Set(sts.filter((s) => s.pago_em).map((s) => s.id));
@@ -218,7 +196,7 @@ async function getFinanceAndCardReport(
     card: {
       completude,
       faturas,
-      faturasPorMes,
+      faturasPorMes: faturasDoHistorico,
       parcelasComprometidas,
       parcelasAtivas,
       aReceber,
