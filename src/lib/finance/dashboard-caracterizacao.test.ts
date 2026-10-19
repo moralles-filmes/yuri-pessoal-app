@@ -748,8 +748,8 @@ describe("5 · §9 — cenário sintético obrigatório", () => {
  * que o dia em que passasse a ser fosse um diff aqui, e não um número que mudou sozinho.
  *
  * Agora prova que é — pelo `valor_pessoal` GRAVADO no ato (A2), pela mesma `meuCentavos` da
- * despesa à vista, sem o motor conhecer `classificacao` nem categoria (D8). E prova a
- * divergência que o dono decidiu manter (B2): o `saldo` da evolução continua bruto − bruto.
+ * despesa à vista, sem o motor conhecer `classificacao` nem categoria (D8). E prova que a
+ * evolução é minha dos dois lados (a divergência B2 caiu em 2026-10-18, por pedido do dono).
  * ═══════════════════════════════════════════════════════════════════════════════════════ */
 
 describe("6 · 03-C — a entrada é partida entre minha e de terceiros", () => {
@@ -873,20 +873,22 @@ describe("6 · 03-C — a entrada é partida entre minha e de terceiros", () => 
     expect(emA.entradasMeu).toBe(300);
   });
 
-  it("B2 — divergência declarada: o saldo da evolução continua bruto − bruto", () => {
-    // Decisão do dono na 03-C: o Resultado do §13.3 (renda pessoal − minha parte EFETIVA das
-    // despesas) nasce depois da 03-D, quando o perdoado (D11) existir. Trocar um lado só seria
-    // a subtração que o próprio §13.3 proíbe.
+  it("a evolução é MINHA dos dois lados: o Resultado do §13.3 (desenho 2026-10-18)", () => {
+    // ⚠️ REESCRITO de propósito. Até 2026-10-18 este teste congelava a divergência B2 da 03-C
+    // ("saldo bruto − bruto"), que esperava o perdoado da 03-D. O perdoado existe, e o dono
+    // pediu os gráficos só com o que é dele: entradas = entradasMeu, saídas = meu (efetiva),
+    // saldo = a diferença das duas — nunca um lado meu e o outro bruto.
     const ev = evolucaoMensal({
       meses: ["2026-06"],
       transactions: [
+        tx({ amount: 1000, valor_pessoal: 300, type: "receita", status: "recebido" }),
         tx({ amount: 250, valor_pessoal: 0, type: "receita", status: "recebido" }),
-        tx({ amount: 100 }),
+        tx({ amount: 100, valor_pessoal: 40 }),
       ],
       statements: [],
       receivables: [],
     });
-    expect(ev).toEqual([{ mes: "2026-06", entradas: 250, saidas: 100, saldo: 150 }]);
+    expect(ev).toEqual([{ mes: "2026-06", entradas: 300, saidas: 40, saldo: 260 }]);
   });
 });
 

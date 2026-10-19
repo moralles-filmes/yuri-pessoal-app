@@ -90,7 +90,7 @@ export function PeriodBarChart({
       <BarChart data={points} margin={{ left: 4, right: 8, top: 8 }}>
         <CartesianGrid vertical={false} stroke={GRID_COLOR} />
         <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis tick={axisTick} axisLine={false} tickLine={false} width={48} />
+        <YAxis tick={axisTick} axisLine={false} tickLine={false} width="auto" />
         <Tooltip
           {...tooltipProps}
           formatter={(_value, _name, item) => [
@@ -119,7 +119,7 @@ export function EvolutionLineChart({
       <LineChart data={points} margin={{ left: 4, right: 8, top: 8 }}>
         <CartesianGrid vertical={false} stroke={GRID_COLOR} />
         <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis tick={axisTick} axisLine={false} tickLine={false} width={48} domain={["auto", "auto"]} />
+        <YAxis tick={axisTick} axisLine={false} tickLine={false} width="auto" domain={["auto", "auto"]} />
         <Tooltip
           {...tooltipProps}
           formatter={(_value, _name, item) => [
@@ -161,7 +161,7 @@ export function PeriodAreaChart({
         </defs>
         <CartesianGrid vertical={false} stroke={GRID_COLOR} />
         <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis tick={axisTick} axisLine={false} tickLine={false} width={40} allowDecimals={false} />
+        <YAxis tick={axisTick} axisLine={false} tickLine={false} width="auto" allowDecimals={false} />
         <Tooltip
           {...tooltipProps}
           formatter={(_value, _name, item) => [

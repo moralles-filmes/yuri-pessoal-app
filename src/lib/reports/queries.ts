@@ -6,16 +6,21 @@
  * A RLS garante o escopo por usuário. Tudo roda em paralelo (Promise.all), sem N+1.
  */
 import { createClient } from "@/lib/supabase/server";
-import { centavosParaReais, hojeISO } from "@/lib/format";
+import { hojeISO } from "@/lib/format";
 import { comparativoDoGraficoAteODia } from "@/lib/finance/caixa";
-import { parteDoTerceiroCentavos } from "@/lib/finance/recebimentos";
 import { lerFinanceiro } from "@/lib/finance/queries";
+import { estadoDoCaixa, type EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import type { BaseFinanceira } from "@/lib/finance/base";
 import {
   comparativoMesAMes,
   evolucaoMensal,
+  faturasPorMes,
+  type FaturaDoMes,
   gastosPorCategoria,
   gastosPorForma,
   mesDe,
+  paresDoMesAMes,
+  type MesAMesDados,
   perdoadoDoMes,
   projecaoProximosMeses,
   proximas6Faturas,
@@ -61,21 +66,20 @@ export type FinanceReport = {
   comparativo: Comparativo;
   /** K3b: o corte "até o dia D" do mês em andamento para o gráfico "Mês a mês"; null no fechado. */
   graficoAteODia: { ateODia: number; comparativo: Comparativo } | null;
+  /** As minhas entradas/saídas do "Meu mês a mês" em competência (desenho 2026-10-18). */
+  mesAMes: MesAMesDados;
   evolucao: EvolucaoPonto[];
   categorias: CategoriaSlice[];
   formas: FormaSlice[];
   projecao: ProjecaoPonto[];
+  /** As faturas dos meses da projeção com o valor CHEIO (meu + terceiros), pelo vencimento. */
+  faturasFuturas: FaturaDoMes[];
   contas: ProximasContas;
   aReceber: number;
   assinaturas: { nome: string; valor: number; frequency: Frequency }[];
 };
 
-export type FaturaMes = {
-  mes: string;
-  total: number;
-  meu: number;
-  terceiros: number;
-};
+export type FaturaMes = FaturaDoMes;
 
 export type CardReport = {
   completude: CompletudeFinanceira;
@@ -118,6 +122,8 @@ export type ReportsData = {
   mes: string;
   hoje: string;
   finance: FinanceReport;
+  /** Só com a base caixa selecionada; `null` em competência. */
+  caixa: EstadoDoCaixa | null;
   card: CardReport;
   habits: HabitsReport;
   studies: StudiesReport;
@@ -129,7 +135,8 @@ export type ReportsData = {
 async function getFinanceAndCardReport(
   mesSel: string,
   hoje: string,
-): Promise<{ finance: FinanceReport; card: CardReport }> {
+  base: BaseFinanceira,
+): Promise<{ finance: FinanceReport; caixa: EstadoDoCaixa | null; card: CardReport }> {
   const mesAtual = mesDe(hoje);
   // REDESIGN-03-B — a MESMA chamada da página do dashboard financeiro, não a mesma cópia.
   const janela = janelaDoRelatorio({ mesSel, mesAtual });
@@ -149,7 +156,7 @@ async function getFinanceAndCardReport(
   const evolucao = evolucaoMensal({ meses: evoMeses, transactions: txs, statements: sts, receivables: recs });
   const categorias = gastosPorCategoria({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
   const formas = gastosPorForma({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
-  const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, recorrencias, bills: dashBills });
+  const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, receivables: recs, recorrencias, bills: dashBills });
   const contas = proximasContasPagar({ hoje, bills: dashBills });
   const aReceber = totalAReceber(recs, mesSel);
   const saldo = saldoDasContas(accounts);
@@ -163,29 +170,21 @@ async function getFinanceAndCardReport(
     }))
     .sort((a, b) => b.valor - a.valor);
 
+  const caixa =
+    base === "caixa"
+      ? await estadoDoCaixa(
+          mesSel,
+          hoje,
+          { statements: sts, receivables: recs, transactions: txs, installmentItems: inst },
+          evoMeses,
+        )
+      : null;
+
   // ── Cartão ──
   const faturas = proximas6Faturas({ hoje, cards: dashCards, statements: sts, receivables: recs });
 
-  // Terceiros por fatura (somatório de recebíveis por statement_id).
-  const recByStatement = new Map<string, number>();
-  for (const r of recs) {
-    if (!r.statement_id) continue;
-    recByStatement.set(r.statement_id, (recByStatement.get(r.statement_id) ?? 0) + centavosParaReais(parteDoTerceiroCentavos(r)));
-  }
-  // Faturas reais agrupadas por mês de competência.
-  const porMes = new Map<string, FaturaMes>();
-  for (const s of sts) {
-    if (!s.card_id) continue;
-    const mes = mesDe(s.competencia);
-    const total = s.total_atual ?? 0;
-    const terceiros = recByStatement.get(s.id) ?? 0;
-    const cur = porMes.get(mes) ?? { mes, total: 0, meu: 0, terceiros: 0 };
-    cur.total += total;
-    cur.terceiros += terceiros;
-    cur.meu += total - terceiros;
-    porMes.set(mes, cur);
-  }
-  const faturasPorMes = [...porMes.values()].sort((a, b) => a.mes.localeCompare(b.mes));
+  // Faturas reais agrupadas por mês de competência (histórico) — a regra única de meu × terceiros.
+  const faturasDoHistorico = faturasPorMes({ statements: sts, receivables: recs, agrupar: "competencia" });
 
   // Parcelas comprometidas (em faturas ainda não pagas).
   const paidStatements = new Set(sts.filter((s) => s.pago_em).map((s) => s.id));
@@ -207,18 +206,21 @@ async function getFinanceAndCardReport(
       perdoado: perdoadoDoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs }),
       comparativo,
       graficoAteODia,
+      mesAMes: paresDoMesAMes(graficoAteODia !== null ? graficoAteODia.comparativo : comparativo),
       evolucao,
       categorias,
       formas,
       projecao,
+      faturasFuturas: faturasPorMes({ statements: sts, receivables: recs, meses: projMeses, agrupar: "vencimento" }),
       contas,
       aReceber,
       assinaturas,
     },
+    caixa,
     card: {
       completude,
       faturas,
-      faturasPorMes,
+      faturasPorMes: faturasDoHistorico,
       parcelasComprometidas,
       parcelasAtivas,
       aReceber,
@@ -294,10 +296,13 @@ async function getTasksReportData(todayIso: string): Promise<TasksReport> {
 
 /* ───────────────────────────── Orquestrador ───────────────────────────── */
 
-export async function getReportsData(mesSel: string): Promise<ReportsData> {
+export async function getReportsData(
+  mesSel: string,
+  base: BaseFinanceira = "competencia",
+): Promise<ReportsData> {
   const hoje = hojeISO();
   const [financeAndCard, habits, studies, tasks] = await Promise.all([
-    getFinanceAndCardReport(mesSel, hoje),
+    getFinanceAndCardReport(mesSel, hoje, base),
     getHabitsReport(hoje),
     getStudiesReport(hoje),
     getTasksReportData(hoje),
@@ -307,6 +312,7 @@ export async function getReportsData(mesSel: string): Promise<ReportsData> {
     mes: mesSel,
     hoje,
     finance: financeAndCard.finance,
+    caixa: financeAndCard.caixa,
     card: financeAndCard.card,
     habits,
     studies,

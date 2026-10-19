@@ -4,10 +4,12 @@ import { lerFinanceiro } from "@/lib/finance/queries";
 import {
   comparativoMesAMes,
   evolucaoMensal,
+  faturasPorMes,
   gastosPorCategoria,
   gastosPorForma,
   gerarAlertas,
   mesDe,
+  paresDoMesAMes,
   perdoadoDoMes,
   proximas6Faturas,
   projecaoProximosMeses,
@@ -70,13 +72,23 @@ export default async function DashboardFinanceiroPage({
   const categorias = gastosPorCategoria({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
   const formas = gastosPorForma({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
   const faturas = proximas6Faturas({ hoje, cards: dashCards, statements: sts, receivables: recs });
-  const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, recorrencias, bills: dashBills });
+  const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, receivables: recs, recorrencias, bills: dashBills });
+  // Gráfico novo: as faturas dos meses da projeção com o valor CHEIO, pelo vencimento.
+  const faturasFuturas = faturasPorMes({ statements: sts, receivables: recs, meses: projMeses, agrupar: "vencimento" });
   const contas = proximasContasPagar({ hoje, bills: dashBills });
   const aReceber = totalAReceber(recs, mesSel);
   const saldo = saldoDasContas(accounts);
 
   // A leitura da base caixa só acontece quando ela está selecionada.
-  const caixa = base === "caixa" ? await estadoDoCaixa(mesSel, hoje) : null;
+  const caixa =
+    base === "caixa"
+      ? await estadoDoCaixa(
+          mesSel,
+          hoje,
+          { statements: sts, receivables: recs, transactions: txs, installmentItems: inst },
+          evoMeses,
+        )
+      : null;
 
   // Corte "até o dia D" do mês em andamento (K3/K3b) — calculado no servidor, viaja por prop.
   const corteCompetencia = comparativoAteODia({
@@ -132,11 +144,13 @@ export default async function DashboardFinanceiroPage({
         comparativo={comparativo}
         corteCompetencia={corteCompetencia}
         graficoAteODia={graficoAteODia}
+        mesAMesCompetencia={paresDoMesAMes(graficoAteODia !== null ? graficoAteODia.comparativo : comparativo)}
         evolucao={evolucao}
         categorias={categorias}
         formas={formas}
         faturas={faturas}
         projecao={projecao}
+        faturasFuturas={faturasFuturas}
         alertas={alertas}
         contas={contas}
         aReceber={aReceber}

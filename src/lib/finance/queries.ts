@@ -49,7 +49,8 @@ import type {
   TransactionWithRelations,
 } from "@/types/database";
 
-const TX_SELECT =
+/** Exportado para a leitura de caixa ler as compras das faturas pagas com a MESMA forma (desenho 2026-10-18). */
+export const TX_SELECT =
   "*, account:accounts!transactions_account_id_fkey(id,name,color), transfer_account:accounts!transactions_transfer_account_id_fkey(id,name), category:categories(id,name,color,icon), subcategory:subcategories(id,name), card:credit_cards(id,nome,cor,bandeira), statement:card_statements!transactions_statement_id_fkey(id,pago_em)";
 
 /**

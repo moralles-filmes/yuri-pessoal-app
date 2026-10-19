@@ -28,6 +28,14 @@ conferência à mão, 4 retirados no desenho).
 
 ---
 
+## 🟡 Tarefa avulsa aberta: gráficos "meus" seguindo a base (2026-10-18)
+
+Branch `feat/graficos-meus-e-base` — ver o topo de `docs/project/CURRENT_STATUS.md`. Falta a
+**conferência visual com dados reais** em `/dashboard/financeiro` e `/relatorios`, nas duas
+bases, em 360/768/1280 px: o card "Minhas saídas" de outubro/2026 em competência deve bater com
+o ponto de out/26 da evolução (R$ 8.904,27 no dia 18/10), e nenhum eixo pode cortar rótulo. O PR
+vai para `main` depois da 03-E.
+
 ## ⛔ AS PENDÊNCIAS QUE SOBREVIVEM À FASE
 
 Nenhuma delas bloqueia nada hoje. Todas são conhecidas, e é por isso que estão escritas.
