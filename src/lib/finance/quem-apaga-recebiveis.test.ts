@@ -37,11 +37,6 @@ const ALLOWLIST: Record<string, { n: number; porque: string }> = {
     n: 1,
     porque: "cancelInstallmentFuture — protegido (regra cheia, A4)",
   },
-  "lib/actions/statements.ts · transactions": {
-    n: 1,
-    porque:
-      "markStatementUnpaid (até a A2 da 03-F levá-lo à RPC): o lançamento de pagamento de fatura é transferência, que não é divisível: não tem recebível",
-  },
   "lib/actions/transactions.ts · transactions": {
     n: 4,
     porque:

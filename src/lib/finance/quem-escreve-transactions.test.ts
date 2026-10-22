@@ -44,9 +44,9 @@ const ESCRITAS: Record<string, Escrita> = {
     mudaStatus: false,
   },
   "lib/actions/statements.ts": {
-    quantidade: 2,
+    quantidade: 1,
     motivo:
-      "markStatementUnpaid apaga o lançamento de pagamento (até a A2 da 03-F levá-lo à RPC) e moveTransactionToStatement reatribui statement_id sem tocar status — pagar escreve pela RPC pagar_fatura (M-F)",
+      "moveTransactionToStatement reatribui statement_id sem tocar status — pagar e desfazer escrevem pelas RPCs pagar_fatura e desfazer_pagamento_fatura (M-F)",
     mudaStatus: false,
   },
   "lib/actions/transactions.ts": {

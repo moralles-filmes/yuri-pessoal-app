@@ -60,7 +60,9 @@ import {
   markStatementPaid,
   markStatementUnpaid,
   moveTransactionToStatement,
+  preverDesfazerPagamento,
 } from "@/lib/actions/statements";
+import { MSG_FATURA_NAO_PAGA, MSG_PAGAMENTO_EDITADO } from "@/lib/finance/desfazer-pagamento";
 import { toast } from "sonner";
 import type {
   CardStatementWithTotal,
@@ -365,14 +367,33 @@ export function StatementsClient({
     ? list.find((s) => s.competencia === atualComp)
     : undefined;
 
+  // Transitório (03-F A2): a A3 troca este clique pelo diálogo de confirmação.
   async function handleUnpay(id: string) {
-    const res = await markStatementUnpaid(id);
+    const lido = await preverDesfazerPagamento(id);
+    if (!lido.ok) {
+      toast.error(lido.error);
+      return;
+    }
+    const previsao = lido.data;
+    if (previsao.estado === "pagamento-editado") {
+      toast.error(MSG_PAGAMENTO_EDITADO);
+      return;
+    }
+    if (previsao.estado === "nao-paga") {
+      toast.error(MSG_FATURA_NAO_PAGA);
+      router.refresh();
+      return;
+    }
+    const res = await markStatementUnpaid(
+      id,
+      previsao.estado === "com-lancamento" ? previsao.lancamentoId : null,
+    );
     if (res.ok) {
       toast.success("Pagamento desfeito.");
-      router.refresh();
     } else {
       toast.error(res.error);
     }
+    router.refresh();
   }
 
   if (cards.length === 0) {
