@@ -13,9 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-
-// TODO(Task 6): trocar pelo import de MAX_ESPECIALISTAS de `@/lib/ai/agents/especialistas`.
-const MAX_ESPECIALISTAS = 6;
+import { MAX_ESPECIALISTAS } from "@/lib/ai/agents/especialistas";
 
 const MIGRATIONS = path.resolve(__dirname, "..", "..", "..", "..", "supabase", "migrations");
 
