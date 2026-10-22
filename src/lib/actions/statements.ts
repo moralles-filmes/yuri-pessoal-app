@@ -7,7 +7,11 @@ import {
   invalid,
   notAuthed,
 } from "@/lib/actions/helpers";
-import { montarPagamentoFatura } from "@/lib/finance/statement-payment";
+import {
+  argumentosDoPagamento,
+  mensagemDoErroDoPagamento,
+  montarPagamentoFatura,
+} from "@/lib/finance/statement-payment";
 import { pagamentoFaturaSchema } from "@/lib/validators/statement";
 import { hojeISO } from "@/lib/format";
 import type { ActionResult } from "@/types/finance";
@@ -21,18 +25,13 @@ function revalidateStatements() {
 }
 
 /**
- * Marca de "pago em" gravado em `card_statements.pago_em` (timestamptz) a partir da data
- * escolhida. Meio-dia UTC = 09h em São Paulo: cai no MESMO dia do calendário em qualquer
- * leitura no fuso BR (meia-noite UTC voltaria um dia).
- */
-function pagoEmTimestamp(data: string): string {
-  return `${data}T12:00:00Z`;
-}
-
-/**
  * Paga a fatura: cria UM lançamento de pagamento (transferência que debita a conta escolhida)
  * e marca a fatura como paga, guardando a conta e o lançamento para o "Desfazer".
  * O valor é o total da fatura no momento do pagamento.
+ *
+ * A garantia de "uma vez só" é da RPC `pagar_fatura` (reserva condicional da fatura +
+ * lançamento + ponteiro, numa transação): duas abas ou um clique duplo não pagam duas vezes.
+ * A leitura de `pago_em` aqui é só o caminho rápido, para recusar sem ir ao banco gravar.
  *
  * `dataPagamento` ('yyyy-MM-dd') é a data em que o dinheiro saiu da conta — quem paga informa
  * para bater com o extrato do banco. Ausente, usa hoje.
@@ -86,27 +85,11 @@ export async function markStatementPaid(
     dataPagamento: data,
   });
 
-  const { data: pago, error: insErr } = await ctx.supabase
-    .from("transactions")
-    .insert({ user_id: ctx.userId, ...payload })
-    .select("id")
-    .single();
-  if (insErr || !pago) return dbError("Não foi possível registrar o pagamento.");
-
-  const { error: updErr } = await ctx.supabase
-    .from("card_statements")
-    .update({
-      status: "paga",
-      pago_em: pagoEmTimestamp(data),
-      pago_conta_id: contaId,
-      pago_transacao_id: pago.id,
-    })
-    .eq("id", id);
-  if (updErr) {
-    // Compensação (sem transação multi-statement no client): desfaz o lançamento criado.
-    await ctx.supabase.from("transactions").delete().eq("id", pago.id);
-    return dbError("Não foi possível marcar a fatura como paga.");
-  }
+  const { error } = await ctx.supabase.rpc(
+    "pagar_fatura",
+    argumentosDoPagamento({ statementId: id, dataPagamento: data, lancamento: payload }),
+  );
+  if (error) return dbError(mensagemDoErroDoPagamento(error));
 
   revalidateStatements();
   return { ok: true, data: undefined };

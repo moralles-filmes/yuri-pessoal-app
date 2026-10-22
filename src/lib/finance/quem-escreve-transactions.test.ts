@@ -44,8 +44,9 @@ const ESCRITAS: Record<string, Escrita> = {
     mudaStatus: false,
   },
   "lib/actions/statements.ts": {
-    quantidade: 4,
-    motivo: "pagar/desfazer o pagamento de fatura: o lançamento de pagamento é uma transferência",
+    quantidade: 2,
+    motivo:
+      "markStatementUnpaid apaga o lançamento de pagamento (até a A2 da 03-F levá-lo à RPC) e moveTransactionToStatement reatribui statement_id sem tocar status — pagar escreve pela RPC pagar_fatura (M-F)",
     mudaStatus: false,
   },
   "lib/actions/transactions.ts": {
@@ -144,6 +145,68 @@ describe("03-E · K0 — quem escreve em transactions", () => {
     for (const arquivo of mudam) {
       const codigo = VARRIDOS.find((v) => v.caminho === arquivo)?.codigo ?? "";
       expect(codigo, arquivo).toContain("liquidado_em");
+    }
+  });
+});
+
+/**
+ * REDESIGN-03-F · A1 — a escrita também mora em FUNÇÃO SQL desde a M-F. A varredura de `src/`
+ * não a enxerga, então as funções têm o próprio inventário: cada `insert into`, `update` ou
+ * `delete from` em `public.transactions` dentro do corpo de um `create function` declarado por
+ * arquivo, com o motivo. Migration de dado fora de função (ex.: a da transferência em uma linha)
+ * não entra: ela rodou uma vez e não é um caminho.
+ */
+const MIGRATIONS = path.resolve(SRC, "..", "supabase", "migrations");
+
+/** `arquivo de migration` → quantas escritas em `transactions` DENTRO de funções, e por quê. */
+const ESCRITAS_SQL: Record<string, { quantidade: number; motivo: string }> = {
+  "20261021120000_pagamento_fatura_atomico.sql": {
+    quantidade: 2,
+    motivo:
+      "pagar_fatura insere o pagamento (nasce pago, com liquidado_em, coerente com o CHECK); desfazer_pagamento_fatura o apaga",
+  },
+};
+
+const ESCRITA_SQL = /\b(insert\s+into|update|delete\s+from)\s+(public\.)?transactions\b/g;
+
+function escritasEmFuncoes(sql: string): number {
+  const limpo = sql
+    .split("\n")
+    .map((l) => l.replace(/--.*$/, ""))
+    .join("\n")
+    .toLowerCase();
+  let n = 0;
+  for (const m of limpo.matchAll(/create\s+(or\s+replace\s+)?function/g)) {
+    const abre = limpo.indexOf("$$", m.index ?? 0);
+    const fecha = abre < 0 ? -1 : limpo.indexOf("$$", abre + 2);
+    if (fecha < 0) continue;
+    n += (limpo.slice(abre, fecha).match(ESCRITA_SQL) ?? []).length;
+  }
+  return n;
+}
+
+const SQL_VARRIDOS = fs
+  .readdirSync(MIGRATIONS)
+  .filter((f) => f.endsWith(".sql"))
+  .map((f) => ({ arquivo: f, n: escritasEmFuncoes(fs.readFileSync(path.join(MIGRATIONS, f), "utf8")) }));
+
+describe("03-F · A1 — quem escreve em transactions de dentro de uma função SQL", () => {
+  it("a varredura alcança as migrations — não afirma [] === []", () => {
+    expect(SQL_VARRIDOS.length).toBeGreaterThan(100);
+  });
+
+  it("toda função que escreve em transactions está declarada, com a contagem exata", () => {
+    const contagem = Object.fromEntries(
+      SQL_VARRIDOS.filter((v) => v.n > 0).map((v) => [v.arquivo, v.n]),
+    );
+    expect(contagem).toEqual(
+      Object.fromEntries(Object.entries(ESCRITAS_SQL).map(([f, e]) => [f, e.quantidade])),
+    );
+  });
+
+  it("toda entrada tem motivo", () => {
+    for (const [arquivo, e] of Object.entries(ESCRITAS_SQL)) {
+      expect(e.motivo.trim().length, arquivo).toBeGreaterThan(10);
     }
   });
 });
