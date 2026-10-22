@@ -17,6 +17,7 @@ import "server-only";
  */
 
 import { randomUUID } from "node:crypto";
+import { ROTULO_CRUZAR_MODULOS } from "@/lib/ai/constants";
 import { createClient } from "@/lib/supabase/server";
 import type { ClienteDaIa } from "./client";
 import type { AiProviderId, AiUsage } from "@/lib/ai/core/contracts";
@@ -192,7 +193,7 @@ export const MENSAGEM_ADMISSAO: Record<BeginRunErrorCode, string> = {
   // que o dono vai procurá-lo.
   AI_EXPERIENCE_NOT_AVAILABLE: "Este panorama não está disponível.",
   AI_CROSS_MODULE_NOT_ALLOWED:
-    "Os panoramas de vários módulos estão desligados. Ligue “Panoramas de vários módulos” em /ia/configuracoes.",
+    `O cruzamento de módulos está desligado. Ligue “${ROTULO_CRUZAR_MODULOS}” em /ia/configuracoes.`,
   // ⚠️ A frase NÃO é de erro: o dono não fez nada errado, e o que ele pediu está acontecendo.
   // Dizer "aguarde" ou "muitas tentativas" transformaria um clique a mais em repreensão.
   AI_EXPERIENCE_JUST_STARTED:

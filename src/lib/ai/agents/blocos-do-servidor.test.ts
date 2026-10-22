@@ -129,6 +129,15 @@ describe("avisos do servidor", () => {
     expect(termosProibidosEm(a)).toEqual([]);
   });
 
+  it("avisoSemEspecialista com lista vazia não lista nada e continua apontando o link", () => {
+    const a = avisoSemEspecialista([]);
+    expect(a).toMatch(/nenhum módulo de registros está liberado/i);
+    expect(a).not.toContain(": .");
+    expect(a).not.toMatch(/destes módulos/);
+    expect(a).toContain(settingsLink());
+    expect(termosProibidosEm(a)).toEqual([]);
+  });
+
   it("avisoSemEspecialista cita os desligados, aponta para settingsLink() e não afirma que a pergunta os exige", () => {
     const a = avisoSemEspecialista(["Financeiro", "Treinos"]);
     expect(a).toContain("Financeiro");

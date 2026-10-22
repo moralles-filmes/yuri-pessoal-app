@@ -99,6 +99,8 @@ export function avisoDeEspecialistasQueFalharam(rotulos: readonly string[]): str
 
 /** Acrescentado quando a pergunta era sobre registros e nenhum especialista estava liberado. */
 export function avisoSemEspecialista(desligados: readonly string[]): string {
-  const quais = desligados.length > 0 ? `: ${listaDeRotulos(desligados)}` : "";
-  return `A leitura destes módulos está desligada${quais}. Para eu consultar algum deles, ligue a leitura em ${settingsLink()}.`;
+  if (desligados.length === 0) {
+    return `Nenhum módulo de registros está liberado para leitura. Para eu consultar algum, ligue a leitura em ${settingsLink()}.`;
+  }
+  return `A leitura destes módulos está desligada: ${listaDeRotulos(desligados)}. Para eu consultar algum deles, ligue a leitura em ${settingsLink()}.`;
 }
