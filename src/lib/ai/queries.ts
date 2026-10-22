@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 import type { ClienteDaIa } from "./server/client";
 import { AI_PROVIDERS, type AiProviderId } from "./core/contracts";
+import { normalizarAlternancia } from "./core/text";
 import { cantoValido, CANTO_PADRAO, type CantoDoBotao } from "./painel";
 import { PROVIDER_REGISTRY } from "./providers/registry";
 import {
@@ -435,6 +436,10 @@ export async function getConversation(
  * Mensagem em `streaming`, `cancelled` ou `failed` fica de fora: mandar meia resposta de
  * volta como se fosse a fala do assistente ensinaria o modelo a continuar de onde parou uma
  * frase que o usuário nunca chegou a ver inteira.
+ *
+ * MOD-ia-027: por último, `normalizarAlternancia` garante que a fatia enviada sempre alterna
+ * e sempre começa pelo dono — um recorte no meio da conversa começaria com o assistente, e
+ * dois envios sem resposta produziriam dois `user` seguidos.
  */
 export async function getHistoryForPrompt(
   userId: string,
@@ -462,7 +467,7 @@ export async function getHistoryForPrompt(
     saida.push({ role: m.role as "user" | "assistant", content: m.content });
   }
 
-  return saida.reverse();
+  return normalizarAlternancia(saida.reverse());
 }
 
 /** Teto da trilha lida de uma vez. Uma conversa de 500 mensagens não vira 5.000 linhas na tela. */
