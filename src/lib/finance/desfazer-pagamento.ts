@@ -7,7 +7,7 @@
  * a RPC `desfazer_pagamento_fatura` recusa se o pagamento mudou entre a leitura e o clique.
  */
 import { MSG_FATURA_NAO_ENCONTRADA, MSG_FATURA_SEM_SESSAO } from "@/lib/finance/statement-payment";
-import { dateInSaoPaulo } from "@/lib/format";
+import { dateInSaoPaulo, formatCurrency, formatDate } from "@/lib/format";
 
 /** O lançamento apontado por `card_statements.pago_transacao_id`, já com o nome da conta. */
 export type LancamentoDoPagamento = {
@@ -83,6 +83,41 @@ export const MSG_PAGAMENTO_EDITADO =
   "O lançamento deste pagamento foi editado em Lançamentos. Para desfazer, exclua-o por lá — a fatura reabre junto.";
 export const MSG_DESFAZER_INCERTO =
   "Não foi possível confirmar o desfazer. Recarregue a página para ver o estado atual.";
+
+/**
+ * O que o diálogo de desfazer escreve para cada estado da leitura (REDESIGN-03-F · A3, spec §5.4).
+ * Puro: valor e data saem formatados daqui, para a tela não montar frase nenhuma.
+ *
+ * `podeConfirmar` só vale onde há o que desfazer; `linkLancamentos` só onde a saída é por
+ * Lançamentos (pagamento editado).
+ */
+export function textoDoDesfazer(p: PrevisaoDoDesfazer): {
+  texto: string;
+  podeConfirmar: boolean;
+  linkLancamentos: boolean;
+} {
+  switch (p.estado) {
+    case "com-lancamento": {
+      const emAberto = "As compras desta fatura voltam a ficar em aberto.";
+      const feitoEm = `Pagamento feito em ${formatDate(p.dataPagamento)}.`;
+      const texto =
+        p.conta != null
+          ? `O lançamento «${p.descricao}» será excluído. ${formatCurrency(p.valor)} volta ao saldo de ${p.conta}. ${feitoEm} ${emAberto}`
+          : `O lançamento «${p.descricao}», de ${formatCurrency(p.valor)}, será excluído. Ele era de uma conta que foi excluída; nenhum saldo volta. ${feitoEm} ${emAberto}`;
+      return { texto, podeConfirmar: true, linkLancamentos: false };
+    }
+    case "sem-lancamento":
+      return {
+        texto: `Esta fatura está marcada como paga em ${formatDate(p.dataPagamento)}, mas sem lançamento de pagamento. Desfazer só a reabre; nenhum saldo muda.`,
+        podeConfirmar: true,
+        linkLancamentos: false,
+      };
+    case "pagamento-editado":
+      return { texto: MSG_PAGAMENTO_EDITADO, podeConfirmar: false, linkLancamentos: true };
+    case "nao-paga":
+      return { texto: MSG_FATURA_NAO_PAGA, podeConfirmar: false, linkLancamentos: false };
+  }
+}
 
 /**
  * Traduz o erro da RPC `desfazer_pagamento_fatura` (o texto exato do `raise`) para a tela. Só

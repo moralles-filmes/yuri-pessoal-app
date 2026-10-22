@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -56,13 +57,8 @@ import {
   STATEMENT_STATUS_LABELS,
   type Classificacao,
 } from "@/lib/finance/constants";
-import {
-  markStatementPaid,
-  markStatementUnpaid,
-  moveTransactionToStatement,
-  preverDesfazerPagamento,
-} from "@/lib/actions/statements";
-import { MSG_FATURA_NAO_PAGA, MSG_PAGAMENTO_EDITADO } from "@/lib/finance/desfazer-pagamento";
+import { markStatementPaid, moveTransactionToStatement } from "@/lib/actions/statements";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { toast } from "sonner";
 import type {
   CardStatementWithTotal,
@@ -72,6 +68,11 @@ import type {
 } from "@/types/database";
 
 const ALL = "all";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const DesfazerPagamentoDialog = dynamic(() => import("./desfazer-pagamento-dialog"), {
+  ssr: false,
+});
 
 type CardOption = {
   id: string;
@@ -212,6 +213,9 @@ export function StatementsClient({
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = React.useState<string | null>(null);
+  // Fatura cujo pagamento está sendo desfeito (nulo = diálogo fechado).
+  const [desfazendo, setDesfazendo] = React.useState<string | null>(null);
+  const desfazerMontado = useLazyDialog(desfazendo !== null);
 
   const selectedCard = cards.find((c) => c.id === selectedCardId) ?? null;
 
@@ -366,35 +370,6 @@ export function StatementsClient({
   const faturaAtual = atualComp
     ? list.find((s) => s.competencia === atualComp)
     : undefined;
-
-  // Transitório (03-F A2): a A3 troca este clique pelo diálogo de confirmação.
-  async function handleUnpay(id: string) {
-    const lido = await preverDesfazerPagamento(id);
-    if (!lido.ok) {
-      toast.error(lido.error);
-      return;
-    }
-    const previsao = lido.data;
-    if (previsao.estado === "pagamento-editado") {
-      toast.error(MSG_PAGAMENTO_EDITADO);
-      return;
-    }
-    if (previsao.estado === "nao-paga") {
-      toast.error(MSG_FATURA_NAO_PAGA);
-      router.refresh();
-      return;
-    }
-    const res = await markStatementUnpaid(
-      id,
-      previsao.estado === "com-lancamento" ? previsao.lancamentoId : null,
-    );
-    if (res.ok) {
-      toast.success("Pagamento desfeito.");
-    } else {
-      toast.error(res.error);
-    }
-    router.refresh();
-  }
 
   if (cards.length === 0) {
     return (
@@ -554,7 +529,7 @@ export function StatementsClient({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleUnpay(s.id as string)}
+                            onClick={() => setDesfazendo(s.id as string)}
                           >
                             <RotateCcw /> Desfazer
                           </Button>
@@ -735,6 +710,15 @@ export function StatementsClient({
             );
           })}
         </div>
+      )}
+
+      {desfazerMontado && (
+        <DesfazerPagamentoDialog
+          statementId={desfazendo}
+          onOpenChange={(aberto) => {
+            if (!aberto) setDesfazendo(null);
+          }}
+        />
       )}
     </div>
   );
