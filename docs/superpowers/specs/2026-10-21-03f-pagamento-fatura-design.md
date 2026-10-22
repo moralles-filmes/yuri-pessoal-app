@@ -590,3 +590,127 @@ patch de worker é dado não confiável (`tsc` antes de aplicar).
 | RR-F-5 | O comportamento da RPC é provado por varredura do SQL e por **uma** prova no banco; o harness não executa SQL. Uma edição futura da função que fuja das formas varridas não é pega | aceito; refazer a prova do §10 se a função mudar |
 | RR-F-6 | Pagamento **editado** em Lançamentos (virou despesa, mudou de status, ganhou destino) não se desfaz em `/faturas` (D-F7); o caminho é Lançamentos → excluir, que confere os recebíveis mas **não pede confirmação** (o P1-8 fecha só o botão de `/faturas`). Hoje 0 casos | aceito; a confirmação de excluir em Lançamentos fica para quem tratar o RR-F-1 (**03-G**, proposto) |
 | RR6 / RR12 | (03-C) "grava antes de recusar" em `updateTransaction` | **03-G** (K2) |
+
+---
+
+## 13. Resultado da execução (2026-10-21)
+
+### 13.1 Commits
+
+`39aa90e` desenho · `3cb5317` plano · `55b04a9` M-F · `c4d6e9e` A1 · `1e6aae5` A2 · `717f4f5` A3 ·
+`7a32b4f` B2 · `66de183` correções da revisão final. Sem push, sem merge, sem upstream.
+
+### 13.2 A migration
+
+- Validador (`saas-shield-br:migration-validator`): 1ª passada PASS_WITH_WARNINGS, 4 achados P3.
+  O de redação (nota de reversão) foi corrigido; os três de lógica viraram a **D-F12**, incluída
+  pelo dono. 2ª passada PASS_WITH_WARNINGS, 0 bloqueantes, com 1 achado novo (FINDING-005,
+  registrado no RR-F-4).
+- Aplicada pelo MCP depois do "Aplique" do dono, numa mensagem só para isso.
+- Conferida pelo objeto: 2 funções, `prosecdef = false`, `search_path=""`, `anon`/`public` sem
+  execute, `authenticated` com execute; "own rows" + FORCE RLS em `card_statements`,
+  `transactions` e `accounts`.
+- Tipos: só as duas entradas em `Functions`. Ficaram de fora, por não serem da M-F, uma
+  relationship de `import_rows` e a sintaxe nova dos genéricos (invariante 94).
+
+### 13.3 Os cinco comandos (antes `85d9ad1` × depois `66de183`)
+
+| Comando | Antes | Depois |
+| --- | --- | --- |
+| `npm run test:run` | 277 arquivos, 6.546 testes | **281 arquivos, 6.631 testes**, verdes |
+| `npm run lint` | limpo | limpo |
+| `npx tsc --noEmit` | limpo | limpo |
+| `npm run build` | ok | ok |
+| `npm run perf:bundle` | mediana 216,3 KB, 68 rotas | **mediana 216,3 KB**, 68 rotas, todas no orçamento |
+
+Rotas (KB gz): `/faturas` 206,7 → **206,9** · `/cartoes` 218,2 → 218,2 ·
+`/financeiro/lancamentos` 226,4 → 226,3 · `/dashboard/financeiro` 207,7 → 207,7.
+`TZ=UTC npx vitest run src/lib/finance/ src/lib/actions/ src/lib/notifications/`: 56 arquivos,
+943 testes, verdes.
+
+### 13.4 Mutações
+
+Cada uma aplicada sozinha. As de TS compilaram. A restauração foi conferida por
+`git diff --quiet` em todas. **26 de 26 caíram.**
+
+| # | Teste que cai (arquivo › nome) |
+| --- | --- |
+| Y1 | `statements.test.ts` › A1 "manda à RPC exatamente o lançamento…", "não escreve direto em tabela nenhuma" (+5 da A1/B2) e `quem-escreve-transactions.test.ts` › "toda escrita em transactions está declarada…" |
+| Y2 | `m-f-pagamento-fatura.test.ts` › "pagar: a reserva é condicional e a recusa vem ANTES do insert" |
+| Y3 | idem Y2 |
+| Y4 | `m-f` › "nenhuma das duas engole falha — sem bloco exception when" |
+| Y5 | `m-f` › "desfazer: as três recusas vêm ANTES de qualquer escrita" |
+| Y6a | `statements.test.ts` › "manda à RPC exatamente o lançamento de montarPagamentoFatura" |
+| Y6b | `m-f` › "espelho: as colunas do insert são exatamente as chaves de montarPagamentoFatura" |
+| Y7 | `m-f` › "desfazer: trava a fatura e o lançamento antes de decidir" |
+| Y8 | `m-f` › "desfazer: as três recusas vêm ANTES de qualquer escrita" |
+| Y9 | `faturas-tela.test.ts` › "statements-client não importa nem chama markStatementUnpaid" |
+| Y10a/b/c | `desfazer-pagamento.test.ts` › "…o texto diz de qual conta" / "…traz o valor formatado" / "…traz a data de pagamento em dd/MM/yyyy" |
+| Y11a | `quem-escreve-transactions.test.ts` › "toda escrita em transactions está declarada…" (+4 da A1/B2) |
+| Y11b | `quem-escreve-transactions.test.ts` › "toda função que escreve em transactions está declarada…" |
+| Y12a | `m-f` › "as duas são security invoker com search_path vazio — nenhuma security definer" |
+| Y12b | `m-f` › "revoke de public e anon, grant a authenticated, para as duas" |
+| Y13 | `statements.test.ts` › "data de amanhã é recusada com a mensagem própria no campo…" |
+| Y14 | `desfazer-pagamento.test.ts` › "a data é a de Brasília — 01:30 UTC ainda é o dia anterior" |
+| Y15 | `statements.test.ts` › "confirmar manda à RPC o lançamento lido — e nada é escrito direto" |
+| Y16a | `m-f` › "pagar: só cria o que o desfazer aceita apagar…" e "desfazer: só apaga o que ainda tem a forma…" |
+| Y16b | `desfazer-pagamento.test.ts` › "ganhou grupo de transferência: não é mais pagamento" |
+| Y17 | `faturas-tela.test.ts` › "o diálogo lê fieldErrors.dataPagamento…" |
+| Y18 (D-F12) | `m-f` › "pagar: só cria o que o desfazer aceita apagar…" |
+| Y19 (D-F12) | `m-f` › "pagar: a conta tem de ser visível pela RLS…" |
+| F1 / F2 (revisão) | `statements.test.ts` › "erro na leitura do lançamento NÃO vira 'sem lançamento'" / `faturas-tela.test.ts` › "depois de uma recusa o diálogo lê de novo…" |
+
+### 13.5 A prova no banco (dado sintético, 2026-10-21, ~21h56 BRT)
+
+Uma fatura sintética (`[03F-SINT]`, competência 2031-01) foi criada num cartão e numa conta que
+já existiam. As chamadas rodaram como `authenticated`, com o `sub` do dono.
+
+- **Pagar duas vezes:** 1 lançamento `[03F-SINT]`; a 2ª chamada saiu com `FATURA_JA_PAGA`. A
+  fatura ficou paga, com ponteiro e conta, e o lançamento ficou na forma do pagamento (com
+  `liquidado_em`).
+- **Recusas no banco** (numa transação que terminou em rollback):
+  - desfazer com outro lançamento → `PAGAMENTO_MUDOU`;
+  - lançamento com `type` despesa → `FATURA_PAGAMENTO_INVALIDO`;
+  - conta inexistente/alheia → `FATURA_PAGAMENTO_INVALIDO`;
+  - sem sessão → `FATURA_SEM_SESSAO`.
+- **Desfazer duas vezes:** 0 lançamentos `[03F-SINT]`, a fatura reaberta com os campos `pago_*`
+  nulos, e a 2ª chamada saiu com `FATURA_NAO_PAGA`.
+- **Saldo:** o md5 de `account_balance` de todas as contas, depois do desfazer, ficou **igual**
+  ao de partida.
+- ⚠️ **A concorrência foi provada de forma SEQUENCIAL, não simultânea.** O MCP serializou as duas
+  chamadas: a 2ª começou ~2,5 s depois do fim da 1ª, como mostram os `clock_timestamp()`. Também
+  não existe `dblink`. A prova mostra a recusa da segunda chamada; ela **não** mostra a espera
+  pelo lock. A espera é comportamento documentado do Postgres (EvalPlanQual em READ COMMITTED),
+  confirmado por leitura nos dois validadores e na revisão final.
+- ⚠️ **Remoção:** o MCP recusou o `delete` da fatura sintética (`declined`). Ela ficou no banco
+  aberta, sem itens, sem lançamento e sem efeito em saldo, à espera de o dono rodar a remoção no
+  SQL Editor.
+
+### 13.6 Revisão final da branch (modelo mais capaz)
+
+Nenhum achado bloqueante nem importante. Quatro menores, todos corrigidos em `66de183`:
+
+- **F1:** um erro de leitura virava "sem lançamento".
+- **F2:** o diálogo não relia depois de uma recusa.
+- **F3:** faltava `aria-live`.
+- **F4:** cobertura de testes e o inventário de `quem-apaga`.
+
+A revisão também apontou um caso extremo sem dano, que fica registrado no RR-F-7.
+
+### 13.7 Desvios e limitações
+
+- A ordem mudou: a migration veio antes da A1 (§9).
+- A **D-F12** entrou depois do "aprovado", por achado do validador e com decisão do dono.
+- O inventário ficou com `statements.ts` em **1** (o spec previa 1 já na A1). A A1 deixou 2,
+  porque o desfazer ainda apagava direto, e a A2 levou a 1.
+- A A2 commitou um `handleUnpay` **transitório** (lê e confirma no mesmo clique), trocado pelo
+  diálogo na A3.
+- **A conferência visual** do diálogo não foi feita. O Chrome estava conectado, mas não havia
+  fatura paga para abrir o "Desfazer", e pagar uma real ficaria fora do escopo.
+
+### 13.8 Risco residual novo
+
+| # | Risco | Destino |
+| --- | --- | --- |
+| RR-F-7 | Desfazer em `/faturas` concorrendo com Lançamentos → excluir do MESMO lançamento pode dar deadlock: o desfazer trava a fatura e depois o lançamento, e o `on delete set null` faz o inverso. O Postgres aborta uma das duas; nada fica pela metade, e a tela mostra a mensagem de "incerto" | aceito |
+| RR-F-8 | A espera pelo lock da reserva não foi observada no banco (prova sequencial, §13.5) | aceito; refazer com duas sessões reais se a função mudar |
