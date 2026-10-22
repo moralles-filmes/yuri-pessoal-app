@@ -7,8 +7,26 @@ import {
   invalid,
   notAuthed,
 } from "@/lib/actions/helpers";
-import { montarPagamentoFatura } from "@/lib/finance/statement-payment";
-import { pagamentoFaturaSchema } from "@/lib/validators/statement";
+import {
+  argumentosDoPagamento,
+  mensagemDoErroDoPagamento,
+  montarPagamentoFatura,
+} from "@/lib/finance/statement-payment";
+import {
+  MSG_LEITURA_DO_PAGAMENTO_FALHOU,
+  mensagemDoErroDoDesfazer,
+  previsaoDoDesfazer,
+  type LancamentoDoPagamento,
+  type PrevisaoDoDesfazer,
+} from "@/lib/finance/desfazer-pagamento";
+import {
+  dataDePagamentoFutura,
+  MSG_DATA_PAGAMENTO_FATURA_FUTURA,
+} from "@/lib/finance/caixa";
+import {
+  desfazerPagamentoFaturaSchema,
+  pagamentoFaturaSchema,
+} from "@/lib/validators/statement";
 import { hojeISO } from "@/lib/format";
 import type { ActionResult } from "@/types/finance";
 
@@ -21,18 +39,13 @@ function revalidateStatements() {
 }
 
 /**
- * Marca de "pago em" gravado em `card_statements.pago_em` (timestamptz) a partir da data
- * escolhida. Meio-dia UTC = 09h em São Paulo: cai no MESMO dia do calendário em qualquer
- * leitura no fuso BR (meia-noite UTC voltaria um dia).
- */
-function pagoEmTimestamp(data: string): string {
-  return `${data}T12:00:00Z`;
-}
-
-/**
  * Paga a fatura: cria UM lançamento de pagamento (transferência que debita a conta escolhida)
  * e marca a fatura como paga, guardando a conta e o lançamento para o "Desfazer".
  * O valor é o total da fatura no momento do pagamento.
+ *
+ * A garantia de "uma vez só" é da RPC `pagar_fatura` (reserva condicional da fatura +
+ * lançamento + ponteiro, numa transação): duas abas ou um clique duplo não pagam duas vezes.
+ * A leitura de `pago_em` aqui é só o caminho rápido, para recusar sem ir ao banco gravar.
  *
  * `dataPagamento` ('yyyy-MM-dd') é a data em que o dinheiro saiu da conta — quem paga informa
  * para bater com o extrato do banco. Ausente, usa hoje.
@@ -47,6 +60,11 @@ export async function markStatementPaid(
 
   const parsed = pagamentoFaturaSchema.safeParse({ id, contaId, dataPagamento });
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  // 03-F K3 — data futura é recusada antes de qualquer leitura e sem chamar a RPC.
+  if (dataDePagamentoFutura(parsed.data.dataPagamento, hojeISO())) {
+    return invalid({ dataPagamento: [MSG_DATA_PAGAMENTO_FATURA_FUTURA] });
+  }
 
   const data = parsed.data.dataPagamento ?? hojeISO();
 
@@ -86,66 +104,91 @@ export async function markStatementPaid(
     dataPagamento: data,
   });
 
-  const { data: pago, error: insErr } = await ctx.supabase
-    .from("transactions")
-    .insert({ user_id: ctx.userId, ...payload })
-    .select("id")
-    .single();
-  if (insErr || !pago) return dbError("Não foi possível registrar o pagamento.");
-
-  const { error: updErr } = await ctx.supabase
-    .from("card_statements")
-    .update({
-      status: "paga",
-      pago_em: pagoEmTimestamp(data),
-      pago_conta_id: contaId,
-      pago_transacao_id: pago.id,
-    })
-    .eq("id", id);
-  if (updErr) {
-    // Compensação (sem transação multi-statement no client): desfaz o lançamento criado.
-    await ctx.supabase.from("transactions").delete().eq("id", pago.id);
-    return dbError("Não foi possível marcar a fatura como paga.");
-  }
+  const { error } = await ctx.supabase.rpc(
+    "pagar_fatura",
+    argumentosDoPagamento({ statementId: id, dataPagamento: data, lancamento: payload }),
+  );
+  if (error) return dbError(mensagemDoErroDoPagamento(error));
 
   revalidateStatements();
   return { ok: true, data: undefined };
 }
 
 /**
- * Desfaz o pagamento: deleta o lançamento de pagamento (estorna o saldo da conta) e limpa os
- * campos de pagamento. Os lançamentos do cartão voltam a "em aberto" (derivado da fatura).
+ * Lê o pagamento que o "Desfazer" vai desfazer, SEM escrever nada: qual lançamento sai, de
+ * qual conta, com que valor e em que data foi pago (03-F K1). A view `card_statements_with_total`
+ * não expõe `pago_transacao_id`, por isso a leitura vai à tabela.
  */
-export async function markStatementUnpaid(id: string): Promise<ActionResult> {
+export async function preverDesfazerPagamento(
+  id: string,
+): Promise<ActionResult<PrevisaoDoDesfazer>> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { data: st } = await ctx.supabase
-    .from("card_statements")
-    .select("pago_transacao_id")
-    .eq("id", id)
-    .eq("user_id", ctx.userId)
-    .single();
-  if (!st) return dbError("Fatura não encontrada.");
+  const parsed = desfazerPagamentoFaturaSchema.pick({ id: true }).safeParse({ id });
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
 
-  if (st.pago_transacao_id) {
-    await ctx.supabase
+  // Erro de leitura NÃO vira "não encontrada" nem "sem lançamento": o diálogo afirmaria um
+  // fato falso ("nenhum saldo muda") com o botão de confirmar à mostra.
+  const { data: fatura, error: erroFatura } = await ctx.supabase
+    .from("card_statements")
+    .select("pago_em, pago_transacao_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (erroFatura) return dbError(MSG_LEITURA_DO_PAGAMENTO_FALHOU);
+  if (!fatura) return dbError("Fatura não encontrada.");
+
+  let lancamento: LancamentoDoPagamento | null = null;
+  if (fatura.pago_transacao_id) {
+    const { data: tx, error: erroLancamento } = await ctx.supabase
       .from("transactions")
-      .delete()
-      .eq("id", st.pago_transacao_id);
+      .select(
+        "id, type, status, amount, description, transfer_account_id, transfer_group_id, account:accounts!transactions_account_id_fkey(name)",
+      )
+      .eq("id", fatura.pago_transacao_id)
+      .maybeSingle();
+    if (erroLancamento) return dbError(MSG_LEITURA_DO_PAGAMENTO_FALHOU);
+    if (tx) {
+      lancamento = {
+        id: tx.id,
+        type: tx.type,
+        status: tx.status,
+        amount: Number(tx.amount),
+        description: tx.description ?? "",
+        transfer_account_id: tx.transfer_account_id,
+        transfer_group_id: tx.transfer_group_id,
+        conta: tx.account?.name ?? null,
+      };
+    }
   }
 
-  const { error } = await ctx.supabase
-    .from("card_statements")
-    .update({
-      status: "aberta",
-      pago_em: null,
-      pago_conta_id: null,
-      pago_transacao_id: null,
-    })
-    .eq("id", id);
+  return { ok: true, data: previsaoDoDesfazer({ fatura, lancamento }) };
+}
 
-  if (error) return dbError("Não foi possível desfazer o pagamento.");
+/**
+ * Desfaz o pagamento LIDO na confirmação: `lancamentoId` é o que `preverDesfazerPagamento`
+ * devolveu (`null` para fatura paga sem lançamento) e é obrigatório, para nenhum chamador
+ * desfazer sem dizer o que leu. A RPC `desfazer_pagamento_fatura` trava a fatura, recusa se o
+ * pagamento mudou ou foi editado em Lançamentos e, numa transação, reabre a fatura e apaga o
+ * lançamento (o saldo da conta volta junto).
+ */
+export async function markStatementUnpaid(
+  id: string,
+  lancamentoId: string | null,
+): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = desfazerPagamentoFaturaSchema.safeParse({ id, lancamentoId });
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const { error } = await ctx.supabase.rpc("desfazer_pagamento_fatura", {
+    p_statement_id: parsed.data.id,
+    // O tipo gerado não marca o argumento como nulo, mas a função trata `null` (fatura sem lançamento).
+    p_lancamento_id: parsed.data.lancamentoId as string,
+  });
+  if (error) return dbError(mensagemDoErroDoDesfazer(error));
+
   revalidateStatements();
   return { ok: true, data: undefined };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -56,11 +57,8 @@ import {
   STATEMENT_STATUS_LABELS,
   type Classificacao,
 } from "@/lib/finance/constants";
-import {
-  markStatementPaid,
-  markStatementUnpaid,
-  moveTransactionToStatement,
-} from "@/lib/actions/statements";
+import { markStatementPaid, moveTransactionToStatement } from "@/lib/actions/statements";
+import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import { toast } from "sonner";
 import type {
   CardStatementWithTotal,
@@ -70,6 +68,11 @@ import type {
 } from "@/types/database";
 
 const ALL = "all";
+
+// ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
+const DesfazerPagamentoDialog = dynamic(() => import("./desfazer-pagamento-dialog"), {
+  ssr: false,
+});
 
 type CardOption = {
   id: string;
@@ -210,6 +213,9 @@ export function StatementsClient({
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = React.useState<string | null>(null);
+  // Fatura cujo pagamento está sendo desfeito (nulo = diálogo fechado).
+  const [desfazendo, setDesfazendo] = React.useState<string | null>(null);
+  const desfazerMontado = useLazyDialog(desfazendo !== null);
 
   const selectedCard = cards.find((c) => c.id === selectedCardId) ?? null;
 
@@ -364,16 +370,6 @@ export function StatementsClient({
   const faturaAtual = atualComp
     ? list.find((s) => s.competencia === atualComp)
     : undefined;
-
-  async function handleUnpay(id: string) {
-    const res = await markStatementUnpaid(id);
-    if (res.ok) {
-      toast.success("Pagamento desfeito.");
-      router.refresh();
-    } else {
-      toast.error(res.error);
-    }
-  }
 
   if (cards.length === 0) {
     return (
@@ -533,7 +529,7 @@ export function StatementsClient({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleUnpay(s.id as string)}
+                            onClick={() => setDesfazendo(s.id as string)}
                           >
                             <RotateCcw /> Desfazer
                           </Button>
@@ -715,6 +711,15 @@ export function StatementsClient({
           })}
         </div>
       )}
+
+      {desfazerMontado && (
+        <DesfazerPagamentoDialog
+          statementId={desfazendo}
+          onOpenChange={(aberto) => {
+            if (!aberto) setDesfazendo(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -826,6 +831,8 @@ function PayStatementDialog({
   const [contaId, setContaId] = React.useState<string | undefined>(undefined);
   // Data em que o pagamento saiu da conta — editável para bater com o extrato do banco.
   const [data, setData] = React.useState(today);
+  // Recusa de data (B2): a mensagem vem em fieldErrors.dataPagamento e fica sob o campo.
+  const [erroData, setErroData] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
   async function handleConfirm() {
@@ -838,7 +845,13 @@ function PayStatementDialog({
         setOpen(false);
         onPaid();
       } else {
-        toast.error(res.error);
+        const msgData = res.fieldErrors?.dataPagamento?.[0];
+        if (msgData) {
+          setErroData(msgData);
+          toast.error(msgData);
+        } else {
+          toast.error(res.error);
+        }
       }
     } finally {
       setLoading(false);
@@ -853,6 +866,7 @@ function PayStatementDialog({
         if (!v) {
           setContaId(undefined);
           setData(today);
+          setErroData(null);
         }
       }}
     >
@@ -903,12 +917,23 @@ function PayStatementDialog({
               <Input
                 id="fatura-data-pagamento"
                 type="date"
+                max={today}
                 value={data}
-                onChange={(e) => setData(e.target.value)}
+                aria-invalid={erroData ? true : undefined}
+                aria-describedby={erroData ? "fatura-data-pagamento-erro" : undefined}
+                onChange={(e) => {
+                  setData(e.target.value);
+                  setErroData(null);
+                }}
               />
               <p className="text-xs text-muted-foreground">
                 Use a data em que o valor saiu da conta, para bater com o extrato.
               </p>
+              {erroData && (
+                <p id="fatura-data-pagamento-erro" className="text-xs text-destructive">
+                  {erroData}
+                </p>
+              )}
             </div>
           </div>
         )}

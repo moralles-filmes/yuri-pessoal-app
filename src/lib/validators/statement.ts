@@ -10,3 +10,12 @@ export const pagamentoFaturaSchema = z.object({
   contaId: z.string().uuid({ message: "Selecione a conta" }),
   dataPagamento: dateString.optional(),
 });
+
+/**
+ * Entrada do desfazer (03-F K1): a fatura e o lançamento que o dono LEU na confirmação —
+ * `null` quando a fatura estava paga sem lançamento. Sem valor padrão: o chamador diz o que leu.
+ */
+export const desfazerPagamentoFaturaSchema = z.object({
+  id: z.string().uuid({ message: "Fatura inválida" }),
+  lancamentoId: z.string().uuid({ message: "Lançamento inválido" }).nullable(),
+});

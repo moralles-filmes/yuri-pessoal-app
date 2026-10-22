@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  argumentosDoPagamento,
   descricaoPagamentoFatura,
+  mensagemDoErroDoPagamento,
   montarPagamentoFatura,
+  pagoEmTimestamp,
 } from "@/lib/finance/statement-payment";
+import { dateInSaoPaulo } from "@/lib/format";
 
 describe("montarPagamentoFatura", () => {
   const base = {
@@ -54,5 +58,67 @@ describe("montarPagamentoFatura", () => {
     expect(desc).toContain("Pagamento fatura");
     expect(desc).toContain("Nubank");
     expect(desc).toContain("2026");
+  });
+});
+
+describe("pagoEmTimestamp", () => {
+  it("grava meio-dia UTC da data escolhida", () => {
+    expect(pagoEmTimestamp("2031-01-10")).toBe("2031-01-10T12:00:00Z");
+  });
+
+  it("cai no mesmo dia do calendário em São Paulo", () => {
+    expect(dateInSaoPaulo(new Date(pagoEmTimestamp("2031-01-10")))).toBe("2031-01-10");
+  });
+});
+
+describe("argumentosDoPagamento", () => {
+  it("entrega à RPC o MESMO lançamento recebido e o instante do pagamento", () => {
+    const lancamento = montarPagamentoFatura({
+      contaId: "11111111-1111-1111-1111-111111111111",
+      total: 100,
+      cartaoNome: "Cartão Sintético",
+      competencia: "2031-01-01",
+      dataPagamento: "2031-01-10",
+    });
+    const args = argumentosDoPagamento({
+      statementId: "22222222-2222-2222-2222-222222222222",
+      dataPagamento: "2031-01-10",
+      lancamento,
+    });
+    expect(args.p_lancamento).toBe(lancamento);
+    expect(args.p_pago_em).toBe("2031-01-10T12:00:00Z");
+    expect(args.p_statement_id).toBe("22222222-2222-2222-2222-222222222222");
+  });
+});
+
+describe("mensagemDoErroDoPagamento", () => {
+  it("traduz os quatro códigos da RPC", () => {
+    expect(mensagemDoErroDoPagamento({ message: "FATURA_JA_PAGA" })).toBe(
+      "Esta fatura já está paga.",
+    );
+    expect(mensagemDoErroDoPagamento({ message: "FATURA_NAO_ENCONTRADA" })).toBe(
+      "Fatura não encontrada.",
+    );
+    expect(mensagemDoErroDoPagamento({ message: "FATURA_SEM_SESSAO" })).toBe(
+      "Sessão expirada. Faça login novamente.",
+    );
+    expect(mensagemDoErroDoPagamento({ message: "FATURA_PAGAMENTO_INVALIDO" })).toBe(
+      "Não foi possível registrar o pagamento.",
+    );
+  });
+
+  const incerto =
+    "Não foi possível confirmar o pagamento. Recarregue a página para ver se ele foi registrado.";
+
+  it("erro desconhecido não afirma que o pagamento falhou", () => {
+    expect(mensagemDoErroDoPagamento({ message: "fetch failed" })).toBe(incerto);
+  });
+
+  it("não casa por substring", () => {
+    expect(mensagemDoErroDoPagamento({ message: "xFATURA_JA_PAGA" })).toBe(incerto);
+  });
+
+  it("aceita erro nulo", () => {
+    expect(mensagemDoErroDoPagamento(null)).toBe(incerto);
   });
 });

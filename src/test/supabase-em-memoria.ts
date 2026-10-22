@@ -19,6 +19,9 @@
  * ║ • Toda escrita vira uma `Operacao`, NA ORDEM em que aconteceu: é por ela que um teste ║
  * ║   prova "a recusa não gravou nada" ou "o update veio depois da limpeza".              ║
  * ║                                                                                       ║
+ * ║ • `rpc(nome, args)` REGISTRA a chamada (tipo `rpc`, `tabela` = nome da função) e      ║
+ * ║   devolve o que a opção `rpc` configurar; NÃO executa SQL nem mexe nas tabelas.       ║
+ * ║                                                                                       ║
  * ║ O QUE ELE IGNORA: `order`, `or`, colunas do `select` (devolve a linha inteira),       ║
  * ║ `count` exato além do tamanho do resultado, RLS e constraints do banco.               ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
@@ -38,8 +41,9 @@ export type EscritaPretendida = {
 };
 
 export type Operacao = {
+  /** Para `rpc`, o nome da função. */
   tabela: string;
-  tipo: "insert" | "update" | "delete";
+  tipo: "insert" | "update" | "delete" | "rpc";
   valores?: Linha | Linha[];
   filtros: Array<[string, string, unknown]>;
 };
@@ -72,6 +76,8 @@ export function criarSupabaseEmMemoria(
     antesDeGravar?: (op: EscritaPretendida) => ErroSimulado | null;
     /** Simula o `max_rows` do PostgREST: corta a leitura ANTES do `limit`; o `count` não muda. */
     maxRows?: number;
+    /** Resposta de `client.rpc(nome, args)`. Sem ela, a chamada devolve o erro `SEM_RPC`. */
+    rpc?: (nome: string, args: Record<string, unknown>) => { data: unknown; error: ErroSimulado | null };
   } = {},
 ) {
   const tabelas: Record<string, Linha[]> = Object.fromEntries(
@@ -206,6 +212,13 @@ export function criarSupabaseEmMemoria(
 
   const client = {
     from,
+    rpc: async (nome: string, args: Record<string, unknown>): Promise<Resultado> => {
+      operacoes.push({ tabela: nome, tipo: "rpc", valores: args, filtros: [] });
+      if (!opcoes.rpc) {
+        return { data: null, error: { code: "SEM_RPC", message: "rpc não configurada no teste" } };
+      }
+      return opcoes.rpc(nome, args);
+    },
     auth: {
       getUser: async () => ({ data: { user: { id: opcoes.userId ?? "user-1" } }, error: null }),
     },
@@ -217,7 +230,7 @@ export function criarSupabaseEmMemoria(
     /** O estado CORRENTE das tabelas, depois das escritas. */
     tabelas,
     operacoes,
-    /** Só as escritas (insert/update/delete), na ordem — opcionalmente de uma tabela. */
+    /** Só as escritas (insert/update/delete) e as chamadas `rpc`, na ordem — opcionalmente de uma tabela (ou função). */
     escritas(tabela?: string): Operacao[] {
       return operacoes.filter((o) => tabela === undefined || o.tabela === tabela);
     },

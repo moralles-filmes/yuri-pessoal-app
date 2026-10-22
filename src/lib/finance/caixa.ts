@@ -409,6 +409,10 @@ export function dataDeLiquidacaoAGravar(params: {
 export const MSG_DATA_PAGAMENTO_FUTURA =
   "A data do pagamento não pode ser futura. Deixe vazio se ainda não foi pago.";
 
+// 03-F K3: a da P8 manda deixar vazio, e o campo do pagamento de fatura nunca fica vazio.
+export const MSG_DATA_PAGAMENTO_FATURA_FUTURA =
+  "A data do pagamento não pode ser futura. Pague a fatura quando o valor sair da conta.";
+
 /**
  * P8 — data futura num lançamento liquidado é previsão, não caixa. Comparação de texto
  * 'yyyy-MM-dd' contra o `hoje` injetado. Data anterior à compra é aceita (pagamento antecipado).

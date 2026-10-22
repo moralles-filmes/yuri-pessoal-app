@@ -1,6 +1,6 @@
 # STATUS
 
-**Atualizado:** 2026-10-18
+**Atualizado:** 2026-10-22
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
 REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
@@ -11,8 +11,14 @@ REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · 
 (integrada por merge `--no-ff` em `31bef87`, **com a M3 aplicada**) · **REDESIGN-03-D ✅**
 (integrada por merge `--no-ff` em `545acf4`, **com a M1 aplicada**) · **REDESIGN-07 (A–D) ✅**
 (integrada por merge `--no-ff` em `598b475`, sem migration) · **REDESIGN-03-E ✅** (integrada
-por merge `--no-ff` em `de6ef19`, **com a M2 e a M2b aplicadas**); **03-F liberada** —
-idempotência do pagamento de fatura (P0-4) e confirmação no desfazer (P1-8)
+por merge `--no-ff` em `de6ef19`, **com a M2 e a M2b aplicadas**) · **REDESIGN-03-F ✅**
+(integrada por merge `--no-ff` em `84bf87b`, **com a M-F aplicada**); **03-G liberada** — erro
+é erro: `error.tsx` por rota e leituras que param de engolir falha (P0-5)
+
+⛔ **A M-F foi aplicada em 2026-10-21** (03-F), pelo MCP, depois do seu "Aplique" literal, numa
+mensagem só para isso (D63). Ela **não** estava no `MIGRATIONS.md`: nasceu da K0 da 03-F, com o
+SQL aprovado no desenho — duas funções (`pagar_fatura`, `desfazer_pagamento_fatura`), nenhuma
+tabela, coluna, policy, índice ou dado.
 
 ⛔ **A M2 e a M2b foram aplicadas em 2026-10-18** (03-E), pelo MCP, cada uma depois do seu
 "aplique a M2" / "aplique a M2b" literal, em mensagens separadas (D61). A M1 foi aplicada em
@@ -26,7 +32,52 @@ cada uma por PR, em vez de esperar a 08. **A 03-D vai pelo PR #57** (D60), com o
 para o push e o PR; o merge em `main` é seu. **A REDESIGN-07 (A–D) foi integrada em
 `598b475`** e foi a `main` pelo PR #58. **A 03-E vai a `main` por PR próprio, com o seu aval
 explícito para push, PR **e** merge** ("Pode subir para o git em uma branch, fazer pr e merge",
-D62).
+D62). **A 03-F vai a `main` por PR só com o seu aval explícito para o push e o PR** — o merge
+em `main` é produção.
+
+---
+
+## REDESIGN-03-F — pagar a fatura acontece uma vez só, e desfazer é uma decisão lida ✅
+
+Branch `feat/redesign-03f-pagamento-fatura`, nascida de `85d9ad1` (9 commits), integrada por merge
+`--no-ff` em **`84bf87b`** — a árvore integrada é **idêntica** à da ponta (`5e7e221`). O contrato,
+com o resultado da execução no §13, é
+`docs/superpowers/specs/2026-10-21-03f-pagamento-fatura-design.md`; o plano,
+`docs/superpowers/plans/2026-10-21-03f-pagamento-fatura.md`.
+
+**O que mudou de natureza.** Pagar a fatura deixou de ser três requisições (ler, inserir,
+marcar) e passou a ser **uma transação no banco** (RPC `pagar_fatura`, `security invoker`): a
+reserva é condicional (`pago_em is null`) sob o lock da linha, e não existe mais a janela entre
+inserir a transferência e religá-la à fatura — o estado "transferência debitando a conta sem
+fatura apontando" deixou de ser alcançável. O lançamento continua montado **só** por
+`montarPagamentoFatura`; o SQL lista os nomes das colunas, espelhados por teste. **Desfazer**
+abre um diálogo que lê o pagamento antes (lançamento, conta, valor que volta, data em Brasília),
+e a confirmação fica **presa ao lançamento lido** (RPC `desfazer_pagamento_fatura`):
+`PAGAMENTO_MUDOU` se ele mudou, `PAGAMENTO_EDITADO` se foi editado em Lançamentos (D-F7).
+
+| Item | Entrega | Muda número? |
+| --- | --- | --- |
+| M-F | as duas RPCs + tipos (só as duas entradas em `Functions`); D-F12: `pagar_fatura` só cria o que o desfazer aceita apagar, recusa conta que a RLS não mostra e lê o payload só depois da sessão | não |
+| A1 | `markStatementPaid` pela RPC (assinatura igual); erro desconhecido diz "recarregue para ver se foi registrado", nunca "falhou"; harness ganha `rpc()`; inventário de escrita ganha a seção das **funções SQL** | não — salvo o lançamento em dobro, que deixou de nascer |
+| A2 | `preverDesfazerPagamento` (só leitura) e `markStatementUnpaid(id, lancamentoId)` — **mudança de assinatura (K1)** | não |
+| A3 | diálogo lazy de confirmação em `/faturas` (P1-8) | não |
+| B2 | data de pagamento futura recusada, mensagem própria no campo, `max={today}` (RR-E-12) | não |
+
+**Provado:** 26 mutações (Y1–Y19 com variantes) derrubando o teste nomeado; prova no banco com
+dado sintético (pagar 2× → 1 lançamento e `FATURA_JA_PAGA`; desfazer 2× → 0 e
+`FATURA_NAO_PAGA`; as quatro recusas no banco; hash dos saldos igual ao de partida) — ⚠️
+**sequencial**, não simultânea: o MCP serializou as chamadas e não há `dblink` (RR-F-8); revisão
+final da branch no modelo mais capaz, com quatro achados menores corrigidos (`66de183`).
+
+⚠️ **Pendência sua (D63):** o MCP recusou o `delete` da fatura sintética `[03F-SINT]` (competência
+2031-01, aberta, sem itens, sem lançamento, sem efeito em saldo). O SQL de remoção está na entrega
+da 03-F; depois dele, a contagem do banco volta a 9 faturas / 0 pagas / 60 lançamentos. E a
+**conferência visual** do diálogo (claro, escuro, 390 px) — não havia fatura paga para abri-lo.
+
+**Risco residual novo:** RR-F-1 a RR-F-8 no §12/§13.8 do contrato. Os com destino: **RR-F-1**
+(a edição do pagamento em Lançamentos apaga → recria → religa, sem atomicidade), **RR-F-2**
+(`deleteTransaction` ignora o erro ao reabrir a fatura) e **RR-F-6** (excluir em Lançamentos não
+pede confirmação) → **03-G**.
 
 ---
 
@@ -900,6 +951,8 @@ distinguem · horizonte de faturas declarado honestamente (6 ciclos × 3 cartõe
 2. `transactions.liquidado_em` (E6)
 3. `categories.classificacao_padrao` (E7) — **aplicada em 2026-10-11** (03-C2, versão
    `20261011190803`)
+4. `pagar_fatura` e `desfazer_pagamento_fatura` (M-F, da K0 da **03-F** — fora do `MIGRATIONS.md`)
+   — **aplicada em 2026-10-21**, pelo MCP (D63); duas funções, nenhuma tabela, coluna ou dado
 
 `transactions.classificacao`/`valor_pessoal` para receita (E2) **não precisa de migration** —
 as colunas já existem e o CHECK já aceita.
@@ -955,6 +1008,7 @@ as colunas já existem e o CHECK já aceita.
 | D60 | **A 03-D foi integrada na sessão que a escreveu, a seu pedido** ("Pode mergear"), **com** revisão independente da branch inteira (D57) e re-revisão restrita de cada correção, **sem** auditoria de módulo. A branch nasceu antes da D54, então a árvore integrada é a da ponta (`c7798ae`) **mais exatamente** a mudança da D54 no STATUS — conferido por patch-id —, e os cinco comandos rodaram depois do merge. O push e o PR #57 vieram com o seu aval explícito; **o merge em `main` é seu**. ⚠️ **A conferência com dado real da D39/D44/D48/D52 vale também para a 03-D**: registrar um recebimento parcial pela tela, desfazê-lo, e conferir que nenhum número de dashboard, relatório ou sino mudou além do que a B1–B4 prometem |
 | D61 | **03-E: K0–K4 decididas por você, uma de cada vez, e o desenho aprovado** ("Aprovado! Nao precisa me apresentar o plano, pode implementar."). A M2 entrou com o seu "aplique a M2" e a **M2b** (o `create or replace` de `account_balance_before` pela data de caixa, que **não** estava no `MIGRATIONS.md`) com o seu "aplique a M2b", separado — as duas pelo MCP, conferidas pelo objeto e não pela versão do histórico (D59). O gerador de tipos trouxe de novo a relationship de `import_rows` e a sintaxe nova dos genéricos; **só as 3 linhas da coluna** entraram. A prova de efeito zero da B1 contra dado real ficou fraca porque você tinha apagado o financeiro para reimportar; a comparação com **dado sintético** (autorizada por você, plano mostrado antes) é o substituto, e o MCP recusou o `delete` final — os 11 marcados saíram pelo SQL Editor, por você |
 | D62 | **A 03-E foi integrada na sessão que a escreveu, a seu pedido** ("Pode subir para o git em uma branch, fazer pr e merge"), **com** revisão final da branch no modelo mais capaz e **sem** auditoria de módulo. Pela primeira vez o aval cobriu **também o merge em `main`**. A branch nasceu de `main` (`7d37305`, que já tinha os PRs #58 e #59), então o merge trouxe esses commits para esta branch e a árvore integrada é **igual** à da ponta |
+| D63 | **03-F: K0–K3 decididas por você, uma de cada vez, e o desenho aprovado** ("Aprovado"). A **M-F** (`pagar_fatura` e `desfazer_pagamento_fatura`, que **não** estava no `MIGRATIONS.md`) entrou com o seu "Aplique", numa mensagem só para isso, pelo MCP, conferida pelo objeto (`pg_proc`: invoker, `search_path` vazio, grants) e não pela versão do histórico (D59). **Antes do aplique, o `migration-validator` achou três guardas de lógica (P3) e você as incluiu** ("Incluir as três") — a D-F12 do contrato; o FINDING-005 (referências do payload não conferidas) ficou como risco aceito (RR-F-4). O gerador de tipos trouxe de novo a relationship de `import_rows` e a sintaxe nova dos genéricos; **só as duas funções** entraram. A prova no banco é **sequencial** (o MCP serializa as chamadas, sem `dblink`) e o `delete` da fatura sintética voltou `declined` — a remoção ficou com você. Integrada na sessão que a escreveu, ao você pedir o prompt da próxima fase (memória de 2026-10-11): merge `--no-ff` em `84bf87b`, árvore idêntica à da ponta; **push e PR só com o seu aval** |
 
 ## Bloqueios
 
@@ -1104,29 +1158,46 @@ Rotas tocadas, antes → depois (KB gz): `/financeiro/lancamentos` 226,0 → 226
 `/relatorios` 208,5 → 210,3 · `/dashboard/financeiro` 205,4 → 207,2; `/dashboard`,
 `/financeiro` e `/financeiro/contas` iguais.
 
-## Próximo passo — REDESIGN-03-F (idempotência do pagamento de fatura e confirmação no desfazer)
+**Depois do merge da 03-F (`84bf87b`), na árvore integrada** — idêntica à da ponta
+`5e7e221`: `lint` ✅ · `tsc` ✅ · `build` ✅ · `perf:bundle` ✅ mediana **216,3**, 68 rotas,
+todas dentro · `test:run` **281 / 6.631**, 6.630 ✅ e 1 ❌ — a mesma de ambiente
+(`approval/schema.test.ts` lendo migration com CRLF na cópia de trabalho desta worktree; 32/32 no
+diretório principal). Na ponta, no diretório principal, os cinco tinham passado sem ressalva:
+**281 / 6.631**, mediana **216,3**; `TZ=UTC` em finance/actions/notifications **56 / 943**.
+Rotas tocadas, antes → depois (KB gz): `/faturas` 206,7 → 206,9 · `/financeiro/lancamentos`
+226,4 → 226,3; `/cartoes` e `/dashboard/financeiro` iguais.
 
-**A 03-E está fechada, integrada** (`de6ef19`) **e vai a `main` por PR com o seu aval.** A
-03-F fecha dois achados da auditoria: **P0-4** — pagar a fatura é *check-then-act* sem
-constraint, e duas requisições concorrentes inserem duas transferências debitando a conta (a
-primeira fica órfã); e **P1-8** — "Desfazer pagamento" não pede confirmação, o único movimento
-de dinheiro a um clique. O primeiro entregável é o **desenho**, aprovado por você antes de
-qualquer linha de código.
+## Próximo passo — REDESIGN-03-G (erro é erro)
 
-⚠️ **A trava de idempotência mora no banco** (invariante 36), então a 03-F provavelmente pede
-uma migration que **não está** no `MIGRATIONS.md` (um índice único, ou uma RPC transacional).
-O SQL vai ao desenho e precisa do seu "aplique" literal, separado do "aprovado". **Antes de
-qualquer índice único: contar as duplicatas existentes**, só leitura — um índice sobre dado que
-já viola a regra falha na criação.
+**A 03-F está fechada e integrada** (`84bf87b`). Ela vai a `main` por PR **só com o seu aval
+explícito** para o push e o PR. A 03-G é a **última subfase da REDESIGN-03** e fecha o **P0-5**
+da auditoria: *falha de leitura vira R$ 0,00*. As queries não desestruturam `error` e devolvem
+`[]`, e não existe nenhum `error.tsx` no repositório (contado em 2026-10-22: **0**).
 
-⚠️ **O que a 03-E deixou para a 03-F:** o pagamento de fatura agora grava `liquidado_em` com a
-data do pagamento, e desfazer o pagamento apaga a transferência — a coerência entre os dois
-caminhos tem de continuar provada pelo inventário de escrita (`quem-escreve-transactions.test.ts`).
-RR-E-12 (data de pagamento futura aceita em `markStatementPaid`) é vizinho e **não** é da 03-F,
-salvo decisão sua no desenho.
+O primeiro entregável é o **desenho**, aprovado por você antes de qualquer linha de código.
 
-⚠️ **Pendência que é sua (D39, D44, D48, D52, D60):** a conferência com dado real da 03-B, da
-03-B2, da 03-C, da 03-C2 **e** da 03-D. Da 03-E, a conferência visual a 390 px (RR-E-13).
+⚠️ **A 03-G herda a maior fila de riscos residuais da fase.** Todos têm destino escrito aqui, e o
+desenho decide, com você, o que entra e o que vira subfase própria. Se não couber numa só, a
+divisão segue o padrão 03-B / 03-B2.
+
+| Origem | Risco | Natureza |
+| --- | --- | --- |
+| P0-5 | leitura com erro vira `[]`/R$ 0,00; nenhum `error.tsx` | leitura |
+| RR2 (03-B2) | o `max_rows` do PostgREST corta em silêncio as leituras **sem** `.limit`, inclusive as do Cron | leitura |
+| RR-C2-3 (03-C2) | erro ao ler as categorias marcadas devolve `[]`, e a frase diz "nenhuma marcada" | leitura |
+| RR-E-9 (03-E) | `getReceivables` não expõe teto nem erro: "Reembolsos recebidos" sai 0 sem aviso | leitura |
+| RR6 / RR12 (03-C) | `updateTransaction` grava antes de recusar a divisão; chamada direta troca o tipo de compra parcelada | escrita |
+| RR8 / RR14 (03-C) | `update` falha depois da limpeza: a despesa perde a divisão **e** os recebíveis pendentes, sem a mensagem dizer | escrita |
+| RR11 (03-C) | editar um estorno de cartão o tira da fatura (destino **03-G / 05**) | escrita |
+| RR-F-1 (03-F) | a edição do pagamento de fatura em Lançamentos (apaga → recria → religa) não é atômica | escrita |
+| RR-F-2 (03-F) | `deleteTransaction` ignora o erro ao reabrir a fatura | escrita |
+| RR-F-6 (03-F) | excluir em Lançamentos não pede confirmação (o P1-8 fechou só `/faturas`) | tela |
+| D32 | os "18 casos financeiros mínimos do briefing §13" que o aceite da 03 cita **não existem em `docs/`** | fechamento da fase |
+
+⚠️ **Pendência sua, da 03-F (D63):** remover a fatura sintética `[03F-SINT]`, porque o MCP
+recusou o `delete`; e a conferência visual do diálogo de desfazer. Também segue sua a
+conferência com dado real da 03-B, da 03-B2, da 03-C, da 03-C2, da 03-D (D39, D44, D48, D52, D60)
+e a visual a 390 px da 03-E (RR-E-13).
 
 🚀 **Publicação (D54, D62):** a integração das próximas subfases continua sendo merge
 `--no-ff` nesta branch, seguido de PR para `main`.

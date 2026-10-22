@@ -11,6 +11,12 @@
  * Cadeia (FKs das migrations): transactions → transaction_installments / shared_expenses (cascade)
  * → receivables (cascade) → receivable_receipts (cascade, FK composta da M1).
  *
+ * ⚠️ Desde a 03-F, o pagamento de fatura é apagado DENTRO da função SQL
+ * `desfazer_pagamento_fatura`, que esta varredura de `src/` não enxerga. Ele não alcança
+ * recebimento: a função só apaga um lançamento com a forma de pagamento (transferência, que não é
+ * divisível — D-F7, travado por `m-f-pagamento-fatura.test.ts`), e o inventário de funções SQL
+ * de `quem-escreve-transactions.test.ts` fica vermelho com qualquer escrita nova.
+ *
  * ⚠️ Varredura TEXTUAL, como `quem-le-os-recebimentos.test.ts`. A prova de comportamento de cada
  * ponto protegido é o teste de harness dele.
  */
@@ -36,10 +42,6 @@ const ALLOWLIST: Record<string, { n: number; porque: string }> = {
   "lib/actions/installments.ts · receivables": {
     n: 1,
     porque: "cancelInstallmentFuture — protegido (regra cheia, A4)",
-  },
-  "lib/actions/statements.ts · transactions": {
-    n: 2,
-    porque: "o lançamento de pagamento de fatura é transferência, que não é divisível: não tem recebível",
   },
   "lib/actions/transactions.ts · transactions": {
     n: 4,
