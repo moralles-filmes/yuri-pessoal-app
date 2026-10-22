@@ -283,9 +283,16 @@ Finanças, Treinos" a partir daí. Linha antiga fica nula, e nulo não é preenc
 Hoje uma retentativa refaz o laço inteiro desde a primeira mensagem, e o evento `switch` limpa
 texto, chips e propostas da última bolha (invariante 46). Com especialistas:
 
-- **Retentativa dentro de um especialista** (erro do provedor) refaz **só aquele especialista**.
-  As propostas que ele tinha criado ficam órfãs e expiram em 10 min sem tocar nada, como hoje. A
-  tela recebe um evento que remove os cartões **daquele especialista**, e só os dele.
+- **[call, no plano] Especialista em paralelo NÃO repete a tentativa nem troca de provedor.** Se
+  falha, ele é declarado como falha (§4.3.6), e os outros seguem. Três motivos:
+  - com retentativa, o multiplicador da reserva valeria para as seis trilhas, e o pior caso
+    passaria de US$ 2,50 por mensagem;
+  - repetir um especialista come o prazo de 60 s dos outros;
+  - sem retentativa não nasce proposta órfã de especialista.
+
+  **No modo direto** (um especialista só) ele segue a política do provedor, como o agente
+  roteado de hoje. O `switch` daquela trilha zera o texto e remove **os cartões daquela trilha**,
+  e só os dela.
 - **Retentativa do coordenador no passo 1** (antes de qualquer acionamento) segue a regra de hoje.
 - ⛔ **Retentativa do coordenador no passo 2** (a síntese) **não reexecuta especialistas** e
   **não remove propostas**. Os resultados dos especialistas ficam guardados **em memória durante
@@ -296,8 +303,8 @@ texto, chips e propostas da última bolha (invariante 46). Com especialistas:
 
 ### 5.4 Eventos SSE e a tela
 
-- **Evento novo `especialista`** `{ id, rotulo, status: "consultando" | "pronto" | "falhou" |
-  "reiniciado" }`. Ele alimenta a linha "Consultando: Agenda ✓ · Treinos…".
+- **Evento novo `especialista`** `{ id, rotulo, trilha, status: "consultando" | "pronto" |
+  "falhou" }`. Ele alimenta a linha "Consultando: Agenda ✓ · Treinos…".
   `chat-events.test.ts` exige `case` no cliente, e o tipo `Evento` duplicado à mão em
   `chat-client.tsx` muda junto.
 - **`proposta` carrega o id do especialista** para a remoção seletiva da §5.3.
@@ -324,7 +331,8 @@ memória vem por último. A garantia continua a mesma; só muda o lugar.
   × (1 + `MAX_TOOL_STEPS`)**, × tentativas × margem. O RPC aceita qualquer `reserved_cost >= 0`,
   então subestimar passaria em silêncio. Há teste com o número escrito à mão, como o da
   invariante 56.
-- **[call] As constantes mantêm o pior caso perto de US$ 1,50 por mensagem.** O revisor fez a
+- **[call] As constantes mantêm o pior caso perto de US$ 1,50 por mensagem** (a conta do plano dá
+  ~US$ 1,40: especialistas em paralelo sem retentativa, §5.3). O revisor fez a
   conta com as constantes de hoje e o `gemini-3.6-flash`: entre US$ 3 e 4 reservados por
   mensagem, inclusive para um "oi" (hoje são ~US$ 0,6). A reserva é devolvida quando o run fecha
   e o custo real fica muito abaixo disso. Mas o RPC recusa quando gasto + reservas abertas +
