@@ -140,6 +140,31 @@ describe("registry de agentes", () => {
   });
 
   /**
+   * MOD-ia-001 — a mesma classe de defeito, um nível abaixo: o PROMPT dizia "só lê" enquanto a
+   * descrição já tinha sido corrigida. O modelo lê o prompt, não a descrição — então um agente
+   * que oferece ferramenta de escrita e afirma no prompt que não altera nada contradiz o que
+   * lhe foi entregue. O prompt passa a DESCREVER a regra (alteração só como proposta que o dono
+   * confirma na tela) em vez de afirmar a ausência dela.
+   */
+  it("prompt de agente com ferramenta de ESCRITA não afirma que só lê", () => {
+    const escrita = new Set(
+      AI_TOOL_REGISTRY.filter((t) => t.kind === "escrita").map((t) => t.name),
+    );
+    const comEscrita = AI_AGENT_REGISTRY.filter((a) =>
+      a.allowedTools.some((nome) => escrita.has(nome)),
+    );
+    // Sem esta guarda, um filtro que devolvesse sempre [] passaria pelo laço sem verificar nada.
+    expect(comEscrita.length).toBeGreaterThan(0);
+    for (const agente of comEscrita) {
+      expect(agente.prompt, agente.id).not.toMatch(
+        /só lê|exclusivamente as ferramentas de leitura|ainda não consegue executar/i,
+      );
+      expect(agente.prompt, agente.id).toMatch(/confirm/i);
+      expect(agente.prompt, agente.id).toMatch(/proposta|prepar/i);
+    }
+  });
+
+  /**
    * A outra metade: quem ALCANÇA a memória diz isso. Sem ela, a correção acima poderia ser
    * feita apagando a frase — e a descrição ficaria calada sobre o que a chave do dono libera,
    * que é o defeito que a 18-C já corrigiu uma vez em Treinos (as medidas corporais).
