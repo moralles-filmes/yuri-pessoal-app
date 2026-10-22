@@ -108,6 +108,7 @@ foi recusado (`declined`); se acontecer de novo, **paro e pergunto** (§8).
 | D-F11 | A mensagem da B2 chega à tela pelo **campo**: o diálogo de pagar lê `fieldErrors.dataPagamento` e a mostra sob a data (destacada) e no toast | `invalid()` sempre devolve "Verifique os campos destacados."; o diálogo só fazia `toast.error(res.error)` e não destacava nada — a regra do projeto ("só vale se algum campo for destacado"). (Achado do revisor do desenho; decisão minha) |
 | D-F8 | A conta e o valor do diálogo vêm do **lançamento** (`transactions.account_id`, `amount`), não de `pago_conta_id` nem do `total_atual` | É o lançamento que sai e é na conta dele que o saldo volta. `total_atual` muda com estorno posterior; `pago_conta_id` pode divergir se o pagamento foi editado |
 | D-F9 | O harness ganha `rpc()` (registra a chamada como operação e devolve o que o teste configurar) | Para provar que a action monta os argumentos por `montarPagamentoFatura` e mapeia cada erro. **O harness não executa SQL**: o comportamento da RPC é provado por varredura do arquivo e pela prova no banco (§10) |
+| D-F12 | `pagar_fatura` ganha três guardas antes de qualquer escrita, todas com `FATURA_PAGAMENTO_INVALIDO`: (1) o lançamento tem de ter a **forma** que o desfazer aceita apagar (as mesmas quatro condições da D-F7); (2) a conta tem de ser **visível pela RLS** de `accounts`; (3) o payload só é lido **depois** do check de sessão | Achados do `migration-validator` (FINDING-001/002/003, P3, não bloqueantes), **incluídos pelo dono** em 2026-10-21 ("Incluir as três"). (1) torna "todo pagamento criado é desfazível" propriedade do banco, sem pôr valor nenhum no SQL; (2) fecha a referência a conta alheia que a FK simples aceitaria; (3) faz "sem sessão" sempre responder `FATURA_SEM_SESSAO` |
 | D-F10 | `pagoEmTimestamp` sai de `actions/statements.ts` (arquivo `"use server"`, que só pode exportar funções async) para `finance/statement-payment.ts`, puro e testado | O valor vai à RPC; precisa de teste próprio (meio-dia UTC = 09h BRT, mesmo dia) |
 
 ### 3.3 Os fatos que o desenho responde (varredura de 2026-10-21)
@@ -172,13 +173,25 @@ set search_path = ''
 as $$
 declare
   v_user uuid := auth.uid();
-  v_conta uuid := (p_lancamento ->> 'account_id')::uuid;
+  v_conta uuid;
   v_lancamento uuid;
 begin
   if v_user is null then
     raise exception 'FATURA_SEM_SESSAO' using errcode = 'P0001';
   end if;
+  v_conta := (p_lancamento ->> 'account_id')::uuid;            -- D-F12 (3): depois da sessão
   if v_conta is null or p_pago_em is null then
+    raise exception 'FATURA_PAGAMENTO_INVALIDO' using errcode = 'P0001';
+  end if;
+  -- D-F12 (1): só cria o que o desfazer aceita apagar (as mesmas quatro condições).
+  if (p_lancamento ->> 'type') is distinct from 'transferencia'
+     or (p_lancamento ->> 'status') is distinct from 'pago'
+     or (p_lancamento ->> 'transfer_account_id') is not null
+     or (p_lancamento ->> 'transfer_group_id') is not null then
+    raise exception 'FATURA_PAGAMENTO_INVALIDO' using errcode = 'P0001';
+  end if;
+  -- D-F12 (2): a FK de account_id não confere o dono; a RLS de accounts confere.
+  if not exists (select 1 from public.accounts where id = v_conta) then
     raise exception 'FATURA_PAGAMENTO_INVALIDO' using errcode = 'P0001';
   end if;
 
@@ -297,6 +310,9 @@ que é observável — não sobre a ordem.
 - existe exatamente um arquivo que cria `public.pagar_fatura` e um que cria
   `public.desfazer_pagamento_fatura`;
 - as duas são `security invoker` com `set search_path = ''`; **nenhuma** `security definer`;
+- `pagar_fatura`: a recusa de sessão vem antes de ler o payload; as quatro condições de forma
+  (espelhadas com as do desfazer) e o `not exists` em `accounts` vêm antes da primeira escrita,
+  com `raise exception 'fatura_pagamento_invalido'` (D-F12);
 - a reserva tem `where id = p_statement_id and pago_em is null` e é seguida de
   `if not found then` com `raise exception 'fatura_ja_paga'` **antes** do `insert`;
 - o `insert` vem de `jsonb_populate_record(null::public.transactions, p_lancamento)` e o
@@ -333,7 +349,9 @@ igual**:
    p_lancamento: payload }`.
 6. Erro → `mensagemDoErroDoPagamento(error)` (puro): `FATURA_JA_PAGA` → "Esta fatura já está
    paga."; `FATURA_NAO_ENCONTRADA` → "Fatura não encontrada."; `FATURA_SEM_SESSAO` → a mensagem
-   de sessão de `notAuthed`; qualquer outro → a de D-F5.
+   de sessão de `notAuthed`; `FATURA_PAGAMENTO_INVALIDO` → "Não foi possível registrar o
+   pagamento." (a recusa veio antes de qualquer escrita, então aqui afirmar é verdade);
+   qualquer outro → a de D-F5.
 7. `revalidateStatements()`.
 
 **Harness** (`src/test/supabase-em-memoria.ts`): opção `rpc?: (nome, args) => Resultado`; cada
@@ -568,7 +586,7 @@ patch de worker é dado não confiável (`tsc` antes de aplicar).
 | RR-F-1 | A **edição** do pagamento em Lançamentos (`updateTransaction`: apaga → recria → religa) não é atômica: falha no recriar deixa a fatura paga sem lançamento (lado seguro, e agora visível no diálogo); falha no religar deixa o lançamento recriado **sem** ponteiro — o estado que a 03-F fecha no pagamento | **03-G** (proposto) |
 | RR-F-2 | `deleteTransaction` ignora o erro do `update` que reabre a fatura e apaga o lançamento mesmo assim → fatura paga sem lançamento (lado seguro; o diálogo da A3 a mostra e reabre) | **03-G** (erro é erro) |
 | RR-F-3 | O valor pago é o `total_atual` lido **antes** da RPC: uma compra lançada no mesmo instante fica fora do pagamento (como hoje) | aceito |
-| RR-F-4 | A RPC aceita o lançamento montado pelo chamador; um autenticado que a chame direto escolhe os campos — sem privilégio novo, porque ele já insere em `transactions` pelo PostgREST com a mesma RLS | aceito, declarado no comentário da função |
+| RR-F-4 | A RPC aceita o lançamento montado pelo chamador (a forma e a conta são conferidas desde a D-F12; valor, datas, descrição e as referências `card_id`/`statement_id`/`category_id`/`subcategory_id` — FKs simples, nulas no payload real — não: FINDING-005 do validador, P3); um autenticado que a chame direto escolhe os campos — sem privilégio novo, porque ele já insere em `transactions` pelo PostgREST com a mesma RLS | aceito, declarado no comentário da função |
 | RR-F-5 | O comportamento da RPC é provado por varredura do SQL e por **uma** prova no banco; o harness não executa SQL. Uma edição futura da função que fuja das formas varridas não é pega | aceito; refazer a prova do §10 se a função mudar |
 | RR-F-6 | Pagamento **editado** em Lançamentos (virou despesa, mudou de status, ganhou destino) não se desfaz em `/faturas` (D-F7); o caminho é Lançamentos → excluir, que confere os recebíveis mas **não pede confirmação** (o P1-8 fecha só o botão de `/faturas`). Hoje 0 casos | aceito; a confirmação de excluir em Lançamentos fica para quem tratar o RR-F-1 (**03-G**, proposto) |
 | RR6 / RR12 | (03-C) "grava antes de recusar" em `updateTransaction` | **03-G** (K2) |
