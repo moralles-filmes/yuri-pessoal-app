@@ -17,7 +17,7 @@
  * executor, reserva e prompt rodam de verdade.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { AiStreamEvent } from "@/lib/ai/core/contracts";
 import type { ToolOutput } from "@/lib/ai/tools/contracts";
@@ -168,6 +168,16 @@ const systemsRecebidos: string[] = [];
 const ferramentasRecebidas: string[][] = [];
 /** 18-F Bloco 4 — as mensagens que chegaram ao provedor, para provar PAPEL e ORDEM. */
 const mensagensRecebidas: { role: string; content: unknown }[][] = [];
+/** MOD-ia-005 — o `timeoutMs` que cada chamada recebeu do runner. */
+const timeoutsRecebidos: number[] = [];
+/**
+ * MOD-ia-005 — roda quando o stream de uma chamada COMEÇA a ser consumido. É por aqui que um
+ * caso adianta o relógio injetado ("o provedor respondeu aos 52 s") ou segura a chamada até o
+ * sinal de aborto do runner disparar.
+ */
+let aoConsumirChamada:
+  | ((indice: number, request: { abortSignal?: AbortSignal }) => Promise<void> | void)
+  | null = null;
 
 vi.mock("@/lib/ai/providers/provider-factory", () => ({
   createProviderClient: () => ({
@@ -176,13 +186,17 @@ vi.mock("@/lib/ai/providers/provider-factory", () => ({
       system: string;
       tools: readonly { name: string }[];
       messages: readonly { role: string; content: unknown }[];
+      timeoutMs: number;
+      abortSignal?: AbortSignal;
     }) => {
       const indice = systemsRecebidos.length;
       systemsRecebidos.push(request.system);
       ferramentasRecebidas.push(request.tools.map((t) => t.name));
       mensagensRecebidas.push(request.messages.map((m) => ({ ...m })));
+      timeoutsRecebidos.push(request.timeoutMs);
       const eventos = respostasPorChamada[indice] ?? [FINISH];
       return (async function* () {
+        if (aoConsumirChamada) await aoConsumirChamada(indice, request);
         for (const e of eventos) yield e;
       })();
     },
@@ -318,7 +332,14 @@ const pedeVolume = (callId = "call-1"): AiStreamEvent => ({
  * `pageContext`) só aparecia como erro de `tsc`, e nunca em `vitest`, que não checa tipo.
  * Amarrar no contrato faz o compilador acompanhar o runner sozinho.
  */
+/**
+ * MOD-ia-005 — o relógio do PRAZO, injetado. Começa em 0 (o instante em que `runChat` cria o
+ * prazo) e só anda quando um caso o adianta.
+ */
+let relogioMs = 0;
+
 const ENTRADA: ChatRunnerInput = {
+  agoraMs: () => relogioMs,
   userId: "user-1",
   conversationId: null,
   text: "qual foi meu volume de treino essa semana?",
@@ -354,6 +375,9 @@ beforeEach(() => {
   versaoGravada = "";
   admissaoDeExperiencia = null;
   falhaDaFerramenta = null;
+  timeoutsRecebidos.length = 0;
+  aoConsumirChamada = null;
+  relogioMs = 0;
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -945,5 +969,158 @@ describe("runChat — o modo CAIXA DE ENTRADA", () => {
       "training.get_volume",
       "training.get_records",
     ]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// MOD-ia-005 — O PRAZO GLOBAL DA REQUISIÇÃO
+// ────────────────────────────────────────────────────────────────
+
+describe("runChat — o prazo global da requisição", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("a primeira chamada recebe o menor entre o timeout configurado e o que resta", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+    // O prazo nasce no instante 0; a chamada sai aos 40 s (preparação lenta). Restam 15 s,
+    // menos que os 30 s configurados no duplo — vale o que resta.
+    let leituras = 0;
+    const relogio = () => (leituras++ === 0 ? 0 : 40_000);
+
+    await rodar({ agoraMs: relogio });
+
+    expect(timeoutsRecebidos).toEqual([15_000]);
+  });
+
+  it("com folga, a chamada recebe o timeout configurado", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar();
+
+    expect(timeoutsRecebidos).toEqual([30_000]);
+  });
+
+  /**
+   * ⛔ O retry que passaria do limite NÃO é aberto. Abri-lo era entregar a função à
+   * plataforma: ela morre aos 60 s, o `finally` não roda, e run e tentativa ficam presos até a
+   * lease, com o consumo real fora da conta.
+   */
+  it("não abre retry quando o prazo restante está abaixo do piso", async () => {
+    respostasPorChamada = [
+      [{ type: "delta", text: "deixa eu ver" }, ERRO_TEMPORARIO],
+      [{ type: "delta", text: "não deveria chegar aqui" }, FINISH],
+    ];
+    // O 5xx chega aos 52 s: sobram 3 s, abaixo do piso de 5 s.
+    aoConsumirChamada = () => {
+      relogioMs = 52_000;
+    };
+
+    const eventos = await rodar();
+
+    expect(statusDoRun).toBe("failed");
+    expect(eventos.at(-1)).toEqual({
+      type: "error",
+      code: "AI_DEADLINE",
+      message: "A resposta passou do tempo máximo e foi encerrada.",
+    });
+    expect(medicao.filter((e) => e.tipo === "start")).toHaveLength(1);
+    expect(systemsRecebidos).toHaveLength(1);
+    // Nenhuma tentativa ficou aberta.
+    expect(medicao.filter((e) => e.tipo === "close")).toHaveLength(1);
+  });
+
+  it("não abre o passo de ferramenta quando o prazo restante está abaixo do piso", async () => {
+    respostasPorChamada = [
+      [pedeVolume(), FINISH],
+      [{ type: "delta", text: "não deveria chegar aqui" }, FINISH],
+    ];
+    aoConsumirChamada = () => {
+      relogioMs = 52_000;
+    };
+
+    const eventos = await rodar();
+
+    // A leitura aconteceu; a continuação, não.
+    expect(ferramentaRodou).toEqual([{ dias: 7 }]);
+    expect(systemsRecebidos).toHaveLength(1);
+    expect(statusDoRun).toBe("failed");
+    expect(eventos.at(-1)).toMatchObject({ type: "error", code: "AI_DEADLINE" });
+    // A tentativa do passo 0 terminou de verdade (o provedor mandou `finish`): fecha
+    // `completed`, e a do passo seguinte nunca é aberta.
+    expect(medicao).toEqual([
+      { tipo: "start", id: "att-1", attemptIndex: 1, attemptType: "PRIMARY" },
+      { tipo: "close", id: "att-1", status: "completed" },
+    ]);
+  });
+
+  /**
+   * O timer do servidor aborta o sinal da chamada, e o adapter relata isso como aborto. Sem a
+   * reclassificação, o prazo esgotado chegaria ao dono como "Resposta cancelada." e a
+   * tentativa ficaria `cancelled` — ninguém cancelou nada.
+   */
+  it("o timeout do servidor não vira 'cancelado pelo usuário'", async () => {
+    vi.useFakeTimers();
+    respostasPorChamada = [
+      [
+        // O que o adapter emite quando o sinal da chamada aborta (parte `abort` do SDK).
+        {
+          type: "error",
+          error: {
+            class: "CANCELADO_PELO_USUARIO",
+            code: "STREAM_ABORTED",
+            message: "Resposta cancelada.",
+            retryable: false,
+          },
+        },
+      ],
+    ];
+    aoConsumirChamada = async (_i, request) => {
+      // O provedor pendurado: só volta quando o runner aborta o sinal. Quando ele volta, o
+      // relógio do prazo já passou do piso.
+      await new Promise<void>((resolve) => {
+        request.abortSignal?.addEventListener("abort", () => resolve(), { once: true });
+      });
+      relogioMs = 53_000;
+    };
+
+    const promessa = rodar();
+    await vi.advanceTimersByTimeAsync(30_000);
+    const eventos = await promessa;
+
+    expect(statusDoRun).toBe("failed");
+    expect(eventos.at(-1)).toMatchObject({ type: "error", code: "AI_DEADLINE" });
+    expect(medicao).toEqual([
+      { tipo: "start", id: "att-1", attemptIndex: 1, attemptType: "PRIMARY" },
+      { tipo: "close", id: "att-1", status: "failed" },
+    ]);
+  });
+
+  /**
+   * ⛔ `return()` do consumidor (o navegador fechou a aba no meio da resposta) não pode deixar
+   * a tentativa `started`: `ai_usage_events_one_active_uidx` só aceita uma aberta por run, e a
+   * medição daquela chamada nunca seria fechada.
+   */
+  it("`return()` do consumidor depois do primeiro delta fecha a tentativa como `cancelled`", async () => {
+    respostasPorChamada = [
+      [
+        { type: "delta", text: "primeiro" },
+        { type: "delta", text: " segundo" },
+        FINISH,
+      ],
+    ];
+
+    const gen = runChat({ ...ENTRADA });
+    let r = await gen.next();
+    while (!r.done && (r.value as { type: string }).type !== "delta") r = await gen.next();
+    expect(r.value).toEqual({ type: "delta", text: "primeiro" });
+
+    await gen.return(undefined);
+
+    expect(medicao).toEqual([
+      { tipo: "start", id: "att-1", attemptIndex: 1, attemptType: "PRIMARY" },
+      { tipo: "close", id: "att-1", status: "cancelled" },
+    ]);
+    expect(statusDoRun).toBe("cancelled");
   });
 });

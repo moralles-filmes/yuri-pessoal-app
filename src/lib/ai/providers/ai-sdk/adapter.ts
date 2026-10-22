@@ -377,6 +377,30 @@ function toToolSet(tools: readonly AiToolDefinition[]): ToolSet {
   return set;
 }
 
+/**
+ * MOD-ia-005 — o sinal de UMA chamada: o do chamador mais o próprio `timeoutMs`.
+ *
+ * Até aqui `timeoutMs` atravessava o contrato e morria neste arquivo: `streamText` dependia do
+ * timer do chat-runner, e `generateObject` (comprovante e insight) não tinha timeout nenhum —
+ * um provedor pendurado prendia a função até a plataforma matá-la, e aí nenhum `finally` roda.
+ *
+ * `estourou()` distingue os dois abortos, porque eles levam a decisões opostas: o tempo
+ * esgotado é `TIMEOUT` (cabe repetir, se o prazo da requisição ainda comportar), e o aborto do
+ * chamador é cancelamento (repetir seria desobedecer quem mandou parar).
+ */
+function sinalDaChamada(
+  externo: AbortSignal | undefined,
+  timeoutMs: number,
+): { readonly signal: AbortSignal; readonly estourou: () => boolean } {
+  const tempo = AbortSignal.timeout(timeoutMs);
+  return {
+    signal: externo ? AbortSignal.any([externo, tempo]) : tempo,
+    estourou: () => tempo.aborted && !externo?.aborted,
+  };
+}
+
+const erroDeTempo = (): AiError => aiError("TIMEOUT", "PROVIDER_TIMEOUT");
+
 export type AdapterConfig = {
   readonly provider: AiProviderId;
   /** O modelo já construído pelo adapter específico do provedor. */
@@ -395,6 +419,7 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
       let usage: AiUsage | null = null;
       let providerRequestId: string | null = null;
       let terminou = false;
+      const chamada = sinalDaChamada(request.abortSignal, request.timeoutMs);
 
       try {
         // ⚠️ `tools` vem do contrato já resolvido pela allowlist do agente. Quando vazio, o
@@ -418,7 +443,7 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
           // Teto EXPLÍCITO em toda chamada. Sem ele não há reserva possível.
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
-          abortSignal: request.abortSignal,
+          abortSignal: chamada.signal,
           // O retry é NOSSO (`core/fallback.ts` decide, e cada tentativa vira uma linha em
           // `ai_usage_events`). Deixar o SDK repetir por conta própria produziria chamadas
           // pagas que o nosso medidor nunca veria.
@@ -480,13 +505,18 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
               terminou = true;
               yield {
                 type: "error",
-                error: aiError("CANCELADO_PELO_USUARIO", "STREAM_ABORTED"),
+                error: chamada.estourou()
+                  ? erroDeTempo()
+                  : aiError("CANCELADO_PELO_USUARIO", "STREAM_ABORTED"),
               };
               break;
 
             case "error":
               terminou = true;
-              yield { type: "error", error: mapProviderError(parte.error) };
+              yield {
+                type: "error",
+                error: chamada.estourou() ? erroDeTempo() : mapProviderError(parte.error),
+              };
               break;
 
             default:
@@ -495,7 +525,10 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
         }
       } catch (erro) {
         terminou = true;
-        yield { type: "error", error: mapProviderError(erro) };
+        yield {
+          type: "error",
+          error: chamada.estourou() ? erroDeTempo() : mapProviderError(erro),
+        };
         return;
       }
 
@@ -537,6 +570,7 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
         };
       }
 
+      const chamada = sinalDaChamada(request.abortSignal, request.timeoutMs);
       try {
         const resultado = await sdkGenerateObject({
           model: config.buildModel(request.model),
@@ -549,7 +583,7 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
           schemaDescription: request.schemaDescription,
           maxOutputTokens: request.maxOutputTokens,
           temperature: request.temperature,
-          abortSignal: request.abortSignal,
+          abortSignal: chamada.signal,
           maxRetries: 0,
         });
 
@@ -563,7 +597,7 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
       } catch (erro) {
         return {
           ok: false,
-          error: mapProviderError(erro),
+          error: chamada.estourou() ? erroDeTempo() : mapProviderError(erro),
           usage: usageDoErro(erro),
           providerRequestId: null,
         };

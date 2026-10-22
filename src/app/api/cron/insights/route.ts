@@ -24,6 +24,12 @@ import { runInsightJobForAllUsers } from "@/lib/ai/server/insight-job";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/**
+ * MOD-ia-005 — explícito porque esta rota chama o provedor. Sem ele, o limite é o padrão da
+ * plataforma, e quem encerra uma análise travada passa a ser ela — sem `finally`, com o run
+ * aberto até a lease. O timeout de cada chamada (`generateObject`) mora no adapter.
+ */
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;

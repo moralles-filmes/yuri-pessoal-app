@@ -88,6 +88,12 @@ import {
   startAttempt,
   type AttemptType,
 } from "./run-store";
+import {
+  AI_DEADLINE,
+  criarPrazo,
+  MENSAGEM_DO_PRAZO,
+  timeoutDaChamada,
+} from "./prazo";
 import { runToolLoop } from "./tool-loop";
 
 export type ChatRunnerEvent =
@@ -164,6 +170,12 @@ export type ChatRunnerInput = {
   readonly abortSignal: AbortSignal;
   readonly agora: Date;
   /**
+   * MOD-ia-005 — o relógio do PRAZO da requisição, em ms. Ausente = `Date.now`. É injetável
+   * pelo mesmo motivo que `agora`: o prazo é uma decisão sobre o tempo, e um teste que
+   * dependesse do relógio real teria de esperar 55 s para ver um retry recusado.
+   */
+  readonly agoraMs?: () => number;
+  /**
    * 18-F Bloco 4 — O PLANO DA EXPERIÊNCIA. Ausente = mensagem normal, tudo como antes.
    *
    * ⛔ É um OBJETO PRONTO, e por isso este arquivo NÃO importa `experiences/catalog`: ele não
@@ -187,6 +199,13 @@ type Alvo = { readonly provider: AiProviderId; readonly model: AiModelEntry };
 export async function* runChat(
   input: ChatRunnerInput,
 ): AsyncGenerator<ChatRunnerEvent> {
+  /**
+   * MOD-ia-005 — o prazo nasce ANTES de tudo, porque preferências, memória, histórico e a
+   * admissão também gastam os 60 s da função. Ver `server/prazo.ts`.
+   */
+  const agoraMs = input.agoraMs ?? Date.now;
+  const prazo = criarPrazo(agoraMs());
+
   // ── 1. Cripto pronta? ───────────────────────────────────────────────────────────────
   const readiness = getCryptoReadiness();
   if (!readiness.ready) {
@@ -534,6 +553,62 @@ export async function* runChat(
     completedModel: concluiu ? (alvoAnterior?.model.id ?? model.id) : null,
   });
 
+  /**
+   * ╔════════════════════════════════════════════════════════════════════════════════════╗
+   * ║ CADA CHAMADA AO MODELO É UMA TENTATIVA PRÓPRIA — E SÓ UMA FICA ABERTA.              ║
+   * ║                                                                                     ║
+   * ║ `ai_usage_events_one_active_uidx` é `UNIQUE (run_id) WHERE status = 'started'`.     ║
+   * ║ Abrir a tentativa do passo N+1 com a do passo N ainda aberta é `23505` EM            ║
+   * ║ RUNTIME — nenhum teste de unidade da medição pega isso, porque a trava é do          ║
+   * ║ banco. Por isso o fechamento acontece AQUI, num ponto só, e é a primeira coisa       ║
+   * ║ que `chamarModelo` faz antes de abrir a seguinte.                                    ║
+   * ║                                                                                     ║
+   * ║ ⛔ MOD-ia-005 — no escopo da FUNÇÃO, e não da tentativa: o `finally` lá embaixo      ║
+   * ║ precisa alcançá-la. `return()` do consumidor (a aba fechada no meio da resposta)    ║
+   * ║ não passa pelo ramo de cancelamento; sem isso a tentativa ficava `started`, com a   ║
+   * ║ medição daquela chamada nunca fechada. A tarifa viaja com ela pelo mesmo motivo.    ║
+   * ╚════════════════════════════════════════════════════════════════════════════════════╝
+   */
+  let aberta: { id: string; inicio: number; tarifa: AiRate } | null = null;
+  let usoFinal: AiUsage | null = null;
+  let providerRequestId: string | null = null;
+
+  const fecharTentativaAberta = async (
+    status: "completed" | "failed" | "cancelled",
+    errorCode: string | null,
+  ) => {
+    if (!aberta) return;
+    const atual = aberta;
+    aberta = null;
+    await closeAttempt({
+      attemptId: atual.id,
+      userId: input.userId,
+      status,
+      usage: usoFinal,
+      rate: atual.tarifa,
+      latencyMs: Date.now() - atual.inicio,
+      providerRequestId,
+      errorCode,
+    });
+    if (usoFinal) {
+      const parcial = computeAttemptCost(usoFinal, atual.tarifa);
+      if (parcial.totalUsd !== null) custoAcumulado += parcial.totalUsd;
+    }
+    usoFinal = null;
+    providerRequestId = null;
+  };
+
+  /**
+   * MOD-ia-005 — o prazo não comporta a próxima chamada. Fecha o run como `failed` com código
+   * declarado, em vez de abrir uma chamada que a plataforma cortaria no meio.
+   */
+  const encerrarPorPrazo = async (): Promise<ChatRunnerEvent> => {
+    const erro = aiError("TIMEOUT", AI_DEADLINE, MENSAGEM_DO_PRAZO);
+    await failRun(contexto(), erro);
+    fechado = true;
+    return { type: "error", code: erro.code, message: safeUserMessage(erro) };
+  };
+
   try {
     /**
      * ╔════════════════════════════════════════════════════════════════════════════════════╗
@@ -652,6 +727,14 @@ export async function* runChat(
         continue;
       }
 
+      // MOD-ia-005 — a primeira chamada, o retry e o fallback passam por aqui ANTES de abrir a
+      // tentativa: abaixo do piso, nenhuma linha nova em `ai_usage_events` e nenhum `switch`.
+      const timeoutDaTentativa = timeoutDaChamada(prazo, agoraMs(), config.timeoutMs);
+      if (timeoutDaTentativa === null) {
+        yield await encerrarPorPrazo();
+        return;
+      }
+
       attemptIndex += 1;
       const tipo: AttemptType = tipoDaTentativa(attemptIndex, alvoAnterior, alvo);
       if (tipo === "FALLBACK") fallbackCount += 1;
@@ -734,55 +817,18 @@ export async function* runChat(
       }
 
       const inicioTentativa = Date.now();
-      const { signal, dispose } = combinarSinais(input.abortSignal, config.timeoutMs);
+      // O timer do servidor nasce com o timeout que o PRAZO permite, não com o configurado.
+      const { signal, dispose } = combinarSinais(input.abortSignal, timeoutDaTentativa);
 
-      let usoFinal: AiUsage | null = null;
-      let providerRequestId: string | null = null;
+      usoFinal = null;
+      providerRequestId = null;
       let erroDaTentativa: AiError | null = null;
       let concluiu = false;
       let finishReason = "unknown";
       let toolCallInesperada = false;
 
-      /**
-       * ╔════════════════════════════════════════════════════════════════════════════════╗
-       * ║ CADA CHAMADA AO MODELO É UMA TENTATIVA PRÓPRIA — E SÓ UMA FICA ABERTA.          ║
-       * ║                                                                                 ║
-       * ║ `ai_usage_events_one_active_uidx` é `UNIQUE (run_id) WHERE status = 'started'`. ║
-       * ║ Abrir a tentativa do passo N+1 com a do passo N ainda aberta é `23505` EM        ║
-       * ║ RUNTIME — nenhum teste de unidade da medição pega isso, porque a trava é do      ║
-       * ║ banco. Por isso o fechamento acontece AQUI, num ponto só, e é a primeira coisa   ║
-       * ║ que `chamarModelo` faz antes de abrir a seguinte.                                ║
-       * ╚════════════════════════════════════════════════════════════════════════════════╝
-       */
-      let aberta: { id: string; inicio: number } | null = {
-        id: tentativa.id,
-        inicio: inicioTentativa,
-      };
-
-      const fecharTentativaAberta = async (
-        status: "completed" | "failed" | "cancelled",
-        errorCode: string | null,
-      ) => {
-        if (!aberta) return;
-        const atual = aberta;
-        aberta = null;
-        await closeAttempt({
-          attemptId: atual.id,
-          userId: input.userId,
-          status,
-          usage: usoFinal,
-          rate: tarifa,
-          latencyMs: Date.now() - atual.inicio,
-          providerRequestId,
-          errorCode,
-        });
-        if (usoFinal) {
-          const parcial = computeAttemptCost(usoFinal, tarifa);
-          if (parcial.totalUsd !== null) custoAcumulado += parcial.totalUsd;
-        }
-        usoFinal = null;
-        providerRequestId = null;
-      };
+      // A tentativa recém-aberta é a única aberta (ver o quadro de `fecharTentativaAberta`).
+      aberta = { id: tentativa.id, inicio: inicioTentativa, tarifa };
 
       /**
        * A chamada ao provedor, uma por passo do laço. O passo 0 usa a tentativa já aberta
@@ -794,7 +840,21 @@ export async function* runChat(
         passo: number,
       ): AsyncIterable<AiStreamEvent> =>
         (async function* () {
+          let timeoutDestaChamada = timeoutDaTentativa;
           if (passo > 0) {
+            // MOD-ia-005 — o passo de ferramenta também é uma chamada, e também cabe ou não
+            // no prazo. Sem espaço, a tentativa anterior fecha como `completed` (ela terminou
+            // de verdade) e nenhuma nova é aberta; o runner fecha o run por `AI_DEADLINE`.
+            const cabe = timeoutDaChamada(prazo, agoraMs(), config.timeoutMs);
+            if (cabe === null) {
+              await fecharTentativaAberta("completed", null);
+              yield {
+                type: "error",
+                error: aiError("TIMEOUT", AI_DEADLINE, MENSAGEM_DO_PRAZO),
+              };
+              return;
+            }
+            timeoutDestaChamada = cabe;
             await fecharTentativaAberta("completed", null);
             attemptIndex += 1;
             const nova = await startAttempt({
@@ -819,7 +879,7 @@ export async function* runChat(
               };
               return;
             }
-            aberta = { id: nova.id, inicio: Date.now() };
+            aberta = { id: nova.id, inicio: Date.now(), tarifa };
             concluiu = false;
           }
 
@@ -829,7 +889,7 @@ export async function* runChat(
             system,
             messages: msgs,
             maxOutputTokens: alvo.model.outputCapTokens,
-            timeoutMs: config.timeoutMs,
+            timeoutMs: timeoutDestaChamada,
             abortSignal: signal,
             // O laço executa SÓ o que passou pela allowlist do agente e pelo guard. O que
             // não está aqui não foi oferecido — e voltar assim mesmo encerra o run.
@@ -946,6 +1006,18 @@ export async function* runChat(
         return;
       }
 
+      /**
+       * MOD-ia-005 — quem abortou o sinal da chamada foi o timer do SERVIDOR, não o dono (o
+       * sinal dele foi tratado logo acima). O adapter só vê um aborto e o relata como
+       * cancelamento; deixar assim fecharia a tentativa como `cancelled` e diria ao dono
+       * "Resposta cancelada." sobre algo que ninguém cancelou. Como `TIMEOUT`, a decisão de
+       * retry segue a regra de sempre — e o prazo, conferido antes da próxima chamada, decide
+       * se ela ainda cabe.
+       */
+      if (signal.aborted && erroDaTentativa?.class === "CANCELADO_PELO_USUARIO") {
+        erroDaTentativa = aiError("TIMEOUT", "SERVER_TIMEOUT");
+      }
+
       // ── Sucesso ────────────────────────────────────────────────────────────────────
       if (concluiu && !erroDaTentativa) {
         /**
@@ -994,6 +1066,13 @@ export async function* runChat(
         await failRun(contexto(), erro);
         fechado = true;
         yield { type: "error", code: erro.code, message: safeUserMessage(erro) };
+        return;
+      }
+
+      // MOD-ia-005 — o passo de ferramenta já recusou abrir a chamada por falta de prazo.
+      // Não há o que decidir: nem retry nem fallback cabem no mesmo tempo que não coube.
+      if (erro.code === AI_DEADLINE) {
+        yield await encerrarPorPrazo();
         return;
       }
 
@@ -1052,7 +1131,11 @@ export async function* runChat(
     // Rede de segurança: se saímos por `return()` do consumidor (o navegador fechou a aba),
     // o run não pode ficar aberto prendendo orçamento. O UPDATE é condicional, então se
     // alguém já fechou, isto é no-op.
+    //
+    // ⛔ MOD-ia-005 — e a TENTATIVA aberta fecha antes do run, como `cancelled`. Sem isto,
+    // `return()` depois do primeiro delta deixava a linha de `ai_usage_events` em `started`.
     if (!fechado) {
+      await fecharTentativaAberta("cancelled", "CANCELLED").catch(() => {});
       await cancelRun(contexto(), "Conexão encerrada antes da conclusão.").catch(() => {});
     }
   }
@@ -1076,6 +1159,10 @@ function tipoDaTentativa(
  * O timeout do SERVIDOR é menor que o `maxDuration` da plataforma de propósito: assim quem
  * encerra somos nós, e o estado fica consistente. Se a plataforma cortar primeiro, ninguém
  * roda o `finally` — e o run só seria recuperado pela reconciliação.
+ *
+ * MOD-ia-005 — `timeoutMs` chega já recortado por `timeoutDaChamada` (`server/prazo.ts`): o
+ * menor entre o configurado e o que resta do prazo da requisição. O configurado sozinho
+ * (padrão 60 s, até 300 s) não garantia a frase acima.
  */
 function combinarSinais(
   externo: AbortSignal,
