@@ -18,6 +18,11 @@
 --
 -- Nada de dado é escrito: linha antiga fica com trilha 0 (verdade: era o único caminho) e com
 -- `prompt_version`/`agent_id` NULOS — nulo não é preenchido com chute.
+--
+-- ROLLBACK: reverter o CÓDIGO e deixar esta migration como está. Colunas, índice e CHECKs novos
+-- são inofensivos para o código antigo. Recriar o índice antigo `(run_id) WHERE started` ou o
+-- CHECK antigo de `attempt_type` falharia assim que existisse linha com trilha > 0 ou
+-- ESPECIALISTA — não tente.
 -- ============================================================================================
 
 -- 1. A trilha da tentativa.
@@ -42,6 +47,14 @@ alter table public.ai_usage_events drop constraint if exists ai_usage_events_att
 alter table public.ai_usage_events
   add constraint ai_usage_events_attempt_type_check
   check (attempt_type in ('PRIMARY', 'RETRY', 'FALLBACK', 'TOOL_STEP', 'ESPECIALISTA'));
+
+-- 3b. O tipo é COERENTE com a trilha, no banco e não só no servidor: PRIMARY é a primeira chamada
+--     do coordenador (decisão ou síntese), então mora na trilha 0; ESPECIALISTA é a primeira de um
+--     especialista, então nunca mora nela. RETRY/FALLBACK/TOOL_STEP existem nas duas.
+alter table public.ai_usage_events drop constraint if exists ai_usage_events_tipo_coerente_com_trilha;
+alter table public.ai_usage_events
+  add constraint ai_usage_events_tipo_coerente_com_trilha
+  check ((attempt_type <> 'PRIMARY' or trilha = 0) and (attempt_type <> 'ESPECIALISTA' or trilha > 0));
 
 -- 4. A versão de prompt POR TENTATIVA. `ai_runs.prompt_version` passa a contar só o coordenador;
 --    sem esta coluna nada registraria qual versão do especialista leu ou propôs (invariante 105).

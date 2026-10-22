@@ -72,6 +72,15 @@ describe("chat livre — migration das trilhas (ai_usage_events / ai_tool_calls)
     expect(add).toBeGreaterThan(drop);
   });
 
+  it("o tipo da tentativa é coerente com a trilha: PRIMARY só na 0, ESPECIALISTA só fora dela", () => {
+    const drop = SQL.indexOf("drop constraint if exists ai_usage_events_tipo_coerente_com_trilha");
+    const add = SQL.indexOf(
+      "add constraint ai_usage_events_tipo_coerente_com_trilha check ((attempt_type <> 'primary' or trilha = 0) and (attempt_type <> 'especialista' or trilha > 0))",
+    );
+    expect(drop).toBeGreaterThanOrEqual(0);
+    expect(add).toBeGreaterThan(drop);
+  });
+
   it("prompt_version e agent_id são nulos (sem not null, sem default)", () => {
     expect(SQL).toContain(
       "alter table public.ai_usage_events add column if not exists prompt_version text;",
