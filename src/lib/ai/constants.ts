@@ -292,6 +292,13 @@ export const AVISO_SEM_ACESSO =
   "O assistente só consulta o que você autorizar, módulo a módulo, e toda autorização nasce desligada. Ele pode ler Financeiro, Dieta e Alimentação, Treinos, Medidas corporais, TO-DO, Agenda, Tarefas e Rotinas, Hábitos, Estudos e a Memória de preferências — cada um com a sua chave. Para ALTERAR algo ele precisa de uma segunda chave, e há chave de alteração para TO-DO, Hábitos, Agenda, Dieta e Alimentação, Financeiro e Memória: ele prepara a alteração, mostra exatamente o que vai mudar, e nada acontece até você confirmar na tela.";
 
 /**
+ * O nome do interruptor `allowCrossModule` na tela de preferências. Ele vale para a conversa
+ * (juntar vários módulos numa resposta) e para os atalhos de panorama, e as frases do servidor
+ * que mandam ligá-lo citam ESTA constante — nunca o texto escrito de novo.
+ */
+export const ROTULO_CRUZAR_MODULOS = "Cruzar módulos";
+
+/**
  * A versão curta da mesma regra, para a descrição da página. Afirma a REGRA, nunca o estado:
  * continua verdadeira com `allow_training` ligada ou desligada. O texto da 18-A ("sem acesso
  * aos seus registros nesta versão") virou mentira no instante em que as leituras de Treinos

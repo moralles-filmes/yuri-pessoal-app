@@ -35,6 +35,7 @@ import { activeModelsFor } from "@/lib/ai/core/models";
 import {
   AVISO_DA_ESCRITA,
   AVISO_MOEDA,
+  ROTULO_CRUZAR_MODULOS,
   ROTULO_DA_PERMISSAO,
   ROTULO_DA_PERMISSAO_DE_ESCRITA,
 } from "@/lib/ai/constants";
@@ -421,14 +422,18 @@ export function AiPreferencesForm({
           </div>
         </div>
 
-        {/* ── Panoramas de vários módulos (18-F · Bloco 4) ──────────────────────────── */}
+        {/* ── Cruzar módulos (18-F · Bloco 4, e a conversa livre) ───────────────────────
+            Uma chave, dois usos: a conversa juntar vários módulos numa resposta e os atalhos
+            de panorama. O nome sai de `ROTULO_CRUZAR_MODULOS`, que o servidor cita ao mandar
+            ligá-la. */}
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <Label htmlFor="pref-panoramas">Panoramas de vários módulos</Label>
+            <Label htmlFor="pref-panoramas">{ROTULO_CRUZAR_MODULOS}</Label>
             <p className="text-xs text-muted-foreground">
-              Libera os atalhos “Planejar meu dia”, “Encerrar meu dia” e “Planejar minha
-              semana”. Cada panorama lê só os módulos cuja leitura estiver ligada acima — o que
-              estiver desligado fica de fora, e o panorama <strong>diz o que ficou</strong>.
+              Libera a conversa a juntar vários módulos numa mesma resposta e os atalhos
+              “Planejar meu dia”, “Encerrar meu dia” e “Planejar minha semana”. Só entram os
+              módulos cuja leitura estiver ligada acima — o que estiver desligado fica de fora, e
+              a resposta <strong>diz o que ficou</strong>.
             </p>
           </div>
           <Switch

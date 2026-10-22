@@ -132,6 +132,18 @@ describe("definicoesDeAcionamento", () => {
     expect(MAX_TAREFA_CHARS).toBe(1500);
   });
 
+  it("situa o \"você\" da descrição do agente como o dono", () => {
+    for (const d of definicoesDeAcionamento(catalogoCompleto().ofertas)) {
+      expect(d.description).toMatch(/escrita para o dono/);
+    }
+  });
+
+  it("oferta sem perfil no registry é erro explícito", () => {
+    expect(() =>
+      definicoesDeAcionamento([{ agentId: "nao-existe", rotulo: "X", ferramenta: "acionar_x" }]),
+    ).toThrow(/nao-existe/);
+  });
+
   it("sem ofertas, sem definições", () => {
     expect(definicoesDeAcionamento([])).toEqual([]);
   });

@@ -91,10 +91,14 @@ export function definicoesDeAcionamento(
 ): AiToolDefinition[] {
   return ofertas.map((o) => {
     const agente = AI_AGENT_REGISTRY.find((a) => a.id === o.agentId);
+    // O agente vem do registry: oferta sem perfil é incoerência de quem montou a lista.
+    if (!agente) throw new Error(`Especialista sem perfil no registry: ${o.agentId}`);
     return {
       name: o.ferramenta,
+      // A descrição do perfil fala com o DONO ("você"); aqui ela chega ao coordenador, então o
+      // "você" é situado como o dono antes de a frase aparecer.
       description:
-        `Aciona o especialista ${o.rotulo}. ${agente?.description ?? ""} ` +
+        `Aciona o especialista ${o.rotulo}. Descrição do especialista, escrita para o dono (nela, "você" é o dono): ${agente.description} ` +
         "Escreva em `tarefa` o pedido completo, com o contexto necessário: o especialista não vê a conversa.",
       inputSchema: {
         type: "object",

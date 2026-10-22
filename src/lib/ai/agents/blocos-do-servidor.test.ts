@@ -1,4 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { ROTULO_CRUZAR_MODULOS } from "@/lib/ai/constants";
 import { settingsLink } from "@/lib/search/ai-links";
 import { termosProibidosEm } from "@/lib/tone/vocabulary";
 import {
@@ -72,11 +75,21 @@ describe("blocoDoCoordenador", () => {
     expect(b).not.toMatch(/desligad/i);
   });
 
+  it("sem ofertas, não manda acionar ferramenta nem fala de teto", () => {
+    const b = blocoDoCoordenador({ ofertas: [], desligados: ["Financeiro"], allowCrossModule: true });
+    expect(b).not.toMatch(/acione o especialista/i);
+    expect(b).not.toContain(String(MAX_ESPECIALISTAS));
+    expect(b).toMatch(/nenhum especialista está disponível/i);
+    expect(b).toContain("Financeiro");
+  });
+
   it("passa no varredor de vocabulário proibido, nas variações", () => {
     for (const allowCrossModule of [false, true]) {
       for (const desligados of [[], ["Treinos", "Dieta e Alimentação"]]) {
-        const b = blocoDoCoordenador({ ofertas: OFERTAS, desligados, allowCrossModule });
-        expect(termosProibidosEm(b)).toEqual([]);
+        for (const ofertas of [OFERTAS, []]) {
+          const b = blocoDoCoordenador({ ofertas, desligados, allowCrossModule });
+          expect(termosProibidosEm(b)).toEqual([]);
+        }
       }
     }
   });
@@ -98,6 +111,17 @@ describe("avisos do servidor", () => {
     expect(avisoDeEspecialistasQueFalharam(["Financeiro"])).toContain("Financeiro");
   });
 
+  it("avisoCruzarModulos cita o rótulo REAL do interruptor, e a tela o renderiza desse mesmo símbolo", () => {
+    expect(avisoCruzarModulos()).toContain(ROTULO_CRUZAR_MODULOS);
+    const tela = fs.readFileSync(
+      path.resolve(__dirname, "..", "..", "..", "components", "ai", "ai-preferences-form.tsx"),
+      "utf8",
+    );
+    expect(tela).toMatch(
+      /<Label htmlFor="pref-panoramas">\{ROTULO_CRUZAR_MODULOS\}<\/Label>/,
+    );
+  });
+
   it("avisoCruzarModulos aponta para /ia/configuracoes via settingsLink()", () => {
     const a = avisoCruzarModulos();
     expect(a).toContain(settingsLink());
@@ -105,10 +129,11 @@ describe("avisos do servidor", () => {
     expect(termosProibidosEm(a)).toEqual([]);
   });
 
-  it("avisoSemEspecialista cita os desligados e aponta para settingsLink()", () => {
+  it("avisoSemEspecialista cita os desligados, aponta para settingsLink() e não afirma que a pergunta os exige", () => {
     const a = avisoSemEspecialista(["Financeiro", "Treinos"]);
     expect(a).toContain("Financeiro");
     expect(a).toContain("Treinos");
+    expect(a).not.toMatch(/exige/i);
     expect(a).toContain(settingsLink());
     expect(termosProibidosEm(a)).toEqual([]);
   });

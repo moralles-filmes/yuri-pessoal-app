@@ -16,6 +16,7 @@
  */
 
 import { dateInSaoPaulo } from "@/lib/format";
+import { ROTULO_CRUZAR_MODULOS } from "@/lib/ai/constants";
 import { settingsLink } from "@/lib/search/ai-links";
 import { MAX_ESPECIALISTAS, type EspecialistaOferecido } from "./especialistas";
 
@@ -47,21 +48,27 @@ export function blocoDoCoordenador(input: {
 }): string {
   const linhas: string[] = [
     "Você coordena a conversa. Os dados do dono só chegam por especialistas: cada um lê o próprio módulo e devolve o que encontrou.",
-    "Para consultar um módulo, acione o especialista dele pela ferramenta correspondente e escreva em `tarefa` o pedido completo — o especialista não vê a conversa.",
   ];
 
   if (input.ofertas.length > 0) {
     linhas.push(
+      "Para consultar um módulo, acione o especialista dele pela ferramenta correspondente e escreva em `tarefa` o pedido completo — o especialista não vê a conversa.",
       "Especialistas disponíveis:",
       ...input.ofertas.map((o) => `- ${o.rotulo} (ferramenta ${o.ferramenta})`),
     );
+  } else {
+    linhas.push(
+      "Nenhum especialista está disponível nesta conversa, então não há como consultar registro algum.",
+    );
   }
 
-  linhas.push(
-    input.allowCrossModule
-      ? `Você pode acionar até ${MAX_ESPECIALISTAS} especialistas distintos por mensagem, cada um uma vez.`
-      : "Nesta conversa você aciona um especialista por mensagem; uma pergunta que cruze módulos fica para o dono refazer por partes.",
-  );
+  if (input.ofertas.length > 0) {
+    linhas.push(
+      input.allowCrossModule
+        ? `Você pode acionar até ${MAX_ESPECIALISTAS} especialistas distintos por mensagem, cada um uma vez.`
+        : "Nesta conversa você aciona um especialista por mensagem; uma pergunta que cruze módulos fica para o dono refazer por partes.",
+    );
+  }
 
   if (input.desligados.length > 0) {
     linhas.push(
@@ -78,7 +85,7 @@ export function blocoDoCoordenador(input: {
 
 /** Acrescentado quando a pergunta pedia mais de um módulo e o cruzamento está desligado. */
 export function avisoCruzarModulos(): string {
-  return `Esta pergunta envolve mais de um módulo, e o cruzamento de módulos está desligado nas preferências, então respondi com um só. Para liberar, ligue "cruzar módulos" em ${settingsLink()}.`;
+  return `Esta pergunta envolve mais de um módulo, e “${ROTULO_CRUZAR_MODULOS}” está desligado nas preferências, então respondi com um só. Para liberar, ligue “${ROTULO_CRUZAR_MODULOS}” em ${settingsLink()}.`;
 }
 
 /** Acrescentado quando um ou mais especialistas acionados não conseguiram responder. */
@@ -92,7 +99,6 @@ export function avisoDeEspecialistasQueFalharam(rotulos: readonly string[]): str
 
 /** Acrescentado quando a pergunta era sobre registros e nenhum especialista estava liberado. */
 export function avisoSemEspecialista(desligados: readonly string[]): string {
-  const quais =
-    desligados.length > 0 ? ` (${listaDeRotulos(desligados)})` : "";
-  return `Não há acesso liberado aos módulos${quais} que essa pergunta exige. Para liberar a leitura, ajuste as chaves em ${settingsLink()}.`;
+  const quais = desligados.length > 0 ? `: ${listaDeRotulos(desligados)}` : "";
+  return `A leitura destes módulos está desligada${quais}. Para eu consultar algum deles, ligue a leitura em ${settingsLink()}.`;
 }
