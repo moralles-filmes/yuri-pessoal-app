@@ -19,6 +19,10 @@ import {
   type PrevisaoDoDesfazer,
 } from "@/lib/finance/desfazer-pagamento";
 import {
+  dataDePagamentoFutura,
+  MSG_DATA_PAGAMENTO_FATURA_FUTURA,
+} from "@/lib/finance/caixa";
+import {
   desfazerPagamentoFaturaSchema,
   pagamentoFaturaSchema,
 } from "@/lib/validators/statement";
@@ -55,6 +59,11 @@ export async function markStatementPaid(
 
   const parsed = pagamentoFaturaSchema.safeParse({ id, contaId, dataPagamento });
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  // 03-F K3 — data futura é recusada antes de qualquer leitura e sem chamar a RPC.
+  if (dataDePagamentoFutura(parsed.data.dataPagamento, hojeISO())) {
+    return invalid({ dataPagamento: [MSG_DATA_PAGAMENTO_FATURA_FUTURA] });
+  }
 
   const data = parsed.data.dataPagamento ?? hojeISO();
 

@@ -1,5 +1,6 @@
 /** REDESIGN-03-F · A1 — markStatementPaid pela RPC atômica. Fixture sintética. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MSG_DATA_PAGAMENTO_FATURA_FUTURA } from "@/lib/finance/caixa";
 import { montarPagamentoFatura } from "@/lib/finance/statement-payment";
 import { criarSupabaseEmMemoria } from "@/test/supabase-em-memoria";
 
@@ -206,5 +207,30 @@ describe("03-F A2 · desfazer preso ao lançamento lido", () => {
     const res = await markStatementUnpaid(ID, LANC);
     expect(res.ok).toBe(false);
     expect(!res.ok && res.error.startsWith(inicio)).toBe(true);
+  });
+});
+
+describe("03-F B2 · data de pagamento futura", () => {
+  it("data de amanhã é recusada com a mensagem própria no campo, sem ler nada nem chamar a RPC", async () => {
+    const resultado = await markStatementPaid(ID, CONTA, "2031-01-16");
+    expect(resultado.ok).toBe(false);
+    expect(resultado).toMatchObject({
+      fieldErrors: { dataPagamento: [MSG_DATA_PAGAMENTO_FATURA_FUTURA] },
+    });
+    expect(fake.operacoes).toEqual([]);
+  });
+
+  it("hoje é aceito e chega à RPC", async () => {
+    const resultado = await markStatementPaid(ID, CONTA, "2031-01-15");
+    expect(resultado.ok).toBe(true);
+    expect(fake.operacoes.map((o) => o.tipo)).toEqual(["rpc"]);
+    expect(fake.operacoes[0].valores).toMatchObject({ p_pago_em: "2031-01-15T12:00:00Z" });
+  });
+
+  it("data passada é aceita e chega à RPC", async () => {
+    const resultado = await markStatementPaid(ID, CONTA, "2031-01-02");
+    expect(resultado.ok).toBe(true);
+    expect(fake.operacoes.map((o) => o.tipo)).toEqual(["rpc"]);
+    expect(fake.operacoes[0].valores).toMatchObject({ p_pago_em: "2031-01-02T12:00:00Z" });
   });
 });

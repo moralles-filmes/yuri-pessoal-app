@@ -49,3 +49,23 @@ describe("03-F A3 · o desfazer da tela passa pela confirmação", () => {
     expect(normalizada(dialogo)).toContain('variant="destructive"');
   });
 });
+
+describe("03-F B2 · a recusa de data futura chega ao campo", () => {
+  const tela = normalizada(fonteSemComentarios(TELA));
+  const inicio = tela.indexOf("function PayStatementDialog");
+  // O trecho vai do diálogo até o fim do arquivo: é o último componente da tela.
+  const pagarDialogo = tela.slice(inicio);
+
+  it("achou o PayStatementDialog (não afirma sobre trecho vazio)", () => {
+    expect(inicio).toBeGreaterThan(-1);
+    expect(pagarDialogo.length).toBeGreaterThan(500);
+  });
+
+  it("o campo de data tem max={today}", () => {
+    expect(pagarDialogo).toContain("max={today}");
+  });
+
+  it("o diálogo lê fieldErrors.dataPagamento para mostrar a recusa sob o campo", () => {
+    expect(pagarDialogo).toContain("fieldErrors?.dataPagamento");
+  });
+});

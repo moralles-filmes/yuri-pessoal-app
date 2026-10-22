@@ -831,6 +831,8 @@ function PayStatementDialog({
   const [contaId, setContaId] = React.useState<string | undefined>(undefined);
   // Data em que o pagamento saiu da conta — editável para bater com o extrato do banco.
   const [data, setData] = React.useState(today);
+  // Recusa de data (B2): a mensagem vem em fieldErrors.dataPagamento e fica sob o campo.
+  const [erroData, setErroData] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
   async function handleConfirm() {
@@ -843,7 +845,13 @@ function PayStatementDialog({
         setOpen(false);
         onPaid();
       } else {
-        toast.error(res.error);
+        const msgData = res.fieldErrors?.dataPagamento?.[0];
+        if (msgData) {
+          setErroData(msgData);
+          toast.error(msgData);
+        } else {
+          toast.error(res.error);
+        }
       }
     } finally {
       setLoading(false);
@@ -858,6 +866,7 @@ function PayStatementDialog({
         if (!v) {
           setContaId(undefined);
           setData(today);
+          setErroData(null);
         }
       }}
     >
@@ -908,12 +917,23 @@ function PayStatementDialog({
               <Input
                 id="fatura-data-pagamento"
                 type="date"
+                max={today}
                 value={data}
-                onChange={(e) => setData(e.target.value)}
+                aria-invalid={erroData ? true : undefined}
+                aria-describedby={erroData ? "fatura-data-pagamento-erro" : undefined}
+                onChange={(e) => {
+                  setData(e.target.value);
+                  setErroData(null);
+                }}
               />
               <p className="text-xs text-muted-foreground">
                 Use a data em que o valor saiu da conta, para bater com o extrato.
               </p>
+              {erroData && (
+                <p id="fatura-data-pagamento-erro" className="text-xs text-destructive">
+                  {erroData}
+                </p>
+              )}
             </div>
           </div>
         )}
