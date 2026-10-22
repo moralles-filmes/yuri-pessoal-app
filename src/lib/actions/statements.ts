@@ -13,6 +13,7 @@ import {
   montarPagamentoFatura,
 } from "@/lib/finance/statement-payment";
 import {
+  MSG_LEITURA_DO_PAGAMENTO_FALHOU,
   mensagemDoErroDoDesfazer,
   previsaoDoDesfazer,
   type LancamentoDoPagamento,
@@ -127,22 +128,26 @@ export async function preverDesfazerPagamento(
   const parsed = desfazerPagamentoFaturaSchema.pick({ id: true }).safeParse({ id });
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
 
-  const { data: fatura } = await ctx.supabase
+  // Erro de leitura NÃO vira "não encontrada" nem "sem lançamento": o diálogo afirmaria um
+  // fato falso ("nenhum saldo muda") com o botão de confirmar à mostra.
+  const { data: fatura, error: erroFatura } = await ctx.supabase
     .from("card_statements")
     .select("pago_em, pago_transacao_id")
     .eq("id", id)
     .maybeSingle();
+  if (erroFatura) return dbError(MSG_LEITURA_DO_PAGAMENTO_FALHOU);
   if (!fatura) return dbError("Fatura não encontrada.");
 
   let lancamento: LancamentoDoPagamento | null = null;
   if (fatura.pago_transacao_id) {
-    const { data: tx } = await ctx.supabase
+    const { data: tx, error: erroLancamento } = await ctx.supabase
       .from("transactions")
       .select(
         "id, type, status, amount, description, transfer_account_id, transfer_group_id, account:accounts!transactions_account_id_fkey(name)",
       )
       .eq("id", fatura.pago_transacao_id)
       .maybeSingle();
+    if (erroLancamento) return dbError(MSG_LEITURA_DO_PAGAMENTO_FALHOU);
     if (tx) {
       lancamento = {
         id: tx.id,

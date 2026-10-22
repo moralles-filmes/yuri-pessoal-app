@@ -48,6 +48,26 @@ describe("03-F A3 · o desfazer da tela passa pela confirmação", () => {
     expect(dialogo).toContain("textoDoDesfazer(");
     expect(normalizada(dialogo)).toContain('variant="destructive"');
   });
+
+  // Revisão final da 03-F (F2, F3, F4a).
+  const confirmar = normalizada(dialogo).slice(normalizada(dialogo).indexOf("async function handleConfirm"));
+
+  it("a confirmação manda o lançamento DA LEITURA, não um relido nem null fixo", () => {
+    expect(confirmar.length).toBeGreaterThan(200);
+    const chamada = confirmar.indexOf("markStatementUnpaid(statementId, lancamentoId)");
+    const origem = confirmar.indexOf("leitura.previsao.lancamentoId");
+    expect(origem).toBeGreaterThan(-1);
+    expect(chamada).toBeGreaterThan(origem);
+  });
+
+  it("depois de uma recusa o diálogo lê de novo — não oferece o botão preso ao lançamento velho", () => {
+    expect(confirmar).toContain("setReleitura(");
+    expect(normalizada(dialogo)).toContain("[statementId, releitura]");
+  });
+
+  it("o texto que chega depois da leitura é anunciado ao leitor de tela", () => {
+    expect(normalizada(dialogo)).toContain('aria-live="polite"');
+  });
 });
 
 describe("03-F B2 · a recusa de data futura chega ao campo", () => {

@@ -164,6 +164,28 @@ describe("03-F A2 · desfazer preso ao lançamento lido", () => {
     expect(fake.operacoes).toEqual([]);
   });
 
+  it("erro na leitura do lançamento NÃO vira 'sem lançamento' (revisão final, F1)", async () => {
+    montarPaga({ pago_em: "2031-01-10T12:00:00Z", pago_transacao_id: LANC });
+    const original = fake.client as { from: (t: string) => unknown };
+    const deOrigem = original.from.bind(original);
+    // Só a leitura de transactions falha (timeout), como o PostgREST devolveria.
+    original.from = (tabela: string) =>
+      tabela === "transactions"
+        ? {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: null,
+                  error: { code: "57014", message: "canceling statement due to statement timeout" },
+                }),
+              }),
+            }),
+          }
+        : deOrigem(tabela);
+    const res = await preverDesfazerPagamento(ID);
+    expect(res).toEqual({ ok: false, error: "Não foi possível ler o pagamento. Tente de novo." });
+  });
+
   it("fatura não paga", async () => {
     montarPaga({ pago_em: null, pago_transacao_id: null });
     const res = await preverDesfazerPagamento(ID);
@@ -211,7 +233,7 @@ describe("03-F A2 · desfazer preso ao lançamento lido", () => {
 });
 
 describe("03-F B2 · data de pagamento futura", () => {
-  it("data de amanhã é recusada com a mensagem própria no campo, sem ler nada nem chamar a RPC", async () => {
+  it("data de amanhã é recusada com a mensagem própria no campo, sem escrever nada nem chamar a RPC", async () => {
     const resultado = await markStatementPaid(ID, CONTA, "2031-01-16");
     expect(resultado.ok).toBe(false);
     expect(resultado).toMatchObject({

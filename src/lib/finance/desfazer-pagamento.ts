@@ -81,6 +81,7 @@ export const MSG_PAGAMENTO_MUDOU =
   "O pagamento desta fatura mudou desde que você abriu a confirmação. Abra de novo para ver o atual.";
 export const MSG_PAGAMENTO_EDITADO =
   "O lançamento deste pagamento foi editado em Lançamentos. Para desfazer, exclua-o por lá — a fatura reabre junto.";
+export const MSG_LEITURA_DO_PAGAMENTO_FALHOU = "Não foi possível ler o pagamento. Tente de novo.";
 export const MSG_DESFAZER_INCERTO =
   "Não foi possível confirmar o desfazer. Recarregue a página para ver o estado atual.";
 
