@@ -249,6 +249,40 @@ describe("runToolLoop — o smoke ponta a ponta", () => {
     ]);
   });
 
+  it("MOD-ia-035: o metadado opaco da tool call chega à parte tool-call do assistente no passo seguinte", async () => {
+    const assinatura = { google: { thoughtSignature: "sig" } };
+    const { chamarModelo, recebido } = modeloDeMentira([
+      [
+        {
+          type: "tool-call",
+          toolName: "training.get_volume",
+          callId: "call-1",
+          input: { dias: 7 },
+          metadadosDoProvedor: assinatura,
+        },
+        pedeVolume("call-2"),
+        FINISH,
+      ],
+      [{ type: "delta", text: "pronto" }, FINISH],
+    ]);
+
+    await coletar(
+      runToolLoop({
+        ctxBase: CTX_BASE,
+        mensagensIniciais: [{ role: "user", content: "volume?" }],
+        ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
+        chamarModelo,
+      }),
+    );
+
+    const partes = recebido[1][1].content as readonly Record<string, unknown>[];
+    expect(partes.find((p) => p.callId === "call-1")?.metadadosDoProvedor).toEqual(assinatura);
+    // Ausente continua ausente: a chamada sem metadado não ganha o campo.
+    const semMetadado = partes.find((p) => p.callId === "call-2");
+    expect(semMetadado && "metadadosDoProvedor" in semMetadado).toBe(false);
+  });
+
   it("a trilha fica completa: passos abertos e fechados, e a chamada auditada", async () => {
     const { chamarModelo } = modeloDeMentira([
       [pedeVolume(), FINISH],

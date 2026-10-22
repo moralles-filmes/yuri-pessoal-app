@@ -174,6 +174,10 @@ export async function* runToolLoop(
             callId: evento.callId,
             toolName: evento.toolName,
             input: evento.input,
+            // Volta ao provedor no passo seguinte (assinatura do Gemini 3). Ausente fica ausente.
+            ...(evento.metadadosDoProvedor != null
+              ? { metadadosDoProvedor: evento.metadadosDoProvedor }
+              : {}),
           });
           continue;
         }

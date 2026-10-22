@@ -83,6 +83,12 @@ export type AiContentPart =
       readonly callId: string;
       readonly toolName: string;
       readonly input: unknown;
+      /**
+       * Opaco: o que o provedor anexou à chamada e quer de volta no passo seguinte (a
+       * assinatura de raciocínio do Gemini 3, por exemplo). `core/` não conhece o formato —
+       * só `providers/` lê e escreve (invariante 4). Ausente continua ausente.
+       */
+      readonly metadadosDoProvedor?: unknown;
     }
   | {
       readonly type: "tool-result";
@@ -249,6 +255,8 @@ export type AiStreamEvent =
       readonly toolName: string;
       readonly callId: string;
       readonly input: unknown;
+      /** Opaco, como em `AiContentPart`: o laço só o repassa para a parte do passo seguinte. */
+      readonly metadadosDoProvedor?: unknown;
     }
   | {
       readonly type: "finish";

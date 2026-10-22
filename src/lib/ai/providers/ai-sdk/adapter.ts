@@ -233,8 +233,19 @@ function partesDeUsuario(p: AiContentPart, i: number): Array<TextPart | ImagePar
 function partesDoAssistente(p: AiContentPart, i: number): Array<TextPart | ToolCallPart> {
   if (p.type === "text") return [{ type: "text", text: p.text }];
   if (p.type === "tool-call") {
+    // Gemini 3: a assinatura de raciocínio precisa voltar na parte `tool-call`, em
+    // `providerOptions` (`readProviderOpts` de `@ai-sdk/google` lê `part.providerOptions`).
+    // Sem ela o provedor recusa o passo seguinte ou degrada o raciocínio. Ausente = sem campo.
     return [
-      { type: "tool-call", toolCallId: p.callId, toolName: p.toolName, input: p.input },
+      {
+        type: "tool-call",
+        toolCallId: p.callId,
+        toolName: p.toolName,
+        input: p.input,
+        ...(p.metadadosDoProvedor != null
+          ? { providerOptions: p.metadadosDoProvedor as ToolCallPart["providerOptions"] }
+          : {}),
+      },
     ];
   }
   // O SDK até aceitaria `tool-result` aqui — mas só no caso de ferramenta executada PELO
@@ -434,6 +445,11 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
                 toolName: String(parte.toolName ?? "desconhecida"),
                 callId: String(parte.toolCallId ?? ""),
                 input: parte.input ?? {},
+                // `providerMetadata` da tool call no `fullStream` (ai@7): é onde o
+                // `@ai-sdk/google` entrega `{ google: { thoughtSignature } }`. Opaco aqui.
+                ...(parte.providerMetadata != null
+                  ? { metadadosDoProvedor: parte.providerMetadata }
+                  : {}),
               };
               break;
 
