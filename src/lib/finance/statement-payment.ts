@@ -28,6 +28,61 @@ export type PagamentoFaturaPayload = {
   description: string;
 };
 
+/**
+ * Marca de "pago em" gravado em `card_statements.pago_em` (timestamptz) a partir da data
+ * escolhida. Meio-dia UTC = 09h em São Paulo: cai no MESMO dia do calendário em qualquer
+ * leitura no fuso BR (meia-noite UTC voltaria um dia).
+ */
+export function pagoEmTimestamp(data: string): string {
+  return `${data}T12:00:00Z`;
+}
+
+/** Argumentos da RPC `pagar_fatura`: a fatura, o instante do pagamento e o lançamento pronto. */
+export function argumentosDoPagamento(p: {
+  statementId: string;
+  dataPagamento: string;
+  lancamento: PagamentoFaturaPayload;
+}): {
+  p_statement_id: string;
+  p_pago_em: string;
+  p_lancamento: PagamentoFaturaPayload;
+} {
+  return {
+    p_statement_id: p.statementId,
+    p_pago_em: pagoEmTimestamp(p.dataPagamento),
+    p_lancamento: p.lancamento,
+  };
+}
+
+export const MSG_FATURA_JA_PAGA = "Esta fatura já está paga.";
+export const MSG_FATURA_NAO_ENCONTRADA = "Fatura não encontrada.";
+export const MSG_FATURA_SEM_SESSAO = "Sessão expirada. Faça login novamente.";
+export const MSG_PAGAMENTO_INVALIDO = "Não foi possível registrar o pagamento.";
+export const MSG_PAGAMENTO_INCERTO =
+  "Não foi possível confirmar o pagamento. Recarregue a página para ver se ele foi registrado.";
+
+/**
+ * Traduz o erro da RPC `pagar_fatura` (o texto exato do `raise`, em `error.message`) para a
+ * mensagem da tela. Só igualdade exata: um erro desconhecido (rede, timeout) NÃO afirma que o
+ * pagamento falhou — ele pode ter sido gravado antes da resposta se perder.
+ */
+export function mensagemDoErroDoPagamento(
+  error: { message?: string } | null,
+): string {
+  switch (error?.message) {
+    case "FATURA_JA_PAGA":
+      return MSG_FATURA_JA_PAGA;
+    case "FATURA_NAO_ENCONTRADA":
+      return MSG_FATURA_NAO_ENCONTRADA;
+    case "FATURA_SEM_SESSAO":
+      return MSG_FATURA_SEM_SESSAO;
+    case "FATURA_PAGAMENTO_INVALIDO":
+      return MSG_PAGAMENTO_INVALIDO;
+    default:
+      return MSG_PAGAMENTO_INCERTO;
+  }
+}
+
 /** "Pagamento fatura {mês/ano} — {cartão}" (mês por extenso, pt-BR). */
 export function descricaoPagamentoFatura(
   cartaoNome: string,
