@@ -524,7 +524,7 @@ describe("runChat — a medição por CHAMADA", () => {
     for (const e of medicao) {
       if (e.tipo === "start") {
         abertas += 1;
-        expect(abertas, `duas tentativas abertas ao mesmo tempo em ${JSON.stringify(medicao)}`).toBe(1);
+        expect(abertas, `duas tentativas abertas ao mesmo tempo na mesma trilha (a trava é uma aberta por trilha) em ${JSON.stringify(medicao)}`).toBe(1);
       } else {
         abertas -= 1;
       }

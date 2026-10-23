@@ -18,15 +18,8 @@ import "server-only";
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 
-import type {
-  AiMessage,
-  AiProviderId,
-  AiStreamEvent,
-  AiUsage,
-} from "@/lib/ai/core/contracts";
-import { aiError, type AiError } from "@/lib/ai/core/errors";
-import { decideFallback } from "@/lib/ai/core/fallback";
-import type { AiModelEntry } from "@/lib/ai/core/models";
+import type { AiMessage, AiProviderId } from "@/lib/ai/core/contracts";
+import { aiError } from "@/lib/ai/core/errors";
 import { type AiRate, PRICING_VERSION, rateFor } from "@/lib/ai/core/pricing";
 import { routeRequest } from "@/lib/ai/core/router";
 import { buildSystemPrompt, findAgent, promptVersionOf } from "@/lib/ai/agents/registry";
@@ -55,18 +48,15 @@ import {
 import { closeStep, startStep, type ToolCallStatus } from "@/lib/ai/tools/audit";
 import { executeTool, type PropostaParaATela } from "@/lib/ai/tools/executor";
 import { renderUntrusted } from "@/lib/ai/security/untrusted";
-import { toolDefinitionsFor, UNEXPECTED_TOOL_CALL } from "@/lib/ai/tools/registry";
+import { toolDefinitionsFor } from "@/lib/ai/tools/registry";
 import { MAX_TOOL_STEPS } from "@/lib/ai/tools/limits";
 import { textoDasMensagens } from "@/lib/ai/core/text";
 import { safeUserMessage } from "@/lib/ai/security/redact";
-import { computeAttemptCost } from "@/lib/ai/usage/meter";
 import {
   computeReservation,
   estimarTokensDeEntrada,
-  projetarCustoDoDestino,
   RESERVA_TTL_SEGUNDOS,
 } from "@/lib/ai/usage/reservation";
-import { createProviderClient } from "@/lib/ai/providers/provider-factory";
 import {
   getAiPreferences,
   getHistoryForPrompt,
@@ -74,28 +64,24 @@ import {
 } from "@/lib/ai/queries";
 import { dateInSaoPaulo } from "@/lib/format";
 import { AI_CRYPTO_NOT_CONFIGURED, getCryptoReadiness } from "./crypto-readiness";
-import { resolveApiKey } from "./credential-store";
 import {
   beginChatRun,
   beginExperienceRun,
   cancelRun,
-  closeAttempt,
   completeRun,
   failRun,
   HEARTBEAT_INTERVAL_MS,
   heartbeatAndPersist,
   markStreaming,
   MENSAGEM_ADMISSAO,
-  startAttempt,
-  type AttemptType,
 } from "./run-store";
+import { criarPrazo } from "./prazo";
 import {
-  AI_DEADLINE,
-  criarPrazo,
-  MENSAGEM_DO_PRAZO,
-  timeoutDaChamada,
-} from "./prazo";
-import { runToolLoop } from "./tool-loop";
+  runTrilha,
+  type Alvo,
+  type ContadoresDoRun,
+  type DesfechoDaTrilha,
+} from "./trilha";
 
 export type ChatRunnerEvent =
   | {
@@ -194,8 +180,6 @@ export type ChatRunnerInput = {
    */
   readonly caixaDeEntrada?: boolean;
 };
-
-type Alvo = { readonly provider: AiProviderId; readonly model: AiModelEntry };
 
 export async function* runChat(
   input: ChatRunnerInput,
@@ -416,7 +400,8 @@ export async function* runChat(
   }
 
   // As definições que VÃO ao provedor. Resolvidas uma vez: elas são a régua da chamada
-  // inesperada (o que não foi oferecido não pode voltar) e o que decide se há laço.
+  // inesperada (o que não foi oferecido não pode voltar — `runTrilha` a deriva daqui) e o que
+  // decide se há laço.
   // ⚠️ As permissões entram AQUI desde a 18-C: um agente pode ter na allowlist ferramentas de
   // módulos com flags diferentes (o de Treinos tem `training` e `body`), e oferecer o que a
   // flag vai recusar queima um passo do laço por pergunta. O guard segue decidindo na execução.
@@ -427,7 +412,6 @@ export async function* runChat(
   const definicoes = input.plano
     ? []
     : toolDefinitionsFor(perfil.allowedTools, prefs.permissions, prefs.writePermissions);
-  const nomesOferecidos = definicoes.map((d) => d.name);
 
   // A estimativa é sobre o prompt JÁ MONTADO, nunca sobre o texto cru do usuário.
   //
@@ -519,25 +503,32 @@ export async function* runChat(
   // ── 6. Tentativas ──────────────────────────────────────────────────────────────────
   const inicioMs = Date.now();
   let texto = "";
-  let attemptIndex = 0;
-  let retriesUsed = 0;
-  let fallbackCount = 0;
-  let alvoIdx = 0;
-  let alvoAnterior: Alvo | null = null;
   let custoAcumulado = 0;
   let fechado = false;
   let ultimoHeartbeat = inicioMs;
+  /** Quem EFETIVAMENTE concluiu — só existe depois de um desfecho `ok`. */
+  let vencedor: Alvo | null = null;
 
   /**
-   * ⚠️ O `step_index` é DO RUN, e o run é um só: `beginChatRun` já rodou, e retry e fallback
-   * continuam dentro dele. Como `ai_run_steps_run_index_uidx` é `UNIQUE (run_id, step_index,
-   * kind)`, um contador que vivesse dentro de `runToolLoop` reiniciaria a cada tentativa e a
-   * segunda colidiria em `23505` — `startStep` devolveria `null` e a regra "sem trilha, sem
-   * leitura" bloquearia TODA leitura depois do primeiro retry. Por isso o contador mora aqui,
-   * ao lado de `attemptIndex`, e atravessa a cadeia inteira.
+   * ⚠️ Os contadores são DO RUN, e o run é um só: `beginChatRun` já rodou, e retry, fallback
+   * e TOOL_STEP continuam dentro dele. Como `ai_run_steps_run_index_uidx` é `UNIQUE (run_id,
+   * step_index, kind)`, um contador que vivesse dentro de `runToolLoop` (ou de uma trilha)
+   * reiniciaria a cada tentativa e a segunda colidiria em `23505` — `startStep` devolveria
+   * `null` e a regra "sem trilha, sem leitura" bloquearia TODA leitura depois do primeiro
+   * retry. Por isso os contadores moram aqui e atravessam a cadeia inteira (invariante 18);
+   * `attempt_index` é `UNIQUE (run_id)` pelo mesmo motivo.
    */
+  let attemptIndex = 0;
   let stepIndex = 0;
-  const proximoStepIndex = () => (stepIndex += 1);
+  let fallbackCount = 0;
+  const contadores: ContadoresDoRun = {
+    proximoAttemptIndex: () => (attemptIndex += 1),
+    proximoStepIndex: () => (stepIndex += 1),
+    contarFallback: () => {
+      fallbackCount += 1;
+    },
+  };
+  const proximoStepIndex = contadores.proximoStepIndex;
 
   /**
    * 18-F Bloco 4 — o que NÃO chegou porque a leitura falhou, já em pt-BR. Vive fora do `try`
@@ -559,67 +550,9 @@ export async function* runChat(
     startedAtMs: inicioMs,
     attemptCount: attemptIndex,
     fallbackCount,
-    completedProvider: concluiu
-      ? ((alvoAnterior?.provider ?? provider) as AiProviderId)
-      : null,
-    completedModel: concluiu ? (alvoAnterior?.model.id ?? model.id) : null,
+    completedProvider: concluiu ? ((vencedor?.provider ?? provider) as AiProviderId) : null,
+    completedModel: concluiu ? (vencedor?.model.id ?? model.id) : null,
   });
-
-  /**
-   * ╔════════════════════════════════════════════════════════════════════════════════════╗
-   * ║ CADA CHAMADA AO MODELO É UMA TENTATIVA PRÓPRIA — E SÓ UMA FICA ABERTA.              ║
-   * ║                                                                                     ║
-   * ║ `ai_usage_events_one_active_uidx` é `UNIQUE (run_id) WHERE status = 'started'`.     ║
-   * ║ Abrir a tentativa do passo N+1 com a do passo N ainda aberta é `23505` EM            ║
-   * ║ RUNTIME — nenhum teste de unidade da medição pega isso, porque a trava é do          ║
-   * ║ banco. Por isso o fechamento acontece AQUI, num ponto só, e é a primeira coisa       ║
-   * ║ que `chamarModelo` faz antes de abrir a seguinte.                                    ║
-   * ║                                                                                     ║
-   * ║ ⛔ MOD-ia-005 — no escopo da FUNÇÃO, e não da tentativa: o `finally` lá embaixo      ║
-   * ║ precisa alcançá-la. `return()` do consumidor (a aba fechada no meio da resposta)    ║
-   * ║ não passa pelo ramo de cancelamento; sem isso a tentativa ficava `started`, com a   ║
-   * ║ medição daquela chamada nunca fechada. A tarifa viaja com ela pelo mesmo motivo.    ║
-   * ╚════════════════════════════════════════════════════════════════════════════════════╝
-   */
-  let aberta: { id: string; inicio: number; tarifa: AiRate } | null = null;
-  let usoFinal: AiUsage | null = null;
-  let providerRequestId: string | null = null;
-
-  const fecharTentativaAberta = async (
-    status: "completed" | "failed" | "cancelled",
-    errorCode: string | null,
-  ) => {
-    if (!aberta) return;
-    const atual = aberta;
-    aberta = null;
-    await closeAttempt({
-      attemptId: atual.id,
-      userId: input.userId,
-      status,
-      usage: usoFinal,
-      rate: atual.tarifa,
-      latencyMs: Date.now() - atual.inicio,
-      providerRequestId,
-      errorCode,
-    });
-    if (usoFinal) {
-      const parcial = computeAttemptCost(usoFinal, atual.tarifa);
-      if (parcial.totalUsd !== null) custoAcumulado += parcial.totalUsd;
-    }
-    usoFinal = null;
-    providerRequestId = null;
-  };
-
-  /**
-   * MOD-ia-005 — o prazo não comporta a próxima chamada. Fecha o run como `failed` com código
-   * declarado, em vez de abrir uma chamada que a plataforma cortaria no meio.
-   */
-  const encerrarPorPrazo = async (): Promise<ChatRunnerEvent> => {
-    const erro = aiError("TIMEOUT", AI_DEADLINE, MENSAGEM_DO_PRAZO);
-    await failRun(contexto(), erro);
-    fechado = true;
-    return { type: "error", code: erro.code, message: safeUserMessage(erro) };
-  };
 
   try {
     /**
@@ -731,470 +664,170 @@ export async function* runChat(
       }
     }
 
-    while (alvoIdx < alvos.length) {
-      const alvo = alvos[alvoIdx];
-      const tarifa = rateFor(alvo.provider, alvo.model.id, hoje);
-      if (!tarifa) {
-        alvoIdx += 1;
-        continue;
-      }
+    /**
+     * ╔════════════════════════════════════════════════════════════════════════════════════╗
+     * ║ A TRILHA 0 — o laço de tentativas mora em `runTrilha` (`./trilha`), e este arquivo ║
+     * ║ continua dono do resto: o texto público, o heartbeat, a persistência e o           ║
+     * ║ FECHAMENTO do run. A trilha não fecha run nenhum — ela devolve um desfecho.        ║
+     * ╚════════════════════════════════════════════════════════════════════════════════════╝
+     */
+    const trilha = runTrilha({
+      run: { runId: run.runId, conversationId: run.conversationId, userId: input.userId },
+      trilha: 0,
+      agente: { id: perfil.id, allowedTools: perfil.allowedTools },
+      promptVersion: perfil.promptVersion,
+      system,
+      mensagens,
+      definicoes,
+      modo: "laco",
+      alvos,
+      config: { timeoutMs: config.timeoutMs, maxRetries: config.maxRetries },
+      fallbackLigado,
+      repetir: true,
+      // Sem teto próprio: cada alvo usa o teto do SEU modelo, como sempre foi.
+      tetoDeSaida: Number.POSITIVE_INFINITY,
+      primeiroTipo: "PRIMARY",
+      permissions: prefs.permissions,
+      writePermissions: prefs.writePermissions,
+      contadores,
+      prazo,
+      agoraMs,
+      abortSignal: input.abortSignal,
+      hoje,
+      reservaRestante: () => Math.max(0, reserva.valorUsd - custoAcumulado),
+      aoGastar: (usd) => {
+        custoAcumulado += usd;
+      },
+      promptMontado,
+    });
 
-      // MOD-ia-005 — a primeira chamada, o retry e o fallback passam por aqui ANTES de abrir a
-      // tentativa: abaixo do piso, nenhuma linha nova em `ai_usage_events` e nenhum `switch`.
-      const timeoutDaTentativa = timeoutDaChamada(prazo, agoraMs(), config.timeoutMs);
-      if (timeoutDaTentativa === null) {
-        yield await encerrarPorPrazo();
-        return;
-      }
-
-      attemptIndex += 1;
-      const tipo: AttemptType = tipoDaTentativa(attemptIndex, alvoAnterior, alvo);
-      if (tipo === "FALLBACK") fallbackCount += 1;
-
-      if (attemptIndex > 1) {
-        /**
-         * ╔════════════════════════════════════════════════════════════════════════════════╗
-         * ║ TENTATIVA NOVA COMEÇA COM O TEXTO ZERADO — E A TELA FAZ O MESMO NO `switch`.    ║
-         * ║                                                                                 ║
-         * ║ Sem isto, a narração da tentativa que falhou ficava colada na da seguinte: o    ║
-         * ║ acumulador atravessava o retry e o fallback, e era ele que ia para              ║
-         * ║ `heartbeatAndPersist` e para `completeRun`. A resposta gravada virava a mistura ║
-         * ║ de duas respostas — e nenhuma leitura da conversa depois disso conseguiria      ║
-         * ║ separá-las.                                                                      ║
-         * ║                                                                                 ║
-         * ║ ⚠️ Zerar SÓ AQUI é essencial: o passo TOOL_STEP também incrementa `attemptIndex`,║
-         * ║ mas ele é a MESMA resposta continuando depois de uma ferramenta, não uma        ║
-         * ║ tentativa nova — e não passa por este ponto (ele vive dentro de `chamarModelo`).║
-         * ║                                                                                 ║
-         * ║ ⚠️ E zerar só no servidor seria pior que não zerar: o `router.refresh()` do fim  ║
-         * ║ do envio releria o texto novo e APAGARIA da tela algo que o usuário já tinha    ║
-         * ║ lido. Por isso `chat-client.tsx` limpa a bolha no mesmo evento.                  ║
-         * ╚════════════════════════════════════════════════════════════════════════════════╝
-         */
-        texto = "";
-        yield {
-          type: "switch",
-          provider: alvo.provider,
-          model: alvo.model.id,
-          motivo:
-            tipo === "RETRY"
-              ? "Repetindo a chamada no mesmo modelo."
-              : "Continuando em outro provedor.",
-        };
-      }
-
-      const tentativa = await startAttempt({
-        runId: run.runId,
-        userId: input.userId,
-        conversationId: run.conversationId,
-        agentId: perfil.id,
-        attemptIndex,
-        attemptType: tipo,
-        provider: alvo.provider,
-        modelId: alvo.model.id,
-        rate: tarifa,
-      });
-
-      if (!tentativa) {
-        const erro = aiError(
-          "ERRO_PERMANENTE",
-          "ATTEMPT_NOT_RECORDED",
-          "Não foi possível registrar a execução. Nenhuma chamada foi feita.",
-        );
-        await failRun(contexto(), erro);
-        fechado = true;
-        yield { type: "error", code: erro.code, message: safeUserMessage(erro) };
-        return;
-      }
-
-      alvoAnterior = alvo;
-
-      // A credencial é decifrada AQUI, no instante da chamada, para UMA chamada.
-      const chave = await resolveApiKey(input.userId, alvo.provider);
-      if (!chave.ok) {
-        await closeAttempt({
-          attemptId: tentativa.id,
-          userId: input.userId,
-          status: "failed",
-          usage: null,
-          rate: tarifa,
-          latencyMs: 0,
-          providerRequestId: null,
-          errorCode: chave.error.code,
-        });
-        await failRun(contexto(), chave.error);
-        fechado = true;
-        yield { type: "error", code: chave.error.code, message: safeUserMessage(chave.error) };
-        return;
-      }
-
-      const inicioTentativa = Date.now();
-      // O timer do servidor nasce com o timeout que o PRAZO permite, não com o configurado.
-      const { signal, dispose } = combinarSinais(input.abortSignal, timeoutDaTentativa);
-
-      usoFinal = null;
-      providerRequestId = null;
-      let erroDaTentativa: AiError | null = null;
-      let concluiu = false;
-      let finishReason = "unknown";
-      let toolCallInesperada = false;
-
-      // A tentativa recém-aberta é a única aberta (ver o quadro de `fecharTentativaAberta`).
-      aberta = { id: tentativa.id, inicio: inicioTentativa, tarifa };
-
-      /**
-       * A chamada ao provedor, uma por passo do laço. O passo 0 usa a tentativa já aberta
-       * (PRIMARY/RETRY/FALLBACK); os seguintes abrem uma tentativa `TOOL_STEP` — que é o que
-       * mantém a medição por CHAMADA, e não por resposta.
-       */
-      const chamarModelo = (
-        msgs: readonly AiMessage[],
-        passo: number,
-      ): AsyncIterable<AiStreamEvent> =>
-        (async function* () {
-          let timeoutDestaChamada = timeoutDaTentativa;
-          if (passo > 0) {
-            // MOD-ia-005 — o passo de ferramenta também é uma chamada, e também cabe ou não
-            // no prazo. Sem espaço, a tentativa anterior fecha como `completed` (ela terminou
-            // de verdade) e nenhuma nova é aberta; o runner fecha o run por `AI_DEADLINE`.
-            const cabe = timeoutDaChamada(prazo, agoraMs(), config.timeoutMs);
-            if (cabe === null) {
-              await fecharTentativaAberta("completed", null);
-              yield {
-                type: "error",
-                error: aiError("TIMEOUT", AI_DEADLINE, MENSAGEM_DO_PRAZO),
-              };
-              return;
-            }
-            timeoutDestaChamada = cabe;
-            await fecharTentativaAberta("completed", null);
-            attemptIndex += 1;
-            const nova = await startAttempt({
-              runId: run.runId,
-              userId: input.userId,
-              conversationId: run.conversationId,
-              agentId: perfil.id,
-              attemptIndex,
-              attemptType: "TOOL_STEP",
-              provider: alvo.provider,
-              modelId: alvo.model.id,
-              rate: tarifa,
-            });
-            if (!nova) {
-              yield {
-                type: "error",
-                error: aiError(
-                  "ERRO_PERMANENTE",
-                  "ATTEMPT_NOT_RECORDED",
-                  "Não foi possível registrar a continuação da execução. A resposta foi interrompida.",
-                ),
-              };
-              return;
-            }
-            aberta = { id: nova.id, inicio: Date.now(), tarifa };
-            concluiu = false;
-          }
-
-          const client = createProviderClient(alvo.provider, chave.value);
-          yield* client.streamText({
-            model: alvo.model.id,
-            system,
-            messages: msgs,
-            maxOutputTokens: alvo.model.outputCapTokens,
-            timeoutMs: timeoutDestaChamada,
-            abortSignal: signal,
-            // O laço executa SÓ o que passou pela allowlist do agente e pelo guard. O que
-            // não está aqui não foi oferecido — e voltar assim mesmo encerra o run.
-            tools: definicoes,
-          });
-        })();
-
-      try {
-        for await (const evento of runToolLoop({
-          ctxBase: {
-            runId: run.runId,
-            // A conversa vem de `beginChatRun` (a admissão atômica), nunca do cliente: é ela
-            // que a FK composta de `ai_action_proposals` confere contra o run e o dono.
-            conversationId: run.conversationId,
-            userId: input.userId,
-            agent: { id: perfil.id, allowedTools: perfil.allowedTools },
-            permissions: prefs.permissions,
-            writePermissions: prefs.writePermissions,
-          },
-          mensagensIniciais: mensagens,
-          ferramentasOferecidas: nomesOferecidos,
-          proximoStepIndex,
-          chamarModelo,
-        })) {
-          if (evento.type === "delta") {
-            if (texto === "") await markStreaming(run.runId, input.userId);
-            texto += evento.text;
-            yield { type: "delta", text: evento.text };
-
-            // Heartbeat + persistência periódicos. Nunca por token: um stream rápido
-            // escreveria centenas de UPDATEs por segundo.
-            const agoraMs = Date.now();
-            if (agoraMs - ultimoHeartbeat >= HEARTBEAT_INTERVAL_MS) {
-              ultimoHeartbeat = agoraMs;
-              await heartbeatAndPersist(
-                run.runId,
-                input.userId,
-                run.assistantMessageId,
-                texto,
-              );
-            }
-            continue;
-          }
-
-          if (evento.type === "tool") {
-            yield {
-              type: "tool",
-              toolName: evento.toolName,
-              status: evento.status,
-              registros: evento.registros,
-            };
-            continue;
-          }
-
-          if (evento.type === "proposta") {
-            yield { type: "proposta", proposta: evento.proposta };
-            continue;
-          }
-
-          if (evento.type === "aviso") {
-            // O corte NÃO é silencioso: ele entra na resposta que o usuário lê e na
-            // mensagem que fica gravada. Uma resposta interrompida apresentada como
-            // completa é a mesma família de mentira que a subfase inteira combate.
-            const trecho = texto === "" ? evento.texto : `\n\n${evento.texto}`;
-            texto += trecho;
-            yield { type: "delta", text: trecho };
-            continue;
-          }
-
-          if (evento.type === "tool-call-inesperada") {
-            // Não executamos, não interpretamos como ferramenta válida e não deixamos o run
-            // seguir como se nada tivesse ocorrido.
-            toolCallInesperada = true;
-            erroDaTentativa = aiError(
-              "ERRO_PERMANENTE",
-              UNEXPECTED_TOOL_CALL,
-              "O provedor tentou usar uma ferramenta que não foi oferecida. A execução foi encerrada por segurança.",
-            );
-            break;
-          }
-
-          const doProvedor = evento.evento;
-
-          if (doProvedor.type === "finish") {
-            usoFinal = doProvedor.usage;
-            providerRequestId = doProvedor.providerRequestId;
-            finishReason = doProvedor.finishReason;
-            concluiu = true;
-            continue;
-          }
-
-          if (doProvedor.type === "error") {
-            erroDaTentativa = doProvedor.error;
-            break;
-          }
+    /**
+     * ⚠️ `next()` à mão, e não `for await`: o `for await` descarta o valor de retorno do
+     * gerador, e o DESFECHO é justamente o valor de retorno. O preço é fechar a trilha à mão
+     * quando ESTE gerador é abandonado — o `finally` abaixo faz o que o `for await` faria, e é
+     * ele que leva o `return()` do navegador até o `finally` da trilha (que fecha a tentativa
+     * aberta antes de o run ser fechado aqui).
+     */
+    let desfecho: DesfechoDaTrilha | null = null;
+    try {
+      for (;;) {
+        const passo = await trilha.next();
+        if (passo.done) {
+          desfecho = passo.value;
+          break;
         }
-      } catch (e) {
-        erroDaTentativa = aiError(
-          "ERRO_TEMPORARIO",
-          "STREAM_FAILED",
-          e instanceof Error && e.name === "AbortError"
-            ? "A resposta foi interrompida."
-            : "A resposta foi interrompida por uma falha inesperada.",
-        );
-      } finally {
-        dispose();
-      }
+        const evento = passo.value;
 
-      // ── Cancelamento do usuário (ou queda do cliente, que é idêntica) ───────────────
-      if (input.abortSignal.aborted) {
-        await fecharTentativaAberta("cancelled", "CANCELLED");
-        await cancelRun(contexto(), "Cancelado pelo usuário ou queda da conexão.");
-        fechado = true;
-        return;
-      }
+        if (evento.type === "delta") {
+          if (texto === "") await markStreaming(run.runId, input.userId);
+          texto += evento.text;
+          yield { type: "delta", text: evento.text };
 
-      /**
-       * MOD-ia-005 — quem abortou o sinal da chamada foi o timer do SERVIDOR, não o dono (o
-       * sinal dele foi tratado logo acima). O adapter só vê um aborto e o relata como
-       * cancelamento; deixar assim fecharia a tentativa como `cancelled` e diria ao dono
-       * "Resposta cancelada." sobre algo que ninguém cancelou. Como `TIMEOUT`, a decisão de
-       * retry segue a regra de sempre — e o prazo, conferido antes da próxima chamada, decide
-       * se ela ainda cabe.
-       */
-      if (signal.aborted && erroDaTentativa?.class === "CANCELADO_PELO_USUARIO") {
-        erroDaTentativa = aiError("TIMEOUT", "SERVER_TIMEOUT");
-      }
+          // Heartbeat + persistência periódicos. Nunca por token: um stream rápido
+          // escreveria centenas de UPDATEs por segundo.
+          const agoraDoHeartbeat = Date.now();
+          if (agoraDoHeartbeat - ultimoHeartbeat >= HEARTBEAT_INTERVAL_MS) {
+            ultimoHeartbeat = agoraDoHeartbeat;
+            await heartbeatAndPersist(
+              run.runId,
+              input.userId,
+              run.assistantMessageId,
+              texto,
+            );
+          }
+          continue;
+        }
 
-      // ── Sucesso ────────────────────────────────────────────────────────────────────
-      if (concluiu && !erroDaTentativa) {
-        /**
-         * ╔════════════════════════════════════════════════════════════════════════════════╗
-         * ║ 18-F Bloco 4 — O QUE FICOU DE FORA ENTRA NO TEXTO GRAVADO, E É TEXTO NOSSO.     ║
-         * ║                                                                                 ║
-         * ║ Pedir ao modelo "diga o que ficou de fora" é a mesma família de erro que a 18-E ║
-         * ║ resolveu tirando os números do texto: ele obedece quase sempre, e "quase        ║
-         * ║ sempre" num panorama diário é uma omissão por mês.                              ║
-         * ║                                                                                 ║
-         * ║ ⚠️ NO FIM, e não no começo: tentativa nova ZERA `texto` (a regra logo acima), e ║
-         * ║ um aviso escrito antes do modelo sumiria no primeiro retry. Aqui ele acompanha  ║
-         * ║ a resposta que de fato venceu.                                                  ║
-         * ╚════════════════════════════════════════════════════════════════════════════════╝
-         */
-        for (const frase of [input.plano?.aviso ?? "", avisoDeFalhas]) {
-          if (!frase) continue;
-          const trecho = texto === "" ? frase : `\n\n${frase}`;
+        if (evento.type === "aviso") {
+          // O corte NÃO é silencioso: ele entra na resposta que o usuário lê e na
+          // mensagem que fica gravada.
+          const trecho = texto === "" ? evento.texto : `\n\n${evento.texto}`;
           texto += trecho;
           yield { type: "delta", text: trecho };
+          continue;
         }
-        await fecharTentativaAberta("completed", null);
-        await completeRun(contexto(true));
-        fechado = true;
-        yield {
-          type: "done",
-          finishReason,
-          provider: alvo.provider,
-          model: alvo.model.id,
-        };
-        return;
+
+        if (evento.type === "switch") {
+          // Tentativa nova começa com o texto zerado — o quadro em `runTrilha` explica por
+          // quê, e a tela faz o mesmo ao receber este evento (invariante 23).
+          texto = "";
+          yield evento;
+          continue;
+        }
+
+        // `tool` e `proposta` passam como vieram.
+        yield evento;
       }
-
-      // ── Falha ──────────────────────────────────────────────────────────────────────
-      const erro =
-        erroDaTentativa ??
-        aiError("ERRO_TEMPORARIO", "NO_FINISH", "A resposta terminou sem conclusão.");
-
-      await fecharTentativaAberta(
-        erro.class === "CANCELADO_PELO_USUARIO" ? "cancelled" : "failed",
-        erro.code,
-      );
-
-      // Tool call inesperada NÃO tem recuperação: encerra o run, ponto.
-      if (toolCallInesperada) {
-        await failRun(contexto(), erro);
-        fechado = true;
-        yield { type: "error", code: erro.code, message: safeUserMessage(erro) };
-        return;
+    } finally {
+      if (desfecho === null) {
+        await trilha.return({
+          ok: false,
+          erro: aiError("CANCELADO_PELO_USUARIO", "CANCELLED"),
+          cancelado: true,
+        });
       }
+    }
 
-      // MOD-ia-005 — o passo de ferramenta já recusou abrir a chamada por falta de prazo.
-      // Não há o que decidir: nem retry nem fallback cabem no mesmo tempo que não coube.
-      if (erro.code === AI_DEADLINE) {
-        yield await encerrarPorPrazo();
-        return;
-      }
+    // ── Cancelamento do usuário (ou queda do cliente, que é idêntica) ───────────────────
+    if (!desfecho.ok && desfecho.cancelado) {
+      await cancelRun(contexto(), "Cancelado pelo usuário ou queda da conexão.");
+      fechado = true;
+      return;
+    }
 
-      const proximoAlvo = alvos[alvoIdx + 1];
-      const tarifaProximo = proximoAlvo
-        ? rateFor(proximoAlvo.provider, proximoAlvo.model.id, hoje)
-        : null;
-      const custoProjetado =
-        tarifaProximo && proximoAlvo
-          ? projetarCustoDoDestino(
-              tarifaProximo,
-              estimarTokensDeEntrada(promptMontado),
-              proximoAlvo.model.outputCapTokens,
-            )
-          : Number.POSITIVE_INFINITY;
-
-      const veredito = decideFallback({
-        errorClass: erro.class,
-        fallbackAllowed: fallbackLigado,
-        fallbackTargetsLeft: alvos.length - (alvoIdx + 1),
-        retriesUsed,
-        maxRetries: config.maxRetries,
-        reservaRestante: Math.max(0, reserva.valorUsd - custoAcumulado),
-        custoProjetadoDoDestino: custoProjetado,
-      });
-
-      if (veredito.kind === "retry") {
-        retriesUsed += 1;
-        continue; // mesmo alvo
-      }
-      if (veredito.kind === "fallback") {
-        alvoIdx += 1;
-        continue;
-      }
-
+    // ── Falha ──────────────────────────────────────────────────────────────────────────
+    if (!desfecho.ok) {
+      const { erro, motivo } = desfecho;
       await failRun(contexto(), erro);
       fechado = true;
       yield {
         type: "error",
         code: erro.code,
-        message: `${safeUserMessage(erro)} ${veredito.motivo}`.trim(),
+        message: motivo ? `${safeUserMessage(erro)} ${motivo}`.trim() : safeUserMessage(erro),
       };
       return;
     }
 
-    // Saiu do laço sem sucesso: acabaram os alvos.
-    const erro = aiError(
-      "ERRO_PERMANENTE",
-      "NO_TARGET_SUCCEEDED",
-      "Nenhum provedor autorizado conseguiu responder.",
-    );
-    await failRun(contexto(), erro);
+    // ── Sucesso ────────────────────────────────────────────────────────────────────────
+    vencedor = desfecho.alvo;
+    /**
+     * ╔════════════════════════════════════════════════════════════════════════════════════╗
+     * ║ 18-F Bloco 4 — O QUE FICOU DE FORA ENTRA NO TEXTO GRAVADO, E É TEXTO NOSSO.         ║
+     * ║                                                                                     ║
+     * ║ Pedir ao modelo "diga o que ficou de fora" é a mesma família de erro que a 18-E     ║
+     * ║ resolveu tirando os números do texto: ele obedece quase sempre, e "quase            ║
+     * ║ sempre" num panorama diário é uma omissão por mês.                                  ║
+     * ║                                                                                     ║
+     * ║ ⚠️ NO FIM, e não no começo: tentativa nova ZERA `texto` (invariante 23), e um aviso ║
+     * ║ escrito antes do modelo sumiria no primeiro retry. Aqui ele acompanha a resposta    ║
+     * ║ que de fato venceu.                                                                 ║
+     * ╚════════════════════════════════════════════════════════════════════════════════════╝
+     */
+    for (const frase of [input.plano?.aviso ?? "", avisoDeFalhas]) {
+      if (!frase) continue;
+      const trecho = texto === "" ? frase : `\n\n${frase}`;
+      texto += trecho;
+      yield { type: "delta", text: trecho };
+    }
+    await completeRun(contexto(true));
     fechado = true;
-    yield { type: "error", code: erro.code, message: safeUserMessage(erro) };
+    yield {
+      type: "done",
+      finishReason: desfecho.finishReason,
+      provider: desfecho.alvo.provider,
+      model: desfecho.alvo.model.id,
+    };
   } finally {
     // Rede de segurança: se saímos por `return()` do consumidor (o navegador fechou a aba),
     // o run não pode ficar aberto prendendo orçamento. O UPDATE é condicional, então se
     // alguém já fechou, isto é no-op.
     //
-    // ⛔ MOD-ia-005 — e a TENTATIVA aberta fecha antes do run, como `cancelled`. Sem isto,
-    // `return()` depois do primeiro delta deixava a linha de `ai_usage_events` em `started`.
+    // ⛔ MOD-ia-005 — a TENTATIVA aberta já fechou antes daqui, como `cancelled`: o `finally`
+    // do consumo da trilha leva o `return()` até o `finally` de `runTrilha`.
     if (!fechado) {
-      await fecharTentativaAberta("cancelled", "CANCELLED").catch(() => {});
       await cancelRun(contexto(), "Conexão encerrada antes da conclusão.").catch(() => {});
     }
   }
-}
-
-/** `PRIMARY` na primeira; `RETRY` quando repete provedor E modelo; `FALLBACK` quando muda. */
-function tipoDaTentativa(
-  attemptIndex: number,
-  anterior: Alvo | null,
-  atual: Alvo,
-): AttemptType {
-  if (attemptIndex === 1 || anterior === null) return "PRIMARY";
-  const mesmo =
-    anterior.provider === atual.provider && anterior.model.id === atual.model.id;
-  return mesmo ? "RETRY" : "FALLBACK";
-}
-
-/**
- * Une o `AbortSignal` do cliente com o timeout do servidor.
- *
- * O timeout do SERVIDOR é menor que o `maxDuration` da plataforma de propósito: assim quem
- * encerra somos nós, e o estado fica consistente. Se a plataforma cortar primeiro, ninguém
- * roda o `finally` — e o run só seria recuperado pela reconciliação.
- *
- * MOD-ia-005 — `timeoutMs` chega já recortado por `timeoutDaChamada` (`server/prazo.ts`): o
- * menor entre o configurado e o que resta do prazo da requisição. O configurado sozinho
- * (padrão 60 s, até 300 s) não garantia a frase acima.
- */
-function combinarSinais(
-  externo: AbortSignal,
-  timeoutMs: number,
-): { signal: AbortSignal; dispose: () => void } {
-  const controller = new AbortController();
-
-  const abortar = () => controller.abort();
-  if (externo.aborted) abortar();
-  else externo.addEventListener("abort", abortar, { once: true });
-
-  const timer = setTimeout(abortar, Math.max(1000, timeoutMs));
-
-  return {
-    signal: controller.signal,
-    dispose: () => {
-      clearTimeout(timer);
-      externo.removeEventListener("abort", abortar);
-    },
-  };
 }
 
 /**
