@@ -78,14 +78,17 @@ let respostasPorChamada: (readonly AiStreamEvent[])[] = [];
 let chamadasAoProvedor = 0;
 /** O `abortSignal` que cada chamada recebeu — o da chamada abandonada tem de abortar. */
 const sinaisRecebidos: (AbortSignal | undefined)[] = [];
+/** O `maxOutputTokens` que cada chamada recebeu — é por aqui que o teto da trilha se prova. */
+const tetosRecebidos: number[] = [];
 
 vi.mock("@/lib/ai/providers/provider-factory", () => ({
   createProviderClient: () => ({
     provider: "openai",
-    streamText: (request: { abortSignal?: AbortSignal }) => {
+    streamText: (request: { abortSignal?: AbortSignal; maxOutputTokens: number }) => {
       const indice = chamadasAoProvedor;
       chamadasAoProvedor += 1;
       sinaisRecebidos.push(request.abortSignal);
+      tetosRecebidos.push(request.maxOutputTokens);
       const eventos = respostasPorChamada[indice] ?? [FINISH];
       return (async function* () {
         for (const e of eventos) yield e;
@@ -142,6 +145,11 @@ vi.mock("@/lib/ai/tools/audit", () => ({
 const { runTrilha } = await import("./trilha");
 const { executeTool } = await import("@/lib/ai/tools/executor");
 const { criarPrazo } = await import("./prazo");
+const { rateFor } = await import("@/lib/ai/core/pricing");
+const { estimarTokensDeEntrada, projetarCustoDoDestino } = await import(
+  "@/lib/ai/usage/reservation"
+);
+const { MAX_ESPECIALISTAS } = await import("@/lib/ai/agents/especialistas");
 type EntradaDaTrilha = Parameters<typeof runTrilha>[0];
 
 // ─────────────────────────── Fixtures ───────────────────────────
@@ -245,6 +253,7 @@ beforeEach(() => {
   vi.mocked(executeTool).mockClear();
   credencialLanca = false;
   sinaisRecebidos.length = 0;
+  tetosRecebidos.length = 0;
   aoExecutarFerramenta = null;
 });
 
@@ -439,6 +448,11 @@ describe("runTrilha — não abre o que não vai acontecer", () => {
     const { desfecho } = await rodar(entrada({ agoraMs: () => relogio }));
 
     expect(chamadasAoProvedor).toBe(1);
+    // Nenhuma tentativa TOOL_STEP aberta; a do passo 0 terminou de verdade e fecha `completed`.
+    expect(medicao.map((m) => `${m.tipo}:${m.id}${m.tipo === "close" ? `:${m.status}` : ""}`)).toEqual([
+      "start:att-1",
+      "close:att-1:completed",
+    ]);
     expect(passosAbertos.map((p) => `${p.stepIndex}:${p.kind}`)).toEqual([
       "1:modelo",
       "1:ferramentas",
@@ -493,5 +507,130 @@ describe("runTrilha — o fechamento da tentativa aberta", () => {
       "start:att-1",
       "close:att-1:cancelled",
     ]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// Rodada pós-revisão da Task 10
+// ────────────────────────────────────────────────────────────────
+
+/** Um segundo alvo de OUTRO provedor e outro modelo, também do catálogo real (com tarifa). */
+const MODELO_FALLBACK: AiModelEntry = findModel("gemini", "gemini-3.6-flash")!;
+
+describe("runTrilha — fallback e teto de saída", () => {
+  it("o caminho FALLBACK: tipo na 2ª tentativa, contarFallback uma vez e switch com texto zerado", async () => {
+    const contarFallback = vi.fn();
+    respostasPorChamada = [
+      [{ type: "delta", text: "Vou olhar seus tre" }, ERRO_TEMPORARIO],
+      [{ type: "delta", text: "Foram 12480 kg." }, FINISH],
+    ];
+
+    const { eventos, desfecho } = await rodar(
+      entrada({
+        alvos: [
+          { provider: "openai", model: MODELO },
+          { provider: "gemini", model: MODELO_FALLBACK },
+        ],
+        fallbackLigado: true,
+        // Sem retry: o transitório vai direto para o próximo alvo.
+        config: { timeoutMs: 30_000, maxRetries: 0 },
+        contadores: {
+          proximoAttemptIndex: () => (indiceDeTentativa += 1),
+          proximoStepIndex: () => (indiceDePasso += 1),
+          contarFallback,
+        },
+      }),
+    );
+
+    expect(medicao.filter((m) => m.tipo === "start").map((m) => m.attemptType)).toEqual([
+      "PRIMARY",
+      "FALLBACK",
+    ]);
+    expect(contarFallback).toHaveBeenCalledTimes(1);
+    expect(eventos).toContainEqual({
+      type: "switch",
+      provider: "gemini",
+      model: "gemini-3.6-flash",
+      motivo: "Continuando em outro provedor.",
+    });
+    // O texto da tentativa que caiu não atravessa o switch.
+    expect(desfecho).toMatchObject({
+      ok: true,
+      texto: "Foram 12480 kg.",
+      alvo: { provider: "gemini" },
+    });
+  });
+
+  /**
+   * O teto FINITO da trilha (o passo de decisão do coordenador, o especialista em paralelo)
+   * vale nas duas pontas: no que o adapter recebe e no custo projetado do fallback. Se a
+   * projeção usasse o teto do modelo, o orçamento recusaria um fallback que cabe.
+   */
+  it("teto finito menor que o do modelo: o adapter o recebe, e a projeção do fallback também", async () => {
+    const teto = 500;
+    expect(teto).toBeLessThan(MODELO_FALLBACK.outputCapTokens);
+    const promptMontado = "SISTEMA qual meu volume?";
+    const tarifa = rateFor("gemini", MODELO_FALLBACK.id, "2026-08-06")!;
+    const tokens = estimarTokensDeEntrada(promptMontado);
+    const comTeto = projetarCustoDoDestino(tarifa, tokens, teto);
+    const comCap = projetarCustoDoDestino(tarifa, tokens, MODELO_FALLBACK.outputCapTokens);
+    expect(comTeto).toBeLessThan(comCap);
+
+    respostasPorChamada = [
+      [ERRO_TEMPORARIO],
+      [{ type: "delta", text: "ok" }, FINISH],
+    ];
+
+    const { desfecho } = await rodar(
+      entrada({
+        alvos: [
+          { provider: "openai", model: MODELO },
+          { provider: "gemini", model: MODELO_FALLBACK },
+        ],
+        fallbackLigado: true,
+        config: { timeoutMs: 30_000, maxRetries: 0 },
+        tetoDeSaida: teto,
+        promptMontado,
+        // A sobra fica ENTRE as duas projeções: cabe com o teto da trilha, não cabe com o do
+        // modelo. Só a projeção pelo teto deixa o fallback acontecer.
+        reservaRestante: () => (comTeto + comCap) / 2,
+      }),
+    );
+
+    expect(tetosRecebidos).toEqual([teto, teto]);
+    expect(medicao.filter((m) => m.tipo === "start").map((m) => m.attemptType)).toEqual([
+      "PRIMARY",
+      "FALLBACK",
+    ]);
+    expect(desfecho).toMatchObject({ ok: true, texto: "ok" });
+  });
+});
+
+describe("runTrilha — coerência entre primeiroTipo e trilha", () => {
+  /**
+   * O banco tem a mesma regra (`ai_usage_events_tipo_coerente_com_trilha`), mas lá ela viraria
+   * `startAttempt → null → ATTEMPT_NOT_RECORDED`: uma "falha de registro" na tela do dono para
+   * o que é erro de quem chamou. Aqui ela é recusada antes de qualquer I/O.
+   */
+  it.each([
+    { primeiroTipo: "PRIMARY" as const, trilha: 1 },
+    { primeiroTipo: "ESPECIALISTA" as const, trilha: 0 },
+    { primeiroTipo: "ESPECIALISTA" as const, trilha: MAX_ESPECIALISTAS + 1 },
+    { primeiroTipo: "ESPECIALISTA" as const, trilha: 1.5 },
+  ])("$primeiroTipo na trilha $trilha é erro de programação, sem tocar o banco", async (caso) => {
+    await expect(rodar(entrada(caso))).rejects.toThrow(/trilha/);
+    expect(medicao).toEqual([]);
+    expect(passosAbertos).toEqual([]);
+    expect(chamadasAoProvedor).toBe(0);
+  });
+
+  it.each([
+    { primeiroTipo: "PRIMARY" as const, trilha: 0 },
+    { primeiroTipo: "ESPECIALISTA" as const, trilha: 1 },
+    { primeiroTipo: "ESPECIALISTA" as const, trilha: MAX_ESPECIALISTAS },
+  ])("$primeiroTipo na trilha $trilha é aceito", async (caso) => {
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+    const { desfecho } = await rodar(entrada(caso));
+    expect(desfecho).toMatchObject({ ok: true });
   });
 });

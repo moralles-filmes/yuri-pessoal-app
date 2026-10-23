@@ -24,6 +24,7 @@ import type {
   AiToolDefinition,
   AiUsage,
 } from "@/lib/ai/core/contracts";
+import { MAX_ESPECIALISTAS } from "@/lib/ai/agents/especialistas";
 import { aiError, type AiError } from "@/lib/ai/core/errors";
 import { decideFallback } from "@/lib/ai/core/fallback";
 import type { AiModelEntry } from "@/lib/ai/core/models";
@@ -144,6 +145,7 @@ export type EntradaDaTrilha = {
 export async function* runTrilha(
   e: EntradaDaTrilha,
 ): AsyncGenerator<EventoDaTrilha, DesfechoDaTrilha> {
+  exigirTrilhaCoerente(e.primeiroTipo, e.trilha);
   const { runId, conversationId, userId } = e.run;
   // As definições que VÃO ao provedor são a régua da chamada inesperada: o que não foi
   // oferecido não pode voltar.
@@ -633,6 +635,29 @@ export async function* runTrilha(
      * dentro passa pelo `catch` acima e fecha `failed`.
      */
     if (aberta) await fecharTentativaAberta("cancelled", "CANCELLED").catch(() => {});
+  }
+}
+
+/**
+ * `PRIMARY` só na trilha 0 (o coordenador, ou o agente de hoje); `ESPECIALISTA` só nas
+ * trilhas 1..`MAX_ESPECIALISTAS`, na ordem do acionamento.
+ *
+ * ⚠️ O banco tem a mesma regra (`ai_usage_events_tipo_coerente_com_trilha`), mas lá ela
+ * chegaria como `startAttempt → null → ATTEMPT_NOT_RECORDED`: o dono leria "não foi possível
+ * registrar a execução" sobre o que é erro de quem chamou esta função. Por isso a recusa é
+ * aqui, ANTES de qualquer I/O, e lança — não há desfecho honesto para uma trilha mal montada.
+ */
+function exigirTrilhaCoerente(primeiroTipo: "PRIMARY" | "ESPECIALISTA", trilha: number): void {
+  const coerente =
+    primeiroTipo === "PRIMARY"
+      ? trilha === 0
+      : Number.isInteger(trilha) && trilha >= 1 && trilha <= MAX_ESPECIALISTAS;
+  if (!coerente) {
+    throw new Error(
+      primeiroTipo === "PRIMARY"
+        ? `runTrilha: a primeira tentativa PRIMARY só existe na trilha 0 (recebida: trilha ${trilha}).`
+        : `runTrilha: a primeira tentativa ESPECIALISTA exige uma trilha inteira de 1 a ${MAX_ESPECIALISTAS} (recebida: trilha ${trilha}).`,
+    );
   }
 }
 
