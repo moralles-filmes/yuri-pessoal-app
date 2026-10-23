@@ -23,6 +23,7 @@ import "server-only";
  */
 
 import type { AiContentPart, AiMessage, AiStreamEvent } from "@/lib/ai/core/contracts";
+import type { AiError } from "@/lib/ai/core/errors";
 import { renderUntrusted, wrapUntrusted } from "@/lib/ai/security/untrusted";
 import {
   AVISO_TETO_DE_PASSOS,
@@ -97,6 +98,16 @@ export type ToolLoopInput = {
     mensagens: readonly AiMessage[],
     passo: number,
   ) => AsyncIterable<AiStreamEvent>;
+  /**
+   * MOD-ia-005 — o dono do run decide, ANTES de cada passo, se a chamada ainda acontece (o
+   * prazo cabe? o dono cancelou? a tentativa foi registrada?). Devolvendo um erro, o laço o
+   * repassa como evento do provedor e para — SEM numerar e SEM abrir o passo `modelo`.
+   *
+   * ⚠️ Recusar dentro de `chamarModelo`, como era, deixava o passo `modelo` já aberto: ele
+   * fechava `failed` com ~0 ms, e a trilha registrava uma chamada ao provedor que nunca saiu.
+   * Ausente = toda chamada acontece.
+   */
+  readonly antesDaChamada?: (passo: number) => Promise<AiError | null>;
 };
 
 export async function* runToolLoop(
@@ -106,6 +117,12 @@ export async function* runToolLoop(
   const oferecidas = new Set(input.ferramentasOferecidas);
 
   for (let passo = 0; passo <= MAX_TOOL_STEPS; passo += 1) {
+    const recusa = input.antesDaChamada ? await input.antesDaChamada(passo) : null;
+    if (recusa) {
+      yield { type: "passthrough", evento: { type: "error", error: recusa } };
+      return;
+    }
+
     const chamadas: ToolCallRequest[] = [];
     const partesDoAssistente: AiContentPart[] = [];
     let texto = "";

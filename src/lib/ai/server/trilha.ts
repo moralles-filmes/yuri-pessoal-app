@@ -166,7 +166,7 @@ export async function* runTrilha(
    * ║ status = 'started'`. Abrir a tentativa do passo N+1 com a do passo N ainda aberta,  ║
    * ║ na mesma trilha, é `23505` EM RUNTIME — nenhum teste de unidade da medição pega     ║
    * ║ isso, porque a trava é do banco. Por isso o fechamento acontece AQUI, num ponto só, ║
-   * ║ e é a primeira coisa que `chamarModelo` faz antes de abrir a seguinte.              ║
+   * ║ e é a primeira coisa que `antesDaChamada` faz antes de abrir a seguinte.            ║
    * ║                                                                                     ║
    * ║ ⛔ MOD-ia-005 — no escopo da FUNÇÃO, e não da tentativa: o `finally` lá embaixo      ║
    * ║ precisa alcançá-la. `return()` do consumidor (a aba fechada no meio da resposta)    ║
@@ -245,7 +245,7 @@ export async function* runTrilha(
          * ║ ⚠️ Zerar SÓ AQUI é essencial: o passo TOOL_STEP também consome um               ║
          * ║ `attempt_index`, mas ele é a MESMA resposta continuando depois de uma            ║
          * ║ ferramenta, não uma tentativa nova — e não passa por este ponto (ele vive dentro ║
-         * ║ de `chamarModelo`).                                                              ║
+         * ║ de `antesDaChamada`).                                                            ║
          * ║                                                                                 ║
          * ║ ⚠️ E zerar só no servidor seria pior que não zerar: o `router.refresh()` do fim  ║
          * ║ do envio releria o texto novo e APAGARIA da tela algo que o usuário já tinha    ║
@@ -292,9 +292,20 @@ export async function* runTrilha(
 
       alvoAnterior = alvo;
 
+      /**
+       * A tentativa conta como ABERTA desde já: se decifrar a credencial LANÇAR, o `catch` lá
+       * embaixo precisa alcançá-la. Antes ela só entrava em `aberta` depois da credencial, e
+       * uma exceção ali deixava a linha `started` para sempre — nem `failed`, nem `cancelled`.
+       */
+      const atual = { id: tentativa.id, inicio: Date.now(), tarifa };
+      aberta = atual;
+
       // A credencial é decifrada AQUI, no instante da chamada, para UMA chamada.
       const chave = await resolveApiKey(userId, alvo.provider);
       if (!chave.ok) {
+        // Nenhuma chamada saiu: latência zero, como sempre foi — por isso o fechamento é
+        // direto, e não por `fecharTentativaAberta` (que mediria o tempo da decifração).
+        aberta = null;
         await closeAttempt({
           attemptId: tentativa.id,
           userId,
@@ -308,9 +319,10 @@ export async function* runTrilha(
         return { ok: false, erro: chave.error, cancelado: false };
       }
 
-      const inicioTentativa = Date.now();
+      // A latência conta a partir da chamada, não da decifração.
+      atual.inicio = Date.now();
       // O timer do servidor nasce com o timeout que o PRAZO permite, não com o configurado.
-      const { signal, dispose } = combinarSinais(e.abortSignal, timeoutDaTentativa);
+      const { signal, dispose, abortar } = combinarSinais(e.abortSignal, timeoutDaTentativa);
 
       usoFinal = null;
       providerRequestId = null;
@@ -322,63 +334,63 @@ export async function* runTrilha(
       const pedidas: ChamadaPedida[] = [];
       const passoDaDecisao: { indice: number | null } = { indice: null };
 
-      // A tentativa recém-aberta é a única aberta (ver o quadro de `fecharTentativaAberta`).
-      aberta = { id: tentativa.id, inicio: inicioTentativa, tarifa };
+      let timeoutDestaChamada = timeoutDaTentativa;
 
       /**
-       * A chamada ao provedor, uma por passo do laço. O passo 0 usa a tentativa já aberta
+       * Antes de cada passo do laço. O passo 0 usa a tentativa já aberta
        * (PRIMARY/ESPECIALISTA/RETRY/FALLBACK); os seguintes abrem uma tentativa `TOOL_STEP` —
        * que é o que mantém a medição por CHAMADA, e não por resposta.
+       *
+       * ⚠️ Roda ANTES de o laço abrir o passo `modelo` (`antesDaChamada` em `tool-loop.ts`): a
+       * chamada que não vai acontecer não deixa passo nem tentativa na trilha.
        */
-      const chamarModelo = (
-        msgs: readonly AiMessage[],
-        passo: number,
-      ): AsyncIterable<AiStreamEvent> =>
-        (async function* () {
-          let timeoutDestaChamada = timeoutDaTentativa;
-          if (passo > 0) {
-            // MOD-ia-005 — o passo de ferramenta também é uma chamada, e também cabe ou não
-            // no prazo. Sem espaço, a tentativa anterior fecha como `completed` (ela terminou
-            // de verdade) e nenhuma nova é aberta; quem chama fecha o run por `AI_DEADLINE`.
-            const cabe = timeoutDaChamada(e.prazo, e.agoraMs(), e.config.timeoutMs);
-            if (cabe === null) {
-              await fecharTentativaAberta("completed", null);
-              yield {
-                type: "error",
-                error: aiError("TIMEOUT", AI_DEADLINE, MENSAGEM_DO_PRAZO),
-              };
-              return;
-            }
-            timeoutDestaChamada = cabe;
-            await fecharTentativaAberta("completed", null);
-            const nova = await startAttempt({
-              runId,
-              userId,
-              conversationId,
-              agentId: e.agente.id,
-              attemptIndex: e.contadores.proximoAttemptIndex(),
-              attemptType: "TOOL_STEP",
-              provider: alvo.provider,
-              modelId: alvo.model.id,
-              rate: tarifa,
-              trilha: e.trilha,
-              promptVersion: e.promptVersion,
-            });
-            if (!nova) {
-              yield {
-                type: "error",
-                error: aiError(
-                  "ERRO_PERMANENTE",
-                  "ATTEMPT_NOT_RECORDED",
-                  "Não foi possível registrar a continuação da execução. A resposta foi interrompida.",
-                ),
-              };
-              return;
-            }
-            aberta = { id: nova.id, inicio: Date.now(), tarifa };
-            concluiu = false;
-          }
+      const antesDaChamada = async (passo: number): Promise<AiError | null> => {
+        if (passo === 0) return null;
+        // O dono cancelou enquanto a ferramenta rodava. A tentativa anterior terminou de
+        // verdade (fecha `completed`) e a nova não abre: ela nasceria condenada, com o sinal
+        // já abortado, e a linha em `ai_usage_events` mediria uma chamada que não saiu.
+        if (e.abortSignal.aborted) {
+          await fecharTentativaAberta("completed", null);
+          return aiError("CANCELADO_PELO_USUARIO", "CANCELLED");
+        }
+        // MOD-ia-005 — o passo de ferramenta também é uma chamada, e também cabe ou não no
+        // prazo. Sem espaço, a tentativa anterior fecha como `completed` (ela terminou de
+        // verdade) e nenhuma nova é aberta; quem chama fecha o run por `AI_DEADLINE`.
+        const cabe = timeoutDaChamada(e.prazo, e.agoraMs(), e.config.timeoutMs);
+        if (cabe === null) {
+          await fecharTentativaAberta("completed", null);
+          return aiError("TIMEOUT", AI_DEADLINE, MENSAGEM_DO_PRAZO);
+        }
+        timeoutDestaChamada = cabe;
+        await fecharTentativaAberta("completed", null);
+        const nova = await startAttempt({
+          runId,
+          userId,
+          conversationId,
+          agentId: e.agente.id,
+          attemptIndex: e.contadores.proximoAttemptIndex(),
+          attemptType: "TOOL_STEP",
+          provider: alvo.provider,
+          modelId: alvo.model.id,
+          rate: tarifa,
+          trilha: e.trilha,
+          promptVersion: e.promptVersion,
+        });
+        if (!nova) {
+          return aiError(
+            "ERRO_PERMANENTE",
+            "ATTEMPT_NOT_RECORDED",
+            "Não foi possível registrar a continuação da execução. A resposta foi interrompida.",
+          );
+        }
+        aberta = { id: nova.id, inicio: Date.now(), tarifa };
+        concluiu = false;
+        return null;
+      };
 
+      /** A chamada ao provedor, uma por passo — já admitida por `antesDaChamada`. */
+      const chamarModelo = (msgs: readonly AiMessage[]): AsyncIterable<AiStreamEvent> =>
+        (async function* () {
           const client = createProviderClient(alvo.provider, chave.value);
           yield* client.streamText({
             model: alvo.model.id,
@@ -410,6 +422,7 @@ export async function* runTrilha(
               ferramentasOferecidas: nomesOferecidos,
               proximoStepIndex: e.contadores.proximoStepIndex,
               chamarModelo,
+              antesDaChamada,
             })
           : umaChamadaSo({
               runId,
@@ -422,6 +435,13 @@ export async function* runTrilha(
               passoDaDecisao,
             });
 
+      /**
+       * Falso enquanto o `for await` não terminar POR CONTA PRÓPRIA (fim, `break` ou exceção
+       * capturada). O `return()` do consumidor chega DENTRO dele, no `yield`, e só então o
+       * `finally` roda com isto ainda falso — é o sinal de abandono, e o pedido ao provedor é
+       * abortado em vez de seguir gerando (e cobrando) uma resposta que ninguém vai ler.
+       */
+      let consumoTerminou = false;
       try {
         for await (const evento of fonte) {
           if (evento.type === "delta") {
@@ -481,7 +501,9 @@ export async function* runTrilha(
             break;
           }
         }
+        consumoTerminou = true;
       } catch (err) {
+        consumoTerminou = true;
         erroDaTentativa = aiError(
           "ERRO_TEMPORARIO",
           "STREAM_FAILED",
@@ -490,6 +512,7 @@ export async function* runTrilha(
             : "A resposta foi interrompida por uma falha inesperada.",
         );
       } finally {
+        if (!consumoTerminou) abortar();
         dispose();
       }
 
@@ -593,10 +616,22 @@ export async function* runTrilha(
       ),
       cancelado: false,
     };
+  } catch (err) {
+    // Exceção DESTA função (banco, cofre de credenciais): ninguém cancelou nada, então a
+    // tentativa aberta fecha `failed` — e a exceção sobe intacta para quem chama.
+    await fecharTentativaAberta("failed", "UNEXPECTED_ERROR").catch(() => {});
+    throw err;
   } finally {
-    // Rede de segurança: se saímos por `return()` do consumidor (o navegador fechou a aba),
-    // a tentativa aberta desta trilha fecha como `cancelled` — ANTES de quem chama fechar o
-    // run, porque o `finally` daqui roda quando o `for await` dele abandona este gerador.
+    /**
+     * Rede de segurança: se saímos por `return()` do consumidor (o navegador fechou a aba),
+     * a tentativa aberta desta trilha fecha como `cancelled` — ANTES de quem chama fechar o
+     * run, porque este `finally` roda quando ele abandona este gerador.
+     *
+     * ⚠️ `cancelled` TAMBÉM quando o abandono vem de uma exceção do LADO DO CONSUMIDOR (o
+     * `markStreaming` ou o heartbeat de `runChat` lançando, por exemplo): para este gerador,
+     * isso chega como um `return()` comum e não há como distinguir os dois. Exceção daqui de
+     * dentro passa pelo `catch` acima e fecha `failed`.
+     */
     if (aberta) await fecharTentativaAberta("cancelled", "CANCELLED").catch(() => {});
   }
 }
@@ -711,7 +746,7 @@ async function* umaChamadaSo(input: {
 function combinarSinais(
   externo: AbortSignal,
   timeoutMs: number,
-): { signal: AbortSignal; dispose: () => void } {
+): { signal: AbortSignal; dispose: () => void; abortar: () => void } {
   const controller = new AbortController();
 
   const abortar = () => controller.abort();
@@ -726,5 +761,7 @@ function combinarSinais(
       clearTimeout(timer);
       externo.removeEventListener("abort", abortar);
     },
+    // O abandono pelo consumidor (`return()`) não passa pelo sinal do dono nem pelo timer.
+    abortar,
   };
 }

@@ -4,10 +4,11 @@
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
  * ║ O QUE SÓ SE PROVA AQUI (e não no `tool-loop.test.ts`)                                 ║
  * ║                                                                                       ║
- * ║  • `ai_usage_events_one_active_uidx` é `UNIQUE (run_id) WHERE status = 'started'`:    ║
- * ║    abrir a tentativa do passo N+1 com a do passo N aberta é `23505` EM RUNTIME. É      ║
- * ║    constraint de banco — nenhum teste de unidade da medição pega. O que dá para        ║
- * ║    provar sem banco é a ORDEM das chamadas, e é o que este arquivo faz.                ║
+ * ║  • `ai_usage_events_one_active_per_trilha_uidx` é `UNIQUE (run_id, trilha) WHERE      ║
+ * ║    status = 'started'`: abrir a tentativa do passo N+1 com a do passo N aberta, na     ║
+ * ║    mesma trilha, é `23505` EM RUNTIME. É constraint de banco — nenhum teste de unidade ║
+ * ║    da medição pega. O que dá para provar sem banco é a ORDEM das chamadas, e é o que   ║
+ * ║    este arquivo faz.                                                                   ║
  * ║  • cada chamada ao modelo vira UMA linha de medição: `PRIMARY` e depois `TOOL_STEP`.   ║
  * ║  • o agente sai do ROTEADOR, com as flags do usuário — não do que o cliente pediu.     ║
  * ║  • o corte pelo teto de passos entra no TEXTO da resposta gravada.                     ║
@@ -84,6 +85,11 @@ let textoGravado = "";
 let statusDoRun = "";
 let versaoGravada = "";
 let admissaoDeExperiencia: { experiencia: string; title: string } | null = null;
+/**
+ * MOD-ia-005 — roda no instante da ADMISSÃO. É por aqui que um caso diz "a preparação levou
+ * 40 s" sem depender de QUANTAS vezes o runner lê o relógio até ali.
+ */
+let aoAdmitir: (() => void) | null = null;
 
 vi.mock("./run-store", () => ({
   HEARTBEAT_INTERVAL_MS: 10_000,
@@ -94,6 +100,7 @@ vi.mock("./run-store", () => ({
    */
   MENSAGEM_ADMISSAO: { AI_AGENT_NOT_ALLOWED: "Este assistente não está disponível." },
   beginChatRun: async (input: { reservedCost: number; promptVersion: string }) => {
+    aoAdmitir?.();
     reservaGravada = input.reservedCost;
     versaoGravada = input.promptVersion;
     return {
@@ -377,6 +384,7 @@ beforeEach(() => {
   falhaDaFerramenta = null;
   timeoutsRecebidos.length = 0;
   aoConsumirChamada = null;
+  aoAdmitir = null;
   relogioMs = 0;
 });
 
@@ -507,9 +515,9 @@ describe("runChat — o laço integrado", () => {
 
 describe("runChat — a medição por CHAMADA", () => {
   /**
-   * ⚠️ ESTE É O TESTE DO `23505`. A trava é do banco (`UNIQUE (run_id) WHERE status =
+   * ⚠️ ESTE É O TESTE DO `23505`. A trava é do banco (`UNIQUE (run_id, trilha) WHERE status =
    * 'started'`), então o que se verifica aqui é a única coisa verificável sem banco: entre
-   * dois `start` NUNCA falta um `close`.
+   * dois `start` da mesma trilha NUNCA falta um `close`. (Aqui só existe a trilha 0.)
    */
   it("fecha a tentativa N ANTES de abrir a N+1 — sempre", async () => {
     respostasPorChamada = [
@@ -983,12 +991,17 @@ describe("runChat — o prazo global da requisição", () => {
 
   it("a primeira chamada recebe o menor entre o timeout configurado e o que resta", async () => {
     respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
-    // O prazo nasce no instante 0; a chamada sai aos 40 s (preparação lenta). Restam 15 s,
-    // menos que os 30 s configurados no duplo — vale o que resta.
-    let leituras = 0;
-    const relogio = () => (leituras++ === 0 ? 0 : 40_000);
+    // O prazo nasce no instante 0; a admissão termina aos 40 s (preparação lenta). Restam
+    // 15 s, menos que os 30 s configurados no duplo — vale o que resta.
+    //
+    // ⚠️ O relógio anda num EVENTO (a admissão), e não na N-ésima leitura: a versão anterior
+    // contava as chamadas a `agoraMs`, e uma leitura a mais (inofensiva) em qualquer ponto do
+    // runner a deixava vermelha sem defeito nenhum.
+    aoAdmitir = () => {
+      relogioMs = 40_000;
+    };
 
-    await rodar({ agoraMs: relogio });
+    await rodar();
 
     expect(timeoutsRecebidos).toEqual([15_000]);
   });
@@ -1098,8 +1111,8 @@ describe("runChat — o prazo global da requisição", () => {
 
   /**
    * ⛔ `return()` do consumidor (o navegador fechou a aba no meio da resposta) não pode deixar
-   * a tentativa `started`: `ai_usage_events_one_active_uidx` só aceita uma aberta por run, e a
-   * medição daquela chamada nunca seria fechada.
+   * a tentativa `started`: `ai_usage_events_one_active_per_trilha_uidx` só aceita uma aberta
+   * por trilha, e a medição daquela chamada nunca seria fechada.
    */
   it("`return()` do consumidor depois do primeiro delta fecha a tentativa como `cancelled`", async () => {
     respostasPorChamada = [

@@ -824,6 +824,11 @@ export async function* runChat(
     //
     // ⛔ MOD-ia-005 — a TENTATIVA aberta já fechou antes daqui, como `cancelled`: o `finally`
     // do consumo da trilha leva o `return()` até o `finally` de `runTrilha`.
+    //
+    // ⚠️ O run fecha `cancelled` TAMBÉM numa exceção inesperada (o `markStreaming` ou o
+    // heartbeat lançando, por exemplo), porque este `finally` não distingue os dois casos e
+    // a exceção sobe ao Route Handler logo depois. A tentativa, não: exceção de DENTRO da
+    // trilha fecha a tentativa como `failed` (`runTrilha`, ramo `catch`).
     if (!fechado) {
       await cancelRun(contexto(), "Conexão encerrada antes da conclusão.").catch(() => {});
     }

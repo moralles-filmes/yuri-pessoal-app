@@ -25,8 +25,14 @@ import type { ToolOutput } from "@/lib/ai/tools/contracts";
 
 // ─────────────────────────── Duplos de borda ───────────────────────────
 
+/** Quando ligado, decifrar a credencial LANÇA — a exceção inesperada de dentro da trilha. */
+let credencialLanca = false;
+
 vi.mock("./credential-store", () => ({
-  resolveApiKey: async () => ({ ok: true, value: "sk-de-mentira" }),
+  resolveApiKey: async () => {
+    if (credencialLanca) throw new Error("cofre fora do ar");
+    return { ok: true, value: "sk-de-mentira" };
+  },
 }));
 
 type LinhaDeMedicao =
@@ -70,13 +76,16 @@ vi.mock("./run-store", () => ({
 
 let respostasPorChamada: (readonly AiStreamEvent[])[] = [];
 let chamadasAoProvedor = 0;
+/** O `abortSignal` que cada chamada recebeu — o da chamada abandonada tem de abortar. */
+const sinaisRecebidos: (AbortSignal | undefined)[] = [];
 
 vi.mock("@/lib/ai/providers/provider-factory", () => ({
   createProviderClient: () => ({
     provider: "openai",
-    streamText: () => {
+    streamText: (request: { abortSignal?: AbortSignal }) => {
       const indice = chamadasAoProvedor;
       chamadasAoProvedor += 1;
+      sinaisRecebidos.push(request.abortSignal);
       const eventos = respostasPorChamada[indice] ?? [FINISH];
       return (async function* () {
         for (const e of eventos) yield e;
@@ -95,11 +104,17 @@ const SAIDA: ToolOutput = {
   refs: [{ tipo: "sessao_de_treino", id: "s1", rota: "/treinos/historico/s1" }],
 };
 
+/** Roda DENTRO da ferramenta: é por aqui que um caso cancela ou gasta o prazo durante a leitura. */
+let aoExecutarFerramenta: (() => void) | null = null;
+
 vi.mock("@/lib/ai/tools/executors", () => ({
   TOOL_EXECUTORS: {
     "training.get_volume": {
       schema: z.object({ dias: z.number().int().optional() }).strict(),
-      run: async () => SAIDA,
+      run: async () => {
+        aoExecutarFerramenta?.();
+        return SAIDA;
+      },
     },
   },
 }));
@@ -228,6 +243,9 @@ beforeEach(() => {
   indiceDeTentativa = 0;
   indiceDePasso = 0;
   vi.mocked(executeTool).mockClear();
+  credencialLanca = false;
+  sinaisRecebidos.length = 0;
+  aoExecutarFerramenta = null;
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -370,5 +388,110 @@ describe("runTrilha — tentativas", () => {
     ]);
     // O texto do desfecho é só o da tentativa que venceu: o switch zerou o que veio antes.
     expect(desfecho).toMatchObject({ ok: true, texto: "Foram 12480 kg.", stepIndex: null });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// Minors herdados da revisão da Task 4 (MOD-ia-005)
+// ────────────────────────────────────────────────────────────────
+
+const PEDE_VOLUME_E_TERMINA: readonly AiStreamEvent[] = [
+  { type: "tool-call", toolName: "training.get_volume", callId: "c1", input: { dias: 7 } },
+  FINISH,
+];
+
+describe("runTrilha — não abre o que não vai acontecer", () => {
+  /**
+   * O dono cancelou ENQUANTO a ferramenta rodava. Abrir a tentativa TOOL_STEP com o sinal já
+   * abortado gravava uma linha em `ai_usage_events` para uma chamada condenada antes de sair.
+   */
+  it("TOOL_STEP não abre tentativa com o sinal já abortado", async () => {
+    const dono = new AbortController();
+    aoExecutarFerramenta = () => dono.abort();
+    respostasPorChamada = [PEDE_VOLUME_E_TERMINA, [{ type: "delta", text: "x" }, FINISH]];
+
+    const { desfecho } = await rodar(entrada({ abortSignal: dono.signal }));
+
+    expect(chamadasAoProvedor).toBe(1);
+    // A do passo 0 terminou de verdade (o provedor mandou `finish`): fecha `completed`.
+    expect(medicao.map((m) => `${m.tipo}:${m.id}${m.tipo === "close" ? `:${m.status}` : ""}`)).toEqual([
+      "start:att-1",
+      "close:att-1:completed",
+    ]);
+    expect(passosAbertos.map((p) => `${p.stepIndex}:${p.kind}`)).toEqual([
+      "1:modelo",
+      "1:ferramentas",
+    ]);
+    expect(desfecho).toMatchObject({ ok: false, cancelado: true });
+  });
+
+  /**
+   * O prazo acabou durante a ferramenta. A tentativa não abria (Task 4), mas o passo `modelo`
+   * sim — e fechava `failed` com ~0 ms, registrando na trilha uma chamada que não houve.
+   */
+  it("passo recusado pelo prazo não abre o passo `modelo`", async () => {
+    let relogio = 0;
+    aoExecutarFerramenta = () => {
+      relogio = 52_000;
+    };
+    respostasPorChamada = [PEDE_VOLUME_E_TERMINA, [{ type: "delta", text: "x" }, FINISH]];
+
+    const { desfecho } = await rodar(entrada({ agoraMs: () => relogio }));
+
+    expect(chamadasAoProvedor).toBe(1);
+    expect(passosAbertos.map((p) => `${p.stepIndex}:${p.kind}`)).toEqual([
+      "1:modelo",
+      "1:ferramentas",
+    ]);
+    expect(desfecho).toMatchObject({ ok: false, erro: { code: "AI_DEADLINE" } });
+  });
+});
+
+describe("runTrilha — o fechamento da tentativa aberta", () => {
+  /**
+   * Exceção DE DENTRO da trilha (banco, cofre) não é cancelamento: ninguém cancelou nada. Ela
+   * fecha `failed` e sobe; `cancelled` fica para o abandono pelo consumidor (`return()`).
+   */
+  it("exceção inesperada fecha a tentativa como `failed`, não `cancelled`", async () => {
+    credencialLanca = true;
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await expect(rodar(entrada())).rejects.toThrow("cofre fora do ar");
+
+    expect(medicao.map((m) => `${m.tipo}:${m.id}${m.tipo === "close" ? `:${m.status}` : ""}`)).toEqual([
+      "start:att-1",
+      "close:att-1:failed",
+    ]);
+  });
+
+  /**
+   * `return()` do consumidor (a aba fechada) no meio do stream. Sem abortar o sinal, o
+   * provedor continuava gerando — e cobrando — uma resposta que ninguém ia ler.
+   */
+  it("`return()` no meio do stream aborta o sinal da chamada", async () => {
+    respostasPorChamada = [
+      [
+        { type: "delta", text: "primeiro" },
+        { type: "delta", text: " segundo" },
+        FINISH,
+      ],
+    ];
+
+    const gen = runTrilha(entrada());
+    const primeiro = await gen.next();
+    expect(primeiro.value).toEqual({ type: "delta", text: "primeiro" });
+
+    await gen.return({
+      ok: false,
+      erro: { class: "CANCELADO_PELO_USUARIO", code: "CANCELLED", message: "", retryable: false },
+      cancelado: true,
+    });
+
+    expect(sinaisRecebidos).toHaveLength(1);
+    expect(sinaisRecebidos[0]?.aborted).toBe(true);
+    expect(medicao.map((m) => `${m.tipo}:${m.id}${m.tipo === "close" ? `:${m.status}` : ""}`)).toEqual([
+      "start:att-1",
+      "close:att-1:cancelled",
+    ]);
   });
 });
