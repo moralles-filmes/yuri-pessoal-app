@@ -14,6 +14,7 @@ import type { ClienteDaIa } from "./server/client";
 import { AI_PROVIDERS, type AiProviderId } from "./core/contracts";
 import { normalizarAlternancia } from "./core/text";
 import { cantoValido, CANTO_PADRAO, type CantoDoBotao } from "./painel";
+import { TOOL_NAME_ACIONAMENTO } from "./agents/especialistas";
 import { PROVIDER_REGISTRY } from "./providers/registry";
 import {
   computeBudgetUsage,
@@ -491,6 +492,9 @@ const MAX_TOOL_CALLS_POR_LEITURA = 500;
  *
  * Colunas EXPLÍCITAS, como todo este arquivo. `arguments_sanitized` e `refs` já saem do banco
  * como `jsonb` e passam por parsers puros — o `refs` vira `href`, então é validado antes.
+ *
+ * ⛔ As linhas de `TOOL_NAME_ACIONAMENTO` ficam de fora: são o pedido do coordenador ao
+ * especialista, não uma leitura de dado.
  */
 export async function getRunSources(
   userId: string,
@@ -506,6 +510,10 @@ export async function getRunSources(
     )
     .eq("user_id", userId)
     .in("run_id", [...runIds])
+    // O acionamento de um especialista é o PEDIDO do coordenador, auditado em `ai_tool_calls`
+    // — mas não leu registro nenhum. Como fonte ele mentiria; quem leu foi o especialista, e
+    // as chamadas DELE aparecem aqui. Filtrado no banco para não gastar o teto da leitura.
+    .neq("tool_name", TOOL_NAME_ACIONAMENTO)
     .order("created_at", { ascending: true })
     .limit(MAX_TOOL_CALLS_POR_LEITURA);
 

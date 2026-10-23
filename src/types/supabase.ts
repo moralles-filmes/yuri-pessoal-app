@@ -1066,6 +1066,7 @@ export type Database = {
       }
       ai_tool_calls: {
         Row: {
+          agent_id: string | null
           arguments_sanitized: Json
           created_at: string
           duration_ms: number | null
@@ -1082,6 +1083,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agent_id?: string | null
           arguments_sanitized?: Json
           created_at?: string
           duration_ms?: number | null
@@ -1098,6 +1100,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agent_id?: string | null
           arguments_sanitized?: Json
           created_at?: string
           duration_ms?: number | null
@@ -1148,12 +1151,14 @@ export type Database = {
           model_id: string
           output_tokens: number | null
           pricing_version: string
+          prompt_version: string | null
           provider: string
           provider_request_id: string | null
           rate_snapshot: Json
           run_id: string
           started_at: string
           status: string
+          trilha: number
           usage_availability: Json
           user_id: string
           was_fallback: boolean
@@ -1175,12 +1180,14 @@ export type Database = {
           model_id: string
           output_tokens?: number | null
           pricing_version: string
+          prompt_version?: string | null
           provider: string
           provider_request_id?: string | null
           rate_snapshot: Json
           run_id: string
           started_at?: string
           status?: string
+          trilha?: number
           usage_availability?: Json
           user_id: string
           was_fallback?: boolean
@@ -1202,12 +1209,14 @@ export type Database = {
           model_id?: string
           output_tokens?: number | null
           pricing_version?: string
+          prompt_version?: string | null
           provider?: string
           provider_request_id?: string | null
           rate_snapshot?: Json
           run_id?: string
           started_at?: string
           status?: string
+          trilha?: number
           usage_availability?: Json
           user_id?: string
           was_fallback?: boolean
