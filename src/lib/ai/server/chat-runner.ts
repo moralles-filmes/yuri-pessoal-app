@@ -35,9 +35,10 @@ import {
   moduloDoAgente,
   routeAgent,
 } from "@/lib/ai/agents/routing";
-import { blocoDeMemorias, memoriasParaOPrompt } from "@/lib/ai/memory/prompt";
+import { memoriasParaOPrompt } from "@/lib/ai/memory/prompt";
 import type { MemoriaParaPrompt } from "@/lib/ai/memory/contracts";
 import { getMemoriasVigentes } from "@/lib/ai/memory/queries";
+import { montarSystem } from "./system-prompt";
 /**
  * ⛔ 18-F Bloco 4 — `contracts` e `inbox`, NUNCA `experiences/catalog`.
  *
@@ -292,7 +293,8 @@ export async function* runChat(
    * ⚠️ 18-F Bloco 3 — A MEMÓRIA ENTRA POR ÚLTIMO, e a ordem é a garantia (§6.4). O prompt de
    * SEGURANÇA vem primeiro, o perfil do agente depois, o contexto do roteamento depois, e só
    * então as preferências do dono. Uma frase dele acima das travas seria injeção com um passo
-   * humano no meio. `memory/prompt.test.ts` varre esta concatenação.
+   * humano no meio. A concatenação é `montarSystem` (`./system-prompt`), e
+   * `memory/prompt.test.ts` prova a ordem lá.
    *
    * ⚠️ E isto NÃO muda `promptVersionOf(agent)`. A versão registrada em `ai_runs` descreve o
    * PROMPT-BASE e o perfil; memória e contexto de roteamento são dado desta execução, como já
@@ -341,9 +343,9 @@ export async function* runChat(
    * O que o resto do run precisa saber sobre "quem está respondendo". Com plano, nada disso
    * vem do registry de agentes: a experiência não é um agente do dono, é um roteiro nosso.
    *
-   * ⚠️ `system` é montado ANTES da memória e a memória é concatenada depois, nos dois
-   * caminhos — a ordem é a garantia da invariante 98, e `memory/prompt.test.ts` a varre sobre
-   * a fonte deste arquivo. O bloco da caixa de entrada entra ANTES dela, nunca depois.
+   * ⚠️ `system` sai de `montarSystem` nos dois caminhos, que põe a memória POR ÚLTIMO — a
+   * ordem é a garantia da invariante 98, provada em `memory/prompt.test.ts`. Os blocos do
+   * servidor (roteamento e caixa de entrada) entram ANTES dela, nunca depois.
    */
   const perfil = input.plano
     ? {
@@ -351,22 +353,32 @@ export async function* runChat(
         allowedTools: input.plano.leituras.map((l) => l.toolName),
         requiredCapabilities: [] as readonly string[],
         systemBase: input.plano.system,
+        blocosDoServidor: [] as readonly string[],
         promptVersion: input.plano.promptVersion,
       }
     : {
         id: agent!.id,
         allowedTools: agent!.allowedTools,
         requiredCapabilities: agent!.requiredCapabilities,
-        systemBase:
-          buildSystemPrompt(agent!) +
-          blocoDeContextoDeRoteamento(decisao!.motivo, input.pageContext?.rota ?? null) +
-          (input.caixaDeEntrada ? BLOCO_DA_CAIXA_DE_ENTRADA : ""),
+        systemBase: buildSystemPrompt(agent!),
+        blocosDoServidor: [
+          blocoDeContextoDeRoteamento(decisao!.motivo, input.pageContext?.rota ?? null),
+          input.caixaDeEntrada ? BLOCO_DA_CAIXA_DE_ENTRADA : "",
+        ] as readonly string[],
         promptVersion: input.caixaDeEntrada
           ? versaoComCaixaDeEntrada(promptVersionOf(agent!))
           : promptVersionOf(agent!),
       };
 
-  const system = perfil.systemBase + blocoDeMemorias(selecionadas);
+  /**
+   * A concatenação do `system` é UMA, em `montarSystem`: base, blocos do servidor (na ordem),
+   * e só então a memória. Nenhum caminho monta o `system` por fora dela.
+   */
+  const system = montarSystem({
+    base: perfil.systemBase,
+    blocos: perfil.blocosDoServidor,
+    memorias: selecionadas,
+  });
 
   // Com plano, `conversationId` é sempre null (a experiência abre conversa nova) — a guarda
   // explícita é o que impede um caminho futuro de misturar histórico com leitura dirigida.

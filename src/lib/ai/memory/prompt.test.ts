@@ -13,10 +13,14 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
+import { montarSystem } from "@/lib/ai/server/system-prompt";
 import { TOOL_PERMISSIONS, type ToolPermission } from "@/lib/ai/tools/contracts";
 import { TETO_DE_MEMORIAS_NO_PROMPT } from "./contracts";
 import { blocoDeMemorias, memoriasParaOPrompt } from "./prompt";
+
+const SERVER_DIR = path.resolve(__dirname, "..", "server");
 
 const TODAS_DESLIGADAS = Object.fromEntries(
   TOOL_PERMISSIONS.map((p) => [p, false]),
@@ -163,6 +167,33 @@ describe("blocoDeMemorias", () => {
 });
 
 /**
+ * Código sem comentários, por um scanner de verdade (o do TypeScript), não por regex.
+ *
+ * Um regex que corta `//` no meio da linha engole a URL de uma string e o código depois dela;
+ * o scanner só descarta comentário de fato. O teste positivo logo abaixo prova que ele não
+ * está descartando código útil.
+ */
+function semComentarios(codigo: string): string {
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    false,
+    ts.LanguageVariant.Standard,
+    codigo,
+  );
+  let saida = "";
+  for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
+    if (
+      token === ts.SyntaxKind.SingleLineCommentTrivia ||
+      token === ts.SyntaxKind.MultiLineCommentTrivia
+    ) {
+      continue;
+    }
+    saida += scanner.getTokenText();
+  }
+  return saida;
+}
+
+/**
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
  * ║ ⛔ A MEMÓRIA ENTRA POR ÚLTIMO, E A ORDEM É A GARANTIA (§6.4).                          ║
  * ║                                                                                       ║
@@ -170,59 +201,73 @@ describe("blocoDeMemorias", () => {
  * ║ meio: ele confirma um texto proposto a partir de um documento lido, e aquele texto    ║
  * ║ passa a valer mais que o prompt de segurança.                                          ║
  * ║                                                                                       ║
- * ║ Varredura de fonte porque a ordem é uma propriedade da CONCATENAÇÃO, e `chat-runner`  ║
- * ║ não é testável sem provedor. É a mesma técnica de `chat-events.test.ts`.               ║
+ * ║ A concatenação é UMA, em `server/system-prompt.ts` (`montarSystem`). Por ser função    ║
+ * ║ pura, a ordem se prova pelo COMPORTAMENTO. A varredura de fonte fica só para garantir  ║
+ * ║ que nenhum outro arquivo do servidor monta o `system` por fora dela.                    ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
-describe("a ordem da montagem do system prompt", () => {
-  const runner = fs.readFileSync(
-    path.join(process.cwd(), "src/lib/ai/server/chat-runner.ts"),
-    "utf8",
-  );
+describe("montarSystem — a concatenação única do system", () => {
+  it("põe a memória por último: base < bloco do servidor < memória", () => {
+    const sistema = montarSystem({
+      base: "BASE-DO-AGENTE",
+      blocos: ["BLOCO-DO-SERVIDOR"],
+      memorias: [m("1", "Prefiro respostas curtas")],
+    });
+    const iBase = sistema.indexOf("BASE-DO-AGENTE");
+    const iBloco = sistema.indexOf("BLOCO-DO-SERVIDOR");
+    const iMemoria = sistema.indexOf("Prefiro respostas curtas");
 
-  /**
-   * ⚠️ 18-F Bloco 4 — a montagem foi PARTIDA EM DUAS (`perfil.systemBase`, depois
-   * `+ blocoDeMemorias`) para o panorama poder trazer o próprio prompt de redação no lugar
-   * do perfil do agente. A ordem que este teste protege não mudou; o que mudou é onde ela
-   * está escrita, e o bloco da caixa de entrada entrou no meio.
-   */
-  it("blocoDeMemorias vem DEPOIS do perfil, do roteamento e da caixa de entrada", () => {
-    const base = runner.indexOf("buildSystemPrompt(agent");
-    const roteamento = runner.indexOf("blocoDeContextoDeRoteamento(");
-    // A USADA, não a importada: o nome aparece primeiro no `import` do topo do arquivo.
-    const caixa = runner.indexOf("? BLOCO_DA_CAIXA_DE_ENTRADA");
-    const memoria = runner.indexOf("const system = perfil.systemBase + blocoDeMemorias(");
-
-    expect(base, "buildSystemPrompt não encontrado").toBeGreaterThan(-1);
-    expect(caixa, "o bloco da caixa de entrada não encontrado").toBeGreaterThan(-1);
-    expect(memoria, "a montagem final do system não encontrada").toBeGreaterThan(-1);
-    expect(base).toBeLessThan(roteamento);
-    expect(roteamento).toBeLessThan(caixa);
-    expect(caixa).toBeLessThan(memoria);
+    expect(iBase).toBeGreaterThan(-1);
+    expect(iBloco).toBeGreaterThan(iBase);
+    expect(iMemoria).toBeGreaterThan(iBloco);
   });
 
+  it("sem memória, é base + blocos, na ordem dada", () => {
+    expect(montarSystem({ base: "B", blocos: ["X", "Y"], memorias: [] })).toBe("BXY");
+  });
+});
+
+describe("a montagem do system no chat-runner", () => {
   /**
-   * ⛔ 18-F Bloco 4 — O PANORAMA TAMBÉM CARREGA A MEMÓRIA.
-   *
-   * "Planejar meu dia" respeitando uma preferência salva é onde a memória do Bloco 3
-   * justifica existir. Um `system` de panorama montado sem ela — que é o que a primeira
-   * versão do plano desta task esboçava — faria o panorama nascer sem as preferências que
-   * ele existe para respeitar. A concatenação é UMA, e os dois caminhos passam por ela.
+   * ⚠️ `blocoDeMemorias(` em UM arquivo só de `server/`, e é `system-prompt.ts`. Antes da Task 7
+   * a varredura olhava o `chat-runner` inteiro, e a ordem vivia escrita nele; agora a ordem é
+   * função, e este teste garante que ninguém a remonta por fora.
    */
-  it("o caminho do PLANO passa pela mesma concatenação, e a memória é a última", () => {
-    const montagem = runner.indexOf("const system = perfil.systemBase + blocoDeMemorias(");
-    expect(montagem).toBeGreaterThan(-1);
+  it("`blocoDeMemorias(` aparece em UM arquivo de src/lib/ai/server/, e é system-prompt.ts", () => {
+    const usam: string[] = [];
+    for (const nome of fs.readdirSync(SERVER_DIR)) {
+      if (!nome.endsWith(".ts") || nome.endsWith(".test.ts")) continue;
+      const codigo = semComentarios(fs.readFileSync(path.join(SERVER_DIR, nome), "utf8"));
+      if (/\bblocoDeMemorias\s*\(/.test(codigo)) usam.push(nome);
+    }
+    expect(usam).toEqual(["system-prompt.ts"]);
+  });
 
-    // Não existe um segundo lugar que monte `system` — nem no ramo do plano.
-    const ocorrencias = runner.match(/blocoDeMemorias\(/g) ?? [];
-    expect(ocorrencias, "blocoDeMemorias aparece mais de uma vez").toHaveLength(1);
+  /** Controle positivo: o scanner não pode ter descartado a chamada que o teste procura. */
+  it("controle: o scanner enxerga a chamada real dentro de system-prompt.ts", () => {
+    const codigo = semComentarios(
+      fs.readFileSync(path.join(SERVER_DIR, "system-prompt.ts"), "utf8"),
+    );
+    expect(codigo).toMatch(/\bblocoDeMemorias\s*\(/);
+  });
 
-    // E o `systemBase` do plano vem do próprio plano, não de um agente do registry.
+  it("o chat-runner monta o system SÓ por montarSystem, com a memória selecionada", () => {
+    const runner = semComentarios(
+      fs.readFileSync(path.join(SERVER_DIR, "chat-runner.ts"), "utf8"),
+    );
+    expect(runner.match(/\bmontarSystem\(/g) ?? []).toHaveLength(1);
+    expect(runner).toMatch(/montarSystem\(\{[\s\S]*?memorias:\s*selecionadas/);
+  });
+
+  /** O caminho do PLANO usa o system do próprio plano como base — nunca um agente do registry. */
+  it("o caminho do PLANO usa o system do plano como base", () => {
+    const runner = fs.readFileSync(path.join(SERVER_DIR, "chat-runner.ts"), "utf8");
     expect(runner).toContain("systemBase: input.plano.system");
   });
 
   /** A leitura é condicionada à chave — nenhuma consulta quando o dono não autorizou. */
   it("as memórias só são lidas com allow_memory ligada", () => {
+    const runner = fs.readFileSync(path.join(SERVER_DIR, "chat-runner.ts"), "utf8");
     expect(runner).toMatch(
       /permissions\.allow_memory[\s\S]{0,120}getMemoriasVigentes\(/,
     );
