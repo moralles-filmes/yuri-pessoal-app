@@ -366,6 +366,21 @@ describe("03-G L7 — a leitura que falha tira só a sua família (K1b)", () => 
     expect(inseridas("sistema_")).toEqual([]);
   });
 
+  it("Z7 — registros de hábito sem leitura: o hábito já feito NÃO vira 'pendente'", async () => {
+    // Família de DUAS leituras: os hábitos chegam, os registros não. Passar a família ao gerador
+    // com os registros vazios diria "hábito pendente" sobre um hábito já feito hoje.
+    estado.tabelas.habits = [
+      { id: "hab-1", user_id: USUARIO, name: "Habito sintetico", category: "saude", frequency: "diaria", weekdays: null, target_value: 1, unit: "vez", is_active: true },
+    ];
+    estado.tabelas.habit_logs = [
+      { habit_id: "hab-1", user_id: USUARIO, log_date: "2026-09-10", value: 1, is_done: true },
+    ];
+    estado.falhar.habit_logs = "XX000";
+    const r = await generateForUser(servicoFalso(), USUARIO, AGORA);
+    expect(r.familiasNaoLidas).toEqual(["habitos"]);
+    expect(inseridas("habit_pending")).toEqual([]);
+  });
+
   it("Z9 — preferências com erro: nada é entregue, nem o aviso de sistema", async () => {
     estado.falhar.settings = "XX000";
     estado.falhar.card_statements_with_total = "XX000";
