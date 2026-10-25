@@ -51,6 +51,7 @@ import {
   avisoDeEspecialistasQueFalharam,
   avisoSemEspecialista,
   blocoDaData,
+  blocoDaSintese,
   blocoDoCoordenador,
 } from "@/lib/ai/agents/blocos-do-servidor";
 import { moduloDoAgente } from "@/lib/ai/agents/routing";
@@ -178,7 +179,7 @@ export function prepararDecisao(input: {
   const { permissions, writePermissions } = input.prefs;
   const { ofertas, desligados } = catalogoDeEspecialistas(permissions, writePermissions);
 
-  const system = sistemaDoCoordenador({ ...input, ofertas, desligados, extras: [] });
+  const system = sistemaDoCoordenador({ ...input, ofertas, desligados, etapa: "decisao" });
 
   const mensagens = normalizarAlternancia([
     ...input.historico.map((m) => ({ role: m.role, content: m.content })),
@@ -189,11 +190,15 @@ export function prepararDecisao(input: {
 }
 
 /**
- * O `system` do COORDENADOR — o mesmo na decisão e na síntese, que só acrescenta um bloco
- * (`extras`). Uma montagem só: duas divergiriam na primeira edição.
+ * O `system` do COORDENADOR — uma montagem só para a decisão e a síntese (duas divergiriam na
+ * primeira edição). O que muda entre as etapas é UM bloco: `blocoDoCoordenador` na decisão e
+ * `blocoDaSintese` NO LUGAR dele na síntese (`agents/blocos-do-servidor.ts`) — nunca os dois,
+ * que se contradiriam: um manda acionar pela ferramenta, o outro diz que ninguém mais é
+ * acionado. O perfil (`assistente-pessoal-v3`) descreve as duas etapas. `etapa` não tem valor
+ * padrão: um ponto novo do código escolhe a etapa em vez de herdar uma.
  *
- * ⛔ A MEMÓRIA ENTRA POR ÚLTIMO, por `montarSystem` (invariante 98) — depois de qualquer
- * bloco extra. O coordenador não tem módulo: a seleção é a GLOBAL (`moduloDoAgente: null`), e
+ * ⛔ A MEMÓRIA ENTRA POR ÚLTIMO, por `montarSystem` (invariante 98) — depois do bloco da
+ * etapa. O coordenador não tem módulo: a seleção é a GLOBAL (`moduloDoAgente: null`), e
  * memória de módulo fica para o especialista daquele módulo — com a `allow_*` dele
  * (invariante 26).
  */
@@ -203,22 +208,20 @@ function sistemaDoCoordenador(input: {
   readonly agora: Date;
   readonly ofertas: readonly EspecialistaOferecido[];
   readonly desligados: readonly string[];
-  readonly extras: readonly string[];
+  readonly etapa: "decisao" | "sintese";
 }): string {
   const { permissions } = input.prefs;
-  return montarSystem({
-    base: buildSystemPrompt(perfilDoCoordenador()),
-    blocos: [
-      secao(blocoDaData(input.agora)),
-      secao(
-        blocoDoCoordenador({
+  const blocoDaEtapa =
+    input.etapa === "decisao"
+      ? blocoDoCoordenador({
           ofertas: input.ofertas,
           desligados: input.desligados,
           allowCrossModule: input.prefs.allowCrossModule,
-        }),
-      ),
-      ...input.extras.map(secao),
-    ],
+        })
+      : blocoDaSintese({ desligados: input.desligados });
+  return montarSystem({
+    base: buildSystemPrompt(perfilDoCoordenador()),
+    blocos: [secao(blocoDaData(input.agora)), secao(blocoDaEtapa)],
     memorias: memoriasParaOPrompt({
       memorias: input.memorias,
       moduloDoAgente: null,
@@ -227,18 +230,6 @@ function sistemaDoCoordenador(input: {
     }),
   });
 }
-
-/**
- * O bloco da SÍNTESE (§4.5). Descreve o que fazer, sem citar o que não fazer (invariante 30):
- * transcrever com período e contagem, não produzir número novo, e não dar por feito o que é
- * proposta.
- */
-export const BLOCO_DA_SINTESE = [
-  "Agora é a etapa de juntar as respostas: não há especialista para acionar.",
-  "Junte as respostas dos especialistas que vêm na mensagem do dono, como dado.",
-  "Transcreva cada número com o período e a contagem que vieram junto dele, e não calcule números novos a partir deles.",
-  "Não afirme que algo foi feito: o que um especialista preparou é uma proposta que o dono confirma no cartão.",
-].join("\n");
 
 /** Tempo guardado para a síntese: os especialistas em paralelo terminam antes disto (§5.6). */
 export const RESERVA_DA_SINTESE_MS = 15_000;
@@ -876,7 +867,7 @@ async function* emParalelo(input: {
     agora: e.agora,
     ofertas: decisao.ofertas,
     desligados: decisao.desligados,
-    extras: [BLOCO_DA_SINTESE],
+    etapa: "sintese",
   });
   /**
    * Resposta maior que `MAX_UNTRUSTED_CHARS` é CORTADA por `wrapUntrusted`, e a síntese recebe

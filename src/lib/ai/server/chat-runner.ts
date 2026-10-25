@@ -425,7 +425,7 @@ export async function* runChat(
 
     preparo = {
       agentId: coordenador!.id,
-      // ⚠️ Continua a versão de hoje até a Task 14 trocar o prompt do coordenador.
+      // A versão do coordenador (`assistente-pessoal-v3`, invariante 105), derivada do registry.
       promptVersion: promptVersionOf(coordenador!),
       reserva,
       doPlano: null,

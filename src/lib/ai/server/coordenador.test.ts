@@ -245,6 +245,7 @@ const {
   avisoDeEspecialistasQueFalharam,
   avisoSemEspecialista,
   blocoDaData,
+  blocoDaSintese,
 } =
   await import(
   "@/lib/ai/agents/blocos-do-servidor"
@@ -834,6 +835,42 @@ describe("conduzirCoordenador — especialistas em paralelo e síntese", () => {
       "2:ESPECIALISTA",
     ]);
     expect(desfecho).toMatchObject({ ok: true, texto: "Resumo dos dois." });
+  });
+
+  /**
+   * Pendência da Task 13: a síntese recebia o system da DECISÃO (que lista as ferramentas de
+   * acionamento e manda acionar) mais um bloco dizendo que não havia a quem acionar. Agora a
+   * decisão leva `blocoDoCoordenador` e a síntese leva `blocoDaSintese` NO LUGAR dele.
+   */
+  it("o system da síntese não manda acionar nem lista ferramenta de acionamento; o da decisão, sim", async () => {
+    responder = ({ quem }) => {
+      if (quem === "decisao") return DECIDE_DOIS;
+      if (quem === "sintese") return [delta("Resumo."), FINISH];
+      return [delta(`texto-do-${quem}`), FINISH];
+    };
+
+    await conduzir({ prefs: prefs() });
+
+    const daDecisao = systemsRecebidos[0]!;
+    expect(daDecisao).toContain("acionar_financeiro");
+    expect(daDecisao).toContain("Etapa atual: decidir.");
+    expect(daDecisao).not.toContain("Etapa atual: juntar.");
+
+    const daSintese = systemsRecebidos[indiceDaSintese()]!;
+    expect(daSintese).not.toMatch(/acionar_/);
+    // O perfil descreve a etapa de decidir (e diz "acione"); o que não pode vir é o bloco que
+    // MANDA acionar agora, pela ferramenta.
+    expect(daSintese).not.toContain("pela ferramenta correspondente");
+    expect(daSintese).not.toContain("Especialistas disponíveis");
+    expect(daSintese).toContain("Etapa atual: juntar.");
+    expect(daSintese).not.toContain("Etapa atual: decidir.");
+    // O bloco é o de `blocos-do-servidor.ts` (a parte fixa; os desligados, quando há, vêm
+    // depois dela), e a data continua antes dele.
+    expect(daSintese).toContain(blocoDaSintese({ desligados: [] }));
+    expect(daSintese.indexOf(blocoDaData(AGORA))).toBeLessThan(
+      daSintese.indexOf("Etapa atual: juntar."),
+    );
+    expect(daSintese.indexOf(blocoDaData(AGORA))).toBeGreaterThan(-1);
   });
 
   it("os deltas dos especialistas não vão para a tela; os da síntese vão", async () => {
