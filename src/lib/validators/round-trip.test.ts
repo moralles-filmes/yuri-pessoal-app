@@ -680,3 +680,11 @@ describe("lançamento (03-E): a \"Data do pagamento\" aceita a própria saída",
     expect(r.error?.flatten().fieldErrors.liquidado_em).toBeDefined();
   });
 });
+
+
+it("o valor REAL do formulário de memória passa no schema", () => {
+  const r = roundTrip(memoriaSchema, { conteudo: "Prefiro treinar à noite", modulo: "__todas__", expiraEm: "" });
+  expect(r.noCliente.success, fieldErrors(r.noCliente.error)).toBe(true);
+  expect(r.noServidor.success, fieldErrors(r.noServidor.error)).toBe(true);
+  expect(r.noCliente.data).toMatchObject({ modulo: null, expiraEm: null });
+});

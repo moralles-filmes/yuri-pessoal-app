@@ -7,7 +7,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const DIR = path.join(process.cwd(), "src/lib/ai/memory");
 const ler = (arquivo: string) => fs.readFileSync(path.join(DIR, arquivo), "utf8");
@@ -119,5 +119,71 @@ describe("quem fala com o banco declara server-only; quem é puro, não", () => 
       .readdirSync(DIR)
       .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
     expect([...arquivos].sort()).toEqual([...COM_IO, ...PUROS].sort());
+  });
+});
+
+
+import { alternarMemoria, esquecerMemoria, excluirMemoria, criarMemoria, editarMemoria, type ContextoDaMemoria } from "./services";
+
+function contextoComEvento(falha: boolean) {
+  const insertEvento = vi.fn(async () => ({ error: falha ? { message: "Falha interna, não exibir" } : null }));
+  const excluir = vi.fn();
+  const alteracoes: string[] = [];
+  const fila = { eq: vi.fn(), then: (resolver: (r: unknown) => unknown) => Promise.resolve({ error: null }).then(resolver) };
+  fila.eq.mockReturnValue(fila);
+  const supabase = { from: vi.fn((tabela: string) => tabela === "ai_memory_events"
+    ? { insert: insertEvento }
+    : {
+      insert: vi.fn(() => ({ select: vi.fn(() => ({ single: async () => { alteracoes.push("criou"); return { data: { id: "m1" }, error: null }; } })) })),
+      update: vi.fn(() => { alteracoes.push("editou"); return fila; }),
+      delete: excluir.mockImplementation(() => { alteracoes.push("apagou"); return fila; }),
+    }) };
+  return { ctx: { supabase, userId: "dono" } as unknown as ContextoDaMemoria, insertEvento, excluir, alteracoes };
+}
+const entrada = { conteudo: "Prefiro treinar à noite", modulo: null, expiraEm: null } as const;
+
+describe("falha do evento da memória", () => {
+  it.each([true, false])("alternarMemoria devolve ok:false quando o evento não grava, ligar=%s", async (ligar) => {
+    const { ctx, insertEvento } = contextoComEvento(true);
+    const r = await alternarMemoria(ctx, "m1", ligar);
+    expect(r.ok).toBe(false);
+    expect(insertEvento).toHaveBeenCalledWith(expect.objectContaining({ evento: ligar ? "reativada" : "desativada", user_id: "dono" }));
+    expect(JSON.stringify(r)).not.toContain("Falha interna");
+  });
+  it("esquecerMemoria não declara sucesso quando o evento falha", async () => {
+    const { ctx } = contextoComEvento(true);
+    expect((await esquecerMemoria(ctx, "m1", "dono")).ok).toBe(false);
+  });
+  it("excluirMemoria não apaga sem evento", async () => {
+    const { ctx, excluir } = contextoComEvento(true);
+    expect((await excluirMemoria(ctx, "m1")).ok).toBe(false);
+    expect(excluir).not.toHaveBeenCalled();
+  });
+  it("criar e editar declaram a alteração parcial se o evento falha depois da gravação", async () => {
+    const { ctx, alteracoes } = contextoComEvento(true);
+    const criou = await criarMemoria(ctx, entrada, "dono");
+    const editou = await editarMemoria(ctx, "m1", entrada);
+    expect(criou).toMatchObject({ ok: false, erro: expect.stringMatching(/salva.*evento/) });
+    expect(editou).toMatchObject({ ok: false, erro: expect.stringMatching(/alterada.*evento/) });
+    expect(alteracoes).toEqual(["criou", "editou"]);
+  });
+  it("evento gravado permite alternar, esquecer e apagar, com ordem evento antes do delete", async () => {
+    const { ctx, insertEvento, excluir } = contextoComEvento(false);
+    expect((await alternarMemoria(ctx, "m1", false)).ok).toBe(true);
+    expect((await esquecerMemoria(ctx, "m1", "dono")).ok).toBe(true);
+    expect((await excluirMemoria(ctx, "m1")).ok).toBe(true);
+    expect(insertEvento.mock.invocationCallOrder.at(-1)).toBeLessThan(excluir.mock.invocationCallOrder[0]);
+  });
+});
+
+describe("texto e datas da memória na tela", () => {
+  const tela = fs.readFileSync(path.resolve(DIR, "../../../components/ai/memory-client.tsx"), "utf8");
+  it("mostra prazo e expiração em pt-BR sem alterar as datas puras do formulário", () => {
+    expect(tela).toContain("formatDate(m.expirouEm)");
+    expect(tela).toContain("formatDate(m.prazo)");
+  });
+  it("declara as cópias que sobrevivem até apagar a conversa", () => {
+    expect(tela).toContain("Uma cópia continua na conversa em que ela foi proposta e em Ações, até você apagar a conversa.");
+    expect(tela).not.toContain("A frase sai daqui e não volta");
   });
 });

@@ -14,7 +14,8 @@
  */
 
 import * as React from "react";
-import { useForm, useWatch, type Resolver } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import type { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -53,11 +54,8 @@ const TODAS = "__todas__";
 /** Os campos que ESTA tela mostra. Erro de campo fora daqui vai para o toast, não some. */
 const FORM_FIELDS = ["conteudo", "modulo", "expiraEm"] as const;
 
-type FormValues = {
-  conteudo: string;
-  modulo: string;
-  expiraEm: string;
-};
+type FormValues = z.input<typeof memoriaSchema>;
+type FormValidado = z.output<typeof memoriaSchema>;
 
 function toDefaults(memoria: MemoriaNaLista | null): FormValues {
   return {
@@ -83,8 +81,8 @@ export function MemoryFormDialog({
   const editando = Boolean(memoria);
   const [salvando, setSalvando] = React.useState(false);
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(memoriaSchema) as unknown as Resolver<FormValues>,
+  const form = useForm<FormValues, unknown, FormValidado>({
+    resolver: zodResolver(memoriaSchema),
     defaultValues: toDefaults(memoria),
   });
 
@@ -107,12 +105,12 @@ export function MemoryFormDialog({
     onAbertoChange(proximo);
   }
 
-  async function onSubmit(values: FormValues) {
+  async function onSubmit(values: FormValidado) {
     setSalvando(true);
     const r = await salvarMemoria({
       id: memoria?.id ?? null,
       conteudo: values.conteudo,
-      modulo: values.modulo === TODAS ? null : values.modulo,
+      modulo: values.modulo,
       expiraEm: values.expiraEm || null,
     });
     setSalvando(false);
@@ -186,7 +184,7 @@ export function MemoryFormDialog({
             <div className="space-y-1.5">
               <Label htmlFor="modulo">Vale para</Label>
               <Select
-                value={valores.modulo ?? TODAS}
+                value={typeof valores.modulo === "string" ? valores.modulo : TODAS}
                 onValueChange={(v) => form.setValue("modulo", v)}
               >
                 <SelectTrigger

@@ -494,10 +494,12 @@ export const memoriaSchema = z
   .object({
     id: z.uuid().nullish(),
     conteudo: z.string(),
-    modulo: z
-      .enum(MODULOS_DE_MEMORIA)
-      .nullish()
-      .transform((v) => v ?? null),
+    modulo: z.preprocess(
+      (v) => v === "__todas__" ? null : v,
+      z.enum(MODULOS_DE_MEMORIA, { error: "Módulo de memória não reconhecido." })
+        .nullish()
+        .transform((v) => v ?? null),
+    ),
     /**
      * ⚠️ O REGEX ACEITA A STRING VAZIA, e isso não é folga — é o que um `<input type="date">`
      * vazio de fato manda. `.regex()` roda ANTES do `.transform()`, então um padrão
