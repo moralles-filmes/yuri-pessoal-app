@@ -40,3 +40,22 @@ export function dbError(
 ): ActionResult<never> {
   return { ok: false, error: message };
 }
+
+/**
+ * 03-G (D-G20) — leitura que falhou ANTES de qualquer escrita da action: a frase pode afirmar
+ * que nada mudou.
+ */
+export function falhaDeLeituraAntes(oQue: string): ActionResult<never> {
+  return { ok: false, error: `Não foi possível ler ${oQue}. Nada foi alterado.` };
+}
+
+/**
+ * 03-G (D-G20) — leitura que falhou DEPOIS de uma escrita da mesma action: erra para "pode ter
+ * acontecido em parte" (invariante 37), nunca afirma o que não sabe.
+ */
+export function falhaDeLeituraDepois(oQue: string): ActionResult<never> {
+  return {
+    ok: false,
+    error: `Não foi possível ler ${oQue}. A alteração pode ter sido gravada em parte: recarregue a página para conferir.`,
+  };
+}

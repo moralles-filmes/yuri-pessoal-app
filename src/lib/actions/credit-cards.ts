@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { creditCardSchema } from "@/lib/validators/credit-card";
-import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
+import {
+  authContext,
+  dbError,
+  falhaDeLeituraAntes,
+  invalid,
+  notAuthed,
+} from "@/lib/actions/helpers";
 import type { ActionResult } from "@/types/finance";
 
 function revalidateCards() {
@@ -98,12 +104,16 @@ export async function deleteCreditCard(id: string): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { count } = await ctx.supabase
+  // 03-G — com a contagem falha, o cartão com histórico era EXCLUÍDO (as faturas iam junto por cascade).
+  const { count, error: erroDaContagem } = await ctx.supabase
     .from("transactions")
     .select("id", { count: "exact", head: true })
     .eq("card_id", id);
+  if (erroDaContagem || count === null) {
+    return falhaDeLeituraAntes("os lançamentos do cartão");
+  }
 
-  if ((count ?? 0) > 0) {
+  if (count > 0) {
     return dbError(
       "Este cartão tem lançamentos vinculados. Inative-o em vez de excluir para preservar o histórico.",
     );

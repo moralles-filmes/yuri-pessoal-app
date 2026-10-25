@@ -2,6 +2,8 @@ import { getFinanceCardData } from "@/lib/dashboard/queries";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { apresentarEntradas } from "@/lib/finance/entradas-do-card";
 import { fraseDoPerdoado, rotuloPendenteDoMes } from "@/lib/finance/recebimentos";
+import { ehErroDeLeitura, registrarFalhaDeLeitura, type ErroDeLeitura } from "@/lib/supabase/leitura";
+import { CardSemLeitura } from "@/components/shared/card-sem-leitura";
 import { Metric, MetricRow } from "./primitives";
 import type { DashWindow } from "@/lib/dashboard/period";
 
@@ -13,7 +15,22 @@ export async function FinanceCard({
   window: DashWindow;
   todayIso: string;
 }) {
-  const d = await getFinanceCardData(window.mes, todayIso);
+  // 03-G (L4, D-G17): captura SÓ ErroDeLeitura e SÓ a leitura. O JSX fica fora do try (regra
+  // react-hooks/error-boundaries). Qualquer outra exceção sobe para o error.tsx. Em produção o
+  // error.tsx não saberia dizer qual leitura falhou; aqui o `oQue` ainda existe (K1.3).
+  let d: Awaited<ReturnType<typeof getFinanceCardData>> | null = null;
+  let falha: ErroDeLeitura | null = null;
+  try {
+    d = await getFinanceCardData(window.mes, todayIso);
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    falha = e;
+    registrarFalhaDeLeitura(e);
+  }
+  if (falha || !d) {
+    return <CardSemLeitura oQue={falha?.oQue ?? "os dados do card"} href="/dashboard" />;
+  }
+
   const entradasNoCard = apresentarEntradas(d);
 
   return (

@@ -19,7 +19,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getAccounts, getTransactions } from "@/lib/finance/queries";
-import { catchUpRecurrences } from "@/lib/finance/generation";
+import { exigirCompleta } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
+import {
+  AVISO_DE_RECORRENCIAS_INTERROMPIDAS,
+  catchUpRecurrences,
+} from "@/lib/finance/generation";
 import { formatCurrency, hojeISO } from "@/lib/format";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
 import { saldoDasContas } from "@/lib/finance/saldo-das-contas";
@@ -60,8 +65,10 @@ const QUICK_LINKS = [
 ];
 
 export default async function FinanceiroOverviewPage() {
-  // Catch-up de recorrências vencidas (idempotente, seguro no render).
-  await catchUpRecurrences();
+  // Catch-up de recorrências vencidas (idempotente, seguro no render). 03-G: a leitura das
+  // recorrências LANÇA (vai ao `financeiro/error.tsx`, nada foi gravado); um erro no meio da
+  // geração volta `interrompida` e a tela o declara — aí já pode haver lançamento gravado.
+  const { interrompida } = await catchUpRecurrences();
 
   // Mês corrente em Brasília. Derivar de `new Date()` aqui daria o mês seguinte na
   // virada do mês entre 21h e 00h (BRT), zerando os cards de entradas/saídas.
@@ -69,7 +76,9 @@ export default async function FinanceiroOverviewPage() {
 
   const [accounts, monthTx] = await Promise.all([
     getAccounts(),
-    getTransactions({ month }),
+    // A página SOMA Entradas e Saídas: lista cortada é erro (LeituraIncompleta → error.tsx),
+    // nunca um total afirmado sobre parte do mês (K2, D-G7).
+    getTransactions({ month }).then((l) => exigirCompleta(l, ROTULOS_DE_LEITURA.lancamentos)),
   ]);
 
   const totalBalance = saldoDasContas(accounts);
@@ -95,6 +104,14 @@ export default async function FinanceiroOverviewPage() {
 
   return (
     <div className="space-y-6">
+      {interrompida && (
+        <p
+          role="status"
+          className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm"
+        >
+          {AVISO_DE_RECORRENCIAS_INTERROMPIDAS}
+        </p>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Saldo total"

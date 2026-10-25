@@ -55,6 +55,11 @@ export async function GET(request: Request) {
       users: result.users,
       inserted: result.inserted,
       aiRunsReconciled: ia.runs,
+      // 03-G (K1b) — o que a verificação NÃO conseguiu ler, por usuário. SEM `userId`: este
+      // JSON pode ir a log externo.
+      naoLidas: result.results
+        .filter((r) => r.familiasNaoLidas.length > 0 || r.naoEntregue)
+        .map((r) => ({ familias: r.familiasNaoLidas, naoEntregue: r.naoEntregue ?? null })),
     });
   } catch {
     return NextResponse.json({ error: "generation_failed" }, { status: 500 });

@@ -10,6 +10,7 @@ import {
   getPeopleForSelect,
   getSubcategories,
 } from "@/lib/finance/queries";
+import { AvisoDeTeto } from "@/components/shared/aviso-de-teto";
 import { hojeISO } from "@/lib/format";
 import { ImportUpload } from "./import-upload";
 import { ImportHistory } from "./import-history";
@@ -79,7 +80,7 @@ export default async function ImportarPage({
     }
   }
 
-  const [batches, cards, accounts] = await Promise.all([
+  const [leituraDosLotes, cards, accounts] = await Promise.all([
     getImportBatches(),
     getCreditCards(),
     getAccounts(),
@@ -99,7 +100,9 @@ export default async function ImportarPage({
           .filter((a) => a.is_active)
           .map((a) => ({ id: a.id, name: a.name }))}
       />
-      <ImportHistory batches={batches} />
+      {/* Histórico é lista pura: o teto de 100 lotes vira aviso, não erro (K2, D-G5). */}
+      <AvisoDeTeto leitura={leituraDosLotes} oQue="importações" />
+      <ImportHistory batches={leituraDosLotes.linhas} />
     </div>
   );
 }

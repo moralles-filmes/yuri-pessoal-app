@@ -6,6 +6,8 @@ import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
 import {
   authContext,
   dbError,
+  falhaDeLeituraAntes,
+  falhaDeLeituraDepois,
   invalid,
   notAuthed,
   type AuthContext,
@@ -16,6 +18,8 @@ import {
   getOrCreateStatementForCompetencia,
   resolveOrCreateStatement,
 } from "@/lib/finance/statements";
+import { ehErroDeLeitura, exigir, listaCompleta } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { resolverFatura } from "@/lib/finance/invoice";
 import { dataDoExtratoAGravar } from "@/lib/finance/caixa";
 import { detectarCompetenciaFatura } from "@/lib/import/competencia";
@@ -62,6 +66,8 @@ import type { ActionResult } from "@/types/finance";
 import type { ImportSplitPart } from "@/types/database";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+const R = ROTULOS_DE_LEITURA;
 
 function revalidateImports() {
   revalidatePath("/importar");
@@ -119,13 +125,16 @@ async function existingKeysFor(
 ): Promise<Set<string>> {
   if (!ctx) return new Set();
   const col = origem === "cartao" ? "card_id" : "account_id";
-  const { data } = await ctx.supabase
+  // 03-G — a dedup sobre um conjunto CORTADO reimportaria duplicata: erro, saturação ou falta de
+  // contagem LANÇAM, e quem chama recusa antes de gravar.
+  const res = await ctx.supabase
     .from("transactions")
-    .select("purchase_date, amount, description")
+    .select("purchase_date, amount, description", { count: "exact" })
     .eq(col, targetId)
     .limit(5000);
+  const data = listaCompleta(res, "os lançamentos já existentes");
   const set = new Set<string>();
-  for (const t of data ?? []) {
+  for (const t of data) {
     const k = chaveComposta(
       t.purchase_date,
       reaisParaCentavos(t.amount),
@@ -149,16 +158,20 @@ async function parcelasLancadasFor(
   ctx: AuthContext,
   cardId: string,
 ): Promise<ParcelaLancada[]> {
-  const { data } = await ctx.supabase
+  // 03-G — mesma regra de `existingKeysFor`: com a lista cortada, a parcela já lançada entraria
+  // de novo. Lança; quem chama recusa antes de gravar.
+  const res = await ctx.supabase
     .from("transaction_installments")
     .select(
       "numero, total_parcelas, valor, data_competencia, parent:transactions!transaction_installments_parent_transaction_id_fkey(description)",
+      { count: "exact" },
     )
     .eq("card_id", cardId)
     .eq("status", "ativa")
     .limit(5000);
+  const data = listaCompleta(res, "as parcelas já lançadas");
 
-  return (data ?? []).map((p) => {
+  return data.map((p) => {
     const parent = p.parent as { description: string | null } | null;
     const descricao = parent?.description ?? "";
     return {
@@ -207,11 +220,15 @@ async function detectarCompetenciaLote(
   cardId: string,
   rows: { dataNorm: string | null; parcelasTotal: number | null }[],
 ): Promise<string | null> {
-  const { data: card } = await ctx.supabase
-    .from("credit_cards")
-    .select("dia_fechamento, dia_vencimento")
-    .eq("id", cardId)
-    .maybeSingle();
+  // 03-G — erro de leitura LANÇA (antes virava "sem competência detectada").
+  const card = exigir(
+    await ctx.supabase
+      .from("credit_cards")
+      .select("dia_fechamento, dia_vencimento")
+      .eq("id", cardId)
+      .maybeSingle(),
+    R.cartao,
+  );
   if (!card) return null;
   return (
     detectarCompetenciaFatura(rows, card.dia_fechamento, card.dia_vencimento)
@@ -267,50 +284,62 @@ export async function parseImportFile(
   const fields = autoDetectMapping(table.headers);
   const targetId = d.origem === "cartao" ? d.credit_card_id! : d.account_id!;
 
-  const { data: cats } = await ctx.supabase
-    .from("categories")
-    .select("id, name");
-  const categorias = (cats ?? []).map((c) => ({ id: c.id, name: c.name }));
+  // 03-G — nenhuma escrita antes desta região: toda leitura que decide o lote mora nela, e
+  // qualquer uma que falhe (ou venha cortada) recusa com "Nada foi alterado".
+  let sinalNegativoDespesa: boolean;
+  let competenciaFatura: string | null;
+  let conferidas: NormalizedRow[];
+  let duplicadas: number;
+  try {
+    const cats = listaCompleta(
+      await ctx.supabase.from("categories").select("id, name", { count: "exact" }),
+      R.categorias,
+    );
+    const categorias = cats.map((c) => ({ id: c.id, name: c.name }));
 
-  // Fatura de cartão não tem convenção de sinal única (OFX traz compra negativa; planilha traz
-  // compra positiva), então ela é DETECTADA do arquivo — assumir uma delas fazia a fatura
-  // inteira entrar como estorno. Em extrato de conta quem decide continua sendo o usuário.
-  const sinalNegativoDespesa =
-    d.origem === "cartao"
-      ? detectarSinalNegativoDespesa(table, fields)
-      : d.sinal_negativo_despesa;
+    // Fatura de cartão não tem convenção de sinal única (OFX traz compra negativa; planilha traz
+    // compra positiva), então ela é DETECTADA do arquivo — assumir uma delas fazia a fatura
+    // inteira entrar como estorno. Em extrato de conta quem decide continua sendo o usuário.
+    sinalNegativoDespesa =
+      d.origem === "cartao"
+        ? detectarSinalNegativoDespesa(table, fields)
+        : d.sinal_negativo_despesa;
 
-  const normalized = applyMapping(table, fields, {
-    origem: d.origem,
-    sinalNegativoDespesa,
-    categorias,
-  });
-  // Fatura de cartão: detecta a competência (das compras à vista) para ancorar parcelas e
-  // últimas parcelas na fatura certa. O usuário confirma/ajusta na revisão. Vem ANTES da dedup
-  // porque a conferência contra parcelamentos já lançados precisa dela; o resultado é o mesmo,
-  // pois `detectarCompetenciaFatura` só lê data e total de parcelas — campos que a dedup não toca.
-  const competenciaFatura =
-    d.origem === "cartao" && d.credit_card_id
-      ? await detectarCompetenciaLote(ctx, d.credit_card_id, normalized)
-      : null;
+    const normalized = applyMapping(table, fields, {
+      origem: d.origem,
+      sinalNegativoDespesa,
+      categorias,
+    });
+    // Fatura de cartão: detecta a competência (das compras à vista) para ancorar parcelas e
+    // últimas parcelas na fatura certa. O usuário confirma/ajusta na revisão. Vem ANTES da dedup
+    // porque a conferência contra parcelamentos já lançados precisa dela; o resultado é o mesmo,
+    // pois `detectarCompetenciaFatura` só lê data e total de parcelas — campos que a dedup não toca.
+    competenciaFatura =
+      d.origem === "cartao" && d.credit_card_id
+        ? await detectarCompetenciaLote(ctx, d.credit_card_id, normalized)
+        : null;
 
-  const existingKeys = await existingKeysFor(ctx, d.origem, targetId);
-  const deduped = detectarDuplicados(normalized, existingKeys, targetId);
-  // Segundo passe: a linha já coberta por uma parcela ativa deste cartão (a compra que o mês
-  // anterior lançou como parcelamento) entraria duplicada — a dedup não a vê, pois as parcelas
-  // não estão em `transactions`.
-  const conferidas =
-    d.origem === "cartao" && d.credit_card_id
-      ? marcarParcelasJaLancadas(
-          deduped,
-          await parcelasLancadasFor(ctx, d.credit_card_id),
-          competenciaFatura,
-        )
-      : // Extrato: avisa o que parece transferência (e auto-ignora o pagamento de fatura, que
-        // já entra pelo cartão). Depois da dedup de propósito — ela limpa o `motivo` ao promover
-        // a linha, e rodar antes apagaria o aviso justamente nas linhas que ele existe para marcar.
-        marcarTransferencias(deduped, d.origem);
-  const duplicadas = conferidas.filter((r) => r.status === "duplicada").length;
+    const existingKeys = await existingKeysFor(ctx, d.origem, targetId);
+    const deduped = detectarDuplicados(normalized, existingKeys, targetId);
+    // Segundo passe: a linha já coberta por uma parcela ativa deste cartão (a compra que o mês
+    // anterior lançou como parcelamento) entraria duplicada — a dedup não a vê, pois as parcelas
+    // não estão em `transactions`.
+    conferidas =
+      d.origem === "cartao" && d.credit_card_id
+        ? marcarParcelasJaLancadas(
+            deduped,
+            await parcelasLancadasFor(ctx, d.credit_card_id),
+            competenciaFatura,
+          )
+        : // Extrato: avisa o que parece transferência (e auto-ignora o pagamento de fatura, que
+          // já entra pelo cartão). Depois da dedup de propósito — ela limpa o `motivo` ao promover
+          // a linha, e rodar antes apagaria o aviso justamente nas linhas que ele existe para marcar.
+          marcarTransferencias(deduped, d.origem);
+    duplicadas = conferidas.filter((r) => r.status === "duplicada").length;
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    return falhaDeLeituraAntes(e.oQue);
+  }
 
   const { data: batch, error: batchErr } = await ctx.supabase
     .from("import_batches")
@@ -362,60 +391,79 @@ export async function remapImportBatch(
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
   const fields = parsed.data.fields as ColumnMapping;
 
-  const { data: batch } = await ctx.supabase
-    .from("import_batches")
-    .select("id, origem, credit_card_id, account_id, status, column_mapping")
-    .eq("id", batchId)
-    .maybeSingle();
-  if (!batch) return dbError("Lote não encontrado.");
-  if (batch.status === "importado" || batch.status === "cancelado") {
-    return dbError("Este lote já foi finalizado e não pode ser remapeado.");
+  // 03-G — nenhuma escrita antes desta região; qualquer leitura que falhe recusa antes do
+  // `delete` das linhas.
+  let headers: string[];
+  let competenciaFatura: string | null;
+  let conferidas: NormalizedRow[];
+  try {
+    const batch = exigir(
+      await ctx.supabase
+        .from("import_batches")
+        .select("id, origem, credit_card_id, account_id, status, column_mapping")
+        .eq("id", batchId)
+        .maybeSingle(),
+      R.loteDaImportacao,
+    );
+    if (!batch) return dbError("Lote não encontrado.");
+    if (batch.status === "importado" || batch.status === "cancelado") {
+      return dbError("Este lote já foi finalizado e não pode ser remapeado.");
+    }
+
+    // ⛔ O remap APAGA todas as linhas e regrava as lidas: com a leitura cortada pelo max_rows,
+    // ele perderia linhas do lote em silêncio.
+    const rows = listaCompleta(
+      await ctx.supabase
+        .from("import_rows")
+        .select("raw", { count: "exact" })
+        .eq("import_batch_id", batchId)
+        .order("linha_index", { ascending: true }),
+      R.linhasDaImportacao,
+    );
+    headers =
+      (batch.column_mapping as { headers?: string[] } | null)?.headers ?? [];
+    const table: ParsedTable = {
+      headers,
+      rows: rows.map((r) => (Array.isArray(r.raw) ? (r.raw as string[]) : [])),
+    };
+
+    const origem = batch.origem as "cartao" | "conta";
+    const targetId = (
+      origem === "cartao" ? batch.credit_card_id : batch.account_id
+    ) as string;
+
+    const cats = listaCompleta(
+      await ctx.supabase.from("categories").select("id, name", { count: "exact" }),
+      R.categorias,
+    );
+    const categorias = cats.map((c) => ({ id: c.id, name: c.name }));
+
+    const normalized = applyMapping(table, fields, {
+      origem,
+      sinalNegativoDespesa: parsed.data.sinal_negativo_despesa,
+      categorias,
+    });
+    // Remap recalcula tudo (datas/valores/parcelas) → re-detecta a competência da fatura. Assim
+    // como no parse, vem antes da dedup para alimentar a conferência de parcelamentos.
+    competenciaFatura =
+      origem === "cartao"
+        ? await detectarCompetenciaLote(ctx, targetId, normalized)
+        : null;
+
+    const existingKeys = await existingKeysFor(ctx, origem, targetId);
+    const deduped = detectarDuplicados(normalized, existingKeys, targetId);
+    conferidas =
+      origem === "cartao"
+        ? marcarParcelasJaLancadas(
+            deduped,
+            await parcelasLancadasFor(ctx, targetId),
+            competenciaFatura,
+          )
+        : marcarTransferencias(deduped, origem);
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    return falhaDeLeituraAntes(e.oQue);
   }
-
-  const { data: rows } = await ctx.supabase
-    .from("import_rows")
-    .select("raw")
-    .eq("import_batch_id", batchId)
-    .order("linha_index", { ascending: true });
-  const headers =
-    (batch.column_mapping as { headers?: string[] } | null)?.headers ?? [];
-  const table: ParsedTable = {
-    headers,
-    rows: (rows ?? []).map((r) => (Array.isArray(r.raw) ? (r.raw as string[]) : [])),
-  };
-
-  const origem = batch.origem as "cartao" | "conta";
-  const targetId = (
-    origem === "cartao" ? batch.credit_card_id : batch.account_id
-  ) as string;
-
-  const { data: cats } = await ctx.supabase
-    .from("categories")
-    .select("id, name");
-  const categorias = (cats ?? []).map((c) => ({ id: c.id, name: c.name }));
-
-  const normalized = applyMapping(table, fields, {
-    origem,
-    sinalNegativoDespesa: parsed.data.sinal_negativo_despesa,
-    categorias,
-  });
-  // Remap recalcula tudo (datas/valores/parcelas) → re-detecta a competência da fatura. Assim
-  // como no parse, vem antes da dedup para alimentar a conferência de parcelamentos.
-  const competenciaFatura =
-    origem === "cartao"
-      ? await detectarCompetenciaLote(ctx, targetId, normalized)
-      : null;
-
-  const existingKeys = await existingKeysFor(ctx, origem, targetId);
-  const deduped = detectarDuplicados(normalized, existingKeys, targetId);
-  const conferidas =
-    origem === "cartao"
-      ? marcarParcelasJaLancadas(
-          deduped,
-          await parcelasLancadasFor(ctx, targetId),
-          competenciaFatura,
-        )
-      : marcarTransferencias(deduped, origem);
 
   await ctx.supabase.from("import_rows").delete().eq("import_batch_id", batchId);
   const { error: insErr } = await ctx.supabase
@@ -457,13 +505,15 @@ export async function updateImportRow(
   // Trava por LINHA, não pelo lote: a linha que já virou lançamento é imutável, mas as que
   // ficaram de fora (duplicada/ignorada/erro) seguem editáveis mesmo depois do lote importado —
   // senão marcar "não é duplicidade" depois da importação não teria como chegar à fatura.
-  const { data: row } = await ctx.supabase
+  const rowRes = await ctx.supabase
     .from("import_rows")
     .select(
       "id, status, transaction_id, classificacao, import_batches(status, origem, account_id)",
     )
     .eq("id", rowId)
     .maybeSingle();
+  if (rowRes.error) return falhaDeLeituraAntes("a linha da importação");
+  const row = rowRes.data;
   if (!row) return dbError("Linha não encontrada.");
   const batch = row.import_batches as {
     status?: string;
@@ -527,11 +577,13 @@ export async function updateImportRow(
     // A categoria SAI da subcategoria (RLS: só a do próprio dono é lida). Escolher as duas
     // separadamente deixaria o cliente montar "Delivery sob Moradia"; o banco recusaria, mas a
     // mensagem chegaria como erro genérico.
-    const { data: sub } = await ctx.supabase
+    const subRes = await ctx.supabase
       .from("subcategories")
       .select("id, category_id")
       .eq("id", d.subcategoria_sugerida_id)
       .maybeSingle();
+    if (subRes.error) return falhaDeLeituraAntes("a subcategoria");
+    const sub = subRes.data;
     if (!sub) {
       return invalid({ subcategoria_sugerida_id: ["Subcategoria não encontrada."] });
     }
@@ -586,13 +638,15 @@ export async function setImportRowSplit(
   const parsed = splitSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
 
-  const { data: row } = await ctx.supabase
+  const rowRes = await ctx.supabase
     .from("import_rows")
     .select(
       "id, tipo, status, transaction_id, transfer_account_id, import_batches(status)",
     )
     .eq("id", rowId)
     .maybeSingle();
+  if (rowRes.error) return falhaDeLeituraAntes("a linha da importação");
+  const row = rowRes.data;
   if (!row) return dbError("Linha não encontrada.");
   const batchStatus = (row.import_batches as { status?: string } | null)?.status;
   if (batchStatus === "cancelado") return dbError("Este lote foi cancelado.");
@@ -645,9 +699,17 @@ async function createCardEstorno(
   },
 ): Promise<ActionResult<{ id: string }>> {
   // Na importação, `competencia` força a fatura sendo importada; senão deriva da data.
-  const statementId = args.competencia
-    ? await getOrCreateStatementForCompetencia(ctx, args.cardId, args.competencia)
-    : await resolveOrCreateStatement(ctx, args.cardId, args.date);
+  // 03-G (D-G26): no commit da importação, a falha vira o erro DESTA linha (o laço marca a linha
+  // como erro e segue, como já fazia com o null); nenhuma escrita desta linha veio antes.
+  let statementId: string | null;
+  try {
+    statementId = args.competencia
+      ? await getOrCreateStatementForCompetencia(ctx, args.cardId, args.competencia)
+      : await resolveOrCreateStatement(ctx, args.cardId, args.date);
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    return dbError(`Não foi possível ler ${ROTULOS_DE_LEITURA.fatura}.`);
+  }
   if (!statementId) return dbError("Não foi possível resolver a fatura do estorno.");
 
   const { data, error } = await ctx.supabase
@@ -687,11 +749,13 @@ export async function commitImport(
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { data: batch } = await ctx.supabase
+  const batchRes = await ctx.supabase
     .from("import_batches")
     .select("id, origem, credit_card_id, account_id, status, competencia_fatura")
     .eq("id", batchId)
     .maybeSingle();
+  if (batchRes.error) return falhaDeLeituraAntes(R.loteDaImportacao);
+  const batch = batchRes.data;
   if (!batch) return dbError("Lote não encontrado.");
   if (batch.status === "cancelado") {
     return dbError("Este lote foi cancelado.");
@@ -700,14 +764,24 @@ export async function commitImport(
   // Rodar de novo num lote já importado é seguro e às vezes necessário: só entram as linhas
   // `para_importar`, então a linha que o usuário destravou depois ("não é duplicidade") alcança
   // a fatura sem recriar nada — as já importadas ficaram com outro status.
-  const { data: rows } = await ctx.supabase
+  const rowsRes = await ctx.supabase
     .from("import_rows")
     .select(
       "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, subcategoria_sugerida_id, parcela, parcelas_total, import_as, classificacao, split_parts, transfer_account_id",
+      { count: "exact" },
     )
     .eq("import_batch_id", batchId)
     .eq("status", "para_importar")
     .order("linha_index", { ascending: true });
+  // 03-G — importar só parte do lote e marcá-lo como importado esconderia o resto.
+  if (
+    rowsRes.error ||
+    rowsRes.count === null ||
+    rowsRes.count > (rowsRes.data ?? []).length
+  ) {
+    return falhaDeLeituraAntes(R.linhasDaImportacao);
+  }
+  const rows = rowsRes.data;
 
   if ((rows ?? []).length === 0) {
     return dbError("Não há linhas marcadas para importar neste lote.");
@@ -721,11 +795,13 @@ export async function commitImport(
   if (batch.origem === "cartao" && batch.credit_card_id) {
     competenciaAlvo = batch.competencia_fatura ?? null;
     if (!competenciaAlvo) {
-      const { data: card } = await ctx.supabase
+      const cardRes = await ctx.supabase
         .from("credit_cards")
         .select("dia_fechamento, dia_vencimento")
         .eq("id", batch.credit_card_id)
         .maybeSingle();
+      if (cardRes.error) return falhaDeLeituraAntes(R.cartao);
+      const card = cardRes.data;
       if (card) {
         competenciaAlvo =
           detectarCompetenciaFatura(
@@ -913,10 +989,21 @@ export async function commitImport(
   }
 
   // Recontagem final dos totais a partir do estado real das linhas.
-  const { data: all } = await ctx.supabase
+  // 03-G (D-G20) — as linhas JÁ foram importadas: sem a recontagem, o lote não é marcado como
+  // importado com totais inventados, e a frase diz que a alteração pode ter sido gravada em parte.
+  const allRes = await ctx.supabase
     .from("import_rows")
-    .select("status")
+    .select("status", { count: "exact" })
     .eq("import_batch_id", batchId);
+  if (
+    allRes.error ||
+    allRes.count === null ||
+    allRes.count > (allRes.data ?? []).length
+  ) {
+    revalidateFinance();
+    return falhaDeLeituraDepois(R.linhasDaImportacao);
+  }
+  const all = allRes.data;
   const count = (s: string) =>
     (all ?? []).filter((r) => r.status === s).length;
 
@@ -961,59 +1048,84 @@ export async function undoImportBatch(
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { data: batch } = await ctx.supabase
-    .from("import_batches")
-    .select("id, status")
-    .eq("id", batchId)
-    .maybeSingle();
-  if (!batch) return dbError("Lote não encontrado.");
+  // 03-G — nenhuma escrita antes desta região; qualquer leitura que falhe (ou venha cortada)
+  // recusa antes do `delete`.
+  let txIds: string[];
+  try {
+    const batch = exigir(
+      await ctx.supabase
+        .from("import_batches")
+        .select("id, status")
+        .eq("id", batchId)
+        .maybeSingle(),
+      R.loteDaImportacao,
+    );
+    if (!batch) return dbError("Lote não encontrado.");
 
-  const { data: rows } = await ctx.supabase
-    .from("import_rows")
-    .select("id, transaction_id")
-    .eq("import_batch_id", batchId)
-    .not("transaction_id", "is", null);
+    // Desfazer só parte e devolver TODAS as linhas para revisão deixaria lançamento sem linha.
+    const rows = listaCompleta(
+      await ctx.supabase
+        .from("import_rows")
+        .select("id, transaction_id", { count: "exact" })
+        .eq("import_batch_id", batchId)
+        .not("transaction_id", "is", null),
+      R.linhasDaImportacao,
+    );
 
-  const txIds = (rows ?? [])
-    .map((r) => r.transaction_id)
-    .filter((id): id is string => !!id);
-  if (txIds.length === 0) {
-    return dbError("Este lote não criou lançamentos para desfazer.");
-  }
-
-  // Faturas alcançadas: a do próprio lançamento (à vista/estorno) e as das parcelas geradas.
-  const { data: txs } = await ctx.supabase
-    .from("transactions")
-    .select("id, statement_id")
-    .in("id", txIds);
-  const { data: parcelas } = await ctx.supabase
-    .from("transaction_installments")
-    .select("statement_id")
-    .in("parent_transaction_id", txIds);
-
-  const statementIds = [
-    ...new Set(
-      [
-        ...(txs ?? []).map((t) => t.statement_id),
-        ...(parcelas ?? []).map((p) => p.statement_id),
-      ].filter((id): id is string => !!id),
-    ),
-  ];
-
-  if (statementIds.length > 0) {
-    const { data: pagas } = await ctx.supabase
-      .from("card_statements")
-      .select("competencia")
-      .in("id", statementIds)
-      .not("pago_em", "is", null);
-    if ((pagas ?? []).length > 0) {
-      const meses = (pagas ?? [])
-        .map((s) => competenciaLabel(s.competencia))
-        .join(", ");
-      return dbError(
-        `Fatura já paga (${meses}). Desfaça o pagamento em Faturas antes de desfazer a importação.`,
-      );
+    txIds = rows
+      .map((r) => r.transaction_id)
+      .filter((id): id is string => !!id);
+    if (txIds.length === 0) {
+      return dbError("Este lote não criou lançamentos para desfazer.");
     }
+
+    // Faturas alcançadas: a do próprio lançamento (à vista/estorno) e as das parcelas geradas.
+    // 03-G — sem elas, uma fatura paga passaria despercebida.
+    const txs = listaCompleta(
+      await ctx.supabase
+        .from("transactions")
+        .select("id, statement_id", { count: "exact" })
+        .in("id", txIds),
+      R.lancamentos,
+    );
+    const parcelas = listaCompleta(
+      await ctx.supabase
+        .from("transaction_installments")
+        .select("statement_id", { count: "exact" })
+        .in("parent_transaction_id", txIds),
+      R.parcelas,
+    );
+
+    const statementIds = [
+      ...new Set(
+        [
+          ...txs.map((t) => t.statement_id),
+          ...parcelas.map((p) => p.statement_id),
+        ].filter((id): id is string => !!id),
+      ),
+    ];
+
+    if (statementIds.length > 0) {
+      const pagas = listaCompleta(
+        await ctx.supabase
+          .from("card_statements")
+          .select("competencia", { count: "exact" })
+          .in("id", statementIds)
+          .not("pago_em", "is", null),
+        R.faturas,
+      );
+      if (pagas.length > 0) {
+        const meses = pagas
+          .map((s) => competenciaLabel(s.competencia))
+          .join(", ");
+        return dbError(
+          `Fatura já paga (${meses}). Desfaça o pagamento em Faturas antes de desfazer a importação.`,
+        );
+      }
+    }
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    return falhaDeLeituraAntes(e.oQue);
   }
 
   const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: txIds });
@@ -1060,11 +1172,13 @@ export async function setImportBatchCompetencia(
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { data: batch } = await ctx.supabase
+  const batchRes = await ctx.supabase
     .from("import_batches")
     .select("id, status, origem")
     .eq("id", batchId)
     .maybeSingle();
+  if (batchRes.error) return falhaDeLeituraAntes(R.loteDaImportacao);
+  const batch = batchRes.data;
   if (!batch) return dbError("Lote não encontrado.");
   if (batch.status === "importado" || batch.status === "cancelado") {
     return dbError("Este lote já foi finalizado.");

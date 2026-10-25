@@ -33,19 +33,19 @@ beforeEach(() => {
 describe("03-C2 · A6 — o filtro de categoria marcada", () => {
   it("ligado, só vêm os lançamentos de categoria marcada", async () => {
     const r = await getTransactions({ categoriasMarcadas: true });
-    expect(r.map((t) => t.id)).toEqual(["t-marcada"]);
+    expect(r.linhas.map((t) => t.id)).toEqual(["t-marcada"]);
   });
   it("sem nenhuma categoria marcada, a lista é vazia", async () => {
     fake = criarSupabaseEmMemoria({
       categories: [{ id: "cat-n", user_id: "user-1", kind: "receita", classificacao_padrao: null }],
       transactions: TRES,
     });
-    expect(await getTransactions({ categoriasMarcadas: true })).toEqual([]);
+    expect((await getTransactions({ categoriasMarcadas: true })).linhas).toEqual([]);
   });
   it("desligado, nada é peneirado", async () => {
-    expect((await getTransactions({})).map((t) => t.id).sort()).toEqual(["t-marcada", "t-outra", "t-sem"]);
+    expect((await getTransactions({})).linhas.map((t) => t.id).sort()).toEqual(["t-marcada", "t-outra", "t-sem"]);
   });
   it("combina em E com o filtro de categoria", async () => {
-    expect(await getTransactions({ categoriasMarcadas: true, categoryId: "cat-n" })).toEqual([]);
+    expect((await getTransactions({ categoriasMarcadas: true, categoryId: "cat-n" })).linhas).toEqual([]);
   });
 });

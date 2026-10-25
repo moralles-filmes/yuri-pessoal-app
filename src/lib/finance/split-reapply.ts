@@ -91,10 +91,16 @@ export async function reapplySplit(
     }
   }
 
-  const { data: shares } = await ctx.supabase
+  const { data: shares, error: erroDaDivisao } = await ctx.supabase
     .from("shared_expenses")
     .select("person_id, valor")
     .eq("transaction_id", args.transactionId);
+  // 03-G (D-G19, Z13) — antes, erro aqui lia "sem divisão atual" e PULAVA a proteção dos recebíveis
+  // cobrados. A frase fala da divisão, e não do lançamento, porque no caminho despesa → despesa o
+  // update já aconteceu antes (RR6, 03-G2).
+  if (erroDaDivisao) {
+    return { ok: false, error: "Não foi possível ler a divisão atual. A divisão não foi alterada." };
+  }
   const divisaoAtual = new Map<string, number>(
     (shares ?? []).map((s) => [s.person_id, reaisParaCentavos(s.valor)]),
   );
