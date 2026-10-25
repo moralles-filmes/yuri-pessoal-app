@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { personSchema } from "@/lib/validators/person";
-import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
+import {
+  authContext,
+  dbError,
+  falhaDeLeituraAntes,
+  invalid,
+  notAuthed,
+} from "@/lib/actions/helpers";
 import type { ActionResult } from "@/types/finance";
 
 function revalidatePeople() {
@@ -74,7 +80,7 @@ export async function deletePerson(id: string): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const [{ count: recCount }, { count: shCount }] = await Promise.all([
+  const [recebiveis, divisoes] = await Promise.all([
     ctx.supabase
       .from("receivables")
       .select("id", { count: "exact", head: true })
@@ -85,7 +91,18 @@ export async function deletePerson(id: string): Promise<ActionResult> {
       .eq("person_id", id),
   ]);
 
-  if ((recCount ?? 0) > 0 || (shCount ?? 0) > 0) {
+  // 03-G — antes, erro aqui contava zero e a pessoa com histórico era EXCLUÍDA em vez de inativada.
+  // Com a contagem falha, recusa antes do delete.
+  if (
+    recebiveis.error ||
+    divisoes.error ||
+    recebiveis.count === null ||
+    divisoes.count === null
+  ) {
+    return falhaDeLeituraAntes("o histórico da pessoa");
+  }
+
+  if (recebiveis.count > 0 || divisoes.count > 0) {
     return dbError(
       "Esta pessoa tem gastos/recebíveis vinculados. Inative-a em vez de excluir.",
     );

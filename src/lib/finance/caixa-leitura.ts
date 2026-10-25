@@ -16,7 +16,9 @@ import "server-only";
  *
  * `card_statements.pago_transacao_id` vem de TODAS as faturas, sem filtro de data (P10): o
  * pagamento de uma fatura antiga pode cair no período, e a fatura não carrega a data dele.
- * Os recebíveis são os de `/terceiros` (`getReceivables`) — a mesma leitura, não uma segunda.
+ * Os recebíveis são os de `/terceiros` (`lerRecebiveis`) — a mesma leitura, não uma segunda.
+ * 03-G (RR-E-9, D-G10): erro nela também é `{ ok: false }` (antes virava "nenhum recebível"), e
+ * recebíveis ou recebimentos saturados também são `parcial`.
  *
  * O client é o COM SESSÃO: a RLS escopa o dono, então nenhuma consulta leva `user_id`.
  */
@@ -52,7 +54,8 @@ import {
 } from "@/lib/finance/caixa-minha-parte";
 import { leituraComTeto } from "@/lib/finance/leitura-com-teto";
 import { montarEntradas, primeiro, type Embutido } from "@/lib/finance/pipeline";
-import { getReceivables, TX_SELECT } from "@/lib/finance/queries";
+import { lerRecebiveis, TX_SELECT } from "@/lib/finance/queries";
+import { ehErroDeLeitura, registrarFalhaDeLeitura } from "@/lib/supabase/leitura";
 import type { TransactionWithRelations } from "@/types/database";
 import type { RecebivelComRecebimentos } from "@/lib/finance/recebimentos";
 import { createClient } from "@/lib/supabase/server";
@@ -160,10 +163,16 @@ export async function lerCaixaDoMes(
       .from("card_statements")
       .select("id,pago_transacao_id", { count: "exact" })
       .not("pago_transacao_id", "is", null),
-    getReceivables(),
+    // A terceira leitura LANÇA (03-G); o caixa já sabe dizer erro, então ela passa a ser
+    // conferida como as outras duas — `null` aqui é "não li", nunca "nenhum recebível".
+    lerRecebiveis().catch((e: unknown) => {
+      if (!ehErroDeLeitura(e)) throw e;
+      registrarFalhaDeLeitura(e);
+      return null;
+    }),
   ]);
 
-  if (lancamentos.error || faturas.error) return { ok: false };
+  if (lancamentos.error || faturas.error || recebiveis === null) return { ok: false };
 
   const leituraTx = leituraComTeto((lancamentos.data ?? []) as unknown as LinhaBruta[], lancamentos.count);
   const leituraFaturas = leituraComTeto(
@@ -171,7 +180,11 @@ export async function lerCaixaDoMes(
     faturas.count,
   );
   // Sem contagem também é parcial: errar para "pode faltar coisa" é o único erro aceitável.
-  const parcial = leituraTx.situacao !== "completa" || leituraFaturas.situacao !== "completa";
+  const parcial =
+    leituraTx.situacao !== "completa" ||
+    leituraFaturas.situacao !== "completa" ||
+    recebiveis.situacao !== "completa" ||
+    recebiveis.situacaoDosRecebimentos !== "completa";
 
   const transactions: TxDeCaixa[] = leituraTx.linhas
     .map((l) => {
@@ -219,7 +232,7 @@ export async function lerCaixaDoMes(
     pagamentosDeFatura,
     pagamentos,
     comprasDasFaturasPagas,
-    recebiveis,
+    recebiveis: recebiveis.linhas,
     parcial: parcial || comprasParcial,
     periodoLido,
   };

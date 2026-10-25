@@ -22,8 +22,13 @@
  * ║ • `rpc(nome, args)` REGISTRA a chamada (tipo `rpc`, `tabela` = nome da função) e      ║
  * ║   devolve o que a opção `rpc` configurar; NÃO executa SQL nem mexe nas tabelas.       ║
  * ║                                                                                       ║
+ * ║ • 03-G: `count` só vem quando a leitura pediu `{ count: "exact" }` (senão `null`,     ║
+ * ║   como o PostgREST); `head: true` devolve `data: null`. `falharLeitura` faz o         ║
+ * ║   `select` daquela tabela devolver `{ data: null, error }` — com a mensagem do banco ║
+ * ║   preenchida DE PROPÓSITO, para um teste provar que ela não chega à tela.            ║
+ * ║                                                                                       ║
  * ║ O QUE ELE IGNORA: `order`, `or`, colunas do `select` (devolve a linha inteira),       ║
- * ║ `count` exato além do tamanho do resultado, RLS e constraints do banco.               ║
+ * ║ RLS e constraints do banco.                                                           ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
  * Só para teste — nenhum arquivo de runtime o importa. Fixture sintética: o repositório é
@@ -48,7 +53,14 @@ export type Operacao = {
   filtros: Array<[string, string, unknown]>;
 };
 
-type Resultado = { data: unknown; error: { code: string; message: string } | null; count?: number };
+type Resultado = {
+  data: unknown;
+  error: { code: string; message: string } | null;
+  count?: number | null;
+};
+
+/** A mensagem que um teste procura na saída para provar que o texto do banco não vazou. */
+export const MENSAGEM_DO_BANCO_SIMULADA = "relation segredo_do_banco coluna_interna";
 
 function comparar(a: unknown, b: unknown): number {
   if (a == null || b == null) return Number.NaN;
@@ -78,6 +90,8 @@ export function criarSupabaseEmMemoria(
     maxRows?: number;
     /** Resposta de `client.rpc(nome, args)`. Sem ela, a chamada devolve o erro `SEM_RPC`. */
     rpc?: (nome: string, args: Record<string, unknown>) => { data: unknown; error: ErroSimulado | null };
+    /** 03-G — tabela → `code` do erro que o `select` dela devolve. Escritas não são afetadas. */
+    falharLeitura?: Record<string, string>;
   } = {},
 ) {
   const tabelas: Record<string, Linha[]> = Object.fromEntries(
@@ -92,6 +106,8 @@ export function criarSupabaseEmMemoria(
     let devolveAlteradas = false;
     let valores: Linha | Linha[] | undefined;
     let limite: number | undefined;
+    let pediuContagem = false;
+    let soCabecalho = false;
     const filtros: Array<[string, string, unknown]> = [];
     let executado: Resultado | undefined;
 
@@ -147,11 +163,23 @@ export function criarSupabaseEmMemoria(
         return executado;
       }
 
+      const codigo = opcoes.falharLeitura?.[tabela];
+      if (codigo) {
+        executado = {
+          data: null,
+          error: { code: codigo, message: `${MENSAGEM_DO_BANCO_SIMULADA} (${tabela})` },
+          count: null,
+        };
+        return executado;
+      }
+
       const todas = linhas.filter(casa).map((l) => ({ ...l }));
       executado = {
-        data: todas.slice(0, Math.min(limite ?? Infinity, opcoes.maxRows ?? Infinity)),
+        data: soCabecalho
+          ? null
+          : todas.slice(0, Math.min(limite ?? Infinity, opcoes.maxRows ?? Infinity)),
         error: null,
-        count: todas.length,
+        count: pediuContagem ? todas.length : null,
       };
       return executado;
     }
@@ -167,7 +195,9 @@ export function criarSupabaseEmMemoria(
       filtros.push(["not", coluna, [op, alvo]]);
       return builder;
     };
-    builder.select = () => {
+    builder.select = (_colunas?: string, opcoesDoSelect?: { count?: string; head?: boolean }) => {
+      if (opcoesDoSelect?.count === "exact") pediuContagem = true;
+      if (opcoesDoSelect?.head) soCabecalho = true;
       if (modo === "insert") devolveInseridas = true;
       if (modo === "update") devolveAlteradas = true;
       return builder;
@@ -194,6 +224,7 @@ export function criarSupabaseEmMemoria(
     };
     builder.single = async (): Promise<Resultado> => {
       const r = executar();
+      if (r.error) return r;
       const primeira = Array.isArray(r.data) ? (r.data[0] ?? null) : r.data;
       return primeira === null
         ? { data: null, error: { code: "PGRST116", message: "nenhuma linha" } }
@@ -201,6 +232,7 @@ export function criarSupabaseEmMemoria(
     };
     builder.maybeSingle = async (): Promise<Resultado> => {
       const r = executar();
+      if (r.error) return r;
       return { data: Array.isArray(r.data) ? (r.data[0] ?? null) : r.data, error: null };
     };
     builder.then = (

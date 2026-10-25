@@ -2,7 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { recurringSchema } from "@/lib/validators/recurring";
-import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
+import {
+  authContext,
+  dbError,
+  falhaDeLeituraDepois,
+  invalid,
+  notAuthed,
+} from "@/lib/actions/helpers";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import type { ActionResult, GenerationResult } from "@/types/finance";
 import { hojeISO } from "@/lib/format";
 import {
@@ -129,7 +136,10 @@ export async function generateRecurringNow(
   if (error) return dbError("Não foi possível gerar as recorrências.");
 
   const recurrences = (data ?? []) as unknown as RecurrenceRow[];
-  const generated = await runGeneration(ctx, recurrences, today);
+  const { generated, interrompida } = await runGeneration(ctx, recurrences, today);
   revalidateRecurring();
+  // 03-G (D-G26, D-G31): a fatura não pôde ser lida no meio do laço, depois de lançamentos
+  // possivelmente gravados — a frase não pode afirmar que nada mudou.
+  if (interrompida) return falhaDeLeituraDepois(ROTULOS_DE_LEITURA.fatura);
   return { ok: true, data: { generated, recurrences: recurrences.length } };
 }

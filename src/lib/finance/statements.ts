@@ -9,8 +9,14 @@
  * Fase 04: `getOrCreateStatementByFatura` é exposto para os parcelamentos resolverem a
  * fatura de CADA parcela (já com a FaturaAlvo calculada por `distribuirFaturas`), sem
  * reconsultar o cartão a cada parcela.
+ *
+ * 03-G (D-G21): erro de LEITURA lança `ErroDeLeitura` ANTES de tentar criar. Antes, um erro na
+ * busca levava a criar a fatura, o unique recusava, devolvia `null` e o lançamento era gravado
+ * SEM fatura. Quem chama (Server Action ou serviço) captura.
  */
 import type { AuthContext } from "@/lib/actions/helpers";
+import { exigir } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import {
   montarFatura,
   resolverFatura,
@@ -24,13 +30,16 @@ export async function getOrCreateStatementByFatura(
   alvo: FaturaAlvo,
 ): Promise<string | null> {
   // Get-or-create por (user_id implícito na RLS, card_id, competencia).
-  const existing = await ctx.supabase
-    .from("card_statements")
-    .select("id")
-    .eq("card_id", cardId)
-    .eq("competencia", alvo.competencia)
-    .maybeSingle();
-  if (existing.data) return existing.data.id;
+  const existente = exigir(
+    await ctx.supabase
+      .from("card_statements")
+      .select("id")
+      .eq("card_id", cardId)
+      .eq("competencia", alvo.competencia)
+      .maybeSingle(),
+    ROTULOS_DE_LEITURA.fatura,
+  );
+  if (existente) return existente.id;
 
   const created = await ctx.supabase
     .from("card_statements")
@@ -46,13 +55,16 @@ export async function getOrCreateStatementByFatura(
   if (created.data) return created.data.id;
 
   // Corrida de unique (inserção concorrente criou a mesma fatura): re-seleciona.
-  const again = await ctx.supabase
-    .from("card_statements")
-    .select("id")
-    .eq("card_id", cardId)
-    .eq("competencia", alvo.competencia)
-    .maybeSingle();
-  return again.data?.id ?? null;
+  const again = exigir(
+    await ctx.supabase
+      .from("card_statements")
+      .select("id")
+      .eq("card_id", cardId)
+      .eq("competencia", alvo.competencia)
+      .maybeSingle(),
+    ROTULOS_DE_LEITURA.fatura,
+  );
+  return again?.id ?? null;
 }
 
 /**
@@ -66,11 +78,15 @@ export async function getOrCreateStatementForCompetencia(
   cardId: string,
   competencia: string,
 ): Promise<string | null> {
-  const { data: card } = await ctx.supabase
-    .from("credit_cards")
-    .select("id, dia_fechamento, dia_vencimento")
-    .eq("id", cardId)
-    .single();
+  // 03-G: falha de leitura do cartão lança ErroDeLeitura; "não encontrado" (PGRST116) segue null.
+  const card = exigir(
+    await ctx.supabase
+      .from("credit_cards")
+      .select("id, dia_fechamento, dia_vencimento")
+      .eq("id", cardId)
+      .single(),
+    ROTULOS_DE_LEITURA.cartao,
+  );
   if (!card) return null;
 
   const [year, month] = competencia.split("-").map(Number); // 'yyyy-MM-01'
@@ -90,11 +106,15 @@ export async function resolveOrCreateStatement(
   dataCompra: string,
 ): Promise<string | null> {
   // Dias de fechamento/vencimento do cartão (RLS garante que é do usuário).
-  const { data: card } = await ctx.supabase
-    .from("credit_cards")
-    .select("id, dia_fechamento, dia_vencimento")
-    .eq("id", cardId)
-    .single();
+  // 03-G: falha de leitura do cartão lança ErroDeLeitura; "não encontrado" (PGRST116) segue null.
+  const card = exigir(
+    await ctx.supabase
+      .from("credit_cards")
+      .select("id, dia_fechamento, dia_vencimento")
+      .eq("id", cardId)
+      .single(),
+    ROTULOS_DE_LEITURA.cartao,
+  );
   if (!card) return null;
 
   const alvo = resolverFatura(

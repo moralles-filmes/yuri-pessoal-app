@@ -3,11 +3,25 @@ import { StatementStatusBadge } from "@/components/financeiro/badges";
 import { getInvoicesCardData } from "@/lib/dashboard/queries";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { rotuloTotalPendenteAte } from "@/lib/finance/recebimentos";
+import { ehErroDeLeitura, registrarFalhaDeLeitura, type ErroDeLeitura } from "@/lib/supabase/leitura";
+import { CardSemLeitura } from "@/components/shared/card-sem-leitura";
 import { Metric, MetricRow, CardEmpty } from "./primitives";
 
 /** Corpo do card Cartões & Faturas — abertas/fechadas, próximos vencimentos, a receber. */
 export async function InvoicesCard({ todayIso }: { todayIso: string }) {
-  const d = await getInvoicesCardData(todayIso);
+  // 03-G (L4, D-G17): captura SÓ ErroDeLeitura e SÓ a leitura; o JSX fica fora do try.
+  let d: Awaited<ReturnType<typeof getInvoicesCardData>> | null = null;
+  let falha: ErroDeLeitura | null = null;
+  try {
+    d = await getInvoicesCardData(todayIso);
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    falha = e;
+    registrarFalhaDeLeitura(e);
+  }
+  if (falha || !d) {
+    return <CardSemLeitura oQue={falha?.oQue ?? "os dados do card"} href="/dashboard" />;
+  }
 
   if (!d.hasCards) {
     return <CardEmpty>Nenhum cartão cadastrado ainda.</CardEmpty>;

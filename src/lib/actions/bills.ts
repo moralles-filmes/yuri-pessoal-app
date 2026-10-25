@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { billSchema } from "@/lib/validators/bill";
-import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
+import {
+  authContext,
+  dbError,
+  falhaDeLeituraAntes,
+  invalid,
+  notAuthed,
+} from "@/lib/actions/helpers";
 import type { ActionResult } from "@/types/finance";
 import { hojeISO } from "@/lib/format";
 
@@ -106,12 +112,15 @@ export async function generateBillTransaction(
   const day = Math.min(bill.due_day, lastDay);
   const dueDate = `${hoje.slice(0, 7)}-${String(day).padStart(2, "0")}`;
 
-  const { data: dup } = await ctx.supabase
+  // 03-G — a guarda de duplicata com a leitura falha deixava lançar a conta fixa DUAS vezes.
+  const dupRes = await ctx.supabase
     .from("transactions")
     .select("id")
     .eq("description", bill.name)
     .eq("competence_date", dueDate)
     .limit(1);
+  if (dupRes.error) return falhaDeLeituraAntes("os lançamentos do mês");
+  const dup = dupRes.data;
   if (dup && dup.length > 0) {
     return { ok: true, data: { id: null } };
   }

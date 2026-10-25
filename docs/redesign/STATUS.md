@@ -1,6 +1,6 @@
 # STATUS
 
-**Atualizado:** 2026-10-22
+**Atualizado:** 2026-10-25
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
 REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
@@ -12,8 +12,9 @@ REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · 
 (integrada por merge `--no-ff` em `545acf4`, **com a M1 aplicada**) · **REDESIGN-07 (A–D) ✅**
 (integrada por merge `--no-ff` em `598b475`, sem migration) · **REDESIGN-03-E ✅** (integrada
 por merge `--no-ff` em `de6ef19`, **com a M2 e a M2b aplicadas**) · **REDESIGN-03-F ✅**
-(integrada por merge `--no-ff` em `84bf87b`, **com a M-F aplicada**); **03-G liberada** — erro
-é erro: `error.tsx` por rota e leituras que param de engolir falha (P0-5)
+(integrada por merge `--no-ff` em `84bf87b`, **com a M-F aplicada**) · **REDESIGN-03-G ✅**
+(integrada por merge `--no-ff` em `6c158e9`, sem migration; `main` trazida em `a8537d6`);
+**03-G2 liberada** — as escritas que ignoram o erro, a atomicidade e o fechamento da REDESIGN-03
 
 ⛔ **A M-F foi aplicada em 2026-10-21** (03-F), pelo MCP, depois do seu "Aplique" literal, numa
 mensagem só para isso (D63). Ela **não** estava no `MIGRATIONS.md`: nasceu da K0 da 03-F, com o
@@ -33,7 +34,56 @@ para o push e o PR; o merge em `main` é seu. **A REDESIGN-07 (A–D) foi integr
 `598b475`** e foi a `main` pelo PR #58. **A 03-E vai a `main` por PR próprio, com o seu aval
 explícito para push, PR **e** merge** ("Pode subir para o git em uma branch, fazer pr e merge",
 D62). **A 03-F vai a `main` por PR só com o seu aval explícito para o push e o PR** — o merge
-em `main` é produção.
+em `main` é produção. **A 03-G foi a `main` por PR, com o seu aval para PR **e** merge** ("Pode
+fazer pr e merge no git", D64).
+
+---
+
+## REDESIGN-03-G — erro é erro: leitura que falha deixa de virar zero ✅
+
+Branch `feat/redesign-03g-erro-e-erro`, nascida de `5bdeb3f` (18 commits), integrada por merge
+`--no-ff` em **`6c158e9`** — a árvore integrada é **idêntica** à da ponta (`dfcc1cd`). Depois,
+`origin/main` (PRs #61, gráficos "meus", e #63, dependências) entrou por merge em **`a8537d6`**,
+com dois conflitos resolvidos juntando os lados. O contrato, com o resultado da execução no §13,
+é `docs/superpowers/specs/2026-10-22-03g-erro-e-erro-design.md`; o plano,
+`docs/superpowers/plans/2026-10-25-03g-erro-e-erro.md`.
+
+**O que mudou de natureza.** No financeiro, falha de leitura deixou de ser `[]`/R$ 0,00: toda
+leitura passa por um núcleo único (`src/lib/supabase/leitura.ts` — `exigir`, `listaCompleta`,
+`listaComTeto`) que **lança `ErroDeLeitura`** com um rótulo nosso (`ROTULOS_DE_LEITURA`), nunca o
+texto do banco. Cada consumidor diz o que não leu: a tela por **três limites de erro**
+(`(app)/error.tsx`, `financeiro/error.tsx`, `global-error.tsx`); o card do dashboard e o insight
+capturando no servidor; a Server Action recusando **antes** de escrever ("…Nada foi alterado.")
+ou, depois de já ter escrito, com a frase "pode ter sido gravada em parte"; o Cron **por
+família**, com o aviso novo `sistema_verificacao_incompleta`. Lista que alimenta número exige
+`count: "exact"` e recusa a saturada (o `max_rows` do PostgREST deixa de cortar em silêncio);
+lista que só lista mostra "N de M".
+
+| Item | Entrega | Muda número? |
+| --- | --- | --- |
+| L0 | núcleo de leitura, as duas frases das actions, harness com `falharLeitura` e `count` | não |
+| L1 + L5 | queries do financeiro lançam; `getReceivables` sai (vira `lerRecebiveis`); o caixa devolve `{ ok: false }` também nos recebíveis (RR-E-9) | não — salvo onde o zero era falha |
+| L2 | aviso de teto em lançamentos, faturas e importar; `exigirCompleta` em `/financeiro`, `/parcelamentos`, `/terceiros` | não |
+| L3 | tela de erro única, **três** limites (sem `src/app/error.tsx` — decisão sua sobre o bundle) | não |
+| L4 | cards e insight dizem qual leitura falhou | não |
+| L6 | as leituras que decidem escrita em 11 actions e no serviço; o busca-ou-cria da fatura lança antes de criar (D-G21) | não — salvo a conta fixa em dobro e o cartão com histórico excluído, que deixam de acontecer |
+| L7 | Cron por família (`familias.ts`), aviso de verificação incompleta, preferência ou dedupe com erro ⇒ nada entregue | não |
+| L8 | varredura das **107** leituras do escopo como teste; 5 exceções declaradas | não |
+
+**Provado:** 26 mutações (Z1–Z21 com variantes), cada uma com o nome do teste que cai e a
+restauração conferida por `git diff --quiet`; três saíram fracas e duas viraram teste novo (Z4: o
+card **chamado**; Z7b: hábito com os registros não lidos). Revisão final da branch no modelo mais
+capaz: um achado médio (transferência editada dizia "Nada foi alterado." depois de apagar),
+corrigido em `d888c17`. Banco só leitura: **md5 dos saldos igual**; as contagens que mudaram
+nasceram todas em 2026-10-22 (§13.4 do contrato).
+
+⚠️ **Pendência sua:** a conferência visual (tela de erro, card sem leitura, aviso de teto) — as
+telas exigem sessão, e quebrar o banco para ver o erro está fora. E confirmar que as linhas novas
+de 2026-10-22 (100 lançamentos, 95 divisões, 95 recebíveis, 1 fatura) são uso seu.
+
+**Risco residual novo:** RR-G-1 a RR-G-13 no §11/§13.6 do contrato. Com destino na **03-G2**:
+RR-G-4 (as 29 escritas que ignoram o erro e a atomicidade), RR-G-8 (estado parcial depois da
+frase "pode ter sido gravada em parte") e RR-G-10 (as frases por linha no commit da importação).
 
 ---
 
@@ -1008,6 +1058,7 @@ as colunas já existem e o CHECK já aceita.
 | D60 | **A 03-D foi integrada na sessão que a escreveu, a seu pedido** ("Pode mergear"), **com** revisão independente da branch inteira (D57) e re-revisão restrita de cada correção, **sem** auditoria de módulo. A branch nasceu antes da D54, então a árvore integrada é a da ponta (`c7798ae`) **mais exatamente** a mudança da D54 no STATUS — conferido por patch-id —, e os cinco comandos rodaram depois do merge. O push e o PR #57 vieram com o seu aval explícito; **o merge em `main` é seu**. ⚠️ **A conferência com dado real da D39/D44/D48/D52 vale também para a 03-D**: registrar um recebimento parcial pela tela, desfazê-lo, e conferir que nenhum número de dashboard, relatório ou sino mudou além do que a B1–B4 prometem |
 | D61 | **03-E: K0–K4 decididas por você, uma de cada vez, e o desenho aprovado** ("Aprovado! Nao precisa me apresentar o plano, pode implementar."). A M2 entrou com o seu "aplique a M2" e a **M2b** (o `create or replace` de `account_balance_before` pela data de caixa, que **não** estava no `MIGRATIONS.md`) com o seu "aplique a M2b", separado — as duas pelo MCP, conferidas pelo objeto e não pela versão do histórico (D59). O gerador de tipos trouxe de novo a relationship de `import_rows` e a sintaxe nova dos genéricos; **só as 3 linhas da coluna** entraram. A prova de efeito zero da B1 contra dado real ficou fraca porque você tinha apagado o financeiro para reimportar; a comparação com **dado sintético** (autorizada por você, plano mostrado antes) é o substituto, e o MCP recusou o `delete` final — os 11 marcados saíram pelo SQL Editor, por você |
 | D62 | **A 03-E foi integrada na sessão que a escreveu, a seu pedido** ("Pode subir para o git em uma branch, fazer pr e merge"), **com** revisão final da branch no modelo mais capaz e **sem** auditoria de módulo. Pela primeira vez o aval cobriu **também o merge em `main`**. A branch nasceu de `main` (`7d37305`, que já tinha os PRs #58 e #59), então o merge trouxe esses commits para esta branch e a árvore integrada é **igual** à da ponta |
+| D64 | **A 03-G foi integrada na sessão que a escreveu, a seu pedido** ("Pode fazer pr e merge no git"), **com** revisão final da branch no modelo mais capaz e **sem** auditoria de módulo. Merge `--no-ff` em `6c158e9`, árvore idêntica à da ponta (`dfcc1cd`). A `main` tinha andado (PRs #61 e #63) e entrou por merge em `a8537d6`: dois conflitos (`queries.ts`, `caixa-leitura.ts`) resolvidos juntando os lados, e a varredura da L8 **achou a leitura nova** das compras das faturas pagas (106 → 107) — ela já tratava o erro. O aval cobriu push, PR **e** merge em `main` |
 | D63 | **03-F: K0–K3 decididas por você, uma de cada vez, e o desenho aprovado** ("Aprovado"). A **M-F** (`pagar_fatura` e `desfazer_pagamento_fatura`, que **não** estava no `MIGRATIONS.md`) entrou com o seu "Aplique", numa mensagem só para isso, pelo MCP, conferida pelo objeto (`pg_proc`: invoker, `search_path` vazio, grants) e não pela versão do histórico (D59). **Antes do aplique, o `migration-validator` achou três guardas de lógica (P3) e você as incluiu** ("Incluir as três") — a D-F12 do contrato; o FINDING-005 (referências do payload não conferidas) ficou como risco aceito (RR-F-4). O gerador de tipos trouxe de novo a relationship de `import_rows` e a sintaxe nova dos genéricos; **só as duas funções** entraram. A prova no banco é **sequencial** (o MCP serializa as chamadas, sem `dblink`) e o `delete` da fatura sintética voltou `declined` — a remoção ficou com você. Integrada na sessão que a escreveu, ao você pedir o prompt da próxima fase (memória de 2026-10-11): merge `--no-ff` em `84bf87b`, árvore idêntica à da ponta; **push e PR só com o seu aval** |
 
 ## Bloqueios
@@ -1167,40 +1218,43 @@ diretório principal). Na ponta, no diretório principal, os cinco tinham passad
 Rotas tocadas, antes → depois (KB gz): `/faturas` 206,7 → 206,9 · `/financeiro/lancamentos`
 226,4 → 226,3; `/cartoes` e `/dashboard/financeiro` iguais.
 
-## Próximo passo — REDESIGN-03-G (erro é erro)
+**03-G, na ponta (`d888c17`), no diretório principal:** `test:run` ✅ **292 / 6.783** · `lint` ✅ ·
+`tsc` ✅ · `build` ✅ · `perf:bundle` ✅ mediana **217,8** (era 216,3; o degrau é o limite de erro do
+app em toda rota), 68 rotas dentro; `TZ=UTC` em finance/actions/notifications **63 / 1.063**.
+**Depois dos merges (`a8537d6`), na árvore integrada, com `npm ci`:** `lint` ✅ · `tsc` ✅ ·
+`build` ✅ · `perf:bundle` ✅ mediana **202,0** (as dependências do #63), 68 rotas dentro ·
+`test:run` **296 / 6.833**, 6.832 ✅ e 1 ❌ — a mesma de ambiente (`approval/schema.test.ts` com
+CRLF nesta worktree) · finance/actions/notifications **66 / 1.098** em Brasília e em `TZ=UTC`.
 
-**A 03-F está fechada e integrada** (`84bf87b`). Ela vai a `main` por PR **só com o seu aval
-explícito** para o push e o PR. A 03-G é a **última subfase da REDESIGN-03** e fecha o **P0-5**
-da auditoria: *falha de leitura vira R$ 0,00*. As queries não desestruturam `error` e devolvem
-`[]`, e não existe nenhum `error.tsx` no repositório (contado em 2026-10-22: **0**).
+## Próximo passo — REDESIGN-03-G2 (as escritas e o fechamento da REDESIGN-03)
 
-O primeiro entregável é o **desenho**, aprovado por você antes de qualquer linha de código.
+**A 03-G está fechada e integrada** (`6c158e9`, com a `main` em `a8537d6`) e foi a `main` por PR,
+com o seu aval para PR **e** merge (D64). A 03-G2 é a **última subfase da REDESIGN-03**: a 03-G
+fechou a leitura; a 03-G2 fecha a **escrita** e a fase.
 
-⚠️ **A 03-G herda a maior fila de riscos residuais da fase.** Todos têm destino escrito aqui, e o
-desenho decide, com você, o que entra e o que vira subfase própria. Se não couber numa só, a
-divisão segue o padrão 03-B / 03-B2.
+O primeiro entregável é o **desenho**, aprovado por você antes de qualquer linha de código. O
+registro do que vai para ela está no §12 do contrato da 03-G.
 
 | Origem | Risco | Natureza |
 | --- | --- | --- |
-| P0-5 | leitura com erro vira `[]`/R$ 0,00; nenhum `error.tsx` | leitura |
-| RR2 (03-B2) | o `max_rows` do PostgREST corta em silêncio as leituras **sem** `.limit`, inclusive as do Cron | leitura |
-| RR-C2-3 (03-C2) | erro ao ler as categorias marcadas devolve `[]`, e a frase diz "nenhuma marcada" | leitura |
-| RR-E-9 (03-E) | `getReceivables` não expõe teto nem erro: "Reembolsos recebidos" sai 0 sem aviso | leitura |
-| RR6 / RR12 (03-C) | `updateTransaction` grava antes de recusar a divisão; chamada direta troca o tipo de compra parcelada | escrita |
-| RR8 / RR14 (03-C) | `update` falha depois da limpeza: a despesa perde a divisão **e** os recebíveis pendentes, sem a mensagem dizer | escrita |
-| RR11 (03-C) | editar um estorno de cartão o tira da fatura (destino **03-G / 05**) | escrita |
-| RR-F-1 (03-F) | a edição do pagamento de fatura em Lançamentos (apaga → recria → religa) não é atômica | escrita |
-| RR-F-2 (03-F) | `deleteTransaction` ignora o erro ao reabrir a fatura | escrita |
-| RR-F-6 (03-F) | excluir em Lançamentos não pede confirmação (o P1-8 fechou só `/faturas`) | tela |
-| D32 | os "18 casos financeiros mínimos do briefing §13" que o aceite da 03 cita **não existem em `docs/`** | fechamento da fase |
+| K3 / RR6 / RR12 (03-C) | `updateTransaction` grava antes de recusar a divisão; chamada direta troca o tipo de compra parcelada | atomicidade |
+| RR-F-1 (03-F) | a edição de transferência e do pagamento de fatura (apaga → recria → religa) não é atômica — a 03-G só tornou a frase honesta | atomicidade |
+| RR8 / RR14 (03-C) | `update` falha depois da limpeza: a despesa perde a divisão **e** os recebíveis pendentes | atomicidade |
+| `criarTransacao` | as compensações de `services.ts` ignoram o próprio erro | escrita |
+| `reapplySplit` | as escritas do meio (`:134/138/144/170`) | escrita |
+| RR-F-2 (03-F) | `deleteTransaction` reabre a fatura ignorando o erro e devolve `ok: true` mesmo com o `delete` falhando | escrita |
+| RR-G-4 | as **29 escritas** financeiras que ignoram o erro (§2.3 do contrato da 03-G), cada uma com destino | escrita |
+| RR-G-8 / RR-G-10 (03-G) | estado parcial depois da frase de "depois"; as frases por linha no commit da importação | escrita |
+| RR11 (03-C) | editar um estorno de cartão o tira da fatura (destino **03-G2 / 05**) | escrita |
+| RR-F-6 / K4 | excluir em Lançamentos não pede confirmação (o P1-8 fechou só `/faturas`) | tela |
+| K5 / D32 | a **matriz de fechamento** da REDESIGN-03; os "18 casos financeiros mínimos do briefing §13" que o aceite da 03 cita **não existem em `docs/`** | fechamento da fase |
 
-⚠️ **Pendência sua, da 03-F (D63):** remover a fatura sintética `[03F-SINT]`, porque o MCP
-recusou o `delete`; e a conferência visual do diálogo de desfazer. Também segue sua a
-conferência com dado real da 03-B, da 03-B2, da 03-C, da 03-C2, da 03-D (D39, D44, D48, D52, D60)
-e a visual a 390 px da 03-E (RR-E-13).
+⚠️ **Pendências suas, herdadas:** a conferência visual da 03-G; remover a fatura sintética
+`[03F-SINT]` e conferir o diálogo de desfazer (D63); a conferência com dado real da 03-B, da
+03-B2, da 03-C, da 03-C2, da 03-D (D39, D44, D48, D52, D60) e a visual a 390 px da 03-E (RR-E-13).
 
-🚀 **Publicação (D54, D62):** a integração das próximas subfases continua sendo merge
-`--no-ff` nesta branch, seguido de PR para `main`.
+🚀 **Publicação (D54, D62, D64):** a integração continua sendo merge `--no-ff` nesta branch,
+seguido de PR para `main`.
 
 ⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA AQUI — meça** (D34):
 

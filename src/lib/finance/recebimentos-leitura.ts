@@ -5,13 +5,22 @@ import "server-only";
  * Consulta própria, nunca embed (a invariante 21 da 16-E registra FK composta impedindo o embed
  * do PostgREST). A junção com os recebíveis é pura (`anexarRecebimentos`). Teto visível:
  * saturado vira motivo de `completude`, nunca um saldo afirmado como exato.
+ *
+ * 03-G (D-G6): erro de leitura LANÇA `ErroDeLeitura` (antes virava lista vazia). A saturação
+ * continua sendo `situacao`, não erro — quem decide é o chamador (`exigirCompleta` nas telas que
+ * somam; `parcial` no motor e no caixa).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
 import { createClient } from "@/lib/supabase/server";
 import { dividirEmBlocos, TAMANHO_DO_BLOCO } from "@/lib/finance/receivables-bulk";
-import { leituraComTeto, type LeituraComTeto } from "@/lib/finance/leitura-com-teto";
+import {
+  listaComTeto,
+  type LeituraComTeto,
+  type RespostaDoBanco,
+} from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import type { RecebimentoDoBanco } from "@/types/database";
 import type { RecebivelParaProteger } from "@/lib/finance/protecao-do-recebivel";
 
@@ -26,11 +35,14 @@ export async function lerRecebimentos(
 ): Promise<LeituraComTeto<RecebimentoDoBanco>> {
   const supabase = owner?.client ?? (await createClient());
   const base = supabase.from("receivable_receipts").select(COLUNAS, { count: "exact" });
-  const { data, count } = await (owner ? base.eq("user_id", owner.userId) : base)
+  const res = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("recebido_em", { ascending: true })
     .order("created_at", { ascending: true })
     .limit(TETO_DE_RECEBIMENTOS);
-  return leituraComTeto((data ?? []) as RecebimentoDoBanco[], count);
+  return listaComTeto(
+    res as RespostaDoBanco<RecebimentoDoBanco[] | null>,
+    ROTULOS_DE_LEITURA.recebimentos,
+  );
 }
 
 /** Os recebimentos de recebíveis específicos, por blocos (a query string do `in` cresce linear). */

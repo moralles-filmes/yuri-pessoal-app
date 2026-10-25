@@ -101,6 +101,12 @@ export function NotificationsCard({ prefs }: { prefs: NotificationPrefs }) {
           </div>
         ))}
 
+        {/* REDESIGN-03-G (D-G12) — o tipo sem grupo diz, na tela, por que não tem interruptor. */}
+        <p className="text-xs text-muted-foreground">
+          Avisos do sistema (verificação incompleta) não têm interruptor: eles dizem que algum outro
+          aviso pode estar faltando.
+        </p>
+
         <div className="flex justify-end">
           <Button onClick={onSave} disabled={pending}>
             <Save /> {pending ? "Salvando…" : "Salvar notificações"}

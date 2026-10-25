@@ -25,6 +25,8 @@ import { randomUUID } from "node:crypto";
 import type { AuthContext } from "@/lib/actions/helpers";
 import { transactionSchema } from "@/lib/validators/transaction";
 import { receitaResponsabilidadeSchema, splitSchema } from "@/lib/validators/split";
+import { ehErroDeLeitura } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import {
   getOrCreateStatementForCompetencia,
   resolveOrCreateStatement,
@@ -85,6 +87,13 @@ export type CriarTransacaoResultado =
       readonly ok: false;
       readonly erro: string;
       readonly fieldErrors?: Record<string, string[] | undefined>;
+      /**
+       * 03-G — a leitura que falhou (o rótulo), quando a falha foi de leitura. `erro` diz "Nada
+       * foi alterado." porque, NESTE serviço, nenhuma escrita veio antes; quem chama depois de
+       * já ter escrito (a transferência editada, que apaga antes de recriar) usa o rótulo para
+       * dizer a frase de "depois".
+       */
+      readonly leituraFalhou?: string;
     };
 
 /**
@@ -171,9 +180,21 @@ export async function criarTransacao(
   let statementId: string | null = null;
   if (d.type === "despesa" && d.payment_method === "cartao_credito" && d.card_id) {
     cardId = d.card_id;
-    statementId = d.statement_competencia
-      ? await getOrCreateStatementForCompetencia(ctx, d.card_id, d.statement_competencia)
-      : await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
+    // 03-G (D-G26): o ErroDeLeitura do busca-ou-cria vira a falha deste serviço; nenhuma escrita
+    // DESTE serviço veio antes dele, então "Nada foi alterado" é verdade aqui. Quem chama depois de
+    // ter escrito lê `leituraFalhou` e escolhe a frase (ver `updateTransaction`).
+    try {
+      statementId = d.statement_competencia
+        ? await getOrCreateStatementForCompetencia(ctx, d.card_id, d.statement_competencia)
+        : await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
+    } catch (e) {
+      if (!ehErroDeLeitura(e)) throw e;
+      return {
+        ok: false,
+        erro: `Não foi possível ler ${ROTULOS_DE_LEITURA.fatura}. Nada foi alterado.`,
+        leituraFalhou: ROTULOS_DE_LEITURA.fatura,
+      };
+    }
     if (!statementId) {
       return { ok: false, erro: "Não foi possível resolver a fatura do cartão." };
     }
@@ -267,11 +288,16 @@ export async function excluirTransacaoSimples(
   ctx: FinanceServiceContext,
   id: string,
 ): Promise<{ ok: true } | { ok: false; erro: string }> {
-  const { data: existente } = await ctx.supabase
+  // 03-G (D-G19): erro de leitura não é "não existe" — recusa antes de qualquer escrita.
+  const res = await ctx.supabase
     .from("transactions")
     .select("id, transfer_group_id")
     .eq("id", id)
     .maybeSingle();
+  if (res.error) {
+    return { ok: false, erro: `Não foi possível ler ${ROTULOS_DE_LEITURA.lancamento}. Nada foi alterado.` };
+  }
+  const existente = res.data;
 
   if (!existente) return { ok: false, erro: "O lançamento não existe mais (ou não é seu)." };
   if (existente.transfer_group_id) {

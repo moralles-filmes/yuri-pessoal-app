@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import {
   authContext,
   dbError,
+  falhaDeLeituraAntes,
   invalid,
   notAuthed,
 } from "@/lib/actions/helpers";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import {
   argumentosDoPagamento,
   mensagemDoErroDoPagamento,
@@ -81,20 +83,29 @@ export async function markStatementPaid(
   if (total <= 0) return dbError("Não há valor a pagar nesta fatura.");
 
   // Conta deve existir e ser do usuário (RLS garante o dono).
-  const { data: conta } = await ctx.supabase
+  // 03-G: falha de leitura é mensagem distinta de "não encontrada"; recusa antes da RPC.
+  const contaRes = await ctx.supabase
     .from("accounts")
     .select("id")
     .eq("id", contaId)
     .single();
-  if (!conta) return dbError("Conta não encontrada.");
+  if (contaRes.error && contaRes.error.code !== "PGRST116") {
+    return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.conta);
+  }
+  if (!contaRes.data) return dbError("Conta não encontrada.");
 
-  const { data: card } = st.card_id
+  // 03-G: mesma regra da conta — falha de leitura recusa antes da RPC.
+  const cardRes = st.card_id
     ? await ctx.supabase
         .from("credit_cards")
         .select("nome")
         .eq("id", st.card_id)
         .single()
-    : { data: null };
+    : { data: null, error: null };
+  if (cardRes.error && cardRes.error.code !== "PGRST116") {
+    return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.cartao);
+  }
+  const card = cardRes.data;
 
   const payload = montarPagamentoFatura({
     contaId,
@@ -205,20 +216,30 @@ export async function moveTransactionToStatement(
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { data: tx } = await ctx.supabase
+  // 03-G: falha de leitura é mensagem distinta de "não encontrado"; recusa antes do update.
+  const txRes = await ctx.supabase
     .from("transactions")
     .select("id, card_id")
     .eq("id", txId)
     .single();
+  if (txRes.error && txRes.error.code !== "PGRST116") {
+    return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.lancamento);
+  }
+  const tx = txRes.data;
   if (!tx || !tx.card_id) {
     return dbError("Lançamento de cartão não encontrado.");
   }
 
-  const { data: target } = await ctx.supabase
+  // 03-G: mesma regra do lançamento — falha de leitura recusa antes do update.
+  const targetRes = await ctx.supabase
     .from("card_statements")
     .select("id, card_id")
     .eq("id", targetStatementId)
     .single();
+  if (targetRes.error && targetRes.error.code !== "PGRST116") {
+    return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.fatura);
+  }
+  const target = targetRes.data;
   if (!target || target.card_id !== tx.card_id) {
     return dbError("A fatura de destino precisa ser do mesmo cartão.");
   }

@@ -220,7 +220,14 @@ export function TransactionFormDialog({
     if (!transaction || transaction.type !== "despesa" || transaction.classificacao === "pessoal") return;
     let active = true;
     getTransactionSplit(transaction.id).then((res) => {
-      if (!active || !res.ok) return;
+      if (!active) return;
+      // 03-G (D-G32) — com a leitura falha o formulário NÃO pode ficar aberto com a divisão vazia:
+      // salvar apagaria a divisão.
+      if (!res.ok) {
+        toast.error(res.error);
+        setOpen(false);
+        return;
+      }
       setValue("classificacao", res.data.classificacao);
       setValue("parts", res.data.parts);
     });

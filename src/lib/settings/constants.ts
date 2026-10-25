@@ -169,6 +169,9 @@ export const NOTIFICATION_TYPES_SEM_INTERRUPTOR = {
   ai_budget_threshold: "O gasto com IA chegou perto do teto (ou passou dele): é dinheiro seu.",
   ai_provider_problem: "O provedor de IA parou de responder ou recusou a chave: o assistente está parado.",
   ai_action_stuck: "Uma ação que você confirmou ficou sem desfecho registrado: pode não ter acontecido.",
+  // REDESIGN-03-G (D-G12) — o precedente da 07-D: ele avisa que outro aviso pode estar faltando.
+  sistema_verificacao_incompleta:
+    "A verificação automática não conseguiu ler alguma área: avisos dela podem estar faltando.",
 } as const satisfies Partial<Record<NotificationType, string>>;
 
 /** Explicação curta de cada tipo, exibida ao lado do interruptor em /configuracoes. */

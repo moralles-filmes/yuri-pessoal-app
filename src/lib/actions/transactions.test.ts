@@ -201,6 +201,44 @@ describe("03-C A2 · transferência editada para receita: a recusa da A1 vem ant
   });
 });
 
+describe("03-G · transferência editada para despesa de cartão, com a fatura sem leitura", () => {
+  it("o lançamento antigo JÁ foi apagado: a frase é a de 'depois', nunca 'Nada foi alterado.'", async () => {
+    // Achado da revisão final da 03-G: o serviço dizia "Nada foi alterado." (verdade dentro
+    // dele), e o ramo de transferência apaga ANTES de recriar. A atomicidade é da 03-G2 (RR-F-1).
+    const CARTAO = "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b";
+    fake = criarSupabaseEmMemoria(
+      {
+        transactions: [
+          existente({
+            type: "transferencia",
+            payment_method: "transferencia",
+            transfer_group_id: "grupo-1",
+            transfer_account_id: "9c4e2a10-7b3d-4f61-8e25-1a2b3c4d5e6f",
+          }),
+        ],
+        credit_cards: [{ id: CARTAO, dia_fechamento: 5, dia_vencimento: 12 }],
+      },
+      { falharLeitura: { credit_cards: "XX000" } },
+    );
+    const r = await updateTransaction(
+      ID,
+      payload({
+        type: "despesa",
+        payment_method: "cartao_credito",
+        account_id: null,
+        card_id: CARTAO,
+        status: "pendente",
+      }),
+    );
+    expect(r).toEqual({
+      ok: false,
+      error:
+        "Não foi possível ler a fatura. A alteração pode ter sido gravada em parte: recarregue a página para conferir.",
+    });
+    expect(fake.escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual(["transactions:delete"]);
+  });
+});
+
 describe("03-C A2 · sair de receita zera a responsabilidade", () => {
   it("receita de terceiro editada para despesa pessoal volta a pessoal, com valor nulo", async () => {
     fake = criarSupabaseEmMemoria({
