@@ -1,5 +1,5 @@
 /**
- * Fase 18-C — IA · Prompt do especialista em Financeiro, v2.
+ * Fase 18-C — IA · Prompt do especialista em Financeiro, v3.
  *
  * ⚠️ É o prompt com o maior potencial de dano por número errado do sistema inteiro. Metade
  * dele existe para impedir UMA coisa: o modelo somar o que não se soma. As regras abaixo saem
@@ -8,10 +8,15 @@
  *
  * ⚠️ A proibição é DESCRITA, nunca CITADA — ver o cabeçalho de `habitos.ts`.
  *
+ * v3 (Task 15b, pedido do dono): gasto, entrada e fatura saem com o total E a separação "meu" ×
+ * "de terceiros" que a ferramenta já devolve, sem esperar o dono pedir. A separação é
+ * TRANSCRITA — a regra de não somar as partições continua. A versão sobe porque o
+ * comportamento muda (invariante 105).
+ *
  * Puro: só texto.
  */
 
-export const FINANCEIRO_PROMPT_VERSION = "financeiro-v2";
+export const FINANCEIRO_PROMPT_VERSION = "financeiro-v3";
 
 export const FINANCEIRO_PROMPT = `PAPEL
 
@@ -35,6 +40,12 @@ O QUE VOCÊ NUNCA FAZ
 - Entradas e saídas são independentes: não as subtraia para inventar um "resultado do mês" que o sistema não calculou.
 - Uma compra parcelada NÃO entra inteira no mês da compra: cada parcela entra na fatura do mês dela. O resumo já trata isso — não tente reconciliar por conta própria.
 - Estorno de cartão não é entrada de dinheiro: ele já reduz o total da fatura.
+
+MEU E DE TERCEIROS — MOSTRE A SEPARAÇÃO SEM ESPERAR O PEDIDO
+- Ao responder sobre gasto, entrada ou fatura, mostre o total E a separação que veio da ferramenta: quanto é do dono e quanto é de terceiros. Não espere o dono pedir.
+- "Quanto gastei" é respondido com a parte do dono em destaque e o total ao lado.
+- A separação é TRANSCRITA do resultado, nunca calculada: as partes já vêm somadas pelo sistema. A regra de não somar as partições continua valendo — nem entre si, nem com o total.
+- Se a ferramenta não trouxe a separação para aquele número, não a invente: mostre o total e diga que a separação não veio no resultado.
 
 SOBRE OS ESTADOS E OS VALORES
 - Os valores estão em REAIS (BRL) e já vêm na unidade que a tela mostra. Não converta, não multiplique e não divida por nada.

@@ -94,14 +94,14 @@ describe("startAttempt — trilha e versão de prompt", () => {
     });
 
     const r = await startAttempt(
-      tentativa({ client: cliente, trilha: 3, promptVersion: "seguranca-v3+financeiro-v2" }),
+      tentativa({ client: cliente, trilha: 3, promptVersion: "seguranca-v3+financeiro-v3" }),
     );
 
     expect(r).toEqual({ id: "ev-1", jaExistia: false });
     expect(inserts).toHaveLength(1);
     expect(inserts[0]).toMatchObject({
       trilha: 3,
-      prompt_version: "seguranca-v3+financeiro-v2",
+      prompt_version: "seguranca-v3+financeiro-v3",
       attempt_type: "ESPECIALISTA",
     });
   });

@@ -37,6 +37,7 @@ import {
 import { blocoDaData } from "./blocos-do-servidor";
 import { termosProibidosEm } from "@/lib/tone/vocabulary";
 import { TREINOS_PROMPT } from "./prompts/treinos";
+import { FINANCEIRO_PROMPT, FINANCEIRO_PROMPT_VERSION } from "./prompts/financeiro";
 import { AGENT_PERMISSION } from "./routing";
 import {
   AI_TOOL_REGISTRY,
@@ -671,6 +672,66 @@ describe("prompt-base v3 — o que o modelo pode fazer com o resultado da ferram
         `o prompt-base cita "${campo}", que nenhuma ferramenta devolve`,
       ).toBe(true);
     }
+  });
+});
+
+/**
+ * Task 15b — pedido do dono (2026-10-25): "quanto gastei" já vem separado em "meu" e "de
+ * terceiros", sem ele precisar pedir. As ferramentas já devolvem a separação
+ * (`gasto_meu`/`gasto_de_terceiros`, `entradas_meu`/`entradas_terceiros`, `meu`/`de_terceiros`
+ * na fatura); a v2 só proibia somá-las, não mandava mostrá-las.
+ */
+describe("prompt do Financeiro — financeiro-v3", () => {
+  const SECAO = "MEU E DE TERCEIROS — MOSTRE A SEPARAÇÃO SEM ESPERAR O PEDIDO";
+  /** Só a seção nova: do título dela até a próxima seção (ou o fim). */
+  const secao = () => {
+    const inicio = FINANCEIRO_PROMPT.indexOf(SECAO);
+    const fim = FINANCEIRO_PROMPT.indexOf("\n\n", inicio);
+    return FINANCEIRO_PROMPT.slice(inicio, fim === -1 ? undefined : fim);
+  };
+
+  it("sobe a versão para financeiro-v3, e o agente a usa", () => {
+    expect(FINANCEIRO_PROMPT_VERSION).toBe("financeiro-v3");
+    const agente = findAgent("financeiro")!;
+    expect(agente.promptVersion).toBe("financeiro-v3");
+    expect(promptVersionOf(agente)).toBe(`${SECURITY_PROMPT_VERSION}+financeiro-v3`);
+  });
+
+  it("manda mostrar o total E a separação de gasto, entrada e fatura sem esperar o pedido", () => {
+    expect(FINANCEIRO_PROMPT).toContain(SECAO);
+    const s = secao();
+    expect(s).toContain(
+      "Ao responder sobre gasto, entrada ou fatura, mostre o total E a separação que veio da ferramenta",
+    );
+    expect(s).toContain("quanto é do dono e quanto é de terceiros");
+    expect(s).toContain("Não espere o dono pedir");
+  });
+
+  it('"quanto gastei" põe a parte do dono em destaque e o total ao lado', () => {
+    expect(secao()).toContain("a parte do dono em destaque e o total ao lado");
+  });
+
+  it("a separação é transcrita, nunca calculada, e a regra de não somar as partições continua", () => {
+    const s = secao();
+    expect(s).toContain("A separação é TRANSCRITA do resultado, nunca calculada");
+    expect(s).toContain("A regra de não somar as partições continua valendo");
+    // A regra da v2 não saiu.
+    expect(FINANCEIRO_PROMPT).toContain('"Meu" e "de terceiros" PARTICIONAM as saídas');
+  });
+
+  it("sem a separação no resultado, não a inventa", () => {
+    expect(secao()).toContain(
+      "Se a ferramenta não trouxe a separação para aquele número, não a invente",
+    );
+  });
+
+  it("a seção nova passa no vocabulário proibido e não cita valor de exemplo", () => {
+    expect(termosProibidosEm(secao())).toEqual([]);
+    // O prompt inteiro: "tente" casa por SUBSTRING em "assis**tente**" e em "não tente
+    // reconciliar", que já estavam na v2 — e nada além disso.
+    expect(termosProibidosEm(FINANCEIRO_PROMPT)).toEqual(["tente"]);
+    // Um número de exemplo no prompt é um número que o modelo pode repetir como se fosse dado.
+    expect(secao()).not.toMatch(/\d/);
   });
 });
 
