@@ -23,9 +23,15 @@ const { createInstallmentPurchase, updateInstallmentSplit, cancelInstallmentFutu
 );
 const { generateBillTransaction } = await import("@/lib/actions/bills");
 const { deleteCreditCard } = await import("@/lib/actions/credit-cards");
+const { markStatementPaid, moveTransactionToStatement } = await import("@/lib/actions/statements");
+const { getOrCreateStatementByFatura } = await import("@/lib/finance/statements");
+const { excluirTransacaoSimples } = await import("@/lib/finance/services");
+const { ehErroDeLeitura } = await import("@/lib/supabase/leitura");
 
 const TX = "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d";
 const CARTAO = "2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e";
+const FATURA = "3c4d5e6f-7a8b-4c9d-8e0f-2a3b4c5d6e7f";
+const CONTA = "4d5e6f7a-8b9c-4d0e-9f1a-3b4c5d6e7f8a";
 const PESSOA = "1f2e3d4c-5b6a-4978-8a9b-0c1d2e3f4a5b";
 const escritas = () => fake.operacoes.filter((o) => o.tipo !== "rpc");
 
@@ -281,6 +287,93 @@ describe("03-G L6 · deleteCreditCard", () => {
   it("sem lançamentos e sem erro, exclui como antes", async () => {
     fake = criarSupabaseEmMemoria({ credit_cards: [{ id: CARTAO }], transactions: [] });
     expect(await deleteCreditCard(CARTAO)).toEqual({ ok: true, data: undefined });
+  });
+});
+
+describe("03-G L6 · busca-ou-cria da fatura (D-G21)", () => {
+  it("leitura falhando LANÇA antes de tentar criar — nada de lançamento sem fatura", async () => {
+    fake = criarSupabaseEmMemoria({ card_statements: [] }, { falharLeitura: { card_statements: "XX000" } });
+    const erro = await getOrCreateStatementByFatura(
+      { supabase: fake.client, userId: "user-1" } as never,
+      CARTAO,
+      { competencia: "2026-07-01" } as never,
+    ).catch((e: unknown) => e);
+    expect(ehErroDeLeitura(erro)).toBe(true);
+    expect(escritas()).toEqual([]);
+  });
+});
+
+describe("03-G L6 · createInstallmentPurchase, laço das parcelas (Z20, D-G26)", () => {
+  it("fatura não lida: a compensação apaga a compra-pai e a frase é a de 'depois'", async () => {
+    fake = criarSupabaseEmMemoria(
+      { credit_cards: [{ id: CARTAO, dia_fechamento: 5, dia_vencimento: 12 }], card_statements: [] },
+      { falharLeitura: { card_statements: "XX000" } },
+    );
+    const r = await createInstallmentPurchase({
+      card_id: CARTAO,
+      qtd_parcelas: 3,
+      valor_total: 300,
+      purchase_date: "2026-06-01",
+      competence_date: "2026-06-01",
+    });
+    expect(r).toEqual({
+      ok: false,
+      error:
+        "Não foi possível ler a fatura. A alteração pode ter sido gravada em parte: recarregue a página para conferir.",
+    });
+    expect(escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual([
+      "transactions:insert",
+      "transactions:delete",
+    ]);
+    expect(fake.tabelas.transactions).toEqual([]);
+  });
+});
+
+describe("03-G L6 · markStatementPaid", () => {
+  const fatura = {
+    card_statements_with_total: [{ id: FATURA, card_id: CARTAO, competencia: "2026-06-01", pago_em: null, total_atual: 100 }],
+    accounts: [{ id: CONTA }],
+    credit_cards: [{ id: CARTAO, nome: "Cartao sintetico" }],
+  };
+  it.each([
+    ["accounts", "Não foi possível ler a conta. Nada foi alterado."],
+    ["credit_cards", "Não foi possível ler o cartão. Nada foi alterado."],
+  ])("%s falhando recusa antes da RPC, com mensagem distinta de 'não encontrada'", async (tabela, mensagem) => {
+    fake = criarSupabaseEmMemoria(fatura, { falharLeitura: { [tabela]: "XX000" } });
+    expect(await markStatementPaid(FATURA, CONTA, "2026-06-10")).toEqual({ ok: false, error: mensagem });
+    expect(fake.operacoes).toEqual([]);
+  });
+
+  it("conta que não existe continua 'Conta não encontrada.'", async () => {
+    fake = criarSupabaseEmMemoria({ ...fatura, accounts: [] });
+    expect(await markStatementPaid(FATURA, CONTA, "2026-06-10")).toEqual({
+      ok: false,
+      error: "Conta não encontrada.",
+    });
+  });
+});
+
+describe("03-G L6 · moveTransactionToStatement", () => {
+  it.each([
+    ["transactions", "Não foi possível ler o lançamento. Nada foi alterado."],
+    ["card_statements", "Não foi possível ler a fatura. Nada foi alterado."],
+  ])("%s falhando recusa sem escrever", async (tabela, mensagem) => {
+    fake = criarSupabaseEmMemoria(
+      { transactions: [{ id: TX, card_id: CARTAO }], card_statements: [{ id: FATURA, card_id: CARTAO }] },
+      { falharLeitura: { [tabela]: "XX000" } },
+    );
+    expect(await moveTransactionToStatement(TX, FATURA)).toEqual({ ok: false, error: mensagem });
+    expect(escritas()).toEqual([]);
+  });
+});
+
+describe("03-G L6 · excluirTransacaoSimples (D-G19)", () => {
+  it("leitura falhando não vira 'não existe mais': recusa sem escrever", async () => {
+    fake = criarSupabaseEmMemoria({ transactions: [{ id: TX }] }, { falharLeitura: { transactions: "XX000" } });
+    expect(
+      await excluirTransacaoSimples({ supabase: fake.client, userId: "user-1" } as never, TX),
+    ).toEqual({ ok: false, erro: "Não foi possível ler o lançamento. Nada foi alterado." });
+    expect(escritas()).toEqual([]);
   });
 });
 

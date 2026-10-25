@@ -16,6 +16,8 @@ import {
   getOrCreateStatementForCompetencia,
   resolveOrCreateStatement,
 } from "@/lib/finance/statements";
+import { ehErroDeLeitura } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { resolverFatura } from "@/lib/finance/invoice";
 import { dataDoExtratoAGravar } from "@/lib/finance/caixa";
 import { detectarCompetenciaFatura } from "@/lib/import/competencia";
@@ -645,9 +647,17 @@ async function createCardEstorno(
   },
 ): Promise<ActionResult<{ id: string }>> {
   // Na importação, `competencia` força a fatura sendo importada; senão deriva da data.
-  const statementId = args.competencia
-    ? await getOrCreateStatementForCompetencia(ctx, args.cardId, args.competencia)
-    : await resolveOrCreateStatement(ctx, args.cardId, args.date);
+  // 03-G (D-G26): no commit da importação, a falha vira o erro DESTA linha (o laço marca a linha
+  // como erro e segue, como já fazia com o null); nenhuma escrita desta linha veio antes.
+  let statementId: string | null;
+  try {
+    statementId = args.competencia
+      ? await getOrCreateStatementForCompetencia(ctx, args.cardId, args.competencia)
+      : await resolveOrCreateStatement(ctx, args.cardId, args.date);
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    return dbError(`Não foi possível ler ${ROTULOS_DE_LEITURA.fatura}.`);
+  }
   if (!statementId) return dbError("Não foi possível resolver a fatura do estorno.");
 
   const { data, error } = await ctx.supabase

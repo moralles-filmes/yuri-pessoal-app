@@ -11,6 +11,7 @@ export const ROTULOS_DE_LEITURA = {
   lancamentos: "os lançamentos",
   lancamento: "o lançamento",
   contas: "as contas",
+  conta: "a conta",
   categorias: "as categorias",
   categoriasMarcadas: "as categorias marcadas como de terceiros",
   subcategorias: "as subcategorias",
