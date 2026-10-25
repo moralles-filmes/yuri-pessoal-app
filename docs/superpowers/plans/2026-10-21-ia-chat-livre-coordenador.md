@@ -1577,3 +1577,37 @@ export function RespostaFormatada({ texto }: { readonly texto: string }): React.
 ## Resultado do teste real
 
 *(preenchido nas Tasks 15 e 28)*
+
+### Task 15 — teste real cedo com o Gemini do dono (2026-10-25)
+
+Ambiente: `npm run dev -- -p 3100` na worktree, Gemini 2.5 Flash do dono, "Cruzar módulos"
+ligada por ele, todas as chaves de leitura e escrita dos módulos ligadas. O dono digitou as
+frases (a extensão do Chrome não respondeu). Conferência só por leitura no banco; nenhum valor,
+nome ou texto dos registros foi lido ou registrado (as verificações de texto foram booleanas).
+
+**Rodada 1 — REPROVADA no caso (c).** 3 runs `completed`, 32 tentativas, 0 `started`,
+trilhas 0..6, `prompt_version` em toda tentativa, `agent_id` em toda chamada,
+`coordenador.acionar` auditado, log do `dev` sem `skip_thought_signature_validator`.
+Custo US$ 0,061573 (nenhuma tentativa sem custo).
+- (a) "Quanto gastei este mês?" — aprovado: 1 especialista (Financeiro), modo direto, 9,9 s.
+- (b) "Como foi minha semana?" — aprovado: 6 especialistas em paralelo + síntese, 25 s; a
+  resposta não cita valor sem leitura e declara o que não encontrou.
+- (c) despejo pão + treino + luz — **reprovado**: 2 de 3 propostas. O coordenador escreveu na
+  tarefa do Financeiro uma categoria que o dono não disse; a previsão recusou
+  (`EfeitoImpossivel`, nada gravado; a resposta declarou a falha). E acionou 6 especialistas
+  para 3 itens. Correção na tarefa dona (Task 14), commit `bab9c39`: "a tarefa leva só o que o
+  dono disse" e "módulo envolvido é o que a mensagem pede de fato", com testes e mutação.
+  ⚠️ O dono confirmou os dois cartões desta rodada (tarefa e compromisso criados de verdade).
+
+**Rodadas 2 e 3 (depois de `bab9c39`) — APROVADAS.** 6 runs `completed`, 0 `started`.
+- (a) 1 especialista nas duas rodadas, 7–9 s.
+- (b) 4 e 6 especialistas + síntese, 12–18 s; quando o Financeiro não leu, a resposta não
+  citou valor.
+- (c) exatamente 3 especialistas (TO-DO, Financeiro, Agenda) e 3 propostas
+  (`criarTarefaTodo`, `lancarTransacao`, `criarEvento`) nas duas rodadas; nenhuma tarefa de
+  especialista com categoria; nenhum cartão confirmado.
+- Custo das rodadas 2 e 3: US$ 0,067842. Total do teste: US$ 0,129415.
+
+Observação (sem correção, para o relatório final): em "como foi minha semana", alguns
+especialistas (TO-DO, Hábitos, às vezes Financeiro) responderam sem chamar ferramenta. A
+síntese não inventou número por isso, mas o panorama sai mais pobre do que poderia.
