@@ -19,7 +19,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, Send, Sparkles, Square } from "lucide-react";
+import { Loader2, Plus, Send, Sparkles, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -188,6 +188,7 @@ export type ConversaDaIa = {
   /** 18-F Bloco 4 — dispara um panorama pelo MESMO endpoint e pelo mesmo leitor de SSE. */
   readonly iniciarExperiencia: (id: string) => Promise<void>;
   readonly cancelar: () => void;
+  readonly novaConversa: () => void;
   /**
    * REDESIGN-07-D · D1 — o desfecho de cada cartão de proposta, por id.
    *
@@ -320,7 +321,11 @@ export function useConversaDaIa({
         const corpo = (await resposta.json().catch(() => null)) as
           | { error?: string; code?: string }
           | null;
-        const mensagem = corpo?.error ?? "Não foi possível iniciar a resposta.";
+        const indisponivel = corpo?.code === "AI_CONVERSATION_NOT_AVAILABLE";
+        const mensagem = indisponivel
+          ? "A conversa anterior não existe mais. Envie de novo para começar uma nova."
+          : corpo?.error ?? "Não foi possível iniciar a resposta.";
+        if (indisponivel) setConversa(null);
         marcarFalha(idProvisorioAssistente, mensagem);
         setFase(faseDoEvento({ tipo: "error", mensagem }));
         toast.error(mensagem);
@@ -504,6 +509,17 @@ export function useConversaDaIa({
     await disparar({ experiencia: id }, atalho.titulo);
   }
 
+  function novaConversa() {
+    if (enviando) return;
+    setBolhas([]);
+    setConversa(null);
+    setTexto("");
+    setDesfechos({});
+    setFase(null);
+    propostasDaRespostaRef.current = [];
+    onAtividade?.({ tipo: "recomecou" });
+  }
+
   function registrarDesfecho(proposalId: string, desfecho: DesfechoDoCartao) {
     setDesfechos((atual) => ({ ...atual, [proposalId]: desfecho }));
   }
@@ -530,6 +546,7 @@ export function useConversaDaIa({
     enviar,
     iniciarExperiencia,
     cancelar,
+    novaConversa,
     desfechos,
     registrarDesfecho,
     avisarDecisao,
@@ -552,6 +569,7 @@ export function ChatView({
   podeConversar,
   podeCruzarModulos,
   motivoBloqueio,
+  compacto = false,
   vazio,
 }: Omit<ChatClientProps, "conversationId" | "initialMessages" | "onAtividade"> & {
   readonly conversa: ConversaDaIa;
@@ -564,6 +582,7 @@ export function ChatView({
     enviar,
     iniciarExperiencia,
     cancelar,
+    novaConversa,
     desfechos,
     registrarDesfecho,
     avisarDecisao,
@@ -603,6 +622,13 @@ export function ChatView({
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
+      {!compacto && bolhas.length > 0 && (
+        <div className="flex justify-end">
+          <Button variant="ghost" size="icon" aria-label="Nova conversa" disabled={enviando} onClick={novaConversa}>
+            <Plus className="size-4" />
+          </Button>
+        </div>
+      )}
       {motivoBloqueio && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           {motivoBloqueio}

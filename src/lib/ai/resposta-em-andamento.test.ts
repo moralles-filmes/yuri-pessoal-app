@@ -7,6 +7,7 @@ import {
   linhaDeEspecialistas,
   textoParaDevolver,
   deveEnviarComEnter,
+  deveFecharAoNavegar,
   type EspecialistaNaTela,
 } from "./resposta-em-andamento";
 
@@ -101,5 +102,15 @@ describe("recusa antes do start e teclado do chat", () => {
     ["a", false, false, true, false, false],
   ])("tecla %s, shift %s, composição %s, atalho %s, toque %s → envia %s", (tecla, shift, compondo, atalho, toque, esperado) => {
     expect(deveEnviarComEnter({ tecla, shift, compondo, atalho, toque })).toBe(esperado);
+  });
+});
+
+
+describe("navegação no painel", () => {
+  it.each([
+    ["/financeiro", true], ["/ia/acoes?filtro=pendentes", true],
+    ["https://x.com", false], ["//x.com", false], ["/\\x.com", false], ["/\t/x.com", false], [null, false],
+  ])("link %s fecha o painel: %s", (href, esperado) => {
+    expect(deveFecharAoNavegar(href)).toBe(esperado);
   });
 });

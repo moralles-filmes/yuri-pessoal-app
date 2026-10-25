@@ -1,3 +1,5 @@
+import { rotaInternaAceita } from "./tools/sources";
+
 /** Estado transitório do SSE. Cada especialista conserva seus cartões ao repetir outra trilha. */
 export type PropostaComTrilha = { readonly id: string; readonly trilha: number };
 export type EspecialistaNaTela = {
@@ -41,4 +43,9 @@ export function deveEnviarComEnter(e: {
   readonly toque: boolean;
 }): boolean {
   return e.tecla === "Enter" && !e.compondo && (e.atalho || (!e.shift && !e.toque));
+}
+
+/** A navegação do painel segue a mesma allowlist de rotas dos chips e da resposta. */
+export function deveFecharAoNavegar(href: string | null): boolean {
+  return href !== null && rotaInternaAceita(href);
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { getConversation, getRunSources } from "@/lib/ai/queries";
 import { prontidaoDoChat } from "@/lib/ai/server/chat-readiness";
 import { formatUsdOrUnavailable } from "@/lib/ai/constants";
 import { reconcileOwnRuns } from "@/lib/ai/server/reconcile";
-import { conversationsLink } from "@/lib/search/ai-links";
+import { AI_LINK_BASE, conversationsLink } from "@/lib/search/ai-links";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +71,9 @@ export default async function ConversaPage({
       >
         <div className="flex flex-wrap items-center gap-2">
           {arquivada && <Badge variant="outline">arquivada</Badge>}
+          <Button asChild variant="ghost" size="icon">
+            <Link href={AI_LINK_BASE} aria-label="Nova conversa"><Plus className="size-4" /></Link>
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href={conversationsLink()}>
               <ArrowLeft className="size-4" /> Voltar
@@ -80,6 +83,7 @@ export default async function ConversaPage({
       </PageHeader>
 
       <ChatClient
+        compacto
         conversationId={detalhe.conversation.id}
         initialMessages={detalhe.messages}
         runs={detalhe.runs}

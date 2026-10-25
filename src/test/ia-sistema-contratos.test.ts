@@ -576,3 +576,47 @@ describe("chat livre — uma só descrição do gasto e chaves do panorama", () 
     expect(chat).toContain('onClick={() => enviando ? cancelar() : void enviar()}');
   });
 });
+
+
+describe("chat livre — cabeçalho e nova conversa", () => {
+  const painel = fonte("components/ai/floating-assistant-panel.tsx");
+  const botao = fonte("components/ai/floating-assistant.tsx");
+  const chat = fonte(CHAT);
+  it("o cabeçalho oferece ícones acessíveis, menu e descrição oculta", () => {
+    expect(painel).toContain('aria-label="Nova conversa"');
+    expect(painel).toContain('aria-label="Mais opções"');
+    expect(painel).toContain('<SheetDescription className="sr-only">');
+    expect(painel).toContain("conversationsLink()");
+    expect(painel).toContain("conversa.novaConversa");
+    expect(painel).toContain('onClickCapture={aoNavegar}');
+    expect(painel).toContain('deveFecharAoNavegar(link?.getAttribute("href") ?? null)');
+  });
+  it("a casca continua leve e o carregamento dá retorno visual", () => {
+    expect(botao).not.toMatch(/from "@\/lib\/(?:ai\/constants|validators\/)/);
+    expect(botao).not.toMatch(/from "[^\"]*(?:chat-client|ui\/sheet|ui\/dropdown-menu)"/);
+    expect(botao).toMatch(/loading: \(\) => \(/);
+    expect(botao).toContain('role="status"');
+    expect(botao).toContain("Abrindo o assistente…");
+    expect(botao).toContain("estadoDoBotao(");
+    expect(botao).toContain("if (proximo !== preferencias) setPreferencias(proximo)");
+  });
+  it("nova conversa limpa o estado no motor, com envio protegido", () => {
+    const inicio = chat.indexOf("function novaConversa()");
+    expect(inicio).toBeGreaterThan(-1);
+    const corpo = chat.slice(inicio, chat.indexOf("function registrarDesfecho", inicio));
+    expect(corpo).toContain("if (enviando) return");
+    for (const reset of ['setBolhas([])', 'setConversa(null)', 'setDesfechos({})', 'setFase(null)', 'setTexto("")', 'propostasDaRespostaRef.current = []']) expect(corpo).toContain(reset);
+    expect(corpo).toContain('onAtividade?.({ tipo: "recomecou" })');
+    expect(chat).toContain("!compacto && bolhas.length > 0");
+    expect(chat).toContain('onClick={novaConversa}');
+    expect(chat).toMatch(/const \{[^}]*\bnovaConversa\b[^}]*\} = conversa/);
+  });
+  it("conversa indisponível prepara novo envio e não reenvia sozinha", () => {
+    const inicio = chat.indexOf('corpo?.code === "AI_CONVERSATION_NOT_AVAILABLE"');
+    expect(inicio).toBeGreaterThan(-1);
+    const bloco = chat.slice(inicio, chat.indexOf("marcarFalha(", inicio));
+    expect(bloco).toContain("setConversa(null)");
+    expect(bloco).toContain("Envie de novo para começar uma nova.");
+    expect(bloco).not.toMatch(/disparar\(|enviar\(/);
+  });
+});
