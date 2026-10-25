@@ -39,6 +39,7 @@ import {
   definicoesDeAcionamento,
   MAX_TAREFA_CHARS,
   MOTIVO_PARA_AUDITORIA,
+  type Acionamento,
   type DecisaoDeAcionamentos,
   type EspecialistaOferecido,
 } from "@/lib/ai/agents/especialistas";
@@ -290,6 +291,12 @@ export async function* eventosDaTrilha(
         case "tool":
           yield evento;
           break;
+        default: {
+          // Evento novo em `EventoDaTrilha` sem tratamento aqui é erro de compilação, não um
+          // evento descartado em silêncio (a lição de `chat-events.test.ts`).
+          const naoTratado: never = evento;
+          throw new Error(`Evento de trilha não tratado: ${JSON.stringify(naoTratado)}`);
+        }
       }
     }
   } finally {
@@ -407,20 +414,29 @@ export async function* conduzirCoordenador(
     };
   }
 
-  await auditarAcionamentos(e.run, stepId, chamadas, decidido);
+  /**
+   * ⛔ SEM TRILHA, SEM ESPECIALISTA — por acionamento, não só pelo passo. O especialista pode
+   * preparar proposta, e é a linha do acionamento em `ai_tool_calls` que diz quem pediu o
+   * quê; aceito cuja auditoria falhou NÃO roda. É a disciplina de `executor.ts` ("sem trilha,
+   * sem proposta") aplicada ao pedido do coordenador.
+   */
+  const aceitos = await auditarAcionamentos(e.run, stepId, chamadas, decidido);
+  const semRegistro = decidido.aceitos.length - aceitos.length;
 
   const cruzouDesligado = decidido.recusados.some(
     (r) => r.motivo === "CRUZAR_MODULOS_DESLIGADO",
   );
 
   // ── 3. Sem aceitos: o texto retido é a resposta, ou a frase do servidor ──────────────
-  if (decidido.aceitos.length === 0) {
+  if (aceitos.length === 0) {
     const resposta =
-      retido !== ""
-        ? retido
-        : cruzouDesligado
-          ? avisoCruzarModulos()
-          : avisoSemEspecialista(decisao.desligados);
+      semRegistro > 0
+        ? AVISO_SEM_AUDITORIA
+        : retido !== ""
+          ? retido
+          : cruzouDesligado
+            ? avisoCruzarModulos()
+            : avisoSemEspecialista(decisao.desligados);
     yield { type: "delta", text: resposta };
     return {
       ok: true,
@@ -431,12 +447,12 @@ export async function* conduzirCoordenador(
   }
 
   // ── 5. Dois ou mais aceitos: especialistas em paralelo + síntese ─────────────────────
-  if (decidido.aceitos.length > 1) {
+  if (aceitos.length > 1) {
     throw new Error("Task 13");
   }
 
   // ── 4. MODO DIRETO — a resposta do especialista É a resposta final (§4.4) ────────────
-  const aceito = decidido.aceitos[0]!;
+  const aceito = aceitos[0]!;
   const esp = findAgent(aceito.agentId);
   // `decidirAcionamentos` só aceita quem `catalogoDeEspecialistas` ofereceu, e a oferta sai
   // do registry: um aceito sem perfil é incoerência nossa, não do modelo.
@@ -521,13 +537,15 @@ export async function* conduzirCoordenador(
  * Uma linha em `ai_tool_calls` por pedido de acionamento: aceito como `executada`, recusado
  * como `rejeitada` com o motivo da auditoria. A tarefa recusada entra só se for texto — a
  * forma inválida não é reescrita para caber.
+ *
+ * Devolve os aceitos que GANHARAM linha: só eles podem virar trilha.
  */
 async function auditarAcionamentos(
   run: EntradaDoCoordenador["run"],
   stepId: string,
   chamadas: readonly { readonly callId: string; readonly toolName: string; readonly input: unknown }[],
   decidido: DecisaoDeAcionamentos,
-): Promise<void> {
+): Promise<readonly Acionamento[]> {
   const inicio = Date.now();
   const tarefaPedida = (callId: string): string => {
     const pedido = chamadas.find((c) => c.callId === callId)?.input;
@@ -538,18 +556,20 @@ async function auditarAcionamentos(
     return typeof tarefa === "string" ? tarefa : "";
   };
 
-  await Promise.all([
-    ...decidido.aceitos.map((a) =>
-      registrarAcionamento({
-        runId: run.runId,
-        userId: run.userId,
-        stepId,
-        especialistaId: a.agentId,
-        tarefa: a.tarefa,
-        providerCallId: a.callId,
-        status: "executada",
-        rejectionReason: null,
-      }),
+  const [idsDosAceitos] = await Promise.all([
+    Promise.all(
+      decidido.aceitos.map((a) =>
+        registrarAcionamento({
+          runId: run.runId,
+          userId: run.userId,
+          stepId,
+          especialistaId: a.agentId,
+          tarefa: a.tarefa,
+          providerCallId: a.callId,
+          status: "executada",
+          rejectionReason: null,
+        }).catch(() => null),
+      ),
     ),
     ...decidido.recusados.map((r) =>
       registrarAcionamento({
@@ -561,7 +581,7 @@ async function auditarAcionamentos(
         providerCallId: r.callId,
         status: "rejeitada",
         rejectionReason: MOTIVO_PARA_AUDITORIA[r.motivo],
-      }),
+      }).catch(() => null),
     ),
   ]);
 
@@ -572,4 +592,6 @@ async function auditarAcionamentos(
     status: "completed",
     durationMs: Date.now() - inicio,
   });
+
+  return decidido.aceitos.filter((_, i) => idsDosAceitos[i] !== null);
 }

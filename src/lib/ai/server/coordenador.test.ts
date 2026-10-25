@@ -53,6 +53,8 @@ type Acionamento = {
   stepId: string;
 };
 const acionamentos: Acionamento[] = [];
+/** Rodada 1 — quando ligado, a linha do acionamento ACEITO não é gravada (`null`, como num `23505`). */
+let auditoriaDoAceitoFalha = false;
 
 vi.mock("./run-store", () => ({
   startAttempt: async (input: {
@@ -83,6 +85,7 @@ vi.mock("./run-store", () => ({
       rejectionReason: input.rejectionReason,
       stepId: input.stepId,
     });
+    if (auditoriaDoAceitoFalha && input.status === "executada") return null;
     return `tc-${acionamentos.length}`;
   },
 }));
@@ -284,6 +287,7 @@ beforeEach(() => {
   passosFechados.length = 0;
   respostasPorChamada = [];
   passoQueFalha = null;
+  auditoriaDoAceitoFalha = false;
   permissoes = { allow_finance: true, allow_todo: true };
   escrita = {};
   cruzarModulos = false;
@@ -489,6 +493,8 @@ describe("conduzirCoordenador — o modo direto", () => {
     expect(doCoordenador).toContain(blocoDaData(AGORA));
     expect(doCoordenador).toContain("me chame pelo primeiro nome");
     expect(doCoordenador).not.toContain("prefiro valores sem centavos");
+    // E ela TERMINA o system dele — a memória por último também no coordenador (inv. 98).
+    expect(doCoordenador.endsWith(blocoDeMemorias([memorias[1]!]))).toBe(true);
   });
 
   it("a proposta do especialista sai com a trilha dele", async () => {
@@ -608,6 +614,25 @@ describe("conduzirCoordenador — as recusas", () => {
 
     expect(systemsRecebidos).toHaveLength(1);
     expect(acionamentos).toEqual([]);
+    expect(eventos.some((e) => e.type === "especialista")).toBe(false);
+    expect(desfecho).toMatchObject({ ok: true, texto: AVISO_SEM_AUDITORIA });
+    expect(deltas(eventos)).toEqual([AVISO_SEM_AUDITORIA]);
+  });
+
+  /**
+   * Rodada 1 — sem trilha, sem especialista, POR ACIONAMENTO. O especialista pode preparar
+   * proposta; um aceito cuja linha em `ai_tool_calls` não foi gravada não vira trilha.
+   */
+  it("aceito cuja auditoria falhou não roda, e a resposta declara a falta de trilha", async () => {
+    auditoriaDoAceitoFalha = true;
+    respostasPorChamada = [
+      [delta("Vou consultar…"), aciona("financeiro", "gasto de outubro"), FINISH],
+      [delta("não deveria chegar aqui"), FINISH],
+    ];
+
+    const { eventos, desfecho } = await conduzir();
+
+    expect(systemsRecebidos).toHaveLength(1);
     expect(eventos.some((e) => e.type === "especialista")).toBe(false);
     expect(desfecho).toMatchObject({ ok: true, texto: AVISO_SEM_AUDITORIA });
     expect(deltas(eventos)).toEqual([AVISO_SEM_AUDITORIA]);

@@ -26,7 +26,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import type { AiStreamEvent } from "@/lib/ai/core/contracts";
+import type { AiMessage, AiStreamEvent } from "@/lib/ai/core/contracts";
+import type { AiPreferencesView } from "@/lib/ai/types";
 import type { ToolOutput } from "@/lib/ai/tools/contracts";
 import { MAX_TOOL_STEPS } from "@/lib/ai/tools/limits";
 import { AVISO_TETO_DE_PASSOS } from "@/lib/ai/tools/limits";
@@ -44,6 +45,8 @@ vi.mock("./credential-store", () => ({
 
 /** Preferências do usuário, trocáveis por teste. */
 let permissoes: Record<string, boolean> = { allow_training: true };
+/** O histórico que `getHistoryForPrompt` devolve (Rodada 1 da Task 12: pesa na reserva). */
+let historicoDoBanco: { role: "user" | "assistant"; content: string }[] = [];
 
 vi.mock("@/lib/ai/queries", () => ({
   getRouterConfigs: async () => [
@@ -77,7 +80,7 @@ vi.mock("@/lib/ai/queries", () => ({
     // 18-F Bloco 4 — o executor dirigido recebe as duas listas, como qualquer chamada.
     writePermissions: {},
   }),
-  getHistoryForPrompt: async () => [],
+  getHistoryForPrompt: async () => historicoDoBanco,
 }));
 
 type Evento =
@@ -321,6 +324,9 @@ const { computeReservation, estimarTokensDeEntrada } = await import(
 );
 const { rateFor } = await import("@/lib/ai/core/pricing");
 const { findModel } = await import("@/lib/ai/core/models");
+const { computeReservationDoCoordenador } = await import("@/lib/ai/usage/reservation");
+const { tokensDoMaiorEspecialista } = await import("./coordenador");
+const { textoDasMensagens } = await import("@/lib/ai/core/text");
 
 // ─────────────────────────── Fixtures ───────────────────────────
 
@@ -429,6 +435,7 @@ beforeEach(() => {
   chavesDePasso.clear();
   respostasPorChamada = [];
   permissoes = { allow_training: true };
+  historicoDoBanco = [];
   reservaGravada = 0;
   textoGravado = "";
   statusDoRun = "";
@@ -714,6 +721,43 @@ describe("runChat — a medição por CHAMADA", () => {
       maxToolSteps: MAX_TOOL_STEPS,
     });
     expect(semAcionamento).toBeGreaterThan(umAgente.valorUsd);
+  });
+
+  /**
+   * Rodada 1 da Task 12 — o que `runChat` ENTREGA à reserva, entrada por entrada. Sem este
+   * caso, zerar a entrada do coordenador ou a do especialista não deixava nada vermelho: os
+   * dois casos acima só comparam reservas entre si. A entrada do coordenador é derivada do que
+   * de fato CHEGOU ao provedor (system + mensagens, com histórico); a do especialista, do
+   * maior especialista do registry.
+   */
+  it("a reserva gravada é computeReservationDoCoordenador com as entradas do prompt enviado", async () => {
+    historicoDoBanco = [
+      { role: "user", content: "pergunta antiga ".repeat(200) },
+      { role: "assistant", content: "resposta antiga ".repeat(200) },
+    ];
+    respostasPorChamada = [[{ type: "delta", text: "Olá!" }, FINISH]];
+
+    await rodar({ conversationId: "conv-1" });
+
+    // O histórico chegou ao provedor — é ele que pesa na entrada do coordenador.
+    expect(mensagensRecebidas[0]).toHaveLength(3);
+    const modelo = findModel("openai", "gpt-5.6-terra")!;
+    const esperada = computeReservationDoCoordenador({
+      rates: [rateFor("openai", "gpt-5.6-terra", "2026-08-06")!],
+      maxRetries: 1,
+      maxFallbacks: 0,
+      margem: 1.15,
+      tokensEntradaDoCoordenador: estimarTokensDeEntrada(
+        systemsRecebidos[0] + textoDasMensagens(mensagensRecebidas[0] as AiMessage[]),
+      ),
+      tokensEntradaDoEspecialista: tokensDoMaiorEspecialista({
+        prefs: { permissions: permissoes } as unknown as AiPreferencesView,
+        memorias: [],
+        agora: ENTRADA.agora,
+      }),
+      tetoSaidaDaSintese: modelo.outputCapTokens,
+    });
+    expect(reservaGravada).toBe(esperada.valorUsd);
   });
 });
 
