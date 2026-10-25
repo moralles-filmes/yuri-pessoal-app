@@ -504,7 +504,12 @@ describe("03-B2 A5 — tetos e completude (desenho, §5.5)", () => {
   ] as const)("getTransactionsRange distingue a contagem %s mesmo abaixo do teto", async (count, situacao) => {
     estado.contagens.transactions = count;
     const r = await getTransactionsRange(JANELA);
-    expect(r).toEqual({ linhas: estado.dados.transactions, situacao });
+    // 03-G (D-G4): a leitura passa a carregar o `count` como `total` — o "M" do aviso "N de M".
+    expect(r).toEqual({
+      linhas: estado.dados.transactions,
+      situacao,
+      total: count === undefined ? estado.dados.transactions.length : count,
+    });
   });
 
   it("atingir os limites com contagens iguais às linhas ainda é exato", async () => {
