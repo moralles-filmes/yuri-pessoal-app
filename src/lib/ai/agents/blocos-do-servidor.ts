@@ -106,12 +106,9 @@ export function blocoDoEspecialista(input: {
   readonly temEscrita: boolean;
 }): string {
   /**
-   * Teste real da rodada 1 — com o passo 0 só de leituras, a Agenda e o TO-DO leram, receberam
-   * as ferramentas de alteração no passo seguinte e responderam sem propor: o TO-DO afirmou que
-   * só podia consultar, e a Agenda pediu licença para preparar o que a tarefa já trazia inteiro.
-   * O modelo tirou a conclusão da lista que viu na primeira chamada. Por isso o bloco DIZ que a
-   * lista muda, e que a confirmação do cartão já é a pergunta ao dono — mas só quando é verdade
-   * (`temEscrita`), senão a frase prometeria uma ferramenta que não vem.
+   * Teste real da rodada 1 — a Agenda pediu licença para preparar um compromisso que a tarefa já
+   * trazia inteiro. O bloco diz que a confirmação do cartão já é a pergunta ao dono — mas só
+   * quando há alteração liberada (`temEscrita`), senão mandaria preparar o que não tem como.
    */
   const alteracao = input.temEscrita
     ? [
@@ -128,11 +125,6 @@ export function blocoDoEspecialista(input: {
     "Você foi acionado porque a tarefa depende dos registros do dono. Consulte as suas ferramentas antes de responder.",
     "Se nenhuma ferramenta cobre exatamente o período ou o recorte pedido, use a leitura mais próxima e diga com clareza o que ela cobre — por exemplo, o mês inteiro em vez da semana, ou o que está aberto ou atrasado em vez do que foi concluído.",
     "Apresente cada leitura pelo que ela é: o período e o recorte que vieram com ela são os que você declara.",
-    ...(input.temEscrita
-      ? [
-          "Na primeira chamada ficam disponíveis só as leituras; as ferramentas de alteração voltam logo depois dela. Ler primeiro é a ordem do trabalho, e nunca o limite do que você pode fazer.",
-        ]
-      : []),
     ...alteracao,
   ].join("\n");
 }

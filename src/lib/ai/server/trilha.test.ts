@@ -654,7 +654,7 @@ describe("runTrilha — coerência entre primeiroTipo e trilha", () => {
 // ────────────────────────────────────────────────────────────────
 
 describe("runTrilha — primeiroPassoExigeLeitura", () => {
-  /** Uma escrita na allowlist: no passo 0 ela NÃO é oferecida (Rodada 1 da revisão). */
+  /** Uma escrita na allowlist: oferecida desde o passo 0 (teste real da rodada 1). */
   const DEFINICAO_ESCRITA = {
     name: "training.criar_treino",
     description: "escreve",
@@ -673,7 +673,7 @@ describe("runTrilha — primeiroPassoExigeLeitura", () => {
       (c, i) => `${c ?? "-"}:${(ferramentasRecebidas[i] ?? []).join("+")}`,
     );
 
-  it("o passo 0 recebe SÓ as leituras com 'required'; o TOOL_STEP recebe todas, sem 'required'", async () => {
+  it("o passo 0 recebe TODAS as ferramentas com 'required'; o TOOL_STEP, todas sem 'required'", async () => {
     respostasPorChamada = [
       PEDE_VOLUME_E_TERMINA,
       [{ type: "delta", text: "Foram 12480 kg." }, FINISH],
@@ -682,10 +682,10 @@ describe("runTrilha — primeiroPassoExigeLeitura", () => {
     const { desfecho } = await rodar(entrada(ESPECIALISTA));
 
     expect(desfecho).toMatchObject({ ok: true, texto: "Foram 12480 kg." });
-    // Exigir no TOOL_STEP faria o modelo nunca conseguir terminar com texto; oferecer a escrita
-    // no passo 0 com 'required' empurraria uma proposta com dado chutado em vez de pergunta.
+    // Exigir no TOOL_STEP faria o modelo nunca conseguir terminar com texto; esconder a escrita
+    // no passo 0 o convencia de que não podia alterar nada (teste real da rodada 1).
     expect(pedidos()).toEqual([
-      "required:training.get_volume",
+      "required:training.get_volume+training.criar_treino",
       "-:training.get_volume+training.criar_treino",
     ]);
     expect(medicao.filter((m) => m.tipo === "start").map((m) => m.attemptType)).toEqual([
@@ -694,7 +694,7 @@ describe("runTrilha — primeiroPassoExigeLeitura", () => {
     ]);
   });
 
-  it("o RETRY é tentativa nova: o primeiro passo dele volta a oferecer só leituras com 'required'", async () => {
+  it("o RETRY é tentativa nova: o primeiro passo dele volta a ter 'required'", async () => {
     respostasPorChamada = [
       [ERRO_TEMPORARIO],
       PEDE_VOLUME_E_TERMINA,
@@ -710,29 +710,10 @@ describe("runTrilha — primeiroPassoExigeLeitura", () => {
       "TOOL_STEP",
     ]);
     expect(pedidos()).toEqual([
-      "required:training.get_volume",
-      "required:training.get_volume",
+      "required:training.get_volume+training.criar_treino",
+      "required:training.get_volume+training.criar_treino",
       "-:training.get_volume+training.criar_treino",
     ]);
-  });
-
-  it("uma escrita devolvida no passo 0 é chamada inesperada — não vira proposta", async () => {
-    // Um provedor que ignore `tools`/`required` e devolva a escrita assim mesmo.
-    respostasPorChamada = [
-      [{ type: "tool-call", toolName: "training.criar_treino", callId: "w0", input: {} }, FINISH],
-    ];
-
-    const { eventos, desfecho } = await rodar(entrada(ESPECIALISTA));
-
-    expect(desfecho).toMatchObject({
-      ok: false,
-      cancelado: false,
-      erro: { code: "UNEXPECTED_TOOL_CALL" },
-    });
-    expect(executeTool).not.toHaveBeenCalled();
-    expect(eventos.some((e) => e.type === "proposta")).toBe(false);
-    // O caminho de sempre: sem retry depois de tool call inesperada.
-    expect(chamadasAoProvedor).toBe(1);
   });
 
   it("null: oferece tudo e não exige nada", async () => {
@@ -763,7 +744,7 @@ describe("runTrilha — primeiroPassoExigeLeitura", () => {
     expect(pedidos()).toEqual(["-:training.criar_treino"]);
   });
 
-  it("leitura que não está nas definições não é oferecida — e sem nenhuma, nada é exigido", async () => {
+  it("leitura que não está nas definições não conta — e sem nenhuma, nada é exigido", async () => {
     respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
 
     await rodar(

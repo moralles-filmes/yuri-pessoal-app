@@ -130,15 +130,21 @@ export type EntradaDaTrilha = {
   readonly primeiroTipo: "PRIMARY" | "ESPECIALISTA";
   /**
    * Task 15b — as LEITURAS do especialista. Lista não vazia = o PRIMEIRO passo de cada tentativa
-   * (ESPECIALISTA/RETRY/FALLBACK) oferece SÓ elas, com `toolChoice: "required"`: o modelo é
-   * obrigado a ler antes de responder, e não a propor uma escrita (ou uma memória) com dado
-   * chutado em vez de perguntar. Do passo 1 em diante, todas as definições, no padrão (`auto`)
-   * — senão ele nunca conseguiria terminar com texto. Uma escrita que volte no passo 0 é
-   * chamada inesperada (`ferramentasDoPrimeiroPasso` do `tool-loop`).
+   * (ESPECIALISTA/RETRY/FALLBACK) pede `toolChoice: "required"`: o modelo é obrigado a chamar uma
+   * ferramenta antes de responder. Do passo 1 em diante, o padrão (`auto`) — senão ele nunca
+   * conseguiria terminar com texto. As definições oferecidas são SEMPRE todas.
    *
-   * `null` ou lista vazia = nada é exigido e tudo é oferecido desde o passo 0: um especialista
-   * só com escrita nunca é forçado a escrever. Leitura que não esteja em `definicoes` (a
-   * allowlist já filtrada pelas chaves) não é oferecida.
+   * ⚠️ A rodada 1 da revisão oferecia SÓ as leituras no passo 0, para o `required` não empurrar
+   * uma escrita com dado chutado. No teste real (2026-10-25) isso quebrou a escrita: o modelo
+   * via só leituras, concluía que não podia alterar nada e, no passo seguinte — já com as
+   * ferramentas de alteração —, respondia que não conseguia lançar (1 de 3 propostas numa
+   * rodada, 0 de 3 na outra, contra 3 de 3 antes). Com tudo oferecido, a leitura continua
+   * disponível para satisfazer o `required`, e o dado que falta é pergunta
+   * (`blocoDoEspecialista`).
+   *
+   * `null` ou lista vazia = nada é exigido: um especialista só com escrita nunca é forçado a
+   * escrever. Leitura que não esteja em `definicoes` (a allowlist já filtrada pelas chaves) não
+   * conta.
    *
    * ⛔ Sem valor padrão, como `repetir` e `modo`. Quem calcula é `coordenador.ts` (esta função
    * não conhece o registry); a decisão, a síntese e o panorama passam `null`. Instrução no
@@ -168,11 +174,10 @@ export async function* runTrilha(
   // As definições que VÃO ao provedor são a régua da chamada inesperada: o que não foi
   // oferecido não pode voltar.
   const nomesOferecidos = e.definicoes.map((d) => d.name);
-  // Task 15b — as leituras do passo 0, só entre as que vão de fato ao provedor. Vazia = nada.
-  const leiturasDoPasso0 = (e.primeiroPassoExigeLeitura ?? []).filter((d) =>
+  // Task 15b — há leitura entre as que vão de fato ao provedor? Sem nenhuma, nada é exigido.
+  const exigeLeitura = (e.primeiroPassoExigeLeitura ?? []).some((d) =>
     nomesOferecidos.includes(d.name),
   );
-  const exigeLeitura = leiturasDoPasso0.length > 0;
 
   /**
    * O texto DESTA trilha, para o desfecho. Zera em tentativa nova pela mesma regra que zera o
@@ -435,7 +440,7 @@ export async function* runTrilha(
             abortSignal: signal,
             // O laço executa SÓ o que passou pela allowlist do agente e pelo guard. O que
             // não está aqui não foi oferecido — e voltar assim mesmo encerra o run.
-            tools: exigir ? leiturasDoPasso0 : e.definicoes,
+            tools: e.definicoes,
             ...(exigir ? { toolChoice: "required" as const } : {}),
           });
         })();
@@ -455,9 +460,6 @@ export async function* runTrilha(
               },
               mensagensIniciais: e.mensagens,
               ferramentasOferecidas: nomesOferecidos,
-              ...(exigeLeitura
-                ? { ferramentasDoPrimeiroPasso: leiturasDoPasso0.map((d) => d.name) }
-                : {}),
               proximoStepIndex: e.contadores.proximoStepIndex,
               chamarModelo,
               antesDaChamada,

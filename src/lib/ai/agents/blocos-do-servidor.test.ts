@@ -83,24 +83,19 @@ describe("blocoDoEspecialista", () => {
   });
 
   /**
-   * Teste real da rodada 1 — com o passo 0 só de leituras, a Agenda pediu licença para
-   * preparar um compromisso que a tarefa já trazia inteiro, e o TO-DO disse que só podia
-   * consultar. Com escrita liberada, o bloco diz que a lista muda e que o cartão é a pergunta.
+   * Teste real da rodada 1 — a Agenda pediu licença para preparar um compromisso que a tarefa
+   * já trazia inteiro. Com escrita liberada, o bloco diz que o cartão já é a pergunta.
    */
-  it("com escrita liberada, diz que a alteração volta depois da leitura e que o cartão já é a pergunta", () => {
-    expect(comEscrita).toContain(
-      "Na primeira chamada ficam disponíveis só as leituras; as ferramentas de alteração voltam logo depois dela.",
-    );
-    expect(comEscrita).toContain("nunca o limite do que você pode fazer");
+  it("com escrita liberada, manda preparar a proposta quando a tarefa traz os dados — o cartão é a pergunta", () => {
     for (const x of [comEscrita, soEscrita]) {
       expect(x).toContain("traz os dados que ela exige, prepare a proposta");
       expect(x).toContain("essa confirmação já é a pergunta a ele");
     }
   });
 
-  it("sem escrita liberada, não promete ferramenta de alteração nem manda preparar proposta", () => {
+  it("sem escrita liberada, não manda preparar proposta", () => {
     for (const x of [b, semLeitura]) {
-      expect(x).not.toMatch(/ferramentas de alteração|prepare a proposta/);
+      expect(x).not.toMatch(/prepare a proposta/);
     }
   });
 

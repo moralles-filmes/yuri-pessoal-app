@@ -84,14 +84,6 @@ export type ToolLoopInput = {
    */
   readonly ferramentasOferecidas: readonly string[];
   /**
-   * Task 15b — quando presente, o PASSO 0 aceita só estes nomes (o especialista lê antes de
-   * propor: a trilha oferece só as leituras no primeiro passo). Uma escrita que volte no passo
-   * 0 — de um provedor que ignorou `tools`/`required` — é chamada inesperada, como qualquer
-   * nome não oferecido naquela chamada: não vira proposta. Ausente = o passo 0 aceita o mesmo
-   * que os outros.
-   */
-  readonly ferramentasDoPrimeiroPasso?: readonly string[];
-  /**
    * O próximo `step_index` DO RUN — não do laço.
    *
    * ⚠️ `ai_run_steps_run_index_uidx` é `UNIQUE (run_id, step_index, kind)`, e o `run_id` é UM
@@ -122,14 +114,9 @@ export async function* runToolLoop(
   input: ToolLoopInput,
 ): AsyncGenerator<ToolLoopEvent> {
   const mensagens: AiMessage[] = [...input.mensagensIniciais];
-  const todas = new Set(input.ferramentasOferecidas);
-  const doPrimeiroPasso = input.ferramentasDoPrimeiroPasso
-    ? new Set(input.ferramentasDoPrimeiroPasso)
-    : todas;
+  const oferecidas = new Set(input.ferramentasOferecidas);
 
   for (let passo = 0; passo <= MAX_TOOL_STEPS; passo += 1) {
-    // O que FOI enviado ao provedor NESTE passo é a régua da chamada inesperada.
-    const oferecidas = passo === 0 ? doPrimeiroPasso : todas;
     const recusa = input.antesDaChamada ? await input.antesDaChamada(passo) : null;
     if (recusa) {
       yield { type: "passthrough", evento: { type: "error", error: recusa } };

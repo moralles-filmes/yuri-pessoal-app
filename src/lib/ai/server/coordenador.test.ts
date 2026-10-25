@@ -1346,11 +1346,10 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
   });
 
   /**
-   * Teste real da rodada 1 — o especialista com alteração liberada precisa ouvir que as
-   * ferramentas de alteração voltam depois da primeira chamada; o sem alteração, não (seria
-   * prometer o que não vem).
+   * Teste real da rodada 1 — o especialista com alteração liberada ouve que, com os dados na
+   * tarefa, prepara a proposta; o sem alteração, não (mandaria preparar o que não tem como).
    */
-  it("o bloco diz que a alteração volta depois da leitura só para quem tem escrita liberada", async () => {
+  it("o bloco manda preparar a proposta só para quem tem escrita liberada", async () => {
     cruzarModulos = true;
     escrita = { allow_write_finance: true };
     responder = ({ quem }) => {
@@ -1368,7 +1367,7 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
       blocoDoEspecialista({ temLeitura: true, temEscrita: true }),
     );
     expect(porQuem.get("todo")).toContain(blocoDoEspecialista({ temLeitura: true, temEscrita: false }));
-    expect(porQuem.get("todo")).not.toContain("as ferramentas de alteração voltam");
+    expect(porQuem.get("todo")).not.toContain("prepare a proposta");
   });
 
   it("modo direto: o system do especialista leva o bloco do especialista", async () => {
@@ -1384,10 +1383,11 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
   });
 
   /**
-   * Rodada 1 da revisão — o `required` sobre a allowlist INTEIRA empurrava o modelo a propor
-   * escrita (ou memória) com dado chutado em vez de perguntar. No passo 0 vão só as leituras.
+   * Teste real da rodada 1 — oferecer só as leituras no passo 0 convencia o modelo de que ele não
+   * podia alterar nada, e a escrita deixou de acontecer. Todas as ferramentas vão desde o passo 0;
+   * o `required` continua só nele.
    */
-  it("com escrita ligada: o passo 0 do especialista recebe só leituras; o TOOL_STEP recebe todas", async () => {
+  it("com escrita ligada: o passo 0 do especialista recebe TODAS com 'required'; o TOOL_STEP, todas sem", async () => {
     escrita = { allow_write_finance: true };
     respostasPorChamada = [
       [aciona("financeiro", "gasto de outubro"), FINISH],
@@ -1398,11 +1398,7 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
     await conduzir({ prefs: prefs() });
 
     expect(resumo()).toEqual(["decisao#0:-", "financeiro#0:required", "financeiro#1:-"]);
-    expect(ferramentasRecebidas[1]).toEqual([
-      "finance.get_balances",
-      "finance.get_spending",
-      "finance.get_invoice",
-    ]);
+    expect(ferramentasRecebidas[1]).toEqual(ferramentasRecebidas[2]);
     expect(ferramentasRecebidas[2]).toEqual([
       "finance.get_balances",
       "finance.get_spending",
@@ -1439,18 +1435,18 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
     ]);
   });
 
-  it("escrita devolvida no passo 0 é chamada inesperada: o especialista falha e nada é proposto", async () => {
+  it("tarefa completa: a escrita já no passo 0 satisfaz o 'required' e vira proposta", async () => {
     escrita = { allow_write_finance: true };
     respostasPorChamada = [
       [aciona("financeiro", "lançar R$ 10 no mercado"), FINISH],
       [{ type: "tool-call", toolName: "finance.lancar_transacao", callId: "w0", input: {} }, FINISH],
+      [delta("Preparei o lançamento."), FINISH],
     ];
 
     const { eventos, desfecho } = await conduzir({ prefs: prefs() });
 
-    expect(eventos.some((e) => e.type === "proposta")).toBe(false);
-    expect(desfecho).toMatchObject({ ok: false, erro: { code: "UNEXPECTED_TOOL_CALL" } });
-    // O caminho de sempre: tool call inesperada não tem retry.
-    expect(systemsRecebidos).toHaveLength(2);
+    expect(desfecho).toMatchObject({ ok: true, texto: "Preparei o lançamento." });
+    expect(eventos.filter((e) => e.type === "proposta")).toHaveLength(1);
+    expect(resumo()).toEqual(["decisao#0:-", "financeiro#0:required", "financeiro#1:-"]);
   });
 });
