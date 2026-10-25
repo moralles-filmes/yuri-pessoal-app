@@ -7,6 +7,7 @@ import { termosProibidosEm } from "@/lib/tone/vocabulary";
 import {
   avisoConsultaNaoMontada,
   avisoCruzarModulos,
+  avisoDeEspecialistasComLeituraIncompleta,
   avisoDeEspecialistasQueFalharam,
   avisoSemEspecialista,
   blocoDaData,
@@ -137,6 +138,16 @@ describe("avisos do servidor", () => {
     expect(a).not.toMatch(/destes módulos/);
     expect(a).toContain(settingsLink());
     expect(termosProibidosEm(a)).toEqual([]);
+  });
+
+  it("avisoDeEspecialistasComLeituraIncompleta: vazio sem rótulos, cita os módulos e respeita o tom", () => {
+    expect(avisoDeEspecialistasComLeituraIncompleta([])).toBe("");
+    const um = avisoDeEspecialistasComLeituraIncompleta(["Financeiro"]);
+    expect(um).toContain("Financeiro");
+    expect(termosProibidosEm(um)).toEqual([]);
+    const dois = avisoDeEspecialistasComLeituraIncompleta(["Financeiro", "TO-DO"]);
+    expect(dois).toContain("Financeiro e TO-DO");
+    expect(termosProibidosEm(dois)).toEqual([]);
   });
 
   it("avisoConsultaNaoMontada cita o módulo, não manda ligar leitura nenhuma e respeita o tom", () => {

@@ -98,6 +98,18 @@ export function avisoDeEspecialistasQueFalharam(rotulos: readonly string[]): str
 }
 
 /**
+ * Acrescentado quando um especialista respondeu, mas com a leitura interrompida (o teto de
+ * passos) ou com a resposta longa demais para chegar inteira à síntese.
+ */
+export function avisoDeEspecialistasComLeituraIncompleta(rotulos: readonly string[]): string {
+  if (rotulos.length === 0) return "";
+  const nomes = listaDeRotulos(rotulos);
+  return rotulos.length === 1
+    ? `A resposta do especialista ${nomes} chegou incompleta; o que está acima pode não incluir tudo desse módulo.`
+    : `As respostas dos especialistas ${nomes} chegaram incompletas; o que está acima pode não incluir tudo desses módulos.`;
+}
+
+/**
  * Quando o coordenador pediu um especialista LIBERADO, mas a consulta veio sem forma (tarefa
  * vazia ou longa demais) e nenhum outro pedido valeu. O módulo está ligado: mandar ligar a
  * leitura apontaria para uma causa que não é a real.

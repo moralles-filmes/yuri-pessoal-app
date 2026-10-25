@@ -47,6 +47,7 @@ import {
 import {
   avisoConsultaNaoMontada,
   avisoCruzarModulos,
+  avisoDeEspecialistasComLeituraIncompleta,
   avisoDeEspecialistasQueFalharam,
   avisoSemEspecialista,
   blocoDaData,
@@ -510,7 +511,9 @@ export async function* conduzirCoordenador(
 
   // ── 5. Dois ou mais aceitos: especialistas em paralelo + síntese ─────────────────────
   if (aceitos.length > 1) {
-    return yield* emParalelo({ e, coordenador, decisao, aceitos, comum, cruzouDesligado });
+    // ⚠️ Sem `cruzouDesligado`: com dois ou mais aceitos, "Cruzar módulos" está LIGADA
+    // (`decidirAcionamentos` recusa o 2º quando ela está desligada) — ver `emParalelo`.
+    return yield* emParalelo({ e, coordenador, decisao, aceitos, comum });
   }
 
   // ── 4. MODO DIRETO — a resposta do especialista É a resposta final (§4.4) ────────────
@@ -686,9 +689,8 @@ async function* emParalelo(input: {
     | "primeiroTipo"
     | "promptMontado"
   >;
-  readonly cruzouDesligado: boolean;
 }): AsyncGenerator<ChatRunnerEvent, DesfechoDoCoordenador> {
-  const { e, coordenador, decisao, aceitos, comum, cruzouDesligado } = input;
+  const { e, coordenador, decisao, aceitos, comum } = input;
   const { permissions, writePermissions } = e.prefs;
 
   // Trilhas 1..n, NA ORDEM DO ACIONAMENTO.
@@ -719,8 +721,6 @@ async function* emParalelo(input: {
    */
   const controle = new AbortController();
   const repassarAborto = () => controle.abort();
-  if (e.abortSignal.aborted) controle.abort();
-  else e.abortSignal.addEventListener("abort", repassarAborto, { once: true });
 
   /**
    * MOD-ia-005 + §5.6 — o prazo de cada especialista é o restante MENOS a reserva da síntese.
@@ -762,15 +762,30 @@ async function* emParalelo(input: {
   );
 
   /**
-   * §5.6 — sem `delta` não há heartbeat em `runChat`, e o run pareceria travado para a
-   * reconciliação (lease). O parcial gravado é VAZIO: o texto dos especialistas não é público.
+   * ⛔ INVARIANTE 17 NO PARALELO — o corte pelo teto de passos (`aviso`) de um especialista
+   * não chega ao dono pelo texto dele: esse texto vai à síntese como DADO NÃO CONFIÁVEL, e o
+   * modelo pode omiti-lo. Quem foi cortado é guardado aqui (por índice da trilha) e declarado
+   * pelo SERVIDOR no fim da resposta.
    */
-  const heartbeat = setInterval(() => {
-    heartbeatAndPersist(e.run.runId, e.run.userId, e.run.assistantMessageId, "").catch(() => {});
-  }, HEARTBEAT_INTERVAL_MS);
+  const cortados = new Set<number>();
 
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
   let finais: readonly DesfechoDaTrilha[] | null = null;
   try {
+    // Dentro do `try` que os desfaz: nada do que o `finally` limpa nasce fora dele.
+    if (e.abortSignal.aborted) controle.abort();
+    else e.abortSignal.addEventListener("abort", repassarAborto, { once: true });
+
+    /**
+     * §5.6 — sem `delta` não há heartbeat em `runChat`, e o run pareceria travado para a
+     * reconciliação (lease). O parcial gravado é VAZIO: o texto dos especialistas não é público.
+     */
+    heartbeat = setInterval(() => {
+      heartbeatAndPersist(e.run.runId, e.run.userId, e.run.assistantMessageId, "").catch(
+        () => {},
+      );
+    }, HEARTBEAT_INTERVAL_MS);
+
     for (;;) {
       const passo = await mescla.next();
       if (passo.done) {
@@ -798,8 +813,12 @@ async function* emParalelo(input: {
       const ev = evento.evento;
       switch (ev.type) {
         case "delta":
+          // ⛔ NÃO vai para a tela: o texto está no desfecho da trilha.
+          break;
         case "aviso":
-          // ⛔ NÃO vão para a tela: o texto (com o aviso de corte) está no desfecho da trilha.
+          // O texto do corte está no desfecho (dado para a síntese); a DECLARAÇÃO ao dono é
+          // nossa, no fim — ver `cortados`.
+          cortados.add(indice);
           break;
         case "switch":
           // Com `repetir: false` a trilha não troca de tentativa; e nada dela está na tela.
@@ -838,7 +857,7 @@ async function* emParalelo(input: {
 
   const respondidos = participantes.flatMap((p, i) => {
     const d = finais[i]!;
-    return d.ok ? [{ p, texto: d.texto }] : [];
+    return d.ok ? [{ p, i, texto: d.texto }] : [];
   });
   const falhos = participantes.flatMap((p, i) => {
     const d = finais[i]!;
@@ -859,9 +878,18 @@ async function* emParalelo(input: {
     desligados: decisao.desligados,
     extras: [BLOCO_DA_SINTESE],
   });
-  const blocos = respondidos.map(({ p, texto }) =>
-    renderUntrusted(wrapUntrusted("resposta_de_especialista", p.aceito.rotulo, { texto })),
-  );
+  /**
+   * Resposta maior que `MAX_UNTRUSTED_CHARS` é CORTADA por `wrapUntrusted`, e a síntese recebe
+   * só parte dela. Isso também é leitura incompleta, e entra na mesma frase do servidor.
+   */
+  const blocos = respondidos.map(({ p, i, texto }) => {
+    const bloco = wrapUntrusted("resposta_de_especialista", p.aceito.rotulo, { texto });
+    if (bloco.truncated) cortados.add(i);
+    return renderUntrusted(bloco);
+  });
+  const incompletos = respondidos
+    .filter(({ i }) => cortados.has(i))
+    .map(({ p }) => p.aceito.rotulo);
   // Papel `user`, depois do histórico e respeitando a alternância (MOD-ia-027) — nunca
   // `system`, e nunca `tool` (a Anthropic recusa bloco de ferramenta sem `tools`).
   const mensagens = normalizarAlternancia([
@@ -894,13 +922,18 @@ async function* emParalelo(input: {
   if (!sintese.ok) return sintese;
 
   /**
-   * ⛔ AS FRASES SÃO DO SERVIDOR, E VÃO NO FIM (invariante 103, §4.3.6): quem não respondeu,
-   * e depois o "cruzar módulos". No fim porque tentativa nova zera o texto (invariante 23).
+   * ⛔ AS FRASES SÃO DO SERVIDOR, E VÃO NO FIM (invariante 103, §4.3.6). A ordem das frases
+   * do coordenador é: quem não respondeu → quem respondeu com leitura incompleta → "cruzar
+   * módulos". No fim porque tentativa nova zera o texto (invariante 23).
+   *
+   * ⚠️ A terceira NÃO EXISTE AQUI, e não por esquecimento: com dois ou mais aceitos, "Cruzar
+   * módulos" está ligada — desligada, `decidirAcionamentos` recusa o 2º e o caminho é o modo
+   * direto, que é onde `avisoCruzarModulos()` fecha a resposta.
    */
   let texto = sintese.texto;
   const frases = [
     avisoDeEspecialistasQueFalharam(falhos.map(({ p }) => p.aceito.rotulo)),
-    cruzouDesligado ? avisoCruzarModulos() : "",
+    avisoDeEspecialistasComLeituraIncompleta(incompletos),
   ];
   for (const frase of frases) {
     if (!frase) continue;

@@ -241,6 +241,7 @@ const { AVISO_SEM_AUDITORIA } = await import("./tool-loop");
 const {
   avisoConsultaNaoMontada,
   avisoCruzarModulos,
+  avisoDeEspecialistasComLeituraIncompleta,
   avisoDeEspecialistasQueFalharam,
   avisoSemEspecialista,
   blocoDaData,
@@ -249,6 +250,7 @@ const {
   "@/lib/ai/agents/blocos-do-servidor"
 );
 const { blocoDeMemorias } = await import("@/lib/ai/memory/prompt");
+const { MAX_UNTRUSTED_CHARS } = await import("@/lib/ai/security/untrusted");
 const { catalogoDeEspecialistas } = await import("@/lib/ai/agents/especialistas");
 type EntradaDoCoordenador = Parameters<typeof conduzirCoordenador>[0];
 
@@ -931,6 +933,75 @@ describe("conduzirCoordenador — especialistas em paralelo e síntese", () => {
     expect(
       desfecho.ok && desfecho.texto.endsWith(avisoDeEspecialistasQueFalharam(["Financeiro"])),
     ).toBe(true);
+  });
+
+  /**
+   * Rodada 1 — invariante 17 no paralelo: o corte pelo teto de passos de um especialista vai à
+   * síntese como dado, e o modelo pode omiti-lo. A declaração ao dono é do SERVIDOR, no fim,
+   * depois da de quem falhou.
+   */
+  it("especialista cortado pelo teto de passos é declarado pelo servidor, depois de quem falhou", async () => {
+    cruzarModulos = true;
+    permissoes = { allow_finance: true, allow_todo: true, allow_training: true };
+    const pedeSaldo = (n: number): AiStreamEvent => ({
+      type: "tool-call",
+      toolName: "finance.get_balances",
+      callId: `s${n}`,
+      input: {},
+    });
+    responder = ({ quem, vez }) => {
+      if (quem === "decisao") {
+        return [
+          aciona("financeiro", "saldo"),
+          aciona("todo", "tarefas de hoje"),
+          aciona("treinos", "volume"),
+          FINISH,
+        ];
+      }
+      if (quem === "sintese") return [delta("Resumo."), FINISH];
+      // O Financeiro pede ferramenta em TODO passo: o laço corta no teto e emite o aviso.
+      if (quem === "financeiro") return [pedeSaldo(vez), FINISH];
+      if (quem === "todo") return [ERRO_TEMPORARIO];
+      return [delta("treinos ok"), FINISH];
+    };
+
+    const { desfecho } = await conduzir({ prefs: prefs() });
+
+    const falha = avisoDeEspecialistasQueFalharam(["TO-DO"]);
+    const incompleta = avisoDeEspecialistasComLeituraIncompleta(["Financeiro"]);
+    expect(desfecho).toMatchObject({ ok: true });
+    expect(desfecho.ok && desfecho.texto).toBe(`Resumo.\n\n${falha}\n\n${incompleta}`);
+  });
+
+  /** Rodada 1 — resposta cortada por `wrapUntrusted` também é leitura incompleta. */
+  it("resposta de especialista longa demais para o bloco não confiável é declarada incompleta", async () => {
+    responder = ({ quem }) => {
+      if (quem === "decisao") return DECIDE_DOIS;
+      if (quem === "sintese") return [delta("Resumo."), FINISH];
+      if (quem === "financeiro") return [delta("x".repeat(MAX_UNTRUSTED_CHARS + 100)), FINISH];
+      return [delta("2 tarefas para hoje."), FINISH];
+    };
+
+    const { desfecho } = await conduzir({ prefs: prefs() });
+
+    expect(desfecho.ok && desfecho.texto).toBe(
+      `Resumo.\n\n${avisoDeEspecialistasComLeituraIncompleta(["Financeiro"])}`,
+    );
+  });
+
+  /** Rodada 1 — menos de 20 s no início: os 15 s da síntese tiram o especialista do piso. */
+  it("com menos de 20 s restantes, nenhum especialista abre tentativa e o desfecho é AI_DEADLINE", async () => {
+    responder = ({ quem }) => {
+      if (quem === "decisao") return DECIDE_DOIS;
+      return [delta("não deveria"), FINISH];
+    };
+
+    // Prazo de 55 s a partir de 0; aos 36 s restam 19 s → 4 s para os especialistas (< piso).
+    const { desfecho } = await conduzir({ prefs: prefs(), agoraMs: () => 36_000 });
+
+    expect(medicao.filter((m) => m.tipo === "start" && (m.trilha ?? 0) >= 1)).toEqual([]);
+    expect(chamadasPor("sintese")).toBe(0);
+    expect(desfecho).toMatchObject({ ok: false, cancelado: false, erro: { code: "AI_DEADLINE" } });
   });
 
   /** Review Focus 4 — o lento é cortado pelo prazo DELE, e a síntese começa com folga. */
