@@ -12,6 +12,7 @@ do roadmap original, todas concluídas.
 | [METRICAS-FINANCEIRAS.md](METRICAS-FINANCEIRAS.md) | Dicionário de métricas: o que cada número significa hoje e o que passará a significar |
 | [NAVEGACAO.md](NAVEGACAO.md) | Estrutura atual da navegação, defeitos e proposta |
 | [PLANO.md](PLANO.md) | Fases, subfases, gates de aprovação e critérios de aceite |
+| [REFERENCIA-VISUAL.md](REFERENCIA-VISUAL.md) | O visual-alvo do Painel financeiro (04-A) e do Dashboard (06), descrito em palavras, e os desvios do print |
 | [STATUS.md](STATUS.md) | Fase atual, concluído, pendências, decisões, bloqueios, próximo passo |
 
 ## Regras deste trabalho

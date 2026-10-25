@@ -78,15 +78,34 @@ todos como teste puro · nenhum teste existente alterado para passar · concilia
 
 ## REDESIGN-04 — Relatórios e terceiros
 
+🎨 **Referência visual (D65, 2026-10-25): print 1 → Painel financeiro.** Descrita em
+[REFERENCIA-VISUAL.md](REFERENCIA-VISUAL.md) §2–§4. O print decide layout e forma, não o que um
+número significa. Os desvios dele estão no §6.
+
 | Subfase | Entrega |
 | --- | --- |
-| **04-A** | Novo relatório financeiro: Resumo → Evolução → Composição → Detalhamento → Projeções. Barra de filtros com período, base, responsabilidade, conta, cartão, pessoa, categoria |
+| **04-A** | **Painel financeiro (`/dashboard/financeiro`) no visual do print 1.** A ordem de cima para baixo é Resumo → Evolução → Composição → Cartões e faturas → Detalhamento → Projeções: banner, os 4 indicadores (saldo com data, minhas entradas, minhas saídas, de terceiros), barras × rosca, cartões na cor de cada um × próximas faturas, últimas transações × a receber de terceiros, e abaixo tudo o que o painel já tem. **Primeiro entregável: prévia com dado sintético, aprovada antes do código.** Cria as peças comuns (banner, indicador, bloco, olho) se a 06 ainda não as tiver criado |
+| **04-A2** | **Relatório financeiro (`/relatorios`, aba Financeiro) com as mesmas peças**, sem banner. Barra de filtros com período, base, responsabilidade, conta, cartão, pessoa, categoria. Resumo → Evolução → Composição → Detalhamento → Projeções. As outras abas ficam como estão |
 | **04-B** | Detalhamento que abre os registros por trás de cada indicador |
 | **04-C** | Área Terceiros e reembolsos: por pessoa, origem do débito, valor atribuído, recebimentos, saldo, histórico |
 | **04-D** | Exportação com período, base, filtros e identificação de projeções no arquivo. XLSX oferecido (a lib já existe) |
 
+**Pendências que já estavam endereçadas à 04-A** continuam nela:
+
+| Pendência | Origem | Vai para |
+| --- | --- | --- |
+| RR4: o número principal de "Entradas" é bruto | 03-C | 04-A (e 06) |
+| RR5: o saldo da evolução é bruto − bruto | 03-C | 04-A, no componente do gráfico, o que vale também para a 04-A2 |
+| RR-E-6: "Saldo atual" sem corte de data | 03-E | 04-A |
+| RR-E-7: a régua do gasto alto compara mês parcial com meses cheios | 03-E | 04-A (alertas do painel) |
+| "parcial" nas telas (campo entregue pela 03-B2) | 03-B2 | 04-A, 04-A2 e 06 |
+| RR-C2-10: filtro ligado × desligado no escuro | 03-C2 | 04-A2 (barra de filtros) |
+| RR-C2-6: seletor de categoria do formulário | 03-C2 | 04-A ou subfase de formulário (inalterado) |
+
 **Aceite:** todo indicador abre os registros que o explicam · totais conciliam · gráfico de
-pizza sem negativo · série futura visualmente distinta de realizado.
+pizza sem negativo · série futura visualmente distinta de realizado · **o aceite visual de
+`REFERENCIA-VISUAL.md` §7** (prévia aprovada, 390/768/1280/1440 px, claro e escuro, contraste
+do banner medido, banner sem JS de cliente) · nenhum bloco que o painel tem hoje sumiu.
 
 ---
 
@@ -107,12 +126,33 @@ financeira.
 
 ## REDESIGN-06 — Dashboard geral
 
-Cabeçalho compacto → Prioridades do dia → Resumo financeiro → Organização → Saúde → Insights.
+🎨 **Referência visual (D65, 2026-10-25): print 2.** Descrita em
+[REFERENCIA-VISUAL.md](REFERENCIA-VISUAL.md) §2 e §5.
+
+Barra (período + Personalizar) → **banner de boas-vindas** → **Resumo financeiro** (faixa fixa
+de 4 indicadores: saldo das contas com o olho, entradas do mês, saídas do mês, total em cartões
+com à vista) → **grade dos 11 cards**, todos do mesmo tamanho, cada um com a anatomia do print.
+
+⚠️ **A sequência antiga** (Cabeçalho compacto → Prioridades do dia → Resumo financeiro →
+Organização → Saúde → Insights) **foi substituída pela do print.** O "hoje" de cada módulo
+fica nos quadros do próprio card (Hoje · Atrasadas · Urgentes no TO-DO, Eventos hoje na Agenda,
+concluídos hoje em Hábitos), e o bloco "Prioridades do dia" sai do plano. O agrupamento
+Organização/Saúde também sai, porque a ordem dos cards é sua e o "Personalizar" já a guarda.
+
+**Entram aqui também:** o F3 (o seletor de período do dashboard sem `aria-pressed`, registrado
+na 07-A), o D15 (quando dobrar fatias em "Outros"), o RR4 no card Financeiro e a divergência do
+`card-meta.ts` em Notificações (`NAVEGACAO.md` §5).
+
+**Primeiro entregável: prévia com dado sintético, aprovada antes do código.** Cria as peças
+comuns (banner, indicador, bloco, olho) se a 04-A ainda não as tiver criado. Se já tiver,
+**reusa**, nunca copia.
 
 **Aceite:** os 11 ids de `DASH_CARD_IDS` preservados · layout personalizado existente não é
-resetado · carregamento por bloco mantido · erro isolado por bloco · card de "hoje" **diz** que
-é de hoje · salvar ordem não sequestra o período padrão (R7) · **a IA continua sem gerar nada
-no carregamento** (`boundaries.test.ts:552` tem de continuar verde).
+resetado · carregamento por bloco mantido · erro isolado por bloco, **inclusive na faixa do
+Resumo financeiro** · a faixa e o card Financeiro saem da **mesma** leitura · card de "hoje"
+**diz** que é de hoje · salvar ordem não sequestra o período padrão (R7) · **a IA continua sem
+gerar nada no carregamento** (`boundaries.test.ts:552` tem de continuar verde) · **o aceite
+visual de `REFERENCIA-VISUAL.md` §7**.
 
 ---
 
@@ -151,3 +191,6 @@ comparação de performance antes/depois · documentação · plano de reversão
 
 02 e 03 são independentes e podem andar em paralelo — 02 é visual, 03 é significado. 04, 05 e
 06 dependem das duas. **08 fecha.**
+
+04-A e 06 compartilham as peças visuais de `REFERENCIA-VISUAL.md` §2. A primeira das duas a
+rodar as cria e a outra reusa. Não há ordem obrigatória entre elas.
