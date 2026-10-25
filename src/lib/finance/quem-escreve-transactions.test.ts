@@ -165,6 +165,11 @@ const ESCRITAS_SQL: Record<string, { quantidade: number; motivo: string }> = {
     motivo:
       "pagar_fatura insere o pagamento (nasce pago, com liquidado_em, coerente com o CHECK); desfazer_pagamento_fatura o apaga",
   },
+  "20261025120000_salvar_lancamento_atomico.sql": {
+    quantidade: 3,
+    motivo:
+      "03-G2 (K1): salvar_lancamento insere ou atualiza o lançamento e criar_compra_parcelada insere a compra-pai; liquidado_em chega de montarLinhaDoLancamento (dataDeLiquidacaoAGravar) e a compra-pai de cartão não tem a coluna",
+  },
 };
 
 const ESCRITA_SQL = /\b(insert\s+into|update|delete\s+from)\s+(public\.)?transactions\b/g;

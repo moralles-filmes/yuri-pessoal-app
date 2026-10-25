@@ -155,6 +155,7 @@ revisão de subagente, entram num commit só de docs e a execução segue **sem*
 | **D-G2-19** | *(Revisão de desenho.)* **O formulário, ao editar um estorno, manda o `card_id` do lançamento e não pede conta** — senão o schema exige uma conta (`validators/transaction.ts:58-63`) que o servidor descartaria em silêncio (D-G2-1). Na tela: no lugar de conta e meio de pagamento, "Estorno no cartão — continua na fatura em que foi lançado.". `transaction-form.tsx` entra no E3. |
 | **D-G2-20** | *(Revisão de desenho.)* **A compra-pai tem builder próprio** (`montarCompraPai`, em `linha-do-lancamento.ts`), com as colunas de parcelado; `COLUNAS_DA_COMPRA_PAI` é espelhada pelo teste da migration como `COLUNAS_DA_LINHA`. Os dois builders **sempre** mandam as chaves NOT NULL sem default útil (`type`, `amount`, `purchase_date`, `competence_date`, `status`) — há teste. |
 | **D-G2-21** | *(Revisão de desenho.)* **O SQL confere também o `person_id` dos recebíveis e exige parcela `ativa`** no `parcela_numero`; e o harness de teste passa a devolver as linhas em `delete().select()` (hoje devolve `null`), porque o "0 linhas ⇒ já sumiu" do E5 depende disso. |
+| **D-G2-22** | *(`saas-shield-br:migration-validator`, 2026-10-25: PASS_WITH_WARNINGS, 0 bloqueantes, 5 P3.)* Incorporados com o "Sim" do dono: (1) a conferência de `parcela_numero` sobe para **antes** do lock e dos deletes; (2) `criar_compra_parcelada` confere `qtd_parcelas = jsonb_array_length(p_parcelas)`; (3) `jsonb_array_length` só roda sobre lista (`case`, o `OR` do SQL não garante curto-circuito); (4) comentário: parcela com fatura nula cai em `LANCAMENTO_REFERENCIA_INVALIDA`. Não incorporado: (5) deadlock teórico com `desfazer_pagamento_fatura` — o Postgres aborta um lado com `40P01`, tudo revertido, e o app lê SQLSTATE como "Nada foi alterado." (D-G2-16). |
 | **D-G2-13** | **O varredor de escritas é uma função nova no mesmo arquivo** (`inventariarEscritas`, em `src/test/inventario-de-leituras.ts`), com as RPCs de escrita numa allowlist (`salvar_lancamento`, `criar_compra_parcelada`, `pagar_fatura`, `desfazer_pagamento_fatura`). O teste novo fixa a contagem e as exceções declaradas (`statements.ts:44` deliberada; o seed D-G24; `todo_reminders`, fora do financeiro). |
 
 ---
@@ -215,6 +216,8 @@ Nenhuma tabela, coluna, policy, índice ou dado.
 -- Os VALORES chegam prontos de TS (montarLinhaDoLancamento, montarDivisaoAVista,
 -- montarDivisaoParcelada): aqui só se confere a forma, se ORDENA e se torna ATÔMICO. As colunas
 -- listadas são espelhadas por teste (src/lib/finance/m-g2-salvar-lancamento.test.ts).
+--
+-- Aditiva: duas funções. Nenhuma tabela, coluna, policy, índice ou dado.
 --
 -- Reversão (primeiro reverter o app, que passa a chamar estas funções; depois):
 --   drop function if exists public.criar_compra_parcelada(jsonb, jsonb, jsonb);
@@ -331,6 +334,17 @@ begin
     ) then
       raise exception 'LANCAMENTO_REFERENCIA_INVALIDA' using errcode = 'P0001';
     end if;
+    -- D-G2-3: parcela_numero resolve o installment_id pela parcela ATIVA do MESMO pai — e a
+    -- recusa vem ANTES de travar e apagar (achado 1 do migration-validator).
+    if exists (
+      select 1 from jsonb_to_recordset(coalesce(p_divisao -> 'recebiveis', '[]')) x(parcela_numero int)
+       where x.parcela_numero is not null
+         and not exists (select 1 from public.transaction_installments i
+                          where i.parent_transaction_id = v_id and i.numero = x.parcela_numero
+                            and i.status = 'ativa')
+    ) then
+      raise exception 'DIVISAO_INVALIDA' using errcode = 'P0001';
+    end if;
 
     -- D-G2-4: trava os recebíveis da divisão atual e reconfere a proteção DENTRO da transação.
     perform 1 from public.receivables rc
@@ -358,16 +372,6 @@ begin
       from jsonb_to_recordset(coalesce(p_divisao -> 'pessoas', '[]'))
            x(person_id uuid, tipo_divisao text, percentual numeric, valor numeric);
 
-    -- D-G2-3: parcela_numero resolve o installment_id pela parcela ATIVA do MESMO pai.
-    if exists (
-      select 1 from jsonb_to_recordset(coalesce(p_divisao -> 'recebiveis', '[]')) x(parcela_numero int)
-       where x.parcela_numero is not null
-         and not exists (select 1 from public.transaction_installments i
-                          where i.parent_transaction_id = v_id and i.numero = x.parcela_numero
-                            and i.status = 'ativa')
-    ) then
-      raise exception 'DIVISAO_INVALIDA' using errcode = 'P0001';
-    end if;
     insert into public.receivables (
       user_id, person_id, transaction_id, shared_expense_id, installment_id, statement_id,
       card_id, valor, status, data_prevista
@@ -406,8 +410,11 @@ begin
      or (p_pai ->> 'payment_method') is distinct from 'cartao_credito'
      or (p_pai ->> 'card_id') is null
      or (p_pai ->> 'statement_id') is not null
-     or jsonb_typeof(p_parcelas) is distinct from 'array'
-     or jsonb_array_length(p_parcelas) < 1 then
+     -- jsonb_array_length só roda sobre lista: o OR do SQL não garante curto-circuito (achado 3).
+     or case when jsonb_typeof(p_parcelas) = 'array'
+             then jsonb_array_length(p_parcelas) < 1
+               or (p_pai ->> 'qtd_parcelas')::int is distinct from jsonb_array_length(p_parcelas)
+             else true end then
     raise exception 'PARCELADO_INVALIDO' using errcode = 'P0001';
   end if;
   if not exists (select 1 from public.credit_cards where id = (p_pai ->> 'card_id')::uuid)
@@ -415,6 +422,7 @@ begin
          and not exists (select 1 from public.categories where id = (p_pai ->> 'category_id')::uuid))
      or ((p_pai ->> 'subcategory_id') is not null
          and not exists (select 1 from public.subcategories where id = (p_pai ->> 'subcategory_id')::uuid))
+     -- Toda parcela tem fatura (D-G2-2 as resolve antes): statement_id nulo também cai aqui.
      or exists (
        select 1 from jsonb_to_recordset(p_parcelas) x(statement_id uuid)
         where not exists (select 1 from public.card_statements s where s.id = x.statement_id)
