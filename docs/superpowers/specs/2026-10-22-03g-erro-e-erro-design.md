@@ -599,4 +599,137 @@ com o erro injetado pelo harness. No fim, só a recontagem da §2.1 (mesmos núm
 
 ## 13. Resultado da execução
 
-*(vazia até a execução)*
+Executada em 2026-10-25, na branch `feat/redesign-03g-erro-e-erro`, sem push, sem merge, sem
+upstream e sem migration. Um commit por passo:
+
+| Passo | Commit | O quê |
+| --- | --- | --- |
+| desenho / plano | `d2f5cee` / `e2f290e` | este arquivo e `docs/superpowers/plans/2026-10-25-03g-erro-e-erro.md` |
+| L0 | `256dd6c` | `supabase/leitura.ts`, as duas frases de `helpers.ts`, harness com `falharLeitura` e `count` |
+| L1 (+ L5) | `0952818`, `1804a46` | queries lançam; o caixa (L5) entrou junto, porque `lerRecebiveis` mudou de forma no L1 |
+| L3 | `a0b9035` | tela de erro única e **três** limites (desvio aprovado, abaixo) |
+| L2 | `e0f1cb3` | aviso de teto nas três listas; `exigirCompleta` onde soma |
+| L4 | `4ad22f2`, `1766aa6` | cards e insight dizem qual leitura falhou; o segundo commit é o teste que chama o card (Z4) |
+| L6a / L6c1 / L6b / L6c2 | `803343e` / `33a4f15` / `88b6678` / `c3c0d62` | as leituras que decidem escrita (L6b e L6c1 trocaram de ordem: o L6b fazia `getOrCreate*` lançar, e os chamadores precisavam capturar antes) |
+| L7 | `6ba1a58`, `c5c4068` | Cron por família e o aviso; o segundo commit é o teste que matou a Z7b |
+| L8 | `a7c48e7` | a varredura como teste |
+| revisão | `d888c17` | o achado médio da revisão final, corrigido (abaixo) |
+
+**Quem executou** (`summary_line` literais do `ai-router-br`):
+
+- Task 1 (L0): `🔀 Router · TIER 1 · standard → Codex (gpt-6.1-sol · low) … · classificação` — ficou no principal.
+- Tasks 2 (L1), 3 (L3), 4 (L2), 5 (L4), 7a (L6a) e a primeira tentativa da 7b (L6b):
+  `🔀 Router · TIER 1 · simple → Codex (gpt-6-luna · medium) indisponível → Claude Haiku (subagente) · delegado ao subagente`.
+- Task 7c1 (L6c1): `🔀 Router · TIER 1 · simple → Claude Haiku (subagente) · delegado ao subagente`.
+- Task 7b (L6b), no despacho que valeu: `🔀 Router · TIER 1 · simple → workers externos bloqueados (dirty_worktree) → Claude Haiku (subagente) · delegado ao subagente`.
+- Task 7c2 (L6c2): `🔀 Router · TIER 3 → agente principal`.
+- L5, L7, L8, os ajustes de bundle do L3, as mutações e a revisão: no principal, como manda a
+  §8. O trabalho de subagente foi revisado no diff antes de cada commit; dois subagentes pararam
+  e devolveram a decisão (L2: conflito com um teste; L6b: a captura faltando nos chamadores, que
+  virou o L6c1).
+
+### 13.1 Os cinco comandos, antes × depois
+
+| Comando | `5bdeb3f` (antes) | ponta (depois) |
+| --- | --- | --- |
+| `npm run test:run` | 281 arquivos, 6.631 testes | **292 arquivos, 6.783 testes**, verdes |
+| `npm run lint` | limpo | limpo |
+| `npx tsc --noEmit` | limpo | limpo |
+| `npm run build` | ok | ok |
+| `npm run perf:bundle` | mediana 216,3 KB; maior `/todo` 241,2 | **mediana 217,8 KB**; maior `/todo` 242,3; 68 rotas no orçamento |
+| `TZ=UTC npx vitest run src/lib/finance/ src/lib/actions/ src/lib/notifications/` | — | 63 arquivos, 1.063 testes, verdes |
+
+Rotas tocadas (KB gz, antes → depois): `/financeiro` 199,0 → 200,8 · `/financeiro/lancamentos`
+226,3 → 228,1 · `/faturas` 206,9 → 208,0 · `/importar` 217,3 → 218,5 · `/parcelamentos` 207,8 →
+209,0 · `/terceiros` 224,6 → 225,8 · `/dashboard` 207,0 → 208,2 · `/configuracoes` 209,9 → 211,1
+· `/notificacoes` 202,7 → 204,0. O degrau de ~1,2 KB em toda rota é o limite de erro do app (o
+Turbopack duplica o módulo pequeno por limite); `/financeiro` tem o próprio, daí 1,8.
+
+**Instabilidade preexistente:** `src/lib/ai/boundaries.test.ts` (e às vezes `pipeline.test.ts`)
+estoura o timeout de 5 s sob carga. Acontece também em `5bdeb3f` e passa isolado. Registrado, sem
+conserto (fora da lista).
+
+### 13.2 Desvios do desenho
+
+| Desvio | Por quê | Quem decidiu |
+| --- | --- | --- |
+| **Três** limites de erro, não quatro: sem `src/app/error.tsx` e sem `console.error(digest)` no cliente (D-G14, §5.4) | com quatro, o bundle passava do teto combinado (+1,9 KB na mediana; primeira tentativa +4,4 com `Button`/`cva`). Consequência aceita: falha no `(app)/layout.tsx` cai no `global-error` (sem a casca, tema claro — RR-G-7) | **o dono**, em 2026-10-25 ("3 limites, cabe") |
+| L5 entrou no commit do L1 | `lerRecebiveis` passou a lançar no L1; o caixa precisava capturar no mesmo commit para a suíte continuar verde | eu |
+| L8: **cinco** exceções, não três | além de `getDailyBalances` ×2 e do seed, as duas leituras de `recomputeParentValorPessoal`: ela devolve `false` em vez de lançar e o único chamador traduz em `falhaDeLeituraDepois` (testado). Localmente o varredor as vê como "engolido"; cada uma está declarada com motivo e destino | eu |
+| L8: o varredor fixa **106** leituras (a §2.3 media 90 sem `cron.ts`) | medido no passo, como pedia a §5.9 | — |
+
+### 13.3 Mutações (§6)
+
+Cada uma sozinha, compilando, com a suíte inteira; restauração conferida por `git diff --quiet`
+**e** `git status --porcelain` vazio depois de cada uma (26 de 26 limpas).
+
+| # | Cai | Observação |
+| --- | --- | --- |
+| Z1 `queries.ts` (`getCardBillingDays`) | varredura L8 + "getCardBillingDays lança quando credit_cards falha" | |
+| Z1 `reapplySplit` / Z13 | varredura L8 + "divisão atual falhando recusa sem escrever" | a mesma mutação |
+| Z1 Cron / Z9 | varredura L8 + "Z9 — preferências com erro: nada é entregue" | a mesma mutação |
+| Z2 `exigir` não lança | 12 testes (núcleo, queries, importação, `deleteTransaction`, busca-ou-cria, laço das parcelas) | |
+| Z3 `listaCompleta` aceita saturada | 7 (núcleo, `queries`, importação ×3, Cron K2) | ⚠️ **não** derruba os testes de `/parcelamentos` e `/terceiros`: eles conferem a chamada, e o núcleo confere o efeito |
+| Z4 o card não captura | 2 (o card **chamado**) | a forma natural da mutação não compila (o TS estreita `falha` para `never`); a variante que compila (embrulhar a leitura num `.catch` que troca o erro) **passava** pela varredura do código-fonte — medida, e fechada por `cards-sem-leitura-comportamento.test.ts` (`1766aa6`) |
+| Z5 `(app)/error.tsx` some / `reset` | 1 / 2 (`limites-de-erro.test.ts`) | `reset` precisou trocar também no `global-error` para compilar |
+| Z6 `AvisoDeTeto` some | 4 (`telas-teto` + 3 do `page.test` de lançamentos) | |
+| Z7 em `familias.ts` | 5 | |
+| Z7 em `cron.ts` | 1 | ⚠️ saiu **verde** na primeira rodada: com a leitura falha virando lista vazia, passar a família ao gerador dava o mesmo resultado nos casos testados. Hábitos é o caso em que não dá (os hábitos chegam, os registros não ⇒ "pendente" falso); o teste novo (`c5c4068`) a derruba |
+| Z8 dedupe com erro insere | varredura L8 + "Z8 — dedupe com erro: nada é inserido" | |
+| Z10 some / opt-in / interruptor | 4 / 5 / 1 | |
+| Z11 | varredura L8 + o teste de `idsDasCategoriasMarcadas` | |
+| Z12 | 2 (`caixa-leitura.test.ts`) | |
+| Z14 action / formulário | 2 / 1 | |
+| Z15 | 1 | |
+| Z16 | 2 (núcleo) | |
+| Z17 | 2 (`familias` + Cron) | |
+| Z18 `getHours()` | **0** sob `TZ=America/Sao_Paulo`; **3** sob `TZ=UTC` | o `test:run` fixa o fuso de Brasília, onde `getHours()` coincide com a hora certa: quem pega esta mutação é a verificação `TZ=UTC` do fechamento |
+| Z19 `PGRST116` vira erro | 1 (núcleo) | ⚠️ o teste "excluir lançamento que já sumiu" **não** cai: aquele caminho trata o `PGRST116` explicitamente, sem passar por `exigir` |
+| Z20 | 1 (o laço das parcelas) | |
+| Z21 | 1 (`interrompida: true`) | |
+
+### 13.4 Banco — a recontagem da §2.1 (só leitura, 2026-10-25)
+
+`begin read only; set local role service_role; … rollback;`
+
+- **md5 dos saldos: igual** ao da linha de base (guardado fora do repositório).
+- `[03F-SINT]` 0 · `03G-SINT` 0 · transferências sem destino 0 · candidatos a órfão 0 · faturas pagas 0 ·
+  contas 5 · cartões 5 · categorias 27 · subcategorias 4 · parcelas 20 · contas fixas 9 · recorrências 0 ·
+  pessoas 9 · recebimentos 0 · `import_rows` 212 (maior lote 105) — **iguais**.
+- **Diferentes:** faturas 9 → 10, lançamentos 60 → 160, recebíveis 16 → 111, divisões 5 → 100,
+  notificações 33 → 156. Contadas por dia de criação: todas as linhas novas de lançamentos,
+  recebíveis, divisões e a fatura nasceram em **2026-10-22**, o mesmo dia da linha de base; as
+  notificações são do Cron de produção, dia a dia. Esta branch não escreve no banco (todo teste usa
+  o harness em memória; não há migration) e o tipo novo `sistema_verificacao_incompleta` tem
+  **0** linhas — coerente com o código não estar em produção. A causa das linhas novas **não foi
+  investigada** além disso (seria ler dado do dono); o padrão é o de uso do app. Nenhuma tabela do
+  escopo chega perto de 1000 linhas.
+
+### 13.5 Revisão final da branch (modelo mais capaz, subagente independente)
+
+Nada de gravidade alta. Achados e destino:
+
+| Achado | Gravidade | Destino |
+| --- | --- | --- |
+| Transferência editada para despesa de cartão, com a fatura sem leitura: o lançamento antigo **já foi apagado** e a tela dizia "Nada foi alterado." | média, confirmado | **corrigido** (`d888c17`): `criarTransacao` devolve `leituraFalhou`, e o ramo de transferência devolve a frase de "depois". Teste novo cai sem a correção. A perda em si (apaga → recria) continua sendo a RR-F-1, da 03-G2 |
+| `cancelInstallmentFuture` devolvia a frase de "depois" sem revalidar | baixa | **corrigido** (`d888c17`) |
+| Comentário do laço das parcelas dizia que a leitura falha "chegava como null" | baixa | **corrigido** (`d888c17`): ela seguia para o insert, que em geral criava a fatura |
+| Os três limites não estavam registrados no desenho | baixa | registrado em 13.2 |
+| No commit da importação, a linha que falha guarda em `motivo` "…Nada foi alterado." ao lado de linhas já importadas (verdade **por linha**); o estorno de cartão diz a frase sem o sufixo | baixa | **RR-G-10**, abaixo |
+| No Cron, exceção que **não** é `ErroDeLeitura` cala o usuário inteiro sem aparecer em `naoLidas` (comportamento anterior à 03-G) | baixa, plausível | **RR-G-11**, abaixo |
+
+### 13.6 Risco residual acrescentado pela execução
+
+| # | Risco | Destino |
+| --- | --- | --- |
+| RR-G-10 | Frases por linha no commit da importação: "Nada foi alterado." (verdade para a linha) convive com linhas importadas; o estorno usa a frase sem o sufixo | 03-G2, junto do commit da importação |
+| RR-G-11 | `runNotificationGeneration` engole exceção que não é de leitura e devolve `familiasNaoLidas: []`; o JSON da rota não lista esse usuário | aceito (anterior à 03-G); um `naoEntregue: "excecao"` fecharia |
+| RR-G-12 | Z3 e Z19 não derrubam o teste de tela/ação que o §6 pedia (ver 13.3): os efeitos estão cobertos no núcleo, as telas só pela forma | aceito |
+| RR-G-13 | Z18 só é pega sob `TZ=UTC` | aceito: a verificação `TZ=UTC` faz parte do fechamento |
+
+### 13.7 Conferência visual
+
+**Não feita por mim**: as telas exigem sessão do dono, e quebrar o banco para ver o estado de erro
+está fora (§7). Fica pedida ao dono: `/financeiro/lancamentos` com o aviso de teto (só aparece com
+mais de 500 lançamentos no filtro), a tela de erro (derrubar a rede no DevTools e recarregar uma
+rota do app) e o card do dashboard.
