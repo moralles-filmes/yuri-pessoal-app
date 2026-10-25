@@ -314,6 +314,21 @@ describe("prompt de sistema", () => {
     expect(prompt).toContain("inclusive na segunda etapa");
   });
 
+  /**
+   * Teste real da Task 15 (2026-10-25): o coordenador escreveu na tarefa do Financeiro uma
+   * categoria que o dono não disse, a previsão recusou e o lançamento não virou proposta — e
+   * acionou seis especialistas para três itens. As duas regras abaixo nasceram dali.
+   */
+  it("78. a v3 proíbe completar a tarefa com detalhe que o dono não disse", () => {
+    expect(prompt).toContain("Autossuficiente não é completada: a tarefa leva só o que o dono disse");
+    expect(prompt).toContain("Categoria, conta, cartão, valor, horário ou classificação que ele não falou ficam de fora");
+  });
+
+  it("78. a v3 aciona só o módulo que a mensagem pede de fato", () => {
+    expect(prompt).toContain("Módulo envolvido é o módulo que a mensagem pede de fato");
+    expect(prompt).toContain("e não para todos os que poderiam ter alguma relação com ele");
+  });
+
   it("78. a v3 amarra o acionamento ao limite por mensagem do bloco do servidor", () => {
     expect(prompt).toContain("dentro do limite por mensagem que o bloco do servidor informa");
     expect(prompt).toContain("O limite de acionamentos por mensagem que o bloco do servidor informa vale aqui também");
