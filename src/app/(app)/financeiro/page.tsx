@@ -19,6 +19,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getAccounts, getTransactions } from "@/lib/finance/queries";
+import { exigirCompleta } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import {
   AVISO_DE_RECORRENCIAS_INTERROMPIDAS,
   catchUpRecurrences,
@@ -74,7 +76,9 @@ export default async function FinanceiroOverviewPage() {
 
   const [accounts, monthTx] = await Promise.all([
     getAccounts(),
-    getTransactions({ month }).then((l) => l.linhas),
+    // A página SOMA Entradas e Saídas: lista cortada é erro (LeituraIncompleta → error.tsx),
+    // nunca um total afirmado sobre parte do mês (K2, D-G7).
+    getTransactions({ month }).then((l) => exigirCompleta(l, ROTULOS_DE_LEITURA.lancamentos)),
   ]);
 
   const totalBalance = saldoDasContas(accounts);

@@ -7,6 +7,8 @@ import {
   getPeopleForSelect,
 } from "@/lib/finance/queries";
 import { hojeISO } from "@/lib/format";
+import { exigirCompleta } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { InstallmentsClient } from "./installments-client";
 
 export const metadata: Metadata = { title: "Parcelamentos" };
@@ -26,7 +28,10 @@ export default async function ParcelamentosPage({
   const categoryId = str(sp.category);
 
   const [purchases, cards, categories, people] = await Promise.all([
-    getInstallmentPurchases({ cardId, categoryId }).then((l) => l.linhas),
+    // A tela SOMA as compras (StatCards): lista cortada é erro, não total parcial (D-G5).
+    getInstallmentPurchases({ cardId, categoryId }).then((l) =>
+      exigirCompleta(l, ROTULOS_DE_LEITURA.comprasParceladas),
+    ),
     getCreditCards(),
     getCategories(),
     getPeopleForSelect(),

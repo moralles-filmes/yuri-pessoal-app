@@ -8,6 +8,9 @@ import {
   getStatements,
   getTransactions,
 } from "@/lib/finance/queries";
+import { leituraComTeto } from "@/lib/supabase/leitura";
+import { AvisoDeTeto } from "@/components/shared/aviso-de-teto";
+import type { TransactionWithRelations } from "@/types/database";
 import { hojeISO } from "@/lib/format";
 import { StatementsClient } from "./statements-client";
 
@@ -34,12 +37,13 @@ export default async function FaturasPage({
     cards[0]?.id ??
     null;
 
-  const [statements, transactions] = selectedCardId
+  const [statements, leituraTx] = selectedCardId
     ? await Promise.all([
         getStatements({ cardId: selectedCardId }),
-        getTransactions({ cardId: selectedCardId }).then((l) => l.linhas),
+        getTransactions({ cardId: selectedCardId }),
       ])
-    : [[], []];
+    : [[], leituraComTeto<TransactionWithRelations>([], 0)];
+  const transactions = leituraTx.linhas;
 
   const statementIds = statements.map((s) => s.id).filter(Boolean) as string[];
   const [installmentItems, receivables] = selectedCardId
@@ -57,6 +61,9 @@ export default async function FaturasPage({
         title="Faturas"
         description="Faturas por cartão e mês: aberta, fechada, paga e atrasada."
       />
+      {/* Os itens listados são cortados no teto de 500; o TOTAL da fatura vem da view, não desta
+          lista — por isso aviso, não erro (K2, D-G5). */}
+      <AvisoDeTeto leitura={leituraTx} oQue="lançamentos deste cartão" />
       <StatementsClient
         cards={cards.map((c) => ({
           id: c.id,
