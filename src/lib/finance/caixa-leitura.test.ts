@@ -217,4 +217,29 @@ describe("lerCaixaDoMes", () => {
     };
     expect(await lerCaixaDoMes("2026-10")).toEqual({ ok: false });
   });
+
+  // 03-G (RR-E-9, D-G10, Z12): a terceira leitura passa a ser conferida como as outras duas.
+  it("erro ao ler os recebíveis também devolve { ok: false } — nunca \"nenhum recebível\"", async () => {
+    fake = criarSupabaseEmMemoria({ transactions: [tx("t-1")] }, { falharLeitura: { receivables: "XX000" } });
+    const espiao = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await lerCaixaDoMes("2026-10")).toEqual({ ok: false });
+    expect(espiao).toHaveBeenCalledWith("[leitura]", "os recebíveis", "XX000");
+    espiao.mockRestore();
+  });
+
+  it("erro ao ler os recebimentos também devolve { ok: false }", async () => {
+    fake = criarSupabaseEmMemoria({}, { falharLeitura: { receivable_receipts: "XX000" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await lerCaixaDoMes("2026-10")).toEqual({ ok: false });
+    vi.restoreAllMocks();
+  });
+
+  it("recebíveis cortados pelo max_rows deixam a leitura parcial", async () => {
+    fake = criarSupabaseEmMemoria(
+      { receivables: [{ id: "r-1" }, { id: "r-2" }, { id: "r-3" }] },
+      { maxRows: 2 },
+    );
+    const r = await lerCaixaDoMes("2026-10");
+    expect(r.ok && r.parcial).toBe(true);
+  });
 });
