@@ -57,6 +57,11 @@ describe("blocoDoCoordenador", () => {
     expect(b).not.toContain(String(MAX_ESPECIALISTAS));
   });
 
+  it("declara que o especialista não vê a conversa (estado do sistema mora no bloco, não no perfil)", () => {
+    const b = blocoDoCoordenador({ ofertas: OFERTAS, desligados: [], allowCrossModule: true });
+    expect(b).toContain("o especialista não vê a conversa");
+  });
+
   it("com cruzar módulos ligado, cita MAX_ESPECIALISTAS", () => {
     const b = blocoDoCoordenador({ ofertas: OFERTAS, desligados: [], allowCrossModule: true });
     expect(b).toContain(String(MAX_ESPECIALISTAS));
