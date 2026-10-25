@@ -51,12 +51,17 @@ describe("blocoDaData", () => {
  * diz QUAL ler e como declarar o recorte.
  */
 describe("blocoDoEspecialista", () => {
-  const b = blocoDoEspecialista({ temLeitura: true });
-  const semLeitura = blocoDoEspecialista({ temLeitura: false });
+  const b = blocoDoEspecialista({ temLeitura: true, temEscrita: false });
+  const comEscrita = blocoDoEspecialista({ temLeitura: true, temEscrita: true });
+  const semLeitura = blocoDoEspecialista({ temLeitura: false, temEscrita: false });
+  const soEscrita = blocoDoEspecialista({ temLeitura: false, temEscrita: true });
+  const todas = [b, comEscrita, semLeitura, soEscrita];
 
   it("diz que ele foi acionado porque a tarefa depende dos registros, e que consulta antes de responder", () => {
-    expect(b).toContain("Você foi acionado porque a tarefa depende dos registros do dono");
-    expect(b).toContain("Consulte as suas ferramentas antes de responder");
+    for (const x of [b, comEscrita]) {
+      expect(x).toContain("Você foi acionado porque a tarefa depende dos registros do dono");
+      expect(x).toContain("Consulte as suas ferramentas antes de responder");
+    }
   });
 
   it("manda usar a leitura mais próxima quando nenhuma cobre o período ou o recorte pedido", () => {
@@ -72,26 +77,43 @@ describe("blocoDoEspecialista", () => {
   });
 
   /** Rodada 1 — o `required` do passo 0 não pode virar escrita com dado chutado. */
-  it("faltando dado para uma alteração, lê o que houver e pergunta ao dono em vez de preencher", () => {
-    expect(b).toContain(
-      "Se faltar dado para uma alteração, leia o que houver e pergunte ao dono o que falta, em vez de preencher por conta própria.",
+  it("faltando dado para uma alteração, pergunta ao dono em vez de preencher — nas quatro formas", () => {
+    for (const x of todas) expect(x).toMatch(/Se faltar dado para uma alteração, pergunte ao dono/);
+    for (const x of todas) expect(x).toContain("em vez de preencher por conta própria");
+  });
+
+  /**
+   * Teste real da rodada 1 — com o passo 0 só de leituras, a Agenda pediu licença para
+   * preparar um compromisso que a tarefa já trazia inteiro, e o TO-DO disse que só podia
+   * consultar. Com escrita liberada, o bloco diz que a lista muda e que o cartão é a pergunta.
+   */
+  it("com escrita liberada, diz que a alteração volta depois da leitura e que o cartão já é a pergunta", () => {
+    expect(comEscrita).toContain(
+      "Na primeira chamada ficam disponíveis só as leituras; as ferramentas de alteração voltam logo depois dela.",
     );
+    expect(comEscrita).toContain("nunca o limite do que você pode fazer");
+    for (const x of [comEscrita, soEscrita]) {
+      expect(x).toContain("traz os dados que ela exige, prepare a proposta");
+      expect(x).toContain("essa confirmação já é a pergunta a ele");
+    }
+  });
+
+  it("sem escrita liberada, não promete ferramenta de alteração nem manda preparar proposta", () => {
+    for (const x of [b, semLeitura]) {
+      expect(x).not.toMatch(/ferramentas de alteração|prepare a proposta/);
+    }
   });
 
   /**
    * Rodada 1 (Minor 1) — "consulte as suas ferramentas" seria falso para um especialista sem
-   * leitura oferecida. Sem leitura, o bloco fica só com a regra de perguntar.
+   * leitura oferecida.
    */
-  it("sem leitura oferecida, não manda consultar nem fala de leitura — só a regra de perguntar", () => {
-    expect(semLeitura).not.toMatch(/consulte|leitura/i);
-    expect(semLeitura).toContain(
-      "Se faltar dado para uma alteração, pergunte ao dono o que falta, em vez de preencher por conta própria.",
-    );
+  it("sem leitura oferecida, não manda consultar nem fala de leitura", () => {
+    for (const x of [semLeitura, soEscrita]) expect(x).not.toMatch(/consulte|leitura/i);
   });
 
-  it("passa no varredor de vocabulário proibido, nas duas formas", () => {
-    expect(termosProibidosEm(b)).toEqual([]);
-    expect(termosProibidosEm(semLeitura)).toEqual([]);
+  it("passa no varredor de vocabulário proibido, nas quatro formas", () => {
+    for (const x of todas) expect(termosProibidosEm(x)).toEqual([]);
   });
 });
 

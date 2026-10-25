@@ -23,7 +23,7 @@ import "server-only";
  * dele: acionar não é ferramenta do registry, porque não lê dado nenhum.
  */
 
-import type { AiMessage } from "@/lib/ai/core/contracts";
+import type { AiMessage, AiToolDefinition } from "@/lib/ai/core/contracts";
 import { aiError, type AiError } from "@/lib/ai/core/errors";
 import { normalizarAlternancia, textoDasMensagens } from "@/lib/ai/core/text";
 import {
@@ -251,6 +251,14 @@ function ferramentasDoEspecialista(
   return { definicoes, leituras };
 }
 
+/** O que o bloco do especialista pode afirmar sem mentir: há leitura? há alteração? */
+function sinaisDoEspecialista(f: ReturnType<typeof ferramentasDoEspecialista>): {
+  readonly temLeitura: boolean;
+  readonly temEscrita: boolean;
+} {
+  return { temLeitura: f.leituras.length > 0, temEscrita: f.definicoes.length > f.leituras.length };
+}
+
 /**
  * O `system` de UM especialista: segurança + perfil, a data, e a memória DO MÓDULO DELE por
  * último (spec §4.3.3). A seleção usa o módulo do ESPECIALISTA, e a chave exigida continua
@@ -268,7 +276,7 @@ function sistemaDoEspecialista(
     // O bloco só manda consultar quando há leitura oferecida (Rodada 1): sem ela a frase seria falsa.
     blocos: [
       secao(blocoDaData(agora)),
-      secao(blocoDoEspecialista({ temLeitura: ferramentasDoEspecialista(esp, prefs).leituras.length > 0 })),
+      secao(blocoDoEspecialista(sinaisDoEspecialista(ferramentasDoEspecialista(esp, prefs)))),
     ],
     memorias: memoriasParaOPrompt({
       memorias,

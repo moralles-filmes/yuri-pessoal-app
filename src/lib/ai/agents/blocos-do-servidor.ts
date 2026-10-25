@@ -101,21 +101,39 @@ export function blocoDoCoordenador(input: {
  * ⚠️ Entra na reserva sem nada a fazer: `tokensDoMaiorEspecialista` mede o system montado por
  * `sistemaDoEspecialista`, que é quem o inclui.
  */
-export function blocoDoEspecialista(input: { readonly temLeitura: boolean }): string {
+export function blocoDoEspecialista(input: {
+  readonly temLeitura: boolean;
+  readonly temEscrita: boolean;
+}): string {
+  /**
+   * Teste real da rodada 1 — com o passo 0 só de leituras, a Agenda e o TO-DO leram, receberam
+   * as ferramentas de alteração no passo seguinte e responderam sem propor: o TO-DO afirmou que
+   * só podia consultar, e a Agenda pediu licença para preparar o que a tarefa já trazia inteiro.
+   * O modelo tirou a conclusão da lista que viu na primeira chamada. Por isso o bloco DIZ que a
+   * lista muda, e que a confirmação do cartão já é a pergunta ao dono — mas só quando é verdade
+   * (`temEscrita`), senão a frase prometeria uma ferramenta que não vem.
+   */
+  const alteracao = input.temEscrita
+    ? [
+        "Quando a tarefa pede uma alteração e traz os dados que ela exige, prepare a proposta: o dono a confirma no cartão, e essa confirmação já é a pergunta a ele.",
+        "Se faltar dado para uma alteração, pergunte ao dono só o que falta, em vez de preencher por conta própria.",
+      ]
+    : ["Se faltar dado para uma alteração, pergunte ao dono o que falta, em vez de preencher por conta própria."];
   /**
    * Rodada 1 — sem leitura oferecida (todas as chaves de leitura do módulo desligadas), mandar
-   * "consultar as ferramentas" seria afirmar o que não existe. Fica só a regra de perguntar.
+   * "consultar as ferramentas" seria afirmar o que não existe. Fica só o que vale para alterar.
    */
-  if (!input.temLeitura) {
-    return "Se faltar dado para uma alteração, pergunte ao dono o que falta, em vez de preencher por conta própria.";
-  }
+  if (!input.temLeitura) return alteracao.join("\n");
   return [
     "Você foi acionado porque a tarefa depende dos registros do dono. Consulte as suas ferramentas antes de responder.",
     "Se nenhuma ferramenta cobre exatamente o período ou o recorte pedido, use a leitura mais próxima e diga com clareza o que ela cobre — por exemplo, o mês inteiro em vez da semana, ou o que está aberto ou atrasado em vez do que foi concluído.",
     "Apresente cada leitura pelo que ela é: o período e o recorte que vieram com ela são os que você declara.",
-    // A leitura obrigatória do primeiro passo não autoriza completar uma alteração por conta
-    // própria: o que ela não trouxe vira pergunta.
-    "Se faltar dado para uma alteração, leia o que houver e pergunte ao dono o que falta, em vez de preencher por conta própria.",
+    ...(input.temEscrita
+      ? [
+          "Na primeira chamada ficam disponíveis só as leituras; as ferramentas de alteração voltam logo depois dela. Ler primeiro é a ordem do trabalho, e nunca o limite do que você pode fazer.",
+        ]
+      : []),
+    ...alteracao,
   ].join("\n");
 }
 

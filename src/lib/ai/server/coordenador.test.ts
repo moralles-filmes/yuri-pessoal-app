@@ -1333,7 +1333,7 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
 
     await conduzir({ prefs: prefs() });
 
-    const bloco = blocoDoEspecialista({ temLeitura: true });
+    const bloco = blocoDoEspecialista({ temLeitura: true, temEscrita: false });
     const porQuem = ferramentasRecebidas.map((f, i) => ({
       quem: quemPelasFerramentas(f),
       system: systemsRecebidos[i]!,
@@ -1345,6 +1345,32 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
     }
   });
 
+  /**
+   * Teste real da rodada 1 — o especialista com alteração liberada precisa ouvir que as
+   * ferramentas de alteração voltam depois da primeira chamada; o sem alteração, não (seria
+   * prometer o que não vem).
+   */
+  it("o bloco diz que a alteração volta depois da leitura só para quem tem escrita liberada", async () => {
+    cruzarModulos = true;
+    escrita = { allow_write_finance: true };
+    responder = ({ quem }) => {
+      if (quem === "decisao") return DECIDE_DOIS;
+      if (quem === "sintese") return [delta("Resumo."), FINISH];
+      return [delta("ok"), FINISH];
+    };
+
+    await conduzir({ prefs: prefs() });
+
+    const porQuem = new Map(
+      ferramentasRecebidas.map((f, i) => [quemPelasFerramentas(f), systemsRecebidos[i]!] as const),
+    );
+    expect(porQuem.get("financeiro")).toContain(
+      blocoDoEspecialista({ temLeitura: true, temEscrita: true }),
+    );
+    expect(porQuem.get("todo")).toContain(blocoDoEspecialista({ temLeitura: true, temEscrita: false }));
+    expect(porQuem.get("todo")).not.toContain("as ferramentas de alteração voltam");
+  });
+
   it("modo direto: o system do especialista leva o bloco do especialista", async () => {
     respostasPorChamada = [
       [aciona("financeiro", "gasto de outubro"), FINISH],
@@ -1353,8 +1379,8 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
 
     await conduzir();
 
-    expect(systemsRecebidos[0]).not.toContain(blocoDoEspecialista({ temLeitura: true }));
-    expect(systemsRecebidos[1]).toContain(blocoDoEspecialista({ temLeitura: true }));
+    expect(systemsRecebidos[0]).not.toContain(blocoDoEspecialista({ temLeitura: true, temEscrita: false }));
+    expect(systemsRecebidos[1]).toContain(blocoDoEspecialista({ temLeitura: true, temEscrita: false }));
   });
 
   /**

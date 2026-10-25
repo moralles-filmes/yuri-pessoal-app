@@ -296,7 +296,7 @@ describe("ferramentas (18-B)", () => {
           toolChoice: "required",
         }),
       );
-      expect(opcoesRecebidas?.toolChoice, provider).toBe("required");
+      expect((opcoesRecebidas as Record<string, unknown> | null)?.toolChoice, provider).toBe("required");
     }
   });
 

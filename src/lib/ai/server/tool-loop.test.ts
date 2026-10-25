@@ -845,7 +845,7 @@ describe("runToolLoop — ferramentasDoPrimeiroPasso", () => {
       }),
     );
 
-    expect(eventos.some((e) => e.type === "tool-call-inesperada")).toBe(false);
+    expect(eventos.some((e) => (e as { type?: string }).type === "tool-call-inesperada")).toBe(false);
     expect(recebido).toHaveLength(3);
   });
 });
