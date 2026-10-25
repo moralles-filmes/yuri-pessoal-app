@@ -7,6 +7,7 @@ import {
   authContext,
   dbError,
   falhaDeLeituraAntes,
+  falhaDeLeituraDepois,
   invalid,
   notAuthed,
   type AuthContext,
@@ -144,14 +145,23 @@ export async function updateTransaction(
       await ctx.supabase.from("transactions").delete().eq("id", id);
     }
 
-    const recriado = await createTransaction(input);
-    if (recriado.ok && statementId) {
+    // 03-G — o serviço direto (é o que `createTransaction` faz por dentro, com o mesmo `ctx`),
+    // para ler `leituraFalhou`: aqui o lançamento antigo JÁ foi apagado, então "Nada foi
+    // alterado." seria mentira. A frase é a de "depois" (D-G20); a atomicidade é da 03-G2 (RR-F-1).
+    const recriado = await criarTransacao(ctx, input);
+    if (!recriado.ok) {
+      revalidateTransactions();
+      if (recriado.leituraFalhou) return falhaDeLeituraDepois(recriado.leituraFalhou);
+      return recriado.fieldErrors ? invalid(recriado.fieldErrors) : dbError(recriado.erro);
+    }
+    if (statementId) {
       await ctx.supabase
         .from("card_statements")
-        .update({ pago_transacao_id: recriado.data.id })
+        .update({ pago_transacao_id: recriado.id })
         .eq("id", statementId);
     }
-    return recriado;
+    revalidateTransactions();
+    return { ok: true, data: { id: recriado.id } };
   }
 
   // Re-resolve a fatura ao editar (ex.: mudou a data ou o cartão). Se deixar de ser

@@ -130,10 +130,10 @@ export async function createInstallmentPurchase(
     status: "ativa";
   }[] = [];
   for (const p of plano) {
-    // 03-G (D-G26, Z20) — o ErroDeLeitura não escapa da action. A compensação que já existia para
-    // o null continua rodando (antes da 03-G, uma leitura falha chegava aqui como null). A frase
-    // diz "pode ter sido gravada em parte" porque a compra-pai já foi gravada e a compensação
-    // ignora o próprio erro (03-G2).
+    // 03-G (D-G26, Z20) — o ErroDeLeitura não escapa da action: ele cai na compensação que já
+    // existia para o `null` (antes da 03-G, a leitura falha da fatura seguia para o insert, que em
+    // geral criava a fatura e mascarava o erro). A frase diz "pode ter sido gravada em parte"
+    // porque a compra-pai já foi gravada e a compensação ignora o próprio erro (03-G2).
     let statementId: string | null;
     let leituraFalhou = false;
     try {
@@ -362,6 +362,7 @@ export async function cancelInstallmentFuture(
     // 03-G — leitura falha aqui gravaria valor_pessoal calculado sobre listas vazias; as parcelas
     // já foram canceladas, por isso a frase é a de "depois".
     if (!(await recomputeParentValorPessoal(ctx, parentId))) {
+      revalidateInstallments();
       return falhaDeLeituraDepois(ROTULOS_DE_LEITURA.parcelas);
     }
   }

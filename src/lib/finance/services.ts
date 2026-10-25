@@ -87,6 +87,13 @@ export type CriarTransacaoResultado =
       readonly ok: false;
       readonly erro: string;
       readonly fieldErrors?: Record<string, string[] | undefined>;
+      /**
+       * 03-G — a leitura que falhou (o rótulo), quando a falha foi de leitura. `erro` diz "Nada
+       * foi alterado." porque, NESTE serviço, nenhuma escrita veio antes; quem chama depois de
+       * já ter escrito (a transferência editada, que apaga antes de recriar) usa o rótulo para
+       * dizer a frase de "depois".
+       */
+      readonly leituraFalhou?: string;
     };
 
 /**
@@ -174,14 +181,19 @@ export async function criarTransacao(
   if (d.type === "despesa" && d.payment_method === "cartao_credito" && d.card_id) {
     cardId = d.card_id;
     // 03-G (D-G26): o ErroDeLeitura do busca-ou-cria vira a falha deste serviço; nenhuma escrita
-    // veio antes dele, então "Nada foi alterado" é verdade.
+    // DESTE serviço veio antes dele, então "Nada foi alterado" é verdade aqui. Quem chama depois de
+    // ter escrito lê `leituraFalhou` e escolhe a frase (ver `updateTransaction`).
     try {
       statementId = d.statement_competencia
         ? await getOrCreateStatementForCompetencia(ctx, d.card_id, d.statement_competencia)
         : await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
     } catch (e) {
       if (!ehErroDeLeitura(e)) throw e;
-      return { ok: false, erro: `Não foi possível ler ${ROTULOS_DE_LEITURA.fatura}. Nada foi alterado.` };
+      return {
+        ok: false,
+        erro: `Não foi possível ler ${ROTULOS_DE_LEITURA.fatura}. Nada foi alterado.`,
+        leituraFalhou: ROTULOS_DE_LEITURA.fatura,
+      };
     }
     if (!statementId) {
       return { ok: false, erro: "Não foi possível resolver a fatura do cartão." };
