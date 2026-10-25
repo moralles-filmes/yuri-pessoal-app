@@ -9120,12 +9120,20 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: number
       }
+      criar_compra_parcelada: {
+        Args: { p_divisao: Json; p_pai: Json; p_parcelas: Json }
+        Returns: string
+      }
       desfazer_pagamento_fatura: {
         Args: { p_lancamento_id: string; p_statement_id: string }
         Returns: undefined
       }
       pagar_fatura: {
         Args: { p_lancamento: Json; p_pago_em: string; p_statement_id: string }
+        Returns: string
+      }
+      salvar_lancamento: {
+        Args: { p_divisao: Json; p_id?: string; p_lancamento: Json }
         Returns: string
       }
       seed_default_categories: { Args: never; Returns: number }
