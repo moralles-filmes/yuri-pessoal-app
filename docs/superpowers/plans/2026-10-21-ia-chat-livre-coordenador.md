@@ -1611,3 +1611,26 @@ Custo US$ 0,061573 (nenhuma tentativa sem custo).
 Observação (sem correção, para o relatório final): em "como foi minha semana", alguns
 especialistas (TO-DO, Hábitos, às vezes Financeiro) responderam sem chamar ferramenta. A
 síntese não inventou número por isso, mas o panorama sai mais pobre do que poderia.
+
+### Task 15b — o especialista lê antes de responder; Financeiro "meu × terceiros" (2026-10-25)
+
+Pedida pelo dono depois da Task 15. Commits: `bf229b6`, `ea459f9`, `bb4ddb4`, `e5e44fe`, `71b9fd6`.
+
+- **Desenho final:** no passo 0 de cada tentativa do especialista, TODAS as ferramentas da allowlist
+  (já filtrada pelas chaves) com `toolChoice: "required"`, desde que haja ao menos uma leitura
+  entre elas; do passo 1 em diante, `auto`. Decisão, síntese e panorama: nada exigido.
+  `blocoDoEspecialista({ temLeitura, temEscrita })` manda ler o mais próximo e declarar o recorte;
+  com escrita liberada, preparar a proposta quando a tarefa traz os dados (o cartão é a pergunta)
+  e perguntar só o que faltar. `financeiro-v3` mostra a parte do dono e a de terceiros sem pedir.
+- **Desenho descartado no teste real:** oferecer SÓ as leituras no passo 0 (recomendação da
+  revisão, `bb4ddb4`). O modelo concluía que não podia alterar nada: o despejo do pão rendeu 1 de
+  3 propostas e depois 0 de 3 (antes, 3 de 3), com respostas como "não consigo fazer
+  lançamentos". `71b9fd6` desfez.
+- **Teste real final (Gemini):** "Quanto gastei este mês?" → leu `finance.get_spending` e
+  respondeu meu R$ 10.598,01 + terceiros R$ 3.768,94 = total R$ 14.366,95 ✅. "Como foi minha
+  semana?" → os 6 especialistas leram e declararam o recorte (Financeiro mostrou o mês) ✅ —
+  observação: acionou o teto de 6, a pergunta mais cara. Despejo do pão → 3 propostas
+  (lançamento, compromisso, tarefa), descritas como aguardando confirmação ✅.
+- **Registrado sem correção (§9.2):** numa rodada intermediária (com o desenho descartado), a
+  síntese afirmou "Preparei uma proposta de compromisso" sem proposta existir. Correção sugerida
+  se reaparecer: o servidor informa à síntese quantas propostas cada trilha criou de fato.
