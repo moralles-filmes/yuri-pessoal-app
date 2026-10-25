@@ -68,6 +68,7 @@ de mexer, para que qualquer mudança de número seja visível e intencional.
 | **03-E** | Modo **caixa exato × competência** com rótulo (E6). `liquidado_em` nulo cai para `competence_date` **com a aproximação declarada**, nunca em silêncio. Regra de comparação de mês parcial |
 | **03-F** | Idempotência do pagamento de fatura (P0-4) e confirmação no desfazer (P1-8) |
 | **03-G** | Erro é erro: `error.tsx` por rota e leituras que param de engolir falha (P0-5) |
+| **03-G2** | **As escritas e o fechamento** (decidido no desenho da 03-G, §12): atomicidade de `updateTransaction`/`criarTransacao`/`reapplySplit`/`deleteTransaction`, as 29 escritas que ignoram o erro, a confirmação de excluir em Lançamentos (RR-F-6) e a matriz de fechamento da REDESIGN-03 (D32) |
 
 **Aceite:** os 18 casos financeiros mínimos do briefing §13 + o cenário sintético obrigatório,
 todos como teste puro · nenhum teste existente alterado para passar · conciliação card × tabela
