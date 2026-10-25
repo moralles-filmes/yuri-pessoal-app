@@ -60,7 +60,7 @@ import type { MemoriaParaPrompt } from "@/lib/ai/memory/contracts";
 import { memoriasParaOPrompt } from "@/lib/ai/memory/prompt";
 import { renderUntrusted, wrapUntrusted } from "@/lib/ai/security/untrusted";
 import { closeStep, startStep } from "@/lib/ai/tools/audit";
-import { toolDefinitionsFor } from "@/lib/ai/tools/registry";
+import { findTool, toolDefinitionsFor } from "@/lib/ai/tools/registry";
 import type { AiPreferencesView } from "@/lib/ai/types";
 import {
   estimarTokensDeEntrada,
@@ -236,6 +236,22 @@ function sistemaDoCoordenador(input: {
 export const RESERVA_DA_SINTESE_MS = 15_000;
 
 /**
+ * Task 15b (Rodada 1) — as ferramentas de UM especialista, já filtradas pelas chaves do dono, e
+ * as de LEITURA entre elas. As leituras vão sozinhas, com `required`, no primeiro passo de cada
+ * tentativa (`runTrilha`): oferecer a allowlist inteira empurrava o modelo a propor escrita ou
+ * memória com dado chutado em vez de perguntar. Quem sabe o que é leitura é o registry; por isso
+ * a conta mora aqui, e `trilha.ts` só recebe a lista.
+ */
+function ferramentasDoEspecialista(
+  esp: AiAgentProfile,
+  prefs: AiPreferencesView,
+): { readonly definicoes: readonly AiToolDefinition[]; readonly leituras: readonly AiToolDefinition[] } {
+  const definicoes = toolDefinitionsFor(esp.allowedTools, prefs.permissions, prefs.writePermissions);
+  const leituras = definicoes.filter((d) => findTool(d.name)?.kind === "leitura");
+  return { definicoes, leituras };
+}
+
+/**
  * O `system` de UM especialista: segurança + perfil, a data, e a memória DO MÓDULO DELE por
  * último (spec §4.3.3). A seleção usa o módulo do ESPECIALISTA, e a chave exigida continua
  * sendo a do módulo da memória (invariante 26).
@@ -249,7 +265,11 @@ function sistemaDoEspecialista(
   return montarSystem({
     base: buildSystemPrompt(esp),
     // Task 15b — a data e, logo depois, o que fazer quando a leitura não cobre o recorte.
-    blocos: [secao(blocoDaData(agora)), secao(blocoDoEspecialista())],
+    // O bloco só manda consultar quando há leitura oferecida (Rodada 1): sem ela a frase seria falsa.
+    blocos: [
+      secao(blocoDaData(agora)),
+      secao(blocoDoEspecialista({ temLeitura: ferramentasDoEspecialista(esp, prefs).leituras.length > 0 })),
+    ],
     memorias: memoriasParaOPrompt({
       memorias,
       moduloDoAgente: moduloDoAgente(esp.id),
@@ -398,7 +418,7 @@ export async function* conduzirCoordenador(
       tetoDeSaida: TETO_SAIDA_DECISAO,
       primeiroTipo: "PRIMARY",
       // A decisão pode responder direto, sem acionar ninguém ("oi", pergunta geral).
-      exigirFerramentaNoPrimeiroPasso: false,
+      primeiroPassoExigeLeitura: null,
       promptMontado: decisao.system + textoDasMensagens(decisao.mensagens),
     }),
     0,
@@ -527,6 +547,7 @@ export async function* conduzirCoordenador(
   };
 
   const system = sistemaDoEspecialista(esp, e.prefs, e.memorias, e.agora);
+  const ferramentas = ferramentasDoEspecialista(esp, e.prefs);
   /**
    * ⛔ SÓ A TAREFA, SEM O HISTÓRICO (§4.3.2). O coordenador já a escreveu autossuficiente; o
    * histórico pode conter texto colado de fora, e o especialista é quem tem as ferramentas.
@@ -541,7 +562,7 @@ export async function* conduzirCoordenador(
       promptVersion: promptVersionOf(esp),
       system,
       mensagens,
-      definicoes: toolDefinitionsFor(esp.allowedTools, permissions, writePermissions),
+      definicoes: ferramentas.definicoes,
       modo: "laco",
       // No modo direto ele segue a política do provedor, como o agente roteado de hoje (§5.3).
       repetir: true,
@@ -549,8 +570,9 @@ export async function* conduzirCoordenador(
       // (`tetoSaidaDaSintese` em `computeReservationDoCoordenador`).
       tetoDeSaida: e.alvos[0]?.model.outputCapTokens ?? Number.POSITIVE_INFINITY,
       primeiroTipo: "ESPECIALISTA",
-      // Task 15b — acionado é porque a tarefa depende dos registros: ele LÊ antes de responder.
-      exigirFerramentaNoPrimeiroPasso: true,
+      // Task 15b — acionado é porque a tarefa depende dos registros: ele LÊ antes de responder
+      // (só as leituras no primeiro passo; lista vazia = nada exigido).
+      primeiroPassoExigeLeitura: ferramentas.leituras,
       promptMontado: system + textoDasMensagens(mensagens),
     }),
     1,
@@ -684,12 +706,11 @@ async function* emParalelo(input: {
     | "repetir"
     | "tetoDeSaida"
     | "primeiroTipo"
-    | "exigirFerramentaNoPrimeiroPasso"
+    | "primeiroPassoExigeLeitura"
     | "promptMontado"
   >;
 }): AsyncGenerator<ChatRunnerEvent, DesfechoDoCoordenador> {
   const { e, coordenador, decisao, aceitos, comum } = input;
-  const { permissions, writePermissions } = e.prefs;
 
   // Trilhas 1..n, NA ORDEM DO ACIONAMENTO.
   const participantes = aceitos.map((aceito, i) => {
@@ -734,6 +755,7 @@ async function* emParalelo(input: {
   const mescla = mesclar(
     participantes.map((p) => {
       const system = sistemaDoEspecialista(p.esp, e.prefs, e.memorias, e.agora);
+      const ferramentas = ferramentasDoEspecialista(p.esp, e.prefs);
       // SÓ A TAREFA, SEM O HISTÓRICO (§4.3.2).
       const mensagens: AiMessage[] = [{ role: "user", content: p.aceito.tarefa }];
       return blindada(
@@ -744,7 +766,7 @@ async function* emParalelo(input: {
           promptVersion: promptVersionOf(p.esp),
           system,
           mensagens,
-          definicoes: toolDefinitionsFor(p.esp.allowedTools, permissions, writePermissions),
+          definicoes: ferramentas.definicoes,
           modo: "laco",
           // §5.3: em paralelo, falhou, acabou — sem retry nem fallback.
           repetir: false,
@@ -752,7 +774,7 @@ async function* emParalelo(input: {
           tetoDeSaida: TETO_SAIDA_ESPECIALISTA,
           primeiroTipo: "ESPECIALISTA",
           // Task 15b — como no modo direto: o especialista acionado lê antes de responder.
-          exigirFerramentaNoPrimeiroPasso: true,
+          primeiroPassoExigeLeitura: ferramentas.leituras,
           prazo: prazoDosEspecialistas,
           abortSignal: controle.signal,
           promptMontado: system + textoDasMensagens(mensagens),
@@ -914,7 +936,7 @@ async function* emParalelo(input: {
       tetoDeSaida: e.alvos[0]?.model.outputCapTokens ?? Number.POSITIVE_INFINITY,
       primeiroTipo: "PRIMARY",
       // Sem ferramenta não há o que exigir — e a síntese não lê nada, só junta.
-      exigirFerramentaNoPrimeiroPasso: false,
+      primeiroPassoExigeLeitura: null,
       promptMontado: system + textoDasMensagens(mensagens),
     }),
     0,

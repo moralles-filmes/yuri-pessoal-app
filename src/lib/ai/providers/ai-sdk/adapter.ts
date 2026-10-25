@@ -454,6 +454,9 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
           // Task 15b — só com ferramentas: `required` sem `tools` não tem o que exigir. Os
           // quatro pacotes traduzem o valor (Gemini `ANY`, Anthropic `any`, OpenAI/xAI
           // `required`); recusa do provedor vira evento `error`, como qualquer outra.
+          // ⚠️ O extended thinking da Anthropic é INCOMPATÍVEL com `tool_choice: any`: quem o
+          // ligar neste adapter tem de deixar de mandar `required` para esse provedor, ou todo
+          // especialista falha no primeiro passo.
           ...(temFerramentas && request.toolChoice
             ? { toolChoice: request.toolChoice }
             : {}),

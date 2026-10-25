@@ -82,6 +82,8 @@ const sinaisRecebidos: (AbortSignal | undefined)[] = [];
 const tetosRecebidos: number[] = [];
 /** Task 15b — o `toolChoice` de cada chamada (`undefined` = ausente do pedido). */
 const toolChoicesRecebidos: (string | undefined)[] = [];
+/** Task 15b — os nomes das ferramentas que cada chamada recebeu. */
+const ferramentasRecebidas: string[][] = [];
 
 vi.mock("@/lib/ai/providers/provider-factory", () => ({
   createProviderClient: () => ({
@@ -90,12 +92,14 @@ vi.mock("@/lib/ai/providers/provider-factory", () => ({
       abortSignal?: AbortSignal;
       maxOutputTokens: number;
       toolChoice?: string;
+      tools: readonly { name: string }[];
     }) => {
       const indice = chamadasAoProvedor;
       chamadasAoProvedor += 1;
       sinaisRecebidos.push(request.abortSignal);
       tetosRecebidos.push(request.maxOutputTokens);
       toolChoicesRecebidos.push(request.toolChoice);
+      ferramentasRecebidas.push(request.tools.map((t) => t.name));
       const eventos = respostasPorChamada[indice] ?? [FINISH];
       return (async function* () {
         for (const e of eventos) yield e;
@@ -221,7 +225,7 @@ function entrada(parcial: Partial<EntradaDaTrilha> = {}): EntradaDaTrilha {
     repetir: true,
     tetoDeSaida: Number.POSITIVE_INFINITY,
     primeiroTipo: "PRIMARY",
-    exigirFerramentaNoPrimeiroPasso: false,
+    primeiroPassoExigeLeitura: null,
     permissions: { allow_training: true },
     writePermissions: {},
     contadores: {
@@ -263,6 +267,7 @@ beforeEach(() => {
   sinaisRecebidos.length = 0;
   tetosRecebidos.length = 0;
   toolChoicesRecebidos.length = 0;
+  ferramentasRecebidas.length = 0;
   aoExecutarFerramenta = null;
 });
 
@@ -648,14 +653,27 @@ describe("runTrilha — coerência entre primeiroTipo e trilha", () => {
 // Task 15b — o especialista é OBRIGADO a ler no primeiro passo de cada tentativa
 // ────────────────────────────────────────────────────────────────
 
-describe("runTrilha — exigirFerramentaNoPrimeiroPasso", () => {
+describe("runTrilha — primeiroPassoExigeLeitura", () => {
+  /** Uma escrita na allowlist: no passo 0 ela NÃO é oferecida (Rodada 1 da revisão). */
+  const DEFINICAO_ESCRITA = {
+    name: "training.criar_treino",
+    description: "escreve",
+    inputSchema: {},
+  };
+
   const ESPECIALISTA = {
     trilha: 1,
     primeiroTipo: "ESPECIALISTA" as const,
-    exigirFerramentaNoPrimeiroPasso: true,
+    definicoes: [DEFINICAO_VOLUME, DEFINICAO_ESCRITA],
+    primeiroPassoExigeLeitura: [DEFINICAO_VOLUME],
   };
 
-  it("ligada: o primeiro passo pede 'required' e o TOOL_STEP seguinte não pede", async () => {
+  const pedidos = () =>
+    toolChoicesRecebidos.map(
+      (c, i) => `${c ?? "-"}:${(ferramentasRecebidas[i] ?? []).join("+")}`,
+    );
+
+  it("o passo 0 recebe SÓ as leituras com 'required'; o TOOL_STEP recebe todas, sem 'required'", async () => {
     respostasPorChamada = [
       PEDE_VOLUME_E_TERMINA,
       [{ type: "delta", text: "Foram 12480 kg." }, FINISH],
@@ -664,16 +682,19 @@ describe("runTrilha — exigirFerramentaNoPrimeiroPasso", () => {
     const { desfecho } = await rodar(entrada(ESPECIALISTA));
 
     expect(desfecho).toMatchObject({ ok: true, texto: "Foram 12480 kg." });
-    // Exigir no TOOL_STEP faria o modelo nunca conseguir terminar com texto: só ferramenta,
-    // até o teto de passos cortar a resposta.
-    expect(toolChoicesRecebidos).toEqual(["required", undefined]);
+    // Exigir no TOOL_STEP faria o modelo nunca conseguir terminar com texto; oferecer a escrita
+    // no passo 0 com 'required' empurraria uma proposta com dado chutado em vez de pergunta.
+    expect(pedidos()).toEqual([
+      "required:training.get_volume",
+      "-:training.get_volume+training.criar_treino",
+    ]);
     expect(medicao.filter((m) => m.tipo === "start").map((m) => m.attemptType)).toEqual([
       "ESPECIALISTA",
       "TOOL_STEP",
     ]);
   });
 
-  it("ligada: o RETRY é tentativa nova, e o primeiro passo dele também pede 'required'", async () => {
+  it("o RETRY é tentativa nova: o primeiro passo dele volta a oferecer só leituras com 'required'", async () => {
     respostasPorChamada = [
       [ERRO_TEMPORARIO],
       PEDE_VOLUME_E_TERMINA,
@@ -688,25 +709,71 @@ describe("runTrilha — exigirFerramentaNoPrimeiroPasso", () => {
       "RETRY",
       "TOOL_STEP",
     ]);
-    expect(toolChoicesRecebidos).toEqual(["required", "required", undefined]);
+    expect(pedidos()).toEqual([
+      "required:training.get_volume",
+      "required:training.get_volume",
+      "-:training.get_volume+training.criar_treino",
+    ]);
   });
 
-  it("desligada: nenhuma chamada pede 'required'", async () => {
+  it("uma escrita devolvida no passo 0 é chamada inesperada — não vira proposta", async () => {
+    // Um provedor que ignore `tools`/`required` e devolva a escrita assim mesmo.
+    respostasPorChamada = [
+      [{ type: "tool-call", toolName: "training.criar_treino", callId: "w0", input: {} }, FINISH],
+    ];
+
+    const { eventos, desfecho } = await rodar(entrada(ESPECIALISTA));
+
+    expect(desfecho).toMatchObject({
+      ok: false,
+      cancelado: false,
+      erro: { code: "UNEXPECTED_TOOL_CALL" },
+    });
+    expect(executeTool).not.toHaveBeenCalled();
+    expect(eventos.some((e) => e.type === "proposta")).toBe(false);
+    // O caminho de sempre: sem retry depois de tool call inesperada.
+    expect(chamadasAoProvedor).toBe(1);
+  });
+
+  it("null: oferece tudo e não exige nada", async () => {
     respostasPorChamada = [
       PEDE_VOLUME_E_TERMINA,
       [{ type: "delta", text: "Foram 12480 kg." }, FINISH],
     ];
 
-    await rodar(entrada({ ...ESPECIALISTA, exigirFerramentaNoPrimeiroPasso: false }));
+    await rodar(entrada({ ...ESPECIALISTA, primeiroPassoExigeLeitura: null }));
 
-    expect(toolChoicesRecebidos).toEqual([undefined, undefined]);
+    expect(pedidos()).toEqual([
+      "-:training.get_volume+training.criar_treino",
+      "-:training.get_volume+training.criar_treino",
+    ]);
   });
 
-  it("ligada, mas sem definições: não há o que exigir, e 'required' não é pedido", async () => {
-    respostasPorChamada = [[{ type: "delta", text: "Sem leitura liberada." }, FINISH]];
+  it("lista vazia (especialista só com escrita): oferece tudo e nunca o força a escrever", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "Qual treino?" }, FINISH]];
 
-    await rodar(entrada({ ...ESPECIALISTA, definicoes: [] }));
+    await rodar(
+      entrada({
+        ...ESPECIALISTA,
+        definicoes: [DEFINICAO_ESCRITA],
+        primeiroPassoExigeLeitura: [],
+      }),
+    );
 
-    expect(toolChoicesRecebidos).toEqual([undefined]);
+    expect(pedidos()).toEqual(["-:training.criar_treino"]);
+  });
+
+  it("leitura que não está nas definições não é oferecida — e sem nenhuma, nada é exigido", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
+
+    await rodar(
+      entrada({
+        ...ESPECIALISTA,
+        definicoes: [DEFINICAO_ESCRITA],
+        primeiroPassoExigeLeitura: [DEFINICAO_VOLUME],
+      }),
+    );
+
+    expect(pedidos()).toEqual(["-:training.criar_treino"]);
   });
 });

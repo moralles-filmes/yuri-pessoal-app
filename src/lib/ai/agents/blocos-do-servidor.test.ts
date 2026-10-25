@@ -51,7 +51,8 @@ describe("blocoDaData", () => {
  * diz QUAL ler e como declarar o recorte.
  */
 describe("blocoDoEspecialista", () => {
-  const b = blocoDoEspecialista();
+  const b = blocoDoEspecialista({ temLeitura: true });
+  const semLeitura = blocoDoEspecialista({ temLeitura: false });
 
   it("diz que ele foi acionado porque a tarefa depende dos registros, e que consulta antes de responder", () => {
     expect(b).toContain("Você foi acionado porque a tarefa depende dos registros do dono");
@@ -70,8 +71,27 @@ describe("blocoDoEspecialista", () => {
     expect(b).toContain("Apresente cada leitura pelo que ela é");
   });
 
-  it("passa no varredor de vocabulário proibido", () => {
+  /** Rodada 1 — o `required` do passo 0 não pode virar escrita com dado chutado. */
+  it("faltando dado para uma alteração, lê o que houver e pergunta ao dono em vez de preencher", () => {
+    expect(b).toContain(
+      "Se faltar dado para uma alteração, leia o que houver e pergunte ao dono o que falta, em vez de preencher por conta própria.",
+    );
+  });
+
+  /**
+   * Rodada 1 (Minor 1) — "consulte as suas ferramentas" seria falso para um especialista sem
+   * leitura oferecida. Sem leitura, o bloco fica só com a regra de perguntar.
+   */
+  it("sem leitura oferecida, não manda consultar nem fala de leitura — só a regra de perguntar", () => {
+    expect(semLeitura).not.toMatch(/consulte|leitura/i);
+    expect(semLeitura).toContain(
+      "Se faltar dado para uma alteração, pergunte ao dono o que falta, em vez de preencher por conta própria.",
+    );
+  });
+
+  it("passa no varredor de vocabulário proibido, nas duas formas", () => {
     expect(termosProibidosEm(b)).toEqual([]);
+    expect(termosProibidosEm(semLeitura)).toEqual([]);
   });
 });
 

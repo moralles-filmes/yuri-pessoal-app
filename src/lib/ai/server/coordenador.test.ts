@@ -209,16 +209,22 @@ vi.mock("@/lib/ai/tools/executor", () => ({
     status: "executada",
     block: wrapUntrusted("resultado_de_ferramenta", call.toolName, { id: "prop-1" }),
     recordsRead: 0,
-    proposta: {
-      id: "prop-1",
-      effectHash: "h1",
-      expiresAt: "2026-08-06T15:10:00Z",
-      toolName: call.toolName,
-      risco: 3,
-      resumo: "Lançar R$ 10,00",
-      linhas: [],
-      ressalvas: [],
-    },
+    // Só a ESCRITA prepara proposta; uma leitura devolve dado (Task 15b, Rodada 1: o
+    // especialista lê no primeiro passo, e a leitura não pode virar cartão no duplo).
+    ...(call.toolName.includes(".get_")
+      ? {}
+      : {
+          proposta: {
+            id: "prop-1",
+            effectHash: "h1",
+            expiresAt: "2026-08-06T15:10:00Z",
+            toolName: call.toolName,
+            risco: 3,
+            resumo: "Lançar R$ 10,00",
+            linhas: [],
+            ressalvas: [],
+          },
+        }),
   }),
 }));
 
@@ -242,6 +248,7 @@ vi.mock("@/lib/ai/tools/audit", () => ({
 const { conduzirCoordenador } = await import("./coordenador");
 const { criarPrazo, PISO_POR_CHAMADA_MS } = await import("./prazo");
 const { AVISO_SEM_AUDITORIA } = await import("./tool-loop");
+const { AVISO_TETO_DE_PASSOS } = await import("@/lib/ai/tools/limits");
 const {
   avisoConsultaNaoMontada,
   avisoCruzarModulos,
@@ -600,6 +607,8 @@ describe("conduzirCoordenador — o modo direto", () => {
     escrita = { allow_write_finance: true };
     respostasPorChamada = [
       [aciona("financeiro", "lançar R$ 10 no mercado"), FINISH],
+      // Task 15b — o primeiro passo só oferece leituras: ler, depois propor.
+      [{ type: "tool-call", toolName: "finance.get_spending", callId: "r0", input: {} }, FINISH],
       [{ type: "tool-call", toolName: "finance.lancar_transacao", callId: "w1", input: {} }, FINISH],
       [delta("Preparei o lançamento."), FINISH],
     ];
@@ -616,6 +625,7 @@ describe("conduzirCoordenador — o modo direto", () => {
     escrita = { allow_write_finance: true };
     respostasPorChamada = [
       [aciona("financeiro", "lançar R$ 10 no mercado"), FINISH],
+      [{ type: "tool-call", toolName: "finance.get_spending", callId: "r0", input: {} }, FINISH],
       [{ type: "tool-call", toolName: "finance.lancar_transacao", callId: "w1", input: {} }, FINISH],
       [delta("Preparei"), ERRO_TEMPORARIO],
       [delta("Preparei o lançamento."), FINISH],
@@ -1116,8 +1126,9 @@ describe("conduzirCoordenador — especialistas em paralelo e síntese", () => {
     responder = ({ quem, vez, abortSignal }) => {
       if (quem === "decisao") return DECIDE_DOIS;
       if (quem === "financeiro" && vez === 0) {
+        // O primeiro passo só oferece leituras (Task 15b): é uma leitura que abre o passo.
         return [
-          { type: "tool-call", toolName: "finance.lancar_transacao", callId: "w1", input: {} },
+          { type: "tool-call", toolName: "finance.get_spending", callId: "r1", input: {} },
           FINISH,
         ];
       }
@@ -1322,7 +1333,7 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
 
     await conduzir({ prefs: prefs() });
 
-    const bloco = blocoDoEspecialista();
+    const bloco = blocoDoEspecialista({ temLeitura: true });
     const porQuem = ferramentasRecebidas.map((f, i) => ({
       quem: quemPelasFerramentas(f),
       system: systemsRecebidos[i]!,
@@ -1342,7 +1353,78 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
 
     await conduzir();
 
-    expect(systemsRecebidos[0]).not.toContain(blocoDoEspecialista());
-    expect(systemsRecebidos[1]).toContain(blocoDoEspecialista());
+    expect(systemsRecebidos[0]).not.toContain(blocoDoEspecialista({ temLeitura: true }));
+    expect(systemsRecebidos[1]).toContain(blocoDoEspecialista({ temLeitura: true }));
+  });
+
+  /**
+   * Rodada 1 da revisão — o `required` sobre a allowlist INTEIRA empurrava o modelo a propor
+   * escrita (ou memória) com dado chutado em vez de perguntar. No passo 0 vão só as leituras.
+   */
+  it("com escrita ligada: o passo 0 do especialista recebe só leituras; o TOOL_STEP recebe todas", async () => {
+    escrita = { allow_write_finance: true };
+    respostasPorChamada = [
+      [aciona("financeiro", "gasto de outubro"), FINISH],
+      [LEITURA_DO_FINANCEIRO, FINISH],
+      [delta("Você gastou R$ 10,00."), FINISH],
+    ];
+
+    await conduzir({ prefs: prefs() });
+
+    expect(resumo()).toEqual(["decisao#0:-", "financeiro#0:required", "financeiro#1:-"]);
+    expect(ferramentasRecebidas[1]).toEqual([
+      "finance.get_balances",
+      "finance.get_spending",
+      "finance.get_invoice",
+    ]);
+    expect(ferramentasRecebidas[2]).toEqual([
+      "finance.get_balances",
+      "finance.get_spending",
+      "finance.get_invoice",
+      "finance.lancar_transacao",
+    ]);
+  });
+
+  it("um despejo com escrita cabe no teto: ler → propor → texto, sem corte", async () => {
+    escrita = { allow_write_finance: true };
+    respostasPorChamada = [
+      [aciona("financeiro", "lançar R$ 10 no mercado"), FINISH],
+      [LEITURA_DO_FINANCEIRO, FINISH],
+      [{ type: "tool-call", toolName: "finance.lancar_transacao", callId: "w1", input: {} }, FINISH],
+      [delta("Preparei o lançamento."), FINISH],
+    ];
+
+    const { eventos, desfecho } = await conduzir({ prefs: prefs() });
+
+    expect(desfecho).toMatchObject({ ok: true, texto: "Preparei o lançamento." });
+    expect(eventos.filter((e) => e.type === "proposta")).toHaveLength(1);
+    expect(deltas(eventos).join("")).not.toContain(AVISO_TETO_DE_PASSOS);
+    expect(medicao.filter((m) => m.tipo === "start").map((m) => m.attemptType)).toEqual([
+      "PRIMARY",
+      "ESPECIALISTA",
+      "TOOL_STEP",
+      "TOOL_STEP",
+    ]);
+    expect(resumo()).toEqual([
+      "decisao#0:-",
+      "financeiro#0:required",
+      "financeiro#1:-",
+      "financeiro#2:-",
+    ]);
+  });
+
+  it("escrita devolvida no passo 0 é chamada inesperada: o especialista falha e nada é proposto", async () => {
+    escrita = { allow_write_finance: true };
+    respostasPorChamada = [
+      [aciona("financeiro", "lançar R$ 10 no mercado"), FINISH],
+      [{ type: "tool-call", toolName: "finance.lancar_transacao", callId: "w0", input: {} }, FINISH],
+    ];
+
+    const { eventos, desfecho } = await conduzir({ prefs: prefs() });
+
+    expect(eventos.some((e) => e.type === "proposta")).toBe(false);
+    expect(desfecho).toMatchObject({ ok: false, erro: { code: "UNEXPECTED_TOOL_CALL" } });
+    // O caminho de sempre: tool call inesperada não tem retry.
+    expect(systemsRecebidos).toHaveLength(2);
   });
 });

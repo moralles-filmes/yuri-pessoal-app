@@ -701,7 +701,7 @@ export async function* runChat(
               tetoDeSaida: Number.POSITIVE_INFINITY,
               primeiroTipo: "PRIMARY",
               // Sem ferramentas não há o que exigir (Task 15b vale só para especialista).
-              exigirFerramentaNoPrimeiroPasso: false,
+              primeiroPassoExigeLeitura: null,
               permissions: prefs.permissions,
               writePermissions: prefs.writePermissions,
               promptMontado: preparo.doPlano.promptMontado,

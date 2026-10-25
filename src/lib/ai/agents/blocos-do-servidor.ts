@@ -101,11 +101,21 @@ export function blocoDoCoordenador(input: {
  * ⚠️ Entra na reserva sem nada a fazer: `tokensDoMaiorEspecialista` mede o system montado por
  * `sistemaDoEspecialista`, que é quem o inclui.
  */
-export function blocoDoEspecialista(): string {
+export function blocoDoEspecialista(input: { readonly temLeitura: boolean }): string {
+  /**
+   * Rodada 1 — sem leitura oferecida (todas as chaves de leitura do módulo desligadas), mandar
+   * "consultar as ferramentas" seria afirmar o que não existe. Fica só a regra de perguntar.
+   */
+  if (!input.temLeitura) {
+    return "Se faltar dado para uma alteração, pergunte ao dono o que falta, em vez de preencher por conta própria.";
+  }
   return [
     "Você foi acionado porque a tarefa depende dos registros do dono. Consulte as suas ferramentas antes de responder.",
     "Se nenhuma ferramenta cobre exatamente o período ou o recorte pedido, use a leitura mais próxima e diga com clareza o que ela cobre — por exemplo, o mês inteiro em vez da semana, ou o que está aberto ou atrasado em vez do que foi concluído.",
     "Apresente cada leitura pelo que ela é: o período e o recorte que vieram com ela são os que você declara.",
+    // A leitura obrigatória do primeiro passo não autoriza completar uma alteração por conta
+    // própria: o que ela não trouxe vira pergunta.
+    "Se faltar dado para uma alteração, leia o que houver e pergunte ao dono o que falta, em vez de preencher por conta própria.",
   ].join("\n");
 }
 

@@ -129,17 +129,23 @@ export type EntradaDaTrilha = {
   readonly tetoDeSaida: number;
   readonly primeiroTipo: "PRIMARY" | "ESPECIALISTA";
   /**
-   * Task 15b — `true` = o PRIMEIRO passo de cada tentativa (PRIMARY/ESPECIALISTA/RETRY/
-   * FALLBACK) pede `toolChoice: "required"`: o modelo é obrigado a chamar uma ferramenta antes
-   * de responder. Os TOOL_STEP seguintes ficam no padrão (`auto`), senão ele nunca conseguiria
-   * terminar com texto. Sem definições, nada é exigido.
+   * Task 15b — as LEITURAS do especialista. Lista não vazia = o PRIMEIRO passo de cada tentativa
+   * (ESPECIALISTA/RETRY/FALLBACK) oferece SÓ elas, com `toolChoice: "required"`: o modelo é
+   * obrigado a ler antes de responder, e não a propor uma escrita (ou uma memória) com dado
+   * chutado em vez de perguntar. Do passo 1 em diante, todas as definições, no padrão (`auto`)
+   * — senão ele nunca conseguiria terminar com texto. Uma escrita que volte no passo 0 é
+   * chamada inesperada (`ferramentasDoPrimeiroPasso` do `tool-loop`).
    *
-   * ⛔ Sem valor padrão, como `repetir` e `modo`: quem liga é o especialista (`coordenador.ts`);
-   * a decisão do coordenador pode responder direto, e a síntese não tem ferramenta. Instrução
-   * no prompt é obediência "quase sempre" — no teste real da Task 15, especialistas acionados
+   * `null` ou lista vazia = nada é exigido e tudo é oferecido desde o passo 0: um especialista
+   * só com escrita nunca é forçado a escrever. Leitura que não esteja em `definicoes` (a
+   * allowlist já filtrada pelas chaves) não é oferecida.
+   *
+   * ⛔ Sem valor padrão, como `repetir` e `modo`. Quem calcula é `coordenador.ts` (esta função
+   * não conhece o registry); a decisão, a síntese e o panorama passam `null`. Instrução no
+   * prompt é obediência "quase sempre" — no teste real da Task 15, especialistas acionados
    * responderam sem ler nada (invariantes 103/106).
    */
-  readonly exigirFerramentaNoPrimeiroPasso: boolean;
+  readonly primeiroPassoExigeLeitura: readonly AiToolDefinition[] | null;
   readonly permissions: Readonly<Partial<Record<ToolPermission, boolean>>>;
   readonly writePermissions: Readonly<Partial<Record<ToolWritePermission, boolean>>>;
   readonly contadores: ContadoresDoRun;
@@ -162,6 +168,11 @@ export async function* runTrilha(
   // As definições que VÃO ao provedor são a régua da chamada inesperada: o que não foi
   // oferecido não pode voltar.
   const nomesOferecidos = e.definicoes.map((d) => d.name);
+  // Task 15b — as leituras do passo 0, só entre as que vão de fato ao provedor. Vazia = nada.
+  const leiturasDoPasso0 = (e.primeiroPassoExigeLeitura ?? []).filter((d) =>
+    nomesOferecidos.includes(d.name),
+  );
+  const exigeLeitura = leiturasDoPasso0.length > 0;
 
   /**
    * O texto DESTA trilha, para o desfecho. Zera em tentativa nova pela mesma regra que zera o
@@ -414,8 +425,7 @@ export async function* runTrilha(
       ): AsyncIterable<AiStreamEvent> =>
         (async function* () {
           const client = createProviderClient(alvo.provider, chave.value);
-          const exigir =
-            e.exigirFerramentaNoPrimeiroPasso && passo === 0 && e.definicoes.length > 0;
+          const exigir = exigeLeitura && passo === 0;
           yield* client.streamText({
             model: alvo.model.id,
             system: e.system,
@@ -425,7 +435,7 @@ export async function* runTrilha(
             abortSignal: signal,
             // O laço executa SÓ o que passou pela allowlist do agente e pelo guard. O que
             // não está aqui não foi oferecido — e voltar assim mesmo encerra o run.
-            tools: e.definicoes,
+            tools: exigir ? leiturasDoPasso0 : e.definicoes,
             ...(exigir ? { toolChoice: "required" as const } : {}),
           });
         })();
@@ -445,6 +455,9 @@ export async function* runTrilha(
               },
               mensagensIniciais: e.mensagens,
               ferramentasOferecidas: nomesOferecidos,
+              ...(exigeLeitura
+                ? { ferramentasDoPrimeiroPasso: leiturasDoPasso0.map((d) => d.name) }
+                : {}),
               proximoStepIndex: e.contadores.proximoStepIndex,
               chamarModelo,
               antesDaChamada,

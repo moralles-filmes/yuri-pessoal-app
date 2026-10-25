@@ -304,10 +304,14 @@ describe("ferramentas (18-B)", () => {
     // Sem ferramenta não há o que exigir: mandar `required` sem `tools` é erro no provedor
     // (ou, pior, o pedido de uma ferramenta que não existe).
     partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
-    await coletar(
-      createProviderClient("gemini", "chave").streamText({ ...PEDIDO, toolChoice: "required" }),
-    );
-    expect(opcoesRecebidas && "toolChoice" in opcoesRecebidas).toBe(false);
+    for (const provider of AI_PROVIDERS) {
+      opcoesRecebidas = null;
+      await coletar(
+        createProviderClient(provider, "chave").streamText({ ...PEDIDO, toolChoice: "required" }),
+      );
+      expect(opcoesRecebidas, provider).not.toBeNull();
+      expect("toolChoice" in opcoesRecebidas!, provider).toBe(false);
+    }
   });
 
   it("sem toolChoice no pedido, o campo não é enviado (o padrão do provedor continua)", async () => {
