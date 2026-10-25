@@ -168,9 +168,29 @@ describe("03-G2 · M-G2 — salvar_lancamento e criar_compra_parcelada", () => {
 
   it("a compra-pai confere a quantidade de parcelas, e só mede lista (achados 2 e 3)", () => {
     expect(PARCELADA).toContain(
-      "case when jsonb_typeof(p_parcelas) = 'array' then jsonb_array_length(p_parcelas) < 1 or (p_pai ->> 'qtd_parcelas')::int is distinct from jsonb_array_length(p_parcelas) else true end",
+      "(case when jsonb_typeof(p_parcelas) = 'array' then jsonb_array_length(p_parcelas) < 1 or (p_pai ->> 'qtd_parcelas')::int is distinct from jsonb_array_length(p_parcelas) else true end) then",
     );
     expect(PARCELADA.match(/jsonb_array_length\(p_parcelas\)/g) ?? []).toHaveLength(2);
+  });
+
+  it("nenhum CASE fora de parênteses na condição de um IF — o IF do PL/pgSQL termina no 1º THEN fora deles", () => {
+    // Imita o leitor do PL/pgSQL: a condição vai do `if` até o primeiro `then` com profundidade
+    // de parênteses zero. Um `case` nessa profundidade teria o próprio `then` cortando a condição.
+    for (const f of [SALVAR, PARCELADA]) {
+      for (const m of f.matchAll(/(?<![a-z_])if\s/g)) {
+        let profundidade = 0;
+        let k = (m.index ?? 0) + 3;
+        let noTopo = "";
+        for (; k < f.length; k++) {
+          const c = f[k];
+          if (c === "(") profundidade++;
+          else if (c === ")") profundidade--;
+          else if (profundidade === 0 && /^then(?![a-z_])/.test(f.slice(k, k + 5))) break;
+          if (profundidade === 0) noTopo += c;
+        }
+        expect(noTopo, f.slice(m.index ?? 0, k + 4)).not.toMatch(/(?<![a-z_])case(?![a-z_])/);
+      }
+    }
   });
 
   it("compra parcelada não muda de tipo por aqui (D-G2-6, RR12)", () => {

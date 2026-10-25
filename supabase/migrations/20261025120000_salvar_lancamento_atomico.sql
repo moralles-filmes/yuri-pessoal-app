@@ -204,10 +204,12 @@ begin
      or (p_pai ->> 'card_id') is null
      or (p_pai ->> 'statement_id') is not null
      -- jsonb_array_length só roda sobre lista: o OR do SQL não garante curto-circuito (achado 3).
-     or case when jsonb_typeof(p_parcelas) = 'array'
-             then jsonb_array_length(p_parcelas) < 1
-               or (p_pai ->> 'qtd_parcelas')::int is distinct from jsonb_array_length(p_parcelas)
-             else true end then
+     -- Entre parênteses: o IF do PL/pgSQL termina no primeiro THEN fora deles, e o do CASE
+     -- cortaria a condição (42601 na primeira tentativa de aplicar).
+     or (case when jsonb_typeof(p_parcelas) = 'array'
+              then jsonb_array_length(p_parcelas) < 1
+                or (p_pai ->> 'qtd_parcelas')::int is distinct from jsonb_array_length(p_parcelas)
+              else true end) then
     raise exception 'PARCELADO_INVALIDO' using errcode = 'P0001';
   end if;
   if not exists (select 1 from public.credit_cards where id = (p_pai ->> 'card_id')::uuid)
