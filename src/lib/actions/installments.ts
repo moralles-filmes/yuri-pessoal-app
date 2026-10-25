@@ -11,10 +11,14 @@ import { splitSchema } from "@/lib/validators/split";
 import {
   authContext,
   dbError,
+  falhaDeLeituraAntes,
+  falhaDeLeituraDepois,
   invalid,
   notAuthed,
   type AuthContext,
 } from "@/lib/actions/helpers";
+import { ehErroDeLeitura } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { getOrCreateStatementByFatura } from "@/lib/finance/statements";
 import { planejarParcelamento } from "@/lib/finance/installments";
 import { applySplitParcelado } from "@/lib/finance/split-persist";
@@ -55,11 +59,16 @@ export async function createInstallmentPurchase(
   const isShared = split.data.classificacao !== "pessoal";
 
   // Dias do cartão (RLS garante que é do usuário) para distribuir as faturas.
-  const { data: card } = await ctx.supabase
+  // 03-G — `.single()` sem linha (PGRST116) é ausência legítima; qualquer outro erro é leitura falha.
+  const cardRes = await ctx.supabase
     .from("credit_cards")
     .select("id, dia_fechamento, dia_vencimento")
     .eq("id", d.card_id)
     .single();
+  if (cardRes.error && cardRes.error.code !== "PGRST116") {
+    return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.cartao);
+  }
+  const card = cardRes.data;
   if (!card) return dbError("Cartão não encontrado.");
 
   let plano;
@@ -121,14 +130,24 @@ export async function createInstallmentPurchase(
     status: "ativa";
   }[] = [];
   for (const p of plano) {
-    const statementId = await getOrCreateStatementByFatura(
-      ctx,
-      d.card_id,
-      p.fatura,
-    );
+    // 03-G (D-G26, Z20) — o ErroDeLeitura não escapa da action. A compensação que já existia para
+    // o null continua rodando (antes da 03-G, uma leitura falha chegava aqui como null). A frase
+    // diz "pode ter sido gravada em parte" porque a compra-pai já foi gravada e a compensação
+    // ignora o próprio erro (03-G2).
+    let statementId: string | null;
+    let leituraFalhou = false;
+    try {
+      statementId = await getOrCreateStatementByFatura(ctx, d.card_id, p.fatura);
+    } catch (e) {
+      if (!ehErroDeLeitura(e)) throw e;
+      statementId = null;
+      leituraFalhou = true;
+    }
     if (!statementId) {
       await ctx.supabase.from("transactions").delete().eq("id", parent.id);
-      return dbError("Não foi possível resolver a fatura de uma das parcelas.");
+      return leituraFalhou
+        ? falhaDeLeituraDepois(ROTULOS_DE_LEITURA.fatura)
+        : dbError("Não foi possível resolver a fatura de uma das parcelas.");
     }
     rows.push({
       user_id: ctx.userId,
@@ -211,19 +230,23 @@ export async function updateInstallmentSplit(
   const split = splitSchema.safeParse(input);
   if (!split.success) return invalid(split.error.flatten().fieldErrors);
 
-  const { data: parent } = await ctx.supabase
+  const parentRes = await ctx.supabase
     .from("transactions")
     .select("id, classificacao, card_id")
     .eq("id", parentId)
     .eq("parcelado", true)
     .maybeSingle();
+  if (parentRes.error) return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.comprasParceladas);
+  const parent = parentRes.data;
   if (!parent) return dbError("Compra parcelada não encontrada.");
 
-  const { data: parcelas } = await ctx.supabase
+  const parcelasRes = await ctx.supabase
     .from("transaction_installments")
     .select("id, statement_id, valor")
     .eq("parent_transaction_id", parentId)
     .eq("status", "ativa");
+  if (parcelasRes.error) return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.parcelas);
+  const parcelas = parcelasRes.data;
   if (!parcelas || parcelas.length === 0) {
     return dbError(
       "Este parcelamento não tem parcelas ativas para dividir.",
@@ -274,11 +297,13 @@ export async function cancelInstallmentFuture(
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { data: parcelas } = await ctx.supabase
+  const parcelasRes = await ctx.supabase
     .from("transaction_installments")
     .select("id, statement_id")
     .eq("parent_transaction_id", parentId)
     .eq("status", "ativa");
+  if (parcelasRes.error) return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.parcelas);
+  const parcelas = parcelasRes.data;
   if (!parcelas || parcelas.length === 0) {
     return dbError("Não há parcelas ativas para cancelar.");
   }
@@ -286,12 +311,15 @@ export async function cancelInstallmentFuture(
   const statementIds = [
     ...new Set(parcelas.map((p) => p.statement_id).filter(Boolean)),
   ] as string[];
-  const { data: statements } = statementIds.length
+  // 03-G — sem as faturas, toda parcela parecia "aberta" e parcela de fatura PAGA seria cancelada.
+  const statementsRes = statementIds.length
     ? await ctx.supabase
         .from("card_statements")
         .select("id, data_fechamento, data_vencimento, pago_em")
         .in("id", statementIds)
-    : { data: [] };
+    : { data: [], error: null };
+  if (statementsRes.error) return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.faturas);
+  const statements = statementsRes.data;
   const stMap = new Map((statements ?? []).map((s) => [s.id, s]));
 
   const today = hojeISO();
@@ -331,7 +359,11 @@ export async function cancelInstallmentFuture(
 
   if (protecao.recebiveis.length > 0) {
     await ctx.supabase.from("receivables").delete().in("installment_id", ids);
-    await recomputeParentValorPessoal(ctx, parentId);
+    // 03-G — leitura falha aqui gravaria valor_pessoal calculado sobre listas vazias; as parcelas
+    // já foram canceladas, por isso a frase é a de "depois".
+    if (!(await recomputeParentValorPessoal(ctx, parentId))) {
+      return falhaDeLeituraDepois(ROTULOS_DE_LEITURA.parcelas);
+    }
   }
 
   revalidateInstallments();
@@ -347,22 +379,24 @@ export async function cancelInstallmentFuture(
 async function recomputeParentValorPessoal(
   ctx: AuthContext,
   parentId: string,
-): Promise<void> {
-  const { data: ativas } = await ctx.supabase
+): Promise<boolean> {
+  const ativasRes = await ctx.supabase
     .from("transaction_installments")
     .select("valor")
     .eq("parent_transaction_id", parentId)
     .eq("status", "ativa");
-  const { data: recs } = await ctx.supabase
+  const recsRes = await ctx.supabase
     .from("receivables")
     .select("valor")
     .eq("transaction_id", parentId);
+  // 03-G — com leitura falha, não regrava valor_pessoal sobre listas vazias: devolve `false`.
+  if (ativasRes.error || recsRes.error) return false;
 
-  const totalCentavos = (ativas ?? []).reduce(
+  const totalCentavos = (ativasRes.data ?? []).reduce(
     (acc, p) => acc + reaisParaCentavos(p.valor),
     0,
   );
-  const terceirosCentavos = (recs ?? []).reduce(
+  const terceirosCentavos = (recsRes.data ?? []).reduce(
     (acc, r) => acc + reaisParaCentavos(r.valor),
     0,
   );
@@ -376,6 +410,7 @@ async function recomputeParentValorPessoal(
           : null,
     })
     .eq("id", parentId);
+  return true;
 }
 
 /**

@@ -18,8 +18,14 @@ const { getTransactionSplit, deleteTransaction, setTransactionStatus } = await i
 );
 const { deletePerson } = await import("@/lib/actions/people");
 const { reapplySplit } = await import("@/lib/finance/split-reapply");
+const { createInstallmentPurchase, updateInstallmentSplit, cancelInstallmentFuture } = await import(
+  "@/lib/actions/installments"
+);
+const { generateBillTransaction } = await import("@/lib/actions/bills");
+const { deleteCreditCard } = await import("@/lib/actions/credit-cards");
 
 const TX = "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d";
+const CARTAO = "2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e";
 const PESSOA = "1f2e3d4c-5b6a-4978-8a9b-0c1d2e3f4a5b";
 const escritas = () => fake.operacoes.filter((o) => o.tipo !== "rpc");
 
@@ -138,6 +144,143 @@ describe("03-G L6 · reapplySplit (D-G19, Z13)", () => {
       error: "Não foi possível ler a divisão atual. A divisão não foi alterada.",
     });
     expect(escritas()).toEqual([]);
+  });
+});
+
+// Fixture sintética: a fatura fica aberta (fechamento em 2099) com o hojeISO real da ação.
+function parcelamento() {
+  return {
+    transactions: [{ id: TX, parcelado: true, classificacao: "compartilhada", card_id: CARTAO, valor_pessoal: 50 }],
+    transaction_installments: [
+      { id: "inst-1", parent_transaction_id: TX, statement_id: "st-1", status: "ativa", valor: 100 },
+    ],
+    card_statements: [
+      { id: "st-1", data_fechamento: "2099-01-10", data_vencimento: "2099-01-20", pago_em: null },
+    ],
+    receivables: [{ id: "rc-1", installment_id: "inst-1", transaction_id: TX, status: "pendente", valor: 50 }],
+    receivable_receipts: [],
+  };
+}
+
+describe("03-G L6 · createInstallmentPurchase", () => {
+  it("leitura do cartão falhando recusa antes de gravar a compra-pai", async () => {
+    fake = criarSupabaseEmMemoria(
+      { credit_cards: [{ id: CARTAO, dia_fechamento: 5, dia_vencimento: 12 }] },
+      { falharLeitura: { credit_cards: "XX000" } },
+    );
+    const r = await createInstallmentPurchase({
+      card_id: CARTAO,
+      qtd_parcelas: 3,
+      valor_total: 300,
+      purchase_date: "2026-06-01",
+      competence_date: "2026-06-01",
+    });
+    expect(r).toEqual({ ok: false, error: "Não foi possível ler o cartão. Nada foi alterado." });
+    expect(escritas()).toEqual([]);
+  });
+
+  it("cartão que não existe (PGRST116) continua 'não encontrado'", async () => {
+    fake = criarSupabaseEmMemoria({ credit_cards: [] });
+    const r = await createInstallmentPurchase({
+      card_id: CARTAO,
+      qtd_parcelas: 3,
+      valor_total: 300,
+      purchase_date: "2026-06-01",
+      competence_date: "2026-06-01",
+    });
+    expect(r).toEqual({ ok: false, error: "Cartão não encontrado." });
+  });
+});
+
+describe("03-G L6 · updateInstallmentSplit", () => {
+  it.each([
+    ["transactions", "Não foi possível ler as compras parceladas. Nada foi alterado."],
+    ["transaction_installments", "Não foi possível ler as parcelas. Nada foi alterado."],
+  ])("%s falhando recusa sem escrever", async (tabela, mensagem) => {
+    fake = criarSupabaseEmMemoria(parcelamento(), { falharLeitura: { [tabela]: "XX000" } });
+    expect(await updateInstallmentSplit(TX, { classificacao: "pessoal", parts: [] })).toEqual({
+      ok: false,
+      error: mensagem,
+    });
+    expect(escritas()).toEqual([]);
+  });
+});
+
+describe("03-G L6 · cancelInstallmentFuture", () => {
+  it("parcelas falhando recusa sem escrever", async () => {
+    fake = criarSupabaseEmMemoria(parcelamento(), { falharLeitura: { transaction_installments: "XX000" } });
+    expect(await cancelInstallmentFuture(TX)).toEqual({
+      ok: false,
+      error: "Não foi possível ler as parcelas. Nada foi alterado.",
+    });
+    expect(escritas()).toEqual([]);
+  });
+
+  it("faturas falhando recusa — parcela de fatura paga não é cancelada por parecer aberta", async () => {
+    fake = criarSupabaseEmMemoria(parcelamento(), { falharLeitura: { card_statements: "XX000" } });
+    expect(await cancelInstallmentFuture(TX)).toEqual({
+      ok: false,
+      error: "Não foi possível ler as faturas. Nada foi alterado.",
+    });
+    expect(escritas()).toEqual([]);
+    expect(fake.tabelas.transaction_installments[0]).toMatchObject({ status: "ativa" });
+  });
+
+  it("recálculo do valor pessoal com leitura falha não grava sobre listas vazias e diz 'depois'", async () => {
+    const opcoes: { falharLeitura: Record<string, string>; antesDeGravar: (op: { tabela: string; tipo: string }) => null } = {
+      falharLeitura: {},
+      // A leitura dos recebíveis passa a falhar só DEPOIS de eles serem apagados: a primeira
+      // leitura (a proteção) precisa funcionar para a ação chegar ao recálculo.
+      antesDeGravar: ({ tabela, tipo }) => {
+        if (tabela === "receivables" && tipo === "delete") opcoes.falharLeitura.receivables = "XX000";
+        return null;
+      },
+    };
+    fake = criarSupabaseEmMemoria(parcelamento(), opcoes);
+    expect(await cancelInstallmentFuture(TX)).toEqual({
+      ok: false,
+      error:
+        "Não foi possível ler as parcelas. A alteração pode ter sido gravada em parte: recarregue a página para conferir.",
+    });
+    expect(escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual([
+      "transaction_installments:update",
+      "receivables:delete",
+    ]);
+    expect(fake.tabelas.transactions[0]).toMatchObject({ valor_pessoal: 50 });
+  });
+});
+
+describe("03-G L6 · generateBillTransaction", () => {
+  it("guarda de duplicata falhando recusa — a conta fixa não é lançada duas vezes", async () => {
+    fake = criarSupabaseEmMemoria(
+      { bills: [{ id: "bill-1", name: "Conta sintética", due_day: 10, amount: 10 }], transactions: [] },
+      { falharLeitura: { transactions: "XX000" } },
+    );
+    expect(await generateBillTransaction("bill-1")).toEqual({
+      ok: false,
+      error: "Não foi possível ler os lançamentos do mês. Nada foi alterado.",
+    });
+    expect(escritas()).toEqual([]);
+  });
+});
+
+describe("03-G L6 · deleteCreditCard", () => {
+  it("contagem falhando não exclui o cartão", async () => {
+    fake = criarSupabaseEmMemoria(
+      { credit_cards: [{ id: CARTAO }], transactions: [] },
+      { falharLeitura: { transactions: "XX000" } },
+    );
+    expect(await deleteCreditCard(CARTAO)).toEqual({
+      ok: false,
+      error: "Não foi possível ler os lançamentos do cartão. Nada foi alterado.",
+    });
+    expect(escritas()).toEqual([]);
+    expect(fake.tabelas.credit_cards).toHaveLength(1);
+  });
+
+  it("sem lançamentos e sem erro, exclui como antes", async () => {
+    fake = criarSupabaseEmMemoria({ credit_cards: [{ id: CARTAO }], transactions: [] });
+    expect(await deleteCreditCard(CARTAO)).toEqual({ ok: true, data: undefined });
   });
 });
 
