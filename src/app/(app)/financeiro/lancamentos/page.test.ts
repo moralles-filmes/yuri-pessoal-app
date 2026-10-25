@@ -15,7 +15,12 @@ vi.mock("@/lib/finance/queries", () => ({
   getDailyBalances: vi.fn(async () => null),
   getPeopleForSelect: vi.fn(async () => []),
   getSubcategories: vi.fn(async () => []),
-  getTransactions: vi.fn(async () => [{ id: "t-1", competence_date: "2026-06-10" }]),
+  // 03-G (D-G7): a leitura devolve `LeituraComTeto`, e a página decide o teto.
+  getTransactions: vi.fn(async () => ({
+    linhas: [{ id: "t-1", competence_date: "2026-06-10" }],
+    situacao: "completa",
+    total: 1,
+  })),
 }));
 vi.mock("./transactions-client", () => ({ TransactionsClient: () => null }));
 

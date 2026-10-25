@@ -26,7 +26,7 @@ export default async function ParcelamentosPage({
   const categoryId = str(sp.category);
 
   const [purchases, cards, categories, people] = await Promise.all([
-    getInstallmentPurchases({ cardId, categoryId }),
+    getInstallmentPurchases({ cardId, categoryId }).then((l) => l.linhas),
     getCreditCards(),
     getCategories(),
     getPeopleForSelect(),

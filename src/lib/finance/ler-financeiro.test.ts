@@ -97,7 +97,7 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 
-const { getReceivables, getTransactionsRange, lerFinanceiro } = await import("@/lib/finance/queries");
+const { lerRecebiveis, getTransactionsRange, lerFinanceiro } = await import("@/lib/finance/queries");
 
 const JANELA = janelaDoMes("2026-05");
 const DONO: LeituraDoDono = {
@@ -521,9 +521,13 @@ describe("03-B2 A5 — tetos e completude (desenho, §5.5)", () => {
     expect(r.completude).toEqual({ estado: "exato" });
   });
 
-  it("getReceivables continua devolvendo array com o mesmo limite e owner", async () => {
+  // 03-G (D-G29): `getReceivables` saiu; `lerRecebiveis` (exportada) é a mesma leitura e devolve
+  // também a situação, para o chamador decidir o teto.
+  it("lerRecebiveis devolve as linhas com o mesmo limite e owner, e a situação", async () => {
     estado.dados.receivables = Array.from({ length: 1001 }, () => estado.dados.receivables[0]);
-    const r = await getReceivables(DONO);
+    const leitura = await lerRecebiveis(DONO);
+    expect(leitura.situacao).toBe("saturou");
+    const r = leitura.linhas;
     expect(r).toEqual(estado.dados.receivables.slice(0, 1000).map((linha) => ({
       ...(linha as object), recebimentos: [],
     })));

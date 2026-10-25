@@ -6,12 +6,26 @@
  * Cron com service role, que IGNORA a RLS: a frase acima deixa de valer e o escopo do
  * usuário passa a ser o `.eq("user_id", …)` explícito. Sem `owner`, o caminho é byte por
  * byte o de antes. Ver `src/lib/supabase/owner.ts`.
+ *
+ * 03-G — toda leitura passa por `exigir` / `listaComTeto` / `listaCompleta` (`src/lib/supabase/
+ * leitura.ts`) e LANÇA `ErroDeLeitura` no erro. Zero volta a significar "medido zero", nunca
+ * "não li": a lista que falhou não vira `[]`. Quem decide o teto é o chamador (`LeituraComTeto`)
+ * ou o próprio helper (`listaCompleta`, quando a lista alimenta número).
  */
 import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
+import {
+  exigir,
+  exigirCompleta,
+  leituraComTeto,
+  listaCompleta,
+  listaComTeto,
+  type LeituraComTeto,
+  type RespostaDoBanco,
+} from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { toDateInputValue } from "@/lib/format";
 import { SETTLED_STATUSES } from "@/lib/finance/constants";
-import { leituraComTeto, type LeituraComTeto } from "@/lib/finance/leitura-com-teto";
 import { idsDasCategoriasMarcadas } from "@/lib/finance/categorias-marcadas";
 import { anexarRecebimentos } from "@/lib/finance/recebimentos";
 import { lerRecebimentos } from "@/lib/finance/recebimentos-leitura";
@@ -49,6 +63,9 @@ import type {
   TransactionWithRelations,
 } from "@/types/database";
 
+/** Alias local do rótulo: as linhas abaixo ficam legíveis (`R.lancamentos`). */
+const R = ROTULOS_DE_LEITURA;
+
 const TX_SELECT =
   "*, account:accounts!transactions_account_id_fkey(id,name,color), transfer_account:accounts!transactions_transfer_account_id_fkey(id,name), category:categories(id,name,color,icon), subcategory:subcategories(id,name), card:credit_cards(id,nome,cor,bandeira), statement:card_statements!transactions_statement_id_fkey(id,pago_em)";
 
@@ -66,55 +83,61 @@ export async function getAccounts(
   const supabase = owner?.client ?? (await createClient());
   // `accounts_with_balance` é VIEW: sob service role a RLS dela não filtra nada, e o
   // `user_id` que ela expõe é o único escopo que sobra.
-  const base = supabase.from("accounts_with_balance").select("*");
-  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
+  const base = supabase.from("accounts_with_balance").select("*", { count: "exact" });
+  const res = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("is_active", { ascending: false })
     .order("name", { ascending: true });
-  return (data ?? []) as AccountWithBalance[];
+  return listaCompleta(res as RespostaDoBanco<AccountWithBalance[] | null>, R.contas);
 }
 
 export async function getCategories(): Promise<CategoryRow[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("categories")
-    .select("*")
+    .select("*", { count: "exact" })
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
-  return (data ?? []) as CategoryRow[];
+  return listaCompleta(res as RespostaDoBanco<CategoryRow[] | null>, R.categorias);
 }
 
 /**
  * Igual a getCategories, mas semeia as 16 categorias padrão se o usuário ainda
  * não tiver nenhuma. Seguro no render (não chama revalidatePath).
+ *
+ * 03-G: erro de leitura LANÇA (não vira "sem categorias, semear"). O `rpc` de seed fica
+ * exatamente como estava (D-G24).
  */
 export async function getCategoriesEnsureSeed(): Promise<CategoryRow[]> {
   const supabase = await createClient();
-  const first = await supabase
-    .from("categories")
-    .select("*")
-    .order("sort_order", { ascending: true })
-    .order("name", { ascending: true });
+  const first = listaCompleta(
+    (await supabase
+      .from("categories")
+      .select("*", { count: "exact" })
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true })) as RespostaDoBanco<CategoryRow[] | null>,
+    R.categorias,
+  );
 
-  if (first.data && first.data.length > 0) {
-    return first.data as CategoryRow[];
-  }
+  if (first.length > 0) return first;
 
   await supabase.rpc("seed_default_categories");
-  const { data } = await supabase
-    .from("categories")
-    .select("*")
-    .order("sort_order", { ascending: true })
-    .order("name", { ascending: true });
-  return (data ?? []) as CategoryRow[];
+  return listaCompleta(
+    (await supabase
+      .from("categories")
+      .select("*", { count: "exact" })
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true })) as RespostaDoBanco<CategoryRow[] | null>,
+    R.categorias,
+  );
 }
 
 export async function getSubcategories(): Promise<SubcategoryRow[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("subcategories")
-    .select("*")
+    .select("*", { count: "exact" })
     .order("name", { ascending: true });
-  return (data ?? []) as SubcategoryRow[];
+  return listaCompleta(res as RespostaDoBanco<SubcategoryRow[] | null>, R.subcategorias);
 }
 
 export type TransactionFilters = {
@@ -129,13 +152,21 @@ export type TransactionFilters = {
   categoriasMarcadas?: boolean;
 };
 
+/**
+ * Lançamentos do mês/filtro, até o teto de 500 (`LeituraComTeto`, D-G7).
+ *
+ * A mesma leitura serve três telas com respostas DIFERENTES ao teto, e a decisão é do chamador:
+ * `/financeiro` (soma Entradas/Saídas) exige a lista completa; `/financeiro/lancamentos` e
+ * `/faturas` mostram o aviso de teto. Por isso esta função NÃO decide nada sobre o corte.
+ * Erro de leitura LANÇA (03-G).
+ */
 export async function getTransactions(
   filters: TransactionFilters = {},
-): Promise<TransactionWithRelations[]> {
+): Promise<LeituraComTeto<TransactionWithRelations>> {
   const supabase = await createClient();
   let query = supabase
     .from("transactions")
-    .select(TX_SELECT + TX_SHARED_EMBED)
+    .select(TX_SELECT + TX_SHARED_EMBED, { count: "exact" })
     .order("competence_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(500);
@@ -154,12 +185,15 @@ export async function getTransactions(
   }
   if (filters.categoriasMarcadas) {
     const ids = await idsDasCategoriasMarcadas(supabase);
-    if (ids.length === 0) return [];
+    if (ids.length === 0) return leituraComTeto<TransactionWithRelations>([], 0);
     query = query.in("category_id", ids);
   }
 
-  const { data } = await query;
-  return (data ?? []) as unknown as TransactionWithRelations[];
+  const res = await query;
+  return listaComTeto(
+    res as unknown as RespostaDoBanco<TransactionWithRelations[] | null>,
+    R.lancamentos,
+  );
 }
 
 export type DailyBalanceFilters = {
@@ -280,10 +314,13 @@ export async function getTransactionsRange(
     .select(TX_SELECT, { count: "exact" })
     .gte("competence_date", filters.from)
     .lte("competence_date", filters.to);
-  const { data, count } = await (owner ? base.eq("user_id", owner.userId) : base)
+  const res = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("competence_date", { ascending: true })
     .limit(TETO_DE_LANCAMENTOS);
-  return leituraComTeto((data ?? []) as unknown as TransactionWithRelations[], count);
+  return listaComTeto(
+    res as unknown as RespostaDoBanco<TransactionWithRelations[] | null>,
+    R.lancamentos,
+  );
 }
 
 /* ───────────────────────── Fase 03 — Cartões & Faturas ───────────────────────── */
@@ -292,11 +329,11 @@ export async function getCreditCards(
   owner?: LeituraDoDono,
 ): Promise<CreditCardRow[]> {
   const supabase = owner?.client ?? (await createClient());
-  const base = supabase.from("credit_cards").select("*");
-  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
+  const base = supabase.from("credit_cards").select("*", { count: "exact" });
+  const res = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("ativo", { ascending: false })
     .order("nome", { ascending: true });
-  return (data ?? []) as CreditCardRow[];
+  return listaCompleta(res as RespostaDoBanco<CreditCardRow[] | null>, R.cartoes);
 }
 
 /**
@@ -311,13 +348,22 @@ export async function getStatementByCompetencia(
   competencia: string,
 ): Promise<{ data_fechamento: string; data_vencimento: string; pago_em: string | null } | null> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("card_statements")
     .select("data_fechamento, data_vencimento, pago_em")
     .eq("card_id", cardId)
     .eq("competencia", competencia)
     .maybeSingle();
-  return data ?? null;
+  return (
+    exigir(
+      res as RespostaDoBanco<{
+        data_fechamento: string;
+        data_vencimento: string;
+        pago_em: string | null;
+      } | null>,
+      R.fatura,
+    ) ?? null
+  );
 }
 
 /** Os dias de fechamento e vencimento de um cartão — o que `resolverFatura` precisa. */
@@ -325,12 +371,17 @@ export async function getCardBillingDays(
   cardId: string,
 ): Promise<{ dia_fechamento: number; dia_vencimento: number } | null> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("credit_cards")
     .select("dia_fechamento, dia_vencimento")
     .eq("id", cardId)
     .maybeSingle();
-  return data ?? null;
+  return (
+    exigir(
+      res as RespostaDoBanco<{ dia_fechamento: number; dia_vencimento: number } | null>,
+      R.cartao,
+    ) ?? null
+  );
 }
 
 /** Uma transação pelo id, com o mínimo para identificá-la numa tela de confirmação. */
@@ -342,12 +393,23 @@ export async function getTransactionById(id: string): Promise<{
   transfer_group_id: string | null;
 } | null> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("transactions")
     .select("id, description, amount, type, transfer_group_id")
     .eq("id", id)
     .maybeSingle();
-  return data ?? null;
+  return (
+    exigir(
+      res as RespostaDoBanco<{
+        id: string;
+        description: string | null;
+        amount: number;
+        type: string;
+        transfer_group_id: string | null;
+      } | null>,
+      R.lancamento,
+    ) ?? null
+  );
 }
 
 /**
@@ -388,13 +450,22 @@ export async function getTransactionsForReceiptMatch(input: {
   { id: string; description: string | null; purchase_date: string; amount: number }[]
 > {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("transactions")
     .select("id, description, purchase_date, amount")
     .eq("purchase_date", input.dataISO)
     .eq("amount", input.valorCentavos / 100)
     .limit(TETO_DE_CANDIDATAS_DO_COMPROVANTE);
-  return data ?? [];
+  // SEM `count`, de propósito: o corte em 10 é REGRA, não corte silencioso (D-G28). Com
+  // `listaCompleta`, 11 candidatas derrubariam `/ia/comprovantes`.
+  return (
+    exigir(
+      res as RespostaDoBanco<
+        { id: string; description: string | null; purchase_date: string; amount: number }[] | null
+      >,
+      R.candidatasDoComprovante,
+    ) ?? []
+  );
 }
 
 export type StatementFilters = {
@@ -420,6 +491,7 @@ export async function getStatements(
     .from("card_statements_with_total")
     .select(
       "*, card:credit_cards(id,nome,cor,bandeira,dia_fechamento,dia_vencimento)",
+      { count: "exact" },
     )
     .gt("itens", 0)
     .order("competencia", { ascending: false });
@@ -431,8 +503,11 @@ export async function getStatements(
     query = query.eq("competencia", `${filters.month}-01`);
   }
 
-  const { data } = await query;
-  return (data ?? []) as unknown as CardStatementWithTotal[];
+  const res = await query;
+  return listaCompleta(
+    res as unknown as RespostaDoBanco<CardStatementWithTotal[] | null>,
+    R.faturas,
+  );
 }
 
 /* ───────────────────────────── Fase 04 — Parcelamentos ───────────────────────────── */
@@ -457,14 +532,18 @@ export type InstallmentPurchaseFilters = {
  * Compras parceladas (transações "pai" com `parcelado = true`) já com cartão, categoria e
  * todas as parcelas (cada uma com a sua fatura embutida, para derivar status na leitura).
  * O filtro de status do parcelamento é DERIVADO — aplicado na UI, não na query.
+ *
+ * `LeituraComTeto` (teto de 500): a tela SOMA (StatCards), então o chamador exige a lista
+ * completa (D-G5). Recebimentos saturados já são erro aqui (D-G29), porque o saldo de cada
+ * parcela sairia afirmado sobre um conjunto cortado.
  */
 export async function getInstallmentPurchases(
   filters: InstallmentPurchaseFilters = {},
-): Promise<InstallmentPurchaseWithRelations[]> {
+): Promise<LeituraComTeto<InstallmentPurchaseWithRelations>> {
   const supabase = await createClient();
   let query = supabase
     .from("transactions")
-    .select(INSTALLMENT_PURCHASE_SELECT)
+    .select(INSTALLMENT_PURCHASE_SELECT, { count: "exact" })
     .eq("parcelado", true)
     .order("purchase_date", { ascending: false })
     .order("created_at", { ascending: false })
@@ -473,14 +552,18 @@ export async function getInstallmentPurchases(
   if (filters.cardId) query = query.eq("card_id", filters.cardId);
   if (filters.categoryId) query = query.eq("category_id", filters.categoryId);
 
-  const [{ data }, recebimentos] = await Promise.all([query, lerRecebimentos()]);
-  const rows = (data ?? []) as unknown as InstallmentPurchaseWithRelations[];
+  const [res, recebimentos] = await Promise.all([query, lerRecebimentos()]);
+  const leitura = listaComTeto(
+    res as unknown as RespostaDoBanco<InstallmentPurchaseWithRelations[] | null>,
+    R.comprasParceladas,
+  );
+  const lidos = exigirCompleta(recebimentos, R.recebimentos);
   // A embedding não garante ordem; ordena as parcelas por número.
-  for (const r of rows) {
+  for (const r of leitura.linhas) {
     r.installments?.sort((a, b) => a.numero - b.numero);
-    r.receivables = anexarRecebimentos(r.receivables ?? [], recebimentos.linhas);
+    r.receivables = anexarRecebimentos(r.receivables ?? [], lidos);
   }
-  return rows;
+  return leitura;
 }
 
 /**
@@ -501,13 +584,17 @@ export async function getStatementInstallmentItems(
       // não o declara. É o que deixa a fatura dizer "Compartilhada"/"De terceiro" item a item
       // sem deduzir do valor (minha parte zero não prova que a compra é toda de terceiro).
       "*, parent:transactions!transaction_installments_parent_transaction_id_fkey(id,description,classificacao,category:categories(id,name,color))",
+      { count: "exact" },
     )
     .in("statement_id", statementIds)
     .neq("status", "cancelada");
   // Invariante 84: ids de faturas já filtrados não substituem o escopo explícito do dono.
-  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
+  const res = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("numero", { ascending: true });
-  return (data ?? []) as unknown as StatementInstallmentItem[];
+  return listaCompleta(
+    res as unknown as RespostaDoBanco<StatementInstallmentItem[] | null>,
+    R.parcelas,
+  );
 }
 
 export async function getBills(owner?: LeituraDoDono): Promise<
@@ -519,14 +606,17 @@ export async function getBills(owner?: LeituraDoDono): Promise<
   const supabase = owner?.client ?? (await createClient());
   const base = supabase
     .from("bills")
-    .select("*, category:categories(id,name,color), account:accounts(id,name)");
-  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
+    .select("*, category:categories(id,name,color), account:accounts(id,name)", { count: "exact" });
+  const res = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("is_active", { ascending: false })
     .order("due_day", { ascending: true });
-  return (data ?? []) as unknown as (BillRow & {
-    category: Pick<CategoryRow, "id" | "name" | "color"> | null;
-    account: { id: string; name: string } | null;
-  })[];
+  return listaCompleta(
+    res as unknown as RespostaDoBanco<(BillRow & {
+      category: Pick<CategoryRow, "id" | "name" | "color"> | null;
+      account: { id: string; name: string } | null;
+    })[] | null>,
+    R.contasFixas,
+  );
 }
 
 export async function getRecurrences(owner?: LeituraDoDono): Promise<
@@ -541,15 +631,19 @@ export async function getRecurrences(owner?: LeituraDoDono): Promise<
     .from("recurring_transactions")
     .select(
       "*, account:accounts(id,name), card:credit_cards(id,nome), category:categories(id,name,color)",
+      { count: "exact" },
     );
-  const { data } = await (owner ? base.eq("user_id", owner.userId) : base)
+  const res = await (owner ? base.eq("user_id", owner.userId) : base)
     .order("is_active", { ascending: false })
     .order("next_due_date", { ascending: true });
-  return (data ?? []) as unknown as (RecurringTransactionRow & {
-    account: { id: string; name: string } | null;
-    card: { id: string; nome: string } | null;
-    category: Pick<CategoryRow, "id" | "name" | "color"> | null;
-  })[];
+  return listaCompleta(
+    res as unknown as RespostaDoBanco<(RecurringTransactionRow & {
+      account: { id: string; name: string } | null;
+      card: { id: string; nome: string } | null;
+      category: Pick<CategoryRow, "id" | "name" | "color"> | null;
+    })[] | null>,
+    R.recorrencias,
+  );
 }
 
 /* ───────────────────── Fase 05 — Gastos de Terceiros & Divisão ───────────────────── */
@@ -560,14 +654,18 @@ const RECEIVABLE_SELECT =
 /** Pessoas (terceiros) com a contagem de recebíveis vinculados (para excluir vs inativar). */
 export async function getPeople(): Promise<PersonWithCounts[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("people")
-    .select("*, receivables(count)")
+    .select("*, receivables(count)", { count: "exact" })
     .order("ativo", { ascending: false })
     .order("nome", { ascending: true });
-  return ((data ?? []) as unknown as (PersonWithCounts & {
-    receivables: { count: number }[];
-  })[]).map((p) => ({
+  const data = listaCompleta(
+    res as unknown as RespostaDoBanco<(PersonWithCounts & {
+      receivables: { count: number }[];
+    })[] | null>,
+    R.pessoas,
+  );
+  return data.map((p) => ({
     ...p,
     receivables_count: p.receivables?.[0]?.count ?? 0,
   }));
@@ -578,25 +676,26 @@ export async function getPeopleForSelect(): Promise<
   { id: string; nome: string }[]
 > {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("people")
-    .select("id, nome")
+    .select("id, nome", { count: "exact" })
     .eq("ativo", true)
     .order("nome", { ascending: true });
-  return (data ?? []) as { id: string; nome: string }[];
+  return listaCompleta(
+    res as RespostaDoBanco<{ id: string; nome: string }[] | null>,
+    R.pessoas,
+  );
 }
 
 /**
- * Recebíveis com pessoa, cartão, fatura e transação de origem embutidos. Single-user:
- * traz tudo (limite alto) e a aba "A Receber" filtra/agrupa no client (pessoa/mês/cartão/status).
+ * Leitura de recebíveis com os recebimentos anexados e a situação das duas listas — usada por
+ * `/terceiros`, pelo caixa e pelo motor. Pessoa, cartão, fatura e transação de origem embutidos.
+ * Single-user: traz tudo até o teto de 1000 e a aba "A Receber" filtra/agrupa no client.
+ *
+ * 03-G (D-G29): erro de leitura LANÇA. Saturação NÃO é erro aqui — é `situacao`, e quem decide
+ * é o chamador (`exigirCompleta` nas telas que somam; `parcial` no caixa e no motor).
  */
-export async function getReceivables(
-  owner?: LeituraDoDono,
-): Promise<ReceivableWithRelations[]> {
-  return (await lerRecebiveis(owner)).linhas;
-}
-
-async function lerRecebiveis(
+export async function lerRecebiveis(
   owner?: LeituraDoDono,
 ): Promise<
   LeituraComTeto<ReceivableWithRelations> & {
@@ -607,18 +706,21 @@ async function lerRecebiveis(
 > {
   const supabase = owner?.client ?? (await createClient());
   const base = supabase.from("receivables").select(RECEIVABLE_SELECT, { count: "exact" });
-  const [{ data, count }, recebimentos] = await Promise.all([
+  const [res, recebimentos] = await Promise.all([
     (owner ? base.eq("user_id", owner.userId) : base)
       .order("created_at", { ascending: false })
       .limit(TETO_DE_RECEBIVEIS),
     lerRecebimentos(owner),
   ]);
-  const linhas = anexarRecebimentos(
-    (data ?? []) as unknown as Omit<ReceivableWithRelations, "recebimentos">[],
-    recebimentos.linhas,
+  const leitura = listaComTeto(
+    res as unknown as RespostaDoBanco<Omit<ReceivableWithRelations, "recebimentos">[] | null>,
+    R.recebiveis,
   );
+  const linhas = anexarRecebimentos(leitura.linhas, recebimentos.linhas);
   return {
-    ...leituraComTeto(linhas, count),
+    linhas,
+    situacao: leitura.situacao,
+    total: leitura.total,
     situacaoDosRecebimentos: recebimentos.situacao,
     recebimentosLidos: recebimentos.linhas.length,
   };
@@ -627,23 +729,27 @@ async function lerRecebiveis(
 /**
  * Recebíveis das faturas informadas, com a pessoa embutida. Usado na tela /faturas para
  * mostrar "valor de terceiros" e "quem paga e quanto" por fatura.
+ *
+ * Lista que alimenta número (o total de terceiros da fatura): `listaCompleta`. Os recebimentos
+ * saturados são erro (D-G29) — o saldo de cada recebível sairia afirmado sobre um corte.
  */
 export async function getReceivablesByStatements(
   statementIds: string[],
 ): Promise<ReceivableWithPerson[]> {
   if (statementIds.length === 0) return [];
   const supabase = await createClient();
-  const [{ data }, recebimentos] = await Promise.all([
+  const [res, recebimentos] = await Promise.all([
     supabase
       .from("receivables")
-      .select("*, person:people(id,nome)")
+      .select("*, person:people(id,nome)", { count: "exact" })
       .in("statement_id", statementIds),
     lerRecebimentos(),
   ]);
-  return anexarRecebimentos(
-    (data ?? []) as unknown as Omit<ReceivableWithPerson, "recebimentos">[],
-    recebimentos.linhas,
+  const linhas = listaCompleta(
+    res as unknown as RespostaDoBanco<Omit<ReceivableWithPerson, "recebimentos">[] | null>,
+    R.recebiveis,
   );
+  return anexarRecebimentos(linhas, exigirCompleta(recebimentos, R.recebimentos));
 }
 
 /* ───────────────────── REDESIGN-03-B — a leitura do motor financeiro ───────────────────── */
@@ -768,14 +874,18 @@ const IMPORT_BATCH_SELECT =
   "*, card:credit_cards(id,nome,cor,bandeira,dia_fechamento,dia_vencimento), account:accounts(id,name)";
 
 /** Lotes de importação (histórico), do mais recente ao mais antigo, com o alvo resolvido. */
-export async function getImportBatches(): Promise<ImportBatchWithTarget[]> {
+export async function getImportBatches(): Promise<LeituraComTeto<ImportBatchWithTarget>> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("import_batches")
-    .select(IMPORT_BATCH_SELECT)
+    .select(IMPORT_BATCH_SELECT, { count: "exact" })
     .order("created_at", { ascending: false })
     .limit(100);
-  return (data ?? []) as unknown as ImportBatchWithTarget[];
+  // Só lista: a tela mostra o aviso "N de M" (o chamador decide o teto).
+  return listaComTeto(
+    res as unknown as RespostaDoBanco<ImportBatchWithTarget[] | null>,
+    R.lotesDaImportacao,
+  );
 }
 
 /** Um lote específico (para a tela de revisão/resultado). */
@@ -783,12 +893,17 @@ export async function getImportBatch(
   id: string,
 ): Promise<ImportBatchWithTarget | null> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("import_batches")
     .select(IMPORT_BATCH_SELECT)
     .eq("id", id)
     .maybeSingle();
-  return (data ?? null) as unknown as ImportBatchWithTarget | null;
+  return (
+    exigir(
+      res as unknown as RespostaDoBanco<ImportBatchWithTarget | null>,
+      R.loteDaImportacao,
+    ) ?? null
+  );
 }
 
 /** Linhas de um lote (ordenadas pela linha original) com categoria e transação embutidas. */
@@ -796,12 +911,16 @@ export async function getImportRows(
   batchId: string,
 ): Promise<ImportRowWithRelations[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const res = await supabase
     .from("import_rows")
     .select(
       "*, categoria:categories(id,name,color), transaction:transactions!import_rows_transaction_id_fkey(id,description)",
+      { count: "exact" },
     )
     .eq("import_batch_id", batchId)
     .order("linha_index", { ascending: true });
-  return (data ?? []) as unknown as ImportRowWithRelations[];
+  return listaCompleta(
+    res as unknown as RespostaDoBanco<ImportRowWithRelations[] | null>,
+    R.linhasDaImportacao,
+  );
 }

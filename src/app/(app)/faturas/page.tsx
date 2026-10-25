@@ -37,7 +37,7 @@ export default async function FaturasPage({
   const [statements, transactions] = selectedCardId
     ? await Promise.all([
         getStatements({ cardId: selectedCardId }),
-        getTransactions({ cardId: selectedCardId }),
+        getTransactions({ cardId: selectedCardId }).then((l) => l.linhas),
       ])
     : [[], []];
 

@@ -5,6 +5,8 @@
  * NÃO chama revalidatePath — seguro para rodar durante o render.
  */
 import { authContext, type AuthContext } from "@/lib/actions/helpers";
+import { ehErroDeLeitura, exigir, type RespostaDoBanco } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { computeDueOccurrences } from "@/lib/finance/recurrence";
 import { resolveOrCreateStatement } from "@/lib/finance/statements";
 import { hojeISO } from "@/lib/format";
@@ -68,12 +70,19 @@ export function buildGeneratedRow(
   };
 }
 
-/** Gera as ocorrências vencidas de cada recorrência e avança seu next_due_date. */
+/**
+ * Gera as ocorrências vencidas de cada recorrência e avança seu next_due_date.
+ *
+ * 03-G (D-G31): um `ErroDeLeitura` DENTRO do laço (o "busca ou cria" da fatura, depois de
+ * lançamentos já gravados) INTERROMPE o laço e devolve `interrompida: true` — não é possível
+ * desfazer o que já foi gravado, então a tela precisa dizer que algumas recorrências podem estar
+ * faltando. Qualquer outro erro continua subindo.
+ */
 export async function runGeneration(
   ctx: AuthContext,
   recurrences: RecurrenceRow[],
   today: string,
-): Promise<number> {
+): Promise<{ generated: number; interrompida: boolean }> {
   let generated = 0;
 
   for (const r of recurrences) {
@@ -103,11 +112,18 @@ export async function runGeneration(
         const base = buildGeneratedRow(r, date, ctx.userId);
         if (card) {
           // Cada ocorrência cai na fatura da SUA data (mesma regra da compra avulsa).
-          const statementId = await resolveOrCreateStatement(
-            ctx,
-            r.card_id!,
-            date,
-          );
+          let statementId: string | null;
+          try {
+            statementId = await resolveOrCreateStatement(
+              ctx,
+              r.card_id!,
+              date,
+            );
+          } catch (e) {
+            // D-G31: lançamentos anteriores já foram gravados — o laço para e declara.
+            if (ehErroDeLeitura(e)) return { generated, interrompida: true };
+            throw e;
+          }
           if (!statementId) {
             failed = true;
             break;
@@ -141,8 +157,12 @@ export async function runGeneration(
       .eq("id", r.id);
   }
 
-  return generated;
+  return { generated, interrompida: false };
 }
+
+/** 03-G (D-G31): o que `/financeiro` diz quando a geração parou no meio. */
+export const AVISO_DE_RECORRENCIAS_INTERROMPIDAS =
+  "Não foi possível gerar todas as recorrências deste mês; algumas podem estar faltando. Recarregue a página para tentar de novo.";
 
 /**
  * Catch-up: gera tudo que está vencido para o usuário atual. Seguro no render.
@@ -150,23 +170,36 @@ export async function runGeneration(
  * Recorrências de cartão podem criar linhas em `card_statements` (get-or-create
  * idempotente) durante a resolução de fatura — aceitável no render, como já faz o
  * fluxo de compra avulsa; não há `revalidatePath` aqui.
+ *
+ * 03-G, duas regras (D-G8 e D-G31):
+ * - a leitura das recorrências, feita ANTES de qualquer escrita, LANÇA `ErroDeLeitura`: dizer
+ *   "nenhuma recorrência a gerar" com a leitura falha seria o R$ 0,00 por outro caminho;
+ * - um erro DENTRO do laço de geração interrompe e volta `interrompida: true`, porque já pode
+ *   haver lançamentos gravados.
  */
-export async function catchUpRecurrences(): Promise<GenerationResult> {
+export async function catchUpRecurrences(): Promise<
+  GenerationResult & { interrompida: boolean }
+> {
   const ctx = await authContext();
-  if (!ctx) return { generated: 0, recurrences: 0 };
+  if (!ctx) return { generated: 0, recurrences: 0, interrompida: false };
 
   const today = hojeISO();
-  const { data, error } = await ctx.supabase
+  const res = await ctx.supabase
     .from("recurring_transactions")
     .select(RECURRENCE_FIELDS)
     .eq("is_active", true)
     .lte("next_due_date", today);
 
-  if (error || !data || data.length === 0) {
-    return { generated: 0, recurrences: 0 };
+  const data = exigir(
+    res as RespostaDoBanco<RecurrenceRow[] | null>,
+    ROTULOS_DE_LEITURA.recorrencias,
+  );
+
+  if (!data || data.length === 0) {
+    return { generated: 0, recurrences: 0, interrompida: false };
   }
 
-  const recurrences = data as unknown as RecurrenceRow[];
-  const generated = await runGeneration(ctx, recurrences, today);
-  return { generated, recurrences: recurrences.length };
+  const recurrences = data;
+  const { generated, interrompida } = await runGeneration(ctx, recurrences, today);
+  return { generated, recurrences: recurrences.length, interrompida };
 }

@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import {
   getCreditCards,
   getPeople,
-  getReceivables,
+  lerRecebiveis,
 } from "@/lib/finance/queries";
 import { hojeISO } from "@/lib/format";
 import { TerceirosClient } from "./terceiros-client";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TerceirosPage() {
   const [receivables, people, cards] = await Promise.all([
-    getReceivables(),
+    lerRecebiveis().then((l) => l.linhas),
     getPeople(),
     getCreditCards(),
   ]);

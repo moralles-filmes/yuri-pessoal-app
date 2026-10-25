@@ -80,7 +80,7 @@ export default async function ImportarPage({
   }
 
   const [batches, cards, accounts] = await Promise.all([
-    getImportBatches(),
+    getImportBatches().then((l) => l.linhas),
     getCreditCards(),
     getAccounts(),
   ]);

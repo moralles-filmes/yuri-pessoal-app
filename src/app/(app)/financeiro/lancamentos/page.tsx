@@ -37,7 +37,7 @@ export default async function LancamentosPage({
 
   const [transactions, accounts, categories, subcategories, cards, people] =
     await Promise.all([
-      getTransactions(filters),
+      getTransactions(filters).then((l) => l.linhas),
       getAccounts(),
       getCategories(),
       getSubcategories(),
