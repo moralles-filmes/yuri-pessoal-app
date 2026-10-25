@@ -3,7 +3,10 @@ import {
   addMes,
   comparativoMesAMes,
   evolucaoMensal,
+  faturasPorMes,
   gastosPorCategoria,
+  parteDosTerceirosPorFatura,
+  paresDoMesAMes,
   gastosPorForma,
   gerarAlertas,
   mesAnterior,
@@ -269,11 +272,24 @@ describe("comparativoMesAMes / evolucaoMensal", () => {
     expect(ev).toHaveLength(3);
     expect(ev.map((p) => p.mes)).toEqual(["2026-05", "2026-06", "2026-07"]);
     const junho = ev.find((p) => p.mes === "2026-06");
-    expect(junho?.saidas).toBe(300);
-    expect(junho?.saldo).toBe(200); // 500 − 300
+    const r = resumoMes({ mes: "2026-06", transactions, statements, receivables });
+    // Só a minha parte, da MESMA fonte do card: entradasMeu e meu do resumo do mês.
+    expect(junho?.entradas).toBe(r.entradasMeu);
+    expect(junho?.saidas).toBe(r.meu);
+    expect(junho?.saidas).toBe(250); // 100 à vista + (200 − 50) da fatura
+    expect(junho?.saldo).toBe(250); // 500 − 250
     for (const p of ev) {
       expect(Number.isFinite(p.saldo)).toBe(true);
     }
+  });
+
+  it("paresDoMesAMes devolve as minhas entradas e saídas de cada lado", () => {
+    const c = comparativoMesAMes({ mes: "2026-07", transactions, statements, receivables });
+    expect(paresDoMesAMes(c)).toEqual({
+      anterior: { entradas: c.anterior.entradasMeu, saidas: c.anterior.meu },
+      atual: { entradas: c.atual.entradasMeu, saidas: c.atual.meu },
+    });
+    expect(paresDoMesAMes(c).anterior.saidas).toBe(250);
   });
 });
 
@@ -334,30 +350,91 @@ describe("projecaoProximosMeses", () => {
   ];
   const bills: DashBill[] = [{ name: "Internet", amount: 80, due_day: 10, is_active: true }];
 
-  it("soma faturas (sem dupla contagem) + recorrência mensal + conta fixa", () => {
+  it("soma a MINHA parte das faturas + recorrência mensal + conta fixa", () => {
     const proj = projecaoProximosMeses({
       hoje: "2026-06-15",
       meses: proximosMeses("2026-06", 3),
       statements,
+      receivables,
       recorrencias,
       bills,
     });
     expect(proj.map((p) => p.mes)).toEqual(["2026-06", "2026-07", "2026-08"]);
 
     const jun = proj[0];
-    expect(jun.faturas).toBe(200);
+    expect(jun.faturas).toBe(150); // 200 − 50 de terceiros
     expect(jun.recorrencias).toBe(50);
     expect(jun.contasFixas).toBe(80);
-    expect(jun.total).toBe(330);
+    expect(jun.total).toBe(280);
 
     const jul = proj[1];
-    expect(jul.faturas).toBe(100);
-    expect(jul.total).toBe(230);
+    expect(jul.faturas).toBe(70); // 100 − 30 de terceiros
+    expect(jul.total).toBe(200);
 
     const ago = proj[2];
     expect(ago.faturas).toBe(0);
     expect(ago.total).toBe(130);
     for (const p of proj) expect(Number.isFinite(p.total)).toBe(true);
+  });
+
+  it("agrupa a fatura pelo mês do VENCIMENTO, não da competência", () => {
+    const outubro: DashStatement = {
+      id: "st-out",
+      card_id: "c1",
+      competencia: "2026-10-01",
+      data_fechamento: "2026-10-28",
+      data_vencimento: "2026-11-05",
+      pago_em: null,
+      total_atual: 253.41,
+    };
+    const proj = projecaoProximosMeses({
+      hoje: "2026-10-18",
+      meses: ["2026-10", "2026-11"],
+      statements: [outubro],
+      receivables: [{ statement_id: "st-out", installment_id: null, valor: 126.7, status: "pendente" }],
+      recorrencias: [],
+      bills: [],
+    });
+    expect(proj[0].faturas).toBe(0);
+    expect(proj[1].faturas).toBe(126.71);
+  });
+});
+
+describe("faturasPorMes / parteDosTerceirosPorFatura", () => {
+  const outubro: DashStatement = {
+    id: "st-out",
+    card_id: "c1",
+    competencia: "2026-10-01",
+    data_fechamento: "2026-10-28",
+    data_vencimento: "2026-11-05",
+    pago_em: null,
+    total_atual: 253.41,
+  };
+  const recs: DashReceivable[] = [
+    { statement_id: "st-out", installment_id: null, valor: 100, status: "pendente" },
+    { statement_id: "st-out", installment_id: null, valor: 26.7, status: "pendente" },
+  ];
+
+  it("soma a parte dos terceiros por fatura, em centavos", () => {
+    expect(parteDosTerceirosPorFatura(recs).get("st-out")).toBe(12670);
+  });
+
+  it("por vencimento, com os meses pedidos: mês vazio vira zeros", () => {
+    const r = faturasPorMes({
+      statements: [outubro],
+      receivables: recs,
+      meses: ["2026-10", "2026-11"],
+      agrupar: "vencimento",
+    });
+    expect(r).toEqual([
+      { mes: "2026-10", total: 0, meu: 0, terceiros: 0 },
+      { mes: "2026-11", total: 253.41, meu: 126.71, terceiros: 126.7 },
+    ]);
+  });
+
+  it("por competência, sem meses: só os meses com fatura", () => {
+    const r = faturasPorMes({ statements: [outubro], receivables: recs, agrupar: "competencia" });
+    expect(r).toEqual([{ mes: "2026-10", total: 253.41, meu: 126.71, terceiros: 126.7 }]);
   });
 });
 

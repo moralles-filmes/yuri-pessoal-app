@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import { getReportsData } from "@/lib/reports/queries";
 import { mesDe } from "@/lib/finance/dashboard";
-import { estadoDoCaixa } from "@/lib/finance/caixa-leitura";
 import { baseDaUrl } from "@/lib/finance/base";
 import { hojeISO } from "@/lib/format";
 import { RelatoriosClient } from "./relatorios-client";
@@ -28,9 +27,9 @@ export default async function RelatoriosPage({
   })();
 
   const base = baseDaUrl(sp.base);
-  const caixa = base === "caixa" ? await estadoDoCaixa(mesSel, hoje) : null;
-
-  const data = await getReportsData(mesSel);
+  // O caixa é montado dentro do relatório, onde as entradas do motor já foram lidas.
+  const data = await getReportsData(mesSel, base);
+  const caixa = data.caixa;
 
   return (
     <div className="space-y-6">

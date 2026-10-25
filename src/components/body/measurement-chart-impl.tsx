@@ -112,7 +112,7 @@ export function MeasurementChart({
           tick={axisTick}
           axisLine={false}
           tickLine={false}
-          width={56}
+          width="auto"
           domain={domain}
           tickFormatter={(v) => formatMeasurement(Number(v), unit, decimals)}
         />

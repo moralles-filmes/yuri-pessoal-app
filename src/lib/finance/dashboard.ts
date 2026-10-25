@@ -207,7 +207,7 @@ function statementsDoMes(statements: DashStatement[], mes: string): DashStatemen
 }
 
 /** D11 à vista: o perdoado dos recebíveis de UM lançamento sem parcela, por `transaction_id`. */
-function perdoadoPorLancamento(receivables: DashReceivable[]): Map<string, number> {
+export function perdoadoPorLancamento(receivables: DashReceivable[]): Map<string, number> {
   const mapa = new Map<string, number>();
   for (const r of receivables) {
     if (r.installment_id || !r.transaction_id) continue;
@@ -323,6 +323,8 @@ type SpendItem = {
   paymentMethod: PaymentMethod | "cartao_credito" | null;
   movCent: number;
   meuCent: number;
+  /** A fatura do item de cartão; `null` no à vista. */
+  statementId: string | null;
 };
 
 /**
@@ -367,6 +369,7 @@ function buildSpendItems(params: {
         paymentMethod: t.payment_method,
         movCent,
         meuCent,
+        statementId: null,
       });
     } else if (t.statement_id && compByStatement.has(t.statement_id)) {
       // À-vista do cartão (base fatura).
@@ -378,6 +381,7 @@ function buildSpendItems(params: {
         paymentMethod: "cartao_credito",
         movCent,
         meuCent,
+        statementId: t.statement_id,
       });
     }
   }
@@ -395,10 +399,62 @@ function buildSpendItems(params: {
       paymentMethod: "cartao_credito",
       movCent,
       meuCent: movCent - terceiros,
+      statementId: it.statement_id,
     });
   }
 
   return items;
+}
+
+/** Um item que compõe uma fatura, em CENTAVOS (o estorno vem negativo). */
+export type ItemDaFatura = {
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryColor: string | null;
+  movCent: number;
+  meuCent: number;
+};
+
+/**
+ * Os itens de cada fatura, por `statement_id`: os MESMOS itens de cartão que `buildSpendItems`
+ * atribui à fatura (à-vista do cartão + parcelas), mais os estornos (receita vinculada à fatura,
+ * que reduz `total_atual`) com valores negativos. É o que a base caixa usa para abrir um
+ * pagamento de fatura pelas compras dela (desenho 2026-10-18, §4.3).
+ */
+export function itensDasFaturas(params: {
+  transactions: DashTx[];
+  statements: DashStatement[];
+  installmentItems: DashInstallmentItem[];
+  receivables: DashReceivable[];
+}): Map<string, ItemDaFatura[]> {
+  const mapa = new Map<string, ItemDaFatura[]>();
+  const push = (statementId: string, item: ItemDaFatura) => {
+    const lista = mapa.get(statementId) ?? [];
+    lista.push(item);
+    mapa.set(statementId, lista);
+  };
+  for (const i of buildSpendItems(params)) {
+    if (!i.statementId) continue;
+    push(i.statementId, {
+      categoryId: i.categoryId,
+      categoryName: i.categoryName,
+      categoryColor: i.categoryColor,
+      movCent: i.movCent,
+      meuCent: i.meuCent,
+    });
+  }
+  const faturas = new Set(params.statements.map((s) => s.id));
+  for (const t of params.transactions) {
+    if (!ativo(t) || t.type !== "receita" || !t.statement_id || !faturas.has(t.statement_id)) continue;
+    push(t.statement_id, {
+      categoryId: t.category_id,
+      categoryName: t.category?.name ?? null,
+      categoryColor: t.category?.color ?? null,
+      movCent: -cent(t.amount),
+      meuCent: -meuCentavos(t),
+    });
+  }
+  return mapa;
 }
 
 export type CategoriaSlice = {
@@ -512,6 +568,11 @@ export function comparativoMesAMes(params: {
   };
 }
 
+/**
+ * Um ponto da evolução, em REAIS — e é MEU dos dois lados (desenho 2026-10-18): `entradas` é a
+ * minha parte das entradas, `saidas` a minha parte efetiva das saídas (com o perdoado) e `saldo`
+ * a diferença das duas — o "Resultado do período" do §13.3. A base caixa produz a mesma forma.
+ */
 export type EvolucaoPonto = { mes: string; entradas: number; saidas: number; saldo: number };
 
 export function evolucaoMensal(params: {
@@ -523,18 +584,35 @@ export function evolucaoMensal(params: {
   const { meses, transactions, statements, receivables } = params;
   return meses.map((mes) => {
     const r = resumoMes({ mes, transactions, statements, receivables });
-    // ⚠️ REDESIGN-03-C · B2 — divergência DECLARADA, por decisão do dono: `saldo` continua
-    // `entradas − saidas`, bruto − bruto. O Resultado do §13.3 (renda pessoal − minha parte
-    // EFETIVA das despesas) depende do perdoado (D11), que é da 03-D; trocar um lado só
-    // (renda pessoal − despesa bruta) é a subtração que o próprio §13.3 proíbe. Congelado no
-    // bloco 6 de `dashboard-caracterizacao.test.ts`.
+    // A divergência B2 da 03-C ("saldo bruto − bruto", que esperava o perdoado da 03-D) caiu em
+    // 2026-10-18 por pedido do dono: os dois lados são meus, da MESMA fonte do card "Minhas
+    // saídas". Um lado meu e o outro bruto é a subtração que o §13.3 proíbe. Bloco 6 da
+    // caracterização.
     return {
       mes,
-      entradas: r.entradas,
-      saidas: r.saidas,
-      saldo: r.entradas - r.saidas,
+      entradas: r.entradasMeu,
+      saidas: r.meu,
+      saldo: reais(cent(r.entradasMeu) - cent(r.meu)),
     };
   });
+}
+
+/** As duas barras de cada lado do gráfico "Meu mês a mês", em REAIS. Caixa produz a mesma forma. */
+export type MesAMesDados = {
+  anterior: { entradas: number; saidas: number };
+  atual: { entradas: number; saidas: number };
+};
+
+/**
+ * As minhas entradas e saídas de cada lado de um `Comparativo` de competência. No corte "até o
+ * dia D" o comparativo vem de `resumoMes` com `statements: []`, então `meu` já é só o à vista —
+ * o cartão fica fora sem regra nova.
+ */
+export function paresDoMesAMes(c: Comparativo): MesAMesDados {
+  return {
+    anterior: { entradas: c.anterior.entradasMeu, saidas: c.anterior.meu },
+    atual: { entradas: c.atual.entradasMeu, saidas: c.atual.meu },
+  };
 }
 
 /* ───────────────────────────── Próximas 6 faturas ───────────────────────────── */
@@ -553,6 +631,58 @@ export type FaturaProvisao = {
   virtual: boolean;
 };
 
+/**
+ * A parte dos terceiros de cada fatura, em CENTAVOS, por `statement_id` — a regra ÚNICA de
+ * "meu × terceiros" da fatura (`meu = total_atual − isto`). `ignorado` conta só o que o terceiro
+ * pagou (D11): o perdoado fica com o dono. Próximas 6 faturas, projeção, faturas por mês e o
+ * caixa (pagamento de fatura) leem daqui — nenhuma cópia.
+ */
+export function parteDosTerceirosPorFatura(receivables: DashReceivable[]): Map<string, number> {
+  const mapa = new Map<string, number>();
+  for (const r of receivables) {
+    if (!r.statement_id) continue;
+    mapa.set(r.statement_id, (mapa.get(r.statement_id) ?? 0) + parteDoTerceiroCentavos(r));
+  }
+  return mapa;
+}
+
+/** Faturas de um mês, em REAIS: o total cheio e a partição meu + terceiros (fecha por construção). */
+export type FaturaDoMes = { mes: string; total: number; meu: number; terceiros: number };
+
+/**
+ * Faturas de cartão agrupadas por mês — de COMPETÊNCIA (histórico, aba Cartões) ou de
+ * VENCIMENTO (projeção: o mês em que o dinheiro sai). Com `meses`, devolve exatamente esses meses
+ * (mês sem fatura = zeros); sem, só os meses que têm fatura, em ordem.
+ */
+export function faturasPorMes(params: {
+  statements: DashStatement[];
+  receivables: DashReceivable[];
+  meses?: string[];
+  agrupar: "competencia" | "vencimento";
+}): FaturaDoMes[] {
+  const { statements, receivables, meses, agrupar } = params;
+  const terceirosPorFatura = parteDosTerceirosPorFatura(receivables);
+  const porMes = new Map<string, { totalCent: number; terceirosCent: number }>();
+  for (const s of statements) {
+    if (!s.card_id) continue;
+    const mes = mesDe(agrupar === "vencimento" ? s.data_vencimento : s.competencia);
+    const cur = porMes.get(mes) ?? { totalCent: 0, terceirosCent: 0 };
+    cur.totalCent += cent(s.total_atual ?? 0);
+    cur.terceirosCent += terceirosPorFatura.get(s.id) ?? 0;
+    porMes.set(mes, cur);
+  }
+  const lista = meses ?? [...porMes.keys()].sort();
+  return lista.map((mes) => {
+    const v = porMes.get(mes) ?? { totalCent: 0, terceirosCent: 0 };
+    return {
+      mes,
+      total: reais(v.totalCent),
+      meu: reais(v.totalCent - v.terceirosCent),
+      terceiros: reais(v.terceirosCent),
+    };
+  });
+}
+
 export function proximas6Faturas(params: {
   hoje: string;
   cards: DashCard[];
@@ -562,14 +692,7 @@ export function proximas6Faturas(params: {
 }): FaturaProvisao[] {
   const { hoje, cards, statements, receivables, n = 6 } = params;
 
-  const recByStatement = new Map<string, number>();
-  for (const r of receivables) {
-    if (!r.statement_id) continue;
-    recByStatement.set(
-      r.statement_id,
-      (recByStatement.get(r.statement_id) ?? 0) + parteDoTerceiroCentavos(r),
-    );
-  }
+  const recByStatement = parteDosTerceirosPorFatura(receivables);
   const stmtByKey = new Map<string, DashStatement>();
   for (const s of statements) {
     if (s.card_id) stmtByKey.set(`${s.card_id}|${mesDe(s.competencia)}`, s);
@@ -657,20 +780,24 @@ function ocorrenciasNoMes(rec: DashRecurrence, mes: string): number {
   return count;
 }
 
+/**
+ * A projeção é "pelo vencimento" e é MINHA (desenho 2026-10-18): a série `faturas` é a minha
+ * parte de cada fatura (`faturasPorMes`, a regra única), no mês em que ela VENCE. Recorrências e
+ * contas fixas não guardam parte de terceiro no schema e entram cheias.
+ */
 export function projecaoProximosMeses(params: {
   hoje: string;
   meses: string[];
   statements: DashStatement[];
+  receivables: DashReceivable[];
   recorrencias: DashRecurrence[];
   bills: DashBill[];
 }): ProjecaoPonto[] {
-  const { meses, statements, recorrencias, bills } = params;
+  const { meses, statements, receivables, recorrencias, bills } = params;
 
   const faturaCentPorMes = new Map<string, number>();
-  for (const s of statements) {
-    if (!s.card_id) continue;
-    const m = mesDe(s.competencia);
-    faturaCentPorMes.set(m, (faturaCentPorMes.get(m) ?? 0) + cent(s.total_atual ?? 0));
+  for (const f of faturasPorMes({ statements, receivables, meses, agrupar: "vencimento" })) {
+    faturaCentPorMes.set(f.mes, cent(f.meu));
   }
 
   const contasFixasCent = bills

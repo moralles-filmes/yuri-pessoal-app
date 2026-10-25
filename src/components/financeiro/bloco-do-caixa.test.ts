@@ -47,6 +47,14 @@ function ok(atual: NumerosDoCaixa, parcial = false): EstadoDoCaixa {
       saidas: { atual: 0, anterior: 0, pct: null },
       cartaoFora: false,
     },
+    graficos: {
+      minha: { entradas: 0, saidas: 0, saidasBrutas: 0, terceirosNasSaidas: 0, resultado: 0, faturasSemTotal: 0 },
+      evolucao: [],
+      mesAMes: { ateODia: null, dados: { anterior: { entradas: 0, saidas: 0 }, atual: { entradas: 0, saidas: 0 } } },
+      categorias: [],
+      formas: [],
+      semTotal: { evolucao: [], mesAMes: [] },
+    },
   };
 }
 

@@ -53,7 +53,7 @@ export function ReportBarChart({
           tick={axisTick}
           axisLine={false}
           tickLine={false}
-          width={78}
+          width="auto"
           allowDecimals={false}
           tickFormatter={formatValue}
         />

@@ -65,8 +65,12 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
   },
 };
 
-/** Medido no passo da L8 (2026-10-25). Mudou? Confira o inventário antes de ajustar. */
-const LEITURAS_ESPERADAS = 106;
+/**
+ * Medido no passo da L8 (2026-10-25): 106. Na integração com a `main` (2026-10-25) entrou a 107ª —
+ * as compras das faturas pagas em `lerCaixaDoMes` (gráficos "meus", desenho 2026-10-18), que trata
+ * o erro (`{ ok: false }`) e o teto (`leituraComTeto`). Mudou? Confira o inventário antes de ajustar.
+ */
+const LEITURAS_ESPERADAS = 107;
 
 const LEITURAS = inventariarLeituras(ARQUIVOS, RAIZ);
 const chave = (l: { arquivo: string; funcao: string; alvo: string }) =>

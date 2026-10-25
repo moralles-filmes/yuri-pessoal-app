@@ -28,6 +28,7 @@ import {
 } from "@/lib/finance/dashboard";
 import {
   SETTLED_STATUSES,
+  type PaymentMethod,
   type TransactionStatus,
   type TransactionType,
 } from "@/lib/finance/constants";
@@ -57,6 +58,9 @@ export type TxDeCaixa = {
   account_id: string | null;
   transfer_account_id: string | null;
   card_id: string | null;
+  /** Só os gráficos por forma/categoria leem (desenho 2026-10-18). Opcionais: os números não usam. */
+  payment_method?: PaymentMethod | null;
+  category?: { id: string; name: string; color: string | null } | null;
 };
 
 /** Período INCLUSIVO nas duas pontas, 'yyyy-MM-dd'. */

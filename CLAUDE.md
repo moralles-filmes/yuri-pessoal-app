@@ -959,7 +959,7 @@ O client trata `ActionResult` com toast (sonner) — mensagens de erro em pt-BR.
 1. **O schema tem de aceitar a própria saída.** Com `zodResolver`, o react-hook-form entrega ao `onSubmit` a saída **já transformada**, o formulário manda isso para a action e a action valida de novo com o **mesmo** schema. Logo `parse(parse(x))` precisa funcionar — todo helper `optional*` aceita `null` na entrada, não só `""`/ausente. Fixado em `src/lib/validators/round-trip.test.ts`; acrescente ali todo schema novo usado com resolver.
 2. **"Verifique os campos destacados" só vale se algum campo for destacado.** Use `mapServerFieldErrors` (`src/lib/forms/server-errors.ts`): erro de campo que existe na tela vira `setError`; erro de campo que a tela **não tem** sobe para o toast com o nome do campo. Descartar `fieldErrors` deixa o usuário sem saída.
 
-### Layout responsivo — 5 regras que vieram de bugs reais
+### Layout responsivo — 6 regras que vieram de bugs reais
 
 Todas saíram de defeitos que chegaram a **produção** e não aparecem no desktop de quem
 escreveu a tela. Detalhe e medições em `docs/fixes/RESPONSIVIDADE_MOBILE.md`.
@@ -985,6 +985,10 @@ escreveu a tela. Detalhe e medições em `docs/fixes/RESPONSIVIDADE_MOBILE.md`.
 5. **O Header é `sticky top-0 z-30` com `h-16`.** Barra `sticky` dentro do conteúdo usa
    **`top-16`** (ou `top-18` se quiser folga) — nunca `top-0`/`top-2`, senão ela escorrega
    para trás do Header e o controle some ao rolar.
+6. **Todo `<YAxis` usa `width="auto"`** (recharts 3.9 mede o rótulo). Largura fixa fazia
+   "R$ 10,0 mil" quebrar em duas linhas e cortar; `chart-theme.test.ts` varre os `*-impl.tsx`.
+   E gráfico financeiro mostra **só a parte do dono** e segue a base — textos em
+   `src/lib/finance/rotulos-dos-graficos.ts`, fonte única das duas telas (desenho 2026-10-18).
 
 **Como conferir sem depender de sessão:** gere o CSS com `npx @tailwindcss/cli` sobre um HTML
 de teste e tire screenshot com `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
