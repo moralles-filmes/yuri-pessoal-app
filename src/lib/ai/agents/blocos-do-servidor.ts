@@ -97,6 +97,21 @@ export function avisoDeEspecialistasQueFalharam(rotulos: readonly string[]): str
     : `Não consegui obter a resposta dos especialistas ${nomes}; o que está acima não inclui esses módulos.`;
 }
 
+/**
+ * Quando o coordenador pediu um especialista LIBERADO, mas a consulta veio sem forma (tarefa
+ * vazia ou longa demais) e nenhum outro pedido valeu. O módulo está ligado: mandar ligar a
+ * leitura apontaria para uma causa que não é a real.
+ */
+export function avisoConsultaNaoMontada(rotulos: readonly string[]): string {
+  if (rotulos.length === 0) {
+    return "Não consegui montar a consulta aos registros desta vez. Se quiser, envie a pergunta com mais detalhes.";
+  }
+  const nomes = listaDeRotulos(rotulos);
+  return rotulos.length === 1
+    ? `Não consegui montar a consulta ao especialista ${nomes} desta vez. Se quiser, envie a pergunta com mais detalhes.`
+    : `Não consegui montar a consulta aos especialistas ${nomes} desta vez. Se quiser, envie a pergunta com mais detalhes.`;
+}
+
 /** Acrescentado quando a pergunta era sobre registros e nenhum especialista estava liberado. */
 export function avisoSemEspecialista(desligados: readonly string[]): string {
   if (desligados.length === 0) {

@@ -45,6 +45,8 @@ vi.mock("./credential-store", () => ({
 
 /** Preferências do usuário, trocáveis por teste. */
 let permissoes: Record<string, boolean> = { allow_training: true };
+/** Coordenador · Task 13 — "Cruzar módulos" (dois ou mais especialistas por mensagem). */
+let cruzarModulos = false;
 /** O histórico que `getHistoryForPrompt` devolve (Rodada 1 da Task 12: pesa na reserva). */
 let historicoDoBanco: { role: "user" | "assistant"; content: string }[] = [];
 
@@ -77,6 +79,7 @@ vi.mock("@/lib/ai/queries", () => ({
     rateLimitPerMinute: 10,
     rateLimitPerHour: 120,
     permissions: permissoes,
+    allowCrossModule: cruzarModulos,
     // 18-F Bloco 4 — o executor dirigido recebe as duas listas, como qualquer chamada.
     writePermissions: {},
   }),
@@ -435,6 +438,7 @@ beforeEach(() => {
   chavesDePasso.clear();
   respostasPorChamada = [];
   permissoes = { allow_training: true };
+  cruzarModulos = false;
   historicoDoBanco = [];
   reservaGravada = 0;
   textoGravado = "";
@@ -1273,6 +1277,48 @@ describe("runChat — o prazo global da requisição", () => {
       { tipo: "start", id: "att-1", attemptIndex: 1, attemptType: "PRIMARY" },
       { tipo: "close", id: "att-1", status: "failed" },
     ]);
+  });
+
+  /**
+   * Coordenador · Task 13 — Review Focus 1: o dono fecha o painel enquanto DOIS especialistas
+   * rodam. O sinal chega às duas trilhas, nenhuma tentativa fica `started`, e o run fecha
+   * `cancelled` — nunca `failed`.
+   */
+  it("cancelar com dois especialistas no meio fecha as duas tentativas e o run como cancelled", async () => {
+    cruzarModulos = true;
+    permissoes = { allow_training: true, allow_finance: true };
+    const dono = new AbortController();
+    respostasPorChamada = [
+      [
+        { type: "tool-call", toolName: "acionar_treinos", callId: "a1", input: { tarefa: "volume da semana" } },
+        { type: "tool-call", toolName: "acionar_financeiro", callId: "a2", input: { tarefa: "gasto do mês" } },
+        FINISH,
+      ],
+    ];
+    aoConsumirChamada = async (indice, request) => {
+      if (indice === 0) return;
+      await new Promise<void>((resolve) => {
+        request.abortSignal?.addEventListener("abort", () => resolve(), { once: true });
+      });
+    };
+
+    const promessa = rodar({ abortSignal: dono.signal });
+    await vi.waitFor(() => expect(systemsRecebidos).toHaveLength(3));
+    dono.abort();
+    const eventos = await promessa;
+
+    expect(statusDoRun).toBe("cancelled");
+    expect(eventos.some((e) => e.type === "error")).toBe(false);
+    expect(medicao).toEqual([
+      { tipo: "start", id: "att-1", attemptIndex: 1, attemptType: "PRIMARY" },
+      { tipo: "close", id: "att-1", status: "completed" },
+      { tipo: "start", id: "att-2", attemptIndex: 2, attemptType: "ESPECIALISTA" },
+      { tipo: "start", id: "att-3", attemptIndex: 3, attemptType: "ESPECIALISTA" },
+      expect.objectContaining({ tipo: "close", status: "cancelled" }),
+      expect.objectContaining({ tipo: "close", status: "cancelled" }),
+    ]);
+    const fechadas = medicao.filter((m) => m.tipo === "close").map((m) => m.id);
+    expect(fechadas).toEqual(expect.arrayContaining(["att-2", "att-3"]));
   });
 
   /**

@@ -5,6 +5,7 @@ import { ROTULO_CRUZAR_MODULOS } from "@/lib/ai/constants";
 import { settingsLink } from "@/lib/search/ai-links";
 import { termosProibidosEm } from "@/lib/tone/vocabulary";
 import {
+  avisoConsultaNaoMontada,
   avisoCruzarModulos,
   avisoDeEspecialistasQueFalharam,
   avisoSemEspecialista,
@@ -136,6 +137,17 @@ describe("avisos do servidor", () => {
     expect(a).not.toMatch(/destes módulos/);
     expect(a).toContain(settingsLink());
     expect(termosProibidosEm(a)).toEqual([]);
+  });
+
+  it("avisoConsultaNaoMontada cita o módulo, não manda ligar leitura nenhuma e respeita o tom", () => {
+    const um = avisoConsultaNaoMontada(["Financeiro"]);
+    expect(um).toContain("Financeiro");
+    expect(um).not.toContain(settingsLink());
+    expect(termosProibidosEm(um)).toEqual([]);
+    const dois = avisoConsultaNaoMontada(["Financeiro", "TO-DO"]);
+    expect(dois).toContain("Financeiro e TO-DO");
+    expect(termosProibidosEm(dois)).toEqual([]);
+    expect(termosProibidosEm(avisoConsultaNaoMontada([]))).toEqual([]);
   });
 
   it("avisoSemEspecialista cita os desligados, aponta para settingsLink() e não afirma que a pergunta os exige", () => {
