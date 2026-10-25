@@ -75,7 +75,19 @@ type Evento =
       correlationId: string;
     }
   | { type: "delta"; text: string }
-  | { type: "switch"; provider: AiProviderId; model: string; motivo: string }
+  /** Coordenador · Task 12 — `trilha` diz qual trilha recomeçou (a remoção seletiva é da Task 16). */
+  | { type: "switch"; provider: AiProviderId; model: string; motivo: string; trilha: number }
+  /**
+   * Coordenador · Task 12 — um especialista foi acionado, respondeu ou falhou. Por ora só muda
+   * a fase anunciada; a linha "Consultando: Finanças ✓ · Treinos…" é da Task 16.
+   */
+  | {
+      type: "especialista";
+      agentId: string;
+      rotulo: string;
+      trilha: number;
+      status: "consultando" | "pronto" | "falhou";
+    }
   /**
    * Uma consulta aconteceu (ou foi recusada) DENTRO desta resposta. O runner emite este
    * evento desde a Task 10; até aqui a tela o descartava em silêncio — leitura de dado do
@@ -88,7 +100,7 @@ type Evento =
    * É o único evento que traz o `effect_hash`, e ele não passa pelo modelo em momento nenhum:
    * o hash é a prova de que a confirmação vale para a previsão que está desenhada na tela.
    */
-  | { type: "proposta"; proposta: PropostaNaTela }
+  | { type: "proposta"; proposta: PropostaNaTela; trilha: number }
   | { type: "done"; finishReason: string; provider: AiProviderId; model: string }
   | { type: "error"; code: string; message: string; retryAfterSeconds?: number };
 
@@ -478,6 +490,12 @@ export function useConversaDaIa({
                 : b,
             ),
           );
+        },
+        onEspecialista: (e) => {
+          // Só o acionamento muda a fase; "pronto"/"falhou" ganham lugar na linha da Task 16.
+          if (e.status === "consultando") {
+            setFase(faseDoEvento({ tipo: "especialista", rotulo: e.rotulo }));
+          }
         },
         onDone: (e) => {
           onAtividade?.({ tipo: "respondeu" });
@@ -1041,6 +1059,7 @@ async function consumirSse(
     onSwitch: (e: Extract<Evento, { type: "switch" }>) => void;
     onTool: (e: Extract<Evento, { type: "tool" }>) => void;
     onProposta: (e: Extract<Evento, { type: "proposta" }>) => void;
+    onEspecialista: (e: Extract<Evento, { type: "especialista" }>) => void;
     onDone: (e: Extract<Evento, { type: "done" }>) => void;
     onError: (e: Extract<Evento, { type: "error" }>) => void;
   },
@@ -1086,6 +1105,9 @@ async function consumirSse(
           break;
         case "proposta":
           handlers.onProposta(evento);
+          break;
+        case "especialista":
+          handlers.onEspecialista(evento);
           break;
         case "done":
           handlers.onDone(evento);

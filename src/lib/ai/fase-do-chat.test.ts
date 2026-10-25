@@ -22,6 +22,12 @@ describe("faseDoEvento", () => {
     expect(faseDoEvento({ tipo: "tool", toolName: "todo.get_agenda" })).toBe("Consultando TO-DO…");
   });
 
+  it("o especialista acionado é anunciado pelo rótulo dele (Task 12)", () => {
+    expect(faseDoEvento({ tipo: "especialista", rotulo: "Finanças" })).toBe(
+      "Consultando Finanças…",
+    );
+  });
+
   it("ferramenta sem rótulo não vaza o identificador", () => {
     const fase = faseDoEvento({ tipo: "tool", toolName: "modulo.inexistente" });
     expect(fase).not.toContain("modulo.inexistente");
