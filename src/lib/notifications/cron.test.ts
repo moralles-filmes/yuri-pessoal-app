@@ -8,10 +8,12 @@
  * ║ Os testes puros de `generate.ts` provam o gerador; este prova o que o Cron LÊ e        ║
  * ║ entrega a ele, que é onde a B1 (fatura vazia) e a B2 (régua do gasto alto) moram.      ║
  * ║                                                                                       ║
- * ║ O client falso APLICA `eq`, `neq`, `gt`, `gte`, `lte`, `in` e `limit` sobre as linhas  ║
- * ║ sintéticas — é isso que torna visível um `.gt("itens", 0)` a mais ou uma janela de     ║
- * ║ leitura diferente. `or` e `order` são ignorados. Tabela sem fixture devolve []. Dieta, ║
- * ║ Treinos e IA já são isolados por `.catch(() => null)` no Cron. Nenhuma rede.           ║
+ * ║ O client falso APLICA `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `is`, `not` e       ║
+ * ║ `limit` sobre as linhas sintéticas — é isso que torna visível um `.gt("itens", 0)` a   ║
+ * ║ mais ou uma janela de leitura diferente. `or` e `order` são ignorados. Tabela sem      ║
+ * ║ fixture devolve []. 03-G: `estado.falhar` injeta erro de leitura e `estado.cortar`     ║
+ * ║ simula o max_rows; Dieta, Treinos e IA rodam de verdade (um builder que lança vira     ║
+ * ║ "família não lida", e o teste "sem falha" pega isso). Nenhuma rede.                    ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
  * Fixture SINTÉTICA: o repositório é público.
@@ -31,6 +33,10 @@ const AGORA = new Date("2026-09-10T15:00:00.000Z");
 const estado = {
   tabelas: {} as Record<string, Linha[]>,
   inseridas: {} as Record<string, Linha[]>,
+  /** 03-G — tabela → `code` do erro que a LEITURA dela devolve. */
+  falhar: {} as Record<string, string>,
+  /** 03-G — tabela → quantas linhas chegam (o max_rows); o `count` continua sendo o total. */
+  cortar: {} as Record<string, number>,
 };
 
 /** Ordem de string ou de número; nulo nunca passa num filtro de comparação. */
@@ -49,9 +55,14 @@ function servicoFalso(): Servico {
       let limite: number | undefined;
       const builder: Record<string, unknown> = {};
       const resultado = () => {
+        const codigo = estado.falhar[tabela];
+        if (codigo) {
+          return { data: null, error: { code: codigo, message: "erro simulado" }, count: null };
+        }
         const todas = (estado.tabelas[tabela] ?? []).filter((l) => predicados.every((p) => p(l)));
+        const chegam = tabela in estado.cortar ? todas.slice(0, estado.cortar[tabela]) : todas;
         return {
-          data: limite === undefined ? todas : todas.slice(0, limite),
+          data: limite === undefined ? chegam : chegam.slice(0, limite),
           error: null,
           count: todas.length,
         };
@@ -70,11 +81,22 @@ function servicoFalso(): Servico {
       builder.gte = filtro((v, a) => comparar(v, a) >= 0);
       builder.lte = filtro((v, a) => comparar(v, a) <= 0);
       builder.in = filtro((v, a) => (a as unknown[]).includes(v));
+      // 03-G — `is`/`lt`/`not` existem para Dieta e Treinos rodarem de verdade no falso: com o
+      // Cron por família, um builder que lança vira "família não lida" (antes sumia calado).
+      builder.is = filtro((v, a) => (a === null ? v == null : v === a));
+      builder.lt = filtro((v, a) => comparar(v, a) < 0);
+      builder.not = (coluna: string, op: string, alvo: unknown) => {
+        predicados.push((l) => (op === "is" && alvo === null ? l[coluna] != null : l[coluna] !== alvo));
+        return builder;
+      };
       builder.limit = (n: number) => {
         limite = n;
         return builder;
       };
-      builder.maybeSingle = async () => ({ data: resultado().data[0] ?? null, error: null });
+      builder.maybeSingle = async () => {
+        const r = resultado();
+        return r.error ? { data: null, error: r.error } : { data: r.data?.[0] ?? null, error: null };
+      };
       builder.single = builder.maybeSingle;
       builder.insert = async (linhas: Linha | Linha[]) => {
         (estado.inseridas[tabela] ??= []).push(...(Array.isArray(linhas) ? linhas : [linhas]));
@@ -139,6 +161,8 @@ async function rodarOCron(): Promise<void> {
 beforeEach(() => {
   estado.tabelas = fixtureBase();
   estado.inseridas = {};
+  estado.falhar = {};
+  estado.cortar = {};
 });
 
 describe("03-B2 B1 — as faturas que o sino vê", () => {
@@ -292,5 +316,68 @@ describe("03-D B4 — o sino com o saldo", () => {
     expect(avisos).toHaveLength(1);
     expect(avisos[0].dedupe_key).toBe("receivable_pending:rec-c");
     expect(avisos[0].description).toContain(formatCurrency(350));
+  });
+});
+
+/* ═══════════════════════════ 03-G L7 — o Cron por família ═══════════════════════════ */
+
+describe("03-G L7 — a leitura que falha tira só a sua família (K1b)", () => {
+  /** Uma tarefa atrasada: a família que deve SOBREVIVER à falha das faturas. */
+  function comTarefaAtrasada(): void {
+    estado.tabelas.tasks = [
+      { id: "task-1", user_id: USUARIO, title: "Tarefa sintetica", status: "pendente", due_date: "2026-09-01", priority: "media" },
+    ];
+  }
+
+  it("Z7 — faturas sem leitura: nenhum aviso de fatura, a tarefa segue, e o sino diz o que faltou", async () => {
+    comTarefaAtrasada();
+    estado.falhar.card_statements_with_total = "XX000";
+    const r = await generateForUser(servicoFalso(), USUARIO, AGORA);
+
+    expect(inseridas("invoice_")).toEqual([]);
+    expect(inseridas("task_overdue")).toHaveLength(1);
+    expect(r.familiasNaoLidas).toEqual(["faturas", "limiteDoCartao", "gastoAlto"]);
+    expect(inseridas("sistema_verificacao_incompleta")).toEqual([
+      expect.objectContaining({
+        priority: "low",
+        link: "/notificacoes",
+        // AGORA = 12h em Brasília.
+        description:
+          "Na verificação de hoje às 12h não foi possível ler: faturas, limite do cartão, gasto alto. Os avisos delas podem estar faltando.",
+        dedupe_key: "sistema_verificacao_incompleta:2026-09-10:manha",
+      }),
+    ]);
+  });
+
+  it("K2 — lançamentos cortados pelo max_rows contam como não lidos: o gasto alto sai com a soma parcial", async () => {
+    estado.tabelas.transactions = [
+      { id: "tx-1", user_id: USUARIO, competence_date: "2026-09-01" },
+      { id: "tx-2", user_id: USUARIO, competence_date: "2026-09-02" },
+    ];
+    estado.cortar.transactions = 1;
+    const r = await generateForUser(servicoFalso(), USUARIO, AGORA);
+    expect(r.familiasNaoLidas).toEqual(["gastoAlto"]);
+    expect(inseridas("high_spending")).toEqual([]);
+  });
+
+  it("sem falha, nenhum aviso de sistema e a lista vem vazia", async () => {
+    const r = await generateForUser(servicoFalso(), USUARIO, AGORA);
+    expect(r.familiasNaoLidas).toEqual([]);
+    expect(inseridas("sistema_")).toEqual([]);
+  });
+
+  it("Z9 — preferências com erro: nada é entregue, nem o aviso de sistema", async () => {
+    estado.falhar.settings = "XX000";
+    estado.falhar.card_statements_with_total = "XX000";
+    const r = await generateForUser(servicoFalso(), USUARIO, AGORA);
+    expect(r).toMatchObject({ inserted: 0, naoEntregue: "preferencias" });
+    expect(estado.inseridas.notifications ?? []).toEqual([]);
+  });
+
+  it("Z8 — dedupe com erro: nada é inserido (inserir sem saber o que existe duplicaria)", async () => {
+    estado.falhar.notifications = "XX000";
+    const r = await generateForUser(servicoFalso(), USUARIO, AGORA);
+    expect(r).toMatchObject({ inserted: 0, naoEntregue: "dedupe" });
+    expect(estado.inseridas.notifications ?? []).toEqual([]);
   });
 });

@@ -30,13 +30,65 @@ import { buildTrainingGenInput } from "@/lib/notifications/training-cron";
 import { buildAiGenInput } from "@/lib/notifications/ai-cron";
 import { normalizeNotificationPrefs } from "@/lib/settings/constants";
 import { timeInSaoPaulo } from "@/lib/format";
+import {
+  ErroDeLeitura,
+  ehErroDeLeitura,
+  exigirCompleta,
+  listaCompleta,
+  registrarFalhaDeLeitura,
+  type RespostaDoBanco,
+} from "@/lib/supabase/leitura";
+import {
+  familiasNaoLidas,
+  horaDaVerificacao,
+  janelaDaVerificacao,
+  type Familia,
+  type Leitura,
+} from "@/lib/notifications/familias";
 
 type Service = SupabaseClient<Database>;
 
 /** Data local pt-BR ('yyyy-MM-dd') de um instante, independente do fuso do servidor. */
 const spDateIso = dateInSaoPaulo;
 
-export type UserGenResult = { userId: string; candidates: number; inserted: number };
+export type UserGenResult = {
+  userId: string;
+  candidates: number;
+  inserted: number;
+  /** 03-G (K1b) — as famílias que ficaram FORA do gerador porque a leitura delas falhou. */
+  familiasNaoLidas: Familia[];
+  /**
+   * 03-G — nada foi entregue: sem as preferências não se sabe o que o dono quer receber, e sem
+   * o dedupe inserir duplicaria. Erra para "pode faltar aviso", nunca para "aviso em dobro".
+   */
+  naoEntregue?: "preferencias" | "dedupe";
+};
+
+type Tentativa<T> = { ok: true; data: T[] } | { ok: false };
+
+/**
+ * 03-G (K1b) — uma leitura do Cron. Erro ⇒ `{ ok: false }`: a família que depende dela sai do
+ * gerador e as outras seguem. `completa` (K2) é para a lista que alimenta número — sem a
+ * contagem, ou saturada, ela também conta como não lida. Só `ErroDeLeitura` é capturado.
+ */
+async function tentar<T>(
+  leitura: Leitura,
+  pedido: PromiseLike<RespostaDoBanco<T[] | null>>,
+  completa = false,
+): Promise<Tentativa<T>> {
+  try {
+    const res = await pedido;
+    if (completa) return { ok: true, data: listaCompleta(res, leitura) };
+    if (res.error) {
+      throw new ErroDeLeitura(leitura, { codigo: res.error.code ?? null, cause: res.error });
+    }
+    return { ok: true, data: res.data ?? [] };
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    registrarFalhaDeLeitura(e);
+    return { ok: false };
+  }
+}
 
 /** Gera (e persiste) as notificações que faltam para um usuário. Idempotente. */
 export async function generateForUser(
@@ -56,96 +108,177 @@ export async function generateForUser(
   // alto: os 5 meses anteriores e o mês corrente CHEIO. Era "3 meses para trás até hoje".
   const janelaTx = janelaDoGastoAlto(mesAtual);
 
-  // Leituras em paralelo (todas filtradas por user_id).
+  // Leituras em paralelo (todas filtradas por user_id). 03-G (K1b) — cada uma passa por
+  // `tentar`: a que falhar tira do gerador SÓ as famílias que dependem dela (`familias.ts`).
+  // Faturas, recebíveis, agenda e lançamentos alimentam número: pedem `count` e saturar conta
+  // como falha (K2).
   const [
-    cardsRes,
-    statementsRes,
-    billsRes,
-    receivablesRes,
-    recebimentosDoDono,
-    tasksRes,
-    eventRowsRes,
-    habitsRes,
-    habitLogsRes,
-    coursesRes,
-    sessionsRes,
-    txRes,
-    todoTasksRes,
-    todoRemindersRes,
+    cardsT,
+    statementsT,
+    billsT,
+    receivablesT,
+    recebimentosT,
+    tasksT,
+    eventRowsT,
+    habitsT,
+    habitLogsT,
+    coursesT,
+    sessionsT,
+    txT,
+    todoTasksT,
+    todoRemindersT,
   ] = await Promise.all([
-    service.from("credit_cards").select("id, nome, limite_total").eq("user_id", userId),
-    service
-      .from("card_statements_with_total")
-      .select("id, card_id, competencia, data_fechamento, data_vencimento, pago_em, total_atual")
-      .eq("user_id", userId)
-      // 03-B2 (B1, decisão do dono): fatura sem item não é fatura real — o sino deixa de
-      // avisar "Fatura atrasada" de R$ 0,00. É o mesmo filtro de `getStatements`.
-      .gt("itens", 0),
-    service.from("bills").select("id, name, amount, due_day, is_active").eq("user_id", userId),
-    service
-      .from("receivables")
-      .select(
-        "id, valor, status, installment_id, statement_id, transaction_id, pago_em, data_prevista, person:people(nome), statement:card_statements(data_vencimento, competencia), transaction:transactions!receivables_transaction_id_fkey(purchase_date)",
-      )
-      .eq("user_id", userId),
-    lerRecebimentos({ client: service, userId }),
-    service
-      .from("tasks")
-      .select("id, title, status, due_date, priority")
-      .eq("user_id", userId)
-      .in("status", ["pendente", "em_andamento"]),
-    service
-      .from("calendar_events")
-      .select("*")
-      .eq("user_id", userId)
-      .or(
-        `and(recurrence_freq.is.null,start_at.lte.${addDays(now, 3).toISOString()},end_at.gte.${now.toISOString()}),and(recurrence_freq.not.is.null,start_at.lte.${addDays(now, 3).toISOString()})`,
-      )
-      .limit(1000),
-    service
-      .from("habits")
-      .select("id, name, category, frequency, weekdays, target_value, unit, is_active")
-      .eq("user_id", userId)
-      .eq("is_active", true),
-    service
-      .from("habit_logs")
-      .select("habit_id, value, is_done")
-      .eq("user_id", userId)
-      .eq("log_date", todayIso),
-    service
-      .from("study_courses")
-      .select("id, title, status, target_date")
-      .eq("user_id", userId),
-    service
-      .from("study_sessions")
-      .select("course_id, session_date")
-      .eq("user_id", userId)
-      .gte("session_date", spDateIso(addDays(now, -120))),
+    tentar(
+      "cartoes",
+      service.from("credit_cards").select("id, nome, limite_total").eq("user_id", userId),
+    ),
+    tentar(
+      "faturas",
+      service
+        .from("card_statements_with_total")
+        .select("id, card_id, competencia, data_fechamento, data_vencimento, pago_em, total_atual", {
+          count: "exact",
+        })
+        .eq("user_id", userId)
+        // 03-B2 (B1, decisão do dono): fatura sem item não é fatura real — o sino deixa de
+        // avisar "Fatura atrasada" de R$ 0,00. É o mesmo filtro de `getStatements`.
+        .gt("itens", 0),
+      true,
+    ),
+    tentar(
+      "contasFixas",
+      service.from("bills").select("id, name, amount, due_day, is_active").eq("user_id", userId),
+    ),
+    tentar(
+      "recebiveis",
+      service
+        .from("receivables")
+        .select(
+          "id, valor, status, installment_id, statement_id, transaction_id, pago_em, data_prevista, person:people(nome), statement:card_statements(data_vencimento, competencia), transaction:transactions!receivables_transaction_id_fkey(purchase_date)",
+          { count: "exact" },
+        )
+        .eq("user_id", userId),
+      true,
+    ),
+    tentar(
+      "recebimentos",
+      lerRecebimentos({ client: service, userId }).then((l) => ({
+        data: exigirCompleta(l, "recebimentos"),
+        error: null,
+      })),
+    ),
+    tentar(
+      "tarefas",
+      service
+        .from("tasks")
+        .select("id, title, status, due_date, priority")
+        .eq("user_id", userId)
+        .in("status", ["pendente", "em_andamento"]),
+    ),
+    tentar(
+      "agenda",
+      service
+        .from("calendar_events")
+        .select("*", { count: "exact" })
+        .eq("user_id", userId)
+        .or(
+          `and(recurrence_freq.is.null,start_at.lte.${addDays(now, 3).toISOString()},end_at.gte.${now.toISOString()}),and(recurrence_freq.not.is.null,start_at.lte.${addDays(now, 3).toISOString()})`,
+        )
+        .limit(1000),
+      true,
+    ),
+    tentar(
+      "habitos",
+      service
+        .from("habits")
+        .select("id, name, category, frequency, weekdays, target_value, unit, is_active")
+        .eq("user_id", userId)
+        .eq("is_active", true),
+    ),
+    tentar(
+      "registrosDeHabito",
+      service
+        .from("habit_logs")
+        .select("habit_id, value, is_done")
+        .eq("user_id", userId)
+        .eq("log_date", todayIso),
+    ),
+    tentar(
+      "cursos",
+      service
+        .from("study_courses")
+        .select("id, title, status, target_date")
+        .eq("user_id", userId),
+    ),
+    tentar(
+      "sessoesDeEstudo",
+      service
+        .from("study_sessions")
+        .select("course_id, session_date")
+        .eq("user_id", userId)
+        .gte("session_date", spDateIso(addDays(now, -120))),
+    ),
     // A leitura de transações do Cron não tem .limit e continua sem: pôr teto agora
     // truncaria os dados e mudaria o número. O max_rows do PostgREST (padrão 1000,
-    // configurado fora do alcance do SQL) também vale para o Cron.
-    service
-      .from("transactions")
-      .select(
-        "id, amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado, category_id, category:categories(id,name,color)",
-      )
-      .eq("user_id", userId)
-      .gte("competence_date", janelaTx.from)
-      .lte("competence_date", janelaTx.to),
+    // configurado fora do alcance do SQL) também vale para o Cron — e desde a 03-G o corte
+    // é DETECTADO pelo `count` e o gasto alto sai do gerador em vez de sair com a soma parcial.
+    tentar(
+      "lancamentos",
+      service
+        .from("transactions")
+        .select(
+          "id, amount, valor_pessoal, type, payment_method, status, competence_date, card_id, statement_id, parcelado, category_id, category:categories(id,name,color)",
+          { count: "exact" },
+        )
+        .eq("user_id", userId)
+        .gte("competence_date", janelaTx.from)
+        .lte("competence_date", janelaTx.to),
+      true,
+    ),
     // Fase 15 — TO-DO: só as tarefas ABERTAS interessam para alerta.
-    service
-      .from("todo_tasks")
-      .select("id, title, status, scheduled_date, deadline_at, priority, project_id")
-      .eq("user_id", userId)
-      .in("status", ["pendente", "em_andamento"]),
+    tentar(
+      "todo",
+      service
+        .from("todo_tasks")
+        .select("id, title, status, scheduled_date, deadline_at, priority, project_id")
+        .eq("user_id", userId)
+        .in("status", ["pendente", "em_andamento"]),
+    ),
     // Lembretes ainda não disparados cujo horário já chegou.
-    service
-      .from("todo_reminders")
-      .select("id, task_id, remind_at, task:todo_tasks(title, project_id)")
-      .eq("user_id", userId)
-      .eq("status", "pendente")
-      .lte("remind_at", now.toISOString()),
+    tentar(
+      "lembretes",
+      service
+        .from("todo_reminders")
+        .select("id, task_id, remind_at, task:todo_tasks(title, project_id)")
+        .eq("user_id", userId)
+        .eq("status", "pendente")
+        .lte("remind_at", now.toISOString()),
+    ),
   ]);
+
+  // 03-G — a leitura que falhou chega como lista VAZIA só para o mapeamento abaixo não precisar
+  // de dois caminhos; quem garante que "vazio" não vira "não há aviso" é a família sair do
+  // `GenerateInput` (lá embaixo, por `fora`).
+  const falhas = new Set<Leitura>();
+  const dados = <T,>(t: Tentativa<T>, leitura: Leitura): T[] => {
+    if (t.ok) return t.data;
+    falhas.add(leitura);
+    return [];
+  };
+  const cardsRes = { data: dados(cardsT, "cartoes") };
+  const statementsRes = { data: dados(statementsT, "faturas") };
+  const billsRes = { data: dados(billsT, "contasFixas") };
+  const receivablesRes = { data: dados(receivablesT, "recebiveis") };
+  const recebimentosDoDono = { linhas: dados(recebimentosT, "recebimentos") };
+  const tasksRes = { data: dados(tasksT, "tarefas") };
+  const eventRowsRes = { data: dados(eventRowsT, "agenda") };
+  const habitsRes = { data: dados(habitsT, "habitos") };
+  const habitLogsRes = { data: dados(habitLogsT, "registrosDeHabito") };
+  const coursesRes = { data: dados(coursesT, "cursos") };
+  const sessionsRes = { data: dados(sessionsT, "sessoesDeEstudo") };
+  const txRes = { data: dados(txT, "lancamentos") };
+  const todoTasksRes = { data: dados(todoTasksT, "todo") };
+  const todoRemindersRes = { data: dados(todoRemindersT, "lembretes") };
 
   /* ── Faturas / cartões ── */
   const statements = (statementsRes.data ?? []) as Array<{
@@ -365,38 +498,64 @@ export async function generateForUser(
     };
   });
 
+  // Fase 16-F/17-F/18-F — Dieta, Treinos e IA continuam isolados: uma falha de leitura do módulo
+  // não pode impedir o alerta de fatura atrasada de existir. 03-G (K1b) — e agora o isolamento
+  // é DECLARADO: o módulo que falhou vira família não lida, em vez de sumir calado. As leituras
+  // internas de cada builder ficam fora (K1b).
+  const nutrition = await buildNutritionGenInput(service, userId, todayIso, minutosAgora).catch(
+    () => {
+      falhas.add("dieta");
+      return null;
+    },
+  );
+  const training = await buildTrainingGenInput(
+    service,
+    userId,
+    todayIso,
+    minutosAgora,
+    nowMs,
+  ).catch(() => {
+    falhas.add("treinos");
+    return null;
+  });
+  const ai = await buildAiGenInput(service, userId, todayIso, now).catch(() => {
+    falhas.add("ia");
+    return null;
+  });
+
+  const naoLidas = familiasNaoLidas(falhas);
+  const fora = new Set(naoLidas);
+  /** A família não lida fica AUSENTE (`undefined`), nunca vazia — vazio diria "nada a avisar". */
+  const se = <T,>(familia: Familia, valor: T): T | undefined =>
+    fora.has(familia) ? undefined : valor;
+
   /* ── Geração pura ── */
   const input: GenerateInput = {
     todayIso,
     nowMs,
-    statements: genStatements,
-    cards: genCards,
-    bills: (billsRes.data ?? []) as GenerateInput["bills"],
-    receivables: genReceivables,
-    tasks: genTasks,
-    events: genEvents,
-    habits: genHabits,
-    courses: genCourses,
-    spending: { mes: mesAtual, saidas: regua.saidas, mediaSaidas: regua.mediaSaidas },
-    todoTasks: genTodoTasks,
-    todoReminders: genTodoReminders,
-    // Fase 16-F — Dieta. Isolada num try: uma falha de leitura do módulo não pode impedir
-    // o alerta de fatura atrasada de existir.
-    nutrition: await buildNutritionGenInput(service, userId, todayIso, minutosAgora).catch(
-      () => null,
-    ),
-    // Fase 17-F — Treinos. Mesmo isolamento da Dieta: uma falha de leitura do módulo não pode
-    // impedir o alerta de fatura atrasada de existir.
-    training: await buildTrainingGenInput(
-      service,
-      userId,
-      todayIso,
-      minutosAgora,
-      nowMs,
-    ).catch(() => null),
-    // Fase 18-F — IA. Mesmo isolamento de Dieta e Treinos: uma falha de leitura do módulo
-    // não pode impedir o alerta de fatura atrasada de existir.
-    ai: await buildAiGenInput(service, userId, todayIso, now).catch(() => null),
+    statements: se("faturas", genStatements),
+    cards: se("limiteDoCartao", genCards),
+    bills: se("contasFixas", (billsRes.data ?? []) as GenerateInput["bills"]),
+    receivables: se("recebiveis", genReceivables),
+    tasks: se("tarefas", genTasks),
+    events: se("agenda", genEvents),
+    habits: se("habitos", genHabits),
+    courses: se("estudos", genCourses),
+    spending: se("gastoAlto", {
+      mes: mesAtual,
+      saidas: regua.saidas,
+      mediaSaidas: regua.mediaSaidas,
+    }),
+    todoTasks: se("todo", genTodoTasks),
+    todoReminders: se("lembretes", genTodoReminders),
+    nutrition: se("dieta", nutrition),
+    training: se("treinos", training),
+    ai: se("ia", ai),
+    // 03-G (K1b, D-G30) — o aviso de verificação incompleta: janela no dedupe, hora real no texto.
+    naoLidas:
+      naoLidas.length > 0
+        ? { familias: naoLidas, janela: janelaDaVerificacao(now), hora: horaDaVerificacao(now) }
+        : undefined,
   };
 
   const generated = generateNotifications(input);
@@ -404,25 +563,48 @@ export async function generateForUser(
   // Fase 16-F — TODA notificação é desativável. As preferências são lidas aqui (e não dentro
   // do gerador) para que o módulo puro continue respondendo "isto é verdade sobre os dados"
   // e a decisão de entregar fique num lugar só.
-  const { data: settingsRow } = await service
+  // 03-G (K1b) — preferências com erro ⇒ NADA é entregue, nem o aviso de verificação
+  // incompleta (ele também passa pela preferência). Lidas como ausentes, elas ligariam todo tipo
+  // que o dono desligou.
+  const settingsRes = await service
     .from("settings")
     .select("notification_prefs")
     .eq("user_id", userId)
     .maybeSingle();
-  const prefs = normalizeNotificationPrefs(settingsRow?.notification_prefs);
+  if (settingsRes.error) {
+    return {
+      userId,
+      candidates: 0,
+      inserted: 0,
+      familiasNaoLidas: naoLidas,
+      naoEntregue: "preferencias",
+    };
+  }
+  const prefs = normalizeNotificationPrefs(settingsRes.data?.notification_prefs);
 
   const candidates = filterByPrefs(generated, prefs);
   if (candidates.length === 0) {
-    return { userId, candidates: 0, inserted: 0 };
+    return { userId, candidates: 0, inserted: 0, familiasNaoLidas: naoLidas };
   }
 
   // Idempotência: não recria as que já existem (mesma dedupe_key).
+  // 03-G — dedupe com erro ⇒ não insere nada: inserir sem saber o que existe duplicaria.
   const keys = candidates.map((c) => c.dedupe_key);
-  const { data: existingRows } = await service
+  const existingRes = await service
     .from("notifications")
     .select("dedupe_key")
     .eq("user_id", userId)
     .in("dedupe_key", keys);
+  if (existingRes.error) {
+    return {
+      userId,
+      candidates: candidates.length,
+      inserted: 0,
+      familiasNaoLidas: naoLidas,
+      naoEntregue: "dedupe",
+    };
+  }
+  const existingRows = existingRes.data;
   const existing = new Set(
     ((existingRows ?? []) as Array<{ dedupe_key: string | null }>)
       .map((r) => r.dedupe_key)
@@ -431,7 +613,7 @@ export async function generateForUser(
 
   const fresh = selectNewCandidates(candidates, existing);
   if (fresh.length === 0) {
-    return { userId, candidates: candidates.length, inserted: 0 };
+    return { userId, candidates: candidates.length, inserted: 0, familiasNaoLidas: naoLidas };
   }
 
   const nowIso = now.toISOString();
@@ -450,7 +632,7 @@ export async function generateForUser(
   const { error } = await service.from("notifications").insert(rows);
   if (error) {
     // Não falha o Cron inteiro por um usuário; reporta 0 inseridos.
-    return { userId, candidates: candidates.length, inserted: 0 };
+    return { userId, candidates: candidates.length, inserted: 0, familiasNaoLidas: naoLidas };
   }
 
   // Fase 15 — fecha os lembretes de TO-DO que viraram notificação. A dupla proteção
@@ -467,7 +649,12 @@ export async function generateForUser(
       .in("id", sentReminderIds);
   }
 
-  return { userId, candidates: candidates.length, inserted: fresh.length };
+  return {
+    userId,
+    candidates: candidates.length,
+    inserted: fresh.length,
+    familiasNaoLidas: naoLidas,
+  };
 }
 
 /** Roda a geração para TODOS os usuários (single-user na prática). */
@@ -483,7 +670,7 @@ export async function runNotificationGeneration(
     try {
       results.push(await generateForUser(service, u.id, now));
     } catch {
-      results.push({ userId: u.id, candidates: 0, inserted: 0 });
+      results.push({ userId: u.id, candidates: 0, inserted: 0, familiasNaoLidas: [] });
     }
   }
   return {

@@ -78,6 +78,8 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   ai_provider_problem: PlugZap,
   ai_action_stuck: CircleAlert,
   ai_insight_available: Sparkles,
+  // REDESIGN-03-G — a verificação do Cron foi parcial.
+  sistema_verificacao_incompleta: CircleAlert,
 };
 
 export function notificationIcon(type: string): LucideIcon {

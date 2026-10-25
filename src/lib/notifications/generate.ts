@@ -32,6 +32,7 @@ import {
   type TrainingGenInput,
 } from "./training";
 import { generateAiNotifications, type AiGenInput } from "./ai";
+import { textoDasFamilias, type Familia, type JanelaDaVerificacao } from "./familias";
 import { notificationEnabled, type NotificationPrefs } from "@/lib/settings/constants";
 import type { NotificationPriority, NotificationType } from "./constants";
 
@@ -187,6 +188,11 @@ export type GenerateInput = {
    * então herda `dedupe_key`, `selectNewCandidates` e `filterByPrefs` sem nada novo.
    */
   ai?: AiGenInput | null;
+  /**
+   * REDESIGN-03-G (K1b, D-G30) — as famílias que o Cron NÃO conseguiu ler. Elas já chegam
+   * AUSENTES dos campos acima; isto é o que faz o sino dizer que a verificação foi parcial.
+   */
+  naoLidas?: { familias: Familia[]; janela: JanelaDaVerificacao; hora: string };
   options?: GenerateOptions;
 };
 
@@ -581,6 +587,24 @@ export function generateNotifications(input: GenerateInput): NotificationCandida
   /* ── Inteligência Artificial (Fase 18-F) ── */
   if (input.ai) {
     out.push(...generateAiNotifications(input.ai));
+  }
+
+  /* ── Verificação incompleta (03-G, K1b) ── */
+  // Um aviso só, `low`, com link. Ele não diz o que está errado nos dados — diz que algum outro
+  // aviso pode estar faltando. Dedupe por dia + janela (D-G13): a mesma execução rodada de novo
+  // não duplica; a das 21h é outra verificação.
+  if (input.naoLidas && input.naoLidas.familias.length > 0) {
+    const { familias, janela, hora } = input.naoLidas;
+    out.push({
+      type: "sistema_verificacao_incompleta",
+      priority: "low",
+      title: "Verificação incompleta",
+      description: `Na verificação de hoje às ${hora} não foi possível ler: ${textoDasFamilias(familias)}. Os avisos delas podem estar faltando.`,
+      link: "/notificacoes",
+      entity_type: null,
+      entity_id: null,
+      dedupe_key: `sistema_verificacao_incompleta:${today}:${janela}`,
+    });
   }
 
   return out;

@@ -48,9 +48,15 @@ describe("preferências de notificação", () => {
     }
   });
 
-  it("os três avisos de IA que não se desligam ficam sem interruptor; o opt-in de IA ganha o seu", () => {
+  // 03-G (D-G12, D-G33) — o quarto: a verificação incompleta do Cron também não se desliga.
+  it("os três avisos de IA e a verificação incompleta ficam sem interruptor; o opt-in de IA ganha o seu", () => {
     expect(SEM_INTERRUPTOR.sort()).toEqual(
-      ["ai_action_stuck", "ai_budget_threshold", "ai_provider_problem"].sort(),
+      [
+        "ai_action_stuck",
+        "ai_budget_threshold",
+        "ai_provider_problem",
+        "sistema_verificacao_incompleta",
+      ].sort(),
     );
     const grupoDaIa = NOTIFICATION_PREF_GROUPS.find((g) => g.types.includes("ai_insight_available"));
     expect(grupoDaIa?.title).toBe("Inteligência Artificial");
