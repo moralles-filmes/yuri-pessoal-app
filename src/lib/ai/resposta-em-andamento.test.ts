@@ -5,6 +5,8 @@ import {
   aoTrocarDeTentativa,
   aoAtualizarEspecialista,
   linhaDeEspecialistas,
+  textoParaDevolver,
+  deveEnviarComEnter,
   type EspecialistaNaTela,
 } from "./resposta-em-andamento";
 
@@ -78,5 +80,26 @@ describe("ligação dos eventos com o chat", () => {
   it("atualiza a lista no evento e a apresenta na bolha do assistente", () => {
     expect(especialista).toContain("especialistas: aoAtualizarEspecialista(b.especialistas ?? [], e)");
     expect(tela).toContain("linhaDeEspecialistas(b.especialistas)");
+  });
+});
+
+
+describe("recusa antes do start e teclado do chat", () => {
+  it("devolve a mensagem quando não há rascunho novo", () => {
+    expect(textoParaDevolver("oi", "")).toBe("oi");
+    expect(textoParaDevolver("oi", "novo")).toBe("novo");
+    expect(textoParaDevolver("oi", " ")).toBe(" ");
+  });
+
+  it.each([
+    ["Enter", false, false, false, false, true],
+    ["Enter", true, false, false, false, false],
+    ["Enter", false, false, false, true, false],
+    ["Enter", false, true, false, false, false],
+    ["Enter", false, true, true, false, false],
+    ["Enter", false, false, true, true, true],
+    ["a", false, false, true, false, false],
+  ])("tecla %s, shift %s, composição %s, atalho %s, toque %s → envia %s", (tecla, shift, compondo, atalho, toque, esperado) => {
+    expect(deveEnviarComEnter({ tecla, shift, compondo, atalho, toque })).toBe(esperado);
   });
 });

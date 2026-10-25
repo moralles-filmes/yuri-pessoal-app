@@ -27,3 +27,18 @@ export function linhaDeEspecialistas(lista: readonly EspecialistaNaTela[]): stri
   const marcas = { consultando: "…", pronto: " ✓", falhou: " ✕" } as const;
   return "Consultando: " + lista.map((e) => e.rotulo + marcas[e.status]).join(" · ");
 }
+
+/** Recusa antes da admissão: devolve a mensagem sem apagar um rascunho novo. */
+export function textoParaDevolver(enviado: string, atual: string): string {
+  return atual === "" ? enviado : atual;
+}
+
+export function deveEnviarComEnter(e: {
+  readonly tecla: string;
+  readonly shift: boolean;
+  readonly compondo: boolean;
+  readonly atalho: boolean;
+  readonly toque: boolean;
+}): boolean {
+  return e.tecla === "Enter" && !e.compondo && (e.atalho || (!e.shift && !e.toque));
+}

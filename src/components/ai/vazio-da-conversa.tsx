@@ -14,9 +14,9 @@ export function VazioDaConversa() {
   return (
     <EmptyState
       icon={MessagesSquare}
-      title="Nenhuma mensagem ainda"
-      description="Escreva abaixo para começar."
-      className="py-8"
+      title="Como posso ajudar?"
+      description="Pergunte qualquer coisa — eu consulto os módulos que você liberou."
+      className="border-0 bg-transparent py-8"
     />
   );
 }

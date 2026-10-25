@@ -80,6 +80,7 @@ export default async function IaPage() {
         initialMessages={[]}
         runs={{}}
         podeConversar={prontidao.podeConversar}
+        podeCruzarModulos={prontidao.podeCruzarModulos}
         motivoBloqueio={prontidao.motivoBloqueio}
         vazio={<VazioDaConversa />}
       />

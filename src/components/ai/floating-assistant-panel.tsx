@@ -107,6 +107,7 @@ export function FloatingAssistantPanel({
     initialMessages: [],
     runs: {},
     podeConversar: prontidao?.podeConversar ?? false,
+    podeCruzarModulos: prontidao?.podeCruzarModulos ?? false,
     onAtividade,
   });
 
@@ -138,6 +139,7 @@ export function FloatingAssistantPanel({
         vivo
           ? setProntidao({
               podeConversar: false,
+              podeCruzarModulos: false,
               motivoBloqueio: "Não foi possível falar com o servidor agora.",
             })
           : undefined,
@@ -240,6 +242,7 @@ export function FloatingAssistantPanel({
               conversa={conversa}
               runs={{}}
               podeConversar={prontidao.podeConversar}
+              podeCruzarModulos={prontidao.podeCruzarModulos}
               motivoBloqueio={prontidao.motivoBloqueio}
               compacto
               vazio={<VazioDaConversa />}
