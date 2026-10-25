@@ -22,7 +22,7 @@ describe("faseDoEvento", () => {
     expect(faseDoEvento({ tipo: "tool", toolName: "todo.get_agenda" })).toBe("Consultando TO-DO…");
   });
 
-  it("o especialista acionado é anunciado pelo rótulo dele (Task 12)", () => {
+  it("o especialista acionado é anunciado pelo rótulo dele", () => {
     expect(faseDoEvento({ tipo: "especialista", rotulo: "Finanças" })).toBe(
       "Consultando Finanças…",
     );

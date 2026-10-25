@@ -19,7 +19,7 @@ export type EventoDaFase =
   | { readonly tipo: "start" }
   | { readonly tipo: "tool"; readonly toolName: string }
   | { readonly tipo: "switch"; readonly motivo: string }
-  /** Coordenador · Task 12 — um especialista foi acionado. A linha completa é da Task 16. */
+  /** Anuncia o acionamento; a lista da bolha acompanha o desfecho de cada especialista. */
   | { readonly tipo: "especialista"; readonly rotulo: string }
   | { readonly tipo: "proposta" }
   | { readonly tipo: "done" }

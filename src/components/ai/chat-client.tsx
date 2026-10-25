@@ -62,6 +62,13 @@ import { ProposalCardSobDemanda } from "@/components/ai/proposal-card-sob-demand
 import { FraseDeGasto } from "@/components/ai/frase-de-gasto";
 import { DESFECHO_INICIAL, type DesfechoDoCartao } from "@/lib/ai/cartao";
 import { faseDoEvento } from "@/lib/ai/fase-do-chat";
+import {
+  aoTrocarDeTentativa,
+  aoAtualizarEspecialista,
+  linhaDeEspecialistas,
+  type PropostaComTrilha,
+  type EspecialistaNaTela,
+} from "@/lib/ai/resposta-em-andamento";
 import type { ConversationMessage, MessageRunInfo } from "@/lib/ai/types";
 
 type Evento =
@@ -75,11 +82,10 @@ type Evento =
       correlationId: string;
     }
   | { type: "delta"; text: string }
-  /** Coordenador · Task 12 — `trilha` diz qual trilha recomeçou (a remoção seletiva é da Task 16). */
+  /** A trilha identifica quais cartões pertencem à tentativa que recomeçou. */
   | { type: "switch"; provider: AiProviderId; model: string; motivo: string; trilha: number }
   /**
-   * Coordenador · Task 12 — um especialista foi acionado, respondeu ou falhou. Por ora só muda
-   * a fase anunciada; a linha "Consultando: Finanças ✓ · Treinos…" é da Task 16.
+   * Um especialista foi acionado, respondeu ou falhou; a lista conserva a ordem de chegada.
    */
   | {
       type: "especialista";
@@ -129,7 +135,8 @@ type Bolha = {
    * confirmar e recusar. Recarregar aqui esconde o cartão; a proposta continua lá, válida
    * pelos 10 minutos dela, e nada foi aplicado. O cartão sumir NÃO executa e NÃO cancela.
    */
-  propostas?: PropostaNaTela[];
+  propostas?: readonly (PropostaNaTela & PropostaComTrilha)[];
+  especialistas?: readonly EspecialistaNaTela[];
   /**
    * A rota enviada como contexto NESTE envio. É o que a tela sabe: que MANDOU o contexto —
    * quem decide se ele foi usado é o servidor. Por isso o selo diz "enviada com", não "usou".
@@ -286,8 +293,8 @@ export function useConversaDaIa({
   const [conversa, setConversa] = React.useState<string | null>(conversationId);
   const [desfechos, setDesfechos] = React.useState<Record<string, DesfechoDoCartao>>({});
   const [fase, setFase] = React.useState<string | null>(null);
-  /** As propostas que ESTA resposta preparou — as que o `switch` zera junto com o texto. */
-  const propostasDaRespostaRef = React.useRef<string[]>([]);
+  /** Cartões desta resposta, com a trilha que decide quais caem em cada repetição. */
+  const propostasDaRespostaRef = React.useRef<PropostaComTrilha[]>([]);
   const abortRef = React.useRef<AbortController | null>(null);
   const contadorRef = React.useRef(0);
 
@@ -394,34 +401,19 @@ export function useConversaDaIa({
               i === atual.length - 1 ? { ...b, content: b.content + t } : b,
             ),
           ),
-        /**
-         * ╔════════════════════════════════════════════════════════════════════════════════╗
-         * ║ TENTATIVA NOVA COMEÇA COM A BOLHA LIMPA — e o servidor zera o texto no MESMO    ║
-         * ║ instante (`chat-runner.ts`, junto do `yield` deste evento).                     ║
-         * ║                                                                                 ║
-         * ║ Até aqui `onDelta` concatenava tudo na mesma bolha e este handler só trocava o  ║
-         * ║ selo: a narração da tentativa que FALHOU ficava colada na da seguinte, e a      ║
-         * ║ resposta gravada era essa mistura. Corrigir só o servidor seria pior — o        ║
-         * ║ `router.refresh()` do fim do envio releria o texto novo e apagaria da tela algo ║
-         * ║ que o usuário já tinha lido. Os dois lados, ou nenhum.                           ║
-         * ║                                                                                 ║
-         * ║ As consultas caem junto: o laço recomeça no passo 0 a cada tentativa, então as  ║
-         * ║ ferramentas rodam de novo e os chips da tentativa anterior virariam duplicata.  ║
-         * ╚════════════════════════════════════════════════════════════════════════════════╝
-         */
         onSwitch: (e) => {
-          // 18-F Bloco 2 — o selo do botão acompanha a limpeza dos cartões, senão ele
-          // contaria duas propostas onde o dono vê uma (mesma razão do `propostas: []`).
-          onAtividade?.({ tipo: "recomecou" });
           setFase(faseDoEvento({ tipo: "switch", motivo: e.motivo }));
-          // As propostas zeradas abaixo levam junto os desfechos delas: nenhum cartão as mostra
-          // mais, e o mapa não guarda o que a tela não tem como desenhar.
-          const zeradas = propostasDaRespostaRef.current;
-          propostasDaRespostaRef.current = [];
+          const restantes = aoTrocarDeTentativa(propostasDaRespostaRef.current, e.trilha);
+          const zeradas = propostasDaRespostaRef.current.filter(
+            (proposta) => !restantes.some((p) => p.id === proposta.id),
+          );
+          propostasDaRespostaRef.current = [...restantes];
+          // O painel recebe só a retirada dos ids: recomecou apagaria também outras trilhas.
+          for (const { id } of zeradas) onAtividade?.({ tipo: "decidiu", id });
           if (zeradas.length > 0) {
             setDesfechos((atual) => {
               const resto = { ...atual };
-              for (const id of zeradas) delete resto[id];
+              for (const { id } of zeradas) delete resto[id];
               return resto;
             });
           }
@@ -434,22 +426,8 @@ export function useConversaDaIa({
                     model: e.model,
                     content: "",
                     ferramentas: [],
-                    /**
-                     * ⛔ AS PROPOSTAS CAEM JUNTO, E ESTA É A LINHA MAIS IMPORTANTE DO BLOCO.
-                     *
-                     * O laço recomeça do passo 0 a cada tentativa: a ferramenta de escrita
-                     * roda de novo e grava uma SEGUNDA linha em `ai_action_proposals`, com
-                     * outro id e outro hash. Mantendo o cartão anterior, o dono veria dois
-                     * cartões propondo a mesma coisa — e confirmar os dois criaria DUAS
-                     * tarefas. A aprovação de uso único não impede isso: são propostas
-                     * distintas, cada uma com a sua aprovação, e o banco está certo em
-                     * aceitar as duas.
-                     *
-                     * A proposta órfã não é cancelada nem executada: ela expira sozinha em 10
-                     * minutos sem ter tocado em nada. Perder um cartão de tela é o erro
-                     * barato; lançar duas vezes é o caro, e é o bug que este projeto já teve.
-                     */
-                    propostas: [],
+                    // A proposta órfã continua no banco até vencer; nada é confirmado aqui.
+                    propostas: aoTrocarDeTentativa(b.propostas ?? [], e.trilha),
                   }
                 : b,
             ),
@@ -476,7 +454,8 @@ export function useConversaDaIa({
           );
         },
         onProposta: (e) => {
-          propostasDaRespostaRef.current.push(e.proposta.id);
+          const proposta = { ...e.proposta, trilha: e.trilha };
+          propostasDaRespostaRef.current.push(proposta);
           setFase(faseDoEvento({ tipo: "proposta" }));
           onAtividade?.({
             tipo: "propos",
@@ -486,13 +465,17 @@ export function useConversaDaIa({
           setBolhas((atual) =>
             atual.map((b, i) =>
               i === atual.length - 1
-                ? { ...b, propostas: [...(b.propostas ?? []), e.proposta] }
+                ? { ...b, propostas: [...(b.propostas ?? []), proposta] }
                 : b,
             ),
           );
         },
         onEspecialista: (e) => {
-          // Só o acionamento muda a fase; "pronto"/"falhou" ganham lugar na linha da Task 16.
+          setBolhas((atual) =>
+            atual.map((b, i) => i === atual.length - 1
+              ? { ...b, especialistas: aoAtualizarEspecialista(b.especialistas ?? [], e) }
+              : b),
+          );
           if (e.status === "consultando") {
             setFase(faseDoEvento({ tipo: "especialista", rotulo: e.rotulo }));
           }
@@ -737,6 +720,11 @@ export function ChatView({
               <span className="sr-only">
                 {b.role === "user" ? "Você disse: " : "O assistente respondeu: "}
               </span>
+              {b.role === "assistant" && b.especialistas && (
+                <p className="mb-2 break-words text-xs text-muted-foreground">
+                  {linhaDeEspecialistas(b.especialistas)}
+                </p>
+              )}
               <p className="whitespace-pre-wrap break-words">
                 {b.content ||
                   (b.status === "streaming" ? (
