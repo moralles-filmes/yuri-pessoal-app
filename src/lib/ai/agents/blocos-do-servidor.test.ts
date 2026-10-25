@@ -13,6 +13,7 @@ import {
   blocoDaData,
   blocoDaSintese,
   blocoDoCoordenador,
+  blocoDoEspecialista,
 } from "./blocos-do-servidor";
 import { MAX_ESPECIALISTAS, type EspecialistaOferecido } from "./especialistas";
 
@@ -40,6 +41,37 @@ describe("blocoDaData", () => {
 
   it("passa no varredor de vocabulário proibido", () => {
     expect(termosProibidosEm(blocoDaData(new Date("2026-10-21T15:00:00Z")))).toEqual([]);
+  });
+});
+
+/**
+ * Task 15b — teste real da Task 15: em "como foi minha semana?", especialistas acionados
+ * responderam sem ler nada, e quando não havia leitura "da semana" não diziam o que a leitura
+ * mais próxima cobria. O `toolChoice` obriga a primeira chamada a usar ferramenta; este bloco
+ * diz QUAL ler e como declarar o recorte.
+ */
+describe("blocoDoEspecialista", () => {
+  const b = blocoDoEspecialista();
+
+  it("diz que ele foi acionado porque a tarefa depende dos registros, e que consulta antes de responder", () => {
+    expect(b).toContain("Você foi acionado porque a tarefa depende dos registros do dono");
+    expect(b).toContain("Consulte as suas ferramentas antes de responder");
+  });
+
+  it("manda usar a leitura mais próxima quando nenhuma cobre o período ou o recorte pedido", () => {
+    expect(b).toContain("use a leitura mais próxima");
+    expect(b).toContain("diga com clareza o que ela cobre");
+    // Os dois exemplos do desenho: período maior e recorte diferente.
+    expect(b).toContain("o mês inteiro em vez da semana");
+    expect(b).toContain("o que está aberto ou atrasado em vez do que foi concluído");
+  });
+
+  it("descreve que uma leitura nunca é apresentada como se fosse a outra", () => {
+    expect(b).toContain("Apresente cada leitura pelo que ela é");
+  });
+
+  it("passa no varredor de vocabulário proibido", () => {
+    expect(termosProibidosEm(b)).toEqual([]);
   });
 });
 

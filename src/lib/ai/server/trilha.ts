@@ -128,6 +128,18 @@ export type EntradaDaTrilha = {
    */
   readonly tetoDeSaida: number;
   readonly primeiroTipo: "PRIMARY" | "ESPECIALISTA";
+  /**
+   * Task 15b — `true` = o PRIMEIRO passo de cada tentativa (PRIMARY/ESPECIALISTA/RETRY/
+   * FALLBACK) pede `toolChoice: "required"`: o modelo é obrigado a chamar uma ferramenta antes
+   * de responder. Os TOOL_STEP seguintes ficam no padrão (`auto`), senão ele nunca conseguiria
+   * terminar com texto. Sem definições, nada é exigido.
+   *
+   * ⛔ Sem valor padrão, como `repetir` e `modo`: quem liga é o especialista (`coordenador.ts`);
+   * a decisão do coordenador pode responder direto, e a síntese não tem ferramenta. Instrução
+   * no prompt é obediência "quase sempre" — no teste real da Task 15, especialistas acionados
+   * responderam sem ler nada (invariantes 103/106).
+   */
+  readonly exigirFerramentaNoPrimeiroPasso: boolean;
   readonly permissions: Readonly<Partial<Record<ToolPermission, boolean>>>;
   readonly writePermissions: Readonly<Partial<Record<ToolWritePermission, boolean>>>;
   readonly contadores: ContadoresDoRun;
@@ -390,10 +402,20 @@ export async function* runTrilha(
         return null;
       };
 
-      /** A chamada ao provedor, uma por passo — já admitida por `antesDaChamada`. */
-      const chamarModelo = (msgs: readonly AiMessage[]): AsyncIterable<AiStreamEvent> =>
+      /**
+       * A chamada ao provedor, uma por passo — já admitida por `antesDaChamada`.
+       *
+       * `passo` reinicia em 0 a cada tentativa (o laço é recriado no retry e no fallback), então
+       * "passo 0" é exatamente a primeira chamada de PRIMARY/ESPECIALISTA/RETRY/FALLBACK.
+       */
+      const chamarModelo = (
+        msgs: readonly AiMessage[],
+        passo: number,
+      ): AsyncIterable<AiStreamEvent> =>
         (async function* () {
           const client = createProviderClient(alvo.provider, chave.value);
+          const exigir =
+            e.exigirFerramentaNoPrimeiroPasso && passo === 0 && e.definicoes.length > 0;
           yield* client.streamText({
             model: alvo.model.id,
             system: e.system,
@@ -404,6 +426,7 @@ export async function* runTrilha(
             // O laço executa SÓ o que passou pela allowlist do agente e pelo guard. O que
             // não está aqui não foi oferecido — e voltar assim mesmo encerra o run.
             tools: e.definicoes,
+            ...(exigir ? { toolChoice: "required" as const } : {}),
           });
         })();
 

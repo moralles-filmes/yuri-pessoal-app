@@ -136,6 +136,17 @@ export type AiRequest = {
    * tokens por nada).
    */
   readonly tools: readonly AiToolDefinition[];
+  /**
+   * Task 15b — se o modelo PODE (`auto`) ou DEVE (`required`) chamar uma ferramenta nesta
+   * chamada. Ausente = o padrão do provedor (`auto`), como sempre foi.
+   *
+   * `required` só faz sentido com `tools` não vazio: sem ferramenta não há o que exigir, e o
+   * adapter não envia o campo nesse caso. Quem pede `required` é o especialista, no PRIMEIRO
+   * passo de cada tentativa (`runTrilha`) — nos passos seguintes ele precisa poder terminar
+   * com texto. Recusa do provedor segue o caminho normal de erro; não há volta silenciosa
+   * para `auto`.
+   */
+  readonly toolChoice?: "auto" | "required";
 };
 
 // ───────────────────── Saída estruturada (18-D) ─────────────────────

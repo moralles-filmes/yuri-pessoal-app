@@ -451,6 +451,12 @@ export function createAdapter(config: AdapterConfig): AiProviderClient {
           // `stopWhen` NÃO é usado: o laço de ferramentas é nosso, e cada volta precisa
           // passar pelo Tool Executor e virar uma linha de medição.
           ...(temFerramentas ? { tools: toToolSet(request.tools) } : {}),
+          // Task 15b — só com ferramentas: `required` sem `tools` não tem o que exigir. Os
+          // quatro pacotes traduzem o valor (Gemini `ANY`, Anthropic `any`, OpenAI/xAI
+          // `required`); recusa do provedor vira evento `error`, como qualquer outra.
+          ...(temFerramentas && request.toolChoice
+            ? { toolChoice: request.toolChoice }
+            : {}),
         });
 
         for await (const parte of resultado.fullStream) {

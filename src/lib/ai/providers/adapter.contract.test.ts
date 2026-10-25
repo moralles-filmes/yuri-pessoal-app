@@ -282,6 +282,40 @@ describe("ferramentas (18-B)", () => {
     expect(opcoesRecebidas?.tools).toBeUndefined();
   });
 
+  /**
+   * Task 15b — `toolChoice: "required"` é como o especialista é OBRIGADO a ler antes de
+   * responder. Instrução no prompt é "quase sempre"; o valor no pedido ao provedor é estrutural.
+   */
+  it("toolChoice 'required' com ferramentas chega ao SDK", async () => {
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    for (const provider of AI_PROVIDERS) {
+      opcoesRecebidas = null;
+      await coletar(
+        createProviderClient(provider, "chave").streamText({
+          ...COM_FERRAMENTA,
+          toolChoice: "required",
+        }),
+      );
+      expect(opcoesRecebidas?.toolChoice, provider).toBe("required");
+    }
+  });
+
+  it("com `tools` vazio, toolChoice NÃO é enviado — nem quando pedido 'required'", async () => {
+    // Sem ferramenta não há o que exigir: mandar `required` sem `tools` é erro no provedor
+    // (ou, pior, o pedido de uma ferramenta que não existe).
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    await coletar(
+      createProviderClient("gemini", "chave").streamText({ ...PEDIDO, toolChoice: "required" }),
+    );
+    expect(opcoesRecebidas && "toolChoice" in opcoesRecebidas).toBe(false);
+  });
+
+  it("sem toolChoice no pedido, o campo não é enviado (o padrão do provedor continua)", async () => {
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    await coletar(createProviderClient("openai", "chave").streamText(COM_FERRAMENTA));
+    expect(opcoesRecebidas && "toolChoice" in opcoesRecebidas).toBe(false);
+  });
+
   it("o evento tool-call carrega os argumentos do modelo", async () => {
     partesDoSdk = [
       {

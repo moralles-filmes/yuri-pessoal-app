@@ -53,6 +53,7 @@ import {
   blocoDaData,
   blocoDaSintese,
   blocoDoCoordenador,
+  blocoDoEspecialista,
 } from "@/lib/ai/agents/blocos-do-servidor";
 import { moduloDoAgente } from "@/lib/ai/agents/routing";
 import type { MemoriaParaPrompt } from "@/lib/ai/memory/contracts";
@@ -247,7 +248,8 @@ function sistemaDoEspecialista(
 ): string {
   return montarSystem({
     base: buildSystemPrompt(esp),
-    blocos: [secao(blocoDaData(agora))],
+    // Task 15b — a data e, logo depois, o que fazer quando a leitura não cobre o recorte.
+    blocos: [secao(blocoDaData(agora)), secao(blocoDoEspecialista())],
     memorias: memoriasParaOPrompt({
       memorias,
       moduloDoAgente: moduloDoAgente(esp.id),
@@ -395,6 +397,8 @@ export async function* conduzirCoordenador(
       repetir: true,
       tetoDeSaida: TETO_SAIDA_DECISAO,
       primeiroTipo: "PRIMARY",
+      // A decisão pode responder direto, sem acionar ninguém ("oi", pergunta geral).
+      exigirFerramentaNoPrimeiroPasso: false,
       promptMontado: decisao.system + textoDasMensagens(decisao.mensagens),
     }),
     0,
@@ -545,6 +549,8 @@ export async function* conduzirCoordenador(
       // (`tetoSaidaDaSintese` em `computeReservationDoCoordenador`).
       tetoDeSaida: e.alvos[0]?.model.outputCapTokens ?? Number.POSITIVE_INFINITY,
       primeiroTipo: "ESPECIALISTA",
+      // Task 15b — acionado é porque a tarefa depende dos registros: ele LÊ antes de responder.
+      exigirFerramentaNoPrimeiroPasso: true,
       promptMontado: system + textoDasMensagens(mensagens),
     }),
     1,
@@ -678,6 +684,7 @@ async function* emParalelo(input: {
     | "repetir"
     | "tetoDeSaida"
     | "primeiroTipo"
+    | "exigirFerramentaNoPrimeiroPasso"
     | "promptMontado"
   >;
 }): AsyncGenerator<ChatRunnerEvent, DesfechoDoCoordenador> {
@@ -744,6 +751,8 @@ async function* emParalelo(input: {
           // A resposta dele é intermediária: teto menor, o mesmo que a reserva supõe.
           tetoDeSaida: TETO_SAIDA_ESPECIALISTA,
           primeiroTipo: "ESPECIALISTA",
+          // Task 15b — como no modo direto: o especialista acionado lê antes de responder.
+          exigirFerramentaNoPrimeiroPasso: true,
           prazo: prazoDosEspecialistas,
           abortSignal: controle.signal,
           promptMontado: system + textoDasMensagens(mensagens),
@@ -904,6 +913,8 @@ async function* emParalelo(input: {
       repetir: true,
       tetoDeSaida: e.alvos[0]?.model.outputCapTokens ?? Number.POSITIVE_INFINITY,
       primeiroTipo: "PRIMARY",
+      // Sem ferramenta não há o que exigir — e a síntese não lê nada, só junta.
+      exigirFerramentaNoPrimeiroPasso: false,
       promptMontado: system + textoDasMensagens(mensagens),
     }),
     0,

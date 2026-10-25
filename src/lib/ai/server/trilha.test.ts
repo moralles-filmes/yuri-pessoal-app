@@ -80,15 +80,22 @@ let chamadasAoProvedor = 0;
 const sinaisRecebidos: (AbortSignal | undefined)[] = [];
 /** O `maxOutputTokens` que cada chamada recebeu — é por aqui que o teto da trilha se prova. */
 const tetosRecebidos: number[] = [];
+/** Task 15b — o `toolChoice` de cada chamada (`undefined` = ausente do pedido). */
+const toolChoicesRecebidos: (string | undefined)[] = [];
 
 vi.mock("@/lib/ai/providers/provider-factory", () => ({
   createProviderClient: () => ({
     provider: "openai",
-    streamText: (request: { abortSignal?: AbortSignal; maxOutputTokens: number }) => {
+    streamText: (request: {
+      abortSignal?: AbortSignal;
+      maxOutputTokens: number;
+      toolChoice?: string;
+    }) => {
       const indice = chamadasAoProvedor;
       chamadasAoProvedor += 1;
       sinaisRecebidos.push(request.abortSignal);
       tetosRecebidos.push(request.maxOutputTokens);
+      toolChoicesRecebidos.push(request.toolChoice);
       const eventos = respostasPorChamada[indice] ?? [FINISH];
       return (async function* () {
         for (const e of eventos) yield e;
@@ -214,6 +221,7 @@ function entrada(parcial: Partial<EntradaDaTrilha> = {}): EntradaDaTrilha {
     repetir: true,
     tetoDeSaida: Number.POSITIVE_INFINITY,
     primeiroTipo: "PRIMARY",
+    exigirFerramentaNoPrimeiroPasso: false,
     permissions: { allow_training: true },
     writePermissions: {},
     contadores: {
@@ -254,6 +262,7 @@ beforeEach(() => {
   credencialLanca = false;
   sinaisRecebidos.length = 0;
   tetosRecebidos.length = 0;
+  toolChoicesRecebidos.length = 0;
   aoExecutarFerramenta = null;
 });
 
@@ -632,5 +641,72 @@ describe("runTrilha — coerência entre primeiroTipo e trilha", () => {
     respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
     const { desfecho } = await rodar(entrada(caso));
     expect(desfecho).toMatchObject({ ok: true });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// Task 15b — o especialista é OBRIGADO a ler no primeiro passo de cada tentativa
+// ────────────────────────────────────────────────────────────────
+
+describe("runTrilha — exigirFerramentaNoPrimeiroPasso", () => {
+  const ESPECIALISTA = {
+    trilha: 1,
+    primeiroTipo: "ESPECIALISTA" as const,
+    exigirFerramentaNoPrimeiroPasso: true,
+  };
+
+  it("ligada: o primeiro passo pede 'required' e o TOOL_STEP seguinte não pede", async () => {
+    respostasPorChamada = [
+      PEDE_VOLUME_E_TERMINA,
+      [{ type: "delta", text: "Foram 12480 kg." }, FINISH],
+    ];
+
+    const { desfecho } = await rodar(entrada(ESPECIALISTA));
+
+    expect(desfecho).toMatchObject({ ok: true, texto: "Foram 12480 kg." });
+    // Exigir no TOOL_STEP faria o modelo nunca conseguir terminar com texto: só ferramenta,
+    // até o teto de passos cortar a resposta.
+    expect(toolChoicesRecebidos).toEqual(["required", undefined]);
+    expect(medicao.filter((m) => m.tipo === "start").map((m) => m.attemptType)).toEqual([
+      "ESPECIALISTA",
+      "TOOL_STEP",
+    ]);
+  });
+
+  it("ligada: o RETRY é tentativa nova, e o primeiro passo dele também pede 'required'", async () => {
+    respostasPorChamada = [
+      [ERRO_TEMPORARIO],
+      PEDE_VOLUME_E_TERMINA,
+      [{ type: "delta", text: "Foram 12480 kg." }, FINISH],
+    ];
+
+    const { desfecho } = await rodar(entrada(ESPECIALISTA));
+
+    expect(desfecho).toMatchObject({ ok: true });
+    expect(medicao.filter((m) => m.tipo === "start").map((m) => m.attemptType)).toEqual([
+      "ESPECIALISTA",
+      "RETRY",
+      "TOOL_STEP",
+    ]);
+    expect(toolChoicesRecebidos).toEqual(["required", "required", undefined]);
+  });
+
+  it("desligada: nenhuma chamada pede 'required'", async () => {
+    respostasPorChamada = [
+      PEDE_VOLUME_E_TERMINA,
+      [{ type: "delta", text: "Foram 12480 kg." }, FINISH],
+    ];
+
+    await rodar(entrada({ ...ESPECIALISTA, exigirFerramentaNoPrimeiroPasso: false }));
+
+    expect(toolChoicesRecebidos).toEqual([undefined, undefined]);
+  });
+
+  it("ligada, mas sem definições: não há o que exigir, e 'required' não é pedido", async () => {
+    respostasPorChamada = [[{ type: "delta", text: "Sem leitura liberada." }, FINISH]];
+
+    await rodar(entrada({ ...ESPECIALISTA, definicoes: [] }));
+
+    expect(toolChoicesRecebidos).toEqual([undefined]);
   });
 });

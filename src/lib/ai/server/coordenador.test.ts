@@ -118,6 +118,8 @@ const ferramentasRecebidas: string[][] = [];
 const mensagensRecebidas: { role: string; content: unknown }[][] = [];
 /** Task 13 — o `Date.now()` de cada chamada (com timers falsos, o relógio falso). */
 const instantesDasChamadas: number[] = [];
+/** Task 15b — o `toolChoice` de cada chamada, com QUEM a fez (`undefined` = ausente). */
+const toolChoicesRecebidos: { quem: Quem; vez: number; toolChoice: string | undefined }[] = [];
 
 /** Quem a chamada é, pelas ferramentas que recebeu (o system de cada um é longo demais). */
 type Quem = "decisao" | "sintese" | "financeiro" | "todo" | "outro";
@@ -172,11 +174,13 @@ vi.mock("@/lib/ai/providers/provider-factory", () => ({
       tools: readonly { name: string }[];
       messages: readonly { role: string; content: unknown }[];
       abortSignal?: AbortSignal;
+      toolChoice?: string;
     }) => {
       const indice = systemsRecebidos.length;
       const nomes = request.tools.map((t) => t.name);
       const quem = quemPelasFerramentas(nomes);
       const vez = chamadasPor(quem);
+      toolChoicesRecebidos.push({ quem, vez, toolChoice: request.toolChoice });
       systemsRecebidos.push(request.system);
       ferramentasRecebidas.push(nomes);
       mensagensRecebidas.push(request.messages.map((m) => ({ ...m })));
@@ -246,6 +250,7 @@ const {
   avisoSemEspecialista,
   blocoDaData,
   blocoDaSintese,
+  blocoDoEspecialista,
 } =
   await import(
   "@/lib/ai/agents/blocos-do-servidor"
@@ -374,6 +379,7 @@ beforeEach(() => {
   responder = null;
   medicaoLanca = () => false;
   instantesDasChamadas.length = 0;
+  toolChoicesRecebidos.length = 0;
   argumentosDeAuditoria.length = 0;
   heartbeats.length = 0;
   marcacoesDeStreaming = 0;
@@ -1222,5 +1228,121 @@ describe("conduzirCoordenador — especialistas em paralelo e síntese", () => {
       expect(arg).not.toContain("SEGREDO-DO-");
     }
     expect(acionamentos.map((a) => a.tarefa)).toEqual(["gasto de outubro", "tarefas de hoje"]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// Task 15b — o especialista é OBRIGADO a ler antes de responder
+// ────────────────────────────────────────────────────────────────
+
+describe("conduzirCoordenador — Task 15b: o especialista lê antes de responder", () => {
+  /**
+   * Teste real da Task 15 (2026-10-25): em "como foi minha semana?", especialistas acionados
+   * responderam sem chamar ferramenta nenhuma. Pedir no prompt é "quase sempre"; o
+   * `toolChoice` do pedido é estrutural.
+   */
+  const LEITURA_DO_FINANCEIRO: AiStreamEvent = {
+    type: "tool-call",
+    toolName: "finance.get_spending",
+    callId: "r1",
+    input: {},
+  };
+
+  const resumo = () => toolChoicesRecebidos.map((t) => `${t.quem}#${t.vez}:${t.toolChoice ?? "-"}`);
+
+  it("modo direto: a decisão não exige; o 1º passo do especialista exige; o TOOL_STEP não", async () => {
+    respostasPorChamada = [
+      [aciona("financeiro", "gasto de outubro"), FINISH],
+      [LEITURA_DO_FINANCEIRO, FINISH],
+      [delta("Você gastou R$ 10,00."), FINISH],
+    ];
+
+    const { desfecho } = await conduzir();
+
+    expect(desfecho).toMatchObject({ ok: true, texto: "Você gastou R$ 10,00." });
+    expect(resumo()).toEqual(["decisao#0:-", "financeiro#0:required", "financeiro#1:-"]);
+  });
+
+  it("modo direto: o RETRY do especialista volta a exigir no primeiro passo dele", async () => {
+    respostasPorChamada = [
+      [aciona("financeiro", "gasto de outubro"), FINISH],
+      [ERRO_TEMPORARIO],
+      [LEITURA_DO_FINANCEIRO, FINISH],
+      [delta("Você gastou R$ 10,00."), FINISH],
+    ];
+
+    const { desfecho } = await conduzir();
+
+    expect(desfecho).toMatchObject({ ok: true });
+    expect(medicao.filter((m) => m.tipo === "start").map((m) => m.attemptType)).toEqual([
+      "PRIMARY",
+      "ESPECIALISTA",
+      "RETRY",
+      "TOOL_STEP",
+    ]);
+    expect(resumo()).toEqual([
+      "decisao#0:-",
+      "financeiro#0:required",
+      "financeiro#1:required",
+      "financeiro#2:-",
+    ]);
+  });
+
+  it("paralelo: cada especialista exige no 1º passo; a decisão e a síntese nunca", async () => {
+    cruzarModulos = true;
+    responder = ({ quem, vez }) => {
+      if (quem === "decisao") return DECIDE_DOIS;
+      if (quem === "sintese") return [delta("Resumo dos dois."), FINISH];
+      if (quem === "financeiro" && vez === 0) return [LEITURA_DO_FINANCEIRO, FINISH];
+      return [delta(quem === "financeiro" ? "Gastou R$ 10,00." : "2 tarefas."), FINISH];
+    };
+
+    const { desfecho } = await conduzir({ prefs: prefs() });
+
+    expect(desfecho).toMatchObject({ ok: true });
+    // A ordem entre as trilhas paralelas não é a da lista: compara-se o conjunto.
+    expect(resumo().sort()).toEqual(
+      [
+        "decisao#0:-",
+        "financeiro#0:required",
+        "financeiro#1:-",
+        "todo#0:required",
+        "sintese#0:-",
+      ].sort(),
+    );
+  });
+
+  it("o system de cada especialista leva o bloco do especialista; o da decisão e o da síntese, não", async () => {
+    cruzarModulos = true;
+    responder = ({ quem }) => {
+      if (quem === "decisao") return DECIDE_DOIS;
+      if (quem === "sintese") return [delta("Resumo."), FINISH];
+      return [delta("ok"), FINISH];
+    };
+
+    await conduzir({ prefs: prefs() });
+
+    const bloco = blocoDoEspecialista();
+    const porQuem = ferramentasRecebidas.map((f, i) => ({
+      quem: quemPelasFerramentas(f),
+      system: systemsRecebidos[i]!,
+    }));
+    expect(porQuem.map((p) => p.quem).sort()).toEqual(["decisao", "financeiro", "sintese", "todo"]);
+    for (const p of porQuem) {
+      const deveTer = p.quem === "financeiro" || p.quem === "todo";
+      expect(p.system.includes(bloco), p.quem).toBe(deveTer);
+    }
+  });
+
+  it("modo direto: o system do especialista leva o bloco do especialista", async () => {
+    respostasPorChamada = [
+      [aciona("financeiro", "gasto de outubro"), FINISH],
+      [delta("ok"), FINISH],
+    ];
+
+    await conduzir();
+
+    expect(systemsRecebidos[0]).not.toContain(blocoDoEspecialista());
+    expect(systemsRecebidos[1]).toContain(blocoDoEspecialista());
   });
 });

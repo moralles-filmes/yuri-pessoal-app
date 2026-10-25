@@ -91,6 +91,25 @@ export function blocoDoCoordenador(input: {
 }
 
 /**
+ * Task 15b — o bloco do ESPECIALISTA acionado, ao lado de `blocoDaData` no `system` dele.
+ *
+ * No teste real da Task 15, especialistas acionados responderam sem ler nada — e, quando não
+ * havia ferramenta "da semana", não diziam o que a leitura mais próxima cobria. A obrigação de
+ * ler é estrutural (`toolChoice: "required"` no primeiro passo, `runTrilha`); este bloco diz
+ * QUAL leitura escolher e como declarar o recorte dela. Descrito, nunca citado (invariante 30).
+ *
+ * ⚠️ Entra na reserva sem nada a fazer: `tokensDoMaiorEspecialista` mede o system montado por
+ * `sistemaDoEspecialista`, que é quem o inclui.
+ */
+export function blocoDoEspecialista(): string {
+  return [
+    "Você foi acionado porque a tarefa depende dos registros do dono. Consulte as suas ferramentas antes de responder.",
+    "Se nenhuma ferramenta cobre exatamente o período ou o recorte pedido, use a leitura mais próxima e diga com clareza o que ela cobre — por exemplo, o mês inteiro em vez da semana, ou o que está aberto ou atrasado em vez do que foi concluído.",
+    "Apresente cada leitura pelo que ela é: o período e o recorte que vieram com ela são os que você declara.",
+  ].join("\n");
+}
+
+/**
  * O bloco do coordenador na SEGUNDA etapa (juntar, spec §4.5) — entra no `system` da síntese
  * NO LUGAR de `blocoDoCoordenador`, nunca junto dele.
  *

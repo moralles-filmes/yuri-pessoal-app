@@ -700,6 +700,8 @@ export async function* runChat(
               // Sem teto próprio: cada alvo usa o teto do SEU modelo, como sempre foi.
               tetoDeSaida: Number.POSITIVE_INFINITY,
               primeiroTipo: "PRIMARY",
+              // Sem ferramentas não há o que exigir (Task 15b vale só para especialista).
+              exigirFerramentaNoPrimeiroPasso: false,
               permissions: prefs.permissions,
               writePermissions: prefs.writePermissions,
               promptMontado: preparo.doPlano.promptMontado,
