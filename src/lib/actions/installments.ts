@@ -242,9 +242,10 @@ export async function updateInstallmentSplit(
 
   const parcelasRes = await ctx.supabase
     .from("transaction_installments")
-    .select("id, statement_id, valor")
+    .select("id, numero, statement_id, valor")
     .eq("parent_transaction_id", parentId)
-    .eq("status", "ativa");
+    .eq("status", "ativa")
+    .order("numero", { ascending: true });
   if (parcelasRes.error) return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.parcelas);
   const parcelas = parcelasRes.data;
   if (!parcelas || parcelas.length === 0) {
@@ -253,8 +254,10 @@ export async function updateInstallmentSplit(
     );
   }
 
+  // 03-G2 (E3b): `numero` é a numeração REAL da parcela (pode começar em k > 1), a mesma que a RPC
+  // `salvar_lancamento` usa para achar `transaction_installments` — não a posição na lista.
   const parcelasBase = parcelas.map((p) => ({
-    installmentId: p.id,
+    numero: p.numero,
     statementId: p.statement_id,
     cardId: parent.card_id,
     valorCentavos: reaisParaCentavos(p.valor),

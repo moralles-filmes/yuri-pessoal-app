@@ -29,6 +29,16 @@ export type LeituraInventariada = {
 };
 
 const ESCRITA = new Set(["insert", "update", "upsert", "delete"]);
+/**
+ * 03-G2 (D-G2-13) — as RPCs que ESCREVEM. Saem do inventário de leituras e entram no de escritas
+ * (`inventariarEscritas`): o erro delas não é "não li", é "não gravei".
+ */
+export const RPCS_DE_ESCRITA = new Set([
+  "salvar_lancamento",
+  "criar_compra_parcelada",
+  "pagar_fatura",
+  "desfazer_pagamento_fatura",
+]);
 const HELPERS = ["exigir", "listaComTeto", "listaCompleta", "exigirCompleta", "tentar"];
 
 function escapar(nome: string): string {
@@ -104,6 +114,10 @@ function classificaCorpo(corpo: string): "tratado" | "engolido" {
   const s = corpo.replace(/\s+/g, " ");
   if (/\bthrow\b/.test(s)) return "tratado";
   if (/falhaDeLeitura(Antes|Depois)\(|dbError\(|ok:\s*false|falhaNoMeio\(|return\s+"erro"/.test(s)) {
+    return "tratado";
+  }
+  // 03-G2 (K2): as frases de escrita e o plano que devolve o erro em vez de escrever.
+  if (/(traduzirErroDaRpc|falhaDaRpc|nadaGravado|gravadoEmParte|desfechoDesconhecido)\(|acao:\s*"erro"/.test(s)) {
     return "tratado";
   }
   if (/return\s+\{\s*(erro|ok|userId)\b/.test(s)) return "tratado";
@@ -262,7 +276,9 @@ export function inventariarLeituras(arquivos: string[], raiz: string): LeituraIn
       ) {
         const { metodos } = cadeia(n);
         const topo = subir(n);
-        if (!metodos.some((m) => ESCRITA.has(m))) {
+        const rpcDeEscrita =
+          n.expression.name.text === "rpc" && RPCS_DE_ESCRITA.has(n.arguments[0].text);
+        if (!metodos.some((m) => ESCRITA.has(m)) && !rpcDeEscrita) {
           const fn = funcaoQueContem(n);
           saida.push({
             arquivo: caminho,

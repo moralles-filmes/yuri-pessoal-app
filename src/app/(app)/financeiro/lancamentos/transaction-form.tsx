@@ -250,6 +250,9 @@ export function TransactionFormDialog({
   const isTransfer = type === "transferencia";
   const isReceita = type === "receita";
   const isCard = !isTransfer && paymentMethod === "cartao_credito";
+  // 03-G2 (D-G2-19) — estorno de cartão (receita com cartão, em edição): o servidor preserva
+  // cartão e fatura e não guarda conta nem meio de pagamento; a tela não os pede.
+  const ehEstorno = isEdit && transaction?.type === "receita" && !!transaction?.card_id && isReceita;
   // Parcelamento só na criação (edição de parcelamento é feita em /parcelamentos).
   const canParcelar = !isEdit && isCard;
   const isParcelado = canParcelar && parcelado;
@@ -391,17 +394,20 @@ export function TransactionFormDialog({
     const payload = {
       type: values.type,
       amount: values.amount,
-      account_id: values.account_id || "",
+      account_id: ehEstorno ? "" : values.account_id || "",
       transfer_account_id: isTransfer ? values.transfer_account_id || "" : "",
-      card_id: isCard ? values.card_id || "" : "",
+      card_id: ehEstorno ? (transaction?.card_id ?? "") : isCard ? values.card_id || "" : "",
       category_id:
         isTransfer || values.category_id === NONE ? "" : values.category_id,
       subcategory_id:
         isTransfer || values.subcategory_id === NONE
           ? ""
           : values.subcategory_id,
-      payment_method:
-        values.payment_method === NONE ? "" : values.payment_method,
+      payment_method: ehEstorno
+        ? ""
+        : values.payment_method === NONE
+          ? ""
+          : values.payment_method,
       purchase_date: values.purchase_date,
       competence_date: values.competence_date,
       status: values.status,
@@ -513,6 +519,11 @@ export function TransactionFormDialog({
             </div>
           </div>
 
+          {ehEstorno ? (
+            <p className="text-sm text-muted-foreground">
+              Estorno no cartão — continua na fatura em que foi lançado.
+            </p>
+          ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>
@@ -605,6 +616,7 @@ export function TransactionFormDialog({
               </div>
             )}
           </div>
+          )}
 
           {isCard && (
             <div className="space-y-1.5">

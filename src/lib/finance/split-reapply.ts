@@ -12,14 +12,19 @@
  * divergiriam na primeira alteração — foi para isso que ela virou uma função pura
  * (`decidirReaplicacao`, em split.ts) com dois chamadores.
  *
+ * 03-G2 (E3b): a decisão (`planejarReaplicacao`) só LÊ; a escrita é UMA rpc `salvar_lancamento`.
+ *
  * A "minha parte" continua sendo sempre DERIVADA (total − Σ terceiros), nunca informada.
  */
-import type { AuthContext } from "@/lib/actions/helpers";
+import { traduzirErroDaRpc, type AuthContext } from "@/lib/actions/helpers";
 import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
 import { recebivelProtegido } from "@/lib/finance/protecao-do-recebivel";
 import {
-  applySplit,
-  applySplitParcelado,
+  divisaoVazia,
+  montarDivisaoAVista,
+  montarDivisaoParcelada,
+  type AlcanceDaDivisao,
+  type DivisaoPayload,
 } from "@/lib/finance/split-persist";
 import {
   decidirReaplicacao,
@@ -41,7 +46,8 @@ export type ReapplyMode =
   | {
       kind: "parcelado";
       parcelas: {
-        installmentId: string;
+        /** `transaction_installments.numero` REAL (pode começar em k > 1) — não a posição na lista. */
+        numero: number;
         statementId: string | null;
         cardId: string | null;
         valorCentavos: number;
@@ -66,12 +72,35 @@ export type ReapplyArgs = {
   classificacaoNova: Classificacao;
   parts: SplitPartInput[];
   mode: ReapplyMode;
+  /** D-G2-4: o alcance da proteção que a RPC reconfere. Padrão `regra-cheia` (a edição). */
+  alcance?: AlcanceDaDivisao;
 };
 
-export async function reapplySplit(
+/**
+ * 03-G2 (E3b) — o que `planejarReaplicacao` decidiu. SÓ LÊ: quem grava é `reapplySplit`, numa
+ * única chamada à RPC `salvar_lancamento` (substitui a divisão e escreve `classificacao` e
+ * `valor_pessoal` na mesma transação, reconferindo a proteção no SQL).
+ */
+export type PlanoDaDivisao =
+  | { acao: "nada" }
+  | { acao: "bloqueado"; motivo: string }
+  | { acao: "erro"; error: string }
+  | {
+      acao: "substituir";
+      divisao: DivisaoPayload;
+      colunas: { classificacao: Classificacao; valor_pessoal: number | null };
+    };
+
+/**
+ * Lê a divisão gravada, confere os recebíveis e decide — sem escrever nada. As leituras e as
+ * frases de erro são as de sempre; o que mudou é que a decisão "substituir" já sai com o
+ * payload pronto para a RPC.
+ */
+export async function planejarReaplicacao(
   ctx: AuthContext,
   args: ReapplyArgs,
-): Promise<ReapplyResult> {
+): Promise<PlanoDaDivisao> {
+  const alcance = args.alcance ?? "regra-cheia";
   const querDividir =
     args.classificacaoNova !== "pessoal" && args.parts.length > 0;
 
@@ -87,7 +116,7 @@ export async function reapplySplit(
         divisaoNova.set(t.personId, t.valorCentavos);
       }
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return { acao: "erro", error: (e as Error).message };
     }
   }
 
@@ -96,10 +125,12 @@ export async function reapplySplit(
     .select("person_id, valor")
     .eq("transaction_id", args.transactionId);
   // 03-G (D-G19, Z13) — antes, erro aqui lia "sem divisão atual" e PULAVA a proteção dos recebíveis
-  // cobrados. A frase fala da divisão, e não do lançamento, porque no caminho despesa → despesa o
-  // update já aconteceu antes (RR6, 03-G2).
+  // cobrados. Desde a 03-G2 o plano vem ANTES de qualquer escrita (RR6), então nada foi gravado.
   if (erroDaDivisao) {
-    return { ok: false, error: "Não foi possível ler a divisão atual. A divisão não foi alterada." };
+    return {
+      acao: "erro",
+      error: "Não foi possível ler a divisão atual. A divisão não foi alterada.",
+    };
   }
   const divisaoAtual = new Map<string, number>(
     (shares ?? []).map((s) => [s.person_id, reaisParaCentavos(s.valor)]),
@@ -114,7 +145,10 @@ export async function reapplySplit(
       transactionIds: [args.transactionId],
     });
     if (protecao.erro) {
-      return { ok: false, error: "Não foi possível conferir os recebíveis desta divisão. Tente de novo." };
+      return {
+        acao: "erro",
+        error: "Não foi possível conferir os recebíveis desta divisão. Tente de novo.",
+      };
     }
     temRecebivelFechado = protecao.recebiveis.some(
       (r) => recebivelProtegido(r, "regra-cheia"),
@@ -131,55 +165,71 @@ export async function reapplySplit(
     temRecebivelFechado,
   });
 
-  if (decisao.acao === "nada") return { ok: true };
+  if (decisao.acao === "nada") return { acao: "nada" };
   if (decisao.acao === "bloqueado") {
-    return { ok: false, error: decisao.motivo };
+    return { acao: "bloqueado", motivo: decisao.motivo };
   }
-
-  // Limpa a divisão anterior — receivables primeiro, pela FK.
-  await ctx.supabase
-    .from("receivables")
-    .delete()
-    .eq("transaction_id", args.transactionId);
-  await ctx.supabase
-    .from("shared_expenses")
-    .delete()
-    .eq("transaction_id", args.transactionId);
 
   if (decisao.acao === "limpar") {
-    await ctx.supabase
-      .from("transactions")
-      .update({ classificacao: "pessoal", valor_pessoal: null })
-      .eq("id", args.transactionId);
-    return { ok: true };
+    return {
+      acao: "substituir",
+      divisao: divisaoVazia(alcance),
+      colunas: { classificacao: "pessoal", valor_pessoal: null },
+    };
   }
 
-  const res =
+  const montada =
     args.mode.kind === "avista"
-      ? await applySplit(ctx, {
-          transactionId: args.transactionId,
+      ? montarDivisaoAVista({
           totalCentavos: args.totalCentavos,
+          parts: args.parts,
           statementId: args.mode.statementId,
           cardId: args.mode.cardId,
-          parts: args.parts,
           dataPrevista: args.mode.dataPrevista ?? null,
+          alcance,
         })
-      : await applySplitParcelado(ctx, {
-          parentId: args.transactionId,
+      : montarDivisaoParcelada({
           totalCentavos: args.totalCentavos,
           parts: args.parts,
           parcelas: args.mode.parcelas,
+          alcance,
         });
+  if (!montada.ok) return { acao: "erro", error: montada.error };
 
-  if (!res.ok) return { ok: false, error: res.error };
-
-  await ctx.supabase
-    .from("transactions")
-    .update({
+  return {
+    acao: "substituir",
+    divisao: montada.divisao,
+    colunas: {
       classificacao: args.classificacaoNova,
-      valor_pessoal: centavosParaReais(res.minhaParteCentavos),
-    })
-    .eq("id", args.transactionId);
+      valor_pessoal: centavosParaReais(montada.minhaParteCentavos),
+    },
+  };
+}
 
+/**
+ * Reaplica a divisão: planeja (só lê) e, se houver o que substituir, faz UMA chamada à RPC
+ * `salvar_lancamento` — a substituição da divisão e as duas colunas da transação acontecem na
+ * mesma transação, e a proteção dos recebíveis é reconferida no SQL.
+ */
+export async function reapplySplit(
+  ctx: AuthContext,
+  args: ReapplyArgs,
+): Promise<ReapplyResult> {
+  const plano = await planejarReaplicacao(ctx, args);
+
+  if (plano.acao === "nada") return { ok: true };
+  if (plano.acao === "bloqueado") return { ok: false, error: plano.motivo };
+  if (plano.acao === "erro") return { ok: false, error: plano.error };
+
+  const { error } = await ctx.supabase.rpc("salvar_lancamento", {
+    p_lancamento: plano.colunas,
+    p_divisao: plano.divisao,
+    p_id: args.transactionId,
+  });
+  if (error) {
+    // `ActionResult<never>` não tem ramo `ok: true` com valor: o ramo de sucesso é inalcançável aqui.
+    const traduzido = traduzirErroDaRpc(error, "alterar a divisão");
+    return { ok: false, error: traduzido.ok ? "" : traduzido.error };
+  }
   return { ok: true };
 }

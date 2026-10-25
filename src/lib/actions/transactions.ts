@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { transactionSchema } from "@/lib/validators/transaction";
 import { splitSchema } from "@/lib/validators/split";
@@ -7,15 +8,17 @@ import {
   authContext,
   dbError,
   falhaDeLeituraAntes,
-  falhaDeLeituraDepois,
   invalid,
   notAuthed,
+  traduzirErroDaRpc,
   type AuthContext,
 } from "@/lib/actions/helpers";
 import { ehErroDeLeitura, exigir } from "@/lib/supabase/leitura";
 import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { resolveOrCreateStatement } from "@/lib/finance/statements";
-import { reapplySplit } from "@/lib/finance/split-reapply";
+import { planejarReaplicacao } from "@/lib/finance/split-reapply";
+import { montarLinhaDoLancamento } from "@/lib/finance/linha-do-lancamento";
+import { divisaoVazia, type DivisaoPayload } from "@/lib/finance/split-persist";
 import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
 import { motivoParaNaoApagar } from "@/lib/finance/protecao-do-recebivel";
 import {
@@ -29,7 +32,6 @@ import {
   type SplitFormPart,
 } from "@/lib/finance/split";
 import {
-  dataDeLiquidacaoAGravar,
   dataDePagamentoFutura,
   liquidadoNoBotao,
   MSG_DATA_PAGAMENTO_FUTURA,
@@ -85,25 +87,26 @@ export async function updateTransaction(
   const d = parsed.data;
 
   // REDESIGN-03-E · P8 — data de pagamento futura é previsão, não caixa. A recusa vem ANTES de
-  // qualquer leitura ou escrita — em especial antes do ramo de transferência, que apaga o
-  // lançamento e recria: com a recusa vindo da recriação, o delete já teria acontecido.
+  // qualquer leitura ou escrita.
   if (dataDePagamentoFutura(d.liquidado_em, hojeISO())) {
     return invalid({ liquidado_em: [MSG_DATA_PAGAMENTO_FUTURA] });
   }
 
   const { data: existing, error: loadErr } = await ctx.supabase
     .from("transactions")
-    .select("id, type, transfer_group_id, parcelado, classificacao, amount")
+    .select("id, type, transfer_group_id, parcelado, classificacao, amount, card_id, statement_id")
     .eq("id", id)
     .single();
   if (loadErr || !existing) return dbError("Lançamento não encontrado.");
 
+  // 03-G2 (RR12, D-G2-12) — compra parcelada não muda de tipo por aqui. Vem antes de qualquer outra
+  // leitura ou escrita: a compra-pai é o TOTAL, e a mudança de tipo desalinharia as parcelas.
+  if (existing.parcelado && d.type !== existing.type) {
+    return invalid({ type: ["Compra parcelada muda em Parcelamentos."] });
+  }
+
   // REDESIGN-03-C · A2 — a receita decide de quem é o dinheiro ANTES de qualquer escrita: a
   // recusa (ex.: o valor caiu abaixo da "minha parte" de uma compartilhada) não grava nada.
-  // ⚠️ Antes INCLUSIVE do ramo de transferência, que apaga o lançamento e recria: com a recusa
-  // vindo de dentro do `criarTransacao`, uma transferência editada para receita sumia — e, sendo
-  // o pagamento de uma fatura, deixava a fatura "paga" apontando para o nada (achado P2 da
-  // auditoria do módulo, 2026-10-11). O `criarTransacao` decide de novo, e chega no mesmo lugar.
   let colunasDaReceita: ColunasDaResponsabilidade | null = null;
   if (d.type === "receita") {
     const r = lerResponsabilidadeDaReceita(input, d.amount);
@@ -115,64 +118,16 @@ export async function updateTransaction(
   const wasTransfer = !!existing.transfer_group_id;
   const isTransfer = d.type === "transferencia";
 
-  // Transferências são substituídas (remove e recria) para manter as duas pernas
-  // sempre consistentes; lançamentos simples são atualizados no lugar.
-  if (wasTransfer || isTransfer) {
-    // REDESIGN-03-D · RR-D-17 — apagar e recriar leva a divisão por cascade (shared_expenses e
-    // parcelas → recebíveis → recebimentos). Mesmo alcance de `deleteTransaction` (decisão (b)).
-    const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: [id] });
-    if (protecao.erro) return dbError("Não foi possível conferir os recebíveis deste lançamento. Tente de novo.");
-    const motivo = motivoParaNaoApagar(protecao.recebiveis, "so-dinheiro-registrado", "transformar o lançamento em transferência");
-    if (motivo) return dbError(motivo);
-
-    // Se for o pagamento de uma fatura, a fatura precisa apontar para o lançamento RECRIADO
-    // (o delete abaixo zeraria `pago_transacao_id`). Editar o pagamento não desfaz o pagamento.
-    // 03-G (D-G26) — ErroDeLeitura nunca escapa de uma Server Action; aqui nenhuma escrita veio antes.
-    let statementId: string | null;
-    try {
-      statementId = await statementPaidBy(ctx, id);
-    } catch (e) {
-      if (!ehErroDeLeitura(e)) throw e;
-      return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.fatura);
-    }
-
-    if (wasTransfer && existing.transfer_group_id) {
-      await ctx.supabase
-        .from("transactions")
-        .delete()
-        .eq("transfer_group_id", existing.transfer_group_id);
-    } else {
-      await ctx.supabase.from("transactions").delete().eq("id", id);
-    }
-
-    // 03-G — o serviço direto (é o que `createTransaction` faz por dentro, com o mesmo `ctx`),
-    // para ler `leituraFalhou`: aqui o lançamento antigo JÁ foi apagado, então "Nada foi
-    // alterado." seria mentira. A frase é a de "depois" (D-G20); a atomicidade é da 03-G2 (RR-F-1).
-    const recriado = await criarTransacao(ctx, input);
-    if (!recriado.ok) {
-      revalidateTransactions();
-      if (recriado.leituraFalhou) return falhaDeLeituraDepois(recriado.leituraFalhou);
-      return recriado.fieldErrors ? invalid(recriado.fieldErrors) : dbError(recriado.erro);
-    }
-    if (statementId) {
-      await ctx.supabase
-        .from("card_statements")
-        .update({ pago_transacao_id: recriado.id })
-        .eq("id", statementId);
-    }
-    revalidateTransactions();
-    return { ok: true, data: { id: recriado.id } };
-  }
-
-  // Re-resolve a fatura ao editar (ex.: mudou a data ou o cartão). Se deixar de ser
-  // compra no cartão, limpa card_id/statement_id. O ajuste manual de fatura é à parte.
+  // 03-G2 (D-G2-1, RR11) — estorno de cartão (receita com cartão que continua receita) NÃO
+  // re-resolve a fatura: preserva cartão e fatura, mesmo com a data mudando. Senão, a despesa de
+  // cartão resolve a fatura como sempre; nos demais casos os dois ficam nulos.
+  const ehEstorno = existing.type === "receita" && !!existing.card_id && d.type === "receita";
   let cardId: string | null = null;
   let statementId: string | null = null;
-  if (
-    d.type === "despesa" &&
-    d.payment_method === "cartao_credito" &&
-    d.card_id
-  ) {
+  if (ehEstorno) {
+    cardId = existing.card_id;
+    statementId = existing.statement_id;
+  } else if (d.type === "despesa" && d.payment_method === "cartao_credito" && d.card_id) {
     cardId = d.card_id;
     // 03-G (D-G26) — ErroDeLeitura nunca escapa de uma Server Action; aqui nenhuma escrita veio antes.
     try {
@@ -184,14 +139,30 @@ export async function updateTransaction(
     if (!statementId) return dbError("Não foi possível resolver a fatura do cartão.");
   }
 
-  // REDESIGN-03-C · A2(b) — alvo RECEITA: a divisão da despesa antiga sai ANTES do update.
-  // O caminho é o de sempre (`reapplySplit` → `limpar`, com a recusa por recebível cobrado/pago);
-  // o que muda é só a ordem. Com o update primeiro, a recusa chegava com o lançamento já
-  // gravado como receita e com o `valor_pessoal` da despesa antiga — e o motor, que passa a ler
-  // `valor_pessoal` de receita, contaria isso como renda parcial. Despesa → despesa mantém a
-  // ordem de hoje (risco residual RR6 do desenho da 03-C).
-  if (colunasDaReceita && !existing.parcelado) {
-    const res = await reapplySplit(ctx, {
+  // 03-G2 (D-G2-14, §5.3) — a divisão é PLANEJADA antes de qualquer escrita: nenhum delete, nenhum
+  // update direto. Quem grava é UMA rpc, no fim; recusa por recebível não deixa nada gravado (RR6).
+  let divisao: DivisaoPayload | null = null;
+  let colunas: ColunasDaResponsabilidade | undefined;
+
+  if (isTransfer && !wasTransfer) {
+    // RR-D-17 — a divisão sai junto: mesmo alcance de `deleteTransaction` (decisão (b)).
+    const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: [id] });
+    if (protecao.erro) return dbError("Não foi possível conferir os recebíveis deste lançamento. Tente de novo.");
+    const motivo = motivoParaNaoApagar(protecao.recebiveis, "so-dinheiro-registrado", "transformar o lançamento em transferência");
+    if (motivo) return dbError(motivo);
+    divisao = divisaoVazia("so-dinheiro-registrado");
+    colunas = { classificacao: "pessoal", valor_pessoal: null };
+  } else if (isTransfer) {
+    // Transferência editada no lugar: o id é o mesmo, a fatura que ela paga continua apontando para ele.
+    divisao = null;
+    colunas = { classificacao: "pessoal", valor_pessoal: null };
+  } else if (existing.parcelado) {
+    // A divisão de compra parcelada é editada em /parcelamentos (`updateInstallmentSplit`).
+    divisao = null;
+    colunas = undefined;
+  } else if (colunasDaReceita) {
+    // REDESIGN-03-C · A2(b) — alvo RECEITA: a divisão da despesa antiga sai na MESMA rpc.
+    const plano = await planejarReaplicacao(ctx, {
       transactionId: id,
       totalCentavos: reaisParaCentavos(d.amount),
       totalCentavosAtual: reaisParaCentavos(existing.amount),
@@ -200,67 +171,59 @@ export async function updateTransaction(
       parts: [],
       mode: { kind: "avista", statementId, cardId },
     });
-    if (!res.ok) return dbError(res.error);
-  }
-
-  const { error } = await ctx.supabase
-    .from("transactions")
-    .update({
-      type: d.type,
-      payment_method: d.payment_method,
-      account_id: d.account_id,
-      transfer_account_id: null,
-      card_id: cardId,
-      statement_id: statementId,
-      category_id: d.category_id,
-      subcategory_id: d.subcategory_id,
-      amount: d.amount,
-      purchase_date: d.purchase_date,
-      competence_date: d.competence_date,
-      description: d.description,
-      notes: d.notes,
-      tags: d.tags,
-      status: d.status,
-      // REDESIGN-03-E · K0 — a data do pagamento acompanha o status: sair de pago/recebido (ou
-      // virar compra de cartão) LIMPA a coluna, que o CHECK do banco exige coerente.
-      liquidado_em: dataDeLiquidacaoAGravar({
-        status: d.status,
-        card_id: cardId,
-        liquidado_em: d.liquidado_em,
-      }),
-      // Receita: as colunas da A1. Saindo de receita: volta a pessoal/nulo — sem divisão
-      // gravada nem a gravar, `decidirReaplicacao` responde "nada", e uma receita de terceiro
-      // virada despesa pessoal ficaria `terceiro` com valor 0 (fora do "meu"). Despesa →
-      // despesa: nenhuma das duas chaves, como sempre (quem as grava é a divisão, abaixo).
-      ...(colunasDaReceita ??
-        (eraReceita ? { classificacao: "pessoal" as const, valor_pessoal: null } : {})),
-    })
-    .eq("id", id);
-
-  if (error) return dbError("Não foi possível atualizar o lançamento.");
-
-  // Divisão na edição (Fase 05): só em despesa NÃO parcelada — a divisão de compra parcelada
-  // é editada em /parcelamentos, por `updateInstallmentSplit`, que chama o MESMO núcleo.
-  // Re-aplica apenas quando a divisão muda, então editar só descrição/categoria/data de um
-  // gasto já dividido não encosta nos recebíveis. A "minha parte" é sempre derivada.
-  // A receita já passou por aqui ANTES do update (A2(b), acima).
-  if (!colunasDaReceita && !existing.parcelado) {
+    if (plano.acao === "bloqueado") return dbError(plano.motivo);
+    if (plano.acao === "erro") return dbError(plano.error);
+    divisao = plano.acao === "substituir" ? plano.divisao : null;
+    colunas = colunasDaReceita;
+  } else {
+    // Despesa/ajuste (não parcelado): re-aplica só quando a divisão muda, então editar só
+    // descrição/categoria/data de um gasto já dividido não encosta nos recebíveis.
     const split = splitSchema.safeParse(input);
     if (!split.success) return invalid(split.error.flatten().fieldErrors);
 
-    const res = await reapplySplit(ctx, {
+    const plano = await planejarReaplicacao(ctx, {
       transactionId: id,
       totalCentavos: reaisParaCentavos(d.amount),
       totalCentavosAtual: reaisParaCentavos(existing.amount),
-      // Vindo de receita, as colunas acabaram de ser zeradas no update.
-      classificacaoAtual: eraReceita ? "pessoal" : (existing.classificacao as Classificacao),
-      // Só despesa é divisível; receita/transferência/ajuste voltam a pessoal.
-      classificacaoNova:
-        d.type === "despesa" ? split.data.classificacao : "pessoal",
+      // Vindo de receita ou de transferência, as colunas voltam a pessoal na mesma rpc.
+      classificacaoAtual:
+        eraReceita || wasTransfer ? "pessoal" : (existing.classificacao as Classificacao),
+      // Só despesa é divisível; ajuste volta a pessoal.
+      classificacaoNova: d.type === "despesa" ? split.data.classificacao : "pessoal",
       parts: d.type === "despesa" ? split.data.parts : [],
       mode: { kind: "avista", statementId, cardId },
     });
-    if (!res.ok) return dbError(res.error);
+    if (plano.acao === "bloqueado") return dbError(plano.motivo);
+    if (plano.acao === "erro") return dbError(plano.error);
+    if (plano.acao === "substituir") {
+      divisao = plano.divisao;
+      colunas = plano.colunas;
+    } else {
+      divisao = null;
+      // D-G2-14: sair de receita (ou de transferência) volta a pessoal/nulo; despesa → despesa
+      // sem mudança de divisão não menciona as duas colunas.
+      colunas =
+        eraReceita || wasTransfer ? { classificacao: "pessoal", valor_pessoal: null } : undefined;
+    }
+  }
+
+  const linha = montarLinhaDoLancamento(d, {
+    cardId,
+    statementId,
+    transferGroupId: isTransfer ? (existing.transfer_group_id ?? randomUUID()) : null,
+    estorno: ehEstorno,
+    colunas,
+  });
+  const { error } = await ctx.supabase.rpc("salvar_lancamento", {
+    p_lancamento: linha,
+    p_divisao: divisao,
+    p_id: id,
+  });
+  if (error) {
+    // Sem SQLSTATE (rede, timeout) o desfecho é desconhecido: a tela precisa recarregar.
+    const desfechoIncerto = typeof error.code !== "string" || error.code.length !== 5;
+    if (desfechoIncerto) revalidateTransactions();
+    return traduzirErroDaRpc(error, "atualizar o lançamento");
   }
 
   revalidateTransactions();

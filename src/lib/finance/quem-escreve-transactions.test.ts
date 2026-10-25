@@ -50,9 +50,9 @@ const ESCRITAS: Record<string, Escrita> = {
     mudaStatus: false,
   },
   "lib/actions/transactions.ts": {
-    quantidade: 7,
+    quantidade: 4,
     motivo:
-      "updateTransaction (grupo/lançamento que vira transferência e o update simples) e setTransactionStatus (por grupo e por id): os DOIS caminhos que mudam o status e por isso limpam liquidado_em",
+      "deleteTransaction (grupo e lançamento) e setTransactionStatus (por grupo e por id), que muda o status e por isso limpa liquidado_em. updateTransaction grava pela rpc salvar_lancamento desde a 03-G2, com liquidado_em decidido por montarLinhaDoLancamento",
     mudaStatus: true,
   },
   "lib/finance/generation.ts": {
@@ -61,13 +61,8 @@ const ESCRITAS: Record<string, Escrita> = {
     mudaStatus: false,
   },
   "lib/finance/services.ts": {
-    quantidade: 5,
-    motivo: "criarTransacao (insert), compensações, valor_pessoal e excluirTransacaoSimples (desfazer da IA)",
-    mudaStatus: false,
-  },
-  "lib/finance/split-reapply.ts": {
-    quantidade: 2,
-    motivo: "reapplySplit: só mexe em valor_pessoal e classificação",
+    quantidade: 1,
+    motivo: "excluirTransacaoSimples (desfazer da IA); criarTransacao grava pela rpc salvar_lancamento (03-G2)",
     mudaStatus: false,
   },
 };
