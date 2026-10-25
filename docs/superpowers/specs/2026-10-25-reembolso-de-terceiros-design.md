@@ -288,3 +288,12 @@ reaproveitar a atomicidade entregue pela 03-G2.
 - Desfazer de A receber só para recebimento manual.
 - Não criar categoria de sistema "Reembolso"; "Não será cobrado" continua.
 - A alocação continua em `receivable_receipts`, para não mudar os leitores atuais.
+
+## 10. Ajuste do plano (2026-10-25)
+
+O plano (`docs/superpowers/plans/2026-10-25-04c-reembolso-de-terceiros.md`) trocou duas sugestões
+do §5, sem mudar comportamento: **não há tabela de pagamentos** — o pagamento é a própria receita
+(`transactions.reembolso_pessoa_id`, status `recebido`, parte = `amount − coalesce(valor_pessoal, 0)`)
+— e **a realocação é disparada por triggers de instrução** em `transactions` e `receivables`, em vez
+de uma lista de chamadores do RPC. Motivo: um fato só, atomicidade por construção e nenhum chamador
+para esquecer.
