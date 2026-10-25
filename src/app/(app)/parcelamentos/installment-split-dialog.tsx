@@ -86,7 +86,14 @@ export function InstallmentSplitDialog({
     setLoading(true);
     getTransactionSplit(parentId)
       .then((res) => {
-        if (id !== loadId.current || !res.ok) return;
+        if (id !== loadId.current) return;
+        // 03-G (D-G32) — com a leitura falha o diálogo NÃO pode ficar aberto com a divisão vazia:
+        // salvar apagaria a divisão.
+        if (!res.ok) {
+          toast.error(res.error);
+          setOpen(false);
+          return;
+        }
         setClassificacao(res.data.classificacao);
         setParts(res.data.parts);
       })

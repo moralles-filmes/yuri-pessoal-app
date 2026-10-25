@@ -6,10 +6,13 @@ import { splitSchema } from "@/lib/validators/split";
 import {
   authContext,
   dbError,
+  falhaDeLeituraAntes,
   invalid,
   notAuthed,
   type AuthContext,
 } from "@/lib/actions/helpers";
+import { ehErroDeLeitura, exigir } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { resolveOrCreateStatement } from "@/lib/finance/statements";
 import { reapplySplit } from "@/lib/finance/split-reapply";
 import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
@@ -123,7 +126,14 @@ export async function updateTransaction(
 
     // Se for o pagamento de uma fatura, a fatura precisa apontar para o lançamento RECRIADO
     // (o delete abaixo zeraria `pago_transacao_id`). Editar o pagamento não desfaz o pagamento.
-    const statementId = await statementPaidBy(ctx, id);
+    // 03-G (D-G26) — ErroDeLeitura nunca escapa de uma Server Action; aqui nenhuma escrita veio antes.
+    let statementId: string | null;
+    try {
+      statementId = await statementPaidBy(ctx, id);
+    } catch (e) {
+      if (!ehErroDeLeitura(e)) throw e;
+      return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.fatura);
+    }
 
     if (wasTransfer && existing.transfer_group_id) {
       await ctx.supabase
@@ -154,7 +164,13 @@ export async function updateTransaction(
     d.card_id
   ) {
     cardId = d.card_id;
-    statementId = await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
+    // 03-G (D-G26) — ErroDeLeitura nunca escapa de uma Server Action; aqui nenhuma escrita veio antes.
+    try {
+      statementId = await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
+    } catch (e) {
+      if (!ehErroDeLeitura(e)) throw e;
+      return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.fatura);
+    }
     if (!statementId) return dbError("Não foi possível resolver a fatura do cartão.");
   }
 
@@ -251,21 +267,27 @@ export async function getTransactionSplit(
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { data: tx } = await ctx.supabase
+  const txRes = await ctx.supabase
     .from("transactions")
     .select("classificacao")
     .eq("id", id)
     .maybeSingle();
-  const { data: shares } = await ctx.supabase
+  const sharesRes = await ctx.supabase
     .from("shared_expenses")
     .select("person_id, tipo_divisao, percentual, valor")
     .eq("transaction_id", id);
 
+  // 03-G (D-G32) — antes, erro aqui devolvia 'pessoal' com partes vazias, e salvar o formulário
+  // APAGAVA a divisão. Com a leitura falha, a resposta é recusa, nunca "sem divisão".
+  if (txRes.error || sharesRes.error) {
+    return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.divisao);
+  }
+
   return {
     ok: true,
     data: {
-      classificacao: (tx?.classificacao ?? "pessoal") as Classificacao,
-      parts: sharedExpensesToFormParts((shares ?? []) as SharedExpenseLike[]),
+      classificacao: (txRes.data?.classificacao ?? "pessoal") as Classificacao,
+      parts: sharedExpensesToFormParts((sharesRes.data ?? []) as SharedExpenseLike[]),
     },
   };
 }
@@ -276,28 +298,37 @@ export async function getTransactionSplit(
  * `card_statements.pago_transacao_id` é FK `on delete set null`: apagar o lançamento de
  * pagamento zera o ponteiro mas NÃO limpa `pago_em`/`status`, então a fatura ficaria "paga"
  * apontando para o nada. Quem apaga/recria o lançamento usa isto para acertar a fatura.
+ *
+ * 03-G — erro de leitura LANCA ErroDeLeitura (antes virava "não é pagamento de fatura" e a fatura
+ * ficava paga apontando para o nada); quem chama captura.
  */
 async function statementPaidBy(
   ctx: AuthContext,
   txId: string,
 ): Promise<string | null> {
-  const { data } = await ctx.supabase
+  const res = await ctx.supabase
     .from("card_statements")
     .select("id")
     .eq("pago_transacao_id", txId)
     .maybeSingle();
-  return data?.id ?? null;
+  return exigir(res, ROTULOS_DE_LEITURA.fatura)?.id ?? null;
 }
 
 export async function deleteTransaction(id: string): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const { data: existing } = await ctx.supabase
+  const existingRes = await ctx.supabase
     .from("transactions")
     .select("transfer_group_id")
     .eq("id", id)
     .single();
+  // PGRST116 = o lançamento já sumiu: segue como hoje (D-G27). Qualquer outro erro recusa antes
+  // de qualquer escrita.
+  if (existingRes.error && existingRes.error.code !== "PGRST116") {
+    return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.lancamento);
+  }
+  const existing = existingRes.data;
 
   // REDESIGN-03-D · A4 (decisão (b)) — o cascade levaria o registro do dinheiro que entrou.
   const protecao = await protecaoDosRecebiveis(ctx.supabase, { transactionIds: [id] });
@@ -307,7 +338,14 @@ export async function deleteTransaction(id: string): Promise<ActionResult> {
 
   // Apagar o pagamento pela tela de Lançamentos reabre a fatura — mesmo efeito do
   // "Desfazer" em /faturas (o saldo da conta já estorna sozinho, junto com o lançamento).
-  const statementId = await statementPaidBy(ctx, id);
+  // 03-G (Z15) — recusa ANTES de reabrir a fatura e antes do delete.
+  let statementId: string | null;
+  try {
+    statementId = await statementPaidBy(ctx, id);
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.fatura);
+  }
   if (statementId) {
     await ctx.supabase
       .from("card_statements")
@@ -341,11 +379,16 @@ export async function setTransactionStatus(
   if (!ctx) return notAuthed;
   if (!TRANSACTION_STATUSES.includes(status)) return dbError("Status inválido.");
 
-  const { data: existing } = await ctx.supabase
+  const existingRes = await ctx.supabase
     .from("transactions")
     .select("transfer_group_id, status")
     .eq("id", id)
     .single();
+  // PGRST116 = o lançamento já sumiu: segue como hoje (D-G27). Outro erro recusa antes da escrita.
+  if (existingRes.error && existingRes.error.code !== "PGRST116") {
+    return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.lancamento);
+  }
+  const existing = existingRes.data;
 
   // REDESIGN-03-E · P9 — entrar ou sair do estado liquidado grava `liquidado_em = null`: o botão
   // não inventa uma data, e a coluna fica coerente com o CHECK. Entre `pago` e `recebido` a data
