@@ -170,13 +170,6 @@ export type ChatRunnerInput = {
   readonly userId: string;
   readonly conversationId: string | null;
   readonly text: string;
-  /**
-   * ⚠️ Coordenador · Task 12 — IGNORADO. Quem responde é o coordenador, e quem ele aciona sai
-   * da decisão dele, validada pelo servidor. O campo some do corpo na Task 20.
-   */
-  readonly agentId: string | null;
-  /** ⚠️ Coordenador · Task 12 — IGNORADO; some na Task 20 (spec §4.6). */
-  readonly pageContext?: { readonly rota: string; readonly modulo: string } | null;
   readonly providerPreference?: string | null;
   readonly modelPreference?: string | null;
   readonly abortSignal: AbortSignal;
@@ -195,11 +188,7 @@ export type ChatRunnerInput = {
    * catálogo é `server/experience-runner.ts`, e há teste de fronteira sobre isso.
    */
   readonly plano?: PlanoDaExperiencia | null;
-  /**
-   * ⚠️ Coordenador · Task 12 — IGNORADO. O comportamento da caixa de entrada passa a ser do
-   * coordenador sempre (spec §4.6), e o campo some do corpo na Task 20.
-   */
-  readonly caixaDeEntrada?: boolean;
+
 };
 
 export async function* runChat(
@@ -236,9 +225,9 @@ export async function* runChat(
   // ── 3. Quem responde: o COORDENADOR — ou o plano recebido ──────────────────────────
   //
   // Coordenador · Task 12 — sem plano, quem responde é SEMPRE o coordenador (o agente
-  // `assistente-pessoal`). `routeAgent` deixou de decidir o chat: quem cada mensagem consulta
+  // `assistente-pessoal`). Quem cada mensagem consulta
   // sai da decisão do coordenador, e o servidor valida cada acionamento contra a oferta derivada
-  // das chaves do dono (`agents/especialistas.ts`). O `agentId` do cliente fica ignorado.
+  // das chaves do dono (`agents/especialistas.ts`).
   //
   // ⛔ 18-F Bloco 4 — com plano, o coordenador NÃO roda. A experiência não é um agente do dono:
   // é um roteiro nosso, com lista de leituras fixa e prompt próprio.

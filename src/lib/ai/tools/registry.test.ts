@@ -355,8 +355,8 @@ describe("registry ↔ executores e propostas", () => {
  * ║ A TELA PRECISA SABER NOMEAR O QUE FOI CONSULTADO.                                     ║
  * ║                                                                                       ║
  * ║ `ROTULO_DA_FERRAMENTA` é `Record<string, string>` porque `ToolDescriptor.name` é       ║
- * ║ `string` — não há união fechada para um `satisfies` travar, como em                    ║
- * ║ `ROTULO_DA_ROTA_DE_CONTEXTO`. Então a cobertura é conferida AQUI, sobre o registry     ║
+ * ║ `string` — não há união fechada para um `satisfies` travar. Por isso,                    ║
+ * ║ a cobertura é conferida AQUI, sobre o registry     ║
  * ║ real: ferramenta nova sem rótulo apareceria na trilha como `training.get_algo`, que é  ║
  * ║ o identificador interno vazando para o usuário.                                        ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝

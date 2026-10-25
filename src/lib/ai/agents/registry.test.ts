@@ -355,7 +355,7 @@ describe("prompt de sistema", () => {
   });
 
   /**
-   * A caixa de entrada (`experiences/inbox.ts`, que sai na Task 20) deixa de ser um modo que o
+   * A antiga caixa de entrada deixou de ser um modo que o
    * dono liga: o comportamento passa a ser do coordenador SEMPRE (spec §4.6), DESCRITO.
    */
   it("a v3 herda o comportamento da caixa de entrada", () => {

@@ -1,21 +1,3 @@
-/**
- * Fase 18-B — `/api/ia/chat` · o CABEAMENTO do contexto da página.
- *
- * ╔══════════════════════════════════════════════════════════════════════════════════════╗
- * ║ POR QUE ESTE ARQUIVO EXISTE                                                           ║
- * ║                                                                                       ║
- * ║ O schema sozinho não prova nada: ele pode aceitar o contexto perfeitamente e o Route  ║
- * ║ Handler jogá-lo fora — o resultado seria uma tela que oferece contexto e um roteador  ║
- * ║ que nunca o vê. É a falha silenciosa clássica desta fase.                             ║
- * ║                                                                                       ║
- * ║ E prova a metade que o schema não pode provar: o MÓDULO é resolvido AQUI, no servidor, ║
- * ║ a partir da rota. Ele é quem escolhe o agente e, por tabela, a allowlist de           ║
- * ║ ferramentas — o cliente não tem como declará-lo.                                      ║
- * ╚══════════════════════════════════════════════════════════════════════════════════════╝
- *
- * O runner é um duplo: aqui não se testa IA, se testa transporte.
- */
-
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const authContextMock = vi.fn();
@@ -41,8 +23,6 @@ vi.mock("@/lib/ai/server/crypto-readiness", () => ({
 }));
 
 const { POST } = await import("./route");
-
-const UUID = "11111111-2222-4333-8444-555555555555";
 
 /**
  * O duplo do runner. Devolve UM evento de erro e encerra: basta para o Route Handler
@@ -80,109 +60,23 @@ beforeEach(() => {
   runExperienceMock.mockImplementation(() => runnerQueFalha());
 });
 
-describe("POST /api/ia/chat — contexto da página", () => {
-  it("repassa a rota ao runner E resolve o módulo no SERVIDOR", async () => {
-    const resposta = await POST(pedir({ text: "como estou indo?", pageContext: { rota: "/treinos" } }));
-
-    expect(resposta.status).toBe(429);
-    expect(entradaDoRunner().pageContext).toEqual({
-      rota: "/treinos",
-      modulo: "training",
-    });
-  });
-
-  it("cada rota da lista chega ao runner com o módulo dela", async () => {
-    for (const rota of ["/treinos/historico", "/treinos/recordes"]) {
-      runChatMock.mockClear();
-      await POST(pedir({ text: "oi", pageContext: { rota } }));
-      expect(entradaDoRunner().pageContext).toEqual({ rota, modulo: "training" });
-    }
-  });
-
-  it("sem contexto, o runner recebe `null` — não `undefined` nem objeto vazio", async () => {
+describe("POST /api/ia/chat — mensagem e sessão", () => {
+  it("o dono vem da sessão e o runner não recebe os campos aposentados", async () => {
     await POST(pedir({ text: "oi" }));
-    expect(entradaDoRunner().pageContext).toBeNull();
+    const entrada = entradaDoRunner();
+    expect(entrada.userId).toBe("usuario-da-sessao");
+    for (const campo of ["pageContext", "agentId", "caixaDeEntrada"]) expect(entrada).not.toHaveProperty(campo);
   });
-
-  it("`user_id` continua vindo da SESSÃO, nunca do corpo", async () => {
-    await POST(pedir({ text: "oi", pageContext: { rota: "/treinos" } }));
-    expect(entradaDoRunner().userId).toBe("usuario-da-sessao");
-  });
-
-  /**
-   * O par que importa: pedido inválido não vira 500 e NÃO CHEGA ao runner. Nenhuma consulta
-   * acontece, então não há como devolver dado de terceiro nem erro cru de banco.
-   */
-  /**
-   * ⚠️ A MENSAGEM É ESCRITA À MÃO em cada caso, e não por preciosismo: `route.ts` devolve
-   * este texto no corpo, e `chat-client.tsx` o joga direto num `toast.error`. É texto de
-   * usuário, então tem de estar em pt-BR — e o Zod escreve em inglês por padrão
-   * (`Invalid option: expected one of …`, `Unrecognized key: "modulo"`). Um teste que só
-   * conferisse "não contém o UUID" deixaria o inglês passar; foi o que aconteceu.
-   */
-  const RECUSADOS: ReadonlyArray<readonly [string, unknown, string]> = [
-    // 18-C: `/financeiro` entrou na allowlist de contexto. `/relatorios` é uma rota REAL do
-    // app que continua fora dela — o caso que importa é "existe no sistema, não é contexto".
-    ["rota fora da lista", { rota: "/relatorios" }, "Página de contexto não reconhecida."],
-    [
-      "rota de um registro",
-      { rota: `/treinos/historico/${UUID}` },
-      "Página de contexto não reconhecida.",
-    ],
-    [
-      "módulo declarado pelo cliente",
-      { rota: "/treinos", modulo: "finance" },
-      "O pedido trouxe um campo que o servidor não aceita.",
-    ],
-    [
-      "registroId de outro usuário",
-      { rota: "/treinos", registroId: UUID },
-      "O pedido trouxe um campo que o servidor não aceita.",
-    ],
-    [
-      "conteúdo da tela",
-      { rota: "/treinos", titulo: "Treino A" },
-      "O pedido trouxe um campo que o servidor não aceita.",
-    ],
-    [
-      "user_id no contexto",
-      { rota: "/treinos", user_id: UUID },
-      "O pedido trouxe um campo que o servidor não aceita.",
-    ],
-    ["contexto que não é objeto", "/treinos", "Pedido em formato inválido."],
-  ];
-
-  for (const [nome, pageContext, mensagem] of RECUSADOS) {
-    it(`400 e NENHUMA execução: ${nome}`, async () => {
-      const resposta = await POST(pedir({ text: "oi", pageContext }));
-      expect(resposta.status).toBe(400);
-      expect(runChatMock).not.toHaveBeenCalled();
-
-      const corpo = (await resposta.json()) as { code?: string; error?: string };
-      expect(corpo.code).toBe("AI_BAD_REQUEST");
-      expect(corpo.error).toBe(mensagem);
-      // E o valor recusado NÃO volta na resposta: veio do cliente, e refleti-lo na tela
-      // não ajuda ninguém a corrigir o pedido.
-      expect(corpo.error ?? "").not.toContain(UUID);
-      expect(corpo.error ?? "").not.toContain("Treino A");
-    });
-  }
-
-  it("sem sessão, nada é executado — nem com contexto válido", async () => {
+  it("sem sessão, nada é executado", async () => {
     authContextMock.mockResolvedValue(null);
-    const resposta = await POST(pedir({ text: "oi", pageContext: { rota: "/treinos" } }));
-    expect(resposta.status).toBe(401);
+    expect((await POST(pedir({ text: "oi" }))).status).toBe(401);
     expect(runChatMock).not.toHaveBeenCalled();
   });
-
-  it("origem cruzada é recusada antes de qualquer execução", async () => {
+  it("origem cruzada é recusada antes da execução", async () => {
     const pedido = new Request("http://localhost:3000/api/ia/chat", {
-      method: "POST",
-      headers: { "content-type": "application/json", "sec-fetch-site": "cross-site" },
-      body: JSON.stringify({ text: "oi", pageContext: { rota: "/treinos" } }),
+      method: "POST", headers: { "content-type": "application/json", "sec-fetch-site": "cross-site" }, body: JSON.stringify({ text: "oi" }),
     });
-    const resposta = await POST(pedido);
-    expect(resposta.status).toBe(403);
+    expect((await POST(pedido)).status).toBe(403);
     expect(runChatMock).not.toHaveBeenCalled();
   });
 });
@@ -297,17 +191,18 @@ describe("POST /api/ia/chat — o panorama (18-F Bloco 4)", () => {
     });
   }
 
-  it("o modo caixa de entrada chega ao runner do chat", async () => {
-    await POST(pedir({ text: "comprei pão 12 reais", caixaDeEntrada: true }));
 
-    const entrada = runChatMock.mock.calls[0][0] as Record<string, unknown>;
-    expect(entrada.caixaDeEntrada).toBe(true);
-  });
+});
 
-  it("sem o modo, ele chega como `false` — nunca `undefined`", async () => {
-    await POST(pedir({ text: "oi" }));
 
-    const entrada = runChatMock.mock.calls[0][0] as Record<string, unknown>;
-    expect(entrada.caixaDeEntrada).toBe(false);
+describe("campos aposentados do chat livre", () => {
+  it.each([
+    ["pageContext", { rota: "/treinos" }], ["caixaDeEntrada", true], ["agentId", "treinos"],
+  ])("%s dá 400 com mensagem em pt-BR e não chega ao runner", async (campo, valor) => {
+    const resposta = await POST(pedir({ text: "oi", [String(campo)]: valor }));
+    expect(resposta.status).toBe(400);
+    expect(runChatMock).not.toHaveBeenCalled();
+    expect(runExperienceMock).not.toHaveBeenCalled();
+    expect(await resposta.json()).toMatchObject({ code: "AI_BAD_REQUEST", error: "O pedido trouxe um campo que o servidor não aceita." });
   });
 });

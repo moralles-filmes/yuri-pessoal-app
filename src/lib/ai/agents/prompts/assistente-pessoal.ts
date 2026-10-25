@@ -25,7 +25,7 @@
  * ║ a decisão. Por isso ele descreve as duas, e cada bloco do servidor diz em qual delas  ║
  * ║ o modelo está (`agents/blocos-do-servidor.ts`).                                       ║
  * ║                                                                                       ║
- * ║ A caixa de entrada (`experiences/inbox.ts`, que sai na Task 20) deixou de ser um modo ║
+ * ║ A antiga caixa de entrada deixou de ser um modo ║
  * ║ que o dono liga: o comportamento é do coordenador SEMPRE (spec §4.6) — um despejo     ║
  * ║ vira um acionamento por módulo, e nome ambíguo vira pergunta.                         ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝

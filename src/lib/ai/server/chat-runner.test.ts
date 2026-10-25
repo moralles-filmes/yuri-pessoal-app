@@ -412,7 +412,6 @@ const ENTRADA: ChatRunnerInput = {
   userId: "user-1",
   conversationId: null,
   text: "qual foi meu volume de treino essa semana?",
-  agentId: null,
   providerPreference: null,
   modelPreference: null,
   abortSignal: new AbortController().signal,
@@ -488,8 +487,8 @@ describe("runChat — o laço integrado", () => {
   it("o especialista sai do ACIONAMENTO: Treinos recebe as ferramentas de Treinos", async () => {
     respostasPorChamada = [decideTreinos, [{ type: "delta", text: "ok" }, FINISH]];
 
-    // O cliente pede OUTRO agente: o pedido é ignorado (Task 12; o campo some na Task 20).
-    await rodar({ agentId: "financeiro" });
+    // O coordenador escolhe; campos de seleção do cliente são recusados no transporte.
+    await rodar();
 
     // O coordenador vê uma ferramenta de acionamento por especialista oferecido…
     expect(ferramentasRecebidas[0]).toEqual(["acionar_treinos"]);
@@ -554,25 +553,6 @@ describe("runChat — o laço integrado", () => {
     expect(systemsRecebidos[0]).toContain(blocoDaData(ENTRADA.agora));
     expect(systemsRecebidos[0]).toContain("Você coordena a conversa.");
     expect(systemsRecebidos[0]).not.toContain("CONTEXTO DESTA EXECUÇÃO");
-  });
-
-  /**
-   * Coordenador · Task 12 — reescrito (os dois casos de página viraram este). Antes: a página
-   * aberta chegava ao prompt, descrita. A spec §4.6 retira o contexto de página; até a Task 20
-   * removê-lo do corpo, ele é IGNORADO — e este caso prova que nada dele chega ao provedor.
-   */
-  it("a página aberta é ignorada: o system não muda com ela", async () => {
-    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
-    await rodar({ pageContext: { rota: "/treinos/recordes", modulo: "training" } });
-    const comPagina = systemsRecebidos[0];
-
-    systemsRecebidos.length = 0;
-    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
-    await rodar();
-    const semPagina = systemsRecebidos[0];
-
-    expect(comPagina).toBe(semPagina);
-    expect(comPagina).not.toContain("os recordes de Treinos");
   });
 
   it("sem página, o prompt não ganha linha nenhuma sobre tela aberta", async () => {
@@ -1124,25 +1104,6 @@ describe("runChat — o laço DIRIGIDO da experiência", () => {
       type: "error",
       code: "ATTEMPT_NOT_RECORDED",
     });
-  });
-});
-
-/**
- * Coordenador · Task 12 — reescrito (eram três casos). Antes: o modo caixa de entrada
- * acrescentava um bloco ao prompt e marcava `+caixa-v1` na versão, com o roteador de sempre.
- * A spec §4.6 torna esse comportamento do coordenador SEMPRE; até a Task 20 tirar o campo do
- * corpo, ele é IGNORADO — e a garantia de que o roteamento por palavra não decide mais o chat
- * mora nos casos de acionamento acima e em `coordenador.test.ts`.
- */
-describe("runChat — o campo caixaDeEntrada (ignorado até a Task 20)", () => {
-  it("com o campo ligado, nada muda: nem bloco, nem versão", async () => {
-    respostasPorChamada = [[{ type: "delta", text: "ok" }, FINISH]];
-
-    await rodar({ caixaDeEntrada: true });
-
-    expect(systemsRecebidos[0]).not.toContain("MODO CAIXA DE ENTRADA");
-    expect(versaoGravada).not.toContain("+caixa-v");
-    expect(versaoGravada).toBe(promptVersionOf(findAgent("assistente-pessoal")!));
   });
 });
 

@@ -25,7 +25,6 @@ import {
   chatExperienciaSchema,
   chatMensagemSchema,
   chatRequestSchema,
-  contextoDaRota,
   MAX_CHAT_BODY_BYTES,
   MAX_CHAT_TEXT,
 } from "@/lib/validators/ai";
@@ -231,20 +230,10 @@ export async function POST(request: Request) {
           userId: ctx.userId,
           conversationId: corpo.conversationId ?? null,
           text: corpo.text,
-          // ⚠️ PREFERÊNCIA, não decisão: quem escolhe o agente é `routeAgent`, no servidor,
-          // com as flags `allow_*` do usuário na mão. `null` (o caso de hoje — a tela não
-          // manda o campo) é "não pedi nenhum", diferente de "pedi o orquestrador".
-          agentId: corpo.agentId ?? null,
-          // ⚠️ Do contexto da página, SÓ A ROTA atravessa o transporte — e ela vem de uma
-          // lista estática, não de texto da tela. O MÓDULO é resolvido aqui, no servidor: é
-          // ele que decide o agente e, por tabela, a allowlist de ferramentas. Se a tela
-          // pudesse declará-lo, o cliente escolheria o que a IA pode ler.
-          pageContext: corpo.pageContext ? contextoDaRota(corpo.pageContext.rota) : null,
           providerPreference: corpo.providerPreference ?? null,
           modelPreference: corpo.modelPreference ?? null,
           abortSignal: request.signal,
           agora: new Date(),
-          caixaDeEntrada: corpo.caixaDeEntrada === true,
         })
   )[Symbol.asyncIterator]();
 
