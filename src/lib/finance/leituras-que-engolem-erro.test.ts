@@ -56,7 +56,7 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
   },
   "src/lib/actions/installments.ts · recomputeParentValorPessoal · transaction_installments": {
     motivo:
-      "Devolve `false` em vez de lançar, e o único chamador (cancelInstallmentFuture) o traduz em falhaDeLeituraDepois antes de gravar valor_pessoal (L6c1).",
+      "Devolve `\"leitura\"` em vez de lançar (03-G2: era `false`), e o único chamador (cancelInstallmentFuture) o traduz em falhaDeLeituraDepois antes de gravar valor_pessoal (L6c1).",
     destino: "03-G L6c1 — coberto em leituras-que-decidem.test.ts ('recálculo do valor pessoal').",
   },
   "src/lib/actions/installments.ts · recomputeParentValorPessoal · receivables": {
@@ -70,9 +70,10 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
  * as compras das faturas pagas em `lerCaixaDoMes` (gráficos "meus", desenho 2026-10-18), que trata
  * o erro (`{ ok: false }`) e o teto (`leituraComTeto`). Na 03-G2 (D-G2-13) caíram para 105: as RPCs
  * que ESCREVEM (`pagar_fatura`, `desfazer_pagamento_fatura`) saíram daqui para o inventário de
- * escritas, e as novas (`salvar_lancamento`) já nascem lá. Mudou? Confira o inventário antes de ajustar.
+ * escritas, e as novas (`salvar_lancamento`) jÃ¡ nascem lÃ¡; e entrou a 106Âª, a classificaÃ§Ã£o da
+ * compra-pai que `cancelInstallmentFuture` lÃª antes de escrever (D-G2-9), com o erro tratado. Mudou? Confira o inventário antes de ajustar.
  */
-const LEITURAS_ESPERADAS = 105;
+const LEITURAS_ESPERADAS = 106;
 
 const LEITURAS = inventariarLeituras(ARQUIVOS, RAIZ);
 const chave = (l: { arquivo: string; funcao: string; alvo: string }) =>

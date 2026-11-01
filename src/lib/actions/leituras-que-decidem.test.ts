@@ -283,9 +283,10 @@ describe("03-G L6 · cancelInstallmentFuture", () => {
       error:
         "Não foi possível ler as parcelas. A alteração pode ter sido gravada em parte: recarregue a página para conferir.",
     });
+    // 03-G2 (D-G2-9): a ordem agora é recebíveis -> parcelas (antes era o inverso).
     expect(escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual([
-      "transaction_installments:update",
       "receivables:delete",
+      "transaction_installments:update",
     ]);
     expect(fake.tabelas.transactions[0]).toMatchObject({ valor_pessoal: 50 });
   });
@@ -339,7 +340,9 @@ describe("03-G L6 · busca-ou-cria da fatura (D-G21)", () => {
 });
 
 describe("03-G L6 · createInstallmentPurchase, laço das parcelas (Z20, D-G26)", () => {
-  it("fatura não lida: a compensação apaga a compra-pai e a frase é a de 'depois'", async () => {
+  // 03-G2 (D-G2-2): a fatura é resolvida ANTES de qualquer escrita; leitura falha => nada gravado,
+  // sem compra-pai nem compensação (antes: insert + delete e a frase de "depois").
+  it("fatura não lida: nada é gravado e a frase é a de 'antes'", async () => {
     fake = criarSupabaseEmMemoria(
       { credit_cards: [{ id: CARTAO, dia_fechamento: 5, dia_vencimento: 12 }], card_statements: [] },
       { falharLeitura: { card_statements: "XX000" } },
@@ -353,14 +356,11 @@ describe("03-G L6 · createInstallmentPurchase, laço das parcelas (Z20, D-G26)"
     });
     expect(r).toEqual({
       ok: false,
-      error:
-        "Não foi possível ler a fatura. A alteração pode ter sido gravada em parte: recarregue a página para conferir.",
+      error: "Não foi possível ler a fatura. Nada foi alterado.",
     });
-    expect(escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual([
-      "transactions:insert",
-      "transactions:delete",
-    ]);
-    expect(fake.tabelas.transactions).toEqual([]);
+    expect(escritas()).toEqual([]);
+    expect(fake.operacoes.filter((o) => o.tipo === "rpc")).toEqual([]);
+    expect(fake.tabelas.transactions ?? []).toEqual([]);
   });
 });
 

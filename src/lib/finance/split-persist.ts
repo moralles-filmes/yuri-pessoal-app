@@ -1,17 +1,15 @@
 /**
- * Fase 05 — Persistência da divisão no servidor. Server-only (recebe o AuthContext),
- * mas NÃO é "use server": é utilitário das Server Actions, no espírito de statements.ts.
+ * Fase 05 — A divisão com terceiros, MONTADA (puro). Este arquivo não grava nada: devolve o
+ * `DivisaoPayload` — o que a rpc recebe — e a MINHA PARTE (centavos), para o caller decidir
+ * `transactions.valor_pessoal`. Quem grava `shared_expenses` + `receivables` é a rpc
+ * `salvar_lancamento` (e `criar_compra_parcelada`, que a chama), numa transação.
  *
- * Centraliza a gravação de `shared_expenses` + `receivables` e devolve a MINHA PARTE (centavos)
- * para o caller atualizar `transactions.valor_pessoal`. Tudo derivado no servidor a partir de
- * `dividirDespesa` (split.ts) — nunca confiando nos valores de divisão do client sem revalidar.
- * O `user_id` vem sempre de `auth.uid()` (via ctx).
+ * Tudo derivado no servidor a partir de `dividirDespesa` (split.ts) — nunca confiando nos
+ * valores de divisão do client sem revalidar. O `user_id` é o do `auth.uid()` dentro da rpc.
  *
- * 03-G2 · E1 — a MATEMÁTICA saiu do I/O: `montarDivisaoAVista`/`montarDivisaoParcelada` são puros
- * e devolvem o `DivisaoPayload` (o que a RPC receberá); `applySplit`/`applySplitParcelado`
- * continuam gravando como sempre, a partir do MESMO payload — uma conta só, dois destinos.
+ * 03-G2 · E4 — `applySplit`/`applySplitParcelado` (a gravação linha a linha) saíram: com a rpc, uma
+ * conta só alimenta um único destino.
  */
-import type { AuthContext } from "@/lib/actions/helpers";
 import {
   distribuirTerceirosPorParcela,
   dividirDespesa,
@@ -20,10 +18,6 @@ import {
 } from "@/lib/finance/split";
 import { centavosParaReais } from "@/lib/format";
 import type { SplitPartInput } from "@/lib/validators/split";
-
-export type SplitPersistResult =
-  | { ok: true; minhaParteCentavos: number }
-  | { ok: false; error: string };
 
 /* ───────────────────────── O payload da divisão (puro) ───────────────────────── */
 
@@ -167,146 +161,4 @@ export function montarDivisaoParcelada(args: {
       recebiveis,
     },
   };
-}
-
-/* ───────────────────────── A gravação (I/O) ───────────────────────── */
-
-/** Insere as `shared_expenses` (1 por pessoa) e devolve person_id → shared_expense_id. */
-async function inserirSharedExpenses(
-  ctx: AuthContext,
-  transactionId: string,
-  pessoas: DivisaoPayload["pessoas"],
-): Promise<Map<string, string> | null> {
-  const rows = pessoas.map((p) => ({
-    user_id: ctx.userId,
-    transaction_id: transactionId,
-    person_id: p.person_id,
-    tipo_divisao: p.tipo_divisao,
-    percentual: p.percentual,
-    valor: p.valor,
-  }));
-  const { data, error } = await ctx.supabase
-    .from("shared_expenses")
-    .insert(rows)
-    .select("id, person_id");
-  if (error || !data) return null;
-  return new Map(data.map((s) => [s.person_id, s.id]));
-}
-
-/**
- * Divisão de uma despesa À VISTA / cartão simples (não parcelada): grava `shared_expenses`
- * e 1 `receivable` por pessoa (na fatura da compra, quando cartão). Devolve a minha parte.
- */
-export async function applySplit(
-  ctx: AuthContext,
-  args: {
-    transactionId: string;
-    totalCentavos: number;
-    statementId: string | null;
-    cardId: string | null;
-    parts: SplitPartInput[];
-    dataPrevista?: string | null;
-  },
-): Promise<SplitPersistResult> {
-  const montada = montarDivisaoAVista({
-    totalCentavos: args.totalCentavos,
-    parts: args.parts,
-    statementId: args.statementId,
-    cardId: args.cardId,
-    dataPrevista: args.dataPrevista,
-    // O alcance só importa à RPC; neste caminho (gravação direta) não muda o que é gravado.
-    alcance: "regra-cheia",
-  });
-  if (!montada.ok) return { ok: false, error: montada.error };
-
-  const shMap = await inserirSharedExpenses(
-    ctx,
-    args.transactionId,
-    montada.divisao.pessoas,
-  );
-  if (!shMap) return { ok: false, error: "Não foi possível salvar a divisão." };
-
-  const recRows = montada.divisao.recebiveis.map((r) => ({
-    user_id: ctx.userId,
-    person_id: r.person_id,
-    transaction_id: args.transactionId,
-    shared_expense_id: shMap.get(r.person_id) ?? null,
-    installment_id: null,
-    statement_id: r.statement_id,
-    card_id: r.card_id,
-    valor: r.valor,
-    status: "pendente",
-    data_prevista: r.data_prevista,
-  }));
-
-  if (recRows.length > 0) {
-    const { error } = await ctx.supabase.from("receivables").insert(recRows);
-    if (error) {
-      return { ok: false, error: "Não foi possível gerar os recebíveis." };
-    }
-  }
-
-  return { ok: true, minhaParteCentavos: montada.minhaParteCentavos };
-}
-
-/**
- * Divisão de uma compra PARCELADA e compartilhada (ver `montarDivisaoParcelada`). Devolve a minha
- * parte total (para o caller gravar `valor_pessoal` na transação pai).
- */
-export async function applySplitParcelado(
-  ctx: AuthContext,
-  args: {
-    parentId: string;
-    totalCentavos: number;
-    parts: SplitPartInput[];
-    parcelas: {
-      installmentId: string;
-      statementId: string | null;
-      cardId: string | null;
-      valorCentavos: number;
-    }[];
-  },
-): Promise<SplitPersistResult> {
-  // A lista recebida é identificada pela POSIÇÃO (1..N): o `parcela_numero` do payload volta para
-  // o `installmentId` por aqui. Não é a numeração exibida (que pode começar em k > 1).
-  const montada = montarDivisaoParcelada({
-    totalCentavos: args.totalCentavos,
-    parts: args.parts,
-    parcelas: args.parcelas.map((p, i) => ({
-      numero: i + 1,
-      statementId: p.statementId,
-      cardId: p.cardId,
-      valorCentavos: p.valorCentavos,
-    })),
-    alcance: "regra-cheia",
-  });
-  if (!montada.ok) return { ok: false, error: montada.error };
-
-  const shMap = await inserirSharedExpenses(
-    ctx,
-    args.parentId,
-    montada.divisao.pessoas,
-  );
-  if (!shMap) return { ok: false, error: "Não foi possível salvar a divisão." };
-
-  const recRows = montada.divisao.recebiveis.map((r) => ({
-    user_id: ctx.userId,
-    person_id: r.person_id,
-    transaction_id: args.parentId,
-    shared_expense_id: shMap.get(r.person_id) ?? null,
-    installment_id: args.parcelas[(r.parcela_numero ?? 1) - 1].installmentId,
-    statement_id: r.statement_id,
-    card_id: r.card_id,
-    valor: r.valor,
-    status: "pendente",
-  }));
-
-  if (recRows.length > 0) {
-    const { error } = await ctx.supabase.from("receivables").insert(recRows);
-    if (error) {
-      return { ok: false, error: "Não foi possível gerar os recebíveis." };
-    }
-  }
-
-  return { ok: true, minhaParteCentavos: montada.minhaParteCentavos };
 }

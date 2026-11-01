@@ -40,9 +40,9 @@ const ALLOWLIST: Record<string, { n: number; porque: string }> = {
     porque: "undoImportBatch — protegido (regra cheia, A4)",
   },
   "lib/actions/installments.ts · transactions": {
-    n: 4,
+    n: 1,
     porque:
-      "três compensações da criação (o pai acabou de nascer, sem recebimento possível) + deleteInstallmentPurchase — protegido (RR-D-17)",
+      "deleteInstallmentPurchase — protegido (RR-D-17). A criação deixou de ter compensação: grava pela rpc criar_compra_parcelada (03-G2)",
   },
   "lib/actions/installments.ts · receivables": {
     n: 1,

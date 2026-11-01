@@ -39,8 +39,9 @@ const ESCRITAS: Record<string, Escrita> = {
     mudaStatus: false,
   },
   "lib/actions/installments.ts": {
-    quantidade: 8,
-    motivo: "compra parcelada: compra-pai, compensações da criação, edição e cancelamento — cartão nunca guarda a data",
+    quantidade: 3,
+    motivo:
+      "compra parcelada: edição, recálculo da minha parte no cancelamento e exclusão — cartão nunca guarda a data. A criação grava pela rpc criar_compra_parcelada (03-G2)",
     mudaStatus: false,
   },
   "lib/actions/statements.ts": {
