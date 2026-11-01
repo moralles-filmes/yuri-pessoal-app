@@ -49,9 +49,9 @@ const ALLOWLIST: Record<string, { n: number; porque: string }> = {
     porque: "cancelInstallmentFuture — protegido (regra cheia, A4)",
   },
   "lib/actions/transactions.ts · transactions": {
-    n: 2,
+    n: 1,
     porque:
-      "deleteTransaction (grupo e lançamento, decisão (b)) — protegido. A edição que vira transferência deixou de apagar e recriar (03-G2): a divisão sai na rpc salvar_lancamento, com o alcance so-dinheiro-registrado, e updateTransaction confere a proteção antes",
+      "deleteTransaction (grupo OU lançamento num delete só desde o E5 da 03-G2, decisão (b)) — protegido. A edição que vira transferência deixou de apagar e recriar (03-G2): a divisão sai na rpc salvar_lancamento, com o alcance so-dinheiro-registrado, e updateTransaction confere a proteção antes",
   },
   "lib/finance/recebimentos-servico.ts · receivable_receipts": {
     n: 2,
@@ -71,7 +71,9 @@ const ALLOWLIST: Record<string, { n: number; porque: string }> = {
 const CHAMADAS_DA_PROTECAO: Record<string, number> = {
   "lib/actions/imports.ts": 1,
   "lib/actions/installments.ts": 2,
-  "lib/actions/transactions.ts": 2,
+  // deleteTransaction, updateTransaction e preverExclusaoDoLancamento (03-G2 K3: a previsão mostra
+  // o bloqueio pela MESMA proteção que a exclusão confere).
+  "lib/actions/transactions.ts": 3,
   "lib/finance/services.ts": 1,
   "lib/finance/split-reapply.ts": 1,
 };

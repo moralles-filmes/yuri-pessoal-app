@@ -35,7 +35,7 @@ let fake = criarSupabaseEmMemoria({});
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.client }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-const { updateTransaction, deleteTransaction, setTransactionStatus } = await import(
+const { updateTransaction, deleteTransaction, setTransactionStatus, preverExclusaoDoLancamento } = await import(
   "@/lib/actions/transactions"
 );
 
@@ -871,5 +871,120 @@ describe("03-G2 E3c · updateTransaction é uma rpc só", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.endsWith("Nada foi alterado.")).toBe(true);
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("03-G2 E5a · deleteTransaction apaga ANTES de reabrir a fatura (RR-F-2, S6)", () => {
+  const FATURA = "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
+  const pagamento = () => ({
+    transactions: [existente({ type: "transferencia", transfer_group_id: null })],
+    card_statements: [
+      {
+        id: FATURA,
+        competencia: "2031-03-01",
+        status: "paga",
+        pago_em: "2031-04-05",
+        pago_conta_id: CONTA,
+        pago_transacao_id: ID,
+      },
+    ],
+    receivables: [],
+  });
+
+  it("delete com erro: Não foi possível excluir o lançamento. Nada foi alterado. e nenhum update em card_statements", async () => {
+    fake = criarSupabaseEmMemoria(pagamento(), {
+      antesDeGravar: (op) =>
+        op.tabela === "transactions" && op.tipo === "delete" ? { code: "23503", message: "interno" } : null,
+    });
+    const r = await deleteTransaction(ID);
+    expect(r).toEqual({ ok: false, error: "Não foi possível excluir o lançamento. Nada foi alterado." });
+    expect(fake.escritas("card_statements")).toEqual([]);
+    expect(fake.tabelas.card_statements[0]).toMatchObject({ status: "paga", pago_transacao_id: ID });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("delete ok e reabrir falho: frase com 03/2031 e Desfaça o pagamento em Faturas", async () => {
+    fake = criarSupabaseEmMemoria(pagamento(), {
+      antesDeGravar: (op) =>
+        op.tabela === "card_statements" && op.tipo === "update" ? { code: "XX000", message: "interno" } : null,
+    });
+    const r = await deleteTransaction(ID);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toContain("03/2031");
+      expect(r.error).toContain("Desfaça o pagamento em Faturas");
+      expect(r.error).not.toContain("interno");
+    }
+    expect(fake.tabelas.transactions).toEqual([]);
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it("ordem: o delete de transactions vem antes do update de card_statements", async () => {
+    fake = criarSupabaseEmMemoria(pagamento());
+    const r = await deleteTransaction(ID);
+    expect(r).toEqual({ ok: true, data: undefined });
+    expect(fake.escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual([
+      "transactions:delete",
+      "card_statements:update",
+    ]);
+    expect(fake.tabelas.card_statements[0]).toMatchObject({
+      status: "aberta",
+      pago_em: null,
+      pago_conta_id: null,
+      pago_transacao_id: null,
+    });
+  });
+});
+
+describe("03-G2 E5a · preverExclusaoDoLancamento (K3, D-G2-17)", () => {
+  const FATURA = "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
+  const base = (): Record<string, Linha[]> => ({
+    transactions: [existente({ type: "transferencia", transfer_group_id: "grp-1" })],
+    card_statements: [{ id: FATURA, competencia: "2031-03-01", status: "paga", pago_transacao_id: ID }],
+    receivables: [
+      { id: "rc-1", transaction_id: ID, person_id: PESSOA, valor: 100, status: "pendente" },
+      { id: "rc-2", transaction_id: ID, person_id: PESSOA, valor: 200, status: "pendente" },
+    ],
+    people: [{ id: PESSOA, nome: "Pessoa Sintética" }],
+    import_rows: [{ id: "ir-1", transaction_id: ID }],
+  });
+
+  it("lançamento que pagou fatura, com 2 recebíveis pendentes de uma pessoa e 1 linha de importação — os campos certos e NENHUMA escrita", async () => {
+    fake = criarSupabaseEmMemoria(base());
+    const r = await preverExclusaoDoLancamento(ID);
+    expect(r).toEqual({
+      ok: true,
+      data: {
+        bloqueio: null,
+        faturaReaberta: { competencia: "2031-03-01" },
+        recebiveis: [{ pessoa: "Pessoa Sintética", status: "pendente", quantidade: 2 }],
+        parcelas: 0,
+        linhasDaImportacao: 1,
+        ehTransferencia: true,
+      },
+    });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("previsão com leitura de receivables falha: falhaDeLeituraAntes", async () => {
+    fake = criarSupabaseEmMemoria(base(), { falharLeitura: { receivables: "XX000" } });
+    expect(await preverExclusaoDoLancamento(ID)).toEqual({
+      ok: false,
+      error: "Não foi possível ler os recebíveis. Nada foi alterado.",
+    });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("previsão com recebimento registrado: bloqueio preenchido", async () => {
+    fake = criarSupabaseEmMemoria({
+      ...base(),
+      receivable_receipts: [
+        { id: "rr-1", user_id: "user-1", receivable_id: "rc-1", valor: 100, recebido_em: "2031-04-05", created_at: "2031-04-05T10:00:00Z" },
+      ],
+    });
+    const r = await preverExclusaoDoLancamento(ID);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.bloqueio).toMatch(/recebimento registrado/);
+    expect(fake.escritas()).toEqual([]);
   });
 });

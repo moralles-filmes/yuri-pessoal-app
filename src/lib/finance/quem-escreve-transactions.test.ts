@@ -51,9 +51,9 @@ const ESCRITAS: Record<string, Escrita> = {
     mudaStatus: false,
   },
   "lib/actions/transactions.ts": {
-    quantidade: 4,
+    quantidade: 3,
     motivo:
-      "deleteTransaction (grupo e lançamento) e setTransactionStatus (por grupo e por id), que muda o status e por isso limpa liquidado_em. updateTransaction grava pela rpc salvar_lancamento desde a 03-G2, com liquidado_em decidido por montarLinhaDoLancamento",
+      "deleteTransaction (grupo OU lançamento num delete só, 03-G2 E5) e setTransactionStatus (por grupo e por id), que muda o status e por isso limpa liquidado_em. updateTransaction grava pela rpc salvar_lancamento desde a 03-G2, com liquidado_em decidido por montarLinhaDoLancamento",
     mudaStatus: true,
   },
   "lib/finance/generation.ts": {
