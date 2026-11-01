@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { diaExtenso, formatCurrency } from "@/lib/format";
 import {
   deleteTransaction,
+  preverExclusaoDoLancamento,
   setTransactionStatus,
 } from "@/lib/actions/transactions";
 import { toast } from "sonner";
@@ -389,6 +390,7 @@ function TransactionCard({
           />
         )}
         <DeleteConfirmDialog
+          carregarPrevisao={() => preverExclusaoDoLancamento(t.id)}
           title="Excluir lançamento"
           description={
             isTransfer
