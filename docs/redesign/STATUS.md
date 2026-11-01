@@ -1229,6 +1229,11 @@ CRLF nesta worktree) · finance/actions/notifications **66 / 1.098** em Brasíli
 
 ## Próximo passo — REDESIGN-03-G2 (as escritas e o fechamento da REDESIGN-03)
 
+⛔ **Para quem for escrever o prompt da 04-A ou da 06 depois da 03-G2:** as duas fases foram
+atualizadas pela **D65** (referência visual). O prompt tem de mandar ler
+`docs/redesign/REFERENCIA-VISUAL.md` e apontar o print pelo caminho absoluto que está lá (os
+prints ficam fora do git). Ver `PLANO.md`, seções 04 e 06.
+
 **A 03-G está fechada e integrada** (`6c158e9`, com a `main` em `a8537d6`) e foi a `main` por PR,
 com o seu aval para PR **e** merge (D64). A 03-G2 é a **última subfase da REDESIGN-03**: a 03-G
 fechou a leitura; a 03-G2 fecha a **escrita** e a fase.

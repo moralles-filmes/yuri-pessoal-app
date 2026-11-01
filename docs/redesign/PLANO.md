@@ -82,6 +82,11 @@ todos como teste puro · nenhum teste existente alterado para passar · concilia
 [REFERENCIA-VISUAL.md](REFERENCIA-VISUAL.md) §2–§4. O print decide layout e forma, não o que um
 número significa. Os desvios dele estão no §6.
 
+⛔ **O prompt de quem for executar a 04-A TEM de trazer, logo no começo:** "a fase foi
+atualizada pela D65 (2026-10-25): leia `docs/redesign/REFERENCIA-VISUAL.md` antes do desenho, e
+o print 1 está em `C:/Users/Yuri/Documents/Desenvolvedor/yuri.app.pessoal/docs/redesign/referencias/print-1-financeiro.png` (fora do git)". Um prompt
+sem essa linha manda o agente redesenhar pela descrição antiga e ignorar a referência.
+
 | Subfase | Entrega |
 | --- | --- |
 | **04-A** | **Painel financeiro (`/dashboard/financeiro`) no visual do print 1.** A ordem de cima para baixo é Resumo → Evolução → Composição → Cartões e faturas → Detalhamento → Projeções: banner, os 4 indicadores (saldo com data, minhas entradas, minhas saídas, de terceiros), barras × rosca, cartões na cor de cada um × próximas faturas, últimas transações × a receber de terceiros, e abaixo tudo o que o painel já tem. **Primeiro entregável: prévia com dado sintético, aprovada antes do código.** Cria as peças comuns (banner, indicador, bloco, olho) se a 06 ainda não as tiver criado |
@@ -128,6 +133,11 @@ financeira.
 
 🎨 **Referência visual (D65, 2026-10-25): print 2.** Descrita em
 [REFERENCIA-VISUAL.md](REFERENCIA-VISUAL.md) §2 e §5.
+
+⛔ **O prompt de quem for executar a 06 TEM de trazer, logo no começo:** "a fase foi atualizada
+pela D65 (2026-10-25): leia `docs/redesign/REFERENCIA-VISUAL.md` antes do desenho, e o print 2
+está em `C:/Users/Yuri/Documents/Desenvolvedor/yuri.app.pessoal/docs/redesign/referencias/print-2-dashboard.png` (fora do git)". Um prompt sem essa
+linha manda o agente seguir a sequência antiga, que foi substituída.
 
 Barra (período + Personalizar) → **banner de boas-vindas** → **Resumo financeiro** (faixa fixa
 de 4 indicadores: saldo das contas com o olho, entradas do mês, saídas do mês, total em cartões

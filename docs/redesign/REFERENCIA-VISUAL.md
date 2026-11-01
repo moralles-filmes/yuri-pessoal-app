@@ -12,7 +12,17 @@ redesign igual ao print para a parte FINANCEIRO e outro para o DASHBOARD GERAL."
 ⛔ **Os prints NÃO entram no repositório.** Ele é público, e o print 2 tem cara de dado real
 (nomes de cartões e de cursos, valores com centavos). Este arquivo os descreve em palavras,
 sem valor em R$, sem nome de pessoa, de banco, de categoria ou de curso (regra 6 do `README.md`).
-Quem for executar a fase pede os prints ao dono na conversa.
+
+**Onde estão os prints:** na pasta principal do projeto, **fora do git** (ela está no
+`.git/info/exclude`, então não aparece no `git status` e nunca sobe):
+
+- `C:/Users/Yuri/Documents/Desenvolvedor/yuri.app.pessoal/docs/redesign/referencias/print-1-financeiro.png` → 04-A
+- `C:/Users/Yuri/Documents/Desenvolvedor/yuri.app.pessoal/docs/redesign/referencias/print-2-dashboard.png` → 06
+
+⚠️ **Uma worktree NÃO tem essa pasta**, porque arquivo fora do git não vai para o checkout.
+Leia pelo caminho absoluto acima. Se o arquivo não existir (outro computador, pasta limpa),
+**peça os prints ao dono** em vez de seguir sem eles. ⛔ **Nunca os copie para dentro do
+repositório**: nem commit, nem `git add -f`, nem prévia versionada com os valores deles.
 
 **Precedência.** O print decide layout, hierarquia, densidade e forma dos componentes. Ele
 **não** decide o que um número significa. Quando o print contradiz uma regra do projeto, vale a
