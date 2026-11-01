@@ -14,7 +14,7 @@ import type { Frequency } from "@/lib/finance/constants";
 import type { GenerationResult } from "@/types/finance";
 
 export const RECURRENCE_FIELDS =
-  "id, type, payment_method, account_id, card_id, category_id, subcategory_id, amount, description, tags, frequency, interval_count, anchor_date, next_due_date, end_date, generated_status";
+  "id, type, payment_method, account_id, card_id, category_id, subcategory_id, amount, description, tags, frequency, interval_count, anchor_date, next_due_date, end_date, generated_status, last_generated_at";
 
 export type RecurrenceRow = {
   id: string;
@@ -33,6 +33,7 @@ export type RecurrenceRow = {
   next_due_date: string;
   end_date: string | null;
   generated_status: string;
+  last_generated_at: string | null;
 };
 
 /** Uma recorrência é de cartão quando paga no cartão e tem o cartão definido. */
@@ -77,6 +78,23 @@ export function buildGeneratedRow(
  * lançamentos já gravados) INTERROMPE o laço e devolve `interrompida: true` — não é possível
  * desfazer o que já foi gravado, então a tela precisa dizer que algumas recorrências podem estar
  * faltando. Qualquer outro erro continua subindo.
+ *
+ * 03-G2 (S9, D-G2-10): a ordem, por recorrência com datas a gerar, é reserva condicional ->
+ * insert -> devolução (claim-first, invariante 37).
+ * - RESERVA: `update` de `next_due_date`/`is_active`/`last_generated_at` ANTES do insert, com a
+ *   condição `next_due_date = antigo E is_active = true` e `.select("id")`. Duas gerações lendo a
+ *   mesma recorrência (duas abas) disputam a mesma linha: só uma altera, a outra vê 0 linhas e
+ *   NÃO insere. A condição leva `is_active = true` porque na ÚLTIMA geração `newNextDueDate` é
+ *   nulo e só `is_active` muda — sem ela a segunda aba reservaria de novo e inseriria em dobro.
+ * - INSERT: se falhar, a data é DEVOLVIDA (`next_due_date`, `is_active` e `last_generated_at`
+ *   anteriores). A devolução filtra por `last_generated_at = agora` — o instante único da reserva
+ *   —, então só desfaz a reserva DESTA geração, nunca a de outra que tenha vindo depois.
+ * - Devolução com erro ou sem linha alterada: as datas podem ter sumido em silêncio (o catch-up
+ *   só lê `is_active = true`), então devolve `interrompida: true`.
+ * - Cair entre a reserva e o insert erra para "pode faltar" (o aviso `interrompida`), nunca para
+ *   lançamento em dobro (invariante 37).
+ * Sem datas a gerar, a atualização de `last_generated_at`/`is_active` é conferida; erro =>
+ * `interrompida: true`.
  */
 export async function runGeneration(
   ctx: AuthContext,
@@ -137,12 +155,49 @@ export async function runGeneration(
       // Falha ao resolver fatura: não insere nada desta recorrência nem avança.
       if (failed) continue;
 
+      // 03-G2 (S9, D-G2-10): RESERVA a data ANTES de inserir. `agora` é único por reserva e é ele
+      // que a devolução usa para achar a própria reserva.
+      const agora = new Date().toISOString();
+      const reserva = await ctx.supabase
+        .from("recurring_transactions")
+        .update({
+          last_generated_at: agora,
+          ...(plan.newNextDueDate ? { next_due_date: plan.newNextDueDate } : {}),
+          ...(plan.finished ? { is_active: false } : {}),
+        })
+        .eq("id", r.id)
+        .eq("next_due_date", r.next_due_date)
+        .eq("is_active", true)
+        .select("id");
+      if (reserva.error) return { generated, interrompida: true };
+      // Outra geração já reservou esta data: não insere (evita o lançamento em dobro).
+      if ((reserva.data ?? []).length === 0) continue;
+
       const { error } = await ctx.supabase.from("transactions").insert(rows);
+      if (!error) {
+        generated += rows.length;
+        continue;
+      }
+
+      // Insert falhou: DEVOLVE a data (só se a reserva ainda for a desta geração).
+      const devolucao = await ctx.supabase
+        .from("recurring_transactions")
+        .update({
+          next_due_date: r.next_due_date,
+          is_active: true,
+          last_generated_at: r.last_generated_at,
+        })
+        .eq("id", r.id)
+        .eq("last_generated_at", agora)
+        .select("id");
+      if (devolucao.error || (devolucao.data ?? []).length === 0) {
+        return { generated, interrompida: true };
+      }
       // Falha em uma recorrência não deve travar as demais.
-      if (!error) generated += rows.length;
-      else continue;
+      continue;
     }
 
+    // Sem datas a gerar: só registra a conferência (e encerra a recorrência, se for o caso).
     const update: {
       last_generated_at: string;
       next_due_date?: string;
@@ -151,10 +206,12 @@ export async function runGeneration(
     if (plan.newNextDueDate) update.next_due_date = plan.newNextDueDate;
     if (plan.finished) update.is_active = false;
 
-    await ctx.supabase
+    // 03-G2 (S9): a escrita é conferida.
+    const { error } = await ctx.supabase
       .from("recurring_transactions")
       .update(update)
       .eq("id", r.id);
+    if (error) return { generated, interrompida: true };
   }
 
   return { generated, interrompida: false };
