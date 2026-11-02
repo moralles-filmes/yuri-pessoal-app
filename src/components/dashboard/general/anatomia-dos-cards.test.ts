@@ -148,3 +148,22 @@ describe("T12 · training-card.tsx", () => {
     },
   );
 });
+
+// T13 · conferência visual: três defeitos que só apareceram no navegador.
+describe("T13 · densidade e moldura decididas pelo card", () => {
+  // Regra 4 de responsividade: num terço da grade de 1440 o card tem ~330 px, e quatro colunas
+  // decididas pela viewport quebravam "R$ 3.862,49" no meio.
+  it.each(["todo-card.tsx", "invoices-card.tsx"])("%s usa @[26rem], não sm:, para 4 colunas", (arquivo) => {
+    const codigo = ler(arquivo);
+    expect(codigo).toContain("@[26rem]:grid-cols-4");
+    expect(codigo).not.toContain("sm:grid-cols-4");
+  });
+  it("card-shell.tsx: o conteúdo é @container e o cabeçalho é flex (a primitiva é grid)", () => {
+    const codigo = ler("card-shell.tsx");
+    expect(codigo).toContain('<CardContent className="@container');
+    expect(codigo).toMatch(/<CardHeader className="flex flex-row/);
+  });
+  it("training-card.tsx: o dia a seguir não usa a borda quase invisível no escuro", () => {
+    expect(ler("training-card.tsx")).not.toContain("border-dotted border-border");
+  });
+});

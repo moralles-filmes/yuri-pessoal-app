@@ -77,7 +77,7 @@ export function CardShell({
         personalizing && hidden && "opacity-55",
       )}
     >
-      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-3">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
         <CardTitle className="flex min-w-0 items-center gap-2.5 text-base">
           {personalizing && (
             <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -143,7 +143,7 @@ export function CardShell({
         )}
       </CardHeader>
 
-      <CardContent className="flex-1 pt-0">{children}</CardContent>
+      <CardContent className="@container flex-1 pt-0">{children}</CardContent>
     </Card>
   );
 }

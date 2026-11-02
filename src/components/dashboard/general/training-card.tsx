@@ -31,7 +31,7 @@ const BARRA_DO_ESTADO: Record<EstadoDoDiaNaSemana, { classe: string; palavra: st
   planejado: { classe: "h-8 border-2 border-dashed border-primary", palavra: "planejado hoje" },
   descanso: { classe: "h-3 bg-muted border border-border", palavra: "descanso" },
   livre: { classe: "h-3 bg-muted border border-border", palavra: "dia livre" },
-  a_seguir: { classe: "h-3 border border-dotted border-border", palavra: "a seguir" },
+  a_seguir: { classe: "h-3 border border-dashed border-muted-foreground/50", palavra: "a seguir" },
 };
 
 const diaMes = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;

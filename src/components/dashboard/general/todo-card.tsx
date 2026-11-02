@@ -36,7 +36,7 @@ export async function TodoCard({ todayIso }: { todayIso: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 @[26rem]:grid-cols-4">
         <Quadro valor={String(summary.dueToday)} rotulo="Hoje" />
         <Quadro valor={String(summary.overdue)} rotulo="Atrasadas" />
         <Quadro valor={String(summary.p1)} rotulo="Urgentes (P1)" tom="vermelho" />

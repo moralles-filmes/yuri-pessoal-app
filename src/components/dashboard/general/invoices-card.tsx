@@ -30,7 +30,7 @@ export async function InvoicesCard({ todayIso }: { todayIso: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 @[26rem]:grid-cols-4">
         <Quadro valor={String(d.abertas)} rotulo="Abertas" />
         <Quadro valor={String(d.fechadas)} rotulo="Fechadas" />
         <Quadro valor={String(d.pagas)} rotulo="Pagas" />
