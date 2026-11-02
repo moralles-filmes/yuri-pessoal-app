@@ -131,6 +131,17 @@ export async function criarTransacao(
     };
   }
 
+  // 03-G2 (revisão final) — o schema aceita receita com cartão e sem conta só para a EDIÇÃO de um
+  // estorno existente (D-G2-19). Criar por aqui gravaria uma receita sem conta e sem cartão (o
+  // cartão só é resolvido para despesa); o estorno importado nasce por `createCardEstorno`.
+  if (d.type === "receita" && d.card_id && !d.account_id) {
+    return {
+      ok: false,
+      erro: "Verifique os campos destacados.",
+      fieldErrors: { account_id: ["Selecione a conta"] },
+    };
+  }
+
   if (d.type === "transferencia") {
     // UMA linha por transferência: `public.account_balance` já deriva os dois lados da
     // mesma linha (-amount na conta de origem `account_id`, +amount no destino

@@ -278,6 +278,15 @@ describe("03-G · transferência editada para despesa de cartão, com a fatura s
 });
 
 describe("03-C A2 · sair de receita zera a responsabilidade", () => {
+  // 03-G2 (revisão final) — o schema aceita receita com cartão e sem conta só por causa do estorno.
+  it("receita comum editada com cartão e sem conta: recusada no campo, sem escrita", async () => {
+    fake = criarSupabaseEmMemoria({ transactions: [existente({ type: "receita" })] }, RPC_OK);
+    const r = await updateTransaction(ID, payload({ card_id: "5b1d2c3e-4f50-4a6b-8c7d-9e0f1a2b3c4d", account_id: "" }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.fieldErrors?.account_id).toEqual(["Selecione a conta"]);
+    expect(fake.escritas()).toEqual([]);
+  });
+
   // 03-G2 (D-G2-12, Y22): afirmava a linha gravada; agora lê o p_lancamento — as duas chaves
   // vão EXPLÍCITAS no payload (pessoal / nulo), sem divisão a substituir.
   it("receita de terceiro editada para despesa pessoal volta a pessoal, com valor nulo", async () => {
@@ -901,6 +910,23 @@ describe("03-G2 E5a · deleteTransaction apaga ANTES de reabrir a fatura (RR-F-2
     expect(fake.escritas("card_statements")).toEqual([]);
     expect(fake.tabelas.card_statements[0]).toMatchObject({ status: "paga", pago_transacao_id: ID });
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  // 03-G2 (revisão final) — sem SQLSTATE o delete PODE ter acontecido.
+  it("delete sem code (rede): desfecho desconhecido citando a fatura, nunca 'Nada foi alterado'", async () => {
+    fake = criarSupabaseEmMemoria(pagamento(), {
+      antesDeGravar: (op) =>
+        op.tabela === "transactions" && op.tipo === "delete" ? { code: "", message: "fetch failed" } : null,
+    });
+    const r = await deleteTransaction(ID);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toContain("pode ter sido excluído");
+      expect(r.error).toContain("03/2031");
+      expect(r.error).not.toContain("Nada foi alterado");
+    }
+    expect(fake.escritas("card_statements")).toEqual([]);
+    expect(revalidatePath).toHaveBeenCalled();
   });
 
   it("delete ok e reabrir falho: frase com 03/2031 e Desfaça o pagamento em Faturas", async () => {

@@ -252,6 +252,21 @@ describe("03-G2 E4 · cancelInstallmentFuture, ordenado e conferido (D-G2-9)", (
     expect(fake.tabelas.transaction_installments[0]).toMatchObject({ status: "ativa" });
   });
 
+  // 03-G2 (revisão final) — sem SQLSTATE os recebíveis PODEM ter saído.
+  it("delete sem code (rede): desfecho desconhecido, nunca 'Nada foi alterado'", async () => {
+    fake = criarSupabaseEmMemoria(parcelamento(), {
+      antesDeGravar: (op) =>
+        op.tabela === "receivables" && op.tipo === "delete" ? { code: "", message: "fetch failed" } : null,
+    });
+    const r = await cancelInstallmentFuture("tx-p");
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toContain("pode ter removido os recebíveis");
+      expect(r.error).not.toContain("Nada foi alterado");
+    }
+    expect(fake.tabelas.transaction_installments[0]).toMatchObject({ status: "ativa" });
+  });
+
   it("update das parcelas falho: diz que os recebíveis foram removidos e manda repetir", async () => {
     fake = criarSupabaseEmMemoria(parcelamento(), recusar("transaction_installments", "update"));
     const r = await cancelInstallmentFuture("tx-p");

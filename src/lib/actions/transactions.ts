@@ -7,11 +7,13 @@ import { splitSchema } from "@/lib/validators/split";
 import {
   authContext,
   dbError,
+  desfechoDesconhecido,
   falhaDeLeituraAntes,
   gravadoEmParte,
   invalid,
   nadaGravado,
   notAuthed,
+  temSqlstate,
   traduzirErroDaRpc,
   type AuthContext,
 } from "@/lib/actions/helpers";
@@ -127,6 +129,12 @@ export async function updateTransaction(
   const ehEstorno = existing.type === "receita" && !!existing.card_id && d.type === "receita";
   let cardId: string | null = null;
   let statementId: string | null = null;
+  // 03-G2 (revisão final) — o schema aceita receita com cartão e sem conta por causa do estorno
+  // (D-G2-19); fora da edição de um estorno existente, isso gravaria uma receita sem conta e sem
+  // cartão. Recusa antes de qualquer escrita.
+  if (!ehEstorno && d.type === "receita" && d.card_id && !d.account_id) {
+    return invalid({ account_id: ["Selecione a conta"] });
+  }
   if (ehEstorno) {
     cardId = existing.card_id;
     statementId = existing.statement_id;
@@ -336,7 +344,17 @@ export async function deleteTransaction(id: string): Promise<ActionResult> {
       ? apagar.eq("transfer_group_id", existing.transfer_group_id)
       : apagar.eq("id", id)
   ).select("id");
-  if (erroDoDelete) return nadaGravado("excluir o lançamento");
+  if (erroDoDelete) {
+    if (temSqlstate(erroDoDelete)) return nadaGravado("excluir o lançamento");
+    // 03-G2 (revisão final) — sem SQLSTATE o delete PODE ter acontecido: nunca "Nada foi alterado".
+    revalidateTransactions();
+    return desfechoDesconhecido(
+      fatura
+        ? `sido excluído; se ele sumiu, a fatura de ${competenciaMMAAAA(fatura.competencia)} continua marcada como paga e o pagamento se desfaz em Faturas`
+        : "sido excluído",
+      "Lançamentos",
+    );
+  }
 
   if (fatura) {
     const { error: erroDaFatura } = await ctx.supabase

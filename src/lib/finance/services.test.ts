@@ -338,6 +338,22 @@ describe("03-C2 A5 · criarTransacao NÃO lê a marcação da categoria (K2)", (
 });
 
 describe("03-G2 E3a · criarTransacao grava numa chamada só (rpc salvar_lancamento)", () => {
+  // 03-G2 (revisão final) — o schema aceita receita com cartão e sem conta só para a EDIÇÃO de um
+  // estorno; criar por aqui gravaria uma receita sem conta e sem cartão.
+  it("receita com cartão e sem conta não é criada: recusa no campo, nenhuma escrita", async () => {
+    const fake = criarSupabaseEmMemoria({}, RPC_OK);
+    const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
+    const r = await criarTransacao(ctx, {
+      ...BASE,
+      type: "receita",
+      status: "recebido",
+      card_id: "5b1d2c3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+      account_id: "",
+    });
+    expect(r).toMatchObject({ ok: false, fieldErrors: { account_id: ["Selecione a conta"] } });
+    expect(fake.escritas()).toEqual([]);
+  });
+
   const DESTINO = "9a4b6c20-3e1d-4f87-b5a2-1c8d7e6f0a93";
   const DIVIDIDA = {
     ...BASE,

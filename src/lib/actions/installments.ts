@@ -11,12 +11,14 @@ import { splitSchema } from "@/lib/validators/split";
 import {
   authContext,
   dbError,
+  desfechoDesconhecido,
   falhaDeLeituraAntes,
   falhaDeLeituraDepois,
   gravadoEmParte,
   invalid,
   nadaGravado,
   notAuthed,
+  temSqlstate,
   traduzirErroDaRpc,
   type AuthContext,
 } from "@/lib/actions/helpers";
@@ -336,7 +338,16 @@ export async function cancelInstallmentFuture(
       .from("receivables")
       .delete()
       .in("installment_id", ids);
-    if (delErr) return nadaGravado("cancelar as parcelas futuras");
+    if (delErr) {
+      if (temSqlstate(delErr)) return nadaGravado("cancelar as parcelas futuras");
+      // 03-G2 (revisão final) — sem SQLSTATE os recebíveis PODEM ter saído: nunca "Nada foi
+      // alterado". Repetir o cancelamento converge (o recálculo roda para a compra dividida).
+      revalidateInstallments();
+      return desfechoDesconhecido(
+        "removido os recebíveis destas parcelas sem cancelá-las",
+        "Parcelamentos",
+      );
+    }
   }
 
   const { error } = await ctx.supabase

@@ -81,6 +81,17 @@ export function desfechoDesconhecido(oQue: string, onde: string): ActionResult<n
 }
 
 /**
+ * O banco respondeu (D-G2-16)? `code` SQLSTATE tem 5 caracteres (inclui `P0001` e `23xxx`): a
+ * transação foi recusada e nada ficou. Sem ele (fetch falho, timeout), a escrita PODE ter
+ * acontecido — quem chama erra para "pode ter acontecido", nunca para "nada".
+ */
+export function temSqlstate<E extends { code?: string }>(
+  error: E | null | undefined,
+): error is E & { code: string } {
+  return typeof error?.code === "string" && error.code.length === 5;
+}
+
+/**
  * Traduz o erro de uma RPC de escrita. Erro com `code` SQLSTATE (5 caracteres — inclui `P0001` e
  * as violações de CHECK/FK, todas com a transação revertida) ⇒ nada gravado. Sem `code` (fetch
  * falho, timeout) ⇒ desfecho desconhecido. ⛔ A mensagem crua do banco NUNCA vai para a tela:
@@ -91,7 +102,7 @@ export function traduzirErroDaRpc(
   oQue: string,
   onde = "Lançamentos",
 ): ActionResult<never> {
-  if (typeof error?.code !== "string" || error.code.length !== 5) {
+  if (!temSqlstate(error)) {
     return desfechoDesconhecido("sido salvo", onde);
   }
   const mensagem = error.message ?? "";

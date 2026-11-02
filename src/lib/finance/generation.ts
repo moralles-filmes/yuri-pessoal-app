@@ -4,7 +4,7 @@
  * quanto pelo catch-up chamado no render da página /financeiro.
  * NÃO chama revalidatePath — seguro para rodar durante o render.
  */
-import { authContext, type AuthContext } from "@/lib/actions/helpers";
+import { authContext, temSqlstate, type AuthContext } from "@/lib/actions/helpers";
 import { ehErroDeLeitura, exigir, type RespostaDoBanco } from "@/lib/supabase/leitura";
 import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { computeDueOccurrences } from "@/lib/finance/recurrence";
@@ -179,7 +179,13 @@ export async function runGeneration(
         continue;
       }
 
-      // Insert falhou: DEVOLVE a data (só se a reserva ainda for a desta geração).
+      // 03-G2 (revisão final) — sem SQLSTATE a resposta se perdeu e o insert PODE ter sido
+      // gravado: devolver a data faria a próxima geração lançar as mesmas ocorrências de novo. A
+      // reserva fica de pé e a geração declara `interrompida` — erra para "pode faltar", nunca
+      // para "em dobro" (invariante 37).
+      if (!temSqlstate(error)) return { generated, interrompida: true };
+
+      // Insert recusado pelo banco: DEVOLVE a data (só se a reserva ainda for a desta geração).
       const devolucao = await ctx.supabase
         .from("recurring_transactions")
         .update({

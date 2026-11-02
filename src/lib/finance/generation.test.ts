@@ -189,6 +189,18 @@ describe("03-G2 E6 · runGeneration reserva antes de inserir (S9, D-G2-10)", () 
     });
   });
 
+  // 03-G2 (revisão final) — sem SQLSTATE o insert PODE ter sido gravado: devolver a data faria a
+  // próxima geração lançar de novo. A reserva fica de pé e a geração para.
+  it("insert sem SQLSTATE (rede): a reserva fica de pé e a geração para — nunca devolve a data", async () => {
+    const { fake, ctx, lidas } = montar({}, (op) =>
+      op.tabela === "transactions" && op.tipo === "insert" ? { code: "", message: "fetch failed" } : null,
+    );
+    const r = await runGeneration(ctx, lidas, HOJE);
+    expect(r).toEqual({ generated: 0, interrompida: true });
+    expect(fake.tabelas.recurring_transactions[0].next_due_date).not.toBe("2031-01-10");
+    expect(fake.escritas("recurring_transactions")).toHaveLength(1);
+  });
+
   it("reserva com erro: interrompida e nenhum insert", async () => {
     const { fake, ctx, lidas } = montar({}, (op) =>
       op.tabela === "recurring_transactions" && op.tipo === "update"
