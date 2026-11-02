@@ -16,8 +16,8 @@ import type { EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
 import type { LinhaDoCaixa } from "@/lib/finance/detalhe";
 
 /**
- * 04-B — "Ver registros ›" de uma linha do caixa. A URL chega pronta do servidor; sem ela (o
- * relatório usa este bloco e ainda não abre registros aqui) nada é desenhado.
+ * 04-B — "Ver registros ›" de uma linha do caixa. A URL chega pronta do servidor (painel e
+ * relatório); sem ela — linha que não segue o recorte — nada é desenhado.
  */
 function VerRegistros({ href }: { href: string | undefined }) {
   if (!href) return null;
