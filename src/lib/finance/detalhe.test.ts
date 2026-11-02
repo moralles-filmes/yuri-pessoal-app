@@ -1010,3 +1010,12 @@ describe("mês além da janela lida (revisão final, achado 2)", () => {
     for (const [chave, alvo] of casos) expect(pedir(chave, "meu", alvo, { mes: "2027-04" }).estado).not.toBe("falha");
   });
 });
+
+describe("parcela cuja compra-pai não tem descrição (conferência visual, dado real)", () => {
+  it("escreve 'Compra parcelada', como a tela de Faturas, e não '(sem descrição)'", () => {
+    const inst = (E.inst ?? []).map((i) => (i.id === "i-notebook-3" ? { ...i, descricao: null } : i));
+    const d = ok(pedir("saidas", "meu", null, { entradas: { ...E, inst } }));
+    const r = registrosDe(d).find((x) => x.id === "i-notebook-3");
+    expect(r?.descricao).toBe("Compra parcelada");
+  });
+});

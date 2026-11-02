@@ -476,7 +476,8 @@ function registroDoItem(ctx: Contexto, i: ItemDeGasto): RegistroDoDetalhe {
   return registro({
     id: i.txId ?? i.installmentId ?? `item:${i.statementId ?? "avista"}:${i.descricao ?? ""}`,
     data: i.data,
-    descricao: i.descricao ?? "(sem descrição)",
+    // Sem descrição na compra-pai, a parcela se nomeia como na tela de Faturas.
+    descricao: i.descricao ?? (i.origem === "parcela" ? "Compra parcelada" : "(sem descrição)"),
     origem: fatura !== null ? nomeDoCartao(ctx.p, fatura.card_id) : nomeDaConta(ctx.p, tx?.account_id),
     categoria: i.categoryName,
     brutoCent: i.movCent,
