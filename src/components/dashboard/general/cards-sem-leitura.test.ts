@@ -47,4 +47,9 @@ describe("03-G L4 · CardSemLeitura", () => {
     expect(codigo).toContain("Tentar de novo");
     expect(codigo).not.toContain('"use client"');
   });
+
+  it("tem o desenho de falha: role=alert e o ícone de alerta", () => {
+    expect(codigo).toContain('role="alert"');
+    expect(codigo).toContain("AlertTriangle");
+  });
 });
