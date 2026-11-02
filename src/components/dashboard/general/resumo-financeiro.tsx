@@ -56,6 +56,13 @@ export async function ResumoFinanceiro({
           >
             parcial · a leitura atingiu o teto de lançamentos; pode faltar coisa
           </span>
+        ) : d.completudeDoHistorico.estado === "parcial" ? (
+          <span
+            role="status"
+            className="rounded-md border border-warning/30 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning-ink"
+          >
+            parcial · a base das comparações com o mês anterior pode estar incompleta
+          </span>
         ) : null}
       </div>
 

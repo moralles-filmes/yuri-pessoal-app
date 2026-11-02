@@ -407,7 +407,8 @@ export async function getNotificationsCardData(): Promise<NotificationsCardData>
   if (error) {
     // 06 T11 (D-06-M5): só a tabela ausente é "indisponível" (o "Em breve" legítimo); qualquer
     // outro erro é falha de leitura — o card a mostra como falha, nunca como "Em breve".
-    if (error.code === "42P01") return { available: false, unread: 0 };
+    // 42P01 do Postgres ou PGRST205 do PostgREST ("table not found in the schema cache").
+    if (error.code === "42P01" || error.code === "PGRST205") return { available: false, unread: 0 };
     throw new ErroDeLeitura("as notificações", { codigo: error.code ?? null, cause: error });
   }
   return { available: true, unread: count ?? 0 };
@@ -542,7 +543,9 @@ export async function getTrainingCardData(todayIso: string): Promise<TrainingCar
   const [preferences, scheduled, history, running, measurements, measurementTypes] =
     await Promise.all([
       getTrainingPreferences(),
-      getScheduledWorkouts(todayIso, todayIso),
+      // 6 dias para trás cobrem o começo de qualquer semana (weekStartsOn ainda não foi lido):
+      // sem isso, um descanso planejado que já passou aparecia como "dia livre" nas barras.
+      getScheduledWorkouts(addDaysIso(todayIso, -6), todayIso),
       // 60 dias cobrem a semana atual e o "último treino" sem trazer o histórico inteiro.
       getSessionHistory({ from: addDaysIso(todayIso, -60), to: todayIso }),
       supabase
@@ -565,7 +568,7 @@ export async function getTrainingCardData(todayIso: string): Promise<TrainingCar
   const weekRange = dashboardRange("semana", todayIso, preferences.weekStartsOn);
   const weekMetrics = aggregateSessions(sessionsInRange(history, weekRange), metricOptions);
   const semTreino = weekMetrics.sessionCount === 0;
-  // Barras Seg→Dom (REDESIGN-06 T12): mesmas sessões e mesmo planejamento já lidos acima.
+  // Barras Seg→Dom (REDESIGN-06 T12): mesmas sessões e o planejamento da semana até hoje.
   const dias = consistencyCalendar(
     sessionsInRange(history, weekRange),
     scheduled.map((entry) => ({
@@ -579,9 +582,10 @@ export async function getTrainingCardData(todayIso: string): Promise<TrainingCar
   );
 
   // ── Hoje ──
+  const scheduledToday = scheduled.filter((entry) => entry.scheduledDate === todayIso);
   const todayEntry =
-    scheduled.find((entry) => entry.entryKind === "treino" && entry.status !== "cancelado") ??
-    scheduled.find((entry) => entry.entryKind === "descanso") ??
+    scheduledToday.find((entry) => entry.entryKind === "treino" && entry.status !== "cancelado") ??
+    scheduledToday.find((entry) => entry.entryKind === "descanso") ??
     null;
   const trainedToday = history.some((item) => item.sessionDate === todayIso);
 

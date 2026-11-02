@@ -69,7 +69,10 @@ export function GeneralDashboard({
   const [order, setOrder] = React.useState<DashCardId[]>(layout.order);
   const [hidden, setHidden] = React.useState<DashCardId[]>(layout.hidden);
   // R7: o período que o "Salvar" grava é o PADRÃO escolhido aqui, nunca o da URL.
-  const [periodoPadrao, setPeriodoPadrao] = React.useState<DashPeriod>(layout.period);
+  const [periodoPadrao, setPeriodoPadrao] = React.useState<DashPeriod>(
+    // "custom" não está entre as opções (sem de/até não há o que salvar): abre em "mes".
+    layout.period === "custom" ? "mes" : layout.period,
+  );
   const [personalizing, setPersonalizing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const dragId = React.useRef<DashCardId | null>(null);
@@ -126,7 +129,7 @@ export function GeneralDashboard({
   function cancel() {
     setOrder(layout.order);
     setHidden(layout.hidden);
-    setPeriodoPadrao(layout.period);
+    setPeriodoPadrao(layout.period === "custom" ? "mes" : layout.period);
     setPersonalizing(false);
   }
 

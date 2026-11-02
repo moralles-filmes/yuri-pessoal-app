@@ -68,7 +68,7 @@ export async function FinanceCard({
         <BarrasEntradasSaidasChart dados={d.barras} />
         {d.completudeDoHistorico.estado === "parcial" ? (
           <p role="status" className="text-xs font-medium text-warning-ink">
-            o histórico das barras pode estar incompleto
+            o histórico das barras e das comparações pode estar incompleto
           </p>
         ) : null}
       </div>

@@ -167,3 +167,22 @@ describe("T13 · densidade e moldura decididas pelo card", () => {
     expect(ler("training-card.tsx")).not.toContain("border-dotted border-border");
   });
 });
+
+// Revisão final da branch: quatro achados que os testes das tarefas não pegavam.
+describe("revisão final · ausência e parcial que não podem sumir", () => {
+  it("resumo-financeiro.tsx: o histórico parcial também marca a faixa (é a base das comparações)", () => {
+    expect(ler("resumo-financeiro.tsx")).toContain('d.completudeDoHistorico.estado === "parcial"');
+  });
+  it("notifications-card.tsx: não lidas > 0 com lista vazia não vira \"Tudo em dia\"", () => {
+    expect(ler("notifications-card.tsx")).toContain("recent.length === 0 && d.unread > 0");
+  });
+  it("queries.ts: o planejamento do Treinos cobre a semana até hoje, e \"Hoje\" filtra o dia", () => {
+    const q = readFileSync(join(__dirname, "../../../lib/dashboard/queries.ts"), "utf8");
+    expect(q).toContain("getScheduledWorkouts(addDaysIso(todayIso, -6), todayIso)");
+    expect(q).toContain("entry.scheduledDate === todayIso");
+  });
+  it("general-dashboard-client.tsx: layout salvo em custom abre o seletor em mes", () => {
+    const c = readFileSync(join(__dirname, "../../../app/(app)/dashboard/general-dashboard-client.tsx"), "utf8");
+    expect(c.match(/layout\.period === "custom" \? "mes" : layout\.period/g)?.length).toBe(2);
+  });
+});

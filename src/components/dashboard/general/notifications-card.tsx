@@ -43,6 +43,11 @@ export async function NotificationsCard() {
 
   const recent = await getRecentNotifications(4);
 
+  // Com não lidas contadas, lista vazia é falha da segunda leitura, não "Tudo em dia".
+  if (recent.length === 0 && d.unread > 0) {
+    return <CardSemLeitura oQue="as notificações recentes" href="/notificacoes" />;
+  }
+
   if (recent.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">

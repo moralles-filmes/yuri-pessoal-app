@@ -40,6 +40,11 @@ describe("T11 · getNotificationsCardData", () => {
     await expect(getNotificationsCardData()).resolves.toEqual({ available: false, unread: 0 });
   });
 
+  it("tabela ausente pelo PostgREST (PGRST205) segue indisponível", async () => {
+    resposta.atual = { count: null, error: { code: "PGRST205" } };
+    await expect(getNotificationsCardData()).resolves.toEqual({ available: false, unread: 0 });
+  });
+
   it("sucesso devolve a contagem", async () => {
     resposta.atual = { count: 3, error: null };
     await expect(getNotificationsCardData()).resolves.toEqual({ available: true, unread: 3 });
