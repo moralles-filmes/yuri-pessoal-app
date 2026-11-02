@@ -36,6 +36,7 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { Bloco } from "@/components/shared/painel/bloco";
 import { Indicador } from "@/components/shared/painel/indicador";
+import { BotaoDoOlho, OlhoDosValores } from "@/components/shared/painel/olho-dos-valores";
 import {
   CategoryPill,
   ClassificacaoBadge,
@@ -122,6 +123,22 @@ const SEM_LANCAMENTOS = "sem lançamentos conhecidos";
 const moeda = (cent: number) => formatCurrency(cent / 100);
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
+/**
+ * Valor em dinheiro da lista: com o olho fechado, o texto real some e entra "R$ ••••" (CSS puro,
+ * sem recarregar). É discrição, não sigilo — o valor continua no HTML. O diálogo de pagamento não
+ * usa isto: quem vai pagar precisa ver quanto.
+ */
+function Valor({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <span className="group-data-[ocultar=true]/olho:hidden">{children}</span>
+      <span aria-hidden="true" className="hidden group-data-[ocultar=true]/olho:inline">
+        R$ ••••
+      </span>
+    </>
+  );
+}
+
 /** Quem paga uma parte de um item da fatura. */
 type ParteDoItem = { personId: string; nome: string; valor: number; perdoado: number };
 
@@ -155,7 +172,7 @@ function PartesDoItem({
         <span>
           meu{" "}
           <span className="font-medium tabular-nums text-foreground">
-            {formatCurrency(meu)}
+            <Valor>{formatCurrency(meu)}</Valor>
           </span>
         </span>
       )}
@@ -163,10 +180,13 @@ function PartesDoItem({
         <span key={p.personId} className="min-w-0">
           <span className="truncate">{p.nome}</span>{" "}
           <span className="font-medium tabular-nums text-foreground">
-            {formatCurrency(p.valor)}
+            <Valor>{formatCurrency(p.valor)}</Valor>
           </span>
           {p.perdoado > 0 && (
-            <span> · não será cobrado {formatCurrency(p.perdoado)}</span>
+            <span>
+              {" "}
+              · não será cobrado <Valor>{formatCurrency(p.perdoado)}</Valor>
+            </span>
           )}
         </span>
       ))}
@@ -268,8 +288,10 @@ function DetalheDaFatura({
                   : "text-sm font-medium tabular-nums"
               }
             >
-              {t.type === "receita" ? "−" : ""}
-              {formatCurrency(t.amount)}
+              <Valor>
+                {t.type === "receita" ? "−" : ""}
+                {formatCurrency(t.amount)}
+              </Valor>
             </span>
             <MoveTransactionDialog
               txId={t.id}
@@ -306,7 +328,7 @@ function DetalheDaFatura({
             />
           </div>
           <span className="shrink-0 text-sm font-medium tabular-nums">
-            {formatCurrency(it.valor)}
+            <Valor>{formatCurrency(it.valor)}</Valor>
           </span>
         </div>
       ))}
@@ -337,14 +359,14 @@ function DetalheDaFatura({
               <div className="mb-1.5 flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
                 <span className="min-w-0 truncate">Quem paga esta fatura</span>
                 <span className="shrink-0 tabular-nums">
-                  {formatCurrency(totalReais)}
+                  <Valor>{formatCurrency(totalReais)}</Valor>
                 </span>
               </div>
               <div className="space-y-1">
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="min-w-0 truncate">Minha parte</span>
                   <span className="shrink-0 font-medium tabular-nums">
-                    {formatCurrency(meu)}
+                    <Valor>{formatCurrency(meu)}</Valor>
                   </span>
                 </div>
                 {[...byPerson.entries()].map(([id, p]) => (
@@ -355,11 +377,13 @@ function DetalheDaFatura({
                     <span className="min-w-0 text-muted-foreground">
                       <span className="block truncate">{p.nome}</span>
                       {p.perdoado > 0 && (
-                        <span className="block">não será cobrado {formatCurrency(p.perdoado)}</span>
+                        <span className="block">
+                          não será cobrado <Valor>{formatCurrency(p.perdoado)}</Valor>
+                        </span>
                       )}
                     </span>
                     <span className="shrink-0 font-medium tabular-nums">
-                      {formatCurrency(p.valor)}
+                      <Valor>{formatCurrency(p.valor)}</Valor>
                     </span>
                   </div>
                 ))}
@@ -441,12 +465,19 @@ function CartaoDaFatura({
             {mostraTerceiros && v && (
               <p className="text-xs text-muted-foreground">
                 meu{" "}
-                <span className="font-medium text-foreground">{moeda(v.meuCent)}</span>{" "}
+                <span className="font-medium text-foreground">
+                  <Valor>{moeda(v.meuCent)}</Valor>
+                </span>{" "}
                 · terceiros{" "}
                 <span className="font-medium text-foreground">
-                  {moeda(v.terceirosCent)}
+                  <Valor>{moeda(v.terceirosCent)}</Valor>
                 </span>
-                {frasePerdoado && ` · ${frasePerdoado}`}
+                {frasePerdoado && (
+                  <>
+                    {" · "}
+                    <Valor>{frasePerdoado}</Valor>
+                  </>
+                )}
               </p>
             )}
           </div>
@@ -462,7 +493,7 @@ function CartaoDaFatura({
                     f.estado === "paga" && "line-through text-muted-foreground",
                   )}
                 >
-                  {moeda(v.totalCent)}
+                  <Valor>{moeda(v.totalCent)}</Valor>
                 </span>
               )}
               {v !== null && f.acao === null && v.totalCent <= 0 && (
@@ -518,6 +549,7 @@ export function StatementsClient({
   selectedCardId,
   month,
   status,
+  ocultoInicial,
 }: {
   cards: CardOption[];
   statements: CardStatementWithTotal[];
@@ -529,6 +561,8 @@ export function StatementsClient({
   selectedCardId: string | null;
   month: string | null;
   status: string | null;
+  /** O olho dos valores é do aparelho (cookie lido na página). */
+  ocultoInicial: boolean;
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = React.useState<string | null>(null);
@@ -773,6 +807,8 @@ export function StatementsClient({
         </div>
       </div>
 
+      <OlhoDosValores ocultoInicial={ocultoInicial}>
+      <div className="space-y-5">
       {/* Indicadores: sempre sobre TODAS as faturas do cartão, não sobre o filtro. */}
       {aPagar && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -781,6 +817,7 @@ export function StatementsClient({
             icone={ReceiptText}
             rotulo="A pagar neste cartão"
             dica="Soma das faturas fechadas ainda não pagas, as atrasadas inclusive. Fatura em aberto e prevista não entram."
+            acessorio={<BotaoDoOlho />}
             valor={moeda(aPagar.totalCent)}
             linhaDeBase={
               aPagar.qtd > 0
@@ -825,12 +862,13 @@ export function StatementsClient({
             valor={proximo ? diaMes(proximo.data) : { ausente: "nenhum vencimento conhecido" }}
             linhaDeBase={
               proximo
-                ? `fatura de ${mesPorExtenso(proximo.fatura.competencia)} · ${
-                    proximo.fatura.valores
-                      ? moeda(proximo.fatura.valores.totalCent)
-                      : SEM_LANCAMENTOS
+                ? `fatura de ${mesPorExtenso(proximo.fatura.competencia)}${
+                    proximo.fatura.valores ? "" : ` · ${SEM_LANCAMENTOS}`
                   }`
                 : "sem faturas conhecidas"
+            }
+            detalheComValor={
+              proximo?.fatura.valores ? `total: ${moeda(proximo.fatura.valores.totalCent)}` : null
             }
           />
         </div>
@@ -874,6 +912,8 @@ export function StatementsClient({
           </div>
         )
       )}
+      </div>
+      </OlhoDosValores>
 
       {pagarMontado && (
         <PagarFaturaDialog

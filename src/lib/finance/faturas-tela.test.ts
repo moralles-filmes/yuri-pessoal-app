@@ -158,3 +158,32 @@ describe("05-B · tela", () => {
     expect(normalizada(nav)).toContain('title: "Faturas e pagamentos"');
   });
 });
+
+describe("05-C · olho", () => {
+  const tela = fonteSemComentarios(TELA);
+  const pagina = fonteSemComentarios("src/app/(app)/faturas/page.tsx");
+  const pagarDialogo = fonteSemComentarios(PAGAR);
+
+  it("leu os arquivos (não afirma sobre string vazia)", () => {
+    expect(tela.length).toBeGreaterThan(500);
+    expect(pagina.length).toBeGreaterThan(200);
+    expect(pagarDialogo.length).toBeGreaterThan(500);
+  });
+
+  it("a página lê o cookie do olho e passa ocultoInicial", () => {
+    expect(pagina).toContain("COOKIE_DO_OLHO");
+    expect(pagina).toContain("valoresOcultos");
+    expect(normalizada(pagina)).toContain("ocultoInicial={ocultos}");
+  });
+
+  it("a tela importa o olho e esconde os valores da lista por CSS", () => {
+    expect(tela).toMatch(/import\s*\{[^}]*\bOlhoDosValores\b[^}]*\}/);
+    expect(tela).toMatch(/import\s*\{[^}]*\bBotaoDoOlho\b[^}]*\}/);
+    expect(tela).toContain("<OlhoDosValores");
+    expect(tela).toContain("group-data-[ocultar=true]/olho:hidden");
+  });
+
+  it("o diálogo de pagamento continua mostrando o valor (não usa o olho)", () => {
+    expect(pagarDialogo).not.toContain("ocultar=true");
+  });
+});
