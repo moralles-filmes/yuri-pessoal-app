@@ -123,7 +123,7 @@ export function montarProximosMeses(p: {
     );
 
   const celulas: Record<string, Record<string, CelulaDoMes>> = {};
-  const reaisDaGrade: DashStatement[] = [];
+  const reaisDaGrade: (typeof statements)[number][] = [];
   for (const card of cartoes) {
     const linha: Record<string, CelulaDoMes> = {};
     for (const mes of meses) {
