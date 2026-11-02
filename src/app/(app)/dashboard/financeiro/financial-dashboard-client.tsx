@@ -42,11 +42,10 @@ import type { CompletudeFinanceira } from "@/lib/finance/pipeline";
 import {
   comparacaoDosIndicadores,
   dadosDasBarras,
-  indicadoresDoCaixa,
+  indicadoresDoResumo,
   valorDaFatura,
   type CartaoDoPainel,
   type UltimasDoPainel,
-  type ValorDoIndicador,
 } from "@/lib/finance/painel";
 import { estadoDoBloco } from "@/lib/painel/bloco";
 import { RoscaCategoriasChart } from "@/components/dashboard/rosca-categorias-chart";
@@ -82,11 +81,6 @@ function diaMes(iso: string): string {
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 }
 
-/** O número vira texto de moeda; o estado de erro passa como está (nunca vira R$ 0,00). */
-function valorDoIndicador(v: ValorDoIndicador): string | { erro: string } {
-  return typeof v === "number" ? formatCurrency(v) : v;
-}
-
 /** Monta a URL do dashboard preservando o mês e a base caixa quando ativa. */
 function urlDoDashboard(mes: string, base: BaseFinanceira): string {
   const params = new URLSearchParams();
@@ -113,7 +107,6 @@ export function DashboardClient({
   base,
   caixa,
   saldoCom,
-  entradasInd,
   resumo,
   perdoado,
   graficoAteODia,
@@ -146,7 +139,11 @@ export function DashboardClient({
   base: BaseFinanceira;
   caixa: EstadoDoCaixa | null;
   saldoCom: { rotulo: string; valor: number | null; diferenca: string | null };
-  entradasInd: { valor: number; linhaDeTerceiros: string | null };
+  /**
+   * Não é mais lido aqui: `indicadoresDoResumo` chama `indicadorMinhasEntradas` por dentro (04-A2
+   * D-A2-15). Fica na prop porque `entradas-do-card.test.ts` (K1) ainda exige a chamada na página.
+   */
+  entradasInd?: { valor: number; linhaDeTerceiros: string | null };
   resumo: ResumoMes;
   perdoado: number;
   graficoAteODia: { ateODia: number } | null;
@@ -216,43 +213,6 @@ export function DashboardClient({
 
   /* ───────────── Os quatro indicadores (K1, K2, K6, K7) ───────────── */
 
-  // Em caixa os três vêm de `indicadoresDoCaixa` (leitura com erro vira TEXTO nos três); em
-  // competência, do resumo do mês. `null` = competência.
-  const caixaInd = indicadoresDoCaixa(caixa);
-
-  const entradasIndView = caixaInd
-    ? {
-        valor: valorDoIndicador(caixaInd.entradas),
-        linhaDeBase: "renda pessoal recebida · caixa realizado",
-        detalheComValor: null,
-      }
-    : {
-        valor: formatCurrency(entradasInd.valor),
-        linhaDeBase: "renda pessoal · competência",
-        // Tem dinheiro: some junto com o olho (revisão final 04-A).
-        detalheComValor: entradasInd.linhaDeTerceiros,
-      };
-
-  const saidasInd = caixaInd
-    ? {
-        valor: valorDoIndicador(caixaInd.saidas),
-        linhaDeBase: "minha parte · caixa realizado",
-      }
-    : {
-        valor: formatCurrency(resumo.meu),
-        linhaDeBase: "minha parte · competência · inclui o que ainda está pendente",
-      };
-
-  const terceirosInd = caixaInd
-    ? {
-        valor: valorDoIndicador(caixaInd.terceiros),
-        linhaDeBase: "terceiros nas saídas · caixa realizado",
-      }
-    : {
-        valor: formatCurrency(resumo.terceiros),
-        linhaDeBase: "parte de terceiros nas saídas · competência",
-      };
-
   // Setas (K7): a mesma fonte do "Meu mês a mês". Caixa com erro de leitura: sem seta.
   const comparacao = caixaErro
     ? null
@@ -263,6 +223,18 @@ export function DashboardClient({
         // Mês futuro: só o que já está lançado, sem cor (revisão final 04-A).
         futuro: mesSel > mesAtual,
       });
+
+  // 04-A2 (D-A2-15): a montagem dos três indicadores é a função que o relatório também usa. Aqui o
+  // painel pede sempre "meu"; o pendente só é lido nas outras responsabilidades.
+  const indicadores = indicadoresDoResumo({
+    resp: "meu",
+    base,
+    resumo,
+    caixa,
+    comparacao,
+    pendente: { ate: totalPendente, rotuloAte: rotuloTotalPendente, referenteAoMes: aReceber },
+    rotuloDoRecorte: null,
+  });
 
   /* ───────────── Cartões e próximas faturas ───────────── */
 
@@ -383,12 +355,12 @@ export function DashboardClient({
             className={INDICADOR_PEQUENO_NO_CELULAR}
             tom="entrada"
             icone={TrendingUp}
-            rotulo="Minhas entradas"
-            dica="A parte das entradas que é sua (renda pessoal). Dinheiro de terceiros fica de fora."
-            valor={entradasIndView.valor}
-            linhaDeBase={entradasIndView.linhaDeBase}
-            detalheComValor={entradasIndView.detalheComValor}
-            comparacao={comparacao?.entradas}
+            rotulo={indicadores.entradas.rotulo}
+            dica={indicadores.entradas.dica}
+            valor={indicadores.entradas.valor}
+            linhaDeBase={indicadores.entradas.linhaDeBase}
+            detalheComValor={indicadores.entradas.detalheComValor}
+            comparacao={indicadores.entradas.comparacao ?? undefined}
             href={`/financeiro/lancamentos?type=receita&month=${mesSel}`}
             hrefRotulo="Ver entradas"
           />
@@ -396,11 +368,11 @@ export function DashboardClient({
             className={INDICADOR_PEQUENO_NO_CELULAR}
             tom="saida"
             icone={TrendingDown}
-            rotulo="Minhas saídas"
-            dica="A sua parte das saídas. O que é de terceiros fica de fora e aparece em De terceiros."
-            valor={saidasInd.valor}
-            linhaDeBase={saidasInd.linhaDeBase}
-            comparacao={comparacao?.saidas}
+            rotulo={indicadores.saidas.rotulo}
+            dica={indicadores.saidas.dica}
+            valor={indicadores.saidas.valor}
+            linhaDeBase={indicadores.saidas.linhaDeBase}
+            comparacao={indicadores.saidas.comparacao ?? undefined}
             href={`/financeiro/lancamentos?type=despesa&month=${mesSel}`}
             hrefRotulo="Ver saídas"
           />
@@ -408,10 +380,10 @@ export function DashboardClient({
             className={INDICADOR_PEQUENO_NO_CELULAR}
             tom="terceiros"
             icone={Users}
-            rotulo="De terceiros"
-            dica="A parte de terceiros dentro das saídas: o que foi pago por você e volta para você."
-            valor={terceirosInd.valor}
-            linhaDeBase={terceirosInd.linhaDeBase}
+            rotulo={indicadores.quarto.rotulo}
+            dica={indicadores.quarto.dica}
+            valor={indicadores.quarto.valor}
+            linhaDeBase={indicadores.quarto.linhaDeBase}
             href="/terceiros"
             hrefRotulo="Ver terceiros"
           />

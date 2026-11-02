@@ -16,7 +16,13 @@ import { semComentarios } from "@/test/links-inline";
 const pasta = join(process.cwd(), "src", "app", "(app)", "dashboard", "financeiro");
 const PAGINA = semComentarios(readFileSync(join(pasta, "page.tsx"), "utf8"));
 const CLIENTE = semComentarios(readFileSync(join(pasta, "financial-dashboard-client.tsx"), "utf8"));
-const TUDO = `${PAGINA}\n${CLIENTE}`;
+// 04-A2 (D-A2-15): a montagem dos três indicadores saiu do cliente para `indicadoresDoResumo`
+// (`finance/painel.ts`), compartilhada com o relatório. O inventário passa a ler os dois lugares, e
+// as checagens de "fonte certa" leem o ramo "meu" da função — a garantia é a mesma, mudou de arquivo.
+const PAINEL = semComentarios(
+  readFileSync(join(process.cwd(), "src", "lib", "finance", "painel.ts"), "utf8"),
+);
+const TUDO = `${PAGINA}\n${CLIENTE}\n${PAINEL}`;
 
 /** [nº no §2.3 · bloco, marcador(es) — basta um]. O destino vem do §4, "Antes → depois". */
 const BLOCOS: readonly (readonly [string, readonly string[]])[] = [
@@ -83,29 +89,37 @@ describe("o banner é só do servidor", () => {
 });
 
 describe("indicadores: o número de cada um sai da fonte certa", () => {
-  /** O trecho do cliente entre dois marcadores — para a asserção valer só para o indicador pedido. */
-  const trecho = (de: string, ate: string) => {
-    const i = CLIENTE.indexOf(de);
-    const j = CLIENTE.indexOf(ate, i + de.length);
+  /** O trecho de `fonte` entre dois marcadores — para a asserção valer só para o indicador pedido. */
+  const trecho = (fonte: string, de: string, ate: string) => {
+    const i = fonte.indexOf(de);
+    const j = fonte.indexOf(ate, i + de.length);
     expect(i, `marcador ${de}`).toBeGreaterThanOrEqual(0);
     expect(j, `marcador ${ate}`).toBeGreaterThan(i);
-    return CLIENTE.slice(i, j);
+    return fonte.slice(i, j);
   };
+  /** O ramo "meu" de `indicadoresDoResumo`: é o que o painel mostra. */
+  const meu = () => trecho(PAINEL, 'if (resp === "meu")', "Pendente de terceiros");
+
+  it("o cliente monta os três indicadores por indicadoresDoResumo, em \"meu\" (D-A2-15)", () => {
+    expect(CLIENTE).toContain("indicadoresDoResumo(");
+    expect(CLIENTE).toMatch(/resp:\s*"meu"/);
+  });
 
   it("Minhas saídas, em competência, vale resumo.meu — nunca resumo.saidas (K1/K6)", () => {
-    const saidas = trecho("const saidasInd", "const terceirosInd");
+    const saidas = trecho(meu(), "saidas: {", "quarto: {");
     expect(saidas).toContain("formatCurrency(resumo.meu)");
     expect(saidas).not.toContain("resumo.saidas");
   });
 
   it("De terceiros, em competência, vale resumo.terceiros", () => {
-    const terceiros = trecho("const terceirosInd", "const comparacao");
-    expect(terceiros).toContain("formatCurrency(resumo.terceiros)");
+    const quarto = meu().slice(meu().indexOf("quarto: {"));
+    expect(quarto).toContain("formatCurrency(resumo.terceiros)");
   });
 
   it("Minhas entradas, em competência, vem da função de apresentação do painel (entradasMeu), não do bruto", () => {
-    expect(PAGINA).toContain("indicadorMinhasEntradas(resumo)");
-    expect(CLIENTE).toContain("entradasInd.valor");
+    expect(meu()).toContain("indicadorMinhasEntradas(resumo)");
+    expect(meu()).toContain("formatCurrency(entradasComp.valor)");
+    expect(meu()).not.toContain("resumo.entradas)");
     expect(CLIENTE).not.toContain("resumo.entradas");
   });
 
@@ -115,10 +129,9 @@ describe("indicadores: o número de cada um sai da fonte certa", () => {
   });
 
   it("em caixa, os três indicadores saem de indicadoresDoCaixa — e a leitura com erro vira texto, não número", () => {
-    expect(CLIENTE).toContain("indicadoresDoCaixa(");
-    // O cliente não lê graficos.minha direto para os indicadores: o erro seria esquecido.
-    const topo = trecho("const saidasInd", "const terceirosInd");
-    expect(topo).not.toContain("graficos.minha");
+    expect(PAINEL).toContain("indicadoresDoCaixa(");
+    // O ramo "meu" não lê graficos.minha direto: o erro de leitura seria esquecido.
+    expect(meu()).not.toContain("graficos.minha");
   });
 
   it("os quatro indicadores ficam dentro do OlhoDosValores, e só o Saldo leva o botão", () => {
