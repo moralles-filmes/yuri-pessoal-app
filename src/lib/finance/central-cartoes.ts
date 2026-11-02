@@ -18,13 +18,13 @@
  * `null`. Fatura real com total 0 é zero MEDIDO e entra na soma.
  */
 import {
-  type DashReceivable,
   type DashStatement,
   mesDe,
   nextDayISO,
   parteDosTerceirosPorFatura,
 } from "@/lib/finance/dashboard";
 import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
+import { montarEntradas } from "@/lib/finance/pipeline";
 import { parteDoTerceiroCentavos, resumirRecebivel } from "@/lib/finance/recebimentos";
 import { reaisParaCentavos } from "@/lib/format";
 import type { CreditCardRow, ReceivableWithPerson } from "@/types/database";
@@ -128,18 +128,12 @@ export function montarVisaoGeral(p: {
   const { hoje, cards, statements, receivables } = p;
 
   const porPessoa = parteDosTerceirosPorPessoa(receivables);
-  // `meu` sai da regra única da fatura (total − Σ terceiros), nunca somando as pessoas.
-  const terceirosPorFatura = parteDosTerceirosPorFatura(
-    receivables.map(
-      (r): DashReceivable => ({
-        statement_id: r.statement_id,
-        installment_id: r.installment_id,
-        valor: Number(r.valor),
-        status: r.status,
-        recebido: resumirRecebivel(r).recebido,
-      }),
-    ),
-  );
+  // `meu` sai da regra única da fatura (total − Σ terceiros), nunca somando as pessoas. O
+  // `DashReceivable` nasce em `montarEntradas` — a fronteira da 03-B proíbe montá-lo aqui.
+  const { recs } = montarEntradas({
+    recebiveis: receivables.map((r) => ({ ...r, statement: null, transaction: null })),
+  });
+  const terceirosPorFatura = parteDosTerceirosPorFatura(recs);
 
   const nomes = new Map<string, string>();
   for (const r of receivables) {
