@@ -8,7 +8,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { hojeISO } from "@/lib/format";
 import { comparativoDoGraficoAteODia } from "@/lib/finance/caixa";
-import { lerFinanceiro } from "@/lib/finance/queries";
+import { getCategories, getPeopleForSelect, lerFinanceiro, lerSaldoAte } from "@/lib/finance/queries";
 import { estadoDoCaixa, type EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
 import type { BaseFinanceira } from "@/lib/finance/base";
 import {
@@ -19,6 +19,7 @@ import {
   gastosPorCategoria,
   gastosPorForma,
   mesDe,
+  nextDayISO,
   paresDoMesAMes,
   type MesAMesDados,
   perdoadoDoMes,
@@ -37,11 +38,14 @@ import {
   type ResumoMes,
 } from "@/lib/finance/dashboard";
 import {
-  ESCOPO_RELATORIO,
+  ESCOPO_PAINEL,
   janelaDoRelatorio,
   saldoDasContas,
   type CompletudeFinanceira,
 } from "@/lib/finance/pipeline";
+import { recorteDaUrl } from "@/lib/finance/recorte";
+import type { Responsabilidade } from "@/lib/finance/responsabilidade";
+import { montarRelatorioFinanceiro, type RelatorioFinanceiro } from "@/lib/reports/financeiro";
 import { getHabitsDashboard } from "@/lib/habits/queries";
 import { getStudyDashboard } from "@/lib/studies/queries";
 import { tasksReport, type ReportTask, type TasksReport } from "@/lib/reports/tasks";
@@ -121,8 +125,14 @@ export type StudiesReport = {
 export type ReportsData = {
   mes: string;
   hoje: string;
+  /** 04-A2: o modelo de vista da aba Financeiro (a Task 9 passa a desenhá-lo). */
+  financeiro: RelatorioFinanceiro;
+  /**
+   * ⚠️ PROVISÓRIO até a Task 9 (04-A2): o relatório ANTIGO, que `relatorios-client.tsx` ainda lê.
+   * Quem desenha a aba nova lê `financeiro`; estes dois campos saem junto com o cliente antigo.
+   */
   finance: FinanceReport;
-  /** Só com a base caixa selecionada; `null` em competência. */
+  /** ⚠️ PROVISÓRIO (idem): só com a base caixa selecionada; `null` em competência. */
   caixa: EstadoDoCaixa | null;
   card: CardReport;
   habits: HabitsReport;
@@ -132,22 +142,44 @@ export type ReportsData = {
 
 /* ───────────────────────────── Financeiro + Cartão ───────────────────────────── */
 
+/** Os parâmetros da URL que o relatório lê além do mês e da base (04-A2). */
+export type FiltrosDoRelatorioNaUrl = {
+  resp: Responsabilidade;
+  sp: Record<string, string | string[] | undefined>;
+};
+
 async function getFinanceAndCardReport(
   mesSel: string,
   hoje: string,
   base: BaseFinanceira,
-): Promise<{ finance: FinanceReport; caixa: EstadoDoCaixa | null; card: CardReport }> {
+  filtros: FiltrosDoRelatorioNaUrl,
+): Promise<{
+  financeiro: RelatorioFinanceiro;
+  finance: FinanceReport;
+  caixa: EstadoDoCaixa | null;
+  card: CardReport;
+}> {
   const mesAtual = mesDe(hoje);
   // REDESIGN-03-B — a MESMA chamada da página do dashboard financeiro, não a mesma cópia.
   const janela = janelaDoRelatorio({ mesSel, mesAtual });
   const { evoMeses, projMeses } = janela;
 
   // As recorrências voltam também CRUAS: "assinaturas" lê `description` e `category.name`, que
-  // não são entrada do motor.
-  const { entradas, contas: accounts, recorrencias: recurrences, completude } = await lerFinanceiro({
-    janela,
-    escopo: ESCOPO_RELATORIO,
-  });
+  // não são entrada do motor. 04-A2 (D-A2-23): com `ESCOPO_PAINEL`, os recebíveis crus (com a
+  // pessoa e o cartão) saem da MESMA leitura; pessoas e categorias dos `<select>` vêm de leituras
+  // que já existiam (nenhuma tabela nova é lida).
+  const [leitura, pessoas, categoriasLidas] = await Promise.all([
+    lerFinanceiro({ janela, escopo: ESCOPO_PAINEL }),
+    getPeopleForSelect(),
+    getCategories(),
+  ]);
+  const {
+    entradas,
+    contas: accounts,
+    recorrencias: recurrences,
+    recebiveis: recebiveisCrus,
+    completude,
+  } = leitura;
   const { txs, sts, recs, inst, cards: dashCards, recorrencias, bills: dashBills } = entradas;
 
   const resumo = resumoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
@@ -180,6 +212,39 @@ async function getFinanceAndCardReport(
         )
       : null;
 
+  // 04-A2: as opções dos filtros, o recorte da URL (id desconhecido é ignorado) e o saldo —
+  // `lerSaldoAte` depende do recorte (o da conta), por isso vem DEPOIS, uma RPC a mais e sequencial.
+  const opcoes = {
+    contas: accounts.map((c) => ({ id: c.id, nome: c.name })),
+    cartoes: dashCards.map((c) => ({ id: c.id, nome: c.nome })),
+    pessoas,
+    categorias: categoriasLidas.map((c) => ({ id: c.id, nome: c.name })),
+  };
+  const recorte = recorteDaUrl(filtros.sp, {
+    contas: opcoes.contas.map((o) => o.id),
+    cartoes: opcoes.cartoes.map((o) => o.id),
+    pessoas: opcoes.pessoas.map((o) => o.id),
+    categorias: opcoes.categorias.map((o) => o.id),
+  });
+  const saldoAte = await lerSaldoAte(nextDayISO(hoje), recorte.conta);
+
+  const financeiro = montarRelatorioFinanceiro({
+    mes: mesSel,
+    hoje,
+    base,
+    resp: filtros.resp,
+    recorte,
+    entradas,
+    recebiveisCrus,
+    contas: accounts,
+    recorrenciasCruas: recurrences,
+    saldoAte,
+    caixa,
+    completude,
+    janela: { evoMeses, projMeses },
+    opcoes,
+  });
+
   // ── Cartão ──
   const faturas = proximas6Faturas({ hoje, cards: dashCards, statements: sts, receivables: recs });
 
@@ -198,6 +263,7 @@ async function getFinanceAndCardReport(
   }
 
   return {
+    financeiro,
     finance: {
       completude,
       mes: mesSel,
@@ -298,11 +364,12 @@ async function getTasksReportData(todayIso: string): Promise<TasksReport> {
 
 export async function getReportsData(
   mesSel: string,
-  base: BaseFinanceira = "competencia",
+  base: BaseFinanceira,
+  filtros: FiltrosDoRelatorioNaUrl,
 ): Promise<ReportsData> {
   const hoje = hojeISO();
   const [financeAndCard, habits, studies, tasks] = await Promise.all([
-    getFinanceAndCardReport(mesSel, hoje, base),
+    getFinanceAndCardReport(mesSel, hoje, base, filtros),
     getHabitsReport(hoje),
     getStudiesReport(hoje),
     getTasksReportData(hoje),
@@ -311,6 +378,7 @@ export async function getReportsData(
   return {
     mes: mesSel,
     hoje,
+    financeiro: financeAndCard.financeiro,
     finance: financeAndCard.finance,
     caixa: financeAndCard.caixa,
     card: financeAndCard.card,

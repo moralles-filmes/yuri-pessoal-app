@@ -287,16 +287,21 @@ export async function getDailyBalances(
 }
 
 /**
- * K2 (04-A) — saldo das contas somadas até o fim do dia anterior a `dataExclusiva` (quem chama
- * passa o dia seguinte a hoje). Mesmo contrato do saldo diário do extrato (`account_balance_before`,
+ * K2 (04-A) — saldo das contas somadas (ou só o da conta `contaId`, 04-A2) até o fim do dia anterior a
+ * `dataExclusiva` (quem chama passa o dia seguinte a hoje). Mesmo contrato do saldo diário do extrato (`account_balance_before`,
  * corte pela data de caixa). `null` = não leu, nunca zero: a tela escreve "Não foi possível ler o
  * saldo". É a ÚNICA leitura do financeiro que não lança no erro, de propósito.
  */
-export async function lerSaldoAte(dataExclusiva: string): Promise<number | null> {
+export async function lerSaldoAte(
+  dataExclusiva: string,
+  contaId: string | null = null,
+): Promise<number | null> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("account_balance_before", {
-    // Mesmo cast de `getDailyBalances`: `null` é o escopo válido "todas as contas somadas".
-    p_account_id: null as unknown as string,
+    // Mesmo cast de `getDailyBalances`: `null` é o escopo válido "todas as contas somadas". Com
+    // `contaId` (recorte de conta do relatório, 04-A2 D-A2-12) é o saldo SÓ daquela conta — a
+    // função SQL já recebe o id, então não há migration.
+    p_account_id: contaId ?? (null as unknown as string),
     p_date: dataExclusiva,
   });
   if (error || data == null) return null;

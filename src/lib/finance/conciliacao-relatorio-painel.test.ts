@@ -18,7 +18,12 @@ import {
   indicadoresDoResumo,
 } from "@/lib/finance/painel";
 import { rotuloTotalPendenteAte, totalPendenteAte } from "@/lib/finance/recebimentos";
+import { janelaDoRelatorio } from "@/lib/finance/pipeline";
+import { SEM_RECORTE } from "@/lib/finance/recorte";
+import { saldoComData } from "@/lib/finance/painel";
+import { saldoDasContas } from "@/lib/finance/saldo-das-contas";
 import { formatCurrency, reaisParaCentavos } from "@/lib/format";
+import { montarRelatorioFinanceiro } from "@/lib/reports/financeiro";
 
 /**
  * 04-A2, Tarefa 4 (D-A2-20) — A CONCILIAÇÃO painel × relatório: o painel e o relatório sem recorte,
@@ -32,8 +37,8 @@ import { formatCurrency, reaisParaCentavos } from "@/lib/format";
  * ⛔ Se uma igualdade não fechar, NÃO se ajusta a fórmula nem a fixture para passar: o teste fica
  * vermelho e os números vão para quem decide.
  *
- * Este arquivo traz o caminho do PAINEL (`resumoMes` + `indicadoresDoResumo`). A metade do relatório
- * (`montarRelatorioFinanceiro`) nasce na T7 e entra aqui no lugar do `it.todo`.
+ * Este arquivo traz os DOIS caminhos: o do PAINEL (`resumoMes` + `indicadoresDoResumo`) e o do
+ * RELATÓRIO (`montarRelatorioFinanceiro`, T7), sem recorte, em "meu", nas duas bases.
  */
 
 const HOJE = "2026-11-05";
@@ -120,6 +125,12 @@ const CAIXA_OK = {
       resultado: 1799.5,
       faturasSemTotal: 0,
     },
+    // Os gráficos da base caixa: o relatório os lê (os indicadores do painel só leem `minha`).
+    evolucao: [{ mes: MES, entradas: 2900, saidas: 1100.5, saldo: 1799.5 }],
+    mesAMes: { ateODia: null, dados: { anterior: { entradas: 1, saidas: 2 }, atual: { entradas: 3, saidas: 4 } } },
+    categorias: [],
+    formas: [],
+    semTotal: { evolucao: [], mesAMes: [] },
   },
 } as unknown as EstadoDoCaixa;
 
@@ -200,5 +211,88 @@ describe("conciliação painel × relatório (04-A2, D-A2-20)", () => {
     expect(cent(resumo.meu) + cent(resumo.terceiros)).toBe(cent(resumo.saidas));
   });
 
-  it.todo("relatorio sem recorte = painel (montarRelatorioFinanceiro, T7)");
+});
+
+/* ───────────────────────────── A metade do relatório (T7) ───────────────────────────── */
+
+const JANELA = janelaDoRelatorio({ mesSel: MES, mesAtual: MES });
+const CONTAS_DO_PAINEL = [{ id: "conta-x", current_balance: 1500.25 }];
+const SALDO_ATE = 1400;
+
+/** O caminho do RELATÓRIO: o modelo de vista, sem recorte, em "meu". */
+function caminhoDoRelatorio(baseDaLeitura: "competencia" | "caixa") {
+  return montarRelatorioFinanceiro({
+    mes: MES,
+    hoje: HOJE,
+    base: baseDaLeitura,
+    resp: "meu",
+    recorte: SEM_RECORTE,
+    entradas: {
+      txs: TRANSACOES,
+      sts: FATURAS,
+      recs: RECEBIVEIS,
+      inst: PARCELAS,
+      cards: [],
+      recorrencias: [],
+      bills: [],
+    },
+    recebiveisCrus: [],
+    contas: CONTAS_DO_PAINEL,
+    recorrenciasCruas: [],
+    saldoAte: SALDO_ATE,
+    caixa: baseDaLeitura === "caixa" ? CAIXA_OK : null,
+    completude: { estado: "exato" },
+    janela: { evoMeses: JANELA.evoMeses, projMeses: JANELA.projMeses },
+    opcoes: { contas: [], cartoes: [], pessoas: [], categorias: [] },
+  });
+}
+
+describe("conciliação painel × relatório: o modelo de vista do relatório (T7)", () => {
+  it.each(["competencia", "caixa"] as const)(
+    "%s: os três indicadores do relatório são os do painel, campo a campo",
+    (baseDaLeitura) => {
+      const painel = caminhoDoPainel(baseDaLeitura);
+      const relatorio = caminhoDoRelatorio(baseDaLeitura).indicadores;
+      for (const chave of ["entradas", "saidas", "quarto"] as const) {
+        // A seta (`comparacao`) é do mês a mês e o teste do painel passa `null`: o resto é igual.
+        expect({ ...relatorio[chave], comparacao: null }, chave).toEqual({
+          ...painel[chave],
+          comparacao: null,
+        });
+      }
+    },
+  );
+
+  it("o saldo do relatório é o `saldoComData` do painel", () => {
+    const esperado = saldoComData({
+      saldoAte: SALDO_ATE,
+      saldoDaView: saldoDasContas(CONTAS_DO_PAINEL),
+      hoje: HOJE,
+    });
+    const saldo = caminhoDoRelatorio("competencia").saldo;
+    expect(saldo.rotulo).toBe(esperado.rotulo);
+    expect(saldo.valor).toBe(formatCurrency(SALDO_ATE));
+    expect(saldo.detalheComValor).toBe(esperado.diferenca);
+  });
+
+  it("a barra do mês do relatório é a do painel: Minhas saídas, centavo a centavo", () => {
+    const r = caminhoDoRelatorio("competencia");
+    const barra = r.barras.find((b) => b.mes === MES);
+    expect(barra).toBeDefined();
+    expect(cent(barra?.saidas ?? Number.NaN)).toBe(cent(resumo.meu));
+    expect(cent(barra?.entradas ?? Number.NaN)).toBe(cent(resumo.entradasMeu));
+    expect(r.indicadores.saidas.valor).toBe(formatCurrency(barra?.saidas ?? Number.NaN));
+  });
+
+  it("a rosca do relatório é a do painel: as mesmas fatias, os mesmos estornos, a conta fecha", () => {
+    const r = caminhoDoRelatorio("competencia");
+    expect(r.rosca).not.toBeNull();
+    const fatias = r.rosca?.categorias ?? [];
+    expect(fatias.map((f) => f.valor)).toEqual(categorias.map((f) => f.meu));
+    expect(r.rosca?.estornos).toBe(estornos);
+    const fora = foraDaRosca(categorias, estornos);
+    expect(somaCent(dadosDaRosca(categorias).map((f) => f.meu)) - cent(estornos) + cent(fora.soma)).toBe(
+      cent(resumo.meu),
+    );
+  });
 });

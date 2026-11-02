@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { getReportsData } from "@/lib/reports/queries";
 import { mesDe } from "@/lib/finance/dashboard";
 import { baseDaUrl } from "@/lib/finance/base";
+import { responsabilidadeDaUrl } from "@/lib/finance/responsabilidade";
 import { hojeISO } from "@/lib/format";
 import { RelatoriosClient } from "./relatorios-client";
 
@@ -28,7 +29,9 @@ export default async function RelatoriosPage({
 
   const base = baseDaUrl(sp.base);
   // O caixa é montado dentro do relatório, onde as entradas do motor já foram lidas.
-  const data = await getReportsData(mesSel, base);
+  // 04-A2: a responsabilidade e os recortes (conta, cartão, pessoa, categoria) vêm da URL; quem os
+  // valida contra a lista do dono é a leitura (`recorteDaUrl`), não a página.
+  const data = await getReportsData(mesSel, base, { resp: responsabilidadeDaUrl(sp.resp), sp });
   const caixa = data.caixa;
 
   return (
