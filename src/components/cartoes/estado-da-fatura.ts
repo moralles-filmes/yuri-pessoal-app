@@ -3,6 +3,16 @@ import { dateInSaoPaulo } from "@/lib/format";
 
 export type TomDoEstado = "atrasada" | "paga" | "credito" | "prevista" | "aberta" | "neutro";
 
+/** Classes do selo por tom (a PALAVRA vem de `rotuloDoEstado`; a cor só reforça). */
+export const CLASSE_DO_TOM: Record<TomDoEstado, string> = {
+  atrasada: "border-destructive/40 bg-destructive/10 text-destructive",
+  paga: "border-success-ink/40 text-success-ink",
+  credito: "border-info-ink/40 text-info-ink",
+  aberta: "border-warning-ink/40 text-warning-ink",
+  prevista: "border-dashed text-muted-foreground",
+  neutro: "",
+};
+
 /** 'yyyy-MM-dd' → 'dd/MM'. Data pura: manipulada como texto. */
 function diaMes(iso: string): string {
   const [, mes, dia] = iso.split("-");
@@ -14,7 +24,7 @@ function diaMes(iso: string): string {
  * Crédito vence os outros estados; `paga` lê `pago_em` (instante) em Brasília.
  */
 export function rotuloDoEstado(
-  linha: LinhaDaCentral,
+  linha: Pick<LinhaDaCentral, "credito" | "estado" | "pagoEm">,
   tabela: "fechadas" | "abertas",
 ): { texto: string; tom: TomDoEstado } {
   if (linha.credito) return { texto: "Crédito", tom: "credito" };

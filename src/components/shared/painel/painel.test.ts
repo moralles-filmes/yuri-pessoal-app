@@ -122,6 +122,12 @@ describe("indicador", () => {
     expect(ind).toContain("group-data-[ocultar=true]/olho:inline");
     expect(ind).toContain("R$ ••••");
   });
+
+  it("trata { ausente } como ramo próprio, em itálico, sem a máscara de valor", () => {
+    const codigo = semComentarios(ind);
+    expect(codigo).toContain('"ausente" in valor');
+    expect(codigo).toContain("italic");
+  });
 });
 
 describe("bloco — vazio e falha têm desenhos distintos", () => {

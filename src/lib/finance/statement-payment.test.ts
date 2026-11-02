@@ -1,7 +1,12 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  MSG_FATURA_JA_PAGA,
+  MSG_PAGAMENTO_INCERTO,
   argumentosDoPagamento,
   descricaoPagamentoFatura,
+  desfechoDoPagamento,
   mensagemDoErroDoPagamento,
   montarPagamentoFatura,
   pagoEmTimestamp,
@@ -120,5 +125,57 @@ describe("mensagemDoErroDoPagamento", () => {
 
   it("aceita erro nulo", () => {
     expect(mensagemDoErroDoPagamento(null)).toBe(incerto);
+  });
+});
+
+describe("desfechoDoPagamento", () => {
+  it("ok → pago", () => {
+    expect(desfechoDoPagamento({ ok: true, data: undefined })).toEqual({ tipo: "pago" });
+  });
+
+  it("fatura já paga → ja-paga (converge, não é erro para a tela)", () => {
+    expect(desfechoDoPagamento({ ok: false, error: MSG_FATURA_JA_PAGA })).toEqual({
+      tipo: "ja-paga",
+    });
+  });
+
+  it("pagamento incerto → incerto", () => {
+    expect(desfechoDoPagamento({ ok: false, error: MSG_PAGAMENTO_INCERTO })).toEqual({
+      tipo: "incerto",
+    });
+  });
+
+  it("exceção no cliente → incerto (pode ter sido gravado antes da resposta se perder)", () => {
+    expect(desfechoDoPagamento({ excecao: true })).toEqual({ tipo: "incerto" });
+  });
+
+  it("erro de data → data, com a mensagem do campo", () => {
+    expect(
+      desfechoDoPagamento({
+        ok: false,
+        error: "x",
+        fieldErrors: { dataPagamento: ["futura"] },
+      }),
+    ).toEqual({ tipo: "data", mensagem: "futura" });
+  });
+
+  it("qualquer outro erro → recusado, com a mensagem recebida", () => {
+    expect(desfechoDoPagamento({ ok: false, error: "Conta não encontrada." })).toEqual({
+      tipo: "recusado",
+      mensagem: "Conta não encontrada.",
+    });
+  });
+});
+
+describe("src/lib/actions/statements.ts", () => {
+  it("usa MSG_FATURA_JA_PAGA no caminho rápido e não repete o literal", () => {
+    const fonte = readFileSync(
+      join(process.cwd(), "src/lib/actions/statements.ts"),
+      "utf8",
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(fonte).toContain("MSG_FATURA_JA_PAGA");
+    expect(fonte).not.toContain('"Esta fatura já está paga."');
   });
 });

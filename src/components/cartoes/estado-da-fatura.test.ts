@@ -72,4 +72,11 @@ describe("rotuloDoEstado", () => {
       tom: "aberta",
     });
   });
+
+  it("aceita só os campos que usa (tipo estrutural, sem a linha inteira)", () => {
+    expect(rotuloDoEstado({ credito: false, estado: "prevista", pagoEm: null }, "abertas")).toEqual({
+      texto: "Prevista",
+      tom: "prevista",
+    });
+  });
 });
