@@ -9,7 +9,7 @@
 -- Nenhum dado é alterado: lido em 2026-11-02, `receivable_receipts` não tinha nenhuma linha com
 -- `transaction_id` (nem linha nenhuma), e nenhuma receita era de terceiro.
 --
--- Reversão (primeiro reverter o app e a M3/M2; depois):
+-- Reversão (primeiro reverter o app, a M3 e a M2; depois):
 --   alter table public.import_rows drop constraint if exists import_rows_reembolso_pessoa_fk,
 --     drop column if exists reembolso_sobra, drop column if exists reembolso_pessoa_id,
 --     drop column if exists receita_classificacao;
@@ -29,10 +29,22 @@
 
 -- (1) Habilita as FKs COMPOSTAS (invariante 23 da 17-F): a RLS confere o user_id da PRÓPRIA
 --     linha e não alcança a linha apontada.
-alter table public.transactions drop constraint if exists transactions_id_user_uk;
-alter table public.transactions add constraint transactions_id_user_uk unique (id, user_id);
-alter table public.people drop constraint if exists people_id_user_uk;
-alter table public.people add constraint people_id_user_uk unique (id, user_id);
+--     Guardado por `if not exists`, não por drop + add: numa segunda execução as FKs abaixo já
+--     dependem destas uniques, e o drop falharia (2BP01). Achado 003 da validação.
+do $$
+begin
+  if not exists (select 1 from pg_constraint
+                  where conname = 'transactions_id_user_uk'
+                    and conrelid = 'public.transactions'::regclass) then
+    alter table public.transactions add constraint transactions_id_user_uk unique (id, user_id);
+  end if;
+  if not exists (select 1 from pg_constraint
+                  where conname = 'people_id_user_uk'
+                    and conrelid = 'public.people'::regclass) then
+    alter table public.people add constraint people_id_user_uk unique (id, user_id);
+  end if;
+end;
+$$;
 
 -- (2) De quem é o reembolso. Sem cascade: pessoa com reembolso não é excluída (é inativada),
 --     como a que tem recebível.
@@ -68,6 +80,9 @@ alter table public.receivable_receipts drop constraint if exists receivable_rece
 alter table public.receivable_receipts add constraint receivable_receipts_conta_fk
   foreign key (conta_id, user_id) references public.accounts (id, user_id)
   on delete set null (conta_id);
+
+comment on column public.receivable_receipts.transaction_id is
+  '04-C: preenchido SÓ pela realocação automática do reembolso (realocar_reembolsos_da_pessoa), que apaga e refaz estas linhas. Recebimento manual deixa nulo. Não reutilize a coluna para outro vínculo: a realocação o apagaria e a proteção da divisão deixaria de contá-lo.';
 
 create index if not exists receivable_receipts_transaction_idx
   on public.receivable_receipts (transaction_id)

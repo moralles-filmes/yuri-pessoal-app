@@ -314,7 +314,7 @@ desvios do plano estão numerados (**DV-n**) e valem por cima do plano.
 - md5 dos saldos = a linha de base `15d93bd1c1d3e55a40db6210dff0eb3b`.
 - Nem `transactions_id_user_uk` nem `people_id_user_uk` existem.
 
-Consequência: a M1 e a M2 **não tocam nenhum dado existente**, e nenhum número real muda no dia em
+Consequência: as três migrations (M1, M2, M3) **não tocam nenhum dado existente**, e nenhum número real muda no dia em
 que entram. O que muda são as regras para o que for lançado dali em diante. O legado (K0, manual)
 continua coberto por teste, mas hoje não tem linha nenhuma.
 
@@ -333,7 +333,7 @@ continua coberto por teste, mas hoje não tem linha nenhuma.
   (`20261025120000_salvar_lancamento_atomico.sql`) que **lista as colunas à mão** no `insert` e
   no `update` (D-G2-5: só a chave que veio é escrita). Sem acrescentar `reembolso_pessoa_id` ali,
   a coluna nova **nunca seria gravada** pelo formulário — e nada falharia, ela só ficaria nula. A
-  M1 faz `create or replace` da função com a coluna nas duas listas e com a pessoa na conferência
+  M3 (arquivo próprio, porque o teste da 03-G2 exige só função e grants nele) faz `create or replace` da função com a coluna nas duas listas e com a pessoa na conferência
   de referência (`LANCAMENTO_REFERENCIA_INVALIDA`). O teste de varredura da 03-G2
   (`m-g2-salvar-lancamento.test.ts`) passa a ler a versão nova.
 - **DV-2 · a proteção que o RPC confere no SQL só conta recebimento manual.** A linha 151 da mesma
@@ -342,10 +342,14 @@ continua coberto por teste, mas hoje não tem linha nenhuma.
   senão a §5.6 valeria no TS e seria recusada no banco (o caso 8 do §6 falharia só em runtime). É
   o **único** ponto SQL que lê `receivable_receipts` (conferido por `grep` nas migrations).
 - **DV-3 · triggers de instrução e o RPC.** `salvar_lancamento` grava o lançamento e depois apaga
-  e recria os recebíveis da divisão, em instruções separadas da mesma transação. Cada instrução
-  dispara o trigger; a realocação roda mais de uma vez por gravação e, por ser idempotente,
-  termina no mesmo lugar. O script SQL prova isso passando pelo próprio RPC, não só por `insert`
-  cru.
+  e recria os recebíveis da divisão, em instruções separadas da mesma transação. ⚠️ Escrito aqui
+  primeiro como "a realocação roda mais de uma vez e termina no mesmo lugar" — **errado**, e a
+  validação estática das migrations mostrou por quê: entre o apagar e o recriar, o trigger manda o
+  dinheiro da dívida apagada para a seguinte, e a regra 6 (nunca mover alocação) o prende lá. A
+  substituição da divisão **pausa** os triggers (`reembolso.pausa`, local à transação) e realoca
+  **uma vez** no fim, para cada pessoa da divisão velha e da nova. Por isso a função de realocação
+  vem antes (**M2**) e a redefinição do RPC depois (**M3**). O script SQL prova isso passando pelo
+  próprio RPC, com o caso "dívida mais antiga refeita mantém a alocação".
 
 A ordem e o conteúdo do resto (M1 aditiva, M2 com `realocar_reembolsos_da_pessoa` e os seis
 triggers, `security invoker`, `search_path = ''`, nenhum `update public.receivables`) valem.

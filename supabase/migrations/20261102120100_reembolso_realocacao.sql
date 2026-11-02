@@ -1,4 +1,4 @@
--- REDESIGN-04-C · M3 — a realocação automática do reembolso, disparada pelo banco.
+-- REDESIGN-04-C · M2 — a realocação automática do reembolso, disparada pelo banco.
 --
 -- Desenho: docs/superpowers/specs/2026-10-25-reembolso-de-terceiros-design.md (§5.2, §5.3, §10).
 -- A regra é a de `src/lib/finance/reembolso.ts` (`realocar`), passo a passo, com os MESMOS
@@ -45,6 +45,19 @@ begin
   if p_user is null or p_person is null then
     return;
   end if;
+  -- Defesa em profundidade (achado 004): com sessão, só o próprio dono. A RLS já barraria (as
+  -- leituras voltariam vazias e o insert cairia no with check); sem sessão (service role) vale a
+  -- linha que disparou o trigger.
+  if auth.uid() is not null and p_user is distinct from auth.uid() then
+    return;
+  end if;
+  -- Achado 002: trava os recebíveis da pessoa em ORDEM de id ANTES do advisory. O trigger
+  -- `receivable_receipts_nao_excede` trava a linha do recebível a cada alocação; sem esta ordem,
+  -- uma sessão com a linha e outra com o advisory se esperariam (deadlock, 40P01).
+  perform 1 from public.receivables
+   where user_id = p_user and person_id = p_person
+   order by id
+     for update;
   -- Serializa a realocação da MESMA pessoa: duas gravações concorrentes leriam o mesmo dinheiro
   -- livre e alocariam duas vezes.
   perform pg_advisory_xact_lock(hashtext('reembolso:' || p_user::text || ':' || p_person::text));
@@ -182,9 +195,14 @@ as $$
 declare
   v_par record;
 begin
+  -- `salvar_lancamento` pausa a realocação enquanto substitui a divisão e realoca uma vez no fim
+  -- (achado 001): realocar entre o apagar e o recriar mandaria o dinheiro para a dívida errada.
+  if coalesce(current_setting('reembolso.pausa', true), '') = '1' then
+    return null;
+  end if;
   if tg_op = 'INSERT' then
     for v_par in select distinct n.user_id, n.reembolso_pessoa_id as person_id from novas n
-                  where n.reembolso_pessoa_id is not null loop
+                  where n.reembolso_pessoa_id is not null order by 1, 2 loop
       perform public.realocar_reembolsos_da_pessoa(v_par.user_id, v_par.person_id);
     end loop;
   elsif tg_op = 'UPDATE' then
@@ -192,12 +210,12 @@ begin
                    from (select n.user_id, n.reembolso_pessoa_id as person_id from novas n
                          union all
                          select v.user_id, v.reembolso_pessoa_id from velhas v) x
-                  where x.person_id is not null loop
+                  where x.person_id is not null order by 1, 2 loop
       perform public.realocar_reembolsos_da_pessoa(v_par.user_id, v_par.person_id);
     end loop;
   else
     for v_par in select distinct v.user_id, v.reembolso_pessoa_id as person_id from velhas v
-                  where v.reembolso_pessoa_id is not null loop
+                  where v.reembolso_pessoa_id is not null order by 1, 2 loop
       perform public.realocar_reembolsos_da_pessoa(v_par.user_id, v_par.person_id);
     end loop;
   end if;
@@ -216,11 +234,16 @@ as $$
 declare
   v_par record;
 begin
+  -- `salvar_lancamento` pausa a realocação enquanto substitui a divisão e realoca uma vez no fim
+  -- (achado 001): realocar entre o apagar e o recriar mandaria o dinheiro para a dívida errada.
+  if coalesce(current_setting('reembolso.pausa', true), '') = '1' then
+    return null;
+  end if;
   if tg_op = 'INSERT' then
     for v_par in select distinct n.user_id, n.person_id from novas n
                   where n.person_id is not null
                     and exists (select 1 from public.transactions t
-                                 where t.user_id = n.user_id and t.reembolso_pessoa_id = n.person_id) loop
+                                 where t.user_id = n.user_id and t.reembolso_pessoa_id = n.person_id) order by 1, 2 loop
       perform public.realocar_reembolsos_da_pessoa(v_par.user_id, v_par.person_id);
     end loop;
   elsif tg_op = 'UPDATE' then
@@ -230,14 +253,14 @@ begin
                          select v.user_id, v.person_id from velhas v) x
                   where x.person_id is not null
                     and exists (select 1 from public.transactions t
-                                 where t.user_id = x.user_id and t.reembolso_pessoa_id = x.person_id) loop
+                                 where t.user_id = x.user_id and t.reembolso_pessoa_id = x.person_id) order by 1, 2 loop
       perform public.realocar_reembolsos_da_pessoa(v_par.user_id, v_par.person_id);
     end loop;
   else
     for v_par in select distinct v.user_id, v.person_id from velhas v
                   where v.person_id is not null
                     and exists (select 1 from public.transactions t
-                                 where t.user_id = v.user_id and t.reembolso_pessoa_id = v.person_id) loop
+                                 where t.user_id = v.user_id and t.reembolso_pessoa_id = v.person_id) order by 1, 2 loop
       perform public.realocar_reembolsos_da_pessoa(v_par.user_id, v_par.person_id);
     end loop;
   end if;

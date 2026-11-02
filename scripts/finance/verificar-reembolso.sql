@@ -304,6 +304,34 @@ begin
     tx2);
   update public.receivables set observacoes = 'a' where transaction_id = tx2;
   perform pg_temp.confere('RPC refazer divisão', q, 0, 40000, '{"a": 10000}');
+  -- Achado 001 · refazer a divisão da dívida MAIS ANTIGA mantém a alocação nela (a pausa impede
+  -- que o dinheiro escorra para a dívida seguinte entre o apagar e o recriar).
+  q := pg_temp.pessoa('Pessoa Sintética 001');
+  tx2 := public.salvar_lancamento(
+    jsonb_build_object('type', 'despesa', 'payment_method', 'pix',
+                       'account_id', current_setting('reembolso.conta'), 'amount', 500,
+                       'purchase_date', '2026-07-10', 'competence_date', '2026-07-10',
+                       'description', 'Despesa sintética 04-C (antiga)', 'status', 'pago',
+                       'liquidado_em', '2026-07-10', 'classificacao', 'terceiro', 'valor_pessoal', 0),
+    jsonb_build_object('alcance', 'regra-cheia',
+                       'pessoas', jsonb_build_array(jsonb_build_object('person_id', q, 'tipo_divisao', 'valor',
+                                                                       'percentual', null, 'valor', 500)),
+                       'recebiveis', jsonb_build_array(jsonb_build_object('person_id', q, 'valor', 500,
+                                                                          'data_prevista', '2026-07-10'))));
+  update public.receivables set observacoes = 'a' where transaction_id = tx2;
+  perform pg_temp.divida(q, 'b', 50000, '2026-08-10');
+  perform pg_temp.receita(q, 50000, '2026-11-01');
+  perform pg_temp.confere('001 antes', q, 50000, 0, '{"a": 50000}');
+  perform public.salvar_lancamento(null,
+    jsonb_build_object('alcance', 'regra-cheia',
+                       'pessoas', jsonb_build_array(jsonb_build_object('person_id', q, 'tipo_divisao', 'valor',
+                                                                       'percentual', null, 'valor', 500)),
+                       'recebiveis', jsonb_build_array(jsonb_build_object('person_id', q, 'valor', 500,
+                                                                          'data_prevista', '2026-07-10'))),
+    tx2);
+  update public.receivables set observacoes = 'a' where transaction_id = tx2;
+  perform pg_temp.confere('001 depois', q, 50000, 0, '{"a": 50000}');
+
   -- …e o recebimento MANUAL continua bloqueando (pessoa sem crédito, recebível sem alocação).
   q := pg_temp.pessoa('Pessoa Sintética RPC3');
   tx2 := public.salvar_lancamento(

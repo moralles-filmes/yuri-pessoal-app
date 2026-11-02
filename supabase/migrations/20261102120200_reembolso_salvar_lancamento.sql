@@ -1,13 +1,16 @@
--- REDESIGN-04-C · M2 — `salvar_lancamento` passa a gravar `reembolso_pessoa_id` (DV-1 do §11) e
+-- REDESIGN-04-C · M3 — `salvar_lancamento` passa a gravar `reembolso_pessoa_id` (DV-1 do §11) e
 -- a proteção que ele reconfere no SQL passa a contar só o recebimento MANUAL (DV-2).
 --
--- Esta é a função da M-G2 (20261025120000_salvar_lancamento_atomico.sql) com três mudanças, e
+-- Esta é a função da M-G2 (20261025120000_salvar_lancamento_atomico.sql) com quatro mudanças, e
 -- nenhuma outra:
 --   1. `reembolso_pessoa_id` entra no insert e no update (só quando a chave veio, D-G2-5);
 --   2. a pessoa do reembolso entra na conferência de referência (LANCAMENTO_REFERENCIA_INVALIDA);
 --   3. a alocação automática (`receivable_receipts.transaction_id` preenchido) NÃO protege o
 --      recebível (§5.6): quando a compra muda, a alocação some com ele e o dinheiro volta a ser
---      saldo a favor, que a M3 realoca. O recebimento manual continua protegendo.
+--      saldo a favor, que a M2 realoca. O recebimento manual continua protegendo.
+--   4. a substituição da divisão pausa a realocação (`reembolso.pausa`) e realoca uma vez no fim,
+--      para cada pessoa da divisão velha e da nova (achado 001 da validação). Por isso a M3 só
+--      pode ser aplicada JUNTO com a M2 ou depois dela (chama `realocar_reembolsos_da_pessoa`).
 -- O teste de espelho (m-g2-salvar-lancamento.test.ts) lê a versão MAIS NOVA da função.
 --
 -- Só função e grants: nenhuma tabela, coluna, policy, índice ou dado.
@@ -30,6 +33,8 @@ declare
   v_id uuid := p_id;
   v_atual public.transactions%rowtype;
   v_alcance text;
+  v_pessoas uuid[];
+  v_pessoa uuid;
 begin
   -- Sem sessão é a primeira recusa: nada do payload é lido antes.
   if v_user is null then
@@ -159,6 +164,20 @@ begin
       raise exception 'DIVISAO_PROTEGIDA' using errcode = 'P0001';
     end if;
 
+    -- 04-C (achado 001 do migration-validator): o apagar e o recriar são DUAS instruções, e o
+    -- trigger da M2 realocaria entre elas — o dinheiro da dívida apagada iria para a seguinte e a
+    -- regra 6 (nunca mover alocação) o prenderia lá quando a dívida recriada voltasse. Os
+    -- triggers ficam em pausa durante a substituição e a realocação roda UMA vez no fim, para
+    -- cada pessoa da divisão velha e da nova.
+    v_pessoas := array(
+      select rc.person_id from public.receivables rc
+       where rc.transaction_id = v_id
+          or rc.shared_expense_id in (select id from public.shared_expenses where transaction_id = v_id)
+      union
+      select x.person_id from jsonb_to_recordset(coalesce(p_divisao -> 'recebiveis', '[]')) x(person_id uuid)
+    );
+    perform set_config('reembolso.pausa', '1', true);
+
     -- Substitui: recebíveis primeiro (pela FK), depois a divisão.
     delete from public.receivables rc
      where rc.transaction_id = v_id
@@ -181,6 +200,11 @@ begin
            x.statement_id, x.card_id, x.valor, 'pendente', x.data_prevista
       from jsonb_to_recordset(coalesce(p_divisao -> 'recebiveis', '[]'))
            x(person_id uuid, parcela_numero int, statement_id uuid, card_id uuid, valor numeric, data_prevista date);
+
+    perform set_config('reembolso.pausa', '', true);
+    foreach v_pessoa in array v_pessoas loop
+      perform public.realocar_reembolsos_da_pessoa(v_user, v_pessoa);
+    end loop;
   end if;
 
   return v_id;

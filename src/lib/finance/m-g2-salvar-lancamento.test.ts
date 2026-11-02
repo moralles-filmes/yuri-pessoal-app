@@ -37,7 +37,7 @@ const DA_SALVAR = ARQUIVOS.filter((f) => ler(f).includes(CRIA_SALVAR));
 const DA_PARCELADA = ARQUIVOS.filter((f) => ler(f).includes(CRIA_PARCELADA));
 /**
  * 04-C (DV-1, DV-2): `salvar_lancamento` foi redefinido por
- * `20261102120100_reembolso_salvar_lancamento.sql`. As conferências da função leem a definição
+ * `20261102120200_reembolso_salvar_lancamento.sql`. As conferências da função leem a definição
  * MAIS NOVA (o nome do arquivo é a ordem de aplicação); as regras de forma valem para cada arquivo
  * que define uma das duas.
  */
@@ -81,7 +81,7 @@ describe("03-G2 · M-G2 — salvar_lancamento e criar_compra_parcelada", () => {
     expect(DA_PARCELADA).toEqual(["20261025120000_salvar_lancamento_atomico.sql"]);
     expect(DA_SALVAR).toEqual([
       "20261025120000_salvar_lancamento_atomico.sql",
-      "20261102120100_reembolso_salvar_lancamento.sql",
+      "20261102120200_reembolso_salvar_lancamento.sql",
     ]);
     expect(SALVAR).not.toBe("");
     expect(PARCELADA).not.toBe("");
