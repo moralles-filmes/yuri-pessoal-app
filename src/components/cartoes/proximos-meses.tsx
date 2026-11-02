@@ -122,6 +122,8 @@ const TH =
 const CEL =
   "block min-h-16 rounded-lg border bg-card px-2.5 py-2 text-inherit no-underline hover:border-primary focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none";
 const MES_STICKY = "sticky left-0 z-[1] bg-card";
+/** O total do mês fica sempre à vista: com muitos cartões a grade rola entre as duas colunas fixas. */
+const TOTAL_STICKY = "sticky right-0 z-[1] border-l";
 
 function CelulaDaTabela({ celula }: { celula: CelulaDoMes }) {
   if (celula.tipo === "nao-projeta") {
@@ -205,7 +207,7 @@ function CelulaDoTotal({ total }: { total: TotalDoMes }) {
 
 function CabecalhoDoCartao({ cartao }: { cartao: CartaoDaCentral }) {
   return (
-    <th className={cn(TH, "min-w-40 normal-case")}>
+    <th className={cn(TH, "min-w-32 normal-case")}>
       <span className="flex min-w-0 items-center gap-1.5">
         <MarcadorDoCartao cor={cartao.cor} />
         <span className="min-w-0 truncate text-foreground">{cartao.nome}</span>
@@ -224,15 +226,15 @@ function Tabela({ dados, mesAtual }: { dados: ProximosMeses; mesAtual: string })
     <div className="hidden overflow-x-auto md:block">
       <table
         className="w-full border-collapse"
-        style={{ minWidth: 110 + 170 + dados.cartoes.length * 160 }}
+        style={{ minWidth: 90 + 150 + dados.cartoes.length * 132 }}
       >
         <thead>
           <tr className="border-b">
-            <th className={cn(TH, MES_STICKY, "w-28")}>Mês</th>
+            <th className={cn(TH, MES_STICKY, "w-20")}>Mês</th>
             {dados.cartoes.map((c) => (
               <CabecalhoDoCartao key={c.id} cartao={c} />
             ))}
-            <th className={cn(TH, "w-44")}>
+            <th className={cn(TH, TOTAL_STICKY, "min-w-36 bg-card")}>
               Total conhecido
               <span className="block text-[10px] font-medium tracking-normal normal-case">
                 só faturas que existem
@@ -254,7 +256,7 @@ function Tabela({ dados, mesAtual }: { dados: ProximosMeses; mesAtual: string })
                   <CelulaDaTabela celula={dados.celulas[c.id][mes]} />
                 </td>
               ))}
-              <td className="bg-muted/60 px-2.5 py-3 align-top">
+              <td className={cn(TOTAL_STICKY, "bg-muted px-2.5 py-3 align-top")}>
                 <CelulaDoTotal total={dados.totais[mes]} />
               </td>
             </tr>
