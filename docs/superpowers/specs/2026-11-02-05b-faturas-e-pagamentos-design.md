@@ -147,7 +147,7 @@ em `src/lib/finance/queries.ts`.
   - `aPagar`: Σ `totalCent` e Σ `meuCent` de `pagar`, `qtd`, `qtdAtrasadas`. Lista vazia ⇒
     `{ totalCent: 0 }` (zero medido: "nenhuma fatura fechada a pagar").
   - `atual`: a linha do ciclo atual. Prevista ⇒ `null` ⇒ "sem lançamentos conhecidos".
-  - `proximoVencimento`: o menor `dataVencimento` de `pagar`; sem `pagar`, o da linha atual.
+  - `proximoVencimento`: o menor `dataVencimento >= hoje` de `pagar` (as atrasadas já estão em "A pagar"); sem nenhuma, o da linha atual, salvo se ela já estiver paga (aí não há próximo vencimento).
   - Com filtro de mês/status, os indicadores continuam sobre **todas** as linhas do cartão (o
     filtro encolhe a lista, não muda o que se deve). **Escolha do agente.**
 - Testes obrigatórios: atrasada + fechada no mesmo cartão (ordem); fatura atual prevista (nunca

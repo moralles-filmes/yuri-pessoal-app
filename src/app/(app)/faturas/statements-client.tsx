@@ -781,7 +781,7 @@ export function StatementsClient({
             valor={moeda(aPagar.totalCent)}
             linhaDeBase={
               aPagar.qtd > 0
-                ? `${plural(aPagar.qtd, "fatura fechada", "faturas fechadas")} · ${
+                ? `${plural(aPagar.qtd, "fatura a pagar", "faturas a pagar")} · ${
                     aPagar.qtdAtrasadas === 0
                       ? "nenhuma atrasada"
                       : plural(aPagar.qtdAtrasadas, "atrasada", "atrasadas")
@@ -814,7 +814,7 @@ export function StatementsClient({
             tom="saldo"
             icone={CalendarClock}
             rotulo="Próximo vencimento"
-            dica="Vencimento da próxima fatura fechada a pagar; sem nenhuma, o da fatura atual."
+            dica="Vencimento da próxima fatura fechada a pagar que ainda não venceu; sem nenhuma, o da fatura atual (se ainda não foi paga). As atrasadas estão em A pagar."
             valor={proximo ? diaMes(proximo.data) : { ausente: "nenhum vencimento conhecido" }}
             linhaDeBase={
               proximo
@@ -843,7 +843,12 @@ export function StatementsClient({
               titulo="Precisam de pagamento"
               subtitulo="atrasadas primeiro, depois por vencimento"
               estado={estadoDoBloco({ ok: true, itens: grupos.pagar })}
-              vazio={{ frase: "Nenhuma fatura fechada a pagar." }}
+              vazio={{
+                frase:
+                  month || status
+                    ? "Nenhuma fatura a pagar neste filtro."
+                    : "Nenhuma fatura fechada a pagar.",
+              }}
             >
               <div className="grid gap-3">{grupos.pagar.map(renderFatura)}</div>
             </Bloco>

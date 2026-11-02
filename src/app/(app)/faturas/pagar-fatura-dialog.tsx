@@ -189,7 +189,7 @@ export default function PagarFaturaDialog({
                     {formatCurrency(exibida.totalReais)}
                   </dd>
                 </div>
-                {exibida.terceirosReais > 0 && (
+                {exibida.terceirosReais !== 0 && (
                   <div className="flex items-center justify-between gap-3 text-xs">
                     <dt className="min-w-0 text-muted-foreground">Minha parte · terceiros</dt>
                     <dd className="shrink-0 tabular-nums">

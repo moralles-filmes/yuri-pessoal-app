@@ -199,6 +199,12 @@ describe("organizarFaturasDoCartao — zero, crédito e paga antes de fechar", (
     expect(f.pagoEm).toBe("2026-11-01T15:00:00Z");
   });
 
+  it("atual paga antes de fechar, sem nada a pagar: não há 'próximo vencimento' (não é dívida)", () => {
+    const paga = { ...nov, pago_em: "2026-11-01T15:00:00Z" };
+    const { indicadores } = organizar({ statements: [paga] });
+    expect(indicadores.proximoVencimento).toBeNull();
+  });
+
   it("paga depois de fechar vai para 'anteriores' com 'desfazer'", () => {
     const f = organizar().grupos.anteriores[0];
     expect(f.estado).toBe("paga");

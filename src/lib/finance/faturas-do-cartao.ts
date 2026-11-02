@@ -191,7 +191,8 @@ export function organizarFaturasDoCartao(p: {
     (menor, f) => (menor === null || f.dataVencimento < menor.dataVencimento ? f : menor),
     null,
   );
-  const dono = proximoPagar ?? atual;
+  // A atual já paga não vence nada: apontar para ela sugeriria uma dívida que não existe.
+  const dono = proximoPagar ?? (atual && atual.estado !== "paga" ? atual : null);
   const indicadores: IndicadoresDeFaturas = {
     aPagar: {
       totalCent: pagar.reduce((s, f) => s + f.valores!.totalCent, 0),
