@@ -45,6 +45,8 @@ const ISO = "yyyy-MM-dd";
 export type DashTx = {
   /** 03-D (B1, à vista): liga o recebível ao lançamento. Opcional — `dashboard.test.ts` não muda. */
   id?: string;
+  /** 04-A2 (D-A2-13): a conta do lançamento, para o recorte por conta do relatório. Opcional pelo mesmo motivo. */
+  account_id?: string | null;
   amount: number;
   valor_pessoal: number | null;
   type: TransactionType;
