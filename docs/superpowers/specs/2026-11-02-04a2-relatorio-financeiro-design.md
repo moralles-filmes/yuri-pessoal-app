@@ -316,5 +316,97 @@ caixa: D-A2-21.
 
 ## 13. Resultado da execução
 
-*(preenchido no fim: commits, os cinco comandos, aceite um a um, decisões tomadas na execução com o custo se
-estiverem erradas, e os achados não consertados.)*
+Executada em 2026-11-02, na worktree `C:/tmp/04a2-relatorio`. Commits locais, sem push nem merge (D67).
+
+### 13.1 Commits
+
+| Commit | Passo |
+| --- | --- |
+| `a1f733b`, `d34f1fe`, `f40e815` | desenho, plano e correção de uma assinatura do plano |
+| `88cb804` | T1: o motor carrega a conta do lançamento (`account_id`) |
+| `18a3606` | T3: responsabilidade pura |
+| `243be1d` | T2: recortes puros e a matriz segue × não segue |
+| `4f2e2ea` | T6: RR-C2-10, o botão "marcadas" ligado se distingue no escuro |
+| `45720d0` | T5: peças da 04-A acessíveis (L3) e o estado "não segue" |
+| `59b9020` | T8: a barra de filtros |
+| `80ed6c8` | T4: `indicadoresDoResumo`, compartilhado com o painel |
+| `d03ea21` | T7: leitura e modelo de vista do relatório (`montarRelatorioFinanceiro`) |
+| `e906557` | T9: a aba Financeiro na sequência do §4, com o inventário |
+| `b474ef2` | V1 (conferência visual): o título do `Bloco` quebra linha em vez de cortar |
+| `05f31a5`, `7b657a3`, `ccc3bd3`, `35dcece`, `3f473da`, `86daef4`, `d7425d8` | R1, R2, R3, R5, R6, R7 e R9 (revisão final) |
+
+Executores, pelo `ai-router-br`: Codex indisponível (`codex_model_not_listed`) em todas as tarefas, então o
+trabalho foi para subagentes Claude (Haiku na T6, depois que o DeepSeek foi barrado por `dirty_worktree`; Sonnet nas
+outras). Toda entrega foi revisada pelo principal (diff, testes, mutação) antes do commit.
+
+### 13.2 Os cinco comandos (em `d7425d8`)
+
+| Comando | Resultado |
+| --- | --- |
+| `npm run test:run` | 329 arquivos, 7.421 testes, verde |
+| `npm run lint` | sem erro nem aviso |
+| `npx tsc --noEmit` | sem erro |
+| `npm run build` | verde |
+| `npm run perf:bundle` | todas as rotas dentro do orçamento; `/relatorios` **196,7 → 206,6 KB gz**; `/dashboard/financeiro` 201,3 → 201,6 KB |
+| `TZ=UTC npx vitest run src/lib/finance src/lib/reports` | 74 arquivos, 1.196 testes, verde |
+
+### 13.3 Aceite (§9), um a um
+
+1. ✅ Peças importadas, nunca copiadas: `relatorio-inventario.test.ts` varre os imports e recusa `function
+   Indicador`/`function Bloco` novos em `src/components/`.
+2. ✅ Sete controles na URL (`url-do-relatorio.ts`, `barra-de-filtros.tsx`); nenhum campo de texto.
+3. ✅ Conciliação sem recorte em "meu", nas duas bases (`conciliacao-relatorio-painel.test.ts`). Ver 13.5 sobre o
+   alcance dessa garantia.
+4. ✅ Todo bloco segue a §5 (com a leitura de R6 abaixo); a varredura "nenhum número onde o bloco é ✗" roda 7
+   recortes × 2 bases × 3 responsabilidades, com guarda contra tautologia.
+5. ✅ A rosca não tem negativo (o estorno fica fora, com nota); o mês em andamento é hachurado nas barras e a
+   projeção usa as peças da 04-A.
+6. ✅ Inventário dos 15 itens do §2 (`relatorio-inventario.test.ts`).
+7. ✅ `AvisoParcial`, extraído e usado pelo painel e pelo relatório; a completude chega intacta com qualquer recorte.
+8. ✅ RR-C2-10: `variant="default"` + ✓ + `aria-pressed` (T6, `filtro-marcadas.test.ts`).
+9. ✅ L3 nos dois lugares: a dica em `<details>` (toque e teclado), "valor oculto" para leitor de tela, legenda
+   "parcial" só com dado.
+10. ⚠️ Prévia aprovada pelo dono. A conferência no navegador foi feita com a sessão do dono (não pediu login), mas
+    a janela do Chrome da extensão abriu fora da tela e não aceitou redimensionar. Por isso as larguras foram
+    simuladas com `<iframe>` dentro da página:
+    - **medidas pelo DOM em 390, 768, 1280 e 1440 px:** nenhuma rolagem horizontal e nenhum texto cortado
+      (fora o `sr-only`), com cada recorte, Terceiros, Consolidado e a base caixa;
+    - **capturas:** 390 px no claro (sem filtro) e no escuro (com pessoa), 1280 px no escuro (Consolidado) e no
+      claro (base caixa, olho fechado). 768 e 1440 ficaram só nas medidas pelo DOM;
+    - **achado consertado (V1):** o título do `Bloco` era truncado a 390 px.
+11. ✅ Os cinco comandos verdes, `/relatorios` em 206,6 KB (teto 250), `TZ=UTC` verde.
+12. ✅ md5 dos saldos = `15d93bd1c1d3e55a40db6210dff0eb3b` (5 contas), igual à linha de base. Banco só lido.
+
+### 13.4 Decisões tomadas na execução (e o custo se estiverem erradas)
+
+| Decisão | Custo se errada |
+| --- | --- |
+| `painel-inventario.test.ts` passou a ler `painel.ts`, porque a montagem dos indicadores mudou de arquivo (§7 previa a mudança). A mutação `resumo.saidas` no ramo "meu" derruba o teste. | Baixo: a garantia é a mesma, só que lida em outro arquivo. |
+| A dica (i) abre **no fluxo**, abaixo do rótulo. O card mantém `overflow-hidden`, que segura rótulos e valores longos. | Baixo: o card cresce ao abrir a dica. |
+| Cartão + categoria juntos: Entradas não segue, porque mostrar o valor seria um R$ 0,00 fantasma. | Baixo: perde-se um número que seria zero. |
+| A fixture do relatório foi **copiada** em `financeiro.test.ts`, e não extraída. Um arquivo fora de `*.test.ts` montando `Dash*` reprova `fronteira-do-motor.test.ts`. | Duas fixtures podem divergir; o impacto fica só nos testes. |
+| `mesAMes`, `rosca` e `ancora` são `null` quando o bloco é ✗ ou quando o caixa não foi lido. `perdoado` é `null` no caixa. | Nenhum número falso; a tela mostra vazio ou falha. |
+| Com recorte de pessoa, o quarto indicador é o pendente dela em qualquer responsabilidade (L5); entradas e saídas ficam ✗. | Em "meu", o dono vê o pendente da pessoa no lugar de "De terceiros". |
+| Saldo com recorte de conta: o rótulo vira "Saldo da conta". Conta inexistente dá erro, nunca a soma das contas. | Nenhum. |
+| Com recorte de categoria, as saídas vêm da fatia da categoria e levam "antes dos estornos do cartão" (R2/R7b). | O total da categoria pode ficar acima do valor líquido. Isso está declarado na tela. |
+| Em Terceiros e Consolidado, a rosca soma `movimentado`, antes dos estornos, e leva uma nota em vez de número (R2). Não há função do motor para o estorno cheio. | A rosca não fecha com "Saídas (bruto)", e a nota explica por quê. |
+| Opções de categoria: todas, inclusive inativas. Opções de pessoa: só as ativas (`getPeopleForSelect`). | Ver 13.5 (pessoa inativa). |
+| O olho envolve a aba inteira. Esconde o Resumo (D-A2-8), o `BlocoDoCaixa` (R3, via `ValorComOlho` compartilhado) e os valores do Detalhamento. Não esconde os gráficos, como no painel. | Ver 13.5. |
+| "Ver sem o filtro" de um bloco que não segue a responsabilidade no caixa volta para `resp=meu` mantendo o recorte. | Baixo. |
+| **R6 — leitura do D-A2-6:** na base caixa, só os blocos que vêm de `estadoDoCaixa` ficam ✗ com recorte. Saldo, pendente, assinaturas, projeção e faturas futuras não leem o caixa e seguem a matriz da competência. | Se o dono quisesse "caixa = nenhum recorte em nada", agora aparecem cinco números recortados na base caixa. Todos são independentes da base. |
+| O seletor de mês voltou à aba Cartões como `SeletorDoMes`, a mesma função da barra (R5). Hábitos, Estudos e Tarefas leem só o `hoje`. | Nenhum. |
+| `rotulosDaComposicao(resp)` em `rotulos-dos-graficos.ts`; as peças recebem rótulos por prop, e os defaults são os textos de hoje (o painel não muda). | Nenhum. |
+| O CSV de "Maiores gastos" ganha o sufixo `-filtrado` quando há recorte. | Baixo. |
+| `getReportsData` passou a exigir `base` (antes tinha padrão). | Nenhum: só a página o chama. |
+
+### 13.5 Achados não consertados
+
+| Achado | Custo | Destino |
+| --- | --- | --- |
+| O "Baixar relatório (JSON)" mudou de forma: `data.finance` virou `data.financeiro`, os números agora são textos formatados e a exportação segue os filtros da URL (que vão no próprio objeto, em `filtros`). O §1 dizia que o JSON "continua como está". | Quem consumia o JSON antigo quebra. | 04-D (exportação) |
+| `getCategories` e `getPeopleForSelect` lançam no erro, como `lerFinanceiro`. Uma falha derruba `/relatorios` inteiro, inclusive as outras abas. | Falha rara, mas a página inteira cai. | Subfase própria (leituras que degradam) |
+| Pessoa inativa não é opção de filtro, e `?pessoa=<id dela>` é ignorado em silêncio. | O pendente dela só aparece sem filtro. | 04-C (ficha por pessoa) |
+| O olho não esconde os gráficos: legenda da rosca, frase "Fora da rosca" e tooltips. | Discrição parcial, igual ao painel. | 06 ou uma subfase do olho |
+| A conciliação compara pelo mesmo `indicadoresDoResumo`. Ela não pegaria o `page.tsx` do painel montando o `resumo` de outra janela ou leitura. | Uma divergência futura de leitura passaria pelo teste. | Subfase própria (teste de leitura) |
+| Herdado da 04-A, fora desta branch: `?mes=2026-13` passa na regex, e um mês além da janela de projeção mostra R$ 0,00 (igual no painel). | Número falso em URL digitada à mão. | Continua no §13.5 da 04-A |
+| Os achados do §13.5 da 04-A que não estão nas peças reusadas | Ver lá. | Continuam no §13.5 da 04-A |
