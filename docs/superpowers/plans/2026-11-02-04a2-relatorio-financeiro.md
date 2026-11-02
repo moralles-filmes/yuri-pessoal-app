@@ -422,7 +422,7 @@ export type RelatorioFinanceiro = {
 export function montarRelatorioFinanceiro(p: {
   mes: string; hoje: string; base: BaseFinanceira; resp: Responsabilidade; recorte: Recorte;
   entradas: EntradasDoMotorDoRelatorio; recebiveisCrus: readonly (RecebivelComRecebimentos & { person_id: string | null; card_id: string | null; person: { id: string; nome: string } | null })[];
-  contas: AccountWithBalance[]; recorrenciasCruas: LeituraFinanceira<typeof ESCOPO_PAINEL>["recorrencias"]; // as cruas de hoje (description, category) saldoAte: number | null;
+  contas: AccountWithBalance[]; recorrenciasCruas: LeituraFinanceira<typeof ESCOPO_PAINEL>["recorrencias"]; saldoAte: number | null; // recorrências cruas: description, category
   caixa: EstadoDoCaixa | null; janela: { evoMeses: string[]; projMeses: string[] };
   opcoes: RelatorioFinanceiro["filtros"]["opcoes"];
 }): RelatorioFinanceiro;
