@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { getDashboardLayout } from "@/lib/dashboard/settings";
 import { asPeriod, asView, resolveWindow } from "@/lib/dashboard/period";
 import { type DashCardId } from "@/lib/dashboard/cards";
-import { hojeISO } from "@/lib/format";
+import { horaDeBrasiliaAgora, hojeISO } from "@/lib/format";
+import { getDisplayName } from "@/lib/settings/queries";
+import { rotuloDeHoje } from "@/lib/dashboard/rotulos";
+import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
+import { FRASES_DO_BANNER, fraseDoDia, saudacaoPara } from "@/lib/painel/saudacao";
+import { BannerDeBoasVindas } from "@/components/shared/painel/banner-de-boas-vindas";
+import { LimiteDoBloco } from "@/components/dashboard/general/limite-do-bloco";
+import { ResumoFinanceiro } from "@/components/dashboard/general/resumo-financeiro";
 import { GeneralDashboard } from "./general-dashboard-client";
 import { CardBodySkeleton } from "@/components/dashboard/general/card-skeleton";
 import { FinanceCard } from "@/components/dashboard/general/finance-card";
@@ -35,7 +43,13 @@ export default async function DashboardPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const layout = await getDashboardLayout();
+  // O olho dos valores é do aparelho (cookie); o nome do banner nunca lança.
+  const [layout, nome, cookieDoOlho] = await Promise.all([
+    getDashboardLayout(),
+    getDisplayName(),
+    cookies().then((c) => c.get(COOKIE_DO_OLHO)?.value),
+  ]);
+  const ocultos = valoresOcultos(cookieDoOlho);
 
   const now = new Date();
   const todayIso = hojeISO();
@@ -58,60 +72,111 @@ export default async function DashboardPage({
   // Cada card renderiza no servidor com seu próprio Suspense/skeleton (stream por card).
   const contentById: Record<DashCardId, React.ReactNode> = {
     financeiro: (
-      <Suspense fallback={<CardBodySkeleton lines={5} />}>
-        <FinanceCard window={window} todayIso={todayIso} />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de Financeiro">
+        <Suspense fallback={<CardBodySkeleton lines={5} />}>
+          <FinanceCard window={window} todayIso={todayIso} />
+        </Suspense>
+      </LimiteDoBloco>
     ),
     todo: (
-      <Suspense fallback={<CardBodySkeleton lines={5} />}>
-        <TodoCard todayIso={todayIso} />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de TO-DO">
+        <Suspense fallback={<CardBodySkeleton lines={5} />}>
+          <TodoCard todayIso={todayIso} />
+        </Suspense>
+      </LimiteDoBloco>
     ),
     faturas: (
-      <Suspense fallback={<CardBodySkeleton lines={4} />}>
-        <InvoicesCard todayIso={todayIso} />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de Cartões & Faturas">
+        <Suspense fallback={<CardBodySkeleton lines={4} />}>
+          <InvoicesCard todayIso={todayIso} />
+        </Suspense>
+      </LimiteDoBloco>
     ),
     agenda: (
-      <Suspense fallback={<CardBodySkeleton lines={4} />}>
-        <AgendaCard window={window} now={now} />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de Agenda">
+        <Suspense fallback={<CardBodySkeleton lines={4} />}>
+          <AgendaCard window={window} now={now} />
+        </Suspense>
+      </LimiteDoBloco>
     ),
     dieta: (
-      <Suspense fallback={<CardBodySkeleton lines={5} />}>
-        <NutritionCard todayIso={todayIso} minutosAgora={minutosAgora} />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de Dieta e Alimentação">
+        <Suspense fallback={<CardBodySkeleton lines={5} />}>
+          <NutritionCard todayIso={todayIso} minutosAgora={minutosAgora} />
+        </Suspense>
+      </LimiteDoBloco>
     ),
     tarefas: (
-      <Suspense fallback={<CardBodySkeleton lines={4} />}>
-        <TasksCard todayIso={todayIso} />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de Tarefas & Rotinas">
+        <Suspense fallback={<CardBodySkeleton lines={4} />}>
+          <TasksCard todayIso={todayIso} />
+        </Suspense>
+      </LimiteDoBloco>
     ),
     habitos: (
-      <Suspense fallback={<CardBodySkeleton lines={4} />}>
-        <HabitsCard window={window} todayIso={todayIso} />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de Hábitos">
+        <Suspense fallback={<CardBodySkeleton lines={4} />}>
+          <HabitsCard window={window} todayIso={todayIso} />
+        </Suspense>
+      </LimiteDoBloco>
     ),
     estudos: (
-      <Suspense fallback={<CardBodySkeleton lines={4} />}>
-        <StudiesCard window={window} todayIso={todayIso} />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de Estudos">
+        <Suspense fallback={<CardBodySkeleton lines={4} />}>
+          <StudiesCard window={window} todayIso={todayIso} />
+        </Suspense>
+      </LimiteDoBloco>
     ),
     notificacoes: (
-      <Suspense fallback={<CardBodySkeleton lines={3} />}>
-        <NotificationsCard />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de Notificações">
+        <Suspense fallback={<CardBodySkeleton lines={3} />}>
+          <NotificationsCard />
+        </Suspense>
+      </LimiteDoBloco>
     ),
     treinos: (
-      <Suspense fallback={<CardBodySkeleton lines={5} />}>
-        <TrainingCard todayIso={todayIso} />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de Treinos">
+        <Suspense fallback={<CardBodySkeleton lines={5} />}>
+          <TrainingCard todayIso={todayIso} />
+        </Suspense>
+      </LimiteDoBloco>
     ),
     insights: (
-      <Suspense fallback={<CardBodySkeleton lines={4} />}>
-        <InsightsCard />
-      </Suspense>
+      <LimiteDoBloco nome="os dados de Insights da IA">
+        <Suspense fallback={<CardBodySkeleton lines={4} />}>
+          <InsightsCard />
+        </Suspense>
+      </LimiteDoBloco>
     ),
+  };
+
+  const banner = (
+    <BannerDeBoasVindas
+      saudacao={saudacaoPara(horaDeBrasiliaAgora())}
+      nome={nome}
+      linha="Aqui está um resumo da sua vida em um só lugar."
+      frase={fraseDoDia(todayIso, FRASES_DO_BANNER)}
+    />
+  );
+
+  const faixa = (
+    <LimiteDoBloco nome="o resumo financeiro">
+      <Suspense fallback={<CardBodySkeleton lines={3} />}>
+        <ResumoFinanceiro mes={window.mes} hoje={todayIso} ocultos={ocultos} />
+      </Suspense>
+    </LimiteDoBloco>
+  );
+
+  const [anoRef, mesRef] = window.mes.split("-").map(Number);
+  const mesPorExtenso = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(
+    new Date(anoRef, mesRef - 1, 1),
+  );
+  const subtituloById: Partial<Record<DashCardId, string>> = {
+    todo: rotuloDeHoje(todayIso),
+    dieta: rotuloDeHoje(todayIso),
+    tarefas: rotuloDeHoje(todayIso),
+    habitos: rotuloDeHoje(todayIso),
+    financeiro: `${mesPorExtenso} · competência`,
   };
 
   return (
@@ -128,6 +193,9 @@ export default async function DashboardPage({
         view={view}
         customFrom={customFrom}
         customTo={customTo}
+        banner={banner}
+        faixa={faixa}
+        subtituloById={subtituloById}
       />
     </div>
   );

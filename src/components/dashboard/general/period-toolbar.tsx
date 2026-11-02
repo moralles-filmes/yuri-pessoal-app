@@ -122,11 +122,16 @@ export function PeriodToolbar({
       )}
 
       {/* Alternância de visão dia/semana/mês */}
-      <div className="inline-flex items-center rounded-lg border border-input p-0.5">
+      <div
+        role="group"
+        aria-label="Visão"
+        className="inline-flex items-center rounded-lg border border-input p-0.5"
+      >
         {DASH_VIEWS.map((v) => (
           <button
             key={v}
             type="button"
+            aria-pressed={window.view === v}
             onClick={() => selectView(v)}
             className={cn(
               "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",

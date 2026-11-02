@@ -35,9 +35,11 @@ export function CardShell({
   onDragOver,
   onDrop,
   onDragEnd,
+  subtitulo,
   children,
 }: {
   id: DashCardId;
+  subtitulo?: string;
   personalizing: boolean;
   hidden: boolean;
   isFirst: boolean;
@@ -76,14 +78,26 @@ export function CardShell({
       )}
     >
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-3">
-        <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+        <CardTitle className="flex min-w-0 items-center gap-2.5 text-base">
           {personalizing && (
             <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           )}
-          <Icon className="size-4 shrink-0 text-primary" aria-hidden />
-          <span className="truncate">{title}</span>
+          <span
+            aria-hidden
+            className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-primary/10 text-primary"
+          >
+            <Icon className="size-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate">{title}</span>
+            {subtitulo && (
+              <span className="block truncate text-xs font-normal text-muted-foreground">
+                {subtitulo}
+              </span>
+            )}
+          </span>
           {personalizing && hidden && (
-            <Badge variant="outline" className="ml-1 text-muted-foreground">
+            <Badge variant="outline" className="ml-1 shrink-0 text-muted-foreground">
               Oculto
             </Badge>
           )}
@@ -121,10 +135,10 @@ export function CardShell({
         ) : (
           <Link
             href={DASH_CARD_HREF[id]}
-            className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-primary transition-colors hover:underline"
           >
-            Ver
-            <ChevronRight className="size-3" />
+            Ver mais
+            <ChevronRight className="size-3" aria-hidden />
           </Link>
         )}
       </CardHeader>
