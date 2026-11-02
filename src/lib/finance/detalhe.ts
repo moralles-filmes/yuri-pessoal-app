@@ -835,7 +835,9 @@ function pendenteDoMesDaCompetencia(ctx: Contexto): Resultado {
     .filter((x) => x.valorCent > 0);
   return preparado(p, {
     parte: "pendente",
-    totalCent: cent(totalAReceber(p.entradas.recs, p.mes)),
+    // O total sai dos MESMOS crus da lista (e do "referente ao mês" da tela): `entradas.recs` do
+    // relatório não segue o recorte de pessoa, e a lista segue (revisão final, achado 1).
+    totalCent: cent(totalAReceber(montarEntradas({ recebiveis: p.recebiveisCrus }).recs, p.mes)),
     grupos: gruposPorPessoa(itens),
   });
 }

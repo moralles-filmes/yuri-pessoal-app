@@ -982,6 +982,13 @@ describe("a gaveta do relatório concilia com o número, com os mesmos recortes 
     );
   });
 
+  it("pendente-do-mes com o recorte de pessoa: o total é o DELA, o mesmo da lista (revisão final, achado 1)", () => {
+    // Sem link na tela (o quadro âncora não segue a pessoa), mas a URL compartilhada chega aqui.
+    const p = { recorte: comRecorte({ pessoa: "pessoa-a" }) };
+    // Literal: r1 Pessoa A 40 + r3 Pessoa A 20, ambos de novembro.
+    expect(somaDosRegistros({ chave: "pendente-do-mes", parte: "meu", alvo: null }, p)).toBe(6000);
+  });
+
   it("as entradas da conta fecham com 'Minhas entradas' (conta e categoria)", () => {
     for (const p of [{ recorte: comRecorte({ conta: "conta-b" }) }, { recorte: comRecorte({ categoria: CAT_E.id }) }]) {
       const indicador = monta(p).indicadores.entradas.valor as string;
