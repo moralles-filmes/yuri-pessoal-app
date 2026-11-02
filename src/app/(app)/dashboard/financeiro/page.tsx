@@ -43,16 +43,13 @@ import {
 import { rotuloTotalPendenteAte, totalPendenteAte } from "@/lib/finance/recebimentos";
 import { horaDeBrasiliaAgora, hojeISO } from "@/lib/format";
 import { textoSobreACor } from "@/lib/painel/cor";
+import { mesDaUrl } from "@/lib/painel/detalhe-url";
 import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
 import { FRASES_DO_BANNER, fraseDoDia, saudacaoPara } from "@/lib/painel/saudacao";
 import { DashboardClient } from "./financial-dashboard-client";
 
 export const metadata: Metadata = { title: "Dashboard financeiro" };
 export const dynamic = "force-dynamic";
-
-function str(value: string | string[] | undefined): string | undefined {
-  return typeof value === "string" && value.length ? value : undefined;
-}
 
 export default async function DashboardFinanceiroPage({
   searchParams,
@@ -62,10 +59,7 @@ export default async function DashboardFinanceiroPage({
   const sp = await searchParams;
   const hoje = hojeISO();
   const mesAtual = mesDe(hoje);
-  const mesSel = (() => {
-    const v = str(sp.mes);
-    return v && /^\d{4}-\d{2}$/.test(v) ? v : mesAtual;
-  })();
+  const mesSel = mesDaUrl(sp.mes, mesAtual);
 
   // Base dos números (?base=caixa); sem o parâmetro, competência.
   const base = baseDaUrl(sp.base);

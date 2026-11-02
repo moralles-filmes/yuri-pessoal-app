@@ -6,15 +6,12 @@ import { mesDe } from "@/lib/finance/dashboard";
 import { baseDaUrl } from "@/lib/finance/base";
 import { responsabilidadeDaUrl } from "@/lib/finance/responsabilidade";
 import { hojeISO } from "@/lib/format";
+import { mesDaUrl } from "@/lib/painel/detalhe-url";
 import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
 import { RelatoriosClient } from "./relatorios-client";
 
 export const metadata: Metadata = { title: "Relatórios" };
 export const dynamic = "force-dynamic";
-
-function str(value: string | string[] | undefined): string | undefined {
-  return typeof value === "string" && value.length ? value : undefined;
-}
 
 export default async function RelatoriosPage({
   searchParams,
@@ -24,10 +21,7 @@ export default async function RelatoriosPage({
   const sp = await searchParams;
   const hoje = hojeISO();
   const mesAtual = mesDe(hoje);
-  const mesSel = (() => {
-    const v = str(sp.mes);
-    return v && /^\d{4}-\d{2}$/.test(v) ? v : mesAtual;
-  })();
+  const mesSel = mesDaUrl(sp.mes, mesAtual);
 
   const base = baseDaUrl(sp.base);
   // O caixa é montado dentro do relatório (`data.financeiro.caixa`), onde as entradas do motor já foram lidas.
