@@ -14,9 +14,12 @@ const leituras = vi.hoisted(() => ({
   getInvoicesCardData: vi.fn(),
 }));
 vi.mock("@/lib/dashboard/queries", () => leituras);
+const resumo = vi.hoisted(() => ({ lerResumoDoDashboard: vi.fn() }));
+vi.mock("@/lib/dashboard/resumo-financeiro", () => resumo);
 
 const { FinanceCard } = await import("./finance-card");
 const { InvoicesCard } = await import("./invoices-card");
+const { ResumoFinanceiro } = await import("./resumo-financeiro");
 const { CardSemLeitura } = await import("@/components/shared/card-sem-leitura");
 
 const JANELA = { mes: "2026-09" } as never;
@@ -28,16 +31,21 @@ beforeEach(() => {
 describe.each([
   ["FinanceCard", "getFinanceCardData", () => FinanceCard({ window: JANELA, todayIso: "2026-09-10" })],
   ["InvoicesCard", "getInvoicesCardData", () => InvoicesCard({ todayIso: "2026-09-10" })],
+  [
+    "ResumoFinanceiro",
+    "lerResumoDoDashboard",
+    () => ResumoFinanceiro({ mes: "2026-09", hoje: "2026-09-10", ocultos: false }),
+  ],
 ] as const)("03-G L4 · %s chamado", (_nome, leitura, chamar) => {
   it("ErroDeLeitura vira o CardSemLeitura com o rótulo da leitura — nenhum número", async () => {
-    leituras[leitura].mockRejectedValueOnce(new ErroDeLeitura("os lançamentos"));
+    ({ ...leituras, ...resumo })[leitura].mockRejectedValueOnce(new ErroDeLeitura("os lançamentos"));
     const elemento = await chamar();
     expect(elemento.type).toBe(CardSemLeitura);
     expect(elemento.props).toMatchObject({ oQue: "os lançamentos" });
   });
 
   it("qualquer outra exceção sobe para o error.tsx", async () => {
-    leituras[leitura].mockRejectedValueOnce(new TypeError("defeito de programação"));
+    ({ ...leituras, ...resumo })[leitura].mockRejectedValueOnce(new TypeError("defeito de programação"));
     await expect(chamar()).rejects.toThrow(TypeError);
   });
 });

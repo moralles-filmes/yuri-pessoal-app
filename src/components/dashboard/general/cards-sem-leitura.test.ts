@@ -17,6 +17,7 @@ const ler = (arquivo: string) =>
 describe.each([
   ["finance-card.tsx", "getFinanceCardData"],
   ["invoices-card.tsx", "getInvoicesCardData"],
+  ["resumo-financeiro.tsx", "lerResumoDoDashboard"],
 ])("03-G L4 · %s", (arquivo, leitura) => {
   const codigo = ler(arquivo);
   const tryBloco = codigo.match(/try \{([\s\S]*?)\} catch \(e\) \{([\s\S]*?)\}/);

@@ -38,6 +38,10 @@ const COR_POR_SENTIDO: Record<ComparacaoDoIndicador["sentido"], string> = {
   neutro: "text-muted-foreground",
 };
 
+/** Classes literais para o CARD dos indicadores secundários no celular (menores, sem base nem comparação; a dica (i) fica). */
+export const INDICADOR_PEQUENO_NO_CELULAR =
+  "max-sm:[&>div]:p-2.5 max-sm:[&_.text-2xl]:text-[0.9375rem] max-sm:[&_p.text-xs]:hidden";
+
 const FORMATO_PCT = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
