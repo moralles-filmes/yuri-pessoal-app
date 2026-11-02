@@ -31,6 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { StatementStatusBadge } from "@/components/financeiro/badges";
+import { AvisoParcial } from "@/components/financeiro/aviso-parcial";
 import { BlocoDoCaixa } from "@/components/financeiro/bloco-do-caixa";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -139,11 +140,6 @@ export function DashboardClient({
   base: BaseFinanceira;
   caixa: EstadoDoCaixa | null;
   saldoCom: { rotulo: string; valor: number | null; diferenca: string | null };
-  /**
-   * Não é mais lido aqui: `indicadoresDoResumo` chama `indicadorMinhasEntradas` por dentro (04-A2
-   * D-A2-15). Fica na prop porque `entradas-do-card.test.ts` (K1) ainda exige a chamada na página.
-   */
-  entradasInd?: { valor: number; linhaDeTerceiros: string | null };
   resumo: ResumoMes;
   perdoado: number;
   graficoAteODia: { ateODia: number } | null;
@@ -274,28 +270,8 @@ export function DashboardClient({
       {/* Banner de boas-vindas (montado no servidor) */}
       {banner}
 
-      {/* Aviso "parcial": a leitura pode estar incompleta, e o painel diz por quê */}
-      {completude.estado === "parcial" && (
-        <div
-          role="status"
-          className="flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2"
-        >
-          <AlertTriangle
-            aria-hidden="true"
-            className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
-          />
-          <div className="min-w-0 space-y-0.5 text-xs text-muted-foreground">
-            <p className="font-medium text-foreground">
-              Alguns números podem estar incompletos nesta leitura.
-            </p>
-            <ul className="list-disc space-y-0.5 pl-4">
-              {completude.motivos.map((motivo) => (
-                <li key={motivo}>{motivo}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
+      {/* Aviso "parcial": a leitura pode estar incompleta, e o painel diz por quê (peça única) */}
+      <AvisoParcial completude={completude} />
 
       {/* Alertas — faixa compacta */}
       {alertas.length > 0 && (

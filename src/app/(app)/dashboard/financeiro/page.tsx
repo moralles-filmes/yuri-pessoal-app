@@ -34,7 +34,6 @@ import {
   aReceberPorPessoa,
   estornosDoCartaoNoMes,
   faturaAtualDoCartao,
-  indicadorMinhasEntradas,
   pendenteAoBanco,
   saldoComData,
   valorDaFatura,
@@ -156,7 +155,6 @@ export default async function DashboardFinanceiroPage({
 
   // ── O painel (04-A): tudo serializável, calculado aqui; o cliente só desenha. ──
   const saldoCom = saldoComData({ saldoAte, saldoDaView: saldo, hoje });
-  const entradasInd = indicadorMinhasEntradas(resumo);
   // O estorno do cartão só pesa na rosca de COMPETÊNCIA (D-A-11); a de caixa tem a conta dela.
   const estornos =
     base === "competencia"
@@ -227,7 +225,6 @@ export default async function DashboardFinanceiroPage({
         base={base}
         caixa={caixa}
         saldoCom={saldoCom}
-        entradasInd={entradasInd}
         resumo={resumo}
         perdoado={perdoado}
         graficoAteODia={graficoAteODia}
