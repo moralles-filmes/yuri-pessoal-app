@@ -101,6 +101,20 @@ describe("série futura e mês parcial são visualmente distintos do realizado",
     expect(ler("barras-entradas-saidas-chart.tsx")).toContain("mês em andamento · parcial");
   });
 
+  it("04-A2: a legenda parcial só aparece com dado (fachada) e as séries/nomes são props do -impl", () => {
+    const fachada = semComentarios(ler("barras-entradas-saidas-chart.tsx"));
+    expect(fachada).toMatch(/temDadosNasBarras\(props\.dados\)\s*&&/);
+    const impl = semComentarios(ler("barras-entradas-saidas-chart-impl.tsx"));
+    expect(impl).toContain("temDadosNasBarras");
+    // com series === "saidas" a Bar de entradas não é renderizada
+    expect(impl).toMatch(/series\s*!==\s*"saidas"[\s\S]{0,40}<Bar[\s\S]{0,40}dataKey="entradas"/);
+    expect(impl).toContain("nomes.entradas");
+    expect(impl).toContain("nomes.saidas");
+    expect(impl).toContain('"Minhas entradas"');
+    expect(impl).toContain('"Minhas saídas"');
+    expect(impl).not.toContain('name="Minhas');
+  });
+
   it("as barras de entradas e saídas têm eixo Y com largura automática", () => {
     const fonte = ler("barras-entradas-saidas-chart-impl.tsx");
     expect(fonte).toMatch(/<YAxis[\s\S]*?width="auto"[\s\S]*?\/>/);

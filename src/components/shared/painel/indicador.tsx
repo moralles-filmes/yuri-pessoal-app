@@ -71,7 +71,8 @@ function leituraDaVariacao(pct: number | null): {
  * dos valores age só por CSS (`group-data-[ocultar=true]/olho`), então o valor real e o "R$ ••••"
  * saem os dois do servidor e o cliente apenas escolhe qual aparece.
  *
- * ⛔ Erro de leitura nunca vira zero: o estado `{ erro }` mostra o texto, não um valor. E a linha
+ * ⛔ Erro de leitura nunca vira zero: o estado `{ erro }` mostra o texto, não um valor; o mesmo
+ * vale para `{ naoSegue }` (o filtro ativo não alcança este número), que é outro fato. E a linha
  * de base (o que o número mede) fica sempre visível — número sem base não se interpreta.
  */
 export function Indicador({
@@ -92,7 +93,7 @@ export function Indicador({
   icone: LucideIcon;
   rotulo: string;
   dica: string;
-  valor: string | { erro: string };
+  valor: string | { erro: string } | { naoSegue: string };
   linhaDeBase: string;
   /** Detalhe que contém dinheiro (ex.: "+ R$ X de terceiros"): some junto com o olho. */
   detalheComValor?: string | null;
@@ -120,19 +121,28 @@ export function Indicador({
 
         {/* `min-w-0`: item de flex não encolhe abaixo do conteúdo, e o chip é `shrink-0`. */}
         <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <p className="min-w-0 break-words text-sm font-medium text-muted-foreground">
-              {rotulo}
-            </p>
-            <span
-              role="img"
-              title={dica}
-              aria-label={dica}
-              className="shrink-0 text-muted-foreground"
-            >
-              <Info aria-hidden="true" className="size-3.5" />
-            </span>
-            {acessorio ? <div className="ml-auto shrink-0">{acessorio}</div> : null}
+          {/* L3: a dica abre por toque e por teclado (`<details>` nativo, sem JS). O `title` só
+              aparecia com o mouse — no celular e no teclado a dica não existia. Ela abre NO FLUXO,
+              logo abaixo do rótulo: um painel por cima seria cortado pelo `overflow-hidden` do card
+              (que segura o rótulo e o valor longos, conferência 04-A) e passaria da borda no celular. */}
+          <div className="flex min-w-0 items-start gap-1.5">
+            <details className="group/dica min-w-0 flex-1">
+              <summary
+                className="flex w-fit max-w-full cursor-pointer list-none items-center gap-1.5 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+              >
+                <span className="min-w-0 break-words text-sm font-medium text-muted-foreground">
+                  {rotulo}
+                </span>
+                <Info
+                  aria-hidden="true"
+                  className="size-3.5 shrink-0 text-muted-foreground group-open/dica:text-primary"
+                />
+                {/* Soma ao rótulo, não o substitui: o leitor ouve "Minhas saídas, o que é este número". */}
+                <span className="sr-only">, o que é este número</span>
+              </summary>
+              <p className="mt-1 rounded-md bg-muted p-2 text-xs text-muted-foreground">{dica}</p>
+            </details>
+            {acessorio ? <div className="shrink-0">{acessorio}</div> : null}
           </div>
 
           {typeof valor === "string" ? (
@@ -144,6 +154,16 @@ export function Indicador({
               >
                 R$ ••••
               </span>
+              {/* O "R$ ••••" é aria-hidden; o leitor de tela ouve "valor oculto". `display:none`
+                  tira o invólucro da árvore de acessibilidade com o olho aberto. */}
+              <span className="hidden group-data-[ocultar=true]/olho:block">
+                <span className="sr-only">valor oculto</span>
+              </span>
+            </p>
+          ) : "naoSegue" in valor ? (
+            // O quarto desenho (04-A2 L1): o bloco não segue o filtro. Texto, nunca número.
+            <p className="rounded-md border border-dashed p-2 text-sm text-muted-foreground">
+              {valor.naoSegue}
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">{valor.erro}</p>
