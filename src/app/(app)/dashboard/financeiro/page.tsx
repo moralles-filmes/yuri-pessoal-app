@@ -168,7 +168,6 @@ export default async function DashboardFinanceiroPage({
           receivables: recs,
         })
       : 0;
-  const mesEmAndamento = mesSel === mesAtual ? mesAtual : null;
   const porPessoa = aReceberPorPessoa(recebiveis, hoje);
   const totalPendente = totalPendenteAte(recebiveis, hoje);
   const rotuloTotalPendente = rotuloTotalPendenteAte(hoje);
@@ -236,7 +235,7 @@ export default async function DashboardFinanceiroPage({
         evolucao={evolucao}
         categorias={categorias}
         estornos={estornos}
-        mesEmAndamento={mesEmAndamento}
+        mesAtual={mesAtual}
         formas={formas}
         faturas={faturas}
         cartoes={cartoesDoPainel}

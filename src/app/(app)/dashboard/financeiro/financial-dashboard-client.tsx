@@ -121,7 +121,7 @@ export function DashboardClient({
   evolucao,
   categorias,
   estornos,
-  mesEmAndamento,
+  mesAtual,
   formas,
   faturas,
   cartoes,
@@ -157,7 +157,7 @@ export function DashboardClient({
   /** Estornos do cartão no mês (competência) — entram na nota da rosca. */
   estornos: number;
   /** O mês em andamento ('yyyy-MM') ou `null` quando o mês selecionado não é o de hoje. */
-  mesEmAndamento: string | null;
+  mesAtual: string;
   formas: FormaSlice[];
   faturas: FaturaProvisao[];
   cartoes: CartaoDoPainel[];
@@ -224,12 +224,13 @@ export function DashboardClient({
     ? {
         valor: valorDoIndicador(caixaInd.entradas),
         linhaDeBase: "renda pessoal recebida · caixa realizado",
+        detalheComValor: null,
       }
     : {
         valor: formatCurrency(entradasInd.valor),
-        linhaDeBase:
-          "renda pessoal · competência" +
-          (entradasInd.linhaDeTerceiros ? ` · ${entradasInd.linhaDeTerceiros}` : ""),
+        linhaDeBase: "renda pessoal · competência",
+        // Tem dinheiro: some junto com o olho (revisão final 04-A).
+        detalheComValor: entradasInd.linhaDeTerceiros,
       };
 
   const saidasInd = caixaInd
@@ -259,6 +260,8 @@ export function DashboardClient({
         dados: caixaOk ? caixaOk.graficos.mesAMes.dados : mesAMesCompetencia,
         ateODia: caixaOk ? caixaOk.graficos.mesAMes.ateODia : (graficoAteODia?.ateODia ?? null),
         base,
+        // Mês futuro: só o que já está lançado, sem cor (revisão final 04-A).
+        futuro: mesSel > mesAtual,
       });
 
   /* ───────────── Cartões e próximas faturas ───────────── */
@@ -370,7 +373,8 @@ export function DashboardClient({
                 ? { erro: "Não foi possível ler o saldo" }
                 : formatCurrency(saldoCom.valor)
             }
-            linhaDeBase={saldoCom.diferenca ?? "todas as contas, até o fim de hoje"}
+            linhaDeBase="todas as contas, até o fim de hoje"
+            detalheComValor={saldoCom.diferenca}
             href="/financeiro/contas"
             hrefRotulo="Ver contas"
             acessorio={<BotaoDoOlho />}
@@ -383,6 +387,7 @@ export function DashboardClient({
             dica="A parte das entradas que é sua (renda pessoal). Dinheiro de terceiros fica de fora."
             valor={entradasIndView.valor}
             linhaDeBase={entradasIndView.linhaDeBase}
+            detalheComValor={entradasIndView.detalheComValor}
             comparacao={comparacao?.entradas}
             href={`/financeiro/lancamentos?type=receita&month=${mesSel}`}
             hrefRotulo="Ver entradas"
@@ -431,7 +436,7 @@ export function DashboardClient({
             <CaixaNaoLido />
           ) : (
             <BarrasEntradasSaidasChart
-              dados={dadosDasBarras(graficosCaixa ? graficosCaixa.evolucao : evolucao, mesEmAndamento)}
+              dados={dadosDasBarras(graficosCaixa ? graficosCaixa.evolucao : evolucao, mesAtual)}
             />
           )}
           {graficosCaixa && <RodapeDasFaturasSemTotal meses={graficosCaixa.semTotal.evolucao} />}

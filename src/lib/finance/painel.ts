@@ -168,8 +168,21 @@ export function comparacaoDosIndicadores(p: {
   dados: MesAMesDados;
   ateODia: number | null;
   base: BaseFinanceira;
+  /** Mês selecionado depois do mês em andamento: só o que já está lançado, sem cor (revisão 04-A). */
+  futuro?: boolean;
 }): { entradas: ComparacaoDoIndicador; saidas: ComparacaoDoIndicador } {
   const { dados, ateODia, base } = p;
+  if (p.futuro) {
+    const semCor = (pct: number | null): ComparacaoDoIndicador => ({
+      pct,
+      sentido: "neutro",
+      texto: "mês futuro: só o que já está lançado",
+    });
+    return {
+      entradas: semCor(variacaoPct(dados.atual.entradas, dados.anterior.entradas)),
+      saidas: semCor(variacaoPct(dados.atual.saidas, dados.anterior.saidas)),
+    };
+  }
   const emAndamento = ateODia !== null;
   const pctEntradas = variacaoPct(dados.atual.entradas, dados.anterior.entradas);
   const pctSaidas = variacaoPct(dados.atual.saidas, dados.anterior.saidas);
@@ -286,12 +299,16 @@ export function foraDaRosca(
 
 /* ───────────────────────────── Barras ───────────────────────────── */
 
-/** Os pontos das barras, iguais aos de entrada, com o mês em andamento marcado como parcial. */
+/**
+ * Os pontos das barras, iguais aos de entrada, com o mês em andamento — e qualquer mês DEPOIS dele,
+ * quando um mês futuro está selecionado — marcado como parcial (revisão final 04-A): o que ainda
+ * não aconteceu não pode ter o mesmo traço do realizado. `null` = nenhum parcial.
+ */
 export function dadosDasBarras(
   evolucao: readonly EvolucaoPonto[],
-  mesEmAndamento: string | null,
+  mesAtual: string | null,
 ): (EvolucaoPonto & { parcial: boolean })[] {
-  return evolucao.map((p) => ({ ...p, parcial: mesEmAndamento !== null && p.mes === mesEmAndamento }));
+  return evolucao.map((p) => ({ ...p, parcial: mesAtual !== null && p.mes >= mesAtual }));
 }
 
 /* ───────────────────────────── Faturas ───────────────────────────── */

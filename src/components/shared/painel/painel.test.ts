@@ -88,9 +88,12 @@ describe("olho dos valores — a ilha cliente", () => {
     expect(olho).toContain("samesite=lax");
   });
 
-  it("expõe o estado por data-ocultar num invólucro `group/olho contents`", () => {
+  it("expõe o estado por data-ocultar num invólucro de caixa própria (não `contents`)", () => {
+    // Conferência visual (04-A): com `display: contents` o invólucro não recebe o espaçamento do
+    // `space-y` do pai, e os indicadores encostavam no bloco seguinte.
     expect(olho).toContain("data-ocultar");
-    expect(olho).toContain("group/olho contents");
+    expect(olho).toContain('className="group/olho"');
+    expect(olho).not.toContain("group/olho contents");
   });
 
   it("diz na dica que é discrição, não sigilo", () => {
@@ -185,4 +188,19 @@ describe("tokens do banner em globals.css", () => {
       expect(corpo).toMatch(/--banner-to\s*:/);
     });
   }
+});
+
+describe("conferência visual e revisão final (04-A) — o indicador", () => {
+  const fonteIndicador = fs.readFileSync(path.join(process.cwd(), "src/components/shared/painel/indicador.tsx"), "utf8");
+
+  it("rótulo e valor quebram linha em vez de cortar (o dinheiro nunca é truncado)", () => {
+    expect(fonteIndicador).not.toMatch(/className="[^"]*truncate[^"]*text-2xl/);
+    expect(fonteIndicador).not.toMatch(/className="min-w-0 truncate text-sm/);
+    expect(fonteIndicador).toMatch(/text-2xl[^"]*break-words|break-words[^"]*text-2xl/);
+  });
+
+  it("o detalhe com valor em dinheiro também some com o olho", () => {
+    expect(fonteIndicador).toContain("detalheComValor");
+    expect(fonteIndicador).toMatch(/detalheComValor[\s\S]*group-data-\[ocultar=true\]\/olho:hidden/);
+  });
 });

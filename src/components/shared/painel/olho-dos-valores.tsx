@@ -13,7 +13,8 @@ const OlhoContext = createContext<EstadoDoOlho | null>(null);
  * servidor (cookie); ao alternar, grava o cookie e troca `data-ocultar` no invólucro, e o CSS dos
  * indicadores (`group-data-[ocultar=true]/olho`) escolhe entre o valor e "R$ ••••" sem recarregar.
  *
- * O invólucro é `display: contents` (não cria caixa nem mexe na grade). Os `children` continuam
+ * O invólucro é uma caixa comum (bloco), e não `display: contents`: com `contents` ele não recebia
+ * o espaçamento do `space-y` do pai e os indicadores encostavam no bloco seguinte (conferência 04-A).
  * sendo Server Components passados de fora: esta ilha não os renderiza, só os envolve.
  *
  * O botão é um componente à parte (`BotaoDoOlho`), que lê o estado por contexto — assim a página
@@ -39,7 +40,7 @@ export function OlhoDosValores({
 
   return (
     <OlhoContext.Provider value={{ oculto, alternar }}>
-      <div data-ocultar={oculto ? "true" : "false"} className="group/olho contents">
+      <div data-ocultar={oculto ? "true" : "false"} className="group/olho">
         {children}
       </div>
     </OlhoContext.Provider>

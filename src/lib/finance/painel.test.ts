@@ -122,6 +122,16 @@ describe("comparacaoDosIndicadores", () => {
     expect(r.entradas.texto).toBe("até o dia 18 vs. mês anterior");
   });
 
+  it("revisão final: mês futuro não ganha cor — só o que já está lançado", () => {
+    for (const base of ["competencia", "caixa"] as const) {
+      const r = comparacaoDosIndicadores({ dados, ateODia: null, base, futuro: true });
+      expect(r.entradas.sentido).toBe("neutro");
+      expect(r.saidas.sentido).toBe("neutro");
+      expect(r.entradas.texto).toBe("mês futuro: só o que já está lançado");
+      expect(r.saidas.texto).toBe("mês futuro: só o que já está lançado");
+    }
+  });
+
   it("mês fora do andamento: texto simples e a seta de saídas ganha cor", () => {
     for (const base of ["competencia", "caixa"] as const) {
       const r = comparacaoDosIndicadores({ dados, ateODia: null, base });
@@ -392,6 +402,14 @@ describe("dadosDasBarras", () => {
   it("marca como parcial só o mês em andamento", () => {
     const r = dadosDasBarras(evolucao, "2026-11");
     expect(r.map((p) => p.parcial)).toEqual([false, false, true]);
+  });
+
+  it("revisão final: com um mês futuro selecionado, o mês em andamento e os seguintes são parciais", () => {
+    const comFuturo: EvolucaoPonto[] = [
+      ...evolucao,
+      { mes: "2026-12", entradas: 0, saidas: 120, saldo: -120 },
+    ];
+    expect(dadosDasBarras(comFuturo, "2026-11").map((p) => p.parcial)).toEqual([false, false, true, true]);
   });
 
   it("sem mês em andamento, nenhuma barra é parcial", () => {

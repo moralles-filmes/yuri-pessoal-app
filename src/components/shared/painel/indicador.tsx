@@ -81,6 +81,7 @@ export function Indicador({
   dica,
   valor,
   linhaDeBase,
+  detalheComValor,
   comparacao,
   href,
   hrefRotulo,
@@ -93,6 +94,8 @@ export function Indicador({
   dica: string;
   valor: string | { erro: string };
   linhaDeBase: string;
+  /** Detalhe que contém dinheiro (ex.: "+ R$ X de terceiros"): some junto com o olho. */
+  detalheComValor?: string | null;
   comparacao?: ComparacaoDoIndicador;
   href?: string;
   hrefRotulo?: string;
@@ -118,7 +121,7 @@ export function Indicador({
         {/* `min-w-0`: item de flex não encolhe abaixo do conteúdo, e o chip é `shrink-0`. */}
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-w-0 items-center gap-1.5">
-            <p className="min-w-0 truncate text-sm font-medium text-muted-foreground">
+            <p className="min-w-0 break-words text-sm font-medium text-muted-foreground">
               {rotulo}
             </p>
             <span
@@ -133,7 +136,7 @@ export function Indicador({
           </div>
 
           {typeof valor === "string" ? (
-            <p className="truncate text-2xl font-semibold tracking-tight tabular-nums">
+            <p className="break-words text-2xl font-semibold tracking-tight tabular-nums">
               <span className="group-data-[ocultar=true]/olho:hidden">{valor}</span>
               <span
                 aria-hidden="true"
@@ -147,6 +150,12 @@ export function Indicador({
           )}
 
           <p className="text-xs text-muted-foreground">{linhaDeBase}</p>
+          {detalheComValor ? (
+            <p className="text-xs text-muted-foreground">
+              <span className="group-data-[ocultar=true]/olho:hidden">{detalheComValor}</span>
+              <span className="hidden group-data-[ocultar=true]/olho:inline">valor oculto</span>
+            </p>
+          ) : null}
 
           {comparacao && variacao ? (
             <p

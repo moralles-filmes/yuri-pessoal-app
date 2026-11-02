@@ -188,6 +188,8 @@ describe("04-A T3 — getUltimasTransacoes (D-A-12)", () => {
     const leitura = estado.leituras.find((l) => l.tabela === "transactions");
     expect(leitura?.filtros).toContainEqual(["lte", "competence_date", "2026-11-18"]);
     expect(leitura?.filtros).toContainEqual(["neq", "type", "transferencia"]);
+    // Revisão final: lançamento cancelado não é "última transação".
+    expect(leitura?.filtros).toContainEqual(["neq", "status", "cancelado"]);
     expect(leitura?.ordem).toEqual([
       ["competence_date", { ascending: false }],
       ["created_at", { ascending: false }],

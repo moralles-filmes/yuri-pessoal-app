@@ -305,7 +305,7 @@ export async function lerSaldoAte(dataExclusiva: string): Promise<number | null>
 
 /**
  * D-A-12 (04-A) — os últimos lançamentos que JÁ ACONTECERAM (competência até `hoje`), sem
- * transferências (o pagamento de fatura é transferência). Erro de leitura LANÇA (03-G). O corte
+ * transferências (o pagamento de fatura é transferência) e sem cancelados (revisão final). Erro de leitura LANÇA (03-G). O corte
  * pelo `limit` não é saturação: há mais lançamentos que `n` por definição, então a situação da
  * leitura é descartada.
  */
@@ -319,6 +319,7 @@ export async function getUltimasTransacoes(
     .select(TX_SELECT + TX_SHARED_EMBED, { count: "exact" })
     .lte("competence_date", hoje)
     .neq("type", "transferencia")
+    .neq("status", "cancelado")
     .order("competence_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(n);
