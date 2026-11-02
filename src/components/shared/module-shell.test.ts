@@ -22,6 +22,7 @@ import { temPagina } from "@/test/rotas";
 import { NAV_DA_DIETA } from "@/components/nutrition/nutrition-nav";
 import { NAV_DE_TREINOS } from "@/components/training/training-nav";
 import { NAV_DA_IA } from "@/components/ai/ai-nav";
+import { NAV_DA_CENTRAL_DE_CARTOES } from "@/components/cartoes/cartoes-nav";
 import type { NavegacaoDeModulo } from "@/components/shared/module-shell";
 import { NUTRITION_SECTIONS } from "@/lib/nutrition/constants";
 import { TRAINING_SECTIONS } from "@/lib/training/constants";
@@ -43,6 +44,8 @@ const ARQUIVOS_DE_MODULO = [
   "training/training-shell.tsx",
   "ai/ai-nav.tsx",
   "ai/ai-shell.tsx",
+  "cartoes/cartoes-nav.ts",
+  "cartoes/cartoes-shell.tsx",
 ] as const;
 
 /**
@@ -61,6 +64,7 @@ const NAVS: { nome: string; nav: NavegacaoDeModulo }[] = [
   { nome: "Dieta", nav: NAV_DA_DIETA },
   { nome: "Treinos", nav: NAV_DE_TREINOS },
   { nome: "IA", nav: NAV_DA_IA },
+  { nome: "Cartões", nav: NAV_DA_CENTRAL_DE_CARTOES },
 ];
 
 function itensDe(nav: NavegacaoDeModulo) {
@@ -74,7 +78,7 @@ describe("a varredura sabe dizer não", () => {
     }
   });
 
-  it("os seis arquivos de módulo foram mesmo lidos", () => {
+  it("os oito arquivos de módulo foram mesmo lidos", () => {
     for (const arquivo of ARQUIVOS_DE_MODULO) {
       expect(fonte(arquivo).length, arquivo).toBeGreaterThan(300);
     }
@@ -138,6 +142,15 @@ describe("toda seção declarada entra na coluna", () => {
       expect(item.href).not.toContain("http");
     }
   });
+
+  it("a central de cartões tem exatamente as quatro seções da 05-A", () => {
+    expect(itensDe(NAV_DA_CENTRAL_DE_CARTOES).map((item) => item.href)).toEqual([
+      "/cartoes",
+      "/cartoes/meus",
+      "/faturas",
+      "/parcelamentos",
+    ]);
+  });
 });
 
 describe("toda seção de módulo abre uma tela que existe", () => {
@@ -146,9 +159,9 @@ describe("toda seção de módulo abre uma tela que existe", () => {
   );
 
   it("há seção suficiente para a varredura significar alguma coisa", () => {
-    // 12 da Dieta + 13 de Treinos + 8 da IA. O piso é o que impede este bloco de passar
-    // verde sobre uma lista vazia.
-    expect(TODOS.length).toBeGreaterThanOrEqual(33);
+    // 12 da Dieta + 13 de Treinos + 8 da IA + 4 da central de cartões. O piso é o que
+    // impede este bloco de passar verde sobre uma lista vazia.
+    expect(TODOS.length).toBeGreaterThanOrEqual(37);
   });
 
   it.each(TODOS)("%s → %s", (_modulo, href) => {
