@@ -22,8 +22,9 @@ sem migration, **sem push** — D67) · **REDESIGN-05-A ✅** (integrada por mer
 `--no-ff` em `bae44af`, sem migration, **sem push** — D67) · **REDESIGN-05-C ✅** (integrada
 por merge `--no-ff` em `30964b8`, sem migration, **sem push** — D67) — **a REDESIGN-05 está
 fechada** · **REDESIGN-04-A2 ✅** (integrada por merge `--no-ff` em `d5fb873`, sem
-migration, **sem push** — D67) · **04-B liberada** (o detalhamento por trás de cada número) e
-**06 liberada** (Dashboard geral no visual do print 2)
+migration, **sem push** — D67) · **REDESIGN-06 ✅** (integrada por merge `--no-ff` em
+`9915d99`, sem migration, **sem push** — D67) — **o Dashboard geral está no visual do print 2**
+· **04-B liberada** (o detalhamento por trás de cada número)
 
 ⛔ **A M-F foi aplicada em 2026-10-21** (03-F), pelo MCP, depois do seu "Aplique" literal, numa
 mensagem só para isso (D63). Ela **não** estava no `MIGRATIONS.md`: nasceu da K0 da 03-F, com o
@@ -50,6 +51,57 @@ PR** ("faz o pr e tudo mais dessa no git", D66) — **o merge em `main` é seu**
 ⛔ **A partir de 2026-11-02 a publicação por partes ACABOU (D67, por custo da Vercel).** As
 próximas fases se acumulam em `feat/redesign-00-auditoria` **sem push** e vão a `main` num
 **PR único**, com **um merge só**, quando você pedir. O PR #65 (03-G2) fica aberto e é esse PR.
+
+---
+
+## REDESIGN-06 — o Dashboard geral no visual do print 2 ✅
+
+Branch `feat/redesign-06-dashboard`, nascida de `30964b8` (21 commits), integrada por merge
+`--no-ff` em **`9915d99`**, **local e sem push** (D67). O desenho é
+`docs/superpowers/specs/2026-11-02-06-dashboard-geral-design.md` e o plano é
+`docs/superpowers/plans/2026-11-02-06-dashboard-geral.md` (13 tarefas TDD). Prévia aprovada em
+2026-11-02. **Sem migration.**
+
+**O que mudou.** `/dashboard` ganhou o banner (saudação, frase do dia), a faixa **Resumo
+financeiro** (Saldo das contas em DD/MM com o olho, Minhas entradas, Minhas saídas, Total em
+cartões) e a anatomia do print nos 11 cards: ícone em quadrado, subtítulo ("hoje, seg 02/11"
+nos cards de hoje), quadros e "Ver mais ›". A faixa e o card Financeiro saem de **uma** leitura
+(`lerResumoDoDashboard`, com `cache`): o mês e um histórico de 6 meses só com transações, em
+duas leituras, para o teto de 2.000 não cortar o mês corrente (D-06-M4). O card Financeiro mostra
+"Realmente meu" e as barras de 6 meses; Treinos ganhou as barras da semana **sem vermelho**
+(invariante 22); Hábitos, o anel do dia, e a água deixou de ter "+" (nenhum clique em card
+escreve). **Cada bloco tem o seu limite de erro** (`LimiteDoBloco`, `catchError` do Next 16.4,
+"Tentar de novo" relê antes de zerar). Fechados: **F3** (alternância de visão com
+`aria-pressed`), **R7** (salvar a ordem não grava mais o período da URL; "Período padrão" no
+Personalizar), **D15** (a rosca dobra em "Outros (N categorias)" acima de 8) e o card de
+Notificações deixou de mostrar "Em breve" quando a leitura falha (D-06-M5). Desvios do print no
+§6 de `REFERENCIA-VISUAL.md`, linhas "(06)". Peça comum tocada: só `shared/painel/indicador.tsx`
+(passou a exportar `INDICADOR_PEQUENO_NO_CELULAR`).
+
+**Provado na ponta:** `test:run` **342 / 7.511**, `lint`, `tsc`, `build` e `perf:bundle`
+verdes (`/dashboard` **198,9 KB**, `/configuracoes` **197,5 KB**); `TZ=UTC` nos arquivos novos:
+253 testes. Conferência visual **com a sua sessão**, 390/768/1280/1440, claro e escuro, sem
+rolagem horizontal; contraste do banner 5,6:1 (claro) e 8,7:1 (escuro); erro provocado no card de
+Estudos ficou isolado nele (revertido sem commit). Ela achou três defeitos — dinheiro quebrado em
+4 colunas num terço da grade (`@container` + `@[26rem]`), "Ver mais" fora do cabeçalho
+(`CardHeader` é `grid`) e barra "a seguir" invisível no escuro —, todos com teste. Revisão final
+(Opus): nada grave; cinco achados corrigidos com teste (histórico parcial também na faixa,
+notificações com não lidas e lista vazia, descanso passado no Treinos, layout salvo `custom`,
+`PGRST205`).
+
+**Na integração:** um conflito, em `entradas-do-card.test.ts` — a 04-A2 tirou o relatório de
+`apresentarEntradas` e a 06 tirou o card; as duas provas ficam, e nenhuma tela usa mais a função.
+Depois do merge, `relatorios-client.tsx` passou a importar `INDICADOR_PEQUENO_NO_CELULAR` da peça
+comum em vez da cópia que a 04-A2 tinha (`6bac81b`). Os cinco comandos na árvore integrada:
+`test:run` **351 / 7.759** ✅ · `lint` ✅ · `tsc` ✅ · `build` ✅ · `perf:bundle` ✅ (71 rotas
+dentro); `TZ=UTC` em dashboard, painel, finance e components/dashboard: 1.467 ✅.
+
+**Pendências declaradas** (não consertadas): o "Tentar de novo" do `CardSemLeitura` aponta para
+`/dashboard` sem o `?periodo` (padrão herdado da 03-G); uma edição de mês de lançamento
+exatamente entre as duas leituras derruba faixa e card juntos no limite de erro (a nova tentativa
+resolve); `apresentarEntradas` ficou sem consumidor (limpeza); RF4 do plano (semana começando no
+domingo) só é testado na função pura, não em `getTrainingCardData`; uma rodada da suíte teve 1
+falha intermitente não identificada, que não se repetiu em três rodadas.
 
 ---
 
@@ -1541,7 +1593,16 @@ Os cinco comandos rodaram sobre essa árvore e passaram: `test:run` **331 / 7.39
 `tsc`, `build` e `perf:bundle` (mediana **202,3**, 71 rotas dentro). Na worktree de integração,
 uma rodada foi contaminada por um merge alheio, abortado no meio dela (ver Pendências da 05-C).
 
-## Próximo passo — REDESIGN-06 (Dashboard geral) e REDESIGN-04-B (Detalhamento), em paralelo
+## Próximo passo — REDESIGN-04-B (Detalhamento) e 04-C; depois a REDESIGN-08
+
+**A 06 está integrada** (`9915d99`). Falta a **04-B** (todo indicador abre os registros que o
+explicam, e os totais conciliam), que anda em `C:/tmp/04b-detalhamento`, e a **04-C**
+(`feat/redesign-04c-reembolso`), em outra sessão. As duas tocam peças comuns já mexidas pela 06
+(`indicador.tsx`, `card-sem-leitura.tsx`): a integração delas pode ter conflito ali. Fechadas a
+04-B e a 04-C, vem a **REDESIGN-08** (regressão e entrega) e o merge do **PR único #65** (D67),
+quando você pedir.
+
+### Histórico — o passo anterior (06 e 04-B em paralelo)
 
 **A REDESIGN-05 está fechada** (`30964b8`). A **06** é o Dashboard geral (`/dashboard`) no visual
 do **print 2** (D65): barra → banner → Resumo financeiro (4 indicadores) → grade dos 11 cards. O
