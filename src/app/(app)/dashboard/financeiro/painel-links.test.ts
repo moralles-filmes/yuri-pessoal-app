@@ -49,7 +49,11 @@ describe("painel financeiro — links", () => {
     const lidos = parametrosLidos("/financeiro/lancamentos");
     expect(lidos.has("type")).toBe(true);
     expect(lidos.has("month")).toBe(true);
-    expect(CODIGO).toMatch(/\/financeiro\/lancamentos\?type=receita&month=/);
-    expect(CODIGO).toMatch(/\/financeiro\/lancamentos\?type=despesa&month=/);
+    // 04-B (D-B-14): os indicadores deixaram de ir direto a Lançamentos e abrem os registros do
+    // número (`?detalhe=`, URL pronta do servidor). A tela de lançamentos continua alcançável pelo
+    // rodapé da gaveta (`linkLancamentos`) e pelo "Ver todas" de Últimas transações.
+    expect(CODIGO).toMatch(/href=\{hrefs\.entradas\}/);
+    expect(CODIGO).toMatch(/href=\{hrefs\.saidas\}/);
+    expect(CODIGO).toMatch(/linkLancamentos=\{`\/financeiro\/lancamentos\?month=/);
   });
 });

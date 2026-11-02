@@ -19,6 +19,7 @@ import {
 import { StatCard } from "@/components/shared/stat-card";
 import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { Bloco } from "@/components/shared/painel/bloco";
+import { GavetaDeRegistros } from "@/components/shared/painel/gaveta-de-registros";
 import { Indicador } from "@/components/shared/painel/indicador";
 import { BotaoDoOlho, OlhoDosValores } from "@/components/shared/painel/olho-dos-valores";
 import {
@@ -38,17 +39,20 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { fraseDoPerdoado, rotuloPendenteDoMes } from "@/lib/finance/recebimentos";
 import { ROTULO_DA_BASE, type BaseFinanceira } from "@/lib/finance/base";
 import type { EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
-import { TRANSACTION_TYPE_LABELS } from "@/lib/finance/constants";
+import { PAYMENT_METHOD_LABELS, TRANSACTION_TYPE_LABELS } from "@/lib/finance/constants";
 import type { CompletudeFinanceira } from "@/lib/finance/pipeline";
 import {
   comparacaoDosIndicadores,
   dadosDasBarras,
+  faturaAtualDoCartao,
   indicadoresDoResumo,
   valorDaFatura,
   type CartaoDoPainel,
   type UltimasDoPainel,
 } from "@/lib/finance/painel";
 import { estadoDoBloco } from "@/lib/painel/bloco";
+import type { VistaDaGaveta } from "@/lib/painel/gaveta";
+import type { HrefsDoPainel } from "@/lib/painel/hrefs-do-painel";
 import { RoscaCategoriasChart } from "@/components/dashboard/rosca-categorias-chart";
 import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-chart";
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
@@ -93,6 +97,62 @@ function urlDoDashboard(mes: string, base: BaseFinanceira): string {
 }
 
 /**
+ * 04-B — D-B-17: o gráfico não abre registros (cada barra é o indicador do seu mês); abrir aquele
+ * mês é trocar o mês no topo. A frase fica ao lado dos gráficos de mês a mês.
+ */
+const FRASE_DO_MES = "Para ver os registros de um mês, escolha o mês no topo.";
+
+const ROTULO_DA_FORMA: Record<string, string> = { ...PAYMENT_METHOD_LABELS, outro: "Outro" };
+
+/**
+ * 04-B — "Ver registros ›". A URL chega PRONTA do servidor (`hrefsDoPainel`): o cliente não monta
+ * URL. `scroll={false}` porque abrir a gaveta não muda de lugar na página.
+ */
+function VerRegistros({ href, de, className }: { href: string | undefined; de?: string; className?: string }) {
+  if (!href) return null;
+  return (
+    <Link
+      href={href}
+      scroll={false}
+      aria-label={de ? `Ver registros de ${de}` : undefined}
+      className={cn("inline-block text-xs whitespace-nowrap text-primary hover:underline", className)}
+    >
+      Ver registros ›
+    </Link>
+  );
+}
+
+/**
+ * Uma lista de links, UM POR FATIA, ABAIXO do gráfico: fora do SVG (clique em fatia exigiria JS no
+ * recharts) e legível por teclado e leitor de tela. `min-w-0` no texto: o irmão do link é `shrink-0`.
+ */
+function LinksPorFatia({ itens }: { itens: { chave: string; nome: string; href: string | undefined }[] }) {
+  const comLink = itens.filter((i) => i.href !== undefined);
+  if (comLink.length === 0) return null;
+  return (
+    <ul className="mt-3 grid gap-x-4 gap-y-1.5 border-t pt-3 sm:grid-cols-2">
+      {comLink.map((i) => (
+        <li key={i.chave} className="flex min-w-0 items-center justify-between gap-2 text-sm">
+          <span className="min-w-0 truncate text-muted-foreground">{i.nome}</span>
+          <VerRegistros href={i.href} de={i.nome} className="shrink-0" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** O `StatCard` não tem link: o "Ver registros" fica logo abaixo dele. */
+function ComRegistros({ href, children }: { href: string | undefined; children: React.ReactNode }) {
+  if (!href) return <>{children}</>;
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      {children}
+      <VerRegistros href={href} />
+    </div>
+  );
+}
+
+/**
  * No celular, os três indicadores secundários ficam menores e sem a base e a comparação (a dica (i)
  * continua). As classes são literais e vão no CARD: o `Indicador` é uma peça comum e não conhece o
  * painel.
@@ -131,6 +191,11 @@ export function DashboardClient({
   aReceber,
   faturasAbertas,
   faturasFechadas,
+  vista,
+  hrefs,
+  faturaIds,
+  urlAoFechar,
+  linkLancamentos,
 }: {
   /** O banner de boas-vindas, JÁ montado pelo servidor — o cliente não o importa. */
   banner: React.ReactNode;
@@ -166,6 +231,14 @@ export function DashboardClient({
   aReceber: number;
   faturasAbertas: number;
   faturasFechadas: number;
+  /** 04-B: a vista da gaveta de registros (`?detalhe=`), pronta do servidor; `null` = fechada. */
+  vista: VistaDaGaveta | null;
+  /** 04-B: a URL de cada número que abre registros, pronta do servidor. */
+  hrefs: HrefsDoPainel;
+  /** 04-B: `cardId|competência` → id da fatura REAL (virtual não tem registros). */
+  faturaIds: Record<string, string>;
+  urlAoFechar: string;
+  linkLancamentos: string;
 }) {
   const router = useRouter();
 
@@ -240,6 +313,12 @@ export function DashboardClient({
   const ciclos = Math.max(0, ...ciclosPorCartao.values());
 
   const aReceberVazio = totalPendente === 0 && aReceber === 0;
+
+  /** O link da fatura de uma linha do painel, se for uma fatura real (a virtual não tem registros). */
+  const hrefDaFatura = (cardId: string, competencia: string): string | undefined => {
+    const id = faturaIds[`${cardId}|${competencia}`];
+    return id === undefined ? undefined : hrefs.faturas[id];
+  };
 
   return (
     <div className="space-y-6">
@@ -323,9 +402,16 @@ export function DashboardClient({
             }
             linhaDeBase="todas as contas, até o fim de hoje"
             detalheComValor={saldoCom.diferenca}
-            href="/financeiro/contas"
-            hrefRotulo="Ver contas"
-            acessorio={<BotaoDoOlho />}
+            href={hrefs.saldo}
+            hrefRotulo="Ver registros"
+            acessorio={
+              <span className="flex items-center gap-2">
+                <Link href="/financeiro/contas" className="text-xs text-primary hover:underline">
+                  Contas
+                </Link>
+                <BotaoDoOlho />
+              </span>
+            }
           />
           <Indicador
             className={INDICADOR_PEQUENO_NO_CELULAR}
@@ -337,8 +423,8 @@ export function DashboardClient({
             linhaDeBase={indicadores.entradas.linhaDeBase}
             detalheComValor={indicadores.entradas.detalheComValor}
             comparacao={indicadores.entradas.comparacao ?? undefined}
-            href={`/financeiro/lancamentos?type=receita&month=${mesSel}`}
-            hrefRotulo="Ver entradas"
+            href={hrefs.entradas}
+            hrefRotulo="Ver registros"
           />
           <Indicador
             className={INDICADOR_PEQUENO_NO_CELULAR}
@@ -349,8 +435,8 @@ export function DashboardClient({
             valor={indicadores.saidas.valor}
             linhaDeBase={indicadores.saidas.linhaDeBase}
             comparacao={indicadores.saidas.comparacao ?? undefined}
-            href={`/financeiro/lancamentos?type=despesa&month=${mesSel}`}
-            hrefRotulo="Ver saídas"
+            href={hrefs.saidas}
+            hrefRotulo="Ver registros"
           />
           <Indicador
             className={INDICADOR_PEQUENO_NO_CELULAR}
@@ -360,15 +446,19 @@ export function DashboardClient({
             dica={indicadores.quarto.dica}
             valor={indicadores.quarto.valor}
             linhaDeBase={indicadores.quarto.linhaDeBase}
-            href="/terceiros"
-            hrefRotulo="Ver terceiros"
+            href={hrefs.terceiros}
+            hrefRotulo="Ver registros"
           />
         </div>
+
+        {/* 04-B: a gaveta fica DENTRO do olho — ela é desenhada num portal, fora do invólucro, e só
+            o contexto do olho a alcança. A vista vem pronta da página (`?detalhe=`). */}
+        <GavetaDeRegistros vista={vista} urlAoFechar={urlAoFechar} linkLancamentos={linkLancamentos} />
       </OlhoDosValores>
 
       {/* Bloco do caixa (só na base caixa) */}
       {base === "caixa" && caixa && (
-        <BlocoDoCaixa mesRotulo={monthYearLabel(mesSel)} caixa={caixa} />
+        <BlocoDoCaixa mesRotulo={monthYearLabel(mesSel)} caixa={caixa} hrefs={hrefs.caixa} />
       )}
 
       {/* Entradas × saídas (barras) e gastos por categoria (rosca) */}
@@ -388,6 +478,7 @@ export function DashboardClient({
             />
           )}
           {graficosCaixa && <RodapeDasFaturasSemTotal meses={graficosCaixa.semTotal.evolucao} />}
+          <p className="text-xs text-muted-foreground">{FRASE_DO_MES}</p>
         </Bloco>
         <Bloco
           titulo="Meus gastos por categoria"
@@ -400,6 +491,17 @@ export function DashboardClient({
             <RoscaCategoriasChart
               categorias={graficosCaixa ? graficosCaixa.categorias : categorias}
               estornos={estornos}
+            />
+          )}
+          {/* 04-B: um link por fatia, abaixo do gráfico (fora do SVG). Só na competência: na base
+              caixa o detalhe da categoria "não é calculado", então `hrefs.categorias` vem vazio. */}
+          {!caixaErro && !graficosCaixa && (
+            <LinksPorFatia
+              itens={categorias.map((c) => ({
+                chave: c.categoryId ?? "sem-categoria",
+                nome: c.name,
+                href: hrefs.categorias[c.categoryId ?? "sem-categoria"],
+              }))}
             />
           )}
         </Bloco>
@@ -424,42 +526,51 @@ export function DashboardClient({
         >
           <div className="@container">
             <div className="grid grid-cols-1 gap-3 @md:grid-cols-2 @2xl:grid-cols-3">
-              {cartoes.map((c) => (
-                <Link
-                  key={c.id}
-                  href="/cartoes"
-                  style={c.texto !== null && c.cor ? { background: c.cor } : undefined}
-                  className={cn(
-                    "block min-w-0 rounded-xl p-4 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                    c.texto === null
-                      ? "bg-muted text-foreground"
-                      : c.texto === "branco"
-                        ? "text-white"
-                        : "text-zinc-900",
-                  )}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <CreditCard aria-hidden="true" className="size-4 shrink-0" />
-                    <span className="min-w-0 truncate text-sm font-medium">{c.nome}</span>
+              {cartoes.map((c) => {
+                // A fatura "atual" é a mesma que o bloco mostra; só a real tem registros.
+                const atual = faturaAtualDoCartao(faturas, c.id);
+                const hrefDaAtual = atual ? hrefDaFatura(atual.cardId, atual.competencia) : undefined;
+                return (
+                  // O cartão inteiro já é um `<Link>`: o "Ver registros" fica ao lado, não dentro
+                  // (link dentro de link não é HTML válido).
+                  <div key={c.id} className="flex min-w-0 flex-col gap-1.5">
+                    <Link
+                      href="/cartoes"
+                      style={c.texto !== null && c.cor ? { background: c.cor } : undefined}
+                      className={cn(
+                        "block min-w-0 rounded-xl p-4 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                        c.texto === null
+                          ? "bg-muted text-foreground"
+                          : c.texto === "branco"
+                            ? "text-white"
+                            : "text-zinc-900",
+                      )}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <CreditCard aria-hidden="true" className="size-4 shrink-0" />
+                        <span className="min-w-0 truncate text-sm font-medium">{c.nome}</span>
+                      </div>
+                      <p className="mt-3 text-xs opacity-80">Fatura atual</p>
+                      {c.faturaAtual === null ? (
+                        <p className="text-sm font-medium">sem lançamentos conhecidos</p>
+                      ) : (
+                        <p className="truncate text-xl font-semibold tabular-nums">
+                          {formatCurrency(c.faturaAtual)}
+                        </p>
+                      )}
+                      {c.minhaParte !== null && (
+                        <p className="truncate text-xs tabular-nums opacity-80">
+                          minha parte {formatCurrency(c.minhaParte)}
+                        </p>
+                      )}
+                      {c.fechaEm !== null && (
+                        <p className="mt-1 text-xs opacity-80">fecha em {diaMes(c.fechaEm)}</p>
+                      )}
+                    </Link>
+                    <VerRegistros href={hrefDaAtual} de={`fatura de ${c.nome}`} />
                   </div>
-                  <p className="mt-3 text-xs opacity-80">Fatura atual</p>
-                  {c.faturaAtual === null ? (
-                    <p className="text-sm font-medium">sem lançamentos conhecidos</p>
-                  ) : (
-                    <p className="truncate text-xl font-semibold tabular-nums">
-                      {formatCurrency(c.faturaAtual)}
-                    </p>
-                  )}
-                  {c.minhaParte !== null && (
-                    <p className="truncate text-xs tabular-nums opacity-80">
-                      minha parte {formatCurrency(c.minhaParte)}
-                    </p>
-                  )}
-                  {c.fechaEm !== null && (
-                    <p className="mt-1 text-xs opacity-80">fecha em {diaMes(c.fechaEm)}</p>
-                  )}
-                </Link>
-              ))}
+                );
+              })}
               <Link
                 href="/cartoes"
                 className="flex min-h-[7rem] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed p-4 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -505,6 +616,15 @@ export function DashboardClient({
                       </p>
                       <p className="text-xs text-muted-foreground">
                         vence {diaMes(f.dataVencimento)}
+                        {hrefDaFatura(f.cardId, f.competencia) ? (
+                          <>
+                            {" · "}
+                            <VerRegistros
+                              href={hrefDaFatura(f.cardId, f.competencia)}
+                              de={`${f.cardNome} ${monthYearLabel(f.competencia)}`}
+                            />
+                          </>
+                        ) : null}
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
@@ -612,6 +732,7 @@ export function DashboardClient({
           titulo="Pendente de terceiros"
           subtitulo="O que ainda não voltou para você"
           verTodos={{ href: "/terceiros" }}
+          acao={aReceberVazio ? undefined : <VerRegistros href={hrefs.pendente} de="o pendente de terceiros" />}
           estado={aReceberVazio ? "vazio" : "conteudo"}
           vazio={{ frase: "Nada pendente de terceiros agora." }}
         >
@@ -624,18 +745,28 @@ export function DashboardClient({
             </div>
             {porPessoa.length > 0 && (
               <ul className="space-y-1.5 text-sm">
-                {porPessoa.map((p) => (
-                  <li key={p.pessoaId ?? "sem-pessoa"} className="flex items-center justify-between gap-3">
-                    <span className="min-w-0 truncate">{p.nome}</span>
-                    <span className="shrink-0 font-medium tabular-nums">
-                      {formatCurrency(p.pendente)}
-                    </span>
-                  </li>
-                ))}
+                {porPessoa.map((p) => {
+                  // Sem `pessoaId` (recebível sem pessoa) não há alvo: a linha não tem link.
+                  const href = p.pessoaId === null ? undefined : hrefs.pendentePorPessoa[p.pessoaId];
+                  return (
+                    <li key={p.pessoaId ?? "sem-pessoa"} className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                        <span className="min-w-0 truncate">{p.nome}</span>
+                        <VerRegistros href={href} de={p.nome} />
+                      </div>
+                      <span className="shrink-0 font-medium tabular-nums">
+                        {formatCurrency(p.pendente)}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
             <div className="flex items-center justify-between gap-3 border-t pt-3 text-sm">
-              <span className="min-w-0 text-muted-foreground">{rotuloPendenteDoMes(mesSel)}</span>
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                <span className="min-w-0 text-muted-foreground">{rotuloPendenteDoMes(mesSel)}</span>
+                <VerRegistros href={hrefs.pendenteDoMes} de={rotuloPendenteDoMes(mesSel)} />
+              </div>
               <span className="shrink-0 font-medium tabular-nums">{formatCurrency(aReceber)}</span>
             </div>
           </div>
@@ -662,6 +793,7 @@ export function DashboardClient({
                   <p className="text-3xl font-semibold tracking-tight tabular-nums">
                     {minhasSaidasCard.valor}
                   </p>
+                  <VerRegistros href={hrefs.saidas} de={rotulos.cardMinhasSaidas.titulo(monthYearLabel(mesSel))} />
                   {base === "competencia" && frase !== null && (
                     <p className="text-xs break-words text-muted-foreground">{frase}</p>
                   )}
@@ -679,44 +811,52 @@ export function DashboardClient({
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">{rotulos.cardMinhasSaidas.bruto}</p>
                   <p className="font-semibold tabular-nums">{minhasSaidasCard.bruto}</p>
+                  <VerRegistros href={hrefs.bruto} de={rotulos.cardMinhasSaidas.bruto} />
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">{rotulos.cardMinhasSaidas.terceiros}</p>
                   <p className="font-semibold tabular-nums">{minhasSaidasCard.terceiros}</p>
+                  <VerRegistros href={hrefs.terceiros} de={rotulos.cardMinhasSaidas.terceiros} />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <StatCard
-              label="Gasto no cartão"
-              value={formatCurrency(resumo.cartao)}
-              icon={CreditCard}
-              hint={`Pela fatura · à vista ${formatCurrency(resumo.aVista)}`}
-            />
+            <ComRegistros href={hrefs.cartao?.bruto}>
+              <StatCard
+                label="Gasto no cartão"
+                value={formatCurrency(resumo.cartao)}
+                icon={CreditCard}
+                hint={`Pela fatura · à vista ${formatCurrency(resumo.aVista)}`}
+              />
+            </ComRegistros>
             <StatCard
               label="Faturas (aberta/fechada)"
               value={`${faturasAbertas}/${faturasFechadas}`}
               icon={ReceiptText}
               hint="Pela fatura · no período em diante"
             />
-            <StatCard
-              label="Próximas contas a pagar"
-              value={formatCurrency(contas.total)}
-              icon={CalendarClock}
-              hint={
-                contas.proxima
-                  ? `Pelo vencimento · ${contas.count} conta(s) · 1ª em ${formatDate(contas.proxima.data)}`
-                  : "Pelo vencimento · nenhuma nos próximos 31 dias"
-              }
-            />
-            <StatCard
-              label="Cartão realmente meu"
-              value={formatCurrency(resumo.cartaoMeu)}
-              icon={Scale}
-              hint={`Pela fatura · terceiros ${formatCurrency(resumo.cartao - resumo.cartaoMeu)}`}
-            />
+            <ComRegistros href={hrefs.contas}>
+              <StatCard
+                label="Próximas contas a pagar"
+                value={formatCurrency(contas.total)}
+                icon={CalendarClock}
+                hint={
+                  contas.proxima
+                    ? `Pelo vencimento · ${contas.count} conta(s) · 1ª em ${formatDate(contas.proxima.data)}`
+                    : "Pelo vencimento · nenhuma nos próximos 31 dias"
+                }
+              />
+            </ComRegistros>
+            <ComRegistros href={hrefs.cartao?.meu}>
+              <StatCard
+                label="Cartão realmente meu"
+                value={formatCurrency(resumo.cartaoMeu)}
+                icon={Scale}
+                hint={`Pela fatura · terceiros ${formatCurrency(resumo.cartao - resumo.cartaoMeu)}`}
+              />
+            </ComRegistros>
           </div>
         </div>
 
@@ -731,6 +871,17 @@ export function DashboardClient({
                 <CaixaNaoLido />
               ) : (
                 <FormaPagamentoChart data={graficosCaixa ? graficosCaixa.formas : formas} />
+              )}
+              {/* 04-B: um link por forma, abaixo do gráfico; só na competência (`hrefs.formas` vem
+                  vazio na base caixa). */}
+              {!caixaErro && !graficosCaixa && (
+                <LinksPorFatia
+                  itens={formas.map((f) => ({
+                    chave: f.paymentMethod,
+                    nome: ROTULO_DA_FORMA[f.paymentMethod] ?? f.paymentMethod,
+                    href: hrefs.formas[f.paymentMethod],
+                  }))}
+                />
               )}
             </CardContent>
           </Card>
@@ -748,6 +899,7 @@ export function DashboardClient({
                 />
               )}
               {graficosCaixa && <RodapeDasFaturasSemTotal meses={graficosCaixa.semTotal.mesAMes} />}
+              <p className="mt-2 text-xs text-muted-foreground">{FRASE_DO_MES}</p>
             </CardContent>
           </Card>
         </div>
@@ -766,6 +918,14 @@ export function DashboardClient({
             </CardHeader>
             <CardContent>
               <ProjecaoChart data={projecao} />
+              {/* 04-B: um link por mês da projeção, abaixo do gráfico (fora do SVG). */}
+              <LinksPorFatia
+                itens={projecao.map((p) => ({
+                  chave: p.mes,
+                  nome: monthYearLabel(p.mes),
+                  href: hrefs.projecao[p.mes],
+                }))}
+              />
             </CardContent>
           </Card>
           <Card>

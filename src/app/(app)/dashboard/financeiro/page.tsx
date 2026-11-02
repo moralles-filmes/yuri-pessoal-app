@@ -27,7 +27,8 @@ import {
   saldoDasContas,
 } from "@/lib/finance/pipeline";
 import { baseDaUrl } from "@/lib/finance/base";
-import { estadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import { lerEstadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import { detalheDoNumero, type ParametrosDoDetalhe } from "@/lib/finance/detalhe";
 import { reguaDoGastoAlto } from "@/lib/finance/regua-do-gasto-alto";
 import { comparativoDoGraficoAteODia } from "@/lib/finance/caixa";
 import {
@@ -41,9 +42,11 @@ import {
   type UltimasDoPainel,
 } from "@/lib/finance/painel";
 import { rotuloTotalPendenteAte, totalPendenteAte } from "@/lib/finance/recebimentos";
-import { horaDeBrasiliaAgora, hojeISO } from "@/lib/format";
+import { horaDeBrasiliaAgora, hojeISO, reaisParaCentavos } from "@/lib/format";
 import { textoSobreACor } from "@/lib/painel/cor";
-import { mesDaUrl } from "@/lib/painel/detalhe-url";
+import { mesDaUrl, pedidoDaUrl, urlSemDetalhe } from "@/lib/painel/detalhe-url";
+import { vistaDaGaveta } from "@/lib/painel/gaveta";
+import { hrefsDoPainel } from "@/lib/painel/hrefs-do-painel";
 import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
 import { FRASES_DO_BANNER, fraseDoDia, saudacaoPara } from "@/lib/painel/saudacao";
 import { DashboardClient } from "./financial-dashboard-client";
@@ -102,16 +105,19 @@ export default async function DashboardFinanceiroPage({
   const aReceber = totalAReceber(recs, mesSel);
   const saldo = saldoDasContas(accounts);
 
-  // A leitura da base caixa só acontece quando ela está selecionada.
-  const caixa =
+  // A leitura da base caixa só acontece quando ela está selecionada. `lerEstadoDoCaixa` devolve,
+  // além do estado que a tela já usava, a leitura crua e o motor que a gaveta de registros lista
+  // (04-B): relê-los numa segunda consulta abriria uma janela em que lista e número discordam.
+  const doCaixa =
     base === "caixa"
-      ? await estadoDoCaixa(
+      ? await lerEstadoDoCaixa(
           mesSel,
           hoje,
           { statements: sts, receivables: recs, transactions: txs, installmentItems: inst },
           evoMeses,
         )
       : null;
+  const caixa = doCaixa ? doCaixa.estado : null;
 
   // Corte "até o dia D" do mês em andamento (K3b) para as setas dos indicadores e o "Meu mês a mês"
   // — calculado no servidor, viaja por prop.
@@ -191,6 +197,71 @@ export default async function DashboardFinanceiroPage({
       }
     : { ok: false };
 
+  // ── 04-B: a gaveta de registros. O pedido vem da URL (`?detalhe=`); o detalhe é montado AQUI, a
+  // partir das MESMAS variáveis (`txs`/`sts`/`recs`/`inst`/…) que montaram os números acima — uma
+  // lista paralela faria o número e os registros discordarem. O cliente recebe a vista pronta. ──
+  const pedido = pedidoDaUrl(sp);
+
+  // D-B-12: o saldo abre "saldo por conta" — uma chamada da MESMA RPC por conta, só com a gaveta
+  // aberta nele. Falha de uma conta vira `saldoCent: null` (a gaveta diz qual); nunca zero.
+  let saldos: ParametrosDoDetalhe["saldos"] = null;
+  if (pedido?.chave === "saldo") {
+    const corte = nextDayISO(hoje);
+    const porConta = await Promise.all(
+      accounts.map(async (conta) => {
+        const valor = await lerSaldoAte(corte, conta.id).catch(() => null);
+        return { id: conta.id, nome: conta.name, saldoCent: valor === null ? null : reaisParaCentavos(valor) };
+      }),
+    );
+    saldos = { totalCent: saldoAte === null ? null : reaisParaCentavos(saldoAte), porConta };
+  }
+
+  const detalhe = pedido
+    ? detalheDoNumero({
+        pedido,
+        mes: mesSel,
+        hoje,
+        base,
+        entradas: { txs, sts, recs, inst, cards: dashCards, recorrencias, bills: dashBills },
+        recebiveisCrus: recebiveis,
+        caixa:
+          base === "caixa"
+            ? doCaixa?.leitura && doCaixa.motorDoCaixa
+              ? { leitura: doCaixa.leitura, motor: doCaixa.motorDoCaixa }
+              : "erro"
+            : null,
+        saldos,
+        completude,
+        naoSegue: null,
+        categoriaDoRecorte: null,
+        nomes: {
+          contas: new Map(accounts.map((a) => [a.id, a.name])),
+          cartoes: new Map(dashCards.map((c) => [c.id, c.nome])),
+        },
+      })
+    : null;
+  const vista = detalhe ? vistaDaGaveta(detalhe) : null;
+
+  // Fatura real de cada linha do painel (a view `faturas` não carrega o id): casada por cartão +
+  // competência, a mesma chave de `proximas6Faturas`. Fatura virtual não tem registros.
+  const idDaFatura = new Map<string, string>();
+  for (const s of sts) if (s.card_id) idDaFatura.set(`${s.card_id}|${mesDe(s.competencia)}`, s.id);
+  const faturaIds: Record<string, string> = {};
+  for (const f of faturas) {
+    const chave = `${f.cardId}|${f.competencia}`;
+    const id = idDaFatura.get(chave);
+    if (!f.virtual && id !== undefined) faturaIds[chave] = id;
+  }
+  const hrefs = hrefsDoPainel({
+    sp,
+    base,
+    pessoas: porPessoa.flatMap((p) => (p.pessoaId === null ? [] : [p.pessoaId])),
+    categorias: categorias.map((c) => c.categoryId),
+    formas: formas.map((f) => f.paymentMethod),
+    faturas: Object.values(faturaIds),
+    meses: projecao.map((p) => p.mes),
+  });
+
   // O banner é Server Component, sem JS de cliente: chega pronto ao cliente como `ReactNode`.
   const [anoSel, mesNumSel] = mesSel.split("-").map(Number);
   const mesPorExtenso = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(
@@ -242,6 +313,11 @@ export default async function DashboardFinanceiroPage({
         aReceber={aReceber}
         faturasAbertas={faturasAbertas}
         faturasFechadas={faturasFechadas}
+        vista={vista}
+        hrefs={hrefs}
+        faturaIds={faturaIds}
+        urlAoFechar={urlSemDetalhe("/dashboard/financeiro", sp)}
+        linkLancamentos={`/financeiro/lancamentos?month=${mesSel}`}
       />
     </div>
   );
