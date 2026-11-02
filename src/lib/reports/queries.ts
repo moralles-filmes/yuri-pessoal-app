@@ -6,9 +6,10 @@
  * A RLS garante o escopo por usuário. Tudo roda em paralelo (Promise.all), sem N+1.
  */
 import { createClient } from "@/lib/supabase/server";
-import { hojeISO } from "@/lib/format";
+import { hojeISO, reaisParaCentavos } from "@/lib/format";
 import { getCategories, getPeopleForSelect, lerFinanceiro, lerSaldoAte } from "@/lib/finance/queries";
-import { estadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import { lerEstadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import type { ParametrosDoDetalhe } from "@/lib/finance/detalhe";
 import type { BaseFinanceira } from "@/lib/finance/base";
 import {
   faturasPorMes,
@@ -26,7 +27,13 @@ import {
 } from "@/lib/finance/pipeline";
 import { recorteDaUrl } from "@/lib/finance/recorte";
 import type { Responsabilidade } from "@/lib/finance/responsabilidade";
-import { montarRelatorioFinanceiro, type RelatorioFinanceiro } from "@/lib/reports/financeiro";
+import {
+  gavetaDoRelatorio,
+  montarRelatorioFinanceiro,
+  type GavetaDoRelatorio,
+  type RelatorioFinanceiro,
+} from "@/lib/reports/financeiro";
+import { pedidoDaUrl } from "@/lib/painel/detalhe-url";
 import { getHabitsDashboard } from "@/lib/habits/queries";
 import { getStudyDashboard } from "@/lib/studies/queries";
 import { tasksReport, type ReportTask, type TasksReport } from "@/lib/reports/tasks";
@@ -105,6 +112,8 @@ async function getFinanceAndCardReport(
   filtros: FiltrosDoRelatorioNaUrl,
 ): Promise<{
   financeiro: RelatorioFinanceiro;
+  /** 04-B: fora do `ReportsData` — o JSON exportado não leva a vista da gaveta nem as URLs. */
+  gaveta: GavetaDoRelatorio;
   card: CardReport;
 }> {
   const mesAtual = mesDe(hoje);
@@ -132,15 +141,19 @@ async function getFinanceAndCardReport(
 
   const aReceber = totalAReceber(recs, mesSel);
 
-  const caixa =
+  // 04-B: `lerEstadoDoCaixa` devolve, além do estado que o modelo já usa, a leitura crua e o motor
+  // que a gaveta lista — relê-los numa segunda consulta abriria uma janela em que lista e número
+  // discordam.
+  const doCaixa =
     base === "caixa"
-      ? await estadoDoCaixa(
+      ? await lerEstadoDoCaixa(
           mesSel,
           hoje,
           { statements: sts, receivables: recs, transactions: txs, installmentItems: inst },
           evoMeses,
         )
       : null;
+  const caixa = doCaixa ? doCaixa.estado : null;
 
   // 04-A2: as opções dos filtros, o recorte da URL (id desconhecido é ignorado) e o saldo —
   // `lerSaldoAte` depende do recorte (o da conta), por isso vem DEPOIS, uma RPC a mais e sequencial.
@@ -158,7 +171,7 @@ async function getFinanceAndCardReport(
   });
   const saldoAte = await lerSaldoAte(nextDayISO(hoje), recorte.conta);
 
-  const financeiro = montarRelatorioFinanceiro({
+  const parametros = {
     mes: mesSel,
     hoje,
     base,
@@ -173,6 +186,36 @@ async function getFinanceAndCardReport(
     completude,
     janela: { evoMeses, projMeses },
     opcoes,
+  };
+  const financeiro = montarRelatorioFinanceiro(parametros);
+
+  // ── 04-B: a gaveta de registros. O pedido vem da URL (`?detalhe=`). ──
+  const pedido = pedidoDaUrl(filtros.sp);
+
+  // D-B-12: o saldo abre "saldo por conta" — uma chamada da MESMA RPC por conta, só com a gaveta
+  // aberta nele. Com o recorte de conta, só a conta dele (é o número que o indicador mostra).
+  // Falha de uma conta vira `saldoCent: null` (a gaveta diz qual); nunca zero.
+  let saldos: ParametrosDoDetalhe["saldos"] = null;
+  if (pedido?.chave === "saldo") {
+    const corte = nextDayISO(hoje);
+    const contasDoSaldo = recorte.conta === null ? accounts : accounts.filter((c) => c.id === recorte.conta);
+    const porConta = await Promise.all(
+      contasDoSaldo.map(async (conta) => {
+        const valor = await lerSaldoAte(corte, conta.id).catch(() => null);
+        return { id: conta.id, nome: conta.name, saldoCent: valor === null ? null : reaisParaCentavos(valor) };
+      }),
+    );
+    saldos = { totalCent: saldoAte === null ? null : reaisParaCentavos(saldoAte), porConta };
+  }
+
+  const gaveta = gavetaDoRelatorio({
+    ...parametros,
+    relatorio: financeiro,
+    pedido,
+    sp: filtros.sp,
+    caixaParaDetalhe:
+      base === "caixa" ? (doCaixa?.leitura && doCaixa.motorDoCaixa ? { leitura: doCaixa.leitura, motor: doCaixa.motorDoCaixa } : "erro") : null,
+    saldos,
   });
 
   // ── Cartão ──
@@ -194,6 +237,7 @@ async function getFinanceAndCardReport(
 
   return {
     financeiro,
+    gaveta,
     card: {
       completude,
       faturas,
@@ -277,7 +321,7 @@ export async function getReportsData(
   mesSel: string,
   base: BaseFinanceira,
   filtros: FiltrosDoRelatorioNaUrl,
-): Promise<ReportsData> {
+): Promise<{ data: ReportsData; gaveta: GavetaDoRelatorio }> {
   const hoje = hojeISO();
   const [financeAndCard, habits, studies, tasks] = await Promise.all([
     getFinanceAndCardReport(mesSel, hoje, base, filtros),
@@ -287,12 +331,15 @@ export async function getReportsData(
   ]);
 
   return {
-    mes: mesSel,
-    hoje,
-    financeiro: financeAndCard.financeiro,
-    card: financeAndCard.card,
-    habits,
-    studies,
-    tasks,
+    data: {
+      mes: mesSel,
+      hoje,
+      financeiro: financeAndCard.financeiro,
+      card: financeAndCard.card,
+      habits,
+      studies,
+      tasks,
+    },
+    gaveta: financeAndCard.gaveta,
   };
 }

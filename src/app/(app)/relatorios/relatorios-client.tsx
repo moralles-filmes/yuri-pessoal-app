@@ -36,6 +36,7 @@ import { Bloco } from "@/components/shared/painel/bloco";
 import { Indicador } from "@/components/shared/painel/indicador";
 import { BotaoDoOlho, OlhoDosValores } from "@/components/shared/painel/olho-dos-valores";
 import { ValorComOlho } from "@/components/shared/painel/valor-com-olho";
+import { GavetaDeRegistros } from "@/components/shared/painel/gaveta-de-registros";
 import { BarraDeFiltros, SeletorDoMes } from "@/components/reports/barra-de-filtros";
 import { RoscaCategoriasChart } from "@/components/dashboard/rosca-categorias-chart";
 import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-chart";
@@ -54,12 +55,13 @@ import { fraseDoPerdoado, rotuloPendenteDoMes } from "@/lib/finance/recebimentos
 import { SEM_RECORTE, type TipoDeRecorte } from "@/lib/finance/recorte";
 import { urlDoRelatorio } from "@/lib/reports/url-do-relatorio";
 import type { EstadoDoBloco as EstadoDoBlocoNaTela } from "@/lib/painel/bloco";
-import type { RelatorioFinanceiro } from "@/lib/reports/financeiro";
+import type { GavetaDoRelatorio, RelatorioFinanceiro } from "@/lib/reports/financeiro";
 import { formatMinutes, STUDY_STATUS_LABELS } from "@/lib/studies/constants";
 import { toCsv } from "@/lib/reports/csv";
 import { downloadCsv, downloadJson } from "@/lib/reports/download";
 import { cn } from "@/lib/utils";
 import { ROTULO_DA_BASE } from "@/lib/finance/base";
+import { PAYMENT_METHOD_LABELS } from "@/lib/finance/constants";
 import type { ReportsData } from "@/lib/reports/queries";
 
 const FREQ_LABELS: Record<string, string> = {
@@ -79,9 +81,12 @@ function pct(value: number): string {
 
 export function RelatoriosClient({
   data,
+  gaveta,
   valoresOcultos,
 }: {
   data: ReportsData;
+  /** 04-B: a vista da gaveta e as URLs dos registros. Fora de `data`: o JSON exportado não as leva. */
+  gaveta: GavetaDoRelatorio;
   /** O olho dos valores, lido do cookie no servidor (D-A2-8). */
   valoresOcultos: boolean;
 }) {
@@ -132,7 +137,7 @@ export function RelatoriosClient({
 
         {/* ───────────── Financeiro ───────────── */}
         <TabsContent value="financeiro" className="space-y-6">
-          <AbaFinanceiro financeiro={financeiro} valoresOcultos={valoresOcultos} />
+          <AbaFinanceiro financeiro={financeiro} gaveta={gaveta} valoresOcultos={valoresOcultos} />
         </TabsContent>
 
         {/* ───────────── Cartões ───────────── */}
@@ -547,6 +552,52 @@ function acaoDoBloco(f: RelatorioFinanceiro, bloco: BlocoDaAba): React.ReactNode
 const INDICADOR_PEQUENO_NO_CELULAR =
   "max-sm:[&>div]:p-2.5 max-sm:[&_.text-2xl]:text-[0.9375rem] max-sm:[&_p.text-xs]:hidden";
 
+/**
+ * 04-B — D-B-17: o gráfico não abre registros (cada barra é o indicador do seu mês); abrir aquele
+ * mês é trocar o mês no topo. A frase fica junto dos gráficos de mês a mês.
+ */
+const ROTULO_DA_FORMA: Record<string, string> = { ...PAYMENT_METHOD_LABELS, outro: "Outro" };
+
+const FRASE_DO_MES = "Para ver os registros de um mês, escolha o mês no topo.";
+
+/**
+ * 04-B — "Ver registros ›". A URL chega PRONTA do servidor (`gavetaDoRelatorio`): o cliente não
+ * monta URL, e número que não abre não tem URL (o link some). `scroll={false}`: abrir a gaveta não
+ * muda de lugar na página.
+ */
+function VerRegistros({ href, de, className }: { href: string | undefined; de?: string; className?: string }) {
+  if (!href) return null;
+  return (
+    <Link
+      href={href}
+      scroll={false}
+      aria-label={de ? `Ver registros de ${de}` : undefined}
+      className={cn("inline-block text-xs whitespace-nowrap text-primary hover:underline", className)}
+    >
+      Ver registros ›
+    </Link>
+  );
+}
+
+/**
+ * Uma lista de links, UM POR FATIA, ABAIXO do gráfico: fora do SVG (clique em fatia exigiria JS no
+ * gráfico) e legível por teclado e leitor de tela. `min-w-0` no texto: o irmão do link é `shrink-0`.
+ */
+function LinksPorFatia({ itens }: { itens: { chave: string; nome: string; href: string | undefined }[] }) {
+  const comLink = itens.filter((i) => i.href !== undefined);
+  if (comLink.length === 0) return null;
+  return (
+    <ul className="mt-3 grid gap-x-4 gap-y-1.5 border-t pt-3 sm:grid-cols-2">
+      {comLink.map((i) => (
+        <li key={i.chave} className="flex min-w-0 items-center justify-between gap-2 text-sm">
+          <span className="min-w-0 truncate text-muted-foreground">{i.nome}</span>
+          <VerRegistros href={i.href} de={i.nome} className="shrink-0" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 const FALHA_DO_CAIXA = {
   frase: "Não foi possível ler o caixa agora. Nada aqui é zero — tente recarregar a página.",
 };
@@ -612,12 +663,15 @@ function textosDaResponsabilidade(f: RelatorioFinanceiro) {
  */
 function AbaFinanceiro({
   financeiro,
+  gaveta,
   valoresOcultos,
 }: {
   financeiro: RelatorioFinanceiro;
+  gaveta: GavetaDoRelatorio;
   valoresOcultos: boolean;
 }) {
   const { filtros, saldo, indicadores, caixa } = financeiro;
+  const { hrefs } = gaveta;
   const { mes, base, resp } = filtros;
   const caixaOk = caixa?.estado === "ok" ? caixa : null;
   const caixaErro = caixa?.estado === "erro";
@@ -631,6 +685,8 @@ function AbaFinanceiro({
   const formasDaResp = financeiro.formas.map((f) => ({ ...f, meu: f.valor }));
   const ancora = financeiro.ancora;
   const composicao = rotulosDaComposicao(resp);
+  // O quarto indicador é "De terceiros" (minha responsabilidade, sem pessoa) ou o pendente.
+  const quartoHref = resp === "meu" && filtros.recorte.pessoa === null ? hrefs.terceiros : hrefs.pendente;
 
   return (
     <div className="space-y-6">
@@ -655,9 +711,16 @@ function AbaFinanceiro({
                 valor={saldo.valor}
                 linhaDeBase={saldo.linhaDeBase}
                 detalheComValor={saldo.detalheComValor}
-                href={saldo.href}
-                hrefRotulo="Ver contas"
-                acessorio={<BotaoDoOlho />}
+                href={hrefs.saldo}
+                hrefRotulo="Ver registros"
+                acessorio={
+                  <span className="flex items-center gap-2">
+                    <Link href={saldo.href} className="text-xs text-primary hover:underline">
+                      Contas
+                    </Link>
+                    <BotaoDoOlho />
+                  </span>
+                }
               />
               <Indicador
                 className={INDICADOR_PEQUENO_NO_CELULAR}
@@ -669,8 +732,8 @@ function AbaFinanceiro({
                 linhaDeBase={indicadores.entradas.linhaDeBase}
                 detalheComValor={indicadores.entradas.detalheComValor}
                 comparacao={indicadores.entradas.comparacao ?? undefined}
-                href={`/financeiro/lancamentos?type=receita&month=${mes}`}
-                hrefRotulo="Ver entradas"
+                href={hrefs.entradas}
+                hrefRotulo="Ver registros"
               />
               <Indicador
                 className={INDICADOR_PEQUENO_NO_CELULAR}
@@ -682,8 +745,8 @@ function AbaFinanceiro({
                 linhaDeBase={indicadores.saidas.linhaDeBase}
                 detalheComValor={indicadores.saidas.detalheComValor}
                 comparacao={indicadores.saidas.comparacao ?? undefined}
-                href={`/financeiro/lancamentos?type=despesa&month=${mes}`}
-                hrefRotulo="Ver saídas"
+                href={hrefs.saidas}
+                hrefRotulo="Ver registros"
               />
               <Indicador
                 className={INDICADOR_PEQUENO_NO_CELULAR}
@@ -695,13 +758,35 @@ function AbaFinanceiro({
                 linhaDeBase={indicadores.quarto.linhaDeBase}
                 detalheComValor={indicadores.quarto.detalheComValor}
                 comparacao={indicadores.quarto.comparacao ?? undefined}
-                href="/terceiros"
-                hrefRotulo="Ver terceiros"
+                href={quartoHref}
+                hrefRotulo="Ver registros"
               />
             </div>
 
+            {/* 04-B: a gaveta fica DENTRO do olho — ela é desenhada num portal, fora do invólucro, e só
+                o contexto do olho a alcança. A vista vem pronta da página (`?detalhe=`). */}
+            <GavetaDeRegistros
+              vista={gaveta.vista}
+              urlAoFechar={gaveta.urlAoFechar}
+              linkLancamentos={gaveta.linkLancamentos}
+            />
+
             {/* Bloco do caixa (só na base caixa; sem leitura ele mesmo diz que não leu) */}
-            {base === "caixa" && caixa ? <BlocoDoCaixa mesRotulo={monthLabel(mes)} caixa={caixa} /> : null}
+            {base === "caixa" && caixa ? (
+              <BlocoDoCaixa
+                mesRotulo={monthLabel(mes)}
+                caixa={caixa}
+                hrefs={{
+                  renda: hrefs["caixa:renda"],
+                  reembolsos: hrefs["caixa:reembolsos"],
+                  outras: hrefs["caixa:outras"],
+                  saidas: hrefs["caixa:saidas"],
+                  pagamentos: hrefs["caixa:pagamentos"],
+                  "sem-destino": hrefs["caixa:sem-destino"],
+                  "entre-contas": hrefs["caixa:entre-contas"],
+                }}
+              />
+            ) : null}
           </section>
 
           <section aria-labelledby="rel-evolucao" className="space-y-4">
@@ -728,6 +813,7 @@ function AbaFinanceiro({
                   nomes={texto.barras.nomes}
                 />
                 {caixaOk ? <RodapeDasFaturasSemTotal meses={caixaOk.graficos.semTotal.evolucao} /> : null}
+                <p className="mt-2 text-xs text-muted-foreground">{FRASE_DO_MES}</p>
               </Bloco>
               <Bloco
                 className="min-w-0"
@@ -745,6 +831,7 @@ function AbaFinanceiro({
               >
                 {financeiro.mesAMes !== null ? <MesAMesChart dados={financeiro.mesAMes} /> : null}
                 {caixaOk ? <RodapeDasFaturasSemTotal meses={caixaOk.graficos.semTotal.mesAMes} /> : null}
+                <p className="mt-2 text-xs text-muted-foreground">{FRASE_DO_MES}</p>
               </Bloco>
             </div>
           </section>
@@ -777,6 +864,16 @@ function AbaFinanceiro({
                   />
                 ) : null}
                 {rosca?.nota ? <p className="mt-3 text-xs text-muted-foreground">{rosca.nota}</p> : null}
+                {/* 04-B: um link por fatia, abaixo do gráfico (fora do SVG). Sem link na base caixa. */}
+                {rosca !== null ? (
+                  <LinksPorFatia
+                    itens={rosca.categorias.map((c) => ({
+                      chave: c.categoryId ?? "sem-categoria",
+                      nome: c.name,
+                      href: hrefs["categoria:" + (c.categoryId ?? "sem-categoria")],
+                    }))}
+                  />
+                ) : null}
               </Bloco>
               <Bloco
                 className="min-w-0"
@@ -788,6 +885,13 @@ function AbaFinanceiro({
                 naoSegue={naoSegueDoRelatorio(financeiro, "formas")}
               >
                 <FormaPagamentoChart data={formasDaResp} rotuloDaSerie={composicao.serieDaForma} />
+                <LinksPorFatia
+                  itens={financeiro.formas.map((f) => ({
+                    chave: f.paymentMethod,
+                    nome: ROTULO_DA_FORMA[f.paymentMethod] ?? f.paymentMethod,
+                    href: hrefs["forma:" + f.paymentMethod],
+                  }))}
+                />
               </Bloco>
             </div>
           </section>
@@ -819,6 +923,7 @@ function AbaFinanceiro({
                       <p className="text-lg font-semibold break-words tabular-nums">
                         <ValorComOlho texto={formatCurrency(ancora.meu)} />
                       </p>
+                      <VerRegistros href={hrefs.meu} de={rotulos.cardMinhasSaidas.titulo(monthLabel(mes))} />
                     </div>
                     <div className="min-w-0 rounded-lg bg-muted/50 p-3">
                       <p className="text-xs break-words text-muted-foreground">
@@ -827,6 +932,7 @@ function AbaFinanceiro({
                       <p className="text-lg font-semibold break-words tabular-nums">
                         <ValorComOlho texto={formatCurrency(ancora.bruto)} />
                       </p>
+                      <VerRegistros href={hrefs.bruto} de={rotulos.cardMinhasSaidas.bruto} />
                     </div>
                     <div className="min-w-0 rounded-lg bg-muted/50 p-3">
                       <p className="text-xs break-words text-muted-foreground">
@@ -835,6 +941,7 @@ function AbaFinanceiro({
                       <p className="text-lg font-semibold break-words tabular-nums">
                         <ValorComOlho texto={formatCurrency(ancora.terceiros)} />
                       </p>
+                      <VerRegistros href={hrefs.terceiros} de={rotulos.cardMinhasSaidas.terceiros} />
                     </div>
                   </div>
                   {ancora.perdoado !== null && fraseDoPerdoado(ancora.perdoado) !== null ? (
@@ -845,8 +952,11 @@ function AbaFinanceiro({
                   <div className="flex items-baseline justify-between gap-3 border-t pt-3 text-sm">
                     <span className="min-w-0 text-muted-foreground">{rotuloPendenteDoMes(mes)}</span>
                     {ancora.pendenteDoMes !== null ? (
-                      <span className="shrink-0 font-medium tabular-nums">
-                        <ValorComOlho texto={formatCurrency(ancora.pendenteDoMes)} />
+                      <span className="flex shrink-0 flex-col items-end gap-0.5">
+                        <span className="font-medium tabular-nums">
+                          <ValorComOlho texto={formatCurrency(ancora.pendenteDoMes)} />
+                        </span>
+                        <VerRegistros href={hrefs["pendente-do-mes"]} de={rotuloPendenteDoMes(mes)} />
                       </span>
                     ) : (
                       <span className="min-w-0 text-right text-xs text-muted-foreground">
@@ -896,6 +1006,11 @@ function AbaFinanceiro({
                             <ValorComOlho texto={`(meu ${formatCurrency(c.meu)})`} />
                           </span>
                         )}
+                        <VerRegistros
+                          href={hrefs["categoria:" + (c.categoryId ?? "sem-categoria")]}
+                          de={c.name}
+                          className="block"
+                        />
                       </span>
                     </li>
                   ))}
@@ -971,6 +1086,14 @@ function AbaFinanceiro({
                 naoSegue={naoSegueDoRelatorio(financeiro, "projecao")}
               >
                 <ProjecaoChart data={financeiro.projecao} />
+                {/* 04-B: um link por mês da projeção, abaixo do gráfico (fora do SVG). */}
+                <LinksPorFatia
+                  itens={financeiro.projecao.map((ponto) => ({
+                    chave: ponto.mes,
+                    nome: monthLabel(ponto.mes),
+                    href: hrefs["projecao:" + ponto.mes],
+                  }))}
+                />
               </Bloco>
               <Bloco
                 className="min-w-0"
