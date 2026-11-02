@@ -454,6 +454,20 @@ describe("SEGUE_O_RECORTE", () => {
   });
 });
 
+/** Os blocos que, na base caixa, vêm da leitura do caixa (`estadoDoCaixa`) — e não se recortam (D-A2-6). */
+const BLOCOS_DO_CAIXA = [
+  "entradas",
+  "saidas",
+  "terceiros",
+  "setas",
+  "barras",
+  "mesAMes",
+  "rosca",
+  "formas",
+  "ancora",
+  "maiores",
+] as const;
+
 describe("naoSegue", () => {
   it("sem recorte, null (nas duas bases)", () => {
     for (const bloco of BLOCOS) {
@@ -469,8 +483,30 @@ describe("naoSegue", () => {
     const caixa = naoSegue("saidas", r, "caixa");
     expect(caixa?.tipo).toBe("cartao");
     expect(caixa?.motivo).toContain("caixa");
-    for (const bloco of BLOCOS) {
+    for (const bloco of BLOCOS_DO_CAIXA) {
       expect(naoSegue(bloco, { ...SEM_RECORTE, pessoa: "pessoa-a" }, "caixa")).not.toBeNull();
+    }
+  });
+
+  it("R6: na base caixa só os blocos que vêm da leitura do caixa deixam de seguir", () => {
+    const conta: Recorte = { ...SEM_RECORTE, conta: "conta-b" };
+    expect(naoSegue("saldo", conta, "caixa")).toBeNull();
+    expect(naoSegue("rosca", conta, "caixa")).not.toBeNull();
+    expect(naoSegue("rosca", conta, "caixa")?.motivo).toContain("caixa");
+    // Os cinco que NÃO vêm do caixa seguem a matriz da competência, bloco a bloco e recorte a recorte.
+    for (const bloco of ["saldo", "pendente", "assinaturas", "projecao", "faturasFuturas"] as const) {
+      for (const tipo of TIPOS) {
+        const r: Recorte = { ...SEM_RECORTE, [tipo]: "x" };
+        expect(naoSegue(bloco, r, "caixa"), `${bloco} · ${tipo}`).toEqual(naoSegue(bloco, r, "competencia"));
+      }
+    }
+    // E os que vêm do caixa são ✗ com qualquer recorte, com o motivo da base.
+    for (const bloco of BLOCOS_DO_CAIXA) {
+      for (const tipo of TIPOS) {
+        expect(naoSegue(bloco, { ...SEM_RECORTE, [tipo]: "x" }, "caixa")?.motivo, `${bloco} · ${tipo}`).toContain(
+          "caixa",
+        );
+      }
     }
   });
 

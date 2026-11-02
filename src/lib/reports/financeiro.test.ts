@@ -690,13 +690,51 @@ describe("base caixa", () => {
     expect(r.caixa).toBe(CAIXA_OK);
   });
 
-  it("com qualquer recorte, todo bloco é não segue e nenhum número aparece (D-A2-6)", () => {
+  it("com qualquer recorte, todo bloco que vem do caixa é não segue e nenhum número aparece (D-A2-6)", () => {
     const r = caixa({ recorte: comRecorte({ cartao: "cartao-a" }) });
-    for (const bloco of Object.values(r.blocos)) expect(bloco.naoSegue?.motivo).toContain("caixa");
+    for (const bloco of ["barras", "mesAMes", "rosca", "formas", "ancora", "maiores"] as const) {
+      expect(r.blocos[bloco].naoSegue?.motivo, bloco).toContain("caixa");
+    }
     expect(r.indicadores.saidas.valor).toEqual({ naoSegue: expect.any(String) });
     expect(r.barras).toEqual([]);
     expect(r.rosca).toBeNull();
     expect(r.ancora).toBeNull();
+  });
+
+  it("R6: saldo, pendente, assinaturas, projeção e faturas futuras seguem a MESMA matriz da competência", () => {
+    // Conta: o saldo é o DAQUELA conta (saldoAte), mesmo na base caixa.
+    const contaNoCaixa = caixa({ recorte: comRecorte({ conta: "conta-b" }), saldoAte: 900 });
+    expect(contaNoCaixa.blocos.assinaturas.naoSegue?.tipo).toBe("conta");
+    expect(contaNoCaixa.saldo.valor).toBe(formatCurrency(900));
+    expect(contaNoCaixa.saldo.rotulo).toContain("Saldo da conta");
+
+    // Cartão: as faturas futuras são as do cartão (e a matriz da competência manda ✓).
+    const cartaoNoCaixa = caixa({ recorte: comRecorte({ cartao: "cartao-a" }) });
+    expect(cartaoNoCaixa.blocos.faturasFuturas.naoSegue).toBeNull();
+    expect(cartaoNoCaixa.faturasFuturas).toEqual(
+      monta({ recorte: comRecorte({ cartao: "cartao-a" }) }).faturasFuturas,
+    );
+
+    // Categoria: as assinaturas seguem a categoria, nas duas bases.
+    const categoriaNoCaixa = caixa({ recorte: comRecorte({ categoria: CAT_A.id }) });
+    expect(categoriaNoCaixa.blocos.assinaturas.naoSegue).toBeNull();
+    expect(categoriaNoCaixa.assinaturas).toEqual(
+      monta({ recorte: comRecorte({ categoria: CAT_A.id }) }).assinaturas,
+    );
+
+    // A projeção nunca segue recorte, em nenhuma base.
+    expect(contaNoCaixa.blocos.projecao.naoSegue?.motivo).toContain("projeção");
+    expect(contaNoCaixa.blocos.projecao.naoSegue?.motivo).not.toContain("caixa");
+  });
+
+  it("R6: pessoa na base caixa — o quarto indicador é o pendente DELA, não um número de caixa", () => {
+    for (const resp of ["meu", "terceiros", "consolidado"] as const) {
+      const recorte = comRecorte({ pessoa: "pessoa-a" });
+      const r = caixa({ recorte, resp });
+      expect(naoSegue("pendente", recorte, "caixa"), resp).toBeNull();
+      expect(r.indicadores.quarto.valor, resp).toBe(formatCurrency(60));
+      expect(r.indicadores.quarto.rotulo, resp).toMatch(/^Pendente de terceiros/);
+    }
   });
 
   it("em terceiros e consolidado, evolução, rosca e formas não seguem a responsabilidade (D-A2-21)", () => {

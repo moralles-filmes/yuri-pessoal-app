@@ -345,8 +345,28 @@ export const SEGUE_O_RECORTE: Record<BlocoDoRelatorio, Record<TipoDeRecorte, Cel
 const MOTIVO_DA_BASE_CAIXA = "a base caixa não se recorta nesta versão";
 
 /**
+ * Os blocos que, na base caixa, vêm da leitura do caixa (`estadoDoCaixa`) — e por isso não se
+ * recortam (D-A2-6: recortá-la exigiria um segundo caminho de filtro, fora do motor). Os outros
+ * cinco (saldo, pendente, assinaturas, projeção e faturas futuras) não leem o caixa, em nenhuma
+ * base: seguem a MESMA matriz da competência.
+ */
+const BLOCOS_LIDOS_DO_CAIXA: ReadonlySet<BlocoDoRelatorio> = new Set<BlocoDoRelatorio>([
+  "entradas",
+  "saidas",
+  "terceiros",
+  "setas",
+  "barras",
+  "mesAMes",
+  "rosca",
+  "formas",
+  "ancora",
+  "maiores",
+]);
+
+/**
  * O primeiro recorte ATIVO que o bloco não segue, com o motivo; `null` = o bloco segue todos os
- * recortes ligados (inclusive nenhum). Na base caixa, qualquer recorte ligado é ✗ (D-A2-6).
+ * recortes ligados (inclusive nenhum). Na base caixa, qualquer recorte ligado é ✗ (D-A2-6) para
+ * os blocos lidos do caixa (`BLOCOS_LIDOS_DO_CAIXA`); os demais seguem a matriz da competência.
  *
  * Combinação de recortes (D-A2-2): vale o mais restritivo — basta UM ✗ entre os ativos. Em
  * cartão + categoria (D-A2-24) isso também vale: o bloco que o cartão não segue (ex.: entradas)
@@ -358,7 +378,7 @@ export function naoSegue(
   base: BaseFinanceira,
 ): { tipo: TipoDeRecorte; motivo: string } | null {
   for (const tipo of recortesAtivos(r)) {
-    if (base === "caixa") return { tipo, motivo: MOTIVO_DA_BASE_CAIXA };
+    if (base === "caixa" && BLOCOS_LIDOS_DO_CAIXA.has(bloco)) return { tipo, motivo: MOTIVO_DA_BASE_CAIXA };
     const celula = SEGUE_O_RECORTE[bloco][tipo];
     if (celula !== true) return { tipo, motivo: celula.motivo };
   }
