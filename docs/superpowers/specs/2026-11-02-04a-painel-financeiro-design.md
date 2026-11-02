@@ -316,4 +316,111 @@ ao banco" = soma das faturas reais não pagas da lista. Repetido na base caixa o
 
 ## 13. Resultado da execução
 
-*(preenchido no fim: commits, critérios um a um, decisões, achados não consertados, pendências)*
+Executado em 2026-11-02, na worktree `C:/tmp/04a-painel`, branch `feat/redesign-04a-painel`. **Sem push,
+sem PR, sem merge, sem deploy (D67).** A integração local em `feat/redesign-00-auditoria` espera o aval
+do dono.
+
+### 13.1 Commits
+
+| Commit | Passo |
+| --- | --- |
+| `5ada9a0` | desenho |
+| `45246f2` | plano + ajuste da D-A-15 (a régua sai para arquivo próprio; o núcleo comum ainda fechava ciclo) |
+| `50ce80f` | 1 · núcleo puro (`finance/painel.ts`, `lib/painel/{cor,saudacao,olho}.ts`, `horaDeBrasiliaAgora`) |
+| `9362215` | 2 · régua K3 no painel e no sino (`finance/regua-do-gasto-alto.ts`) |
+| `4cb69fc` | 3 · leituras (`ESCOPO_PAINEL`, `lerSaldoAte`, `getUltimasTransacoes`) |
+| `beea28d` | 4 · peças comuns + tokens do banner |
+| `d11be0a` | 5 · barras, rosca, hachura da projeção |
+| `0db3dd1` | 6 · painel montado + inventário + conciliação + links |
+| `1215ac7` | correções da conferência visual e da revisão final |
+| (este) | 8 · §13 + desvios no §6 da REFERENCIA-VISUAL |
+
+Executores: os passos 1–6 foram ao subagente Claude Sonnet pelo `ai-router-br` (o roteador indicava o
+Codex; desviado porque o Codex já gravou no diretório principal deste repositório, onde outra sessão
+trabalha); revisão, correções e os testes de cada passo pelo principal.
+
+### 13.2 Os cinco comandos
+
+| | Antes (passo 0) | Depois |
+| --- | --- | --- |
+| `test:run` | 309 arquivos · 6992 testes ✅ | 320 arquivos · 7175 testes ✅ |
+| `lint` | ✅ | ✅ |
+| `tsc --noEmit` | ✅ | ✅ |
+| `build` | ✅ | ✅ |
+| `perf:bundle` | ✅ mediana 201,9 KB | ✅ mediana 202,1 KB |
+| `/dashboard/financeiro` | 194,1 KB gz | 200,4 KB gz |
+| `/dashboard` | 192,5 KB | 192,7 KB |
+| `/relatorios` | 196,7 KB | 196,9 KB |
+| `TZ=UTC` finance + dashboard + notifications | 70 · 1117 ✅ | 74 · 1193 ✅ |
+
+md5 dos saldos depois: `15d93bd1c1d3e55a40db6210dff0eb3b` (5 contas) — **igual** ao do §2.1. Nenhuma
+escrita no banco, nenhuma migration.
+
+### 13.3 Aceite (§9), um a um
+
+1. ✅ Todo indicador tem link para os registros (`/financeiro/contas`, `lancamentos?type=…&month=`,
+   `/terceiros`) e todo `href` do painel tem `page.tsx` no disco (`painel-links.test.ts`). ⚠️ Na base
+   caixa, "Ver entradas/saídas" abre a lista por competência (o "link certo" mínimo; não reconcilia com o
+   número de caixa).
+2. ✅ Conciliação com teste e **com estorno de cartão** (`painel-conciliacao.test.ts`): Minhas saídas =
+   barra do mês = Σ fatias − estornos + não-positivos; meu + terceiros = bruto; Σ por pessoa = total
+   pendente; pendente ao banco = Σ das faturas reais não pagas. Fechou sem ajuste de fórmula.
+3. ✅ Rosca só com fatias positivas e a nota do que ficou de fora; barras do mês em andamento (e dos
+   seguintes, com mês futuro selecionado) e projeção hachuradas e tracejadas.
+4. ✅ Prévia aprovada; conferido no navegador com a sessão do dono em 390, 768 e 1280 px (iframe na
+   própria página) e 2560 px, claro e escuro, competência, caixa e mês futuro: sem rolagem horizontal,
+   nenhum valor cortado, olho esconde os quatro valores e grava o cookie. 1440 px não foi medido à parte
+   (está entre 1280 e 2560). Contraste do branco sobre o ponto mais claro do degradê, pela fórmula WCAG
+   sobre os tokens: **5,41:1 no claro** (`#256abf`) e **8,54:1 no escuro** (`#184c8d`). Banner sem
+   `"use client"` e só importado pela página (teste de varredura).
+5. ✅ Nenhum bloco do §2.3 sumiu: `painel-inventario.test.ts` confere os 19 com o substituto declarado.
+6. ✅ Nenhum número mudou de significado fora de K1–K4, K6 e K7 (revisão independente conferiu). Testes
+   existentes mudaram onde o §7 declara **e em dois lugares a mais** (13.4).
+7. ✅ Cada regra nova caiu com a sua mutação, desfeita e conferida (`cmp`/`git diff --quiet`).
+8. ✅ Cinco comandos verdes, `perf:bundle` antes → depois e `TZ=UTC` (13.2).
+9. ✅ md5 igual.
+
+### 13.4 Decisões tomadas na execução
+
+- **Testes existentes tocados além do §7** (reescritos no lugar, nenhum apagado): `entradas-do-card.test.ts`
+  (o painel saiu da lista de `apresentarEntradas`, como a K1 decidiu; `it` novo afirma
+  `indicadorMinhasEntradas` e nenhum bruto) e `fechamento-itens-sem-teste.test.ts` ("sem base de
+  comparação" agora vem de `comparacaoDosIndicadores`). Ambos foram vistos caindo com mutação.
+  `leituras-que-engolem-erro.test.ts` recebeu as duas leituras novas (111 → 113) e a exceção de
+  `lerSaldoAte` — é um inventário que exige essa declaração.
+- **Título "Pendente de terceiros"** em vez de "A receber de terceiros" (proibido na 03-D B2;
+  `rotulos-do-pendente.test.ts` intocado). Registrado no §6 da REFERENCIA-VISUAL.
+- **Cor da rosca por posição** (cor da categoria, senão slot `i % 8`), não por hash do id: hash colide e
+  põe duas fatias vizinhas da mesma cor.
+- **Olho por contexto:** `OlhoDosValores` provê o estado; `BotaoDoOlho` vai no indicador de saldo; os
+  valores trocam por CSS, os indicadores seguem renderizados no servidor.
+- **`.env.local` copiado** do diretório principal para a worktree, com autorização do dono, para o dev
+  server (ignorado pelo git).
+- **Revisão final** (revisor independente, modelo mais capaz): sem crítico. Corrigidos com teste que caiu
+  antes: mês futuro tratado como fechado; olho deixando à mostra "diferença de R$ X" e "+ R$ X de
+  terceiros"; lançamento cancelado nas últimas transações; e, da conferência visual, indicadores colados no
+  bloco seguinte (`display: contents`) e rótulo/valor truncados.
+
+### 13.5 Achados não consertados (para o dono decidir)
+
+- Legenda "mês em andamento · parcial" aparece também sobre o estado vazio das barras.
+- Acessibilidade do olho: o "R$ ••••" é `aria-hidden` (o leitor de tela não anuncia nada); o botão usa
+  `aria-pressed` com rótulo que alterna.
+- A dica (i) dos indicadores só abre por `title` (não por toque nem teclado).
+- Falha de "últimas transações" e do saldo não é registrada em log (`registrarFalhaDeLeitura`).
+- Na base caixa em andamento, a seta de saídas fica sem cor, embora ali os dois lados sejam caixa cortado
+  no mesmo dia — confirmar se a K7 queria isso também no caixa.
+- "Próximas faturas" lista até 6 ciclos por cartão (com vários cartões, a lista fica longa; a prévia
+  mostrava 2).
+- "em N×" das compras parceladas nas últimas transações (D-A-12) não foi feito.
+- `gerarAlertas` mantém o parâmetro `resumoAtual`, agora sem uso.
+- `truncate` em `<td>` da tabela de últimas transações não tem efeito (só estético).
+
+### 13.6 Pendências
+
+- Integração local de `feat/redesign-04a-painel` em `feat/redesign-00-auditoria` (merge `--no-ff`, D67),
+  com o aval do dono; o push/PR único (#65) só no fim de todas as fases.
+- `docs/redesign/STATUS.md` não foi editado (restrição da subfase): o registro da 04-A lá fica para a
+  integração.
+
+Não há promessa de "zero bugs": o que está acima é o que foi testado e visto.
