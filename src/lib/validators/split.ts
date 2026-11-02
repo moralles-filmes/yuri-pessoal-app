@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CLASSIFICACOES, SPLIT_TYPES } from "@/lib/finance/constants";
-import { normalizeBRMoney } from "@/lib/validators/shared";
+import { ESCOLHAS_DA_SOBRA } from "@/lib/finance/reembolso";
+import { normalizeBRMoney, optionalUuid } from "@/lib/validators/shared";
 
 /**
  * Valor (reais) opcional vindo do form: string vazia/ausente → undefined. Aceita o padrão BR
@@ -100,3 +101,22 @@ export const receitaResponsabilidadeSchema = z.object({
 });
 
 export type ReceitaResponsabilidadeInput = z.infer<typeof receitaResponsabilidadeSchema>;
+
+/**
+ * Reembolso de terceiros no lançamento de receita (04-C). SEM refine: quem decide se a
+ * combinação fecha é `decidirReembolso` (`finance/reembolso.ts`), num lugar só. O schema só
+ * traduz a forma — `reembolso_devido_visto` é o que a tela mostrou, para a regra conferir.
+ */
+export const reembolsoSchema = z.object({
+  reembolso_pessoa_id: optionalUuid,
+  reembolso_sobra: z.preprocess(
+    (v) => (v === "" || v === null ? undefined : v),
+    z.enum(ESCOLHAS_DA_SOBRA).optional(),
+  ),
+  reembolso_devido_visto: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().nonnegative().optional(),
+  ),
+});
+
+export type ReembolsoInput = z.infer<typeof reembolsoSchema>;

@@ -26,7 +26,7 @@ import { categorySchema } from "@/lib/validators/category";
 import { transactionSchema } from "@/lib/validators/transaction";
 import { registrarRecebimentoSchema } from "@/lib/validators/receivable";
 import { optionalText } from "@/lib/validators/shared";
-import { receitaResponsabilidadeSchema } from "@/lib/validators/split";
+import { receitaResponsabilidadeSchema, reembolsoSchema } from "@/lib/validators/split";
 import {
   aiPreferencesSchema,
   aiProviderConfigSchema,
@@ -678,5 +678,50 @@ describe("lançamento (03-E): a \"Data do pagamento\" aceita a própria saída",
     const r = transactionSchema.safeParse({ ...doFormulario, liquidado_em: "12/10/2026" });
     expect(r.success).toBe(false);
     expect(r.error?.flatten().fieldErrors.liquidado_em).toBeDefined();
+  });
+});
+
+/**
+ * 04-C · o reembolso no lançamento de receita. Quem decide se a combinação fecha é
+ * `decidirReembolso`; o schema só traduz a forma, e a saída tem de ser aceita de novo.
+ */
+describe("reembolso: o lançamento de receita com pessoa salva", () => {
+  it("pessoa, escolha da sobra e devido visto preservam os valores na segunda passada", () => {
+    const { noCliente, noServidor } = roundTrip(reembolsoSchema, {
+      reembolso_pessoa_id: UUID,
+      reembolso_sobra: "saldo",
+      reembolso_devido_visto: "200000",
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noCliente.data).toEqual({
+      reembolso_pessoa_id: UUID,
+      reembolso_sobra: "saldo",
+      reembolso_devido_visto: 200000,
+    });
+    expect(noServidor.data).toEqual(noCliente.data);
+  });
+
+  it("campos vazios ('' e null) passam; sobra e devido saem ausentes, e a pessoa sai null", () => {
+    const { noCliente, noServidor } = roundTrip(reembolsoSchema, {
+      reembolso_pessoa_id: "",
+      reembolso_sobra: "",
+      reembolso_devido_visto: "",
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noCliente.data).toEqual({ reembolso_pessoa_id: null });
+    expect(noServidor.data).toEqual(noCliente.data);
+
+    const nulos = roundTrip(reembolsoSchema, {
+      reembolso_pessoa_id: null,
+      reembolso_sobra: null,
+      reembolso_devido_visto: null,
+    });
+    expect(nulos.noServidor.success, fieldErrors(nulos.noServidor.error)).toBe(true);
+    expect(nulos.noServidor.data).toEqual({ reembolso_pessoa_id: null });
+  });
+
+  it("recusa escolha de sobra inventada e devido negativo", () => {
+    expect(reembolsoSchema.safeParse({ reembolso_sobra: "dinheiro" }).success).toBe(false);
+    expect(reembolsoSchema.safeParse({ reembolso_devido_visto: "-1" }).success).toBe(false);
   });
 });

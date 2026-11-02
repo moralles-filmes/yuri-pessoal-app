@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { CASOS_DO_REEMBOLSO } from "@/lib/finance/reembolso-casos";
 import {
   aplicarRealocacao,
+  decidirReembolso,
+  MSG_DIVIDA_MUDOU,
+  MSG_ESCOLHA_A_SOBRA,
+  MSG_REEMBOLSO_SO_DE_TERCEIRO,
   ordenarDividas,
   previaDoLote,
   previaDoReembolso,
@@ -293,5 +297,129 @@ describe("previaDoLote", () => {
 
   it("lote vazio devolve lista vazia", () => {
     expect(previaDoLote({ devidoCentavos: 100000, saldoAFavorCentavos: 0 }, [])).toEqual([]);
+  });
+});
+
+describe("decidirReembolso", () => {
+  const semSobra = { devidoAntesCentavos: 50000, devidoDepoisCentavos: 0, sobraCentavos: 0 };
+  const comSobra = (sobra: number) => ({ devidoAntesCentavos: 0, devidoDepoisCentavos: 0, sobraCentavos: sobra });
+
+  it("(a) receita pessoal não aceita reembolso de pessoa", () => {
+    expect(
+      decidirReembolso({
+        classificacaoPedida: "pessoal",
+        previa: semSobra,
+        valorCentavos: 10000,
+        escolha: null,
+        devidoVistoCentavos: null,
+      }),
+    ).toEqual({ ok: false, campo: "reembolso_pessoa_id", mensagem: MSG_REEMBOLSO_SO_DE_TERCEIRO });
+  });
+
+  it("(b) dívida que mudou desde a prévia recusa, mesmo com sobra e sem escolha (a recusa vem antes)", () => {
+    expect(
+      decidirReembolso({
+        classificacaoPedida: "terceiro",
+        previa: { devidoAntesCentavos: 50000, devidoDepoisCentavos: 0, sobraCentavos: 20000 },
+        valorCentavos: 70000,
+        escolha: null,
+        devidoVistoCentavos: 40000,
+      }),
+    ).toEqual({ ok: false, campo: "reembolso_sobra", mensagem: MSG_DIVIDA_MUDOU });
+  });
+
+  it("(c) sem sobra: vira terceiro, sem parte própria, e vincula, sem precisar de escolha", () => {
+    expect(
+      decidirReembolso({
+        classificacaoPedida: "terceiro",
+        previa: semSobra,
+        valorCentavos: 30000,
+        escolha: null,
+        devidoVistoCentavos: 50000,
+      }),
+    ).toEqual({ ok: true, receita_classificacao: "terceiro", minhaParteCentavos: null, vincula: true });
+  });
+
+  it("(d) com sobra e sem escolha recusa, pedindo a escolha no campo reembolso_sobra", () => {
+    expect(
+      decidirReembolso({
+        classificacaoPedida: "terceiro",
+        previa: comSobra(20000),
+        valorCentavos: 70000,
+        escolha: null,
+        devidoVistoCentavos: null,
+      }),
+    ).toEqual({ ok: false, campo: "reembolso_sobra", mensagem: MSG_ESCOLHA_A_SOBRA });
+  });
+
+  it("(e) escolha 'saldo' vira terceiro, sem parte própria, e vincula", () => {
+    expect(
+      decidirReembolso({
+        classificacaoPedida: "terceiro",
+        previa: comSobra(20000),
+        valorCentavos: 70000,
+        escolha: "saldo",
+        devidoVistoCentavos: null,
+      }),
+    ).toEqual({ ok: true, receita_classificacao: "terceiro", minhaParteCentavos: null, vincula: true });
+  });
+
+  it("(f) escolha 'receita' com sobra menor que o valor vira compartilhada, com a sobra como parte própria, e vincula", () => {
+    expect(
+      decidirReembolso({
+        classificacaoPedida: "terceiro",
+        previa: comSobra(20000),
+        valorCentavos: 70000,
+        escolha: "receita",
+        devidoVistoCentavos: null,
+      }),
+    ).toEqual({ ok: true, receita_classificacao: "compartilhada", minhaParteCentavos: 20000, vincula: true });
+  });
+
+  it("(g) escolha 'receita' com sobra igual ao valor vira pessoal e NÃO vincula", () => {
+    expect(
+      decidirReembolso({
+        classificacaoPedida: "terceiro",
+        previa: comSobra(70000),
+        valorCentavos: 70000,
+        escolha: "receita",
+        devidoVistoCentavos: null,
+      }),
+    ).toEqual({ ok: true, receita_classificacao: "pessoal", minhaParteCentavos: null, vincula: false });
+  });
+
+  it("compartilhada pedida pelo dono com pessoa é tratada pela sobra, não mantida como pedida", () => {
+    // Sem sobra: vira terceiro, mesmo tendo sido pedida compartilhada.
+    expect(
+      decidirReembolso({
+        classificacaoPedida: "compartilhada",
+        previa: semSobra,
+        valorCentavos: 30000,
+        escolha: null,
+        devidoVistoCentavos: null,
+      }),
+    ).toEqual({ ok: true, receita_classificacao: "terceiro", minhaParteCentavos: null, vincula: true });
+    // Com sobra e escolha 'receita' parcial: vira compartilhada pela sobra.
+    expect(
+      decidirReembolso({
+        classificacaoPedida: "compartilhada",
+        previa: comSobra(20000),
+        valorCentavos: 70000,
+        escolha: "receita",
+        devidoVistoCentavos: null,
+      }),
+    ).toEqual({ ok: true, receita_classificacao: "compartilhada", minhaParteCentavos: 20000, vincula: true });
+  });
+
+  it("devidoVisto null não confere a dívida (caminho da importação)", () => {
+    expect(
+      decidirReembolso({
+        classificacaoPedida: "terceiro",
+        previa: { devidoAntesCentavos: 50000, devidoDepoisCentavos: 0, sobraCentavos: 20000 },
+        valorCentavos: 70000,
+        escolha: "saldo",
+        devidoVistoCentavos: null,
+      }),
+    ).toEqual({ ok: true, receita_classificacao: "terceiro", minhaParteCentavos: null, vincula: true });
   });
 });

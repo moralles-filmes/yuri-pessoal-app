@@ -20,6 +20,8 @@
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 
+import type { Classificacao } from "@/lib/finance/constants";
+
 /** A parte da pessoa numa receita vinculada com status `recebido`. */
 export type PagamentoDoReembolso = {
   readonly transactionId: string;
@@ -297,4 +299,51 @@ export function previaDoLote(
     devido = previa.devidoDepoisCentavos;
   }
   return previas;
+}
+
+/** O que fazer com o valor que passa do que a pessoa deve: a receita fica do dono, ou vai para o saldo a favor. */
+export const ESCOLHAS_DA_SOBRA = ["receita", "saldo"] as const;
+export type EscolhaDaSobra = (typeof ESCOLHAS_DA_SOBRA)[number];
+
+export const MSG_ESCOLHA_A_SOBRA = "Este valor passa do que a pessoa deve. Escolha o que fazer com a sobra.";
+export const MSG_DIVIDA_MUDOU = "O que esta pessoa deve mudou enquanto você lançava. Confira a prévia e salve de novo.";
+export const MSG_REEMBOLSO_SO_DE_TERCEIRO = "Só uma entrada de terceiro pode abater o que uma pessoa deve.";
+
+export type DecisaoDoReembolso =
+  | { ok: true; receita_classificacao: "terceiro" | "compartilhada" | "pessoal"; minhaParteCentavos: number | null; vincula: boolean }
+  | { ok: false; campo: "reembolso_sobra" | "reembolso_pessoa_id"; mensagem: string };
+
+/**
+ * Decide o lançamento de uma receita com pessoa. A classificação final SAI DA SOBRA quando há
+ * pessoa: `compartilhada` pedida pelo dono cai nas mesmas regras de `terceiro`. Puro: a prévia
+ * e a escolha chegam prontas; `devidoVistoCentavos` null significa "não conferir" (importação).
+ */
+export function decidirReembolso(a: {
+  classificacaoPedida: Classificacao;
+  previa: PreviaDoReembolso;
+  valorCentavos: number;
+  escolha: EscolhaDaSobra | null;
+  /** o que a tela mostrou; null = não conferir (importação) */
+  devidoVistoCentavos: number | null;
+}): DecisaoDoReembolso {
+  if (a.classificacaoPedida === "pessoal") {
+    return { ok: false, campo: "reembolso_pessoa_id", mensagem: MSG_REEMBOLSO_SO_DE_TERCEIRO };
+  }
+  if (a.devidoVistoCentavos !== null && a.devidoVistoCentavos !== a.previa.devidoAntesCentavos) {
+    return { ok: false, campo: "reembolso_sobra", mensagem: MSG_DIVIDA_MUDOU };
+  }
+  const sobra = a.previa.sobraCentavos;
+  if (sobra === 0) {
+    return { ok: true, receita_classificacao: "terceiro", minhaParteCentavos: null, vincula: true };
+  }
+  if (a.escolha === null) {
+    return { ok: false, campo: "reembolso_sobra", mensagem: MSG_ESCOLHA_A_SOBRA };
+  }
+  if (a.escolha === "saldo") {
+    return { ok: true, receita_classificacao: "terceiro", minhaParteCentavos: null, vincula: true };
+  }
+  if (sobra < a.valorCentavos) {
+    return { ok: true, receita_classificacao: "compartilhada", minhaParteCentavos: sobra, vincula: true };
+  }
+  return { ok: true, receita_classificacao: "pessoal", minhaParteCentavos: null, vincula: false };
 }
