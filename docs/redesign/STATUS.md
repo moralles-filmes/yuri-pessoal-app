@@ -40,6 +40,10 @@ em `main` é produção. **A 03-G foi a `main` por PR, com o seu aval para PR **
 fazer pr e merge no git", D64). **A 03-G2 vai a `main` por PR, com o seu aval para o push e o
 PR** ("faz o pr e tudo mais dessa no git", D66) — **o merge em `main` é seu**.
 
+⛔ **A partir de 2026-11-02 a publicação por partes ACABOU (D67, por custo da Vercel).** As
+próximas fases se acumulam em `feat/redesign-00-auditoria` **sem push** e vão a `main` num
+**PR único**, com **um merge só**, quando você pedir. O PR #65 (03-G2) fica aberto e é esse PR.
+
 ---
 
 ## REDESIGN-03-G2 — a escrita que falha deixa de virar "deu certo", e a REDESIGN-03 fecha ✅
@@ -1113,6 +1117,7 @@ as colunas já existem e o CHECK já aceita.
 | D64 | **A 03-G foi integrada na sessão que a escreveu, a seu pedido** ("Pode fazer pr e merge no git"), **com** revisão final da branch no modelo mais capaz e **sem** auditoria de módulo. Merge `--no-ff` em `6c158e9`, árvore idêntica à da ponta (`dfcc1cd`). A `main` tinha andado (PRs #61 e #63) e entrou por merge em `a8537d6`: dois conflitos (`queries.ts`, `caixa-leitura.ts`) resolvidos juntando os lados, e a varredura da L8 **achou a leitura nova** das compras das faturas pagas (106 → 107) — ela já tratava o erro. O aval cobriu push, PR **e** merge em `main` |
 | D63 | **03-F: K0–K3 decididas por você, uma de cada vez, e o desenho aprovado** ("Aprovado"). A **M-F** (`pagar_fatura` e `desfazer_pagamento_fatura`, que **não** estava no `MIGRATIONS.md`) entrou com o seu "Aplique", numa mensagem só para isso, pelo MCP, conferida pelo objeto (`pg_proc`: invoker, `search_path` vazio, grants) e não pela versão do histórico (D59). **Antes do aplique, o `migration-validator` achou três guardas de lógica (P3) e você as incluiu** ("Incluir as três") — a D-F12 do contrato; o FINDING-005 (referências do payload não conferidas) ficou como risco aceito (RR-F-4). O gerador de tipos trouxe de novo a relationship de `import_rows` e a sintaxe nova dos genéricos; **só as duas funções** entraram. A prova no banco é **sequencial** (o MCP serializa as chamadas, sem `dblink`) e o `delete` da fatura sintética voltou `declined` — a remoção ficou com você. Integrada na sessão que a escreveu, ao você pedir o prompt da próxima fase (memória de 2026-10-11): merge `--no-ff` em `84bf87b`, árvore idêntica à da ponta; **push e PR só com o seu aval** |
 | D65 | **Referência visual do Painel financeiro e do Dashboard** (2026-10-25, a seu pedido: *"Vamos seguir o plano que já tem, mas adaptar para a referência visual. Esquece a sidebar."*). O print 1 vira o alvo da **04-A** (`/dashboard/financeiro`), o print 2 o da **06**, e o relatório de `/relatorios` ganha a **04-A2** com as mesmas peças. Os prints **não** entram no repositório (público; o print 2 tem cara de dado real), então são descritos em palavras em `REFERENCIA-VISUAL.md`, com os desvios no §6 (sem metas financeiras, sem logos de banco, sem últimos dígitos, rosca na paleta validada, base sempre visível). A sequência antiga da 06 (Prioridades do dia, Organização, Saúde) foi substituída pela do print. Nenhuma migration, nenhuma regra de negócio mudou |
+| D67 | **Fim da publicação por partes** (2026-11-02, a seu pedido: *"juntarmos todas as proximas fases em um unico PR e fazer merge uma vez so, pois o deploy da vercel é muito caro"*). Substitui a D54. Cada fase continua sendo integrada por merge `--no-ff` nesta branch, mas **nenhuma é empurrada**: um push gera um deploy de prévia na Vercel (e, com o PR #65 aberto sobre esta branch, atualiza o PR), e um merge em `main` gera um de produção. O PR #65 (03-G2) fica aberto e vira o PR único; no fim, um push, revisão do título e da descrição, CI verde e **um** merge, com o seu pedido explícito. **Custo aceito:** até o push final, os commits integrados só existem neste disco — e `main` pode andar por outras branches (agenda, IA), então o merge final pode trazer conflitos para resolver uma vez só. O portão de ancestral dos prompts não muda: ele confere esta branch local |
 | D66 | **A 03-G2 foi integrada na sessão que a escreveu, a seu pedido** ("Me envia o prompt da proxima fase e já faz o pr e tudo mais dessa no git"), **com** revisão final da branch no modelo mais capaz e **sem** auditoria de módulo. Merge `--no-ff` em `a70c541`; a árvore difere da ponta (`dc9e641`) só nos documentos da D65. O aval cobre o push e o PR; **"tudo mais" não foi lido como merge em `main`** — merge em `main` é produção e fica com você. A migration `salvar_lancamento_atomico` foi aplicada **por você no SQL editor** (o `apply_migration` do MCP foi recusado), conferida pelo objeto e não pela versão do histórico (D59) |
 
 ## Bloqueios
@@ -1307,8 +1312,13 @@ sintética `[03F-SINT]` e conferir o diálogo de desfazer (D63); a conferência 
 03-B, da 03-B2, da 03-C, da 03-C2, da 03-D (D39, D44, D48, D52, D60) e a visual a 390 px da 03-E
 (RR-E-13).
 
-🚀 **Publicação (D54, D62, D64, D66):** a integração continua sendo merge `--no-ff` nesta branch,
-seguido de PR para `main`.
+🚀 **Publicação (D67, substitui a D54):** a integração continua sendo merge `--no-ff` nesta
+branch, **mas sem push e sem PR por fase**. Todas as fases seguintes vão a `main` juntas, pelo
+PR #65 (aberto, cabeça = esta branch), com **um merge só**, quando você pedir.
+⛔ **Todo prompt de fase TEM de dizer isto nas Regras:** *"Publicação (D67): sem push, sem PR,
+sem merge em main e sem deploy. A integração em feat/redesign-00-auditoria é local; o push e o
+merge do PR único (#65) acontecem uma vez só, no fim, a pedido do dono."* Motivo: cada push numa
+branch ligada à Vercel gera um deploy de prévia, e cada merge em `main` gera um de produção.
 
 ⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA AQUI — meça** (D34):
 
