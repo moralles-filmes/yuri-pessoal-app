@@ -239,4 +239,185 @@ bloco em "não segue".
 
 ## 13. Resultado da execução
 
-*(preenchido ao fim)*
+Executado em 2026-11-02, na worktree `C:/tmp/04b-detalhamento`, branch `feat/redesign-04b-detalhamento` (base
+`0f1358f`). Commits locais, sem push, sem PR, sem merge.
+
+### 13.1 Commits
+
+| Commit | Passo |
+| --- | --- |
+| `5680605` | desenho |
+| `13703b9` | plano + prévia aprovada pelo dono |
+| `cdc64ef` | T1 — o motor expõe os classificadores e carrega os campos de exibição |
+| `912225d` | T2 — `detalheDoNumero` e a conciliação em três lados |
+| `ae96278` | T3 — URL do detalhe e mês válido (D-B-16) |
+| `41811df` | T4 — a gaveta sob demanda e `useOlhoDosValores` |
+| `5edc63c` | T5 — o Painel abre os registros (inclui o saldo por conta, D-B-12) |
+| `164c1e3` | T6 — o Relatório abre os registros com os recortes |
+| `f005caa` | correção de causa: `ref_month` derivado dos crus (achado do subagente da T6) |
+| `c0bf80d` | revisão final, achado 1: pendente-do-mes soma os mesmos crus da lista |
+| `8485890` | revisão final, achado 2: mês além da janela lida é falha declarada |
+| `39b11fb` | revisão final, achado 4: sem "minha parte R$ 0,00" quando tudo é de terceiros |
+| `b66fbf4` | revisão final, achado 6: comentário desatualizado |
+| `48443d9` | revisão final, achado 5: a gaveta devolve o foco ao fechar |
+| `bf30d65` | conferência visual: parcela sem descrição se chama "Compra parcelada" |
+| `3443187` | conferência visual: o atalho das contas sai do indicador de saldo e vai para a gaveta |
+| *(este)* | §13 |
+
+### 13.2 Os cinco comandos (no estado final)
+
+- `npm run test:run`: **348 arquivos / 7.845 testes**, verdes.
+- `npm run lint` e `npx tsc --noEmit`: limpos.
+- `npm run build`: verde.
+- `npm run perf:bundle`: todas as rotas no orçamento.
+
+| Rota | Antes (`0f1358f`) | Depois |
+| --- | --- | --- |
+| `/dashboard/financeiro` | 201,8 KB gz | 203,0 KB gz (+1,2) |
+| `/relatorios` | 206,8 KB gz | 207,8 KB gz (+1,0) |
+
+A gaveta (`Sheet`, lista e marcas) fica fora do manifest das duas rotas, por `next/dynamic` com objeto literal e
+`ssr: false`. O acréscimo é a fachada, os links e o modelo de URL.
+
+`TZ=UTC npx vitest run src/lib/finance src/lib/reports`: 81 arquivos / 1.452 testes, verdes.
+
+**Banco.** Só leitura. O md5 dos saldos (`account_balance` por conta) deu `15d93bd1c1d3e55a40db6210dff0eb3b` no
+início e no fim, igual à linha de base. Nenhuma migration.
+
+### 13.3 Aceite, item a item
+
+1. **Todo número do §4 abre, nas duas telas, com os filtros e o link compartilhável.** ✅
+   - `painel-detalhe.test.ts`, `relatorio-inventario.test.ts` e `hrefs-do-painel.test.ts`.
+   - Na conferência, cada link real foi aberto numa URL limpa.
+   - **Exceção declarada:** "Faturas dos próximos meses" do Relatório não abre (13.5, D2).
+2. **Σ registros = número, em três lados.** ✅
+   - `detalhe.test.ts` compara registros, agregador e literal; `reports/financeiro.test.ts` compara registros com o
+     texto do indicador. Mutações em 13.4.
+   - Na conferência, com dado real, todo número que tem registros fechou "= total": saídas (as três partes),
+     categoria, forma, fatura, cartão, contas, pendente, pendente do mês, projeção, saldo, e saídas com recorte de
+     cartão no Relatório.
+   - **Nenhuma "diferença não explicada" apareceu em dado real.**
+3. **Diferença declarada com valor e motivo.** ✅ Por teste: a fatura da view × a soma dos itens, e a soma × o total.
+   Não apareceu em dado real.
+4. **Vazio, falha, "não segue" e parcial são distintos, e nenhum vazio mostra R$ 0,00.** ✅
+   - **Vazio:** na conferência, cada vazio foi conferido contra o indicador da tela, que também estava em zero:
+     entradas de novembro, a base caixa e dois cartões sem gasto no mês.
+   - **"Não segue":** caixa com recorte de cartão e categoria na base caixa. Nenhum dos dois oferece link.
+   - **Falha:** o mês além da janela lida (revisão final, achado 2).
+5. **Data aproximada, previsto e projetado marcados; a projeção nunca entra na gaveta do realizado.** ✅ Por teste. Na
+   conferência, "previsto" aparece nos itens de fatura em aberto; "projetado" aparece em toda linha da projeção, com
+   fundo hachurado.
+6. **Olho fechado → nenhum valor visível na gaveta.** ✅
+   - Pelo DOM: alternando o olho com a gaveta aberta, os 12 valores dela viram "••••" e voltam.
+   - Pelo print: a 390 px no claro, olho fechado, todo valor da gaveta aparece como "R$ ••••".
+   - O olho do dono foi devolvido ao estado em que estava.
+7. **Nenhum número das telas mudou.** ✅ `dashboard*.test`, `painel-conciliacao`, `conciliacao-relatorio-painel` e os
+   inventários da 04-A/04-A2 passam sem edição de valor. O JSON exportado não muda: a gaveta vai numa prop separada, e
+   `RelatorioFinanceiro`/`ReportsData` estão inalterados.
+8. **Os cinco comandos, o antes e depois do `perf:bundle`, e `TZ=UTC`.** ✅ (13.2)
+9. **Conferência visual.** ✅, com a sessão do dono. Não pediu login.
+   - **Pelo DOM**, nas 4 larguras e nas duas telas, com iframes da mesma origem:
+     - nenhuma rolagem horizontal e nenhum elemento além da gaveta;
+     - em 390 px a gaveta abre de baixo (88dvh); de 768 px para cima abre à direita, com 576 px;
+     - a lista longa do pendente (111 itens) rola por dentro.
+   - **Pelos prints**, com o harness de iframes porque a janela não redimensiona:
+     - Painel: fatura a 390 px no claro; pendente a 390 px no escuro; saídas a 768 px no claro; projeção a 1.440 px no
+       escuro.
+     - Relatório: saídas a 1.280 px no escuro; saldo a 1.280 px no claro; olho fechado a 390 px no claro.
+   - Os prints da primeira tentativa expiraram com a janela atrás; o dono a trouxe para a frente.
+   - **Dois defeitos achados aqui e corrigidos:** `bf30d65` e `3443187` (13.6).
+10. **Banco.** ✅ md5 igual (13.2).
+11. **Revisão final em Opus e o §13.** ✅ Achados e destinos em 13.6.
+
+### 13.4 Mutações confirmadas (todas restauradas e conferidas com `git diff`)
+
+- **T1:**
+  - `ehEntradaDeConta` sem o filtro de cartão;
+  - `classeDeCaixa` com entre-contas trocado por sem-vínculo.
+- **T2:**
+  - fatura sem os estornos (10 testes);
+  - compra-pai do parcelamento em `itensDeGasto` (11);
+  - soma só dos registros exibidos (teto);
+  - `totalAReceber` no lugar de `totalPendenteAte`.
+- **T3:** a regex do mês (`?mes=2026-13` virava vazio falso).
+- **T4:** um `ValorComOlho` trocado por texto cru.
+- **T5:** `[]` no lugar de `txs` no detalhe da página.
+- **T6:**
+  - o caixa sem consultar `naoSegue` (base caixa + cartão);
+  - o detalhe sobre as entradas não recortadas (5 testes).
+- **`f005caa`:** `ref_month` sempre nulo derruba Painel e Relatório.
+- **Achado 1:** o teste com pessoa ficou vermelho antes da correção, com uma diferença falsa.
+- **Achado 2:** `MESES_LIDOS_ADIANTE = 6` derruba 6 testes. Outro teste amarra o limite ao fim de `janelaDoRelatorio`.
+- **Achado 4:** o filtro novo desligado derruba o teste.
+- **Achado 5:** sem `onCloseAutoFocus`, a varredura fica vermelha.
+- **Conferência:**
+  - a parcela sem descrição ficou vermelha antes da correção;
+  - `linkContas` tirado do cliente do Relatório derruba o teste.
+
+### 13.5 Decisões e desvios (com custo)
+
+- **D1. A gaveta recebe a VISTA pronta (`VistaDaGaveta`), e não o `Detalhe`** (desvio da T4). As peças de
+  `components/shared/painel/` não podem importar `@/lib/finance` (`painel.test.ts`, "fronteiras"). O formatador puro
+  `lib/painel/gaveta.ts` fica no meio. Custo: um arquivo a mais. A vantagem é que a gaveta não soma nada.
+- **D2. "Faturas dos próximos meses" do Relatório não abre.** O modelo do Relatório agrega por mês, não por fatura, e
+  não há id de fatura para abrir. Abrir pela projeção mostraria outro número. Fica sem link; vai para a 05-B ou para
+  quem der id de fatura ao modelo.
+- **D3. `?detalhe=cartao` e `?detalhe=contas` no Relatório devolvem "não segue".** O Relatório não desenha esses
+  números. A URL digitada à mão não inventa um.
+- **D4. O atalho "Contas" do saldo saiu do indicador e foi para o rodapé da gaveta do saldo ("Abrir em Contas").**
+  - Por quê: ao lado do olho, como texto ou ícone, ele tirava 1 a 2 linhas do rótulo em todo desktop, e em 1.280 px
+    quebrava "Saldo das contas" no meio da palavra.
+  - No rodapé do saldo ele também troca a nota "Em Lançamentos a lista é filtrada pela competência…", que não vale
+    para saldo.
+  - Custo: as contas ficam a um clique a mais a partir do indicador.
+- **D5. Na gaveta, parcela sem descrição se chama "Compra parcelada"**, como na tela de Faturas. No banco, nenhuma
+  compra-pai de parcelamento tem `description` (contado por `select`, sem ler valor). A gaveta escrevia "(sem
+  descrição)" em todas. Isso é texto; o dado não muda.
+- **D6. Mês além da janela lida é falha, não vazio.**
+  - A janela vai até o fim de (mês atual + 5), e os seletores de mês aceitam qualquer mês.
+  - Escolhi declarar o limite em vez de limitar o seletor: limitar mudaria o comportamento de duas telas fora do
+    escopo.
+  - **O indicador da tela continua mostrando R$ 0,00 nesse mês.** Isso já acontecia antes desta branch; vai para 13.6.
+- **D7. O filtro dos estornos em `detalhe.ts` repete `status !== "cancelado"` em vez de usar o `ativo` do motor.**
+  São equivalentes hoje. Fica registrado para não divergir se `ativo` mudar.
+
+### 13.6 Revisão final (Opus, branch inteira) — achados e destino
+
+A revisão não achou defeito crítico nem alto.
+
+| # | Achado | Gravidade | Destino |
+| --- | --- | --- | --- |
+| 1 | pendente-do-mes: o total vinha de `entradas.recs` (sem o recorte de pessoa) e a lista dos crus recortados; diferença falsa por URL | médio | **corrigido** `c0bf80d` |
+| 2 | mês além da janela: "nenhum registro" falso | médio | **corrigido** na gaveta, `8485890`; o R$ 0,00 do indicador é anterior à branch → backlog do redesign (limitar o seletor de mês ou ampliar a janela), decisão do dono |
+| 3 | os links dos indicadores sem `scroll={false}` | baixo | **não corrigido.** O `Link` é da peça comum `Indicador`, que outras três telas usam para ir a outras rotas; `scroll={false}` faria essas navegações abrirem no meio da página. Os indicadores já ficam no topo. Destino: uma prop `scroll` na peça, se o dono pedir |
+| 4 | "minha parte R$ 0,00" no pendente e no reembolso | baixo | **corrigido** `39b11fb` |
+| 5 | foco ao fechar; histórico duplicado (push ao abrir, replace ao fechar) | baixo | foco **corrigido** `48443d9`. O histórico **não**: trocar `replace` por `back` quebraria quem chega pela URL compartilhada (o "voltar" sairia do app). Fica registrado |
+| 6 | comentário desatualizado em `bloco-do-caixa.tsx` | baixo | **corrigido** `b66fbf4` |
+
+**Achados da conferência visual** (fora da revisão): "(sem descrição)" em toda parcela real (`bf30d65`, D5) e o
+rótulo do saldo espremido (`3443187`, D4). Os dois corrigidos.
+
+**O que a revisão conferiu e está correto:**
+- os refactors do motor não mudam número;
+- o total sai do mesmo agregador da tela, nas duas bases;
+- as partes meu e terceiros fecham, inclusive com o perdoado;
+- os bloqueios do Relatório;
+- os campos das leituras reais contra os das fixtures;
+- o olho no portal;
+- o JSON exportado inalterado;
+- o estado da gaveta fora do `Sheet` (invariante 95), sem `forceMount`;
+- nenhum segredo e nenhum dado real no diff.
+
+### 13.7 Router
+
+| Tarefa | Executor |
+| --- | --- |
+| T1 | `🔀 Router · TIER 3 · standard → Claude Sonnet (subagente) · classificação · indisponível: codex_model_not_listed, deepseek_needs_unsent_files` |
+| T2 | `🔀 Router · TIER 1 · complex → Claude Sonnet (subagente) · classificação · indisponível: codex_model_not_listed` |
+| T3 | `🔀 Router · TIER 1 · simple → Claude Haiku (subagente) · classificação · indisponível: deepseek_needs_unsent_files, codex_model_not_listed` |
+| T4 | `🔀 Router · TIER 0 → agente principal · classificação` |
+| T5 | `🔀 Router · TIER 1 · standard → Claude Sonnet (subagente) · classificação · indisponível: codex_model_not_listed, deepseek_needs_unsent_files` |
+| T6 | `🔀 Router · TIER 1 · standard → Claude Sonnet (subagente) · classificação · indisponível: codex_model_not_listed, deepseek_needs_unsent_files` |
+
+As correções da revisão final e da conferência ficaram com o agente principal. São pequenas, cada uma com o seu teste
+vermelho antes.
