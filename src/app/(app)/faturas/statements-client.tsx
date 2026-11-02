@@ -379,7 +379,7 @@ export function StatementsClient({
         description="Cadastre um cartão de crédito para começar a acompanhar as faturas."
       >
         <Button asChild size="sm">
-          <Link href="/cartoes">Ir para Cartões</Link>
+          <Link href="/cartoes/meus">Ir para Cartões</Link>
         </Button>
       </EmptyState>
     );

@@ -13,6 +13,7 @@ import type { ActionResult } from "@/types/finance";
 
 function revalidateCards() {
   revalidatePath("/cartoes");
+  revalidatePath("/cartoes/meus");
   revalidatePath("/faturas");
 }
 
