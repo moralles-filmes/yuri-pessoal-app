@@ -260,7 +260,7 @@ export function mesAnteriorDe(mes: string): string {
  * `statements: []` — entradas = `entradas`, saídas = só o à vista; o cartão fica fora sem
  * reimplementar regra nenhuma.
  */
-function resumoAteODia(
+export function resumoAteODia(
   lado: string,
   dia: number,
   transactions: DashTx[],

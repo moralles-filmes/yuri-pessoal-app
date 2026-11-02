@@ -77,7 +77,10 @@ describe("03-G2 E9 · itens da matriz que existiam sem teste (K5)", () => {
     }
   });
 
-  it("base anterior zero: o card escreve 'sem base de comparação'", () => {
+  // 04-A (reescrito no lugar): os cards antigos saíram do painel; quem escreve "sem base de
+  // comparação" agora é `comparacaoDosIndicadores` (com teste de valor em painel.test.ts), e o
+  // painel a chama.
+  it("base anterior zero: o indicador escreve 'sem base de comparação'", () => {
     const arquivo = path.resolve(
       __dirname,
       "..",
@@ -89,8 +92,8 @@ describe("03-G2 E9 · itens da matriz que existiam sem teste (K5)", () => {
       "financial-dashboard-client.tsx",
     );
     const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
-    expect(codigo).toMatch(
-      /function hintDoPeriodo\([^)]*\)[^{]*\{[^}]*pct === null[^}]*sem base de comparação/,
-    );
+    expect(codigo).toContain("comparacaoDosIndicadores(");
+    const regra = semComentarios(fs.readFileSync(path.resolve(__dirname, "painel.ts"), "utf8"));
+    expect(regra).toMatch(/pct === null\) return "sem base de comparação"/);
   });
 });

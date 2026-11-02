@@ -241,6 +241,11 @@ nova e sem migration. Senão ficam fora e o desvio vai para o §6.
 | "Saldo total" | "Saldo das contas · em DD/MM" | RR-E-6 |
 | "Entradas (meu)" | renda pessoal como número principal | RR4 (03-C) |
 | Grade com 4 cards na última linha | cards do mesmo tamanho | o layout salvo não guarda tamanho |
+| (04-A) Bloco "A receber de terceiros" | **"Pendente de terceiros"** | o rótulo "A receber de terceiros" foi proibido na 03-D (B2) por ambíguo; dentro do bloco, o total até DD/MM e o pendente do mês ficam com rótulos distintos |
+| (04-A) Bandeira do cartão no bloco | só o nome | a bandeira não chega ao painel (`DashCard` não a traz); trazê-la mexeria no pipeline, fora da 04-A |
+| (04-A) Valor em uma linha nos cards pequenos do celular | o valor quebra linha se não couber | dinheiro nunca é truncado ("R$ 12.34…" se lê como outro número) |
+| (04-A) Seletor "Últimos 9 meses" nas barras | "Ver relatório ›", janela de 6 meses | seletor sem leitura nova seria botão que não liga nada (D-A-6) |
+| (04-A) "Próximas faturas" com 2 ciclos | os ciclos de `proximas6Faturas` (até 6 por cartão) | a lista é a mesma do bloco que ela substitui; encurtá-la é pendência registrada |
 
 ## 7. Aceite visual (soma-se ao aceite da fase)
 

@@ -13,7 +13,7 @@ import { dateInSaoPaulo } from "@/lib/format";
 import { expandRowsToOccurrences } from "@/lib/calendar/expand";
 import { proximosCompromissos } from "@/lib/calendar/upcoming";
 import { habitOccursOn } from "@/lib/habits/streak";
-import { reguaDoGastoAlto } from "@/lib/finance/dashboard";
+import { reguaDoGastoAlto } from "@/lib/finance/regua-do-gasto-alto";
 import { janelaDoGastoAlto, montarEntradas } from "@/lib/finance/pipeline";
 import { anexarRecebimentos, emAberto, resumirRecebivel, saldoCentavos } from "@/lib/finance/recebimentos";
 import { lerRecebimentos } from "@/lib/finance/recebimentos-leitura";
@@ -451,11 +451,12 @@ export async function generateForUser(
     recebiveis: anexarRecebimentos(receivablesRes.data ?? [], recebimentosDoDono.linhas),
   });
   // 03-B2 (B2, decisão do dono) — o sino ADOTOU a régua da tela: a MESMA função que a página do
-  // dashboard financeiro chama. Até 5 meses anteriores, mês sem saída ignorado, e o mês corrente
-  // cheio (pendente incluído). Antes: 3 meses exatos, mês zerado dividindo, e o mês corrente
-  // cortado em hoje — o alerta de gasto alto pode disparar em outro dia do que disparava.
+  // dashboard financeiro chama. Até 5 meses anteriores, mês sem saída ignorado.
+  // K3 (04-A): no mês corrente a comparação é até o dia D, sem o cartão (o mês corrente deixou de
+  // entrar cheio); a descrição do sino diz o corte via `ateODia`.
   const regua = reguaDoGastoAlto({
     mes: mesAtual,
+    hoje: todayIso,
     transactions: txs,
     statements: sts,
     receivables: recs,
@@ -545,6 +546,7 @@ export async function generateForUser(
       mes: mesAtual,
       saidas: regua.saidas,
       mediaSaidas: regua.mediaSaidas,
+      ateODia: regua.ateODia,
     }),
     todoTasks: se("todo", genTodoTasks),
     todoReminders: se("lembretes", genTodoReminders),

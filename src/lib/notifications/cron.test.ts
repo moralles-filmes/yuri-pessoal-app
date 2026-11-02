@@ -208,16 +208,19 @@ describe("03-B2 B2 — a régua do gasto alto no sino", () => {
   /**
    * B2 — conserto aprovado pelo dono em 2026-09-27: o sino ADOTOU a régua da tela
    * (`reguaDoGastoAlto`, a mesma função que a página do dashboard financeiro chama). Até 5 meses
-   * anteriores, mês sem saída IGNORADO, e o mês corrente CHEIO — com pendente, na base
-   * competência (§13.3). Antes: 3 meses exatos, mês zerado dividindo, e o mês corrente cortado
-   * em hoje.
+   * anteriores, mês sem saída IGNORADO. (Antes: 3 meses exatos, mês zerado dividindo.) Na 03-B2
+   * o mês corrente entrava CHEIO, com pendente (§13.3); a K3 (04-A) trocou isso pelo corte.
+   *
+   * K3 (04-A) — a régua passou a comparar "até o dia D, sem o cartão" no mês corrente (hoje
+   * deste teste = 2026-09-10, D = 10): o mês corrente deixou de entrar cheio, e cada mês da média é
+   * cortado no mesmo dia 10. Os cenários A e B da 03-B2 foram reescritos no lugar.
    *
    * Cenário A — um mês zerado (junho) e uma despesa PENDENTE com data futura no mês corrente.
-   * Agora: setembro cheio = 700 + 600 = 1300; média de abr/mai/jul/ago (junho, zerado, fica fora)
-   * = 950; 1300 passa de 950 × 1,2 = 1140 → DISPARA, 37%. (Antes: 700 contra 600 → não
-   * disparava.)
+   * Conta à mão: setembro até o dia 10 = 700 (o pendente de 600 no dia 25 fica fora); abr/mai/jul/
+   * ago têm lançamento só no dia 15, depois do corte → até o dia 10 = 0 e são ignorados → média 0
+   * → sem alerta. (Na 03-B2: 1300 contra 950 disparava, 37%.)
    */
-  it("B2 — régua única (cenário A): mês zerado + pendente futuro — o sino passa a disparar 37%", async () => {
+  it("K3 (04-A) — cenário A: o pendente futuro e as saídas depois do dia 10 ficam fora — média 0, o sino não dispara", async () => {
     soLancamentos(
       despesaAVista("2026-04-15", 1000),
       despesaAVista("2026-05-15", 1000),
@@ -227,17 +230,16 @@ describe("03-B2 B2 — a régua do gasto alto no sino", () => {
       despesaAVista("2026-09-25", 600, "pendente"),
     );
     await rodarOCron();
-    expect(inseridas("high_spending").map((n) => n.description)).toEqual([
-      `As saídas do mês superam a média recente em 37% (${formatCurrency(1300)}).`,
-    ]);
+    expect(inseridas("high_spending").map((n) => n.description)).toEqual([]);
   });
 
   /**
    * Cenário B — o mês zerado puxava a média para baixo.
-   * Agora: média de jul/ago = 500 (junho zerado e abr/mai sem saída ficam fora); setembro = 500
-   * não passa de 600 → NÃO dispara. (Antes: (0 + 500 + 500) / 3 ≈ 333,33 → disparava 50%.)
+   * Conta à mão (K3): jul/ago têm saída só no dia 15, depois do corte → até o dia 10 = 0 e são
+   * ignorados; junho zerado e abr/mai sem saída também → média 0 → NÃO dispara. (Na 03-B2:
+   * média 500 contra setembro = 500, abaixo de 600, também não disparava.)
    */
-  it("B2 — régua única (cenário B): o mês zerado deixa de puxar a média — o sino não dispara", async () => {
+  it("K3 (04-A) — cenário B: jul/ago só têm saída depois do dia 10 — média 0, o sino não dispara", async () => {
     soLancamentos(
       despesaAVista("2026-07-15", 500),
       despesaAVista("2026-08-15", 500),
@@ -245,6 +247,23 @@ describe("03-B2 B2 — a régua do gasto alto no sino", () => {
     );
     await rodarOCron();
     expect(inseridas("high_spending").map((n) => n.description)).toEqual([]);
+  });
+
+  /**
+   * K3 (04-A) — dispara pelo corte. Até o dia 10: jul = 500, ago = 500 → média 500; setembro = 700
+   * (o pendente de 9999 no dia 25 fica fora). 700 > 500 × 1,2 = 600 → dispara, 700/500 − 1 = 40%.
+   */
+  it("K3 (04-A) — dispara pelo corte até o dia 10", async () => {
+    soLancamentos(
+      despesaAVista("2026-07-05", 500),
+      despesaAVista("2026-08-05", 500),
+      despesaAVista("2026-09-05", 700),
+      despesaAVista("2026-09-25", 9999, "pendente"),
+    );
+    await rodarOCron();
+    expect(inseridas("high_spending").map((n) => n.description)).toEqual([
+      `As saídas à vista do mês até o dia 10 superam a média recente até o mesmo dia em 40% (${formatCurrency(700)}). O cartão fica de fora desta conta.`,
+    ]);
   });
 });
 

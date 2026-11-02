@@ -18,13 +18,13 @@ import {
   evolucaoMensal,
   gerarAlertas,
   mediaDeSaidas,
-  reguaDoGastoAlto,
   resumoMes,
   ultimosMeses,
   type DashStatement,
   type DashTx,
   type EvolucaoPonto,
 } from "@/lib/finance/dashboard";
+import { reguaDoGastoAlto } from "@/lib/finance/regua-do-gasto-alto";
 
 /** A tela · `financeiro/page.tsx`, antes da 03-B. */
 function formulaDaTela(evolucao: EvolucaoPonto[], mesSel: string): number {
@@ -103,6 +103,8 @@ const fatura = (competencia: string, total_atual: number): DashStatement => ({
 });
 
 describe("03-B2 B2 — reguaDoGastoAlto, a régua que a tela e o sino chamam", () => {
+  // K3 (04-A): hoje depois de junho, mês fechado, a regra antiga continua valendo aqui.
+  const HOJE = "2026-07-15";
   const MES = "2026-06";
   const transactions = [
     despesa("2025-12-10", 99999), // 6º mês para trás: fora da régua
@@ -115,7 +117,7 @@ describe("03-B2 B2 — reguaDoGastoAlto, a régua que a tela e o sino chamam", (
   ];
   // Março NEGATIVO: estorno maior que o gasto na fatura.
   const statements = [fatura("2026-03", -45.5)];
-  const entrada = { mes: MES, transactions, statements, receivables: [] };
+  const entrada = { mes: MES, hoje: HOJE, transactions, statements, receivables: [] };
 
   it("dá o mesmo número que a fórmula de antes da TELA — o número da tela não muda", () => {
     const evo = evolucaoMensal({ meses: ultimosMeses(MES, 6), transactions, statements, receivables: [] });
@@ -131,14 +133,14 @@ describe("03-B2 B2 — reguaDoGastoAlto, a régua que a tela e o sino chamam", (
   });
 
   it("sem mês anterior com saída, a média é 0 e o alerta não nasce (sem NaN)", () => {
-    const soAtual = { mes: MES, transactions: [despesa("2026-06-10", 500)], statements: [], receivables: [] };
+    const soAtual = { mes: MES, hoje: HOJE, transactions: [despesa("2026-06-10", 500)], statements: [], receivables: [] };
     const r = reguaDoGastoAlto(soAtual);
     expect(r.mediaSaidas).toBe(0);
     expect(Number.isNaN(r.mediaSaidas)).toBe(false);
     const alertas = gerarAlertas({
       hoje: "2026-06-20",
       resumoAtual: resumoMes(soAtual),
-      mediaSaidas: r.mediaSaidas,
+      regua: r,
       cards: [],
       statements: [],
       receivables: [],

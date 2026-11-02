@@ -179,6 +179,14 @@ export function hojeISO(): string {
   return dateInSaoPaulo(new Date());
 }
 
+/**
+ * "Agora" em Brasília como 'HH:mm', para a saudação do painel. Única exceção declarada (04-A), no
+ * molde de `hojeISO()`: lê o relógio aqui para que o resto do painel receba a hora injetada.
+ */
+export function horaDeBrasiliaAgora(): string {
+  return timeInSaoPaulo(new Date());
+}
+
 const SAO_PAULO_TIME = new Intl.DateTimeFormat("pt-BR", {
   timeZone: TIMEZONE,
   hour: "2-digit",
