@@ -33,7 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Bloco } from "@/components/shared/painel/bloco";
-import { Indicador } from "@/components/shared/painel/indicador";
+import { Indicador, INDICADOR_PEQUENO_NO_CELULAR } from "@/components/shared/painel/indicador";
 import { BotaoDoOlho, OlhoDosValores } from "@/components/shared/painel/olho-dos-valores";
 import { ValorComOlho } from "@/components/shared/painel/valor-com-olho";
 import { BarraDeFiltros, SeletorDoMes } from "@/components/reports/barra-de-filtros";
@@ -539,13 +539,6 @@ function acaoDoBloco(f: RelatorioFinanceiro, bloco: BlocoDaAba): React.ReactNode
     </Badge>
   );
 }
-
-/**
- * No celular, os três indicadores secundários ficam menores e sem a base e a comparação (a dica (i)
- * continua). Mesmas classes do painel: ficam no CARD, porque o `Indicador` é uma peça comum.
- */
-const INDICADOR_PEQUENO_NO_CELULAR =
-  "max-sm:[&>div]:p-2.5 max-sm:[&_.text-2xl]:text-[0.9375rem] max-sm:[&_p.text-xs]:hidden";
 
 const FALHA_DO_CAIXA = {
   frase: "Não foi possível ler o caixa agora. Nada aqui é zero — tente recarregar a página.",
