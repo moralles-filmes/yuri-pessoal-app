@@ -16,7 +16,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -57,8 +56,9 @@ import {
   STATEMENT_STATUS_LABELS,
   type Classificacao,
 } from "@/lib/finance/constants";
-import { markStatementPaid, moveTransactionToStatement } from "@/lib/actions/statements";
+import { moveTransactionToStatement } from "@/lib/actions/statements";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import type { FaturaAPagar } from "./pagar-fatura-dialog";
 import { toast } from "sonner";
 import type {
   CardStatementWithTotal,
@@ -71,6 +71,9 @@ const ALL = "all";
 
 // ⛔ objeto literal escrito ali mesmo — o compilador o lê estaticamente (regra 4 do carregamento sob demanda)
 const DesfazerPagamentoDialog = dynamic(() => import("./desfazer-pagamento-dialog"), {
+  ssr: false,
+});
+const PagarFaturaDialog = dynamic(() => import("./pagar-fatura-dialog"), {
   ssr: false,
 });
 
@@ -216,6 +219,9 @@ export function StatementsClient({
   // Fatura cujo pagamento está sendo desfeito (nulo = diálogo fechado).
   const [desfazendo, setDesfazendo] = React.useState<string | null>(null);
   const desfazerMontado = useLazyDialog(desfazendo !== null);
+  // Fatura em pagamento (nulo = diálogo fechado).
+  const [pagando, setPagando] = React.useState<FaturaAPagar | null>(null);
+  const pagarMontado = useLazyDialog(pagando !== null);
 
   const selectedCard = cards.find((c) => c.id === selectedCardId) ?? null;
 
@@ -534,13 +540,23 @@ export function StatementsClient({
                             <RotateCcw /> Desfazer
                           </Button>
                         ) : s.id && s.total_atual > 0 ? (
-                          <PayStatementDialog
-                            statementId={s.id}
-                            total={s.total_atual}
-                            accounts={accounts}
-                            today={today}
-                            onPaid={() => router.refresh()}
-                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-emerald-600 hover:text-emerald-700"
+                            onClick={() =>
+                              setPagando({
+                                statementId: s.id as string,
+                                titulo: `Pagar fatura de ${monthYearLabel(s.competencia)} — ${selectedCard?.nome ?? "cartão"}`,
+                                totalReais: s.total_atual,
+                                meuReais: meu,
+                                terceirosReais: terceiros,
+                                vencimento: s.data_vencimento,
+                              })
+                            }
+                          >
+                            <CheckCircle2 /> Pagar
+                          </Button>
                         ) : null}
                         {s.id && hasItems && (
                           <Button
@@ -712,6 +728,17 @@ export function StatementsClient({
         </div>
       )}
 
+      {pagarMontado && (
+        <PagarFaturaDialog
+          fatura={pagando}
+          accounts={accounts}
+          today={today}
+          onOpenChange={(aberto) => {
+            if (!aberto) setPagando(null);
+          }}
+        />
+      )}
+
       {desfazerMontado && (
         <DesfazerPagamentoDialog
           statementId={desfazendo}
@@ -807,149 +834,6 @@ function MoveTransactionDialog({
             disabled={loading || !target || options.length === 0}
           >
             {loading ? "Movendo…" : "Mover"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function PayStatementDialog({
-  statementId,
-  total,
-  accounts,
-  today,
-  onPaid,
-}: {
-  statementId: string;
-  total: number;
-  accounts: { id: string; name: string }[];
-  today: string;
-  onPaid: () => void;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const [contaId, setContaId] = React.useState<string | undefined>(undefined);
-  // Data em que o pagamento saiu da conta — editável para bater com o extrato do banco.
-  const [data, setData] = React.useState(today);
-  // Recusa de data (B2): a mensagem vem em fieldErrors.dataPagamento e fica sob o campo.
-  const [erroData, setErroData] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
-
-  async function handleConfirm() {
-    if (!contaId || !data) return;
-    setLoading(true);
-    try {
-      const res = await markStatementPaid(statementId, contaId, data);
-      if (res.ok) {
-        toast.success("Fatura paga e debitada da conta.");
-        setOpen(false);
-        onPaid();
-      } else {
-        const msgData = res.fieldErrors?.dataPagamento?.[0];
-        if (msgData) {
-          setErroData(msgData);
-          toast.error(msgData);
-        } else {
-          toast.error(res.error);
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) {
-          setContaId(undefined);
-          setData(today);
-          setErroData(null);
-        }
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-emerald-600 hover:text-emerald-700"
-        >
-          <CheckCircle2 /> Pagar
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Pagar fatura</DialogTitle>
-          <DialogDescription>
-            Debita {formatCurrency(total)} da conta escolhida. O pagamento entra
-            como transferência (não conta como nova despesa).
-          </DialogDescription>
-        </DialogHeader>
-        {accounts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma conta cadastrada.{" "}
-            <Link href="/financeiro/contas" className="underline">
-              Cadastre uma conta
-            </Link>{" "}
-            para pagar a fatura.
-          </p>
-        ) : (
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Debitar da conta</Label>
-              <Select value={contaId} onValueChange={setContaId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecione a conta" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="fatura-data-pagamento">Data do pagamento</Label>
-              <Input
-                id="fatura-data-pagamento"
-                type="date"
-                max={today}
-                value={data}
-                aria-invalid={erroData ? true : undefined}
-                aria-describedby={erroData ? "fatura-data-pagamento-erro" : undefined}
-                onChange={(e) => {
-                  setData(e.target.value);
-                  setErroData(null);
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Use a data em que o valor saiu da conta, para bater com o extrato.
-              </p>
-              {erroData && (
-                <p id="fatura-data-pagamento-erro" className="text-xs text-destructive">
-                  {erroData}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => setOpen(false)}
-            disabled={loading}
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={loading || !contaId || !data || accounts.length === 0}
-          >
-            {loading ? "Pagando…" : `Pagar ${formatCurrency(total)}`}
           </Button>
         </DialogFooter>
       </DialogContent>
