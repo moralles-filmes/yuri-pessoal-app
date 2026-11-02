@@ -1,6 +1,6 @@
 # STATUS
 
-**Atualizado:** 2026-10-25
+**Atualizado:** 2026-11-02
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
 REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
@@ -13,8 +13,10 @@ REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · 
 (integrada por merge `--no-ff` em `598b475`, sem migration) · **REDESIGN-03-E ✅** (integrada
 por merge `--no-ff` em `de6ef19`, **com a M2 e a M2b aplicadas**) · **REDESIGN-03-F ✅**
 (integrada por merge `--no-ff` em `84bf87b`, **com a M-F aplicada**) · **REDESIGN-03-G ✅**
-(integrada por merge `--no-ff` em `6c158e9`, sem migration; `main` trazida em `a8537d6`);
-**03-G2 liberada** — as escritas que ignoram o erro, a atomicidade e o fechamento da REDESIGN-03
+(integrada por merge `--no-ff` em `6c158e9`, sem migration; `main` trazida em `a8537d6`) ·
+**REDESIGN-03-G2 ✅** (integrada por merge `--no-ff` em `a70c541`, **com a migration
+`salvar_lancamento_atomico` aplicada por você no SQL editor**) — **a REDESIGN-03 está fechada,
+com exceções declaradas** · **04-A liberada** — o Painel financeiro no visual do print 1 (D65)
 
 ⛔ **A M-F foi aplicada em 2026-10-21** (03-F), pelo MCP, depois do seu "Aplique" literal, numa
 mensagem só para isso (D63). Ela **não** estava no `MIGRATIONS.md`: nasceu da K0 da 03-F, com o
@@ -35,7 +37,57 @@ para o push e o PR; o merge em `main` é seu. **A REDESIGN-07 (A–D) foi integr
 explícito para push, PR **e** merge** ("Pode subir para o git em uma branch, fazer pr e merge",
 D62). **A 03-F vai a `main` por PR só com o seu aval explícito para o push e o PR** — o merge
 em `main` é produção. **A 03-G foi a `main` por PR, com o seu aval para PR **e** merge** ("Pode
-fazer pr e merge no git", D64).
+fazer pr e merge no git", D64). **A 03-G2 vai a `main` por PR, com o seu aval para o push e o
+PR** ("faz o pr e tudo mais dessa no git", D66) — **o merge em `main` é seu**.
+
+---
+
+## REDESIGN-03-G2 — a escrita que falha deixa de virar "deu certo", e a REDESIGN-03 fecha ✅
+
+Branch `feat/redesign-03g2-escritas`, nascida de `4261e03` (16 commits), integrada por merge
+`--no-ff` em **`a70c541`** — a árvore integrada difere da ponta (`dc9e641`) só nos quatro
+documentos da D65 (`PLANO`, `README`, `REFERENCIA-VISUAL`, `STATUS`), que estavam nesta branch e
+não na de origem. O contrato, com a matriz de fechamento no §12 e o resultado no §13, é
+`docs/superpowers/specs/2026-10-25-03g2-escritas-design.md`.
+
+**O que mudou de natureza.** A 03-G fechou a leitura; a 03-G2 fecha a escrita. Salvar um
+lançamento (criar, editar, editar a divisão, transferência e pagamento de fatura) e criar uma
+compra parcelada viraram **uma transação cada** — as RPCs `salvar_lancamento` e
+`criar_compra_parcelada` (`security invoker`, `search_path = ''`). O que não virou RPC ficou
+**ordenado para errar para "pode não ter acontecido"**: excluir apaga **antes** de reabrir a
+fatura; a recorrência e o commit da importação **reservam antes de inserir** (claim-first, como
+o Approval Engine). Erro sem SQLSTATE (queda de rede) **nunca** vira "Nada foi alterado."
+(`temSqlstate`, D-G2-25). Excluir em Lançamentos passou a mostrar **o que sai junto** antes de
+confirmar (divisão, recebíveis, a fatura que reabre) e recusa o que não pode sair.
+
+| Item | Entrega | Muda número? |
+| --- | --- | --- |
+| E1 | núcleo puro da linha, da divisão e das três frases de escrita | não |
+| E2 | a migration (duas funções, nenhuma tabela, coluna, policy ou dado), aplicada por você no SQL editor depois de um `42601` corrigido | não |
+| E3 | lançamento e divisão numa transação (RR6, RR8, RR12, RR11, RR-F-1) | não — salvo o estorno de cartão editado, que deixa de sair da fatura |
+| E4 | compra parcelada numa transação; cancelamento de parcelas ordenado | não |
+| E5 | excluir apaga antes de reabrir (RR-F-2); a previsão e o diálogo (RR-F-6 / K4) | não |
+| E6 | recorrências reservam antes de inserir (S9) — e a revisão final achou e fechou um **lançamento em dobro** depois de queda de rede | não — salvo o dobro, que deixa de acontecer |
+| E7 | o commit da importação reserva cada linha; as escritas do lote conferidas (S10, S11, RR-G-8, RR-G-10) | não |
+| E8 | varredura das **84** escritas do escopo como teste; 9 exceções, cada uma com contagem `n` | não |
+| E9 | o cenário do §9, a conciliação card × lista × gráfico e os itens da matriz sem teste (K5) | não |
+
+**Provado:** as 24 mutações da §6 (Y1–Y24) mais as da migration, do E9b e R1–R5 da revisão
+final, cada uma com o nome do teste que cai e a restauração conferida. Revisão final da branch
+inteira no modelo mais capaz, sem receber as conclusões do principal: um P0 (o dobro da
+recorrência), dois P1/P2 (a exclusão e o cancelamento dizendo "Nada foi alterado." sem SQLSTATE)
+e uma regressão (receita com cartão e sem conta), corrigidos em `c46f9fd`. Banco só leitura:
+**md5 dos saldos igual** (`15d93bd1…`), nenhuma contagem mudou.
+
+⚠️ **Pendência sua:** a conferência visual do diálogo de exclusão com a previsão e do formulário
+do estorno (claro, escuro, 390 px) — o dev server pede login, e a senha não é digitada por mim.
+
+**Fechamento da REDESIGN-03 (K5): cumprida com exceções declaradas.** A matriz do §12 está
+preenchida linha a linha; os itens ○ (rótulo do saldo com data, "previsto", ficha por pessoa,
+"Pendente ao banco" como rótulo, ausência × zero, hachura da projeção, nota da pizza, entre
+outros) ficam **abertos, com destino na REDESIGN-05** — e os que tocam o painel, na 04-A.
+Achados novos não consertados: A1–A8 no §13.4 (A1: Lançamentos não soma nem filtra por
+responsabilidade → 05). Não é "zero bugs".
 
 ---
 
@@ -1061,6 +1113,7 @@ as colunas já existem e o CHECK já aceita.
 | D64 | **A 03-G foi integrada na sessão que a escreveu, a seu pedido** ("Pode fazer pr e merge no git"), **com** revisão final da branch no modelo mais capaz e **sem** auditoria de módulo. Merge `--no-ff` em `6c158e9`, árvore idêntica à da ponta (`dfcc1cd`). A `main` tinha andado (PRs #61 e #63) e entrou por merge em `a8537d6`: dois conflitos (`queries.ts`, `caixa-leitura.ts`) resolvidos juntando os lados, e a varredura da L8 **achou a leitura nova** das compras das faturas pagas (106 → 107) — ela já tratava o erro. O aval cobriu push, PR **e** merge em `main` |
 | D63 | **03-F: K0–K3 decididas por você, uma de cada vez, e o desenho aprovado** ("Aprovado"). A **M-F** (`pagar_fatura` e `desfazer_pagamento_fatura`, que **não** estava no `MIGRATIONS.md`) entrou com o seu "Aplique", numa mensagem só para isso, pelo MCP, conferida pelo objeto (`pg_proc`: invoker, `search_path` vazio, grants) e não pela versão do histórico (D59). **Antes do aplique, o `migration-validator` achou três guardas de lógica (P3) e você as incluiu** ("Incluir as três") — a D-F12 do contrato; o FINDING-005 (referências do payload não conferidas) ficou como risco aceito (RR-F-4). O gerador de tipos trouxe de novo a relationship de `import_rows` e a sintaxe nova dos genéricos; **só as duas funções** entraram. A prova no banco é **sequencial** (o MCP serializa as chamadas, sem `dblink`) e o `delete` da fatura sintética voltou `declined` — a remoção ficou com você. Integrada na sessão que a escreveu, ao você pedir o prompt da próxima fase (memória de 2026-10-11): merge `--no-ff` em `84bf87b`, árvore idêntica à da ponta; **push e PR só com o seu aval** |
 | D65 | **Referência visual do Painel financeiro e do Dashboard** (2026-10-25, a seu pedido: *"Vamos seguir o plano que já tem, mas adaptar para a referência visual. Esquece a sidebar."*). O print 1 vira o alvo da **04-A** (`/dashboard/financeiro`), o print 2 o da **06**, e o relatório de `/relatorios` ganha a **04-A2** com as mesmas peças. Os prints **não** entram no repositório (público; o print 2 tem cara de dado real), então são descritos em palavras em `REFERENCIA-VISUAL.md`, com os desvios no §6 (sem metas financeiras, sem logos de banco, sem últimos dígitos, rosca na paleta validada, base sempre visível). A sequência antiga da 06 (Prioridades do dia, Organização, Saúde) foi substituída pela do print. Nenhuma migration, nenhuma regra de negócio mudou |
+| D66 | **A 03-G2 foi integrada na sessão que a escreveu, a seu pedido** ("Me envia o prompt da proxima fase e já faz o pr e tudo mais dessa no git"), **com** revisão final da branch no modelo mais capaz e **sem** auditoria de módulo. Merge `--no-ff` em `a70c541`; a árvore difere da ponta (`dc9e641`) só nos documentos da D65. O aval cobre o push e o PR; **"tudo mais" não foi lido como merge em `main`** — merge em `main` é produção e fica com você. A migration `salvar_lancamento_atomico` foi aplicada **por você no SQL editor** (o `apply_migration` do MCP foi recusado), conferida pelo objeto e não pela versão do histórico (D59) |
 
 ## Bloqueios
 
@@ -1227,39 +1280,34 @@ app em toda rota), 68 rotas dentro; `TZ=UTC` em finance/actions/notifications **
 `test:run` **296 / 6.833**, 6.832 ✅ e 1 ❌ — a mesma de ambiente (`approval/schema.test.ts` com
 CRLF nesta worktree) · finance/actions/notifications **66 / 1.098** em Brasília e em `TZ=UTC`.
 
-## Próximo passo — REDESIGN-03-G2 (as escritas e o fechamento da REDESIGN-03)
+**Depois do merge da 03-G2 (`a70c541`), na árvore integrada:** `lint` ✅ · `tsc` ✅ · `test:run` **309 / 6.992**, 6.991 ✅ e 1 ❌ — a mesma de ambiente (`approval/schema.test.ts` lendo migration com CRLF na cópia de trabalho desta worktree; no índice o arquivo é LF).
+Na ponta (`c46f9fd`/`dc9e641`), na worktree, os cinco tinham passado: **309 / 6.992** · `lint` ✅
+· `tsc` ✅ · `build` ✅ · `perf:bundle` ✅ mediana **202,1**, 68 rotas dentro; `TZ=UTC` em
+finance/actions/notifications **1.254** verdes.
 
-⛔ **Para quem for escrever o prompt da 04-A ou da 06 depois da 03-G2:** as duas fases foram
-atualizadas pela **D65** (referência visual). O prompt tem de mandar ler
-`docs/redesign/REFERENCIA-VISUAL.md` e apontar o print pelo caminho absoluto que está lá (os
-prints ficam fora do git). Ver `PLANO.md`, seções 04 e 06.
+## Próximo passo — REDESIGN-04-A (o Painel financeiro no visual do print 1)
 
-**A 03-G está fechada e integrada** (`6c158e9`, com a `main` em `a8537d6`) e foi a `main` por PR,
-com o seu aval para PR **e** merge (D64). A 03-G2 é a **última subfase da REDESIGN-03**: a 03-G
-fechou a leitura; a 03-G2 fecha a **escrita** e a fase.
+⛔ **O prompt da 04-A TEM de trazer, logo no começo (D65):** leia
+`docs/redesign/REFERENCIA-VISUAL.md` antes do desenho, e o print 1 está em
+`C:/Users/Yuri/Documents/Desenvolvedor/yuri.app.pessoal/docs/redesign/referencias/print-1-financeiro.png`
+(fora do git). Ver `PLANO.md`, seção 04.
 
-O primeiro entregável é o **desenho**, aprovado por você antes de qualquer linha de código. O
-registro do que vai para ela está no §12 do contrato da 03-G.
+**A REDESIGN-03 está fechada, com exceções declaradas** (03-G2, `a70c541`). Ela libera a 04, a
+05 e a 06. A **04-C** (Terceiros e reembolsos) já tem desenho e plano em outra sessão
+(`feat/redesign-04c-reembolso`, não integrada); a 04-A não a toca.
 
-| Origem | Risco | Natureza |
-| --- | --- | --- |
-| K3 / RR6 / RR12 (03-C) | `updateTransaction` grava antes de recusar a divisão; chamada direta troca o tipo de compra parcelada | atomicidade |
-| RR-F-1 (03-F) | a edição de transferência e do pagamento de fatura (apaga → recria → religa) não é atômica — a 03-G só tornou a frase honesta | atomicidade |
-| RR8 / RR14 (03-C) | `update` falha depois da limpeza: a despesa perde a divisão **e** os recebíveis pendentes | atomicidade |
-| `criarTransacao` | as compensações de `services.ts` ignoram o próprio erro | escrita |
-| `reapplySplit` | as escritas do meio (`:134/138/144/170`) | escrita |
-| RR-F-2 (03-F) | `deleteTransaction` reabre a fatura ignorando o erro e devolve `ok: true` mesmo com o `delete` falhando | escrita |
-| RR-G-4 | as **29 escritas** financeiras que ignoram o erro (§2.3 do contrato da 03-G), cada uma com destino | escrita |
-| RR-G-8 / RR-G-10 (03-G) | estado parcial depois da frase de "depois"; as frases por linha no commit da importação | escrita |
-| RR11 (03-C) | editar um estorno de cartão o tira da fatura (destino **03-G2 / 05**) | escrita |
-| RR-F-6 / K4 | excluir em Lançamentos não pede confirmação (o P1-8 fechou só `/faturas`) | tela |
-| K5 / D32 | a **matriz de fechamento** da REDESIGN-03; os "18 casos financeiros mínimos do briefing §13" que o aceite da 03 cita **não existem em `docs/`** | fechamento da fase |
+O primeiro entregável da 04-A é a **prévia com dado sintético**, aprovada por você antes do
+código. Vão para ela, além do layout do print: RR4 (Entradas bruto), RR5 (saldo da evolução
+bruto − bruto), RR-E-6 (Saldo atual sem data), RR-E-7 (a régua do gasto alto), o "parcial" nas
+telas, RR-C2-6 (se não for para uma subfase de formulário) e os itens ○ da matriz da 03-G2 que
+tocam o painel.
 
-⚠️ **Pendências suas, herdadas:** a conferência visual da 03-G; remover a fatura sintética
-`[03F-SINT]` e conferir o diálogo de desfazer (D63); a conferência com dado real da 03-B, da
-03-B2, da 03-C, da 03-C2, da 03-D (D39, D44, D48, D52, D60) e a visual a 390 px da 03-E (RR-E-13).
+⚠️ **Pendências suas, herdadas:** a conferência visual da 03-G e da 03-G2; remover a fatura
+sintética `[03F-SINT]` e conferir o diálogo de desfazer (D63); a conferência com dado real da
+03-B, da 03-B2, da 03-C, da 03-C2, da 03-D (D39, D44, D48, D52, D60) e a visual a 390 px da 03-E
+(RR-E-13).
 
-🚀 **Publicação (D54, D62, D64):** a integração continua sendo merge `--no-ff` nesta branch,
+🚀 **Publicação (D54, D62, D64, D66):** a integração continua sendo merge `--no-ff` nesta branch,
 seguido de PR para `main`.
 
 ⚠️ **O NÚMERO DE COMMITS À FRENTE NÃO MORA AQUI — meça** (D34):
