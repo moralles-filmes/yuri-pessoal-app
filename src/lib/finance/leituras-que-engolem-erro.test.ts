@@ -56,7 +56,7 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
   },
   "src/lib/actions/installments.ts · recomputeParentValorPessoal · transaction_installments": {
     motivo:
-      "Devolve `false` em vez de lançar, e o único chamador (cancelInstallmentFuture) o traduz em falhaDeLeituraDepois antes de gravar valor_pessoal (L6c1).",
+      "Devolve `\"leitura\"` em vez de lançar (03-G2: era `false`), e o único chamador (cancelInstallmentFuture) o traduz em falhaDeLeituraDepois antes de gravar valor_pessoal (L6c1).",
     destino: "03-G L6c1 — coberto em leituras-que-decidem.test.ts ('recálculo do valor pessoal').",
   },
   "src/lib/actions/installments.ts · recomputeParentValorPessoal · receivables": {
@@ -68,9 +68,15 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
 /**
  * Medido no passo da L8 (2026-10-25): 106. Na integração com a `main` (2026-10-25) entrou a 107ª —
  * as compras das faturas pagas em `lerCaixaDoMes` (gráficos "meus", desenho 2026-10-18), que trata
- * o erro (`{ ok: false }`) e o teto (`leituraComTeto`). Mudou? Confira o inventário antes de ajustar.
+ * o erro (`{ ok: false }`) e o teto (`leituraComTeto`). Na 03-G2 (D-G2-13) caíram para 105: as RPCs
+ * que ESCREVEM (`pagar_fatura`, `desfazer_pagamento_fatura`) saíram daqui para o inventário de
+ * escritas, e as novas (`salvar_lancamento`) já nascem lá; e entrou a 106ª, a classificação da
+ * compra-pai que `cancelInstallmentFuture` lê antes de escrever (D-G2-9), com o erro tratado. No
+ * E5 da 03-G2 (K3) entraram 5, todas de `preverExclusaoDoLancamento`, que só lê e trata cada erro
+ * com `falhaDeLeituraAntes`: o lançamento, os recebíveis, as pessoas, as parcelas e as linhas da
+ * importação — 111. Mudou? Confira o inventário antes de ajustar.
  */
-const LEITURAS_ESPERADAS = 107;
+const LEITURAS_ESPERADAS = 111;
 
 const LEITURAS = inventariarLeituras(ARQUIVOS, RAIZ);
 const chave = (l: { arquivo: string; funcao: string; alvo: string }) =>

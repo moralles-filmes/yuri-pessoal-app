@@ -212,6 +212,41 @@ describe("03-G L6 · updateInstallmentSplit", () => {
   });
 });
 
+// 03-G2 (E3b): a divisão do parcelamento vai pela rpc salvar_lancamento, identificando cada parcela
+// pelo `numero` REAL (aqui 3 e 4 — um parcelamento que começa na 3ª), nunca pela posição na lista.
+describe("03-G2 E3b · updateInstallmentSplit usa a numeração real das parcelas", () => {
+  it("o payload da rpc carrega parcela_numero 3 e 4, não 1 e 2", async () => {
+    const base = parcelamento();
+    fake = criarSupabaseEmMemoria(
+      {
+        ...base,
+        transaction_installments: [
+          { id: "inst-3", parent_transaction_id: TX, numero: 3, statement_id: "st-1", status: "ativa", valor: 100 },
+          { id: "inst-4", parent_transaction_id: TX, numero: 4, statement_id: "st-1", status: "ativa", valor: 100 },
+        ],
+        receivables: [],
+        shared_expenses: [],
+      },
+      { rpc: () => ({ data: TX, error: null }) },
+    );
+    const r = await updateInstallmentSplit(TX, {
+      classificacao: "compartilhada",
+      parts: [{ person_id: PESSOA, tipo: "valor", valor: 80 }],
+    });
+    expect(r.ok).toBe(true);
+    const chamadas = fake.escritas("salvar_lancamento").map((o) => o.valores as Record<string, unknown>);
+    expect(chamadas).toHaveLength(1);
+    expect(chamadas[0].p_id).toBe(TX);
+    expect(chamadas[0].p_lancamento).toEqual({ classificacao: "compartilhada", valor_pessoal: 120 });
+    const divisao = chamadas[0].p_divisao as { recebiveis: { parcela_numero: number; valor: number }[] };
+    const numeros = divisao.recebiveis.map((x) => x.parcela_numero);
+    expect(numeros.length).toBeGreaterThan(0);
+    expect(numeros.every((n) => n === 3 || n === 4)).toBe(true);
+    expect(divisao.recebiveis.reduce((acc, x) => acc + x.valor, 0)).toBeCloseTo(80, 2);
+    expect(escritas()).toEqual([]);
+  });
+});
+
 describe("03-G L6 · cancelInstallmentFuture", () => {
   it("parcelas falhando recusa sem escrever", async () => {
     fake = criarSupabaseEmMemoria(parcelamento(), { falharLeitura: { transaction_installments: "XX000" } });
@@ -248,9 +283,10 @@ describe("03-G L6 · cancelInstallmentFuture", () => {
       error:
         "Não foi possível ler as parcelas. A alteração pode ter sido gravada em parte: recarregue a página para conferir.",
     });
+    // 03-G2 (D-G2-9): a ordem agora é recebíveis -> parcelas (antes era o inverso).
     expect(escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual([
-      "transaction_installments:update",
       "receivables:delete",
+      "transaction_installments:update",
     ]);
     expect(fake.tabelas.transactions[0]).toMatchObject({ valor_pessoal: 50 });
   });
@@ -304,7 +340,9 @@ describe("03-G L6 · busca-ou-cria da fatura (D-G21)", () => {
 });
 
 describe("03-G L6 · createInstallmentPurchase, laço das parcelas (Z20, D-G26)", () => {
-  it("fatura não lida: a compensação apaga a compra-pai e a frase é a de 'depois'", async () => {
+  // 03-G2 (D-G2-2): a fatura é resolvida ANTES de qualquer escrita; leitura falha => nada gravado,
+  // sem compra-pai nem compensação (antes: insert + delete e a frase de "depois").
+  it("fatura não lida: nada é gravado e a frase é a de 'antes'", async () => {
     fake = criarSupabaseEmMemoria(
       { credit_cards: [{ id: CARTAO, dia_fechamento: 5, dia_vencimento: 12 }], card_statements: [] },
       { falharLeitura: { card_statements: "XX000" } },
@@ -318,14 +356,11 @@ describe("03-G L6 · createInstallmentPurchase, laço das parcelas (Z20, D-G26)"
     });
     expect(r).toEqual({
       ok: false,
-      error:
-        "Não foi possível ler a fatura. A alteração pode ter sido gravada em parte: recarregue a página para conferir.",
+      error: "Não foi possível ler a fatura. Nada foi alterado.",
     });
-    expect(escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual([
-      "transactions:insert",
-      "transactions:delete",
-    ]);
-    expect(fake.tabelas.transactions).toEqual([]);
+    expect(escritas()).toEqual([]);
+    expect(fake.operacoes.filter((o) => o.tipo === "rpc")).toEqual([]);
+    expect(fake.tabelas.transactions ?? []).toEqual([]);
   });
 });
 

@@ -8,7 +8,8 @@
  *      receita) continua gravando `pessoal` — as chaves da receita são próprias;
  *   3. a despesa grava EXATAMENTE como antes.
  *
- * `applySplit` roda de verdade sobre o client falso. Fixture sintética.
+ * 03-G2 (D-G2-12): a escrita é UMA chamada `rpc("salvar_lancamento")`; os testes leem os
+ * argumentos dela (`p_lancamento`, `p_divisao`), não mais inserts diretos. Fixture sintética.
  */
 import { describe, expect, it, vi } from "vitest";
 import { criarTransacao, excluirTransacaoSimples, type FinanceServiceContext } from "@/lib/finance/services";
@@ -32,8 +33,11 @@ const BASE = {
   description: "x",
 };
 
+const ID_NOVO = "7c1d5e90-4b2a-4f36-8d10-5a9e3b7c2f84";
+const RPC_OK = { rpc: () => ({ data: ID_NOVO, error: null }) };
+
 function rodar(payload: Linha) {
-  const fake = criarSupabaseEmMemoria({});
+  const fake = criarSupabaseEmMemoria({}, RPC_OK);
   const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
   return { fake, resultado: criarTransacao(ctx, payload) };
 }
@@ -74,13 +78,20 @@ describe("03-D · A4 — o desfazer da IA não apaga dinheiro registrado", () =>
   });
 });
 
-/** A linha que o insert de `transactions` recebeu (a primeira, e só pode haver uma). */
-function inseridaEmTransactions(fake: ReturnType<typeof criarSupabaseEmMemoria>): Linha {
-  const inserts = fake.escritas("transactions").filter((o) => o.tipo === "insert");
-  expect(inserts).toHaveLength(1);
-  return inserts[0].valores as Linha;
+/** Os argumentos da única chamada `salvar_lancamento` (e só pode haver uma). */
+function chamadaDaRpc(fake: ReturnType<typeof criarSupabaseEmMemoria>): Linha {
+  const chamadas = fake.escritas("salvar_lancamento");
+  expect(chamadas).toHaveLength(1);
+  expect(chamadas[0].tipo).toBe("rpc");
+  return chamadas[0].valores as Linha;
 }
 
+/** A linha (`p_lancamento`) que a rpc recebeu. */
+function inseridaEmTransactions(fake: ReturnType<typeof criarSupabaseEmMemoria>): Linha {
+  return chamadaDaRpc(fake).p_lancamento as Linha;
+}
+
+// 03-G2 (D-G2-12): afirmava o insert direto; a escrita passou a ser a rpc salvar_lancamento
 describe("03-C A2 · criarTransacao — a receita grava a responsabilidade da A1", () => {
   it("receita sem os campos de responsabilidade nasce pessoal, com valor_pessoal nulo", async () => {
     const { fake, resultado } = rodar({ ...BASE, type: "receita", status: "recebido" });
@@ -162,13 +173,13 @@ describe("03-C A2 · criarTransacao — a receita grava a responsabilidade da A1
     const linha = inseridaEmTransactions(fake);
     expect(linha.classificacao).toBe("pessoal");
     expect(linha.valor_pessoal).toBeNull();
-    expect(fake.escritas("shared_expenses")).toEqual([]);
-    expect(fake.escritas("receivables")).toEqual([]);
+    expect(chamadaDaRpc(fake).p_divisao).toBeNull();
   });
 });
 
+// 03-G2 (D-G2-12): afirmava o insert direto; a escrita passou a ser a rpc salvar_lancamento
 describe("03-C A2 · criarTransacao — a despesa grava como antes", () => {
-  it("despesa compartilhada: insert compartilhado, divisão e recebível gravados, minha parte derivada", async () => {
+  it("despesa compartilhada: linha compartilhada, divisão e recebível no payload, minha parte derivada", async () => {
     const { fake, resultado } = rodar({
       ...BASE,
       type: "despesa",
@@ -179,27 +190,33 @@ describe("03-C A2 · criarTransacao — a despesa grava como antes", () => {
     expect((await resultado).ok).toBe(true);
     const linha = inseridaEmTransactions(fake);
     expect(linha.classificacao).toBe("compartilhada");
-    expect(fake.tabelas.shared_expenses).toHaveLength(1);
-    expect(fake.tabelas.receivables).toHaveLength(1);
-    expect(fake.tabelas.receivables[0].valor).toBe(600);
-    expect(fake.tabelas.transactions[0].valor_pessoal).toBe(400);
+    const divisao = chamadaDaRpc(fake).p_divisao as {
+      pessoas: Linha[];
+      recebiveis: Linha[];
+    };
+    expect(divisao.pessoas).toHaveLength(1);
+    expect(divisao.recebiveis).toHaveLength(1);
+    expect(divisao.recebiveis[0].valor).toBe(600);
+    expect(linha.valor_pessoal).toBe(400);
   });
 
-  it("despesa pessoal: o insert NÃO carrega a chave valor_pessoal (byte a byte como antes)", async () => {
+  it("despesa pessoal: p_lancamento NÃO carrega a chave valor_pessoal (byte a byte como antes)", async () => {
     const { fake, resultado } = rodar({ ...BASE, type: "despesa", status: "pago" });
     expect((await resultado).ok).toBe(true);
     const linha = inseridaEmTransactions(fake);
-    expect(linha.classificacao).toBe("pessoal");
+    // 03-G2: sem `colunas`, a classificação nem viaja — o SQL faz o coalesce 'pessoal'.
+    expect(Object.hasOwn(linha, "classificacao")).toBe(false);
     expect(Object.hasOwn(linha, "valor_pessoal")).toBe(false);
   });
 });
 
+// 03-G2 (D-G2-12): afirmava o insert direto; a escrita passou a ser a rpc salvar_lancamento
 describe("03-E A3 · criarTransacao grava liquidado_em pela regra (K0)", () => {
   const CARTAO = "5d9c2e44-7a10-4b6f-8e21-0f3a9b6c1d72";
 
   /** Como `rodar`, mas com o CHECK da M2 simulado (e fixture opcional). */
   function rodarComCheck(payload: Linha, tabelas: Record<string, Linha[]> = {}) {
-    const fake = criarSupabaseEmMemoria(tabelas, { antesDeGravar: checkLiquidadoEmCoerente });
+    const fake = criarSupabaseEmMemoria(tabelas, { antesDeGravar: checkLiquidadoEmCoerente, ...RPC_OK });
     const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
     return { fake, resultado: criarTransacao(ctx, payload) };
   }
@@ -298,13 +315,14 @@ describe("03-E A3 · criarTransacao grava liquidado_em pela regra (K0)", () => {
   });
 });
 
+// 03-G2 (D-G2-12): afirmava o insert direto; a escrita passou a ser a rpc salvar_lancamento
 describe("03-C2 A5 · criarTransacao NÃO lê a marcação da categoria (K2)", () => {
   const MARCADA = "c0ffee00-0000-4000-8000-000000000001";
 
   it("receita em categoria marcada, sem receita_classificacao, grava pessoal", async () => {
     const fake = criarSupabaseEmMemoria({
       categories: [{ id: MARCADA, user_id: "user-1", kind: "receita", classificacao_padrao: "terceiro" }],
-    });
+    }, RPC_OK);
     const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
     const r = await criarTransacao(ctx, {
       ...BASE,
@@ -316,5 +334,121 @@ describe("03-C2 A5 · criarTransacao NÃO lê a marcação da categoria (K2)", (
     const linha = inseridaEmTransactions(fake);
     expect(linha.classificacao).toBe("pessoal");
     expect(linha.valor_pessoal).toBeNull();
+  });
+});
+
+describe("03-G2 E3a · criarTransacao grava numa chamada só (rpc salvar_lancamento)", () => {
+  // 03-G2 (revisão final) — o schema aceita receita com cartão e sem conta só para a EDIÇÃO de um
+  // estorno; criar por aqui gravaria uma receita sem conta e sem cartão.
+  it("receita com cartão e sem conta não é criada: recusa no campo, nenhuma escrita", async () => {
+    const fake = criarSupabaseEmMemoria({}, RPC_OK);
+    const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
+    const r = await criarTransacao(ctx, {
+      ...BASE,
+      type: "receita",
+      status: "recebido",
+      card_id: "5b1d2c3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+      account_id: "",
+    });
+    expect(r).toMatchObject({ ok: false, fieldErrors: { account_id: ["Selecione a conta"] } });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  const DESTINO = "9a4b6c20-3e1d-4f87-b5a2-1c8d7e6f0a93";
+  const DIVIDIDA = {
+    ...BASE,
+    type: "despesa",
+    status: "pago",
+    classificacao: "compartilhada",
+    parts: [{ person_id: PESSOA, tipo: "valor", valor: 600 }],
+  };
+
+  function rodarComRpc(payload: Linha, rpc: NonNullable<Parameters<typeof criarSupabaseEmMemoria>[1]>["rpc"]) {
+    const fake = criarSupabaseEmMemoria({}, { rpc });
+    const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
+    return { fake, resultado: criarTransacao(ctx, payload) };
+  }
+
+  it("criar despesa dividida: UMA chamada rpc salvar_lancamento e nenhum insert/update/delete direto", async () => {
+    const { fake, resultado } = rodar(DIVIDIDA);
+    const r = await resultado;
+    expect(r).toEqual({ ok: true, id: ID_NOVO, statementId: null });
+    const escritas = fake.escritas();
+    expect(escritas).toHaveLength(1);
+    expect(escritas[0].tipo).toBe("rpc");
+    expect(escritas[0].tabela).toBe("salvar_lancamento");
+    // criar = não mandar `p_id`.
+    expect(Object.hasOwn(escritas[0].valores as Linha, "p_id")).toBe(false);
+  });
+
+  it("criar: rpc com erro com code P0001 => mensagem termina em Nada foi alterado. e nenhuma outra escrita", async () => {
+    const { fake, resultado } = rodarComRpc(DIVIDIDA, () => ({
+      data: null,
+      error: { code: "P0001", message: "qualquer coisa do banco" },
+    }));
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.erro.endsWith("Nada foi alterado.")).toBe(true);
+      expect(r.erro).not.toContain("qualquer coisa do banco");
+    }
+    expect(fake.escritas()).toHaveLength(1);
+    expect(fake.escritas()[0].tipo).toBe("rpc");
+  });
+
+  it("criar: rpc sem code (fetch failed) => mensagem com pode ter sido salvo", async () => {
+    const { resultado } = rodarComRpc(DIVIDIDA, () => ({
+      data: null,
+      error: { code: "", message: "fetch failed" },
+    }));
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.erro).toContain("pode ter sido salvo");
+  });
+
+  it("transferencia: p_lancamento com payment_method transferencia, category_id/card_id/statement_id nulos e transfer_group_id preenchido", async () => {
+    const { fake, resultado } = rodar({
+      type: "transferencia",
+      payment_method: "transferencia",
+      account_id: CONTA,
+      transfer_account_id: DESTINO,
+      amount: 300,
+      purchase_date: "2026-06-10",
+      competence_date: "2026-06-10",
+      description: "mover",
+      status: "pago",
+    });
+    expect((await resultado).ok).toBe(true);
+    const args = chamadaDaRpc(fake);
+    const linha = args.p_lancamento as Linha;
+    expect(linha.payment_method).toBe("transferencia");
+    expect(linha.transfer_account_id).toBe(DESTINO);
+    expect(linha.category_id).toBeNull();
+    expect(linha.card_id).toBeNull();
+    expect(linha.statement_id).toBeNull();
+    expect(typeof linha.transfer_group_id).toBe("string");
+    expect(linha.transfer_group_id).toBeTruthy();
+    expect(args.p_divisao).toBeNull();
+  });
+
+  it("despesa pessoal: p_lancamento NAO tem as chaves classificacao nem valor_pessoal", async () => {
+    const { fake, resultado } = rodar({ ...BASE, type: "despesa", status: "pago" });
+    expect((await resultado).ok).toBe(true);
+    const args = chamadaDaRpc(fake);
+    const linha = args.p_lancamento as Linha;
+    expect(Object.hasOwn(linha, "classificacao")).toBe(false);
+    expect(Object.hasOwn(linha, "valor_pessoal")).toBe(false);
+    expect(args.p_divisao).toBeNull();
+  });
+
+  it("divisao que nao fecha: nenhuma escrita", async () => {
+    // 1200 de terceiros num lançamento de 1000: a conta não fecha.
+    const { fake, resultado } = rodar({
+      ...DIVIDIDA,
+      parts: [{ person_id: PESSOA, tipo: "valor", valor: 1200 }],
+    });
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    expect(fake.escritas()).toEqual([]);
   });
 });

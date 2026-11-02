@@ -15,8 +15,12 @@
  * ║ 4. Despesa → despesa continua no caminho e na ordem de hoje.                          ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
- * `authContext` é o real (o `createClient` é que devolve o dublê); `reapplySplit` e
- * `applySplit` também. Fixture sintética.
+ * `authContext` é o real (o `createClient` é que devolve o dublê); `reapplySplit` também.
+ * Fixture sintética.
+ *
+ * 03-G2 (D-G2-12, E3b): a reaplicação da divisão é UMA `rpc("salvar_lancamento")`. O dublê registra a
+ * chamada e NÃO executa SQL — por isso os testes leem `p_id`/`p_lancamento`/`p_divisao` em vez de
+ * olhar `shared_expenses`/`receivables` esvaziados.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { criarSupabaseEmMemoria, type Linha } from "@/test/supabase-em-memoria";
@@ -24,13 +28,14 @@ import { MOTIVO_RECEBIVEL_FECHADO } from "@/lib/finance/split";
 import { MSG_PARTE_TOTAL } from "@/lib/finance/responsabilidade-da-receita";
 import { MSG_DATA_PAGAMENTO_FUTURA } from "@/lib/finance/caixa";
 import { checkLiquidadoEmCoerente } from "@/test/check-liquidado-em";
+import { revalidatePath } from "next/cache";
 
 let fake = criarSupabaseEmMemoria({});
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.client }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-const { updateTransaction, deleteTransaction, setTransactionStatus } = await import(
+const { updateTransaction, deleteTransaction, setTransactionStatus, preverExclusaoDoLancamento } = await import(
   "@/lib/actions/transactions"
 );
 
@@ -90,18 +95,32 @@ function payload(sobre: Linha): Linha {
   };
 }
 
+const ID_NOVO = "7c1d5e90-4b2a-4f36-8d10-5a9e3b7c2f84";
+const RPC_OK = { rpc: () => ({ data: ID_NOVO, error: null }) };
+
+/** As chamadas `rpc("salvar_lancamento")`, com os argumentos que o servidor mandou. */
+const chamadasDaRpc = () =>
+  fake.escritas("salvar_lancamento").map((o) => o.valores as Record<string, unknown>);
+
 const linhaFinal = () => fake.tabelas.transactions.find((t) => t.id === ID) as Linha;
+
+/** O `p_lancamento` da (única) rpc — o que o servidor mandou gravar no lançamento. */
+const linhaDaRpc = () => chamadasDaRpc()[0].p_lancamento as Linha;
 
 beforeEach(() => {
   fake = criarSupabaseEmMemoria({});
+  vi.mocked(revalidatePath).mockClear();
 });
 
 describe("03-C A2 · updateTransaction — a receita grava a responsabilidade da A1", () => {
+  // 03-G2 (D-G2-12): afirmava a linha gravada; agora lê o p_lancamento da rpc (o dublê não executa SQL).
   it("receita pessoal reclassificada como de terceiro grava 'terceiro' e 0", async () => {
-    fake = criarSupabaseEmMemoria({ transactions: [existente({ type: "receita" })] });
+    fake = criarSupabaseEmMemoria({ transactions: [existente({ type: "receita" })] }, RPC_OK);
     const r = await updateTransaction(ID, payload({ receita_classificacao: "terceiro" }));
     expect(r.ok).toBe(true);
-    expect(linhaFinal()).toMatchObject({ classificacao: "terceiro", valor_pessoal: 0 });
+    expect(chamadasDaRpc()).toHaveLength(1);
+    expect(chamadasDaRpc()[0].p_id).toBe(ID);
+    expect(linhaDaRpc()).toMatchObject({ classificacao: "terceiro", valor_pessoal: 0 });
   });
 
   it("compartilhada com o valor reduzido abaixo da parte é RECUSADA no campo, sem nada gravado", async () => {
@@ -130,17 +149,35 @@ describe("03-C A2 · updateTransaction — a receita grava a responsabilidade da
 });
 
 describe("03-C A2(b) · despesa compartilhada que vira receita", () => {
+  // 03-G2 (D-G2-12): afirmava shared_expenses/receivables vazios e a ordem rpc → update; a limpeza
+  // da divisão e a linha da receita agora vão na MESMA rpc (o dublê não executa SQL).
   it("limpa divisão e recebível pelo caminho de hoje e grava a receita pessoal", async () => {
-    fake = criarSupabaseEmMemoria(despesaCompartilhada("pendente"));
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("pendente"), RPC_OK);
     const r = await updateTransaction(ID, payload({}));
     expect(r.ok).toBe(true);
-    expect(fake.tabelas.shared_expenses).toEqual([]);
-    expect(fake.tabelas.receivables).toEqual([]);
-    expect(linhaFinal()).toMatchObject({
+    const chamadas = chamadasDaRpc();
+    expect(chamadas).toHaveLength(1);
+    expect(chamadas[0].p_id).toBe(ID);
+    expect(chamadas[0].p_lancamento).toMatchObject({
       type: "receita",
       classificacao: "pessoal",
       valor_pessoal: null,
     });
+    expect(chamadas[0].p_divisao).toEqual({ alcance: "regra-cheia", pessoas: [], recebiveis: [] });
+    expect(fake.escritas("shared_expenses")).toEqual([]);
+    expect(fake.escritas("receivables")).toEqual([]);
+    // Nenhum update direto: uma escrita só, a rpc.
+    expect(fake.escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual(["salvar_lancamento:rpc"]);
+  });
+
+  it("receita: as colunas da receita e a divisão vazia (regra-cheia) vão na mesma chamada", async () => {
+    // A responsabilidade que o dono escolheu para a receita (A1) vence a "limpeza" do plano.
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("pendente"), RPC_OK);
+    const r = await updateTransaction(ID, payload({ receita_classificacao: "terceiro" }));
+    expect(r.ok).toBe(true);
+    expect(chamadasDaRpc()).toHaveLength(1);
+    expect(linhaDaRpc()).toMatchObject({ type: "receita", classificacao: "terceiro", valor_pessoal: 0 });
+    expect(chamadasDaRpc()[0].p_divisao).toEqual({ alcance: "regra-cheia", pessoas: [], recebiveis: [] });
   });
 
   it.each(["cobrado", "pago"])(
@@ -202,9 +239,10 @@ describe("03-C A2 · transferência editada para receita: a recusa da A1 vem ant
 });
 
 describe("03-G · transferência editada para despesa de cartão, com a fatura sem leitura", () => {
-  it("o lançamento antigo JÁ foi apagado: a frase é a de 'depois', nunca 'Nada foi alterado.'", async () => {
-    // Achado da revisão final da 03-G: o serviço dizia "Nada foi alterado." (verdade dentro
-    // dele), e o ramo de transferência apaga ANTES de recriar. A atomicidade é da 03-G2 (RR-F-1).
+  // 03-G2 (D-G2-12, RR-F-1): antes, o ramo de transferência apagava ANTES de recriar e a frase tinha de
+  // ser a de 'depois'. Agora a fatura é lida antes de qualquer escrita: nada foi gravado, e a frase
+  // pode (e deve) dizer "Nada foi alterado.". O lançamento da transferência continua intacto.
+  it("a fatura sem leitura recusa ANTES de qualquer escrita: 'Nada foi alterado.' e a transferência intacta", async () => {
     const CARTAO = "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b";
     fake = criarSupabaseEmMemoria(
       {
@@ -232,31 +270,53 @@ describe("03-G · transferência editada para despesa de cartão, com a fatura s
     );
     expect(r).toEqual({
       ok: false,
-      error:
-        "Não foi possível ler a fatura. A alteração pode ter sido gravada em parte: recarregue a página para conferir.",
+      error: "Não foi possível ler a fatura. Nada foi alterado.",
     });
-    expect(fake.escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual(["transactions:delete"]);
+    expect(fake.escritas()).toEqual([]);
+    expect(linhaFinal()).toMatchObject({ type: "transferencia", transfer_group_id: "grupo-1" });
   });
 });
 
 describe("03-C A2 · sair de receita zera a responsabilidade", () => {
+  // 03-G2 (revisão final) — o schema aceita receita com cartão e sem conta só por causa do estorno.
+  it("receita comum editada com cartão e sem conta: recusada no campo, sem escrita", async () => {
+    fake = criarSupabaseEmMemoria({ transactions: [existente({ type: "receita" })] }, RPC_OK);
+    const r = await updateTransaction(ID, payload({ card_id: "5b1d2c3e-4f50-4a6b-8c7d-9e0f1a2b3c4d", account_id: "" }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.fieldErrors?.account_id).toEqual(["Selecione a conta"]);
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  // 03-G2 (D-G2-12, Y22): afirmava a linha gravada; agora lê o p_lancamento — as duas chaves
+  // vão EXPLÍCITAS no payload (pessoal / nulo), sem divisão a substituir.
   it("receita de terceiro editada para despesa pessoal volta a pessoal, com valor nulo", async () => {
-    fake = criarSupabaseEmMemoria({
-      transactions: [existente({ type: "receita", classificacao: "terceiro", valor_pessoal: 0 })],
-    });
+    fake = criarSupabaseEmMemoria(
+      {
+        transactions: [existente({ type: "receita", classificacao: "terceiro", valor_pessoal: 0 })],
+      },
+      RPC_OK,
+    );
     const r = await updateTransaction(ID, payload({ type: "despesa", status: "pago" }));
     expect(r.ok).toBe(true);
-    expect(linhaFinal()).toMatchObject({
+    expect(chamadasDaRpc()).toHaveLength(1);
+    expect(linhaDaRpc()).toMatchObject({
       type: "despesa",
       classificacao: "pessoal",
       valor_pessoal: null,
     });
+    expect(Object.hasOwn(linhaDaRpc(), "valor_pessoal")).toBe(true);
+    expect(chamadasDaRpc()[0].p_divisao).toBeNull();
   });
 
+  // 03-G2 (D-G2-12): afirmava as linhas gravadas em shared_expenses/receivables e a linha final;
+  // agora lê o que a rpc salvar_lancamento recebeu.
   it("receita de terceiro editada para despesa compartilhada aplica a divisão da despesa", async () => {
-    fake = criarSupabaseEmMemoria({
-      transactions: [existente({ type: "receita", classificacao: "terceiro", valor_pessoal: 0 })],
-    });
+    fake = criarSupabaseEmMemoria(
+      {
+        transactions: [existente({ type: "receita", classificacao: "terceiro", valor_pessoal: 0 })],
+      },
+      RPC_OK,
+    );
     const r = await updateTransaction(
       ID,
       payload({
@@ -267,19 +327,29 @@ describe("03-C A2 · sair de receita zera a responsabilidade", () => {
       }),
     );
     expect(r.ok).toBe(true);
-    expect(fake.tabelas.shared_expenses).toHaveLength(1);
-    expect(fake.tabelas.receivables).toHaveLength(1);
-    expect(linhaFinal()).toMatchObject({
+    const chamadas = chamadasDaRpc();
+    expect(chamadas).toHaveLength(1);
+    expect(chamadas[0].p_id).toBe(ID);
+    expect(chamadas[0].p_lancamento).toMatchObject({
       type: "despesa",
       classificacao: "compartilhada",
       valor_pessoal: 400,
     });
+    const divisao = chamadas[0].p_divisao as { alcance: string; pessoas: Linha[]; recebiveis: Linha[] };
+    expect(divisao.alcance).toBe("regra-cheia");
+    expect(divisao.pessoas).toHaveLength(1);
+    expect(divisao.recebiveis).toHaveLength(1);
+    expect(divisao.recebiveis[0]).toMatchObject({ person_id: PESSOA, valor: 600 });
+    expect(fake.escritas("shared_expenses")).toEqual([]);
+    expect(fake.escritas("receivables")).toEqual([]);
   });
 });
 
 describe("03-C A2 · despesa → despesa continua como hoje", () => {
-  it("mudar só a descrição de uma despesa dividida não encosta em divisão nem recebível", async () => {
-    fake = criarSupabaseEmMemoria(despesaCompartilhada("pendente"));
+  // 03-G2 (D-G2-12/14): antes o update de `transactions` era um só, sem as duas chaves; agora é UMA
+  // rpc, p_divisao nulo e p_lancamento sem classificacao/valor_pessoal.
+  it("editar só a descrição de despesa dividida: UMA rpc, p_divisao nulo e sem classificacao/valor_pessoal", async () => {
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("pendente"), RPC_OK);
     const r = await updateTransaction(
       ID,
       payload({
@@ -293,12 +363,13 @@ describe("03-C A2 · despesa → despesa continua como hoje", () => {
     expect(r.ok).toBe(true);
     expect(fake.escritas("shared_expenses")).toEqual([]);
     expect(fake.escritas("receivables")).toEqual([]);
-    // O update de `transactions` é um só, e não toca a responsabilidade (quem a grava é a divisão).
-    const updates = fake.escritas("transactions");
-    expect(updates).toHaveLength(1);
-    expect(Object.hasOwn(updates[0].valores as Linha, "classificacao")).toBe(false);
-    expect(Object.hasOwn(updates[0].valores as Linha, "valor_pessoal")).toBe(false);
-    expect(linhaFinal()).toMatchObject({ classificacao: "compartilhada", valor_pessoal: 400 });
+    // Uma escrita só — a rpc — e ela não toca a responsabilidade (quem a grava é a divisão).
+    expect(fake.escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual(["salvar_lancamento:rpc"]);
+    expect(chamadasDaRpc()[0].p_id).toBe(ID);
+    expect(chamadasDaRpc()[0].p_divisao).toBeNull();
+    expect(linhaDaRpc()).toMatchObject({ description: "outra descrição" });
+    expect(Object.hasOwn(linhaDaRpc(), "classificacao")).toBe(false);
+    expect(Object.hasOwn(linhaDaRpc(), "valor_pessoal")).toBe(false);
   });
 });
 
@@ -306,13 +377,17 @@ describe("03-C2 A5 · updateTransaction NÃO lê a marcação da categoria (K2)"
   const MARCADA = "c0ffee00-0000-4000-8000-000000000001";
 
   it("receita pessoal movida para uma categoria marcada, sem receita_*, continua pessoal", async () => {
-    fake = criarSupabaseEmMemoria({
-      transactions: [existente({ type: "receita" })],
-      categories: [{ id: MARCADA, user_id: "user-1", kind: "receita", classificacao_padrao: "terceiro" }],
-    });
+    fake = criarSupabaseEmMemoria(
+      {
+        transactions: [existente({ type: "receita" })],
+        categories: [{ id: MARCADA, user_id: "user-1", kind: "receita", classificacao_padrao: "terceiro" }],
+      },
+      RPC_OK,
+    );
     const r = await updateTransaction(ID, payload({ category_id: MARCADA }));
     expect(r.ok).toBe(true);
-    expect(linhaFinal()).toMatchObject({ category_id: MARCADA, classificacao: "pessoal", valor_pessoal: null });
+    // 03-G2 (D-G2-12): lê o p_lancamento da rpc em vez da linha gravada.
+    expect(linhaDaRpc()).toMatchObject({ category_id: MARCADA, classificacao: "pessoal", valor_pessoal: null });
   });
 });
 
@@ -373,10 +448,44 @@ describe("03-D RR-D-17 · despesa dividida editada para transferência", () => {
     expect(fake.escritas()).toHaveLength(0);
   });
 
-  it("pago legado sem recebimento continua deixando (b): a primeira escrita é o delete do lançamento", async () => {
-    fake = criarSupabaseEmMemoria(despesaCompartilhada("pago"));
-    await updateTransaction(ID, paraTransferencia());
-    expect(fake.escritas()[0]).toEqual({ tabela: "transactions", tipo: "delete", filtros: [["eq", "id", ID]] });
+  // 03-G2 (D-G2-12): a primeira (e única) escrita era o delete do lançamento; agora é a rpc, com a
+  // divisão vazia no alcance 'so-dinheiro-registrado' — e nenhum delete.
+  it("pago legado sem recebimento continua deixando (b): a única escrita é a rpc, sem delete", async () => {
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("pago"), RPC_OK);
+    const r = await updateTransaction(ID, paraTransferencia());
+    expect(r.ok).toBe(true);
+    expect(fake.escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual(["salvar_lancamento:rpc"]);
+    expect(chamadasDaRpc()[0].p_id).toBe(ID);
+    expect(chamadasDaRpc()[0].p_divisao).toEqual({
+      alcance: "so-dinheiro-registrado",
+      pessoas: [],
+      recebiveis: [],
+    });
+  });
+
+  it("despesa vira transferência sem recebimento: divisão vazia no alcance so-dinheiro-registrado e a linha de transferência", async () => {
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("pendente"), RPC_OK);
+    const r = await updateTransaction(ID, paraTransferencia());
+    expect(r.ok).toBe(true);
+    expect(chamadasDaRpc()).toHaveLength(1);
+    expect(chamadasDaRpc()[0].p_divisao).toEqual({
+      alcance: "so-dinheiro-registrado",
+      pessoas: [],
+      recebiveis: [],
+    });
+    expect(linhaDaRpc()).toMatchObject({
+      type: "transferencia",
+      payment_method: "transferencia",
+      transfer_account_id: OUTRA_CONTA,
+      category_id: null,
+      subcategory_id: null,
+      card_id: null,
+      statement_id: null,
+      classificacao: "pessoal",
+      valor_pessoal: null,
+    });
+    expect(typeof linhaDaRpc().transfer_group_id).toBe("string");
+    expect(fake.escritas("transactions")).toEqual([]);
   });
 });
 
@@ -388,13 +497,14 @@ describe("03-D RR-D-17 · despesa dividida editada para transferência", () => {
 describe("03-E A3 · status e liquidado_em (K0, P9)", () => {
   const DATA = "2026-06-12";
   const comCheck = (tabelas: Record<string, Linha[]>) =>
-    criarSupabaseEmMemoria(tabelas, { antesDeGravar: checkLiquidadoEmCoerente });
+    criarSupabaseEmMemoria(tabelas, { antesDeGravar: checkLiquidadoEmCoerente, ...RPC_OK });
 
   it("(Z11) updateTransaction de despesa paga com data para 'pendente' limpa a data", async () => {
     fake = comCheck({ transactions: [existente({ liquidado_em: DATA })] });
     const r = await updateTransaction(ID, payload({ type: "despesa", status: "pendente" }));
     expect(r.ok).toBe(true);
-    expect(linhaFinal()).toMatchObject({ status: "pendente", liquidado_em: null });
+    // 03-G2 (D-G2-12): o CHECK simulado só vale para escritas diretas; aqui lê-se o p_lancamento.
+    expect(linhaDaRpc()).toMatchObject({ status: "pendente", liquidado_em: null });
   });
 
   it("(Z11) updateTransaction para 'pendente' descarta a data que o formulário ainda carrega", async () => {
@@ -406,7 +516,7 @@ describe("03-E A3 · status e liquidado_em (K0, P9)", () => {
       payload({ type: "despesa", status: "pendente", liquidado_em: DATA }),
     );
     expect(r.ok).toBe(true);
-    expect(linhaFinal()).toMatchObject({ status: "pendente", liquidado_em: null });
+    expect(linhaDaRpc()).toMatchObject({ status: "pendente", liquidado_em: null });
   });
 
   it("(Z11) setTransactionStatus de pago (com data) para 'pendente' limpa a data", async () => {
@@ -460,7 +570,7 @@ describe("03-E A3 · status e liquidado_em (K0, P9)", () => {
       payload({ type: "despesa", status: "pago", liquidado_em: DATA }),
     );
     expect(r.ok).toBe(true);
-    expect(linhaFinal()).toMatchObject({ status: "pago", liquidado_em: DATA });
+    expect(linhaDaRpc()).toMatchObject({ status: "pago", liquidado_em: DATA });
   });
 
   it("(P8) updateTransaction com data de pagamento futura é recusada no campo, sem nenhuma escrita", async () => {
@@ -498,17 +608,22 @@ describe("03-E A3 · status e liquidado_em (K0, P9)", () => {
     expect(linhaFinal()).toMatchObject({ transfer_group_id: "grupo-1" });
   });
 
-  it("updateTransaction de transferência (apaga e recria) preserva a data informada", async () => {
-    fake = comCheck({
-      transactions: [
-        existente({
-          type: "transferencia",
-          payment_method: "transferencia",
-          transfer_group_id: "grupo-1",
-          transfer_account_id: OUTRA_CONTA,
-        }),
-      ],
-    });
+  // 03-G2 (D-G2-12): a transferência é editada NO LUGAR (era apaga-e-recria): rpc com p_id, a data
+  // vem em p_lancamento e o transfer_group_id existente é mantido.
+  it("updateTransaction de transferência (editada no lugar) preserva a data informada", async () => {
+    fake = criarSupabaseEmMemoria(
+      {
+        transactions: [
+          existente({
+            type: "transferencia",
+            payment_method: "transferencia",
+            transfer_group_id: "grupo-1",
+            transfer_account_id: OUTRA_CONTA,
+          }),
+        ],
+      },
+      { antesDeGravar: checkLiquidadoEmCoerente, ...RPC_OK },
+    );
     const r = await updateTransaction(
       ID,
       payload({
@@ -519,11 +634,16 @@ describe("03-E A3 · status e liquidado_em (K0, P9)", () => {
       }),
     );
     expect(r.ok).toBe(true);
-    expect(fake.tabelas.transactions).toHaveLength(1);
-    expect(fake.tabelas.transactions[0]).toMatchObject({
+    // Nada é apagado: o mesmo id é atualizado pela rpc.
+    expect(fake.escritas("transactions")).toEqual([]);
+    const chamadas = chamadasDaRpc();
+    expect(chamadas).toHaveLength(1);
+    expect(chamadas[0].p_id).toBe(ID);
+    expect(chamadas[0].p_lancamento).toMatchObject({
       type: "transferencia",
       status: "pago",
       liquidado_em: DATA,
+      transfer_group_id: "grupo-1",
     });
   });
 
@@ -537,5 +657,360 @@ describe("03-E A3 · status e liquidado_em (K0, P9)", () => {
     const { error } = await client.from("transactions").update({ status: "pendente" }).eq("id", ID);
     expect(error?.code).toBe("23514");
     expect(linhaFinal()).toMatchObject({ status: "pago", liquidado_em: DATA });
+  });
+});
+
+/**
+ * 03-G2 (D-G2-12, E3b) — a reaplicação da divisão é UMA chamada a `salvar_lancamento`, a proteção
+ * dos recebíveis é lida ANTES (planejarReaplicacao só lê) e o erro da rpc vira a frase da falha.
+ */
+describe("03-G2 E3b · reaplicar a divisão é UMA rpc", () => {
+  const despesaDividida = (sobre: Linha = {}) =>
+    payload({
+      type: "despesa",
+      status: "pago",
+      classificacao: "compartilhada",
+      parts: [{ person_id: PESSOA, tipo: "valor", valor: 500 }],
+      ...sobre,
+    });
+
+  it("reaplicar divisão: UMA rpc salvar_lancamento e nenhum delete/insert direto em receivables/shared_expenses", async () => {
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("pendente"), RPC_OK);
+    const r = await updateTransaction(ID, despesaDividida());
+    expect(r.ok).toBe(true);
+    const chamadas = chamadasDaRpc();
+    expect(chamadas).toHaveLength(1);
+    expect(chamadas[0].p_id).toBe(ID);
+    // 03-G2 (E3c): a linha inteira e as duas colunas da divisão vão na mesma rpc.
+    expect(chamadas[0].p_lancamento).toMatchObject({ classificacao: "compartilhada", valor_pessoal: 500 });
+    expect(chamadas[0].p_divisao).toMatchObject({
+      alcance: "regra-cheia",
+      pessoas: [{ person_id: PESSOA, tipo_divisao: "valor", percentual: null, valor: 500 }],
+      recebiveis: [{ person_id: PESSOA, parcela_numero: null, valor: 500 }],
+    });
+    expect(fake.escritas("receivables")).toEqual([]);
+    expect(fake.escritas("shared_expenses")).toEqual([]);
+  });
+
+  it.each(["cobrado", "pago"])(
+    "reaplicar com recebível %s: recusa sem rpc",
+    async (status) => {
+      fake = criarSupabaseEmMemoria(despesaCompartilhada(status), RPC_OK);
+      const r = await updateTransaction(ID, despesaDividida());
+      expect(r).toEqual({ ok: false, error: MOTIVO_RECEBIVEL_FECHADO });
+      expect(chamadasDaRpc()).toEqual([]);
+      expect(fake.escritas("receivables")).toEqual([]);
+      expect(fake.escritas("shared_expenses")).toEqual([]);
+    },
+  );
+
+  it("rpc com erro P0001 DIVISAO_PROTEGIDA: a frase termina em 'Nada foi alterado.'", async () => {
+    // O banco reconfere a proteção dentro da transação: o recebível pode ter mudado entre a leitura
+    // do servidor e a rpc.
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("pendente"), {
+      rpc: () => ({ data: null, error: { code: "P0001", message: "DIVISAO_PROTEGIDA" } }),
+    });
+    const r = await updateTransaction(ID, despesaDividida());
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.endsWith("Nada foi alterado.")).toBe(true);
+    expect(chamadasDaRpc()).toHaveLength(1);
+  });
+});
+
+/**
+ * 03-G2 (D-G2-12, E3c) — `updateTransaction` num caminho só: decide tudo antes de escrever e grava por
+ * UMA rpc `salvar_lancamento` com `p_id`.
+ */
+describe("03-G2 E3c · updateTransaction é uma rpc só", () => {
+  const CARTAO = "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b";
+  const GRUPO = "grupo-1";
+
+  it("editar com recebível cobrado: recusa sem NENHUMA escrita (RR6)", async () => {
+    fake = criarSupabaseEmMemoria(despesaCompartilhada("cobrado"), RPC_OK);
+    const r = await updateTransaction(
+      ID,
+      payload({
+        type: "despesa",
+        status: "pago",
+        description: "outra descrição",
+        classificacao: "compartilhada",
+        parts: [{ person_id: PESSOA, tipo: "valor", valor: 500 }],
+      }),
+    );
+    expect(r).toEqual({ ok: false, error: MOTIVO_RECEBIVEL_FECHADO });
+    expect(fake.escritas()).toEqual([]);
+    // Antes da 03-G2 o update do lançamento já tinha acontecido quando a recusa chegava.
+    expect(linhaFinal()).toMatchObject({ classificacao: "compartilhada", valor_pessoal: 400 });
+  });
+
+  it("editar transferência que paga fatura: rpc com p_id = id, nenhum delete, nenhuma escrita em card_statements (RR-F-1)", async () => {
+    fake = criarSupabaseEmMemoria(
+      {
+        transactions: [
+          existente({
+            type: "transferencia",
+            payment_method: "transferencia",
+            transfer_group_id: GRUPO,
+            transfer_account_id: OUTRA_CONTA,
+          }),
+        ],
+        card_statements: [{ id: "st-1", pago_transacao_id: ID, status: "paga" }],
+      },
+      RPC_OK,
+    );
+    const r = await updateTransaction(
+      ID,
+      payload({ type: "transferencia", status: "pago", transfer_account_id: OUTRA_CONTA, description: "novo" }),
+    );
+    expect(r).toEqual({ ok: true, data: { id: ID } });
+    expect(fake.escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual(["salvar_lancamento:rpc"]);
+    expect(fake.escritas("card_statements")).toEqual([]);
+    expect(chamadasDaRpc()[0].p_id).toBe(ID);
+    expect(chamadasDaRpc()[0].p_divisao).toBeNull();
+    expect(linhaDaRpc()).toMatchObject({ transfer_group_id: GRUPO, description: "novo", classificacao: "pessoal", valor_pessoal: null });
+    expect(fake.tabelas.card_statements[0]).toMatchObject({ pago_transacao_id: ID });
+  });
+
+  it("transferência que deixa de ser transferência: transfer_account_id e transfer_group_id nulos", async () => {
+    fake = criarSupabaseEmMemoria(
+      {
+        transactions: [
+          existente({
+            type: "transferencia",
+            payment_method: "transferencia",
+            transfer_group_id: GRUPO,
+            transfer_account_id: OUTRA_CONTA,
+          }),
+        ],
+      },
+      RPC_OK,
+    );
+    const r = await updateTransaction(ID, payload({ type: "despesa", status: "pago" }));
+    expect(r.ok).toBe(true);
+    expect(linhaDaRpc()).toMatchObject({
+      type: "despesa",
+      transfer_account_id: null,
+      transfer_group_id: null,
+      classificacao: "pessoal",
+      valor_pessoal: null,
+    });
+    expect(chamadasDaRpc()[0].p_divisao).toBeNull();
+  });
+
+  it("editar a descrição de um estorno: card_id e statement_id do existente, account_id e payment_method nulos (RR11)", async () => {
+    fake = criarSupabaseEmMemoria(
+      {
+        transactions: [
+          existente({
+            type: "receita",
+            payment_method: null,
+            account_id: null,
+            card_id: CARTAO,
+            statement_id: "st-9",
+          }),
+        ],
+      },
+      RPC_OK,
+    );
+    const r = await updateTransaction(
+      ID,
+      // A data mudou: o estorno NÃO muda de fatura (D-G2-1). Nenhum cartão cadastrado no dublê —
+      // se o servidor tentasse re-resolver, a leitura falharia.
+      payload({
+        description: "estorno corrigido",
+        payment_method: "",
+        account_id: "",
+        card_id: CARTAO,
+        purchase_date: "2026-08-20",
+        competence_date: "2026-08-20",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(fake.escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual(["salvar_lancamento:rpc"]);
+    expect(linhaDaRpc()).toMatchObject({
+      type: "receita",
+      card_id: CARTAO,
+      statement_id: "st-9",
+      account_id: null,
+      payment_method: null,
+      description: "estorno corrigido",
+      purchase_date: "2026-08-20",
+    });
+  });
+
+  it("compra parcelada que muda de tipo: invalid no campo, sem escrita (RR12)", async () => {
+    fake = criarSupabaseEmMemoria({ transactions: [existente({ parcelado: true })] }, RPC_OK);
+    const r = await updateTransaction(ID, payload({ type: "receita" }));
+    expect(r).toMatchObject({
+      ok: false,
+      fieldErrors: { type: ["Compra parcelada muda em Parcelamentos."] },
+    });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("compra parcelada que continua despesa: divisão intocada (p_divisao nulo) e sem as colunas da divisão", async () => {
+    fake = criarSupabaseEmMemoria({ transactions: [existente({ parcelado: true })] }, RPC_OK);
+    const r = await updateTransaction(ID, payload({ type: "despesa", status: "pago", description: "x2" }));
+    expect(r.ok).toBe(true);
+    expect(chamadasDaRpc()[0].p_divisao).toBeNull();
+    expect(Object.hasOwn(linhaDaRpc(), "classificacao")).toBe(false);
+    expect(Object.hasOwn(linhaDaRpc(), "valor_pessoal")).toBe(false);
+  });
+
+  it("rpc sem code (rede/timeout): a frase diz que pode ter sido salvo e a tela é revalidada", async () => {
+    fake = criarSupabaseEmMemoria(
+      { transactions: [existente({})] },
+      { rpc: () => ({ data: null, error: { code: "", message: "fetch failed" } }) },
+    );
+    const r = await updateTransaction(ID, payload({ type: "despesa", status: "pago" }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toMatch(/pode ter sido salvo/);
+      expect(r.error).not.toMatch(/Nada foi alterado/);
+    }
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it("rpc com SQLSTATE (transação revertida): 'Nada foi alterado.' e nenhuma revalidação", async () => {
+    fake = criarSupabaseEmMemoria(
+      { transactions: [existente({})] },
+      { rpc: () => ({ data: null, error: { code: "23514", message: "check" } }) },
+    );
+    const r = await updateTransaction(ID, payload({ type: "despesa", status: "pago" }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.endsWith("Nada foi alterado.")).toBe(true);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("03-G2 E5a · deleteTransaction apaga ANTES de reabrir a fatura (RR-F-2, S6)", () => {
+  const FATURA = "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
+  const pagamento = () => ({
+    transactions: [existente({ type: "transferencia", transfer_group_id: null })],
+    card_statements: [
+      {
+        id: FATURA,
+        competencia: "2031-03-01",
+        status: "paga",
+        pago_em: "2031-04-05",
+        pago_conta_id: CONTA,
+        pago_transacao_id: ID,
+      },
+    ],
+    receivables: [],
+  });
+
+  it("delete com erro: Não foi possível excluir o lançamento. Nada foi alterado. e nenhum update em card_statements", async () => {
+    fake = criarSupabaseEmMemoria(pagamento(), {
+      antesDeGravar: (op) =>
+        op.tabela === "transactions" && op.tipo === "delete" ? { code: "23503", message: "interno" } : null,
+    });
+    const r = await deleteTransaction(ID);
+    expect(r).toEqual({ ok: false, error: "Não foi possível excluir o lançamento. Nada foi alterado." });
+    expect(fake.escritas("card_statements")).toEqual([]);
+    expect(fake.tabelas.card_statements[0]).toMatchObject({ status: "paga", pago_transacao_id: ID });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  // 03-G2 (revisão final) — sem SQLSTATE o delete PODE ter acontecido.
+  it("delete sem code (rede): desfecho desconhecido citando a fatura, nunca 'Nada foi alterado'", async () => {
+    fake = criarSupabaseEmMemoria(pagamento(), {
+      antesDeGravar: (op) =>
+        op.tabela === "transactions" && op.tipo === "delete" ? { code: "", message: "fetch failed" } : null,
+    });
+    const r = await deleteTransaction(ID);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toContain("pode ter sido excluído");
+      expect(r.error).toContain("03/2031");
+      expect(r.error).not.toContain("Nada foi alterado");
+    }
+    expect(fake.escritas("card_statements")).toEqual([]);
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it("delete ok e reabrir falho: frase com 03/2031 e Desfaça o pagamento em Faturas", async () => {
+    fake = criarSupabaseEmMemoria(pagamento(), {
+      antesDeGravar: (op) =>
+        op.tabela === "card_statements" && op.tipo === "update" ? { code: "XX000", message: "interno" } : null,
+    });
+    const r = await deleteTransaction(ID);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toContain("03/2031");
+      expect(r.error).toContain("Desfaça o pagamento em Faturas");
+      expect(r.error).not.toContain("interno");
+    }
+    expect(fake.tabelas.transactions).toEqual([]);
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it("ordem: o delete de transactions vem antes do update de card_statements", async () => {
+    fake = criarSupabaseEmMemoria(pagamento());
+    const r = await deleteTransaction(ID);
+    expect(r).toEqual({ ok: true, data: undefined });
+    expect(fake.escritas().map((o) => `${o.tabela}:${o.tipo}`)).toEqual([
+      "transactions:delete",
+      "card_statements:update",
+    ]);
+    expect(fake.tabelas.card_statements[0]).toMatchObject({
+      status: "aberta",
+      pago_em: null,
+      pago_conta_id: null,
+      pago_transacao_id: null,
+    });
+  });
+});
+
+describe("03-G2 E5a · preverExclusaoDoLancamento (K3, D-G2-17)", () => {
+  const FATURA = "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
+  const base = (): Record<string, Linha[]> => ({
+    transactions: [existente({ type: "transferencia", transfer_group_id: "grp-1" })],
+    card_statements: [{ id: FATURA, competencia: "2031-03-01", status: "paga", pago_transacao_id: ID }],
+    receivables: [
+      { id: "rc-1", transaction_id: ID, person_id: PESSOA, valor: 100, status: "pendente" },
+      { id: "rc-2", transaction_id: ID, person_id: PESSOA, valor: 200, status: "pendente" },
+    ],
+    people: [{ id: PESSOA, nome: "Pessoa Sintética" }],
+    import_rows: [{ id: "ir-1", transaction_id: ID }],
+  });
+
+  it("lançamento que pagou fatura, com 2 recebíveis pendentes de uma pessoa e 1 linha de importação — os campos certos e NENHUMA escrita", async () => {
+    fake = criarSupabaseEmMemoria(base());
+    const r = await preverExclusaoDoLancamento(ID);
+    expect(r).toEqual({
+      ok: true,
+      data: {
+        bloqueio: null,
+        faturaReaberta: { competencia: "2031-03-01" },
+        recebiveis: [{ pessoa: "Pessoa Sintética", status: "pendente", quantidade: 2 }],
+        parcelas: 0,
+        linhasDaImportacao: 1,
+        ehTransferencia: true,
+      },
+    });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("previsão com leitura de receivables falha: falhaDeLeituraAntes", async () => {
+    fake = criarSupabaseEmMemoria(base(), { falharLeitura: { receivables: "XX000" } });
+    expect(await preverExclusaoDoLancamento(ID)).toEqual({
+      ok: false,
+      error: "Não foi possível ler os recebíveis. Nada foi alterado.",
+    });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("previsão com recebimento registrado: bloqueio preenchido", async () => {
+    fake = criarSupabaseEmMemoria({
+      ...base(),
+      receivable_receipts: [
+        { id: "rr-1", user_id: "user-1", receivable_id: "rc-1", valor: 100, recebido_em: "2031-04-05", created_at: "2031-04-05T10:00:00Z" },
+      ],
+    });
+    const r = await preverExclusaoDoLancamento(ID);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.bloqueio).toMatch(/recebimento registrado/);
+    expect(fake.escritas()).toEqual([]);
   });
 });

@@ -56,10 +56,12 @@ export const transactionSchema = z
   )
   // Conta é obrigatória, EXCETO em transferência (já validada acima) e em compra no
   // cartão de crédito (desacoplada de conta — entra na fatura, não no saldo).
+  // 03-G2 (D-G2-19): estorno de cartão (receita com cartão) não tem conta.
   .refine(
     (v) =>
       v.type === "transferencia" ||
       v.payment_method === "cartao_credito" ||
+      (v.type === "receita" && !!v.card_id) ||
       !!v.account_id,
     { message: "Selecione a conta", path: ["account_id"] },
   )

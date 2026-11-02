@@ -19,7 +19,8 @@ export type AcaoQueApaga =
   | "excluir o parcelamento"
   | "transformar o lançamento em transferência";
 
-const STATUS_PROTEGIDOS = ["cobrado", "pago", "ignorado"];
+/** 03-G2 (D-G2-4) — exportada: `salvar_lancamento` reconfere esta lista no SQL, e o teste da migration as espelha. */
+export const STATUS_PROTEGIDOS: readonly string[] = ["cobrado", "pago", "ignorado"];
 
 export function recebivelProtegido(r: RecebivelParaProteger, alcance: AlcanceDaProtecao): boolean {
   if (r.temRecebimento) return true;

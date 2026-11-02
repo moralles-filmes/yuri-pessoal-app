@@ -22,7 +22,7 @@ import "server-only";
  */
 
 import { randomUUID } from "node:crypto";
-import type { AuthContext } from "@/lib/actions/helpers";
+import { traduzirErroDaRpc, type AuthContext } from "@/lib/actions/helpers";
 import { transactionSchema } from "@/lib/validators/transaction";
 import { receitaResponsabilidadeSchema, splitSchema } from "@/lib/validators/split";
 import { ehErroDeLeitura } from "@/lib/supabase/leitura";
@@ -31,7 +31,8 @@ import {
   getOrCreateStatementForCompetencia,
   resolveOrCreateStatement,
 } from "@/lib/finance/statements";
-import { applySplit } from "@/lib/finance/split-persist";
+import { montarDivisaoAVista, type DivisaoPayload } from "@/lib/finance/split-persist";
+import { montarLinhaDoLancamento } from "@/lib/finance/linha-do-lancamento";
 import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
 import { motivoParaNaoApagar } from "@/lib/finance/protecao-do-recebivel";
 import {
@@ -39,11 +40,7 @@ import {
   decidirResponsabilidadeDaReceita,
 } from "@/lib/finance/responsabilidade-da-receita";
 import type { Classificacao } from "@/lib/finance/constants";
-import {
-  dataDeLiquidacaoAGravar,
-  dataDePagamentoFutura,
-  MSG_DATA_PAGAMENTO_FUTURA,
-} from "@/lib/finance/caixa";
+import { dataDePagamentoFutura, MSG_DATA_PAGAMENTO_FUTURA } from "@/lib/finance/caixa";
 import { centavosParaReais, hojeISO, reaisParaCentavos } from "@/lib/format";
 
 export type FinanceServiceContext = AuthContext;
@@ -96,6 +93,15 @@ export type CriarTransacaoResultado =
       readonly leituraFalhou?: string;
     };
 
+/** 03-G2 (D-G2-16): o erro da rpc vira a frase da falha (nada gravado × desfecho desconhecido). */
+function falhaDaRpc(
+  error: { code?: string; message?: string } | null,
+  oQue: string,
+): { ok: false; erro: string } {
+  const t = traduzirErroDaRpc(error, oQue);
+  return { ok: false, erro: t.ok ? "" : t.error };
+}
+
 /**
  * Cria o lançamento. `input` é o objeto CRU — o mesmo que o formulário envia — porque a
  * divisão é lida do mesmo objeto por um segundo schema (`splitSchema`), e separar as duas
@@ -125,43 +131,35 @@ export async function criarTransacao(
     };
   }
 
+  // 03-G2 (revisão final) — o schema aceita receita com cartão e sem conta só para a EDIÇÃO de um
+  // estorno existente (D-G2-19). Criar por aqui gravaria uma receita sem conta e sem cartão (o
+  // cartão só é resolvido para despesa); o estorno importado nasce por `createCardEstorno`.
+  if (d.type === "receita" && d.card_id && !d.account_id) {
+    return {
+      ok: false,
+      erro: "Verifique os campos destacados.",
+      fieldErrors: { account_id: ["Selecione a conta"] },
+    };
+  }
+
   if (d.type === "transferencia") {
     // UMA linha por transferência: `public.account_balance` já deriva os dois lados da
     // mesma linha (-amount na conta de origem `account_id`, +amount no destino
     // `transfer_account_id`). Gravar as duas pernas espelhadas fazia os efeitos se
     // anularem e o saldo das contas não mudava. `transfer_group_id` continua marcando
     // a linha como transferência (usado em update/delete/status).
-    const { data, error } = await ctx.supabase
-      .from("transactions")
-      .insert({
-        user_id: ctx.userId,
-        type: "transferencia" as const,
-        payment_method: "transferencia" as const,
-        account_id: d.account_id,
-        transfer_account_id: d.transfer_account_id,
-        transfer_group_id: randomUUID(),
-        amount: d.amount,
-        purchase_date: d.purchase_date,
-        competence_date: d.competence_date,
-        description: d.description,
-        notes: d.notes,
-        tags: d.tags,
-        status: d.status,
-        // K0: a transferência nunca tem cartão; só liquidada guarda a data.
-        liquidado_em: dataDeLiquidacaoAGravar({
-          status: d.status,
-          card_id: null,
-          liquidado_em: d.liquidado_em,
-        }),
-        category_id: null,
-        subcategory_id: null,
-      })
-      .select("id")
-      .single();
-    if (error || !data) {
-      return { ok: false, erro: "Não foi possível registrar a transferência." };
-    }
-    return { ok: true, id: data.id, statementId: null };
+    // 03-G2: uma chamada só; sem `colunas`, a classificação cai no coalesce 'pessoal' do SQL.
+    const linha = montarLinhaDoLancamento(d, {
+      cardId: null,
+      statementId: null,
+      transferGroupId: randomUUID(),
+    });
+    const { data, error } = await ctx.supabase.rpc("salvar_lancamento", {
+      p_lancamento: linha,
+      p_divisao: null,
+    });
+    if (error || !data) return falhaDaRpc(error, "registrar a transferência");
+    return { ok: true, id: data, statementId: null };
   }
 
   // REDESIGN-03-C · A2 — a receita decide de quem é o dinheiro ANTES de qualquer escrita.
@@ -213,63 +211,39 @@ export async function criarTransacao(
     };
   }
   const isShared = d.type === "despesa" && split.data.classificacao !== "pessoal";
-  const classificacao = isShared ? split.data.classificacao : "pessoal";
 
-  const { data, error } = await ctx.supabase
-    .from("transactions")
-    .insert({
-      user_id: ctx.userId,
-      type: d.type,
-      payment_method: d.payment_method,
-      account_id: d.account_id,
-      transfer_account_id: null,
-      card_id: cardId,
-      statement_id: statementId,
-      category_id: d.category_id,
-      subcategory_id: d.subcategory_id,
-      amount: d.amount,
-      purchase_date: d.purchase_date,
-      competence_date: d.competence_date,
-      description: d.description,
-      notes: d.notes,
-      tags: d.tags,
-      status: d.status,
-      // K0: compra de cartão nunca guarda a data; fora de pago/recebido também é nulo.
-      liquidado_em: dataDeLiquidacaoAGravar({
-        status: d.status,
-        card_id: cardId,
-        liquidado_em: d.liquidado_em,
-      }),
-      // Despesa e ajuste: o objeto de sempre (sem `valor_pessoal`, que a divisão deriva depois).
-      // Receita: as duas colunas da A1.
-      ...(colunasDaReceitaDecididas ?? { classificacao }),
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) return { ok: false, erro: "Não foi possível salvar o lançamento." };
-
-  // Grava a divisão (shared_expenses + receivables) e deriva o valor_pessoal. Quase-atômico:
-  // se a divisão falhar, remove a transação para não deixar gasto sem divisão consistente.
-  if (isShared) {
-    const res = await applySplit(ctx, {
-      transactionId: data.id,
+  // 03-G2 (D-G2-14): o lançamento e a divisão vão numa chamada só, atômica — sem compensação.
+  // A conta da divisão roda ANTES: divisão que não fecha recusa sem nenhuma escrita.
+  let colunas: ColunasDaResponsabilidade | undefined;
+  let divisao: DivisaoPayload | null = null;
+  if (colunasDaReceitaDecididas) {
+    colunas = colunasDaReceitaDecididas;
+  } else if (isShared) {
+    const montada = montarDivisaoAVista({
       totalCentavos: reaisParaCentavos(d.amount),
+      parts: split.data.parts,
       statementId,
       cardId,
-      parts: split.data.parts,
+      alcance: "regra-cheia",
     });
-    if (!res.ok) {
-      await ctx.supabase.from("transactions").delete().eq("id", data.id);
-      return { ok: false, erro: res.error };
-    }
-    await ctx.supabase
-      .from("transactions")
-      .update({ valor_pessoal: centavosParaReais(res.minhaParteCentavos) })
-      .eq("id", data.id);
+    if (!montada.ok) return { ok: false, erro: montada.error };
+    colunas = {
+      classificacao: split.data.classificacao,
+      valor_pessoal: centavosParaReais(montada.minhaParteCentavos),
+    };
+    divisao = montada.divisao;
   }
 
-  return { ok: true, id: data.id, statementId };
+  // Despesa/ajuste pessoal: a linha não leva `classificacao` nem `valor_pessoal` (o SQL faz o
+  // coalesce 'pessoal' e deixa `valor_pessoal` nulo, como o insert de antes).
+  const linha = montarLinhaDoLancamento(d, { cardId, statementId, transferGroupId: null, colunas });
+  const { data, error } = await ctx.supabase.rpc("salvar_lancamento", {
+    p_lancamento: linha,
+    p_divisao: divisao,
+  });
+  if (error || !data) return falhaDaRpc(error, "salvar o lançamento");
+
+  return { ok: true, id: data, statementId };
 }
 
 /**
