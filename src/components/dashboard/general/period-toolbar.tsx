@@ -17,6 +17,7 @@ import {
   DASH_VIEW_LABELS,
   DASH_VIEWS,
   VIEW_TO_PERIOD,
+  visaoDoPeriodo,
   windowLabel,
   type DashPeriod,
   type DashView,
@@ -70,8 +71,7 @@ export function PeriodToolbar({
       push({ period: "custom" });
       return;
     }
-    const v: DashView = p === "semana" ? "semana" : p === "hoje" ? "dia" : "mes";
-    push({ period: p, view: v });
+    push({ period: p, view: visaoDoPeriodo(p) });
   }
 
   function selectView(v: DashView) {

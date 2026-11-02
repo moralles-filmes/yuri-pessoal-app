@@ -16,6 +16,9 @@ import {
   subMonths,
 } from "date-fns";
 import { hojeISO } from "@/lib/format";
+// Só tipos: `cards.ts` importa este módulo em runtime, então um import de valor aqui criaria ciclo.
+import type { DashCardId } from "./cards";
+import type { DashboardLayoutInput } from "@/lib/validators/settings";
 
 const ISO = "yyyy-MM-dd";
 
@@ -228,4 +231,34 @@ export function asPeriod(value: unknown): DashPeriod {
 /** Normaliza um valor desconhecido para uma DashView válida (default 'mes'). */
 export function asView(value: unknown): DashView {
   return DASH_VIEWS.includes(value as DashView) ? (value as DashView) : "mes";
+}
+
+/* ───────────────────────────── Visão a partir do período ───────────────────────────── */
+
+/**
+ * Visão que a barra usa para cada período (o que antes estava inline em `selectPeriod`):
+ * semana→semana, hoje→dia, o resto (mês, mês anterior, personalizado)→mês.
+ */
+export function visaoDoPeriodo(p: DashPeriod): DashView {
+  if (p === "semana") return "semana";
+  if (p === "hoje") return "dia";
+  return "mes";
+}
+
+/**
+ * Payload de `saveDashboardLayout` no modo Personalizar. R7: o período gravado é o PADRÃO
+ * escolhido nas configurações, nunca o da URL — por isso não há parâmetro de período da URL
+ * e não há como vazá-lo para a preferência salva.
+ */
+export function payloadDoSalvar(p: {
+  order: DashCardId[];
+  hidden: DashCardId[];
+  periodoPadrao: DashPeriod;
+}): DashboardLayoutInput {
+  return {
+    order: p.order,
+    hidden: p.hidden,
+    period: p.periodoPadrao,
+    view: visaoDoPeriodo(p.periodoPadrao),
+  };
 }

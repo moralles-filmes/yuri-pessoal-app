@@ -3,10 +3,13 @@ import {
   asPeriod,
   asView,
   isIsoDate,
+  payloadDoSalvar,
   resolveWindow,
+  visaoDoPeriodo,
   windowLabel,
 } from "@/lib/dashboard/period";
 import {
+  DASH_CARD_IDS,
   DEFAULT_DASHBOARD_LAYOUT,
   normalizeLayout,
   visibleCards,
@@ -173,5 +176,32 @@ describe("visibleCards", () => {
       view: "mes",
     };
     expect(visibleCards(layout)).toEqual(["financeiro", "agenda", "tarefas", "habitos", "estudos"]);
+  });
+});
+
+describe("visaoDoPeriodo", () => {
+  it("cada período cai na visão que a barra já usava", () => {
+    expect(visaoDoPeriodo("hoje")).toBe("dia");
+    expect(visaoDoPeriodo("semana")).toBe("semana");
+    expect(visaoDoPeriodo("mes")).toBe("mes");
+    expect(visaoDoPeriodo("mes_anterior")).toBe("mes");
+    expect(visaoDoPeriodo("custom")).toBe("mes");
+  });
+});
+
+describe("payloadDoSalvar", () => {
+  it("grava o período PADRÃO e a visão derivada, sem parâmetro de período da URL (R7)", () => {
+    expect(
+      payloadDoSalvar({
+        order: [...DASH_CARD_IDS],
+        hidden: ["todo"],
+        periodoPadrao: "hoje",
+      }),
+    ).toEqual({
+      order: [...DASH_CARD_IDS],
+      hidden: ["todo"],
+      period: "hoje",
+      view: "dia",
+    });
   });
 });
