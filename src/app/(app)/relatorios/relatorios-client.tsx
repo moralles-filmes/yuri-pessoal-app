@@ -206,6 +206,7 @@ export function RelatoriosClient({
   });
 
   const cartoesNaProvisao = new Set(card.faturas.map((f) => f.cardId)).size;
+  const rotuloCartoes = `${cartoesNaProvisao} ${cartoesNaProvisao === 1 ? "cartão" : "cartões"}`;
 
   return (
     <div className="space-y-6">
@@ -411,7 +412,7 @@ export function RelatoriosClient({
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Comprometido em parcelas" value={formatCurrency(card.parcelasComprometidas)} icon={Layers} hint={`${card.parcelasAtivas} parcela(s) em aberto`} />
                 <StatCard label={rotuloPendenteDoMes(finance.mes)} value={formatCurrency(card.aReceber)} icon={HandCoins} />
-                <StatCard label="Próximas faturas" value={String(card.faturas.filter((f) => f.status !== "paga").length)} icon={CreditCard} hint={`Próximos 6 ciclos de cada cartão · ${cartoesNaProvisao} cartões`} />
+                <StatCard label="Próximas faturas" value={String(card.faturas.filter((f) => f.status !== "paga").length)} icon={CreditCard} hint={`Próximos 6 ciclos de cada cartão · ${rotuloCartoes}`} />
                 <StatCard label="Total próximas faturas" value={formatCurrency(card.faturas.filter((f) => f.status !== "paga").reduce((s, f) => s + f.total, 0))} icon={CalendarClock} />
               </div>
 
@@ -426,7 +427,7 @@ export function RelatoriosClient({
               <Card>
                 <CardHeader>
                   <CardTitle>Próximos 6 ciclos de cada cartão</CardTitle>
-                  <CardDescription>{`${cartoesNaProvisao} cartões · `}Total, valor realmente seu e o que terceiros precisam pagar.</CardDescription>
+                  <CardDescription>{`${rotuloCartoes} · `}Total, valor realmente seu e o que terceiros precisam pagar.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {card.faturas.length === 0 ? (

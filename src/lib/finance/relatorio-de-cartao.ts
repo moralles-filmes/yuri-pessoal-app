@@ -157,7 +157,8 @@ export function montarRelatorioDeCartao(p: {
   porCartao.sort(
     (a, b) =>
       Number(b.card.ativo) - Number(a.card.ativo) ||
-      a.card.nome.localeCompare(b.card.nome, "pt-BR"),
+      a.card.nome.localeCompare(b.card.nome, "pt-BR") ||
+      a.card.id.localeCompare(b.card.id),
   );
 
   return { base, n, meses, cardId, porMes, totais, porCartao };

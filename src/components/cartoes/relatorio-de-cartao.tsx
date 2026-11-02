@@ -226,13 +226,19 @@ export function RelatorioDeCartaoTela({
       </div>
 
       <Bloco titulo="Faturas por mês" subtitulo="minha parte + terceiros" estado="conteudo">
-        <FaturasChart
-          data={grafico}
-          vazio={{
-            titulo: "Sem faturas neste período",
-            descricao: "As faturas aparecem aqui pela base escolhida.",
-          }}
-        />
+        {/* O olho também cobre o gráfico: o eixo e o tooltip mostram dinheiro. */}
+        <p className="hidden py-8 text-center text-sm text-muted-foreground group-data-[ocultar=true]/olho:block">
+          Gráfico oculto junto com os valores.
+        </p>
+        <div className="group-data-[ocultar=true]/olho:hidden">
+          <FaturasChart
+            data={grafico}
+            vazio={{
+              titulo: "Sem faturas neste período",
+              descricao: "As faturas aparecem aqui pela base escolhida.",
+            }}
+          />
+        </div>
         <p className="text-xs text-muted-foreground">mês sem fatura não vira barra de zero</p>
       </Bloco>
 

@@ -53,8 +53,12 @@ export function FaturasChart({
   data: ItemDoGraficoDeFaturas[];
   vazio?: { titulo: string; descricao: string };
 }) {
-  // Vazio = nenhum mês com fatura de valor não nulo e diferente de zero.
-  if (!data.some((f) => f.total !== null && f.total !== 0)) {
+  // Vazio = nenhum mês com fatura. No uso de hoje (sem `vazio`), total zero conta como vazio; com
+  // `vazio` (histórico, 05-C), mês com fatura de total zero é zero MEDIDO e o gráfico aparece.
+  const temFatura = vazio
+    ? data.some((f) => f.total !== null)
+    : data.some((f) => f.total !== null && f.total !== 0);
+  if (!temFatura) {
     const texto = vazio ?? VAZIO_PADRAO;
     return (
       <EmptyState

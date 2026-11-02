@@ -63,3 +63,10 @@ describe("05-C T4 · FaturasChart com mês sem fatura", () => {
     expect(normalizada(fachada)).toContain("ssr: false");
   });
 });
+
+describe("05-C · com `vazio`, fatura de total zero é zero medido (revisão)", () => {
+  it("o vazio do histórico é 'nenhum mês com fatura', não 'nenhum total ≠ 0'", () => {
+    const impl = fonteSemComentarios(IMPL).replace(/\s+/g, " ");
+    expect(impl).toContain("data.some((f) => f.total !== null)");
+  });
+});

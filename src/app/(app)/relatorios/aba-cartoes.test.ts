@@ -40,3 +40,11 @@ describe("aba Cartões de /relatorios (05-C T6)", () => {
     );
   });
 });
+
+describe("aba Cartões de /relatorios — plural (05-C, revisão)", () => {
+  it("um cartão é 'cartão', nunca '1 cartões'", () => {
+    const tela = fonteSemComentarios(TELA).replace(/\s+/g, " ");
+    expect(tela).toContain('cartoesNaProvisao === 1 ? "cartão" : "cartões"');
+    expect(tela).not.toContain("${cartoesNaProvisao} cartões");
+  });
+});
