@@ -70,6 +70,37 @@ describe("vistaDaGaveta", () => {
     ]);
   });
 
+  it("'minha parte R$ 0,00' não aparece quando tudo é de terceiros (revisão final, achado 4)", () => {
+    const v = vistaDaGaveta(
+      ok({
+        parte: "pendente",
+        totalCent: 4000,
+        somaCent: 4000,
+        grupos: [
+          {
+            rotulo: "Pessoa A",
+            fatura: null,
+            registros: [
+              {
+                id: "r",
+                data: "2026-11-02",
+                descricao: "Loja",
+                origem: null,
+                categoria: null,
+                brutoCent: 4000,
+                meuCent: 0,
+                terceirosCent: 4000,
+                marcas: [],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    if (v.estado !== "ok") throw new Error("estado");
+    expect(v.grupos[0].linhas[0].outras.map((o) => o.rotulo)).not.toContain("minha parte");
+  });
+
   it("soma que fecha não tem diferença; a que não fecha escreve o valor", () => {
     const fecha = vistaDaGaveta(ok());
     const naoFecha = vistaDaGaveta(ok({ somaCent: 6000, diferencaCent: 3000 }));

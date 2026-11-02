@@ -101,6 +101,8 @@ function linha(r: RegistroDoDetalhe, coluna: Coluna): LinhaDaGaveta {
   const valor = r[coluna];
   const outras = (Object.keys(ROTULO_DA_COLUNA) as Coluna[])
     .filter((c) => c !== coluna && r[c] !== valor && !(c === "terceirosCent" && r[c] === 0))
+    // Tudo de terceiros (pendente, reembolso): "minha parte R$ 0,00" não diz nada além disso.
+    .filter((c) => !(c === "meuCent" && r.meuCent === 0 && r.terceirosCent === r.brutoCent))
     .map((c) => ({ rotulo: ROTULO_DA_COLUNA[c], valor: dinheiro(r[c]) }));
   return {
     id: r.id,
