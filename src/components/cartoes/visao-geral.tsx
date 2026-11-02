@@ -113,6 +113,13 @@ function apoioDeAPagar(v: VisaoGeralDosCartoes): string | undefined {
 const TH = "px-3 py-2.5 text-right text-[11px] font-semibold tracking-wide whitespace-nowrap text-muted-foreground uppercase first:text-left";
 const TD = "px-3 py-2.5 text-right whitespace-nowrap tabular-nums first:text-left";
 
+/**
+ * A coluna Estado fica PRESA à direita: com várias pessoas a tabela rola dentro do card (medido
+ * com dado real: 3 pessoas já passam de 1280 px), e o selo é o que distingue paga, atrasada e
+ * prevista — ele não pode depender de rolar para ser visto.
+ */
+const COLUNA_DO_ESTADO = "sticky right-0 z-[1] bg-card";
+
 function Valores({
   linha,
   pessoas,
@@ -174,7 +181,7 @@ function LinhaDaTabela({
           {SEM_LANCAMENTOS}
         </td>
       )}
-      <td className={cn(TD, "not-italic")}>
+      <td className={cn(TD, COLUNA_DO_ESTADO, "not-italic")}>
         <Selo linha={linha} tabela={tabela} />
       </td>
     </tr>
@@ -280,7 +287,7 @@ function Bloco({
                       {p.nome}
                     </th>
                   ))}
-                  <th className={TH}>Estado</th>
+                  <th className={cn(TH, COLUNA_DO_ESTADO)}>Estado</th>
                 </tr>
               </thead>
               <tbody>
