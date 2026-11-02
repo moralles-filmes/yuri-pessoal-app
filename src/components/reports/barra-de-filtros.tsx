@@ -104,6 +104,29 @@ function CamposDeRecorte({
   );
 }
 
+/**
+ * O seletor do mês de referência. Mora aqui para valer nas DUAS abas que leem o mês (Financeiro e
+ * Cartões): troca o período por `router.push` (entra no histórico) preservando base, responsabilidade
+ * e recorte via `urlDoRelatorio`. O `id` é de quem usa — os dois nunca aparecem ao mesmo tempo, mas
+ * o rótulo ligado ao campo não pode depender disso.
+ */
+export function SeletorDoMes({ filtros, id }: { filtros: FiltrosDoRelatorio; id: string }) {
+  const router = useRouter();
+  const { mes, base, resp, recorte } = filtros;
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 sm:w-52">
+      <Label htmlFor={id}>Período (mês de referência)</Label>
+      <input
+        id={id}
+        type="month"
+        value={mes}
+        onChange={(e) => router.push(urlDoRelatorio({ mes: e.target.value || mes, base, resp, recorte }))}
+        className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 text-sm"
+      />
+    </div>
+  );
+}
+
 type Chip = { chave: string; texto: string; rotulo: string; remover: () => void };
 
 export function BarraDeFiltros({ filtros }: { filtros: FiltrosDoRelatorio }) {
@@ -144,18 +167,7 @@ export function BarraDeFiltros({ filtros }: { filtros: FiltrosDoRelatorio }) {
     <Card>
       <CardContent className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <div className="flex min-w-0 flex-col gap-1.5 sm:w-52">
-            <Label htmlFor="rel-mes">Período (mês de referência)</Label>
-            <input
-              id="rel-mes"
-              type="month"
-              value={mes}
-              onChange={(e) =>
-                router.push(urlDoRelatorio({ mes: e.target.value || mes, base, resp, recorte }))
-              }
-              className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 text-sm"
-            />
-          </div>
+          <SeletorDoMes filtros={filtros} id="rel-mes" />
           <div className="flex min-w-0 flex-col gap-1.5">
             <span className="text-sm font-medium">Base:</span>
             <SeletorDeVisao

@@ -388,3 +388,35 @@ describe("a rosca e as formas levam os rótulos da responsabilidade (nunca o def
     expect(ABA).not.toMatch(/minhas saídas|Minha parte/);
   });
 });
+
+/* ─────────────────────── R5: a aba Cartões troca o mês ─────────────────────── */
+
+describe("o seletor do mês também vale na aba Cartões", () => {
+  const cartoes = (() => {
+    const inicio = CLIENTE.indexOf('<TabsContent value="cartoes"');
+    expect(inicio, "TabsContent cartoes").toBeGreaterThanOrEqual(0);
+    const fim = CLIENTE.indexOf("</TabsContent>", inicio);
+    expect(fim).toBeGreaterThan(inicio);
+    return CLIENTE.slice(inicio, fim);
+  })();
+
+  it("<SeletorDoMes> aparece dentro do TabsContent de cartões, com os filtros do relatório", () => {
+    const tags = tagsDe(cartoes, "SeletorDoMes");
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toMatch(/\bfiltros=\{/);
+    expect(tags[0]).toMatch(/\bid="[^"]+"/);
+  });
+
+  it("a barra de filtros usa a MESMA peça, com id distinto", () => {
+    const barra = ler(join(process.cwd(), "src", "components", "reports", "barra-de-filtros.tsx"));
+    expect(barra).toMatch(/export function SeletorDoMes\(/);
+    const usos = tagsDe(barra, "SeletorDoMes");
+    expect(usos).toHaveLength(1);
+    const idDaBarra = /\bid="([^"]+)"/.exec(usos[0])?.[1];
+    const idDeCartoes = /\bid="([^"]+)"/.exec(tagsDe(cartoes, "SeletorDoMes")[0] ?? "")?.[1];
+    expect(idDaBarra).toBeDefined();
+    expect(idDeCartoes).toBeDefined();
+    expect(idDeCartoes).not.toBe(idDaBarra);
+    expect(CLIENTE).toMatch(/import \{[^}]*\bSeletorDoMes\b[^}]*\} from "@\/components\/reports\/barra-de-filtros"/);
+  });
+});

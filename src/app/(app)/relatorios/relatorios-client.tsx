@@ -35,7 +35,7 @@ import { Bloco } from "@/components/shared/painel/bloco";
 import { Indicador } from "@/components/shared/painel/indicador";
 import { BotaoDoOlho, OlhoDosValores } from "@/components/shared/painel/olho-dos-valores";
 import { ValorComOlho } from "@/components/shared/painel/valor-com-olho";
-import { BarraDeFiltros } from "@/components/reports/barra-de-filtros";
+import { BarraDeFiltros, SeletorDoMes } from "@/components/reports/barra-de-filtros";
 import { RoscaCategoriasChart } from "@/components/dashboard/rosca-categorias-chart";
 import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-chart";
 import { MesAMesChart } from "@/components/dashboard/mes-a-mes-chart";
@@ -133,6 +133,8 @@ export function RelatoriosClient({
 
         {/* ───────────── Cartões ───────────── */}
         <TabsContent value="cartoes" className="space-y-6">
+          {/* O mês vale para esta aba também: o seletor mora na barra da aba Financeiro, e aqui volta. */}
+          <SeletorDoMes filtros={financeiro.filtros} id="rel-mes-cartoes" />
           {!card.hasCards ? (
             <EmptyState
               icon={CreditCard}
