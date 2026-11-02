@@ -15,7 +15,7 @@ const ler = (arquivo: string) =>
     .replace(/^\s*\/\/.*$/gm, "");
 
 describe.each([
-  ["finance-card.tsx", "getFinanceCardData"],
+  ["finance-card.tsx", "lerResumoDoDashboard"],
   ["invoices-card.tsx", "getInvoicesCardData"],
   ["resumo-financeiro.tsx", "lerResumoDoDashboard"],
 ])("03-G L4 · %s", (arquivo, leitura) => {

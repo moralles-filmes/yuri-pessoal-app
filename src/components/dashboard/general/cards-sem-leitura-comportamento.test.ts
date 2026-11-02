@@ -10,7 +10,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ErroDeLeitura } from "@/lib/supabase/leitura";
 
 const leituras = vi.hoisted(() => ({
-  getFinanceCardData: vi.fn(),
   getInvoicesCardData: vi.fn(),
 }));
 vi.mock("@/lib/dashboard/queries", () => leituras);
@@ -29,7 +28,7 @@ beforeEach(() => {
 });
 
 describe.each([
-  ["FinanceCard", "getFinanceCardData", () => FinanceCard({ window: JANELA, todayIso: "2026-09-10" })],
+  ["FinanceCard", "lerResumoDoDashboard", () => FinanceCard({ window: JANELA, todayIso: "2026-09-10" })],
   ["InvoicesCard", "getInvoicesCardData", () => InvoicesCard({ todayIso: "2026-09-10" })],
   [
     "ResumoFinanceiro",

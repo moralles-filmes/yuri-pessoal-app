@@ -30,18 +30,31 @@ describe("apresentarEntradas", () => {
 
   // K1 (04-A, decisão do dono): o painel financeiro troca o card de Entradas pelo indicador
   // "Minhas entradas", que lê `indicadorMinhasEntradas` (a minha parte); `apresentarEntradas` NÃO
-  // muda e segue sendo a fonte única das outras duas telas até a 04-A2/06. Reescrito no lugar.
-  it.each([
-    "src/app/(app)/relatorios/relatorios-client.tsx",
-    "src/components/dashboard/general/finance-card.tsx",
-  ])("os cards de Entradas que restam leem só do apresentador: %s", (arquivo) => {
-    const fonte = fs.readFileSync(path.join(process.cwd(), arquivo), "utf8")
-      .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/\/\/[^\r\n]*/g, "");
+  // muda e segue sendo a fonte única da tela de relatórios. Na 06 o RR4 foi para a faixa do Resumo
+  // financeiro (D-06-2): o card Financeiro do dashboard geral não mostra mais Entradas.
+  it.each(["src/app/(app)/relatorios/relatorios-client.tsx"])(
+    "os cards de Entradas que restam leem só do apresentador: %s",
+    (arquivo) => {
+      const fonte = fs.readFileSync(path.join(process.cwd(), arquivo), "utf8")
+        .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/[^\r\n]*/g, "");
 
-    expect(fonte).toContain("apresentarEntradas(");
-    expect(fonte).not.toMatch(/formatCurrency\(\s*[\w.?]*\.entradas\s*\)/);
+      expect(fonte).toContain("apresentarEntradas(");
+      expect(fonte).not.toMatch(/formatCurrency\(\s*[\w.?]*\.entradas\s*\)/);
+    },
+  );
+
+  it("D-06-2 — as entradas do dashboard geral vivem na faixa (entradasInd), não no card Financeiro", () => {
+    const ler = (arquivo: string) =>
+      fs.readFileSync(path.join(process.cwd(), arquivo), "utf8")
+        .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/[^\r\n]*/g, "");
+    const card = ler("src/components/dashboard/general/finance-card.tsx");
+    const faixa = ler("src/components/dashboard/general/resumo-financeiro.tsx");
+    expect(card).not.toMatch(/formatCurrency\(\s*[\w.?]*\.entradas\s*\)/);
+    expect(faixa).toContain("entradasInd");
   });
 
   it("K1 (04-A) — o painel financeiro lê Entradas só de indicadorMinhasEntradas, nunca do bruto", () => {
