@@ -74,6 +74,13 @@ describe("04-B · a gaveta de registros", () => {
     expect(IMPL).toMatch(/data-\[side=right\]:sm:max-w-xl/);
   });
 
+  it("ao fechar, o foco volta a quem o tinha ao abrir (aberta pela URL não há SheetTrigger)", () => {
+    // Revisão final, achado 5: sem isto o Radix devolve o foco ao <body> e o teclado perde a posição.
+    expect(IMPL).toMatch(/onOpenAutoFocus=\{/);
+    expect(IMPL).toMatch(/onCloseAutoFocus=\{/);
+    expect(IMPL).toMatch(/\.focus\(\{\s*preventScroll:\s*true\s*\}\)/);
+  });
+
   it("o vazio não escreve R$ e a falha é alerta", () => {
     expect(IMPL).toMatch(/role="alert"/);
     expect(IMPL).not.toMatch(/R\$ 0,00/);

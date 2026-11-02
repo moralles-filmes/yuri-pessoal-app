@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { AlertTriangle, CircleCheck, CircleSlash, Inbox } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -237,11 +237,24 @@ export function GavetaDeRegistrosImpl({
   const lado = useLado();
   const oculto = useOlhoDosValores()?.oculto ?? false;
   const linhaDeBase = vista.estado === "ok" || vista.estado === "vazio" ? vista.linhaDeBase : null;
+  // Aberta pela URL, a gaveta não tem `SheetTrigger`: sem guardar quem tinha o foco, o Radix o
+  // devolveria ao <body> ao fechar, e quem usa teclado perderia a posição na página.
+  const origem = useRef<HTMLElement | null>(null);
 
   return (
     <Sheet open={aberto} onOpenChange={(v) => (v ? undefined : aoFechar())}>
       <SheetContent
         side={lado}
+        onOpenAutoFocus={() => {
+          origem.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(e) => {
+          const alvo = origem.current;
+          if (alvo && alvo.isConnected) {
+            e.preventDefault();
+            alvo.focus({ preventScroll: true });
+          }
+        }}
         className="gap-0 p-0 data-[side=bottom]:max-h-[88dvh] data-[side=bottom]:rounded-t-2xl data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
       >
         <div data-ocultar={oculto ? "true" : "false"} className="group/olho flex min-h-0 flex-1 flex-col">
