@@ -351,3 +351,25 @@ describe("o olho dos valores e a página", () => {
     expect(ABA).toContain("rotuloPendenteDoMes(");
   });
 });
+
+/* ─────────────────────── R1: rosca e formas rotulam pela responsabilidade ─────────────────────── */
+
+describe("a rosca e as formas levam os rótulos da responsabilidade (nunca o default 'minhas')", () => {
+  it("<RoscaCategoriasChart> recebe `ariaDaLista` e `rotuloDoTotal`", () => {
+    const tags = tagsDe(ABA, "RoscaCategoriasChart");
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toMatch(/\bariaDaLista=\{/);
+    expect(tags[0]).toMatch(/\brotuloDoTotal=\{/);
+  });
+
+  it("<FormaPagamentoChart> recebe `rotuloDaSerie`", () => {
+    const tags = tagsDe(ABA, "FormaPagamentoChart");
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toMatch(/\brotuloDaSerie=\{/);
+  });
+
+  it("os textos saem de `rotulosDaComposicao` (fonte única), não de literais na tela", () => {
+    expect(CLIENTE).toContain("rotulosDaComposicao(");
+    expect(ABA).not.toMatch(/minhas saídas|Minha parte/);
+  });
+});

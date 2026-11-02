@@ -43,7 +43,7 @@ import { ProjecaoChart } from "@/components/dashboard/projecao-chart";
 import { FaturasChart } from "@/components/dashboard/faturas-chart";
 import { AvisoParcial } from "@/components/financeiro/aviso-parcial";
 import { RodapeDasFaturasSemTotal } from "@/components/financeiro/caixa-nos-graficos";
-import { rotulosDosGraficos } from "@/lib/finance/rotulos-dos-graficos";
+import { rotulosDaComposicao, rotulosDosGraficos } from "@/lib/finance/rotulos-dos-graficos";
 import { ReportBarChart, type BarPoint } from "@/components/reports/report-bar-chart";
 import { BlocoDoCaixa } from "@/components/financeiro/bloco-do-caixa";
 import { monthLabel } from "@/components/dashboard/chart-theme";
@@ -638,6 +638,7 @@ function AbaFinanceiro({
   const categoriasDaRosca = rosca === null ? [] : rosca.categorias.map((c) => ({ ...c, meu: c.valor }));
   const formasDaResp = financeiro.formas.map((f) => ({ ...f, meu: f.valor }));
   const ancora = financeiro.ancora;
+  const composicao = rotulosDaComposicao(resp);
 
   return (
     <div className="space-y-6">
@@ -776,7 +777,12 @@ function AbaFinanceiro({
                 naoSegue={naoSegueDoRelatorio(financeiro, "rosca")}
               >
                 {rosca !== null ? (
-                  <RoscaCategoriasChart categorias={categoriasDaRosca} estornos={rosca.estornos} />
+                  <RoscaCategoriasChart
+                    categorias={categoriasDaRosca}
+                    estornos={rosca.estornos}
+                    ariaDaLista={composicao.ariaDaLista}
+                    rotuloDoTotal={composicao.totalDaRosca}
+                  />
                 ) : null}
               </Bloco>
               <Bloco
@@ -788,7 +794,7 @@ function AbaFinanceiro({
                 falha={FALHA_DO_CAIXA}
                 naoSegue={naoSegueDoRelatorio(financeiro, "formas")}
               >
-                <FormaPagamentoChart data={formasDaResp} />
+                <FormaPagamentoChart data={formasDaResp} rotuloDaSerie={composicao.serieDaForma} />
               </Bloco>
             </div>
           </section>
