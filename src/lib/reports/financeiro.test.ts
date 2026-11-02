@@ -363,7 +363,7 @@ describe("sem recorte, em meu (o painel)", () => {
   it("as setas só existem em meu e sem recorte", () => {
     expect(r.indicadores.entradas.comparacao).not.toBeNull();
     expect(monta({ resp: "consolidado" }).indicadores.saidas.comparacao?.texto).toBe(
-      "sem comparação neste recorte",
+      "sem comparação nesta responsabilidade",
     );
     expect(monta({ recorte: comRecorte({ conta: "conta-b" }) }).indicadores.saidas.comparacao?.texto).toBe(
       "sem comparação neste recorte",

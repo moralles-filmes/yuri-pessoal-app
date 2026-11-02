@@ -248,7 +248,7 @@ type MinhaDoCaixa = Extract<EstadoDoCaixa, { estado: "ok" }>["graficos"]["minha"
  * é TEXTO, nunca R$ 0,00. Os textos de "meu" são os que o painel já tinha.
  *
  * `comparacao` (as setas) só chega em "meu" e sem recorte (D-A2-22); nos outros casos, o texto diz
- * "sem comparação neste recorte". `null` em `p.comparacao` = sem setas (caixa com erro).
+ * "sem comparação nesta responsabilidade" (sem recorte) ou "sem comparação neste recorte" (com recorte). `null` em `p.comparacao` = sem setas (caixa com erro).
  */
 export function indicadoresDoResumo(p: {
   resp: Responsabilidade;
@@ -274,10 +274,12 @@ export function indicadoresDoResumo(p: {
   const minha: MinhaDoCaixa | null = caixa?.estado === "ok" ? caixa.graficos.minha : null;
 
   const comSetas = resp === "meu" && p.rotuloDoRecorte === null;
+  // Quem bloqueia a seta: com recorte ligado, o recorte; sem ele (só pode ser Terceiros ou
+  // Consolidado), a responsabilidade. Dizer "recorte" onde não há nenhum manda o dono procurar um filtro.
   const semComparacao = (): ComparacaoDoIndicador => ({
     pct: null,
     sentido: "neutro",
-    texto: "sem comparação neste recorte",
+    texto: p.rotuloDoRecorte === null ? "sem comparação nesta responsabilidade" : "sem comparação neste recorte",
   });
   const comparacaoDe = (qual: "entradas" | "saidas"): ComparacaoDoIndicador | null =>
     comSetas ? (p.comparacao?.[qual] ?? null) : semComparacao();

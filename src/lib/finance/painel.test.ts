@@ -771,6 +771,14 @@ describe("indicadoresDoResumo", () => {
       for (const c of [r.entradas.comparacao, r.saidas.comparacao]) {
         expect(c?.pct).toBeNull();
         expect(c?.sentido).toBe("neutro");
+        // Sem recorte, quem bloqueia a seta é a responsabilidade — não há recorte a culpar.
+        expect(c?.texto).toBe("sem comparação nesta responsabilidade");
+      }
+    });
+
+    it.each(["terceiros", "consolidado"] as const)("%s COM recorte: o motivo é o recorte", (resp) => {
+      const r = chamar(resp, "competencia", { rotuloDoRecorte: " · Cartão A" });
+      for (const c of [r.entradas.comparacao, r.saidas.comparacao]) {
         expect(c?.texto).toBe("sem comparação neste recorte");
       }
     });
