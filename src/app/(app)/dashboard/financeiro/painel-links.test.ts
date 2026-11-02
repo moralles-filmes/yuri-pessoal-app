@@ -38,6 +38,8 @@ describe("painel financeiro — links", () => {
   it("todo href estático escrito no painel tem página no disco (nenhum link morto)", () => {
     const achados = new Set<string>();
     for (const m of CODIGO.matchAll(/\bhref\s*[=:]\s*\{?\s*["'`](\/[^"'`?#$]*)/g)) achados.add(m[1]);
+    // 04-B: os destinos do rodapé da gaveta (`linkLancamentos`, `linkContas`) também são links.
+    for (const m of CODIGO.matchAll(/\blink[A-Z]\w*=\{[^}]*?["'`](\/[^"'`?#$]*)/g)) achados.add(m[1]);
 
     // Sem isto, uma extração que não achasse nada passaria verde.
     expect(achados.size).toBeGreaterThanOrEqual(DESTINOS.length);

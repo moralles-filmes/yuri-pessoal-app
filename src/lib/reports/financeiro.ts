@@ -605,6 +605,8 @@ export type GavetaDoRelatorio = {
   hrefs: Record<string, string>;
   urlAoFechar: string;
   linkLancamentos: string;
+  /** Só na gaveta do saldo: o rodapé leva às contas (saldo não é competência). */
+  linkContas: string | null;
 };
 
 const CAMINHO_DO_RELATORIO = "/relatorios";
@@ -776,5 +778,6 @@ export function gavetaDoRelatorio(p: ParametrosDaGaveta): GavetaDoRelatorio {
     hrefs,
     urlAoFechar: urlSemDetalhe(CAMINHO_DO_RELATORIO, p.sp),
     linkLancamentos: `/financeiro/lancamentos?month=${mes}`,
+    linkContas: p.pedido?.chave === "saldo" ? "/financeiro/contas" : null,
   };
 }

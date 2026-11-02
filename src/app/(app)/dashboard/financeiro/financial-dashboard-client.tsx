@@ -196,6 +196,7 @@ export function DashboardClient({
   faturaIds,
   urlAoFechar,
   linkLancamentos,
+  linkContas,
 }: {
   /** O banner de boas-vindas, JÁ montado pelo servidor — o cliente não o importa. */
   banner: React.ReactNode;
@@ -239,6 +240,7 @@ export function DashboardClient({
   faturaIds: Record<string, string>;
   urlAoFechar: string;
   linkLancamentos: string;
+  linkContas: string | null;
 }) {
   const router = useRouter();
 
@@ -404,14 +406,7 @@ export function DashboardClient({
             detalheComValor={saldoCom.diferenca}
             href={hrefs.saldo}
             hrefRotulo="Ver registros"
-            acessorio={
-              <span className="flex items-center gap-2">
-                <Link href="/financeiro/contas" className="text-xs text-primary hover:underline">
-                  Contas
-                </Link>
-                <BotaoDoOlho />
-              </span>
-            }
+            acessorio={<BotaoDoOlho />}
           />
           <Indicador
             className={INDICADOR_PEQUENO_NO_CELULAR}
@@ -453,7 +448,12 @@ export function DashboardClient({
 
         {/* 04-B: a gaveta fica DENTRO do olho — ela é desenhada num portal, fora do invólucro, e só
             o contexto do olho a alcança. A vista vem pronta da página (`?detalhe=`). */}
-        <GavetaDeRegistros vista={vista} urlAoFechar={urlAoFechar} linkLancamentos={linkLancamentos} />
+        <GavetaDeRegistros
+          vista={vista}
+          urlAoFechar={urlAoFechar}
+          linkLancamentos={linkLancamentos}
+          linkContas={linkContas}
+        />
       </OlhoDosValores>
 
       {/* Bloco do caixa (só na base caixa) */}

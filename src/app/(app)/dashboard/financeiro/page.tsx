@@ -318,6 +318,7 @@ export default async function DashboardFinanceiroPage({
         faturaIds={faturaIds}
         urlAoFechar={urlSemDetalhe("/dashboard/financeiro", sp)}
         linkLancamentos={`/financeiro/lancamentos?month=${mesSel}`}
+        linkContas={pedido?.chave === "saldo" ? "/financeiro/contas" : null}
       />
     </div>
   );

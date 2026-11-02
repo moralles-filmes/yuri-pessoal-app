@@ -151,7 +151,28 @@ function LinkLancamentos({ href }: { href: string }) {
   );
 }
 
-function Corpo({ vista, linkLancamentos }: { vista: VistaDaGaveta; linkLancamentos: string }) {
+/** Saldo não é competência: a gaveta do saldo leva às contas, sem a nota de Lançamentos. */
+function LinkContas({ href }: { href: string }) {
+  return (
+    <Link href={href} className="inline-block text-xs text-primary hover:underline">
+      Abrir em Contas ›
+    </Link>
+  );
+}
+
+function LinkDoRodape({ linkLancamentos, linkContas }: { linkLancamentos: string; linkContas: string | null }) {
+  return linkContas ? <LinkContas href={linkContas} /> : <LinkLancamentos href={linkLancamentos} />;
+}
+
+function Corpo({
+  vista,
+  linkLancamentos,
+  linkContas,
+}: {
+  vista: VistaDaGaveta;
+  linkLancamentos: string;
+  linkContas: string | null;
+}) {
   switch (vista.estado) {
     case "falha":
       return (
@@ -186,7 +207,7 @@ function Corpo({ vista, linkLancamentos }: { vista: VistaDaGaveta; linkLancament
             </div>
             <p className="text-sm text-muted-foreground">{vista.frase}</p>
           </div>
-          <LinkLancamentos href={linkLancamentos} />
+          <LinkDoRodape linkLancamentos={linkLancamentos} linkContas={linkContas} />
         </>
       );
     case "ok":
@@ -201,7 +222,15 @@ function Corpo({ vista, linkLancamentos }: { vista: VistaDaGaveta; linkLancament
   }
 }
 
-function Rodape({ vista, linkLancamentos }: { vista: Extract<VistaDaGaveta, { estado: "ok" }>; linkLancamentos: string }) {
+function Rodape({
+  vista,
+  linkLancamentos,
+  linkContas,
+}: {
+  vista: Extract<VistaDaGaveta, { estado: "ok" }>;
+  linkLancamentos: string;
+  linkContas: string | null;
+}) {
   return (
     <div className="space-y-1.5 border-t px-4 py-3 text-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -218,7 +247,7 @@ function Rodape({ vista, linkLancamentos }: { vista: Extract<VistaDaGaveta, { es
           </span>
         )}
       </div>
-      <LinkLancamentos href={linkLancamentos} />
+      <LinkDoRodape linkLancamentos={linkLancamentos} linkContas={linkContas} />
     </div>
   );
 }
@@ -228,11 +257,13 @@ export function GavetaDeRegistrosImpl({
   aoFechar,
   vista,
   linkLancamentos,
+  linkContas,
 }: {
   aberto: boolean;
   aoFechar: () => void;
   vista: VistaDaGaveta;
   linkLancamentos: string;
+  linkContas: string | null;
 }) {
   const lado = useLado();
   const oculto = useOlhoDosValores()?.oculto ?? false;
@@ -268,9 +299,9 @@ export function GavetaDeRegistrosImpl({
             ) : null}
           </SheetHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
-            <Corpo vista={vista} linkLancamentos={linkLancamentos} />
+            <Corpo vista={vista} linkLancamentos={linkLancamentos} linkContas={linkContas} />
           </div>
-          {vista.estado === "ok" ? <Rodape vista={vista} linkLancamentos={linkLancamentos} /> : null}
+          {vista.estado === "ok" ? <Rodape vista={vista} linkLancamentos={linkLancamentos} linkContas={linkContas} /> : null}
         </div>
       </SheetContent>
     </Sheet>

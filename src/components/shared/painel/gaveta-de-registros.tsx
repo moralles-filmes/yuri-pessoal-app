@@ -30,15 +30,20 @@ export function GavetaDeRegistros({
   vista,
   urlAoFechar,
   linkLancamentos,
+  linkContas = null,
 }: {
   vista: VistaDaGaveta | null;
   urlAoFechar: string;
   linkLancamentos: string;
+  /** Só na gaveta do saldo: o rodapé leva às contas em vez de Lançamentos. */
+  linkContas?: string | null;
 }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(vista !== null);
   const [ultimo, setUltimo] = useState<VistaDaGaveta | null>(vista);
   const [visto, setVisto] = useState<VistaDaGaveta | null>(vista);
+  // O link das contas acompanha a ÚLTIMA vista: na animação de fechar a URL já o perdeu.
+  const [ultimoLinkContas, setUltimoLinkContas] = useState<string | null>(linkContas);
 
   // Estado derivado DURANTE o render (o padrão de `useLazyDialog`): uma vista nova da URL abre a
   // gaveta e passa a ser a última; `null` não apaga a última (a animação de fechar o usa).
@@ -46,6 +51,7 @@ export function GavetaDeRegistros({
     setVisto(vista);
     if (vista !== null) {
       setUltimo(vista);
+      setUltimoLinkContas(linkContas);
       setAberto(true);
     } else {
       setAberto(false);
@@ -66,6 +72,7 @@ export function GavetaDeRegistros({
       aoFechar={aoFechar}
       vista={ultimo}
       linkLancamentos={linkLancamentos}
+      linkContas={ultimoLinkContas}
     />
   );
 }

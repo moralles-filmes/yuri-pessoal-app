@@ -713,14 +713,7 @@ function AbaFinanceiro({
                 detalheComValor={saldo.detalheComValor}
                 href={hrefs.saldo}
                 hrefRotulo="Ver registros"
-                acessorio={
-                  <span className="flex items-center gap-2">
-                    <Link href={saldo.href} className="text-xs text-primary hover:underline">
-                      Contas
-                    </Link>
-                    <BotaoDoOlho />
-                  </span>
-                }
+                acessorio={<BotaoDoOlho />}
               />
               <Indicador
                 className={INDICADOR_PEQUENO_NO_CELULAR}
@@ -769,6 +762,7 @@ function AbaFinanceiro({
               vista={gaveta.vista}
               urlAoFechar={gaveta.urlAoFechar}
               linkLancamentos={gaveta.linkLancamentos}
+              linkContas={gaveta.linkContas}
             />
 
             {/* Bloco do caixa (só na base caixa; sem leitura ele mesmo diz que não leu) */}
