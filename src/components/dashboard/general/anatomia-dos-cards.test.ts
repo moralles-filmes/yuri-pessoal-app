@@ -111,3 +111,26 @@ describe("T10 · InvoicesCard chamado", () => {
     expect(texto).not.toMatch(/R\$\s?0,00/);
   });
 });
+
+describe("T11 · nutrition-card.tsx", () => {
+  const codigo = ler("nutrition-card.tsx");
+  it.each(["Configurar dieta", "registradas"])("contém %s", (trecho) => {
+    expect(codigo).toContain(trecho);
+  });
+  it.each(["Aderência de hoje", "Lista de compras", "Água (Hábitos)"])(
+    "não contém %s",
+    (trecho) => {
+      expect(codigo).not.toContain(trecho);
+    },
+  );
+});
+
+describe("T11 · habits-card-body.tsx", () => {
+  const codigo = ler("habits-card-body.tsx");
+  it.each(["concluídos hoje", "<svg"])("contém %s", (trecho) => {
+    expect(codigo).toContain(trecho);
+  });
+  it("não contém incrementHabit (a água é só leitura)", () => {
+    expect(codigo).not.toContain("incrementHabit");
+  });
+});

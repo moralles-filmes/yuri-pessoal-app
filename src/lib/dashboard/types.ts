@@ -148,6 +148,10 @@ export type StudiesCardData = {
 
 /* ───────────────────────────── Notificações (placeholder até a Fase 13) ───────────────────────────── */
 
+/**
+ * `available: false` é só "tabela ausente" (o "Em breve" legítimo). Erro de leitura NÃO chega
+ * aqui: `getNotificationsCardData` lança `ErroDeLeitura` e o card mostra a falha (D-06-M5).
+ */
 export type NotificationsCardData = {
   available: boolean;
   unread: number;

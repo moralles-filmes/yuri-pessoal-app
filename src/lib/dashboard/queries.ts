@@ -9,6 +9,7 @@
 import { addDays, format, startOfMonth, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
+import { ErroDeLeitura } from "@/lib/supabase/leitura";
 import { dateInSaoPaulo, saoPauloWallClockToInstant } from "@/lib/format";
 import { lerFinanceiro } from "@/lib/finance/queries";
 import {
@@ -392,8 +393,8 @@ export async function getStudiesCardData(
 /* ───────────────────────────── Notificações (Fase 13) ───────────────────────────── */
 
 /**
- * Lê as não lidas reais da tabela `notifications` (Fase 13). Resiliente: se a leitura
- * falhar (ex.: Supabase não configurado), degrada para available=false sem quebrar o card.
+ * Lê as não lidas reais da tabela `notifications` (Fase 13). Tabela ausente (42P01) degrada
+ * para available=false; qualquer outro erro lança `ErroDeLeitura` (06 T11, D-06-M5).
  */
 export async function getNotificationsCardData(): Promise<NotificationsCardData> {
   const supabase = await createClient();
@@ -402,7 +403,12 @@ export async function getNotificationsCardData(): Promise<NotificationsCardData>
     .select("*", { count: "exact", head: true })
     .eq("is_read", false)
     .eq("is_resolved", false);
-  if (error) return { available: false, unread: 0 };
+  if (error) {
+    // 06 T11 (D-06-M5): só a tabela ausente é "indisponível" (o "Em breve" legítimo); qualquer
+    // outro erro é falha de leitura — o card a mostra como falha, nunca como "Em breve".
+    if (error.code === "42P01") return { available: false, unread: 0 };
+    throw new ErroDeLeitura("as notificações", { codigo: error.code ?? null, cause: error });
+  }
   return { available: true, unread: count ?? 0 };
 }
 

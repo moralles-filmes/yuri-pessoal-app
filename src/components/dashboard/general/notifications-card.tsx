@@ -3,14 +3,29 @@ import { Bell, BellOff, ChevronRight } from "lucide-react";
 import { getNotificationsCardData } from "@/lib/dashboard/queries";
 import { getRecentNotifications } from "@/lib/notifications/queries";
 import { NOTIFICATION_PRIORITY_BADGE } from "@/lib/notifications/constants";
+import { ehErroDeLeitura, registrarFalhaDeLeitura, type ErroDeLeitura } from "@/lib/supabase/leitura";
+import { CardSemLeitura } from "@/components/shared/card-sem-leitura";
 import { cn } from "@/lib/utils";
 
 /**
  * Corpo do card Notificações (Fase 13): mostra as não lidas reais + as últimas, com
- * link para a central /notificacoes. Degrada com elegância se a leitura falhar.
+ * link para a central /notificacoes. Falha de leitura mostra o CardSemLeitura, nunca "Em breve"
+ * (06 T11, D-06-M5); "Em breve" é só a tabela ausente.
  */
 export async function NotificationsCard() {
-  const d = await getNotificationsCardData();
+  // Padrão 03-G: captura SÓ ErroDeLeitura e SÓ a leitura; o JSX fica fora do try.
+  let d: Awaited<ReturnType<typeof getNotificationsCardData>> | null = null;
+  let falha: ErroDeLeitura | null = null;
+  try {
+    d = await getNotificationsCardData();
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    falha = e;
+    registrarFalhaDeLeitura(e);
+  }
+  if (falha || !d) {
+    return <CardSemLeitura oQue={falha?.oQue ?? "as notificações"} href="/dashboard" />;
+  }
 
   if (!d.available) {
     return (
