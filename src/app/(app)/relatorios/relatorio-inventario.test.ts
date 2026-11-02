@@ -335,9 +335,20 @@ describe("o olho dos valores e a página", () => {
     expect(ABA.indexOf("</OlhoDosValores>")).toBeGreaterThan(ABA.lastIndexOf("<Indicador"));
   });
 
-  it("o texto de dinheiro das listas some com o olho (mesmo seletor do Indicador)", () => {
-    expect(CLIENTE).toContain("group-data-[ocultar=true]/olho:hidden");
-    expect(CLIENTE).toContain("valor oculto");
+  it("o texto de dinheiro das listas some com o olho (peça compartilhada, mesmo seletor do Indicador)", () => {
+    const peca = ler(join(process.cwd(), "src", "components", "shared", "painel", "valor-com-olho.tsx"));
+    expect(peca).toContain("export function ValorComOlho");
+    expect(peca).toContain("group-data-[ocultar=true]/olho:hidden");
+    expect(peca).toContain("valor oculto");
+    expect(CLIENTE).toContain("<ValorComOlho");
+  });
+
+  it("R3 · o relatório não define a própria peça do olho (reuso, não cópia)", () => {
+    expect(CLIENTE).not.toMatch(/\bfunction\s+ComOlho\b/);
+    expect(CLIENTE).not.toContain("<ComOlho");
+    expect(CLIENTE).toMatch(
+      /import \{[^}]*\bValorComOlho\b[^}]*\} from "@\/components\/shared\/painel\/valor-com-olho"/,
+    );
   });
 
   it("o BlocoDoCaixa só aparece na base caixa, com o estado lido pelo modelo", () => {

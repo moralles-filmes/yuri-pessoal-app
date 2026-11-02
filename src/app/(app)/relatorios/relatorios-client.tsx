@@ -34,6 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Bloco } from "@/components/shared/painel/bloco";
 import { Indicador } from "@/components/shared/painel/indicador";
 import { BotaoDoOlho, OlhoDosValores } from "@/components/shared/painel/olho-dos-valores";
+import { ValorComOlho } from "@/components/shared/painel/valor-com-olho";
 import { BarraDeFiltros } from "@/components/reports/barra-de-filtros";
 import { RoscaCategoriasChart } from "@/components/dashboard/rosca-categorias-chart";
 import { FormaPagamentoChart } from "@/components/dashboard/forma-pagamento-chart";
@@ -531,24 +532,6 @@ function acaoDoBloco(f: RelatorioFinanceiro, bloco: BlocoDaAba): React.ReactNode
 }
 
 /**
- * Texto com dinheiro dentro da aba: some e dá lugar a "R$ ••••" com o olho fechado — o MESMO seletor
- * do `Indicador` (`group-data-[ocultar=true]/olho`). O leitor de tela ouve "valor oculto".
- */
-function ComOlho({ texto }: { texto: string }) {
-  return (
-    <>
-      <span className="group-data-[ocultar=true]/olho:hidden">{texto}</span>
-      <span aria-hidden="true" className="hidden group-data-[ocultar=true]/olho:inline">
-        R$ ••••
-      </span>
-      <span className="hidden group-data-[ocultar=true]/olho:inline">
-        <span className="sr-only">valor oculto</span>
-      </span>
-    </>
-  );
-}
-
-/**
  * No celular, os três indicadores secundários ficam menores e sem a base e a comparação (a dica (i)
  * continua). Mesmas classes do painel: ficam no CARD, porque o `Indicador` é uma peça comum.
  */
@@ -825,7 +808,7 @@ function AbaFinanceiro({
                     <div className="min-w-0 rounded-lg bg-muted/50 p-3">
                       <p className="text-xs break-words text-muted-foreground">Minhas saídas</p>
                       <p className="text-lg font-semibold break-words tabular-nums">
-                        <ComOlho texto={formatCurrency(ancora.meu)} />
+                        <ValorComOlho texto={formatCurrency(ancora.meu)} />
                       </p>
                     </div>
                     <div className="min-w-0 rounded-lg bg-muted/50 p-3">
@@ -833,7 +816,7 @@ function AbaFinanceiro({
                         {rotulos.cardMinhasSaidas.bruto}
                       </p>
                       <p className="text-lg font-semibold break-words tabular-nums">
-                        <ComOlho texto={formatCurrency(ancora.bruto)} />
+                        <ValorComOlho texto={formatCurrency(ancora.bruto)} />
                       </p>
                     </div>
                     <div className="min-w-0 rounded-lg bg-muted/50 p-3">
@@ -841,20 +824,20 @@ function AbaFinanceiro({
                         {rotulos.cardMinhasSaidas.terceiros}
                       </p>
                       <p className="text-lg font-semibold break-words tabular-nums">
-                        <ComOlho texto={formatCurrency(ancora.terceiros)} />
+                        <ValorComOlho texto={formatCurrency(ancora.terceiros)} />
                       </p>
                     </div>
                   </div>
                   {ancora.perdoado !== null && fraseDoPerdoado(ancora.perdoado) !== null ? (
                     <p className="text-xs break-words text-muted-foreground">
-                      <ComOlho texto={fraseDoPerdoado(ancora.perdoado) ?? ""} />
+                      <ValorComOlho texto={fraseDoPerdoado(ancora.perdoado) ?? ""} />
                     </p>
                   ) : null}
                   <div className="flex items-baseline justify-between gap-3 border-t pt-3 text-sm">
                     <span className="min-w-0 text-muted-foreground">{rotuloPendenteDoMes(mes)}</span>
                     {ancora.pendenteDoMes !== null ? (
                       <span className="shrink-0 font-medium tabular-nums">
-                        <ComOlho texto={formatCurrency(ancora.pendenteDoMes)} />
+                        <ValorComOlho texto={formatCurrency(ancora.pendenteDoMes)} />
                       </span>
                     ) : (
                       <span className="min-w-0 text-right text-xs text-muted-foreground">
@@ -897,11 +880,11 @@ function AbaFinanceiro({
                       </span>
                       <span className="shrink-0 text-right tabular-nums">
                         <span className="font-semibold">
-                          <ComOlho texto={formatCurrency(c.movimentado)} />
+                          <ValorComOlho texto={formatCurrency(c.movimentado)} />
                         </span>
                         {c.meu !== c.movimentado && (
                           <span className="ml-1 text-xs text-muted-foreground">
-                            <ComOlho texto={`(meu ${formatCurrency(c.meu)})`} />
+                            <ValorComOlho texto={`(meu ${formatCurrency(c.meu)})`} />
                           </span>
                         )}
                       </span>
@@ -948,7 +931,7 @@ function AbaFinanceiro({
                       <span className="min-w-0 truncate">{a.nome}</span>
                       <span className="shrink-0 tabular-nums">
                         <span className="font-semibold">
-                          <ComOlho texto={formatCurrency(a.valor)} />
+                          <ValorComOlho texto={formatCurrency(a.valor)} />
                         </span>
                         <span className="ml-1 text-xs text-muted-foreground">
                           {FREQ_LABELS[a.frequency] ?? a.frequency}

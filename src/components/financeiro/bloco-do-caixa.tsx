@@ -9,15 +9,26 @@
  */
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ValorComOlho } from "@/components/shared/painel/valor-com-olho";
 import { formatCurrency } from "@/lib/format";
 import type { EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
 
-function Linha({ rotulo, valor, secundaria }: { rotulo: string; valor: number; secundaria?: string }) {
+function Linha({
+  rotulo,
+  valor,
+  secundaria,
+}: {
+  rotulo: string;
+  valor: number;
+  secundaria?: React.ReactNode;
+}) {
   return (
     <div className="min-w-0 space-y-0.5">
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 text-sm break-words text-muted-foreground">{rotulo}</span>
-        <span className="shrink-0 text-sm font-medium tabular-nums">{formatCurrency(valor)}</span>
+        <span className="shrink-0 text-sm font-medium tabular-nums">
+          <ValorComOlho texto={formatCurrency(valor)} />
+        </span>
       </div>
       {secundaria && <p className="text-xs break-words text-muted-foreground">{secundaria}</p>}
     </div>
@@ -70,9 +81,11 @@ export function BlocoDoCaixa({ mesRotulo, caixa }: { mesRotulo: string; caixa: E
             rotulo="Saídas de caixa"
             valor={n.saidasDeCaixa}
             secundaria={
-              n.pagamentosDeFatura > 0
-                ? `inclui pagamentos de fatura ${formatCurrency(n.pagamentosDeFatura)}`
-                : undefined
+              n.pagamentosDeFatura > 0 ? (
+                <>
+                  inclui pagamentos de fatura <ValorComOlho texto={formatCurrency(n.pagamentosDeFatura)} />
+                </>
+              ) : undefined
             }
           />
         </div>
@@ -83,7 +96,7 @@ export function BlocoDoCaixa({ mesRotulo, caixa }: { mesRotulo: string; caixa: E
             <span className="min-w-0 text-sm font-medium break-words">Resultado de caixa</span>
           </div>
           <span className="shrink-0 text-lg font-semibold tracking-tight tabular-nums">
-            {formatCurrency(n.resultadoDeCaixa)}
+            <ValorComOlho texto={formatCurrency(n.resultadoDeCaixa)} />
           </span>
         </div>
 
@@ -108,13 +121,15 @@ export function BlocoDoCaixa({ mesRotulo, caixa }: { mesRotulo: string; caixa: E
           {n.transferenciasSemVinculo.quantidade > 0 && (
             <p className="break-words">
               {n.transferenciasSemVinculo.quantidade} transferência(s) sem destino e sem vínculo com
-              fatura contadas como saída ({formatCurrency(n.transferenciasSemVinculo.total)})
+              fatura contadas como saída (
+              <ValorComOlho texto={formatCurrency(n.transferenciasSemVinculo.total)} />)
             </p>
           )}
           {n.transferenciasEntreContas > 0 && (
             <p className="break-words">
-              Transferências entre suas contas: {formatCurrency(n.transferenciasEntreContas)} — não
-              entram no resultado
+              Transferências entre suas contas:{" "}
+              <ValorComOlho texto={formatCurrency(n.transferenciasEntreContas)} /> — não entram no
+              resultado
             </p>
           )}
           {caixa.parcial && (
