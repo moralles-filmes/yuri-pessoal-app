@@ -69,9 +69,12 @@ describe("apresentarEntradas", () => {
     // compartilhada com o relatório. A garantia é a mesma — o número vem de `indicadorMinhasEntradas`
     // — e ela pode estar em UM dos dois lugares.
     const painel = ler("src/lib/finance/painel.ts");
-    expect(
-      pagina.includes("indicadorMinhasEntradas(") || painel.includes("indicadorMinhasEntradas("),
-    ).toBe(true);
+    // A função é DEFINIDA em painel.ts, então `includes("indicadorMinhasEntradas(")` ali é sempre
+    // verdadeiro. A garantia é a CHAMADA: tira-se a linha da definição antes de procurar.
+    const chamaSemDefinir = (fonte: string) =>
+      fonte.replace(/export function indicadorMinhasEntradas\(/g, "").includes("indicadorMinhasEntradas(");
+    expect(chamaSemDefinir(painel), "indicadoresDoResumo chama indicadorMinhasEntradas").toBe(true);
+    expect(chamaSemDefinir(pagina) || chamaSemDefinir(painel)).toBe(true);
     expect(cliente).not.toMatch(/formatCurrency\(\s*[\w.?]*\.entradas\s*\)/);
     expect(pagina).not.toMatch(/formatCurrency\(\s*[\w.?]*\.entradas\s*\)/);
   });

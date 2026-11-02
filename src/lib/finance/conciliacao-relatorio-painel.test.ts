@@ -290,9 +290,15 @@ describe("conciliação painel × relatório: o modelo de vista do relatório (T
     const fatias = r.rosca?.categorias ?? [];
     expect(fatias.map((f) => f.valor)).toEqual(categorias.map((f) => f.meu));
     expect(r.rosca?.estornos).toBe(estornos);
-    const fora = foraDaRosca(categorias, estornos);
-    expect(somaCent(dadosDaRosca(categorias).map((f) => f.meu)) - cent(estornos) + cent(fora.soma)).toBe(
-      cent(resumo.meu),
-    );
+    // A conta fecha com os dados do RELATÓRIO (`r.rosca`), não com os do painel que o teste já tinha
+    // em mãos — senão a asserção passaria mesmo com a rosca do relatório errada.
+    const doRelatorio = (r.rosca?.categorias ?? []).map((c) => ({ ...c, meu: c.valor }));
+    const estornosDoRelatorio = r.rosca?.estornos ?? Number.NaN;
+    const foraDoRelatorio = foraDaRosca(doRelatorio, estornosDoRelatorio);
+    expect(
+      somaCent(dadosDaRosca(doRelatorio).map((f) => f.meu)) - cent(estornosDoRelatorio) + cent(foraDoRelatorio.soma),
+    ).toBe(cent(resumo.meu));
+    // E é a MESMA conta do painel: mesmas fatias, mesmo que ficou de fora.
+    expect(foraDoRelatorio).toEqual(foraDaRosca(categorias, estornos));
   });
 });
