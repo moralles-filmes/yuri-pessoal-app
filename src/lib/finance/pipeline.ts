@@ -504,10 +504,21 @@ export const ESCOPO_RELATORIO = {
 } as const;
 
 /**
- * Um dos três escopos, e só. A união das três formas literais faz uma combinação solta
+ * Página do dashboard financeiro (04-A): o mesmo do relatório + os recebíveis crus com a pessoa
+ * (D-A-14), saídos da MESMA leitura de `receivables` — nenhuma leitura a mais.
+ */
+export const ESCOPO_PAINEL = {
+  ...ESCOPO_RELATORIO,
+  nome: "painel",
+  recebiveisCrus: true,
+} as const;
+
+/**
+ * Um dos quatro escopos, e só. A união das quatro formas literais faz uma combinação solta
  * (ex.: o card com parcelas) não tipar — ninguém escreve um objeto de escopo à mão.
  */
 export type EscopoFinanceiro =
   | typeof ESCOPO_CARD_FINANCEIRO
   | typeof ESCOPO_FATURAS
-  | typeof ESCOPO_RELATORIO;
+  | typeof ESCOPO_RELATORIO
+  | typeof ESCOPO_PAINEL;

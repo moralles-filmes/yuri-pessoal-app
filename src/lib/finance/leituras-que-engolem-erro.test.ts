@@ -49,6 +49,11 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
     motivo: "A abertura do mesmo saldo diário: sem ela, `null` (um saldo que começa do zero seria mentira).",
     destino: "K1 (5) — mantido, junto da linha acima.",
   },
+  "src/lib/finance/queries.ts · lerSaldoAte · account_balance_before": {
+    motivo:
+      "K2 (04-A): erro → `null`, e a tela escreve \"Não foi possível ler o saldo\" — ausência, nunca zero.",
+    destino: "04-A K2 — mantido.",
+  },
   "src/lib/finance/queries.ts · getCategoriesEnsureSeed · seed_default_categories": {
     motivo:
       "O seed é idempotente e a leitura seguinte (listaCompleta das categorias) lança se algo falhou: o erro do rpc não decide nada.",
@@ -74,9 +79,10 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
  * compra-pai que `cancelInstallmentFuture` lê antes de escrever (D-G2-9), com o erro tratado. No
  * E5 da 03-G2 (K3) entraram 5, todas de `preverExclusaoDoLancamento`, que só lê e trata cada erro
  * com `falhaDeLeituraAntes`: o lançamento, os recebíveis, as pessoas, as parcelas e as linhas da
- * importação — 111. Mudou? Confira o inventário antes de ajustar.
+ * importação — 111. Na 04-A entraram 2: `getUltimasTransacoes` (lança no erro) e `lerSaldoAte`
+ * (K2: erro → `null`, declarada em EXCECOES) — 113. Mudou? Confira o inventário antes de ajustar.
  */
-const LEITURAS_ESPERADAS = 111;
+const LEITURAS_ESPERADAS = 113;
 
 const LEITURAS = inventariarLeituras(ARQUIVOS, RAIZ);
 const chave = (l: { arquivo: string; funcao: string; alvo: string }) =>
