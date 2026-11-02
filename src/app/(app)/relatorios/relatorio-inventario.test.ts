@@ -368,6 +368,10 @@ describe("a rosca e as formas levam os rótulos da responsabilidade (nunca o def
     expect(tags[0]).toMatch(/\brotuloDaSerie=\{/);
   });
 
+  it("R2: a nota da rosca (antes dos estornos) é desenhada no Bloco da rosca", () => {
+    expect(ABA).toContain("rosca.nota");
+  });
+
   it("os textos saem de `rotulosDaComposicao` (fonte única), não de literais na tela", () => {
     expect(CLIENTE).toContain("rotulosDaComposicao(");
     expect(ABA).not.toMatch(/minhas saídas|Minha parte/);

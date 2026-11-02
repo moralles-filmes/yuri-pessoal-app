@@ -454,7 +454,7 @@ describe("com o recorte de categoria", () => {
     expect(r.indicadores.quarto.valor).toBe(formatCurrency(120));
     const c = monta({ recorte, resp: "consolidado" });
     expect(c.indicadores.saidas.valor).toBe(formatCurrency(370));
-    expect(c.indicadores.saidas.detalheComValor).toContain("estornos não têm categoria e ficam fora");
+    expect(c.indicadores.saidas.linhaDeBase).toContain("antes dos estornos do cartão");
     // A linha "minha · de terceiros" da responsabilidade continua lá.
     expect(c.indicadores.saidas.detalheComValor).toContain(formatCurrency(250));
   });
@@ -639,6 +639,33 @@ describe("consolidado e terceiros", () => {
   it("estornos da rosca só existem em meu", () => {
     expect(monta({ resp: "meu" }).rosca?.estornos).toBe(30);
     expect(monta({ resp: "consolidado" }).rosca?.estornos).toBe(0);
+  });
+
+  it("R2: terceiros e consolidado avisam que a rosca está antes dos estornos; meu não (já os mostra)", () => {
+    for (const resp of ["terceiros", "consolidado"] as const) {
+      const nota = monta({ resp }).rosca?.nota;
+      expect(nota, resp).toEqual(expect.stringContaining("antes dos estornos do cartão"));
+    }
+    expect(monta({ resp: "meu" }).rosca?.nota).toBeNull();
+  });
+
+  it("R2: a rosca do caixa não leva nota (o estorno nem existe na leitura do caixa)", () => {
+    expect(monta({ base: "caixa", caixa: CAIXA_OK }).rosca?.nota).toBeNull();
+  });
+
+  it("R2: com a categoria, saídas avisam 'antes dos estornos do cartão' em QUALQUER responsabilidade", () => {
+    for (const resp of ["meu", "terceiros", "consolidado"] as const) {
+      const r = monta({ recorte: comRecorte({ categoria: CAT_A.id }), resp });
+      expect(r.indicadores.saidas.linhaDeBase, resp).toContain("antes dos estornos do cartão");
+    }
+  });
+
+  it("R2: nenhum texto do modelo diz que o estorno 'não tem categoria'", () => {
+    for (const resp of ["meu", "terceiros", "consolidado"] as const) {
+      for (const recorte of [SEM_RECORTE, comRecorte({ categoria: CAT_A.id })]) {
+        expect(JSON.stringify(monta({ resp, recorte })), resp).not.toContain("não têm categoria");
+      }
+    }
   });
 });
 

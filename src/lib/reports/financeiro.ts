@@ -135,7 +135,12 @@ export type RelatorioFinanceiro = {
   /** O dia do corte do mês a mês no mês em andamento; `null` no mês fechado (ou sem mês a mês). */
   ateODia: number | null;
   /** Já na responsabilidade (`valor`); `null` quando não segue (ou o caixa não foi lido). */
-  rosca: { categorias: (CategoriaSlice & { valor: number })[]; estornos: number } | null;
+  rosca: {
+    categorias: (CategoriaSlice & { valor: number })[];
+    estornos: number;
+    /** Aviso de que a soma está antes dos estornos do cartão (competência, fora de "meu"); `null` sem aviso. */
+    nota: string | null;
+  } | null;
   formas: (FormaSlice & { valor: number })[];
   /** O quadro meu × bruto × terceiros; `null` quando não segue (ou o caixa não foi lido). */
   ancora: {
@@ -177,7 +182,9 @@ export type ParametrosDoRelatorio = {
 
 const NAO_SEGUE_RESP_NO_CAIXA = "não segue a responsabilidade na base caixa";
 const SALDO_NAO_LIDO = "Não foi possível ler o saldo";
-const SEM_ESTORNO_NA_CATEGORIA = "estornos não têm categoria e ficam fora";
+const ANTES_DOS_ESTORNOS_NA_CATEGORIA = "antes dos estornos do cartão";
+const ROSCA_ANTES_DOS_ESTORNOS =
+  "Valores antes dos estornos do cartão: o total pode ficar acima das saídas do mês.";
 const CARTAO_NAO_SAI_DE_CONTA = "o cartão não sai de conta: a fatura paga aparece na base caixa";
 
 const ROTULO_DO_TIPO: Record<TipoDeRecorte, string> = {
@@ -331,11 +338,12 @@ export function montarRelatorioFinanceiro(p: ParametrosDoRelatorio): RelatorioFi
     if (recorte.conta !== null && !emCaixa) {
       saidasInd = { ...saidasInd, linhaDeBase: `${saidasInd.linhaDeBase} · ${CARTAO_NAO_SAI_DE_CONTA}` };
     }
-    // O bruto da categoria não fecha com o bruto do mês, e a tela diz por quê (D-A2-10).
-    if (recorte.categoria !== null && resp === "consolidado" && saidasInd.detalheComValor !== null) {
+    // A saída da categoria vem da fatia, que não desconta o estorno do cartão (D-A2-10): vale em
+    // QUALQUER responsabilidade. Sem dinheiro no texto, por isso vai na linha de base.
+    if (recorte.categoria !== null) {
       saidasInd = {
         ...saidasInd,
-        detalheComValor: `${saidasInd.detalheComValor} · ${SEM_ESTORNO_NA_CATEGORIA}`,
+        linhaDeBase: `${saidasInd.linhaDeBase} · ${ANTES_DOS_ESTORNOS_NA_CATEGORIA}`,
       };
     }
   }
@@ -419,6 +427,8 @@ export function montarRelatorioFinanceiro(p: ParametrosDoRelatorio): RelatorioFi
                   receivables: e.recs,
                 })
               : 0,
+          // Fora de "meu" a rosca soma o movimentado, sem o estorno que o total desconta.
+          nota: resp !== "meu" && !emCaixa ? ROSCA_ANTES_DOS_ESTORNOS : null,
         }
       : null;
 

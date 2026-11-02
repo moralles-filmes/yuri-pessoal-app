@@ -784,6 +784,7 @@ function AbaFinanceiro({
                     rotuloDoTotal={composicao.totalDaRosca}
                   />
                 ) : null}
+                {rosca?.nota ? <p className="mt-3 text-xs text-muted-foreground">{rosca.nota}</p> : null}
               </Bloco>
               <Bloco
                 className="min-w-0"
