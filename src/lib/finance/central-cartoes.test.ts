@@ -18,6 +18,7 @@ import { parteDosTerceirosPorFatura } from "@/lib/finance/dashboard";
 import { resumirRecebivel } from "@/lib/finance/recebimentos";
 import type { ReceivableWithPerson } from "@/types/database";
 import {
+  cicloEmAberto,
   montarVisaoGeral,
   parteDosTerceirosPorPessoa,
   type CartaoDaCentral,
@@ -264,6 +265,22 @@ describe("montarVisaoGeral — por pessoa", () => {
       meuCent: 60000,
       porPessoaCent: { "p-ana": 0, "p-orfa": 4000 },
     });
+  });
+});
+
+describe("cicloEmAberto", () => {
+  const cartao = { dia_fechamento: 27, dia_vencimento: 10 };
+
+  it("antes do fechamento: o ciclo corrente fecha no dia 27 deste mês", () => {
+    expect(cicloEmAberto("2026-11-02", cartao).dataFechamento).toBe("2026-11-27");
+  });
+
+  it("no dia do fechamento o aberto é o ciclo seguinte", () => {
+    expect(cicloEmAberto("2026-11-27", cartao).dataFechamento).toBe("2026-12-27");
+  });
+
+  it("virada de ano: depois do fechamento de dezembro, a competência é janeiro", () => {
+    expect(cicloEmAberto("2026-12-28", cartao).competencia.slice(0, 7)).toBe("2027-01");
   });
 });
 

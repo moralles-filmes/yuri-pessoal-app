@@ -14,7 +14,7 @@ function diaMes(iso: string): string {
  * Crédito vence os outros estados; `paga` lê `pago_em` (instante) em Brasília.
  */
 export function rotuloDoEstado(
-  linha: LinhaDaCentral,
+  linha: Pick<LinhaDaCentral, "credito" | "estado" | "pagoEm">,
   tabela: "fechadas" | "abertas",
 ): { texto: string; tom: TomDoEstado } {
   if (linha.credito) return { texto: "Crédito", tom: "credito" };

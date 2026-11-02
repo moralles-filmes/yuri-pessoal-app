@@ -23,7 +23,7 @@ import {
   nextDayISO,
   parteDosTerceirosPorFatura,
 } from "@/lib/finance/dashboard";
-import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
+import { type FaturaAlvo, resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
 import { montarEntradas } from "@/lib/finance/pipeline";
 import { parteDoTerceiroCentavos, resumirRecebivel } from "@/lib/finance/recebimentos";
 import { reaisParaCentavos } from "@/lib/format";
@@ -101,6 +101,24 @@ export function parteDosTerceirosPorPessoa(
     mapa.set(r.statement_id, porPessoa);
   }
   return mapa;
+}
+
+/* ───────────────────────────── Ciclo em aberto ───────────────────────────── */
+
+/**
+ * O ciclo que ACUMULA compras em `hoje` para um cartão: o da compra de hoje, avançado enquanto
+ * `hoje` já alcançou o fechamento. No dia do fechamento a fatura de hoje já é "fechada", então o
+ * aberto é o ciclo seguinte.
+ */
+export function cicloEmAberto(
+  hoje: string,
+  card: { dia_fechamento: number; dia_vencimento: number },
+): FaturaAlvo {
+  let ciclo = resolverFatura(hoje, card.dia_fechamento, card.dia_vencimento);
+  while (hoje >= ciclo.dataFechamento) {
+    ciclo = resolverFatura(nextDayISO(ciclo.dataFechamento), card.dia_fechamento, card.dia_vencimento);
+  }
+  return ciclo;
 }
 
 /* ───────────────────────────── Montagem ───────────────────────────── */
@@ -189,11 +207,7 @@ export function montarVisaoGeral(p: {
   const abertasBrutas: LinhaBruta[] = [];
   for (const card of cards) {
     if (!card.ativo) continue;
-    let ciclo = resolverFatura(hoje, card.dia_fechamento, card.dia_vencimento);
-    // No dia do fechamento a fatura de hoje já é "fechada": o aberto é o ciclo seguinte.
-    while (hoje >= ciclo.dataFechamento) {
-      ciclo = resolverFatura(nextDayISO(ciclo.dataFechamento), card.dia_fechamento, card.dia_vencimento);
-    }
+    const ciclo = cicloEmAberto(hoje, card);
     const competencia = mesDe(ciclo.competencia);
     const real = realPorChave.get(`${card.id}|${competencia}`);
     // Fatura real já fechada pelas próprias datas (cartão reconfigurado) está em "fechadas":
