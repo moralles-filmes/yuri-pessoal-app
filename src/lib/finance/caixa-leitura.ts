@@ -69,7 +69,7 @@ export const TETO_DO_CAIXA = 5000;
 
 const COLUNAS =
   "id,type,status,amount,valor_pessoal,competence_date,liquidado_em,account_id,transfer_account_id,card_id," +
-  "payment_method,category:categories(id,name,color)";
+  "payment_method,description,category:categories(id,name,color)";
 
 export type LeituraDoCaixa =
   | {
@@ -252,8 +252,27 @@ export async function estadoDoCaixa(
   /** Os meses da evolução (o primeiro decide o começo da janela lida). */
   evoMeses: string[],
 ): Promise<EstadoDoCaixa> {
+  return (await lerEstadoDoCaixa(mesSel, hoje, motor, evoMeses)).estado;
+}
+
+/**
+ * 04-B — `estadoDoCaixa` COM a leitura e o motor que o alimentaram. A gaveta de registros precisa
+ * dos lançamentos crus para listar o que cada número do caixa soma, e relê-los numa segunda
+ * consulta abriria uma janela em que os dois discordariam. `leitura` e `motorDoCaixa` são `null`
+ * quando a leitura falhou (`estado: 'erro'`).
+ */
+export async function lerEstadoDoCaixa(
+  mesSel: string,
+  hoje: string,
+  motor: MotorDoCaixa,
+  evoMeses: string[],
+): Promise<{
+  estado: EstadoDoCaixa;
+  leitura: Extract<LeituraDoCaixa, { ok: true }> | null;
+  motorDoCaixa: MotorDoCaixa | null;
+}> {
   const leitura = await lerCaixaDoMes(mesSel, evoMeses[0]);
-  if (!leitura.ok) return { estado: "erro" };
+  if (!leitura.ok) return { estado: { estado: "erro" }, leitura: null, motorDoCaixa: null };
 
   const { transactions, pagamentosDeFatura, pagamentos, recebiveis, parcial } = leitura;
   // O motor só tem os lançamentos da janela evo..proj; as compras das faturas pagas entram pelo
@@ -262,11 +281,8 @@ export async function estadoDoCaixa(
   const extras = montarEntradas({ transacoes: leitura.comprasDasFaturasPagas }).txs.filter(
     (t) => !t.id || !doMotor.has(t.id),
   );
-  const doMes = {
-    transactions,
-    pagamentos,
-    motor: { ...motor, transactions: [...motor.transactions, ...extras] },
-  };
+  const motorDoCaixa: MotorDoCaixa = { ...motor, transactions: [...motor.transactions, ...extras] };
+  const doMes = { transactions, pagamentos, motor: motorDoCaixa };
 
   const atual = numerosDoCaixa({
     periodo: periodoAteODia(mesSel, 31),
@@ -282,7 +298,7 @@ export async function estadoDoCaixa(
   });
 
   const entradasDeCaixa = entradasDoCaixa(atual);
-  return {
+  const estado: EstadoDoCaixa = {
     estado: "ok",
     atual,
     anterior,
@@ -307,4 +323,5 @@ export async function estadoDoCaixa(
       },
     },
   };
+  return { estado, leitura, motorDoCaixa };
 }

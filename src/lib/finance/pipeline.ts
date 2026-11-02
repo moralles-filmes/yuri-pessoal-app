@@ -80,6 +80,9 @@ export type LinhaTx = {
   category: Embutido<CategoriaEmbutida>;
   /** 04-A2 (D-A2-13): obrigatório — campo que o chamador não tem é `null` escrito. */
   account_id: string | null;
+  /** 04-B: obrigatórios (estritos) — só exibição na gaveta de registros; nenhum número os lê. */
+  description: string | null;
+  purchase_date: string | null;
 };
 
 export type LinhaFatura = {
@@ -114,7 +117,10 @@ export type LinhaParcela = {
   statement_id: string | null;
   valor: Dinheiro;
   status: string;
-  parent: Embutido<{ category: Embutido<CategoriaEmbutida> }>;
+  /** 04-B: "k" de "k/N" — só exibição. */
+  numero: number;
+  total_parcelas: number;
+  parent: Embutido<{ description: string | null; category: Embutido<CategoriaEmbutida> }>;
 };
 
 export type LinhaCartao = {
@@ -300,6 +306,8 @@ export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): Entradas
           competence_date: t.competence_date,
           card_id: t.card_id,
           account_id: t.account_id,
+          descricao: t.description,
+          data_compra: t.purchase_date,
           statement_id: t.statement_id,
           parcelado: Boolean(t.parcelado),
           category_id: t.category_id,
@@ -350,12 +358,16 @@ export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): Entradas
 
   if (linhas.parcelas !== undefined) {
     const inst: DashInstallmentItem[] = linhas.parcelas.map((it) => {
-      const categoria = primeiro(primeiro(it.parent)?.category ?? null);
+      const pai = primeiro(it.parent);
+      const categoria = primeiro(pai?.category ?? null);
       return {
         id: it.id,
         statement_id: it.statement_id,
         valor: num(it.valor),
         status: it.status,
+        numero: it.numero,
+        total_parcelas: it.total_parcelas,
+        descricao: pai?.description ?? null,
         parent: categoria
           ? { category: { id: categoria.id, name: categoria.name, color: categoria.color } }
           : { category: null },

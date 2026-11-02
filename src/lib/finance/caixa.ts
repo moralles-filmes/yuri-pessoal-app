@@ -61,6 +61,8 @@ export type TxDeCaixa = {
   /** Só os gráficos por forma/categoria leem (desenho 2026-10-18). Opcionais: os números não usam. */
   payment_method?: PaymentMethod | null;
   category?: { id: string; name: string; color: string | null } | null;
+  /** 04-B: só exibição na gaveta de registros. Opcional — nenhum número o lê. */
+  description?: string | null;
 };
 
 /** Período INCLUSIVO nas duas pontas, 'yyyy-MM-dd'. */
@@ -119,6 +121,50 @@ export function filtroDaJanelaDeCaixa(p: Periodo): string {
 /* ───────────────────────────── Os números do caixa ───────────────────────────── */
 
 /**
+ * 04-B (D-B-3) — a classe de caixa de UM lançamento, extraída de `numerosDoCaixa` para a gaveta
+ * de registros listar exatamente o que cada número soma. Cada lançamento está em UMA classe;
+ * status e janela de datas ficam FORA dela (quem decide é quem chama).
+ *
+ *  - `renda`: receita com conta (renda pessoal + parte de terceiros);
+ *  - `despesa`: despesa com conta;
+ *  - `fatura`: transferência que pagou fatura (entra nas saídas);
+ *  - `sem-vinculo`: transferência com conta e sem destino (entra nas saídas, declarada);
+ *  - `entre-contas`: transferência com conta e destino (informativa);
+ *  - `sem-conta`: liquidado sem conta de origem — não moveu conta (P2), contado à parte;
+ *  - `fora`: compra/estorno de cartão e `ajuste`.
+ */
+export type ClasseDeCaixa =
+  | "renda"
+  | "despesa"
+  | "fatura"
+  | "sem-vinculo"
+  | "entre-contas"
+  | "sem-conta"
+  | "fora";
+
+export function classeDeCaixa(
+  t: TxDeCaixa,
+  pagamentosDeFatura: ReadonlySet<string>,
+): ClasseDeCaixa {
+  if (t.type === "receita") {
+    // Estorno de cartão: já reduz a fatura e não cai em conta.
+    if (t.card_id !== null) return "fora";
+    return t.account_id === null ? "sem-conta" : "renda";
+  }
+  if (t.type === "despesa") {
+    // Compra no cartão: quem sai da conta é o pagamento da fatura.
+    if (t.card_id !== null) return "fora";
+    return t.account_id === null ? "sem-conta" : "despesa";
+  }
+  if (t.type === "transferencia") {
+    if (pagamentosDeFatura.has(t.id)) return "fatura";
+    if (t.account_id === null) return "sem-conta";
+    return t.transfer_account_id !== null ? "entre-contas" : "sem-vinculo";
+  }
+  return "fora";
+}
+
+/**
  * Os números do §13.2 sobre os lançamentos `pago`/`recebido` (`SETTLED_STATUSES`) cuja data de
  * caixa cai em `periodo`. Cada lançamento entra em no máximo UM número; `ajuste`, compra e
  * estorno de cartão ficam fora de todos.
@@ -150,48 +196,44 @@ export function numerosDoCaixa(params: {
     // Quanto este lançamento entrou em algum número (para o contador de aproximados).
     let contado = false;
 
-    if (t.type === "receita") {
-      // Estorno de cartão: já reduz a fatura e não cai em conta.
-      if (t.card_id !== null) continue;
-      if (t.account_id === null) {
-        semConta += 1;
-        continue;
+    switch (classeDeCaixa(t, pagamentosDeFatura)) {
+      case "renda": {
+        const meu = meuCentavos(t);
+        rendaCent += meu;
+        outrasCent += cent(t.amount) - meu;
+        contado = true;
+        break;
       }
-      const meu = meuCentavos(t);
-      rendaCent += meu;
-      outrasCent += cent(t.amount) - meu;
-      contado = true;
-    } else if (t.type === "despesa") {
-      // Compra no cartão: quem sai da conta é o pagamento da fatura.
-      if (t.card_id !== null) continue;
-      if (t.account_id === null) {
-        semConta += 1;
-        continue;
-      }
-      saidasCent += cent(t.amount);
-      contado = true;
-    } else if (t.type === "transferencia") {
-      if (pagamentosDeFatura.has(t.id)) {
+      case "despesa":
+        saidasCent += cent(t.amount);
+        contado = true;
+        break;
+      case "fatura":
         saidasCent += cent(t.amount);
         pagamentosCent += cent(t.amount);
         contado = true;
-      } else if (t.account_id !== null && t.transfer_account_id !== null) {
+        break;
+      case "entre-contas":
         entreContasCent += cent(t.amount);
         contado = true;
-      } else if (t.account_id !== null) {
+        break;
+      case "sem-vinculo":
         // Sem destino e sem vínculo: o dinheiro saiu, mas não se sabe para onde. Entra nas
         // saídas e é DECLARADO à parte.
         saidasCent += cent(t.amount);
         semVinculoQtd += 1;
         semVinculoCent += cent(t.amount);
         contado = true;
-      } else {
-        // Sem conta de origem: não se sabe de qual conta o dinheiro saiu. Fica fora, mas
-        // CONTADA (P2) — nunca em silêncio.
+        break;
+      case "sem-conta":
+        // Receita/despesa/transferência sem conta de origem: não se sabe de qual conta o
+        // dinheiro mexeu. Fica fora, mas CONTADA (P2) — nunca em silêncio.
         semConta += 1;
-      }
+        break;
+      case "fora":
+        // Compra/estorno de cartão e `ajuste`: fora de todos os números.
+        break;
     }
-    // `ajuste`: fora de tudo.
 
     if (contado && aproximada) aproximados += 1;
   }

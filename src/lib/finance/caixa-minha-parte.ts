@@ -70,9 +70,12 @@ export type MinhaParteDoCaixa = {
   faturasSemTotal: number;
 };
 
-/** Um lançamento do período, já classificado pela regra de caixa. */
-type Movimento =
-  | { kind: "renda"; meuCent: number }
+/**
+ * Um lançamento do período, já classificado pela regra de caixa. Exportado na 04-B: a gaveta de
+ * registros lista os movimentos, e não um filtro paralelo.
+ */
+export type Movimento =
+  | { kind: "renda"; t: TxDeCaixa; meuCent: number }
   | { kind: "despesa"; t: TxDeCaixa; brutoCent: number; meuCent: number }
   | { kind: "fatura"; t: TxDeCaixa; statementId: string; brutoCent: number }
   | { kind: "sem_vinculo"; t: TxDeCaixa; brutoCent: number };
@@ -82,7 +85,7 @@ type Movimento =
  * (receita/despesa com conta, pagamento de fatura, transferência sem vínculo). Transferência
  * entre contas, compra/estorno de cartão, `ajuste` e lançamento sem conta ficam fora.
  */
-function movimentos(
+export function movimentos(
   periodo: Periodo,
   transactions: readonly TxDeCaixa[],
   pagamentos: PagamentoDeFatura,
@@ -95,7 +98,7 @@ function movimentos(
     if (data < periodo.de || data > periodo.ate) continue;
     if (t.type === "receita") {
       if (t.card_id !== null || t.account_id === null) continue;
-      out.push({ kind: "renda", meuCent: meuCentavos(t) });
+      out.push({ kind: "renda", t, meuCent: meuCentavos(t) });
     } else if (t.type === "despesa") {
       if (t.card_id !== null || t.account_id === null) continue;
       out.push({
@@ -117,7 +120,7 @@ function movimentos(
 }
 
 /** O total e a minha parte de cada fatura, em centavos. */
-function faturasDoMotor(motor: MotorDoCaixa): Map<string, { totalCent: number; meuCent: number }> {
+export function faturasDoMotor(motor: MotorDoCaixa): Map<string, { totalCent: number; meuCent: number }> {
   const terceiros = parteDosTerceirosPorFatura(motor.receivables);
   const mapa = new Map<string, { totalCent: number; meuCent: number }>();
   for (const s of motor.statements) {
@@ -133,7 +136,7 @@ function proporcao(valorCent: number, num: number, den: number): number {
 }
 
 /** A minha parte de um pagamento de fatura; `null` quando a proporção não existe. */
-function meuDoPagamento(
+export function meuDoPagamento(
   m: Extract<Movimento, { kind: "fatura" }>,
   faturas: Map<string, { totalCent: number; meuCent: number }>,
 ): number | null {
