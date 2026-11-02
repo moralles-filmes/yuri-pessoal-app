@@ -67,10 +67,10 @@ export function BarrasEntradasSaidasChart({
   }
 
   const chartData = dados.map((p) => ({ ...p, label: monthLabel(p.mes) }));
-  const temParcial = dados.some((p) => p.parcial);
 
   return (
     <div>
+      {/* A legenda do mês parcial mora na FACHADA (altura reservada exata, sem salto). */}
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
           <defs>
@@ -125,36 +125,6 @@ export function BarrasEntradasSaidasChart({
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      {temParcial && (
-        <p className="mt-1 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <svg width="16" height="12" aria-hidden="true" className="shrink-0">
-            <defs>
-              <pattern
-                id="hachura-amostra"
-                patternUnits="userSpaceOnUse"
-                width="6"
-                height="6"
-                patternTransform="rotate(45)"
-              >
-                <rect width="6" height="6" fill="var(--muted-foreground)" fillOpacity={0.15} />
-                <line x1="0" y1="0" x2="0" y2="6" stroke="var(--muted-foreground)" strokeWidth={2.5} />
-              </pattern>
-            </defs>
-            <rect
-              x="0.75"
-              y="0.75"
-              width="14.5"
-              height="10.5"
-              rx="2"
-              fill="url(#hachura-amostra)"
-              stroke="var(--muted-foreground)"
-              strokeWidth={1.5}
-              strokeDasharray="4 3"
-            />
-          </svg>
-          <span>mês em andamento · parcial</span>
-        </p>
-      )}
     </div>
   );
 }

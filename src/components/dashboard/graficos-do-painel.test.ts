@@ -93,11 +93,12 @@ describe("série futura e mês parcial são visualmente distintos do realizado",
     expect(fonte).toContain("(projetado)");
   });
 
-  it("barras-entradas-saidas-chart-impl.tsx tem hachura, tracejado e a legenda do mês parcial", () => {
+  it("barras: hachura e tracejado no -impl, legenda do mês parcial na fachada (altura exata)", () => {
     const fonte = ler("barras-entradas-saidas-chart-impl.tsx");
     expect(fonte).toContain("<pattern");
     expect(fonte).toContain("strokeDasharray");
-    expect(fonte).toContain("mês em andamento · parcial");
+    expect(fonte).not.toContain("mês em andamento · parcial");
+    expect(ler("barras-entradas-saidas-chart.tsx")).toContain("mês em andamento · parcial");
   });
 
   it("as barras de entradas e saídas têm eixo Y com largura automática", () => {

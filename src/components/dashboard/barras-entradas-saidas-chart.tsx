@@ -30,8 +30,42 @@ const LazyBarrasEntradasSaidasChart = dynamic(
 
 export function BarrasEntradasSaidasChart(props: Props) {
   return (
-    <div style={chartSkeletonHeightVar(280)}>
-      <LazyBarrasEntradasSaidasChart {...props} />
+    <div>
+      {/* A altura reservada é a do gráfico; a legenda do mês parcial fica aqui, fora do
+          carregamento sob demanda, para a reserva ser exata e o gráfico não dar salto. */}
+      <div style={chartSkeletonHeightVar(280)}>
+        <LazyBarrasEntradasSaidasChart {...props} />
+      </div>
+      {props.dados.some((p) => p.parcial) && (
+        <p className="mt-1 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <svg width="16" height="12" aria-hidden="true" className="shrink-0">
+            <defs>
+              <pattern
+                id="hachura-amostra"
+                patternUnits="userSpaceOnUse"
+                width="6"
+                height="6"
+                patternTransform="rotate(45)"
+              >
+                <rect width="6" height="6" fill="var(--muted-foreground)" fillOpacity={0.15} />
+                <line x1="0" y1="0" x2="0" y2="6" stroke="var(--muted-foreground)" strokeWidth={2.5} />
+              </pattern>
+            </defs>
+            <rect
+              x="0.75"
+              y="0.75"
+              width="14.5"
+              height="10.5"
+              rx="2"
+              fill="url(#hachura-amostra)"
+              stroke="var(--muted-foreground)"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+            />
+          </svg>
+          <span>mês em andamento · parcial</span>
+        </p>
+      )}
     </div>
   );
 }

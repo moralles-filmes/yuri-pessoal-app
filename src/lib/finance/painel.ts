@@ -7,6 +7,7 @@
  * `totalPendenteAte`, variação sai de `variacaoPct`.
  */
 import type { BaseFinanceira } from "@/lib/finance/base";
+import type { EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
 import {
   type CategoriaSlice,
   type DashInstallmentItem,
@@ -22,6 +23,7 @@ import {
   variacaoPct,
 } from "@/lib/finance/dashboard";
 import { type RecebivelComRecebimentos, totalPendenteAte } from "@/lib/finance/recebimentos";
+import type { TransactionType } from "@/lib/finance/constants";
 import { centavosParaReais, formatCurrency, reaisParaCentavos } from "@/lib/format";
 
 export type Sentido = "bom" | "ruim" | "neutro";
@@ -38,6 +40,37 @@ function diaMes(iso: string): string {
 function moedaComSinal(reais: number): string {
   return reais < 0 ? `−${formatCurrency(Math.abs(reais))}` : formatCurrency(reais);
 }
+
+/* ───────────────────────────── Formas que a página entrega ao cliente ───────────────────────────── */
+
+/** Uma linha de "Últimas transações": o lançamento como ele é (valor cheio), pronto para mostrar. */
+export type UltimaTransacaoDoPainel = {
+  id: string;
+  /** 'yyyy-MM-dd' — a data de competência, texto puro. */
+  data: string;
+  descricao: string;
+  categoria: string | null;
+  valor: number;
+  tipo: TransactionType;
+};
+
+/** A leitura de "Últimas transações": falha é falha, lista vazia é vazio (`estadoDoBloco`). */
+export type UltimasDoPainel =
+  | { ok: true; itens: UltimaTransacaoDoPainel[] }
+  | { ok: false };
+
+/** Um cartão do bloco "Cartões de crédito". `texto: null` = cor fora do formato → estilo neutro. */
+export type CartaoDoPainel = {
+  id: string;
+  nome: string;
+  cor: string | null;
+  texto: "branco" | "escuro" | null;
+  /** O valor CHEIO da fatura atual; `null` = "sem lançamentos conhecidos". */
+  faturaAtual: number | null;
+  minhaParte: number | null;
+  /** 'yyyy-MM-dd' do fechamento da fatura atual; `null` sem fatura. */
+  fechaEm: string | null;
+};
 
 /* ───────────────────────────── Indicadores ───────────────────────────── */
 
@@ -78,6 +111,33 @@ export function saldoComData(p: {
         : `não inclui lançamentos pagos com data futura (diferença de ${formatCurrency(
             centavosParaReais(Math.abs(diferencaCent)),
           )})`,
+  };
+}
+
+/** O valor de um indicador: o número ou o texto de erro (que NUNCA vira zero na tela). */
+export type ValorDoIndicador = number | { erro: string };
+
+/**
+ * K6 — os três indicadores da base caixa: renda pessoal recebida, a minha parte do que saiu das
+ * contas e a de terceiros dentro disso, todos de `caixa.graficos.minha` (nenhuma conta nova).
+ * `null` = base competência (não há caixa). Leitura do caixa com erro: os TRÊS levam o texto de erro
+ * de sempre — ⛔ nunca R$ 0,00, que diria ao dono que nada entrou nem saiu.
+ */
+export function indicadoresDoCaixa(caixa: EstadoDoCaixa | null): {
+  entradas: ValorDoIndicador;
+  saidas: ValorDoIndicador;
+  terceiros: ValorDoIndicador;
+} | null {
+  if (caixa === null) return null;
+  if (caixa.estado === "erro") {
+    const erro = { erro: "Não foi possível ler o caixa" };
+    return { entradas: { ...erro }, saidas: { ...erro }, terceiros: { ...erro } };
+  }
+  const { minha } = caixa.graficos;
+  return {
+    entradas: minha.entradas,
+    saidas: minha.saidas,
+    terceiros: minha.terceirosNasSaidas,
   };
 }
 

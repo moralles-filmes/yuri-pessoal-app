@@ -28,11 +28,13 @@ describe("apresentarEntradas", () => {
     }).detalhe).toBeNull();
   });
 
+  // K1 (04-A, decisão do dono): o painel financeiro troca o card de Entradas pelo indicador
+  // "Minhas entradas", que lê `indicadorMinhasEntradas` (a minha parte); `apresentarEntradas` NÃO
+  // muda e segue sendo a fonte única das outras duas telas até a 04-A2/06. Reescrito no lugar.
   it.each([
-    "src/app/(app)/dashboard/financeiro/financial-dashboard-client.tsx",
     "src/app/(app)/relatorios/relatorios-client.tsx",
     "src/components/dashboard/general/finance-card.tsx",
-  ])("os três cards de Entradas leem só do apresentador: %s", (arquivo) => {
+  ])("os cards de Entradas que restam leem só do apresentador: %s", (arquivo) => {
     const fonte = fs.readFileSync(path.join(process.cwd(), arquivo), "utf8")
       .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
       .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -40,5 +42,18 @@ describe("apresentarEntradas", () => {
 
     expect(fonte).toContain("apresentarEntradas(");
     expect(fonte).not.toMatch(/formatCurrency\(\s*[\w.?]*\.entradas\s*\)/);
+  });
+
+  it("K1 (04-A) — o painel financeiro lê Entradas só de indicadorMinhasEntradas, nunca do bruto", () => {
+    const ler = (arquivo: string) =>
+      fs.readFileSync(path.join(process.cwd(), arquivo), "utf8")
+        .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/[^\r\n]*/g, "");
+    const pagina = ler("src/app/(app)/dashboard/financeiro/page.tsx");
+    const cliente = ler("src/app/(app)/dashboard/financeiro/financial-dashboard-client.tsx");
+    expect(pagina).toContain("indicadorMinhasEntradas(");
+    expect(cliente).not.toMatch(/formatCurrency\(\s*[\w.?]*\.entradas\s*\)/);
+    expect(pagina).not.toMatch(/formatCurrency\(\s*[\w.?]*\.entradas\s*\)/);
   });
 });

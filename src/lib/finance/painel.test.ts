@@ -506,3 +506,44 @@ describe("pendenteAoBanco", () => {
     expect(pendenteAoBanco([])).toBe(0);
   });
 });
+
+/* ───────────────────────────── Indicadores da base caixa (T6) ───────────────────────────── */
+
+import type { EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import { indicadoresDoCaixa } from "@/lib/finance/painel";
+
+describe("indicadoresDoCaixa", () => {
+  // Só `graficos.minha` importa aqui; o resto do estado do caixa não é lido por esta função.
+  const caixaOk = {
+    estado: "ok",
+    graficos: {
+      minha: {
+        entradas: 3000,
+        saidas: 1200.5,
+        saidasBrutas: 1500.5,
+        terceirosNasSaidas: 300,
+        resultado: 1799.5,
+        faturasSemTotal: 0,
+      },
+    },
+  } as unknown as EstadoDoCaixa;
+
+  it("leitura do caixa com erro: os três indicadores levam o texto de erro, nunca um número", () => {
+    const r = indicadoresDoCaixa({ estado: "erro" });
+    const erro = { erro: "Não foi possível ler o caixa" };
+    expect(r).toEqual({ entradas: erro, saidas: erro, terceiros: erro });
+    for (const v of Object.values(r ?? {})) expect(typeof v).not.toBe("number");
+  });
+
+  it("caixa ok: os três números são os de graficos.minha", () => {
+    expect(indicadoresDoCaixa(caixaOk)).toEqual({
+      entradas: 3000,
+      saidas: 1200.5,
+      terceiros: 300,
+    });
+  });
+
+  it("base competência (caixa nulo): não há indicador de caixa", () => {
+    expect(indicadoresDoCaixa(null)).toBeNull();
+  });
+});
