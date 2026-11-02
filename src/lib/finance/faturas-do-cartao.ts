@@ -11,7 +11,7 @@
  */
 import { cicloEmAberto, type EstadoDaLinha } from "@/lib/finance/central-cartoes";
 import { mesDe, nextDayISO } from "@/lib/finance/dashboard";
-import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
+import { montarFatura, resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
 import { parteDoTerceiroCentavos, perdoadoCentavos, resumirRecebivel } from "@/lib/finance/recebimentos";
 import { reaisParaCentavos } from "@/lib/format";
 import type { ReceivableWithPerson } from "@/types/database";
@@ -70,9 +70,31 @@ export type FaturaLida = {
 
 const porChave = (a: FaturaDaTela, b: FaturaDaTela) => a.chave.localeCompare(b.chave);
 
+/** Teto de ciclos à frente do próximo para a prevista pedida por `month` (desenho §8.1). */
+const MAX_CICLOS_A_FRENTE = 24;
+
+/**
+ * Ciclo (datas de `montarFatura`, que clampa o dia) do mês `month` ('yyyy-MM'), só se ele for
+ * POSTERIOR à competência do próximo ciclo e dentro do teto; senão `null`. Competência = mês do
+ * fechamento, então o mês pedido é o mês de fechamento.
+ */
+function previstaDoMesPedido(
+  month: string | null,
+  compSeguinte: string,
+  card: { dia_fechamento: number; dia_vencimento: number },
+): { competencia: string; dataFechamento: string; dataVencimento: string } | null {
+  if (!month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month <= compSeguinte) return null;
+  const [ano, mes] = month.split("-").map(Number);
+  const [anoSeg, mesSeg] = compSeguinte.split("-").map(Number);
+  if ((ano - anoSeg) * 12 + (mes - mesSeg) > MAX_CICLOS_A_FRENTE) return null;
+  const f = montarFatura(ano, mes - 1, card.dia_fechamento, card.dia_vencimento);
+  return { competencia: f.competencia, dataFechamento: f.dataFechamento, dataVencimento: f.dataVencimento };
+}
+
 export function organizarFaturasDoCartao(p: {
   hoje: string;
-  card: { dia_fechamento: number; dia_vencimento: number };
+  /** `ativo` ausente = `true` (Visão geral e testes atuais não mudam). */
+  card: { dia_fechamento: number; dia_vencimento: number; ativo?: boolean };
   statements: readonly FaturaLida[];
   receivables: readonly ReceivableWithPerson[];
   /** 'yyyy-MM' */
@@ -80,6 +102,7 @@ export function organizarFaturasDoCartao(p: {
   status: string | null;
 }): { grupos: GruposDeFaturas; indicadores: IndicadoresDeFaturas; vazio: boolean } {
   const { hoje, card, statements, receivables, month, status } = p;
+  const ativo = card.ativo ?? true;
 
   /* Terceiros por fatura, em centavos, pela regra única */
   const terceiros = new Map<string, { parte: number; perdoado: number }>();
@@ -162,8 +185,18 @@ export function organizarFaturasDoCartao(p: {
     const marca = s === realAtual ? "atual" : s === realSeguinte ? "proxima" : null;
     linhas.push(real(s, marca));
   }
-  if (!realAtual) linhas.push(prevista(ciclo, "atual"));
-  if (!realSeguinte) linhas.push(prevista(seguinte, "proxima"));
+  // Cartão desativado não acumula compras: nenhuma prevista (atual, próxima ou do mês pedido).
+  // As faturas reais seguem todas — uma parcela pode ter criado qualquer uma delas.
+  if (ativo) {
+    if (!realAtual) linhas.push(prevista(ciclo, "atual"));
+    if (!realSeguinte) linhas.push(prevista(seguinte, "proxima"));
+    // Prevista de um mês futuro além do próximo ciclo, só quando o `month` da URL a pede
+    // (destino das células previstas de "Próximos meses"). Sem `month`, nada muda.
+    const extra = previstaDoMesPedido(month, compSeguinte, card);
+    if (extra && !statements.some((s) => mesDe(s.competencia) === mesDe(extra.competencia))) {
+      linhas.push(prevista(extra, null));
+    }
+  }
 
   /* Grupos (sobre a lista SEM filtro, para os indicadores) */
   const pagar = linhas

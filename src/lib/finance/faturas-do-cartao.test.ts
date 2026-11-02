@@ -323,6 +323,116 @@ describe("organizarFaturasDoCartao — filtros", () => {
   });
 });
 
+describe("organizarFaturasDoCartao — 05-C · prevista de mês futuro", () => {
+  it("month além do próximo ciclo, sem real, ativo ⇒ prevista daquele mês em 'proximas', com datas de montarFatura", () => {
+    const { grupos, vazio } = organizar({ month: "2027-04" });
+    expect(vazio).toBe(false);
+    expect(grupos.pagar).toEqual([]);
+    expect(grupos.emAberto).toEqual([]);
+    expect(grupos.anteriores).toEqual([]);
+    expect(grupos.proximas).toHaveLength(1);
+    const f = grupos.proximas[0];
+    expect(f.competencia).toBe("2027-04");
+    expect(f.chave).toBe("prevista|2027-04");
+    expect(f.estado).toBe("prevista");
+    expect(f.statementId).toBeNull();
+    expect(f.valores).toBeNull();
+    expect(f.marca).toBeNull();
+    expect(f.dataFechamento).toBe("2027-04-27");
+    expect(f.dataVencimento).toBe("2027-05-10");
+  });
+
+  it("o dia de fechamento 31 é clampado no mês curto (fev/2027 fecha dia 28)", () => {
+    const { grupos } = organizar({ card: { dia_fechamento: 31, dia_vencimento: 10 }, month: "2027-02" });
+    expect(grupos.proximas).toHaveLength(1);
+    expect(grupos.proximas[0].competencia).toBe("2027-02");
+    expect(grupos.proximas[0].dataFechamento).toBe("2027-02-28");
+    expect(grupos.proximas[0].dataVencimento).toBe("2027-03-10");
+  });
+
+  it("com status='paga' a prevista extra não passa; com 'aberta' passa", () => {
+    expect(organizar({ month: "2027-04", status: "paga" }).vazio).toBe(true);
+    expect(organizar({ month: "2027-04", status: "aberta" }).grupos.proximas).toHaveLength(1);
+  });
+
+  it("month passado sem fatura ⇒ vazio (não cria prevista no passado)", () => {
+    const r = organizar({ month: "2026-01" });
+    expect(r.vazio).toBe(true);
+  });
+
+  it("month = mês do ciclo atual ou do próximo não cria prevista extra (já existem)", () => {
+    expect(organizar({ month: "2026-12" }).grupos.proximas).toHaveLength(1);
+    expect(organizar({ month: "2026-11" }).grupos.emAberto).toHaveLength(1);
+  });
+
+  it("month futuro COM fatura real ⇒ só a real", () => {
+    const abr = fatura({ id: "s-abr", competencia: "2027-04-01", data_fechamento: "2027-04-27", data_vencimento: "2027-05-10", total_atual: 150 });
+    const { grupos } = organizar({ statements: [...STATEMENTS, abr], month: "2027-04" });
+    expect(grupos.proximas).toHaveLength(1);
+    expect(grupos.proximas[0].statementId).toBe("s-abr");
+    expect(grupos.proximas[0].estado).not.toBe("prevista");
+  });
+
+  it("sem month: exatamente as previstas de hoje (atual + próxima)", () => {
+    const { grupos } = organizar({ statements: [], receivables: [] });
+    expect(comps(grupos.emAberto)).toEqual(["2026-11"]);
+    expect(comps(grupos.proximas)).toEqual(["2026-12"]);
+  });
+
+  it("month malformado ou além do teto de 24 ciclos não cria prevista", () => {
+    expect(organizar({ month: "2027-13" }).vazio).toBe(true);
+    expect(organizar({ month: "27-04" }).vazio).toBe(true);
+    expect(organizar({ month: "2099-01" }).vazio).toBe(true);
+    expect(organizar({ month: "2028-12" }).grupos.proximas).toHaveLength(1);
+  });
+
+  it("a prevista extra não muda os indicadores", () => {
+    expect(organizar({ month: "2027-04" }).indicadores).toEqual(organizar().indicadores);
+  });
+});
+
+describe("organizarFaturasDoCartao — 05-C · cartão desativado", () => {
+  const desativado = { ...CARD, ativo: false };
+
+  it("nenhuma prevista em nenhum grupo; reais continuam, e a atrasada segue em 'pagar'", () => {
+    const { grupos } = organizar({ card: desativado, statements: [ago, set, out], receivables: [] });
+    const todas = [...grupos.pagar, ...grupos.emAberto, ...grupos.proximas, ...grupos.anteriores];
+    expect(todas.some((f) => f.estado === "prevista")).toBe(false);
+    expect(comps(grupos.pagar)).toEqual(["2026-09", "2026-10"]);
+    expect(grupos.pagar[0].estado).toBe("atrasada");
+    expect(comps(grupos.anteriores)).toEqual(["2026-08"]);
+    expect(grupos.emAberto).toEqual([]);
+    expect(grupos.proximas).toEqual([]);
+  });
+
+  it("indicadores.atual = a real do ciclo atual, se existir; senão null", () => {
+    expect(organizar({ card: desativado }).indicadores.atual?.statementId).toBe("s-nov");
+    expect(organizar({ card: desativado, statements: [ago, set, out] }).indicadores.atual).toBeNull();
+  });
+
+  it("não cria a prevista de mês futuro pedida por month", () => {
+    expect(organizar({ card: desativado, month: "2027-04" }).vazio).toBe(true);
+  });
+
+  it("faturas reais futuras (parcelas) continuam todas", () => {
+    const jan = fatura({ id: "s-jan", competencia: "2027-01-01", data_fechamento: "2027-01-27", data_vencimento: "2027-02-10", total_atual: 200 });
+    const { grupos } = organizar({ card: desativado, statements: [...STATEMENTS, jan] });
+    expect(comps(grupos.proximas)).toEqual(["2027-01"]);
+    expect(grupos.proximas[0].statementId).toBe("s-jan");
+  });
+
+  it("sem fatura real nenhuma: vazio, sem atual e sem próximo vencimento", () => {
+    const r = organizar({ card: desativado, statements: [], receivables: [] });
+    expect(r.vazio).toBe(true);
+    expect(r.indicadores.atual).toBeNull();
+    expect(r.indicadores.proximoVencimento).toBeNull();
+  });
+
+  it("ativo:true explícito se comporta como ausente", () => {
+    expect(organizar({ card: { ...CARD, ativo: true } })).toEqual(organizar());
+  });
+});
+
 describe("organizarFaturasDoCartao — terceiros", () => {
   it("recebível 'ignorado' com recebido parcial concilia com as regras únicas, e meu = total − terceiros", () => {
     const receivables = [

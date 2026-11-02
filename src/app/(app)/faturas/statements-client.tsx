@@ -87,6 +87,8 @@ type CardOption = {
   cor: string | null;
   dia_fechamento: number;
   dia_vencimento: number;
+  /** Ausente = ativo. Desativado não acumula compras (sem fatura prevista). */
+  ativo?: boolean;
 };
 
 /** 'yyyy-MM' ou 'yyyy-MM-dd' → "outubro de 2026" (minúsculo, para frase corrida). */
@@ -687,6 +689,7 @@ export function StatementsClient({
   const ind = organizado?.indicadores;
   const aPagar = ind?.aPagar;
   const atual = ind?.atual ?? null;
+  const cartaoDesativado = selectedCard?.ativo === false;
   const proximo = ind?.proximoVencimento ?? null;
 
   const gruposComLinhas: {
@@ -802,12 +805,16 @@ export function StatementsClient({
             valor={
               atual?.valores
                 ? moeda(atual.valores.totalCent)
-                : { ausente: SEM_LANCAMENTOS }
+                : cartaoDesativado && !atual
+                  ? { ausente: "cartão desativado — não acumula compras" }
+                  : { ausente: SEM_LANCAMENTOS }
             }
             linhaDeBase={
               atual
                 ? `acumulando até ${diaMes(atual.dataFechamento)} · vence ${diaMes(atual.dataVencimento)}`
-                : "nenhum ciclo em aberto"
+                : cartaoDesativado
+                  ? "cartão desativado"
+                  : "nenhum ciclo em aberto"
             }
           />
           <Indicador

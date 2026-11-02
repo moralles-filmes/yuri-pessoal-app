@@ -74,6 +74,7 @@ export default async function FaturasPage({
           cor: c.cor,
           dia_fechamento: c.dia_fechamento,
           dia_vencimento: c.dia_vencimento,
+          ativo: c.ativo,
         }))}
         statements={statements}
         transactions={transactions}
