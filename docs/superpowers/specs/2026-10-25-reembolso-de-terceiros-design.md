@@ -297,3 +297,158 @@ do §5, sem mudar comportamento: **não há tabela de pagamentos** — o pagamen
 — e **a realocação é disparada por triggers de instrução** em `transactions` e `receivables`, em vez
 de uma lista de chamadores do RPC. Motivo: um fato só, atomicidade por construção e nenhum chamador
 para esquecer.
+
+## 11. O que mudou desde 2026-10-25 (reconciliação de 2026-11-02, antes de qualquer código)
+
+O plano parte de `af0b547`. Depois dele foram integradas a 03-G2, a 04-A, a 04-A2, a 05, a 06 e a
+04-B. Esta seção diz, tarefa a tarefa, o que continua, o que mudou de lugar e o que é novo. Os
+desvios do plano estão numerados (**DV-n**) e valem por cima do plano.
+
+### 11.1 O banco hoje (lido em 2026-11-02, só `select`)
+
+- `receivable_receipts` tem **zero linhas**: nenhuma com `transaction_id`, nenhuma com `conta_id`,
+  nenhum recebimento manual.
+- Os recebíveis são **111, todos `pendente`**, de 3 pessoas: **nenhum legado `pago` (K0)**,
+  nenhum `cobrado`, nenhum `ignorado`.
+- **Nenhuma** receita `terceiro`/`compartilhada`. 32 linhas de receita em `import_rows`.
+- md5 dos saldos = a linha de base `15d93bd1c1d3e55a40db6210dff0eb3b`.
+- Nem `transactions_id_user_uk` nem `people_id_user_uk` existem.
+
+Consequência: a M1 e a M2 **não tocam nenhum dado existente**, e nenhum número real muda no dia em
+que entram. O que muda são as regras para o que for lançado dali em diante. O legado (K0, manual)
+continua coberto por teste, mas hoje não tem linha nenhuma.
+
+### 11.2 Tarefa a tarefa
+
+**Tarefa 0 — vale.** O portão (03-G2 e 04-B ancestrais de `00-auditoria`) passou.
+
+**Tarefa 1 (regra pura) — vale como está.**
+
+**Tarefa 2 (decisão pura + schema) — vale.** O schema do lançamento mudou de forma na 03-G2:
+`reembolsoSchema` entra onde mora hoje o de `receita_classificacao`/`receita_minha_parte`, e o
+`round-trip.test.ts` ganha a fixture (regra 1 dos formulários e invariante 94).
+
+**Tarefa 3 (banco) — muda. Três desvios:**
+- **DV-1 · `salvar_lancamento` é redefinido.** A 03-G2 pôs criar e editar lançamento num RPC
+  (`20261025120000_salvar_lancamento_atomico.sql`) que **lista as colunas à mão** no `insert` e
+  no `update` (D-G2-5: só a chave que veio é escrita). Sem acrescentar `reembolso_pessoa_id` ali,
+  a coluna nova **nunca seria gravada** pelo formulário — e nada falharia, ela só ficaria nula. A
+  M1 faz `create or replace` da função com a coluna nas duas listas e com a pessoa na conferência
+  de referência (`LANCAMENTO_REFERENCIA_INVALIDA`). O teste de varredura da 03-G2
+  (`m-g2-salvar-lancamento.test.ts`) passa a ler a versão nova.
+- **DV-2 · a proteção que o RPC confere no SQL só conta recebimento manual.** A linha 151 da mesma
+  migration (`exists (select 1 from public.receivable_receipts rr where rr.receivable_id = rc.id)`)
+  é o espelho SQL de `recebivelProtegido` (D-G2-4). Ela ganha `and rr.transaction_id is null`,
+  senão a §5.6 valeria no TS e seria recusada no banco (o caso 8 do §6 falharia só em runtime). É
+  o **único** ponto SQL que lê `receivable_receipts` (conferido por `grep` nas migrations).
+- **DV-3 · triggers de instrução e o RPC.** `salvar_lancamento` grava o lançamento e depois apaga
+  e recria os recebíveis da divisão, em instruções separadas da mesma transação. Cada instrução
+  dispara o trigger; a realocação roda mais de uma vez por gravação e, por ser idempotente,
+  termina no mesmo lugar. O script SQL prova isso passando pelo próprio RPC, não só por `insert`
+  cru.
+
+A ordem e o conteúdo do resto (M1 aditiva, M2 com `realocar_reembolsos_da_pessoa` e os seis
+triggers, `security invoker`, `search_path = ''`, nenhum `update public.receivables`) valem.
+
+**Tarefa 4 (leitura e proteção) — vale, com o inventário já feito (§11.4) e um ponto novo:**
+- **DV-4 · `deletePerson` conta as receitas vinculadas.** Hoje ele conta recebíveis e divisões
+  antes de excluir (ou inativar). Com a FK sem cascade de `transactions.reembolso_pessoa_id`, uma
+  pessoa com reembolso e sem recebível cairia num `23503` cru. Ela passa a ser **inativada**, como
+  a que tem recebível.
+
+**Tarefa 5 (números do caixa) — cresce: a 04-B pôs uma gaveta em cima de cada número.**
+Escolha de §5.8 (a do plano): **o reembolso vinculado aparece em "Reembolsos recebidos"**, e as
+alocações automáticas **nunca** contam ali. Em `numerosDoCaixa`:
+- `reembolsosRecebidos` = recebimentos **manuais** do período (com K0) **+** `reembolsosVinculados`;
+- `reembolsosVinculados` (campo novo) = Σ `amount − meu` das receitas com `reembolso_pessoa_id`;
+- `outrasEntradasDeTerceiros` = Σ `amount − meu` só das receitas **sem** pessoa;
+- `entradasDoCaixa`, `resultadoDeCaixa` e `rendaPessoalRecebida`: a fórmula é a mesma; o número
+  só deixa de dobrar;
+- `avisoDeSobreposicao` = recebimentos manuais > 0 **e** outras > 0 (só o legado).
+
+Os pontos de leitura que seguem a regra (Review Focus 1), cada um com teste:
+
+| Ponto | Arquivo | O que muda |
+| --- | --- | --- |
+| Bloco do caixa (Painel e Relatório) | `components/financeiro/bloco-do-caixa.tsx` | nada na tela: lê `numerosDoCaixa` |
+| Faixa do Painel / indicadores de caixa | `finance/painel.ts`, `caixa-leitura.ts` | nada: leem `entradasDoCaixa` e `minhaParteDoCaixa` |
+| Gaveta · linha "Reembolsos recebidos" | `finance/detalhe.ts` (`linhaDoCaixaDetalhe`, `reembolsos`) | lista os recebimentos **manuais** + as receitas vinculadas (id do lançamento, data de caixa, a parte da pessoa); as alocações automáticas saem |
+| Gaveta · linha "Outras entradas" | `detalhe.ts` (`outras`) | filtra as receitas **sem** pessoa |
+| Gaveta · "Entradas" do caixa, parte terceiros | `detalhe.ts` (`entradasDoCaixaDetalhe`) | total = `outras + vinculados`: **numericamente igual** ao de antes, porque a parte vinculada só mudou de linha; a lista (os movimentos de renda) continua fechando |
+| Relatório "De terceiros" | `reports/financeiro.ts` | nada: é a parte dos terceiros nas **saídas** (D3, o valor), não lê recebimento |
+| Pendente (Painel, Relatório, gaveta `pendente`/`pendente-do-mes`) | `totalPendenteAte`, `pendenteDoPeriodo` | nada no código: a alocação automática **é** recebimento, datada no dia do dinheiro, e abate o pendente sozinha, que é o objetivo |
+| Competência ("minhas entradas", "entradas de terceiros") | `resumoMes` | nada: `valor_pessoal` já faz o trabalho |
+
+Os testes de conciliação da 04-A, 04-A2 e 04-B **não mudam de número** com as fixtures atuais
+(nelas não há receita vinculada). Cada um ganha um caso com receita vinculada provando que o
+número conta o reembolso uma vez.
+
+**Tarefa 6 (lançamento) — vale, no formato da 03-G2:** a decisão roda em `criarTransacao`
+(`services.ts`) e em `updateTransaction` (`actions/transactions.ts`) **antes** do
+`rpc("salvar_lancamento")`, ao lado de `lerResponsabilidadeDaReceita`; o payload ganha
+`reembolso_pessoa_id` (DV-1). `setTransactionStatus` não precisa de nada: o trigger vê a troca de
+status. A importação cria por `createTransaction` (`imports.ts:1033`), então herda o mesmo
+caminho.
+
+**Tarefa 7 (importação) — vale.** As linhas citadas no desenho (`imports.ts:666-668`, `957-973`)
+andaram: a recusa da classificação de receita fica hoje em `setImportRowSplit` (`imports.ts:669`)
+e o envio, em `commitImport` (`imports.ts:1032-1048`).
+
+**Tarefa 8 (Terceiros) — vale, e ganha a ficha por pessoa que a 04-B mandou para cá** (§13 da
+04-B; linha 04-C do `PLANO.md`: "por pessoa, origem do débito, valor atribuído, recebimentos,
+saldo, histórico"). Ver §11.3.
+
+**Tarefa 9 (fechamento) — muda.** O plano manda editar `CLAUDE.md`, `CURRENT_STATUS.md` e
+`docs/handoff/*`. **DV-5:** nesta fase o dono proibiu editar qualquer `CLAUDE.md`, o `AGENTS.md` e
+o `docs/redesign/STATUS.md`. A invariante nova e o handoff ficam escritos no §13 deste desenho, e
+quem integra decide onde copiá-los. Push, PR e merge: nenhum (D67).
+
+### 11.3 A tela de Terceiros por pessoa (proposta para aprovação)
+
+- O topo continua com o **total pendente** (`totalPendenteAte(hoje)`, o mesmo do Painel).
+- **Uma ficha por pessoa** com dívida, saldo a favor ou histórico:
+  - **Deve** (o número grande) = `resumoDaPessoa.devidoCentavos`, parcelas futuras incluídas; por
+    teste, **igual** ao `aReceberPorPessoa` do Painel para a mesma pessoa;
+  - **Saldo a favor**, só quando > 0 (nunca junto com dívida, §5.2);
+  - **Em aberto:** as linhas não cobertas por inteiro, com a **origem** (descrição da compra,
+    cartão/fatura ou "parcela k/N") e o **valor atribuído**, **sem** chip de parcial e sem saldo
+    por linha (§2.7);
+  - **Pagamentos:** as receitas vinculadas da pessoa (data de caixa, conta, valor), cada uma
+    linkando para o lançamento. É o "recebimentos/histórico" do `PLANO.md`; desfazer é editar ou
+    excluir a receita ali;
+  - **Pagos** (filtro): as linhas cobertas por inteiro (`secoesDaLista().historico`);
+  - **Não será cobrado** continua como seção própria (D11).
+- Saem: **Receber**, "marcar recebido" em massa e `registrar-recebimento-dialog.tsx`.
+  **Desfazer** só em linha com recebimento manual (hoje, nenhuma).
+- "Reembolsos recebidos em <mês>" = `recebidoDaPessoaNoPeriodo` (manuais + partes vinculadas): o
+  dinheiro que virou saldo a favor também conta, porque entrou.
+
+### 11.4 Inventário dos leitores da COLUNA `status` de recebível (§5.3)
+
+| Ponto | Decide por | Ação |
+| --- | --- | --- |
+| Sino (`notifications/cron.ts:337`) | `emAberto(resumirRecebivel)`: derivado, valor = saldo | nada; o `status` que passa ao `generate.ts` só distingue cobrado/pendente |
+| `notifications/generate.ts:363` | o status que o cron já derivou | nada |
+| Motor (`pipeline.ts:341`) | `recebido` somado + coluna crua para `ignorado` | nada |
+| Proteção (`protecao-do-recebivel.ts`) | coluna (`cobrado`/`pago`/`ignorado`) + `temRecebimento` | `temRecebimento` passa a contar só o manual (Tarefa 4 + DV-2) |
+| Terceiros (`terceiros-client.tsx:678, 710, 757, 795, 813`) | coluna, para mostrar botões | reescrito na Tarefa 8 |
+
+O **sino continua por linha** (um aviso por recebível em aberto, com o saldo). Agrupar por pessoa
+mudaria a contagem de avisos e as chaves de dedupe; fica fora (backlog), declarado.
+
+### 11.5 O que esta fase herda do STATUS
+
+| Item | Destino aqui |
+| --- | --- |
+| RR7 (03-C), K2 (03-D), RR-E-4 (03-E) | **fecha**: o vínculo existe e o caixa conta uma vez |
+| RR-D-16 (barra "N selecionados" híbrida) | **some**: a seleção em massa de receber sai |
+| RR-D-18 (mensagem manda clicar num "Receber" que não está lá) | **fecha**: o texto de `motivoParaNaoApagar` deixa de citar o botão |
+| RR-D-21 (soma por pessoa sem teste de comportamento) | **fecha**: `resumoDaPessoa`, conciliado com `aReceberPorPessoa` |
+| RR-D-14 (`RECEIVABLE_OPEN_STATUSES` sem consumidor) | conferido na execução; se continuar órfã, sai |
+| RR-D-12, RR-D-20 (leitura de recebimentos com falha/teto) | conferidos contra o que a 03-G deixou; o que faltar vai ao §13 com destino |
+| Pessoa inativa como opção de filtro (achado da 04-A2) | **proposta:** "De quem?" lista as ativas e, na edição, a pessoa vinculada mesmo inativa; o filtro do Relatório fica fora (backlog) |
+
+### 11.6 Prévia
+
+A prévia com dado sintético (Terceiros por pessoa e o formulário com "De quem?" e a pergunta da
+sobra) foi publicada à parte para a aprovação do dono; os números saem dos casos 2, 4 e 5 do §6.
