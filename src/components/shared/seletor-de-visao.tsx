@@ -89,7 +89,7 @@ export function SeletorDeVisao<V extends string>({
 }
 
 /** Estado que não depende de cor: a marca só existe na opção ativa. */
-function MarcaDeAtiva() {
+export function MarcaDeAtiva() {
   return (
     <svg
       aria-hidden="true"

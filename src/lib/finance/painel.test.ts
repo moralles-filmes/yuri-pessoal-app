@@ -565,3 +565,263 @@ describe("indicadoresDoCaixa", () => {
     expect(indicadoresDoCaixa(null)).toBeNull();
   });
 });
+
+/* ───────────────────────────── indicadoresDoResumo (04-A2 T4, D-A2-15) ───────────────────────────── */
+
+import { indicadoresDoResumo, type IndicadorPronto } from "@/lib/finance/painel";
+import type { Responsabilidade } from "@/lib/finance/responsabilidade";
+import { rotuloTotalPendenteAte } from "@/lib/finance/recebimentos";
+
+describe("indicadoresDoResumo", () => {
+  // Valores sintéticos, todos diferentes entre si: trocar um campo por outro não passa despercebido.
+  const resumo = {
+    entradas: 5000,
+    entradasMeu: 3000,
+    entradasTerceiros: 2000,
+    saidas: 1500.5,
+    meu: 1200.25,
+    terceiros: 300.25,
+  };
+  const caixaOk = {
+    estado: "ok",
+    graficos: {
+      minha: {
+        entradas: 2900,
+        saidas: 1100.5,
+        saidasBrutas: 1400.75,
+        terceirosNasSaidas: 300.25,
+        resultado: 1799.5,
+        faturasSemTotal: 0,
+      },
+    },
+  } as unknown as EstadoDoCaixa;
+  const pendente = {
+    ate: 410.5,
+    rotuloAte: rotuloTotalPendenteAte("2026-11-05"),
+    referenteAoMes: 120.1,
+  };
+  const comparacao = {
+    entradas: { pct: 10, sentido: "bom" as const, texto: "vs. mês anterior" },
+    saidas: { pct: -5, sentido: "bom" as const, texto: "vs. mês anterior" },
+  };
+
+  const chamar = (
+    resp: Responsabilidade,
+    base: "competencia" | "caixa",
+    extra: Partial<Parameters<typeof indicadoresDoResumo>[0]> = {},
+  ) =>
+    indicadoresDoResumo({
+      resp,
+      base,
+      resumo,
+      caixa: base === "caixa" ? caixaOk : null,
+      comparacao,
+      pendente,
+      rotuloDoRecorte: null,
+      ...extra,
+    });
+
+  const textosDe = (i: IndicadorPronto) => [i.rotulo, i.dica, i.linhaDeBase, i.detalheComValor ?? ""];
+
+  describe("meu, em competência (os textos que o painel já tinha)", () => {
+    const r = chamar("meu", "competencia");
+
+    it("Minhas entradas: entradasMeu, nunca o bruto, com a linha de terceiros", () => {
+      expect(r.entradas.rotulo).toBe("Minhas entradas");
+      expect(r.entradas.valor).toBe(formatCurrency(resumo.entradasMeu));
+      expect(r.entradas.valor).not.toBe(formatCurrency(resumo.entradas));
+      expect(r.entradas.linhaDeBase).toBe("renda pessoal · competência");
+      expect(r.entradas.detalheComValor).toBe(`+ ${formatCurrency(2000)} de terceiros`);
+      expect(r.entradas.dica).toBe(
+        "A parte das entradas que é sua (renda pessoal). Dinheiro de terceiros fica de fora.",
+      );
+    });
+
+    it("Minhas saídas: resumo.meu, nunca resumo.saidas", () => {
+      expect(r.saidas.rotulo).toBe("Minhas saídas");
+      expect(r.saidas.valor).toBe(formatCurrency(resumo.meu));
+      expect(r.saidas.linhaDeBase).toBe("minha parte · competência · inclui o que ainda está pendente");
+      expect(r.saidas.detalheComValor).toBeNull();
+      expect(r.saidas.dica).toBe(
+        "A sua parte das saídas. O que é de terceiros fica de fora e aparece em De terceiros.",
+      );
+    });
+
+    it("De terceiros: resumo.terceiros", () => {
+      expect(r.quarto.rotulo).toBe("De terceiros");
+      expect(r.quarto.valor).toBe(formatCurrency(resumo.terceiros));
+      expect(r.quarto.linhaDeBase).toBe("parte de terceiros nas saídas · competência");
+      expect(r.quarto.dica).toBe(
+        "A parte de terceiros dentro das saídas: o que foi pago por você e volta para você.",
+      );
+    });
+
+    it("sem terceiros nas entradas, não há linha de terceiros", () => {
+      const sem = chamar("meu", "competencia", {
+        resumo: { ...resumo, entradas: 3000, entradasTerceiros: 0 },
+      });
+      expect(sem.entradas.detalheComValor).toBeNull();
+    });
+
+    it("as setas chegam como vieram, e sem setas (caixa com erro) ficam nulas", () => {
+      expect(r.entradas.comparacao).toBe(comparacao.entradas);
+      expect(r.saidas.comparacao).toBe(comparacao.saidas);
+      expect(r.quarto.comparacao).toBeNull();
+      const sem = chamar("meu", "competencia", { comparacao: null });
+      expect(sem.entradas.comparacao).toBeNull();
+      expect(sem.saidas.comparacao).toBeNull();
+    });
+  });
+
+  describe("meu, na base caixa (os mesmos textos e os mesmos números do painel)", () => {
+    it("os três valores são os de graficos.minha", () => {
+      const r = chamar("meu", "caixa");
+      expect(r.entradas.valor).toBe(formatCurrency(2900));
+      expect(r.saidas.valor).toBe(formatCurrency(1100.5));
+      expect(r.quarto.valor).toBe(formatCurrency(300.25));
+      expect(r.entradas.linhaDeBase).toBe("renda pessoal recebida · caixa realizado");
+      expect(r.entradas.detalheComValor).toBeNull();
+      expect(r.saidas.linhaDeBase).toBe("minha parte · caixa realizado");
+      expect(r.quarto.linhaDeBase).toBe("terceiros nas saídas · caixa realizado");
+    });
+
+    it("leitura do caixa com erro: os três levam o texto, nunca um número", () => {
+      const r = chamar("meu", "caixa", { caixa: { estado: "erro" } });
+      const erro = { erro: "Não foi possível ler o caixa" };
+      expect(r.entradas.valor).toEqual(erro);
+      expect(r.saidas.valor).toEqual(erro);
+      expect(r.quarto.valor).toEqual(erro);
+    });
+  });
+
+  describe("terceiros e consolidado", () => {
+    it("terceiros, em competência: entradas e saídas de terceiros e o pendente", () => {
+      const r = chamar("terceiros", "competencia");
+      expect(r.entradas.rotulo).toBe("Entradas de terceiros");
+      expect(r.entradas.valor).toBe(formatCurrency(resumo.entradasTerceiros));
+      expect(r.saidas.rotulo).toBe("Saídas de terceiros");
+      expect(r.saidas.valor).toBe(formatCurrency(resumo.terceiros));
+      expect(r.quarto.rotulo).toBe("Pendente de terceiros até 05/11");
+      expect(r.quarto.valor).toBe(formatCurrency(410.5));
+      expect(r.quarto.detalheComValor).toBe(`referente ao mês: ${formatCurrency(120.1)}`);
+    });
+
+    it("consolidado, em competência: o bruto como número, com minha e de terceiros embaixo", () => {
+      const r = chamar("consolidado", "competencia");
+      expect(r.entradas.rotulo).toBe("Entradas (bruto)");
+      expect(r.entradas.valor).toBe(formatCurrency(resumo.entradas));
+      expect(r.entradas.detalheComValor).toBe(
+        `minha ${formatCurrency(3000)} · de terceiros ${formatCurrency(2000)}`,
+      );
+      expect(r.saidas.rotulo).toBe("Saídas (bruto)");
+      expect(r.saidas.valor).toBe(formatCurrency(resumo.saidas));
+      expect(r.saidas.detalheComValor).toBe(
+        `minha ${formatCurrency(1200.25)} · de terceiros ${formatCurrency(300.25)}`,
+      );
+      expect(r.quarto.rotulo).toBe("Pendente de terceiros até 05/11");
+    });
+
+    it.each(["competencia", "caixa"] as const)(
+      "consolidado (%s): nenhum rótulo nem linha de base diz 'Minhas' ou 'meu gasto'",
+      (base) => {
+        const r = chamar("consolidado", base);
+        for (const i of [r.entradas, r.saidas, r.quarto]) {
+          expect(i.rotulo).not.toMatch(/minhas/i);
+          expect(i.rotulo).not.toMatch(/meu gasto/i);
+          expect(i.linhaDeBase).not.toMatch(/minhas/i);
+          expect(i.linhaDeBase).not.toMatch(/meu gasto/i);
+          expect(i.dica).not.toMatch(/meu gasto/i);
+        }
+      },
+    );
+
+    it("caixa + terceiros: entradas de terceiros não segue; as saídas são o que o caixa traz", () => {
+      const r = chamar("terceiros", "caixa");
+      expect(r.entradas.valor).toEqual({ naoSegue: "não segue a responsabilidade na base caixa" });
+      expect(r.saidas.valor).toBe(formatCurrency(300.25));
+      expect(r.quarto.valor).toBe(formatCurrency(410.5));
+    });
+
+    it("caixa + consolidado: entradas brutas não segue; as saídas brutas vêm do caixa", () => {
+      const r = chamar("consolidado", "caixa");
+      expect(r.entradas.valor).toEqual({ naoSegue: "não segue a responsabilidade na base caixa" });
+      expect(r.saidas.valor).toBe(formatCurrency(1400.75));
+      expect(r.saidas.detalheComValor).toBe(
+        `minha ${formatCurrency(1100.5)} · de terceiros ${formatCurrency(300.25)}`,
+      );
+    });
+
+    it("caixa com erro em terceiros: a saída vira texto, o pendente continua número", () => {
+      const r = chamar("terceiros", "caixa", { caixa: { estado: "erro" } });
+      expect(r.saidas.valor).toEqual({ erro: "Não foi possível ler o caixa" });
+      expect(typeof r.quarto.valor).toBe("string");
+    });
+
+    it("pendente zero é zero medido, não ausência", () => {
+      const r = chamar("terceiros", "competencia", {
+        pendente: { ate: 0, rotuloAte: pendente.rotuloAte, referenteAoMes: 0 },
+      });
+      expect(r.quarto.valor).toBe(formatCurrency(0));
+    });
+  });
+
+  describe("comparação (D-A2-22)", () => {
+    it.each(["terceiros", "consolidado"] as const)("%s: sem seta, e a legenda diz por quê", (resp) => {
+      const r = chamar(resp, "competencia");
+      for (const c of [r.entradas.comparacao, r.saidas.comparacao]) {
+        expect(c?.pct).toBeNull();
+        expect(c?.sentido).toBe("neutro");
+        // Sem recorte, quem bloqueia a seta é a responsabilidade — não há recorte a culpar.
+        expect(c?.texto).toBe("sem comparação nesta responsabilidade");
+      }
+    });
+
+    it.each(["terceiros", "consolidado"] as const)("%s COM recorte: o motivo é o recorte", (resp) => {
+      const r = chamar(resp, "competencia", { rotuloDoRecorte: " · Cartão A" });
+      for (const c of [r.entradas.comparacao, r.saidas.comparacao]) {
+        expect(c?.texto).toBe("sem comparação neste recorte");
+      }
+    });
+
+    it("meu com recorte ligado: sem seta também", () => {
+      const r = chamar("meu", "competencia", { rotuloDoRecorte: " · Cartão A" });
+      expect(r.entradas.comparacao?.pct).toBeNull();
+      expect(r.saidas.comparacao?.texto).toBe("sem comparação neste recorte");
+    });
+
+    it("mês futuro (Review Focus 3): o sentido neutro da 04-A chega intacto", () => {
+      const dados = {
+        atual: { entradas: 100, saidas: 200 },
+        anterior: { entradas: 50, saidas: 100 },
+      } as unknown as Parameters<typeof comparacaoDosIndicadores>[0]["dados"];
+      const futuro = comparacaoDosIndicadores({ dados, ateODia: null, base: "competencia", futuro: true });
+      const r = chamar("meu", "competencia", { comparacao: futuro });
+      expect(r.entradas.comparacao?.sentido).toBe("neutro");
+      expect(r.saidas.comparacao?.sentido).toBe("neutro");
+      expect(r.entradas.comparacao?.texto).toBe("mês futuro: só o que já está lançado");
+      expect(r.entradas.comparacao?.pct).not.toBeNull();
+    });
+  });
+
+  describe("recorte e vocabulário", () => {
+    it("o rótulo do recorte vai ao fim da linha de base, e só a ela", () => {
+      const r = chamar("terceiros", "competencia", { rotuloDoRecorte: " · Cartão A" });
+      for (const i of [r.entradas, r.saidas, r.quarto]) {
+        expect(i.linhaDeBase.endsWith(" · Cartão A")).toBe(true);
+        expect(i.rotulo).not.toContain("Cartão A");
+      }
+    });
+
+    it.each(["meu", "terceiros", "consolidado"] as const)(
+      "%s: nenhum texto fixo usa vocabulário proibido",
+      (resp) => {
+        for (const base of ["competencia", "caixa"] as const) {
+          const r = chamar(resp, base);
+          for (const i of [r.entradas, r.saidas, r.quarto]) {
+            for (const t of textosDe(i)) expect(termosProibidosEm(t)).toEqual([]);
+          }
+        }
+      },
+    );
+  });
+});

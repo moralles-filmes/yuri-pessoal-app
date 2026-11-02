@@ -24,6 +24,7 @@ import {
 } from "@/lib/finance/dashboard";
 import { type RecebivelComRecebimentos, totalPendenteAte } from "@/lib/finance/recebimentos";
 import type { TransactionType } from "@/lib/finance/constants";
+import type { Responsabilidade } from "@/lib/finance/responsabilidade";
 import { centavosParaReais, formatCurrency, reaisParaCentavos } from "@/lib/format";
 
 export type Sentido = "bom" | "ruim" | "neutro";
@@ -142,6 +143,14 @@ export function indicadoresDoCaixa(caixa: EstadoDoCaixa | null): {
 }
 
 /**
+ * O valor de um indicador pronto para a tela: o número vira texto de moeda; o estado de erro passa
+ * como está (nunca vira R$ 0,00).
+ */
+function valorDoIndicador(v: ValorDoIndicador): string | { erro: string } {
+  return typeof v === "number" ? formatCurrency(v) : v;
+}
+
+/**
  * A cor da seta pelo SIGNIFICADO: entrada que sobe é boa; saída que sobe é ruim. Mês em andamento
  * não dá cor à saída (a comparação é parcial: o cartão ainda não fechou). Sem base ou sem variação
  * é neutro. Entrada tem cor também em andamento: o corte do dia vale para os dois meses.
@@ -206,6 +215,169 @@ export function comparacaoDosIndicadores(p: {
       sentido: sentidoDaVariacao("saida", pctSaidas, emAndamento),
       texto: textoDe(pctSaidas, base === "competencia"),
     },
+  };
+}
+
+/* ───────────────────────────── Os indicadores de uma responsabilidade (04-A2, D-A2-15) ───────────────────────────── */
+
+/**
+ * Um indicador pronto para a peça `Indicador`: rótulo, dica, número (ou o estado que NÃO é número),
+ * a linha do que ele mede e a comparação. É a forma que o painel e o relatório compartilham — por
+ * isso o número dos dois bate por construção, e não por coincidência de duas montagens.
+ */
+export type IndicadorPronto = {
+  rotulo: string;
+  dica: string;
+  valor: string | { erro: string } | { naoSegue: string };
+  linhaDeBase: string;
+  /** Detalhe que contém dinheiro: some junto com o olho. */
+  detalheComValor: string | null;
+  comparacao: ComparacaoDoIndicador | null;
+};
+
+const NAO_SEGUE_NO_CAIXA = "não segue a responsabilidade na base caixa";
+
+type MinhaDoCaixa = Extract<EstadoDoCaixa, { estado: "ok" }>["graficos"]["minha"];
+
+/**
+ * Os três primeiros indicadores do Resumo — entradas, saídas e o quarto (De terceiros em "meu";
+ * o pendente em "terceiros" e "consolidado") — na responsabilidade e na base pedidas.
+ *
+ * ⛔ Nenhuma conta nova: cada número é um campo de `resumoMes`, ou de `caixa.graficos.minha` na base
+ * caixa (D-A2-21). O que o caixa não traz vira `{ naoSegue }`, sem subtração. Falha de leitura do caixa
+ * é TEXTO, nunca R$ 0,00. Os textos de "meu" são os que o painel já tinha.
+ *
+ * `comparacao` (as setas) só chega em "meu" e sem recorte (D-A2-22); nos outros casos, o texto diz
+ * "sem comparação nesta responsabilidade" (sem recorte) ou "sem comparação neste recorte" (com recorte). `null` em `p.comparacao` = sem setas (caixa com erro).
+ */
+export function indicadoresDoResumo(p: {
+  resp: Responsabilidade;
+  base: BaseFinanceira;
+  resumo: Pick<
+    ResumoMes,
+    "entradas" | "entradasMeu" | "entradasTerceiros" | "saidas" | "meu" | "terceiros"
+  >;
+  caixa: EstadoDoCaixa | null;
+  comparacao: { entradas: ComparacaoDoIndicador; saidas: ComparacaoDoIndicador } | null;
+  /** Só "terceiros" e "consolidado" leem o pendente; "meu" não o usa. */
+  pendente: { ate: number; rotuloAte: string; referenteAoMes: number };
+  /** O recorte ligado, no fim da linha de base (ex.: " · Cartão A"); `null` = sem recorte. */
+  rotuloDoRecorte: string | null;
+}): { entradas: IndicadorPronto; saidas: IndicadorPronto; quarto: IndicadorPronto } {
+  const { resp, base, resumo, pendente } = p;
+  const recorte = p.rotuloDoRecorte ?? "";
+  const emCaixa = base === "caixa";
+
+  // Na base caixa sem leitura nenhuma, o que chega ao dono é "não leu", nunca um zero.
+  const caixa: EstadoDoCaixa | null = emCaixa ? (p.caixa ?? { estado: "erro" }) : null;
+  const caixaInd = indicadoresDoCaixa(caixa);
+  const minha: MinhaDoCaixa | null = caixa?.estado === "ok" ? caixa.graficos.minha : null;
+
+  const comSetas = resp === "meu" && p.rotuloDoRecorte === null;
+  // Quem bloqueia a seta: com recorte ligado, o recorte; sem ele (só pode ser Terceiros ou
+  // Consolidado), a responsabilidade. Dizer "recorte" onde não há nenhum manda o dono procurar um filtro.
+  const semComparacao = (): ComparacaoDoIndicador => ({
+    pct: null,
+    sentido: "neutro",
+    texto: p.rotuloDoRecorte === null ? "sem comparação nesta responsabilidade" : "sem comparação neste recorte",
+  });
+  const comparacaoDe = (qual: "entradas" | "saidas"): ComparacaoDoIndicador | null =>
+    comSetas ? (p.comparacao?.[qual] ?? null) : semComparacao();
+
+  const minhaEDeTerceiros = (meu: number, terceiros: number): string =>
+    `minha ${formatCurrency(meu)} · de terceiros ${formatCurrency(terceiros)}`;
+
+  if (resp === "meu") {
+    const entradasComp = indicadorMinhasEntradas(resumo);
+    return {
+      entradas: {
+        rotulo: "Minhas entradas",
+        dica: "A parte das entradas que é sua (renda pessoal). Dinheiro de terceiros fica de fora.",
+        valor: caixaInd ? valorDoIndicador(caixaInd.entradas) : formatCurrency(entradasComp.valor),
+        linhaDeBase: `${caixaInd ? "renda pessoal recebida · caixa realizado" : "renda pessoal · competência"}${recorte}`,
+        // Tem dinheiro: some junto com o olho (revisão final 04-A).
+        detalheComValor: caixaInd ? null : entradasComp.linhaDeTerceiros,
+        comparacao: comparacaoDe("entradas"),
+      },
+      saidas: {
+        rotulo: "Minhas saídas",
+        dica: "A sua parte das saídas. O que é de terceiros fica de fora e aparece em De terceiros.",
+        valor: caixaInd ? valorDoIndicador(caixaInd.saidas) : formatCurrency(resumo.meu),
+        linhaDeBase: `${caixaInd ? "minha parte · caixa realizado" : "minha parte · competência · inclui o que ainda está pendente"}${recorte}`,
+        detalheComValor: null,
+        comparacao: comparacaoDe("saidas"),
+      },
+      quarto: {
+        rotulo: "De terceiros",
+        dica: "A parte de terceiros dentro das saídas: o que foi pago por você e volta para você.",
+        valor: caixaInd ? valorDoIndicador(caixaInd.terceiros) : formatCurrency(resumo.terceiros),
+        linhaDeBase: `${caixaInd ? "terceiros nas saídas · caixa realizado" : "parte de terceiros nas saídas · competência"}${recorte}`,
+        detalheComValor: null,
+        comparacao: null,
+      },
+    };
+  }
+
+  // "Pendente de terceiros até DD/MM": o sufixo vem do rótulo que a tela já calcula, sem reabrir a data.
+  const ate = /até \d{2}\/\d{2}$/.exec(pendente.rotuloAte);
+  const quarto: IndicadorPronto = {
+    rotulo: ate ? `Pendente de terceiros ${ate[0]}` : pendente.rotuloAte,
+    dica: "O que terceiros ainda não devolveram até esta data, já descontado o que voltou.",
+    valor: formatCurrency(pendente.ate),
+    linhaDeBase: `o que ainda não voltou para você${recorte}`,
+    detalheComValor: `referente ao mês: ${formatCurrency(pendente.referenteAoMes)}`,
+    comparacao: null,
+  };
+
+  if (resp === "terceiros") {
+    return {
+      entradas: {
+        rotulo: "Entradas de terceiros",
+        dica: "O dinheiro que entrou e é de terceiros. Não é renda sua.",
+        valor: emCaixa ? { naoSegue: NAO_SEGUE_NO_CAIXA } : formatCurrency(resumo.entradasTerceiros),
+        linhaDeBase: `${emCaixa ? "entradas de terceiros · caixa realizado" : "entradas de terceiros · competência"}${recorte}`,
+        detalheComValor: null,
+        comparacao: comparacaoDe("entradas"),
+      },
+      saidas: {
+        rotulo: "Saídas de terceiros",
+        dica: "A parte de terceiros dentro das saídas: o que foi pago por você e volta para você.",
+        valor: caixaInd ? valorDoIndicador(caixaInd.terceiros) : formatCurrency(resumo.terceiros),
+        linhaDeBase: `${caixaInd ? "terceiros nas saídas · caixa realizado" : "parte de terceiros nas saídas · competência"}${recorte}`,
+        detalheComValor: null,
+        comparacao: comparacaoDe("saidas"),
+      },
+      quarto,
+    };
+  }
+
+  // consolidado: o bruto como número, com "minha" e "de terceiros" em linha separada (nunca "meu gasto").
+  return {
+    entradas: {
+      rotulo: "Entradas (bruto)",
+      dica: "Tudo o que entrou, somando a sua parte e a de terceiros.",
+      valor: emCaixa ? { naoSegue: NAO_SEGUE_NO_CAIXA } : formatCurrency(resumo.entradas),
+      linhaDeBase: `${emCaixa ? "bruto · caixa realizado" : "bruto · competência"}${recorte}`,
+      detalheComValor: emCaixa ? null : minhaEDeTerceiros(resumo.entradasMeu, resumo.entradasTerceiros),
+      comparacao: comparacaoDe("entradas"),
+    },
+    saidas: {
+      rotulo: "Saídas (bruto)",
+      dica: "Tudo o que saiu, somando a sua parte e a de terceiros.",
+      valor: emCaixa
+        ? minha
+          ? formatCurrency(minha.saidasBrutas)
+          : { erro: "Não foi possível ler o caixa" }
+        : formatCurrency(resumo.saidas),
+      linhaDeBase: `${emCaixa ? "bruto · caixa realizado" : "bruto · competência"}${recorte}`,
+      detalheComValor: emCaixa
+        ? minha
+          ? minhaEDeTerceiros(minha.saidas, minha.terceirosNasSaidas)
+          : null
+        : minhaEDeTerceiros(resumo.meu, resumo.terceiros),
+      comparacao: comparacaoDe("saidas"),
+    },
+    quarto,
   };
 }
 

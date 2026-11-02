@@ -7,45 +7,29 @@
  */
 import { createClient } from "@/lib/supabase/server";
 import { hojeISO } from "@/lib/format";
-import { comparativoDoGraficoAteODia } from "@/lib/finance/caixa";
-import { lerFinanceiro } from "@/lib/finance/queries";
-import { estadoDoCaixa, type EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import { getCategories, getPeopleForSelect, lerFinanceiro, lerSaldoAte } from "@/lib/finance/queries";
+import { estadoDoCaixa } from "@/lib/finance/caixa-leitura";
 import type { BaseFinanceira } from "@/lib/finance/base";
 import {
-  comparativoMesAMes,
-  evolucaoMensal,
   faturasPorMes,
   type FaturaDoMes,
-  gastosPorCategoria,
-  gastosPorForma,
   mesDe,
-  paresDoMesAMes,
-  type MesAMesDados,
-  perdoadoDoMes,
-  projecaoProximosMeses,
+  nextDayISO,
   proximas6Faturas,
-  proximasContasPagar,
-  resumoMes,
   totalAReceber,
-  type CategoriaSlice,
-  type Comparativo,
-  type EvolucaoPonto,
   type FaturaProvisao,
-  type FormaSlice,
-  type ProjecaoPonto,
-  type ProximasContas,
-  type ResumoMes,
 } from "@/lib/finance/dashboard";
 import {
-  ESCOPO_RELATORIO,
+  ESCOPO_PAINEL,
   janelaDoRelatorio,
-  saldoDasContas,
   type CompletudeFinanceira,
 } from "@/lib/finance/pipeline";
+import { recorteDaUrl } from "@/lib/finance/recorte";
+import type { Responsabilidade } from "@/lib/finance/responsabilidade";
+import { montarRelatorioFinanceiro, type RelatorioFinanceiro } from "@/lib/reports/financeiro";
 import { getHabitsDashboard } from "@/lib/habits/queries";
 import { getStudyDashboard } from "@/lib/studies/queries";
 import { tasksReport, type ReportTask, type TasksReport } from "@/lib/reports/tasks";
-import type { Frequency } from "@/lib/finance/constants";
 import type { StudyCategory, StudyStatus } from "@/lib/studies/constants";
 import type { TaskStoredStatus } from "@/lib/tasks/constants";
 import type {
@@ -55,29 +39,6 @@ import type {
 } from "@/types/database";
 
 /* ───────────────────────────── Tipos de saída ───────────────────────────── */
-
-export type FinanceReport = {
-  completude: CompletudeFinanceira;
-  mes: string;
-  saldo: number;
-  resumo: ResumoMes;
-  /** 03-D D11: entra em meu por decisão de não cobrar; resumo.meu − perdoado = parte acordada. */
-  perdoado: number;
-  comparativo: Comparativo;
-  /** K3b: o corte "até o dia D" do mês em andamento para o gráfico "Mês a mês"; null no fechado. */
-  graficoAteODia: { ateODia: number; comparativo: Comparativo } | null;
-  /** As minhas entradas/saídas do "Meu mês a mês" em competência (desenho 2026-10-18). */
-  mesAMes: MesAMesDados;
-  evolucao: EvolucaoPonto[];
-  categorias: CategoriaSlice[];
-  formas: FormaSlice[];
-  projecao: ProjecaoPonto[];
-  /** As faturas dos meses da projeção com o valor CHEIO (meu + terceiros), pelo vencimento. */
-  faturasFuturas: FaturaDoMes[];
-  contas: ProximasContas;
-  aReceber: number;
-  assinaturas: { nome: string; valor: number; frequency: Frequency }[];
-};
 
 export type FaturaMes = FaturaDoMes;
 
@@ -121,9 +82,8 @@ export type StudiesReport = {
 export type ReportsData = {
   mes: string;
   hoje: string;
-  finance: FinanceReport;
-  /** Só com a base caixa selecionada; `null` em competência. */
-  caixa: EstadoDoCaixa | null;
+  /** 04-A2: o modelo de vista da aba Financeiro — `relatorios-client.tsx` só o desenha. */
+  financeiro: RelatorioFinanceiro;
   card: CardReport;
   habits: HabitsReport;
   studies: StudiesReport;
@@ -132,43 +92,45 @@ export type ReportsData = {
 
 /* ───────────────────────────── Financeiro + Cartão ───────────────────────────── */
 
+/** Os parâmetros da URL que o relatório lê além do mês e da base (04-A2). */
+export type FiltrosDoRelatorioNaUrl = {
+  resp: Responsabilidade;
+  sp: Record<string, string | string[] | undefined>;
+};
+
 async function getFinanceAndCardReport(
   mesSel: string,
   hoje: string,
   base: BaseFinanceira,
-): Promise<{ finance: FinanceReport; caixa: EstadoDoCaixa | null; card: CardReport }> {
+  filtros: FiltrosDoRelatorioNaUrl,
+): Promise<{
+  financeiro: RelatorioFinanceiro;
+  card: CardReport;
+}> {
   const mesAtual = mesDe(hoje);
   // REDESIGN-03-B — a MESMA chamada da página do dashboard financeiro, não a mesma cópia.
   const janela = janelaDoRelatorio({ mesSel, mesAtual });
   const { evoMeses, projMeses } = janela;
 
   // As recorrências voltam também CRUAS: "assinaturas" lê `description` e `category.name`, que
-  // não são entrada do motor.
-  const { entradas, contas: accounts, recorrencias: recurrences, completude } = await lerFinanceiro({
-    janela,
-    escopo: ESCOPO_RELATORIO,
-  });
-  const { txs, sts, recs, inst, cards: dashCards, recorrencias, bills: dashBills } = entradas;
+  // não são entrada do motor. 04-A2 (D-A2-23): com `ESCOPO_PAINEL`, os recebíveis crus (com a
+  // pessoa e o cartão) saem da MESMA leitura; pessoas e categorias dos `<select>` vêm de leituras
+  // que já existiam (nenhuma tabela nova é lida).
+  const [leitura, pessoas, categoriasLidas] = await Promise.all([
+    lerFinanceiro({ janela, escopo: ESCOPO_PAINEL }),
+    getPeopleForSelect(),
+    getCategories(),
+  ]);
+  const {
+    entradas,
+    contas: accounts,
+    recorrencias: recurrences,
+    recebiveis: recebiveisCrus,
+    completude,
+  } = leitura;
+  const { txs, sts, recs, inst, cards: dashCards } = entradas;
 
-  const resumo = resumoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
-  const comparativo = comparativoMesAMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs });
-  const graficoAteODia = comparativoDoGraficoAteODia({ mes: mesSel, hoje, transactions: txs, receivables: recs });
-  const evolucao = evolucaoMensal({ meses: evoMeses, transactions: txs, statements: sts, receivables: recs });
-  const categorias = gastosPorCategoria({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
-  const formas = gastosPorForma({ mes: mesSel, transactions: txs, statements: sts, installmentItems: inst, receivables: recs });
-  const projecao = projecaoProximosMeses({ hoje, meses: projMeses, statements: sts, receivables: recs, recorrencias, bills: dashBills });
-  const contas = proximasContasPagar({ hoje, bills: dashBills });
   const aReceber = totalAReceber(recs, mesSel);
-  const saldo = saldoDasContas(accounts);
-
-  const assinaturas = recurrences
-    .filter((r) => r.is_active && r.type === "despesa")
-    .map((r) => ({
-      nome: r.description ?? r.category?.name ?? "Recorrência",
-      valor: r.amount,
-      frequency: r.frequency,
-    }))
-    .sort((a, b) => b.valor - a.valor);
 
   const caixa =
     base === "caixa"
@@ -179,6 +141,39 @@ async function getFinanceAndCardReport(
           evoMeses,
         )
       : null;
+
+  // 04-A2: as opções dos filtros, o recorte da URL (id desconhecido é ignorado) e o saldo —
+  // `lerSaldoAte` depende do recorte (o da conta), por isso vem DEPOIS, uma RPC a mais e sequencial.
+  const opcoes = {
+    contas: accounts.map((c) => ({ id: c.id, nome: c.name })),
+    cartoes: dashCards.map((c) => ({ id: c.id, nome: c.nome })),
+    pessoas,
+    categorias: categoriasLidas.map((c) => ({ id: c.id, nome: c.name })),
+  };
+  const recorte = recorteDaUrl(filtros.sp, {
+    contas: opcoes.contas.map((o) => o.id),
+    cartoes: opcoes.cartoes.map((o) => o.id),
+    pessoas: opcoes.pessoas.map((o) => o.id),
+    categorias: opcoes.categorias.map((o) => o.id),
+  });
+  const saldoAte = await lerSaldoAte(nextDayISO(hoje), recorte.conta);
+
+  const financeiro = montarRelatorioFinanceiro({
+    mes: mesSel,
+    hoje,
+    base,
+    resp: filtros.resp,
+    recorte,
+    entradas,
+    recebiveisCrus,
+    contas: accounts,
+    recorrenciasCruas: recurrences,
+    saldoAte,
+    caixa,
+    completude,
+    janela: { evoMeses, projMeses },
+    opcoes,
+  });
 
   // ── Cartão ──
   const faturas = proximas6Faturas({ hoje, cards: dashCards, statements: sts, receivables: recs });
@@ -198,25 +193,7 @@ async function getFinanceAndCardReport(
   }
 
   return {
-    finance: {
-      completude,
-      mes: mesSel,
-      saldo,
-      resumo,
-      perdoado: perdoadoDoMes({ mes: mesSel, transactions: txs, statements: sts, receivables: recs }),
-      comparativo,
-      graficoAteODia,
-      mesAMes: paresDoMesAMes(graficoAteODia !== null ? graficoAteODia.comparativo : comparativo),
-      evolucao,
-      categorias,
-      formas,
-      projecao,
-      faturasFuturas: faturasPorMes({ statements: sts, receivables: recs, meses: projMeses, agrupar: "vencimento" }),
-      contas,
-      aReceber,
-      assinaturas,
-    },
-    caixa,
+    financeiro,
     card: {
       completude,
       faturas,
@@ -298,11 +275,12 @@ async function getTasksReportData(todayIso: string): Promise<TasksReport> {
 
 export async function getReportsData(
   mesSel: string,
-  base: BaseFinanceira = "competencia",
+  base: BaseFinanceira,
+  filtros: FiltrosDoRelatorioNaUrl,
 ): Promise<ReportsData> {
   const hoje = hojeISO();
   const [financeAndCard, habits, studies, tasks] = await Promise.all([
-    getFinanceAndCardReport(mesSel, hoje, base),
+    getFinanceAndCardReport(mesSel, hoje, base, filtros),
     getHabitsReport(hoje),
     getStudiesReport(hoje),
     getTasksReportData(hoje),
@@ -311,8 +289,7 @@ export async function getReportsData(
   return {
     mes: mesSel,
     hoje,
-    finance: financeAndCard.finance,
-    caixa: financeAndCard.caixa,
+    financeiro: financeAndCard.financeiro,
     card: financeAndCard.card,
     habits,
     studies,

@@ -71,6 +71,7 @@ type TxCompleta = {
   parcelado: boolean;
   category_id: string | null;
   category: Categoria | null;
+  account_id: string | null;
   description: string;
 };
 
@@ -155,6 +156,7 @@ function referenciaCardFinanceiro(
     status: t.status,
     competence_date: t.competence_date,
     card_id: t.card_id,
+    account_id: t.account_id,
     statement_id: t.statement_id,
     parcelado: t.parcelado,
     category_id: t.category_id,
@@ -255,6 +257,7 @@ function referenciaRelatorio({
     status: t.status,
     competence_date: t.competence_date,
     card_id: t.card_id,
+    account_id: t.account_id,
     statement_id: t.statement_id,
     parcelado: t.parcelado,
     category_id: t.category_id,
@@ -344,6 +347,7 @@ function referenciaPagina({
     status: t.status,
     competence_date: t.competence_date,
     card_id: t.card_id,
+    account_id: t.account_id,
     statement_id: t.statement_id,
     parcelado: t.parcelado,
     category_id: t.category_id,
@@ -474,6 +478,7 @@ function referenciaCron(
       status: t.status as DashTx["status"],
       competence_date: t.competence_date as string,
       card_id: (t.card_id as string | null) ?? null,
+      account_id: (t.account_id as string | null) ?? null,
       statement_id: (t.statement_id as string | null) ?? null,
       parcelado: Boolean(t.parcelado),
       category_id: null,
@@ -500,6 +505,7 @@ function linhasCompletas(): LinhasCompletas {
         status: "pago",
         competence_date: "2026-05-10",
         card_id: null,
+        account_id: null,
         statement_id: null,
         parcelado: false,
         category_id: "cat-a",
@@ -516,6 +522,7 @@ function linhasCompletas(): LinhasCompletas {
         status: "pago",
         competence_date: "2026-05-12",
         card_id: null,
+        account_id: null,
         statement_id: null,
         parcelado: false,
         category_id: "cat-a",
@@ -532,6 +539,7 @@ function linhasCompletas(): LinhasCompletas {
         status: "pendente",
         competence_date: "2026-04-28",
         card_id: "card-1",
+        account_id: null,
         statement_id: "st-1",
         parcelado: false,
         category_id: null,
@@ -548,6 +556,7 @@ function linhasCompletas(): LinhasCompletas {
         status: "pendente",
         competence_date: "2026-05-02",
         card_id: "card-1",
+        account_id: null,
         statement_id: null,
         parcelado: true,
         category_id: "cat-a",
@@ -563,6 +572,7 @@ function linhasCompletas(): LinhasCompletas {
         status: "recebido",
         competence_date: "2026-05-05",
         card_id: null,
+        account_id: null,
         statement_id: null,
         parcelado: false,
         category_id: null,
@@ -771,6 +781,7 @@ const transacoesDoCron: LinhaTx[] = [
     status: "pago",
     competence_date: "2026-05-10",
     card_id: null,
+    account_id: null,
     statement_id: null,
     parcelado: false,
     category_id: "cat-a",
@@ -785,6 +796,7 @@ const transacoesDoCron: LinhaTx[] = [
     status: "pago",
     competence_date: "2026-04-12",
     card_id: null,
+    account_id: null,
     statement_id: null,
     parcelado: null,
     category_id: null,
@@ -799,6 +811,7 @@ const transacoesDoCron: LinhaTx[] = [
     status: "pendente",
     competence_date: "2026-04-28",
     card_id: "card-1",
+    account_id: null,
     statement_id: "st-1",
     parcelado: false,
     category_id: "cat-b",
@@ -894,6 +907,7 @@ describe("03-B — montarEntradas devolve o que cada chamador montava à mão (c
     expect(Object.keys(novo.txs[0]).sort()).toEqual(
       [
         "id",
+        "account_id",
         "amount",
         "card_id",
         "category",
@@ -1094,6 +1108,7 @@ describe("03-B — montarEntradas: normalização", () => {
           valor_pessoal: null,
           payment_method: null,
           card_id: null,
+          account_id: null,
           statement_id: null,
           parcelado: null,
           category_id: null,
@@ -1152,6 +1167,7 @@ describe("03-B — montarEntradas: normalização", () => {
       status: "pago",
       competence_date: "2026-05-01",
       card_id: null,
+      account_id: null,
       statement_id: null,
       parcelado: false,
       category_id: null,
@@ -1196,6 +1212,7 @@ describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
     valor_pessoal: null,
     payment_method: null,
     card_id: null,
+    account_id: null,
     statement_id: null,
     parcelado: false,
     category_id: null,
@@ -1212,6 +1229,7 @@ describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
       valor_pessoal: null,
       payment_method: null,
       card_id: null,
+      account_id: null,
       statement_id: null,
       parcelado: false,
       category: null,
@@ -1239,6 +1257,13 @@ describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
     ];
     expect(lancamentosForaDoDominio(doCheck)).toBe(0);
     expect(montarEntradas({ transacoes: doCheck }).txs).toHaveLength(2);
+  });
+
+  it("montarEntradas leva account_id da linha ao motor", () => {
+    const comConta = montarEntradas({ transacoes: [{ ...base, account_id: "conta-b" }] });
+    expect(comConta.txs?.[0].account_id).toBe("conta-b");
+    const semConta = montarEntradas({ transacoes: [{ ...base, account_id: null }] });
+    expect(semConta.txs?.[0].account_id).toBeNull();
   });
 
   it("embed que vem como lista é normalizado para o primeiro elemento", () => {

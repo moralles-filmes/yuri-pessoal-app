@@ -21,6 +21,7 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/format";
 import type { EvolucaoPonto } from "@/lib/finance/dashboard";
+import { temDadosNasBarras } from "./barras-dados";
 import {
   axisTick,
   brlCompact,
@@ -51,11 +52,16 @@ function Hachura({ id, cor }: { id: string; cor: string }) {
  */
 export function BarrasEntradasSaidasChart({
   dados,
+  series = "ambas",
+  nomes = { entradas: "Minhas entradas", saidas: "Minhas saídas" },
 }: {
   dados: (EvolucaoPonto & { parcial: boolean })[];
+  /** `saidas`: só a barra de saídas (o recorte por cartão não segue as entradas — 04-A2). */
+  series?: "ambas" | "saidas";
+  /** Os rótulos dependem da responsabilidade (Meu · Terceiros · Consolidado): quem chama os dá. */
+  nomes?: { entradas: string; saidas: string };
 }) {
-  const temDados = dados.some((p) => p.entradas > 0 || p.saidas > 0);
-  if (!temDados) {
+  if (!temDadosNasBarras(dados)) {
     return (
       <EmptyState
         icon={BarChart3}
@@ -88,26 +94,28 @@ export function BarrasEntradasSaidasChart({
             itemStyle={tooltipItemStyle}
           />
           <Legend wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }} />
-          <Bar
-            dataKey="entradas"
-            name="Minhas entradas"
-            fill={COR_ENTRADAS}
-            radius={[4, 4, 0, 0]}
-            maxBarSize={32}
-          >
-            {chartData.map((p) => (
-              <Cell
-                key={p.mes}
-                fill={p.parcial ? "url(#hachura-entradas)" : COR_ENTRADAS}
-                stroke={p.parcial ? COR_ENTRADAS : undefined}
-                strokeWidth={p.parcial ? 1.5 : undefined}
-                strokeDasharray={p.parcial ? "4 3" : undefined}
-              />
-            ))}
-          </Bar>
+          {series !== "saidas" && (
+            <Bar
+              dataKey="entradas"
+              name={nomes.entradas}
+              fill={COR_ENTRADAS}
+              radius={[4, 4, 0, 0]}
+              maxBarSize={32}
+            >
+              {chartData.map((p) => (
+                <Cell
+                  key={p.mes}
+                  fill={p.parcial ? "url(#hachura-entradas)" : COR_ENTRADAS}
+                  stroke={p.parcial ? COR_ENTRADAS : undefined}
+                  strokeWidth={p.parcial ? 1.5 : undefined}
+                  strokeDasharray={p.parcial ? "4 3" : undefined}
+                />
+              ))}
+            </Bar>
+          )}
           <Bar
             dataKey="saidas"
-            name="Minhas saídas"
+            name={nomes.saidas}
             fill={COR_SAIDAS}
             fillOpacity={0.6}
             radius={[4, 4, 0, 0]}

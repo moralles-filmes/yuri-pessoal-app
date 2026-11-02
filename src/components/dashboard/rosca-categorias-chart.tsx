@@ -32,9 +32,15 @@ const LazyRoscaCategoriasChart = dynamic(
 export function RoscaCategoriasChart({
   categorias,
   estornos,
+  ariaDaLista = "Minhas saídas por categoria",
+  rotuloDoTotal = "minhas saídas",
 }: {
   categorias: CategoriaSlice[];
   estornos: number;
+  /** `aria-label` da legenda; o default é o texto do painel. */
+  ariaDaLista?: string;
+  /** Legenda do total no centro da rosca; o default é o texto do painel. */
+  rotuloDoTotal?: string;
 }) {
   const fatias = dadosDaRosca(categorias).sort((a, b) => b.meu - a.meu);
   const fora = foraDaRosca(categorias, estornos);
@@ -58,10 +64,10 @@ export function RoscaCategoriasChart({
   return (
     <div className="@container space-y-3">
       <div style={chartSkeletonHeightVar(260)}>
-        <LazyRoscaCategoriasChart fatias={fatias} total={total} />
+        <LazyRoscaCategoriasChart fatias={fatias} total={total} rotuloDoTotal={rotuloDoTotal} />
       </div>
       <ul
-        aria-label="Minhas saídas por categoria"
+        aria-label={ariaDaLista}
         className="grid gap-x-6 gap-y-1.5 @md:grid-cols-2"
       >
         {fatias.map((f, i) => (

@@ -78,6 +78,8 @@ export type LinhaTx = {
   parcelado: boolean | null;
   category_id: string | null;
   category: Embutido<CategoriaEmbutida>;
+  /** 04-A2 (D-A2-13): obrigatório — campo que o chamador não tem é `null` escrito. */
+  account_id: string | null;
 };
 
 export type LinhaFatura = {
@@ -297,6 +299,7 @@ export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): Entradas
           status: dominio.status,
           competence_date: t.competence_date,
           card_id: t.card_id,
+          account_id: t.account_id,
           statement_id: t.statement_id,
           parcelado: Boolean(t.parcelado),
           category_id: t.category_id,

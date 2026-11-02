@@ -143,6 +143,64 @@ describe("bloco — vazio e falha têm desenhos distintos", () => {
   });
 });
 
+describe("04-A2 L3 — indicador: dica por toque e teclado, valor oculto anunciado", () => {
+  const fonte = semComentarios(ler("indicador.tsx"));
+
+  it("a dica é <details>/<summary> nativo, não title={dica}", () => {
+    expect(fonte).toContain("<details");
+    expect(fonte).toContain("<summary");
+    expect(fonte).not.toContain("title={dica}");
+    expect(temUseClient(fonte)).toBe(false);
+  });
+
+  it('o summary soma "o que é este número" ao rótulo, sem aria-label que o apagaria', () => {
+    expect(fonte).toContain('<span className="sr-only">, o que é este número</span>');
+    expect(fonte).not.toContain('aria-label="O que é este número"');
+    // A dica abre no fluxo: um painel absoluto seria cortado pelo overflow-hidden do card.
+    expect(fonte).toContain("overflow-hidden");
+    expect(fonte).not.toMatch(/absolute[^"]*top-full/);
+  });
+
+  it('"valor oculto" mora num span sr-only que só existe com o olho fechado', () => {
+    expect(fonte).toMatch(
+      /<span[^>]*sr-only[^>]*>[^<]*valor oculto[^<]*<\/span>|<span[^>]*>\s*<span[^>]*sr-only[^>]*>\s*valor oculto/,
+    );
+    // o invólucro some da árvore (display:none) fora do olho fechado
+    expect(fonte).toMatch(/hidden group-data-\[ocultar=true\]\/olho:block/);
+  });
+
+  it("o R$ •••• continua aria-hidden", () => {
+    expect(fonte).toMatch(/aria-hidden="true"[^>]*>\s*R\$ ••••/);
+  });
+
+  it("trata o estado naoSegue no valor, sem número", () => {
+    expect(fonte).toContain("naoSegue");
+    expect(fonte).toContain("border-dashed");
+  });
+});
+
+describe("04-A2 — bloco: o estado nao-segue é o quarto desenho", () => {
+  const fonte = semComentarios(ler("bloco.tsx"));
+  const ramo = fonte.slice(fonte.indexOf('estado === "nao-segue"'));
+
+  it("tem o ramo nao-segue", () => {
+    expect(fonte).toContain('estado === "nao-segue"');
+  });
+
+  it("o ramo não reusa Inbox (vazio) nem AlertTriangle (falha) e tem ícone próprio", () => {
+    expect(ramo).not.toContain("Inbox");
+    expect(ramo).not.toContain("AlertTriangle");
+    expect(ramo).toMatch(/CircleSlash|Ban/);
+  });
+
+  it("mostra a frase pronta e o Link Ver sem o filtro para hrefSemFiltro", () => {
+    expect(ramo).toContain("naoSegue?.frase");
+    expect(ramo).toContain("hrefSemFiltro");
+    expect(ramo).toContain("Ver sem o filtro");
+    expect(ramo).toContain('role="note"');
+  });
+});
+
 describe("estadoDoBloco", () => {
   it("leitura que falhou é falha", () => {
     expect(estadoDoBloco({ ok: false })).toBe("falha");
@@ -208,5 +266,19 @@ describe("conferência visual e revisão final (04-A) — o indicador", () => {
   it("o detalhe com valor em dinheiro também some com o olho", () => {
     expect(fonteIndicador).toContain("detalheComValor");
     expect(fonteIndicador).toMatch(/detalheComValor[\s\S]*group-data-\[ocultar=true\]\/olho:hidden/);
+  });
+});
+
+describe("conferência visual (04-A2) — o cabeçalho do bloco", () => {
+  const fonteBloco = semComentarios(ler("bloco.tsx"));
+
+  it("o título quebra linha em vez de cortar (a 390 px, 'valor cheio' e 'mês a mês' sumiam)", () => {
+    expect(fonteBloco).not.toMatch(/<h3 className="[^"]*\btruncate\b/);
+    expect(fonteBloco).toMatch(/<h3 className="[^"]*\bbreak-words\b/);
+  });
+
+  it("a ação (selo 'filtrado: …') desce para a linha de baixo quando falta espaço, em vez de espremer o título", () => {
+    expect(fonteBloco).toMatch(/className="flex flex-wrap items-start justify-between/);
+    expect(fonteBloco).toMatch(/className="min-w-0 flex-\[1_1_12rem\]"/);
   });
 });

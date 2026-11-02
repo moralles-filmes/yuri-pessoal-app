@@ -5,7 +5,10 @@
  * por aqui" quando a consulta quebrou diz ao dono que não há registro onde pode haver — a mesma
  * mentira que "ausência não é zero" combate no resto do sistema.
  */
-export type EstadoDoBloco = "conteudo" | "vazio" | "falha";
+export type EstadoDoBloco = "conteudo" | "vazio" | "falha" | "nao-segue";
+// `nao-segue` é o quarto estado, do relatório (04-A2 L1): o bloco não obedece ao filtro ativo e diz
+// por quê. Não deriva de leitura — quem chama o decide pela matriz de recorte —, então
+// `estadoDoBloco` não o devolve.
 
 export function estadoDoBloco<T>(
   leitura: { ok: true; itens: readonly T[] } | { ok: false },

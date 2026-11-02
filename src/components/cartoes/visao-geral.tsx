@@ -233,7 +233,7 @@ function ItemDaLista({
   );
 }
 
-function Bloco({
+function BlocoDaCentral({
   titulo,
   frase,
   tabela,
@@ -347,7 +347,7 @@ export function VisaoGeral({ visao }: { visao: VisaoGeralDosCartoes }) {
         />
       </div>
 
-      <Bloco
+      <BlocoDaCentral
         titulo="Fechadas — a pagar"
         frase="por vencimento · clique abre a fatura"
         tabela="fechadas"
@@ -359,7 +359,7 @@ export function VisaoGeral({ visao }: { visao: VisaoGeralDosCartoes }) {
         nota='Paga fica visível até o vencimento e não entra em "A pagar". Crédito também fica fora da soma: crédito num cartão não reduz a dívida de outro.'
       />
 
-      <Bloco
+      <BlocoDaCentral
         titulo="Em aberto — acumulando compras"
         frase="o valor muda até o fechamento"
         tabela="abertas"

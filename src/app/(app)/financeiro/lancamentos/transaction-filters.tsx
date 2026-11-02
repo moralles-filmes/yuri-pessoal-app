@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CategoryPicker } from "@/components/finance/category-picker";
+import { MarcaDeAtiva } from "@/components/shared/seletor-de-visao";
 import { mostrarFiltroDeTerceiros } from "@/lib/finance/marcacao-da-categoria";
 import {
   Select,
@@ -147,11 +148,12 @@ export function TransactionFilters({
       {mostrarFiltroDeTerceiros({ ligado: marcadasLigado, categoriasMarcadas }) && (
         <Button
           type="button"
-          variant={marcadasLigado ? "secondary" : "outline"}
+          variant={marcadasLigado ? "default" : "outline"}
           size="sm"
           aria-pressed={marcadasLigado}
           onClick={() => setParam("marcadas", marcadasLigado ? "" : "1")}
         >
+          {marcadasLigado && <MarcaDeAtiva />}
           Categorias marcadas como de terceiros
         </Button>
       )}

@@ -1,17 +1,19 @@
 import Link from "next/link";
-import { AlertTriangle, Inbox } from "lucide-react";
+import { AlertTriangle, CircleSlash, Inbox } from "lucide-react";
 import type * as React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { EstadoDoBloco } from "@/lib/painel/bloco";
 
 /**
- * Bloco do painel: cabeçalho + um de TRÊS estados com desenhos distintos.
+ * Bloco do painel: cabeçalho + um de QUATRO estados com desenhos distintos.
  *
  * - `conteudo` → os `children`;
  * - `vazio` → ícone neutro (caixa de entrada), frase e, se houver, a ação ("registre o primeiro");
  * - `falha` → ícone de alerta em tom destrutivo e a frase do erro. Nunca o desenho do vazio:
- *   "não há nada" e "não consegui ler" são fatos diferentes, e o dono precisa distingui-los.
+ *   "não há nada" e "não consegui ler" são fatos diferentes, e o dono precisa distingui-los;
+ * - `nao-segue` → borda tracejada e ícone próprio: o bloco não obedece ao filtro ativo (04-A2 L1).
+ *   Não é vazio, nem zero medido, nem falha: a frase do motivo vem pronta, com o caminho de volta.
  *
  * Server Component. O estado vem de `estadoDoBloco` (puro).
  */
@@ -23,6 +25,7 @@ export function Bloco({
   estado,
   vazio,
   falha,
+  naoSegue,
   children,
   className,
 }: {
@@ -33,16 +36,20 @@ export function Bloco({
   estado: EstadoDoBloco;
   vazio?: { frase: string; acao?: React.ReactNode };
   falha?: { frase: string };
+  /** A frase do motivo vem PRONTA de quem chama; o bloco só a mostra e oferece a saída. */
+  naoSegue?: { frase: string; hrefSemFiltro: string };
   children?: React.ReactNode;
   className?: string;
 }) {
   return (
     <Card className={cn("overflow-hidden", className)}>
       <CardContent className="space-y-4 px-4 sm:px-5">
-        {/* `min-w-0` no lado do texto: o título longo não empurra o link para fora do card. */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="truncate text-base leading-snug font-semibold">{titulo}</h3>
+        {/* `min-w-0` no lado do texto: o título longo não empurra o link para fora do card. O título
+            QUEBRA em vez de cortar (a 390 px, "valor cheio" e "mês a mês" sumiam), e a ação desce
+            para a linha de baixo quando sobram menos de 12rem para o título (conferência 04-A2). */}
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0 flex-[1_1_12rem]">
+            <h3 className="break-words text-base leading-snug font-semibold">{titulo}</h3>
             {subtitulo ? (
               <p className="text-xs text-muted-foreground">{subtitulo}</p>
             ) : null}
@@ -91,6 +98,29 @@ export function Bloco({
             <p className="min-w-0 text-sm">
               {falha?.frase ?? "Não foi possível ler estes dados agora."}
             </p>
+          </div>
+        ) : null}
+
+        {estado === "nao-segue" ? (
+          <div
+            role="note"
+            className="flex items-start gap-3 rounded-lg border border-dashed bg-muted/50 p-3"
+          >
+            <CircleSlash
+              aria-hidden="true"
+              className="mt-0.5 size-5 shrink-0 text-muted-foreground"
+            />
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm text-muted-foreground">{naoSegue?.frase}</p>
+              {naoSegue ? (
+                <Link
+                  href={naoSegue.hrefSemFiltro}
+                  className="inline-block text-xs text-primary hover:underline"
+                >
+                  Ver sem o filtro ›
+                </Link>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </CardContent>

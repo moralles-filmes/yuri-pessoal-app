@@ -18,7 +18,15 @@ import { corDaFatia, percentualDaFatia } from "./cores-da-rosca";
  * (a mesma ordem da legenda, para a cor ser a mesma); o vazio também é decidido lá. Todas as
  * categorias aparecem — dobrar em "Outros" fica para a 06 (D15). O total fica no centro.
  */
-export function RoscaCategoriasChart({ fatias, total }: { fatias: CategoriaSlice[]; total: number }) {
+export function RoscaCategoriasChart({
+  fatias,
+  total,
+  rotuloDoTotal = "minhas saídas",
+}: {
+  fatias: CategoriaSlice[];
+  total: number;
+  rotuloDoTotal?: string;
+}) {
   return (
     <div className="relative">
       <ResponsiveContainer width="100%" height={260}>
@@ -51,7 +59,7 @@ export function RoscaCategoriasChart({ fatias, total }: { fatias: CategoriaSlice
         <span className="max-w-26 text-center text-base leading-tight font-semibold tabular-nums">
           {formatCurrency(total)}
         </span>
-        <span className="text-xs text-muted-foreground">minhas saídas</span>
+        <span className="text-xs text-muted-foreground">{rotuloDoTotal}</span>
       </div>
     </div>
   );
