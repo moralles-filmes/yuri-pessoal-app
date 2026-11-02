@@ -99,7 +99,7 @@ Regras (do §6 do desenho, sem reinterpretar):
 - `tabela`: `"abertas"` se `hoje < dataFechamento`, senão `"fechadas"`.
 - Grupos: `pagar` = `acao === "pagar"` (atrasadas antes, depois vencimento asc, competência asc); `emAberto` = a linha do ciclo atual (marca `"atual"`); `proximas` = competência > a do ciclo atual (marca `"proxima"` na prevista/real do ciclo seguinte), asc; `anteriores` = o resto, competência desc.
 - Filtros aplicados à lista ANTES de agrupar; indicadores sobre a lista SEM filtro. `status` compara com `estado`; `prevista` passa só com `status` nulo ou `"aberta"`. `vazio` = nenhum grupo com linha depois do filtro.
-- `aPagar` soma `pagar` (sem filtro). `proximoVencimento` = menor vencimento de `pagar`, senão o da atual; prevista ainda conta (é data, não valor).
+- `aPagar` soma `pagar` (sem filtro). `proximoVencimento` = menor vencimento >= hoje de `pagar` (a atrasada já está em "A pagar"), senão o da atual; prevista ainda conta (é data, não valor).
 
 - [ ] **Step 1: testes** (fixture com DOIS cartões é desnecessária aqui — a função é por cartão —, mas o teste usa `receivables` de duas faturas e com `ignorado`). Hoje `"2026-11-02"`, cartão fecha 27/vence 10, faturas reais set (atrasada, total 412,30), out (fechada, 1.754,40, terceiros 482,00), nov (aberta, 3.480,00), ago (paga). Casos, um `it` cada, com `toEqual`/`toBe` nos campos:
   - `grupos.pagar.map(f=>f.competencia)` = `["2026-09","2026-10"]`; `emAberto[0].competencia` `"2026-11"`, `marca "atual"`; `proximas[0]` é prevista `"2026-12"` com `valores null`, `marca "proxima"`; `anteriores` = `["2026-08"]`.
