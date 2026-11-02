@@ -262,3 +262,17 @@ describe("conferência visual e revisão final (04-A) — o indicador", () => {
     expect(fonteIndicador).toMatch(/detalheComValor[\s\S]*group-data-\[ocultar=true\]\/olho:hidden/);
   });
 });
+
+describe("conferência visual (04-A2) — o cabeçalho do bloco", () => {
+  const fonteBloco = semComentarios(ler("bloco.tsx"));
+
+  it("o título quebra linha em vez de cortar (a 390 px, 'valor cheio' e 'mês a mês' sumiam)", () => {
+    expect(fonteBloco).not.toMatch(/<h3 className="[^"]*\btruncate\b/);
+    expect(fonteBloco).toMatch(/<h3 className="[^"]*\bbreak-words\b/);
+  });
+
+  it("a ação (selo 'filtrado: …') desce para a linha de baixo quando falta espaço, em vez de espremer o título", () => {
+    expect(fonteBloco).toMatch(/className="flex flex-wrap items-start justify-between/);
+    expect(fonteBloco).toMatch(/className="min-w-0 flex-\[1_1_12rem\]"/);
+  });
+});

@@ -44,10 +44,12 @@ export function Bloco({
   return (
     <Card className={cn("overflow-hidden", className)}>
       <CardContent className="space-y-4 px-4 sm:px-5">
-        {/* `min-w-0` no lado do texto: o título longo não empurra o link para fora do card. */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="truncate text-base leading-snug font-semibold">{titulo}</h3>
+        {/* `min-w-0` no lado do texto: o título longo não empurra o link para fora do card. O título
+            QUEBRA em vez de cortar (a 390 px, "valor cheio" e "mês a mês" sumiam), e a ação desce
+            para a linha de baixo quando sobram menos de 12rem para o título (conferência 04-A2). */}
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0 flex-[1_1_12rem]">
+            <h3 className="break-words text-base leading-snug font-semibold">{titulo}</h3>
             {subtitulo ? (
               <p className="text-xs text-muted-foreground">{subtitulo}</p>
             ) : null}
