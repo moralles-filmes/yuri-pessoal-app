@@ -36,13 +36,35 @@ import {
  * fatura, com a minha parte e a de terceiros empilhadas — o único gráfico financeiro que inclui
  * terceiros, e a descrição do card diz isso.
  */
-export function FaturasChart({ data }: { data: FaturaDoMes[] }) {
-  if (!data.some((f) => f.total !== 0)) {
+/** Mês sem fatura: `null` em todos os valores, nunca zero. Vai ao recharts sem barra. */
+export type MesSemFatura = { mes: string; total: null; meu: null; terceiros: null };
+
+export type ItemDoGraficoDeFaturas = FaturaDoMes | MesSemFatura;
+
+const VAZIO_PADRAO = {
+  titulo: "Sem faturas nos próximos meses",
+  descricao: "As faturas dos cartões aparecem aqui pelo mês de vencimento.",
+};
+
+export function FaturasChart({
+  data,
+  vazio,
+}: {
+  data: ItemDoGraficoDeFaturas[];
+  vazio?: { titulo: string; descricao: string };
+}) {
+  // Vazio = nenhum mês com fatura. No uso de hoje (sem `vazio`), total zero conta como vazio; com
+  // `vazio` (histórico, 05-C), mês com fatura de total zero é zero MEDIDO e o gráfico aparece.
+  const temFatura = vazio
+    ? data.some((f) => f.total !== null)
+    : data.some((f) => f.total !== null && f.total !== 0);
+  if (!temFatura) {
+    const texto = vazio ?? VAZIO_PADRAO;
     return (
       <EmptyState
         icon={ReceiptText}
-        title="Sem faturas nos próximos meses"
-        description="As faturas dos cartões aparecem aqui pelo mês de vencimento."
+        title={texto.titulo}
+        description={texto.descricao}
         className="py-8"
       />
     );
@@ -58,10 +80,12 @@ export function FaturasChart({ data }: { data: FaturaDoMes[] }) {
         <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width="auto" />
         <Tooltip
           cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-          formatter={(value) => formatCurrency(Number(value))}
+          formatter={(value) => (value === null || value === undefined ? "sem fatura" : formatCurrency(Number(value)))}
           labelFormatter={(label, payload) => {
-            const total = (payload?.[0]?.payload as FaturaDoMes | undefined)?.total;
-            return total === undefined ? String(label) : `${label} · total ${formatCurrency(total)}`;
+            const total = (payload?.[0]?.payload as ItemDoGraficoDeFaturas | undefined)?.total;
+            if (total === undefined) return String(label);
+            if (total === null) return `${label} · sem fatura`;
+            return `${label} · total ${formatCurrency(total)}`;
           }}
           contentStyle={tooltipStyle}
           labelStyle={tooltipLabelStyle}

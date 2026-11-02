@@ -19,6 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { temPagina } from "@/test/rotas";
+import { hrefAtivo } from "@/lib/nav/active";
 import { NAV_DA_DIETA } from "@/components/nutrition/nutrition-nav";
 import { NAV_DE_TREINOS } from "@/components/training/training-nav";
 import { NAV_DA_IA } from "@/components/ai/ai-nav";
@@ -143,13 +144,26 @@ describe("toda seção declarada entra na coluna", () => {
     }
   });
 
-  it("a central de cartões tem exatamente as quatro seções da 05-A", () => {
+  it("a central de cartões tem exatamente as seis seções entregues até a 05-C T5", () => {
     expect(itensDe(NAV_DA_CENTRAL_DE_CARTOES).map((item) => item.href)).toEqual([
       "/cartoes",
-      "/cartoes/meus",
       "/faturas",
+      "/cartoes/proximos-meses",
       "/parcelamentos",
+      "/cartoes/relatorios",
+      "/cartoes/meus",
     ]);
+  });
+
+  it("/cartoes/proximos-meses acende só o próprio item, não a Visão geral", () => {
+    const hrefs = itensDe(NAV_DA_CENTRAL_DE_CARTOES).map((item) => item.href);
+    expect(hrefAtivo("/cartoes/proximos-meses", hrefs)).toBe("/cartoes/proximos-meses");
+    expect(hrefAtivo("/cartoes", hrefs)).toBe("/cartoes");
+  });
+
+  it("/cartoes/relatorios acende só o próprio item, não a Visão geral", () => {
+    const hrefs = itensDe(NAV_DA_CENTRAL_DE_CARTOES).map((item) => item.href);
+    expect(hrefAtivo("/cartoes/relatorios", hrefs)).toBe("/cartoes/relatorios");
   });
 });
 
@@ -159,9 +173,9 @@ describe("toda seção de módulo abre uma tela que existe", () => {
   );
 
   it("há seção suficiente para a varredura significar alguma coisa", () => {
-    // 12 da Dieta + 13 de Treinos + 8 da IA + 4 da central de cartões. O piso é o que
+    // 12 da Dieta + 13 de Treinos + 8 da IA + 6 da central de cartões. O piso é o que
     // impede este bloco de passar verde sobre uma lista vazia.
-    expect(TODOS.length).toBeGreaterThanOrEqual(37);
+    expect(TODOS.length).toBeGreaterThanOrEqual(39);
   });
 
   it.each(TODOS)("%s → %s", (_modulo, href) => {

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { PageHeader } from "@/components/shared/page-header";
 import {
   getAccounts,
@@ -12,6 +13,7 @@ import { leituraComTeto } from "@/lib/supabase/leitura";
 import { AvisoDeTeto } from "@/components/shared/aviso-de-teto";
 import type { TransactionWithRelations } from "@/types/database";
 import { hojeISO } from "@/lib/format";
+import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
 import { StatementsClient } from "./statements-client";
 
 export const metadata: Metadata = { title: "Faturas e pagamentos" };
@@ -54,6 +56,8 @@ export default async function FaturasPage({
     : [[], []];
 
   const today = hojeISO();
+  // O olho dos valores é do aparelho (cookie): só o valor exato "1" oculta (`valoresOcultos`).
+  const ocultos = valoresOcultos((await cookies()).get(COOKIE_DO_OLHO)?.value);
 
   return (
     <div className="space-y-6">
@@ -74,6 +78,7 @@ export default async function FaturasPage({
           cor: c.cor,
           dia_fechamento: c.dia_fechamento,
           dia_vencimento: c.dia_vencimento,
+          ativo: c.ativo,
         }))}
         statements={statements}
         transactions={transactions}
@@ -86,6 +91,7 @@ export default async function FaturasPage({
         selectedCardId={selectedCardId}
         month={str(sp.month) ?? null}
         status={str(sp.status) ?? null}
+        ocultoInicial={ocultos}
       />
     </div>
   );

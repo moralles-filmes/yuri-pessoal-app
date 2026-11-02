@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -204,6 +205,9 @@ export function RelatoriosClient({
     competencia: finance.categorias,
   });
 
+  const cartoesNaProvisao = new Set(card.faturas.map((f) => f.cardId)).size;
+  const rotuloCartoes = `${cartoesNaProvisao} ${cartoesNaProvisao === 1 ? "cartão" : "cartões"}`;
+
   return (
     <div className="space-y-6">
       {/* Período + base + exportar tudo */}
@@ -402,10 +406,13 @@ export function RelatoriosClient({
             />
           ) : (
             <>
+              <Link href="/cartoes/relatorios" className="text-sm text-primary hover:underline">
+                Ver o relatório de cartões ›
+              </Link>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Comprometido em parcelas" value={formatCurrency(card.parcelasComprometidas)} icon={Layers} hint={`${card.parcelasAtivas} parcela(s) em aberto`} />
                 <StatCard label={rotuloPendenteDoMes(finance.mes)} value={formatCurrency(card.aReceber)} icon={HandCoins} />
-                <StatCard label="Próximas faturas" value={String(card.faturas.filter((f) => f.status !== "paga").length)} icon={CreditCard} hint="Provisão de 6 ciclos" />
+                <StatCard label="Próximas faturas" value={String(card.faturas.filter((f) => f.status !== "paga").length)} icon={CreditCard} hint={`Próximos 6 ciclos de cada cartão · ${rotuloCartoes}`} />
                 <StatCard label="Total próximas faturas" value={formatCurrency(card.faturas.filter((f) => f.status !== "paga").reduce((s, f) => s + f.total, 0))} icon={CalendarClock} />
               </div>
 
@@ -419,8 +426,8 @@ export function RelatoriosClient({
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Próximas 6 faturas</CardTitle>
-                  <CardDescription>Total, valor realmente seu e o que terceiros precisam pagar.</CardDescription>
+                  <CardTitle>Próximos 6 ciclos de cada cartão</CardTitle>
+                  <CardDescription>{`${rotuloCartoes} · `}Total, valor realmente seu e o que terceiros precisam pagar.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {card.faturas.length === 0 ? (
