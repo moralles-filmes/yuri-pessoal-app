@@ -19,7 +19,7 @@ function partesDaData(hojeIso: string): { dd: string; mm: string; diaSemana: str
   };
 }
 
-/** 'yyyy-MM-dd' → "hoje, ter 18/11" (dia da semana abreviado, minúsculo, sem ponto). */
+/** 'yyyy-MM-dd' → "hoje, qua 18/11" (dia da semana abreviado, minúsculo, sem ponto). */
 export function rotuloDeHoje(hojeIso: string): string {
   const { dd, mm, diaSemana } = partesDaData(hojeIso);
   return `hoje, ${diaSemana} ${dd}/${mm}`;
