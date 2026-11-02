@@ -26,7 +26,7 @@ const TELAS = [
 ];
 /** Exceções DECLARADAS, com dono. Cada uma tem de continuar casando (senão sai da lista). */
 const EXCECOES = new Map<string, string>([
-  ["components/dashboard/general/period-toolbar.tsx", "F3 — defeito vivo, é da REDESIGN-06"],
+  ["components/dashboard/general/period-toolbar.tsx", "alternância própria com role=group e aria-pressed desde a 06 (F3); trocar pelo SeletorDeVisao ficou fora da 06"],
   ["app/(app)/todo/todo-client.tsx", "alternador só-ícone, já com aria-pressed e aria-label"],
 ]);
 
@@ -182,7 +182,6 @@ export function temAssinaturaDeAlternancia(corpo: string): boolean {
 
 /** Exceções DECLARADAS, com dono. Cada uma tem de continuar muda (senão sai da lista). */
 const EXCECOES_MUDAS = new Map<string, string>([
-  ["components/dashboard/general/period-toolbar.tsx", "F3 — defeito vivo, é da REDESIGN-06"],
   [
     "app/(app)/terceiros/terceiros-client.tsx",
     "falso positivo da assinatura C: botões de AÇÃO em massa (o \"receber\" é o destaque), não alternância — arquivo da 03-C",

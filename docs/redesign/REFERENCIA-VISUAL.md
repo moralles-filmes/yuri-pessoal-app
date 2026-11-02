@@ -246,6 +246,18 @@ nova e sem migration. Senão ficam fora e o desvio vai para o §6.
 | (04-A) Valor em uma linha nos cards pequenos do celular | o valor quebra linha se não couber | dinheiro nunca é truncado ("R$ 12.34…" se lê como outro número) |
 | (04-A) Seletor "Últimos 9 meses" nas barras | "Ver relatório ›", janela de 6 meses | seletor sem leitura nova seria botão que não liga nada (D-A-6) |
 | (04-A) "Próximas faturas" com 2 ciclos | os ciclos de `proximas6Faturas` (até 6 por cartão) | a lista é a mesma do bloco que ela substitui; encurtá-la é pendência registrada |
+| (06) Saldo das contas com seta "em relação ao mês anterior" | sem comparação | exigiria um segundo corte de saldo; a 04-A também não compara o saldo |
+| (06) "Entradas (mês)" / "Saídas (mês)" | Minhas entradas / Minhas saídas | RR4 e a 04-A (D-06-2) |
+| (06) Card Financeiro com o saldo em destaque | "Realmente meu" em destaque | o saldo já está na faixa logo acima (D-06-3) |
+| (06) Seletor "Últimos 6 meses" no card Financeiro | "Ver relatório ›", janela fixa de 6 meses | D-A-6 |
+| (06) "Total pendente" em Cartões & Faturas | "A pagar nas faturas" | "pendente" sozinho é ambíguo (03-D, B2); o pendente de terceiros tem linha própria |
+| (06) TO-DO só com quadros | + Próximas tarefas | D-06-5; saem conclusão na semana e projetos |
+| (06) Dieta | sai aderência, água, lista de compras e peso | D-06-5 (a água é do módulo Hábitos; o peso, de `body_*`) |
+| (06) Dieta com lista de refeições | "X de Y registradas" + próxima refeição | a leitura do card não traz a lista; trazê-la seria leitura nova |
+| (06) Tarefas & Rotinas | sai a lista de tarefas abertas | D-06-5 |
+| (06) Hábitos | sai o "+copo" da água; a água vira linha de leitura | D-06-5; clicar num card nunca escreve |
+| (06) Estudos | sai o trio semana/mês/sequência; "Atrasados" em âmbar | D-06-5; atraso é aviso, não erro |
+| (06) Treinos | saem último treino, meta e peso; barras sem vermelho | D-06-5; invariante 22 de Treinos |
 
 ## 7. Aceite visual (soma-se ao aceite da fase)
 
