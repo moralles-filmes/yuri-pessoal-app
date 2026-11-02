@@ -38,7 +38,7 @@ const SHORTCUTS = [
     icon: CreditCard,
     title: "Cartões",
     description: "Cadastre e edite seus cartões, fechamento e vencimento.",
-    href: "/cartoes",
+    href: "/cartoes/meus",
   },
 ] as const;
 

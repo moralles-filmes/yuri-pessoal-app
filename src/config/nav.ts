@@ -5,8 +5,6 @@ import {
   Wallet,
   CreditCard,
   Dumbbell,
-  ReceiptText,
-  Layers,
   HandCoins,
   FileUp,
   CalendarDays,
@@ -52,9 +50,9 @@ export const navSections: NavSection[] = [
     items: [
       { title: "Painel financeiro", href: "/dashboard/financeiro", icon: LineChart, phase: "Fase 07" },
       { title: "Financeiro", href: "/financeiro", icon: Wallet, phase: "Fase 02" },
-      { title: "Cartões", href: "/cartoes", icon: CreditCard, phase: "Fase 03" },
-      { title: "Faturas", href: "/faturas", icon: ReceiptText, phase: "Fase 03" },
-      { title: "Parcelamentos", href: "/parcelamentos", icon: Layers, phase: "Fase 04" },
+      // REDESIGN-05-A — Cartões, Faturas e Parcelamentos agora são uma central só: um item
+      // na sidebar, que também representa `/faturas` e `/parcelamentos` (acende UM só).
+      { title: "Cartões e faturas", href: "/cartoes", tambem: ["/faturas", "/parcelamentos"], icon: CreditCard, phase: "Fase 03" },
       { title: "A Receber", href: "/terceiros", icon: HandCoins, phase: "Fase 05" },
       { title: "Importar", href: "/importar", icon: FileUp, phase: "Fase 06" },
     ],
