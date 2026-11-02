@@ -80,7 +80,7 @@ export async function deletePerson(id: string): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
 
-  const [recebiveis, divisoes] = await Promise.all([
+  const [recebiveis, divisoes, receitasVinculadas] = await Promise.all([
     ctx.supabase
       .from("receivables")
       .select("id", { count: "exact", head: true })
@@ -89,6 +89,12 @@ export async function deletePerson(id: string): Promise<ActionResult> {
       .from("shared_expenses")
       .select("id", { count: "exact", head: true })
       .eq("person_id", id),
+    // 04-C: receita vinculada a esta pessoa (reembolso) também é histórico. A FK composta recusaria
+    // o delete com um erro genérico; contar antes dá o caminho certo (inativar) e a mesma mensagem.
+    ctx.supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("reembolso_pessoa_id", id),
   ]);
 
   // 03-G — antes, erro aqui contava zero e a pessoa com histórico era EXCLUÍDA em vez de inativada.
@@ -96,13 +102,15 @@ export async function deletePerson(id: string): Promise<ActionResult> {
   if (
     recebiveis.error ||
     divisoes.error ||
+    receitasVinculadas.error ||
     recebiveis.count === null ||
-    divisoes.count === null
+    divisoes.count === null ||
+    receitasVinculadas.count === null
   ) {
     return falhaDeLeituraAntes("o histórico da pessoa");
   }
 
-  if (recebiveis.count > 0 || divisoes.count > 0) {
+  if (recebiveis.count > 0 || divisoes.count > 0 || receitasVinculadas.count > 0) {
     return dbError(
       "Esta pessoa tem gastos/recebíveis vinculados. Inative-a em vez de excluir.",
     );

@@ -18,6 +18,7 @@ import { centavosParaReais, formatCurrency, reaisParaCentavos } from "@/lib/form
 import {
   anexarRecebimentos,
   dataDoUltimoRecebimento,
+  ehManual,
   emAberto,
   estadoDoRecebivel,
   resumirRecebivel,
@@ -54,6 +55,7 @@ const MSG = {
     "O recebimento foi registrado, mas o status não foi atualizado. Clique em Receber para concluir.",
   saldoMudou: "O saldo deste recebível mudou enquanto você recebia. Atualize a tela e confira.",
   desconhecido: "O status deste recebível não é reconhecido.",
+  automatico: "Este recebimento veio de um lançamento. Edite ou exclua a receita em Lançamentos.",
 } as const;
 
 export function mensagemDoSaldo(saldoCentavos: number): string {
@@ -181,7 +183,12 @@ export async function receberSaldo(
   return { ok: true, data: undefined };
 }
 
-/** "Desfazer": o ÚLTIMO recebimento (P6). A coluna sai de `pago` ANTES de apagar. */
+/**
+ * "Desfazer": o ÚLTIMO recebimento (P6). A coluna sai de `pago` ANTES de apagar.
+ * 04-C: só alcança recebimento MANUAL. O automático nasce de uma receita vinculada e se desfaz
+ * editando ou excluindo a receita — apagá-lo aqui deixaria a receita com dinheiro "livre" que o
+ * banco realocaria no próximo gatilho, desfazendo o desfazer.
+ */
 export async function desfazerUltimoRecebimento(
   ctx: ContextoDoServico,
   id: string,
@@ -190,7 +197,9 @@ export async function desfazerUltimoRecebimento(
   if (lido === "erro") return dbError("Não foi possível ler o recebível.");
   if (!lido) return dbError(MSG.naoExiste);
 
-  const ultimo = ultimoRecebimento(lido.recebimentos);
+  const ultimo = ultimoRecebimento(lido.recebimentos.filter(ehManual));
+  // Sem manual e com automático: o que há para desfazer não é daqui (legado puro tem lista vazia).
+  if (!ultimo && lido.recebimentos.length > 0) return dbError(MSG.automatico);
   if (!ultimo && lido.status !== "pago") return dbError(MSG.nadaADesfazer);
 
   if (lido.status === "pago") {
@@ -320,7 +329,9 @@ export async function aplicarAcaoEmMassa(
     }
 
     // desfazer — origem: coluna `pago`. A coluna PRIMEIRO, o último recebimento DEPOIS.
-    const alvo = lidos.map((r) => r.id);
+    // 04-C: quem só tem recebimento automático fica de fora (conta como ignorado), intacto.
+    const desfazivel = lidos.filter((r) => r.recebimentos.length === 0 || r.recebimentos.some(ehManual));
+    const alvo = desfazivel.map((r) => r.id);
     if (alvo.length === 0) continue;
     const { data: alterados, error: e } = await ctx.supabase
       .from("receivables")
@@ -330,8 +341,8 @@ export async function aplicarAcaoEmMassa(
       .select("id");
     if (e) return falhaNoMeio(afetados);
     afetados += alterados?.length ?? 0;
-    const ultimos = lidos
-      .map((r) => ultimoRecebimento(r.recebimentos)?.id)
+    const ultimos = desfazivel
+      .map((r) => ultimoRecebimento(r.recebimentos.filter(ehManual))?.id)
       .filter((x): x is string => Boolean(x));
     if (ultimos.length > 0) {
       const { error: e2 } = await ctx.supabase.from("receivable_receipts").delete().in("id", ultimos);

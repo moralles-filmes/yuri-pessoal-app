@@ -2176,6 +2176,9 @@ export type Database = {
           parcela: number | null
           parcelas_total: number | null
           raw: Json
+          receita_classificacao: string | null
+          reembolso_pessoa_id: string | null
+          reembolso_sobra: string | null
           split_parts: Json
           status: string
           subcategoria_sugerida_id: string | null
@@ -2201,6 +2204,9 @@ export type Database = {
           parcela?: number | null
           parcelas_total?: number | null
           raw?: Json
+          receita_classificacao?: string | null
+          reembolso_pessoa_id?: string | null
+          reembolso_sobra?: string | null
           split_parts?: Json
           status?: string
           subcategoria_sugerida_id?: string | null
@@ -2226,6 +2232,9 @@ export type Database = {
           parcela?: number | null
           parcelas_total?: number | null
           raw?: Json
+          receita_classificacao?: string | null
+          reembolso_pessoa_id?: string | null
+          reembolso_sobra?: string | null
           split_parts?: Json
           status?: string
           subcategoria_sugerida_id?: string | null
@@ -8753,6 +8762,7 @@ export type Database = {
           purchase_date: string
           qtd_parcelas: number | null
           recurring_id: string | null
+          reembolso_pessoa_id: string | null
           statement_id: string | null
           status: string
           subcategory_id: string | null
@@ -8782,6 +8792,7 @@ export type Database = {
           purchase_date?: string
           qtd_parcelas?: number | null
           recurring_id?: string | null
+          reembolso_pessoa_id?: string | null
           statement_id?: string | null
           status?: string
           subcategory_id?: string | null
@@ -8811,6 +8822,7 @@ export type Database = {
           purchase_date?: string
           qtd_parcelas?: number | null
           recurring_id?: string | null
+          reembolso_pessoa_id?: string | null
           statement_id?: string | null
           status?: string
           subcategory_id?: string | null

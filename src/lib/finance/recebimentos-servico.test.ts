@@ -235,6 +235,38 @@ describe("desfazer", () => {
   it("nada a desfazer é recusado", async () => {
     expect((await desfazerUltimoRecebimento(cenario().ctx, REC)).ok).toBe(false);
   });
+
+  // 04-C — recebimento com transaction_id nasceu de uma receita vinculada: quem o desfaz é a receita.
+  const automatico = (id: string, valor: number, recebido_em: string, created_at?: string): Linha => ({
+    ...receb(id, valor, recebido_em, created_at),
+    transaction_id: "tx-receita",
+  });
+  const MSG_AUTOMATICO = "Este recebimento veio de um lançamento. Edite ou exclua a receita em Lançamentos.";
+
+  it("04-C: só há recebimento automático → recusa com a mensagem e não escreve nada", async () => {
+    const { fake, ctx } = cenario({}, [automatico("a1", 100, "2026-06-20")]);
+    const r = await desfazerUltimoRecebimento(ctx, REC);
+    expect(r).toEqual({ ok: false, error: MSG_AUTOMATICO });
+    expect(fake.escritas()).toHaveLength(0);
+    expect(fake.tabelas.receivable_receipts).toHaveLength(1);
+  });
+
+  it("04-C: o último registrado é o automático, mas há manual → desfaz o MANUAL", async () => {
+    const { fake, ctx } = cenario({}, [
+      receb("m1", 100, "2026-06-05", "2026-06-05T12:00:00Z"),
+      automatico("a1", 100, "2026-06-20", "2026-06-20T12:00:00Z"),
+    ]);
+    const r = await desfazerUltimoRecebimento(ctx, REC);
+    expect(r.ok).toBe(true);
+    expect(fake.tabelas.receivable_receipts.map((x) => x.id)).toEqual(["a1"]);
+  });
+
+  it("04-C: coluna pago com só automático → recusa e não reabre a coluna", async () => {
+    const { fake, ctx } = cenario({ status: "pago", pago_em: "2026-06-20" }, [automatico("a1", 600, "2026-06-20")]);
+    const r = await desfazerUltimoRecebimento(ctx, REC);
+    expect(r).toEqual({ ok: false, error: MSG_AUTOMATICO });
+    expect(fake.escritas()).toHaveLength(0);
+  });
 });
 
 describe("decidir (K1)", () => {
@@ -303,6 +335,31 @@ describe("lote", () => {
       "update:receivables",
       "delete:receivable_receipts",
     ]);
+  });
+
+  it("04-C desfazer em lote: só o manual sai; quem tem só automático fica de fora, intacto", async () => {
+    const { fake, ctx } = cenario(
+      { status: "pago", pago_em: "2026-06-20" },
+      [
+        receb("m1", 600, "2026-06-20"),
+        { ...receb("a2", 100, "2026-06-20"), receivable_id: "rec-2", transaction_id: "tx-receita" },
+      ],
+      [{ id: "rec-2", user_id: "user-1", valor: 100, status: "pago", pago_em: "2026-06-20" }],
+    );
+    const r = await aplicarAcaoEmMassa(ctx, [REC, "rec-2"], "desfazer", HOJE, HOJE);
+    expect(r).toEqual({ ok: true, data: { afetados: 1, ignorados: 1 } });
+    expect(fake.tabelas.receivable_receipts.map((x) => x.id)).toEqual(["a2"]);
+    expect(fake.tabelas.receivables.find((x) => x.id === "rec-2")?.status).toBe("pago");
+    expect(fake.tabelas.receivables.find((x) => x.id === REC)?.status).toBe("pendente");
+  });
+
+  it("04-C desfazer em lote: o último MANUAL sai mesmo quando o último registrado é automático", async () => {
+    const { fake, ctx } = cenario({ status: "pago", pago_em: "2026-06-20" }, [
+      receb("m1", 300, "2026-06-05", "2026-06-05T12:00:00Z"),
+      { ...receb("a1", 300, "2026-06-20", "2026-06-20T12:00:00Z"), transaction_id: "tx-receita" },
+    ]);
+    await aplicarAcaoEmMassa(ctx, [REC], "desfazer", HOJE, HOJE);
+    expect(fake.tabelas.receivable_receipts.map((x) => x.id)).toEqual(["a1"]);
   });
 
   it("ignorar não alcança quem a soma já quitou (coluna ainda pendente)", async () => {
