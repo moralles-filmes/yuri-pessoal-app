@@ -30,19 +30,23 @@ describe("apresentarEntradas", () => {
 
   // K1 (04-A, decisão do dono): o painel financeiro troca o card de Entradas pelo indicador
   // "Minhas entradas", que lê `indicadorMinhasEntradas` (a minha parte); `apresentarEntradas` NÃO
-  // muda e segue sendo a fonte do dashboard geral (06). Reescrito no lugar.
-  // 04-A2 (L2, desenho §7 — declarado, não apagado): o RELATÓRIO também saiu da lista. A aba
-  // Financeiro monta os indicadores por `indicadoresDoResumo`, a mesma função do painel; só o card
-  // do dashboard geral ainda lê do apresentador.
-  it.each(["src/components/dashboard/general/finance-card.tsx"])(
-    "os cards de Entradas que restam leem só do apresentador: %s",
+  // muda. 04-A2 (L2, desenho §7): o RELATÓRIO saiu da lista — a aba Financeiro monta os
+  // indicadores por `indicadoresDoResumo`, a mesma função do painel. 06 (D-06-2): o card Financeiro
+  // do dashboard geral também saiu — as entradas foram para a faixa do Resumo financeiro. Na
+  // integração das duas, nenhuma tela lê mais do apresentador; a função fica (só o teste a usa)
+  // como pendência de limpeza declarada, não apagada.
+  it.each([
+    "src/app/(app)/relatorios/relatorios-client.tsx",
+    "src/components/dashboard/general/finance-card.tsx",
+  ])(
+    "nenhum consumidor antigo volta a ler do apresentador nem do bruto: %s",
     (arquivo) => {
       const fonte = fs.readFileSync(path.join(process.cwd(), arquivo), "utf8")
         .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/\/\/[^\r\n]*/g, "");
 
-      expect(fonte).toContain("apresentarEntradas(");
+      expect(fonte).not.toContain("apresentarEntradas(");
       expect(fonte).not.toMatch(/formatCurrency\(\s*[\w.?]*\.entradas\s*\)/);
     },
   );
@@ -55,6 +59,18 @@ describe("apresentarEntradas", () => {
         .replace(/\/\/[^\r\n]*/g, "");
     expect(ler("src/app/(app)/relatorios/relatorios-client.tsx")).not.toContain("apresentarEntradas(");
     expect(ler("src/lib/reports/financeiro.ts")).toContain("indicadoresDoResumo(");
+  });
+
+  it("D-06-2 — as entradas do dashboard geral vivem na faixa (entradasInd), não no card Financeiro", () => {
+    const ler = (arquivo: string) =>
+      fs.readFileSync(path.join(process.cwd(), arquivo), "utf8")
+        .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/[^\r\n]*/g, "");
+    const card = ler("src/components/dashboard/general/finance-card.tsx");
+    const faixa = ler("src/components/dashboard/general/resumo-financeiro.tsx");
+    expect(card).not.toMatch(/formatCurrency\(\s*[\w.?]*\.entradas\s*\)/);
+    expect(faixa).toContain("entradasInd");
   });
 
   it("K1 (04-A) — o painel financeiro lê Entradas só de indicadorMinhasEntradas, nunca do bruto", () => {

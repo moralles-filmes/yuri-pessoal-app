@@ -40,6 +40,35 @@ export function Metric({
   );
 }
 
+const TONS_DO_QUADRO = {
+  neutro: { caixa: "bg-muted/60", rotulo: "text-muted-foreground", valor: "" },
+  vermelho: { caixa: "bg-destructive/10", rotulo: "text-destructive", valor: "text-destructive" },
+  verde: { caixa: "bg-success/10", rotulo: "text-success-ink", valor: "text-success-ink" },
+  ambar: { caixa: "bg-warning/15", rotulo: "text-warning-ink", valor: "text-warning-ink" },
+} as const;
+
+/**
+ * Quadro de número da moldura nova (valor grande + rótulo). O valor quebra linha em vez de ser
+ * truncado: dinheiro cortado pela metade é pior que um quadro mais alto.
+ */
+export function Quadro({
+  valor,
+  rotulo,
+  tom = "neutro",
+}: {
+  valor: string;
+  rotulo: string;
+  tom?: "neutro" | "vermelho" | "verde" | "ambar";
+}) {
+  const t = TONS_DO_QUADRO[tom];
+  return (
+    <div className={cn("min-w-0 rounded-[10px] p-3", t.caixa)}>
+      <p className={cn("text-lg font-semibold tabular-nums break-words", t.valor)}>{valor}</p>
+      <p className={cn("text-xs", t.rotulo)}>{rotulo}</p>
+    </div>
+  );
+}
+
 /** Linha rótulo → valor (lista compacta). */
 export function MetricRow({
   label,

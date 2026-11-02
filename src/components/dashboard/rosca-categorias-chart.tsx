@@ -7,8 +7,9 @@
  * categorias existe mesmo antes (ou sem) ele.
  *
  * Quem chama passa as categorias como vieram e os estornos do cartão; a fachada filtra só as
- * fatias positivas (`dadosDaRosca`), ordena por minha parte e soma em centavos. A conta do que
- * ficou de fora é `foraDaRosca` — fecha: Σ fatias − estornos + fora = minhas saídas.
+ * fatias positivas (`dadosDaRosca`) e dobra em "Outros" acima de 8 (D15, `dobrarEmOutros`), que
+ * também ordena por minha parte. A conta do que ficou de fora é `foraDaRosca`, sobre as categorias
+ * originais — fecha: Σ fatias − estornos + fora = minhas saídas.
  */
 import dynamic from "next/dynamic";
 import { PieChart as PieIcon } from "lucide-react";
@@ -17,6 +18,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import type { CategoriaSlice } from "@/lib/finance/dashboard";
 import { dadosDaRosca, foraDaRosca } from "@/lib/finance/painel";
 import { centavosParaReais, formatCurrency, reaisParaCentavos } from "@/lib/format";
+import { dobrarEmOutros } from "@/lib/painel/rosca";
 import { corDaFatia, percentualDaFatia } from "./cores-da-rosca";
 
 // ⛔ O segundo argumento de `next/dynamic` tem de ser objeto literal escrito ali mesmo — o
@@ -42,7 +44,7 @@ export function RoscaCategoriasChart({
   /** Legenda do total no centro da rosca; o default é o texto do painel. */
   rotuloDoTotal?: string;
 }) {
-  const fatias = dadosDaRosca(categorias).sort((a, b) => b.meu - a.meu);
+  const fatias = dobrarEmOutros(dadosDaRosca(categorias));
   const fora = foraDaRosca(categorias, estornos);
 
   if (fatias.length === 0) {
@@ -71,19 +73,24 @@ export function RoscaCategoriasChart({
         className="grid gap-x-6 gap-y-1.5 @md:grid-cols-2"
       >
         {fatias.map((f, i) => (
-          <li key={f.categoryId ?? i} className="flex items-center gap-2 text-sm">
-            <span
-              aria-hidden="true"
-              className="size-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: corDaFatia(f, i) }}
-            />
-            <span className="min-w-0 flex-1 truncate" title={f.name}>
-              {f.name}
-            </span>
-            <span className="shrink-0 tabular-nums">{formatCurrency(f.meu)}</span>
-            <span className="w-12 shrink-0 text-right text-muted-foreground tabular-nums">
-              {percentualDaFatia(f.meu, total)}
-            </span>
+          <li key={f.categoryId ?? i} className="text-sm">
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: corDaFatia(f, i) }}
+              />
+              <span className="min-w-0 flex-1 truncate" title={f.name}>
+                {f.name}
+              </span>
+              <span className="shrink-0 tabular-nums">{formatCurrency(f.meu)}</span>
+              <span className="w-12 shrink-0 text-right text-muted-foreground tabular-nums">
+                {percentualDaFatia(f.meu, total)}
+              </span>
+            </div>
+            {f.dobradas && (
+              <p className="pl-4.5 text-xs text-muted-foreground">{f.dobradas.join(", ")}</p>
+            )}
           </li>
         ))}
       </ul>

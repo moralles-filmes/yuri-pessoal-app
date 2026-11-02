@@ -486,7 +486,7 @@ export function dadosDasBarras(
 /* ───────────────────────────── Faturas ───────────────────────────── */
 
 /** O valor cheio da fatura; `null` = fatura prevista sem lançamentos ("sem lançamentos conhecidos"). */
-export function valorDaFatura(f: FaturaProvisao): number | null {
+export function valorDaFatura(f: Pick<FaturaProvisao, "total" | "virtual">): number | null {
   return f.virtual && reaisParaCentavos(f.total) === 0 ? null : f.total;
 }
 

@@ -19,7 +19,7 @@ import {
 import { StatCard } from "@/components/shared/stat-card";
 import { SeletorDeVisao } from "@/components/shared/seletor-de-visao";
 import { Bloco } from "@/components/shared/painel/bloco";
-import { Indicador } from "@/components/shared/painel/indicador";
+import { Indicador, INDICADOR_PEQUENO_NO_CELULAR } from "@/components/shared/painel/indicador";
 import { BotaoDoOlho, OlhoDosValores } from "@/components/shared/painel/olho-dos-valores";
 import {
   Card,
@@ -91,14 +91,6 @@ function urlDoDashboard(mes: string, base: BaseFinanceira): string {
     ? `/dashboard/financeiro?${params.toString()}`
     : "/dashboard/financeiro";
 }
-
-/**
- * No celular, os três indicadores secundários ficam menores e sem a base e a comparação (a dica (i)
- * continua). As classes são literais e vão no CARD: o `Indicador` é uma peça comum e não conhece o
- * painel.
- */
-const INDICADOR_PEQUENO_NO_CELULAR =
-  "max-sm:[&>div]:p-2.5 max-sm:[&_.text-2xl]:text-[0.9375rem] max-sm:[&_p.text-xs]:hidden";
 
 export function DashboardClient({
   banner,

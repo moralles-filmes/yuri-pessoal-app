@@ -15,8 +15,10 @@ const ler = (arquivo: string) =>
     .replace(/^\s*\/\/.*$/gm, "");
 
 describe.each([
-  ["finance-card.tsx", "getFinanceCardData"],
+  ["finance-card.tsx", "lerResumoDoDashboard"],
   ["invoices-card.tsx", "getInvoicesCardData"],
+  ["resumo-financeiro.tsx", "lerResumoDoDashboard"],
+  ["notifications-card.tsx", "getNotificationsCardData"],
 ])("03-G L4 · %s", (arquivo, leitura) => {
   const codigo = ler(arquivo);
   const tryBloco = codigo.match(/try \{([\s\S]*?)\} catch \(e\) \{([\s\S]*?)\}/);
@@ -46,5 +48,10 @@ describe("03-G L4 · CardSemLeitura", () => {
     expect(codigo).toContain("Não foi possível ler {oQue}. O card fica sem valores para não mostrar um número errado.");
     expect(codigo).toContain("Tentar de novo");
     expect(codigo).not.toContain('"use client"');
+  });
+
+  it("tem o desenho de falha: role=alert e o ícone de alerta", () => {
+    expect(codigo).toContain('role="alert"');
+    expect(codigo).toContain("AlertTriangle");
   });
 });
