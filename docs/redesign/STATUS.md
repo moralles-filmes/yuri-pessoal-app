@@ -17,8 +17,9 @@ por merge `--no-ff` em `de6ef19`, **com a M2 e a M2b aplicadas**) · **REDESIGN-
 **REDESIGN-03-G2 ✅** (integrada por merge `--no-ff` em `a70c541`, **com a migration
 `salvar_lancamento_atomico` aplicada por você no SQL editor**) — **a REDESIGN-03 está fechada,
 com exceções declaradas** · **REDESIGN-04-A ✅** (integrada por merge `--no-ff` em `a972712`,
-sem migration, **sem push** — D67) · **04-A2 liberada** — o Relatório financeiro com as mesmas
-peças
+sem migration, **sem push** — D67) · **REDESIGN-05-A ✅** (integrada por merge `--no-ff` em
+`6cfa3b9`, sem migration, **sem push** — D67) · **04-A2 e 05-B liberadas**, em paralelo — o
+Relatório financeiro com as mesmas peças, e Faturas e pagamentos
 
 ⛔ **A M-F foi aplicada em 2026-10-21** (03-F), pelo MCP, depois do seu "Aplique" literal, numa
 mensagem só para isso (D63). Ela **não** estava no `MIGRATIONS.md`: nasceu da K0 da 03-F, com o
@@ -45,6 +46,36 @@ PR** ("faz o pr e tudo mais dessa no git", D66) — **o merge em `main` é seu**
 ⛔ **A partir de 2026-11-02 a publicação por partes ACABOU (D67, por custo da Vercel).** As
 próximas fases se acumulam em `feat/redesign-00-auditoria` **sem push** e vão a `main` num
 **PR único**, com **um merge só**, quando você pedir. O PR #65 (03-G2) fica aberto e é esse PR.
+
+---
+
+## REDESIGN-05-A — a central de cartões: casca, Visão geral e Meus cartões ✅
+
+Branch `feat/redesign-05a-cartoes`, nascida de `2ed5657` (7 commits), integrada por merge
+`--no-ff` em **`6cfa3b9`**, **local e sem push** (D67), **sem conflito** com a 04-A, que entrou
+antes. O contrato é `docs/superpowers/specs/2026-11-02-05a-central-de-cartoes-design.md` (sem §13
+de resultado; o relatório da execução ficou na sessão da fase), e o plano é
+`docs/superpowers/plans/2026-11-02-05a-central-de-cartoes.md`.
+
+**O que mudou de natureza.** `/cartoes`, `/faturas` e `/parcelamentos` ganharam um `layout.tsx`
+cada, todos montando o **mesmo** `CartoesShell` (um `ModuleShell`, sem sexta navegação). Na
+sidebar, os três itens viraram um só, "Cartões e faturas" (`tambem: ["/faturas",
+"/parcelamentos"]`). `/cartoes` passou a ser a **Visão geral**, com quatro números no topo e duas
+tabelas, "Fechadas — a pagar" e "Em aberto — acumulando". Cada tabela tem uma coluna por
+pessoa, e a regra é a de `parteDosTerceirosPorFatura`. O conteúdo antigo de `/cartoes` foi para
+`/cartoes/meus` **sem mudança**. **Nenhuma página mudou de lugar**: `/faturas?card=&month=` e
+`/parcelamentos` respondem como antes. A Visão geral já separa os cinco estados
+(`components/cartoes/estado-da-fatura.ts`), e a linha prevista diz "sem lançamentos conhecidos",
+nunca R$ 0,00. Cartão desativado continua em "A pagar" (desativar não quita a dívida), e clicar
+numa linha leva a `/faturas`, sem ação financeira. Lógica pura em `finance/central-cartoes.ts`.
+
+**Efeito declarado:** a busca, o aviso `card_limit` e a previsão da IA, que apontam para
+`/cartoes`, passam a cair na Visão geral (que tem link para Meus cartões). O "Ir para Cartões" de
+`/faturas` e o atalho de `/configuracoes` foram para `/cartoes/meus`.
+
+**Ficou para a 05-B (§12 do desenho):** trocar `StatCard` e selos pelas peças comuns da 04-A,
+corrigir a P1-2 em `/faturas` (a projeção ainda aparece como "Fatura atual R$ 0,00") e renomear
+a seção "Faturas" para "Faturas e pagamentos". **Para a 05-C:** Próximos meses e Relatórios.
 
 ---
 
@@ -1168,6 +1199,7 @@ as colunas já existem e o CHECK já aceita.
 | D63 | **03-F: K0–K3 decididas por você, uma de cada vez, e o desenho aprovado** ("Aprovado"). A **M-F** (`pagar_fatura` e `desfazer_pagamento_fatura`, que **não** estava no `MIGRATIONS.md`) entrou com o seu "Aplique", numa mensagem só para isso, pelo MCP, conferida pelo objeto (`pg_proc`: invoker, `search_path` vazio, grants) e não pela versão do histórico (D59). **Antes do aplique, o `migration-validator` achou três guardas de lógica (P3) e você as incluiu** ("Incluir as três") — a D-F12 do contrato; o FINDING-005 (referências do payload não conferidas) ficou como risco aceito (RR-F-4). O gerador de tipos trouxe de novo a relationship de `import_rows` e a sintaxe nova dos genéricos; **só as duas funções** entraram. A prova no banco é **sequencial** (o MCP serializa as chamadas, sem `dblink`) e o `delete` da fatura sintética voltou `declined` — a remoção ficou com você. Integrada na sessão que a escreveu, ao você pedir o prompt da próxima fase (memória de 2026-10-11): merge `--no-ff` em `84bf87b`, árvore idêntica à da ponta; **push e PR só com o seu aval** |
 | D65 | **Referência visual do Painel financeiro e do Dashboard** (2026-10-25, a seu pedido: *"Vamos seguir o plano que já tem, mas adaptar para a referência visual. Esquece a sidebar."*). O print 1 vira o alvo da **04-A** (`/dashboard/financeiro`), o print 2 o da **06**, e o relatório de `/relatorios` ganha a **04-A2** com as mesmas peças. Os prints **não** entram no repositório (público; o print 2 tem cara de dado real), então são descritos em palavras em `REFERENCIA-VISUAL.md`, com os desvios no §6 (sem metas financeiras, sem logos de banco, sem últimos dígitos, rosca na paleta validada, base sempre visível). A sequência antiga da 06 (Prioridades do dia, Organização, Saúde) foi substituída pela do print. Nenhuma migration, nenhuma regra de negócio mudou |
 | D68 | **04-A: K1–K5 decididas por você, uma de cada vez; K6 e K7 por delegação** ("Pode seguir como achar melhor"), e o desenho, a prévia e o plano aprovados. Executada na sessão que a escreveu (inline, um commit por passo), com revisão final da branch inteira e **sem** auditoria de módulo. Integrada **localmente** em `a972712` a seu pedido ("envia o prompt da proxima fase"), **sem push** (D67). O `.env.local` foi copiado para a worktree com a sua autorização (ignorado pelo git). **Custo aceito:** a régua do sino mudou de texto e de critério junto com a do painel (K3) — um alerta de gasto alto que aparecia no meio do mês pode deixar de aparecer, porque a comparação passou a ser justa |
+| D69 | **05-A: o layout "B" da Visão geral, fechada × aberta em tabelas separadas e Meus cartões inalterado foram decididos por você**, e a prévia foi aprovada em 2026-11-02 (16 prints, fora do git). Integrada **localmente** em `6cfa3b9` a seu pedido ("integre a 05-A"), **sem push** (D67), numa sessão que não a escreveu: os cinco foram rodados de novo sobre a árvore integrada. Merge sem conflito com a 04-A. **Custo aceito:** os links para `/cartoes` (busca, `card_limit`, IA) passam a abrir a Visão geral, e não a lista de cartões |
 | D67 | **Fim da publicação por partes** (2026-11-02, a seu pedido: *"juntarmos todas as proximas fases em um unico PR e fazer merge uma vez so, pois o deploy da vercel é muito caro"*). Substitui a D54. Cada fase continua sendo integrada por merge `--no-ff` nesta branch, mas **nenhuma é empurrada**: um push gera um deploy de prévia na Vercel (e, com o PR #65 aberto sobre esta branch, atualiza o PR), e um merge em `main` gera um de produção. O PR #65 (03-G2) fica aberto e vira o PR único; no fim, um push, revisão do título e da descrição, CI verde e **um** merge, com o seu pedido explícito. **Custo aceito:** até o push final, os commits integrados só existem neste disco — e `main` pode andar por outras branches (agenda, IA), então o merge final pode trazer conflitos para resolver uma vez só. O portão de ancestral dos prompts não muda: ele confere esta branch local |
 | D66 | **A 03-G2 foi integrada na sessão que a escreveu, a seu pedido** ("Me envia o prompt da proxima fase e já faz o pr e tudo mais dessa no git"), **com** revisão final da branch no modelo mais capaz e **sem** auditoria de módulo. Merge `--no-ff` em `a70c541`; a árvore difere da ponta (`dc9e641`) só nos documentos da D65. O aval cobre o push e o PR; **"tudo mais" não foi lido como merge em `main`** — merge em `main` é produção e fica com você. A migration `salvar_lancamento_atomico` foi aplicada **por você no SQL editor** (o `apply_migration` do MCP foi recusado), conferida pelo objeto e não pela versão do histórico (D59) |
 
@@ -1347,7 +1379,11 @@ a mesma de ambiente (`approval/schema.test.ts`, CRLF na cópia de trabalho desta
 ponta (`5fbd9f4`), na worktree da fase, os cinco tinham passado com **320 / 7.175**;
 `/dashboard/financeiro` **200,4 KB**; `TZ=UTC` em 74 arquivos / 1.193 testes.
 
-## Próximo passo — REDESIGN-04-A2 (o Relatório financeiro com as mesmas peças)
+**Depois do merge da 05-A (`6cfa3b9`), na árvore integrada:** `lint` ✅ · `tsc` ✅ · `build` ✅ ·
+`perf:bundle` ✅ mediana **201,4**, 69 rotas dentro · `test:run` **322 / 7.210**, 7.209 ✅ e 1 ❌ —
+a mesma de ambiente (`approval/schema.test.ts`, CRLF na cópia de trabalho).
+
+## Próximo passo — REDESIGN-04-A2 e REDESIGN-05-B, em paralelo
 
 **A 04-A está integrada** (`a972712`). A 04-A2 é `/relatorios`, aba Financeiro: as peças que a
 04-A criou (indicador, bloco, olho, gráficos — **sem banner**), **reusadas e nunca copiadas**, a
@@ -1362,8 +1398,16 @@ lê `apresentarEntradas`), o "parcial" nas telas, RR-C2-10 (filtro ligado × des
 os achados do §13.5 da 04-A que tocam as peças reusadas (o olho mudo para leitor de tela, a dica
 (i) só por `title`, a legenda "parcial" sobre o vazio), se você decidir consertá-los ali.
 
-A **04-C** (`feat/redesign-04c-reembolso`) e a **05-A** (`feat/redesign-05a-cartoes`) andam em
-outras sessões, não integradas; a 04-A2 não as toca.
+A **05-B** (Faturas e pagamentos) roda ao lado dela. As vencidas aparecem primeiro, depois a
+atual e as a vencer, e o detalhamento fica dentro da fatura. O pagamento reusa a 03-F, com o
+reenvio tratado. Também entram a P1-2 em `/faturas`, a troca de `StatCard` e selos pelas peças da
+04-A, reusadas e nunca copiadas, e a seção renomeada para "Faturas e pagamentos". O portão
+confere `20c17a6` (05-A) e `9342fbb` (04-A). As duas fases tocam peças comuns: se uma precisar de
+uma variante nova em `src/components/shared/painel/`, a segunda integração pode ter conflito ali
+e no STATUS.
+
+A **04-C** (`feat/redesign-04c-reembolso`) anda em outra sessão, não integrada; nem a 04-A2 nem a
+05-B a tocam.
 
 ⚠️ **Pendências suas, herdadas:** a conferência dos achados do §13.5 da 04-A; a conferência visual da 03-G e da 03-G2; remover a fatura
 sintética `[03F-SINT]` e conferir o diálogo de desfazer (D63); a conferência com dado real da
