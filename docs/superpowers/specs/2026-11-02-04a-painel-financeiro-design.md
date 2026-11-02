@@ -118,7 +118,7 @@ sensato resolveria sem mudar o que se constrói ficou decidido aqui:
 | D-A-12 | **Últimas transações:** função nova `getUltimasTransacoes(5)` em `finance/queries.ts` (o `getTransactions` não aceita `limit`): só `competence_date ≤ hoje`, sem transferências (o pagamento de fatura entra por aí), ordem `competence_date` desc e depois `created_at` desc. Valor = o do lançamento (cheio, como na lista de lançamentos, para onde o "Ver todas" leva); compra parcelada aparece com o total e "em N×" | "última" não pode ser algo que ainda não aconteceu; a lista é de registros, não de "minha parte" |
 | D-A-13 | **Cartões e Próximas faturas em valor cheio** (o que se deve ao banco, como a lista e o gráfico de faturas já são hoje), com "minha parte" em linha menor. "Fatura atual" de cada cartão = o ciclo aberto de hoje (`resolverFatura(hoje)`); fechada não paga aparece na lista com o selo | "Pendente ao banco" é cheio; misturar as duas bases no mesmo bloco faria a soma não fechar |
 | D-A-14 | **`aReceberPorPessoa`** agrupa e chama **o próprio `totalPendenteAte`** em cada grupo (mesmo corte de data), então Σ por pessoa = total **por construção**. A pessoa vem dos recebíveis que `lerFinanceiro` já lê (ela passa a devolvê-los com o embed de `RECEIVABLE_SELECT`) — **sem ler `lerRecebiveis()` duas vezes** | reusar `saldoCentavos`/`emAberto` sem corte divergiria do total |
-| D-A-15 | **K3 sem import circular:** o corte até o dia D sai de `caixa.ts` para um núcleo puro novo (ex.: `finance/ate-o-dia.ts`) que `caixa.ts` e `dashboard.ts` importam; nada é duplicado | `caixa.ts` já importa de `dashboard.ts` |
+| D-A-15 | **K3 sem import circular:** `resumoAteODia` passa a ser exportada por `caixa.ts`, e `reguaDoGastoAlto` sai de `dashboard.ts` para `finance/regua-do-gasto-alto.ts`, que importa `caixa.ts` e `dashboard.ts` (nenhum dos dois a importa). Página e sino passam a importá-la dali. Um núcleo comum importado por `dashboard.ts` não serviria: ele também precisa de `resumoMes` | `caixa.ts` já importa de `dashboard.ts` |
 | D-A-16 | `credit_cards.cor` é `not null` (padrão dourado), mas o validador aceita texto livre: `textoSobreACor` trata **cor fora do formato hex** (cai no estilo neutro), não "cor ausente" | o caso real é o texto inválido |
 | D-A-17 | Ler `completude` na página é **trabalho novo** (hoje ela só desestrutura `entradas` e `contas`) | corrige a afirmação "como hoje" |
 
@@ -239,8 +239,8 @@ ao banco" = soma das faturas reais não pagas da lista. Repetido na base caixa o
 
 - `reguaDoGastoAlto({mes, hoje, transactions, statements, receivables})`:
   - `dia = diaDeCorte(mes, hoje)`; se `null` (mês fechado) → exatamente o comportamento de hoje.
-  - senão: `saidas` = à vista do mês até o dia D (`resumoAteODia` — hoje privada em `caixa.ts`; vai para
-    o núcleo puro comum de D-A-15, **sem duplicar a conta** e sem import circular); `mediaSaidas` = `mediaDeSaidas` dos até 5 meses
+  - senão: `saidas` = à vista do mês até o dia D (`resumoAteODia` — hoje privada em `caixa.ts`; é exportada
+    e usada pelo arquivo novo da régua (D-A-15), **sem duplicar a conta** e sem import circular); `mediaSaidas` = `mediaDeSaidas` dos até 5 meses
     anteriores, cada um cortado em `periodoAteODia(m, dia)` (D = 31 em fevereiro vira o último dia).
   - devolve `{ saidas, mediaSaidas, ateODia: dia | null, cartaoFora: dia !== null }`.
 - `gerarAlertas` passa a usar `regua.saidas` (e não `resumoAtual.saidas`) e escreve o texto do corte
