@@ -10,6 +10,8 @@
  * quem paga escolhe a data para bater com o extrato do banco (o padrão é hoje).
  */
 
+import type { ActionResult } from "@/types/finance";
+
 export type PagamentoFaturaPayload = {
   type: "transferencia";
   payment_method: "transferencia";
@@ -81,6 +83,30 @@ export function mensagemDoErroDoPagamento(
     default:
       return MSG_PAGAMENTO_INCERTO;
   }
+}
+
+export type DesfechoDoPagamento =
+  | { tipo: "pago" }
+  | { tipo: "ja-paga" }
+  | { tipo: "incerto" }
+  | { tipo: "data"; mensagem: string }
+  | { tipo: "recusado"; mensagem: string };
+
+/**
+ * Traduz o retorno da action de pagamento em um desfecho para a tela.
+ * "Já paga" converge (a RPC é idempotente): não é erro para quem clicou. Exceção no cliente
+ * vira "incerto", porque o pagamento pode ter sido gravado antes da resposta se perder.
+ */
+export function desfechoDoPagamento(
+  res: ActionResult | { excecao: true },
+): DesfechoDoPagamento {
+  if ("excecao" in res) return { tipo: "incerto" };
+  if (res.ok) return { tipo: "pago" };
+  const dataErro = res.fieldErrors?.dataPagamento?.[0];
+  if (dataErro) return { tipo: "data", mensagem: dataErro };
+  if (res.error === MSG_FATURA_JA_PAGA) return { tipo: "ja-paga" };
+  if (res.error === MSG_PAGAMENTO_INCERTO) return { tipo: "incerto" };
+  return { tipo: "recusado", mensagem: res.error };
 }
 
 /** "Pagamento fatura {mês/ano} — {cartão}" (mês por extenso, pt-BR). */
