@@ -134,3 +134,17 @@ describe("T11 · habits-card-body.tsx", () => {
     expect(codigo).not.toContain("incrementHabit");
   });
 });
+
+describe("T12 · training-card.tsx", () => {
+  const codigo = ler("training-card.tsx");
+  it.each(["data.semana.map(", "semana de"])("contém %s", (trecho) => {
+    expect(codigo).toContain(trecho);
+  });
+  // Invariante 22 de Treinos: nada vermelho, nenhuma cobrança.
+  it.each(["destructive", "red-", "falta", "Último treino", "Meta ·"])(
+    "não contém %s",
+    (trecho) => {
+      expect(codigo).not.toContain(trecho);
+    },
+  );
+});

@@ -62,7 +62,8 @@ import {
 } from "@/lib/training/goal-queries";
 import { getExercises, getMuscleGroups } from "@/lib/training/queries";
 import { aggregateSessions, partialExplanation, volumeRuleLabel } from "@/lib/training/metrics";
-import { dashboardRange, sessionsInRange } from "@/lib/training/dashboards";
+import { consistencyCalendar, dashboardRange, sessionsInRange } from "@/lib/training/dashboards";
+import { semanaDoCard } from "@/lib/dashboard/treinos-semana";
 import { addDaysIso, derivePlannedStatus } from "@/lib/training/schedule";
 import { isGoalOpen, sortGoalsForDisplay } from "@/lib/training/goals";
 import { DERIVED_SCHEDULE_STATUS_LABELS } from "@/lib/training/constants";
@@ -564,6 +565,18 @@ export async function getTrainingCardData(todayIso: string): Promise<TrainingCar
   const weekRange = dashboardRange("semana", todayIso, preferences.weekStartsOn);
   const weekMetrics = aggregateSessions(sessionsInRange(history, weekRange), metricOptions);
   const semTreino = weekMetrics.sessionCount === 0;
+  // Barras Seg→Dom (REDESIGN-06 T12): mesmas sessões e mesmo planejamento já lidos acima.
+  const dias = consistencyCalendar(
+    sessionsInRange(history, weekRange),
+    scheduled.map((entry) => ({
+      scheduledDate: entry.scheduledDate,
+      entryKind: entry.entryKind,
+      status: entry.status,
+    })),
+    weekRange,
+    todayIso,
+    metricOptions,
+  );
 
   // ── Hoje ──
   const todayEntry =
@@ -631,13 +644,15 @@ export async function getTrainingCardData(todayIso: string): Promise<TrainingCar
 
   const runningRow = (running.data ?? [])[0];
 
+  const hasModule =
+    history.length > 0 ||
+    scheduled.length > 0 ||
+    goals.length > 0 ||
+    Boolean(runningRow) ||
+    weightMeasurements.length > 0;
+
   return {
-    hasModule:
-      history.length > 0 ||
-      scheduled.length > 0 ||
-      goals.length > 0 ||
-      Boolean(runningRow) ||
-      weightMeasurements.length > 0,
+    hasModule,
     activeSession: runningRow
       ? {
           id: runningRow.id,
@@ -659,6 +674,8 @@ export async function getTrainingCardData(todayIso: string): Promise<TrainingCar
         }
       : null,
     trainedToday,
+    semana: hasModule ? semanaDoCard(dias) : [],
+    semanaDe: { de: weekRange.from, ate: weekRange.to },
     week: {
       sessions: weekMetrics.sessionCount,
       target: preferences.weeklyWorkoutGoal ?? null,
