@@ -730,12 +730,251 @@ fraqueza.
 > citados em `PLANO.md:73` não existem como lista). Esta matriz é declarada aqui, com este nome.
 
 Preenchida no E9, linha a linha: critério → onde está provado → o que falta → destino.
-Blocos: §9 (8 linhas) · §13.2 a §13.6 (uma linha por item) · conciliação card × lista × gráfico ·
-"nenhum teste existente alterado para passar" (um commit por linha, com o motivo) · "cenário
-sintético obrigatório como teste puro".
+Legenda: ✅ provado por teste · ◐ parcial (o que falta está escrito) · ○ aberto (não existe no
+código; vai declarado para a REDESIGN-05). Fonte dos critérios: `docs/redesign/METRICAS-FINANCEIRAS.md`
+§9 e §13.2–§13.6. Caminhos de teste relativos a `src/lib/finance/` quando não indicado.
+
+### 12.1 O cenário sintético do §9 — `fechamento-redesign-03.test.ts` (E9a)
+
+Fixture sintética (compra no cartão R$ 1.000 · minha parte R$ 400 · terceiro R$ 600 · reembolso
+R$ 250 como recebimento · pagamento da fatura R$ 1.000), pelas funções reais do motor. Nenhum
+`it.fails`: as três exigências que o §9 dava como irrepresentáveis e a condicional são respondidas
+desde a 03-D/03-E. Mutação Y21 (minha parte bruta) derruba [1], [5] e dois da conciliação.
+
+| # | Exigência | Situação | `it` |
+| --- | --- | --- | --- |
+| 1 | Minha despesa continua R$ 400 | ✅ | "[1] minha despesa continua R$ 400 — no resumo, na categoria e na base caixa" |
+| 2 | Responsabilidade original do terceiro = R$ 600 | ✅ | "[2] responsabilidade original do terceiro = R$ 600" |
+| 3 | Reembolso recebido = R$ 250 | ✅ | "[3] reembolso recebido = R$ 250" |
+| 4 | Recebível restante = R$ 350 | ✅ | "[4] recebível restante = R$ 350" (estado derivado `parcial`, status gravado `pendente`) |
+| 5 | Minha renda pessoal não sobe R$ 250 | ✅ | "[5] minha renda pessoal não sobe R$ 250" — inclusive com o reembolso lançado como receita de terceiro |
+| 6 | Reembolso não reduz a fatura devida ao banco | ✅ | "[6] reembolso não reduz a fatura devida ao banco" |
+| 7 | Pagar R$ 1.000 ao banco não cria despesa nova | ✅ | "[7] pagar R$ 1.000 ao banco não cria despesa nova" |
+| 8 | Caixa mostra pagamento e reembolso nas datas efetivas | ✅ | "[8] caixa mostra pagamento e reembolso nas datas efetivas" |
+
+### 12.2 Base CAIXA REALIZADO (§13.2)
+
+| Critério | Situação | Onde / o que falta | Destino |
+| --- | --- | --- | --- |
+| Data `liquidado_em ?? competence_date`, só pago/recebido, aviso "data aproximada" | ✅ | `caixa.test.ts` (dataDeCaixa; "pendente e cancelado ficam fora"); `components/financeiro/bloco-do-caixa.test.ts` (Z5) | — |
+| Renda pessoal recebida | ✅ | `caixa.test.ts` "numerosDoCaixa — entradas" (3 its). Reparte por `valor_pessoal` gravado (D8), não por `classificacao` | — |
+| Reembolsos recebidos | ✅ | `caixa.test.ts` "numerosDoCaixa — reembolsos"; `recebimentos.test.ts` "pela DATA do recebimento" | — |
+| Outras entradas de terceiros (sem o reembolso) | ◐ | separação provada; o reembolso lançado também como receita é **avisado** (K4, 4 its), não excluído | aberto, REDESIGN-05 |
+| Saídas de caixa (compra no cartão não sai) | ✅ | `caixa.test.ts` "compras no cartão + pagamento de fatura: só o pagamento sai" | — |
+| Transferências entre contas próprias | ✅ | `caixa.test.ts` "transferência entre contas fica fora…"; nenhum teste da linha "à parte" na tela | — |
+| Resultado de caixa | ✅ | `caixa.test.ts` (3 its) e "entradasDoCaixa" | — |
+| Saldo das contas **em DD/MM** | ◐ | soma e migration provadas (`saldo-das-contas.test.ts`, `m2b-saldo-data-de-caixa.test.ts`); o **rótulo com a data não existe** ("Saldo atual") | ○ REDESIGN-05 |
+| ⛔ Sem contagem dupla (pagamento é a saída) | ✅ | `caixa.test.ts`; `dashboard-caracterizacao.test.ts` "[7 ✅]"; `statement-payment.test.ts`; e o §9 [7] | — |
+
+### 12.3 Base COMPETÊNCIA (§13.3)
+
+| Critério | Situação | Onde / o que falta | Destino |
+| --- | --- | --- | --- |
+| Inclui `pendente`, marcado como *previsto* | ◐ | o pendente entra (caracterização); a marca "previsto" não existe | ○ REDESIGN-05 |
+| Renda pessoal do período | ✅ | caracterização bloco 6 (entradasMeu) | — |
+| Movimentação de terceiros (entrada) | ✅ | caracterização bloco 6 (entradasTerceiros) | — |
+| Despesa bruta | ✅ | `dashboard.test.ts` "saídas = à vista + cartão (sem o parcelado PAI)" | — |
+| Minha parte acordada | ✅ | `dashboard.test.ts`; `dashboard-recebimentos.test.ts` "a conta fecha" | — |
+| Perdoado | ✅ | `dashboard-recebimentos.test.ts` B1a (com K3-a: perdoado = saldo, não o valor cheio) | — |
+| ▶ Minha parte das despesas | ✅ | `dashboard-recebimentos.test.ts`; caracterização D11 | — |
+| Responsabilidade de terceiros | ✅ | caracterização "[2 ✅]" e bloco 8 | — |
+| ▶ Resultado do período (renda − minha parte) | ✅ | caracterização "a evolução é MINHA dos dois lados"; só existe como `saldo` da evolução, não há card | — |
+| A conta fecha | ✅ | `dashboard-recebimentos.test.ts`; `dashboard.test.ts` "meu + terceiros === saídas" | — |
+
+### 12.4 Terceiros e reembolsos (§13.4)
+
+| Critério | Situação | Onde / o que falta | Destino |
+| --- | --- | --- | --- |
+| Reembolsos recebidos neste período | ✅ | `recebimentos.test.ts` "os três números do §13.4" | — |
+| Pendente referente a este período | ✅ | idem; `rotulos-do-pendente.test.ts` | — |
+| Total pendente até DD/MM | ✅ | `recebimentos.test.ts` (3 its, com o corte) | — |
+| Perdoado (não será cobrado) | ✅ | `recebimentos.test.ts`; "secoesDaLista" | — |
+| Por pessoa: origem, parcela, recebimentos, saldo, histórico | ◐ | `app/(app)/terceiros/terceiros-client.test.ts` varre a fonte; não há teste da ficha por pessoa | ○ REDESIGN-05 |
+| ⛔ Reembolso nunca é renda pessoal | ◐ | caixa ✅ (`caixa-minha-parte.test.ts`); competência **condicional**: reembolso lançado sem classificar ainda sobe `entradasMeu` (caracterização "[5 ⚠️]", D10) | aberto por decisão (D10), REDESIGN-05 |
+| ⛔ Reembolso não reduz a fatura | ✅ | caracterização "[6 ✅]"; §9 [6] | — |
+
+### 12.5 Cartões (§13.5)
+
+| Critério | Situação | Onde / o que falta | Destino |
+| --- | --- | --- | --- |
+| Total das faturas do período | ✅ | `dashboard.test.ts` (2 its) | — |
+| Minha parte da fatura | ✅ | `dashboard.test.ts`; `dashboard-recebimentos.test.ts` "próximas faturas" | — |
+| Responsabilidade de terceiros (pago continua contando) | ✅ | caracterização "[1 ✅]" e bloco 8 | — |
+| Pendente ao banco (`statusEfetivo ≠ paga`) | ✅ (E9b) | `fechamento-itens-sem-teste.test.ts` "Pendente ao banco: totalProximas soma só as faturas reais não pagas" — o código existia (`getInvoicesCardData.totalProximas`) sem teste; o rótulo "Pendente ao banco" não existe ("Total próximas faturas") | rótulo: ○ REDESIGN-05 |
+| Reembolsos pendentes nunca somados ao anterior | ◐ | `totalAReceber` provado; nenhum teste da não-soma | ○ REDESIGN-05 |
+| Horizonte "N ciclos de cada um dos M cartões" | ◐ | contagem provada (caracterização "gera seis ciclos por cartão"); o rótulo diz "Provisão de 6 ciclos" | ○ REDESIGN-05 |
+| Célula: fatura existente | ✅ | caracterização "congela uma fatura real e uma virtual" | — |
+| Célula: projeção | ✅ (motor) | idem (`virtual: true`); o badge "Prevista" sem teste de tela | — |
+| Célula: paga | ✅ (motor) | caracterização; `invoice.test.ts` "pago_em definido → paga" | — |
+| Célula: valor zero medido | ○ | nenhum estado distinto no código | ○ REDESIGN-05 |
+| Célula: sem lançamentos conhecidos (≠ R$ 0,00) | ○ **contrário** | `dashboard.test.ts` "virtuais ficam zero" afirma `total === 0` e a tela escreve R$ 0,00 + "Prevista" — ausência e zero no mesmo pixel | ○ REDESIGN-05 (o teste atual muda junto) |
+
+### 12.6 Comparações (§13.6)
+
+| Regra | Situação | Onde / o que falta | Destino |
+| --- | --- | --- | --- |
+| Base zero → `null` → "sem base de comparação" | ✅ (E9b) | `dashboard.test.ts`, `caixa.test.ts` (o `null`); o texto em `fechamento-itens-sem-teste.test.ts` | — |
+| Mês em andamento: até o dia D | ✅ | `caixa.test.ts` (comparativoAteODia, 7 its); `rotulos-dos-graficos.test.ts` | — |
+| Ausência × zero ("sem registro") | ○ | não existe no financeiro (ver a célula acima) | ○ REDESIGN-05 |
+| Falha de consulta: erro com "tentar de novo" | ✅ | `components/dashboard/general/cards-sem-leitura.test.ts`; `bloco-do-caixa.test.ts`; `caixa-leitura.test.ts` | — |
+| Projeção com traço/hachura e legenda | ○ | gráfico separado com legenda, sem hachura | ○ REDESIGN-05 |
+| Pizza nunca negativa (+ nota do que ficou de fora) | ◐ (E9b) | o filtro de positivos provado por varredura em `fechamento-itens-sem-teste.test.ts`; a **nota** não existe | nota: ○ REDESIGN-05 |
+
+### 12.7 Conciliação card × lista × gráfico — `conciliacao-card-lista-grafico.test.ts` (E9a)
+
+| Critério | Situação | Onde |
+| --- | --- | --- |
+| Mesma fixture, mesmo filtro (2031-03, meu, competência): card = lista = gráfico | ✅ | "card, lista e gráfico mostram a mesma minha parte do mês" (R$ 400 nos quatro: `resumoMes.meu`, o "meu" da linha de `getTransactions` no harness, `evolucaoMensal`, `gastosPorCategoria`) |
+| Base caixa (abril, quando a fatura é paga) | ✅ | "na base CAIXA (abril…) card e gráfico também batem" |
+| Achado: Lançamentos **não soma nem filtra por responsabilidade** | registrado | a lista mostra o bruto com "meu R$ X" por linha; não há "total da lista com o filtro meu". Um `it` de varredura fica vermelho no dia em que a tela ganhar total ou filtro. ○ REDESIGN-05 (não consertado, K5) |
+
+### 12.8 "Nenhum teste existente alterado para passar" — commit a commit
+
+Situação: **cumprido com exceções declaradas** (K5). Todo teste de comportamento alterado
+está abaixo, com o motivo; os de **inventário** são atualizados por desenho (D-G2-12) e não
+contam como exceção.
+
+| Commit | Teste alterado | O que mudou e por quê |
+| --- | --- | --- |
+| `d52c3e0` (03-C A4) | `dashboard-caracterizacao.test.ts` blocos 1, 5 e 6 | o `ResumoMes` ganhou `entradasMeu`/`entradasTerceiros` (4 `toEqual` ganham as chaves). "[5 ⚠️]" deixou de congelar o defeito e passou a afirmar a partição condicional (D10). O bloco 6 provava que a entrada **não** era partida — reescrito com o contrário (C9). `limiares-de-alerta.test.ts`: só o literal do tipo |
+| `762e4ae` (03-D B1a) | `dashboard-caracterizacao.test.ts` | D11: o `ignorado` sai de terceiros e vira despesa minha — os valores de 7 its mudam pela regra nova, três `it.each` perdem o caso `ignorado`, "⚠️ ignorado conta como terceiro hoje" vira "D11 — ignorado vira despesa minha: 400 → 500". Nenhum removido sem substituto |
+| `d574dc7` (regra única por fatura; projeção pelo vencimento) | `dashboard.test.ts` | o `it` "soma faturas (sem dupla contagem) + recorrência mensal + conta fixa" (afirmava a fatura **cheia**, por competência: junho 330, julho 230) foi **reescrito no lugar** como "soma a MINHA parte das faturas + recorrência mensal + conta fixa" (junho 280, julho 200). Nenhum `it` foi apagado; o que a mensagem não dizia: **nenhum teste preserva o comportamento antigo**, e a fixture do substituto não distingue competência de vencimento — quem prova o vencimento é o `it` novo "agrupa a fatura pelo mês do VENCIMENTO". Motivo: decisão do dono (desenho 2026-10-18, gráficos com "meu") |
+| `4c5f117` (evolução e mês a mês com a minha parte) | `dashboard-caracterizacao.test.ts`; `dashboard.test.ts` | "B2 — divergência declarada: o saldo continua bruto − bruto" substituído por "a evolução é MINHA dos dois lados" (a B2 caiu por decisão do dono); "evolução devolve um ponto por mês" passa a afirmar a minha parte |
+| `86f8268` (03-G2 E3) | `transactions.test.ts`, `services.test.ts`, `leituras-que-decidem.test.ts` | os `it` que afirmavam insert/delete/update direto passaram a afirmar os argumentos da RPC **com os mesmos valores** ("mudar só a descrição de uma despesa dividida…", "pago legado sem recebimento continua deixando (b)…", "updateTransaction de transferência (apaga e recria)…" → editada no lugar, "despesa compartilhada: insert…", "despesa pessoal: o insert NÃO carrega a chave valor_pessoal", e as asserções de 4 describes de `services.test.ts`). **Um mudou de sentido por desenho:** "o lançamento antigo JÁ foi apagado: a frase é a de 'depois'" virou "a fatura sem leitura recusa ANTES de qualquer escrita" — a leitura passou a vir antes de toda escrita |
+| `41c47dc` (03-G2 E4) | `leituras-que-decidem.test.ts` | "fatura não lida: a compensação apaga a compra-pai e a frase é a de 'depois'" virou "…nada é gravado e a frase é a de 'antes'" (as faturas passaram a ser resolvidas antes de qualquer escrita); "recálculo do valor pessoal com leitura falha" só mudou a ordem esperada |
+| `e787bee`…`ac6f864` (03-G2 E5–E9) | — | nenhum teste existente de comportamento alterado (só inventários, D-G2-12) |
+
+### 12.9 Cenário sintético obrigatório como teste puro
+
+| Critério | Situação | Onde |
+| --- | --- | --- |
+| O §9 existe como teste puro, com as oito exigências pelas funções reais | ✅ | `fechamento-redesign-03.test.ts` (12.1) — antes ele só existia distribuído pela caracterização ("5 · §9") e por `dashboard-recebimentos.test.ts` "D3" |
 
 ---
 
 ## 13. Resultado da execução
 
-*(vazio — preenchido no fim da execução)*
+Executada de 2026-10-25 a 2026-11-01 na branch `feat/redesign-03g2-escritas` (worktree própria,
+sem upstream, sem push, sem merge, sem deploy). `docs/redesign/STATUS.md`, `CLAUDE.md`, `AGENTS.md`,
+`dashboard.test.ts` e `dashboard-caracterizacao.test.ts` **não foram tocados** (conferido por
+`git diff 4261e03..HEAD`); em `supabase/` só a migration desta subfase; `src/types/supabase.ts`
+ganhou só as duas funções (+8 linhas).
+
+### 13.1 Os commits
+
+| Commit | Passo |
+| --- | --- |
+| `f3797be` | desenho e plano |
+| `d5c1e69` | E1 — linha, divisão e frases de escrita num núcleo puro |
+| `18c2bc3` · `60e0b04` · `e8dfe8e` | E2 — a migration, a correção do 42601 e os tipos |
+| `86f8268` | E3 — lançamento e divisão numa transação (RR6, RR8, RR12, RR11, RR-F-1) |
+| `41c47dc` | E4 — compra parcelada numa transação; cancelamento ordenado |
+| `e787bee` · `aa1c28e` | E5 — excluir apaga antes de reabrir; a previsão e o diálogo (K3) |
+| `a6b2a0b` | E6 — recorrências reservam antes de inserir (S9) |
+| `65b0a7a` | E7 — commit da importação reserva cada linha; escritas do lote conferidas (S10, S11) |
+| `22eff71` | E8 — a varredura das escritas |
+| `ac6f864` · `d770de1` | E9 — o §9, a conciliação e os itens da matriz sem teste |
+| `c46f9fd` | correções da revisão final |
+
+### 13.2 Os critérios de aceite (§10), um a um
+
+1. **As escritas da §2.3 tratadas ou substituídas — ✅.** `escritas-que-engolem-erro.test.ts`:
+   84 escritas no escopo (77 chamadas, conferidas por grep, + 7 RPCs de escrita), 75 tratadas e
+   9 exceções declaradas com motivo, destino e **contagem** `n` (3 deliberadas, 6 falsos positivos
+   do varredor). Y18 vermelha nas duas variantes.
+2. **Nenhuma sequência S1–S10 deixa dinheiro pela metade — ✅**, com o teste da ordem de cada
+   uma: S1–S5 viraram uma RPC (`salvar_lancamento`), S7 outra (`criar_compra_parcelada`); S6
+   "ordem: o delete de transactions vem antes do update de card_statements"; S8 "delete de
+   receivables antes do update de transaction_installments antes do update de transactions";
+   S9 "recorrência: a reserva vem antes do insert"; S10 "reserva antes de criar…". S8 continua
+   ordenada, não atômica (RR-G2-2).
+3. **A migration só depois do "aplique", conferida por objeto — ✅, com desvio de caminho.** O
+   `apply_migration` do MCP foi recusado; **o dono aplicou no SQL editor**. A 1ª tentativa deu
+   `42601` (um `CASE` sem parênteses na condição de um `IF` — o `THEN` dele cortava a condição);
+   nada foi aplicado, a correção (`60e0b04`) ganhou um teste que imita o leitor do PL/pgSQL, e o
+   dono reaplicou ("Rodei"). Conferida por objeto (D59): `pg_proc` com as duas funções,
+   `prosecdef = false`, `search_path=""`, `anon`/`public` sem execute; prova sintética T1–T9 num
+   bloco que termina em `raise` (nada persistiu).
+4. **As 24 mutações da §6 caem, cada uma com o nome do teste — ✅.** Y1, Y2, Y6, Y7, Y8, Y22 (E3);
+   Y3, Y4, Y5 (E2); Y19, Y20 (E4); Y9, Y10, Y11, Y12, Y13 (E5); Y14, Y15, Y23 (E6); Y16, Y17
+   (E7); Y18 ×2 (E8); Y21 (E9); Y24 (`traduzirErroDaRpc`: erro sem `code` passando a "Nada foi
+   alterado." derruba 6 testes de `falha-de-escrita.test.ts` e das actions). Os nomes estão nas
+   mensagens de commit. Além delas: a ordem da conferência de parcela, a conferência de
+   `qtd_parcelas` e o `CASE` sem parênteses (E2); `totalProximas` sem o filtro de paga (E9b); e
+   R1–R5 da revisão final. Cada uma sozinha, compilando, restaurada por cópia e conferida por
+   `cmp`/`git diff --quiet`.
+5. **Os cinco comandos — ✅** (HEAD `c46f9fd`):
+
+   | Comando | Antes (§2.2) | Depois |
+   | --- | --- | --- |
+   | `npm run test:run` | 6.833 testes, 296 arquivos | **6.992 testes, 309 arquivos**, verdes |
+   | `npm run lint` | 0 | 0 |
+   | `npx tsc --noEmit` | 0 | 0 |
+   | `npm run build` | compila | compila |
+   | `npm run perf:bundle` | mediana 217,8 · lançamentos 228,1 · faturas 208,1 · financeiro 200,8 · dashboard/financeiro 209,9 | mediana **202,1** · lançamentos **212,6** · faturas 192,6 · financeiro 185,7 · dashboard/financeiro 194,3 (68 rotas, todas no orçamento) |
+   | `TZ=UTC npx vitest run src/lib/finance/ src/lib/actions/ src/lib/notifications/` | — | 1.254 testes, verdes |
+
+   ⚠️ **A queda de ~15,5 KB é uniforme em todas as rotas** — não é desta subfase: é o chunk
+   compartilhado do ambiente da worktree (dependências instaladas nela), medido contra uma linha
+   de base tirada na árvore principal. O que esta subfase pode ter mudado é a **diferença
+   relativa**: Lançamentos ficava 27,3 KB acima de `/financeiro` e fica 26,9 KB — o diálogo com a
+   previsão não pesou.
+6. **A matriz de fechamento da 03-G2 (§12) preenchida linha a linha — ✅.**
+7. **Banco recontado com o mesmo `md5` — ✅.** Em 2026-11-01, só leitura: marcadores 0/0/0,
+   faturas 10 · pagas 0, lançamentos 160, transferências sem destino 0 · órfãs 0, recebíveis 111
+   · divisões 100 · parcelas 20 · contas 5, grupos de transferência com mais de uma linha 0,
+   estornos 0, `md5` dos saldos **`15d93bd1c1d3e55a40db6210dff0eb3b`** — idêntico à §2.1. Nenhuma
+   contagem mudou; nada foi consertado retroativamente.
+
+### 13.3 Decisões tomadas na execução
+
+| | Decisão | Por quê |
+| --- | --- | --- |
+| D-G2-23 | **A frase do lote não marcado não manda importar de novo** (desvio do texto da §5.7): "As linhas foram importadas e os lançamentos já estão em Lançamentos, mas o lote não foi marcado como importado e os totais dele ficaram desatualizados. Não importe de novo." | Sem linha `para_importar`, `commitImport` recusa **antes** da recontagem — o texto da §5.7 mandava uma ação que não funciona. O teste prova a recusa. O mesmo critério reescreveu a frase do 2º update do desfazer e a do insert falho do remapear (o remap lê o `raw` das próprias linhas: depois do delete, a saída é reenviar o arquivo) |
+| D-G2-24 | **Cada exceção da varredura de escritas declara `n`** | A chave `arquivo · função · alvo` não distingue duas escritas da mesma função no mesmo alvo; sem a contagem, a Y18 em `imports.ts` (a marca `importada` sem conferir) passava escondida atrás da exceção do motivo |
+| D-G2-25 | **Erro sem SQLSTATE nunca vira "nada aconteceu"** — `temSqlstate` em `helpers.ts`, usado pela RPC, pela geração, pela exclusão e pelo cancelamento | Revisão final: a geração devolvia a data depois de um insert que podia ter sido gravado (**lançamento em dobro**), e a exclusão dizia "Nada foi alterado." com o lançamento possivelmente apagado e a fatura não reaberta. É a D-G2-16 levada às escritas que não são RPC |
+| D-G2-26 | **Receita com cartão e sem conta só passa na edição de um estorno existente** | A D-G2-19 afrouxou o schema para o estorno; sem a recusa no servidor, criar por qualquer caminho gravaria uma receita sem conta e sem cartão |
+| D-G2-27 | **A fixture do §9 vive duplicada nos dois testes, comparada letra a letra** | Um `fixture-cenario-9.ts` em `src/lib/finance/` entra nos inventários de produção (`quem-le-liquidado-em`, `fronteira-do-motor`); importar de um `.test.ts` reexecutaria os `it` |
+
+### 13.4 Achados registrados e NÃO consertados (fora da lista)
+
+| | Achado | Destino |
+| --- | --- | --- |
+| A1 | Lançamentos **não soma nem filtra por responsabilidade**: mostra o bruto com "meu R$ X" por linha. A conciliação usa o "meu" da linha; um `it` de varredura fica vermelho no dia em que a tela ganhar total ou filtro | REDESIGN-05 |
+| A2 | Uma chamada direta que edite a compra-pai parcelada como despesa de cartão resolve uma fatura para ela (o formulário não oferece; era assim antes) | REDESIGN-05 |
+| A3 | A fixture `parcelamento()` de `installments.test.ts` não tem `classificacao` na compra-pai (os testes novos usam fixture explícita) | dívida de teste |
+| A4 | `seed_default_categories` escreve e não está em `RPCS_DE_ESCRITA` (segue no inventário de leituras, tratada) | dívida do varredor |
+| A5 | Corrida estreita entre ler a proteção e apagar os recebíveis em `cancelInstallmentFuture` (fora da RPC, sem `for update`) | junto da RR-G2-2 (REDESIGN-05) |
+| A6 | Transferência legada de duas pernas editada no lugar desalinharia o par — **o banco tem 0 grupos com mais de uma linha** | aceito enquanto a contagem for 0 |
+| A7 | Linha de importação reservada, criada e com a marca `importada` falha: o lançamento existe sem `transaction_id` na linha, e o desfazer do lote não o alcança. A linha diz "pode ter sido lançada — confira em Lançamentos" | aceito (é o claim-first, RR-G2-3) |
+| A8 | `new Date()` sem argumento na reserva da geração | mantido por D-G2-10 (o instante que a linha já usava); duas reservas da mesma recorrência no mesmo milissegundo são impossíveis pela condição da reserva |
+
+### 13.5 Pendências
+
+- **Conferência visual do diálogo de exclusão e do formulário do estorno (claro, escuro, 390 px)
+  — NÃO feita.** O dev server da worktree pede login e a senha não é digitada por mim; a
+  conferência depende do dono entrar em `localhost:3001`.
+- Os itens ○ da §12 (rótulo do saldo com data, "previsto", ficha por pessoa, "Pendente ao banco"
+  como rótulo, não-soma dos reembolsos pendentes, rótulo do horizonte, os estados "zero medido" e
+  "sem lançamentos conhecidos", ausência × zero, hachura da projeção, nota da pizza, reembolso
+  sem classificar na competência) — **abertos, declarados para a REDESIGN-05**.
+
+### 13.6 Quem executou (`summary_line` do router, literal)
+
+- E1 (dry-run): `🔀 Router · TIER 1 · standard → Codex (gpt-6.1-sol · low) · fallback: Codex (gpt-6-sol · low) → Claude Sonnet (subagente) · classificação · indisponível: deepseek_needs_unsent_files · 8 arquivos de contexto não vão ao worker`
+- E1, E3a, E4, E5a, E6 (2º despacho), E7, E9a: `🔀 Router · TIER 1 · standard → Codex (gpt-6-sol · low) indisponível → Claude Sonnet (subagente) · delegado ao subagente`
+- E3b, E3c, E6 (1º despacho): `🔀 Router · TIER 1 · standard → workers externos bloqueados (dirty_worktree) → Claude Sonnet (subagente) · delegado ao subagente`
+- E5b, E9b: `🔀 Router · TIER 1 · simple → Codex (gpt-6-luna · medium) indisponível → Claude Haiku (subagente) · delegado ao subagente`
+- E8: `🔀 Router · TIER 1 · standard → Claude Sonnet (subagente) · delegado ao subagente`
+- No principal: a migration (E2), as mutações, os inventários, as frases corrigidas do E7, a
+  contagem `n` do E8, o mapeamento da matriz (agente de leitura), as correções da revisão final.
+  A revisão da branch inteira rodou num subagente no modelo mais capaz, sem receber as
+  conclusões do principal.
+
+### 13.7 Situação da REDESIGN-03
+
+**Cumprida com exceções declaradas** (K5): as escritas financeiras conferem o erro, gravam o
+dinheiro numa transação ou numa ordem que erra para "pode não ter acontecido", e a matriz de
+fechamento da 03-G2 está preenchida — com os itens abertos acima, cada um com destino. Não é
+"zero bugs": a revisão final achou um lançamento em dobro que 115 testes verdes não pegavam.
+`STATUS.md` não foi tocado; o registro é este.
