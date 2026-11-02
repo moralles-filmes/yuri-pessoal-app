@@ -312,14 +312,15 @@ Hoje só os cards Financeiro e Cartões capturam `ErroDeLeitura`; uma falha em q
 página inteira para `src/app/(app)/error.tsx`.
 
 - **Limite de erro novo, `LimiteDoBloco`** (client, `src/components/dashboard/general/limite-do-bloco.tsx`):
-  um error boundary de classe, mínimo, sem dependência. Envolve **cada** card (por fora do
-  `Suspense` dele) e a faixa. No erro, renderiza um **componente de função** de falha (§6.1) cujo
-  "Tentar de novo" **(D-06-M3)** chama `reset()` do boundary (zera `hasError`) **e**
-  `router.refresh()` (busca o RSC de novo **preservando a URL**, com `?periodo/visao/de/ate`). Um
-  `<Link href="/dashboard">` não serve: numa navegação suave o boundary sobrevive com o erro, e o
-  link perde os parâmetros. A decisão "devo mostrar a falha?" é pura (`estadoDoLimite`), testável
-  sem DOM. Registra no `console.error` só o nome do bloco — a mensagem do erro de produção já vem
-  higienizada pelo Next.
+  o **`catchError` do Next 16.4** (`next/error`), não uma classe própria (decidido na execução da
+  T6, conferido em `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/catchError.md`).
+  Envolve **cada** card (por fora do `Suspense` dele) e a faixa. No erro, renderiza a falha
+  (§6.1) cujo "Tentar de novo" **(D-06-M3)** chama `retry()`: relê o RSC **preservando a URL**
+  (`?periodo/visao/de/ate`) numa Transition e só troca a falha pelo conteúdo quando a releitura
+  dá certo. Uma classe com `reset()` + `router.refresh()` erraria a ordem: zerar antes de reler faz
+  o bloco cair de novo no mesmo payload. O `catchError` também deixa `redirect()`/`notFound()`
+  passarem e limpa o erro na navegação. Um `<Link href="/dashboard">` não serve: a navegação suave
+  mantém o limite com erro e perde os parâmetros. Registra no `console.error` só o nome do bloco.
 - Os cards Financeiro e Cartões **mantêm** o `try/catch` de `ErroDeLeitura` (os testes 03-G L4
   continuam valendo); a faixa faz o mesmo, com `oQue = "o resumo financeiro"`. O limite é a rede de
   segurança para o resto.
