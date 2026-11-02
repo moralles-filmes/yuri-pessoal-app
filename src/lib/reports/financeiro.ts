@@ -696,16 +696,15 @@ export type ParametrosDaGaveta = ParametrosDoRelatorio & {
 export function detalheDoRelatorio(p: ParametrosDaGaveta): Detalhe | null {
   if (p.pedido === null) return null;
   const { e, crus } = entradasDoRecorte(p);
-  // O recebível CRU não traz `ref_month` (o pipeline o deriva dos embeds `statement`/`transaction`),
-  // e a lista de "referente ao mês" precisa dele: a derivação é a do pipeline, 1:1 e na mesma ordem.
-  const refMonths = montarEntradas({ recebiveis: crus }).recs.map((r) => r.ref_month);
+  // O `ref_month` dos crus é derivado DENTRO de `detalheDoNumero`, pela regra do pipeline: a
+  // leitura real não o traz, e um caminho só serve ao painel e ao relatório.
   return detalheDoNumero({
     pedido: p.pedido,
     mes: p.mes,
     hoje: p.hoje,
     base: p.base,
     entradas: e,
-    recebiveisCrus: crus.map((r, i) => ({ ...r, ref_month: refMonths[i] })),
+    recebiveisCrus: crus,
     caixa: p.caixaParaDetalhe,
     saldos: p.saldos,
     completude: p.completude,

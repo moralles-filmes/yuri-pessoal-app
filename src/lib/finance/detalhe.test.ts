@@ -217,15 +217,16 @@ const LINHAS_DE_RECEBIVEL: LinhaRecebivel[] = RECEBIVEIS.map((r) => ({
   transaction: r.compraEm ? { purchase_date: r.compraEm } : null,
 }));
 
-/** Os recebíveis crus (com a pessoa) — a lista que o painel usa para o pendente. */
-const CRUS = RECEBIVEIS.map((r) => ({
-  id: r.id,
-  valor: r.valor,
-  status: r.status,
-  pago_em: r.pago_em,
-  recebimentos: r.recebimentos,
-  person: r.pessoa,
-  ref_month: (r.statementCompetencia ?? r.compraEm)?.slice(0, 7) ?? null,
+/**
+ * Os recebíveis crus (com a pessoa) — a lista que o painel usa para o pendente. Como a leitura REAL
+ * (`ESCOPO_PAINEL`), eles NÃO trazem `ref_month`: só as relações de onde o pipeline o deriva. A
+ * primeira versão desta fixture punha `ref_month` à mão, e o "pendente referente ao mês" do painel
+ * abria vazio com dado real sem nenhum teste acusar (revisão da T6).
+ */
+const CRUS = LINHAS_DE_RECEBIVEL.map((linha, i) => ({
+  ...linha,
+  valor: RECEBIVEIS[i].valor,
+  person: RECEBIVEIS[i].pessoa,
 }));
 
 function entradasDaFixture(totalDaFaturaA = 220) {

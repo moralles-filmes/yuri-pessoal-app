@@ -69,7 +69,12 @@ import {
   type DashTx,
   type ItemDeGasto,
 } from "@/lib/finance/dashboard";
-import type { CompletudeFinanceira, EntradasDoMotor } from "@/lib/finance/pipeline";
+import {
+  type CompletudeFinanceira,
+  type EntradasDoMotor,
+  type LinhaRecebivel,
+  montarEntradas,
+} from "@/lib/finance/pipeline";
 import {
   entradasDoRecebivel,
   pendenteDoPeriodo,
@@ -175,11 +180,10 @@ export type ParametrosDoDetalhe = {
    * Recebíveis crus, já recortados por pessoa/cartão (pendente). `person.id` é opcional no tipo
    * (a leitura real sempre o traz): sem ele, o pendente só abre sem `alvo`.
    */
-  recebiveisCrus: readonly (RecebivelComRecebimentos & {
-    id: string;
-    person: { id?: string; nome: string } | null;
-    ref_month?: string | null;
-  })[];
+  recebiveisCrus: readonly (LinhaRecebivel &
+    RecebivelComRecebimentos & {
+      person: { id?: string; nome: string } | null;
+    })[];
   /** Base caixa: a leitura e o motor do caixa; `null` na competência; `"erro"` = não leu. */
   caixa: { leitura: Extract<LeituraDoCaixa, { ok: true }>; motor: MotorDoCaixa } | "erro" | null;
   /** D-B-12: só para `saldo`. `saldoCent: null` = aquela conta não leu. */
@@ -765,10 +769,10 @@ function faturaDaCompetencia(ctx: Contexto): Resultado {
 /* ───────────────────────────── Pendente ───────────────────────────── */
 
 function gruposPorPessoa(
-  itens: { r: ParametrosDoDetalhe["recebiveisCrus"][number]; valorCent: number }[],
+  itens: { r: ParametrosDoDetalhe["recebiveisCrus"][number]; refMonth: string | null; valorCent: number }[],
 ): GrupoDoDetalhe[] {
   const porPessoa = new Map<string, GrupoDoDetalhe>();
-  for (const { r, valorCent } of itens) {
+  for (const { r, refMonth, valorCent } of itens) {
     const nome = r.person?.nome ?? "Sem pessoa";
     const chave = r.person?.id ?? nome;
     const grupo = porPessoa.get(chave) ?? { rotulo: nome, fatura: null, registros: [] };
@@ -776,7 +780,7 @@ function gruposPorPessoa(
       registro({
         id: r.id,
         data: null,
-        descricao: r.ref_month ? `A receber · referente a ${rotuloDoMes(r.ref_month)}` : "A receber",
+        descricao: refMonth ? `A receber · referente a ${rotuloDoMes(refMonth)}` : "A receber",
         origem: r.person?.nome ?? null,
         categoria: null,
         // O valor do registro é o que ainda falta voltar: a partição vira meu = 0, terceiros = saldo.
@@ -797,8 +801,9 @@ function pendenteAteHoje(ctx: Contexto): Resultado {
   const { alvo } = p.pedido;
   const crus = alvo === null ? p.recebiveisCrus : p.recebiveisCrus.filter((r) => r.person?.id === alvo);
   const nome = alvo === null ? null : (crus[0]?.person?.nome ?? null);
+  const refs = refMonthDosCrus(crus);
   const itens = crus
-    .map((r) => ({ r, valorCent: cent(totalPendenteAte([r], p.hoje)) }))
+    .map((r, i) => ({ r, refMonth: refs[i], valorCent: cent(totalPendenteAte([r], p.hoje)) }))
     .filter((x) => x.valorCent > 0);
   return preparado(p, {
     titulo: tituloDoPedido(p, nome),
@@ -809,12 +814,23 @@ function pendenteAteHoje(ctx: Contexto): Resultado {
   });
 }
 
+/**
+ * O mês de referência de cada recebível cru, pela regra ÚNICA do pipeline (`montarEntradas`: a
+ * competência da fatura ou a data da compra). ⛔ A leitura real (`ESCOPO_PAINEL`) NÃO traz
+ * `ref_month` nos crus — por isso o tipo não o aceita, e ele é derivado aqui, 1:1 e na mesma ordem.
+ */
+function refMonthDosCrus(crus: ParametrosDoDetalhe["recebiveisCrus"]): (string | null)[] {
+  return montarEntradas({ recebiveis: crus }).recs.map((r) => r.ref_month ?? null);
+}
+
 function pendenteDoMesDaCompetencia(ctx: Contexto): Resultado {
   const { p } = ctx;
+  const refs = refMonthDosCrus(p.recebiveisCrus);
   const itens = p.recebiveisCrus
-    .map((r) => ({
+    .map((r, i) => ({
       r,
-      valorCent: cent(pendenteDoPeriodo([{ ...resumirRecebivel(r), ref_month: r.ref_month }], p.mes)),
+      refMonth: refs[i],
+      valorCent: cent(pendenteDoPeriodo([{ ...resumirRecebivel(r), ref_month: refs[i] }], p.mes)),
     }))
     .filter((x) => x.valorCent > 0);
   return preparado(p, {
