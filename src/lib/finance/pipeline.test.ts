@@ -38,8 +38,10 @@ import {
 import {
   ESCOPO_CARD_FINANCEIRO,
   ESCOPO_FATURAS,
+  ESCOPO_HISTORICO_DO_DASHBOARD,
   ESCOPO_RELATORIO,
   janelaDoGastoAlto,
+  janelaDoHistoricoDoDashboard,
   janelaDoMes,
   janelaDoRelatorio,
   lancamentosForaDoDominio,
@@ -1378,6 +1380,34 @@ describe("03-B — os três escopos nomeados", () => {
     // @ts-expect-error — o card com parcelas não é nenhum dos três escopos nomeados.
     const solto: EscopoFinanceiro = { ...ESCOPO_CARD_FINANCEIRO, parcelas: true };
     expect(solto.parcelas).toBe(true);
+  });
+});
+
+describe("06 — histórico do dashboard (T1)", () => {
+  const flags = (e: EscopoFinanceiro) =>
+    Object.entries(e)
+      .filter(([k, v]) => k !== "nome" && v === true)
+      .map(([k]) => k)
+      .sort();
+
+  it("06 · janela do histórico: os 5 meses ANTERIORES, sem o mês", () => {
+    expect(janelaDoHistoricoDoDashboard("2026-11")).toEqual({ from: "2026-06-01", to: "2026-10-31" });
+    expect(janelaDoHistoricoDoDashboard("2026-03")).toEqual({ from: "2025-10-01", to: "2026-02-28" });
+  });
+
+  it("06 · escopo do histórico lê só lançamentos", () => {
+    expect(ESCOPO_HISTORICO_DO_DASHBOARD).toEqual({
+      nome: "historico-do-dashboard",
+      contas: false,
+      cartoes: false,
+      faturas: false,
+      recebiveis: false,
+      contasFixas: false,
+      recorrencias: false,
+      transacoes: true,
+      parcelas: false,
+    });
+    expect(flags(ESCOPO_HISTORICO_DO_DASHBOARD)).toEqual(["transacoes"]);
   });
 });
 

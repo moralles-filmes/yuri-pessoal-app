@@ -456,6 +456,15 @@ export function janelaDoGastoAlto(mes: string): JanelaFinanceira {
   return { from: `${addMes(mes, -5)}-01`, to: ultimoDiaDoMes(mes) };
 }
 
+/**
+ * A janela do HISTÓRICO do dashboard (06 · T1): os 5 meses ANTERIORES ao `mes`, sem ele. O
+ * dashboard mostra 6 meses = o mês lido à parte (`janelaDoMes`) + este histórico; as duas leituras
+ * são disjuntas por construção. Nome próprio para não depender da régua do gasto alto.
+ */
+export function janelaDoHistoricoDoDashboard(mes: string): JanelaFinanceira {
+  return { from: `${addMes(mes, -5)}-01`, to: ultimoDiaDoMes(addMes(mes, -1)) };
+}
+
 /* ───────────────────────────── Escopos nomeados ───────────────────────────── */
 
 /**
@@ -490,6 +499,22 @@ export const ESCOPO_FATURAS = {
   parcelas: false,
 } as const;
 
+/**
+ * Histórico do dashboard (06 · T1): SÓ lançamentos, na janela de `janelaDoHistoricoDoDashboard`.
+ * Alimenta as barras e a comparação mês a mês; o mês corrente vem de `ESCOPO_CARD_FINANCEIRO`.
+ */
+export const ESCOPO_HISTORICO_DO_DASHBOARD = {
+  nome: "historico-do-dashboard",
+  contas: false,
+  cartoes: false,
+  faturas: false,
+  recebiveis: false,
+  contasFixas: false,
+  recorrencias: false,
+  transacoes: true,
+  parcelas: false,
+} as const;
+
 /** Relatório e página do dashboard financeiro: tudo, INCLUINDO parcelas. */
 export const ESCOPO_RELATORIO = {
   nome: "relatorio",
@@ -520,5 +545,6 @@ export const ESCOPO_PAINEL = {
 export type EscopoFinanceiro =
   | typeof ESCOPO_CARD_FINANCEIRO
   | typeof ESCOPO_FATURAS
+  | typeof ESCOPO_HISTORICO_DO_DASHBOARD
   | typeof ESCOPO_RELATORIO
   | typeof ESCOPO_PAINEL;
