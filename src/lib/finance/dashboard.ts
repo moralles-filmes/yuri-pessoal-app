@@ -58,6 +58,10 @@ export type DashTx = {
   parcelado: boolean;
   category_id: string | null;
   category?: { id: string; name: string; color: string | null } | null;
+  /** 04-B: texto de exibição da gaveta de registros. Opcional — nenhum número do motor o lê. */
+  descricao?: string | null;
+  /** 04-B: data da compra (`purchase_date`), só para exibição. Opcional pelo mesmo motivo. */
+  data_compra?: string | null;
 };
 
 export type DashStatement = {
@@ -91,6 +95,11 @@ export type DashInstallmentItem = {
   parent: {
     category: { id: string; name: string; color: string | null } | null;
   } | null;
+  /** 04-B: "k" de "k/N", só para exibição. Opcionais — nenhum número do motor os lê. */
+  numero?: number;
+  total_parcelas?: number;
+  /** 04-B: a descrição da compra-pai. */
+  descricao?: string | null;
 };
 
 export type DashCard = {
@@ -170,6 +179,18 @@ const ativo = (t: { status: TransactionStatus }) => t.status !== "cancelado";
 /** "Meu" (centavos) de um lançamento: valor_pessoal quando houver, senão o amount cheio. */
 export function meuCentavos(t: { amount: number; valor_pessoal: number | null }): number {
   return cent(t.valor_pessoal ?? t.amount);
+}
+
+/**
+ * 04-B (D-B-3) — o predicado de ENTRADA do mês, extraído de `resumoMes` para a gaveta de
+ * registros listar EXATAMENTE o que o número soma. Receita ativa, da competência do mês, SEM
+ * cartão: estorno de cartão (receita vinculada à fatura) não é entrada de caixa — já reduz o
+ * total da fatura e não cai em conta.
+ */
+export function ehEntradaDeConta(t: DashTx, mes: string): boolean {
+  return (
+    ativo(t) && mesDe(t.competence_date) === mes && t.type === "receita" && t.card_id === null
+  );
 }
 
 /* ───────────────────────────── Resumo do mês ───────────────────────────── */
@@ -255,8 +276,9 @@ export function resumoMes(params: {
       // Estorno de cartão (receita vinculada à fatura) NÃO é entrada de caixa: já reduz o total
       // da fatura (total_atual = despesas − estornos + parcelas) e não cai em conta. Só receita
       // "de conta" (sem cartão) conta como entrada do mês — senão o estorno é contado em dobro.
-      // A minha parte sai do MESMO `if`: as três (bruta, minha, de terceiros) têm um filtro só.
-      if (t.card_id === null) {
+      // A minha parte sai do MESMO `if`: as três (bruta, minha, de terceiros) têm um filtro só
+      // (`ehEntradaDeConta`, o mesmo que a gaveta de registros usa — 04-B).
+      if (ehEntradaDeConta(t, mes)) {
         entradasCent += cent(t.amount);
         entradasMeuCent += meuCentavos(t);
       }
@@ -331,16 +353,36 @@ type SpendItem = {
 };
 
 /**
+ * 04-B — o item de gasto COM os campos de exibição da gaveta de registros. `SpendItem` + o que
+ * identifica o registro (lançamento ou parcela), o texto e a data. A decisão de quem entra, em
+ * que mês e com que valor continua sendo a de antes: estes campos só acompanham.
+ */
+export type ItemDeGasto = SpendItem & {
+  origem: "avista" | "cartao" | "parcela";
+  txId: string | null;
+  installmentId: string | null;
+  descricao: string | null;
+  /** Data da compra (ou a competência do lançamento); a parcela não tem data própria. */
+  data: string | null;
+  status: string;
+  numero: number | null;
+  totalParcelas: number | null;
+};
+
+/**
  * Constrói a lista unificada de itens de gasto para categoria/forma, reconciliando com
  * `resumoMes.saidas`: à vista pela competência da transação; cartão (à-vista do cartão +
  * parcelas) pela competência da FATURA. Nunca inclui a transação "pai" do parcelamento.
+ *
+ * 04-B (D-B-3): exportada como `itensDeGasto` — a gaveta de registros lista os MESMOS itens que
+ * `gastosPorCategoria`, `gastosPorForma` e `itensDasFaturas` somam, nunca um filtro paralelo.
  */
-function buildSpendItems(params: {
+export function itensDeGasto(params: {
   transactions: DashTx[];
   statements: DashStatement[];
   installmentItems: DashInstallmentItem[];
   receivables: DashReceivable[];
-}): SpendItem[] {
+}): ItemDeGasto[] {
   const { transactions, statements, installmentItems, receivables } = params;
 
   const compByStatement = new Map<string, string>();
@@ -356,12 +398,21 @@ function buildSpendItems(params: {
   }
 
   const perdoado = perdoadoPorLancamento(receivables);
-  const items: SpendItem[] = [];
+  const items: ItemDeGasto[] = [];
 
   for (const t of transactions) {
     if (!ativo(t) || t.type !== "despesa" || t.parcelado) continue;
     const movCent = cent(t.amount);
     const meuCent = meuCentavos(t) + (t.id ? perdoado.get(t.id) ?? 0 : 0);
+    const exibicao = {
+      txId: t.id ?? null,
+      installmentId: null,
+      descricao: t.descricao ?? null,
+      data: t.data_compra ?? t.competence_date,
+      status: t.status,
+      numero: null,
+      totalParcelas: null,
+    };
     if (t.card_id === null) {
       // À vista (base competência).
       items.push({
@@ -373,6 +424,8 @@ function buildSpendItems(params: {
         movCent,
         meuCent,
         statementId: null,
+        origem: "avista",
+        ...exibicao,
       });
     } else if (t.statement_id && compByStatement.has(t.statement_id)) {
       // À-vista do cartão (base fatura).
@@ -385,6 +438,8 @@ function buildSpendItems(params: {
         movCent,
         meuCent,
         statementId: t.statement_id,
+        origem: "cartao",
+        ...exibicao,
       });
     }
   }
@@ -403,6 +458,14 @@ function buildSpendItems(params: {
       movCent,
       meuCent: movCent - terceiros,
       statementId: it.statement_id,
+      origem: "parcela",
+      txId: null,
+      installmentId: it.id,
+      descricao: it.descricao ?? null,
+      data: null,
+      status: it.status,
+      numero: it.numero ?? null,
+      totalParcelas: it.total_parcelas ?? null,
     });
   }
 
@@ -419,7 +482,7 @@ export type ItemDaFatura = {
 };
 
 /**
- * Os itens de cada fatura, por `statement_id`: os MESMOS itens de cartão que `buildSpendItems`
+ * Os itens de cada fatura, por `statement_id`: os MESMOS itens de cartão que `itensDeGasto`
  * atribui à fatura (à-vista do cartão + parcelas), mais os estornos (receita vinculada à fatura,
  * que reduz `total_atual`) com valores negativos. É o que a base caixa usa para abrir um
  * pagamento de fatura pelas compras dela (desenho 2026-10-18, §4.3).
@@ -436,7 +499,7 @@ export function itensDasFaturas(params: {
     lista.push(item);
     mapa.set(statementId, lista);
   };
-  for (const i of buildSpendItems(params)) {
+  for (const i of itensDeGasto(params)) {
     if (!i.statementId) continue;
     push(i.statementId, {
       categoryId: i.categoryId,
@@ -475,7 +538,7 @@ export function gastosPorCategoria(params: {
   installmentItems: DashInstallmentItem[];
   receivables: DashReceivable[];
 }): CategoriaSlice[] {
-  const items = buildSpendItems(params).filter((i) => i.mes === params.mes);
+  const items = itensDeGasto(params).filter((i) => i.mes === params.mes);
   const map = new Map<string, CategoriaSlice & { movCent: number; meuCent: number }>();
   for (const i of items) {
     const key = i.categoryId ?? "__none__";
@@ -518,7 +581,7 @@ export function gastosPorForma(params: {
   installmentItems: DashInstallmentItem[];
   receivables: DashReceivable[];
 }): FormaSlice[] {
-  const items = buildSpendItems(params).filter((i) => i.mes === params.mes);
+  const items = itensDeGasto(params).filter((i) => i.mes === params.mes);
   const map = new Map<string, { movCent: number; meuCent: number }>();
   for (const i of items) {
     const key = i.paymentMethod ?? "outro";
@@ -767,7 +830,7 @@ export type ProjecaoPonto = {
 };
 
 /** Quantas ocorrências de uma recorrência caem dentro de `mes` ('yyyy-MM'). */
-function ocorrenciasNoMes(rec: DashRecurrence, mes: string): number {
+export function ocorrenciasNoMes(rec: DashRecurrence, mes: string): number {
   const [y, m] = mes.split("-").map(Number);
   const inicio = new Date(y, m - 1, 1).getTime();
   const fim = new Date(y, m - 1, getDaysInMonth(new Date(y, m - 1, 1))).getTime();
@@ -855,22 +918,37 @@ function proximoVencimento(hoje: string, dueDay: number): string {
   );
 }
 
+/** Uma conta fixa com a sua próxima data de vencimento. */
+export type VencimentoDeConta = { nome: string; data: string; valor: number };
+
+/**
+ * 04-B — os vencimentos das contas fixas ativas dentro dos próximos `dias` (default 31), do mais
+ * próximo ao mais distante. É a lista de que `proximasContasPagar` soma o total: a gaveta lista
+ * a MESMA, nunca um segundo filtro.
+ */
+export function vencimentosDasContas(params: {
+  hoje: string;
+  bills: DashBill[];
+  dias?: number;
+}): VencimentoDeConta[] {
+  const { hoje, bills, dias = 31 } = params;
+  const [hy, hm, hd] = hoje.split("-").map(Number);
+  const limite = format(new Date(hy, hm - 1, hd + dias), ISO);
+
+  return bills
+    .filter((b) => b.is_active)
+    .map((b) => ({ nome: b.name, data: proximoVencimento(hoje, b.due_day), valor: b.amount }))
+    .filter((b) => b.data >= hoje && b.data <= limite)
+    .sort((a, b) => a.data.localeCompare(b.data));
+}
+
 /** Contas fixas ativas a vencer dentro dos próximos `dias` (default 31). */
 export function proximasContasPagar(params: {
   hoje: string;
   bills: DashBill[];
   dias?: number;
 }): ProximasContas {
-  const { hoje, bills, dias = 31 } = params;
-  const [hy, hm, hd] = hoje.split("-").map(Number);
-  const limite = format(new Date(hy, hm - 1, hd + dias), ISO);
-
-  const venc = bills
-    .filter((b) => b.is_active)
-    .map((b) => ({ nome: b.name, data: proximoVencimento(hoje, b.due_day), valor: b.amount }))
-    .filter((b) => b.data >= hoje && b.data <= limite)
-    .sort((a, b) => a.data.localeCompare(b.data));
-
+  const venc = vencimentosDasContas(params);
   const totalCent = venc.reduce((s, b) => s + cent(b.valor), 0);
   return { total: reais(totalCent), count: venc.length, proxima: venc[0] ?? null };
 }

@@ -38,6 +38,8 @@ describe("painel financeiro — links", () => {
   it("todo href estático escrito no painel tem página no disco (nenhum link morto)", () => {
     const achados = new Set<string>();
     for (const m of CODIGO.matchAll(/\bhref\s*[=:]\s*\{?\s*["'`](\/[^"'`?#$]*)/g)) achados.add(m[1]);
+    // 04-B: os destinos do rodapé da gaveta (`linkLancamentos`, `linkContas`) também são links.
+    for (const m of CODIGO.matchAll(/\blink[A-Z]\w*=\{[^}]*?["'`](\/[^"'`?#$]*)/g)) achados.add(m[1]);
 
     // Sem isto, uma extração que não achasse nada passaria verde.
     expect(achados.size).toBeGreaterThanOrEqual(DESTINOS.length);
@@ -49,7 +51,11 @@ describe("painel financeiro — links", () => {
     const lidos = parametrosLidos("/financeiro/lancamentos");
     expect(lidos.has("type")).toBe(true);
     expect(lidos.has("month")).toBe(true);
-    expect(CODIGO).toMatch(/\/financeiro\/lancamentos\?type=receita&month=/);
-    expect(CODIGO).toMatch(/\/financeiro\/lancamentos\?type=despesa&month=/);
+    // 04-B (D-B-14): os indicadores deixaram de ir direto a Lançamentos e abrem os registros do
+    // número (`?detalhe=`, URL pronta do servidor). A tela de lançamentos continua alcançável pelo
+    // rodapé da gaveta (`linkLancamentos`) e pelo "Ver todas" de Últimas transações.
+    expect(CODIGO).toMatch(/href=\{hrefs\.entradas\}/);
+    expect(CODIGO).toMatch(/href=\{hrefs\.saidas\}/);
+    expect(CODIGO).toMatch(/linkLancamentos=\{`\/financeiro\/lancamentos\?month=/);
   });
 });

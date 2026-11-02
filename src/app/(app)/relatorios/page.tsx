@@ -6,15 +6,12 @@ import { mesDe } from "@/lib/finance/dashboard";
 import { baseDaUrl } from "@/lib/finance/base";
 import { responsabilidadeDaUrl } from "@/lib/finance/responsabilidade";
 import { hojeISO } from "@/lib/format";
+import { mesDaUrl } from "@/lib/painel/detalhe-url";
 import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
 import { RelatoriosClient } from "./relatorios-client";
 
 export const metadata: Metadata = { title: "Relatórios" };
 export const dynamic = "force-dynamic";
-
-function str(value: string | string[] | undefined): string | undefined {
-  return typeof value === "string" && value.length ? value : undefined;
-}
 
 export default async function RelatoriosPage({
   searchParams,
@@ -24,16 +21,13 @@ export default async function RelatoriosPage({
   const sp = await searchParams;
   const hoje = hojeISO();
   const mesAtual = mesDe(hoje);
-  const mesSel = (() => {
-    const v = str(sp.mes);
-    return v && /^\d{4}-\d{2}$/.test(v) ? v : mesAtual;
-  })();
+  const mesSel = mesDaUrl(sp.mes, mesAtual);
 
   const base = baseDaUrl(sp.base);
   // O caixa é montado dentro do relatório (`data.financeiro.caixa`), onde as entradas do motor já foram lidas.
   // 04-A2: a responsabilidade e os recortes (conta, cartão, pessoa, categoria) vêm da URL; quem os
   // valida contra a lista do dono é a leitura (`recorteDaUrl`), não a página.
-  const data = await getReportsData(mesSel, base, { resp: responsabilidadeDaUrl(sp.resp), sp });
+  const { data, gaveta } = await getReportsData(mesSel, base, { resp: responsabilidadeDaUrl(sp.resp), sp });
 
   // O olho dos valores é do aparelho (cookie), o MESMO do painel (D-A2-8): só o valor exato "1"
   // oculta (`valoresOcultos`). Lido aqui, no servidor, para a primeira pintura já vir certa.
@@ -45,7 +39,7 @@ export default async function RelatoriosPage({
         title="Relatórios e análises"
         description="Visão consolidada de finanças, cartões, hábitos, estudos e tarefas — com gráficos, filtros e exportação."
       />
-      <RelatoriosClient data={data} valoresOcultos={ocultos} />
+      <RelatoriosClient data={data} gaveta={gaveta} valoresOcultos={ocultos} />
     </div>
   );
 }

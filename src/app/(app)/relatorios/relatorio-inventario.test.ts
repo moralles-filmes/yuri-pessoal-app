@@ -420,3 +420,114 @@ describe("o seletor do mês também vale na aba Cartões", () => {
     expect(CLIENTE).toMatch(/import \{[^}]*\bSeletorDoMes\b[^}]*\} from "@\/components\/reports\/barra-de-filtros"/);
   });
 });
+
+/* ─────────────────────── 04-B: a aba abre os registros ─────────────────────── */
+
+describe("04-B · a gaveta de registros da aba Financeiro", () => {
+  const trecho = (de: string, ate: string) => {
+    const i = ABA.indexOf(de);
+    expect(i, de).toBeGreaterThanOrEqual(0);
+    const j = ABA.indexOf(ate, i);
+    expect(j, ate).toBeGreaterThan(i);
+    return ABA.slice(i, j);
+  };
+
+  it("<GavetaDeRegistros> fica DENTRO do OlhoDosValores da aba, com a vista e as URLs da prop `gaveta`", () => {
+    const dentro = trecho("<OlhoDosValores", "</OlhoDosValores>");
+    const tags = tagsDe(dentro, "GavetaDeRegistros");
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toContain("vista={gaveta.vista}");
+    expect(tags[0]).toContain("urlAoFechar={gaveta.urlAoFechar}");
+    expect(tags[0]).toContain("linkLancamentos={gaveta.linkLancamentos}");
+    expect(CLIENTE).toMatch(/import \{ GavetaDeRegistros \} from "@\/components\/shared\/painel\/gaveta-de-registros"/);
+  });
+
+  it("os quatro indicadores abrem os registros (as URLs vêm de `hrefs`) e o atalho antigo para Lançamentos saiu", () => {
+    const indicadores = tagsDe(ABA, "Indicador");
+    expect(indicadores).toHaveLength(4);
+    for (const tag of indicadores) {
+      expect(tag).toMatch(/\bhref=\{(hrefs\.\w+|quartoHref)\}/);
+      expect(tag).toContain('hrefRotulo="Ver registros"');
+    }
+    expect(ABA).not.toContain("/financeiro/lancamentos?type=");
+    expect(ABA).toMatch(/quartoHref\s*=\s*resp === "meu" && filtros\.recorte\.pessoa === null\s*\?\s*hrefs\.terceiros\s*:\s*hrefs\.pendente/);
+  });
+
+  it("cada número do §4 que o relatório tem lê a URL da sua chave (`hrefs`)", () => {
+    for (const chave of [
+      "hrefs.saldo",
+      "hrefs.entradas",
+      "hrefs.saidas",
+      "hrefs.pendente",
+      "hrefs.meu",
+      "hrefs.bruto",
+      "hrefs.terceiros",
+      'hrefs["pendente-do-mes"]',
+      '"categoria:"',
+      '"forma:"',
+      '"projecao:"',
+      'hrefs["caixa:renda"]',
+      'hrefs["caixa:reembolsos"]',
+      'hrefs["caixa:outras"]',
+      'hrefs["caixa:saidas"]',
+      'hrefs["caixa:pagamentos"]',
+    ]) {
+      expect(ABA, chave).toContain(chave);
+    }
+  });
+
+  it("a rosca, as formas, as categorias maiores e a projeção levam um link por item, fora do SVG", () => {
+    expect(ABA.match(/<LinksPorFatia/g)?.length).toBe(3);
+    expect(ABA.match(/<VerRegistros/g)?.length).toBeGreaterThanOrEqual(5);
+    // Nenhum link dentro do gráfico: o componente do gráfico nunca recebe `href`.
+    for (const nome of ["RoscaCategoriasChart", "FormaPagamentoChart", "ProjecaoChart", "FaturasChart"]) {
+      for (const tag of tagsDe(ABA, nome)) expect(tag, nome).not.toMatch(/\bhref\b/);
+    }
+  });
+
+  it("D-B-17: barras e mês a mês trazem a frase, sem link; 'Faturas dos próximos meses' não abre (sem id de fatura)", () => {
+    expect(CLIENTE).toContain("Para ver os registros de um mês, escolha o mês no topo.");
+    expect(ABA.match(/\{FRASE_DO_MES\}/g)).toHaveLength(2);
+    const barras = tagsDe(ABA, "BarrasEntradasSaidasChart")[0] ?? "";
+    expect(barras).not.toMatch(/\bhref\b/);
+    expect(ABA).not.toMatch(/hrefs\[["'`]fatura/);
+    expect(ABA).not.toMatch(/hrefs\[["'`]contas/);
+  });
+
+  it("⛔ o JSON exportado continua sendo o `data` inteiro, e a gaveta NÃO entra em ReportsData nem em RelatorioFinanceiro", () => {
+    expect(CLIENTE).toMatch(/downloadJson\(\s*`relatorio-\$\{mes\}\.json`,\s*data\s*\)/);
+    expect(CLIENTE).not.toMatch(/downloadJson\([^)]*gaveta/);
+
+    const tipo = (arquivo: string, nome: string) => {
+      const fonte = ler(join(process.cwd(), ...arquivo.split("/")));
+      const i = fonte.indexOf(`export type ${nome} = {`);
+      expect(i, nome).toBeGreaterThanOrEqual(0);
+      return fonte.slice(i, fonte.indexOf("\n};\n", i));
+    };
+    for (const [arquivo, nome] of [
+      ["src/lib/reports/queries.ts", "ReportsData"],
+      ["src/lib/reports/financeiro.ts", "RelatorioFinanceiro"],
+    ] as const) {
+      const corpo = tipo(arquivo, nome);
+      expect(corpo, nome).not.toMatch(/\b(gaveta|vista|hrefs|hrefsDoDetalhe|detalhe)\??:/);
+      expect(corpo, nome).not.toContain("GavetaDoRelatorio");
+      expect(corpo, nome).not.toContain("VistaDaGaveta");
+    }
+  });
+
+  it("a página entrega `data` e `gaveta` como props separadas", () => {
+    expect(PAGINA).toMatch(/const \{ data, gaveta \} = await getReportsData\(/);
+    expect(PAGINA).toMatch(/<RelatoriosClient data=\{data\} gaveta=\{gaveta\}/);
+    expect(CLIENTE).toMatch(/<AbaFinanceiro financeiro=\{financeiro\} gaveta=\{gaveta\}/);
+  });
+
+  it("a página lê o pedido pela URL e o detalhe nasce no servidor, não no cliente", () => {
+    const queries = ler(join(process.cwd(), "src", "lib", "reports", "queries.ts"));
+    expect(queries).toContain("pedidoDaUrl(filtros.sp)");
+    expect(queries).toContain("gavetaDoRelatorio(");
+    expect(queries).toContain("lerEstadoDoCaixa(");
+    expect(queries).not.toMatch(/\bestadoDoCaixa\(/);
+    expect(CLIENTE).not.toContain("detalheDoNumero");
+    expect(CLIENTE).not.toContain("urlComDetalhe");
+  });
+});

@@ -227,7 +227,7 @@ export async function generateForUser(
       service
         .from("transactions")
         .select(
-          "id, amount, valor_pessoal, type, payment_method, status, competence_date, card_id, account_id, statement_id, parcelado, category_id, category:categories(id,name,color)",
+          "id, amount, valor_pessoal, type, payment_method, status, competence_date, card_id, account_id, statement_id, parcelado, category_id, description, purchase_date, category:categories(id,name,color)",
           { count: "exact" },
         )
         .eq("user_id", userId)

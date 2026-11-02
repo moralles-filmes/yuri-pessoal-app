@@ -7,20 +7,37 @@
  *
  * ⛔ Falha de leitura NUNCA vira zero: com `{ estado: 'erro' }` a tela diz que não leu.
  */
+import Link from "next/link";
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ValorComOlho } from "@/components/shared/painel/valor-com-olho";
 import { formatCurrency } from "@/lib/format";
 import type { EstadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import type { LinhaDoCaixa } from "@/lib/finance/detalhe";
+
+/**
+ * 04-B — "Ver registros ›" de uma linha do caixa. A URL chega pronta do servidor (painel e
+ * relatório); sem ela — linha que não segue o recorte — nada é desenhado.
+ */
+function VerRegistros({ href }: { href: string | undefined }) {
+  if (!href) return null;
+  return (
+    <Link href={href} scroll={false} className="inline-block text-xs text-primary hover:underline">
+      Ver registros ›
+    </Link>
+  );
+}
 
 function Linha({
   rotulo,
   valor,
   secundaria,
+  href,
 }: {
   rotulo: string;
   valor: number;
   secundaria?: React.ReactNode;
+  href?: string;
 }) {
   return (
     <div className="min-w-0 space-y-0.5">
@@ -31,11 +48,21 @@ function Linha({
         </span>
       </div>
       {secundaria && <p className="text-xs break-words text-muted-foreground">{secundaria}</p>}
+      <VerRegistros href={href} />
     </div>
   );
 }
 
-export function BlocoDoCaixa({ mesRotulo, caixa }: { mesRotulo: string; caixa: EstadoDoCaixa }) {
+export function BlocoDoCaixa({
+  mesRotulo,
+  caixa,
+  hrefs,
+}: {
+  mesRotulo: string;
+  caixa: EstadoDoCaixa;
+  /** 04-B: o link de cada linha, pronto do servidor. Opcional — sem ele o bloco é o de sempre. */
+  hrefs?: Partial<Record<LinhaDoCaixa, string>>;
+}) {
   if (caixa.estado === "erro") {
     return (
       <Card>
@@ -67,9 +94,13 @@ export function BlocoDoCaixa({ mesRotulo, caixa }: { mesRotulo: string; caixa: E
             <ArrowDownLeft className="size-4 shrink-0" />
             <span className="min-w-0 break-words">Entradas</span>
           </div>
-          <Linha rotulo="Renda pessoal recebida" valor={n.rendaPessoalRecebida} />
-          <Linha rotulo="Reembolsos recebidos" valor={n.reembolsosRecebidos} />
-          <Linha rotulo="Outras entradas de terceiros" valor={n.outrasEntradasDeTerceiros} />
+          <Linha rotulo="Renda pessoal recebida" valor={n.rendaPessoalRecebida} href={hrefs?.renda} />
+          <Linha rotulo="Reembolsos recebidos" valor={n.reembolsosRecebidos} href={hrefs?.reembolsos} />
+          <Linha
+            rotulo="Outras entradas de terceiros"
+            valor={n.outrasEntradasDeTerceiros}
+            href={hrefs?.outras}
+          />
         </div>
 
         <div className="space-y-2.5 border-t pt-3">
@@ -80,10 +111,17 @@ export function BlocoDoCaixa({ mesRotulo, caixa }: { mesRotulo: string; caixa: E
           <Linha
             rotulo="Saídas de caixa"
             valor={n.saidasDeCaixa}
+            href={hrefs?.saidas}
             secundaria={
               n.pagamentosDeFatura > 0 ? (
                 <>
                   inclui pagamentos de fatura <ValorComOlho texto={formatCurrency(n.pagamentosDeFatura)} />
+                  {hrefs?.pagamentos ? (
+                    <>
+                      {" · "}
+                      <VerRegistros href={hrefs.pagamentos} />
+                    </>
+                  ) : null}
                 </>
               ) : undefined
             }
@@ -123,6 +161,12 @@ export function BlocoDoCaixa({ mesRotulo, caixa }: { mesRotulo: string; caixa: E
               {n.transferenciasSemVinculo.quantidade} transferência(s) sem destino e sem vínculo com
               fatura contadas como saída (
               <ValorComOlho texto={formatCurrency(n.transferenciasSemVinculo.total)} />)
+              {hrefs?.["sem-destino"] ? (
+                <>
+                  {" · "}
+                  <VerRegistros href={hrefs["sem-destino"]} />
+                </>
+              ) : null}
             </p>
           )}
           {n.transferenciasEntreContas > 0 && (
@@ -130,6 +174,12 @@ export function BlocoDoCaixa({ mesRotulo, caixa }: { mesRotulo: string; caixa: E
               Transferências entre suas contas:{" "}
               <ValorComOlho texto={formatCurrency(n.transferenciasEntreContas)} /> — não entram no
               resultado
+              {hrefs?.["entre-contas"] ? (
+                <>
+                  {" · "}
+                  <VerRegistros href={hrefs["entre-contas"]} />
+                </>
+              ) : null}
             </p>
           )}
           {caixa.parcial && (

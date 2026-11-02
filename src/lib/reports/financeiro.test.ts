@@ -30,7 +30,13 @@ import {
 } from "@/lib/finance/recorte";
 import { type Responsabilidade } from "@/lib/finance/responsabilidade";
 import { formatCurrency, reaisParaCentavos } from "@/lib/format";
-import { montarRelatorioFinanceiro, type ParametrosDoRelatorio } from "@/lib/reports/financeiro";
+import { colunaDaParte, type PedidoDeDetalhe } from "@/lib/finance/detalhe";
+import {
+  detalheDoRelatorio,
+  gavetaDoRelatorio,
+  montarRelatorioFinanceiro,
+  type ParametrosDoRelatorio,
+} from "@/lib/reports/financeiro";
 
 // A única leitura que este arquivo toca é `lerSaldoAte` (o saldo da conta do recorte): o client é
 // um espião de `rpc`, sem banco. O modelo de vista em si continua sem I/O.
@@ -263,7 +269,11 @@ const CAIXA_OK = {
 } as unknown as EstadoDoCaixa;
 
 function monta(p: Partial<ParametrosDoRelatorio> = {}) {
-  return montarRelatorioFinanceiro({
+  return montarRelatorioFinanceiro(parametros(p));
+}
+
+function parametros(p: Partial<ParametrosDoRelatorio> = {}): ParametrosDoRelatorio {
+  return {
     mes: MES,
     hoje: HOJE,
     base: "competencia",
@@ -279,7 +289,7 @@ function monta(p: Partial<ParametrosDoRelatorio> = {}) {
     janela: { evoMeses: JANELA.evoMeses, projMeses: JANELA.projMeses },
     opcoes: OPCOES,
     ...p,
-  });
+  };
 }
 
 const comRecorte = (r: Partial<Recorte>): Recorte => ({ ...SEM_RECORTE, ...r });
@@ -858,6 +868,301 @@ describe("nenhum número onde o bloco é ✗ (varredura)", () => {
   });
 });
 
+/* ───────────────────────────── 04-B: a gaveta de registros do relatório ───────────────────────────── */
+
+/**
+ * Os registros que cada número do relatório abre têm de vir com os MESMOS recortes, base e
+ * responsabilidade da tela (D-B-11, D-B-7). Os DOIS LADOS da conciliação não vêm da mesma função:
+ *  - o número é o texto do indicador de `montarRelatorioFinanceiro` (ou o campo `ancora`/`projecao`),
+ *    convertido em centavos aqui, no teste;
+ *  - os registros são `detalheDoRelatorio`, somados num laço do teste, na coluna da parte.
+ * E os dois ainda são comparados a um LITERAL contado à mão.
+ */
+
+const SP = { mes: MES };
+
+function paramsDaGaveta(
+  pedido: PedidoDeDetalhe | null,
+  p: Partial<ParametrosDoRelatorio> = {},
+  extra: { caixaParaDetalhe?: "erro" | null; saldos?: null } = {},
+) {
+  const base = parametros(p);
+  return {
+    ...base,
+    relatorio: montarRelatorioFinanceiro(base),
+    pedido,
+    sp: SP,
+    caixaParaDetalhe: extra.caixaParaDetalhe ?? null,
+    saldos: extra.saldos ?? null,
+  };
+}
+
+const detalheDe = (pedido: PedidoDeDetalhe, p: Partial<ParametrosDoRelatorio> = {}) =>
+  detalheDoRelatorio(paramsDaGaveta(pedido, p));
+const gavetaDe = (pedido: PedidoDeDetalhe | null, p: Partial<ParametrosDoRelatorio> = {}, extra = {}) =>
+  gavetaDoRelatorio(paramsDaGaveta(pedido, p, extra));
+
+/** O texto de moeda ("R$ 1.234,56", com NBSP e sinal) em centavos — conta do teste, não do código. */
+function emCentavos(texto: string): number {
+  const digitos = texto.replace(/[^\d,]/g, "").replace(",", "");
+  return (texto.includes("-") ? -1 : 1) * Number(digitos);
+}
+
+/** Σ da coluna da parte sobre TODOS os registros do detalhe — um laço do teste, em centavos. */
+function somaDosRegistros(pedido: PedidoDeDetalhe, p: Partial<ParametrosDoRelatorio> = {}): number {
+  const d = detalheDe(pedido, p);
+  if (d === null || d.estado !== "ok") throw new Error(`detalhe ${pedido.chave} não está ok: ${d?.estado}`);
+  const coluna = colunaDaParte(d.parte);
+  let total = 0;
+  for (const g of d.grupos) for (const r of g.registros) total = total + r[coluna];
+  expect(d.diferencaCent, `${pedido.chave}: a soma dos registros fecha com o total do motor`).toBe(0);
+  expect(d.somaCent).toBe(total);
+  return total;
+}
+
+const SAIDAS_MEU: PedidoDeDetalhe = { chave: "saidas", parte: "meu", alvo: null };
+
+describe("a gaveta do relatório concilia com o número, com os mesmos recortes (04-B, D-B-11)", () => {
+  const casos: [string, Partial<ParametrosDoRelatorio>, number | null][] = [
+    // O literal à mão: Cartão A = T4 meu 120 + parcela 50 (terceiros 20 → meu 30) − estorno 30.
+    ["cartão", { recorte: comRecorte({ cartao: "cartao-a" }) }, 12000],
+    // Conta B: só T1 (100, meu 60).
+    ["conta", { recorte: comRecorte({ conta: "conta-b" }) }, 6000],
+    // Categoria A (antes dos estornos): T1 60 + T4 120 + T11 70.
+    ["categoria", { recorte: comRecorte({ categoria: CAT_A.id }) }, 25000],
+    ["cartão + categoria", { recorte: comRecorte({ cartao: "cartao-a", categoria: CAT_A.id }) }, 12000],
+    ["sem recorte", {}, null],
+  ];
+
+  it.each(casos)("Σ dos registros de 'saidas' (%s) === o indicador 'Minhas saídas'", (_nome, p, literal) => {
+    const indicador = monta(p).indicadores.saidas.valor;
+    expect(typeof indicador).toBe("string");
+    const doNumero = emCentavos(indicador as string);
+    expect(somaDosRegistros(SAIDAS_MEU, p)).toBe(doNumero);
+    if (literal !== null) expect(doNumero).toBe(literal);
+  });
+
+  it("as três partes do quadro âncora (meu, terceiros, bruto) fecham com os campos de `ancora`, no cartão", () => {
+    const p = { recorte: comRecorte({ cartao: "cartao-a" }) };
+    const ancora = monta(p).ancora;
+    expect(ancora).not.toBeNull();
+    expect(somaDosRegistros({ chave: "saidas", parte: "meu", alvo: null }, p)).toBe(cent(ancora?.meu ?? Number.NaN));
+    expect(somaDosRegistros({ chave: "saidas", parte: "terceiros", alvo: null }, p)).toBe(
+      cent(ancora?.terceiros ?? Number.NaN),
+    );
+    expect(somaDosRegistros({ chave: "saidas", parte: "bruto", alvo: null }, p)).toBe(
+      cent(ancora?.bruto ?? Number.NaN),
+    );
+    // Literais à mão: fatura 220 (bruto), terceiros 80 + 20, meu 120.
+    expect(cent(ancora?.bruto ?? Number.NaN)).toBe(22000);
+    expect(cent(ancora?.terceiros ?? Number.NaN)).toBe(10000);
+  });
+
+  it("o pendente (até hoje) fecha com o quarto indicador, em Terceiros", () => {
+    const p = { resp: "terceiros" as const };
+    const quarto = monta(p).indicadores.quarto.valor;
+    expect(somaDosRegistros({ chave: "pendente", parte: "meu", alvo: null }, p)).toBe(emCentavos(quarto as string));
+    // Literal: T1 Pessoa A 40 + T4 Pessoa B (80 − 30 recebidos) + parcela Pessoa A 20.
+    expect(emCentavos(quarto as string)).toBe(11000);
+  });
+
+  it("o pendente com o recorte de pessoa fecha com o pendente DELA", () => {
+    const p = { recorte: comRecorte({ pessoa: "pessoa-a" }) };
+    const quarto = monta(p).indicadores.quarto.valor;
+    expect(somaDosRegistros({ chave: "pendente", parte: "meu", alvo: null }, p)).toBe(emCentavos(quarto as string));
+    expect(emCentavos(quarto as string)).toBe(6000);
+  });
+
+  it("o 'referente ao mês' do quadro âncora fecha com a lista de pendente-do-mes, no cartão", () => {
+    const p = { recorte: comRecorte({ cartao: "cartao-a" }) };
+    const ancora = monta(p).ancora;
+    expect(ancora?.pendenteDoMes).not.toBeNull();
+    expect(somaDosRegistros({ chave: "pendente-do-mes", parte: "meu", alvo: null }, p)).toBe(
+      cent(ancora?.pendenteDoMes ?? Number.NaN),
+    );
+  });
+
+  it("pendente-do-mes com o recorte de pessoa: o total é o DELA, o mesmo da lista (revisão final, achado 1)", () => {
+    // Sem link na tela (o quadro âncora não segue a pessoa), mas a URL compartilhada chega aqui.
+    const p = { recorte: comRecorte({ pessoa: "pessoa-a" }) };
+    // Literal: r1 Pessoa A 40 + r3 Pessoa A 20, ambos de novembro.
+    expect(somaDosRegistros({ chave: "pendente-do-mes", parte: "meu", alvo: null }, p)).toBe(6000);
+  });
+
+  it("as entradas da conta fecham com 'Minhas entradas' (conta e categoria)", () => {
+    for (const p of [{ recorte: comRecorte({ conta: "conta-b" }) }, { recorte: comRecorte({ categoria: CAT_E.id }) }]) {
+      const indicador = monta(p).indicadores.entradas.valor as string;
+      expect(somaDosRegistros({ chave: "entradas", parte: "meu", alvo: null }, p)).toBe(emCentavos(indicador));
+    }
+    // Literal: a receita de 3.000 é toda minha.
+    expect(somaDosRegistros({ chave: "entradas", parte: "meu", alvo: null }, {})).toBe(300000);
+  });
+
+  it("a projeção de um mês fecha com o ponto do modelo (minha parte)", () => {
+    const ponto = monta().projecao[0];
+    expect(ponto).toBeDefined();
+    expect(somaDosRegistros({ chave: "projecao", parte: "meu", alvo: ponto.mes })).toBe(Math.round(ponto.total * 100));
+  });
+
+  it("a fatia de uma categoria fecha com a fatia da rosca (Terceiros) e a forma, com a da lista de formas", () => {
+    const r = monta({ resp: "terceiros" });
+    const fatia = r.rosca?.categorias.find((c) => c.categoryId === CAT_A.id);
+    expect(fatia).toBeDefined();
+    expect(
+      somaDosRegistros({ chave: "categoria", parte: "terceiros", alvo: CAT_A.id }, { resp: "terceiros" }),
+    ).toBe(cent(fatia?.valor ?? Number.NaN));
+    const forma = r.formas.find((f) => f.paymentMethod === "cartao_credito");
+    expect(forma).toBeDefined();
+    expect(
+      somaDosRegistros({ chave: "forma", parte: "terceiros", alvo: "cartao_credito" }, { resp: "terceiros" }),
+    ).toBe(cent(forma?.valor ?? Number.NaN));
+  });
+});
+
+describe("a gaveta do relatório: o que abre e o que não abre (04-B)", () => {
+  const chaves = (p: Partial<ParametrosDoRelatorio> = {}) => Object.keys(gavetaDe(null, p).hrefs).sort();
+
+  it("sem recorte, em meu: os números do relatório abrem, cada um com o seu endereço", () => {
+    const { hrefs } = gavetaDe(null);
+    for (const k of ["saldo", "entradas", "saidas", "meu", "terceiros", "bruto", "pendente", "pendente-do-mes"]) {
+      expect(hrefs[k], k).toBeDefined();
+    }
+    expect(hrefs.saidas).toBe("/relatorios?mes=2026-11&detalhe=saidas");
+    expect(hrefs.terceiros).toBe("/relatorios?mes=2026-11&detalhe=saidas&parte=terceiros");
+    expect(hrefs["categoria:cat-a"]).toBe("/relatorios?mes=2026-11&detalhe=categoria&alvo=cat-a");
+    expect(hrefs["forma:pix"]).toBe("/relatorios?mes=2026-11&detalhe=forma&alvo=pix");
+    expect(hrefs["projecao:2026-12"]).toBe("/relatorios?mes=2026-11&detalhe=projecao&alvo=2026-12");
+  });
+
+  it("o relatório não tem 'contas' nem 'cartão', e 'Faturas dos próximos meses' não abre (sem id de fatura)", () => {
+    for (const k of chaves()) {
+      expect(k.startsWith("fatura"), k).toBe(false);
+      expect(k.startsWith("contas"), k).toBe(false);
+      expect(k.startsWith("cartao"), k).toBe(false);
+    }
+  });
+
+  it("com o recorte de pessoa, SÓ o pendente abre", () => {
+    expect(chaves({ recorte: comRecorte({ pessoa: "pessoa-a" }) })).toEqual(["pendente"]);
+  });
+
+  it("recorte de cartão: abre saídas, quadro âncora e pendente; não abre entradas, saldo nem projeção", () => {
+    const k = chaves({ recorte: comRecorte({ cartao: "cartao-a" }) });
+    expect(k).toContain("saidas");
+    expect(k).toContain("pendente");
+    for (const fora of ["entradas", "saldo"]) expect(k, fora).not.toContain(fora);
+    expect(k.some((c) => c.startsWith("projecao:"))).toBe(false);
+    expect(k.some((c) => c.startsWith("forma:"))).toBe(false);
+  });
+
+  it("recorte de conta: o saldo abre; o pendente não (o recebível não sabe a conta)", () => {
+    const k = chaves({ recorte: comRecorte({ conta: "conta-b" }) });
+    expect(k).toContain("saldo");
+    expect(k).not.toContain("pendente");
+  });
+
+  it("recorte de categoria: abre a própria categoria e as saídas; as formas ficam (✓), o saldo e a projeção não", () => {
+    const k = chaves({ recorte: comRecorte({ categoria: CAT_A.id }) });
+    expect(k).toContain("categoria:cat-a");
+    expect(k).toContain("saidas");
+    expect(k).not.toContain("saldo");
+    expect(k.some((c) => c.startsWith("projecao:"))).toBe(false);
+  });
+
+  it("Terceiros: o link de Entradas leva parte=terceiros; Consolidado leva parte=bruto; Meu não leva parte", () => {
+    expect(gavetaDe(null, { resp: "terceiros" }).hrefs.entradas).toContain("parte=terceiros");
+    expect(gavetaDe(null, { resp: "consolidado" }).hrefs.entradas).toContain("parte=bruto");
+    expect(gavetaDe(null).hrefs.entradas).not.toContain("parte=");
+    expect(gavetaDe(null, { resp: "terceiros" }).hrefs.saidas).toContain("parte=terceiros");
+    expect(gavetaDe(null, { resp: "consolidado" }).hrefs.saidas).toContain("parte=bruto");
+  });
+
+  it("os links preservam os outros parâmetros da URL e o fechar tira só o detalhe", () => {
+    const g = gavetaDoRelatorio({
+      ...paramsDaGaveta({ chave: "saidas", parte: "meu", alvo: null }),
+      sp: { mes: MES, cartao: "cartao-a", detalhe: "saidas" },
+    });
+    expect(g.urlAoFechar).toBe("/relatorios?mes=2026-11&cartao=cartao-a");
+    expect(g.linkLancamentos).toBe("/financeiro/lancamentos?month=2026-11");
+  });
+
+  it("sem pedido na URL não há vista", () => {
+    expect(gavetaDe(null).vista).toBeNull();
+    expect(detalheDe({ chave: "saidas", parte: "meu", alvo: null })?.estado).toBe("ok");
+  });
+
+  describe("base caixa", () => {
+    const caixa = { base: "caixa" as const, caixa: CAIXA_OK };
+
+    it("sem recorte, em meu: as sete linhas do caixa abrem (e a pessoa, o cartão... nada mais muda)", () => {
+      const k = chaves(caixa);
+      for (const linha of ["renda", "reembolsos", "outras", "saidas", "pagamentos", "sem-destino", "entre-contas"]) {
+        expect(k, linha).toContain(`caixa:${linha}`);
+      }
+      // Categoria e forma não são calculadas no caixa: o detalhe diria "não é calculado".
+      expect(k.some((c) => c.startsWith("categoria:") || c.startsWith("forma:"))).toBe(false);
+    });
+
+    it("com o recorte de cartão: nenhum link de caixa nem de saídas, e o pedido digitado devolve 'não segue'", () => {
+      const p = { ...caixa, recorte: comRecorte({ cartao: "cartao-a" }) };
+      const k = chaves(p);
+      expect(k.some((c) => c.startsWith("caixa:"))).toBe(false);
+      for (const fora of ["saidas", "meu", "terceiros", "bruto", "entradas"]) expect(k, fora).not.toContain(fora);
+
+      for (const pedido of [
+        { chave: "saidas", parte: "meu", alvo: null },
+        { chave: "caixa", parte: "meu", alvo: "renda" },
+        { chave: "entradas", parte: "meu", alvo: null },
+      ] as PedidoDeDetalhe[]) {
+        // `caixaParaDetalhe: "erro"` prova a ORDEM: o 'não segue' vence a falha de leitura.
+        const g = gavetaDe(pedido, p, { caixaParaDetalhe: "erro" });
+        expect(g.vista?.estado, pedido.chave).toBe("nao-segue");
+        if (g.vista?.estado === "nao-segue") {
+          expect(g.vista.frase).toContain("a base caixa não se recorta nesta versão");
+          expect(g.vista.hrefSemFiltro).toBe("/relatorios?mes=2026-11&base=caixa");
+        }
+        expect(JSON.stringify(g.vista)).not.toContain("R$");
+      }
+    });
+
+    it("Terceiros e Consolidado: o caixa não traz as entradas, então elas não abrem; as saídas abrem na parte", () => {
+      for (const resp of ["terceiros", "consolidado"] as const) {
+        const { hrefs } = gavetaDe(null, { ...caixa, resp });
+        expect(hrefs.entradas, resp).toBeUndefined();
+        expect(hrefs.saidas, resp).toContain(resp === "terceiros" ? "parte=terceiros" : "parte=bruto");
+        // Digitado à mão: 'não segue a responsabilidade', com a volta para Meu.
+        const g = gavetaDe({ chave: "entradas", parte: "meu", alvo: null }, { ...caixa, resp }, {});
+        expect(g.vista?.estado).toBe("nao-segue");
+      }
+    });
+  });
+
+  describe("pedido digitado à mão para um número que não segue", () => {
+    it("recorte de pessoa: 'não segue', sem lista, com o caminho 'Ver sem o filtro'", () => {
+      const g = gavetaDe(SAIDAS_MEU, { recorte: comRecorte({ pessoa: "pessoa-a" }) });
+      expect(g.vista?.estado).toBe("nao-segue");
+      if (g.vista?.estado === "nao-segue") {
+        expect(g.vista.frase).toContain("pessoa");
+        expect(g.vista.hrefSemFiltro).toBe("/relatorios?mes=2026-11");
+      }
+      expect(JSON.stringify(g.vista)).not.toContain("R$");
+    });
+
+    it("projeção com qualquer recorte, e os números que o relatório não tem (cartão, contas)", () => {
+      const p = { recorte: comRecorte({ conta: "conta-b" }) };
+      expect(gavetaDe({ chave: "projecao", parte: "meu", alvo: "2026-12" }, p).vista?.estado).toBe("nao-segue");
+      expect(gavetaDe({ chave: "cartao", parte: "meu", alvo: null }).vista?.estado).toBe("nao-segue");
+      expect(gavetaDe({ chave: "contas", parte: "meu", alvo: null }).vista?.estado).toBe("nao-segue");
+    });
+  });
+
+  it("o JSON exportado não muda: o modelo não ganha chave de gaveta, detalhe nem link", () => {
+    const r = monta() as unknown as Record<string, unknown>;
+    for (const k of ["gaveta", "vista", "hrefs", "hrefsDoDetalhe", "detalhe"]) expect(r, k).not.toHaveProperty(k);
+    expect(JSON.stringify(r)).not.toContain("detalhe=");
+  });
+});
+
 /* ───────────────────────────── O arquivo não calcula nem lê relógio ───────────────────────────── */
 
 describe("reports/financeiro.ts é puro e não soma", () => {
@@ -868,6 +1173,12 @@ describe("reports/financeiro.ts é puro e não soma", () => {
   it("nenhum relógio, nenhum banco, nenhum server-only", () => {
     expect(fonte).not.toMatch(/Date\.now|new Date\(/);
     expect(fonte).not.toMatch(/server-only|@\/lib\/supabase/);
+  });
+
+  it("04-B: há UM jeito de recortar — `recortarEntradas` e `recortarRecebiveisCrus` só no helper, que o modelo e o detalhe chamam", () => {
+    expect(fonte.match(/recortarEntradas\(/g)).toHaveLength(1);
+    expect(fonte.match(/recortarRecebiveisCrus\(/g)).toHaveLength(1);
+    expect(fonte.match(/entradasDoRecorte\(/g)?.length).toBe(3); // a definição + o modelo + o detalhe
   });
 
   it("nenhuma soma nova de dinheiro", () => {

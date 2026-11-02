@@ -60,6 +60,7 @@ import {
   type BlocoDoRelatorio,
   type EntradasDoMotorDoRelatorio,
   type Recorte,
+  SEM_RECORTE,
   type TipoDeRecorte,
   naoSegue,
   recortarEntradas,
@@ -72,8 +73,19 @@ import {
   evolucaoDaResponsabilidade,
   fatiasDaResponsabilidade,
 } from "@/lib/finance/responsabilidade";
+import {
+  type Detalhe,
+  type LinhaDoCaixa,
+  type ParametrosDoDetalhe,
+  type ParteDoDetalhe,
+  type PedidoDeDetalhe,
+  detalheDoNumero,
+} from "@/lib/finance/detalhe";
 import { saldoDasContas } from "@/lib/finance/saldo-das-contas";
 import { formatCurrency } from "@/lib/format";
+import { urlComDetalhe, urlSemDetalhe } from "@/lib/painel/detalhe-url";
+import { type VistaDaGaveta, vistaDaGaveta } from "@/lib/painel/gaveta";
+import { urlDoRelatorio } from "@/lib/reports/url-do-relatorio";
 
 /* ───────────────────────────── Tipos ───────────────────────────── */
 
@@ -206,6 +218,21 @@ const LISTA_DO_TIPO: Record<TipoDeRecorte, keyof RelatorioFinanceiro["filtros"][
   categoria: "categorias",
 };
 
+/* ───────────────────────────── O recorte das entradas ───────────────────────────── */
+
+/**
+ * As entradas do motor e os recebíveis crus RECORTADOS, do jeito que o relatório os recorta: cartão
+ * e conta nas entradas (`recortarEntradas`), pessoa e cartão nos crus (`recortarRecebiveisCrus`,
+ * D-A2-9/D-A2-23). É a ÚNICA porta: o modelo de vista e o detalhamento (04-B) a chamam, e por isso
+ * a lista de registros e o número leem a mesma coisa.
+ */
+function entradasDoRecorte(p: Pick<ParametrosDoRelatorio, "entradas" | "recebiveisCrus" | "recorte">) {
+  return {
+    e: recortarEntradas(p.entradas, p.recorte),
+    crus: recortarRecebiveisCrus(p.recebiveisCrus, { pessoa: p.recorte.pessoa, cartao: p.recorte.cartao }),
+  };
+}
+
 /* ───────────────────────────── O modelo ───────────────────────────── */
 
 export function montarRelatorioFinanceiro(p: ParametrosDoRelatorio): RelatorioFinanceiro {
@@ -221,7 +248,8 @@ export function montarRelatorioFinanceiro(p: ParametrosDoRelatorio): RelatorioFi
   const respNoCaixa = emCaixa && resp !== "meu";
 
   // Cartão e conta: o motor roda igual sobre as entradas recortadas. Sem recorte, as mesmas.
-  const e = recortarEntradas(p.entradas, recorte);
+  // (04-B: o detalhamento recorta pelo MESMO helper — `entradasDoRecorte` —, nunca por outro jeito.)
+  const { e, crus } = entradasDoRecorte(p);
   const resumoDoMotor = resumoMes({
     mes,
     transactions: e.txs,
@@ -244,7 +272,6 @@ export function montarRelatorioFinanceiro(p: ParametrosDoRelatorio): RelatorioFi
 
   /* ── O pendente: recebíveis crus, recortados SÓ por pessoa e cartão (D-A2-9, D-A2-23) ── */
 
-  const crus = recortarRecebiveisCrus(p.recebiveisCrus, { pessoa: recorte.pessoa, cartao: recorte.cartao });
   const pendente = {
     ate: totalPendenteAte(crus, hoje),
     rotuloAte: rotuloTotalPendenteAte(hoje),
@@ -556,5 +583,201 @@ export function montarRelatorioFinanceiro(p: ParametrosDoRelatorio): RelatorioFi
     projecao,
     faturasFuturas,
     caixa,
+  };
+}
+
+/* ───────────────────────────── 04-B: a gaveta de registros ───────────────────────────── */
+
+/**
+ * Os registros que compõem cada número da aba, prontos para a tela. ⛔ NÃO entra em `ReportsData`
+ * nem em `RelatorioFinanceiro`: o botão "Baixar relatório (JSON)" exporta o `data` inteiro, e a
+ * vista da gaveta e as URLs não são dado do relatório. Vai numa prop separada do cliente.
+ */
+export type GavetaDoRelatorio = {
+  /** `null` sem `?detalhe=` na URL. */
+  vista: VistaDaGaveta | null;
+  /**
+   * A URL de cada número que abre. Chaves: `saldo`, `entradas`, `saidas` (os dois indicadores, na
+   * parte da responsabilidade), `meu`/`terceiros`/`bruto` (o quadro âncora, em `saidas`),
+   * `pendente`, `pendente-do-mes`, `categoria:<id|sem-categoria>`, `forma:<forma>`,
+   * `projecao:<mês>` e `caixa:<linha>`. Número que NÃO abre não tem chave: sem link.
+   */
+  hrefs: Record<string, string>;
+  urlAoFechar: string;
+  linkLancamentos: string;
+  /** Só na gaveta do saldo: o rodapé leva às contas (saldo não é competência). */
+  linkContas: string | null;
+};
+
+const CAMINHO_DO_RELATORIO = "/relatorios";
+const FRASE_FORA_DO_RELATORIO = "Este número não faz parte do relatório.";
+
+/**
+ * O bloco da matriz (`SEGUE_O_RECORTE`) que governa o número que o pedido abre — a fonte ÚNICA do
+ * "abre ou não". `null` = o número não existe na aba (o painel o tem; o relatório, não).
+ */
+function blocoDoPedido(pedido: PedidoDeDetalhe): BlocoDoRelatorio | null {
+  switch (pedido.chave) {
+    case "entradas":
+      return "entradas";
+    case "saidas":
+      return pedido.parte === "terceiros" ? "terceiros" : "saidas";
+    case "pendente":
+    case "pendente-do-mes":
+      return "pendente";
+    case "categoria":
+      return "maiores";
+    case "forma":
+      return "formas";
+    case "fatura":
+      return "faturasFuturas";
+    case "projecao":
+      return "projecao";
+    case "saldo":
+      return "saldo";
+    // O caixa não se recorta (D-A2-6, D-B-7): qualquer recorte é ✗, como nas saídas.
+    case "caixa":
+      return "saidas";
+    case "cartao":
+    case "contas":
+      return null;
+  }
+}
+
+/** Por que o pedido NÃO abre registros neste relatório (`null` = abre). */
+function bloqueioDoPedido(
+  p: ParametrosDoRelatorio,
+  pedido: PedidoDeDetalhe,
+): { frase: string; hrefSemFiltro: string | null } | null {
+  const bloco = blocoDoPedido(pedido);
+  if (bloco === null) return { frase: FRASE_FORA_DO_RELATORIO, hrefSemFiltro: null };
+
+  const n = naoSegue(bloco, p.recorte, p.base);
+  if (n !== null) {
+    return {
+      frase: textoDoNaoSegue(n),
+      hrefSemFiltro: urlDoRelatorio({ mes: p.mes, base: p.base, resp: p.resp, recorte: SEM_RECORTE }),
+    };
+  }
+
+  // D-A2-21: o caixa não traz as entradas de terceiros nem as brutas — o indicador diz "não segue".
+  if (p.base === "caixa" && p.resp !== "meu" && pedido.chave === "entradas") {
+    return {
+      frase: `${NAO_SEGUE_RESP_NO_CAIXA.charAt(0).toUpperCase()}${NAO_SEGUE_RESP_NO_CAIXA.slice(1)}.`,
+      hrefSemFiltro: urlDoRelatorio({ mes: p.mes, base: p.base, resp: "meu", recorte: p.recorte }),
+    };
+  }
+  return null;
+}
+
+const LINHAS_DO_CAIXA: readonly LinhaDoCaixa[] = [
+  "renda",
+  "reembolsos",
+  "outras",
+  "saidas",
+  "pagamentos",
+  "sem-destino",
+  "entre-contas",
+];
+
+/** O que a gaveta precisa além dos parâmetros do modelo de vista. */
+export type ParametrosDaGaveta = ParametrosDoRelatorio & {
+  /** O modelo já montado: os links só existem onde há número desenhado. */
+  relatorio: RelatorioFinanceiro;
+  pedido: PedidoDeDetalhe | null;
+  sp: Record<string, string | string[] | undefined>;
+  caixaParaDetalhe: ParametrosDoDetalhe["caixa"];
+  saldos: ParametrosDoDetalhe["saldos"];
+};
+
+/**
+ * O detalhe do número pedido (`null` sem pedido), sobre as entradas RECORTADAS como o relatório as
+ * recorta — o mesmo helper (`entradasDoRecorte`), o mesmo recorte, base e responsabilidade. Onde o
+ * bloco não segue o recorte, o estado é `nao-segue`, sem lista.
+ */
+export function detalheDoRelatorio(p: ParametrosDaGaveta): Detalhe | null {
+  if (p.pedido === null) return null;
+  const { e, crus } = entradasDoRecorte(p);
+  // O `ref_month` dos crus é derivado DENTRO de `detalheDoNumero`, pela regra do pipeline: a
+  // leitura real não o traz, e um caminho só serve ao painel e ao relatório.
+  return detalheDoNumero({
+    pedido: p.pedido,
+    mes: p.mes,
+    hoje: p.hoje,
+    base: p.base,
+    entradas: e,
+    recebiveisCrus: crus,
+    caixa: p.caixaParaDetalhe,
+    saldos: p.saldos,
+    completude: p.completude,
+    naoSegue: bloqueioDoPedido(p, p.pedido),
+    categoriaDoRecorte: p.recorte.categoria,
+    nomes: {
+      contas: new Map(p.opcoes.contas.map((o) => [o.id, o.nome])),
+      cartoes: new Map(p.opcoes.cartoes.map((o) => [o.id, o.nome])),
+    },
+  });
+}
+
+/**
+ * 04-B — a gaveta do relatório: as URLs de cada número que abre e, com `?detalhe=`, o detalhe pronto.
+ *
+ * O detalhe roda sobre as entradas RECORTADAS exatamente como `montarRelatorioFinanceiro` as recorta
+ * (`entradasDoRecorte`, o mesmo helper), com o mesmo recorte, base e responsabilidade. Onde o bloco
+ * não segue o recorte (`naoSegue` ≠ null) não há link, e um `?detalhe=` digitado à mão devolve o
+ * estado "não segue", sem lista. `relatorio` é o modelo já montado: os links só existem onde há
+ * número desenhado (categorias, formas e meses de projeção saem dele).
+ */
+export function gavetaDoRelatorio(p: ParametrosDaGaveta): GavetaDoRelatorio {
+  const { mes, base, resp, relatorio } = p;
+  const parteDaResp: ParteDoDetalhe = resp === "meu" ? "meu" : resp === "terceiros" ? "terceiros" : "bruto";
+
+  const hrefs: Record<string, string> = {};
+  const oferece = (chave: string, pedido: PedidoDeDetalhe) => {
+    if (bloqueioDoPedido(p, pedido) === null) {
+      hrefs[chave] = urlComDetalhe(CAMINHO_DO_RELATORIO, p.sp, pedido);
+    }
+  };
+
+  oferece("saldo", { chave: "saldo", parte: "meu", alvo: null });
+  oferece("entradas", { chave: "entradas", parte: parteDaResp, alvo: null });
+  oferece("saidas", { chave: "saidas", parte: parteDaResp, alvo: null });
+  // O quadro âncora mostra as três partes das saídas, qualquer que seja a responsabilidade.
+  oferece("meu", { chave: "saidas", parte: "meu", alvo: null });
+  oferece("terceiros", { chave: "saidas", parte: "terceiros", alvo: null });
+  oferece("bruto", { chave: "saidas", parte: "bruto", alvo: null });
+  oferece("pendente", { chave: "pendente", parte: "meu", alvo: null });
+  // O "referente ao mês" só tem número desenhado dentro do quadro âncora.
+  if (relatorio.ancora !== null && relatorio.ancora.pendenteDoMes !== null) {
+    oferece("pendente-do-mes", { chave: "pendente-do-mes", parte: "meu", alvo: null });
+  }
+
+  // Categoria e forma não são calculadas na base caixa (o detalhe diz "não é calculado"): sem link.
+  if (base !== "caixa") {
+    const categorias = new Set<string>();
+    for (const c of relatorio.rosca?.categorias ?? []) categorias.add(c.categoryId ?? "sem-categoria");
+    for (const c of relatorio.maiores) categorias.add(c.categoryId ?? "sem-categoria");
+    for (const id of categorias) oferece(`categoria:${id}`, { chave: "categoria", parte: parteDaResp, alvo: id });
+    for (const f of relatorio.formas) {
+      oferece(`forma:${f.paymentMethod}`, { chave: "forma", parte: parteDaResp, alvo: f.paymentMethod });
+    }
+  }
+  for (const ponto of relatorio.projecao) {
+    oferece(`projecao:${ponto.mes}`, { chave: "projecao", parte: "meu", alvo: ponto.mes });
+  }
+  // "Faturas dos próximos meses" não tem link: `FaturaDoMes` agrupa por mês e não carrega o id de
+  // fatura que o detalhe pede (`fatura`, alvo = statement.id).
+  if (base === "caixa" && relatorio.caixa?.estado === "ok") {
+    for (const linha of LINHAS_DO_CAIXA) oferece(`caixa:${linha}`, { chave: "caixa", parte: "meu", alvo: linha });
+  }
+
+  const detalhe = detalheDoRelatorio(p);
+
+  return {
+    vista: detalhe === null ? null : vistaDaGaveta(detalhe),
+    hrefs,
+    urlAoFechar: urlSemDetalhe(CAMINHO_DO_RELATORIO, p.sp),
+    linkLancamentos: `/financeiro/lancamentos?month=${mes}`,
+    linkContas: p.pedido?.chave === "saldo" ? "/financeiro/contas" : null,
   };
 }
