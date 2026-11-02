@@ -6,10 +6,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   ArrowLeftRight,
+  CreditCard,
   ReceiptText,
   RotateCcw,
 } from "lucide-react";
@@ -34,22 +34,25 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
-import { StatCard } from "@/components/shared/stat-card";
+import { Bloco } from "@/components/shared/painel/bloco";
+import { Indicador } from "@/components/shared/painel/indicador";
 import {
   CategoryPill,
   ClassificacaoBadge,
   InstallmentBadge,
-  StatementStatusBadge,
 } from "@/components/financeiro/badges";
-import { formatCurrency, formatDate, toDateInputValue } from "@/lib/format";
-import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
+import { CLASSE_DO_TOM, rotuloDoEstado } from "@/components/cartoes/estado-da-fatura";
+import { formatCurrency, formatDate } from "@/lib/format";
+import {
+  organizarFaturasDoCartao,
+  type FaturaDaTela,
+} from "@/lib/finance/faturas-do-cartao";
+import { estadoDoBloco } from "@/lib/painel/bloco";
 import {
   fraseDoPerdoado,
   parteDoTerceiroCentavos,
   perdoadoCentavos,
   resumirRecebivel,
-  somaDaParteDosTerceiros,
-  somaDoPerdoado,
 } from "@/lib/finance/recebimentos";
 import {
   STATEMENT_STATUSES,
@@ -58,6 +61,7 @@ import {
 } from "@/lib/finance/constants";
 import { moveTransactionToStatement } from "@/lib/actions/statements";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
+import { cn } from "@/lib/utils";
 import type { FaturaAPagar } from "./pagar-fatura-dialog";
 import { toast } from "sonner";
 import type {
@@ -85,16 +89,7 @@ type CardOption = {
   dia_vencimento: number;
 };
 
-type Display = {
-  id: string | null;
-  competencia: string;
-  data_fechamento: string;
-  data_vencimento: string;
-  pago_em: string | null;
-  total_atual: number;
-  itens: number;
-};
-
+/** 'yyyy-MM' ou 'yyyy-MM-dd' → "outubro de 2026" (minúsculo, para frase corrida). */
 function monthYearLabel(competencia: string): string {
   const [y, m] = competencia.split("-").map(Number);
   return new Intl.DateTimeFormat("pt-BR", {
@@ -103,11 +98,27 @@ function monthYearLabel(competencia: string): string {
   }).format(new Date(y, m - 1, 1));
 }
 
-/** Próximo dia (local) de uma data 'yyyy-MM-dd'. */
-function nextDayISO(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return toDateInputValue(new Date(y, m - 1, d + 1));
+/** "Outubro de 2026": a inicial maiúscula é feita aqui, em JS — nunca por CSS. */
+function tituloDaCompetencia(competencia: string): string {
+  const t = monthYearLabel(competencia);
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
+
+/** 'yyyy-MM' → "novembro". */
+function mesPorExtenso(competencia: string): string {
+  const [y, m] = competencia.split("-").map(Number);
+  return new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(y, m - 1, 1));
+}
+
+/** 'yyyy-MM-dd' → 'dd/MM'. Data pura: manipulada como texto. */
+function diaMes(iso: string): string {
+  const [, mes, dia] = iso.split("-");
+  return `${dia}/${mes}`;
+}
+
+const SEM_LANCAMENTOS = "sem lançamentos conhecidos";
+const moeda = (cent: number) => formatCurrency(cent / 100);
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 /** Quem paga uma parte de um item da fatura. */
 type ParteDoItem = { personId: string; nome: string; valor: number; perdoado: number };
@@ -191,6 +202,309 @@ function partesPorItem(
   );
 }
 
+/** Tudo que o detalhamento de UMA fatura precisa, já agrupado pela tela. */
+type DadosDaFatura = {
+  tx: TransactionWithRelations[];
+  inst: StatementInstallmentItem[];
+  rec: ReceivableWithPerson[];
+};
+
+type DetalheProps = {
+  f: FaturaDaTela;
+  dados: DadosDaFatura;
+  moveTargets: { id: string; label: string }[];
+  partesPorTransacao: Map<string, ParteDoItem[]>;
+  partesPorParcela: Map<string, ParteDoItem[]>;
+  onMoved: () => void;
+};
+
+/** O detalhamento de uma fatura REAL: lançamentos, parcelas e "Quem paga esta fatura". */
+function DetalheDaFatura({
+  f,
+  dados,
+  moveTargets,
+  partesPorTransacao,
+  partesPorParcela,
+  onMoved,
+}: DetalheProps) {
+  const { tx, inst, rec } = dados;
+  const totalReais = (f.valores?.totalCent ?? 0) / 100;
+  const meu = (f.valores?.meuCent ?? 0) / 100;
+  return (
+    <div className="space-y-2 border-t pt-3">
+      {tx.map((t) => (
+        <div
+          key={t.id}
+          className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2"
+        >
+          <div className="min-w-0 space-y-0.5">
+            <p className="truncate text-sm font-medium">
+              {t.description || "Lançamento"}
+            </p>
+            <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+              <span>{formatDate(t.purchase_date)}</span>
+              {t.type === "receita" && (
+                <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+                  Estorno
+                </span>
+              )}
+              {t.category && (
+                <CategoryPill name={t.category.name} color={t.category.color} />
+              )}
+            </div>
+            <PartesDoItem
+              total={t.amount}
+              partes={partesPorTransacao.get(t.id) ?? []}
+              classificacao={t.classificacao}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={
+                t.type === "receita"
+                  ? "text-sm font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
+                  : "text-sm font-medium tabular-nums"
+              }
+            >
+              {t.type === "receita" ? "−" : ""}
+              {formatCurrency(t.amount)}
+            </span>
+            <MoveTransactionDialog
+              txId={t.id}
+              currentStatementId={f.statementId as string}
+              targets={moveTargets}
+              onMoved={onMoved}
+            />
+          </div>
+        </div>
+      ))}
+
+      {inst.map((it) => (
+        <div
+          key={it.id}
+          className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2"
+        >
+          <div className="min-w-0 space-y-0.5">
+            <p className="flex items-center gap-2 truncate text-sm font-medium">
+              <InstallmentBadge numero={it.numero} total={it.total_parcelas} />
+              {it.parent?.description || "Compra parcelada"}
+            </p>
+            {it.parent?.category && (
+              <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                <CategoryPill
+                  name={it.parent.category.name}
+                  color={it.parent.category.color}
+                />
+              </div>
+            )}
+            <PartesDoItem
+              total={it.valor}
+              partes={partesPorParcela.get(it.id) ?? []}
+              classificacao={it.parent?.classificacao ?? null}
+            />
+          </div>
+          <span className="shrink-0 text-sm font-medium tabular-nums">
+            {formatCurrency(it.valor)}
+          </span>
+        </div>
+      ))}
+
+      {rec.length > 0 &&
+        (() => {
+          const byPerson = new Map<
+            string,
+            { nome: string; valor: number; perdoado: number }
+          >();
+          for (const r of rec) {
+            const cur = byPerson.get(r.person_id) ?? {
+              nome: r.person?.nome ?? "Pessoa",
+              valor: 0,
+              perdoado: 0,
+            };
+            const resumo = resumirRecebivel(r);
+            cur.valor += parteDoTerceiroCentavos(resumo) / 100;
+            cur.perdoado += perdoadoCentavos(resumo) / 100;
+            byPerson.set(r.person_id, cur);
+          }
+          return (
+            <div className="rounded-lg border border-dashed p-3">
+              {/* O valor do título é o TOTAL da fatura: com a minha parte listada
+                  junto dos terceiros, as linhas somam o cabeçalho e a conta fecha
+                  na tela. O total só de terceiros continua na linha resumida do
+                  card, acima. */}
+              <div className="mb-1.5 flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
+                <span className="min-w-0 truncate">Quem paga esta fatura</span>
+                <span className="shrink-0 tabular-nums">
+                  {formatCurrency(totalReais)}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="min-w-0 truncate">Minha parte</span>
+                  <span className="shrink-0 font-medium tabular-nums">
+                    {formatCurrency(meu)}
+                  </span>
+                </div>
+                {[...byPerson.entries()].map(([id, p]) => (
+                  <div
+                    key={id}
+                    className="flex items-center justify-between gap-2 text-xs"
+                  >
+                    <span className="min-w-0 text-muted-foreground">
+                      <span className="block truncate">{p.nome}</span>
+                      {p.perdoado > 0 && (
+                        <span className="block">não será cobrado {formatCurrency(p.perdoado)}</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 font-medium tabular-nums">
+                      {formatCurrency(p.valor)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+    </div>
+  );
+}
+
+/**
+ * Uma fatura na lista priorizada. O selo vem de `rotuloDoEstado` (a MESMA palavra e cor da Visão
+ * geral); a ação, de `f.acao` (decidida por `organizarFaturasDoCartao`, nunca aqui). Fatura prevista
+ * tem data e NUNCA valor: "sem lançamentos conhecidos", jamais R$ 0,00.
+ */
+function CartaoDaFatura({
+  f,
+  hoje,
+  dados,
+  expandido,
+  onToggle,
+  onPagar,
+  onDesfazer,
+  detalhe,
+}: {
+  f: FaturaDaTela;
+  hoje: string;
+  dados: DadosDaFatura;
+  expandido: boolean;
+  onToggle: () => void;
+  onPagar: () => void;
+  onDesfazer: () => void;
+  detalhe: Omit<DetalheProps, "f" | "dados">;
+}) {
+  const { texto, tom } = rotuloDoEstado(f, f.tabela);
+  const v = f.valores;
+  const temItens = dados.tx.length > 0 || dados.inst.length > 0;
+  const mostraTerceiros = v !== null && (v.terceirosCent > 0 || v.perdoadoCent > 0);
+  const frasePerdoado = v ? fraseDoPerdoado(v.perdoadoCent / 100) : null;
+  const fechamento = hoje < f.dataFechamento ? "fecha" : "fechou";
+  const vencimento = f.dataVencimento < hoje ? "venceu" : "vence";
+  const lancamentos = `${plural(f.itens, "lançamento", "lançamentos")}${
+    f.estado === "aberta" ? " até agora" : ""
+  }`;
+
+  return (
+    <Card
+      className={cn(
+        "overflow-hidden shadow-none",
+        f.estado === "atrasada" && "border-l-4 border-l-destructive",
+        v === null && "border border-dashed bg-transparent ring-0",
+      )}
+    >
+      <CardContent className="space-y-3 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{tituloDaCompetencia(f.competencia)}</span>
+              <Badge variant="outline" className={CLASSE_DO_TOM[tom]}>
+                {texto}
+              </Badge>
+              {f.marca === "atual" && (
+                <Badge variant="outline" className="text-primary">
+                  Atual
+                </Badge>
+              )}
+              {f.marca === "proxima" && (
+                <Badge variant="outline" className="text-muted-foreground">
+                  Próxima
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {fechamento} {diaMes(f.dataFechamento)} · {vencimento}{" "}
+              {diaMes(f.dataVencimento)}
+              {v === null ? "" : ` · ${lancamentos}`}
+            </p>
+            {mostraTerceiros && v && (
+              <p className="text-xs text-muted-foreground">
+                meu{" "}
+                <span className="font-medium text-foreground">{moeda(v.meuCent)}</span>{" "}
+                · terceiros{" "}
+                <span className="font-medium text-foreground">
+                  {moeda(v.terceirosCent)}
+                </span>
+                {frasePerdoado && ` · ${frasePerdoado}`}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <div className="min-w-0 sm:text-right">
+              {v === null ? (
+                <span className="italic text-muted-foreground">{SEM_LANCAMENTOS}</span>
+              ) : (
+                <span
+                  className={cn(
+                    "text-base font-semibold tabular-nums",
+                    f.estado === "paga" && "line-through text-muted-foreground",
+                  )}
+                >
+                  {moeda(v.totalCent)}
+                </span>
+              )}
+              {v !== null && f.acao === null && v.totalCent <= 0 && (
+                <p className="text-[11px] text-muted-foreground">nada a pagar</p>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {f.acao === "pagar" && (
+                <Button size="sm" onClick={onPagar}>
+                  Pagar
+                </Button>
+              )}
+              {f.acao === "pagar-antes" && (
+                <Button variant="outline" size="sm" onClick={onPagar}>
+                  Pagar antes de fechar
+                </Button>
+              )}
+              {f.acao === "desfazer" && (
+                <Button variant="ghost" size="sm" onClick={onDesfazer}>
+                  <RotateCcw /> Desfazer
+                </Button>
+              )}
+              {f.statementId && temItens && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={expandido ? "Recolher" : "Ver lançamentos"}
+                  onClick={onToggle}
+                >
+                  {expandido ? <ChevronUp /> : <ChevronDown />}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {expandido && f.statementId && (
+          <DetalheDaFatura f={f} dados={dados} {...detalhe} />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function StatementsClient({
   cards,
   statements,
@@ -239,19 +553,6 @@ export function StatementsClient({
     router.push(`/faturas?${params.toString()}`);
   }
 
-  const eff = React.useCallback(
-    (s: Display) =>
-      statusEfetivo(
-        {
-          data_fechamento: s.data_fechamento,
-          data_vencimento: s.data_vencimento,
-          pago_em: s.pago_em,
-        },
-        today,
-      ),
-    [today],
-  );
-
   // Lançamentos agrupados por fatura.
   const txByStatement = React.useMemo(() => {
     const map = new Map<string, TransactionWithRelations[]>();
@@ -276,7 +577,7 @@ export function StatementsClient({
     return map;
   }, [installmentItems]);
 
-  // Recebíveis (parte de terceiros) agrupados por fatura: total de terceiros e "quem paga".
+  // Recebíveis (parte de terceiros) agrupados por fatura: "quem paga" no detalhamento.
   const recByStatement = React.useMemo(() => {
     const map = new Map<string, ReceivableWithPerson[]>();
     for (const r of receivables) {
@@ -302,80 +603,31 @@ export function StatementsClient({
     [receivables],
   );
 
-  // Monta a lista de faturas a exibir: faturas reais + ciclos atual/próximo (virtuais
-  // quando ainda não têm lançamentos), depois aplica filtros de mês e status.
-  const { list, atualComp, proximaComp } = React.useMemo(() => {
-    const byComp = new Map<string, Display>();
-    for (const s of statements) {
-      byComp.set(s.competencia, {
-        id: s.id,
-        competencia: s.competencia,
-        data_fechamento: s.data_fechamento,
-        data_vencimento: s.data_vencimento,
-        pago_em: s.pago_em,
-        total_atual: s.total_atual ?? 0,
-        itens: s.itens ?? 0,
-      });
-    }
-
-    let atual: string | null = null;
-    let proxima: string | null = null;
-    if (selectedCard && !month) {
-      const a = resolverFatura(
-        today,
-        selectedCard.dia_fechamento,
-        selectedCard.dia_vencimento,
-      );
-      atual = a.competencia;
-      if (!byComp.has(a.competencia)) {
-        byComp.set(a.competencia, {
-          id: null,
-          competencia: a.competencia,
-          data_fechamento: a.dataFechamento,
-          data_vencimento: a.dataVencimento,
-          pago_em: null,
-          total_atual: 0,
-          itens: 0,
-        });
-      }
-      const p = resolverFatura(
-        nextDayISO(a.dataFechamento),
-        selectedCard.dia_fechamento,
-        selectedCard.dia_vencimento,
-      );
-      proxima = p.competencia;
-      if (!byComp.has(p.competencia)) {
-        byComp.set(p.competencia, {
-          id: null,
-          competencia: p.competencia,
-          data_fechamento: p.dataFechamento,
-          data_vencimento: p.dataVencimento,
-          pago_em: null,
-          total_atual: 0,
-          itens: 0,
-        });
-      }
-    }
-
-    let arr = [...byComp.values()];
-    if (month) arr = arr.filter((s) => s.competencia.slice(0, 7) === month);
-    if (status) arr = arr.filter((s) => eff(s) === status);
-    arr.sort((a, b) => b.competencia.localeCompare(a.competencia));
-    return { list: arr, atualComp: atual, proximaComp: proxima };
-  }, [statements, selectedCard, month, status, today, eff]);
+  // A lista de faturas, os grupos e os indicadores saem de UMA função pura (a regra não mora
+  // aqui). Sem cartão selecionado não há o que organizar.
+  const organizado = React.useMemo(
+    () =>
+      selectedCard
+        ? organizarFaturasDoCartao({
+            hoje: today,
+            card: selectedCard,
+            statements,
+            receivables,
+            month,
+            status,
+          })
+        : null,
+    [selectedCard, today, statements, receivables, month, status],
+  );
 
   // Alvos de movimentação manual: faturas reais (com id) do cartão selecionado.
   const moveTargets = React.useMemo(
     () =>
       statements
         .filter((s) => s.id)
-        .map((s) => ({ id: s.id as string, label: monthYearLabel(s.competencia) })),
+        .map((s) => ({ id: s.id as string, label: tituloDaCompetencia(s.competencia) })),
     [statements],
   );
-
-  const faturaAtual = atualComp
-    ? list.find((s) => s.competencia === atualComp)
-    : undefined;
 
   if (cards.length === 0) {
     return (
@@ -390,6 +642,80 @@ export function StatementsClient({
       </EmptyState>
     );
   }
+
+  const detalhe = {
+    moveTargets,
+    partesPorTransacao,
+    partesPorParcela,
+    onMoved: () => router.refresh(),
+  };
+
+  function renderFatura(f: FaturaDaTela) {
+    const id = f.statementId;
+    return (
+      <CartaoDaFatura
+        key={f.chave}
+        f={f}
+        hoje={today}
+        dados={{
+          tx: id ? (txByStatement.get(id) ?? []) : [],
+          inst: id ? (instByStatement.get(id) ?? []) : [],
+          rec: id ? (recByStatement.get(id) ?? []) : [],
+        }}
+        expandido={id != null && expanded === id}
+        onToggle={() => setExpanded(expanded === id ? null : id)}
+        onPagar={() => {
+          if (!id || !f.valores) return;
+          setPagando({
+            statementId: id,
+            titulo: `Pagar fatura de ${monthYearLabel(f.competencia)} — ${selectedCard?.nome ?? "cartão"}`,
+            totalReais: f.valores.totalCent / 100,
+            meuReais: f.valores.meuCent / 100,
+            terceirosReais: f.valores.terceirosCent / 100,
+            vencimento: f.dataVencimento,
+          });
+        }}
+        onDesfazer={() => {
+          if (id) setDesfazendo(id);
+        }}
+        detalhe={detalhe}
+      />
+    );
+  }
+
+  const grupos = organizado?.grupos;
+  const ind = organizado?.indicadores;
+  const aPagar = ind?.aPagar;
+  const atual = ind?.atual ?? null;
+  const proximo = ind?.proximoVencimento ?? null;
+
+  const gruposComLinhas: {
+    chave: string;
+    titulo: string;
+    subtitulo: string;
+    linhas: FaturaDaTela[];
+  }[] = grupos
+    ? [
+        {
+          chave: "abertas",
+          titulo: "Em aberto — acumulando compras",
+          subtitulo: "o valor muda até o fechamento",
+          linhas: grupos.emAberto,
+        },
+        {
+          chave: "proximas",
+          titulo: "Próximas",
+          subtitulo: "ciclos que ainda não fecharam",
+          linhas: grupos.proximas,
+        },
+        {
+          chave: "anteriores",
+          titulo: "Pagas e anteriores",
+          subtitulo: "mais recentes primeiro",
+          linhas: grupos.anteriores,
+        },
+      ]
+    : [];
 
   return (
     <div className="space-y-5">
@@ -444,288 +770,97 @@ export function StatementsClient({
         </div>
       </div>
 
-      {/* Resumo da fatura atual */}
-      {faturaAtual && (
+      {/* Indicadores: sempre sobre TODAS as faturas do cartão, não sobre o filtro. */}
+      {aPagar && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <StatCard
-            label={`Fatura atual · ${monthYearLabel(faturaAtual.competencia)}`}
-            value={formatCurrency(faturaAtual.total_atual)}
-            icon={ReceiptText}
-            hint={`${faturaAtual.itens} lançamento(s)`}
+          <Indicador
+            tom="saida"
+            icone={ReceiptText}
+            rotulo="A pagar neste cartão"
+            dica="Soma das faturas fechadas ainda não pagas, as atrasadas inclusive. Fatura em aberto e prevista não entram."
+            valor={moeda(aPagar.totalCent)}
+            linhaDeBase={
+              aPagar.qtd > 0
+                ? `${plural(aPagar.qtd, "fatura fechada", "faturas fechadas")} · ${
+                    aPagar.qtdAtrasadas === 0
+                      ? "nenhuma atrasada"
+                      : plural(aPagar.qtdAtrasadas, "atrasada", "atrasadas")
+                  }`
+                : "nenhuma fatura fechada a pagar"
+            }
+            detalheComValor={aPagar.qtd > 0 ? `minha parte: ${moeda(aPagar.meuCent)}` : null}
           />
-          <StatCard
-            label="Vencimento"
-            value={formatDate(faturaAtual.data_vencimento)}
-            icon={CalendarClock}
-            hint={`Fecha em ${formatDate(faturaAtual.data_fechamento)}`}
+          <Indicador
+            tom="terceiros"
+            icone={CreditCard}
+            rotulo={
+              atual
+                ? `Fatura atual · ${mesPorExtenso(atual.competencia)}`
+                : "Fatura atual"
+            }
+            dica="Total já lançado no ciclo que ainda está acumulando compras. Muda até o fechamento."
+            valor={
+              atual?.valores
+                ? moeda(atual.valores.totalCent)
+                : { ausente: SEM_LANCAMENTOS }
+            }
+            linhaDeBase={
+              atual
+                ? `acumulando até ${diaMes(atual.dataFechamento)} · vence ${diaMes(atual.dataVencimento)}`
+                : "nenhum ciclo em aberto"
+            }
+          />
+          <Indicador
+            tom="saldo"
+            icone={CalendarClock}
+            rotulo="Próximo vencimento"
+            dica="Vencimento da próxima fatura fechada a pagar; sem nenhuma, o da fatura atual."
+            valor={proximo ? diaMes(proximo.data) : { ausente: "nenhum vencimento conhecido" }}
+            linhaDeBase={
+              proximo
+                ? `fatura de ${mesPorExtenso(proximo.fatura.competencia)} · ${
+                    proximo.fatura.valores
+                      ? moeda(proximo.fatura.valores.totalCent)
+                      : SEM_LANCAMENTOS
+                  }`
+                : "sem faturas conhecidas"
+            }
           />
         </div>
       )}
 
-      {/* Lista de faturas */}
-      {list.length === 0 ? (
-        <EmptyState
-          icon={ReceiptText}
-          title="Nenhuma fatura encontrada"
-          description="Lance compras no cartão para gerar faturas, ou ajuste os filtros de mês e status."
-        />
-      ) : (
-        <div className="grid gap-3">
-          {list.map((s) => {
-            const efetivo = eff(s);
-            const tx = s.id ? txByStatement.get(s.id) ?? [] : [];
-            const inst = s.id ? instByStatement.get(s.id) ?? [] : [];
-            const rec = s.id ? recByStatement.get(s.id) ?? [] : [];
-            const terceiros = somaDaParteDosTerceiros(rec);
-            const perdoado = somaDoPerdoado(rec);
-            const meu = s.total_atual - terceiros;
-            const hasItems = tx.length > 0 || inst.length > 0;
-            const isOpen = s.id != null && expanded === s.id;
-            const isAtual = s.competencia === atualComp;
-            const isProxima = s.competencia === proximaComp;
-            return (
-              <Card key={s.competencia} className="overflow-hidden">
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium capitalize">
-                          {monthYearLabel(s.competencia)}
-                        </span>
-                        <StatementStatusBadge status={efetivo} />
-                        {isAtual && (
-                          <Badge variant="outline" className="text-primary">
-                            Atual
-                          </Badge>
-                        )}
-                        {isProxima && (
-                          <Badge
-                            variant="outline"
-                            className="text-muted-foreground"
-                          >
-                            Próxima
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Fecha {formatDate(s.data_fechamento)} · vence{" "}
-                        {formatDate(s.data_vencimento)} · {s.itens} lançamento(s)
-                      </p>
-                      {(terceiros > 0 || perdoado > 0) && (
-                        <p className="text-xs text-muted-foreground">
-                          meu{" "}
-                          <span className="font-medium text-foreground">
-                            {formatCurrency(meu)}
-                          </span>{" "}
-                          · terceiros{" "}
-                          <span className="font-medium text-foreground">
-                            {formatCurrency(terceiros)}
-                          </span>
-                          {perdoado > 0 && ` · ${fraseDoPerdoado(perdoado)}`}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 sm:justify-end">
-                      <span className="text-base font-semibold tabular-nums">
-                        {formatCurrency(s.total_atual)}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {s.id && efetivo === "paga" ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDesfazendo(s.id as string)}
-                          >
-                            <RotateCcw /> Desfazer
-                          </Button>
-                        ) : s.id && s.total_atual > 0 ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-emerald-600 hover:text-emerald-700"
-                            onClick={() =>
-                              setPagando({
-                                statementId: s.id as string,
-                                titulo: `Pagar fatura de ${monthYearLabel(s.competencia)} — ${selectedCard?.nome ?? "cartão"}`,
-                                totalReais: s.total_atual,
-                                meuReais: meu,
-                                terceirosReais: terceiros,
-                                vencimento: s.data_vencimento,
-                              })
-                            }
-                          >
-                            <CheckCircle2 /> Pagar
-                          </Button>
-                        ) : null}
-                        {s.id && hasItems && (
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={isOpen ? "Recolher" : "Ver lançamentos"}
-                            onClick={() =>
-                              setExpanded(isOpen ? null : (s.id as string))
-                            }
-                          >
-                            {isOpen ? <ChevronUp /> : <ChevronDown />}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {isOpen && (
-                    <div className="space-y-2 border-t pt-3">
-                      {tx.map((t) => (
-                        <div
-                          key={t.id}
-                          className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2"
-                        >
-                          <div className="min-w-0 space-y-0.5">
-                            <p className="truncate text-sm font-medium">
-                              {t.description || "Lançamento"}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-                              <span>{formatDate(t.purchase_date)}</span>
-                              {t.type === "receita" && (
-                                <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400">
-                                  Estorno
-                                </span>
-                              )}
-                              {t.category && (
-                                <CategoryPill
-                                  name={t.category.name}
-                                  color={t.category.color}
-                                />
-                              )}
-                            </div>
-                            <PartesDoItem
-                              total={t.amount}
-                              partes={partesPorTransacao.get(t.id) ?? []}
-                              classificacao={t.classificacao}
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={
-                                t.type === "receita"
-                                  ? "text-sm font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
-                                  : "text-sm font-medium tabular-nums"
-                              }
-                            >
-                              {t.type === "receita" ? "−" : ""}
-                              {formatCurrency(t.amount)}
-                            </span>
-                            <MoveTransactionDialog
-                              txId={t.id}
-                              currentStatementId={s.id as string}
-                              targets={moveTargets}
-                              onMoved={() => router.refresh()}
-                            />
-                          </div>
-                        </div>
-                      ))}
-
-                      {inst.map((it) => (
-                        <div
-                          key={it.id}
-                          className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2"
-                        >
-                          <div className="min-w-0 space-y-0.5">
-                            <p className="flex items-center gap-2 truncate text-sm font-medium">
-                              <InstallmentBadge
-                                numero={it.numero}
-                                total={it.total_parcelas}
-                              />
-                              {it.parent?.description || "Compra parcelada"}
-                            </p>
-                            {it.parent?.category && (
-                              <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
-                                <CategoryPill
-                                  name={it.parent.category.name}
-                                  color={it.parent.category.color}
-                                />
-                              </div>
-                            )}
-                            <PartesDoItem
-                              total={it.valor}
-                              partes={partesPorParcela.get(it.id) ?? []}
-                              classificacao={it.parent?.classificacao ?? null}
-                            />
-                          </div>
-                          <span className="shrink-0 text-sm font-medium tabular-nums">
-                            {formatCurrency(it.valor)}
-                          </span>
-                        </div>
-                      ))}
-
-                      {rec.length > 0 &&
-                        (() => {
-                          const byPerson = new Map<
-                            string,
-                            { nome: string; valor: number; perdoado: number }
-                          >();
-                          for (const r of rec) {
-                            const cur = byPerson.get(r.person_id) ?? {
-                              nome: r.person?.nome ?? "Pessoa",
-                              valor: 0,
-                              perdoado: 0,
-                            };
-                            const resumo = resumirRecebivel(r);
-                            cur.valor += parteDoTerceiroCentavos(resumo) / 100;
-                            cur.perdoado += perdoadoCentavos(resumo) / 100;
-                            byPerson.set(r.person_id, cur);
-                          }
-                          return (
-                            <div className="rounded-lg border border-dashed p-3">
-                              {/* O valor do título é o TOTAL da fatura: com a minha parte listada
-                                  junto dos terceiros, as linhas somam o cabeçalho e a conta fecha
-                                  na tela. O total só de terceiros continua na linha resumida do
-                                  card, acima. */}
-                              <div className="mb-1.5 flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
-                                <span className="min-w-0 truncate">
-                                  Quem paga esta fatura
-                                </span>
-                                <span className="shrink-0 tabular-nums">
-                                  {formatCurrency(s.total_atual)}
-                                </span>
-                              </div>
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between gap-2 text-xs">
-                                  <span className="min-w-0 truncate">
-                                    Minha parte
-                                  </span>
-                                  <span className="shrink-0 font-medium tabular-nums">
-                                    {formatCurrency(meu)}
-                                  </span>
-                                </div>
-                                {[...byPerson.entries()].map(([id, p]) => (
-                                  <div
-                                    key={id}
-                                    className="flex items-center justify-between gap-2 text-xs"
-                                  >
-                                    <span className="min-w-0 text-muted-foreground">
-                                      <span className="block truncate">{p.nome}</span>
-                                      {p.perdoado > 0 && (
-                                        <span className="block">não será cobrado {formatCurrency(p.perdoado)}</span>
-                                      )}
-                                    </span>
-                                    <span className="shrink-0 font-medium tabular-nums">
-                                      {formatCurrency(p.valor)}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })()}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+      {/* Faturas por prioridade */}
+      {organizado && grupos && (
+        organizado.vazio ? (
+          <EmptyState
+            icon={ReceiptText}
+            title="Nenhuma fatura encontrada"
+            description="Lance compras no cartão para gerar faturas, ou ajuste os filtros de mês e status."
+          />
+        ) : (
+          <div className="space-y-4">
+            <Bloco
+              titulo="Precisam de pagamento"
+              subtitulo="atrasadas primeiro, depois por vencimento"
+              estado={estadoDoBloco({ ok: true, itens: grupos.pagar })}
+              vazio={{ frase: "Nenhuma fatura fechada a pagar." }}
+            >
+              <div className="grid gap-3">{grupos.pagar.map(renderFatura)}</div>
+            </Bloco>
+            {gruposComLinhas
+              .filter((g) => g.linhas.length > 0)
+              .map((g) => (
+                <Bloco
+                  key={g.chave}
+                  titulo={g.titulo}
+                  subtitulo={g.subtitulo}
+                  estado={estadoDoBloco({ ok: true, itens: g.linhas })}
+                >
+                  <div className="grid gap-3">{g.linhas.map(renderFatura)}</div>
+                </Bloco>
+              ))}
+          </div>
+        )
       )}
 
       {pagarMontado && (
@@ -813,7 +948,7 @@ function MoveTransactionDialog({
               </SelectTrigger>
               <SelectContent>
                 {options.map((o) => (
-                  <SelectItem key={o.id} value={o.id} className="capitalize">
+                  <SelectItem key={o.id} value={o.id}>
                     {o.label}
                   </SelectItem>
                 ))}

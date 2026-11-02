@@ -13,7 +13,7 @@ import type {
 } from "@/lib/finance/central-cartoes";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { rotuloDoEstado, type TomDoEstado } from "./estado-da-fatura";
+import { CLASSE_DO_TOM, rotuloDoEstado } from "./estado-da-fatura";
 
 /*
  * REDESIGN-05-A — Visão geral da central de cartões (componente de SERVIDOR, sem JS de cliente).
@@ -44,15 +44,6 @@ const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um :
 function hrefDaFatura(l: LinhaDaCentral): string {
   return `/faturas?card=${l.card.id}&month=${l.competencia}`;
 }
-
-const CLASSE_DO_TOM: Record<TomDoEstado, string> = {
-  atrasada: "border-destructive/40 bg-destructive/10 text-destructive",
-  paga: "border-success-ink/40 text-success-ink",
-  credito: "border-info-ink/40 text-info-ink",
-  aberta: "border-warning-ink/40 text-warning-ink",
-  prevista: "border-dashed text-muted-foreground",
-  neutro: "",
-};
 
 function Selo({ linha, tabela }: { linha: LinhaDaCentral; tabela: "fechadas" | "abertas" }) {
   const { texto, tom } = rotuloDoEstado(linha, tabela);

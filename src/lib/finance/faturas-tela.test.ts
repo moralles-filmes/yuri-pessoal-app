@@ -122,3 +122,39 @@ describe("05-B · pagamento", () => {
     expect(dialogo).toContain("Tentar de novo é seguro");
   });
 });
+
+describe("05-B · tela", () => {
+  const tela = fonteSemComentarios(TELA);
+  const telaN = normalizada(tela);
+  const pagina = fonteSemComentarios("src/app/(app)/faturas/page.tsx");
+  const nav = fonteSemComentarios("src/components/cartoes/cartoes-nav.ts");
+
+  it("leu os arquivos (não afirma sobre string vazia)", () => {
+    expect(tela.length).toBeGreaterThan(500);
+    expect(pagina.length).toBeGreaterThan(200);
+    expect(nav.length).toBeGreaterThan(100);
+  });
+
+  it("a tela importa a organização, o rótulo e as peças do painel", () => {
+    expect(tela).toContain("organizarFaturasDoCartao");
+    expect(tela).toContain("rotuloDoEstado");
+    expect(tela).toMatch(/import\s*\{[^}]*\bIndicador\b[^}]*\}/);
+    expect(tela).toMatch(/import\s*\{[^}]*\bBloco\b[^}]*\}/);
+  });
+
+  it("a tela não usa mais StatCard, StatementStatusBadge, resolverFatura nem capitalize", () => {
+    expect(tela).not.toContain("StatCard");
+    expect(tela).not.toContain("StatementStatusBadge");
+    expect(tela).not.toContain("resolverFatura");
+    expect(tela).not.toContain("capitalize");
+  });
+
+  it("a fatura prevista diz 'sem lançamentos conhecidos' em vez de R$ 0,00", () => {
+    expect(telaN).toContain("sem lançamentos conhecidos");
+  });
+
+  it("a página e a navegação se chamam 'Faturas e pagamentos'", () => {
+    expect(pagina).toContain('"Faturas e pagamentos"');
+    expect(normalizada(nav)).toContain('title: "Faturas e pagamentos"');
+  });
+});
