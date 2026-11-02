@@ -18,8 +18,10 @@ por merge `--no-ff` em `de6ef19`, **com a M2 e a M2b aplicadas**) · **REDESIGN-
 `salvar_lancamento_atomico` aplicada por você no SQL editor**) — **a REDESIGN-03 está fechada,
 com exceções declaradas** · **REDESIGN-04-A ✅** (integrada por merge `--no-ff` em `a972712`,
 sem migration, **sem push** — D67) · **REDESIGN-05-A ✅** (integrada por merge `--no-ff` em
-`6cfa3b9`, sem migration, **sem push** — D67) · **04-A2 e 05-B liberadas**, em paralelo — o
-Relatório financeiro com as mesmas peças, e Faturas e pagamentos
+`6cfa3b9`, sem migration, **sem push** — D67) · **REDESIGN-05-B ✅** (integrada por merge
+`--no-ff` em `bae44af`, sem migration, **sem push** — D67) · **04-A2** liberada (o Relatório
+financeiro com as mesmas peças) e **05-C liberada** (Próximos meses, Parcelamentos e Relatórios
+de cartão)
 
 ⛔ **A M-F foi aplicada em 2026-10-21** (03-F), pelo MCP, depois do seu "Aplique" literal, numa
 mensagem só para isso (D63). Ela **não** estava no `MIGRATIONS.md`: nasceu da K0 da 03-F, com o
@@ -48,6 +50,47 @@ próximas fases se acumulam em `feat/redesign-00-auditoria` **sem push** e vão 
 **PR único**, com **um merge só**, quando você pedir. O PR #65 (03-G2) fica aberto e é esse PR.
 
 ---
+
+## REDESIGN-05-B — Faturas e pagamentos ✅
+
+Branch `feat/redesign-05b-faturas`, nascida de `3a1c943` (9 commits), integrada por merge
+`--no-ff` em **`bae44af`**, **local e sem push** (D67). A árvore integrada é **igual** à da ponta
+(`1d5fefa`). O contrato é `docs/superpowers/specs/2026-11-02-05b-faturas-e-pagamentos-design.md`
+e o plano `docs/superpowers/plans/2026-11-02-05b-faturas-e-pagamentos.md`. Prévia aprovada em
+2026-11-02 (`.superpowers/preview/previa-05b.html`, fora do git).
+
+**O que mudou de natureza.** `/faturas` virou **"Faturas e pagamentos"** (rótulo da navegação
+interna e título; a rota não mudou). As faturas do cartão aparecem em quatro grupos, com a ordem
+derivada na leitura (`finance/faturas-do-cartao.ts`, puro): *Precisam de pagamento* (atrasadas
+primeiro), *Em aberto*, *Próximas* e *Pagas e anteriores*. Três `Indicador` e quatro `Bloco` da
+04-A substituem `StatCard` e o selo antigo; o `Indicador` ganhou a variante `{ ausente }`. **A P1-2
+está fechada**: o ciclo sem fatura diz "sem lançamentos conhecidos" no indicador e na lista. O
+selo sai de `rotuloDoEstado`, **o mesmo da Visão geral**. A regra do ciclo em aberto virou
+`cicloEmAberto` (em `central-cartoes.ts`), usada pelas duas telas. O diálogo de pagamento entra
+por `next/dynamic` + `useLazyDialog`, barra o clique duplo por `ref` e traduz a resposta por
+`desfechoDoPagamento`: "já estava paga" é aviso ("nada foi debitado de novo"), não erro, e a
+resposta perdida diz que tentar de novo é seguro. O desfazer não mudou.
+
+**Efeito declarado:** `/faturas?card=X&month=<competência prevista>` (o link da linha prevista da
+Visão geral) agora mostra a prevista. Antes dizia "Nenhuma fatura encontrada".
+
+**Decidido pelo dono (D70, 2026-11-02):** o selo é **idêntico** ao da Visão geral, sem exceção.
+A fatura vencida de total zero continua "Atrasada", fora de "Precisam de pagamento" e sem botão.
+
+**Provado:** suíte **323 / 7.265**, `lint`, `tsc`, `build` e `perf:bundle` verdes (mediana
+201,3 KB; a rota mais pesada é `/todo`, com 225,9 KB). `TZ=UTC` nos arquivos novos: 101 testes.
+Conferência visual **com a sua sessão**, em 390/768/1280/1440, claro e escuro, sem rolagem
+horizontal. A fatura atual prevista **não** aparece como R$ 0,00. O deep-link da Visão geral foi
+conferido. A revisão final da branch não achou nada crítico; quatro achados menores foram
+corrigidos, com teste vermelho antes onde havia regra.
+
+**Limitações:** os seus cartões não têm hoje fatura paga nem zerada. Esses estados estão provados
+por teste e pela prévia, não por print real. Nenhum pagamento foi confirmado durante a
+conferência.
+
+**Pendências:** o olho dos valores em `/faturas`; o rótulo "Faturas" na IA (`ai/constants.ts`) e na
+busca (`search/types.ts`); `/faturas` ainda cria previstas para cartão desativado (a Visão geral
+pula); trocar o "Atrasada" da fatura zerada nas duas telas, se você quiser.
 
 ## REDESIGN-05-A — a central de cartões: casca, Visão geral e Meus cartões ✅
 
@@ -1199,6 +1242,7 @@ as colunas já existem e o CHECK já aceita.
 | D63 | **03-F: K0–K3 decididas por você, uma de cada vez, e o desenho aprovado** ("Aprovado"). A **M-F** (`pagar_fatura` e `desfazer_pagamento_fatura`, que **não** estava no `MIGRATIONS.md`) entrou com o seu "Aplique", numa mensagem só para isso, pelo MCP, conferida pelo objeto (`pg_proc`: invoker, `search_path` vazio, grants) e não pela versão do histórico (D59). **Antes do aplique, o `migration-validator` achou três guardas de lógica (P3) e você as incluiu** ("Incluir as três") — a D-F12 do contrato; o FINDING-005 (referências do payload não conferidas) ficou como risco aceito (RR-F-4). O gerador de tipos trouxe de novo a relationship de `import_rows` e a sintaxe nova dos genéricos; **só as duas funções** entraram. A prova no banco é **sequencial** (o MCP serializa as chamadas, sem `dblink`) e o `delete` da fatura sintética voltou `declined` — a remoção ficou com você. Integrada na sessão que a escreveu, ao você pedir o prompt da próxima fase (memória de 2026-10-11): merge `--no-ff` em `84bf87b`, árvore idêntica à da ponta; **push e PR só com o seu aval** |
 | D65 | **Referência visual do Painel financeiro e do Dashboard** (2026-10-25, a seu pedido: *"Vamos seguir o plano que já tem, mas adaptar para a referência visual. Esquece a sidebar."*). O print 1 vira o alvo da **04-A** (`/dashboard/financeiro`), o print 2 o da **06**, e o relatório de `/relatorios` ganha a **04-A2** com as mesmas peças. Os prints **não** entram no repositório (público; o print 2 tem cara de dado real), então são descritos em palavras em `REFERENCIA-VISUAL.md`, com os desvios no §6 (sem metas financeiras, sem logos de banco, sem últimos dígitos, rosca na paleta validada, base sempre visível). A sequência antiga da 06 (Prioridades do dia, Organização, Saúde) foi substituída pela do print. Nenhuma migration, nenhuma regra de negócio mudou |
 | D68 | **04-A: K1–K5 decididas por você, uma de cada vez; K6 e K7 por delegação** ("Pode seguir como achar melhor"), e o desenho, a prévia e o plano aprovados. Executada na sessão que a escreveu (inline, um commit por passo), com revisão final da branch inteira e **sem** auditoria de módulo. Integrada **localmente** em `a972712` a seu pedido ("envia o prompt da proxima fase"), **sem push** (D67). O `.env.local` foi copiado para a worktree com a sua autorização (ignorado pelo git). **Custo aceito:** a régua do sino mudou de texto e de critério junto com a do painel (K3) — um alerta de gasto alto que aparecia no meio do mês pode deixar de aparecer, porque a comparação passou a ser justa |
+| D70 | **05-B: a prévia (com as quatro escolhas do agente: um cartão por vez, projeção = "sem lançamentos conhecidos", "Pagar antes de fechar" mantido, total ≤ 0 fora de "Precisam de pagamento"), o desenho e o plano foram aprovados por você**, e o selo da fatura vencida de total zero ficou **idêntico** ao da Visão geral ("Pode manter identico"). Executada por subagentes Haiku/Sonnet via router (os workers externos estavam indisponíveis), com revisão final da branch inteira e **sem** auditoria de módulo. Integrada **localmente** em `bae44af` a seu pedido ("Me envia o prompt da proxima fase da 5"), **sem push** (D67). O `.env.local` foi copiado para a worktree para a conferência visual e apagado depois (ignorado pelo git) |
 | D69 | **05-A: o layout "B" da Visão geral, fechada × aberta em tabelas separadas e Meus cartões inalterado foram decididos por você**, e a prévia foi aprovada em 2026-11-02 (16 prints, fora do git). Integrada **localmente** em `6cfa3b9` a seu pedido ("integre a 05-A"), **sem push** (D67), numa sessão que não a escreveu: os cinco foram rodados de novo sobre a árvore integrada. Merge sem conflito com a 04-A. **Custo aceito:** os links para `/cartoes` (busca, `card_limit`, IA) passam a abrir a Visão geral, e não a lista de cartões |
 | D67 | **Fim da publicação por partes** (2026-11-02, a seu pedido: *"juntarmos todas as proximas fases em um unico PR e fazer merge uma vez so, pois o deploy da vercel é muito caro"*). Substitui a D54. Cada fase continua sendo integrada por merge `--no-ff` nesta branch, mas **nenhuma é empurrada**: um push gera um deploy de prévia na Vercel (e, com o PR #65 aberto sobre esta branch, atualiza o PR), e um merge em `main` gera um de produção. O PR #65 (03-G2) fica aberto e vira o PR único; no fim, um push, revisão do título e da descrição, CI verde e **um** merge, com o seu pedido explícito. **Custo aceito:** até o push final, os commits integrados só existem neste disco — e `main` pode andar por outras branches (agenda, IA), então o merge final pode trazer conflitos para resolver uma vez só. O portão de ancestral dos prompts não muda: ele confere esta branch local |
 | D66 | **A 03-G2 foi integrada na sessão que a escreveu, a seu pedido** ("Me envia o prompt da proxima fase e já faz o pr e tudo mais dessa no git"), **com** revisão final da branch no modelo mais capaz e **sem** auditoria de módulo. Merge `--no-ff` em `a70c541`; a árvore difere da ponta (`dc9e641`) só nos documentos da D65. O aval cobre o push e o PR; **"tudo mais" não foi lido como merge em `main`** — merge em `main` é produção e fica com você. A migration `salvar_lancamento_atomico` foi aplicada **por você no SQL editor** (o `apply_migration` do MCP foi recusado), conferida pelo objeto e não pela versão do histórico (D59) |
