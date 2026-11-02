@@ -113,6 +113,19 @@ export function entradasDoRecebivel(
   return [];
 }
 
+/**
+ * 04-C — as entradas que o DONO registrou: as alocações automáticas de uma receita vinculada
+ * (`transaction_id` preenchido) são o MESMO dinheiro da receita, que a base caixa já conta.
+ * O legado K0 só vale quando o recebível não tem NENHUM recebimento: um recebível `pago` coberto
+ * só por alocação automática não é legado, e contar o valor inteiro dele de novo seria a
+ * contagem em dobro que esta função existe para evitar.
+ */
+export function entradasManuaisDoRecebivel(r: RecebivelComRecebimentos): EntradaDoRecebivel[] {
+  const manuais = r.recebimentos.filter(ehManual);
+  if (manuais.length === 0 && r.recebimentos.length > 0) return [];
+  return entradasDoRecebivel(r, manuais);
+}
+
 /** Recebível com a lista de recebimentos → a forma resumida, com o recebido somado (K0). */
 export function resumirRecebivel(
   r: RecebivelComRecebimentos,
@@ -204,14 +217,22 @@ export function totalPendenteAte(itens: readonly RecebivelComRecebimentos[], cor
   return centavosParaReais(total);
 }
 
-/** "Reembolsos recebidos neste período": pela DATA do recebimento (ou do legado). Nunca `ref_month`. */
+/**
+ * "Reembolsos recebidos neste período": pela DATA do recebimento (ou do legado). Nunca `ref_month`.
+ * 04-C — `somenteManuais`: a base caixa já conta a receita vinculada, então as alocações
+ * automáticas (a mesma receita) ficam de fora (ver `entradasManuaisDoRecebivel`).
+ */
 export function reembolsosRecebidosNoPeriodo(
   itens: readonly RecebivelComRecebimentos[],
   periodo: { readonly de: string; readonly ate: string },
+  opcoes?: { readonly somenteManuais?: boolean },
 ): number {
   let total = 0;
   for (const r of itens) {
-    for (const e of entradasDoRecebivel(r, r.recebimentos)) {
+    const entradas = opcoes?.somenteManuais
+      ? entradasManuaisDoRecebivel(r)
+      : entradasDoRecebivel(r, r.recebimentos);
+    for (const e of entradas) {
       if (e.data === null || e.data < periodo.de || e.data > periodo.ate) continue;
       total += e.centavos;
     }

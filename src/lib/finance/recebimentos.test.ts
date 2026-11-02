@@ -6,6 +6,7 @@ import {
   anexarRecebimentos,
   emAberto,
   entradasDoRecebivel,
+  entradasManuaisDoRecebivel,
   estadoDoRecebivel,
   fraseDoPerdoado,
   parteDoTerceiroCentavos,
@@ -244,6 +245,74 @@ describe("B3 — reembolsos recebidos no mês (§6.4)", () => {
         .reduce((s, r) => s + Number(r.valor), 0);
       expect(reembolsosRecebidosNoPeriodo(itens, { de: `${mes}-01`, ate: `${mes}-31` })).toBe(contaAntiga);
     }
+  });
+});
+
+describe("04-C — reembolsosRecebidosNoPeriodo { somenteManuais }", () => {
+  const JUNHO = { de: "2026-06-01", ate: "2026-06-30" };
+
+  it("sem a opção, as alocações automáticas contam como sempre (comportamento idêntico)", () => {
+    const itens = [
+      rec({
+        valor: 500,
+        status: "pago",
+        pago_em: "2026-06-10",
+        recebimentos: [{ valor: 500, recebido_em: "2026-06-10", transaction_id: "t-rec" }],
+      }),
+    ];
+    expect(reembolsosRecebidosNoPeriodo(itens, JUNHO)).toBe(500);
+    expect(reembolsosRecebidosNoPeriodo(itens, JUNHO, {})).toBe(500);
+  });
+
+  it("com somenteManuais, a alocação automática é ignorada e a manual conta", () => {
+    const itens = [
+      rec({
+        valor: 600,
+        status: "pago",
+        pago_em: "2026-06-10",
+        recebimentos: [
+          { valor: 100, recebido_em: "2026-06-05" },
+          { valor: 500, recebido_em: "2026-06-10", transaction_id: "t-rec" },
+        ],
+      }),
+    ];
+    expect(reembolsosRecebidosNoPeriodo(itens, JUNHO, { somenteManuais: true })).toBe(100);
+  });
+
+  it("recebível só com alocação automática e status pago NÃO vira legado K0", () => {
+    const itens = [
+      rec({
+        valor: 500,
+        status: "pago",
+        pago_em: "2026-06-10",
+        recebimentos: [{ valor: 500, recebido_em: "2026-06-10", transaction_id: "t-rec" }],
+      }),
+    ];
+    expect(reembolsosRecebidosNoPeriodo(itens, JUNHO, { somenteManuais: true })).toBe(0);
+  });
+
+  it("o legado K0 (pago sem nenhum recebimento) continua contando", () => {
+    const itens = [rec({ valor: 100, status: "pago", pago_em: "2026-06-10", recebimentos: [] })];
+    expect(reembolsosRecebidosNoPeriodo(itens, JUNHO, { somenteManuais: true })).toBe(100);
+  });
+
+  it("entradasManuaisDoRecebivel: só as manuais; vazio quando só há automáticas", () => {
+    const soAuto = rec({
+      valor: 500,
+      status: "pago",
+      pago_em: "2026-06-10",
+      recebimentos: [{ valor: 500, recebido_em: "2026-06-10", transaction_id: "t-rec" }],
+    });
+    expect(entradasManuaisDoRecebivel(soAuto)).toEqual([]);
+    const mista = rec({
+      recebimentos: [
+        { valor: 100, recebido_em: "2026-06-05" },
+        { valor: 50, recebido_em: "2026-06-06", transaction_id: "t-rec" },
+      ],
+    });
+    expect(entradasManuaisDoRecebivel(mista)).toEqual([
+      { centavos: 10000, data: "2026-06-05", origem: "recebimento" },
+    ]);
   });
 });
 

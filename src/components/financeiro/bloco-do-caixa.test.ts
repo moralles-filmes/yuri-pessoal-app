@@ -19,6 +19,7 @@ function numeros(sobre: Partial<NumerosDoCaixa> = {}): NumerosDoCaixa {
   return {
     rendaPessoalRecebida: 0,
     reembolsosRecebidos: 0,
+    reembolsosVinculados: 0,
     outrasEntradasDeTerceiros: 0,
     saidasDeCaixa: 0,
     pagamentosDeFatura: 0,
