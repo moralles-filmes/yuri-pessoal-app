@@ -144,12 +144,13 @@ describe("toda seção declarada entra na coluna", () => {
     }
   });
 
-  it("a central de cartões tem exatamente as cinco seções entregues até a 05-C T2", () => {
+  it("a central de cartões tem exatamente as seis seções entregues até a 05-C T5", () => {
     expect(itensDe(NAV_DA_CENTRAL_DE_CARTOES).map((item) => item.href)).toEqual([
       "/cartoes",
       "/faturas",
       "/cartoes/proximos-meses",
       "/parcelamentos",
+      "/cartoes/relatorios",
       "/cartoes/meus",
     ]);
   });
@@ -159,6 +160,11 @@ describe("toda seção declarada entra na coluna", () => {
     expect(hrefAtivo("/cartoes/proximos-meses", hrefs)).toBe("/cartoes/proximos-meses");
     expect(hrefAtivo("/cartoes", hrefs)).toBe("/cartoes");
   });
+
+  it("/cartoes/relatorios acende só o próprio item, não a Visão geral", () => {
+    const hrefs = itensDe(NAV_DA_CENTRAL_DE_CARTOES).map((item) => item.href);
+    expect(hrefAtivo("/cartoes/relatorios", hrefs)).toBe("/cartoes/relatorios");
+  });
 });
 
 describe("toda seção de módulo abre uma tela que existe", () => {
@@ -167,9 +173,9 @@ describe("toda seção de módulo abre uma tela que existe", () => {
   );
 
   it("há seção suficiente para a varredura significar alguma coisa", () => {
-    // 12 da Dieta + 13 de Treinos + 8 da IA + 5 da central de cartões. O piso é o que
+    // 12 da Dieta + 13 de Treinos + 8 da IA + 6 da central de cartões. O piso é o que
     // impede este bloco de passar verde sobre uma lista vazia.
-    expect(TODOS.length).toBeGreaterThanOrEqual(38);
+    expect(TODOS.length).toBeGreaterThanOrEqual(39);
   });
 
   it.each(TODOS)("%s → %s", (_modulo, href) => {
