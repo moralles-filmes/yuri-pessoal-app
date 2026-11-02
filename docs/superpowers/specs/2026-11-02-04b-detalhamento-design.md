@@ -11,6 +11,8 @@ desenhos da 04-A (§13) e da 04-A2 (L1–L5, D-A2-*, §11, §13 e a leitura R6 d
 `reports/financeiro.ts`, `reports/url-do-relatorio.ts`, as peças de `src/components/shared/painel/` e a página de
 Lançamentos.
 
+**Prévia aprovada pelo dono em 2026-11-02** ("Aprovado!"): Artifact privado `https://claude.ai/artifact/7M32NegMSqV64CwshzWDnp`, só com dado sintético.
+
 **Quem decidiu:** o dono delegou o desenho ("faz como ficar melhor na sua sugestão", 2026-11-02). Toda decisão
 abaixo é **minha**, com o custo se estiver errada, para o dono conferir na leitura. A **prévia** com dado sintético
 é aprovada por ele antes de qualquer código.
