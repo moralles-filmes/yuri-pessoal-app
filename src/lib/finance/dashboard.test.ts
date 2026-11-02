@@ -486,7 +486,7 @@ describe("gerarAlertas", () => {
     const alertas = gerarAlertas({
       hoje: "2026-06-15",
       resumoAtual,
-      mediaSaidas: 100, // 300 > 100 * 1.2 ⇒ gasto alto
+      regua: { saidas: resumoAtual.saidas, mediaSaidas: 100, ateODia: null, cartaoFora: false }, // 300 > 100 * 1.2 ⇒ gasto alto
       cards,
       statements,
       receivables,
@@ -504,7 +504,7 @@ describe("gerarAlertas", () => {
     const alertas = gerarAlertas({
       hoje: "2026-06-15",
       resumoAtual,
-      mediaSaidas: 1000, // 300 < 1000 * 1.2
+      regua: { saidas: resumoAtual.saidas, mediaSaidas: 1000, ateODia: null, cartaoFora: false }, // 300 < 1000 * 1.2
       cards: [],
       statements: [],
       receivables: [],

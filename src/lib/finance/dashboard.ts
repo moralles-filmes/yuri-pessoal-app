@@ -26,6 +26,7 @@
 import { addMonths, format, getDaysInMonth, parseISO } from "date-fns";
 import { resolverFatura, statusEfetivo } from "@/lib/finance/invoice";
 import { LIMIARES_DE_ALERTA } from "@/lib/finance/limiares-de-alerta";
+import type { ReguaDoGastoAlto } from "@/lib/finance/regua-do-gasto-alto";
 import { parteDoTerceiroCentavos, pendenteDoPeriodo, perdoadoCentavos } from "@/lib/finance/recebimentos";
 import { occurrenceOn } from "@/lib/finance/recurrence";
 import { centavosParaReais, reaisParaCentavos } from "@/lib/format";
@@ -895,31 +896,6 @@ export function mediaDeSaidas(pontos: readonly { mes: string; saidas: number }[]
     : 0;
 }
 
-/**
- * REDESIGN-03-B2 (B2) — A régua do alerta de gasto alto, a MESMA para a tela e para o sino.
- *
- * `saidas` é o mês `mes` INTEIRO (base competência, pendente incluído — §13.3); `mediaSaidas` é a
- * média dos até 5 meses ANTERIORES a `mes` que tiveram saída (`ultimosMeses(mes, 6)` sem o
- * último). É a conta que a página do dashboard financeiro sempre fez — e o Cron passou a fazer.
- *
- * Quem chama lê pelo menos `janelaDoGastoAlto(mes)` (pipeline.ts): meses fora dela entram como
- * sem saída, e seriam ignorados em silêncio.
- */
-export function reguaDoGastoAlto(params: {
-  mes: string;
-  transactions: DashTx[];
-  statements: DashStatement[];
-  receivables: DashReceivable[];
-}): { saidas: number; mediaSaidas: number } {
-  const { mes, transactions, statements, receivables } = params;
-  const saidasDe = (m: string) => resumoMes({ mes: m, transactions, statements, receivables }).saidas;
-  const anteriores = ultimosMeses(mes, 6).slice(0, -1);
-  return {
-    saidas: saidasDe(mes),
-    mediaSaidas: mediaDeSaidas(anteriores.map((m) => ({ mes: m, saidas: saidasDe(m) }))),
-  };
-}
-
 export type Alerta = {
   kind: "gasto_alto" | "limite_cartao" | "vencimento";
   severity: "warning" | "danger";
@@ -931,7 +907,7 @@ export type Alerta = {
 export function gerarAlertas(params: {
   hoje: string;
   resumoAtual: ResumoMes;
-  mediaSaidas: number;
+  regua: ReguaDoGastoAlto;
   cards: DashCard[];
   statements: DashStatement[];
   receivables: DashReceivable[];
@@ -941,8 +917,7 @@ export function gerarAlertas(params: {
 }): Alerta[] {
   const {
     hoje,
-    resumoAtual,
-    mediaSaidas,
+    regua,
     cards,
     statements,
     diasVencimentoAviso = LIMIARES_DE_ALERTA.diasDeAvisoDeVencimento,
@@ -952,16 +927,19 @@ export function gerarAlertas(params: {
 
   const alertas: Alerta[] = [];
 
-  // Gasto alto: saídas do mês acima da média recente × limiar.
-  if (mediaSaidas > 0 && resumoAtual.saidas > mediaSaidas * limiarGastoAltoPct) {
+  // Gasto alto: saídas acima da média recente × limiar. K3 (04-A): no mês em andamento a régua
+  // já vem cortada "até o dia D, sem o cartão" (`regua.ateODia`); no mês fechado, é a conta inteira.
+  if (regua.mediaSaidas > 0 && regua.saidas > regua.mediaSaidas * limiarGastoAltoPct) {
+    const pct = Math.round((regua.saidas / regua.mediaSaidas - 1) * 100);
     alertas.push({
       kind: "gasto_alto",
       severity: "warning",
       title: "Gasto acima da média",
-      detail: `As saídas do mês superam a média recente em ${Math.round(
-        (resumoAtual.saidas / mediaSaidas - 1) * 100,
-      )}%.`,
-      valor: resumoAtual.saidas,
+      detail:
+        regua.ateODia === null
+          ? `As saídas do mês superam a média recente em ${pct}%.`
+          : `As saídas à vista até o dia ${regua.ateODia} superam a média dos meses anteriores até o mesmo dia em ${pct}%. O cartão fica de fora desta conta.`,
+      valor: regua.saidas,
     });
   }
 

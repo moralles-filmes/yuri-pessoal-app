@@ -115,6 +115,8 @@ export type GenSpending = {
   mes: string; // 'yyyy-MM'
   saidas: number; // reais
   mediaSaidas: number; // reais
+  /** K3 (04-A): o dia do corte "até o dia D, sem o cartão"; ausente/`null` = mês inteiro. */
+  ateODia?: number | null;
 };
 
 /** Tarefa do módulo TO-DO (Fase 15). Datas em 'yyyy-MM-dd' puro. */
@@ -566,7 +568,10 @@ export function generateNotifications(input: GenerateInput): NotificationCandida
       type: "high_spending",
       priority: "medium",
       title: "Gasto acima da média",
-      description: `As saídas do mês superam a média recente em ${pct}% (${formatCurrency(sp.saidas)}).`,
+      description:
+        typeof sp.ateODia === "number"
+          ? `As saídas à vista do mês até o dia ${sp.ateODia} superam a média recente até o mesmo dia em ${pct}% (${formatCurrency(sp.saidas)}). O cartão fica de fora desta conta.`
+          : `As saídas do mês superam a média recente em ${pct}% (${formatCurrency(sp.saidas)}).`,
       link: "/dashboard/financeiro",
       entity_type: null,
       entity_id: null,

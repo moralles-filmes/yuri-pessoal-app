@@ -14,7 +14,6 @@ import {
   proximas6Faturas,
   projecaoProximosMeses,
   proximasContasPagar,
-  reguaDoGastoAlto,
   resumoMes,
   totalAReceber,
 } from "@/lib/finance/dashboard";
@@ -25,6 +24,7 @@ import {
 } from "@/lib/finance/pipeline";
 import { baseDaUrl } from "@/lib/finance/base";
 import { estadoDoCaixa } from "@/lib/finance/caixa-leitura";
+import { reguaDoGastoAlto } from "@/lib/finance/regua-do-gasto-alto";
 import { comparativoAteODia, comparativoDoGraficoAteODia } from "@/lib/finance/caixa";
 import { hojeISO } from "@/lib/format";
 import { DashboardClient } from "./financial-dashboard-client";
@@ -106,9 +106,11 @@ export default async function DashboardFinanceiroPage({
   });
 
   // A régua do alerta de gasto alto — a MESMA que o sino usa desde a 03-B2 (B2, decisão do dono):
-  // até 5 meses anteriores ao selecionado, mês sem saída ignorado. O número desta tela não mudou.
+  // até 5 meses anteriores ao selecionado, mês sem saída ignorado. K3 (04-A): no mês em andamento
+  // é até o dia D, sem o cartão.
   const regua = reguaDoGastoAlto({
     mes: mesSel,
+    hoje,
     transactions: txs,
     statements: sts,
     receivables: recs,
@@ -116,7 +118,7 @@ export default async function DashboardFinanceiroPage({
   const alertas = gerarAlertas({
     hoje,
     resumoAtual: resumo,
-    mediaSaidas: regua.mediaSaidas,
+    regua,
     cards: dashCards,
     statements: sts,
     receivables: recs,
