@@ -24,7 +24,9 @@ por merge `--no-ff` em `30964b8`, sem migration, **sem push** — D67) — **a R
 fechada** · **REDESIGN-04-A2 ✅** (integrada por merge `--no-ff` em `d5fb873`, sem
 migration, **sem push** — D67) · **REDESIGN-06 ✅** (integrada por merge `--no-ff` em
 `9915d99`, sem migration, **sem push** — D67) — **o Dashboard geral está no visual do print 2**
-· **04-B liberada** (o detalhamento por trás de cada número)
+· **REDESIGN-04-B ✅** (integrada por merge `--no-ff` em `e4b8aa8`, sem
+migration, **sem push** — D67) — **todo número do Painel e do Relatório abre os registros que o
+explicam** · falta a **04-C**; depois a **08**
 
 ⛔ **A M-F foi aplicada em 2026-10-21** (03-F), pelo MCP, depois do seu "Aplique" literal, numa
 mensagem só para isso (D63). Ela **não** estava no `MIGRATIONS.md`: nasceu da K0 da 03-F, com o
@@ -51,6 +53,59 @@ PR** ("faz o pr e tudo mais dessa no git", D66) — **o merge em `main` é seu**
 ⛔ **A partir de 2026-11-02 a publicação por partes ACABOU (D67, por custo da Vercel).** As
 próximas fases se acumulam em `feat/redesign-00-auditoria` **sem push** e vão a `main` num
 **PR único**, com **um merge só**, quando você pedir. O PR #65 (03-G2) fica aberto e é esse PR.
+
+---
+
+## REDESIGN-04-B — cada número abre os registros que o explicam ✅
+
+Branch `feat/redesign-04b-detalhamento`, nascida de `0f1358f` (17 commits), integrada por merge
+`--no-ff` em **`e4b8aa8`**, **local e sem push** (D67). O desenho é
+`docs/superpowers/specs/2026-11-02-04b-detalhamento-design.md` (o §13 tem o resultado inteiro) e o
+plano é `docs/superpowers/plans/2026-11-02-04b-detalhamento.md` (7 tarefas TDD). Prévia aprovada
+em 2026-11-02. **Sem migration.**
+
+**O que mudou.** Todo indicador e todo bloco numérico de `/dashboard/financeiro` e da aba
+Financeiro de `/relatorios` ganhou "Ver registros ›". Ele abre uma **gaveta sob demanda**
+(`?detalhe=<chave>&parte=&alvo=`, link compartilhável; de baixo no celular, à direita do `sm`
+para cima) com os registros, **com os mesmos filtros da tela** (mês, base, responsabilidade e
+recortes). O total é o número do motor e a lista sai dos **classificadores do próprio motor**
+(`detalheDoNumero`, puro, em `finance/detalhe.ts`); o rodapé declara "= total" ou a diferença com
+o valor. Cada registro mostra a coluna que concilia e as outras partes só quando dizem algo
+(meu × bruto × terceiros); cartão agrupado por fatura; marcas de **previsto**, **data
+aproximada** (`liquidado_em` nulo), **estorno**, **parcela k/N** e **projetado** (projeção nunca
+na gaveta do realizado). Estados distintos: **vazio** ("nenhum registro", nunca R$ 0,00),
+**falha**, **não segue** (sem lista falsa) e **parcial** (teto de 300, com aviso). O olho alcança
+a gaveta pelo contexto (`useOlhoDosValores`), porque ela vive num portal. **D-A2-6 decidida:** o
+caixa abre sem recorte; com recorte continua "não segue". Gráficos não abrem registros (D-B-17).
+Saldo abre por conta (`lerSaldoAte` por conta) e o rodapé dele leva às Contas — o atalho saiu do
+indicador, onde espremia o rótulo.
+
+**Provado na ponta:** `test:run` **348 / 7.845**, `lint`, `tsc`, `build` e `perf:bundle` verdes
+(`/dashboard/financeiro` 201,8 → **203,0 KB**, `/relatorios` 206,8 → **207,8 KB**; a gaveta fica
+fora do manifest); `TZ=UTC` em finance e reports: 1.452 ✅. Conciliação em **três lados**
+(registros × agregador × literal à mão), com mutações confirmadas por tarefa. md5 dos saldos igual
+à linha de base (`15d93bd1…`) no início e no fim. Conferência visual **com a sua sessão**,
+390/768/1280/1440, claro e escuro, Painel e Relatório (harness de iframes): todo número com
+registros fechou "= total" com dado real, nenhuma diferença apareceu, e ela achou dois defeitos,
+corrigidos com teste (parcela sem descrição → "Compra parcelada", como em Faturas; o rótulo do
+saldo espremido). Revisão final (Opus): nada crítico nem alto; cinco de seis achados corrigidos
+com teste (pendente do mês com recorte de pessoa, mês além da janela lida, "minha parte R$ 0,00",
+foco ao fechar, comentário).
+
+**Na integração:** dois conflitos, em `financial-dashboard-client.tsx` e
+`relatorios-client.tsx` — a 06 tinha movido `INDICADOR_PEQUENO_NO_CELULAR` para a peça comum; a
+cópia local da 04-B saiu. Os cinco comandos na árvore integrada: `test:run` **359 / 7.968** com
+**1 falha de ambiente** (`ai/approval/schema.test.ts`: as migrations desta worktree têm CRLF no
+checkout; o merge não toca `supabase/` nem `src/lib/ai/`, e a suíte passa inteira na worktree da
+04-B, sem CRLF) · `lint` ✅ · `tsc` ✅ · `build` ✅ · `perf:bundle` ✅; `TZ=UTC` em finance e
+reports: 1.456 ✅.
+
+**Pendências declaradas** (não consertadas, com destino no §13 do desenho): num mês além da
+janela lida (+5 meses) o **indicador** ainda mostra R$ 0,00 — anterior à 04-B; a gaveta já
+declara a falha (decisão sua: limitar o seletor de mês ou ampliar a janela); o `Link` do
+`Indicador` sem `scroll={false}` (a peça é usada por outras três telas para mudar de rota);
+fechar a gaveta deixa uma entrada repetida no histórico; "Faturas dos próximos meses" do
+Relatório sem detalhamento (o modelo agrega por mês, sem id de fatura).
 
 ---
 
@@ -1401,6 +1456,7 @@ as colunas já existem e o CHECK já aceita.
 | D63 | **03-F: K0–K3 decididas por você, uma de cada vez, e o desenho aprovado** ("Aprovado"). A **M-F** (`pagar_fatura` e `desfazer_pagamento_fatura`, que **não** estava no `MIGRATIONS.md`) entrou com o seu "Aplique", numa mensagem só para isso, pelo MCP, conferida pelo objeto (`pg_proc`: invoker, `search_path` vazio, grants) e não pela versão do histórico (D59). **Antes do aplique, o `migration-validator` achou três guardas de lógica (P3) e você as incluiu** ("Incluir as três") — a D-F12 do contrato; o FINDING-005 (referências do payload não conferidas) ficou como risco aceito (RR-F-4). O gerador de tipos trouxe de novo a relationship de `import_rows` e a sintaxe nova dos genéricos; **só as duas funções** entraram. A prova no banco é **sequencial** (o MCP serializa as chamadas, sem `dblink`) e o `delete` da fatura sintética voltou `declined` — a remoção ficou com você. Integrada na sessão que a escreveu, ao você pedir o prompt da próxima fase (memória de 2026-10-11): merge `--no-ff` em `84bf87b`, árvore idêntica à da ponta; **push e PR só com o seu aval** |
 | D65 | **Referência visual do Painel financeiro e do Dashboard** (2026-10-25, a seu pedido: *"Vamos seguir o plano que já tem, mas adaptar para a referência visual. Esquece a sidebar."*). O print 1 vira o alvo da **04-A** (`/dashboard/financeiro`), o print 2 o da **06**, e o relatório de `/relatorios` ganha a **04-A2** com as mesmas peças. Os prints **não** entram no repositório (público; o print 2 tem cara de dado real), então são descritos em palavras em `REFERENCIA-VISUAL.md`, com os desvios no §6 (sem metas financeiras, sem logos de banco, sem últimos dígitos, rosca na paleta validada, base sempre visível). A sequência antiga da 06 (Prioridades do dia, Organização, Saúde) foi substituída pela do print. Nenhuma migration, nenhuma regra de negócio mudou |
 | D68 | **04-A: K1–K5 decididas por você, uma de cada vez; K6 e K7 por delegação** ("Pode seguir como achar melhor"), e o desenho, a prévia e o plano aprovados. Executada na sessão que a escreveu (inline, um commit por passo), com revisão final da branch inteira e **sem** auditoria de módulo. Integrada **localmente** em `a972712` a seu pedido ("envia o prompt da proxima fase"), **sem push** (D67). O `.env.local` foi copiado para a worktree com a sua autorização (ignorado pelo git). **Custo aceito:** a régua do sino mudou de texto e de critério junto com a do painel (K3) — um alerta de gasto alto que aparecia no meio do mês pode deixar de aparecer, porque a comparação passou a ser justa |
+| D73 | **04-B: "onde abrir" e a D-A2-6 delegados a mim** ("faz como ficar melhor na sua sugestão"): gaveta sob demanda por `?detalhe=`, construída no servidor; caixa abre sem recorte e com recorte continua "não segue". A prévia foi aprovada por você ("Aprovado!") antes do código; o aval para copiar o `.env.local` à worktree e para integrar ("pode integrar") também. Integrada local, sem push (D67) |
 | D72 | **04-A2: decididos por você** o recorte honesto (o bloco que o filtro não alcança diz "não segue", nunca zero), a responsabilidade "meu" como padrão (como o painel), os três controles sem JS novo, o recorte de pessoa só no que é item a item e o pendente só o dela; a prévia, o desenho e o plano aprovados em 2026-11-02. Integrada local, sem push (D67) |
 | D71 | **05-C: decididos por você a prévia com a grade transposta (meses nas linhas, cartões nas colunas), Relatórios em tela própria mais a correção da aba Cartões de `/relatorios`, a navegação na ordem do `NAVEGACAO.md` §4 e as três pendências de `/faturas` (prevista de qualquer mês, desativado sem prevista, olho)**. O desenho e o plano foram aprovados. A execução seguiu o ai-router, com subagentes Sonnet e Haiku, porque o Codex e o DeepSeek estavam indisponíveis. Houve revisão final da branch e **nenhuma** auditoria de módulo. Integrada **localmente** em `30964b8` a seu pedido ("Me envia o prompt da proxima fase"), **sem push** (D67). O `.env.local` foi copiado para a worktree para a conferência visual e apagado no fim. A próxima fase é a **06**, por sua escolha |
 | D70 | **05-B: a prévia (com as quatro escolhas do agente: um cartão por vez, projeção = "sem lançamentos conhecidos", "Pagar antes de fechar" mantido, total ≤ 0 fora de "Precisam de pagamento"), o desenho e o plano foram aprovados por você**, e o selo da fatura vencida de total zero ficou **idêntico** ao da Visão geral ("Pode manter identico"). Executada por subagentes Haiku/Sonnet via router (os workers externos estavam indisponíveis), com revisão final da branch inteira e **sem** auditoria de módulo. Integrada **localmente** em `bae44af` a seu pedido ("Me envia o prompt da proxima fase da 5"), **sem push** (D67). O `.env.local` foi copiado para a worktree para a conferência visual e apagado depois (ignorado pelo git) |
@@ -1593,7 +1649,16 @@ Os cinco comandos rodaram sobre essa árvore e passaram: `test:run` **331 / 7.39
 `tsc`, `build` e `perf:bundle` (mediana **202,3**, 71 rotas dentro). Na worktree de integração,
 uma rodada foi contaminada por um merge alheio, abortado no meio dela (ver Pendências da 05-C).
 
-## Próximo passo — REDESIGN-04-B (Detalhamento) e 04-C; depois a REDESIGN-08
+## Próximo passo — REDESIGN-04-C (reembolso); depois a REDESIGN-08
+
+**A 04-B está integrada** (`e4b8aa8`). Falta a **04-C** (`feat/redesign-04c-reembolso`, em
+`C:/tmp/04c-reembolso`, em outra sessão — no plano, `264aa8d`). Ela toca peças comuns já mexidas
+pela 06 e pela 04-B (`indicador.tsx`, `card-sem-leitura.tsx`, os clientes do Painel e do
+Relatório): a integração pode ter conflito ali. Fechada e integrada a 04-C, vem a **REDESIGN-08**
+(regressão e entrega: o prompt já foi entregue a você e exige as duas integradas no portão) e o
+merge do **PR único #65** (D67), quando você pedir.
+
+### Histórico — o passo anterior (04-B e 04-C)
 
 **A 06 está integrada** (`9915d99`). Falta a **04-B** (todo indicador abre os registros que o
 explicam, e os totais conciliam), que anda em `C:/tmp/04b-detalhamento`, e a **04-C**
