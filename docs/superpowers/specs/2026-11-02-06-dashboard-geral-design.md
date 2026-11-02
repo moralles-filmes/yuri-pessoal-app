@@ -9,7 +9,7 @@ descrito em `docs/redesign/REFERENCIA-VISUAL.md` §2, §5, §6 e §7. ⛔ Nunca 
 
 **Prévia aprovada pelo dono em 2026-11-02** ("Aprovado!"): Artifact privado
 `https://claude.ai/artifact/P67zPK3mhW1gPqgJ28A2nG`, só com dado sintético (hoje fictício
-terça, 18/11/2026; "Nome", "Cartão A/B/C", "Tarefa A…D", "Categoria A…J"). Ela é a referência de
+quarta, 18/11/2026; "Nome", "Cartão A/B/C", "Tarefa A…D", "Categoria A…J"). Ela é a referência de
 layout deste documento, nas 4 larguras e nos 2 temas, com os estados Personalizar, falha num card,
 falha na faixa, leitura parcial e olho fechado.
 
@@ -234,7 +234,7 @@ regra nenhuma nova). A frase é uma só, num ponto só.
   subtítulo chega por prop (`subtitulo?: string`) calculado no servidor pela página, porque
   depende de `hoje`.
 - **Cards de "hoje" dizem que são de hoje:** TO-DO, Dieta, Tarefas & Rotinas e Hábitos recebem o
-  subtítulo **"hoje, <dia da semana abreviado> DD/MM"** (ex.: "hoje, ter 18/11"), feito de
+  subtítulo **"hoje, <dia da semana abreviado> DD/MM"** (ex.: "hoje, qua 18/11"), feito de
   `hojeISO()` como texto (data pura, nunca `new Date()` do processo). Agenda diz "Eventos hoje
   (DD/MM)" no quadro. Financeiro diz "<mês> · competência". Treinos diz a semana ("semana de DD/MM
   a DD/MM") **dentro do corpo do card**, não no subtítulo: o início da semana depende de

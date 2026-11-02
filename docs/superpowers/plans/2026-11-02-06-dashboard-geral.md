@@ -147,13 +147,13 @@ Regras (spec §4.3–§4.4): os números do mês usam **só** `doMes`. Barras e 
 
 **Interfaces:**
 - Produces:
-  - `rotuloDeHoje(hojeIso: string): string` → `"hoje, ter 18/11"` (dia da semana abreviado minúsculo sem ponto: dom seg ter qua qui sex sáb; calculado com `Date.UTC` sobre o texto, nunca o fuso do processo).
+  - `rotuloDeHoje(hojeIso: string): string` → `"hoje, qua 18/11"` (dia da semana abreviado minúsculo sem ponto: dom seg ter qua qui sex sáb; calculado com `Date.UTC` sobre o texto, nunca o fuso do processo).
   - `rotuloDoDia(hojeIso: string): string` → `"18/11"`.
   - `visaoDoPeriodo(p: DashPeriod): DashView` em `period.ts` → `semana`→`"semana"`, `hoje`→`"dia"`, demais→`"mes"` (a regra que hoje está inline em `selectPeriod` de `period-toolbar.tsx`).
   - `payloadDoSalvar(p: { order: DashCardId[]; hidden: DashCardId[]; periodoPadrao: DashPeriod }): DashboardLayoutInput` → `{ order, hidden, period: periodoPadrao, view: visaoDoPeriodo(periodoPadrao) }` em `period.ts` (importa o tipo de `@/lib/validators/settings` só como `import type`).
 
 - [ ] **Step 1: Testes que falham**
-  - `rotuloDeHoje("2026-11-18") === "hoje, ter 18/11"`; `rotuloDeHoje("2026-11-22") === "hoje, dom 22/11"`; `rotuloDeHoje("2026-11-21") === "hoje, sáb 21/11"`.
+  - `rotuloDeHoje("2026-11-18") === "hoje, qua 18/11"`; `rotuloDeHoje("2026-11-22") === "hoje, dom 22/11"`; `rotuloDeHoje("2026-11-21") === "hoje, sáb 21/11"`.
   - `visaoDoPeriodo("hoje") === "dia"`, `("semana") === "semana"`, `("mes") === "mes"`, `("anterior") === "mes"`, `("custom") === "mes"`.
   - **Review Focus 3:** `payloadDoSalvar({ order, hidden, periodoPadrao: "hoje" })` ⇒ `{ order, hidden, period: "hoje", view: "dia" }` (o período da URL não é parâmetro: não há como vazar).
 - [ ] **Step 2:** Rodar `npx vitest run src/lib/dashboard/rotulos.test.ts src/lib/dashboard/period.test.ts` → FAIL.
