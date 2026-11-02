@@ -24,6 +24,7 @@ import {
   type LinhaParcela,
   type LinhaRecebivel,
   type LinhaTx,
+  janelaDoRelatorio,
 } from "@/lib/finance/pipeline";
 import { totalPendenteAte, type RecebivelComRecebimentos } from "@/lib/finance/recebimentos";
 import { reaisParaCentavos } from "@/lib/format";
@@ -978,5 +979,34 @@ describe("disciplina do arquivo", () => {
     expect(fonte).not.toMatch(/new Date\(\s*\)/);
     expect(fonte).not.toMatch(/^import\s+(?!type)[^;]*caixa-leitura/m);
     expect(fonte).toMatch(/import type \{[^}]*\} from "@\/lib\/finance\/caixa-leitura"/);
+  });
+});
+
+describe("mês além da janela lida (revisão final, achado 2)", () => {
+  // As duas telas leem `janelaDoRelatorio`: até o fim de (mês atual + 5). Hoje é 18/11/2026,
+  // então abril de 2027 é o último mês com lançamentos lidos.
+  const casos: [ParametrosDoDetalhe["pedido"]["chave"], string | null][] = [
+    ["entradas", null],
+    ["saidas", null],
+    ["cartao", null],
+    ["categoria", "sem-categoria"],
+    ["forma", "pix"],
+    ["pendente-do-mes", null],
+  ];
+
+  it.each(casos)("%s em maio de 2027 é falha declarada, nunca 'nenhum registro'", (chave, alvo) => {
+    const d = pedir(chave, "meu", alvo, { mes: "2027-05" });
+    expect(d.estado).toBe("falha");
+    if (d.estado === "falha") expect(d.frase).toBe(
+      "Este mês fica além do período que a tela lê (até 04/2027): os registros dele não foram lidos.",
+    );
+  });
+
+  it("o limite é o fim da janela que as telas leem", () => {
+    expect(janelaDoRelatorio({ mesSel: "2026-11", mesAtual: "2026-11" }).to).toBe("2027-04-30");
+  });
+
+  it("abril de 2027 ainda é lido (não é falha)", () => {
+    for (const [chave, alvo] of casos) expect(pedir(chave, "meu", alvo, { mes: "2027-04" }).estado).not.toBe("falha");
   });
 });

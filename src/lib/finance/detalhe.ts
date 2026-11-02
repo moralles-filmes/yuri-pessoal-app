@@ -51,6 +51,7 @@ import {
   SETTLED_STATUSES,
 } from "@/lib/finance/constants";
 import {
+  addMes,
   ehEntradaDeConta,
   gastosPorCategoria,
   gastosPorForma,
@@ -1218,10 +1219,28 @@ function linhaDoCaixaDetalhe(p: ParametrosDoDetalhe, c: ContextoDoCaixa): Result
 
 const FRASE_CAIXA_NAO_LIDO = "Não foi possível ler o caixa agora.";
 
+/**
+ * O último mês que as telas leem: `janelaDoRelatorio` vai até o fim de (mês atual + 5). Além dele
+ * não há lançamento lido, e "nenhum registro" seria o vazio falso que o D-B-16 proíbe.
+ */
+const MESES_LIDOS_ADIANTE = 5;
+
+/** As chaves cujos registros dependem dos lançamentos DO mês (competência). */
+const DEPENDEM_DO_MES = new Set<ChaveDoDetalhe>(["entradas", "saidas", "cartao", "categoria", "forma", "pendente-do-mes"]);
+
+function alemDaJanela(p: ParametrosDoDetalhe): string | null {
+  if (p.base === "caixa" || !DEPENDEM_DO_MES.has(p.pedido.chave)) return null;
+  const ultimo = addMes(mesDe(p.hoje), MESES_LIDOS_ADIANTE);
+  if (p.mes <= ultimo) return null;
+  return `Este mês fica além do período que a tela lê (até ${ultimo.slice(5, 7)}/${ultimo.slice(0, 4)}): os registros dele não foram lidos.`;
+}
+
 function preparar(p: ParametrosDoDetalhe): Resultado {
   const ctx = contextoDe(p);
   const { chave } = p.pedido;
   const noCaixa = p.base === "caixa";
+  const fora = alemDaJanela(p);
+  if (fora !== null) return { tipo: "falha", titulo: tituloDoPedido(p), frase: fora };
 
   switch (chave) {
     case "entradas":
