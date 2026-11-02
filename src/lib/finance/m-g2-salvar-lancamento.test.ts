@@ -35,18 +35,25 @@ const CRIA_PARCELADA = "create or replace function public.criar_compra_parcelada
 
 const DA_SALVAR = ARQUIVOS.filter((f) => ler(f).includes(CRIA_SALVAR));
 const DA_PARCELADA = ARQUIVOS.filter((f) => ler(f).includes(CRIA_PARCELADA));
-const SQL = DA_SALVAR.length === 1 ? ler(DA_SALVAR[0]) : "";
+/**
+ * 04-C (DV-1, DV-2): `salvar_lancamento` foi redefinido por
+ * `20261102120100_reembolso_salvar_lancamento.sql`. As conferências da função leem a definição
+ * MAIS NOVA (o nome do arquivo é a ordem de aplicação); as regras de forma valem para cada arquivo
+ * que define uma das duas.
+ */
+const ultimo = (lista: string[]) => (lista.length > 0 ? ler(lista[lista.length - 1]) : "");
+const SQL = [...new Set([...DA_SALVAR, ...DA_PARCELADA])].map(ler).join(" ");
 
 /** O trecho de uma função: da criação até o fim do corpo (`$$;`). */
-function corpo(inicio: string): string {
-  const de = SQL.indexOf(inicio);
+function corpo(sql: string, inicio: string): string {
+  const de = sql.indexOf(inicio);
   if (de < 0) return "";
-  const ate = SQL.indexOf("$$;", de);
-  return ate < 0 ? "" : SQL.slice(de, ate + 3);
+  const ate = sql.indexOf("$$;", de);
+  return ate < 0 ? "" : sql.slice(de, ate + 3);
 }
 
-const SALVAR = corpo(CRIA_SALVAR);
-const PARCELADA = corpo(CRIA_PARCELADA);
+const SALVAR = corpo(ultimo(DA_SALVAR), CRIA_SALVAR);
+const PARCELADA = corpo(ultimo(DA_PARCELADA), CRIA_PARCELADA);
 const FORA_DAS_FUNCOES = SQL.replace(/\$\$.*?\$\$/g, "$$$$");
 
 /** Afirma que cada trecho aparece, e na ordem dada. */
@@ -70,9 +77,12 @@ function colunasDoInsert(texto: string, tabela: string): string[] {
 }
 
 describe("03-G2 · M-G2 — salvar_lancamento e criar_compra_parcelada", () => {
-  it("existe exatamente um arquivo, e ele cria as duas funções", () => {
-    expect(DA_SALVAR).toHaveLength(1);
-    expect(DA_PARCELADA).toEqual(DA_SALVAR);
+  it("a M-G2 cria as duas funções, e só a 04-C redefine salvar_lancamento depois dela", () => {
+    expect(DA_PARCELADA).toEqual(["20261025120000_salvar_lancamento_atomico.sql"]);
+    expect(DA_SALVAR).toEqual([
+      "20261025120000_salvar_lancamento_atomico.sql",
+      "20261102120100_reembolso_salvar_lancamento.sql",
+    ]);
     expect(SALVAR).not.toBe("");
     expect(PARCELADA).not.toBe("");
   });
@@ -144,8 +154,10 @@ describe("03-G2 · M-G2 — salvar_lancamento e criar_compra_parcelada", () => {
     ]);
   });
 
-  it("o recebimento registrado protege em qualquer alcance; o status, só na regra cheia", () => {
-    expect(SALVAR).toContain("exists (select 1 from public.receivable_receipts rr where rr.receivable_id = rc.id)");
+  it("o recebimento MANUAL protege em qualquer alcance (04-C, §5.6); o status, só na regra cheia", () => {
+    expect(SALVAR).toContain(
+      "exists (select 1 from public.receivable_receipts rr where rr.receivable_id = rc.id and rr.transaction_id is null)",
+    );
     expect(SALVAR).toContain("(v_alcance = 'regra-cheia' and rc.status in (");
   });
 
@@ -153,6 +165,8 @@ describe("03-G2 · M-G2 — salvar_lancamento e criar_compra_parcelada", () => {
     for (const tabela of ["accounts", "credit_cards", "card_statements", "categories", "subcategories", "people"]) {
       expect(SALVAR).toContain(`from public.${tabela}`);
     }
+    // 04-C: a pessoa do reembolso também (a FK composta não passa pela RLS do PostgREST).
+    expect(SALVAR).toContain("from public.people where id = (p_lancamento ->> 'reembolso_pessoa_id')::uuid");
     expect(SALVAR.match(/from public\.people p where p\.id = x\.person_id/g) ?? []).toHaveLength(2);
     expect(SALVAR).toContain("and i.status = 'ativa'");
   });

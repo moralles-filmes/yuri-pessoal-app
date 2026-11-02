@@ -152,8 +152,8 @@ describe("montarLinhaDoLancamento", () => {
     }
   });
 
-  it("as chaves possíveis são um subconjunto de COLUNAS_DA_LINHA, e COLUNAS_DA_LINHA tem 19", () => {
-    expect(COLUNAS_DA_LINHA).toHaveLength(19);
+  it("as chaves possíveis são um subconjunto de COLUNAS_DA_LINHA, e COLUNAS_DA_LINHA tem 20 (04-C: reembolso_pessoa_id)", () => {
+    expect(COLUNAS_DA_LINHA).toHaveLength(20);
     const completa = montarLinhaDoLancamento(entrada(), {
       ...SEM_VINCULO,
       colunas: { classificacao: "pessoal", valor_pessoal: null },
@@ -161,7 +161,7 @@ describe("montarLinhaDoLancamento", () => {
     for (const chave of Object.keys(completa)) {
       expect(COLUNAS_DA_LINHA).toContain(chave);
     }
-    // E o inverso: com `colunas`, nenhuma das 19 fica de fora.
+    // E o inverso: com `colunas`, nenhuma das 20 fica de fora.
     expect(Object.keys(completa).sort()).toEqual([...COLUNAS_DA_LINHA].sort());
   });
 });
