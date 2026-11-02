@@ -73,6 +73,7 @@ function leituraDaVariacao(pct: number | null): {
  *
  * ⛔ Erro de leitura nunca vira zero: o estado `{ erro }` mostra o texto, não um valor. E a linha
  * de base (o que o número mede) fica sempre visível — número sem base não se interpreta.
+ * `{ ausente }` é a falta de valor medido (ex.: fatura prevista): nem erro, nem zero.
  */
 export function Indicador({
   tom,
@@ -92,7 +93,7 @@ export function Indicador({
   icone: LucideIcon;
   rotulo: string;
   dica: string;
-  valor: string | { erro: string };
+  valor: string | { erro: string } | { ausente: string };
   linhaDeBase: string;
   /** Detalhe que contém dinheiro (ex.: "+ R$ X de terceiros"): some junto com o olho. */
   detalheComValor?: string | null;
@@ -145,6 +146,8 @@ export function Indicador({
                 R$ ••••
               </span>
             </p>
+          ) : "ausente" in valor ? (
+            <p className="text-sm italic text-muted-foreground">{valor.ausente}</p>
           ) : (
             <p className="text-sm text-muted-foreground">{valor.erro}</p>
           )}
