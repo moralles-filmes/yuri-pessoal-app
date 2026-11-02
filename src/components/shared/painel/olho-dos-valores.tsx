@@ -47,6 +47,17 @@ export function OlhoDosValores({
   );
 }
 
+/**
+ * 04-B (D-B-13) — o estado do olho para quem vive num PORTAL. A gaveta de registros é desenhada
+ * fora do invólucro `group/olho`, e o seletor CSS não a alcança; o portal preserva o contexto do
+ * React, não o DOM. Ela lê daqui e repõe `data-ocultar` no próprio invólucro. `null` fora de um
+ * `OlhoDosValores`.
+ */
+export function useOlhoDosValores(): { oculto: boolean } | null {
+  const estado = useContext(OlhoContext);
+  return estado ? { oculto: estado.oculto } : null;
+}
+
 /** Botão do olho. Só funciona dentro de `OlhoDosValores`; fora dele não renderiza nada. */
 export function BotaoDoOlho() {
   const estado = useContext(OlhoContext);
