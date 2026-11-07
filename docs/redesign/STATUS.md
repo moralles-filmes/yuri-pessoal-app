@@ -1,6 +1,6 @@
 # STATUS
 
-**Atualizado:** 2026-11-02
+**Atualizado:** 2026-11-06
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
 REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
@@ -26,7 +26,8 @@ migration, **sem push** — D67) · **REDESIGN-06 ✅** (integrada por merge `--
 `9915d99`, sem migration, **sem push** — D67) — **o Dashboard geral está no visual do print 2**
 · **REDESIGN-04-B ✅** (integrada por merge `--no-ff` em `e4b8aa8`, sem
 migration, **sem push** — D67) — **todo número do Painel e do Relatório abre os registros que o
-explicam** · falta a **04-C**; depois a **08**
+explicam** · **REDESIGN-04-C ✅** (integrada por merge `--no-ff` em `86d850a`, **com a M1, a M2 e
+a M3 aplicadas**, **sem push** — D67) — **a REDESIGN-04 está fechada** · próximo: a **08**
 
 ⛔ **A M-F foi aplicada em 2026-10-21** (03-F), pelo MCP, depois do seu "Aplique" literal, numa
 mensagem só para isso (D63). Ela **não** estava no `MIGRATIONS.md`: nasceu da K0 da 03-F, com o
@@ -53,6 +54,64 @@ PR** ("faz o pr e tudo mais dessa no git", D66) — **o merge em `main` é seu**
 ⛔ **A partir de 2026-11-02 a publicação por partes ACABOU (D67, por custo da Vercel).** As
 próximas fases se acumulam em `feat/redesign-00-auditoria` **sem push** e vão a `main` num
 **PR único**, com **um merge só**, quando você pedir. O PR #65 (03-G2) fica aberto e é esse PR.
+
+---
+
+## REDESIGN-04-C — o reembolso abate sozinho o que a pessoa deve ✅ (a 04 fecha)
+
+Branch `feat/redesign-04c-reembolso-impl`, nascida de `a034bb8` (21 commits), integrada por merge
+`--no-ff` em **`86d850a`**, **local e sem push** (D67). A branch do desenho e do plano
+(`feat/redesign-04c-reembolso`, `264aa8d`) entrou por cherry-pick na de implementação e foi
+registrada em seguida com `-s ours` (`6f12137`), só para as duas pontas serem ancestrais. O
+desenho é `docs/superpowers/specs/2026-10-25-reembolso-de-terceiros-design.md` (o §11 reconcilia
+com o código de 2026-11-02; o **§13 tem o resultado inteiro**, as decisões com custo e a invariante
+nova) e o plano é `docs/superpowers/plans/2026-10-25-04c-reembolso-de-terceiros.md` (9 tarefas TDD).
+
+**O que mudou.** Uma receita marcada como de uma pessoa (`transactions.reembolso_pessoa_id`,
+status `recebido`) **é** o pagamento dela e abate sozinha o que ela deve, da dívida mais antiga
+para a mais nova, parcelas futuras incluídas, com pagamento parcial. Quando passa do que ela deve,
+o dono escolhe — sem padrão — se a sobra é **receita dele** ou **saldo a favor** da pessoa (que
+abate sozinho as próximas compras divididas). O lançamento ganha "De quem?" e a prévia
+("deve R$ X → passa a dever R$ Y"); a importação do extrato ganha o mesmo por linha, com a prévia
+em sequência por pessoa. `/terceiros` vira **uma ficha por pessoa**: o total que deve (igual ao
+do Painel, por teste — RR-D-21), o saldo a favor, e Em aberto (sem chip de parcial), Pagamentos
+(as receitas vinculadas), Pagos e Não será cobrado. **Saem** o Receber, o receber em massa e o
+diálogo de registrar recebimento. Na base caixa, o reembolso entra **uma vez** (RR7, K2, RR-E-4).
+
+**Banco.** Três migrations, aplicadas com o seu "aplique": **M1** (o vínculo, FKs compostas,
+colunas da revisão da importação) pelo MCP; **M2** (`realocar_reembolsos_da_pessoa` + 6 triggers
+de instrução em `transactions` e `receivables`) e **M3** (`salvar_lancamento` com a pausa por
+GUC) **por você no SQL Editor** (o MCP recusou). Nenhuma escreve `receivables.status`; o saldo a
+favor é derivado. md5 dos saldos **`15d93bd1…` antes e depois de cada migration** e no fim. Os
+casos dourados rodaram **nos dois lados**: Vitest (`reembolso-casos.ts`) e o banco
+(`scripts/finance/verificar-reembolso.sql`, em `begin … rollback`, rodado por você: "todos os
+casos conferem").
+
+**Provado na ponta:** `test:run` **364 / 8.201**, `lint`, `tsc`, `build` e `perf:bundle` verdes
+(`/financeiro/lancamentos` 212,9 → **214,9 KB**, `/importar` 203,1 → **206,3**, `/terceiros`
+210,5 → **210,6**, `/relatorios` 208,0 → **208,1**, `/dashboard/financeiro` **203,2** igual;
+mediana 202,7); `TZ=UTC` em finance, reports e import: 1.824 ✅; conciliações da 04-A, 04-A2 e
+04-B verdes sem mudar número. Mutação confirmada em toda regra nova. Conferência visual **com a sua
+sessão** (harness de iframes): nenhuma rolagem horizontal nas 4 telas × 4 larguras; ficha por
+pessoa, formulário, prévia e caixa vistos em claro e escuro. Ela achou **um defeito, corrigido**
+(`5c27911`): trocar o tipo para receita levava o status "Pago" da despesa, e a realocação só conta
+`recebido`. Revisão final (Opus): nada crítico nem alto; o P2 (desfazer recebimento manual não
+realocava) e três P3 corrigidos com teste (`3293037`).
+
+**Na integração:** sem conflito (a ponta nasceu de `a034bb8`, a ponta desta branch); a árvore
+integrada é **idêntica** à da ponta. Os cinco comandos na árvore integrada: `test:run` **364 /
+8.201** com **1 falha de ambiente** (`ai/approval/schema.test.ts`, CRLF nas migrations desta
+worktree — a mesma das integrações anteriores; o merge não toca `src/lib/ai/`) · `lint` ✅ · `tsc`
+✅ · `build` ✅ · `perf:bundle` ✅.
+
+**Pendências declaradas** (não consertadas, com destino no §13.5 do desenho): deadlock plausível
+entre duas edições simultâneas de despesas divididas com a mesma pessoa (migration que ordena o
+lock em `salvar_lancamento`); alocação parcial numa dívida depois perdoada fica nela (decisão sua);
+`registrarRecebimento`/`receberSaldo` e as frases "clique em Receber" sem consumidor (limpeza); "De
+quem?" sem a pessoa vinculada inativa; o sino continua por recebível; o diálogo de reembolso da
+importação **não foi visto** no navegador (nenhum lote de extrato com receita em revisão). ⚠️ **A
+invariante nova está no §13.6 do desenho e NÃO foi copiada para o `CLAUDE.md`** — nesta fase você
+proibiu editá-lo; copie quando quiser.
 
 ---
 
@@ -1459,6 +1518,7 @@ as colunas já existem e o CHECK já aceita.
 | D73 | **04-B: "onde abrir" e a D-A2-6 delegados a mim** ("faz como ficar melhor na sua sugestão"): gaveta sob demanda por `?detalhe=`, construída no servidor; caixa abre sem recorte e com recorte continua "não segue". A prévia foi aprovada por você ("Aprovado!") antes do código; o aval para copiar o `.env.local` à worktree e para integrar ("pode integrar") também. Integrada local, sem push (D67) |
 | D72 | **04-A2: decididos por você** o recorte honesto (o bloco que o filtro não alcança diz "não segue", nunca zero), a responsabilidade "meu" como padrão (como o painel), os três controles sem JS novo, o recorte de pessoa só no que é item a item e o pendente só o dela; a prévia, o desenho e o plano aprovados em 2026-11-02. Integrada local, sem push (D67) |
 | D71 | **05-C: decididos por você a prévia com a grade transposta (meses nas linhas, cartões nas colunas), Relatórios em tela própria mais a correção da aba Cartões de `/relatorios`, a navegação na ordem do `NAVEGACAO.md` §4 e as três pendências de `/faturas` (prevista de qualquer mês, desativado sem prevista, olho)**. O desenho e o plano foram aprovados. A execução seguiu o ai-router, com subagentes Sonnet e Haiku, porque o Codex e o DeepSeek estavam indisponíveis. Houve revisão final da branch e **nenhuma** auditoria de módulo. Integrada **localmente** em `30964b8` a seu pedido ("Me envia o prompt da proxima fase"), **sem push** (D67). O `.env.local` foi copiado para a worktree para a conferência visual e apagado no fim. A próxima fase é a **06**, por sua escolha |
+| D71 | **04-C: o §11 (reconciliação com o código de 2026-11-02) e a tela de Terceiros por pessoa (§11.3) foram aprovados por você** antes de qualquer código. Executada por subagentes Sonnet via router (Codex e DeepSeek indisponíveis), com revisão final no modelo mais capaz e **sem** auditoria de módulo. As três migrations só depois de um "aplique" seu, uma por mensagem; a M2 e a M3 por você no SQL Editor, conferidas pelo objeto (D59). O `.env.local` foi copiado para a worktree para a conferência visual, com o seu aval, e apagado depois. Integrada **localmente** em `86d850a` a seu pedido ("Integre a 04c"), **sem push** (D67). **Custo aceito:** o desfazer de recebimento manual realoca pelo TS (sem trigger de delete), e o `CLAUDE.md` fica sem a invariante até você copiá-la |
 | D70 | **05-B: a prévia (com as quatro escolhas do agente: um cartão por vez, projeção = "sem lançamentos conhecidos", "Pagar antes de fechar" mantido, total ≤ 0 fora de "Precisam de pagamento"), o desenho e o plano foram aprovados por você**, e o selo da fatura vencida de total zero ficou **idêntico** ao da Visão geral ("Pode manter identico"). Executada por subagentes Haiku/Sonnet via router (os workers externos estavam indisponíveis), com revisão final da branch inteira e **sem** auditoria de módulo. Integrada **localmente** em `bae44af` a seu pedido ("Me envia o prompt da proxima fase da 5"), **sem push** (D67). O `.env.local` foi copiado para a worktree para a conferência visual e apagado depois (ignorado pelo git) |
 | D69 | **05-A: o layout "B" da Visão geral, fechada × aberta em tabelas separadas e Meus cartões inalterado foram decididos por você**, e a prévia foi aprovada em 2026-11-02 (16 prints, fora do git). Integrada **localmente** em `6cfa3b9` a seu pedido ("integre a 05-A"), **sem push** (D67), numa sessão que não a escreveu: os cinco foram rodados de novo sobre a árvore integrada. Merge sem conflito com a 04-A. **Custo aceito:** os links para `/cartoes` (busca, `card_limit`, IA) passam a abrir a Visão geral, e não a lista de cartões |
 | D67 | **Fim da publicação por partes** (2026-11-02, a seu pedido: *"juntarmos todas as proximas fases em um unico PR e fazer merge uma vez so, pois o deploy da vercel é muito caro"*). Substitui a D54. Cada fase continua sendo integrada por merge `--no-ff` nesta branch, mas **nenhuma é empurrada**: um push gera um deploy de prévia na Vercel (e, com o PR #65 aberto sobre esta branch, atualiza o PR), e um merge em `main` gera um de produção. O PR #65 (03-G2) fica aberto e vira o PR único; no fim, um push, revisão do título e da descrição, CI verde e **um** merge, com o seu pedido explícito. **Custo aceito:** até o push final, os commits integrados só existem neste disco — e `main` pode andar por outras branches (agenda, IA), então o merge final pode trazer conflitos para resolver uma vez só. O portão de ancestral dos prompts não muda: ele confere esta branch local |
@@ -1649,7 +1709,15 @@ Os cinco comandos rodaram sobre essa árvore e passaram: `test:run` **331 / 7.39
 `tsc`, `build` e `perf:bundle` (mediana **202,3**, 71 rotas dentro). Na worktree de integração,
 uma rodada foi contaminada por um merge alheio, abortado no meio dela (ver Pendências da 05-C).
 
-## Próximo passo — REDESIGN-04-C (reembolso); depois a REDESIGN-08
+## Próximo passo — REDESIGN-08 (regressão e entrega)
+
+**A REDESIGN-04 está fechada:** a 04-B (`e4b8aa8`) e a 04-C (`86d850a`) estão integradas. Vem a
+**REDESIGN-08** (regressão e entrega — o prompt já foi entregue a você e exige as duas integradas
+no portão: `264aa8d` e `4617f34` são ancestrais desta branch) e o merge do **PR único #65**
+(D67), quando você pedir. Antes do merge final: copiar a invariante do §13.6 do desenho da 04-C
+para o `CLAUDE.md`.
+
+### Histórico — o passo anterior (04-C)
 
 **A 04-B está integrada** (`e4b8aa8`). Falta a **04-C** (`feat/redesign-04c-reembolso`, em
 `C:/tmp/04c-reembolso`, em outra sessão — no plano, `264aa8d`). Ela toca peças comuns já mexidas
