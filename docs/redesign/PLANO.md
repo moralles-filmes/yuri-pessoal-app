@@ -187,6 +187,37 @@ comparação de performance antes/depois · documentação · plano de reversão
 
 **Entrega preparada. Nada é publicado sem sua autorização.**
 
+⚠️ **Desde 2026-11-07 a 08 roda em duas partes** (decisão do dono, ver REDESIGN-09): primeiro
+as correções que ela já tinha em andamento; a regressão e a entrega ficam para **depois** da 09,
+para conferirem o visual final uma vez só.
+
+---
+
+## REDESIGN-09 — Visual em vidro
+
+Desenho: `docs/superpowers/specs/2026-11-07-redesign-09-vidro-design.md` (aprovado em
+2026-11-07, com a prévia visual que o dono aprovou). Material, forma e movimento. **Não muda o
+que nenhuma tela mostra nem o que nenhum número significa.** Nenhuma migration.
+
+| Subfase | Escopo | Plano |
+| --- | --- | --- |
+| **09-A** | tokens medidos, névoa, materiais, raio, fonte | `docs/superpowers/plans/2026-11-07-09a-vidro-tokens-e-fundo.md` |
+| **09-B** | primitivas de `src/components/ui/` | escrito no início da subfase |
+| **09-C** | casca: sidebar, header, menu do celular, assistente, login | idem |
+| **09-D** | abertura (substitui o banner), indicador, bloco, `StatCard`, `PageHeader` | idem |
+| **09-E** | gráficos | idem |
+| **09-F** | varredura dos módulos e conferência de todas as rotas | idem |
+| **09-G** | barra de ações do celular (Buscar · Novo lançamento · Assistente) | idem |
+
+Decisões do dono que entram com ela (numerar a partir da próxima D livre no STATUS na hora da
+integração):
+
+- o visual em vidro substitui a direção da 01-B em tipografia (sai a Arial), raio, fundo
+  (névoa, exceção declarada à regra 7 do `TOKENS.md` §8) e banner (vira abertura sem caixa);
+- o vidro vem **antes** da regressão e da entrega da 08, e tudo vai no PR único #65 (D67);
+- a barra de **ações** do celular entra (09-G) e revoga em parte a D65, que recusava a barra
+  inferior. Ela não é navegação: o menu continua sendo o mesmo.
+
 ---
 
 ## Ordem e dependências
@@ -196,7 +227,9 @@ comparação de performance antes/depois · documentação · plano de reversão
                │         └──▶ 07 (lotes A–D)
                └──▶ 03 ──┬──▶ 04 (relatórios e terceiros)
                          └──▶ 05 (central de cartões)
-                                   └──▶ 08 (regressão e entrega)
+                                   └──▶ 08 (correções)
+                                          └──▶ 09 (vidro, A–G)
+                                                 └──▶ 08 (regressão e entrega)
 ```
 
 02 e 03 são independentes e podem andar em paralelo — 02 é visual, 03 é significado. 04, 05 e
