@@ -56,6 +56,8 @@ const MSG = {
   saldoMudou: "O saldo deste recebível mudou enquanto você recebia. Atualize a tela e confira.",
   desconhecido: "O status deste recebível não é reconhecido.",
   automatico: "Este recebimento veio de um lançamento. Edite ou exclua a receita em Lançamentos.",
+  realocacao:
+    "O recebimento foi desfeito, mas o abatimento pelas receitas da pessoa não foi refeito agora. Ele se acerta na próxima alteração dela; confira em A Receber.",
 } as const;
 
 export function mensagemDoSaldo(saldoCentavos: number): string {
@@ -67,13 +69,34 @@ type Lido = {
   valor: number;
   status: string;
   pago_em: string | null;
+  person_id: string | null;
   recebimentos: RecebimentoDoBanco[];
 };
+
+/**
+ * 04-C (revisão final, P2) — apagar um recebimento MANUAL devolve saldo à dívida, e o delete em
+ * `receivable_receipts` não tem trigger de realocação: sem esta chamada, um saldo a favor da
+ * pessoa ficaria livre ao lado de uma dívida reaberta até o próximo gatilho. Chamada DEPOIS do
+ * delete. A falha não desfaz o desfazer — ela é declarada, e o próximo gatilho da pessoa corrige.
+ */
+async function realocarAsPessoas(
+  ctx: ContextoDoServico,
+  pessoas: readonly (string | null)[],
+): Promise<ActionResult<never> | null> {
+  for (const pessoa of new Set(pessoas.filter((p): p is string => Boolean(p)))) {
+    const { error } = await ctx.supabase.rpc("realocar_reembolsos_da_pessoa", {
+      p_user: ctx.userId,
+      p_person: pessoa,
+    });
+    if (error) return dbError(MSG.realocacao);
+  }
+  return null;
+}
 
 async function lerRecebivel(ctx: ContextoDoServico, id: string): Promise<Lido | null | "erro"> {
   const { data, error } = await ctx.supabase
     .from("receivables")
-    .select("id, valor, status, pago_em")
+    .select("id, valor, status, pago_em, person_id")
     .eq("id", id)
     .maybeSingle();
   if (error) return "erro";
@@ -219,7 +242,7 @@ export async function desfazerUltimoRecebimento(
   if (error) {
     return dbError("O recebível voltou para pendente, mas o recebimento não foi removido. Tente de novo.");
   }
-  return { ok: true, data: undefined };
+  return (await realocarAsPessoas(ctx, [lido.person_id])) ?? { ok: true, data: undefined };
 }
 
 /** As decisões do dono: cobrado, ignorado e voltar para pendente (K1). */
@@ -275,7 +298,7 @@ export async function aplicarAcaoEmMassa(
   for (const bloco of dividirEmBlocos(unicos, TAMANHO_DO_BLOCO)) {
     const { data: linhas, error } = await ctx.supabase
       .from("receivables")
-      .select("id, valor, status, pago_em")
+      .select("id, valor, status, pago_em, person_id")
       .in("id", bloco)
       .in("status", ORIGENS_DA_ACAO[acao]);
     if (error) return falhaNoMeio(afetados);
@@ -320,6 +343,8 @@ export async function aplicarAcaoEmMassa(
       if (e2) {
         return falhaNoMeio(afetados, "Os recebíveis voltaram para pendente, mas os recebimentos não foram removidos. Use Desfazer em cada recebível para concluir.");
       }
+      const falhaDaRealocacao = await realocarAsPessoas(ctx, desfazivel.map((r) => r.person_id));
+      if (falhaDaRealocacao) return falhaDaRealocacao;
     }
   }
 

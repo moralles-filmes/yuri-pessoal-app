@@ -80,9 +80,9 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
  * E5 da 03-G2 (K3) entraram 5, todas de `preverExclusaoDoLancamento`, que só lê e trata cada erro
  * com `falhaDeLeituraAntes`: o lançamento, os recebíveis, as pessoas, as parcelas e as linhas da
  * importação — 111. Na 04-A entraram 2: `getUltimasTransacoes` (lança no erro) e `lerSaldoAte`
- * (K2: erro → `null`, declarada em EXCECOES) — 113. Na 04-C (T4) entraram 6: as leituras de `lerEstadoDoReembolso` e `lerSituacoesDoReembolso` (lançam no erro) e a contagem de receitas vinculadas em `deletePerson` (erro recusa) — 119. Na 04-C (T7) entrou 1: a leitura da linha em `setImportRowReembolso` (falhaDeLeituraAntes) — 120. Mudou? Confira o inventário antes de ajustar.
+ * (K2: erro → `null`, declarada em EXCECOES) — 113. Na 04-C (T4) entraram 6: as leituras de `lerEstadoDoReembolso` e `lerSituacoesDoReembolso` (lançam no erro) e a contagem de receitas vinculadas em `deletePerson` (erro recusa) — 119. Na 04-C (T7) entrou 1: a leitura da linha em `setImportRowReembolso` (falhaDeLeituraAntes) — 120. Na revisão final da 04-C entrou 1: a rpc `realocar_reembolsos_da_pessoa` depois do desfazer manual (erro vira dbError) — 121. Mudou? Confira o inventário antes de ajustar.
  */
-const LEITURAS_ESPERADAS = 120;
+const LEITURAS_ESPERADAS = 121;
 
 const LEITURAS = inventariarLeituras(ARQUIVOS, RAIZ);
 const chave = (l: { arquivo: string; funcao: string; alvo: string }) =>

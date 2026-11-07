@@ -50,10 +50,17 @@ export function useSituacaoDoReembolso(a: {
   React.useEffect(() => {
     if (!chave) return;
     let vivo = true;
-    lerPreviaDoReembolso({ pessoaId, transactionId }).then((res) => {
-      if (!vivo) return;
-      setLida({ chave, resultado: res.ok ? { dados: res.data } : { erro: res.error } });
-    });
+    lerPreviaDoReembolso({ pessoaId, transactionId })
+      .then((res) => {
+        if (!vivo) return;
+        setLida({ chave, resultado: res.ok ? { dados: res.data } : { erro: res.error } });
+      })
+      // Falha inesperada (rede, erro que a action relança): sem isto o estado ficaria em
+      // "carregando" e o Salvar desabilitado, sem frase nenhuma (revisão final, P3).
+      .catch(() => {
+        if (!vivo) return;
+        setLida({ chave, resultado: { erro: "Não foi possível ler o que esta pessoa deve. Feche e abra de novo." } });
+      });
     return () => {
       vivo = false;
     };

@@ -184,7 +184,16 @@ function defaults(tx?: TransactionRow): FormValues {
         ? String(tx.valor_pessoal).replace(".", ",")
         : "",
     reembolso_pessoa_id: tx?.type === "receita" ? (tx.reembolso_pessoa_id ?? "") : "",
-    reembolso_sobra: "",
+    // Na edição, a escolha já feita sai da linha gravada (revisão final, P3): vinculada e
+    // "compartilhada" só existe quando a sobra virou receita minha; vinculada e "de terceiro" com
+    // sobra é saldo a favor. Sem sobra na prévia, o valor nem é enviado. Mudar o valor ou a pessoa
+    // zera a escolha, como na criação.
+    reembolso_sobra:
+      tx?.type === "receita" && tx.reembolso_pessoa_id
+        ? tx.classificacao === "compartilhada"
+          ? "receita"
+          : "saldo"
+        : "",
   };
 }
 

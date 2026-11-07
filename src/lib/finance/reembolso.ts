@@ -126,7 +126,8 @@ function aparar(e: EstadoDoReembolso): {
 
   // Passo 2 — pagamento que encolheu: desfaz as alocações MAIS NOVAS primeiro.
   for (const p of e.pagamentos) {
-    const doPagamento = e.alocacoes.filter((a) => a.transactionId === p.transactionId);
+    // Só as que sobreviveram ao passo 1 — o SQL apaga as órfãs ANTES de somar o excesso.
+    const doPagamento = e.alocacoes.filter((a) => a.transactionId === p.transactionId && novoValor.get(a.id) !== 0);
     let excesso = doPagamento.reduce((s, a) => s + a.valorCentavos, 0) - p.parteCentavos;
     if (excesso <= 0) continue;
     const maisNovasPrimeiro = [...doPagamento].sort((x, y) => comparar(y.criadoEm, x.criadoEm) || comparar(y.id, x.id));

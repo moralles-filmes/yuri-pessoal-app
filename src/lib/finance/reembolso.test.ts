@@ -162,6 +162,18 @@ describe("realocar", () => {
     expect(r.inserir.map((n) => [n.receivableId, n.valorCentavos])).toEqual([["a", 50000]]);
   });
 
+  it("o excesso do passo 2 não conta a alocação que o passo 1 já removeu (igual ao SQL, que apaga antes de somar)", () => {
+    const estado: EstadoDoReembolso = {
+      pagamentos: [pagamento("p1", 60000)],
+      dividas: [divida("a", 50000, "2026-07-10")],
+      alocacoes: [
+        { id: "x1", receivableId: "outra", transactionId: "p1", valorCentavos: 50000, recebidoEm: "2026-11-01", criadoEm: "2026-11-01T11:00:00Z" },
+        { id: "x2", receivableId: "a", transactionId: "p1", valorCentavos: 50000, recebidoEm: "2026-11-01", criadoEm: "2026-11-01T10:00:00Z" },
+      ],
+    };
+    expect(realocar(estado)).toEqual({ remover: ["x1"], reduzir: [], inserir: [] });
+  });
+
   it("a alocação leva a data e a conta do PAGAMENTO, não a de hoje (caso 5)", () => {
     const caso = CASOS_DO_REEMBOLSO.find((c) => c.nome.startsWith("5 "));
     const r = realocar(caso!.estado);

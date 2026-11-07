@@ -194,6 +194,49 @@ describe("receber o saldo", () => {
   });
 });
 
+describe("desfazer realoca a pessoa (04-C, revisão final P2)", () => {
+  function comPessoa(rpcErro: boolean) {
+    const fake = criarSupabaseEmMemoria(
+      {
+        receivables: [{ id: REC, user_id: "user-1", valor: 600, status: "pago", pago_em: "2026-06-20", person_id: "pessoa-a" }],
+        receivable_receipts: [receb("r1", 600, "2026-06-20")],
+      },
+      {
+        antesDeGravar: gatilhoNaoExcede,
+        rpc: () => ({ data: null, error: rpcErro ? { code: "XX000", message: "falhou" } : null }),
+      },
+    );
+    return { fake, ctx: { supabase: fake.client as AuthContext["supabase"], userId: "user-1" } };
+  }
+
+  it("um item: depois de apagar o recebimento manual, chama a realocação da pessoa dele", async () => {
+    const { fake, ctx } = comPessoa(false);
+    expect((await desfazerUltimoRecebimento(ctx, REC)).ok).toBe(true);
+    expect(fake.operacoes.map((o) => `${o.tipo}:${o.tabela}`)).toEqual([
+      "update:receivables",
+      "delete:receivable_receipts",
+      "rpc:realocar_reembolsos_da_pessoa",
+    ]);
+    expect(fake.operacoes[2].valores).toEqual({ p_user: "user-1", p_person: "pessoa-a" });
+  });
+
+  it("lote: a realocação vem depois do delete, uma vez por pessoa", async () => {
+    const { fake, ctx } = comPessoa(false);
+    expect((await aplicarAcaoEmMassa(ctx, [REC], "desfazer")).ok).toBe(true);
+    expect(fake.operacoes.map((o) => `${o.tipo}:${o.tabela}`).slice(-2)).toEqual([
+      "delete:receivable_receipts",
+      "rpc:realocar_reembolsos_da_pessoa",
+    ]);
+  });
+
+  it("a realocação que falha é declarada, nunca engolida", async () => {
+    const { ctx } = comPessoa(true);
+    const r = await desfazerUltimoRecebimento(ctx, REC);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/abatimento pelas receitas da pessoa não foi refeito/);
+  });
+});
+
 describe("desfazer", () => {
   it("reabre a coluna ANTES de apagar, e apaga SÓ o último", async () => {
     const { fake, ctx } = cenario({ status: "pago", pago_em: "2026-06-20" }, [
