@@ -503,8 +503,16 @@ mudou saldo.
 - Toda regra nova teve **mutação confirmada** (quebrar → teste vermelho → restaurar → conferir).
 - Casos dourados SQL (`verificar-reembolso.sql`, `begin … rollback`): **todos conferem** — rodado pelo
   dono no SQL Editor em 2026-11-06 (o MCP recusa o script por ter `delete`); nada gravado.
-- Conferência visual (390/768/1280/1440, claro e escuro): **PENDENTE** — exige o `.env.local`,
-  que só é copiado com o aval do dono.
+- Conferência visual (2026-11-06, Chrome com a sessão do dono, app em `localhost:3104`; prints não
+  saem da sessão — há dado real na tela): **nenhuma rolagem horizontal** em /terceiros,
+  /financeiro/lancamentos, /dashboard/financeiro e /importar nas 4 larguras (390/768/1280/1440, medido
+  por `scrollWidth` em iframe). Vistos em claro e escuro: a ficha por pessoa (390 e 1280), o
+  formulário com "De quem?", a prévia e as duas opções da sobra sem padrão, o bloco do caixa com
+  "Reembolsos recebidos", e a revisão de um lote importado. **Achado e corrigido** (`5c27911`): trocar
+  o tipo para receita levava o status "Pago" da despesa — a realocação só conta `recebido`, então o
+  reembolso não abatia e a prévia dizia "pendente". **Não visto:** o diálogo de reembolso da
+  importação (nenhum lote de extrato com receita em revisão; abrir um exigiria importar no banco real).
+- Depois da última correção: `npm run test:run` com **8.201 testes / 364 arquivos**, verde.
 
 ### 13.3 Decisões tomadas na execução, com o custo
 
