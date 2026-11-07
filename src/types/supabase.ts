@@ -2261,6 +2261,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "import_rows_reembolso_pessoa_fk"
+            columns: ["reembolso_pessoa_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
             foreignKeyName: "import_rows_subcategoria_owner_fkey"
             columns: [
               "subcategoria_sugerida_id",
@@ -4765,18 +4772,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "receivable_receipts_conta_id_fkey"
-            columns: ["conta_id"]
+            foreignKeyName: "receivable_receipts_conta_fk"
+            columns: ["conta_id", "user_id"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
           {
-            foreignKeyName: "receivable_receipts_conta_id_fkey"
-            columns: ["conta_id"]
+            foreignKeyName: "receivable_receipts_conta_fk"
+            columns: ["conta_id", "user_id"]
             isOneToOne: false
             referencedRelation: "accounts_with_balance"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
           {
             foreignKeyName: "receivable_receipts_owner_fk"
@@ -4786,11 +4793,11 @@ export type Database = {
             referencedColumns: ["id", "user_id"]
           },
           {
-            foreignKeyName: "receivable_receipts_transaction_id_fkey"
-            columns: ["transaction_id"]
+            foreignKeyName: "receivable_receipts_transaction_fk"
+            columns: ["transaction_id", "user_id"]
             isOneToOne: false
             referencedRelation: "transactions"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }
@@ -8872,6 +8879,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "transactions_reembolso_pessoa_fk"
+            columns: ["reembolso_pessoa_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
             foreignKeyName: "transactions_statement_id_fkey"
             columns: ["statement_id"]
             isOneToOne: false
@@ -9143,6 +9157,10 @@ export type Database = {
       pagar_fatura: {
         Args: { p_lancamento: Json; p_pago_em: string; p_statement_id: string }
         Returns: string
+      }
+      realocar_reembolsos_da_pessoa: {
+        Args: { p_person: string; p_user: string }
+        Returns: undefined
       }
       salvar_lancamento: {
         Args: { p_divisao: Json; p_id?: string; p_lancamento: Json }
