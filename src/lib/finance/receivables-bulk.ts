@@ -20,7 +20,6 @@
 import type { ReceivableStatus } from "./constants";
 
 export const BULK_RECEIVABLE_ACTIONS = [
-  "receber",
   "cobrado",
   "ignorar",
   "desfazer",
@@ -30,7 +29,6 @@ export type BulkReceivableAction = (typeof BULK_RECEIVABLE_ACTIONS)[number];
 
 /** Rótulo curto da ação, usado no botão da barra de seleção. */
 export const BULK_ACTION_LABELS: Record<BulkReceivableAction, string> = {
-  receber: "Receber",
   cobrado: "Cobrado",
   ignorar: "Ignorar",
   desfazer: "Desfazer",
@@ -38,7 +36,6 @@ export const BULK_ACTION_LABELS: Record<BulkReceivableAction, string> = {
 
 /** Frase da confirmação, no plural do lote. */
 export const BULK_ACTION_TITLES: Record<BulkReceivableAction, string> = {
-  receber: "Marcar como recebidos",
   cobrado: "Marcar como cobrados",
   ignorar: "Ignorar recebíveis",
   desfazer: "Desfazer recebimento",
@@ -50,8 +47,7 @@ export const BULK_ACTION_TITLES: Record<BulkReceivableAction, string> = {
  * número que a tela mostra.
  */
 export const ORIGENS_DA_ACAO: Record<BulkReceivableAction, ReceivableStatus[]> = {
-  // K1 (03-D): só se recebe e só se perdoa o que ainda se deve.
-  receber: ["pendente", "cobrado"],
+  // K1 (03-D): só se perdoa o que ainda se deve.
   cobrado: ["pendente", "ignorado"],
   ignorar: ["pendente", "cobrado"],
   desfazer: ["pago"],
@@ -114,17 +110,14 @@ export function alcanceDaAcao(
 }
 
 /**
- * O patch que a ação grava. `pago_em` só sobrevive no `receber`: toda ação que tira o
- * recebível de "pago" limpa a data, senão a linha guardaria a data de um recebimento que
- * foi desfeito.
+ * O patch que a ação grava. 04-C T8: nenhuma ação em massa grava `pago` — quitar é uma receita
+ * vinculada (ou o recebimento manual legado). Toda ação limpa `pago_em`, senão a linha guardaria
+ * a data de um recebimento que foi desfeito.
  */
 export function patchDaAcao(
   acao: BulkReceivableAction,
-  pagoEm: string,
-): { status: ReceivableStatus; pago_em: string | null } {
+): { status: ReceivableStatus; pago_em: null } {
   switch (acao) {
-    case "receber":
-      return { status: "pago", pago_em: pagoEm };
     case "cobrado":
       return { status: "cobrado", pago_em: null };
     case "ignorar":

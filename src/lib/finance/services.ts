@@ -24,7 +24,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { traduzirErroDaRpc, type AuthContext } from "@/lib/actions/helpers";
 import { transactionSchema } from "@/lib/validators/transaction";
-import { receitaResponsabilidadeSchema, splitSchema } from "@/lib/validators/split";
+import { receitaResponsabilidadeSchema, reembolsoSchema, splitSchema } from "@/lib/validators/split";
 import { ehErroDeLeitura } from "@/lib/supabase/leitura";
 import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import {
@@ -33,7 +33,14 @@ import {
 } from "@/lib/finance/statements";
 import { montarDivisaoAVista, type DivisaoPayload } from "@/lib/finance/split-persist";
 import { montarLinhaDoLancamento } from "@/lib/finance/linha-do-lancamento";
-import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
+import { lerEstadoDoReembolso, protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
+import {
+  decidirReembolso,
+  entradaDaPrevia,
+  MSG_ESTORNO_NAO_ABATE,
+  MSG_LEITURA_DO_REEMBOLSO_FALHOU,
+  previaDoReembolso,
+} from "@/lib/finance/reembolso";
 import { motivoParaNaoApagar } from "@/lib/finance/protecao-do-recebivel";
 import {
   colunasDaReceita,
@@ -57,7 +64,9 @@ export type ColunasDaResponsabilidade = {
  *
  * ⛔ Lê só as chaves PRÓPRIAS da receita (`receita_classificacao`, `receita_minha_parte`).
  * A chave `classificacao` do mesmo payload é da despesa e continua ignorada aqui — é o que
- * mantém a importação (que pode mandá-la numa linha virada receita) e a IA gravando `pessoal`.
+ * mantém a IA gravando `pessoal` e impede um resíduo de divisão de despesa de mudar de quem é uma
+ * entrada. A importação do extrato (04-C · T7) manda as chaves próprias: a linha de ENTRADA pode
+ * trazer `receita_classificacao` e o reembolso escolhidos na revisão; sem escolha, é `pessoal`.
  */
 export function lerResponsabilidadeDaReceita(
   input: unknown,
@@ -76,6 +85,73 @@ export function lerResponsabilidadeDaReceita(
   });
   if (!decisao.ok) return { ok: false, fieldErrors: { [decisao.campo]: [decisao.mensagem] } };
   return { ok: true, colunas: colunasDaReceita(decisao.responsabilidade) };
+}
+
+/**
+ * REDESIGN-04-C · T6 — a receita de UMA PESSOA: o servidor decide classificação, minha parte e
+ * vínculo ANTES de gravar, pela sobra (`decidirReembolso`), e só então passa o resultado à fonte
+ * única das colunas (`decidirResponsabilidadeDaReceita` + `colunasDaReceita`).
+ *
+ * Sem `reembolso_pessoa_id` no payload (o formulário sem pessoa, a importação de hoje e a IA, que
+ * não manda o campo) delega a `lerResponsabilidadeDaReceita`: comportamento idêntico ao de antes.
+ *
+ * `transactionId` é a receita em edição (null na criação): a contribuição dela sai da conta antes
+ * de aplicar o valor novo. `estorno` recusa a pessoa — estorno de cartão não é dinheiro de terceiro.
+ */
+export async function lerReembolsoDaReceita(
+  ctx: FinanceServiceContext,
+  input: unknown,
+  a: { amountReais: number; transactionId: string | null; estorno: boolean },
+): Promise<
+  | { ok: true; colunas: ColunasDaResponsabilidade; reembolsoPessoaId: string | null }
+  | { ok: false; fieldErrors: Record<string, string[] | undefined> }
+> {
+  const reembolso = reembolsoSchema.safeParse(input);
+  if (!reembolso.success) return { ok: false, fieldErrors: reembolso.error.flatten().fieldErrors };
+
+  const pessoaId = reembolso.data.reembolso_pessoa_id;
+  if (pessoaId === null) {
+    const r = lerResponsabilidadeDaReceita(input, a.amountReais);
+    return r.ok ? { ok: true, colunas: r.colunas, reembolsoPessoaId: null } : r;
+  }
+
+  if (a.estorno) return { ok: false, fieldErrors: { reembolso_pessoa_id: [MSG_ESTORNO_NAO_ABATE] } };
+
+  const pedida = receitaResponsabilidadeSchema.safeParse(input);
+  if (!pedida.success) return { ok: false, fieldErrors: pedida.error.flatten().fieldErrors };
+
+  let estado;
+  try {
+    estado = await lerEstadoDoReembolso(ctx.supabase, pessoaId);
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    return { ok: false, fieldErrors: { reembolso_pessoa_id: [MSG_LEITURA_DO_REEMBOLSO_FALHOU] } };
+  }
+
+  const valorCentavos = reaisParaCentavos(a.amountReais);
+  const previa = previaDoReembolso({ ...entradaDaPrevia(estado, a.transactionId), valorCentavos });
+  const decisao = decidirReembolso({
+    classificacaoPedida: pedida.data.receita_classificacao,
+    previa,
+    valorCentavos,
+    escolha: reembolso.data.reembolso_sobra ?? null,
+    devidoVistoCentavos: reembolso.data.reembolso_devido_visto ?? null,
+  });
+  if (!decisao.ok) return { ok: false, fieldErrors: { [decisao.campo]: [decisao.mensagem] } };
+
+  const responsabilidade = decidirResponsabilidadeDaReceita({
+    classificacao: decisao.receita_classificacao,
+    minhaParteCentavos: decisao.minhaParteCentavos,
+    valorCentavos,
+  });
+  if (!responsabilidade.ok) {
+    return { ok: false, fieldErrors: { [responsabilidade.campo]: [responsabilidade.mensagem] } };
+  }
+  return {
+    ok: true,
+    colunas: colunasDaReceita(responsabilidade.responsabilidade),
+    reembolsoPessoaId: decisao.vincula ? pessoaId : null,
+  };
 }
 
 export type CriarTransacaoResultado =
@@ -163,13 +239,20 @@ export async function criarTransacao(
   }
 
   // REDESIGN-03-C · A2 — a receita decide de quem é o dinheiro ANTES de qualquer escrita.
+  // 04-C · T6 — com pessoa, a sobra decide a classificação, a minha parte e o vínculo.
   let colunasDaReceitaDecididas: ColunasDaResponsabilidade | null = null;
+  let reembolsoPessoaId: string | null = null;
   if (d.type === "receita") {
-    const r = lerResponsabilidadeDaReceita(input, d.amount);
+    const r = await lerReembolsoDaReceita(ctx, input, {
+      amountReais: d.amount,
+      transactionId: null,
+      estorno: false,
+    });
     if (!r.ok) {
       return { ok: false, erro: "Verifique os campos destacados.", fieldErrors: r.fieldErrors };
     }
     colunasDaReceitaDecididas = r.colunas;
+    reembolsoPessoaId = r.reembolsoPessoaId;
   }
 
   // Compra no cartão (Fase 03): resolve/cria a fatura e vincula statement_id. Na importação,
@@ -200,8 +283,9 @@ export async function criarTransacao(
 
   // Divisão (Fase 05): a máquina de divisão é só da DESPESA. A receita tem responsabilidade
   // própria (03-C, decidida acima), lida de chaves próprias — a chave `classificacao` do payload
-  // continua sendo só da despesa, e por isso a importação (que pode mandá-la numa linha que
-  // virou receita, imports.ts) e a IA continuam gravando receita `pessoal`. Ajuste fica pessoal.
+  // continua sendo só da despesa, e por isso a IA grava receita `pessoal`. A importação do extrato
+  // (04-C · T7) manda as chaves PRÓPRIAS da receita (classificação e reembolso escolhidos na
+  // revisão) e não manda a divisão de despesa numa entrada. Ajuste fica pessoal.
   const split = splitSchema.safeParse(input);
   if (!split.success) {
     return {
@@ -236,7 +320,7 @@ export async function criarTransacao(
 
   // Despesa/ajuste pessoal: a linha não leva `classificacao` nem `valor_pessoal` (o SQL faz o
   // coalesce 'pessoal' e deixa `valor_pessoal` nulo, como o insert de antes).
-  const linha = montarLinhaDoLancamento(d, { cardId, statementId, transferGroupId: null, colunas });
+  const linha = montarLinhaDoLancamento(d, { cardId, statementId, transferGroupId: null, colunas, reembolsoPessoaId });
   const { data, error } = await ctx.supabase.rpc("salvar_lancamento", {
     p_lancamento: linha,
     p_divisao: divisao,

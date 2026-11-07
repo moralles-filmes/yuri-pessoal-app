@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { transactionSchema } from "@/lib/validators/transaction";
 import { splitSchema } from "@/lib/validators/split";
 import {
@@ -24,11 +25,11 @@ import { planejarReaplicacao } from "@/lib/finance/split-reapply";
 import { montarLinhaDoLancamento } from "@/lib/finance/linha-do-lancamento";
 import { divisaoVazia, type DivisaoPayload } from "@/lib/finance/split-persist";
 import { competenciaMMAAAA, type PrevisaoDeExclusao } from "@/lib/finance/previsao-da-exclusao";
-import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
+import { lerEstadoDoReembolso, protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
 import { motivoParaNaoApagar } from "@/lib/finance/protecao-do-recebivel";
 import {
   criarTransacao,
-  lerResponsabilidadeDaReceita,
+  lerReembolsoDaReceita,
   type ColunasDaResponsabilidade,
 } from "@/lib/finance/services";
 import {
@@ -41,6 +42,7 @@ import {
   liquidadoNoBotao,
   MSG_DATA_PAGAMENTO_FUTURA,
 } from "@/lib/finance/caixa";
+import { entradaDaPrevia, MSG_LEITURA_DO_REEMBOLSO_FALHOU } from "@/lib/finance/reembolso";
 import { hojeISO, reaisParaCentavos } from "@/lib/format";
 import type { ActionResult } from "@/types/finance";
 import {
@@ -112,21 +114,31 @@ export async function updateTransaction(
 
   // REDESIGN-03-C · A2 — a receita decide de quem é o dinheiro ANTES de qualquer escrita: a
   // recusa (ex.: o valor caiu abaixo da "minha parte" de uma compartilhada) não grava nada.
+  // 03-G2 (D-G2-1, RR11) — estorno de cartão (receita com cartão que continua receita) NÃO
+  // re-resolve a fatura: preserva cartão e fatura, mesmo com a data mudando. Senão, a despesa de
+  // cartão resolve a fatura como sempre; nos demais casos os dois ficam nulos. Vem antes da decisão
+  // da receita (04-C): estorno não abate o que uma pessoa deve.
+  const ehEstorno = existing.type === "receita" && !!existing.card_id && d.type === "receita";
+
+  // 04-C · T6 — com pessoa, a sobra decide a classificação, a minha parte e o vínculo; sem pessoa,
+  // é a decisão de sempre. Receita que deixa de ser receita não passa por aqui e a linha grava nulo.
   let colunasDaReceita: ColunasDaResponsabilidade | null = null;
+  let reembolsoPessoaId: string | null = null;
   if (d.type === "receita") {
-    const r = lerResponsabilidadeDaReceita(input, d.amount);
+    const r = await lerReembolsoDaReceita(ctx, input, {
+      amountReais: d.amount,
+      transactionId: id,
+      estorno: ehEstorno,
+    });
     if (!r.ok) return invalid(r.fieldErrors);
     colunasDaReceita = r.colunas;
+    reembolsoPessoaId = r.reembolsoPessoaId;
   }
   const eraReceita = existing.type === "receita";
 
   const wasTransfer = !!existing.transfer_group_id;
   const isTransfer = d.type === "transferencia";
 
-  // 03-G2 (D-G2-1, RR11) — estorno de cartão (receita com cartão que continua receita) NÃO
-  // re-resolve a fatura: preserva cartão e fatura, mesmo com a data mudando. Senão, a despesa de
-  // cartão resolve a fatura como sempre; nos demais casos os dois ficam nulos.
-  const ehEstorno = existing.type === "receita" && !!existing.card_id && d.type === "receita";
   let cardId: string | null = null;
   let statementId: string | null = null;
   // 03-G2 (revisão final) — o schema aceita receita com cartão e sem conta por causa do estorno
@@ -224,6 +236,7 @@ export async function updateTransaction(
     transferGroupId: isTransfer ? (existing.transfer_group_id ?? randomUUID()) : null,
     estorno: ehEstorno,
     colunas,
+    reembolsoPessoaId,
   });
   const { error } = await ctx.supabase.rpc("salvar_lancamento", {
     p_lancamento: linha,
@@ -239,6 +252,40 @@ export async function updateTransaction(
 
   revalidateTransactions();
   return { ok: true, data: { id } };
+}
+
+/**
+ * 04-C · T6 — o que a prévia do reembolso precisa saber da pessoa: a dívida, o saldo a favor e, na
+ * edição, a contribuição desta receita. SÓ LÊ (sem `revalidatePath`). A tela calcula a prévia a cada
+ * valor digitado com `previaDoReembolso`; esta leitura roda uma vez por pessoa. A conta é a do
+ * servidor (`entradaDaPrevia`), que recalcula tudo antes de gravar.
+ */
+export async function lerPreviaDoReembolso(input: {
+  pessoaId: string;
+  transactionId?: string | null;
+}): Promise<
+  ActionResult<{
+    devidoCentavos: number;
+    saldoAFavorCentavos: number;
+    parteAtualDestaCentavos: number;
+    alocadoDestaCentavos: number;
+  }>
+> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const ids = z
+    .object({ pessoaId: z.uuid(), transactionId: z.uuid().nullish() })
+    .safeParse(input);
+  if (!ids.success) return dbError("Pessoa ou lançamento inválido.");
+
+  try {
+    const estado = await lerEstadoDoReembolso(ctx.supabase, ids.data.pessoaId);
+    return { ok: true, data: entradaDaPrevia(estado, ids.data.transactionId ?? null) };
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    return dbError(MSG_LEITURA_DO_REEMBOLSO_FALHOU);
+  }
 }
 
 /**

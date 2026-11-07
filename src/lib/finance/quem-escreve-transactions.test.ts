@@ -166,6 +166,11 @@ const ESCRITAS_SQL: Record<string, { quantidade: number; motivo: string }> = {
     motivo:
       "03-G2 (K1): salvar_lancamento insere ou atualiza o lançamento e criar_compra_parcelada insere a compra-pai; liquidado_em chega de montarLinhaDoLancamento (dataDeLiquidacaoAGravar) e a compra-pai de cartão não tem a coluna",
   },
+  "20261102120200_reembolso_salvar_lancamento.sql": {
+    quantidade: 2,
+    motivo:
+      "04-C (DV-1): a mesma salvar_lancamento da 03-G2, redefinida para gravar reembolso_pessoa_id; o insert e o update continuam recebendo liquidado_em de montarLinhaDoLancamento",
+  },
 };
 
 const ESCRITA_SQL = /\b(insert\s+into|update|delete\s+from)\s+(public\.)?transactions\b/g;

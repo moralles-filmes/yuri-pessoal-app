@@ -24,13 +24,14 @@ import { ehErroDeLeitura, exigir, listaCompleta } from "@/lib/supabase/leitura";
 import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { resolverFatura } from "@/lib/finance/invoice";
 import { dataDoExtratoAGravar } from "@/lib/finance/caixa";
+import { MSG_ESTORNO_NAO_ABATE } from "@/lib/finance/reembolso";
 import { detectarCompetenciaFatura } from "@/lib/import/competencia";
 import {
   importUploadSchema,
   remapSchema,
   updateImportRowSchema,
 } from "@/lib/validators/import";
-import { splitSchema } from "@/lib/validators/split";
+import { importRowReembolsoSchema, splitSchema } from "@/lib/validators/split";
 import {
   autoDetectMapping,
   applyMapping,
@@ -525,6 +526,13 @@ export async function remapImportBatch(
   return { ok: true, data: undefined };
 }
 
+/** As três colunas do reembolso da revisão (04-C · T7), todas de volta a "sem escolha". */
+const LIMPA_O_REEMBOLSO = {
+  receita_classificacao: null,
+  reembolso_pessoa_id: null,
+  reembolso_sobra: null,
+} as const;
+
 /**
  * Edita uma linha na revisão: trocar categoria, corrigir data/valor/descrição, definir tipo,
  * importar como parcelamento, e incluir/ignorar/forçar (status). Só aplica os campos enviados.
@@ -603,6 +611,9 @@ export async function updateImportRow(
     valor?: number;
     tipo?: string;
     transfer_account_id?: string | null;
+    receita_classificacao?: string | null;
+    reembolso_pessoa_id?: string | null;
+    reembolso_sobra?: string | null;
   } = {};
   if (d.status !== undefined) update.status = d.status;
   if (d.categoria_sugerida_id !== undefined) {
@@ -644,6 +655,18 @@ export async function updateImportRow(
       update.categoria_sugerida_id = null;
       update.subcategoria_sugerida_id = null;
     }
+  }
+
+  // 04-C · T7 — reembolso só existe em ENTRADA que vai virar lançamento: a linha que passa a ser
+  // despesa, transferência ou ignorada perde pessoa, classificação e escolha da sobra no mesmo
+  // update. Deixar o resíduo faria uma transferência (ou a volta da linha à revisão) carregar uma
+  // pessoa que a revisão já não mostra. `commitImport` também não o lê fora do ramo da receita.
+  if (
+    d.tipo === "despesa" ||
+    d.status === "ignorada" ||
+    (d.transfer_account_id !== undefined && d.transfer_account_id !== null)
+  ) {
+    Object.assign(update, LIMPA_O_REEMBOLSO);
   }
 
   if (Object.keys(update).length === 0) {
@@ -713,6 +736,65 @@ export async function setImportRowSplit(
     })
     .eq("id", rowId);
   if (error) return dbError("Não foi possível salvar a divisão.");
+
+  revalidateImports();
+  return { ok: true, data: undefined };
+}
+
+/**
+ * 04-C · T7 — define o reembolso de UMA linha de ENTRADA da revisão: pessoal ou de terceiro, de
+ * quem, e o que fazer com a sobra. Só guarda a escolha; quem decide e grava é o `commitImport`,
+ * pelo mesmo caminho do formulário (`criarTransacao` → `lerReembolsoDaReceita`), recalculando a
+ * dívida linha a linha. Só extrato (estorno de cartão e transferência nunca têm pessoa), só
+ * entrada, e só enquanto a linha não virou lançamento.
+ *
+ * A pessoa só é guardada com "de terceiro", e a escolha da sobra só com pessoa: guardar o que não
+ * se aplica faria a revisão mostrar um vínculo que o commit ignora.
+ */
+export async function setImportRowReembolso(
+  rowId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = importRowReembolsoSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const rowRes = await ctx.supabase
+    .from("import_rows")
+    .select(
+      "id, tipo, status, transaction_id, transfer_account_id, import_batches(status, origem)",
+    )
+    .eq("id", rowId)
+    .maybeSingle();
+  if (rowRes.error) return falhaDeLeituraAntes("a linha da importação");
+  const row = rowRes.data;
+  if (!row) return dbError("Linha não encontrada.");
+  const batch = row.import_batches as { status?: string; origem?: string } | null;
+  if (batch?.status === "cancelado") return dbError("Este lote foi cancelado.");
+  if (row.status === "importada" || row.transaction_id) {
+    return dbError(
+      "Esta linha já virou lançamento. Ajuste o reembolso em Financeiro, ou desfaça a importação do lote.",
+    );
+  }
+  if (row.tipo !== "receita") return dbError("Só uma entrada pode ser reembolso.");
+  if (row.transfer_account_id) {
+    return dbError("Esta linha é uma transferência entre suas contas.");
+  }
+  if (batch?.origem === "cartao") return dbError(MSG_ESTORNO_NAO_ABATE);
+
+  const d = parsed.data;
+  const pessoaId = d.receita_classificacao === "terceiro" ? d.reembolso_pessoa_id : null;
+  const { error } = await ctx.supabase
+    .from("import_rows")
+    .update({
+      receita_classificacao: d.receita_classificacao,
+      reembolso_pessoa_id: pessoaId,
+      reembolso_sobra: pessoaId ? (d.reembolso_sobra ?? null) : null,
+    })
+    .eq("id", rowId);
+  if (error) return dbError("Não foi possível salvar o reembolso.");
 
   revalidateImports();
   return { ok: true, data: undefined };
@@ -817,7 +899,7 @@ export async function commitImport(
   const rowsRes = await ctx.supabase
     .from("import_rows")
     .select(
-      "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, subcategoria_sugerida_id, parcela, parcelas_total, import_as, classificacao, split_parts, transfer_account_id",
+      "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, subcategoria_sugerida_id, parcela, parcelas_total, import_as, classificacao, split_parts, transfer_account_id, receita_classificacao, reembolso_pessoa_id, reembolso_sobra",
       { count: "exact" },
     )
     .eq("import_batch_id", batchId)
@@ -1044,7 +1126,19 @@ export async function commitImport(
         liquidado_em: dataDoExtratoAGravar(r.data_norm, hoje),
         description: r.descricao ?? "",
         status: tipo === "receita" ? "recebido" : "pago",
-        ...split,
+        ...(tipo === "receita"
+          ? {
+              // 04-C · T7 — a ENTRADA de extrato leva a responsabilidade escolhida na revisão, nas
+              // chaves PRÓPRIAS da receita, e NÃO leva a divisão de despesa. Vazio é "sem pessoa" /
+              // "sem escolha": o serviço (`lerReembolsoDaReceita`) decide pela dívida de AGORA.
+              // `reembolso_devido_visto` vazio é "não conferir" — a linha anterior do lote já
+              // atualizou o estado, e a conta é refeita linha a linha no servidor.
+              receita_classificacao: r.receita_classificacao ?? "pessoal",
+              reembolso_pessoa_id: r.reembolso_pessoa_id ?? "",
+              reembolso_sobra: r.reembolso_sobra ?? "",
+              reembolso_devido_visto: "",
+            }
+          : split),
       });
     }
 
@@ -1062,9 +1156,16 @@ export async function commitImport(
     } else {
       // A frase da action vira o motivo (RR-G-10). Se ESTA escrita falhar, a linha fica com o
       // motivo da reserva — que erra para "pode ter sido lançada" — e o commit segue.
+      // 04-C · T7 — a recusa do reembolso vem como erro de CAMPO e a frase útil está nele ("Escolha
+      // o que fazer com a sobra"); `res.error` seria só "Verifique os campos destacados.", que na
+      // lista de linhas não aponta para campo nenhum.
+      const motivo =
+        res.fieldErrors?.reembolso_sobra?.[0] ??
+        res.fieldErrors?.reembolso_pessoa_id?.[0] ??
+        res.error;
       await ctx.supabase
         .from("import_rows")
-        .update({ status: "erro", motivo: res.error })
+        .update({ status: "erro", motivo })
         .eq("id", r.id);
       falhas++;
     }

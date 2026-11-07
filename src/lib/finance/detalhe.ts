@@ -77,7 +77,7 @@ import {
   montarEntradas,
 } from "@/lib/finance/pipeline";
 import {
-  entradasDoRecebivel,
+  entradasManuaisDoRecebivel,
   pendenteDoPeriodo,
   resumirRecebivel,
   rotuloPendenteDoMes,
@@ -1072,12 +1072,15 @@ function entradasDoCaixaDetalhe(p: ParametrosDoDetalhe, c: ContextoDoCaixa): Res
   });
   const registros = ordenar(c.movs.filter((m) => m.kind === "renda").map((m) => registroDeMovimento(p, c, m)));
   // Terceiros = o dinheiro de terceiros que entrou; consolidado = a partição minha + terceiros.
+  // 04-C: o dinheiro de terceiros que entrou em conta = "outras" + os reembolsos vinculados (a
+  // parte vinculada só mudou de LINHA no bloco do caixa; a lista de renda continua a mesma).
+  const terceirosCent = cent(numeros.outrasEntradasDeTerceiros) + cent(numeros.reembolsosVinculados);
   const totalCent =
     parte === "meu"
       ? cent(minha.entradas)
       : parte === "terceiros"
-        ? cent(numeros.outrasEntradasDeTerceiros)
-        : cent(minha.entradas) + cent(numeros.outrasEntradasDeTerceiros);
+        ? terceirosCent
+        : cent(minha.entradas) + terceirosCent;
   return preparado(p, {
     parte,
     totalCent,
@@ -1145,7 +1148,11 @@ function linhaDoCaixaDetalhe(p: ParametrosDoDetalhe, c: ContextoDoCaixa): Result
     case "outras":
       parte = "terceiros";
       totalCent = cent(numeros.outrasEntradasDeTerceiros);
-      registros = doTipo("renda").filter((r) => r.terceirosCent !== 0);
+      // 04-C: a receita vinculada é reembolso (linha "reembolsos"), não "outra entrada".
+      registros = c.movs
+        .filter((m) => m.kind === "renda" && !m.t.reembolso_pessoa_id)
+        .map((m) => registroDeMovimento(p, c, m))
+        .filter((r) => r.terceirosCent !== 0);
       break;
     case "saidas":
       totalCent = cent(numeros.saidasDeCaixa);
@@ -1161,24 +1168,44 @@ function linhaDoCaixaDetalhe(p: ParametrosDoDetalhe, c: ContextoDoCaixa): Result
       break;
     case "reembolsos":
       totalCent = cent(numeros.reembolsosRecebidos);
-      registros = c.leitura.recebiveis.flatMap((r, i) =>
-        entradasDoRecebivel(r, r.recebimentos).flatMap((e, j) =>
-          e.data === null || e.data < c.periodo.de || e.data > c.periodo.ate
-            ? []
-            : [
-                registro({
-                  id: `reembolso:${i}:${j}`,
-                  data: e.data,
-                  descricao: "Reembolso recebido",
-                  origem: null,
-                  categoria: null,
-                  brutoCent: e.centavos,
-                  meuCent: 0,
-                  marcas: [],
-                }),
-              ],
+      // 04-C: os recebimentos MANUAIS do período (as alocações automáticas são a mesma receita
+      // vinculada) + um registro por receita vinculada: a parte da pessoa (`amount − meu`).
+      registros = [
+        ...c.leitura.recebiveis.flatMap((r, i) =>
+          entradasManuaisDoRecebivel(r).flatMap((e, j) =>
+            e.data === null || e.data < c.periodo.de || e.data > c.periodo.ate
+              ? []
+              : [
+                  registro({
+                    id: `reembolso:${i}:${j}`,
+                    data: e.data,
+                    descricao: "Reembolso recebido",
+                    origem: null,
+                    categoria: null,
+                    brutoCent: e.centavos,
+                    meuCent: 0,
+                    marcas: [],
+                  }),
+                ],
+          ),
         ),
-      );
+        ...c.movs
+          .filter((m) => m.kind === "renda" && m.t.reembolso_pessoa_id)
+          .map((m) => {
+            const t = m.t;
+            const { data, aproximada } = dataDeCaixa(t);
+            return registro({
+              id: t.id,
+              data,
+              descricao: t.description ?? "Reembolso recebido",
+              origem: nomeDaConta(p, t.account_id),
+              categoria: null,
+              brutoCent: cent(t.amount) - (m.kind === "renda" ? m.meuCent : 0),
+              meuCent: 0,
+              marcas: aproximada ? ["data-aproximada"] : [],
+            });
+          }),
+      ];
       break;
     case "entre-contas":
       totalCent = cent(numeros.transferenciasEntreContas);

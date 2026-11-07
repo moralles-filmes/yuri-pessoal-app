@@ -69,7 +69,7 @@ export const TETO_DO_CAIXA = 5000;
 
 const COLUNAS =
   "id,type,status,amount,valor_pessoal,competence_date,liquidado_em,account_id,transfer_account_id,card_id," +
-  "payment_method,description,category:categories(id,name,color)";
+  "payment_method,description,reembolso_pessoa_id,category:categories(id,name,color)";
 
 export type LeituraDoCaixa =
   | {

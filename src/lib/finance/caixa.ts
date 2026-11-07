@@ -63,6 +63,11 @@ export type TxDeCaixa = {
   category?: { id: string; name: string; color: string | null } | null;
   /** 04-B: só exibição na gaveta de registros. Opcional — nenhum número o lê. */
   description?: string | null;
+  /**
+   * 04-C — a pessoa cujo reembolso esta receita é. Preenchido = a parte de terceiros (`amount −
+   * meu`) é reembolso vinculado, não "outra entrada". Opcional: ausente = sem vínculo.
+   */
+  reembolso_pessoa_id?: string | null;
 };
 
 /** Período INCLUSIVO nas duas pontas, 'yyyy-MM-dd'. */
@@ -73,8 +78,14 @@ export type NumerosDoCaixa = {
   rendaPessoalRecebida: number;
   /** `reembolsosRecebidosNoPeriodo` — chamada, nunca recalculada (03-D). */
   reembolsosRecebidos: number;
-  /** Σ (amount − meu) das mesmas receitas: o dinheiro de terceiros que entrou. */
+  /** Σ (amount − meu) das receitas SEM pessoa vinculada: o dinheiro de terceiros que entrou. */
   outrasEntradasDeTerceiros: number;
+  /**
+   * 04-C — Σ (amount − meu) das receitas COM `reembolso_pessoa_id`. Já está dentro de
+   * `reembolsosRecebidos` (que soma os recebimentos manuais + este); fica exposto para a gaveta
+   * e para a conciliação de "Entradas · terceiros" (= outras + vinculados). Nunca soma de novo.
+   */
+  reembolsosVinculados: number;
   /** Despesas com conta + pagamentos de fatura + transferências sem vínculo. */
   saidasDeCaixa: number;
   /** Parcela de `saidasDeCaixa`, para a tela abrir. */
@@ -180,6 +191,7 @@ export function numerosDoCaixa(params: {
 
   let rendaCent = 0;
   let outrasCent = 0;
+  let vinculadosCent = 0;
   let saidasCent = 0;
   let pagamentosCent = 0;
   let semVinculoQtd = 0;
@@ -200,7 +212,9 @@ export function numerosDoCaixa(params: {
       case "renda": {
         const meu = meuCentavos(t);
         rendaCent += meu;
-        outrasCent += cent(t.amount) - meu;
+        // 04-C: a parte de terceiros de uma receita vinculada é reembolso, não "outra entrada".
+        if (t.reembolso_pessoa_id) vinculadosCent += cent(t.amount) - meu;
+        else outrasCent += cent(t.amount) - meu;
         contado = true;
         break;
       }
@@ -238,12 +252,16 @@ export function numerosDoCaixa(params: {
     if (contado && aproximada) aproximados += 1;
   }
 
-  const reembolsosCent = cent(reembolsosRecebidosNoPeriodo(recebiveis, periodo));
+  // 04-C: só os recebimentos que o dono registrou. As alocações automáticas são a mesma receita
+  // vinculada, que já entrou acima — contá-las de novo dobraria o reembolso.
+  const manuaisCent = cent(reembolsosRecebidosNoPeriodo(recebiveis, periodo, { somenteManuais: true }));
+  const reembolsosCent = manuaisCent + vinculadosCent;
 
   return {
     rendaPessoalRecebida: reais(rendaCent),
     reembolsosRecebidos: reais(reembolsosCent),
     outrasEntradasDeTerceiros: reais(outrasCent),
+    reembolsosVinculados: reais(vinculadosCent),
     saidasDeCaixa: reais(saidasCent),
     pagamentosDeFatura: reais(pagamentosCent),
     transferenciasSemVinculo: { quantidade: semVinculoQtd, total: reais(semVinculoCent) },
@@ -251,7 +269,8 @@ export function numerosDoCaixa(params: {
     resultadoDeCaixa: reais(rendaCent + reembolsosCent + outrasCent - saidasCent),
     aproximados,
     semConta,
-    avisoDeSobreposicao: reembolsosCent > 0 && outrasCent > 0,
+    // Só o legado: recebimento manual + receita de terceiro sem pessoa. A vinculada não conta.
+    avisoDeSobreposicao: manuaisCent > 0 && outrasCent > 0,
   };
 }
 

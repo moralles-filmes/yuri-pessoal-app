@@ -45,6 +45,7 @@ export const COLUNAS_DA_LINHA = [
   "liquidado_em",
   "classificacao",
   "valor_pessoal",
+  "reembolso_pessoa_id",
 ] as const;
 
 export type LinhaDoLancamento = {
@@ -68,6 +69,11 @@ export type LinhaDoLancamento = {
   /** Só existem quando o chamador passou `colunas` — chave AUSENTE, nunca `undefined`. */
   classificacao?: Classificacao;
   valor_pessoal?: number | null;
+  /**
+   * 04-C: a pessoa de quem é o reembolso. SEMPRE presente (nula por padrão): a edição que tira a
+   * pessoa, ou que deixa de ser receita, tem de limpar o vínculo — o RPC só escreve a chave que veio.
+   */
+  reembolso_pessoa_id: string | null;
 };
 
 export type OpcoesDaLinha = {
@@ -78,6 +84,8 @@ export type OpcoesDaLinha = {
   estorno?: boolean;
   /** As duas colunas de responsabilidade. Sem isto, elas NÃO entram na linha. */
   colunas?: { classificacao: Classificacao; valor_pessoal: number | null };
+  /** 04-C: só numa receita cujo reembolso `decidirReembolso` vinculou. Ausente = sem vínculo. */
+  reembolsoPessoaId?: string | null;
 };
 
 export function montarLinhaDoLancamento(
@@ -154,6 +162,7 @@ export function montarLinhaDoLancamento(
       card_id: destino.card_id,
       liquidado_em: d.liquidado_em,
     }),
+    reembolso_pessoa_id: d.type === "receita" ? (o.reembolsoPessoaId ?? null) : null,
   };
 
   if (o.colunas) {

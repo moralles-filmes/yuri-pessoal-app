@@ -18,6 +18,7 @@ import { centavosParaReais, formatCurrency, reaisParaCentavos } from "@/lib/form
 import {
   anexarRecebimentos,
   dataDoUltimoRecebimento,
+  ehManual,
   emAberto,
   estadoDoRecebivel,
   resumirRecebivel,
@@ -54,6 +55,9 @@ const MSG = {
     "O recebimento foi registrado, mas o status não foi atualizado. Clique em Receber para concluir.",
   saldoMudou: "O saldo deste recebível mudou enquanto você recebia. Atualize a tela e confira.",
   desconhecido: "O status deste recebível não é reconhecido.",
+  automatico: "Este recebimento veio de um lançamento. Edite ou exclua a receita em Lançamentos.",
+  realocacao:
+    "O recebimento foi desfeito, mas o abatimento pelas receitas da pessoa não foi refeito agora. Ele se acerta na próxima alteração dela; confira em A Receber.",
 } as const;
 
 export function mensagemDoSaldo(saldoCentavos: number): string {
@@ -65,13 +69,34 @@ type Lido = {
   valor: number;
   status: string;
   pago_em: string | null;
+  person_id: string | null;
   recebimentos: RecebimentoDoBanco[];
 };
+
+/**
+ * 04-C (revisão final, P2) — apagar um recebimento MANUAL devolve saldo à dívida, e o delete em
+ * `receivable_receipts` não tem trigger de realocação: sem esta chamada, um saldo a favor da
+ * pessoa ficaria livre ao lado de uma dívida reaberta até o próximo gatilho. Chamada DEPOIS do
+ * delete. A falha não desfaz o desfazer — ela é declarada, e o próximo gatilho da pessoa corrige.
+ */
+async function realocarAsPessoas(
+  ctx: ContextoDoServico,
+  pessoas: readonly (string | null)[],
+): Promise<ActionResult<never> | null> {
+  for (const pessoa of new Set(pessoas.filter((p): p is string => Boolean(p)))) {
+    const { error } = await ctx.supabase.rpc("realocar_reembolsos_da_pessoa", {
+      p_user: ctx.userId,
+      p_person: pessoa,
+    });
+    if (error) return dbError(MSG.realocacao);
+  }
+  return null;
+}
 
 async function lerRecebivel(ctx: ContextoDoServico, id: string): Promise<Lido | null | "erro"> {
   const { data, error } = await ctx.supabase
     .from("receivables")
-    .select("id, valor, status, pago_em")
+    .select("id, valor, status, pago_em, person_id")
     .eq("id", id)
     .maybeSingle();
   if (error) return "erro";
@@ -181,7 +206,12 @@ export async function receberSaldo(
   return { ok: true, data: undefined };
 }
 
-/** "Desfazer": o ÚLTIMO recebimento (P6). A coluna sai de `pago` ANTES de apagar. */
+/**
+ * "Desfazer": o ÚLTIMO recebimento (P6). A coluna sai de `pago` ANTES de apagar.
+ * 04-C: só alcança recebimento MANUAL. O automático nasce de uma receita vinculada e se desfaz
+ * editando ou excluindo a receita — apagá-lo aqui deixaria a receita com dinheiro "livre" que o
+ * banco realocaria no próximo gatilho, desfazendo o desfazer.
+ */
 export async function desfazerUltimoRecebimento(
   ctx: ContextoDoServico,
   id: string,
@@ -190,7 +220,9 @@ export async function desfazerUltimoRecebimento(
   if (lido === "erro") return dbError("Não foi possível ler o recebível.");
   if (!lido) return dbError(MSG.naoExiste);
 
-  const ultimo = ultimoRecebimento(lido.recebimentos);
+  const ultimo = ultimoRecebimento(lido.recebimentos.filter(ehManual));
+  // Sem manual e com automático: o que há para desfazer não é daqui (legado puro tem lista vazia).
+  if (!ultimo && lido.recebimentos.length > 0) return dbError(MSG.automatico);
   if (!ultimo && lido.status !== "pago") return dbError(MSG.nadaADesfazer);
 
   if (lido.status === "pago") {
@@ -210,7 +242,7 @@ export async function desfazerUltimoRecebimento(
   if (error) {
     return dbError("O recebível voltou para pendente, mas o recebimento não foi removido. Tente de novo.");
   }
-  return { ok: true, data: undefined };
+  return (await realocarAsPessoas(ctx, [lido.person_id])) ?? { ok: true, data: undefined };
 }
 
 /** As decisões do dono: cobrado, ignorado e voltar para pendente (K1). */
@@ -259,17 +291,14 @@ export async function aplicarAcaoEmMassa(
   ctx: ContextoDoServico,
   ids: readonly string[],
   acao: BulkReceivableAction,
-  data: string,
-  hoje: string,
 ): Promise<ActionResult<{ afetados: number; ignorados: number }>> {
-  if (acao === "receber" && data > hoje) return invalid({ pago_em: [MSG.futuro] });
   const unicos = [...new Set(ids)];
   let afetados = 0;
 
   for (const bloco of dividirEmBlocos(unicos, TAMANHO_DO_BLOCO)) {
     const { data: linhas, error } = await ctx.supabase
       .from("receivables")
-      .select("id, valor, status, pago_em")
+      .select("id, valor, status, pago_em, person_id")
       .in("id", bloco)
       .in("status", ORIGENS_DA_ACAO[acao]);
     if (error) return falhaNoMeio(afetados);
@@ -284,7 +313,7 @@ export async function aplicarAcaoEmMassa(
       if (alvo.length === 0) continue;
       const { data: alterados, error: e } = await ctx.supabase
         .from("receivables")
-        .update(patchDaAcao(acao, data))
+        .update(patchDaAcao(acao))
         .in("id", alvo)
         .in("status", ORIGENS_DA_ACAO[acao])
         .select("id");
@@ -293,34 +322,10 @@ export async function aplicarAcaoEmMassa(
       continue;
     }
 
-    if (acao === "receber") {
-      const novos: { user_id: string; receivable_id: string; valor: number; recebido_em: string; observacoes: null }[] = [];
-      const alvo: string[] = [];
-      for (const r of lidos) {
-        const { estado, saldo } = situacao(r);
-        if (!emAberto(resumirRecebivel(r)) && estado !== "pago") continue;
-        if (saldo > 0) {
-          novos.push({ user_id: ctx.userId, receivable_id: r.id, valor: centavosParaReais(saldo), recebido_em: data, observacoes: null });
-        }
-        alvo.push(r.id);
-      }
-      if (novos.length > 0) {
-        const { error: e } = await ctx.supabase.from("receivable_receipts").insert(novos);
-        if (e) return falhaNoMeio(afetados, e.code === "23514" ? MSG.saldoMudou : undefined);
-      }
-      if (alvo.length === 0) continue;
-      const { data: alterados, error: e } = await ctx.supabase
-        .from("receivables")
-        .update({ status: "pago", pago_em: data })
-        .in("id", alvo)
-        .select("id");
-      if (e) return falhaNoMeio(afetados, MSG.colunaDepois);
-      afetados += alterados?.length ?? 0;
-      continue;
-    }
-
     // desfazer — origem: coluna `pago`. A coluna PRIMEIRO, o último recebimento DEPOIS.
-    const alvo = lidos.map((r) => r.id);
+    // 04-C: quem só tem recebimento automático fica de fora (conta como ignorado), intacto.
+    const desfazivel = lidos.filter((r) => r.recebimentos.length === 0 || r.recebimentos.some(ehManual));
+    const alvo = desfazivel.map((r) => r.id);
     if (alvo.length === 0) continue;
     const { data: alterados, error: e } = await ctx.supabase
       .from("receivables")
@@ -330,14 +335,16 @@ export async function aplicarAcaoEmMassa(
       .select("id");
     if (e) return falhaNoMeio(afetados);
     afetados += alterados?.length ?? 0;
-    const ultimos = lidos
-      .map((r) => ultimoRecebimento(r.recebimentos)?.id)
+    const ultimos = desfazivel
+      .map((r) => ultimoRecebimento(r.recebimentos.filter(ehManual))?.id)
       .filter((x): x is string => Boolean(x));
     if (ultimos.length > 0) {
       const { error: e2 } = await ctx.supabase.from("receivable_receipts").delete().in("id", ultimos);
       if (e2) {
         return falhaNoMeio(afetados, "Os recebíveis voltaram para pendente, mas os recebimentos não foram removidos. Use Desfazer em cada recebível para concluir.");
       }
+      const falhaDaRealocacao = await realocarAsPessoas(ctx, desfazivel.map((r) => r.person_id));
+      if (falhaDaRealocacao) return falhaDaRealocacao;
     }
   }
 

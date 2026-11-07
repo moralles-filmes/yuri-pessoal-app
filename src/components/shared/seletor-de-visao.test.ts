@@ -181,12 +181,8 @@ export function temAssinaturaDeAlternancia(corpo: string): boolean {
 }
 
 /** Exceções DECLARADAS, com dono. Cada uma tem de continuar muda (senão sai da lista). */
-const EXCECOES_MUDAS = new Map<string, string>([
-  [
-    "app/(app)/terceiros/terceiros-client.tsx",
-    "falso positivo da assinatura C: botões de AÇÃO em massa (o \"receber\" é o destaque), não alternância — arquivo da 03-C",
-  ],
-]);
+// 04-C T8: a de terceiros-client.tsx saiu — o "receber" em massa (o destaque que a fazia casar) foi removido.
+const EXCECOES_MUDAS = new Map<string, string>();
 
 describe("V1 estendida — nenhuma alternância montada à mão fica muda", () => {
   it("a varredura sabe dizer sim e não (fixture)", () => {

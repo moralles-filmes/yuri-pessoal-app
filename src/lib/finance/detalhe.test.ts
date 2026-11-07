@@ -15,7 +15,7 @@ import {
   resumoMes,
   totalAReceber,
 } from "@/lib/finance/dashboard";
-import { numerosDoCaixa, type TxDeCaixa } from "@/lib/finance/caixa";
+import { entradasDoCaixa, numerosDoCaixa, type TxDeCaixa } from "@/lib/finance/caixa";
 import { minhaParteDoCaixa, type MotorDoCaixa } from "@/lib/finance/caixa-minha-parte";
 import { aReceberPorPessoa } from "@/lib/finance/painel";
 import {
@@ -824,6 +824,92 @@ describe("caixa (base caixa)", () => {
     expect(pedir("categoria", "meu", "cat-a", sobre).estado).toBe("nao-segue");
     expect(pedir("forma", "meu", "pix", sobre).estado).toBe("nao-segue");
     expect(pedir("cartao", "meu", null, sobre).estado).toBe("nao-segue");
+  });
+});
+
+/**
+ * 04-C — a MESMA fixture do caixa com UMA receita vinculada: R$ 300,00 de reembolso da Pessoa A,
+ * recebidos em 14/11, que a alocação automática também lança no recebível (status `pago`, de
+ * propósito: a alocação sozinha não pode virar legado K0). Cada real aparece UMA vez.
+ *   reembolsos = 30,00 + 40,00 (manuais) + 300,00 (vinculada) = 370,00 → 37000
+ *   outras     = 40,00 (Pix de Pessoa A, SEM pessoa)                    →  4000
+ *   vinculados = 300,00                                                  → 30000
+ *   entradas · terceiros = outras + vinculados = 340,00                 → 34000
+ *   entradas · consolidado = 5.000,00 + 340,00 = 5.340,00               → 534000
+ */
+describe("caixa com receita vinculada (04-C)", () => {
+  const VINCULADA = caixaTx({
+    id: "c-reembolso",
+    description: "Reembolso da Pessoa A",
+    amount: 300,
+    valor_pessoal: 0,
+    type: "receita",
+    status: "recebido",
+    competence_date: "2026-11-14",
+    reembolso_pessoa_id: "pessoa-a",
+  });
+  const TXS = [...CAIXA_TXS, VINCULADA];
+  const ALOCADO: RecebivelComRecebimentos = {
+    valor: 300,
+    status: "pago",
+    pago_em: "2026-11-14",
+    recebimentos: [{ valor: 300, recebido_em: "2026-11-14", transaction_id: "c-reembolso" }],
+  };
+  const LEITURA = { ...leituraDoCaixa(TXS), recebiveis: [...(CRUS as RecebivelComRecebimentos[]), ALOCADO] };
+  const sobre = { base: "caixa" as const, caixa: { leitura: LEITURA, motor: MOTOR_DO_CAIXA } };
+  const numeros = numerosDoCaixa({
+    periodo: PERIODO_DO_CAIXA,
+    transactions: TXS,
+    pagamentosDeFatura: LEITURA.pagamentosDeFatura,
+    recebiveis: LEITURA.recebiveis,
+  });
+
+  it("os números contam o reembolso vinculado uma vez", () => {
+    expect(cent(numeros.reembolsosRecebidos)).toBe(37000);
+    expect(cent(numeros.reembolsosVinculados)).toBe(30000);
+    expect(cent(numeros.outrasEntradasDeTerceiros)).toBe(4000);
+    expect(cent(numeros.rendaPessoalRecebida)).toBe(500000);
+    // Aviso aceso só pelo legado da fixture (recebimento manual + Pix SEM pessoa), não pela vinculada.
+    expect(numeros.avisoDeSobreposicao).toBe(true);
+  });
+
+  it("'Reembolsos recebidos' concilia: os manuais + a receita vinculada, sem a alocação automática", () => {
+    const d = conciliar(pedir("caixa", "bruto", "reembolsos", sobre), "brutoCent", numeros.reembolsosRecebidos, 37000);
+    expect(registrosDe(d).map((r) => [r.id, r.data, r.brutoCent, r.meuCent])).toEqual([
+      ["reembolso:1:0", "2026-11-03", 3000, 0],
+      ["reembolso:3:0", "2026-11-10", 4000, 0],
+      ["c-reembolso", "2026-11-14", 30000, 0],
+    ]);
+    expect(registrosDe(d).find((r) => r.id === "c-reembolso")?.descricao).toBe("Reembolso da Pessoa A");
+  });
+
+  it("'Outras entradas' não lista a vinculada", () => {
+    const d = conciliar(pedir("caixa", "bruto", "outras", sobre), "terceirosCent", numeros.outrasEntradasDeTerceiros, 4000);
+    expect(registrosDe(d).map((r) => r.id)).not.toContain("c-reembolso");
+  });
+
+  it("'Renda pessoal' continua sem a vinculada (meu = 0)", () => {
+    const d = conciliar(pedir("caixa", "bruto", "renda", sobre), "meuCent", numeros.rendaPessoalRecebida, 500000);
+    expect(registrosDe(d).map((r) => r.id)).not.toContain("c-reembolso");
+  });
+
+  it("'Entradas · terceiros' concilia com outras + vinculados, e a lista fecha", () => {
+    const d = conciliar(
+      pedir("entradas", "terceiros", null, sobre),
+      "terceirosCent",
+      numeros.outrasEntradasDeTerceiros + numeros.reembolsosVinculados,
+      34000,
+    );
+    expect(registrosDe(d).map((r) => r.id)).toContain("c-reembolso");
+  });
+
+  it("'Entradas' consolidado (bruto) concilia com a renda + os terceiros que entraram", () => {
+    conciliar(pedir("entradas", "bruto", null, sobre), "brutoCent", 5340, 534000);
+  });
+
+  it("a conta da gaveta de Entradas bate com a do card: entradasDoCaixa", () => {
+    // renda 5.000,00 + reembolsos 370,00 + outras 40,00 = 5.410,00 (a vinculada de 300 só uma vez).
+    expect(cent(entradasDoCaixa(numeros))).toBe(541000);
   });
 });
 

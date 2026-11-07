@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  BULK_RECEIVABLE_ACTIONS,
   ORIGENS_DA_ACAO,
   alcanceDaAcao,
   dividirEmBlocos,
@@ -31,7 +32,7 @@ describe("alcanceDaAcao", () => {
   ];
 
   it("soma o valor só do que a ação realmente alcança", () => {
-    const r = alcanceDaAcao(["a", "b"], visiveis, "receber");
+    const r = alcanceDaAcao(["a", "b"], visiveis, "ignorar");
     expect(r.ids).toEqual(["a", "b"]);
     expect(r.valorTotal).toBe(7003 + 3340);
     expect(r.naoAlcancados).toBe(0);
@@ -39,7 +40,7 @@ describe("alcanceDaAcao", () => {
   });
 
   it("não alcança quem já está no destino, e devolve a contagem", () => {
-    const r = alcanceDaAcao(["a", "b", "c"], visiveis, "receber");
+    const r = alcanceDaAcao(["a", "b", "c"], visiveis, "ignorar");
     expect(r.ids).toEqual(["a", "b"]);
     expect(r.valorTotal).toBe(7003 + 3340);
     expect(r.naoAlcancados).toBe(1); // "c" já está pago
@@ -47,7 +48,7 @@ describe("alcanceDaAcao", () => {
 
   it("AÇÃO EM MASSA NÃO SAI DO FILTRO — o que sumiu da tela volta contado", () => {
     // Seleção feita antes de filtrar: 'z' não está mais visível.
-    const r = alcanceDaAcao(["a", "z"], visiveis, "receber");
+    const r = alcanceDaAcao(["a", "z"], visiveis, "ignorar");
     expect(r.ids).toEqual(["a"]);
     expect(r.foraDoFiltro).toBe(1);
     expect(r.valorTotal).toBe(7003);
@@ -72,12 +73,13 @@ describe("alcanceDaAcao", () => {
     expect(r.naoAlcancados).toBe(2);
   });
 
-  it("receber não alcança ignorado — volte para pendente antes (K1)", () => {
-    expect(alcanceDaAcao(["d"], visiveis, "receber").ids).toEqual([]);
+  it("04-C T8: 'receber' saiu — nenhuma ação em massa quita um recebível", () => {
+    expect([...BULK_RECEIVABLE_ACTIONS]).toEqual(["cobrado", "ignorar", "desfazer"]);
+    expect(Object.keys(ORIGENS_DA_ACAO).sort()).toEqual([...BULK_RECEIVABLE_ACTIONS].sort());
   });
 
   it("seleção vazia devolve lote vazio, nunca a lista inteira", () => {
-    const r = alcanceDaAcao([], visiveis, "receber");
+    const r = alcanceDaAcao([], visiveis, "ignorar");
     expect(r.ids).toEqual([]);
     expect(r.valorTotal).toBe(0);
     expect(r.foraDoFiltro).toBe(0);
@@ -85,7 +87,7 @@ describe("alcanceDaAcao", () => {
   });
 
   it("id repetido na seleção conta uma vez só", () => {
-    const r = alcanceDaAcao(["a", "a", "a"], visiveis, "receber");
+    const r = alcanceDaAcao(["a", "a", "a"], visiveis, "ignorar");
     expect(r.ids).toEqual(["a"]);
     expect(r.foraDoFiltro).toBe(0);
   });
@@ -98,7 +100,6 @@ describe("alcanceDaAcao", () => {
 
 describe("ORIGENS_DA_ACAO", () => {
   it("nenhuma ação lista o próprio destino como origem (seria um no-op contado como sucesso)", () => {
-    expect(ORIGENS_DA_ACAO.receber).not.toContain("pago");
     expect(ORIGENS_DA_ACAO.cobrado).not.toContain("cobrado");
     expect(ORIGENS_DA_ACAO.ignorar).not.toContain("ignorado");
     expect(ORIGENS_DA_ACAO.desfazer).not.toContain("pendente");
@@ -106,23 +107,20 @@ describe("ORIGENS_DA_ACAO", () => {
 });
 
 describe("patchDaAcao", () => {
-  it("receber grava a data informada", () => {
-    expect(patchDaAcao("receber", "2026-08-05")).toEqual({
-      status: "pago",
-      pago_em: "2026-08-05",
-    });
-  });
-
-  it("toda ação que sai de 'pago' limpa a data do recebimento", () => {
-    expect(patchDaAcao("cobrado", "2026-08-05")).toEqual({
+  it("nenhuma ação grava 'pago' (04-C T8) e toda ação limpa a data do recebimento", () => {
+    for (const acao of BULK_RECEIVABLE_ACTIONS) {
+      expect(patchDaAcao(acao).status).not.toBe("pago");
+      expect(patchDaAcao(acao).pago_em).toBeNull();
+    }
+    expect(patchDaAcao("cobrado")).toEqual({
       status: "cobrado",
       pago_em: null,
     });
-    expect(patchDaAcao("ignorar", "2026-08-05")).toEqual({
+    expect(patchDaAcao("ignorar")).toEqual({
       status: "ignorado",
       pago_em: null,
     });
-    expect(patchDaAcao("desfazer", "2026-08-05")).toEqual({
+    expect(patchDaAcao("desfazer")).toEqual({
       status: "pendente",
       pago_em: null,
     });
