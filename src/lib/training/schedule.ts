@@ -472,6 +472,30 @@ export type UpcomingEntry<T extends DerivableEntry> = {
   daysAhead: number;
 };
 
+/**
+ * Troca do treino do dia: planejou A, executou B no lugar. É DERIVADO — o planejamento
+ * continua dizendo A (o plano original não é reescrito), e quem diz B é a sessão concluída
+ * ligada ao dia. Sem sessão concluída, ou com o mesmo treino, não há troca.
+ */
+export function trocaDoDia(entry: {
+  workoutId: string | null;
+  workoutName: string | null;
+  title?: string | null;
+  performed?: { workoutId: string | null; workoutName: string } | null;
+}): { feito: string; era: string } | null {
+  const performed = entry.performed;
+  if (!performed) return null;
+  const mesmoTreino =
+    performed.workoutId !== null
+      ? performed.workoutId === entry.workoutId
+      : performed.workoutName === entry.workoutName;
+  if (mesmoTreino) return null;
+  return {
+    feito: performed.workoutName,
+    era: entry.workoutName ?? entry.title ?? "outro treino",
+  };
+}
+
 /** As linhas de hoje que ainda esperam decisão, na ordem do dia. */
 export function entriesForDay<T extends DerivableEntry & { position?: number; plannedTime?: string | null }>(
   entries: T[],

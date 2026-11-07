@@ -340,7 +340,31 @@ export async function getScheduledWorkouts(
   const workoutById = new Map((workoutsRes.data ?? []).map((row) => [row.id, row]));
   const programById = new Map((programsRes.data ?? []).map((row) => [row.id, row.name]));
 
+  // O que a sessão concluída de cada dia EXECUTOU — é daqui que sai a troca do treino do dia
+  // (`trocaDoDia`). Só dias já concluídos têm sessão a procurar.
+  const concludedIds = (entriesRes.data ?? [])
+    .filter((row) => row.status === "concluido")
+    .map((row) => row.id);
+  const performedByEntry = new Map<string, { workoutId: string | null; workoutName: string }>();
+  if (concludedIds.length > 0) {
+    const { data: sessions } = await supabase
+      .from("training_sessions")
+      .select("scheduled_workout_id,workout_id,workout_name_snapshot,ended_at")
+      .in("scheduled_workout_id", concludedIds)
+      .eq("status", "concluida")
+      .order("ended_at", { ascending: true });
+    for (const s of sessions ?? []) {
+      if (!s.scheduled_workout_id) continue;
+      // A última sessão concluída do dia vence (ordem ascendente → a última sobrescreve).
+      performedByEntry.set(s.scheduled_workout_id, {
+        workoutId: s.workout_id,
+        workoutName: s.workout_name_snapshot,
+      });
+    }
+  }
+
   return (entriesRes.data ?? []).map<ScheduledWorkout>((row) => ({
+    performed: performedByEntry.get(row.id) ?? null,
     id: row.id,
     scheduledDate: row.scheduled_date,
     plannedTime: row.planned_time,

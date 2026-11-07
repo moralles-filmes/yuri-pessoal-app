@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
+  ArrowLeftRight,
   CalendarRange,
   Clock,
   Dumbbell,
@@ -23,6 +24,7 @@ import {
   entriesForDay,
   nextScheduledEntry,
   overdueEntries,
+  trocaDoDia,
 } from "@/lib/training/schedule";
 import {
   expandPlannedSets,
@@ -284,6 +286,7 @@ function TodayCard({
   defaultRestSeconds: number;
 }) {
   const derived = derivePlannedStatus(entry, hoje);
+  const troca = trocaDoDia(entry);
 
   if (!workout) {
     return (
@@ -319,6 +322,7 @@ function TodayCard({
               {entry.originalDate
                 ? ` · reagendado (era ${entry.originalDate.slice(8, 10)}/${entry.originalDate.slice(5, 7)})`
                 : ""}
+              {troca ? ` · trocado: você fez ${troca.feito}` : ""}
             </CardDescription>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -331,6 +335,14 @@ function TodayCard({
                 Iniciar
               </Link>
             </Button>
+            {derived !== "concluido" && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`${TRAINING_BASE_PATH}/sessao/preparar?planejado=${entry.id}&trocar=1`}>
+                  <ArrowLeftRight className="size-3.5" />
+                  Trocar
+                </Link>
+              </Button>
+            )}
             <TodoLinkDialog
               kind="treino"
               defaultTitle={`Treinar — ${workout.name}`}
