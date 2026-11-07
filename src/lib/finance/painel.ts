@@ -228,7 +228,7 @@ export function comparacaoDosIndicadores(p: {
 export type IndicadorPronto = {
   rotulo: string;
   dica: string;
-  valor: string | { erro: string } | { naoSegue: string };
+  valor: string | { erro: string } | { naoSegue: string } | { ausente: string };
   linhaDeBase: string;
   /** Detalhe que contém dinheiro: some junto com o olho. */
   detalheComValor: string | null;
@@ -263,7 +263,27 @@ export function indicadoresDoResumo(p: {
   pendente: { ate: number; rotuloAte: string; referenteAoMes: number };
   /** O recorte ligado, no fim da linha de base (ex.: " · Cartão A"); `null` = sem recorte. */
   rotuloDoRecorte: string | null;
+  /** Mês pedido além da janela lida: o último mês lido ('AAAA-MM'); `null` = dentro da janela. */
+  foraDaJanela: string | null;
 }): { entradas: IndicadorPronto; saidas: IndicadorPronto; quarto: IndicadorPronto } {
+  const normal = montarIndicadoresDoResumo(p);
+  // Na base competência, além da janela o número não existe: o motivo ocupa o lugar do valor (K1).
+  // Caixa ignora: o caixa lê o que está no banco, independente da janela de lançamentos.
+  if (p.base !== "competencia" || p.foraDaJanela === null) return normal;
+  const [ano, mes] = p.foraDaJanela.split("-");
+  const fora = (i: IndicadorPronto): IndicadorPronto => ({
+    ...i,
+    valor: { ausente: `fora do período lido (até ${mes}/${ano})` },
+    detalheComValor: null,
+    comparacao: null,
+  });
+  return { entradas: fora(normal.entradas), saidas: fora(normal.saidas), quarto: fora(normal.quarto) };
+}
+
+/** A montagem dos três indicadores para o mês lido, sem o aviso de janela (ver `indicadoresDoResumo`). */
+function montarIndicadoresDoResumo(
+  p: Parameters<typeof indicadoresDoResumo>[0],
+): { entradas: IndicadorPronto; saidas: IndicadorPronto; quarto: IndicadorPronto } {
   const { resp, base, resumo, pendente } = p;
   const recorte = p.rotuloDoRecorte ?? "";
   const emCaixa = base === "caixa";

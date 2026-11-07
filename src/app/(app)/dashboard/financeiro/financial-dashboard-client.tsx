@@ -50,6 +50,7 @@ import {
   type CartaoDoPainel,
   type UltimasDoPainel,
 } from "@/lib/finance/painel";
+import { foraDaJanelaLida } from "@/lib/finance/janela-lida";
 import { estadoDoBloco } from "@/lib/painel/bloco";
 import type { VistaDaGaveta } from "@/lib/painel/gaveta";
 import type { HrefsDoPainel } from "@/lib/painel/hrefs-do-painel";
@@ -297,6 +298,7 @@ export function DashboardClient({
     comparacao,
     pendente: { ate: totalPendente, rotuloAte: rotuloTotalPendente, referenteAoMes: aReceber },
     rotuloDoRecorte: null,
+    foraDaJanela: foraDaJanelaLida(mesSel, mesAtual),
   });
 
   /* ───────────── Cartões e próximas faturas ───────────── */

@@ -82,6 +82,7 @@ import {
   detalheDoNumero,
 } from "@/lib/finance/detalhe";
 import { saldoDasContas } from "@/lib/finance/saldo-das-contas";
+import { foraDaJanelaLida } from "@/lib/finance/janela-lida";
 import { formatCurrency } from "@/lib/format";
 import { urlComDetalhe, urlSemDetalhe } from "@/lib/painel/detalhe-url";
 import { type VistaDaGaveta, vistaDaGaveta } from "@/lib/painel/gaveta";
@@ -335,7 +336,15 @@ export function montarRelatorioFinanceiro(p: ParametrosDoRelatorio): RelatorioFi
               : fatiasDaResponsabilidade([porCategoria.fatia], "terceiros")[0].valor,
         };
 
-  const argumentosDosIndicadores = { base, resumo, caixa, comparacao, pendente, rotuloDoRecorte };
+  const argumentosDosIndicadores = {
+    base,
+    resumo,
+    caixa,
+    comparacao,
+    pendente,
+    rotuloDoRecorte,
+    foraDaJanela: foraDaJanelaLida(mes, mesAtual),
+  };
   const indicadoresBase = indicadoresDoResumo({ ...argumentosDosIndicadores, resp });
   // Com a pessoa, o quarto É o pendente dela, em qualquer responsabilidade (L5).
   const quartoBase =
