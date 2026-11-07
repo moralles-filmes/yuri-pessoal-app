@@ -865,7 +865,7 @@ describe("fronteiras arquiteturais do módulo de IA", () => {
 
     // ⚠️ Segredo AUSENTE também é 401. Uma rota que gasta dinheiro nunca fica aberta
     // "porque a variável não foi definida".
-    expect(codigo).toMatch(/!secret\s*\|\|/);
+    expect(codigo).toMatch(/!segredoConfere\(auth, secret\)/);
 
     // A checagem vem ANTES de montar a service role.
     expect(codigo.indexOf("CRON_SECRET")).toBeLessThan(codigo.indexOf("createServiceClient()"));

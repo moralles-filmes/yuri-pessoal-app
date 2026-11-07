@@ -24,6 +24,7 @@ import {
 } from "./contracts";
 
 export type CodigoDeRecusa =
+  | "TOKEN_NO_TITULO"
   | "TOKEN_DESCONHECIDO"
   | "NUMERO_NO_TEXTO"
   | "SEM_EVIDENCIA"
@@ -43,7 +44,7 @@ export type ResultadoDaValidacao =
   | { readonly ok: false; readonly recusas: readonly Recusa[] };
 
 /**
- * ⚠️ **A BUSCA POR DÍGITO É `/\d/` SOBRE O TEXTO SEM OS TOKENS, e a simplicidade é a decisão.**
+ * ⚠️ **A BUSCA POR DÍGITO É `/\p{Nd}/u` SOBRE O TEXTO SEM OS TOKENS, e a simplicidade é a decisão.**
  *
  * A alternativa — deixar o modelo escrever o número e o servidor conferir — exigiria casar
  * `R$ 1.234,56` com `1234.56`, decidir o que fazer com `mil duzentos e trinta e quatro`, e
@@ -57,7 +58,7 @@ export type ResultadoDaValidacao =
  * indicador e aparece ao lado dele na tela; escrito no texto, ele seria mais um número que o
  * modelo poderia errar. "no período analisado" diz a mesma coisa e não pode estar errado.
  */
-const TEM_DIGITO = /\d/;
+const TEM_DIGITO = /\p{Nd}/u;
 
 /** Os campos de texto que o dono lê, todos submetidos às mesmas regras. */
 function textosDe(insight: InsightGerado): { readonly campo: string; readonly texto: string }[] {
@@ -92,6 +93,11 @@ export function validarInsight(
     if (texto.trim() === "") {
       recusas.push({ codigo: "TEXTO_VAZIO", motivo: `o campo ${campo} veio vazio` });
     }
+  }
+
+  // O título é mostrado sem renderização de fontes nas duas telas.
+  if (tokensDeIndicadorEm(insight.titulo).length > 0) {
+    recusas.push({ codigo: "TOKEN_NO_TITULO", motivo: "o título contém um marcador de indicador" });
   }
 
   // 2. Todo token citado existe entre os indicadores enviados.

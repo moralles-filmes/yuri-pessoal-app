@@ -9,6 +9,7 @@
  * notificações que faltam por `dedupe_key`, então rodar N vezes não duplica.
  */
 import { NextResponse } from "next/server";
+import { segredoConfere } from "@/lib/security/segredo-cron";
 import { createServiceClient, isServiceConfigured } from "@/lib/supabase/service";
 import { runNotificationGeneration } from "@/lib/notifications/cron";
 import { reconcileAllAbandonedRuns } from "@/lib/ai/server/reconcile";
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!segredoConfere(auth, secret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

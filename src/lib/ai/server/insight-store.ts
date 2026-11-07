@@ -24,6 +24,7 @@ type Client = SupabaseClient<Database>;
 export type InsightGravado = {
   readonly id: string;
   readonly dedupeKey: string;
+  readonly reaproveitado: boolean;
 };
 
 export type GravarInsightInput = {
@@ -125,6 +126,10 @@ export async function gravarInsight(
     .select("id")
     .single();
 
+  if (error?.code === "23505") {
+    const existente = await buscarInsightPorChave(input.userId, input.dedupeKey, supabase);
+    return existente ? { id: existente.id, dedupeKey: input.dedupeKey, reaproveitado: true } : null;
+  }
   if (error || !data) return null;
 
   const fontes = fontesCitadas(input.indicadores, input.citados);
@@ -155,7 +160,7 @@ export async function gravarInsight(
     }
   }
 
-  return { id: data.id, dedupeKey: input.dedupeKey };
+  return { id: data.id, dedupeKey: input.dedupeKey, reaproveitado: false };
 }
 
 /** Uma decisão do dono. Append-only: nunca `update`, nunca `delete`. */

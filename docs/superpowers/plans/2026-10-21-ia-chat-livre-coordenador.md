@@ -1351,6 +1351,52 @@ export function RespostaFormatada({ texto }: { readonly texto: string }): React.
   dono.
 - [ ] **Step 10: Commit** `fix(ia): o job de insights roda sem sessão, insight e extração não perdem resultado pago, e o segredo do Cron em tempo constante`.
 
+### Task 22b: Gerar insight financeiro com o Gemini sem falha de formato (MOD-ia-036)
+
+**Acrescentada a pedido do dono em 2026-11-07. Executar depois da Task 22 e antes da 23.**
+
+**Evidência:** o print de produção em `/ia/insights`, com Financeiro selecionado, mostra
+“A análise voltou fora do formato esperado.” e nenhuma análise entregue. Consulta somente de
+metadados confirmou o run das 13h08 de Brasília: `insights.financeiro`, Gemini
+`gemini-3.6-flash`, `failed`, duas tentativas com `INSIGHT_SCHEMA_INVALID`.
+O runner produz esse código quando o objeto devolvido pelo adapter reprova no Zod. Isso localiza
+a etapa; o campo ou a restrição que falhou ainda não foi identificado. As correções de Cron,
+Unicode, persistência e adiamento da Task 22 não encerram este achado.
+
+**Arquivos (confirmar o escopo no diagnóstico):**
+- Modify: `src/lib/ai/insights/schema.ts`, `prompt.ts`,
+  `src/lib/ai/server/insight-runner.ts`;
+- Modify somente se a causa estiver no adapter:
+  `src/lib/ai/providers/ai-sdk/adapter.ts`;
+- Test: `src/lib/ai/insights/engine.test.ts`,
+  `src/lib/ai/server/insight-runner.test.ts`,
+  `src/lib/ai/providers/adapter.contract.test.ts` e/ou
+  `src/lib/ai/providers/ai-sdk/adapter.test.ts`.
+
+- [ ] **Step 1: Diagnóstico da causa.** Comparar o JSON Schema enviado, o objeto retornado
+  por `generateObject`, o Zod e as instruções do prompt. Identificar qual regra reprova:
+  campo obrigatório/extra, enum, tamanho, quantidade de evidências ou transformação do adapter.
+  Não gravar resposta crua, indicadores financeiros ou mensagem de erro que contenha valores
+  do dono em logs/fixtures. Registrar apenas a regra e o campo conhecido do schema; transformar
+  o caso em fixture sintética. Não presumir a causa pelo toast nem gastar em retries exploratórios.
+- [ ] **Step 2: Regressão antes da correção.** Criar teste vermelho que reproduza a causa
+  identificada, cobrindo a passagem adapter → Zod → runner e o fechamento de todas as tentativas.
+  Manter a recusa de saída realmente inválida com mensagem segura.
+- [ ] **Step 3: Correção mínima.** Alinhar contrato e instruções ou corrigir a transformação
+  defeituosa. Preservar limites de tamanho, enumerações, `.strict()`, confiança derivada no
+  servidor, indicadores não confiáveis e números somente por tokens válidos. Aumentar a versão
+  do prompt/schema se o comportamento ou a forma mudar. Não aceitar JSON inválido, truncar tokens
+  nem ampliar tentativas para esconder a causa.
+- [ ] **Step 4: Mutação e checks.** Reverter temporariamente a correção no código local deve deixar o teste
+  vermelho; restaurar por SHA-256 + `git diff`. Rodar a suíte inteira com
+  `--testTimeout=30000`, `npx tsc --noEmit` e `npm run lint`. Confirmar por regressão
+  que Dieta/Treinos e as garantias da Task 22 permanecem válidos.
+- [ ] **Step 5: Teste real e commit próprio.** Com login feito pelo dono no ambiente local,
+  gerar uma análise de Financeiro com o Gemini configurado, confirmar a exibição e persistência
+  de insight/fontes, números renderizados, custo e ausência de run/tentativa aberta. Não ligar
+  o job automático nem confirmar cartões. Se o provedor devolver um erro real, mantê-lo declarado.
+  Registrar o resultado e o custo sem copiar os dados financeiros. Commit em pt-BR com as mutações.
+
 ### Task 23: Ações e desfazer (MOD-ia-004, 012, 017, 022, 023)
 
 **Files:**

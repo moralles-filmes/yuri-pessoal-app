@@ -539,3 +539,15 @@ describe("validate — fora dos tokens, dígito nenhum", () => {
     }
   });
 });
+
+describe("texto Unicode e título sem placeholder", () => {
+  it.each(["３", "٣", "३"])("recusa o dígito decimal %s", digito => {
+    const resultado = validarInsight(insight({ resumo: "Foram " + digito + " registros" }), [IND]);
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) expect(resultado.recusas.some(r => r.codigo === "NUMERO_NO_TEXTO")).toBe(true);
+  });
+  it("recusa até token conhecido no título, mas preserva no corpo", () => {
+    expect(validarInsight(insight({ titulo: "Gasto {{ind:financeiro.gasto_mes}}" }), [IND]).ok).toBe(false);
+    expect(validarInsight(OK, [IND]).ok).toBe(true);
+  });
+});

@@ -18,8 +18,10 @@
  * como a de notificações). Runtime nodejs.
  */
 import { NextResponse } from "next/server";
+import { segredoConfere } from "@/lib/security/segredo-cron";
 
 import { createServiceClient, isServiceConfigured } from "@/lib/supabase/service";
+import { reconcileAllAbandonedRuns } from "@/lib/ai/server/reconcile";
 import { runInsightJobForAllUsers } from "@/lib/ai/server/insight-job";
 
 export const runtime = "nodejs";
@@ -36,7 +38,7 @@ export async function GET(request: Request) {
   const auth = request.headers.get("authorization");
   // Sem segredo configurado é 401 também: uma rota que gasta dinheiro nunca fica aberta
   // "porque a variável não foi definida".
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!segredoConfere(auth, secret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -46,6 +48,7 @@ export async function GET(request: Request) {
 
   try {
     const service = createServiceClient();
+    await reconcileAllAbandonedRuns();
     // `agora` nasce AQUI e é injetado: nada abaixo desta linha chama `new Date()`.
     const resultado = await runInsightJobForAllUsers(service, new Date());
 
