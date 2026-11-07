@@ -226,6 +226,10 @@ Mesmo método do "antes": Safari do iPhone do dono, mesma Wi-Fi, `http://<IP do 
   (`/(app)/treinos/calendario` e `/(app)/ia`), as outras 69 ficaram idênticas. A névoa, os
   materiais e a fonte são CSS e não entram na conta de JS. A Inter passou a `preload: false`:
   o woff2 latino (47,3 KB) só baixa onde a fonte do sistema Apple não existe.
+- **Depois da correção da revisão final (`f3d5ccb`)**: 8.341 testes em 371 arquivos (+3, os testes de
+  "reduzir transparência" nos tokens e da matriz de texto sobre a névoa); lint, tipos e build
+  limpos; mediana 203,0 KB. Uma rota subiu 0,1 KB (`/(app)/treinos/exercicios/[id]`, a troca de
+  classe no `PageHeader`), dentro da tolerância de 1 KB do plano; as outras ficaram como acima.
 
 ## Conferência visual — depois
 
