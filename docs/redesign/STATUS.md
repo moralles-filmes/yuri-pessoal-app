@@ -28,7 +28,7 @@ migration, **sem push** — D67) · **REDESIGN-06 ✅** (integrada por merge `--
 migration, **sem push** — D67) — **todo número do Painel e do Relatório abre os registros que o
 explicam** · **REDESIGN-04-C ✅** (integrada por merge `--no-ff` em `86d850a`, **com a M1, a M2 e
 a M3 aplicadas**, **sem push** — D67) — **a REDESIGN-04 está fechada** · **REDESIGN-08 ✅**
-(regressão e entrega, sem migration, **sem push** — D67) — **🟢 O REDESIGN ESTÁ FECHADO** · próximo:
+(regressão e entrega, integrada por merge `--no-ff` em `0fe59ed`, sem migration, **sem push** — D67) — **🟢 O REDESIGN ESTÁ FECHADO** · próximo:
 o merge do **PR único #65**, a seu pedido (ou a 09 — vidro — antes dele, como você decidiu em 2026-11-07)
 
 ⛔ **A M-F foi aplicada em 2026-10-21** (03-F), pelo MCP, depois do seu "Aplique" literal, numa
@@ -62,7 +62,8 @@ próximas fases se acumulam em `feat/redesign-00-auditoria` **sem push** e vão 
 ## REDESIGN-08 — regressão e entrega ✅ (o redesign fecha)
 
 Branch `feat/redesign-08-entrega`, nascida de `42af6c3` (a ponta com a 04-B e a 04-C), executada em
-`C:/tmp/08-entrega`. Desenho `docs/superpowers/specs/2026-11-06-08-regressao-e-entrega-design.md`
+`C:/tmp/08-entrega`, integrada por merge `--no-ff` em **`0fe59ed`** (local, sem push — D67; árvore idêntica à
+ponta). Desenho `docs/superpowers/specs/2026-11-06-08-regressao-e-entrega-design.md`
 (**§13 com o resultado inteiro**) e plano `docs/superpowers/plans/2026-11-06-08-regressao-e-entrega.md`.
 Sem funcionalidade nova e **sem migration**.
 
@@ -1753,8 +1754,8 @@ uma rodada foi contaminada por um merge alheio, abortado no meio dela (ver Pend�
 
 ## Próximo passo — o merge do PR único #65
 
-**O redesign está fechado** (08 ✅). O que falta é seu: o merge de `feat/redesign-08-entrega` em
-`feat/redesign-00-auditoria`, o push e o merge do **PR #65** em `main` (D67), com o texto de
+**O redesign está fechado** (08 ✅). A 08 está integrada em `feat/redesign-00-auditoria` (`0fe59ed`, árvore idêntica à
+ponta `05b02b4`). O que falta é seu: o push e o merge do **PR #65** em `main` (D67), com o texto de
 `docs/redesign/PR-65.md` e, antes, os dois números do §1 de `docs/redesign/REVERSAO.md`. Se a **09**
 (visual em vidro, decidida em 2026-11-07) vier antes, ela nasce desta ponta e o PR espera por ela.
 
