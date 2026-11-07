@@ -308,7 +308,7 @@ export function FoodsClient({
 
       {/* Barra de seleção — só aparece quando há algo selecionado. */}
       {selected.size > 0 && (
-        <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-lg border bg-card/95 p-2.5 shadow-sm backdrop-blur">
+        <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-lg p-2.5 vidro-casca">
           <span className="text-sm font-medium">
             {selected.size} selecionado{selected.size > 1 ? "s" : ""}
           </span>

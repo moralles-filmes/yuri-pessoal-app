@@ -41,7 +41,7 @@ export function RoscaCategoriasChart({
             strokeWidth={1}
           >
             {fatias.map((f, i) => (
-              <Cell key={f.categoryId ?? i} fill={corDaFatia(f, i)} stroke="var(--card)" />
+              <Cell key={f.categoryId ?? i} fill={corDaFatia(f, i)} stroke="var(--glass-solid)" />
             ))}
           </Pie>
           <Tooltip

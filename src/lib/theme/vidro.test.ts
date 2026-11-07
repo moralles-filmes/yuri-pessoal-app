@@ -127,3 +127,59 @@ describe("a névoa no fundo (T4)", () => {
     expect(coluna).not.toContain("bg-background");
   });
 });
+
+/** Todos os `.tsx` de `src/`, para as varreduras abaixo. */
+function arquivosTsx(dir: string): string[] {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) return arquivosTsx(p);
+    return e.name.endsWith(".tsx") ? [p] : [];
+  });
+}
+
+const relativo = (p: string) => path.relative(path.resolve(SRC, ".."), p).replaceAll(path.sep, "/");
+
+/** Linha (1-based) de um deslocamento no texto. */
+const linhaDe = (texto: string, i: number) => texto.slice(0, i).split("\n").length;
+
+describe("superfícies que cobrem conteúdo rolando (T5)", () => {
+  const ARQUIVOS = arquivosTsx(SRC).map((p) => ({
+    rel: relativo(p),
+    // Comentários saem trocados por espaços de mesmo tamanho de linha: a linha reportada não desliza.
+    fonte: fs
+      .readFileSync(p, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+      .replace(/(^|[^:])\/\/[^\n]*/g, (_, antes: string) => antes),
+  }));
+
+  it("nenhuma classe com sticky/fixed usa bg-card (translúcido sobre o que rola)", () => {
+    const ocorrencias: string[] = [];
+    for (const { rel, fonte } of ARQUIVOS) {
+      // Qualquer literal de texto: className="…", constante "…" ou template `…`.
+      for (const m of fonte.matchAll(/"([^"\n]*)"|'([^'\n]*)'|`([^`]*)`/g)) {
+        const texto = m[1] ?? m[2] ?? m[3] ?? "";
+        const classes = texto.split(/\s+/);
+        const fixa = classes.some((c) => /^(?:[\w-]+:)*(?:sticky|fixed)$/.test(c));
+        const cardTranslucido = classes.some((c) => /^(?:[\w-]+:)*bg-card(?:\/\d+)?$/.test(c));
+        if (fixa && cardTranslucido) ocorrencias.push(`${rel}:${linhaDe(fonte, m.index ?? 0)}`);
+      }
+    }
+    expect(
+      ocorrencias,
+      `fundo translúcido sobre conteúdo que rola: use \`vidro-casca\` (barra) ou \`bg-glass-solid\` (coluna de tabela):\n${ocorrencias.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("nenhum gráfico pinta stroke/fill com var(--card) (vira linha tingida, não vão)", () => {
+    const ocorrencias: string[] = [];
+    for (const { rel, fonte } of ARQUIVOS) {
+      for (const m of fonte.matchAll(/\b(?:stroke|fill)\s*=\s*(?:\{\s*)?["'`]var\(--card\)["'`]/g)) {
+        ocorrencias.push(`${rel}:${linhaDe(fonte, m.index ?? 0)}`);
+      }
+    }
+    expect(
+      ocorrencias,
+      `--card é translúcido: use \`var(--glass-solid)\` no stroke/fill:\n${ocorrencias.join("\n")}`,
+    ).toEqual([]);
+  });
+});

@@ -67,7 +67,7 @@ export function CategoriaChart({ data }: { data: CategoriaSlice[] }) {
             <Cell
               key={d.categoryId ?? i}
               fill={d.color ?? CHART_COLORS[i % CHART_COLORS.length]}
-              stroke="var(--card)"
+              stroke="var(--glass-solid)"
             />
           ))}
         </Pie>

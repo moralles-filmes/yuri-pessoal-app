@@ -121,7 +121,7 @@ const TH =
   "px-2 py-2.5 text-left align-bottom text-[11px] font-semibold tracking-wide text-muted-foreground uppercase";
 const CEL =
   "block min-h-16 rounded-lg border bg-card px-2.5 py-2 text-inherit no-underline hover:border-primary focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none";
-const MES_STICKY = "sticky left-0 z-[1] bg-card";
+const MES_STICKY = "sticky left-0 z-[1] bg-glass-solid";
 /** O total do mês fica sempre à vista: com muitos cartões a grade rola entre as duas colunas fixas. */
 const TOTAL_STICKY = "sticky right-0 z-[1] border-l";
 

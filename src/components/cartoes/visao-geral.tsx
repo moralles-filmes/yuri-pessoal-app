@@ -109,7 +109,7 @@ const TD = "px-3 py-2.5 text-right whitespace-nowrap tabular-nums first:text-lef
  * com dado real: 3 pessoas já passam de 1280 px), e o selo é o que distingue paga, atrasada e
  * prevista — ele não pode depender de rolar para ser visto.
  */
-const COLUNA_DO_ESTADO = "sticky right-0 z-[1] bg-card";
+const COLUNA_DO_ESTADO = "sticky right-0 z-[1] bg-glass-solid";
 
 function Valores({
   linha,
