@@ -107,3 +107,15 @@ describe("C5.2 · tabela-do-grafico.tsx", () => {
     expect(normalizada(fonte)).not.toContain('"use client"');
   });
 });
+
+describe("08 C5.2 — a tabela oculta não alarga a página", () => {
+  // Tabela ignora `width: 1px` e `overflow: hidden`: com `sr-only` NELA, o conteúdo alargava a
+  // página para além da viewport no celular (medido: 713 px numa janela de 490). O `sr-only` mora
+  // numa <div> em volta, que respeita as duas propriedades.
+  const fonte = readFileSync(join(process.cwd(), "src/components/shared/painel/tabela-do-grafico.tsx"), "utf8");
+
+  it("o sr-only está numa div que envolve a tabela, nunca na própria tabela", () => {
+    expect(fonte).toMatch(/<div className="sr-only">\s*<table>/);
+    expect(fonte).not.toMatch(/<table className="sr-only"/);
+  });
+});

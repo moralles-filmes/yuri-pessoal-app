@@ -15,8 +15,11 @@ export function TabelaDoGrafico({
 }) {
   if (leitura === null) return null;
 
+  // `sr-only` na <div>, não na <table>: tabela ignora `width: 1px` e `overflow: hidden`, e a tabela
+  // oculta alargava a página no celular (08, conferência visual).
   return (
-    <table className="sr-only">
+    <div className="sr-only">
+    <table>
       <caption>{titulo}</caption>
       <thead>
         <tr>
@@ -38,5 +41,6 @@ export function TabelaDoGrafico({
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
