@@ -83,6 +83,26 @@ describe("os quatro materiais", () => {
     expect(corpo("ladrilho")).not.toContain("box-shadow");
   });
 
+  it.each(MATERIAIS)(
+    "%s escreve -webkit-backdrop-filter ANTES de backdrop-filter (Lightning CSS do build)",
+    (nome) => {
+      const corpoDoMaterial = corpo(nome);
+      const blocos = [corpoDoMaterial.replace(/@media[^{]*\{[^{}]*\}/g, "")];
+      for (const m of corpoDoMaterial.matchAll(/@media[^{]*\{([^{}]*)\}/g)) blocos.push(m[1]);
+      for (const b of blocos) {
+        for (const m of b.matchAll(/(?<!-webkit-)backdrop-filter\s*:/g)) {
+          const antes = b.slice(0, m.index);
+          expect(
+            antes,
+            "O Lightning CSS do Next funde as duas declarações iguais em UMA prefixada quando o " +
+              "-webkit- vem DEPOIS, e o Chrome não usa o prefixado: o backdrop-filter sem " +
+              "prefixo some do CSS de produção. Escreva -webkit-backdrop-filter primeiro.",
+          ).toMatch(/-webkit-backdrop-filter\s*:/);
+        }
+      }
+    },
+  );
+
   it("nenhum lugar usa background-attachment: fixed (quebra no iOS)", () => {
     expect(css).not.toMatch(/background-attachment\s*:\s*fixed/);
   });

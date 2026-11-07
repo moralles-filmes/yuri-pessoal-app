@@ -393,7 +393,10 @@
 /* OS QUATRO MATERIAIS (REDESIGN-09-A). Nenhum define `border-radius`: o raio é do componente.
    Só `vidro-casca` e `vidro-sobreposicao` desfocam o que está atrás — o desfoque é o recurso
    caro, e `vidro-cartao`/`ladrilho` existem justamente para as superfícies que se repetem.
-   `-webkit-backdrop-filter` é escrito à mão: o Safari ainda o exige.
+   `-webkit-backdrop-filter` é escrito à mão (o Safari ainda o exige) e vem SEMPRE ANTES de
+   `backdrop-filter`: o Lightning CSS do build funde as duas declarações iguais numa só,
+   prefixada, quando o `-webkit-` vem depois — e o Chrome não lê a prefixada, então o sem
+   prefixo some do CSS de produção. A ordem do utilitário `backdrop-blur` do Tailwind é esta.
    Em cada um, transparência reduzida troca o vidro pela superfície opaca validada
    (`--glass-solid`) e cores forçadas devolvem a borda ao sistema. */
 @utility vidro-casca {
@@ -405,13 +408,13 @@
     inset 0 1px 0 var(--glass-hi),
     inset 0 -1px 0 var(--glass-lo),
     var(--glass-shadow);
-  backdrop-filter: blur(30px) saturate(175%);
   -webkit-backdrop-filter: blur(30px) saturate(175%);
+  backdrop-filter: blur(30px) saturate(175%);
 
   @media (prefers-reduced-transparency: reduce) {
     background: var(--glass-solid);
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   @media (forced-colors: active) {
@@ -431,8 +434,8 @@
 
   @media (prefers-reduced-transparency: reduce) {
     background: var(--glass-solid);
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   @media (forced-colors: active) {
@@ -447,13 +450,13 @@
     inset 0 1px 0 var(--glass-hi),
     inset 0 -1px 0 var(--glass-lo),
     var(--glass-shadow);
-  backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
 
   @media (prefers-reduced-transparency: reduce) {
     background: var(--glass-solid);
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   @media (forced-colors: active) {
@@ -467,8 +470,8 @@
 
   @media (prefers-reduced-transparency: reduce) {
     background: var(--glass-solid);
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   @media (forced-colors: active) {
