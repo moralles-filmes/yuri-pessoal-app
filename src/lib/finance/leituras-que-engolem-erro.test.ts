@@ -49,6 +49,11 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
     motivo: "A abertura do mesmo saldo diário: sem ela, `null` (um saldo que começa do zero seria mentira).",
     destino: "K1 (5) — mantido, junto da linha acima.",
   },
+  "src/lib/finance/queries.ts · lerSaldoAte · account_balance_before": {
+    motivo:
+      "K2 (04-A): erro → `null`, e a tela escreve \"Não foi possível ler o saldo\" — ausência, nunca zero.",
+    destino: "04-A K2 — mantido.",
+  },
   "src/lib/finance/queries.ts · getCategoriesEnsureSeed · seed_default_categories": {
     motivo:
       "O seed é idempotente e a leitura seguinte (listaCompleta das categorias) lança se algo falhou: o erro do rpc não decide nada.",
@@ -56,7 +61,7 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
   },
   "src/lib/actions/installments.ts · recomputeParentValorPessoal · transaction_installments": {
     motivo:
-      "Devolve `false` em vez de lançar, e o único chamador (cancelInstallmentFuture) o traduz em falhaDeLeituraDepois antes de gravar valor_pessoal (L6c1).",
+      "Devolve `\"leitura\"` em vez de lançar (03-G2: era `false`), e o único chamador (cancelInstallmentFuture) o traduz em falhaDeLeituraDepois antes de gravar valor_pessoal (L6c1).",
     destino: "03-G L6c1 — coberto em leituras-que-decidem.test.ts ('recálculo do valor pessoal').",
   },
   "src/lib/actions/installments.ts · recomputeParentValorPessoal · receivables": {
@@ -68,9 +73,16 @@ const EXCECOES: Record<string, { motivo: string; destino: string }> = {
 /**
  * Medido no passo da L8 (2026-10-25): 106. Na integração com a `main` (2026-10-25) entrou a 107ª —
  * as compras das faturas pagas em `lerCaixaDoMes` (gráficos "meus", desenho 2026-10-18), que trata
- * o erro (`{ ok: false }`) e o teto (`leituraComTeto`). Mudou? Confira o inventário antes de ajustar.
+ * o erro (`{ ok: false }`) e o teto (`leituraComTeto`). Na 03-G2 (D-G2-13) caíram para 105: as RPCs
+ * que ESCREVEM (`pagar_fatura`, `desfazer_pagamento_fatura`) saíram daqui para o inventário de
+ * escritas, e as novas (`salvar_lancamento`) já nascem lá; e entrou a 106ª, a classificação da
+ * compra-pai que `cancelInstallmentFuture` lê antes de escrever (D-G2-9), com o erro tratado. No
+ * E5 da 03-G2 (K3) entraram 5, todas de `preverExclusaoDoLancamento`, que só lê e trata cada erro
+ * com `falhaDeLeituraAntes`: o lançamento, os recebíveis, as pessoas, as parcelas e as linhas da
+ * importação — 111. Na 04-A entraram 2: `getUltimasTransacoes` (lança no erro) e `lerSaldoAte`
+ * (K2: erro → `null`, declarada em EXCECOES) — 113. Na 04-C (T4) entraram 6: as leituras de `lerEstadoDoReembolso` e `lerSituacoesDoReembolso` (lançam no erro) e a contagem de receitas vinculadas em `deletePerson` (erro recusa) — 119. Na 04-C (T7) entrou 1: a leitura da linha em `setImportRowReembolso` (falhaDeLeituraAntes) — 120. Na revisão final da 04-C entrou 1: a rpc `realocar_reembolsos_da_pessoa` depois do desfazer manual (erro vira dbError) — 121. Mudou? Confira o inventário antes de ajustar.
  */
-const LEITURAS_ESPERADAS = 107;
+const LEITURAS_ESPERADAS = 121;
 
 const LEITURAS = inventariarLeituras(ARQUIVOS, RAIZ);
 const chave = (l: { arquivo: string; funcao: string; alvo: string }) =>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { PageHeader } from "@/components/shared/page-header";
 import {
   getAccounts,
@@ -12,9 +13,10 @@ import { leituraComTeto } from "@/lib/supabase/leitura";
 import { AvisoDeTeto } from "@/components/shared/aviso-de-teto";
 import type { TransactionWithRelations } from "@/types/database";
 import { hojeISO } from "@/lib/format";
+import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
 import { StatementsClient } from "./statements-client";
 
-export const metadata: Metadata = { title: "Faturas" };
+export const metadata: Metadata = { title: "Faturas e pagamentos" };
 export const dynamic = "force-dynamic";
 
 function str(value: string | string[] | undefined): string | undefined {
@@ -54,13 +56,18 @@ export default async function FaturasPage({
     : [[], []];
 
   const today = hojeISO();
+  // O olho dos valores é do aparelho (cookie): só o valor exato "1" oculta (`valoresOcultos`).
+  const ocultos = valoresOcultos((await cookies()).get(COOKIE_DO_OLHO)?.value);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Faturas"
-        description="Faturas por cartão e mês: aberta, fechada, paga e atrasada."
+        title="Faturas e pagamentos"
+        description="Primeiro o que precisa ser pago; depois o que ainda está acumulando."
       />
+      <p className="border-l-2 border-primary pl-2 text-xs text-muted-foreground">
+        Valores por fatura do cartão. Minha parte = total − parte dos terceiros.
+      </p>
       {/* Os itens listados são cortados no teto de 500; o TOTAL da fatura vem da view, não desta
           lista — por isso aviso, não erro (K2, D-G5). */}
       <AvisoDeTeto leitura={leituraTx} oQue="lançamentos deste cartão" />
@@ -71,6 +78,7 @@ export default async function FaturasPage({
           cor: c.cor,
           dia_fechamento: c.dia_fechamento,
           dia_vencimento: c.dia_vencimento,
+          ativo: c.ativo,
         }))}
         statements={statements}
         transactions={transactions}
@@ -83,6 +91,7 @@ export default async function FaturasPage({
         selectedCardId={selectedCardId}
         month={str(sp.month) ?? null}
         status={str(sp.status) ?? null}
+        ocultoInicial={ocultos}
       />
     </div>
   );

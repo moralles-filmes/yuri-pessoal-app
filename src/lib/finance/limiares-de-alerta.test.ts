@@ -47,7 +47,7 @@ function gerarNosDoisCaminhos({
       aVista: saidas - totalFatura,
       aVistaMeu: saidas - totalFatura,
     },
-    mediaSaidas,
+    regua: { saidas, mediaSaidas, ateODia: null, cartaoFora: false },
     cards: [CARTAO],
     statements: [fatura],
     receivables: [],

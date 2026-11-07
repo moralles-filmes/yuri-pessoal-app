@@ -322,6 +322,49 @@ describe("proximas6Faturas", () => {
   });
 });
 
+describe("proximas6Faturas — cartão desativado (08 K2)", () => {
+  // Mesmos dias nos dois cartões: a única diferença é o `ativo`.
+  const cartaoA: DashCard = {
+    id: "cartao-a",
+    nome: "Cartão A",
+    cor: null,
+    limite_total: 1000,
+    dia_fechamento: 10,
+    dia_vencimento: 20,
+  };
+  const cartaoB: DashCard = { ...cartaoA, id: "cartao-b", nome: "Cartão B", ativo: false };
+  // Uma fatura REAL de B, dentro das 6 competências a partir de 2026-06-15 (jul..dez).
+  const faturaRealB: DashStatement = {
+    id: "st-b-ago",
+    card_id: "cartao-b",
+    competencia: "2026-08-01",
+    data_fechamento: "2026-08-10",
+    data_vencimento: "2026-08-20",
+    pago_em: null,
+    total_atual: 80,
+  };
+  const provis = proximas6Faturas({
+    hoje: "2026-06-15",
+    cards: [cartaoA, cartaoB],
+    statements: [faturaRealB],
+    receivables: [],
+  });
+
+  it("o cartão ativo continua com as 6 competências previstas", () => {
+    const deA = provis.filter((f) => f.cardId === "cartao-a");
+    expect(deA).toHaveLength(6);
+    expect(deA.every((f) => f.virtual)).toBe(true);
+  });
+
+  it("o desativado tem exatamente uma linha — a fatura real — e nenhuma prevista", () => {
+    const deB = provis.filter((f) => f.cardId === "cartao-b");
+    expect(deB).toHaveLength(1);
+    expect(deB[0].competencia).toBe("2026-08");
+    expect(deB[0].virtual).toBe(false);
+    expect(provis.some((f) => f.cardId === "cartao-b" && f.virtual)).toBe(false);
+  });
+});
+
 /* ───────────────────────────── projeção ───────────────────────────── */
 
 describe("projecaoProximosMeses", () => {
@@ -486,7 +529,7 @@ describe("gerarAlertas", () => {
     const alertas = gerarAlertas({
       hoje: "2026-06-15",
       resumoAtual,
-      mediaSaidas: 100, // 300 > 100 * 1.2 ⇒ gasto alto
+      regua: { saidas: resumoAtual.saidas, mediaSaidas: 100, ateODia: null, cartaoFora: false }, // 300 > 100 * 1.2 ⇒ gasto alto
       cards,
       statements,
       receivables,
@@ -504,7 +547,7 @@ describe("gerarAlertas", () => {
     const alertas = gerarAlertas({
       hoje: "2026-06-15",
       resumoAtual,
-      mediaSaidas: 1000, // 300 < 1000 * 1.2
+      regua: { saidas: resumoAtual.saidas, mediaSaidas: 1000, ateODia: null, cartaoFora: false }, // 300 < 1000 * 1.2
       cards: [],
       statements: [],
       receivables: [],

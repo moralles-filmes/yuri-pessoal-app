@@ -29,6 +29,10 @@ import { CategoryPicker } from "@/components/finance/category-picker";
 import { categoriaServeAoTipo, categoriasDoTipo } from "@/lib/finance/category-search";
 import { MoneyInput } from "@/components/financeiro/money-input";
 import { ReceitaResponsabilidadeEditor } from "@/components/financeiro/receita-responsabilidade";
+import {
+  ReembolsoDaReceita,
+  useSituacaoDoReembolso,
+} from "@/components/financeiro/reembolso-da-receita";
 import { InstallmentBadge } from "@/components/financeiro/badges";
 import {
   SplitEditor,
@@ -51,6 +55,7 @@ import {
   toDateInputValue,
 } from "@/lib/format";
 import { resolverFatura } from "@/lib/finance/invoice";
+import { previaDoReembolso, type EscolhaDaSobra } from "@/lib/finance/reembolso";
 import {
   aplicarAtalhoDaCategoria,
   DICA_DO_ATALHO,
@@ -111,6 +116,9 @@ type FormValues = {
   parts: SplitPartValue[];
   receita_classificacao: Classificacao;
   receita_minha_parte: string;
+  /** 04-C: a pessoa de quem é o reembolso ('' = nenhuma) e o que fazer com a sobra ('' = sem escolha). */
+  reembolso_pessoa_id: string;
+  reembolso_sobra: "" | EscolhaDaSobra;
 };
 
 // Campo que não existe na tela sobe para o toast com o nome.
@@ -136,6 +144,8 @@ const CAMPOS_DO_FORMULARIO = [
   "parts",
   "receita_classificacao",
   "receita_minha_parte",
+  "reembolso_pessoa_id",
+  "reembolso_sobra",
 ] as const satisfies readonly (keyof FormValues)[];
 
 function defaults(tx?: TransactionRow): FormValues {
@@ -162,10 +172,27 @@ function defaults(tx?: TransactionRow): FormValues {
     override_ultima: "",
     classificacao: tx?.type === "despesa" ? tx.classificacao : "pessoal",
     parts: [],
-    receita_classificacao: tx?.type === "receita" ? tx.classificacao : "pessoal",
+    // Vinculada a uma pessoa: abre como "de terceiro" — a sobra decide (a "minha parte" de uma
+    // compartilhada vinculada vem da prévia, e o editor dela esconderia "De quem?" e perderia o vínculo).
+    receita_classificacao:
+      tx?.type === "receita" ? (tx.reembolso_pessoa_id ? "terceiro" : tx.classificacao) : "pessoal",
     receita_minha_parte:
-      tx?.type === "receita" && tx.classificacao === "compartilhada" && tx.valor_pessoal != null
+      tx?.type === "receita" &&
+      !tx.reembolso_pessoa_id &&
+      tx.classificacao === "compartilhada" &&
+      tx.valor_pessoal != null
         ? String(tx.valor_pessoal).replace(".", ",")
+        : "",
+    reembolso_pessoa_id: tx?.type === "receita" ? (tx.reembolso_pessoa_id ?? "") : "",
+    // Na edição, a escolha já feita sai da linha gravada (revisão final, P3): vinculada e
+    // "compartilhada" só existe quando a sobra virou receita minha; vinculada e "de terceiro" com
+    // sobra é saldo a favor. Sem sobra na prévia, o valor nem é enviado. Mudar o valor ou a pessoa
+    // zera a escolha, como na criação.
+    reembolso_sobra:
+      tx?.type === "receita" && tx.reembolso_pessoa_id
+        ? tx.classificacao === "compartilhada"
+          ? "receita"
+          : "saldo"
         : "",
   };
 }
@@ -247,9 +274,17 @@ export function TransactionFormDialog({
   const qtdParcelas = useWatch({ control, name: "qtd_parcelas" });
   const overrideUltima = useWatch({ control, name: "override_ultima" });
   const status = useWatch({ control, name: "status" });
+  const receitaClassificacao = useWatch({ control, name: "receita_classificacao" });
+  const reembolsoPessoaId = useWatch({ control, name: "reembolso_pessoa_id" });
+  const reembolsoSobra = useWatch({ control, name: "reembolso_sobra" });
+  // Depois de uma recusa do servidor por dívida que mudou, a leitura da pessoa é refeita.
+  const [versaoDoReembolso, setVersaoDoReembolso] = React.useState(0);
   const isTransfer = type === "transferencia";
   const isReceita = type === "receita";
   const isCard = !isTransfer && paymentMethod === "cartao_credito";
+  // 03-G2 (D-G2-19) — estorno de cartão (receita com cartão, em edição): o servidor preserva
+  // cartão e fatura e não guarda conta nem meio de pagamento; a tela não os pede.
+  const ehEstorno = isEdit && transaction?.type === "receita" && !!transaction?.card_id && isReceita;
   // Parcelamento só na criação (edição de parcelamento é feita em /parcelamentos).
   const canParcelar = !isEdit && isCard;
   const isParcelado = canParcelar && parcelado;
@@ -261,6 +296,29 @@ export function TransactionFormDialog({
   // nasce sem status; fora de pago/recebido a coluna não existe (CHECK do banco).
   const mostraDataDoPagamento =
     !isCard && !isParcelado && (status === "pago" || status === "recebido");
+
+  // 04-C — "De quem?" só numa receita de terceiro que não é estorno nem cartão.
+  const mostraReembolso = isReceita && !isCard && !ehEstorno && receitaClassificacao === "terceiro";
+  const pessoaDoReembolso = mostraReembolso ? reembolsoPessoaId : "";
+  const situacaoDoReembolso = useSituacaoDoReembolso({
+    ativo: open && mostraReembolso,
+    pessoaId: pessoaDoReembolso,
+    transactionId: transaction?.id ?? null,
+    versao: versaoDoReembolso,
+  });
+  const valorDoReembolsoCentavos = reaisParaCentavos(parseCurrencyToNumber(amount));
+  const previaDoReembolsoAtual =
+    situacaoDoReembolso.estado === "ok"
+      ? previaDoReembolso({ ...situacaoDoReembolso.dados, valorCentavos: valorDoReembolsoCentavos })
+      : null;
+  const precisaEscolherASobra =
+    Boolean(pessoaDoReembolso) &&
+    !reembolsoSobra &&
+    previaDoReembolsoAtual !== null &&
+    previaDoReembolsoAtual.sobraCentavos > 0;
+  // Sem escolha da sobra (ou sem ter lido a dívida) o servidor recusaria: o botão nem deixa tentar.
+  const reembolsoBloqueiaSalvar =
+    precisaEscolherASobra || (Boolean(pessoaDoReembolso) && situacaoDoReembolso.estado === "carregando");
 
   const selectedCardObj = cards.find((c) => c.id === cardId);
   const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(purchaseDate);
@@ -391,17 +449,20 @@ export function TransactionFormDialog({
     const payload = {
       type: values.type,
       amount: values.amount,
-      account_id: values.account_id || "",
+      account_id: ehEstorno ? "" : values.account_id || "",
       transfer_account_id: isTransfer ? values.transfer_account_id || "" : "",
-      card_id: isCard ? values.card_id || "" : "",
+      card_id: ehEstorno ? (transaction?.card_id ?? "") : isCard ? values.card_id || "" : "",
       category_id:
         isTransfer || values.category_id === NONE ? "" : values.category_id,
       subcategory_id:
         isTransfer || values.subcategory_id === NONE
           ? ""
           : values.subcategory_id,
-      payment_method:
-        values.payment_method === NONE ? "" : values.payment_method,
+      payment_method: ehEstorno
+        ? ""
+        : values.payment_method === NONE
+          ? ""
+          : values.payment_method,
       purchase_date: values.purchase_date,
       competence_date: values.competence_date,
       status: values.status,
@@ -417,6 +478,20 @@ export function TransactionFormDialog({
               values.receita_classificacao === "compartilhada"
                 ? values.receita_minha_parte
                 : "",
+            // 04-C — o servidor decide classificação, minha parte e vínculo pela sobra; a tela
+            // manda a pessoa, a escolha e a dívida que ela mostrou ("devido visto").
+            ...(mostraReembolso && values.reembolso_pessoa_id
+              ? {
+                  reembolso_pessoa_id: values.reembolso_pessoa_id,
+                  reembolso_sobra:
+                    previaDoReembolsoAtual && previaDoReembolsoAtual.sobraCentavos > 0
+                      ? values.reembolso_sobra
+                      : "",
+                  reembolso_devido_visto: previaDoReembolsoAtual
+                    ? previaDoReembolsoAtual.devidoAntesCentavos
+                    : "",
+                }
+              : {}),
           }
         : {}),
     };
@@ -433,6 +508,11 @@ export function TransactionFormDialog({
       const mapeado = mapServerFieldErrors(res.fieldErrors, CAMPOS_DO_FORMULARIO);
       for (const { name, message } of mapeado.toSet) {
         setError(name as Path<FormValues>, { message });
+      }
+      // 04-C — a dívida mudou (ou a escolha faltou): lê de novo e pede a escolha outra vez.
+      if (res.fieldErrors?.reembolso_sobra) {
+        setValue("reembolso_sobra", "");
+        setVersaoDoReembolso((v) => v + 1);
       }
       toast.error(serverErrorMessage(res.error, mapeado));
     }
@@ -463,6 +543,12 @@ export function TransactionFormDialog({
                     value={field.value}
                     onValueChange={(v) => {
                       field.onChange(v);
+                      // 04-C (conferência visual) — o status liquidado acompanha o tipo: receita
+                      // "Pago" (herdado do padrão da despesa) não conta como pagamento de pessoa
+                      // nenhuma (a realocação só vê `recebido`), e a prévia diria "pendente".
+                      const statusAtual = getValues("status");
+                      if (v === "receita" && statusAtual === "pago") setValue("status", "recebido");
+                      if (v !== "receita" && statusAtual === "recebido") setValue("status", "pago");
                       if (v === "transferencia") {
                         setValue("category_id", NONE);
                         setValue("subcategory_id", NONE);
@@ -501,7 +587,11 @@ export function TransactionFormDialog({
                 render={({ field }) => (
                   <MoneyInput
                     value={field.value}
-                    onValueChange={field.onChange}
+                    onValueChange={(v) => {
+                      field.onChange(v);
+                      // 04-C — a sobra depende do valor: mudou o valor, a escolha recomeça.
+                      if (getValues("reembolso_sobra")) setValue("reembolso_sobra", "");
+                    }}
                   />
                 )}
               />
@@ -513,6 +603,11 @@ export function TransactionFormDialog({
             </div>
           </div>
 
+          {ehEstorno ? (
+            <p className="text-sm text-muted-foreground">
+              Estorno no cartão — continua na fatura em que foi lançado.
+            </p>
+          ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>
@@ -605,6 +700,7 @@ export function TransactionFormDialog({
               </div>
             )}
           </div>
+          )}
 
           {isCard && (
             <div className="space-y-1.5">
@@ -832,7 +928,15 @@ export function TransactionFormDialog({
                     render={({ field: parteField }) => (
                       <ReceitaResponsabilidadeEditor
                         classificacao={classField.value}
-                        onClassificacaoChange={(v) => { classField.onChange(v); setOrigem("usuario"); }}
+                        onClassificacaoChange={(v) => {
+                          classField.onChange(v);
+                          setOrigem("usuario");
+                          // 04-C — sair de "de terceiro" desfaz a pessoa e a escolha da sobra.
+                          if (v !== "terceiro") {
+                            setValue("reembolso_pessoa_id", "");
+                            setValue("reembolso_sobra", "");
+                          }
+                        }}
                         dica={origem === "atalho" ? DICA_DO_ATALHO : undefined}
                         minhaParte={parteField.value}
                         onMinhaParteChange={parteField.onChange}
@@ -844,6 +948,25 @@ export function TransactionFormDialog({
                 )}
               />
             </div>
+          )}
+
+          {mostraReembolso && (
+            <ReembolsoDaReceita
+              people={people}
+              pessoaId={reembolsoPessoaId}
+              onPessoaChange={(id) => {
+                setValue("reembolso_pessoa_id", id, { shouldDirty: true });
+                setValue("reembolso_sobra", "");
+              }}
+              sobra={reembolsoSobra}
+              onSobraChange={(v) => setValue("reembolso_sobra", v, { shouldDirty: true })}
+              situacao={situacaoDoReembolso}
+              previa={previaDoReembolsoAtual}
+              valorCentavos={valorDoReembolsoCentavos}
+              pendente={status !== "recebido"}
+              erroPessoa={errors.reembolso_pessoa_id?.message}
+              erroSobra={errors.reembolso_sobra?.message}
+            />
           )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -930,7 +1053,7 @@ export function TransactionFormDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || reembolsoBloqueiaSalvar}>
               {isSubmitting ? "Salvando…" : "Salvar"}
             </Button>
           </DialogFooter>

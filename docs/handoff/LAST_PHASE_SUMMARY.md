@@ -1,5 +1,11 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
+> 🟢 **Depois dela: o REDESIGN financeiro (00 a 08), fechado em 2026-11-07.** 00–03-G em `main`
+> (PRs #56–#64); 03-G2 a 08 integradas localmente em `feat/redesign-00-auditoria`, à espera do
+> merge do **PR único #65** pelo dono. Resumo, decisões e números em `docs/redesign/STATUS.md`;
+> a última subfase (08 — regressão e entrega) tem o resultado no §13 de
+> `docs/superpowers/specs/2026-11-06-08-regressao-e-entrega-design.md`.
+>
 > ✅ **ÚLTIMA: 18-F — IA · Memória, integrações e polimento (2026-09-20). CONCLUÍDA, com os
 > cinco blocos — e ela FECHA A FASE 18.** A IA deixou de ser uma ilha: entrou no sino, na busca
 > global e no backup (Bloco 1); ganhou um botão em toda tela (2); passou a conhecer as

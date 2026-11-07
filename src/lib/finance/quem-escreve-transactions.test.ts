@@ -39,8 +39,9 @@ const ESCRITAS: Record<string, Escrita> = {
     mudaStatus: false,
   },
   "lib/actions/installments.ts": {
-    quantidade: 8,
-    motivo: "compra parcelada: compra-pai, compensações da criação, edição e cancelamento — cartão nunca guarda a data",
+    quantidade: 3,
+    motivo:
+      "compra parcelada: edição, recálculo da minha parte no cancelamento e exclusão — cartão nunca guarda a data. A criação grava pela rpc criar_compra_parcelada (03-G2)",
     mudaStatus: false,
   },
   "lib/actions/statements.ts": {
@@ -50,9 +51,9 @@ const ESCRITAS: Record<string, Escrita> = {
     mudaStatus: false,
   },
   "lib/actions/transactions.ts": {
-    quantidade: 7,
+    quantidade: 3,
     motivo:
-      "updateTransaction (grupo/lançamento que vira transferência e o update simples) e setTransactionStatus (por grupo e por id): os DOIS caminhos que mudam o status e por isso limpam liquidado_em",
+      "deleteTransaction (grupo OU lançamento num delete só, 03-G2 E5) e setTransactionStatus (por grupo e por id), que muda o status e por isso limpa liquidado_em. updateTransaction grava pela rpc salvar_lancamento desde a 03-G2, com liquidado_em decidido por montarLinhaDoLancamento",
     mudaStatus: true,
   },
   "lib/finance/generation.ts": {
@@ -61,13 +62,8 @@ const ESCRITAS: Record<string, Escrita> = {
     mudaStatus: false,
   },
   "lib/finance/services.ts": {
-    quantidade: 5,
-    motivo: "criarTransacao (insert), compensações, valor_pessoal e excluirTransacaoSimples (desfazer da IA)",
-    mudaStatus: false,
-  },
-  "lib/finance/split-reapply.ts": {
-    quantidade: 2,
-    motivo: "reapplySplit: só mexe em valor_pessoal e classificação",
+    quantidade: 1,
+    motivo: "excluirTransacaoSimples (desfazer da IA); criarTransacao grava pela rpc salvar_lancamento (03-G2)",
     mudaStatus: false,
   },
 };
@@ -164,6 +160,16 @@ const ESCRITAS_SQL: Record<string, { quantidade: number; motivo: string }> = {
     quantidade: 2,
     motivo:
       "pagar_fatura insere o pagamento (nasce pago, com liquidado_em, coerente com o CHECK); desfazer_pagamento_fatura o apaga",
+  },
+  "20261025120000_salvar_lancamento_atomico.sql": {
+    quantidade: 3,
+    motivo:
+      "03-G2 (K1): salvar_lancamento insere ou atualiza o lançamento e criar_compra_parcelada insere a compra-pai; liquidado_em chega de montarLinhaDoLancamento (dataDeLiquidacaoAGravar) e a compra-pai de cartão não tem a coluna",
+  },
+  "20261102120200_reembolso_salvar_lancamento.sql": {
+    quantidade: 2,
+    motivo:
+      "04-C (DV-1): a mesma salvar_lancamento da 03-G2, redefinida para gravar reembolso_pessoa_id; o insert e o update continuam recebendo liquidado_em de montarLinhaDoLancamento",
   },
 };
 

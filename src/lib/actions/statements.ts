@@ -10,6 +10,7 @@ import {
 } from "@/lib/actions/helpers";
 import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import {
+  MSG_FATURA_JA_PAGA,
   argumentosDoPagamento,
   mensagemDoErroDoPagamento,
   montarPagamentoFatura,
@@ -77,7 +78,7 @@ export async function markStatementPaid(
     .eq("id", id)
     .single();
   if (loadErr || !st) return dbError("Fatura não encontrada.");
-  if (st.pago_em) return dbError("Esta fatura já está paga.");
+  if (st.pago_em) return dbError(MSG_FATURA_JA_PAGA);
 
   const total = st.total_atual ?? 0;
   if (total <= 0) return dbError("Não há valor a pagar nesta fatura.");

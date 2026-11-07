@@ -17,6 +17,11 @@
  * divisível — D-F7, travado por `m-f-pagamento-fatura.test.ts`), e o inventário de funções SQL
  * de `quem-escreve-transactions.test.ts` fica vermelho com qualquer escrita nova.
  *
+ * 03-G2: a substituição da divisão mora em `salvar_lancamento` (SQL), que reconfere a proteção dentro
+ * da transação — este inventário cobre o TS; o SQL é coberto por `m-g2-salvar-lancamento.test.ts`.
+ * Por isso `split-reapply.ts` saiu da allowlist (não apaga mais nada) e só continua na contagem de
+ * chamadas da proteção (`planejarReaplicacao` a consulta antes de decidir).
+ *
  * ⚠️ Varredura TEXTUAL, como `quem-le-os-recebimentos.test.ts`. A prova de comportamento de cada
  * ponto protegido é o teste de harness dele.
  */
@@ -35,34 +40,27 @@ const ALLOWLIST: Record<string, { n: number; porque: string }> = {
     porque: "undoImportBatch — protegido (regra cheia, A4)",
   },
   "lib/actions/installments.ts · transactions": {
-    n: 4,
+    n: 1,
     porque:
-      "três compensações da criação (o pai acabou de nascer, sem recebimento possível) + deleteInstallmentPurchase — protegido (RR-D-17)",
+      "deleteInstallmentPurchase — protegido (RR-D-17). A criação deixou de ter compensação: grava pela rpc criar_compra_parcelada (03-G2)",
   },
   "lib/actions/installments.ts · receivables": {
     n: 1,
     porque: "cancelInstallmentFuture — protegido (regra cheia, A4)",
   },
   "lib/actions/transactions.ts · transactions": {
-    n: 4,
+    n: 1,
     porque:
-      "updateTransaction (grupo e lançamento que vira transferência, RR-D-17) e deleteTransaction (grupo e lançamento, decisão (b)) — protegidos",
+      "deleteTransaction (grupo OU lançamento num delete só desde o E5 da 03-G2, decisão (b)) — protegido. A edição que vira transferência deixou de apagar e recriar (03-G2): a divisão sai na rpc salvar_lancamento, com o alcance so-dinheiro-registrado, e updateTransaction confere a proteção antes",
   },
   "lib/finance/recebimentos-servico.ts · receivable_receipts": {
     n: 2,
     porque: "desfazer o último recebimento (um e em lote) — a ÚNICA remoção de recebimento, de propósito (K1)",
   },
   "lib/finance/services.ts · transactions": {
-    n: 2,
-    porque: "compensação da criação + excluirTransacaoSimples (desfazer da IA) — protegido, decisão (b)",
-  },
-  "lib/finance/split-reapply.ts · receivables": {
     n: 1,
-    porque: "reapplySplit — protegido (regra cheia, A4)",
-  },
-  "lib/finance/split-reapply.ts · shared_expenses": {
-    n: 1,
-    porque: "reapplySplit — protegido (regra cheia, A4)",
+    porque:
+      "excluirTransacaoSimples (desfazer da IA) — protegido, decisão (b); a criação deixou de ter compensação (03-G2, RPC salvar_lancamento)",
   },
 };
 
@@ -73,7 +71,9 @@ const ALLOWLIST: Record<string, { n: number; porque: string }> = {
 const CHAMADAS_DA_PROTECAO: Record<string, number> = {
   "lib/actions/imports.ts": 1,
   "lib/actions/installments.ts": 2,
-  "lib/actions/transactions.ts": 2,
+  // deleteTransaction, updateTransaction e preverExclusaoDoLancamento (03-G2 K3: a previsão mostra
+  // o bloqueio pela MESMA proteção que a exclusão confere).
+  "lib/actions/transactions.ts": 3,
   "lib/finance/services.ts": 1,
   "lib/finance/split-reapply.ts": 1,
 };

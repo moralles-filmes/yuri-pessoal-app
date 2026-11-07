@@ -579,7 +579,9 @@ describe("03-B2 A1 — contratos de tipo (conferidos pelo tsc --noEmit)", () => 
 
   it("escopo como união só promete os campos comuns", () => {
     type DaUniao = EntradasDoEscopo<EscopoFinanceiro>;
-    expectTypeOf<keyof DaUniao>().toEqualTypeOf<"recs" | "sts">();
+    // 06 (T1): o escopo do histórico do dashboard lê SÓ lançamentos, e o card de faturas não lê
+    // lançamentos — os cinco escopos não têm mais nenhum campo em comum.
+    expectTypeOf<keyof DaUniao>().toEqualTypeOf<never>();
     // @ts-expect-error — a união não garante leitura de parcelas: inst fica ausente.
     const inst: DaUniao["inst"] = [];
     expect(inst).toEqual([]);

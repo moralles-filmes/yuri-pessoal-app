@@ -228,10 +228,10 @@ export type ReceivableRow = Omit<Row<"receivables">, "status"> & {
 
 /** REDESIGN-03-D (M1) — uma linha de recebimento. `valor` em REAIS; `recebido_em` é data pura. */
 export type RecebimentoRow = Row<"receivable_receipts">;
-/** O que as leituras trazem de cada recebimento (sem `user_id`, sem as colunas da 04-C). */
+/** O que as leituras trazem de cada recebimento (sem `user_id` nem `conta_id`; `transaction_id` distingue o automático da 04-C). */
 export type RecebimentoDoBanco = Pick<
   RecebimentoRow,
-  "id" | "receivable_id" | "valor" | "recebido_em" | "observacoes" | "created_at"
+  "id" | "receivable_id" | "valor" | "recebido_em" | "observacoes" | "created_at" | "transaction_id"
 >;
 
 /**

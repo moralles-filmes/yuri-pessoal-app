@@ -2,13 +2,20 @@ import { Badge } from "@/components/ui/badge";
 import { StatementStatusBadge } from "@/components/financeiro/badges";
 import { getInvoicesCardData } from "@/lib/dashboard/queries";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { valorDaFatura } from "@/lib/finance/painel";
 import { rotuloTotalPendenteAte } from "@/lib/finance/recebimentos";
 import { ehErroDeLeitura, registrarFalhaDeLeitura, type ErroDeLeitura } from "@/lib/supabase/leitura";
 import { CardSemLeitura } from "@/components/shared/card-sem-leitura";
-import { Metric, MetricRow, CardEmpty } from "./primitives";
+import { Quadro, MetricRow, CardEmpty } from "./primitives";
 
 /** Corpo do card Cartões & Faturas — abertas/fechadas, próximos vencimentos, a receber. */
-export async function InvoicesCard({ todayIso }: { todayIso: string }) {
+export async function InvoicesCard({
+  todayIso,
+  hrefDeNovo,
+}: {
+  todayIso: string;
+  hrefDeNovo: string;
+}) {
   // 03-G (L4, D-G17): captura SÓ ErroDeLeitura e SÓ a leitura; o JSX fica fora do try.
   let d: Awaited<ReturnType<typeof getInvoicesCardData>> | null = null;
   let falha: ErroDeLeitura | null = null;
@@ -20,7 +27,7 @@ export async function InvoicesCard({ todayIso }: { todayIso: string }) {
     registrarFalhaDeLeitura(e);
   }
   if (falha || !d) {
-    return <CardSemLeitura oQue={falha?.oQue ?? "os dados do card"} href="/dashboard" />;
+    return <CardSemLeitura oQue={falha?.oQue ?? "os dados do card"} href={hrefDeNovo} />;
   }
 
   if (!d.hasCards) {
@@ -29,11 +36,17 @@ export async function InvoicesCard({ todayIso }: { todayIso: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-2">
-        <Metric label="Abertas" value={String(d.abertas)} />
-        <Metric label="Fechadas" value={String(d.fechadas)} />
-        <Metric label="Pagas" value={String(d.pagas)} />
+      <div className="grid grid-cols-2 gap-2 @[26rem]:grid-cols-4">
+        <Quadro valor={String(d.abertas)} rotulo="Abertas" />
+        <Quadro valor={String(d.fechadas)} rotulo="Fechadas" />
+        <Quadro valor={String(d.pagas)} rotulo="Pagas" />
+        <Quadro valor={formatCurrency(d.totalProximas)} rotulo="A pagar nas faturas" />
       </div>
+      {d.completude.estado === "parcial" && (
+        <p className="text-xs text-warning-ink">
+          parcial · a leitura atingiu o teto de lançamentos; pode faltar coisa
+        </p>
+      )}
       <MetricRow
         label={rotuloTotalPendenteAte(todayIso)}
         value={formatCurrency(d.aReceber)}
@@ -63,9 +76,12 @@ export async function InvoicesCard({ todayIso }: { todayIso: string }) {
                 </p>
               </div>
               <div className="shrink-0 text-right">
-                <p className="text-sm font-semibold tabular-nums">
-                  {formatCurrency(f.total)}
-                </p>
+                {/* Prevista sem lançamento não é R$ 0,00: é ausência (`valorDaFatura`, 04-A). */}
+                {valorDaFatura(f) === null ? (
+                  <p className="text-xs italic text-muted-foreground">sem lançamentos conhecidos</p>
+                ) : (
+                  <p className="text-sm font-semibold tabular-nums">{formatCurrency(f.total)}</p>
+                )}
                 {f.virtual ? (
                   <Badge variant="outline" className="text-muted-foreground">
                     Prevista

@@ -19,6 +19,7 @@ function numeros(sobre: Partial<NumerosDoCaixa> = {}): NumerosDoCaixa {
   return {
     rendaPessoalRecebida: 0,
     reembolsosRecebidos: 0,
+    reembolsosVinculados: 0,
     outrasEntradasDeTerceiros: 0,
     saidasDeCaixa: 0,
     pagamentosDeFatura: 0,
@@ -120,5 +121,38 @@ describe("03-E · A4 — BlocoDoCaixa", () => {
       .replace(/\/\/[^\r\n]*/g, "");
     expect(fonte).not.toMatch(/^import\s+(?!type\b)[^;]*from\s+"@\/lib\/finance\/(caixa|caixa-leitura|dashboard)"/m);
     expect(fonte).not.toMatch(/"use client"/);
+  });
+
+  it("R3 · todo valor em dinheiro some com o olho: R$ •••• e 'valor oculto' para cada um", () => {
+    const h = html(
+      ok(
+        numeros({
+          rendaPessoalRecebida: 100,
+          reembolsosRecebidos: 200,
+          outrasEntradasDeTerceiros: 300,
+          saidasDeCaixa: 400,
+          pagamentosDeFatura: 500,
+          transferenciasSemVinculo: { quantidade: 1, total: 600 },
+          transferenciasEntreContas: 700,
+          resultadoDeCaixa: 800,
+        }),
+      ),
+    );
+    // 3 entradas + saídas + o inclui-pagamentos + resultado + sem vínculo + entre contas = 8.
+    expect(h.split("R$ ••••").length - 1).toBe(8);
+    expect(h.split("valor oculto").length - 1).toBe(8);
+    expect(h.split("group-data-[ocultar=true]/olho:hidden").length - 1).toBeGreaterThanOrEqual(8);
+  });
+
+  it("R3 · nenhum formatCurrency( solto: todos vão dentro do componente do olho", () => {
+    const fonte = fs
+      .readFileSync(path.join(process.cwd(), "src/components/financeiro/bloco-do-caixa.tsx"), "utf8")
+      .replace(/\r\n/g, "\n")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "");
+    const todas = fonte.match(/formatCurrency\(/g)?.length ?? 0;
+    const noOlho = fonte.match(/<ValorComOlho texto=\{formatCurrency\(/g)?.length ?? 0;
+    expect(todas).toBeGreaterThan(0);
+    expect(noOlho).toBe(todas);
   });
 });

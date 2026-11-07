@@ -104,6 +104,7 @@ export function criarSupabaseEmMemoria(
     let modo: "select" | "insert" | "update" | "delete" = "select";
     let devolveInseridas = false;
     let devolveAlteradas = false;
+    let devolveApagadas = false;
     let valores: Linha | Linha[] | undefined;
     let limite: number | undefined;
     let pediuContagem = false;
@@ -157,9 +158,11 @@ export function criarSupabaseEmMemoria(
       }
 
       if (modo === "delete") {
+        // 03-G2 (D-G2-21): `.delete().select()` devolve as linhas apagadas, como o PostgREST.
+        const apagadas = linhas.filter(casa).map((l) => ({ ...l }));
         tabelas[tabela] = linhas.filter((l) => !casa(l));
         operacoes.push({ tabela, tipo: "delete", filtros: [...filtros] });
-        executado = { data: null, error: null };
+        executado = { data: devolveApagadas ? apagadas : null, error: null };
         return executado;
       }
 
@@ -200,6 +203,7 @@ export function criarSupabaseEmMemoria(
       if (opcoesDoSelect?.head) soCabecalho = true;
       if (modo === "insert") devolveInseridas = true;
       if (modo === "update") devolveAlteradas = true;
+      if (modo === "delete") devolveApagadas = true;
       return builder;
     };
     builder.insert = (v: Linha | Linha[]) => {

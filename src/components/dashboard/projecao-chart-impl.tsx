@@ -31,6 +31,24 @@ import {
   tooltipStyle,
 } from "./chart-theme";
 
+/**
+ * 04-A — série futura visualmente distinta: o que é projeção sai hachurado, com a borda tracejada
+ * e a legenda "(projetado)". Vale também em /relatorios, onde este gráfico é reaproveitado; os
+ * números, os `dataKey` e a regra de vazio não mudam.
+ */
+function Hachura({ id, cor }: { id: string; cor: string }) {
+  return (
+    <pattern id={id} patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+      <rect width="6" height="6" fill={cor} fillOpacity={0.25} />
+      <line x1="0" y1="0" x2="0" y2="6" stroke={cor} strokeWidth={2.5} />
+    </pattern>
+  );
+}
+
+const COR_FATURAS = CHART_COLORS[0];
+const COR_RECORRENCIAS = CHART_COLORS[2];
+const COR_CONTAS_FIXAS = CHART_COLORS[4];
+
 /** Minha projeção: a minha parte das faturas + recorrências + contas fixas (barras empilhadas). */
 export function ProjecaoChart({ data }: { data: ProjecaoPonto[] }) {
   const temDados = data.some((p) => p.total > 0);
@@ -50,6 +68,11 @@ export function ProjecaoChart({ data }: { data: ProjecaoPonto[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
+        <defs>
+          <Hachura id="hachura-projecao-faturas" cor={COR_FATURAS} />
+          <Hachura id="hachura-projecao-recorrencias" cor={COR_RECORRENCIAS} />
+          <Hachura id="hachura-projecao-contas-fixas" cor={COR_CONTAS_FIXAS} />
+        </defs>
         <CartesianGrid vertical={false} stroke={GRID_COLOR} />
         <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
         <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width="auto" />
@@ -61,9 +84,37 @@ export function ProjecaoChart({ data }: { data: ProjecaoPonto[] }) {
           itemStyle={tooltipItemStyle}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }} />
-        <Bar dataKey="faturas" name="Minha parte das faturas" stackId="p" fill={CHART_COLORS[0]} maxBarSize={48} />
-        <Bar dataKey="recorrencias" name="Recorrências" stackId="p" fill={CHART_COLORS[2]} maxBarSize={48} />
-        <Bar dataKey="contasFixas" name="Contas fixas" stackId="p" fill={CHART_COLORS[4]} radius={[4, 4, 0, 0]} maxBarSize={48} />
+        <Bar
+          dataKey="faturas"
+          name="Minha parte das faturas (projetado)"
+          stackId="p"
+          fill="url(#hachura-projecao-faturas)"
+          stroke={COR_FATURAS}
+          strokeWidth={1.5}
+          strokeDasharray="4 3"
+          maxBarSize={48}
+        />
+        <Bar
+          dataKey="recorrencias"
+          name="Recorrências (projetado)"
+          stackId="p"
+          fill="url(#hachura-projecao-recorrencias)"
+          stroke={COR_RECORRENCIAS}
+          strokeWidth={1.5}
+          strokeDasharray="4 3"
+          maxBarSize={48}
+        />
+        <Bar
+          dataKey="contasFixas"
+          name="Contas fixas (projetado)"
+          stackId="p"
+          fill="url(#hachura-projecao-contas-fixas)"
+          stroke={COR_CONTAS_FIXAS}
+          strokeWidth={1.5}
+          strokeDasharray="4 3"
+          radius={[4, 4, 0, 0]}
+          maxBarSize={48}
+        />
       </BarChart>
     </ResponsiveContainer>
   );

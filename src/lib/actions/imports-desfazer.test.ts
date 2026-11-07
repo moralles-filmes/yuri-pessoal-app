@@ -43,6 +43,35 @@ describe("03-D A4 · desfazer a importação", () => {
     expect(fake.escritas()).toHaveLength(0);
   });
 
+  // 04-C · T7 — o pagamento automático de uma dívida nasce de uma RECEITA (`transaction_id` do
+  // recebimento = a receita que pagou) e some com ela. Só o recebimento manual protege o lote:
+  // desfazer a importação não pode ficar preso por dinheiro que o próprio sistema alocou.
+  const comRecebimento = (recebimento: Record<string, unknown>) => ({
+    ...lote(),
+    transactions: [{ id: "tx-imp", statement_id: null }],
+    transaction_installments: [],
+    card_statements: [],
+    receivables: [{ id: "rc-1", transaction_id: "tx-imp", installment_id: null, status: "pendente", valor: 100 }],
+    receivable_receipts: [
+      { id: "rr-1", receivable_id: "rc-1", valor: 40, recebido_em: "2031-03-10", created_at: "2031-03-10T10:00:00Z", ...recebimento },
+    ],
+  });
+
+  it("lançamento com dívida abatida só por recebimento AUTOMÁTICO (transaction_id) NÃO é bloqueado pela proteção", async () => {
+    fake = criarSupabaseEmMemoria(comRecebimento({ transaction_id: "tx-receita-de-outra-linha" }));
+    const r = await undoImportBatch("lote-1");
+    expect(r).toEqual({ ok: true, data: { removidas: 1 } });
+    expect(fake.tabelas.transactions).toEqual([]);
+    expect(fake.tabelas.import_rows[0]).toMatchObject({ status: "para_importar", transaction_id: null });
+  });
+
+  it("o mesmo recebível com recebimento MANUAL (sem transaction_id) continua bloqueando, sem escrita", async () => {
+    fake = criarSupabaseEmMemoria(comRecebimento({ transaction_id: null }));
+    const r = await undoImportBatch("lote-1");
+    expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/recebimento registrado/) });
+    expect(fake.escritas()).toHaveLength(0);
+  });
+
   it("pendente sem recebimento desfaz", async () => {
     fake = criarSupabaseEmMemoria(lote());
     const r = await undoImportBatch("lote-1");

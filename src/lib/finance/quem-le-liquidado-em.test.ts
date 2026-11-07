@@ -20,7 +20,13 @@ const COLUNA = "liquidado_em";
 
 /** Caminho relativo a `src/` → por que este arquivo pode mencionar a coluna. */
 const ALLOWLIST: Record<string, string> = {
+  "lib/finance/recebimentos.ts":
+    "04-C: o tipo da receita vinculada; a data do pagamento do reembolso é liquidado_em ?? competence_date (espelha a M2)",
+  "lib/finance/recebimentos-leitura.ts":
+    "04-C: lerEstadoDoReembolso/lerSituacoesDoReembolso selecionam a coluna para datar o pagamento",
   "lib/finance/caixa.ts": "as regras puras da base caixa: a ÚNICA que decide a data de caixa (A1)",
+  "lib/finance/linha-do-lancamento.ts":
+    "03-G2 (D-G2-15): a linha do lançamento que vai à RPC monta liquidado_em por dataDeLiquidacaoAGravar — não decide nada",
   "types/supabase.ts": "tipos GERADOS pelo MCP depois da M2 (A2): Row/Insert/Update de transactions",
   "lib/validators/transaction.ts":
     "o campo \"Data do pagamento\" do formulário (A3, K0.1): só aceita a forma; quem decide gravar é o servidor",

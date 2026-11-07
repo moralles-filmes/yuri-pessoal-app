@@ -7,6 +7,9 @@
 import type * as React from "react";
 import dynamic from "next/dynamic";
 import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
+import { TabelaDoGrafico } from "@/components/shared/painel/tabela-do-grafico";
+import { leituraDasFaturas } from "@/lib/painel/leitura-dos-graficos";
+import { monthLabel } from "./chart-theme";
 
 type Props = React.ComponentProps<typeof import("./faturas-chart-impl").FaturasChart>;
 
@@ -21,6 +24,14 @@ export function FaturasChart(props: Props) {
   return (
     <div style={chartSkeletonHeightVar(280)}>
       <LazyFaturasChart {...props} />
+      <TabelaDoGrafico
+        titulo="Faturas por mês"
+        leitura={leituraDasFaturas({
+          data: props.data,
+          vazio: props.vazio,
+          rotuloDoMes: monthLabel,
+        })}
+      />
     </div>
   );
 }

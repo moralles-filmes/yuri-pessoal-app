@@ -8,10 +8,25 @@
  *      receita) continua gravando `pessoal` — as chaves da receita são próprias;
  *   3. a despesa grava EXATAMENTE como antes.
  *
- * `applySplit` roda de verdade sobre o client falso. Fixture sintética.
+ * 03-G2 (D-G2-12): a escrita é UMA chamada `rpc("salvar_lancamento")`; os testes leem os
+ * argumentos dela (`p_lancamento`, `p_divisao`), não mais inserts diretos. Fixture sintética.
  */
-import { describe, expect, it, vi } from "vitest";
-import { criarTransacao, excluirTransacaoSimples, type FinanceServiceContext } from "@/lib/finance/services";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  criarTransacao,
+  excluirTransacaoSimples,
+  lerReembolsoDaReceita,
+  type FinanceServiceContext,
+} from "@/lib/finance/services";
+import {
+  MSG_DIVIDA_MUDOU,
+  MSG_ESCOLHA_A_SOBRA,
+  MSG_ESTORNO_NAO_ABATE,
+  MSG_LEITURA_DO_REEMBOLSO_FALHOU,
+  MSG_REEMBOLSO_SO_DE_TERCEIRO,
+  type EstadoDoReembolso,
+} from "@/lib/finance/reembolso";
+import { ErroDeLeitura } from "@/lib/supabase/leitura";
 import { MSG_PARTE_AUSENTE, MSG_PARTE_TOTAL } from "@/lib/finance/responsabilidade-da-receita";
 import { MSG_DATA_PAGAMENTO_FUTURA } from "@/lib/finance/caixa";
 import { criarSupabaseEmMemoria, type Linha } from "@/test/supabase-em-memoria";
@@ -19,6 +34,13 @@ import { checkLiquidadoEmCoerente } from "@/test/check-liquidado-em";
 
 // A leitura usa o client em memória do ctx; neutraliza apenas o client de servidor.
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}) }));
+
+// 04-C · T6 — só o estado do reembolso é dublado; o resto da leitura (proteção) continua real.
+const { lerEstadoDoReembolso } = vi.hoisted(() => ({ lerEstadoDoReembolso: vi.fn() }));
+vi.mock("@/lib/finance/recebimentos-leitura", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/finance/recebimentos-leitura")>()),
+  lerEstadoDoReembolso,
+}));
 
 const CONTA = "3f1a7c60-9d2b-4a11-8f37-2c9a1b7e5d40";
 const PESSOA = "8b2e4d10-1c3f-4e55-9a02-6d7b8c9e0f11";
@@ -32,8 +54,11 @@ const BASE = {
   description: "x",
 };
 
+const ID_NOVO = "7c1d5e90-4b2a-4f36-8d10-5a9e3b7c2f84";
+const RPC_OK = { rpc: () => ({ data: ID_NOVO, error: null }) };
+
 function rodar(payload: Linha) {
-  const fake = criarSupabaseEmMemoria({});
+  const fake = criarSupabaseEmMemoria({}, RPC_OK);
   const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
   return { fake, resultado: criarTransacao(ctx, payload) };
 }
@@ -74,13 +99,20 @@ describe("03-D · A4 — o desfazer da IA não apaga dinheiro registrado", () =>
   });
 });
 
-/** A linha que o insert de `transactions` recebeu (a primeira, e só pode haver uma). */
-function inseridaEmTransactions(fake: ReturnType<typeof criarSupabaseEmMemoria>): Linha {
-  const inserts = fake.escritas("transactions").filter((o) => o.tipo === "insert");
-  expect(inserts).toHaveLength(1);
-  return inserts[0].valores as Linha;
+/** Os argumentos da única chamada `salvar_lancamento` (e só pode haver uma). */
+function chamadaDaRpc(fake: ReturnType<typeof criarSupabaseEmMemoria>): Linha {
+  const chamadas = fake.escritas("salvar_lancamento");
+  expect(chamadas).toHaveLength(1);
+  expect(chamadas[0].tipo).toBe("rpc");
+  return chamadas[0].valores as Linha;
 }
 
+/** A linha (`p_lancamento`) que a rpc recebeu. */
+function inseridaEmTransactions(fake: ReturnType<typeof criarSupabaseEmMemoria>): Linha {
+  return chamadaDaRpc(fake).p_lancamento as Linha;
+}
+
+// 03-G2 (D-G2-12): afirmava o insert direto; a escrita passou a ser a rpc salvar_lancamento
 describe("03-C A2 · criarTransacao — a receita grava a responsabilidade da A1", () => {
   it("receita sem os campos de responsabilidade nasce pessoal, com valor_pessoal nulo", async () => {
     const { fake, resultado } = rodar({ ...BASE, type: "receita", status: "recebido" });
@@ -162,13 +194,13 @@ describe("03-C A2 · criarTransacao — a receita grava a responsabilidade da A1
     const linha = inseridaEmTransactions(fake);
     expect(linha.classificacao).toBe("pessoal");
     expect(linha.valor_pessoal).toBeNull();
-    expect(fake.escritas("shared_expenses")).toEqual([]);
-    expect(fake.escritas("receivables")).toEqual([]);
+    expect(chamadaDaRpc(fake).p_divisao).toBeNull();
   });
 });
 
+// 03-G2 (D-G2-12): afirmava o insert direto; a escrita passou a ser a rpc salvar_lancamento
 describe("03-C A2 · criarTransacao — a despesa grava como antes", () => {
-  it("despesa compartilhada: insert compartilhado, divisão e recebível gravados, minha parte derivada", async () => {
+  it("despesa compartilhada: linha compartilhada, divisão e recebível no payload, minha parte derivada", async () => {
     const { fake, resultado } = rodar({
       ...BASE,
       type: "despesa",
@@ -179,27 +211,33 @@ describe("03-C A2 · criarTransacao — a despesa grava como antes", () => {
     expect((await resultado).ok).toBe(true);
     const linha = inseridaEmTransactions(fake);
     expect(linha.classificacao).toBe("compartilhada");
-    expect(fake.tabelas.shared_expenses).toHaveLength(1);
-    expect(fake.tabelas.receivables).toHaveLength(1);
-    expect(fake.tabelas.receivables[0].valor).toBe(600);
-    expect(fake.tabelas.transactions[0].valor_pessoal).toBe(400);
+    const divisao = chamadaDaRpc(fake).p_divisao as {
+      pessoas: Linha[];
+      recebiveis: Linha[];
+    };
+    expect(divisao.pessoas).toHaveLength(1);
+    expect(divisao.recebiveis).toHaveLength(1);
+    expect(divisao.recebiveis[0].valor).toBe(600);
+    expect(linha.valor_pessoal).toBe(400);
   });
 
-  it("despesa pessoal: o insert NÃO carrega a chave valor_pessoal (byte a byte como antes)", async () => {
+  it("despesa pessoal: p_lancamento NÃO carrega a chave valor_pessoal (byte a byte como antes)", async () => {
     const { fake, resultado } = rodar({ ...BASE, type: "despesa", status: "pago" });
     expect((await resultado).ok).toBe(true);
     const linha = inseridaEmTransactions(fake);
-    expect(linha.classificacao).toBe("pessoal");
+    // 03-G2: sem `colunas`, a classificação nem viaja — o SQL faz o coalesce 'pessoal'.
+    expect(Object.hasOwn(linha, "classificacao")).toBe(false);
     expect(Object.hasOwn(linha, "valor_pessoal")).toBe(false);
   });
 });
 
+// 03-G2 (D-G2-12): afirmava o insert direto; a escrita passou a ser a rpc salvar_lancamento
 describe("03-E A3 · criarTransacao grava liquidado_em pela regra (K0)", () => {
   const CARTAO = "5d9c2e44-7a10-4b6f-8e21-0f3a9b6c1d72";
 
   /** Como `rodar`, mas com o CHECK da M2 simulado (e fixture opcional). */
   function rodarComCheck(payload: Linha, tabelas: Record<string, Linha[]> = {}) {
-    const fake = criarSupabaseEmMemoria(tabelas, { antesDeGravar: checkLiquidadoEmCoerente });
+    const fake = criarSupabaseEmMemoria(tabelas, { antesDeGravar: checkLiquidadoEmCoerente, ...RPC_OK });
     const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
     return { fake, resultado: criarTransacao(ctx, payload) };
   }
@@ -298,13 +336,14 @@ describe("03-E A3 · criarTransacao grava liquidado_em pela regra (K0)", () => {
   });
 });
 
+// 03-G2 (D-G2-12): afirmava o insert direto; a escrita passou a ser a rpc salvar_lancamento
 describe("03-C2 A5 · criarTransacao NÃO lê a marcação da categoria (K2)", () => {
   const MARCADA = "c0ffee00-0000-4000-8000-000000000001";
 
   it("receita em categoria marcada, sem receita_classificacao, grava pessoal", async () => {
     const fake = criarSupabaseEmMemoria({
       categories: [{ id: MARCADA, user_id: "user-1", kind: "receita", classificacao_padrao: "terceiro" }],
-    });
+    }, RPC_OK);
     const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
     const r = await criarTransacao(ctx, {
       ...BASE,
@@ -316,5 +355,325 @@ describe("03-C2 A5 · criarTransacao NÃO lê a marcação da categoria (K2)", (
     const linha = inseridaEmTransactions(fake);
     expect(linha.classificacao).toBe("pessoal");
     expect(linha.valor_pessoal).toBeNull();
+  });
+});
+
+describe("03-G2 E3a · criarTransacao grava numa chamada só (rpc salvar_lancamento)", () => {
+  // 03-G2 (revisão final) — o schema aceita receita com cartão e sem conta só para a EDIÇÃO de um
+  // estorno; criar por aqui gravaria uma receita sem conta e sem cartão.
+  it("receita com cartão e sem conta não é criada: recusa no campo, nenhuma escrita", async () => {
+    const fake = criarSupabaseEmMemoria({}, RPC_OK);
+    const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
+    const r = await criarTransacao(ctx, {
+      ...BASE,
+      type: "receita",
+      status: "recebido",
+      card_id: "5b1d2c3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+      account_id: "",
+    });
+    expect(r).toMatchObject({ ok: false, fieldErrors: { account_id: ["Selecione a conta"] } });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  const DESTINO = "9a4b6c20-3e1d-4f87-b5a2-1c8d7e6f0a93";
+  const DIVIDIDA = {
+    ...BASE,
+    type: "despesa",
+    status: "pago",
+    classificacao: "compartilhada",
+    parts: [{ person_id: PESSOA, tipo: "valor", valor: 600 }],
+  };
+
+  function rodarComRpc(payload: Linha, rpc: NonNullable<Parameters<typeof criarSupabaseEmMemoria>[1]>["rpc"]) {
+    const fake = criarSupabaseEmMemoria({}, { rpc });
+    const ctx = { supabase: fake.client, userId: "user-1" } as unknown as FinanceServiceContext;
+    return { fake, resultado: criarTransacao(ctx, payload) };
+  }
+
+  it("criar despesa dividida: UMA chamada rpc salvar_lancamento e nenhum insert/update/delete direto", async () => {
+    const { fake, resultado } = rodar(DIVIDIDA);
+    const r = await resultado;
+    expect(r).toEqual({ ok: true, id: ID_NOVO, statementId: null });
+    const escritas = fake.escritas();
+    expect(escritas).toHaveLength(1);
+    expect(escritas[0].tipo).toBe("rpc");
+    expect(escritas[0].tabela).toBe("salvar_lancamento");
+    // criar = não mandar `p_id`.
+    expect(Object.hasOwn(escritas[0].valores as Linha, "p_id")).toBe(false);
+  });
+
+  it("criar: rpc com erro com code P0001 => mensagem termina em Nada foi alterado. e nenhuma outra escrita", async () => {
+    const { fake, resultado } = rodarComRpc(DIVIDIDA, () => ({
+      data: null,
+      error: { code: "P0001", message: "qualquer coisa do banco" },
+    }));
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.erro.endsWith("Nada foi alterado.")).toBe(true);
+      expect(r.erro).not.toContain("qualquer coisa do banco");
+    }
+    expect(fake.escritas()).toHaveLength(1);
+    expect(fake.escritas()[0].tipo).toBe("rpc");
+  });
+
+  it("criar: rpc sem code (fetch failed) => mensagem com pode ter sido salvo", async () => {
+    const { resultado } = rodarComRpc(DIVIDIDA, () => ({
+      data: null,
+      error: { code: "", message: "fetch failed" },
+    }));
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.erro).toContain("pode ter sido salvo");
+  });
+
+  it("transferencia: p_lancamento com payment_method transferencia, category_id/card_id/statement_id nulos e transfer_group_id preenchido", async () => {
+    const { fake, resultado } = rodar({
+      type: "transferencia",
+      payment_method: "transferencia",
+      account_id: CONTA,
+      transfer_account_id: DESTINO,
+      amount: 300,
+      purchase_date: "2026-06-10",
+      competence_date: "2026-06-10",
+      description: "mover",
+      status: "pago",
+    });
+    expect((await resultado).ok).toBe(true);
+    const args = chamadaDaRpc(fake);
+    const linha = args.p_lancamento as Linha;
+    expect(linha.payment_method).toBe("transferencia");
+    expect(linha.transfer_account_id).toBe(DESTINO);
+    expect(linha.category_id).toBeNull();
+    expect(linha.card_id).toBeNull();
+    expect(linha.statement_id).toBeNull();
+    expect(typeof linha.transfer_group_id).toBe("string");
+    expect(linha.transfer_group_id).toBeTruthy();
+    expect(args.p_divisao).toBeNull();
+  });
+
+  it("despesa pessoal: p_lancamento NAO tem as chaves classificacao nem valor_pessoal", async () => {
+    const { fake, resultado } = rodar({ ...BASE, type: "despesa", status: "pago" });
+    expect((await resultado).ok).toBe(true);
+    const args = chamadaDaRpc(fake);
+    const linha = args.p_lancamento as Linha;
+    expect(Object.hasOwn(linha, "classificacao")).toBe(false);
+    expect(Object.hasOwn(linha, "valor_pessoal")).toBe(false);
+    expect(args.p_divisao).toBeNull();
+  });
+
+  it("divisao que nao fecha: nenhuma escrita", async () => {
+    // 1200 de terceiros num lançamento de 1000: a conta não fecha.
+    const { fake, resultado } = rodar({
+      ...DIVIDIDA,
+      parts: [{ person_id: PESSOA, tipo: "valor", valor: 1200 }],
+    });
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    expect(fake.escritas()).toEqual([]);
+  });
+});
+
+// ───────────────────────────── 04-C · T6 — o reembolso na receita ─────────────────────────────
+
+/** A pessoa deve `devidoCentavos` numa única dívida em aberto (sem pagamento nem alocação). */
+function pessoaQueDeve(devidoCentavos: number): EstadoDoReembolso {
+  return {
+    pagamentos: [],
+    dividas: devidoCentavos
+      ? [
+          {
+            receivableId: "d1",
+            valorCentavos: devidoCentavos,
+            status: "pendente",
+            recebidoManualCentavos: 0,
+            dataDaDivida: "2026-05-01",
+            criadoEm: "2026-05-01T10:00:00Z",
+          },
+        ]
+      : [],
+    alocacoes: [],
+  };
+}
+
+const RECEITA = { ...BASE, type: "receita", status: "recebido", receita_classificacao: "terceiro" };
+
+describe("04-C T6 · criarTransacao — receita de uma pessoa", () => {
+  beforeEach(() => {
+    lerEstadoDoReembolso.mockReset();
+  });
+
+  it("500,00 de quem deve 2.000,00: terceiro, valor_pessoal 0, vinculada à pessoa", async () => {
+    lerEstadoDoReembolso.mockResolvedValue(pessoaQueDeve(200000));
+    const { fake, resultado } = rodar({
+      ...RECEITA,
+      amount: 500,
+      reembolso_pessoa_id: PESSOA,
+      reembolso_devido_visto: 200000,
+    });
+    expect((await resultado).ok).toBe(true);
+    expect(lerEstadoDoReembolso).toHaveBeenCalledWith(expect.anything(), PESSOA);
+    expect(inseridaEmTransactions(fake)).toMatchObject({
+      classificacao: "terceiro",
+      valor_pessoal: 0,
+      reembolso_pessoa_id: PESSOA,
+    });
+  });
+
+  it("2.500,00 de quem deve 2.000,00, sem escolha: recusa no campo e NÃO chama a rpc", async () => {
+    lerEstadoDoReembolso.mockResolvedValue(pessoaQueDeve(200000));
+    const { fake, resultado } = rodar({ ...RECEITA, amount: 2500, reembolso_pessoa_id: PESSOA });
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.fieldErrors?.reembolso_sobra).toEqual([MSG_ESCOLHA_A_SOBRA]);
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("2.500,00 com 'receita': compartilhada, minha parte 500, vinculada", async () => {
+    lerEstadoDoReembolso.mockResolvedValue(pessoaQueDeve(200000));
+    const { fake, resultado } = rodar({
+      ...RECEITA,
+      amount: 2500,
+      reembolso_pessoa_id: PESSOA,
+      reembolso_sobra: "receita",
+    });
+    expect((await resultado).ok).toBe(true);
+    expect(inseridaEmTransactions(fake)).toMatchObject({
+      classificacao: "compartilhada",
+      valor_pessoal: 500,
+      reembolso_pessoa_id: PESSOA,
+    });
+  });
+
+  it("2.500,00 com 'saldo': terceiro, valor_pessoal 0, vinculada", async () => {
+    lerEstadoDoReembolso.mockResolvedValue(pessoaQueDeve(200000));
+    const { fake, resultado } = rodar({
+      ...RECEITA,
+      amount: 2500,
+      reembolso_pessoa_id: PESSOA,
+      reembolso_sobra: "saldo",
+    });
+    expect((await resultado).ok).toBe(true);
+    expect(inseridaEmTransactions(fake)).toMatchObject({
+      classificacao: "terceiro",
+      valor_pessoal: 0,
+      reembolso_pessoa_id: PESSOA,
+    });
+  });
+
+  it("devido_visto desatualizado: MSG_DIVIDA_MUDOU no campo, sem rpc", async () => {
+    lerEstadoDoReembolso.mockResolvedValue(pessoaQueDeve(200000));
+    const { fake, resultado } = rodar({
+      ...RECEITA,
+      amount: 500,
+      reembolso_pessoa_id: PESSOA,
+      reembolso_devido_visto: 100000,
+    });
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.fieldErrors?.reembolso_sobra).toEqual([MSG_DIVIDA_MUDOU]);
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("pessoa que não deve nada + 'receita': a entrada é pessoal e NÃO vincula", async () => {
+    lerEstadoDoReembolso.mockResolvedValue(pessoaQueDeve(0));
+    const { fake, resultado } = rodar({
+      ...RECEITA,
+      amount: 500,
+      reembolso_pessoa_id: PESSOA,
+      reembolso_sobra: "receita",
+    });
+    expect((await resultado).ok).toBe(true);
+    const linha = inseridaEmTransactions(fake);
+    expect(linha).toMatchObject({ classificacao: "pessoal", valor_pessoal: null });
+    expect(linha.reembolso_pessoa_id).toBeNull();
+  });
+
+  it("classificação pessoal pedida com pessoa: recusa no campo da pessoa", async () => {
+    lerEstadoDoReembolso.mockResolvedValue(pessoaQueDeve(200000));
+    const { fake, resultado } = rodar({
+      ...RECEITA,
+      receita_classificacao: "pessoal",
+      reembolso_pessoa_id: PESSOA,
+    });
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.fieldErrors?.reembolso_pessoa_id).toEqual([MSG_REEMBOLSO_SO_DE_TERCEIRO]);
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("leitura do estado falhou: frase em pt-BR e nada gravado", async () => {
+    lerEstadoDoReembolso.mockRejectedValue(new ErroDeLeitura("as receitas vinculadas", { codigo: "XX000" }));
+    const { fake, resultado } = rodar({ ...RECEITA, reembolso_pessoa_id: PESSOA });
+    const r = await resultado;
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.fieldErrors?.reembolso_pessoa_id).toEqual([MSG_LEITURA_DO_REEMBOLSO_FALHOU]);
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("payload sem os campos (o da IA e o de hoje): grava como antes e nem lê o estado", async () => {
+    const { fake, resultado } = rodar({ ...BASE, type: "receita", status: "recebido" });
+    expect((await resultado).ok).toBe(true);
+    expect(lerEstadoDoReembolso).not.toHaveBeenCalled();
+    const linha = inseridaEmTransactions(fake);
+    expect(linha).toMatchObject({ classificacao: "pessoal", valor_pessoal: null });
+    expect(linha.reembolso_pessoa_id).toBeNull();
+  });
+
+  it("pessoa vazia ('') com terceiro: é a 'outra entrada de terceiro' de hoje, sem vínculo", async () => {
+    const { fake, resultado } = rodar({ ...RECEITA, reembolso_pessoa_id: "", reembolso_sobra: "" });
+    expect((await resultado).ok).toBe(true);
+    expect(lerEstadoDoReembolso).not.toHaveBeenCalled();
+    const linha = inseridaEmTransactions(fake);
+    expect(linha).toMatchObject({ classificacao: "terceiro", valor_pessoal: 0 });
+    expect(linha.reembolso_pessoa_id).toBeNull();
+  });
+
+  it("despesa com reembolso_pessoa_id no payload: ignora e não vincula", async () => {
+    const { fake, resultado } = rodar({ ...BASE, type: "despesa", status: "pago", reembolso_pessoa_id: PESSOA });
+    expect((await resultado).ok).toBe(true);
+    expect(lerEstadoDoReembolso).not.toHaveBeenCalled();
+    expect(inseridaEmTransactions(fake).reembolso_pessoa_id).toBeNull();
+  });
+});
+
+describe("04-C T6 · lerReembolsoDaReceita", () => {
+  const ctx = { supabase: {}, userId: "user-1" } as unknown as FinanceServiceContext;
+
+  beforeEach(() => {
+    lerEstadoDoReembolso.mockReset();
+  });
+
+  it("estorno de cartão com pessoa: recusa no campo, sem ler o estado", async () => {
+    const r = await lerReembolsoDaReceita(
+      ctx,
+      { ...RECEITA, reembolso_pessoa_id: PESSOA },
+      { amountReais: 500, transactionId: "tx-1", estorno: true },
+    );
+    expect(r).toEqual({ ok: false, fieldErrors: { reembolso_pessoa_id: [MSG_ESTORNO_NAO_ABATE] } });
+    expect(lerEstadoDoReembolso).not.toHaveBeenCalled();
+  });
+
+  it("na edição, a contribuição atual da própria receita sai da conta antes de aplicar o valor", async () => {
+    // A receita já pagou 500,00 e esses 500,00 estão alocados na dívida de 2.000,00.
+    lerEstadoDoReembolso.mockResolvedValue({
+      pagamentos: [
+        { transactionId: "tx-1", contaId: null, parteCentavos: 50000, recebidoEm: "2026-11-01", criadoEm: "2026-11-01T10:00:00Z" },
+      ],
+      dividas: pessoaQueDeve(200000).dividas,
+      alocacoes: [
+        { id: "a1", receivableId: "d1", transactionId: "tx-1", valorCentavos: 50000, recebidoEm: "2026-11-01", criadoEm: "2026-11-01T10:00:00Z" },
+      ],
+    } satisfies EstadoDoReembolso);
+    const r = await lerReembolsoDaReceita(
+      ctx,
+      { ...RECEITA, reembolso_pessoa_id: PESSOA, reembolso_devido_visto: 200000 },
+      { amountReais: 500, transactionId: "tx-1", estorno: false },
+    );
+    expect(r).toEqual({
+      ok: true,
+      colunas: { classificacao: "terceiro", valor_pessoal: 0 },
+      reembolsoPessoaId: PESSOA,
+    });
   });
 });

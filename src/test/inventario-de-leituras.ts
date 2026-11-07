@@ -28,7 +28,20 @@ export type LeituraInventariada = {
   destino: DestinoDaLeitura;
 };
 
+/** O mesmo registro serve às duas direções do inventário. */
+export type EscritaInventariada = LeituraInventariada;
+
 const ESCRITA = new Set(["insert", "update", "upsert", "delete"]);
+/**
+ * 03-G2 (D-G2-13) — as RPCs que ESCREVEM. Saem do inventário de leituras e entram no de escritas
+ * (`inventariarEscritas`): o erro delas não é "não li", é "não gravei".
+ */
+export const RPCS_DE_ESCRITA = new Set([
+  "salvar_lancamento",
+  "criar_compra_parcelada",
+  "pagar_fatura",
+  "desfazer_pagamento_fatura",
+]);
 const HELPERS = ["exigir", "listaComTeto", "listaCompleta", "exigirCompleta", "tentar"];
 
 function escapar(nome: string): string {
@@ -104,6 +117,12 @@ function classificaCorpo(corpo: string): "tratado" | "engolido" {
   const s = corpo.replace(/\s+/g, " ");
   if (/\bthrow\b/.test(s)) return "tratado";
   if (/falhaDeLeitura(Antes|Depois)\(|dbError\(|ok:\s*false|falhaNoMeio\(|return\s+"erro"/.test(s)) {
+    return "tratado";
+  }
+  // 03-G2 (E8): a geração de recorrência devolve `{ generated, interrompida: true }` (S9).
+  if (/interrompida:\s*true/.test(s)) return "tratado";
+  // 03-G2 (K2): as frases de escrita e o plano que devolve o erro em vez de escrever.
+  if (/(traduzirErroDaRpc|falhaDaRpc|nadaGravado|gravadoEmParte|desfechoDesconhecido)\(|acao:\s*"erro"/.test(s)) {
     return "tratado";
   }
   if (/return\s+\{\s*(erro|ok|userId)\b/.test(s)) return "tratado";
@@ -244,8 +263,16 @@ function destinoDe(topo: ts.Node, fn: ts.Node, profundidade = 0): DestinoDaLeitu
   return "descartado";
 }
 
-/** As LEITURAS de cada arquivo, com o destino do `error`. Escritas e Storage ficam fora. */
-export function inventariarLeituras(arquivos: string[], raiz: string): LeituraInventariada[] {
+/**
+ * O laço único do varredor. `quer` escolhe o lado do filtro: `"leitura"` fica com a cadeia SEM
+ * `insert`/`update`/`upsert`/`delete` e sem `rpc` de escrita; `"escrita"` fica com o contrário.
+ * Storage fica fora dos dois.
+ */
+function inventariar(
+  arquivos: string[],
+  raiz: string,
+  quer: "leitura" | "escrita",
+): LeituraInventariada[] {
   const saida: LeituraInventariada[] = [];
   for (const caminho of arquivos) {
     const texto = readFileSync(`${raiz}/${caminho}`, "utf8");
@@ -262,7 +289,10 @@ export function inventariarLeituras(arquivos: string[], raiz: string): LeituraIn
       ) {
         const { metodos } = cadeia(n);
         const topo = subir(n);
-        if (!metodos.some((m) => ESCRITA.has(m))) {
+        const rpcDeEscrita =
+          n.expression.name.text === "rpc" && RPCS_DE_ESCRITA.has(n.arguments[0].text);
+        const ehEscrita = metodos.some((m) => ESCRITA.has(m)) || rpcDeEscrita;
+        if (ehEscrita === (quer === "escrita")) {
           const fn = funcaoQueContem(n);
           saida.push({
             arquivo: caminho,
@@ -278,4 +308,17 @@ export function inventariarLeituras(arquivos: string[], raiz: string): LeituraIn
     visita(sf);
   }
   return saida;
+}
+
+/** As LEITURAS de cada arquivo, com o destino do `error`. Escritas e Storage ficam fora. */
+export function inventariarLeituras(arquivos: string[], raiz: string): LeituraInventariada[] {
+  return inventariar(arquivos, raiz, "leitura");
+}
+
+/**
+ * 03-G2 (E8) — as ESCRITAS: o mesmo varredor com o filtro invertido. Escrita = cadeia com
+ * `insert`/`update`/`upsert`/`delete` OU `rpc` cujo nome está em `RPCS_DE_ESCRITA`.
+ */
+export function inventariarEscritas(arquivos: string[], raiz: string): EscritaInventariada[] {
+  return inventariar(arquivos, raiz, "escrita");
 }

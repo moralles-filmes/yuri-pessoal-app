@@ -1,46 +1,17 @@
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getTasksCardData } from "@/lib/dashboard/queries";
-import { formatDate } from "@/lib/format";
-import { Metric, CardEmpty } from "./primitives";
+import { Quadro } from "./primitives";
 
-/** Corpo do card Tarefas & Rotinas — hoje/atrasadas/em andamento + rotinas do dia. */
+/** Corpo do card Tarefas & Rotinas — quadros de hoje/atrasadas/em andamento + rotinas do dia. */
 export async function TasksCard({ todayIso }: { todayIso: string }) {
   const d = await getTasksCardData(todayIso);
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-3 gap-2">
-        <Metric label="Hoje" value={String(d.dueToday)} />
-        <Metric label="Atrasadas" value={String(d.overdue)} accent={d.overdue > 0} />
-        <Metric label="Em andamento" value={String(d.inProgress)} />
-      </div>
-
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">
-          {d.openTotal} tarefa(s) aberta(s)
-        </p>
-        {d.list.length === 0 ? (
-          <CardEmpty>Nenhuma tarefa aberta. 🎉</CardEmpty>
-        ) : (
-          d.list.map((t) => (
-            <div key={t.id} className="flex items-center justify-between gap-2 text-sm">
-              <span className="truncate">{t.title}</span>
-              {t.effective === "atrasada" ? (
-                <Badge
-                  variant="outline"
-                  className="shrink-0 border-destructive/30 text-destructive"
-                >
-                  Atrasada
-                </Badge>
-              ) : t.due_date ? (
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {formatDate(t.due_date)}
-                </span>
-              ) : null}
-            </div>
-          ))
-        )}
+        <Quadro valor={String(d.dueToday)} rotulo="Hoje" />
+        <Quadro valor={String(d.overdue)} rotulo="Atrasadas" />
+        <Quadro valor={String(d.inProgress)} rotulo="Em andamento" />
       </div>
 
       {d.routines.length > 0 && (

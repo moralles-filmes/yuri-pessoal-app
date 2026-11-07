@@ -11,17 +11,23 @@ import { splitSchema } from "@/lib/validators/split";
 import {
   authContext,
   dbError,
+  desfechoDesconhecido,
   falhaDeLeituraAntes,
   falhaDeLeituraDepois,
+  gravadoEmParte,
   invalid,
+  nadaGravado,
   notAuthed,
+  temSqlstate,
+  traduzirErroDaRpc,
   type AuthContext,
 } from "@/lib/actions/helpers";
 import { ehErroDeLeitura } from "@/lib/supabase/leitura";
 import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { getOrCreateStatementByFatura } from "@/lib/finance/statements";
 import { planejarParcelamento } from "@/lib/finance/installments";
-import { applySplitParcelado } from "@/lib/finance/split-persist";
+import { montarCompraPai } from "@/lib/finance/linha-do-lancamento";
+import { montarDivisaoParcelada, type DivisaoPayload } from "@/lib/finance/split-persist";
 import { reapplySplit } from "@/lib/finance/split-reapply";
 import { statusEfetivo } from "@/lib/finance/invoice";
 import { centavosParaReais, hojeISO, reaisParaCentavos } from "@/lib/format";
@@ -39,9 +45,14 @@ function revalidateInstallments() {
 
 /**
  * Cria uma COMPRA PARCELADA: a transação "pai" (total + metadados, sem fatura) + as N
- * parcelas, cada uma resolvida na sua fatura. Criação quase-atômica: em falha ao resolver
- * faturas ou gravar as parcelas, a compra pai é removida para não deixar parcelas órfãs.
- * O `user_id` vem sempre de `auth.uid()`.
+ * parcelas, cada uma na sua fatura, + a divisão com terceiros quando houver. ATÔMICA (03-G2,
+ * E4): tudo vai por UMA chamada da rpc `criar_compra_parcelada`, numa transação do banco — não
+ * existe mais compra-pai gravada sem as parcelas, nem compensação por delete.
+ *
+ * As faturas de TODAS as parcelas são resolvidas ANTES da rpc (D-G2-2): se alguma falhar, nada é
+ * gravado em `transactions`. Uma fatura vazia pode sobrar se a rpc falhar depois — não é dinheiro
+ * (nenhum lançamento, nenhum total) e já acontecia antes; fica declarado, não tratado.
+ * O `user_id` vem sempre de `auth.uid()` (a rpc o assume).
  */
 export async function createInstallmentPurchase(
   input: unknown,
@@ -87,124 +98,77 @@ export async function createInstallmentPurchase(
     return dbError("Não foi possível calcular as parcelas.");
   }
 
-  // Compra original: guarda o TOTAL e os metadados; statement_id NULL (não entra em fatura).
-  const { data: parent, error: parentErr } = await ctx.supabase
-    .from("transactions")
-    .insert({
-      user_id: ctx.userId,
-      type: "despesa",
-      payment_method: "cartao_credito",
-      account_id: null,
-      transfer_account_id: null,
-      card_id: d.card_id,
-      statement_id: null,
-      category_id: d.category_id,
-      subcategory_id: d.subcategory_id,
-      amount: d.valor_total,
-      purchase_date: d.purchase_date,
-      competence_date: d.competence_date,
-      description: d.description,
-      notes: d.notes,
-      status: "pago",
-      parcelado: true,
-      qtd_parcelas: d.qtd_parcelas,
-      valor_total: d.valor_total,
-      classificacao: isShared ? split.data.classificacao : "pessoal",
-    })
-    .select("id")
-    .single();
-  if (parentErr || !parent) {
-    return dbError("Não foi possível salvar a compra parcelada.");
-  }
-
-  // Resolve a fatura de cada parcela e monta as linhas a inserir.
-  const rows: {
-    user_id: string;
-    parent_transaction_id: string;
-    card_id: string;
-    statement_id: string;
+  // D-G2-2 — a fatura de CADA parcela é resolvida antes de qualquer escrita em `transactions`.
+  // Leitura falha lança `ErroDeLeitura` (03-G) e vira "Nada foi alterado."; `null` também.
+  const parcelasDaRpc: {
     numero: number;
     total_parcelas: number;
     valor: number;
+    statement_id: string;
     data_competencia: string;
-    status: "ativa";
   }[] = [];
+  const faturaDe = new Map<number, string>();
   for (const p of plano) {
-    // 03-G (D-G26, Z20) — o ErroDeLeitura não escapa da action: ele cai na compensação que já
-    // existia para o `null` (antes da 03-G, a leitura falha da fatura seguia para o insert, que em
-    // geral criava a fatura e mascarava o erro). A frase diz "pode ter sido gravada em parte"
-    // porque a compra-pai já foi gravada e a compensação ignora o próprio erro (03-G2).
     let statementId: string | null;
-    let leituraFalhou = false;
     try {
       statementId = await getOrCreateStatementByFatura(ctx, d.card_id, p.fatura);
     } catch (e) {
       if (!ehErroDeLeitura(e)) throw e;
-      statementId = null;
-      leituraFalhou = true;
+      return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.fatura);
     }
     if (!statementId) {
-      await ctx.supabase.from("transactions").delete().eq("id", parent.id);
-      return leituraFalhou
-        ? falhaDeLeituraDepois(ROTULOS_DE_LEITURA.fatura)
-        : dbError("Não foi possível resolver a fatura de uma das parcelas.");
+      return dbError("Não foi possível resolver a fatura de uma das parcelas. Nada foi alterado.");
     }
-    rows.push({
-      user_id: ctx.userId,
-      parent_transaction_id: parent.id,
-      card_id: d.card_id,
-      statement_id: statementId,
+    faturaDe.set(p.numero, statementId);
+    parcelasDaRpc.push({
       numero: p.numero,
       total_parcelas: d.parcelas_total_label ?? d.qtd_parcelas,
       valor: p.valor,
+      statement_id: statementId,
       data_competencia: p.fatura.competencia,
-      status: "ativa",
     });
   }
 
-  const { data: parcelasInseridas, error: instErr } = await ctx.supabase
-    .from("transaction_installments")
-    .insert(rows)
-    .select("id, numero, statement_id");
-  if (instErr || !parcelasInseridas) {
-    // Rollback lógico: remove a compra pai (sem parcelas, pois o batch falhou inteiro).
-    await ctx.supabase.from("transactions").delete().eq("id", parent.id);
-    return dbError("Não foi possível salvar as parcelas.");
-  }
-
-  // Divisão da compra parcelada (Fase 05): a parte de cada terceiro acompanha CADA parcela,
-  // com 1 receivable por (pessoa × parcela) na statement_id da parcela. Quase-atômico: em
-  // falha, remove a compra pai (cascade limpa parcelas, divisões e recebíveis).
+  // Divisão (Fase 05): a parte de cada terceiro acompanha CADA parcela (1 recebível por pessoa ×
+  // parcela, na fatura dela). Os recebíveis levam o `numero` REAL da parcela (pode começar em k > 1).
+  let colunas: { classificacao: Classificacao; valor_pessoal: number | null } = {
+    classificacao: "pessoal",
+    valor_pessoal: null,
+  };
+  let divisao: DivisaoPayload | null = null;
   if (isShared) {
-    const valorPorNumero = new Map(
-      plano.map((p) => [p.numero, p.valorCentavos]),
-    );
-    const parcelas = [...parcelasInseridas]
-      .sort((a, b) => a.numero - b.numero)
-      .map((p) => ({
-        installmentId: p.id,
-        statementId: p.statement_id,
-        cardId: d.card_id,
-        valorCentavos: valorPorNumero.get(p.numero) ?? 0,
-      }));
-    const res = await applySplitParcelado(ctx, {
-      parentId: parent.id,
+    const montada = montarDivisaoParcelada({
       totalCentavos: reaisParaCentavos(d.valor_total),
       parts: split.data.parts,
-      parcelas,
+      parcelas: plano.map((p) => ({
+        numero: p.numero,
+        statementId: faturaDe.get(p.numero) ?? null,
+        cardId: d.card_id,
+        valorCentavos: p.valorCentavos,
+      })),
+      alcance: "regra-cheia",
     });
-    if (!res.ok) {
-      await ctx.supabase.from("transactions").delete().eq("id", parent.id);
-      return dbError(res.error);
-    }
-    await ctx.supabase
-      .from("transactions")
-      .update({ valor_pessoal: centavosParaReais(res.minhaParteCentavos) })
-      .eq("id", parent.id);
+    if (!montada.ok) return dbError(montada.error);
+    divisao = montada.divisao;
+    colunas = {
+      classificacao: split.data.classificacao,
+      valor_pessoal: centavosParaReais(montada.minhaParteCentavos),
+    };
+  }
+
+  const { data, error } = await ctx.supabase.rpc("criar_compra_parcelada", {
+    p_pai: montarCompraPai(d, colunas),
+    p_parcelas: parcelasDaRpc,
+    p_divisao: divisao,
+  });
+  if (error || !data) {
+    // Sem SQLSTATE (rede, timeout) a gravação pode ter acontecido: a tela precisa se atualizar.
+    if (typeof error?.code !== "string" || error.code.length !== 5) revalidateInstallments();
+    return traduzirErroDaRpc(error, "salvar a compra parcelada", "Parcelamentos");
   }
 
   revalidateInstallments();
-  return { ok: true, data: { id: parent.id } };
+  return { ok: true, data: { id: data } };
 }
 
 /**
@@ -242,9 +206,10 @@ export async function updateInstallmentSplit(
 
   const parcelasRes = await ctx.supabase
     .from("transaction_installments")
-    .select("id, statement_id, valor")
+    .select("id, numero, statement_id, valor")
     .eq("parent_transaction_id", parentId)
-    .eq("status", "ativa");
+    .eq("status", "ativa")
+    .order("numero", { ascending: true });
   if (parcelasRes.error) return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.parcelas);
   const parcelas = parcelasRes.data;
   if (!parcelas || parcelas.length === 0) {
@@ -253,8 +218,10 @@ export async function updateInstallmentSplit(
     );
   }
 
+  // 03-G2 (E3b): `numero` é a numeração REAL da parcela (pode começar em k > 1), a mesma que a RPC
+  // `salvar_lancamento` usa para achar `transaction_installments` — não a posição na lista.
   const parcelasBase = parcelas.map((p) => ({
-    installmentId: p.id,
+    numero: p.numero,
     statementId: p.statement_id,
     cardId: parent.card_id,
     valorCentavos: reaisParaCentavos(p.valor),
@@ -338,6 +305,16 @@ export async function cancelInstallmentFuture(
 
   const ids = cancelaveis.map((p) => p.id);
 
+  // 03-G2 (D-G2-9) — a classificação do pai é lida ANTES das escritas: repetir o cancelamento depois
+  // de uma queda entre o passo 1 e o 2 (sem recebível sobrando) também precisa recalcular.
+  const paiRes = await ctx.supabase
+    .from("transactions")
+    .select("id, classificacao")
+    .eq("id", parentId)
+    .maybeSingle();
+  if (paiRes.error) return falhaDeLeituraAntes(ROTULOS_DE_LEITURA.comprasParceladas);
+  const paiEhDividido = !!paiRes.data && paiRes.data.classificacao !== "pessoal";
+
   // REDESIGN-03-D · A4 — a regra única: recebimento registrado, cobrado, pago ou ignorado barra
   // a ação inteira; o acerto com a pessoa é decisão do dono, não efeito colateral do cancelamento.
   const protecao = await protecaoDosRecebiveis(ctx.supabase, { installmentIds: ids });
@@ -351,19 +328,53 @@ export async function cancelInstallmentFuture(
   );
   if (motivo) return dbError(motivo);
 
+  // Ordem das escritas (D-G2-9; ordenada, não atômica): (1) recebíveis → (2) parcelas → (3) minha
+  // parte. Cair entre (1) e (2) deixa a parte do terceiro naquelas parcelas sem dono (a minha parte
+  // ainda a desconta e ele já não deve nada) até o cancelamento ser repetido, que fecha. A ordem de antes (parcelas primeiro) deixava a cobrança de parcela que
+  // não existe mais, somando em /terceiros.
+  const apagouRecebiveis = protecao.recebiveis.length > 0;
+  if (apagouRecebiveis) {
+    const { error: delErr } = await ctx.supabase
+      .from("receivables")
+      .delete()
+      .in("installment_id", ids);
+    if (delErr) {
+      if (temSqlstate(delErr)) return nadaGravado("cancelar as parcelas futuras");
+      // 03-G2 (revisão final) — sem SQLSTATE os recebíveis PODEM ter saído: nunca "Nada foi
+      // alterado". Repetir o cancelamento converge (o recálculo roda para a compra dividida).
+      revalidateInstallments();
+      return desfechoDesconhecido(
+        "removido os recebíveis destas parcelas sem cancelá-las",
+        "Parcelamentos",
+      );
+    }
+  }
+
   const { error } = await ctx.supabase
     .from("transaction_installments")
     .update({ status: "cancelada" })
     .in("id", ids);
-  if (error) return dbError("Não foi possível cancelar as parcelas futuras.");
+  if (error) {
+    if (!apagouRecebiveis) return nadaGravado("cancelar as parcelas futuras");
+    revalidateInstallments();
+    return gravadoEmParte(
+      "Os recebíveis destas parcelas foram removidos, mas as parcelas não foram canceladas. Tente cancelar de novo.",
+    );
+  }
 
-  if (protecao.recebiveis.length > 0) {
-    await ctx.supabase.from("receivables").delete().in("installment_id", ids);
+  if (apagouRecebiveis || paiEhDividido) {
     // 03-G — leitura falha aqui gravaria valor_pessoal calculado sobre listas vazias; as parcelas
     // já foram canceladas, por isso a frase é a de "depois".
-    if (!(await recomputeParentValorPessoal(ctx, parentId))) {
+    const recalculo = await recomputeParentValorPessoal(ctx, parentId);
+    if (recalculo === "leitura") {
       revalidateInstallments();
       return falhaDeLeituraDepois(ROTULOS_DE_LEITURA.parcelas);
+    }
+    if (recalculo === "escrita") {
+      revalidateInstallments();
+      return gravadoEmParte(
+        "As parcelas foram canceladas, mas a minha parte da compra não foi recalculada. Edite a divisão em Parcelamentos para recalcular.",
+      );
     }
   }
 
@@ -376,11 +387,12 @@ export async function cancelInstallmentFuture(
  * o conjunto de parcelas mudar. Não recalcula a divisão: as partes gravadas em
  * `shared_expenses` continuam sendo o que o usuário informou — só a MINHA parte, que é sempre
  * derivada, precisa acompanhar. Sem nenhum recebível a despesa volta a ser inteiramente minha.
+ * Devolve `'leitura'` (não gravou nada) ou `'escrita'` (o update falhou) em vez de lançar.
  */
 async function recomputeParentValorPessoal(
   ctx: AuthContext,
   parentId: string,
-): Promise<boolean> {
+): Promise<"ok" | "leitura" | "escrita"> {
   const ativasRes = await ctx.supabase
     .from("transaction_installments")
     .select("valor")
@@ -390,8 +402,8 @@ async function recomputeParentValorPessoal(
     .from("receivables")
     .select("valor")
     .eq("transaction_id", parentId);
-  // 03-G — com leitura falha, não regrava valor_pessoal sobre listas vazias: devolve `false`.
-  if (ativasRes.error || recsRes.error) return false;
+  // 03-G — com leitura falha, não regrava valor_pessoal sobre listas vazias.
+  if (ativasRes.error || recsRes.error) return "leitura";
 
   const totalCentavos = (ativasRes.data ?? []).reduce(
     (acc, p) => acc + reaisParaCentavos(p.valor),
@@ -402,7 +414,7 @@ async function recomputeParentValorPessoal(
     0,
   );
 
-  await ctx.supabase
+  const { error } = await ctx.supabase
     .from("transactions")
     .update({
       valor_pessoal:
@@ -411,7 +423,7 @@ async function recomputeParentValorPessoal(
           : null,
     })
     .eq("id", parentId);
-  return true;
+  return error ? "escrita" : "ok";
 }
 
 /**

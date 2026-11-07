@@ -286,6 +286,54 @@ export async function getDailyBalances(
   return Object.fromEntries(saldos);
 }
 
+/**
+ * K2 (04-A) — saldo das contas somadas (ou só o da conta `contaId`, 04-A2) até o fim do dia anterior a
+ * `dataExclusiva` (quem chama passa o dia seguinte a hoje). Mesmo contrato do saldo diário do extrato (`account_balance_before`,
+ * corte pela data de caixa). `null` = não leu, nunca zero: a tela escreve "Não foi possível ler o
+ * saldo". É a ÚNICA leitura do financeiro que não lança no erro, de propósito.
+ */
+export async function lerSaldoAte(
+  dataExclusiva: string,
+  contaId: string | null = null,
+): Promise<number | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("account_balance_before", {
+    // Mesmo cast de `getDailyBalances`: `null` é o escopo válido "todas as contas somadas". Com
+    // `contaId` (recorte de conta do relatório, 04-A2 D-A2-12) é o saldo SÓ daquela conta — a
+    // função SQL já recebe o id, então não há migration.
+    p_account_id: contaId ?? (null as unknown as string),
+    p_date: dataExclusiva,
+  });
+  if (error || data == null) return null;
+  return Number(data);
+}
+
+/**
+ * D-A-12 (04-A) — os últimos lançamentos que JÁ ACONTECERAM (competência até `hoje`), sem
+ * transferências (o pagamento de fatura é transferência) e sem cancelados (revisão final). Erro de leitura LANÇA (03-G). O corte
+ * pelo `limit` não é saturação: há mais lançamentos que `n` por definição, então a situação da
+ * leitura é descartada.
+ */
+export async function getUltimasTransacoes(
+  hoje: string,
+  n = 5,
+): Promise<TransactionWithRelations[]> {
+  const supabase = await createClient();
+  const res = await supabase
+    .from("transactions")
+    .select(TX_SELECT + TX_SHARED_EMBED, { count: "exact" })
+    .lte("competence_date", hoje)
+    .neq("type", "transferencia")
+    .neq("status", "cancelado")
+    .order("competence_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(n);
+  return listaComTeto(
+    res as unknown as RespostaDoBanco<TransactionWithRelations[] | null>,
+    R.lancamentos,
+  ).linhas;
+}
+
 export type TransactionRangeFilters = {
   /** 'yyyy-MM-dd' inclusivo (filtra por competence_date). */
   from: string;
@@ -766,7 +814,8 @@ export type LeituraFinanceira<E extends EscopoFinanceiro> = {
   entradas: EntradasDoEscopo<E>;
   completude: CompletudeFinanceira;
 } & (E["contas"] extends true ? { contas: AccountWithBalance[] } : unknown) &
-  (E["recorrencias"] extends true ? { recorrencias: RecorrenciaCrua[] } : unknown);
+  (E["recorrencias"] extends true ? { recorrencias: RecorrenciaCrua[] } : unknown) &
+  (E extends { recebiveisCrus: true } ? { recebiveis: ReceivableWithRelations[] } : unknown);
 
 /**
  * As leituras que o motor financeiro consome, já montadas por `montarEntradas` — a camada de
@@ -863,6 +912,10 @@ export async function lerFinanceiro<E extends EscopoFinanceiro>(
     completude: completudeDe(motivos),
     ...(contas !== undefined ? { contas } : {}),
     ...(recorrencias !== undefined ? { recorrencias } : {}),
+    // 04-A (D-A-14): os recebíveis crus, com a pessoa, saem da MESMA leitura que alimenta o motor.
+    ...("recebiveisCrus" in escopo && escopo.recebiveisCrus && recebiveis !== undefined
+      ? { recebiveis: recebiveis.linhas }
+      : {}),
   } as LeituraFinanceira<E>;
 }
 

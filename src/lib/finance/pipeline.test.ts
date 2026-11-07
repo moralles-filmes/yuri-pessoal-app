@@ -38,8 +38,10 @@ import {
 import {
   ESCOPO_CARD_FINANCEIRO,
   ESCOPO_FATURAS,
+  ESCOPO_HISTORICO_DO_DASHBOARD,
   ESCOPO_RELATORIO,
   janelaDoGastoAlto,
+  janelaDoHistoricoDoDashboard,
   janelaDoMes,
   janelaDoRelatorio,
   lancamentosForaDoDominio,
@@ -71,7 +73,9 @@ type TxCompleta = {
   parcelado: boolean;
   category_id: string | null;
   category: Categoria | null;
+  account_id: string | null;
   description: string;
+  purchase_date: string | null;
 };
 
 type FaturaCompleta = {
@@ -104,6 +108,7 @@ type ParcelaCompleta = {
   valor: number;
   status: string;
   numero: number;
+  total_parcelas: number;
   parent: { id: string; description: string; category: Omit<Categoria, "icon"> | null } | null;
 };
 
@@ -155,6 +160,9 @@ function referenciaCardFinanceiro(
     status: t.status,
     competence_date: t.competence_date,
     card_id: t.card_id,
+    account_id: t.account_id,
+    descricao: t.description,
+    data_compra: t.purchase_date,
     statement_id: t.statement_id,
     parcelado: t.parcelado,
     category_id: t.category_id,
@@ -255,6 +263,9 @@ function referenciaRelatorio({
     status: t.status,
     competence_date: t.competence_date,
     card_id: t.card_id,
+    account_id: t.account_id,
+    descricao: t.description,
+    data_compra: t.purchase_date,
     statement_id: t.statement_id,
     parcelado: t.parcelado,
     category_id: t.category_id,
@@ -288,6 +299,9 @@ function referenciaRelatorio({
     statement_id: it.statement_id,
     valor: it.valor,
     status: it.status,
+    numero: it.numero,
+    total_parcelas: it.total_parcelas,
+    descricao: it.parent?.description ?? null,
     parent: it.parent?.category
       ? {
           category: {
@@ -344,6 +358,9 @@ function referenciaPagina({
     status: t.status,
     competence_date: t.competence_date,
     card_id: t.card_id,
+    account_id: t.account_id,
+    descricao: t.description,
+    data_compra: t.purchase_date,
     statement_id: t.statement_id,
     parcelado: t.parcelado,
     category_id: t.category_id,
@@ -377,6 +394,9 @@ function referenciaPagina({
     statement_id: it.statement_id,
     valor: it.valor,
     status: it.status,
+    numero: it.numero,
+    total_parcelas: it.total_parcelas,
+    descricao: it.parent?.description ?? null,
     parent: it.parent?.category
       ? { category: { id: it.parent.category.id, name: it.parent.category.name, color: it.parent.category.color } }
       : { category: null },
@@ -474,9 +494,12 @@ function referenciaCron(
       status: t.status as DashTx["status"],
       competence_date: t.competence_date as string,
       card_id: (t.card_id as string | null) ?? null,
+      account_id: (t.account_id as string | null) ?? null,
       statement_id: (t.statement_id as string | null) ?? null,
       parcelado: Boolean(t.parcelado),
       category_id: null,
+      descricao: (t.description as string | null) ?? null,
+      data_compra: (t.purchase_date as string | null) ?? null,
     }),
   );
   return { sts: dashStatements, recs: dashReceivables, txs: dashTx };
@@ -500,11 +523,13 @@ function linhasCompletas(): LinhasCompletas {
         status: "pago",
         competence_date: "2026-05-10",
         card_id: null,
+        account_id: null,
         statement_id: null,
         parcelado: false,
         category_id: "cat-a",
         category: catA,
         description: "Lancamento 1",
+        purchase_date: null,
       },
       {
         // À vista dividida: a parte minha é `valor_pessoal`.
@@ -516,11 +541,13 @@ function linhasCompletas(): LinhasCompletas {
         status: "pago",
         competence_date: "2026-05-12",
         card_id: null,
+        account_id: null,
         statement_id: null,
         parcelado: false,
         category_id: "cat-a",
         category: catA,
         description: "Lancamento 2",
+        purchase_date: null,
       },
       {
         // À vista do cartão, sem categoria.
@@ -532,11 +559,13 @@ function linhasCompletas(): LinhasCompletas {
         status: "pendente",
         competence_date: "2026-04-28",
         card_id: "card-1",
+        account_id: null,
         statement_id: "st-1",
         parcelado: false,
         category_id: null,
         category: null,
         description: "Lancamento 3",
+        purchase_date: null,
       },
       {
         // Compra-pai de parcelamento: nunca soma (as parcelas entram pela fatura).
@@ -548,11 +577,13 @@ function linhasCompletas(): LinhasCompletas {
         status: "pendente",
         competence_date: "2026-05-02",
         card_id: "card-1",
+        account_id: null,
         statement_id: null,
         parcelado: true,
         category_id: "cat-a",
         category: catA,
         description: "Lancamento 4",
+        purchase_date: null,
       },
       {
         id: "tx-5",
@@ -563,11 +594,13 @@ function linhasCompletas(): LinhasCompletas {
         status: "recebido",
         competence_date: "2026-05-05",
         card_id: null,
+        account_id: null,
         statement_id: null,
         parcelado: false,
         category_id: null,
         category: null,
         description: "Lancamento 5",
+        purchase_date: null,
       },
     ],
     statements: [
@@ -641,6 +674,7 @@ function linhasCompletas(): LinhasCompletas {
         valor: 100,
         status: "ativa",
         numero: 1,
+        total_parcelas: 3,
         parent: { id: "tx-4", description: "Lancamento 4", category: catB },
       },
       {
@@ -650,6 +684,7 @@ function linhasCompletas(): LinhasCompletas {
         valor: 100,
         status: "ativa",
         numero: 2,
+        total_parcelas: 3,
         parent: { id: "tx-4", description: "Lancamento 4", category: null },
       },
       {
@@ -659,6 +694,7 @@ function linhasCompletas(): LinhasCompletas {
         valor: 100,
         status: "ativa",
         numero: 3,
+        total_parcelas: 3,
         parent: null,
       },
     ],
@@ -771,10 +807,13 @@ const transacoesDoCron: LinhaTx[] = [
     status: "pago",
     competence_date: "2026-05-10",
     card_id: null,
+    account_id: null,
     statement_id: null,
     parcelado: false,
     category_id: "cat-a",
     category: { id: "cat-a", name: "Categoria A", color: "#111111" },
+    description: null,
+    purchase_date: null,
   },
   {
     id: "tx-cron-2",
@@ -785,10 +824,13 @@ const transacoesDoCron: LinhaTx[] = [
     status: "pago",
     competence_date: "2026-04-12",
     card_id: null,
+    account_id: null,
     statement_id: null,
     parcelado: null,
     category_id: null,
     category: null,
+    description: null,
+    purchase_date: null,
   },
   {
     id: "tx-cron-3",
@@ -799,10 +841,13 @@ const transacoesDoCron: LinhaTx[] = [
     status: "pendente",
     competence_date: "2026-04-28",
     card_id: "card-1",
+    account_id: null,
     statement_id: "st-1",
     parcelado: false,
     category_id: "cat-b",
     category: [{ id: "cat-b", name: "Categoria B", color: null }],
+    description: null,
+    purchase_date: null,
   },
 ];
 
@@ -894,11 +939,14 @@ describe("03-B — montarEntradas devolve o que cada chamador montava à mão (c
     expect(Object.keys(novo.txs[0]).sort()).toEqual(
       [
         "id",
+        "account_id",
         "amount",
         "card_id",
         "category",
         "category_id",
         "competence_date",
+        "data_compra",
+        "descricao",
         "parcelado",
         "payment_method",
         "statement_id",
@@ -1094,10 +1142,13 @@ describe("03-B — montarEntradas: normalização", () => {
           valor_pessoal: null,
           payment_method: null,
           card_id: null,
+          account_id: null,
           statement_id: null,
           parcelado: null,
           category_id: null,
           category: null,
+          description: null,
+          purchase_date: null,
         },
       ],
       faturas: [
@@ -1125,7 +1176,9 @@ describe("03-B — montarEntradas: normalização", () => {
           transaction: null,
         },
       ],
-      parcelas: [{ id: "inst-1", statement_id: "st-1", valor: "100.00", status: "ativa", parent: null }],
+      parcelas: [
+        { id: "inst-1", statement_id: "st-1", valor: "100.00", status: "ativa", numero: 1, total_parcelas: 3, parent: null },
+      ],
       cartoes: [
         { id: "card-1", nome: "Cartao 1", cor: null, limite_total: "5000.00", dia_fechamento: 5, dia_vencimento: 15 },
       ],
@@ -1152,10 +1205,13 @@ describe("03-B — montarEntradas: normalização", () => {
       status: "pago",
       competence_date: "2026-05-01",
       card_id: null,
+      account_id: null,
       statement_id: null,
       parcelado: false,
       category_id: null,
       category: null,
+      descricao: null,
+      data_compra: null,
     });
     expect(e.sts[0].total_atual).toBe(480.5);
     expect(e.recs[0]).toEqual({
@@ -1172,6 +1228,9 @@ describe("03-B — montarEntradas: normalização", () => {
       statement_id: "st-1",
       valor: 100,
       status: "ativa",
+      numero: 1,
+      total_parcelas: 3,
+      descricao: null,
       parent: { category: null },
     });
     expect(e.cards[0].limite_total).toBe(5000);
@@ -1181,6 +1240,19 @@ describe("03-B — montarEntradas: normalização", () => {
 
   it("total_atual nulo continua nulo", () => {
     expect(entradasDoCron().sts[1].total_atual).toBeNull();
+  });
+
+  it("cartão desativado chega ao motor com ativo: false; o ativo não muda a forma dos outros (08 K2)", () => {
+    const e = montarEntradas({
+      cartoes: [
+        { id: "card-off", nome: "Cartao Off", cor: null, limite_total: "1000", dia_fechamento: 5, dia_vencimento: 15, ativo: false },
+        { id: "card-sem", nome: "Cartao Sem", cor: null, limite_total: "1000", dia_fechamento: 5, dia_vencimento: 15 },
+        { id: "card-on", nome: "Cartao On", cor: null, limite_total: "1000", dia_fechamento: 5, dia_vencimento: 15, ativo: true },
+      ],
+    });
+    expect(e.cards[0].ativo).toBe(false);
+    expect("ativo" in e.cards[1]).toBe(false);
+    expect("ativo" in e.cards[2]).toBe(false);
   });
 });
 
@@ -1196,10 +1268,13 @@ describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
     valor_pessoal: null,
     payment_method: null,
     card_id: null,
+    account_id: null,
     statement_id: null,
     parcelado: false,
     category_id: null,
     category: null,
+    description: null,
+    purchase_date: null,
   };
 
   it("linha sem category_id não compila — chave ausente não vira null em silêncio (M3, tsc --noEmit)", () => {
@@ -1212,9 +1287,12 @@ describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
       valor_pessoal: null,
       payment_method: null,
       card_id: null,
+      account_id: null,
       statement_id: null,
       parcelado: false,
       category: null,
+      description: null,
+      purchase_date: null,
     };
     // @ts-expect-error — `category_id` é obrigatório (anulável, mas presente): R4 da 03-B fechado.
     const linha: LinhaTx = semCategoria;
@@ -1239,6 +1317,13 @@ describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
     ];
     expect(lancamentosForaDoDominio(doCheck)).toBe(0);
     expect(montarEntradas({ transacoes: doCheck }).txs).toHaveLength(2);
+  });
+
+  it("montarEntradas leva account_id da linha ao motor", () => {
+    const comConta = montarEntradas({ transacoes: [{ ...base, account_id: "conta-b" }] });
+    expect(comConta.txs?.[0].account_id).toBe("conta-b");
+    const semConta = montarEntradas({ transacoes: [{ ...base, account_id: null }] });
+    expect(semConta.txs?.[0].account_id).toBeNull();
   });
 
   it("embed que vem como lista é normalizado para o primeiro elemento", () => {
@@ -1276,7 +1361,9 @@ describe("03-B2 A2 — linhas estritas e estreitamento declarado", () => {
           statement_id: null,
           valor: 3,
           status: "ativa",
-          parent: [{ category: [{ id: "cat-y", name: "Categoria Y", color: null }] }],
+          numero: 1,
+          total_parcelas: 3,
+          parent: [{ description: null, category: [{ id: "cat-y", name: "Categoria Y", color: null }] }],
         },
       ],
     });
@@ -1378,6 +1465,34 @@ describe("03-B — os três escopos nomeados", () => {
     // @ts-expect-error — o card com parcelas não é nenhum dos três escopos nomeados.
     const solto: EscopoFinanceiro = { ...ESCOPO_CARD_FINANCEIRO, parcelas: true };
     expect(solto.parcelas).toBe(true);
+  });
+});
+
+describe("06 — histórico do dashboard (T1)", () => {
+  const flags = (e: EscopoFinanceiro) =>
+    Object.entries(e)
+      .filter(([k, v]) => k !== "nome" && v === true)
+      .map(([k]) => k)
+      .sort();
+
+  it("06 · janela do histórico: os 5 meses ANTERIORES, sem o mês", () => {
+    expect(janelaDoHistoricoDoDashboard("2026-11")).toEqual({ from: "2026-06-01", to: "2026-10-31" });
+    expect(janelaDoHistoricoDoDashboard("2026-03")).toEqual({ from: "2025-10-01", to: "2026-02-28" });
+  });
+
+  it("06 · escopo do histórico lê só lançamentos", () => {
+    expect(ESCOPO_HISTORICO_DO_DASHBOARD).toEqual({
+      nome: "historico-do-dashboard",
+      contas: false,
+      cartoes: false,
+      faturas: false,
+      recebiveis: false,
+      contasFixas: false,
+      recorrencias: false,
+      transacoes: true,
+      parcelas: false,
+    });
+    expect(flags(ESCOPO_HISTORICO_DO_DASHBOARD)).toEqual(["transacoes"]);
   });
 });
 

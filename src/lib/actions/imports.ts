@@ -8,7 +8,9 @@ import {
   dbError,
   falhaDeLeituraAntes,
   falhaDeLeituraDepois,
+  gravadoEmParte,
   invalid,
+  nadaGravado,
   notAuthed,
   type AuthContext,
 } from "@/lib/actions/helpers";
@@ -22,13 +24,14 @@ import { ehErroDeLeitura, exigir, listaCompleta } from "@/lib/supabase/leitura";
 import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import { resolverFatura } from "@/lib/finance/invoice";
 import { dataDoExtratoAGravar } from "@/lib/finance/caixa";
+import { MSG_ESTORNO_NAO_ABATE } from "@/lib/finance/reembolso";
 import { detectarCompetenciaFatura } from "@/lib/import/competencia";
 import {
   importUploadSchema,
   remapSchema,
   updateImportRowSchema,
 } from "@/lib/validators/import";
-import { splitSchema } from "@/lib/validators/split";
+import { importRowReembolsoSchema, splitSchema } from "@/lib/validators/split";
 import {
   autoDetectMapping,
   applyMapping,
@@ -48,6 +51,11 @@ import {
   escalarPartesParcelado,
   planejarImportParcelado,
 } from "@/lib/import/parcelamento";
+import {
+  FRASE_DO_LOTE_NAO_MARCADO,
+  MOTIVO_IMPORTACAO_INTERROMPIDA,
+  fraseDoCommitInterrompido,
+} from "@/lib/import/frases-do-commit";
 import { parseOfx } from "@/lib/import/ofx";
 import { parseCsv } from "@/lib/import/csv";
 import { parseXlsx } from "@/lib/import/xlsx";
@@ -367,7 +375,18 @@ export async function parseImportFile(
     .from("import_rows")
     .insert(toRowInserts(ctx.userId, batch.id, conferidas));
   if (rowsErr) {
-    await ctx.supabase.from("import_batches").delete().eq("id", batch.id);
+    // 03-G2 (S11) — a compensação é conferida: se o lote vazio não saiu, ele continua na lista e a
+    // frase diz o que fazer com ele, em vez de fingir que nada ficou.
+    const { error: compErr } = await ctx.supabase
+      .from("import_batches")
+      .delete()
+      .eq("id", batch.id);
+    if (compErr) {
+      revalidateImports();
+      return gravadoEmParte(
+        "O lote foi registrado, mas as linhas do arquivo não foram salvas e o lote vazio não pôde ser removido. Exclua o lote em Importações e envie o arquivo de novo.",
+      );
+    }
     return dbError("Não foi possível salvar as linhas do arquivo.");
   }
 
@@ -465,13 +484,26 @@ export async function remapImportBatch(
     return falhaDeLeituraAntes(e.oQue);
   }
 
-  await ctx.supabase.from("import_rows").delete().eq("import_batch_id", batchId);
+  // 03-G2 (S11) — as três escritas são conferidas. O `delete` que falha não apagou nada (um comando
+  // só). Depois dele, as linhas antigas JÁ se foram — e o remap lê o `raw` dessas mesmas linhas, então
+  // "aplicar de novo" não é saída: o que resta é reenviar o arquivo.
+  const { error: delErr } = await ctx.supabase
+    .from("import_rows")
+    .delete()
+    .eq("import_batch_id", batchId);
+  if (delErr) return nadaGravado("aplicar o mapeamento");
+
   const { error: insErr } = await ctx.supabase
     .from("import_rows")
     .insert(toRowInserts(ctx.userId, batchId, conferidas));
-  if (insErr) return dbError("Não foi possível aplicar o mapeamento.");
+  if (insErr) {
+    revalidateImports();
+    return gravadoEmParte(
+      "As linhas antigas do lote foram removidas e as novas não foram salvas. Exclua o lote em Importações e envie o arquivo de novo.",
+    );
+  }
 
-  await ctx.supabase
+  const { error: loteErr } = await ctx.supabase
     .from("import_batches")
     .update({
       status: "revisando",
@@ -482,10 +514,24 @@ export async function remapImportBatch(
       column_mapping: { headers, fields },
     })
     .eq("id", batchId);
+  if (loteErr) {
+    revalidateImports();
+    // As linhas novas guardam o `raw`, então aplicar o mapeamento de novo funciona de verdade.
+    return gravadoEmParte(
+      "As linhas foram remapeadas, mas o lote não foi atualizado. Aplique o mapeamento de novo.",
+    );
+  }
 
   revalidateImports();
   return { ok: true, data: undefined };
 }
+
+/** As três colunas do reembolso da revisão (04-C · T7), todas de volta a "sem escolha". */
+const LIMPA_O_REEMBOLSO = {
+  receita_classificacao: null,
+  reembolso_pessoa_id: null,
+  reembolso_sobra: null,
+} as const;
 
 /**
  * Edita uma linha na revisão: trocar categoria, corrigir data/valor/descrição, definir tipo,
@@ -565,6 +611,9 @@ export async function updateImportRow(
     valor?: number;
     tipo?: string;
     transfer_account_id?: string | null;
+    receita_classificacao?: string | null;
+    reembolso_pessoa_id?: string | null;
+    reembolso_sobra?: string | null;
   } = {};
   if (d.status !== undefined) update.status = d.status;
   if (d.categoria_sugerida_id !== undefined) {
@@ -606,6 +655,18 @@ export async function updateImportRow(
       update.categoria_sugerida_id = null;
       update.subcategoria_sugerida_id = null;
     }
+  }
+
+  // 04-C · T7 — reembolso só existe em ENTRADA que vai virar lançamento: a linha que passa a ser
+  // despesa, transferência ou ignorada perde pessoa, classificação e escolha da sobra no mesmo
+  // update. Deixar o resíduo faria uma transferência (ou a volta da linha à revisão) carregar uma
+  // pessoa que a revisão já não mostra. `commitImport` também não o lê fora do ramo da receita.
+  if (
+    d.tipo === "despesa" ||
+    d.status === "ignorada" ||
+    (d.transfer_account_id !== undefined && d.transfer_account_id !== null)
+  ) {
+    Object.assign(update, LIMPA_O_REEMBOLSO);
   }
 
   if (Object.keys(update).length === 0) {
@@ -681,6 +742,65 @@ export async function setImportRowSplit(
 }
 
 /**
+ * 04-C · T7 — define o reembolso de UMA linha de ENTRADA da revisão: pessoal ou de terceiro, de
+ * quem, e o que fazer com a sobra. Só guarda a escolha; quem decide e grava é o `commitImport`,
+ * pelo mesmo caminho do formulário (`criarTransacao` → `lerReembolsoDaReceita`), recalculando a
+ * dívida linha a linha. Só extrato (estorno de cartão e transferência nunca têm pessoa), só
+ * entrada, e só enquanto a linha não virou lançamento.
+ *
+ * A pessoa só é guardada com "de terceiro", e a escolha da sobra só com pessoa: guardar o que não
+ * se aplica faria a revisão mostrar um vínculo que o commit ignora.
+ */
+export async function setImportRowReembolso(
+  rowId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const ctx = await authContext();
+  if (!ctx) return notAuthed;
+
+  const parsed = importRowReembolsoSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const rowRes = await ctx.supabase
+    .from("import_rows")
+    .select(
+      "id, tipo, status, transaction_id, transfer_account_id, import_batches(status, origem)",
+    )
+    .eq("id", rowId)
+    .maybeSingle();
+  if (rowRes.error) return falhaDeLeituraAntes("a linha da importação");
+  const row = rowRes.data;
+  if (!row) return dbError("Linha não encontrada.");
+  const batch = row.import_batches as { status?: string; origem?: string } | null;
+  if (batch?.status === "cancelado") return dbError("Este lote foi cancelado.");
+  if (row.status === "importada" || row.transaction_id) {
+    return dbError(
+      "Esta linha já virou lançamento. Ajuste o reembolso em Financeiro, ou desfaça a importação do lote.",
+    );
+  }
+  if (row.tipo !== "receita") return dbError("Só uma entrada pode ser reembolso.");
+  if (row.transfer_account_id) {
+    return dbError("Esta linha é uma transferência entre suas contas.");
+  }
+  if (batch?.origem === "cartao") return dbError(MSG_ESTORNO_NAO_ABATE);
+
+  const d = parsed.data;
+  const pessoaId = d.receita_classificacao === "terceiro" ? d.reembolso_pessoa_id : null;
+  const { error } = await ctx.supabase
+    .from("import_rows")
+    .update({
+      receita_classificacao: d.receita_classificacao,
+      reembolso_pessoa_id: pessoaId,
+      reembolso_sobra: pessoaId ? (d.reembolso_sobra ?? null) : null,
+    })
+    .eq("id", rowId);
+  if (error) return dbError("Não foi possível salvar o reembolso.");
+
+  revalidateImports();
+  return { ok: true, data: undefined };
+}
+
+/**
  * Cria um ESTORNO/crédito de fatura como uma RECEITA vinculada à fatura do cartão (reduz o
  * total_atual da view). Vai por insert direto porque `createTransaction` só vincula statement_id
  * a despesas — aqui o crédito precisa entrar na MESMA fatura da data, fora do saldo de conta.
@@ -742,6 +862,18 @@ async function createCardEstorno(
  * Cada linha importada vira UMA transação na fatura/competência correta (regra das Fases 03/04);
  * grava `transaction_id` na linha. Falhas individuais marcam a linha como `erro` (não derrubam o
  * lote). Ao final, o lote vira `importado`.
+ *
+ * 03-G2 (S10, D-G2-11) — a ORDEM de cada linha é reserva → cria → marca:
+ *  1. RESERVA: `update status = 'erro', motivo = MOTIVO_IMPORTACAO_INTERROMPIDA` condicionado a
+ *     `status = 'para_importar'`. Vem ANTES de criar o lançamento (claim-first, invariante 37). Se
+ *     outra execução do mesmo lote já pegou a linha, o update altera 0 linhas e esta pula — dois
+ *     commits ao mesmo tempo não lançam a mesma linha duas vezes.
+ *  2. CRIA o lançamento, como sempre.
+ *  3. MARCA a linha `importada` (com o `transaction_id`) ou grava o motivo da falha.
+ *  A reserva grava `erro` com o motivo de interrupção, e não um estado novo, porque é a verdade de
+ *  quem cair no meio: a linha fica fora de `para_importar` dizendo que pode ter sido lançada, e
+ *  rodar o commit de novo NÃO a relança. Erra para "pode não ter acontecido", nunca para "duas
+ *  vezes". Toda escrita é conferida; a que falha para o commit com uma frase de lote.
  */
 export async function commitImport(
   batchId: string,
@@ -767,7 +899,7 @@ export async function commitImport(
   const rowsRes = await ctx.supabase
     .from("import_rows")
     .select(
-      "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, subcategoria_sugerida_id, parcela, parcelas_total, import_as, classificacao, split_parts, transfer_account_id",
+      "id, data_norm, descricao, valor, tipo, categoria_sugerida_id, subcategoria_sugerida_id, parcela, parcelas_total, import_as, classificacao, split_parts, transfer_account_id, receita_classificacao, reembolso_pessoa_id, reembolso_sobra",
       { count: "exact" },
     )
     .eq("import_batch_id", batchId)
@@ -823,18 +955,43 @@ export async function commitImport(
 
   let importadas = 0;
   let falhas = 0;
+  // 03-G2 (S10) — linhas que passaram pela reserva; entra na frase de quando o commit para.
+  let processadas = 0;
   // K0.3 — "hoje" uma vez só: linha de extrato com data futura entra sem a data de caixa.
   const hoje = hojeISO();
 
   for (const r of rows ?? []) {
     if (r.data_norm == null || r.valor == null) {
-      await ctx.supabase
+      const semDados = await ctx.supabase
         .from("import_rows")
         .update({ status: "erro", motivo: "Data ou valor ausente." })
-        .eq("id", r.id);
+        .eq("id", r.id)
+        .eq("status", "para_importar")
+        .select("id");
+      if (semDados.error) {
+        revalidateFinance();
+        return gravadoEmParte(fraseDoCommitInterrompido(processadas));
+      }
+      // Outra execução já pegou esta linha.
+      if ((semDados.data ?? []).length === 0) continue;
       falhas++;
+      processadas++;
       continue;
     }
+    // 03-G2 (S10, D-G2-11) — a RESERVA vem antes de qualquer criação.
+    const reserva = await ctx.supabase
+      .from("import_rows")
+      .update({ status: "erro", motivo: MOTIVO_IMPORTACAO_INTERROMPIDA })
+      .eq("id", r.id)
+      .eq("status", "para_importar")
+      .select("id");
+    if (reserva.error) {
+      revalidateFinance();
+      return gravadoEmParte(fraseDoCommitInterrompido(processadas));
+    }
+    // Outra execução já reservou a linha: não cria nada.
+    if ((reserva.data ?? []).length === 0) continue;
+    processadas++;
     const category = r.categoria_sugerida_id ?? "";
     // Só existe com a categoria (FK composta); transferência nunca chega aqui com uma.
     const subcategory = r.subcategoria_sugerida_id ?? "";
@@ -969,20 +1126,46 @@ export async function commitImport(
         liquidado_em: dataDoExtratoAGravar(r.data_norm, hoje),
         description: r.descricao ?? "",
         status: tipo === "receita" ? "recebido" : "pago",
-        ...split,
+        ...(tipo === "receita"
+          ? {
+              // 04-C · T7 — a ENTRADA de extrato leva a responsabilidade escolhida na revisão, nas
+              // chaves PRÓPRIAS da receita, e NÃO leva a divisão de despesa. Vazio é "sem pessoa" /
+              // "sem escolha": o serviço (`lerReembolsoDaReceita`) decide pela dívida de AGORA.
+              // `reembolso_devido_visto` vazio é "não conferir" — a linha anterior do lote já
+              // atualizou o estado, e a conta é refeita linha a linha no servidor.
+              receita_classificacao: r.receita_classificacao ?? "pessoal",
+              reembolso_pessoa_id: r.reembolso_pessoa_id ?? "",
+              reembolso_sobra: r.reembolso_sobra ?? "",
+              reembolso_devido_visto: "",
+            }
+          : split),
       });
     }
 
     if (res.ok) {
-      await ctx.supabase
+      const marcada = await ctx.supabase
         .from("import_rows")
         .update({ status: "importada", transaction_id: res.data.id, motivo: null })
         .eq("id", r.id);
+      if (marcada.error) {
+        // A linha fica `erro` com o motivo da reserva ("pode ter sido lançada"), que é a verdade.
+        revalidateFinance();
+        return gravadoEmParte(fraseDoCommitInterrompido(processadas));
+      }
       importadas++;
     } else {
+      // A frase da action vira o motivo (RR-G-10). Se ESTA escrita falhar, a linha fica com o
+      // motivo da reserva — que erra para "pode ter sido lançada" — e o commit segue.
+      // 04-C · T7 — a recusa do reembolso vem como erro de CAMPO e a frase útil está nele ("Escolha
+      // o que fazer com a sobra"); `res.error` seria só "Verifique os campos destacados.", que na
+      // lista de linhas não aponta para campo nenhum.
+      const motivo =
+        res.fieldErrors?.reembolso_sobra?.[0] ??
+        res.fieldErrors?.reembolso_pessoa_id?.[0] ??
+        res.error;
       await ctx.supabase
         .from("import_rows")
-        .update({ status: "erro", motivo: res.error })
+        .update({ status: "erro", motivo })
         .eq("id", r.id);
       falhas++;
     }
@@ -1007,7 +1190,7 @@ export async function commitImport(
   const count = (s: string) =>
     (all ?? []).filter((r) => r.status === s).length;
 
-  await ctx.supabase
+  const { error: loteErr } = await ctx.supabase
     .from("import_batches")
     .update({
       status: "importado",
@@ -1016,6 +1199,11 @@ export async function commitImport(
       total_duplicadas: count("duplicada"),
     })
     .eq("id", batchId);
+  if (loteErr) {
+    // Rodar de novo NÃO recontaria: sem linha `para_importar`, o commit recusa antes (ver a frase).
+    revalidateFinance();
+    return gravadoEmParte(FRASE_DO_LOTE_NAO_MARCADO);
+  }
 
   revalidateFinance();
   return { ok: true, data: { importadas, falhas } };
@@ -1146,15 +1334,32 @@ export async function undoImportBatch(
   if (error) return dbError("Não foi possível remover os lançamentos do lote.");
 
   // As linhas voltam para revisão (o que estava ignorado/duplicado continua como estava).
-  await ctx.supabase
+  // 03-G2 (S11) — os dois updates são conferidos. Os lançamentos JÁ foram removidos e
+  // `import_rows.transaction_id` virou null (set null): desfazer de novo não acha o que desfazer.
+  // Por isso a saída do primeiro erro é reenviar o arquivo (os lançamentos não existem mais, então
+  // a dedup não os acusa); no segundo as linhas já voltaram e seguem editáveis com o lote
+  // `importado`, então corrigir e importar de novo funciona (e reconta os totais).
+  const { error: linhasErr } = await ctx.supabase
     .from("import_rows")
     .update({ status: "para_importar", transaction_id: null, motivo: null })
     .eq("import_batch_id", batchId)
     .eq("status", "importada");
-  await ctx.supabase
+  if (linhasErr) {
+    revalidateFinance();
+    return gravadoEmParte(
+      "Os lançamentos do lote foram removidos, mas as linhas não voltaram para a revisão. Exclua o lote em Importações e envie o arquivo de novo.",
+    );
+  }
+  const { error: loteErr } = await ctx.supabase
     .from("import_batches")
     .update({ status: "revisando", total_importadas: 0 })
     .eq("id", batchId);
+  if (loteErr) {
+    revalidateFinance();
+    return gravadoEmParte(
+      "Os lançamentos foram removidos e as linhas voltaram para a revisão, mas o lote continua marcado como importado, com o total antigo. As linhas podem ser corrigidas no lote e importadas de novo quando quiser.",
+    );
+  }
 
   revalidateFinance();
   return { ok: true, data: { removidas: txIds.length } };

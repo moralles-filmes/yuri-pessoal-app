@@ -4,6 +4,7 @@ import {
   VOCABULARIO_DE_PRESCRICAO,
   termosProibidosEm,
 } from "@/lib/tone/vocabulary";
+import { formatCurrency } from "@/lib/format";
 import { isOptInNotification } from "./constants";
 import { DEPENDE_DE, type Familia } from "./familias";
 import {
@@ -375,6 +376,17 @@ describe("generateNotifications — gasto alto", () => {
       base({ spending: { mes: "2026-06", saidas: 1050, mediaSaidas: 1000 } }),
     );
     expect(out).toHaveLength(0);
+  });
+
+  it("K3 (04-A) — com ateODia o texto diz o corte e que o cartão fica de fora", () => {
+    const out = generateNotifications(
+      base({ spending: { mes: "2026-06", saidas: 1300, mediaSaidas: 1000, ateODia: 10 } }),
+    );
+    const n = out.find((c) => c.type === "high_spending");
+    expect(n?.description).toBe(
+      `As saídas à vista do mês até o dia 10 superam a média recente até o mesmo dia em 30% (${formatCurrency(1300)}). O cartão fica de fora desta conta.`,
+    );
+    expect(n?.dedupe_key).toBe("high_spending:2026-06");
   });
 });
 

@@ -2176,6 +2176,9 @@ export type Database = {
           parcela: number | null
           parcelas_total: number | null
           raw: Json
+          receita_classificacao: string | null
+          reembolso_pessoa_id: string | null
+          reembolso_sobra: string | null
           split_parts: Json
           status: string
           subcategoria_sugerida_id: string | null
@@ -2201,6 +2204,9 @@ export type Database = {
           parcela?: number | null
           parcelas_total?: number | null
           raw?: Json
+          receita_classificacao?: string | null
+          reembolso_pessoa_id?: string | null
+          reembolso_sobra?: string | null
           split_parts?: Json
           status?: string
           subcategoria_sugerida_id?: string | null
@@ -2226,6 +2232,9 @@ export type Database = {
           parcela?: number | null
           parcelas_total?: number | null
           raw?: Json
+          receita_classificacao?: string | null
+          reembolso_pessoa_id?: string | null
+          reembolso_sobra?: string | null
           split_parts?: Json
           status?: string
           subcategoria_sugerida_id?: string | null
@@ -2250,6 +2259,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "import_batches"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_rows_reembolso_pessoa_fk"
+            columns: ["reembolso_pessoa_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id", "user_id"]
           },
           {
             foreignKeyName: "import_rows_subcategoria_owner_fkey"
@@ -4756,18 +4772,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "receivable_receipts_conta_id_fkey"
-            columns: ["conta_id"]
+            foreignKeyName: "receivable_receipts_conta_fk"
+            columns: ["conta_id", "user_id"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
           {
-            foreignKeyName: "receivable_receipts_conta_id_fkey"
-            columns: ["conta_id"]
+            foreignKeyName: "receivable_receipts_conta_fk"
+            columns: ["conta_id", "user_id"]
             isOneToOne: false
             referencedRelation: "accounts_with_balance"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
           {
             foreignKeyName: "receivable_receipts_owner_fk"
@@ -4777,11 +4793,11 @@ export type Database = {
             referencedColumns: ["id", "user_id"]
           },
           {
-            foreignKeyName: "receivable_receipts_transaction_id_fkey"
-            columns: ["transaction_id"]
+            foreignKeyName: "receivable_receipts_transaction_fk"
+            columns: ["transaction_id", "user_id"]
             isOneToOne: false
             referencedRelation: "transactions"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }
@@ -8753,6 +8769,7 @@ export type Database = {
           purchase_date: string
           qtd_parcelas: number | null
           recurring_id: string | null
+          reembolso_pessoa_id: string | null
           statement_id: string | null
           status: string
           subcategory_id: string | null
@@ -8782,6 +8799,7 @@ export type Database = {
           purchase_date?: string
           qtd_parcelas?: number | null
           recurring_id?: string | null
+          reembolso_pessoa_id?: string | null
           statement_id?: string | null
           status?: string
           subcategory_id?: string | null
@@ -8811,6 +8829,7 @@ export type Database = {
           purchase_date?: string
           qtd_parcelas?: number | null
           recurring_id?: string | null
+          reembolso_pessoa_id?: string | null
           statement_id?: string | null
           status?: string
           subcategory_id?: string | null
@@ -8858,6 +8877,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "recurring_transactions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_reembolso_pessoa_fk"
+            columns: ["reembolso_pessoa_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id", "user_id"]
           },
           {
             foreignKeyName: "transactions_statement_id_fkey"
@@ -9120,12 +9146,24 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: number
       }
+      criar_compra_parcelada: {
+        Args: { p_divisao: Json; p_pai: Json; p_parcelas: Json }
+        Returns: string
+      }
       desfazer_pagamento_fatura: {
         Args: { p_lancamento_id: string; p_statement_id: string }
         Returns: undefined
       }
       pagar_fatura: {
         Args: { p_lancamento: Json; p_pago_em: string; p_statement_id: string }
+        Returns: string
+      }
+      realocar_reembolsos_da_pessoa: {
+        Args: { p_person: string; p_user: string }
+        Returns: undefined
+      }
+      salvar_lancamento: {
+        Args: { p_divisao: Json; p_id?: string; p_lancamento: Json }
         Returns: string
       }
       seed_default_categories: { Args: never; Returns: number }

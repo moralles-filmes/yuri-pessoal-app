@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { receberSaldoSchema, registrarRecebimentoSchema } from "@/lib/validators/receivable";
+import { bulkReceivablesSchema, receberSaldoSchema, registrarRecebimentoSchema } from "@/lib/validators/receivable";
 
 const ID = "8b2e4d10-1c3f-4e55-9a02-6d7b8c9e0f11";
 const base = { receivable_id: ID, valor: "250,00", recebido_em: "2026-06-05", observacoes: "" };
@@ -40,5 +40,17 @@ describe("receberSaldoSchema", () => {
   it("data opcional", () => {
     expect(receberSaldoSchema.safeParse({ id: ID }).success).toBe(true);
     expect(receberSaldoSchema.safeParse({ id: ID, recebido_em: "2026-06-05" }).success).toBe(true);
+  });
+});
+
+describe("bulkReceivablesSchema (04-C T8)", () => {
+  it("aceita cobrado, ignorar e desfazer", () => {
+    for (const acao of ["cobrado", "ignorar", "desfazer"]) {
+      expect(bulkReceivablesSchema.safeParse({ ids: [ID], acao }).success).toBe(true);
+    }
+  });
+  it("recusa 'receber' e a data pago_em (o lote não quita mais ninguém)", () => {
+    expect(bulkReceivablesSchema.safeParse({ ids: [ID], acao: "receber" }).success).toBe(false);
+    expect(bulkReceivablesSchema.safeParse({ ids: [ID], acao: "cobrado", pago_em: "2026-06-05" }).success).toBe(false);
   });
 });
