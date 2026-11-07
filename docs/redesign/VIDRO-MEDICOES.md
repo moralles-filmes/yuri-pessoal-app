@@ -91,7 +91,7 @@ aparece no "antes" não reprova, e um que se repete nas três rodadas reprova.
 Safari do iPhone do dono, na mesma Wi-Fi, em `http://<IP do PC>:3000`, rolando `/dashboard` e
 `/dashboard/financeiro` nos dois temas.
 
-> _aguardando a resposta do dono_
+> "Não travou" (resposta do dono, 2026-11-07).
 
 ## Testes e orçamento — antes
 
