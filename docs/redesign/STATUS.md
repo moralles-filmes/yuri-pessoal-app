@@ -1,6 +1,6 @@
 # STATUS
 
-**Atualizado:** 2026-11-06
+**Atualizado:** 2026-11-07
 **Fase atual:** REDESIGN-00 ✅ · D6–D11 ✅ · REDESIGN-01 ✅ · **visual e dicionário APROVADOS
 por você em 2026-09-20** · **REDESIGN-02-A ✅ · REDESIGN-02-B ✅ · REDESIGN-02-C ✅ ·
 REDESIGN-02-D ✅ · REDESIGN-02-E ✅** — **a REDESIGN-02 está fechada** · **`R4` FECHADO**
@@ -27,7 +27,9 @@ migration, **sem push** — D67) · **REDESIGN-06 ✅** (integrada por merge `--
 · **REDESIGN-04-B ✅** (integrada por merge `--no-ff` em `e4b8aa8`, sem
 migration, **sem push** — D67) — **todo número do Painel e do Relatório abre os registros que o
 explicam** · **REDESIGN-04-C ✅** (integrada por merge `--no-ff` em `86d850a`, **com a M1, a M2 e
-a M3 aplicadas**, **sem push** — D67) — **a REDESIGN-04 está fechada** · próximo: a **08**
+a M3 aplicadas**, **sem push** — D67) — **a REDESIGN-04 está fechada** · **REDESIGN-08 ✅**
+(regressão e entrega, integrada por merge `--no-ff` em `0fe59ed`, sem migration, **sem push** — D67) — **🟢 O REDESIGN ESTÁ FECHADO** · próximo:
+o merge do **PR único #65**, a seu pedido (ou a 09 — vidro — antes dele, como você decidiu em 2026-11-07)
 
 ⛔ **A M-F foi aplicada em 2026-10-21** (03-F), pelo MCP, depois do seu "Aplique" literal, numa
 mensagem só para isso (D63). Ela **não** estava no `MIGRATIONS.md`: nasceu da K0 da 03-F, com o
@@ -54,6 +56,46 @@ PR** ("faz o pr e tudo mais dessa no git", D66) — **o merge em `main` é seu**
 ⛔ **A partir de 2026-11-02 a publicação por partes ACABOU (D67, por custo da Vercel).** As
 próximas fases se acumulam em `feat/redesign-00-auditoria` **sem push** e vão a `main` num
 **PR único**, com **um merge só**, quando você pedir. O PR #65 (03-G2) fica aberto e é esse PR.
+
+---
+
+## REDESIGN-08 — regressão e entrega ✅ (o redesign fecha)
+
+Branch `feat/redesign-08-entrega`, nascida de `42af6c3` (a ponta com a 04-B e a 04-C), executada em
+`C:/tmp/08-entrega`, integrada por merge `--no-ff` em **`0fe59ed`** (local, sem push — D67; árvore idêntica à
+ponta). Desenho `docs/superpowers/specs/2026-11-06-08-regressao-e-entrega-design.md`
+(**§13 com o resultado inteiro**) e plano `docs/superpowers/plans/2026-11-06-08-regressao-e-entrega.md`.
+Sem funcionalidade nova e **sem migration**.
+
+**Consertos (9, um commit cada, teste vermelho antes, mutação conferida):** C1 fechar a gaveta volta no
+histórico · C2 abrir a gaveta não rola a página · C3 "Tentar de novo" do Dashboard preserva o período ·
+C4 contagem e data não somem com o olho · K1 mês além da janela diz "fora do período lido", nunca
+R$ 0,00 · K2 cartão desativado sem fatura prevista · K7 aba Cartões de `/relatorios` sem prevista como
+R$ 0,00 · C5.1 contraste da face do cartão · C5.2 leitura textual dos quatro gráficos (tabela oculta). Mais **R1**, achado médio da revisão final (Opus, nada crítico nem alto): a tabela oculta das barras dizia
+R$ 0,00 nos meses além da janela lida; agora diz "fora do período lido" (`a6189a6`).
+**A C5.2 criou uma regressão e a própria fase a pegou:** `sr-only` direto num `<table>` alargava o
+Painel para 713 px numa janela de 490; corrigida em `737c501` (a tabela vai dentro de um `div`).
+
+**Conferido por leitura e no navegador, com a sua sessão:** 88 gavetas (Painel e Relatório, duas bases)
+com 0 diferenças; responsabilidade e recortes sem erro (recortes com cobertura fraca); 14 rotas × 5
+larguras sem rolagem horizontal; prints do Painel em claro e escuro; nenhum controle sem nome; contraste
+medido (os abaixo de AA são do app original ou da casca, para o backlog). **Os fluxos que gravam NÃO
+rodaram no banco real, por decisão sua (opção b, 2026-11-07):** ficam conferidos pela suíte e pela leitura.
+
+**Provado na ponta (`a6189a6`, com o conserto da revisão):** `test:run` **368 / 8.285** · `lint` · `tsc` · `build` ·
+`perf:bundle` (mediana **202,8 KB**, 71 rotas, todas ≤ 250, nenhuma com teto próprio; `main` era 201,9) ·
+`TZ=UTC npx vitest run` **368 / 8.285** ✅. md5 dos saldos **`15d93bd1c1d3e55a40db6210dff0eb3b`** no
+início e no fim. Cresceram ≥ 5 KB desde `main`: `/relatorios` +11,6, `/dashboard/financeiro` +9,5,
+`/faturas` +6,8, `/dashboard` +5,2, `/parcelamentos` +5,0 (as peças comuns do painel); `/cartoes` −17,4.
+
+**Entregues para você:** `docs/redesign/PR-65.md` (o texto do PR, **o GitHub não foi editado**) e
+`docs/redesign/REVERSAO.md` (revert por PR, Instant Rollback, e o que **não** reverte: as quatro
+migrations e os triggers da 04-C). A invariante da 04-C (§13.6) foi copiada para o `CLAUDE.md`, e a
+invariante 91 deixou de citar o teto de 285 KB que não existe mais.
+
+**Pendências declaradas** (§13.5 do desenho): contraste fora do PR; K1 só nos três indicadores;
+seta de camada invertida em `leitura-dos-graficos.ts`; caracteres de controle em `painel.test.ts:261`;
+K3/K4/K5/K6 adiadas; o backlog do §4.3 e as conferências do §4.4, listados no `PR-65.md`.
 
 ---
 
@@ -1516,6 +1558,7 @@ as colunas já existem e o CHECK já aceita.
 | D65 | **Referência visual do Painel financeiro e do Dashboard** (2026-10-25, a seu pedido: *"Vamos seguir o plano que já tem, mas adaptar para a referência visual. Esquece a sidebar."*). O print 1 vira o alvo da **04-A** (`/dashboard/financeiro`), o print 2 o da **06**, e o relatório de `/relatorios` ganha a **04-A2** com as mesmas peças. Os prints **não** entram no repositório (público; o print 2 tem cara de dado real), então são descritos em palavras em `REFERENCIA-VISUAL.md`, com os desvios no §6 (sem metas financeiras, sem logos de banco, sem últimos dígitos, rosca na paleta validada, base sempre visível). A sequência antiga da 06 (Prioridades do dia, Organização, Saúde) foi substituída pela do print. Nenhuma migration, nenhuma regra de negócio mudou |
 | D68 | **04-A: K1–K5 decididas por você, uma de cada vez; K6 e K7 por delegação** ("Pode seguir como achar melhor"), e o desenho, a prévia e o plano aprovados. Executada na sessão que a escreveu (inline, um commit por passo), com revisão final da branch inteira e **sem** auditoria de módulo. Integrada **localmente** em `a972712` a seu pedido ("envia o prompt da proxima fase"), **sem push** (D67). O `.env.local` foi copiado para a worktree com a sua autorização (ignorado pelo git). **Custo aceito:** a régua do sino mudou de texto e de critério junto com a do painel (K3) — um alerta de gasto alto que aparecia no meio do mês pode deixar de aparecer, porque a comparação passou a ser justa |
 | D73 | **04-B: "onde abrir" e a D-A2-6 delegados a mim** ("faz como ficar melhor na sua sugestão"): gaveta sob demanda por `?detalhe=`, construída no servidor; caixa abre sem recorte e com recorte continua "não segue". A prévia foi aprovada por você ("Aprovado!") antes do código; o aval para copiar o `.env.local` à worktree e para integrar ("pode integrar") também. Integrada local, sem push (D67) |
+| D74 | **08: K1–K6 decididas por você** (K1 opção a; K2 consertar aqui; K3, K4 e K6 adiar; K5 não trocar o rótulo) e o desenho e o plano aprovados; **K7 e C5.2 aprovadas** durante a execução ("Sim", "Aprovo"). Os fluxos que gravam ficaram fora do banco real, por escolha sua (opção b: "Pode ser a recomendada!"). O `.env.local` foi copiado para a worktree com o seu aval e apagado no fim. Execução via router (DeepSeek e subagentes Haiku), revisão final no modelo mais capaz. **Custo aceito:** uma regressão de escrita que a suíte não pegue só aparece em produção |
 | D72 | **04-A2: decididos por você** o recorte honesto (o bloco que o filtro não alcança diz "não segue", nunca zero), a responsabilidade "meu" como padrão (como o painel), os três controles sem JS novo, o recorte de pessoa só no que é item a item e o pendente só o dela; a prévia, o desenho e o plano aprovados em 2026-11-02. Integrada local, sem push (D67) |
 | D71 | **05-C: decididos por você a prévia com a grade transposta (meses nas linhas, cartões nas colunas), Relatórios em tela própria mais a correção da aba Cartões de `/relatorios`, a navegação na ordem do `NAVEGACAO.md` §4 e as três pendências de `/faturas` (prevista de qualquer mês, desativado sem prevista, olho)**. O desenho e o plano foram aprovados. A execução seguiu o ai-router, com subagentes Sonnet e Haiku, porque o Codex e o DeepSeek estavam indisponíveis. Houve revisão final da branch e **nenhuma** auditoria de módulo. Integrada **localmente** em `30964b8` a seu pedido ("Me envia o prompt da proxima fase"), **sem push** (D67). O `.env.local` foi copiado para a worktree para a conferência visual e apagado no fim. A próxima fase é a **06**, por sua escolha |
 | D71 | **04-C: o §11 (reconciliação com o código de 2026-11-02) e a tela de Terceiros por pessoa (§11.3) foram aprovados por você** antes de qualquer código. Executada por subagentes Sonnet via router (Codex e DeepSeek indisponíveis), com revisão final no modelo mais capaz e **sem** auditoria de módulo. As três migrations só depois de um "aplique" seu, uma por mensagem; a M2 e a M3 por você no SQL Editor, conferidas pelo objeto (D59). O `.env.local` foi copiado para a worktree para a conferência visual, com o seu aval, e apagado depois. Integrada **localmente** em `86d850a` a seu pedido ("Integre a 04c"), **sem push** (D67). **Custo aceito:** o desfazer de recebimento manual realoca pelo TS (sem trigger de delete), e o `CLAUDE.md` fica sem a invariante até você copiá-la |
@@ -1709,7 +1752,15 @@ Os cinco comandos rodaram sobre essa árvore e passaram: `test:run` **331 / 7.39
 `tsc`, `build` e `perf:bundle` (mediana **202,3**, 71 rotas dentro). Na worktree de integração,
 uma rodada foi contaminada por um merge alheio, abortado no meio dela (ver Pendências da 05-C).
 
-## Próximo passo — REDESIGN-08 (regressão e entrega)
+## Próximo passo — o merge do PR único #65
+
+**O redesign está fechado** (08 ✅). A 08 está integrada em `feat/redesign-00-auditoria` (`0fe59ed`, árvore idêntica à
+ponta `05b02b4`). O que falta é seu: o push e o merge do **PR #65** em `main` (D67), com o texto de
+`docs/redesign/PR-65.md` e, antes, os dois números do §1 de `docs/redesign/REVERSAO.md`. Se a **09**
+(visual em vidro, decidida em 2026-11-07) vier antes, ela nasce desta ponta e o PR espera por ela.
+
+### Histórico — o passo anterior (08)
+
 
 **A REDESIGN-04 está fechada:** a 04-B (`e4b8aa8`) e a 04-C (`86d850a`) estão integradas. Vem a
 **REDESIGN-08** (regressão e entrega — o prompt já foi entregue a você e exige as duas integradas

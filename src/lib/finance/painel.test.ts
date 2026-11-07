@@ -618,6 +618,7 @@ describe("indicadoresDoResumo", () => {
       comparacao,
       pendente,
       rotuloDoRecorte: null,
+      foraDaJanela: null,
       ...extra,
     });
 
@@ -823,5 +824,39 @@ describe("indicadoresDoResumo", () => {
         }
       },
     );
+  });
+
+  describe("mês além da janela lida (K1): competência mostra o motivo, nunca R$ 0,00", () => {
+    const AUSENTE = { ausente: "fora do período lido (até 04/2027)" };
+
+    it.each(["meu", "terceiros"] as const)("%s, em competência: os três viram { ausente }", (resp) => {
+      const r = chamar(resp, "competencia", { foraDaJanela: "2027-04" });
+      for (const i of [r.entradas, r.saidas, r.quarto]) {
+        expect(i.valor).toEqual(AUSENTE);
+        expect(i.detalheComValor).toBeNull();
+        expect(i.comparacao).toBeNull();
+      }
+    });
+
+    it("mantém rótulo, dica e linha de base que cada indicador teria", () => {
+      const normal = chamar("meu", "competencia");
+      const r = chamar("meu", "competencia", { foraDaJanela: "2027-04" });
+      expect(r.entradas.rotulo).toBe(normal.entradas.rotulo);
+      expect(r.entradas.dica).toBe(normal.entradas.dica);
+      expect(r.entradas.linhaDeBase).toBe(normal.entradas.linhaDeBase);
+      expect(r.quarto.rotulo).toBe(normal.quarto.rotulo);
+      expect(r.quarto.linhaDeBase).toBe(normal.quarto.linhaDeBase);
+    });
+
+    it("base caixa: foraDaJanela é ignorado (o caixa lê o que existe)", () => {
+      expect(chamar("meu", "caixa", { foraDaJanela: "2027-04" })).toEqual(chamar("meu", "caixa"));
+      expect(chamar("terceiros", "caixa", { foraDaJanela: "2027-04" })).toEqual(chamar("terceiros", "caixa"));
+    });
+
+    it("sem foraDaJanela (null): é o comportamento de sempre", () => {
+      const r = chamar("meu", "competencia", { foraDaJanela: null });
+      expect(r.entradas.valor).toBe(formatCurrency(resumo.entradasMeu));
+      expect(r.saidas.valor).toBe(formatCurrency(resumo.meu));
+    });
   });
 });

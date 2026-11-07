@@ -16,6 +16,9 @@
 import type * as React from "react";
 import dynamic from "next/dynamic";
 import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
+import { TabelaDoGrafico } from "@/components/shared/painel/tabela-do-grafico";
+import { leituraDaProjecao } from "@/lib/painel/leitura-dos-graficos";
+import { monthLabel } from "./chart-theme";
 
 type Props = React.ComponentProps<typeof import("./projecao-chart-impl").ProjecaoChart>;
 
@@ -30,6 +33,10 @@ export function ProjecaoChart(props: Props) {
   return (
     <div style={chartSkeletonHeightVar(280)}>
       <LazyProjecaoChart {...props} />
+      <TabelaDoGrafico
+        titulo="Projeção dos próximos meses"
+        leitura={leituraDaProjecao({ data: props.data, rotuloDoMes: monthLabel })}
+      />
     </div>
   );
 }

@@ -40,6 +40,11 @@ describe.each([
     expect(ramo![1]).toContain("<CardSemLeitura oQue={falha?.oQue");
     expect(ramo![1]).not.toMatch(/formatCurrency|\b0\b/);
   });
+
+  it("o 'Tentar de novo' usa hrefDeNovo, nunca /dashboard puro", () => {
+    expect(codigo).not.toContain('href="/dashboard"');
+    expect(codigo).toContain("href={hrefDeNovo}");
+  });
 });
 
 describe("03-G L4 · CardSemLeitura", () => {

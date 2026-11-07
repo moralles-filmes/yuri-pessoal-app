@@ -28,12 +28,12 @@ beforeEach(() => {
 });
 
 describe.each([
-  ["FinanceCard", "lerResumoDoDashboard", () => FinanceCard({ window: JANELA, todayIso: "2026-09-10" })],
-  ["InvoicesCard", "getInvoicesCardData", () => InvoicesCard({ todayIso: "2026-09-10" })],
+  ["FinanceCard", "lerResumoDoDashboard", () => FinanceCard({ window: JANELA, todayIso: "2026-09-10", hrefDeNovo: "/dashboard?periodo=mes" })],
+  ["InvoicesCard", "getInvoicesCardData", () => InvoicesCard({ todayIso: "2026-09-10", hrefDeNovo: "/dashboard?periodo=mes" })],
   [
     "ResumoFinanceiro",
     "lerResumoDoDashboard",
-    () => ResumoFinanceiro({ mes: "2026-09", hoje: "2026-09-10", ocultos: false }),
+    () => ResumoFinanceiro({ mes: "2026-09", hoje: "2026-09-10", ocultos: false, hrefDeNovo: "/dashboard?periodo=mes" }),
   ],
 ] as const)("03-G L4 · %s chamado", (_nome, leitura, chamar) => {
   it("ErroDeLeitura vira o CardSemLeitura com o rótulo da leitura — nenhum número", async () => {
@@ -41,6 +41,7 @@ describe.each([
     const elemento = await chamar();
     expect(elemento.type).toBe(CardSemLeitura);
     expect(elemento.props).toMatchObject({ oQue: "os lançamentos" });
+    expect(elemento.props).toMatchObject({ href: "/dashboard?periodo=mes" });
   });
 
   it("qualquer outra exceção sobe para o error.tsx", async () => {

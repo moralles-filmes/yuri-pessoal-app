@@ -157,6 +157,7 @@ function caminhoDoPainel(baseDaLeitura: "competencia" | "caixa") {
     comparacao: null,
     pendente,
     rotuloDoRecorte: null,
+    foraDaJanela: null,
   });
 }
 

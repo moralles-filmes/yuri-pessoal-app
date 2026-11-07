@@ -5,6 +5,7 @@ import {
   isIsoDate,
   payloadDoSalvar,
   resolveWindow,
+  urlDoDashboard,
   visaoDoPeriodo,
   windowLabel,
 } from "@/lib/dashboard/period";
@@ -203,5 +204,34 @@ describe("payloadDoSalvar", () => {
       period: "hoje",
       view: "dia",
     });
+  });
+});
+
+describe("urlDoDashboard", () => {
+  it("sem filtros → /dashboard", () => {
+    expect(urlDoDashboard({})).toBe("/dashboard");
+  });
+
+  it("preserva só o período", () => {
+    expect(urlDoDashboard({ periodo: "mes" })).toBe("/dashboard?periodo=mes");
+  });
+
+  it("preserva o período personalizado com de/ate", () => {
+    expect(urlDoDashboard({ periodo: "custom", de: "2026-01-01", ate: "2026-01-31" })).toBe(
+      "/dashboard?periodo=custom&de=2026-01-01&ate=2026-01-31",
+    );
+  });
+
+  it("ordem fixa periodo, visao, de, ate", () => {
+    expect(urlDoDashboard({ visao: "semana", periodo: "mes" })).toBe(
+      "/dashboard?periodo=mes&visao=semana",
+    );
+  });
+
+  it("ignora parâmetros vazios e codifica os valores", () => {
+    expect(urlDoDashboard({ periodo: "", visao: "mes", de: "", ate: "" })).toBe(
+      "/dashboard?visao=mes",
+    );
+    expect(urlDoDashboard({ periodo: "a b" })).toBe("/dashboard?periodo=a%20b");
   });
 });

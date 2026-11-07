@@ -86,3 +86,16 @@ describe("04-B · a gaveta de registros", () => {
     expect(IMPL).not.toMatch(/R\$ 0,00/);
   });
 });
+
+describe("08 C1 - fechar a gaveta", () => {
+  it("a fachada decide entre voltar e substituir pelo helper sem imports", () => {
+    expect(FACHADA).toMatch(/comoFecharAGaveta\(/);
+    expect(FACHADA).toMatch(/router\.back\(\)/);
+    expect(FACHADA).toMatch(/router\.replace\(urlAoFechar, \{ scroll: false \}\)/);
+    expect(FACHADA).toMatch(/useState\(false\)/);
+  });
+
+  it("a fachada importa o helper de @/lib/painel/gaveta-historico", () => {
+    expect(FACHADA).toMatch(/from\s+["']@\/lib\/painel\/gaveta-historico["']/);
+  });
+});

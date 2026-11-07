@@ -1241,6 +1241,19 @@ describe("03-B — montarEntradas: normalização", () => {
   it("total_atual nulo continua nulo", () => {
     expect(entradasDoCron().sts[1].total_atual).toBeNull();
   });
+
+  it("cartão desativado chega ao motor com ativo: false; o ativo não muda a forma dos outros (08 K2)", () => {
+    const e = montarEntradas({
+      cartoes: [
+        { id: "card-off", nome: "Cartao Off", cor: null, limite_total: "1000", dia_fechamento: 5, dia_vencimento: 15, ativo: false },
+        { id: "card-sem", nome: "Cartao Sem", cor: null, limite_total: "1000", dia_fechamento: 5, dia_vencimento: 15 },
+        { id: "card-on", nome: "Cartao On", cor: null, limite_total: "1000", dia_fechamento: 5, dia_vencimento: 15, ativo: true },
+      ],
+    });
+    expect(e.cards[0].ativo).toBe(false);
+    expect("ativo" in e.cards[1]).toBe(false);
+    expect("ativo" in e.cards[2]).toBe(false);
+  });
 });
 
 /* ═══════════════════════════ 03-B2 · A2 — linhas estritas ═══════════════════════════ */

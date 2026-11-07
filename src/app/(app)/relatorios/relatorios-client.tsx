@@ -62,6 +62,7 @@ import { downloadCsv, downloadJson } from "@/lib/reports/download";
 import { cn } from "@/lib/utils";
 import { ROTULO_DA_BASE } from "@/lib/finance/base";
 import { PAYMENT_METHOD_LABELS } from "@/lib/finance/constants";
+import { valorDaFatura } from "@/lib/finance/painel";
 import type { ReportsData } from "@/lib/reports/queries";
 
 const FREQ_LABELS: Record<string, string> = {
@@ -179,7 +180,9 @@ export function RelatoriosClient({
                   {card.faturas.length === 0 ? (
                     <EmptyState icon={CreditCard} title="Sem faturas previstas" className="py-8" />
                   ) : (
-                    card.faturas.map((f) => (
+                    card.faturas.map((f) => {
+                      const valor = valorDaFatura(f);
+                      return (
                       <div
                         key={`${f.cardId}-${f.competencia}`}
                         className="flex flex-col gap-1 rounded-lg border bg-card/40 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
@@ -199,7 +202,12 @@ export function RelatoriosClient({
                           </span>
                         </span>
                         <span className="tabular-nums">
-                          <span className="font-semibold">{formatCurrency(f.total)}</span>
+                          {/* 08 K7: prevista sem lançamentos é ausência, não R$ 0,00 (a regra do painel). */}
+                          {valor === null ? (
+                            <span className="text-xs italic text-muted-foreground">sem lançamentos conhecidos</span>
+                          ) : (
+                            <span className="font-semibold">{formatCurrency(valor)}</span>
+                          )}
                           {f.terceiros > 0 && (
                             <span className="ml-1 text-xs text-muted-foreground">
                               meu {formatCurrency(f.meu)} · terceiros {formatCurrency(f.terceiros)}
@@ -207,7 +215,8 @@ export function RelatoriosClient({
                           )}
                         </span>
                       </div>
-                    ))
+                      );
+                    })
                   )}
                 </CardContent>
               </Card>
@@ -798,6 +807,7 @@ function AbaFinanceiro({
                   dados={financeiro.barras}
                   series={financeiro.seriesDasBarras}
                   nomes={texto.barras.nomes}
+                  ultimoMesLido={financeiro.ultimoMesLidoDasBarras ?? undefined}
                 />
                 {caixaOk ? <RodapeDasFaturasSemTotal meses={caixaOk.graficos.semTotal.evolucao} /> : null}
                 <p className="mt-2 text-xs text-muted-foreground">{FRASE_DO_MES}</p>

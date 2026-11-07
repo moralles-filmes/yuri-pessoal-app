@@ -17,9 +17,11 @@ import type { DashWindow } from "@/lib/dashboard/period";
 export async function FinanceCard({
   window,
   todayIso,
+  hrefDeNovo,
 }: {
   window: DashWindow;
   todayIso: string;
+  hrefDeNovo: string;
 }) {
   // 03-G (L4, D-G17): captura SÓ ErroDeLeitura e SÓ a leitura. O JSX fica fora do try (regra
   // react-hooks/error-boundaries). Qualquer outra exceção sobe para o error.tsx. Em produção o
@@ -34,7 +36,7 @@ export async function FinanceCard({
     registrarFalhaDeLeitura(e);
   }
   if (falha || !d) {
-    return <CardSemLeitura oQue={falha?.oQue ?? "os dados do card"} href="/dashboard" />;
+    return <CardSemLeitura oQue={falha?.oQue ?? "os dados do card"} href={hrefDeNovo} />;
   }
 
   const n = d.numeros;
