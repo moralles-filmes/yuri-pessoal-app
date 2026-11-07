@@ -1313,7 +1313,7 @@ export function RespostaFormatada({ texto }: { readonly texto: string }): React.
   - `src/components/ai/insights-client.tsx:91,325` e
     `src/components/dashboard/general/insights-card.tsx:59`.
 
-- [ ] **Step 1: Escrever a migration (003).**
+- [x] **Step 1: Escrever a migration (003).**
   - Ler no banco a definição **vigente** de `public.ai_begin_insight_run`, com
     `select pg_get_functiondef('public.ai_begin_insight_run'::regproc)`. O histórico de arquivos
     não é confiável.
@@ -1321,35 +1321,35 @@ export function RespostaFormatada({ texto }: { readonly texto: string }): React.
     `perform public.ai_reconcile_abandoned_runs(20);` por
     `if auth.uid() is not null then perform public.ai_reconcile_abandoned_runs(20); end if;`.
   - Manter `security invoker`, `search_path = ''` e os `grant`/`revoke` (`revoke … from public, anon`).
-- [ ] **Step 2: Teste de migration.**
+- [x] **Step 2: Teste de migration.**
   - Acha o arquivo por conteúdo e afirma:
     - o `if auth.uid() is not null then perform public.ai_reconcile_abandoned_runs`;
     - `security invoker`;
     - `revoke` de `public, anon`;
     - o mesmo advisory lock `ai:begin_run:`.
   - Mutação: tirar o `if` → vermelho → desfazer.
-- [ ] **Step 3: Cron (003 e 030).**
+- [x] **Step 3: Cron (003 e 030).**
   - A rota de insights chama `reconcileAllAbandonedRuns()` antes de rodar o job.
   - As **duas** rotas comparam o segredo com `timingSafeEqual` sobre buffers de mesmo tamanho,
     num helper `segredoConfere(header, secret): boolean` em `src/lib/security/` (crie a pasta se
     não existir; puro).
   - Testes do helper: certo → true; errado, de tamanho diferente ou ausente → false.
-- [ ] **Step 4: Testes que falham (026).**
+- [x] **Step 4: Testes que falham (026).**
   - "`gravarInsight` em 23505 devolve o existente como reaproveitado".
   - "insight e extração gravam o resultado ANTES de fechar o run".
   - "exceção depois da admissão fecha o run como failed" (`try/finally` com `failRun`).
-- [ ] **Step 5: Testes que falham (029).** O validador recusa "três" escrito com dígito fullwidth
+- [x] **Step 5: Testes que falham (029).** O validador recusa "três" escrito com dígito fullwidth
   (`/\p{Nd}/u`), e o título com `{{ind:x}}` é resolvido na tela por `renderizarExplicacao` ou
   recusado no validador. **Escolha recusar:** é mais estreito.
-- [ ] **Step 6: Teste que falha ("Adiar 7 dias").** Extraia
+- [x] **Step 6: Teste que falha ("Adiar 7 dias").** Extraia
   `dataDeAdiamento(agora: Date, dias: number): string`. Para `new Date("2026-10-21T01:30:00Z")` e
   7, o resultado é `"2026-10-27"`. Às 22h30 BRT do dia 20, 20 + 7 = 27.
-- [ ] **Step 7:** PASS em tudo.
-- [ ] **Step 8: Commit.**
-- [ ] **Step 9: Aplicar a migration** com o "pode aplicar" do dono, pelo MCP. Conferir com
+- [x] **Step 7:** PASS em tudo.
+- [x] **Step 8: Commit.**
+- [x] **Step 9: Aplicar a migration** com o "pode aplicar" do dono, pelo MCP. Conferir com
   `pg_get_functiondef` que o `if` está lá. **Não** ligar `allow_insight_jobs`: é decisão do
   dono.
-- [ ] **Step 10: Commit** `fix(ia): o job de insights roda sem sessão, insight e extração não perdem resultado pago, e o segredo do Cron em tempo constante`.
+- [x] **Step 10: Commit** `fix(ia): o job de insights roda sem sessão, insight e extração não perdem resultado pago, e o segredo do Cron em tempo constante`.
 
 ### Task 22b: Gerar insight financeiro com o Gemini sem falha de formato (MOD-ia-036)
 
