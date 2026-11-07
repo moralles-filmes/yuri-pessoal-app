@@ -110,9 +110,9 @@ const EXCECOES: Record<string, { n: number; motivo: string; destino: string }> =
  * Medido no E8 da 03-G2 (2026-10-25), depois do E7: 84 escritas no escopo — 77 chamadas
  * `insert`/`update`/`upsert`/`delete` (conferidas por grep) e 7 RPCs de escrita (`salvar_lancamento`
  * ×4, `criar_compra_parcelada`, `pagar_fatura`, `desfazer_pagamento_fatura`). Dessas, 75 tratam o
- * erro e 9 são as exceções acima. Mudou? Confira o inventário antes de ajustar.
+ * erro e 9 são as exceções acima. Na 04-C (T7) entrou 1: o `update` de `setImportRowReembolso` — 85. Mudou? Confira o inventário antes de ajustar.
  */
-const ESCRITAS_ESPERADAS = 84;
+const ESCRITAS_ESPERADAS = 85;
 
 const ESCRITAS = inventariarEscritas(ARQUIVOS, RAIZ);
 const chave = (l: { arquivo: string; funcao: string; alvo: string }) =>

@@ -26,7 +26,11 @@ import { categorySchema } from "@/lib/validators/category";
 import { transactionSchema } from "@/lib/validators/transaction";
 import { registrarRecebimentoSchema } from "@/lib/validators/receivable";
 import { optionalText } from "@/lib/validators/shared";
-import { receitaResponsabilidadeSchema, reembolsoSchema } from "@/lib/validators/split";
+import {
+  importRowReembolsoSchema,
+  receitaResponsabilidadeSchema,
+  reembolsoSchema,
+} from "@/lib/validators/split";
 import {
   aiPreferencesSchema,
   aiProviderConfigSchema,
@@ -723,5 +727,44 @@ describe("reembolso: o lançamento de receita com pessoa salva", () => {
   it("recusa escolha de sobra inventada e devido negativo", () => {
     expect(reembolsoSchema.safeParse({ reembolso_sobra: "dinheiro" }).success).toBe(false);
     expect(reembolsoSchema.safeParse({ reembolso_devido_visto: "-1" }).success).toBe(false);
+  });
+});
+
+/**
+ * 04-C · T7 — o reembolso de UMA linha da importação. A revisão manda o objeto cru e a action
+ * valida de novo com o mesmo schema: a saída tem de ser aceita.
+ */
+describe("reembolso da linha importada: o diálogo salva", () => {
+  it("terceiro com pessoa e escolha preserva os valores na segunda passada", () => {
+    const { noCliente, noServidor } = roundTrip(importRowReembolsoSchema, {
+      receita_classificacao: "terceiro",
+      reembolso_pessoa_id: UUID,
+      reembolso_sobra: "receita",
+    });
+    expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+    expect(noCliente.data).toEqual({
+      receita_classificacao: "terceiro",
+      reembolso_pessoa_id: UUID,
+      reembolso_sobra: "receita",
+    });
+    expect(noServidor.data).toEqual(noCliente.data);
+  });
+
+  it("ninguém ('' ou null) e sem escolha: a pessoa sai null e a sobra sai ausente", () => {
+    for (const vazio of ["", null]) {
+      const { noCliente, noServidor } = roundTrip(importRowReembolsoSchema, {
+        receita_classificacao: "pessoal",
+        reembolso_pessoa_id: vazio,
+        reembolso_sobra: vazio,
+      });
+      expect(noServidor.success, fieldErrors(noServidor.error)).toBe(true);
+      expect(noCliente.data).toEqual({ receita_classificacao: "pessoal", reembolso_pessoa_id: null });
+      expect(noServidor.data).toEqual(noCliente.data);
+    }
+  });
+
+  it("recusa 'compartilhada' (a revisão só oferece pessoal ou de terceiro) e classificação ausente", () => {
+    expect(importRowReembolsoSchema.safeParse({ receita_classificacao: "compartilhada" }).success).toBe(false);
+    expect(importRowReembolsoSchema.safeParse({}).success).toBe(false);
   });
 });

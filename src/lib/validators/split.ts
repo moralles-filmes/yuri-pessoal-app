@@ -120,3 +120,20 @@ export const reembolsoSchema = z.object({
 });
 
 export type ReembolsoInput = z.infer<typeof reembolsoSchema>;
+
+/**
+ * 04-C · T7 — o reembolso de UMA linha de receita na revisão da importação. Só dois destinos
+ * (pessoal ou de terceiro): "compartilhada" nasce da sobra no servidor, nunca de uma escolha da
+ * revisão. A pessoa e a escolha da sobra são opcionais — a action só as guarda quando fazem
+ * sentido (pessoa só com "terceiro", sobra só com pessoa).
+ */
+export const importRowReembolsoSchema = z.object({
+  receita_classificacao: z.enum(["pessoal", "terceiro"]),
+  reembolso_pessoa_id: optionalUuid,
+  reembolso_sobra: z.preprocess(
+    (v) => (v === "" || v === null ? undefined : v),
+    z.enum(ESCOLHAS_DA_SOBRA).optional(),
+  ),
+});
+
+export type ImportRowReembolsoInput = z.infer<typeof importRowReembolsoSchema>;

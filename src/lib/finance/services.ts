@@ -64,7 +64,9 @@ export type ColunasDaResponsabilidade = {
  *
  * ⛔ Lê só as chaves PRÓPRIAS da receita (`receita_classificacao`, `receita_minha_parte`).
  * A chave `classificacao` do mesmo payload é da despesa e continua ignorada aqui — é o que
- * mantém a importação (que pode mandá-la numa linha virada receita) e a IA gravando `pessoal`.
+ * mantém a IA gravando `pessoal` e impede um resíduo de divisão de despesa de mudar de quem é uma
+ * entrada. A importação do extrato (04-C · T7) manda as chaves próprias: a linha de ENTRADA pode
+ * trazer `receita_classificacao` e o reembolso escolhidos na revisão; sem escolha, é `pessoal`.
  */
 export function lerResponsabilidadeDaReceita(
   input: unknown,
@@ -281,8 +283,9 @@ export async function criarTransacao(
 
   // Divisão (Fase 05): a máquina de divisão é só da DESPESA. A receita tem responsabilidade
   // própria (03-C, decidida acima), lida de chaves próprias — a chave `classificacao` do payload
-  // continua sendo só da despesa, e por isso a importação (que pode mandá-la numa linha que
-  // virou receita, imports.ts) e a IA continuam gravando receita `pessoal`. Ajuste fica pessoal.
+  // continua sendo só da despesa, e por isso a IA grava receita `pessoal`. A importação do extrato
+  // (04-C · T7) manda as chaves PRÓPRIAS da receita (classificação e reembolso escolhidos na
+  // revisão) e não manda a divisão de despesa numa entrada. Ajuste fica pessoal.
   const split = splitSchema.safeParse(input);
   if (!split.success) {
     return {
