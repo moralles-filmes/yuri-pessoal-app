@@ -18,10 +18,12 @@ export async function ResumoFinanceiro({
   mes,
   hoje,
   ocultos,
+  hrefDeNovo,
 }: {
   mes: string;
   hoje: string;
   ocultos: boolean;
+  hrefDeNovo: string;
 }) {
   // Captura SÓ ErroDeLeitura e SÓ a leitura; o JSX fica fora do try (react-hooks/error-boundaries).
   let d: ResumoDoDashboard | null = null;
@@ -34,7 +36,7 @@ export async function ResumoFinanceiro({
     registrarFalhaDeLeitura(e);
   }
   if (falha || !d) {
-    return <CardSemLeitura oQue={falha?.oQue ?? "o resumo financeiro"} href="/dashboard" />;
+    return <CardSemLeitura oQue={falha?.oQue ?? "o resumo financeiro"} href={hrefDeNovo} />;
   }
 
   const [ano, mesNum] = mes.split("-").map(Number);

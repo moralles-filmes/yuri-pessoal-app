@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { getDashboardLayout } from "@/lib/dashboard/settings";
-import { asPeriod, asView, resolveWindow } from "@/lib/dashboard/period";
+import { asPeriod, asView, resolveWindow, urlDoDashboard } from "@/lib/dashboard/period";
 import { type DashCardId } from "@/lib/dashboard/cards";
 import { horaDeBrasiliaAgora, hojeISO } from "@/lib/format";
 import { getDisplayName } from "@/lib/settings/queries";
@@ -69,12 +69,20 @@ export default async function DashboardPage({
     to: customTo || null,
   });
 
+  // C3: o "Tentar de novo" dos cards volta para a MESMA URL (com o período da URL), não /dashboard puro.
+  const hrefDeNovo = urlDoDashboard({
+    periodo: str(sp.periodo),
+    visao: str(sp.visao),
+    de: str(sp.de),
+    ate: str(sp.ate),
+  });
+
   // Cada card renderiza no servidor com seu próprio Suspense/skeleton (stream por card).
   const contentById: Record<DashCardId, React.ReactNode> = {
     financeiro: (
       <LimiteDoBloco nome="os dados de Financeiro">
         <Suspense fallback={<CardBodySkeleton lines={5} />}>
-          <FinanceCard window={window} todayIso={todayIso} />
+          <FinanceCard window={window} todayIso={todayIso} hrefDeNovo={hrefDeNovo} />
         </Suspense>
       </LimiteDoBloco>
     ),
@@ -88,7 +96,7 @@ export default async function DashboardPage({
     faturas: (
       <LimiteDoBloco nome="os dados de Cartões & Faturas">
         <Suspense fallback={<CardBodySkeleton lines={4} />}>
-          <InvoicesCard todayIso={todayIso} />
+          <InvoicesCard todayIso={todayIso} hrefDeNovo={hrefDeNovo} />
         </Suspense>
       </LimiteDoBloco>
     ),
@@ -130,7 +138,7 @@ export default async function DashboardPage({
     notificacoes: (
       <LimiteDoBloco nome="os dados de Notificações">
         <Suspense fallback={<CardBodySkeleton lines={3} />}>
-          <NotificationsCard />
+          <NotificationsCard hrefDeNovo={hrefDeNovo} />
         </Suspense>
       </LimiteDoBloco>
     ),
@@ -162,7 +170,7 @@ export default async function DashboardPage({
   const faixa = (
     <LimiteDoBloco nome="o resumo financeiro">
       <Suspense fallback={<CardBodySkeleton lines={3} />}>
-        <ResumoFinanceiro mes={window.mes} hoje={todayIso} ocultos={ocultos} />
+        <ResumoFinanceiro mes={window.mes} hoje={todayIso} ocultos={ocultos} hrefDeNovo={hrefDeNovo} />
       </Suspense>
     </LimiteDoBloco>
   );
