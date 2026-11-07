@@ -234,7 +234,7 @@ function Tabela({ dados, mesAtual }: { dados: ProximosMeses; mesAtual: string })
             {dados.cartoes.map((c) => (
               <CabecalhoDoCartao key={c.id} cartao={c} />
             ))}
-            <th className={cn(TH, TOTAL_STICKY, "min-w-36 bg-card")}>
+            <th className={cn(TH, TOTAL_STICKY, "min-w-36 bg-glass-solid")}>
               Total conhecido
               <span className="block text-[10px] font-medium tracking-normal normal-case">
                 só faturas que existem

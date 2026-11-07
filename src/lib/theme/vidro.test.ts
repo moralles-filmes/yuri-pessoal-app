@@ -190,6 +190,47 @@ describe("superfícies que cobrem conteúdo rolando (T5)", () => {
     ).toEqual([]);
   });
 
+  it("nenhum cn()/clsx() junta sticky/fixed e bg-card, mesmo em literais e constantes separados", () => {
+    const ocorrencias: string[] = [];
+    for (const { rel, fonte } of ARQUIVOS) {
+      // Constantes de texto do arquivo: `const NOME = "…"` (a string pode ficar na linha de baixo).
+      const constantes = new Map<string, string>();
+      for (const m of fonte.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*(?::[^=\n]+)?=\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g)) {
+        constantes.set(m[1], m[2] ?? m[3] ?? m[4] ?? "");
+      }
+      for (const m of fonte.matchAll(/\b(?:cn|clsx)\(/g)) {
+        // Corpo da chamada, por profundidade de parênteses.
+        const abre = (m.index ?? 0) + m[0].length - 1;
+        let prof = 0;
+        let fim = abre;
+        for (let i = abre; i < fonte.length; i += 1) {
+          if (fonte[i] === "(") prof += 1;
+          else if (fonte[i] === ")" && (prof -= 1) === 0) {
+            fim = i;
+            break;
+          }
+        }
+        const corpo = fonte.slice(abre + 1, fim);
+        const literais = [...corpo.matchAll(/"([^"\n]*)"|'([^'\n]*)'|`([^`]*)`/g)].map(
+          (l) => l[1] ?? l[2] ?? l[3] ?? "",
+        );
+        // Identificadores soltos (fora de literais) que sejam constantes de texto conhecidas.
+        const semLiterais = corpo.replace(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g, " ");
+        const resolvidos = [...semLiterais.matchAll(/(?<![\w$.])[A-Za-z_$][\w$]*(?![\w$(])/g)]
+          .map((id) => constantes.get(id[0]))
+          .filter((v): v is string => v !== undefined);
+        const classes = [...literais, ...resolvidos].flatMap((t) => t.split(/\s+/));
+        const fixa = classes.some((c) => /^(?:[\w-]+:)*(?:sticky|fixed)$/.test(c));
+        const cardTranslucido = classes.some((c) => /^(?:[\w-]+:)*bg-card(?:\/\d+)?$/.test(c));
+        if (fixa && cardTranslucido) ocorrencias.push(`${rel}:${linhaDe(fonte, m.index ?? 0)}`);
+      }
+    }
+    expect(
+      ocorrencias,
+      `fundo translúcido sobre conteúdo que rola: use \`vidro-casca\` (barra) ou \`bg-glass-solid\` (coluna de tabela):\n${ocorrencias.join("\n")}`,
+    ).toEqual([]);
+  });
+
   it("nenhum gráfico pinta stroke/fill com var(--card) (vira linha tingida, não vão)", () => {
     const ocorrencias: string[] = [];
     for (const { rel, fonte } of ARQUIVOS) {
