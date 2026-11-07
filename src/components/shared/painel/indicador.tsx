@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type * as React from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { abreAGaveta } from "@/lib/painel/detalhe-url";
 import { cn } from "@/lib/utils";
 
 /**
@@ -204,8 +205,11 @@ export function Indicador({
           ) : null}
 
           {href ? (
+            // 08-T1: abrir a gaveta de registros (?detalhe=) não rola a página; ir para outra
+            // página continua rolando ao topo.
             <Link
               href={href}
+              scroll={!abreAGaveta(href)}
               className="inline-block text-xs text-primary hover:underline"
             >
               {hrefRotulo ?? "Ver registros"} ›

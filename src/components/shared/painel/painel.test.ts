@@ -282,3 +282,15 @@ describe("conferência visual (04-A2) — o cabeçalho do bloco", () => {
     expect(fonteBloco).toMatch(/className="min-w-0 flex-\[1_1_12rem\]"/);
   });
 });
+
+describe("08-T1 — o Link do indicador não rola a página quando abre a gaveta", () => {
+  const fonte = semComentarios(ler("indicador.tsx"));
+
+  it("importa abreAGaveta de @/lib/painel/detalhe-url", () => {
+    expect(importsDe(fonte)).toContain("@/lib/painel/detalhe-url");
+  });
+
+  it("passa scroll={!abreAGaveta(href)} ao <Link> de 'Ver registros'", () => {
+    expect(fonte).toContain("scroll={!abreAGaveta(href)}");
+  });
+});

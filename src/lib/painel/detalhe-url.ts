@@ -81,6 +81,17 @@ export function pedidoDaUrl(sp: Record<string, string | string[] | undefined>): 
   return { chave: chave as ChaveDoDetalhe, parte, alvo };
 }
 
+/**
+ * A URL abre a gaveta de registros? Só se ela tiver o parâmetro `detalhe` (o mesmo que
+ * `urlComDetalhe` escreve). Quem abre a gaveta não deve rolar a página para o topo (08-T1).
+ * Lê só o trecho depois do `?`, sem `new URL` com base implícita.
+ */
+export function abreAGaveta(href: string): boolean {
+  const i = href.indexOf("?");
+  if (i === -1) return false;
+  return new URLSearchParams(href.slice(i + 1)).has("detalhe");
+}
+
 /** A mesma URL com o detalhe pedido: troca `detalhe`/`parte`/`alvo` e preserva o resto. */
 export function urlComDetalhe(caminho: string, sp: Entrada, pedido: PedidoDeDetalhe): string {
   const resto = paresSemRepeticao(sp).filter(([k]) => !ESTADOS_DO_DETALHE.includes(k));
