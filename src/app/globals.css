@@ -156,8 +156,9 @@
   --destructive: #c2262e;
 
   /* Semânticos. `-ink` é a versão LEGÍVEL (texto); a outra é preenchimento.
-     Medido sobre --card (#ffffff): success 3,35:1 (ponto/borda) × success-ink 7,54:1;
-     warning-ink 5,93:1. Usar `text-success` num rótulo produz texto ilegível — use o -ink. */
+     Os `-ink` são medidos sobre `--glass-solid` e sobre o vidro composto na névoa
+     (contraste-dos-tokens.test.ts, piso 4,5:1). A cor de preenchimento serve a ponto/borda,
+     não a texto: usar `text-success` num rótulo produz texto ilegível — use o -ink. */
   --success: oklch(0.621 0.207 143);
   --success-foreground: oklch(1 0 0);
   --success-ink: #006303;
@@ -189,8 +190,8 @@
      rodou; reescrevê-los em oklch introduz arredondamento e invalida o laudo.
      Antes eram 5 slots de "dourado + 2 cinzas" — e `chart-2`/`chart-4` eram
      literalmente cinza, o que para gastos por categoria dava duas fatias
-     indistinguíveis. ⚠️ Três slots ficam abaixo de 3:1 no branco (#1baf7a,
-     #eda100, #e87ba4): isso OBRIGA rótulo direto visível ou tabela, não é
+     indistinguíveis. ⚠️ Quatro slots ficam abaixo de 3:1 sobre `--glass-solid`
+     (#eb6834, #1baf7a, #eda100, #e87ba4): isso OBRIGA rótulo direto visível ou tabela, não é
      dispensável. Slot 1 não é `--primary`: ele é o azul que coube na banda de
      luminosidade junto dos outros sete. */
   --chart-1: #2a78d6; /* azul */
@@ -204,8 +205,9 @@
 
   /* A 01-B não especificou a sidebar. Derivada preservando as RELAÇÕES que o
      tema dourado já tinha (sidebar um pouco mais clara que o fundo; accent da
-     sidebar igual ao accent geral), só re-matizada. Medido: texto 13,25:1 e
-     muted 5,70:1 sobre a sidebar. */
+     sidebar igual ao accent geral), só re-matizada. Desde a 09-A ela é vidro
+     (`--glass`); o contraste do texto é o de qualquer texto sobre vidro, coberto por
+     contraste-dos-tokens.test.ts. */
   --sidebar: var(--glass);
   --sidebar-foreground: oklch(0.3 0.01 260);
   --sidebar-primary: oklch(0.527 0.15 256);
@@ -270,8 +272,8 @@
 
   --destructive: #ff6468;
 
-  /* No escuro o preenchimento já é legível como texto, então `-ink` repete o valor:
-     success 5,19:1 · warning 9,50:1 · info 6,96:1 sobre --card. */
+  /* No escuro o `-ink` é um tom claro, legível como texto: os três passam de 4,5:1 sobre
+     o vidro (contraste-dos-tokens.test.ts). */
   --success: oklch(0.621 0.207 143);
   --success-foreground: oklch(1 0 0);
   --success-ink: #3fcf7f;
@@ -303,8 +305,8 @@
   --chart-7: #9085e9; /* violeta */
   --chart-8: #e66767; /* vermelho */
 
-  /* Derivada como no claro: a sidebar fica ENTRE o fundo (0,177) e o card
-     (0,217). Medido: texto 11,57:1 e muted 7,21:1 sobre ela. */
+  /* Derivada como no claro: a sidebar é vidro (`--glass`), a mesma superfície do card.
+     O contraste do texto sobre ela é o do vidro, coberto por contraste-dos-tokens.test.ts. */
   --sidebar: var(--glass);
   --sidebar-foreground: oklch(0.85 0.006 260);
   --sidebar-primary: oklch(0.717 0.118 254);

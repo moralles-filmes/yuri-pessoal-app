@@ -1,7 +1,12 @@
-# Tokens visuais — REDESIGN-01-B
+# Tokens visuais — REDESIGN-01-B (revistos pela 09-A, vidro)
 
-Direção: SaaS moderno, limpo, profissional, confortável para uso diário.
+Direção original (01-B): SaaS moderno, limpo, profissional, confortável para uso diário.
 Claro: azul de destaque, branco e cinzas **frios**. Escuro: grafite frio, texto claro, azul.
+
+⚠️ **Desde 2026-11-07 a 09-A reescreveu a superfície**: a casca virou **vidro** sobre uma
+**névoa** de fundo, a fonte e o raio mudaram, e os textos foram remedidos sobre as superfícies
+novas. Os §1, §3, §4, §7 e a regra 7 do §8 abaixo já refletem isso. Desenho:
+`docs/superpowers/specs/2026-11-07-redesign-09-vidro-design.md`.
 
 Nenhum valor aqui foi escolhido no olho: os de contraste foram medidos e a paleta de gráficos
 passou pelo validador, com os comandos registrados na §7 para você refazer.
@@ -12,11 +17,20 @@ passou pelo validador, com os comandos registrados na §7 para você refazer.
 
 | Item | Valor | Por quê |
 | --- | --- | --- |
-| **Tipografia** | `--font-sans: Arial, "Helvetica Neue", Helvetica, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` | Exigência sua. **Copiar literalmente.** Não há `next/font` no projeto e não vai haver |
 | `--font-mono`, `--font-heading` | como estão | `--font-heading` é alias de `--font-sans` |
 | **Cores de entidade** | todos os hex em `lib/*/constants.ts`, `calendar/colors.ts`, o default `'#A98438'` de `categories`, cores de cartão/conta | São **suas escolhas**, não identidade do app |
 | **Semântica de alerta** | os ~120 usos de `amber-*` | Significam atenção, não marca |
-| **Escala de raio** | `--radius: 0.7rem` e os derivados | Já é discreta. Arredondamento excessivo está fora da direção |
+
+### O que a 09-A MUDOU nesta seção (2026-11-07)
+
+| Item | Antes (01-B) | Agora (09-A) | Por quê |
+| --- | --- | --- | --- |
+| **Tipografia** | `Arial, "Helvetica Neue", Helvetica, …` — "exigência sua, copiar literalmente, não há `next/font` e não vai haver" | `--font-sans: -apple-system, BlinkMacSystemFont, var(--font-inter), "Segoe UI", system-ui, sans-serif` | Decisão sua, aprovada na prévia que você viu em 2026-11-07 (a prévia declarava a troca por escrito). Spec §6.4 |
+| **Fonte de reserva** | — | **Inter** por `next/font/google`: auto-hospedada, só `latin`, `display: swap`, **`preload: false`** | No iPhone e no Mac sai a fonte do sistema, sem baixar nada; no Windows e no Android sai a Inter. Sem `preload: false`, o aparelho Apple baixaria uma fonte que nunca usa. "Não há `next/font`" **caiu** |
+| **Escala de raio** | `--radius: 0.7rem`; "arredondamento excessivo está fora da direção" | `--radius: 1rem`; a escala derivada (`--radius-sm` … `--radius-4xl`) sobe junto | Substitui a frase da 01-B (spec §6.5). Raio por hierarquia e **concêntrico**: blocos 28 px, indicadores 24 px, ladrilhos e campos 14–16 px, botões e etiquetas em pílula |
+
+⚠️ O `--radius` novo é só o ponto de partida: o construtor confere os usos de `rounded-*` que
+ficarem exagerados, em vez de trocá-los um por um por padrão.
 
 ---
 
@@ -51,82 +65,152 @@ cada uma das cinco linhas acima, revertida uma a uma, deixa a suíte vermelha.
 
 ---
 
-## 3. Tokens — tema CLARO ✅ **aplicado na 02-B**
+## 3. Tokens — tema CLARO ✅ **reescritos na 09-A (vidro)**
 
-⚠️ **A 01-B não especificou a sidebar.** Os oito `--sidebar-*` foram derivados na 02-B
-preservando as relações que o tema dourado já tinha (sidebar um pouco mais clara que o fundo;
-accent da sidebar igual ao accent geral), só re-matizadas. Medido: texto **13,25:1** e
-`muted-foreground` **5,70:1** sobre a sidebar; `--primary` como texto sobre `--accent` (o item
-ativo) **4,73:1**. Os 14 pares medidos passam AA.
+A 01-B/02-B definiu um claro de superfícies **opacas** (`--card` branco). A 09-A trocou a
+superfície por **vidro translúcido sobre uma névoa**: o fundo é `--fog-base` com três manchas
+(`--fog-1..3`) desenhadas por cima, e o vidro (`--glass`) é composto por cima delas.
+
+⛔ **O que foi medido.** Cada texto é medido contra **quatro superfícies**: `--glass-solid`
+(o vidro sobre a base, opaco) **e** o vidro composto sobre o **centro de cada uma das três
+manchas** — o pior caso de verdade. Texto direto sobre a névoa aberta (`--foreground` e
+`--muted-on-fog`) é medido sobre a base e sobre cada mancha. O teste
+`src/lib/theme/contraste-dos-tokens.test.ts` exige **≥ 4,5:1** em todas e falha dizendo para
+*baixar o alfa da névoa antes de escurecer o texto*.
 
 ```css
 :root {
-  /* Neutros FRIOS (hue ~258). Os atuais são hue 70–95: dourado dessaturado,
-     que brigaria com um primário azul. */
-  --background: oklch(0.985 0.003 255);   /* #f9fafc */
-  --foreground: oklch(0.180 0.010 260);   /* #0f1216 */
+  --font-sans: -apple-system, BlinkMacSystemFont, var(--font-inter), "Segoe UI", system-ui, sans-serif;
+  --radius: 1rem;
 
-  --card: oklch(1 0 0);                   /* #ffffff — superfície VALIDADA, ver §7 */
-  --card-foreground: oklch(0.180 0.010 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.180 0.010 260);
+  /* NÉVOA: base opaca + três manchas translúcidas. Alfas já baixados pela medição. */
+  --fog-base: #e8ecf3;
+  --fog-1: rgba(120, 160, 235, 0.45);
+  --fog-2: rgba(196, 186, 240, 0.6);
+  --fog-3: rgba(244, 214, 178, 0.7);
 
-  /* Azul de destaque. Branco em cima mede 5,39:1 — passa AA para texto normal. */
-  --primary: oklch(0.527 0.150 256);      /* #256abf */
-  --primary-foreground: oklch(1 0 0);     /* ⚠️ BRANCO. O dourado usava texto ESCURO */
+  /* VIDRO. --glass-solid É a superfície da validação (vidro sobre a base). */
+  --glass: rgba(255, 255, 255, 0.56);
+  --glass-solid: #f5f7fa;
+  --glass-strong: rgba(255, 255, 255, 0.94);
+  --glass-border: rgba(255, 255, 255, 0.78);
+  --glass-hi: rgba(255, 255, 255, 0.95);
+  --glass-lo: rgba(255, 255, 255, 0.35);
+  --glass-sheen: rgba(255, 255, 255, 0.55);
+  --glass-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 20px 50px -22px rgba(30, 45, 90, 0.28);
+  --tile: rgba(255, 255, 255, 0.55);       --tile-border: rgba(255, 255, 255, 0.7);
+  --pill: rgba(255, 255, 255, 0.82);       --pill-strong: #ffffff;
+  --track: rgba(22, 24, 29, 0.07);         --grid: rgba(22, 24, 29, 0.07);
 
-  --secondary: oklch(0.966 0.005 255);    /* #f1f4f7 */
-  --secondary-foreground: oklch(0.240 0.010 260);
+  /* A casca aponta para o vidro */
+  --background: var(--fog-base);
+  --card: var(--glass);      --popover: var(--glass-strong);      --sidebar: var(--glass);
 
-  --muted: oklch(0.966 0.005 255);
-  --muted-foreground: oklch(0.505 0.014 258);  /* #60656d — 5,9:1 sobre o card */
+  --foreground: #16181d;                   /* + --card-foreground, --popover-foreground */
+  --muted-foreground: #596070;
+  --muted-on-fog: #454b5a;                 /* secundário direto sobre a névoa aberta */
 
-  --accent: oklch(0.955 0.020 255);
-  --accent-foreground: oklch(0.380 0.090 256);
+  --primary: #0062d6;                      /* azul como TEXTO/link */
+  --primary-foreground: #ffffff;
+  --primary-fill: #0062d6;                 /* azul como PREENCHIMENTO (botão), texto branco */
+  --primary-fill-foreground: #ffffff;
 
-  --border: oklch(0.905 0.007 258);       /* #dde0e4 */
-  --input: oklch(0.905 0.007 258);
-  --ring: oklch(0.527 0.150 256);
-
-  --destructive: oklch(0.575 0.186 25);   /* #d03b3b — 4,80:1 sobre branco */
+  --accent: #e7f1fe;   --accent-foreground: #1f4371;
+  --destructive: #c2262e;
+  --success-ink: #006303;   --warning-ink: #8a5a01;   --info-ink: #0062d6;
+  --ring: #0062d6;
 }
 ```
 
-## 4. Tokens — tema ESCURO ✅ **aplicado na 02-B**
+**Contrastes medidos** (o **menor** entre as quatro superfícies de vidro; a mancha que dá o
+mínimo entre parênteses — `g` = vidro, `fog-k` = mancha k):
 
-A sidebar do escuro ficou **entre** o fundo (0,177) e o card (0,217), em 0,197 — mesma
-relação do tema antigo. Texto **11,57:1** e `muted` **7,21:1** sobre ela.
+| Texto | Mínimo no claro |
+| --- | --- |
+| `--foreground` | **14,41:1** (g/fog-1) |
+| `--muted-foreground` | **5,11:1** (g/fog-1) |
+| `--primary` | **4,58:1** (g/fog-1) |
+| `--destructive` | **4,72:1** (g/fog-1) |
+| `--success-ink` | **6,11:1** |
+| `--warning-ink` | **4,81:1** |
+| `--info-ink` | **4,58:1** |
+
+Direto sobre a névoa aberta: `--foreground` **10,73:1** · `--muted-on-fog` **5,27:1**.
+Preenchimentos: `--primary-fill-foreground` sobre `--primary-fill` **5,65:1**;
+`--primary-foreground` sobre `--primary` **5,65:1**; `--accent-foreground` sobre `--accent`
+**8,77:1**.
+
+⚠️ **Folga pequena.** Os pares mais apertados são `--primary`/`--info-ink` (4,58:1). Subir o
+alfa de `--fog-1` no claro quebra o teste — e é para baixar o alfa, não escurecer o texto.
+
+⚠️ **Um segundo `--primary` mora aqui de propósito.** `--primary` continua sendo a cor de
+**texto** (182 usos de `text-primary` não mudam); o **preenchimento** com texto branco é
+`--primary-fill`. No claro os dois valem `#0062d6`.
+
+Não tocados pela 09-A (seguem como na 02-B): `--secondary`, `--muted`, `--border`, `--input`,
+`--success`/`--warning`/`--info` de preenchimento e os `--sidebar-*` restantes.
+
+## 4. Tokens — tema ESCURO ✅ **reescritos na 09-A (vidro)**
+
+Mesma estrutura do claro. A base é quase preta (`--fog-base`) e as manchas são azul, violeta e
+verde-azulado profundos; o vidro é grafite translúcido.
 
 ```css
 .dark {
-  --background: oklch(0.177 0.009 264);   /* #0f1115 — grafite frio, não preto puro */
-  --foreground: oklch(0.968 0.004 260);
+  --fog-base: #0a0c11;
+  --fog-1: rgba(34, 78, 170, 0.6);
+  --fog-2: rgba(88, 56, 150, 0.6);
+  --fog-3: rgba(16, 96, 92, 0.6);
 
-  --card: oklch(0.217 0.013 264);         /* #171a20 — superfície VALIDADA, ver §7 */
-  --card-foreground: oklch(0.968 0.004 260);
-  --popover: oklch(0.217 0.013 264);
-  --popover-foreground: oklch(0.968 0.004 260);
+  --glass: rgba(28, 31, 40, 0.58);
+  --glass-solid: #14171e;                  /* a superfície da validação */
+  --glass-strong: rgba(38, 42, 52, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-hi: rgba(255, 255, 255, 0.14);
+  --glass-lo: rgba(255, 255, 255, 0.04);
+  --glass-sheen: rgba(255, 255, 255, 0.07);
+  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 26px 60px -24px rgba(0, 0, 0, 0.7);
+  --tile: rgba(255, 255, 255, 0.05);       --tile-border: rgba(255, 255, 255, 0.07);
+  --pill: rgba(255, 255, 255, 0.1);        --pill-strong: rgba(255, 255, 255, 0.16);
+  --track: rgba(255, 255, 255, 0.09);      --grid: rgba(255, 255, 255, 0.07);
 
-  /* Azul mais claro + texto escuro, como o dourado já fazia no escuro. 5,94:1. */
-  --primary: oklch(0.717 0.118 254);      /* #6da7ec — 6,96:1 como texto no card */
-  --primary-foreground: oklch(0.274 0.066 254);  /* #0d2847 */
+  --background: var(--fog-base);
+  --card: var(--glass);      --popover: var(--glass-strong);      --sidebar: var(--glass);
 
-  --secondary: oklch(0.265 0.012 262);
-  --secondary-foreground: oklch(0.968 0.004 260);
+  --foreground: #f2f4f8;
+  --muted-foreground: #a1a8b6;   --muted-on-fog: #a1a8b6;
 
-  --muted: oklch(0.265 0.012 262);
-  --muted-foreground: oklch(0.715 0.015 260);
+  /* No escuro o azul de TEXTO é claro; o de PREENCHIMENTO é mais fundo, com texto branco. */
+  --primary: #6ea7ec;            --primary-foreground: #0d2847;
+  --primary-fill: #1f6fe5;       --primary-fill-foreground: #ffffff;
 
-  --accent: oklch(0.305 0.035 256);
-  --accent-foreground: oklch(0.900 0.045 256);
-
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.717 0.118 254);
-
-  --destructive: oklch(0.704 0.191 22);   /* mantido do tema atual, já calibrado */
+  --accent: #233041;   --accent-foreground: #cbe0fc;
+  --destructive: #ff6468;
+  --success-ink: #3fcf7f;   --warning-ink: #fab21c;   --info-ink: #6ea7ec;
+  --ring: #6ea7ec;
 }
 ```
+
+**Contrastes medidos** (menor entre as quatro superfícies de vidro; no escuro o pior caso é
+sempre `fog-3`):
+
+| Texto | Mínimo no escuro |
+| --- | --- |
+| `--foreground` | **13,26:1** (g/fog-3) |
+| `--muted-foreground` | **6,11:1** (g/fog-3) |
+| `--primary` | **5,84:1** (g/fog-3) |
+| `--destructive` | **5,06:1** (g/fog-3) |
+| `--success-ink` | **7,26:1** |
+| `--warning-ink` | **7,96:1** |
+| `--info-ink` | **5,84:1** |
+
+Direto sobre a névoa aberta: `--foreground` **10,73:1** · `--muted-on-fog` **4,95:1**.
+Preenchimentos: `--primary-fill-foreground` sobre `--primary-fill` **4,70:1**;
+`--primary-foreground` sobre `--primary` **5,95:1**; `--accent-foreground` sobre `--accent`
+**9,94:1**.
+
+⚠️ **Folga pequena no escuro:** `--muted-on-fog` (4,95:1) e `--primary-fill` (4,70:1). Subir o
+alfa de `--fog-3` no escuro quebra o teste.
 
 ---
 
@@ -134,6 +218,11 @@ relação do tema antigo. Texto **11,57:1** e `muted` **7,21:1** sobre ela.
 
 Hoje só existe `--destructive`. A ausência de `success`/`warning`/`info` é o que produziu
 **212 ocorrências** de `text-emerald`/`text-red-` em 105 arquivos e ~120 de `amber` em ~60.
+
+⚠️ **Os valores de `-ink` abaixo são os da 01-B.** Desde a 09-A os três `-ink` são hex medidos
+sobre o vidro (claro `#006303` · `#8a5a01` · `#0062d6`; escuro `#3fcf7f` · `#fab21c` ·
+`#6ea7ec`) — a tabela de contrastes está nas §3 e §4. O princípio e o motivo do `-ink`
+separado seguem valendo.
 
 ```css
 :root {
@@ -212,51 +301,52 @@ Ordem fixa, atribuída por identidade, **nunca ciclada**. Slot 1 é o azul da ma
 | 7 | violeta | `#4a3aa7` | `#9085e9` |
 | 8 | vermelho | `#e34948` | `#e66767` |
 
-**Resultado real do validador nas SUAS superfícies:**
+**Resultado real do validador nas SUAS superfícies** (09-A — a superfície é `--glass-solid`,
+não mais `--card`):
 
 ```
-claro (#ffffff) — TODAS PASSAM
+claro (#f5f7fa) — TODAS PASSAM
   banda de luminosidade  8/8 · piso de croma 8/8
-  separação CVD          pior adjacente #eda100↔#1baf7a ΔE 9,1 (protan)
+  separação CVD          pior adjacente #eda100↔#1baf7a ΔE 9,1 (protan) · tritan 5,8
   visão normal           pior adjacente #e87ba4↔#eda100 ΔE 19,6
-  contraste              WARN: #1baf7a 2,82 · #eda100 2,17 · #e87ba4 2,69
+  contraste              WARN: #eb6834 2,98 · #1baf7a 2,62 · #eda100 2,02 · #e87ba4 2,51
 
-escuro (#171a20) — TODAS PASSAM
-  separação CVD          pior adjacente #c98500↔#199e70 ΔE 8,4
+escuro (#14171e) — TODAS PASSAM
+  banda de luminosidade  8/8 · piso de croma 8/8
+  separação CVD          pior adjacente #c98500↔#199e70 ΔE 8,4 (protan) · tritan 8,7
   visão normal           pior adjacente #d55181↔#c98500 ΔE 19,3
   contraste              8/8 acima de 3:1
 ```
 
-⚠️ **O WARN do claro não é dispensável: ele obriga relevo.** Os três slots abaixo de 3:1
-exigem **rótulo direto visível ou tabela de dados**. Na prática já está resolvido — a
-referência visual mostra a legenda com valor ao lado do donut, e essa legenda passa a ser
-obrigatória, não decorativa.
+⚠️ **O WARN do claro não é dispensável: ele obriga relevo.** Os **quatro** slots abaixo de 3:1
+exigem **rótulo direto visível ou tabela de dados**. **O laranja `#eb6834` entrou nessa lista
+na 09-A**: sobre o branco puro da 02-B ele passava de 3:1, e sobre `--glass-solid` (`#f5f7fa`)
+mede 2,98 — por um fio. Na prática já está resolvido — a referência visual mostra a legenda com
+valor ao lado do donut, e essa legenda passa a ser obrigatória, não decorativa. A margem
+estreita da separação CVD (ΔE 5,8 no tritan) é mais um motivo para nunca depender só da cor.
 
 **Para refazer a validação** (obrigatório se qualquer superfície ou hex mudar):
 
-⛔ **Correção da 02-B: o validador NÃO está no repositório.** A 01-B escreveu
-`node scripts/validate_palette.js`, que não existe aqui — `scripts/` tem só `nutrition/`,
-`perf/` e `training/`. Ele vem com a skill `dataviz`, e é de lá que se chama:
+⛔ **O validador NÃO está no repositório.** `scripts/` tem só `nutrition/`, `perf/` e
+`training/`. Ele vem com a skill `dataviz`, e é de lá que se chama:
 
 ```bash
 V="$CLAUDE_SKILLS/dataviz/scripts/validate_palette.js"   # ajuste o caminho da skill
-node "$V" "#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4,#008300,#4a3aa7,#e34948" \
-  --mode light --surface "#ffffff"
-node "$V" "#3987e5,#d95926,#199e70,#c98500,#d55181,#008300,#9085e9,#e66767" \
-  --mode dark  --surface "#171a20"
+node "$V" "#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4,#008300,#4a3aa7,#e34948"   --mode light --surface "#f5f7fa"
+node "$V" "#3987e5,#d95926,#199e70,#c98500,#d55181,#008300,#9085e9,#e66767"   --mode dark  --surface "#14171e"
 ```
 
-✅ **Re-executado na 02-B**, antes de instalar: os dois modos reproduzem o laudo acima linha
-por linha (claro com o WARN de relevo, escuro 8/8 acima de 3:1). Os contrastes das §3/§4/§5
-também foram remedidos um a um — 5,39 · 4,80 · 7,54 · 5,93 · 6,97 batem com o que estava
-escrito.
+✅ **Re-executado na 09-A**, depois de os tokens de vidro entrarem: os dois modos reproduzem o
+laudo acima linha por linha.
 
 ⚠️ **Quem não roda o validador ainda é pego.** `src/lib/theme/tokens.test.ts` guarda os
-**oito hexes** e as **duas superfícies `--card`**: mexer em qualquer um deixa a suíte
+**oito hexes** e as **duas superfícies `--glass-solid`**: mexer em qualquer um deixa a suíte
 vermelha, com a instrução de revalidar no lugar da mensagem de erro. Sem isso, este laudo
 poderia continuar afirmando "todas passam" sobre cores que não existem mais.
 
-⛔ **`--card` é a superfície validada.** Mudar `--card` sem revalidar invalida a tabela acima.
+⛔ **`--glass-solid` é a superfície validada.** Mudar `--glass-solid` (ou o `--fog-base` de que
+ele deriva) sem revalidar invalida a tabela acima. `contraste-dos-tokens.test.ts` confere que o
+vidro composto sobre a base é exatamente `--glass-solid`.
 
 ### O que isso corrige — e era mais grave do que "feio"
 
@@ -294,6 +384,7 @@ escolhida por você continua vencendo**. A paleta é só o fallback.
 5. **Série futura é visualmente projeção** (hachura/tracejado), com legenda dizendo.
 6. **Dinheiro em `tabular-nums`** em coluna de tabela. Número grande solto pode usar figuras
    proporcionais.
-7. **Sem neon, sem gradiente forte, sem sombra pesada.**
+7. **Sem néon, sem sombra pesada. Gradiente só na névoa de fundo e no brilho do material;
+   nunca em botão, cartão ou gráfico como decoração.**
 8. **`cn()` é `twMerge`:** a classe de fora **remove** a da primitiva. Em `DialogContent`,
    `max-w-*` sem prefixo não tem efeito de `sm` para cima — use `sm:max-w-lg`.
