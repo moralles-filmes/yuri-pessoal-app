@@ -25,46 +25,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CHART_COLORS } from "@/components/dashboard/chart-theme";
 import { PAYMENT_METHOD_LABELS } from "@/lib/finance/constants";
-
-const SRC = path.resolve(__dirname, "..", "..");
-
-function semComentarios(codigo: string): string {
-  return codigo.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
-}
-
-const css = semComentarios(
-  fs.readFileSync(path.join(SRC, "app", "globals.css"), "utf8"),
-);
-
-/** Recorta o corpo `{ … }` de um bloco CSS pelo seu seletor, contando profundidade. */
-function bloco(seletor: string): string {
-  const inicio = css.indexOf(seletor);
-  if (inicio < 0) return "";
-  const abre = css.indexOf("{", inicio);
-  if (abre < 0) return "";
-  let profundidade = 0;
-  for (let i = abre; i < css.length; i += 1) {
-    if (css[i] === "{") profundidade += 1;
-    else if (css[i] === "}") {
-      profundidade -= 1;
-      if (profundidade === 0) return css.slice(abre + 1, i);
-    }
-  }
-  return "";
-}
-
-/** Nome → valor das custom properties declaradas num corpo de bloco. */
-function tokens(corpo: string): Map<string, string> {
-  const mapa = new Map<string, string>();
-  for (const m of corpo.matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/g)) {
-    mapa.set(m[1], m[2].trim());
-  }
-  return mapa;
-}
-
-const tema = tokens(bloco("@theme inline"));
-const claro = tokens(bloco(":root"));
-const escuro = tokens(bloco(".dark {"));
+import { claro, css, escuro, SRC, semComentarios, tema } from "./ler-tokens";
+import { lerCor } from "./contraste";
 
 /**
  * Tokens que existem SÓ no claro de propósito: não são cor, não mudam com o tema.
@@ -80,6 +42,15 @@ const PALETA_CLARA = [
 const PALETA_ESCURA = [
   "#3987e5", "#d95926", "#199e70", "#c98500",
   "#d55181", "#008300", "#9085e9", "#e66767",
+];
+
+/** Os 21 tokens que a 09-A acrescenta, todos obrigatórios nos dois temas. */
+const TOKENS_DE_VIDRO = [
+  "fog-base", "fog-1", "fog-2", "fog-3",
+  "glass", "glass-solid", "glass-strong", "glass-border", "glass-hi", "glass-lo",
+  "glass-sheen", "glass-shadow",
+  "tile", "tile-border", "pill", "pill-strong", "track", "grid",
+  "primary-fill", "primary-fill-foreground", "muted-on-fog",
 ];
 
 const REVALIDAR =
@@ -123,10 +94,22 @@ describe("REDESIGN-02-B · contrato dos tokens de tema", () => {
   });
 
   it("`--primary` deixou de ser dourado nos dois temas", () => {
-    // O dourado vivia em hue 83 (claro) e 84 (escuro), croma ~0,12. O azul está em 254–256.
-    const hue = (v: string) => Number(v.match(/oklch\([\d.]+\s+[\d.]+\s+([\d.]+)\)/)?.[1]);
-    expect(hue(claro.get("primary")!)).toBeGreaterThan(200);
-    expect(hue(escuro.get("primary")!)).toBeGreaterThan(200);
+    // O dourado vivia em hue 83 (claro) e 84 (escuro) em oklch. O azul medido em hex tem
+    // matiz HSL ~212; o dourado, em HSL, fica em ~40-50 e nunca chega a 200.
+    const matiz = (v: string) => {
+      const [r, g, b] = lerCor(v).rgb.map((c) => c / 255);
+      const max = Math.max(r, g, b);
+      const d = max - Math.min(r, g, b);
+      if (d === 0) return 0;
+      if (max === r) return (((g - b) / d + 6) % 6) * 60;
+      if (max === g) return ((b - r) / d + 2) * 60;
+      return ((r - g) / d + 4) * 60;
+    };
+    for (const tm of [claro, escuro]) {
+      const h = matiz(tm.get("primary")!);
+      expect(h).toBeGreaterThan(200);
+      expect(h).toBeLessThan(260);
+    }
   });
 
   it("`--gold` é apelido de `--primary`, e nos DOIS temas", () => {
@@ -181,11 +164,43 @@ describe("REDESIGN-02-B · contrato dos tokens de tema", () => {
     }
   });
 
-  it("`--card` continua sendo a superfície em que a paleta foi validada", () => {
-    // O laudo da §7 é sobre ESTAS duas superfícies. Trocar o card sem revalidar transforma
-    // "todas passam" numa afirmação sobre um fundo que não existe mais.
-    expect(claro.get("card"), REVALIDAR).toBe("oklch(1 0 0)");
-    expect(escuro.get("card"), REVALIDAR).toBe("oklch(0.217 0.013 264)");
+  it("`--glass-solid` é a superfície em que a paleta foi validada", () => {
+    // O laudo da §7 é sobre ESTAS duas superfícies. Trocar a superfície sem revalidar
+    // transforma "todas passam" numa afirmação sobre um fundo que não existe mais.
+    expect(claro.get("glass-solid"), REVALIDAR).toBe("#f5f7fa");
+    expect(escuro.get("glass-solid"), REVALIDAR).toBe("#14171e");
+  });
+
+  it("a casca aponta para o vidro", () => {
+    for (const [nome, tm] of [["claro", claro], ["escuro", escuro]] as const) {
+      expect(tm.get("card"), nome).toBe("var(--glass)");
+      expect(tm.get("popover"), nome).toBe("var(--glass-strong)");
+      expect(tm.get("background"), nome).toBe("var(--fog-base)");
+    }
+  });
+
+  it("os tokens de vidro existem nos dois temas", () => {
+    const faltando: string[] = [];
+    for (const [nome, tm] of [["claro", claro], ["escuro", escuro]] as const) {
+      for (const token of TOKENS_DE_VIDRO) {
+        if (!tm.has(token)) faltando.push(`${nome}: --${token}`);
+      }
+    }
+    expect(faltando, `Token de vidro sem valor: ${faltando.join(", ")}`).toEqual([]);
+    expect(TOKENS_DE_VIDRO.length).toBe(21);
+  });
+
+  it("as utilitárias de vidro estão registradas no @theme inline", () => {
+    const registradas = [
+      "glass", "glass-solid", "glass-strong", "glass-border", "tile", "tile-border",
+      "pill", "pill-strong", "track", "grid", "primary-fill", "primary-fill-foreground",
+      "muted-on-fog",
+    ];
+    for (const nome of registradas) {
+      expect(tema.get(`color-${nome}`), `--color-${nome}`).toBe(`var(--${nome})`);
+    }
+    expect(tema.get("ease-mola")).toBe("cubic-bezier(.22,1.45,.36,1)");
+    expect(tema.get("ease-estalo")).toBe("cubic-bezier(.22,1.6,.36,1)");
   });
 
   it("a paleta cobre as formas de pagamento sem repetir cor", () => {

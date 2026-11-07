@@ -7,16 +7,19 @@
 /* ============================================================
    Sistema Pessoal Yuri — Design System
    Identidade: azul / branco / grafite frio. Dark + Light.
-   Fonte: Arial / system (simples e legível, conforme briefing).
+   Tipografia: ver o spec da 09 (§6.4) — a fonte do corpo é decisão da 09-A.
+   Vidro e névoa (09-A): a casca é translúcida sobre uma névoa de três manchas.
 
    ⛔ NENHUM VALOR AQUI FOI ESCOLHIDO NO OLHO.
    Os contrastes foram medidos par a par e a paleta de gráficos passou pelo
    validador (banda de luminosidade, piso de croma, separação para daltonismo e
    contraste com a superfície). Os números e o comando estão em
-   `docs/redesign/TOKENS.md` §7. Mudou `--card`? A validação da paleta caduca:
-   `--card` É a superfície testada.
+   `docs/redesign/TOKENS.md` §7. Mudou `--glass-solid`? A validação da paleta caduca:
+   `--glass-solid` É a superfície testada (o vidro sobre a base da névoa resolve para ela).
 
-   ⚠️ `--font-sans` é exigência do dono e não muda. Não há `next/font` aqui.
+   ⛔ O ALFA DA NÉVOA (`--fog-1..3`) é a PRIMEIRA coisa a baixar se um contraste cair —
+   nunca escureça o texto. `contraste-dos-tokens.test.ts` mede cada texto sobre o vidro
+   composto sobre cada mancha; o teste falha dizendo isso.
    ============================================================ */
 
 @theme inline {
@@ -68,6 +71,21 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-glass: var(--glass);
+  --color-glass-solid: var(--glass-solid);
+  --color-glass-strong: var(--glass-strong);
+  --color-glass-border: var(--glass-border);
+  --color-tile: var(--tile);
+  --color-tile-border: var(--tile-border);
+  --color-pill: var(--pill);
+  --color-pill-strong: var(--pill-strong);
+  --color-track: var(--track);
+  --color-grid: var(--grid);
+  --color-primary-fill: var(--primary-fill);
+  --color-primary-fill-foreground: var(--primary-fill-foreground);
+  --color-muted-on-fog: var(--muted-on-fog);
+  --ease-mola: cubic-bezier(.22,1.45,.36,1);
+  --ease-estalo: cubic-bezier(.22,1.6,.36,1);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -85,53 +103,76 @@
 
   --radius: 0.7rem;
 
-  /* Neutros FRIOS (hue ~255–260). Os antigos eram hue 70–95 — dourado
-     dessaturado, que briga com um primário azul: o cinza puxava para bege e a
-     tela ficava com duas temperaturas ao mesmo tempo. */
-  --background: oklch(0.985 0.003 255); /* #f9fafc */
-  --foreground: oklch(0.18 0.01 260); /* #0f1216 — 18,78:1 no card */
+  /* NÉVOA (09-A): o fundo do app é uma base opaca com três manchas translúcidas. As manchas
+     são desenhadas por cima da base; o vidro (`--glass`) é composto por cima delas.
+     Alfas já baixados pela medição (ver o cabeçalho). */
+  --fog-base: #e8ecf3;
+  --fog-1: rgba(120, 160, 235, 0.45);
+  --fog-2: rgba(196, 186, 240, 0.6);
+  --fog-3: rgba(244, 214, 178, 0.7);
 
-  --card: oklch(1 0 0); /* #ffffff — ⛔ superfície da validação da paleta */
-  --card-foreground: oklch(0.18 0.01 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.01 260);
+  /* VIDRO. `--glass-solid` é o vidro sobre a base, opaco: a superfície da validação. */
+  --glass: rgba(255, 255, 255, 0.56);
+  --glass-solid: #f5f7fa;
+  --glass-strong: rgba(255, 255, 255, 0.94);
+  --glass-border: rgba(255, 255, 255, 0.78);
+  --glass-hi: rgba(255, 255, 255, 0.95);
+  --glass-lo: rgba(255, 255, 255, 0.35);
+  --glass-sheen: rgba(255, 255, 255, 0.55);
+  --glass-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 20px 50px -22px rgba(30, 45, 90, 0.28);
+  --tile: rgba(255, 255, 255, 0.55);
+  --tile-border: rgba(255, 255, 255, 0.7);
+  --pill: rgba(255, 255, 255, 0.82);
+  --pill-strong: #ffffff;
+  --track: rgba(22, 24, 29, 0.07);
+  --grid: rgba(22, 24, 29, 0.07);
 
-  /* Azul de marca. Branco em cima mede 5,39:1 — passa AA para texto normal.
-     ⚠️ `--primary-foreground` é BRANCO agora; o dourado usava texto ESCURO.
-     Isso só é seguro porque TODA ocorrência de `text-primary-foreground` no
-     projeto está colada em `bg-primary` (conferido: 24 de 24). */
-  --primary: oklch(0.527 0.15 256); /* #256abf */
-  --primary-foreground: oklch(1 0 0);
+  --background: var(--fog-base);
+  --foreground: #16181d;
+
+  --card: var(--glass);
+  --card-foreground: #16181d;
+  --popover: var(--glass-strong);
+  --popover-foreground: #16181d;
+
+  /* `--primary` é o azul como TEXTO sobre o vidro; `--primary-fill` é o azul como
+     PREENCHIMENTO de botão (texto branco em cima). No claro os dois coincidem. */
+  --primary: #0062d6;
+  --primary-foreground: #ffffff;
+  --primary-fill: #0062d6;
+  --primary-fill-foreground: #ffffff;
 
   --secondary: oklch(0.966 0.005 255); /* #f1f4f7 */
   --secondary-foreground: oklch(0.24 0.01 260); /* 14,97:1 no secondary */
 
   --muted: oklch(0.966 0.005 255);
-  --muted-foreground: oklch(0.505 0.014 258); /* #60656d — 5,87:1 no card */
+  --muted-foreground: #596070;
+  /* Texto secundário sobre a NÉVOA aberta (fora de qualquer vidro). */
+  --muted-on-fog: #454b5a;
 
-  --accent: oklch(0.955 0.02 255); /* #e7f1fe — fundo do item ativo */
-  --accent-foreground: oklch(0.38 0.09 256); /* 8,77:1 no accent */
+  --accent: #e7f1fe; /* fundo do item ativo */
+  --accent-foreground: #1f4371;
 
-  --destructive: oklch(0.575 0.186 25); /* #d03b3b — 4,80:1 no card */
+  --destructive: #c2262e;
 
   /* Semânticos. `-ink` é a versão LEGÍVEL (texto); a outra é preenchimento.
      Medido sobre --card (#ffffff): success 3,35:1 (ponto/borda) × success-ink 7,54:1;
      warning-ink 5,93:1. Usar `text-success` num rótulo produz texto ilegível — use o -ink. */
   --success: oklch(0.621 0.207 143);
   --success-foreground: oklch(1 0 0);
-  --success-ink: oklch(0.433 0.147 143);
+  --success-ink: #006303;
 
   --warning: oklch(0.811 0.164 78);
   --warning-foreground: oklch(0.25 0.05 78);
-  --warning-ink: oklch(0.508 0.108 73);
+  --warning-ink: #8a5a01;
 
   --info: oklch(0.575 0.163 256);
   --info-foreground: oklch(1 0 0);
-  --info-ink: oklch(0.527 0.15 256);
+  --info-ink: #0062d6;
 
   --border: oklch(0.905 0.007 258); /* #dde0e4 */
   --input: oklch(0.905 0.007 258);
-  --ring: oklch(0.527 0.15 256);
+  --ring: #0062d6;
 
   /* `--gold` deixou de ser um conceito: virou apelido de `--primary`, para não
      quebrar nada que o use (hoje: nada em `src/`, só `::selection` e o gradiente
@@ -165,7 +206,7 @@
      tema dourado já tinha (sidebar um pouco mais clara que o fundo; accent da
      sidebar igual ao accent geral), só re-matizada. Medido: texto 13,25:1 e
      muted 5,70:1 sobre a sidebar. */
-  --sidebar: oklch(0.99 0.003 255);
+  --sidebar: var(--glass);
   --sidebar-foreground: oklch(0.3 0.01 260);
   --sidebar-primary: oklch(0.527 0.15 256);
   --sidebar-primary-foreground: oklch(1 0 0);
@@ -182,54 +223,77 @@
 
 /* ---------- DARK (grafite frio / off-white / azul) ---------- */
 .dark {
-  --background: oklch(0.177 0.009 264); /* #0f1115 — grafite, não preto puro */
-  --foreground: oklch(0.968 0.004 260); /* 15,85:1 no card */
+  --fog-base: #0a0c11;
+  --fog-1: rgba(34, 78, 170, 0.6);
+  --fog-2: rgba(88, 56, 150, 0.6);
+  --fog-3: rgba(16, 96, 92, 0.6);
 
-  --card: oklch(0.217 0.013 264); /* #171a20 — ⛔ superfície da validação */
-  --card-foreground: oklch(0.968 0.004 260);
-  --popover: oklch(0.217 0.013 264);
-  --popover-foreground: oklch(0.968 0.004 260);
+  --glass: rgba(28, 31, 40, 0.58);
+  --glass-solid: #14171e;
+  --glass-strong: rgba(38, 42, 52, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-hi: rgba(255, 255, 255, 0.14);
+  --glass-lo: rgba(255, 255, 255, 0.04);
+  --glass-sheen: rgba(255, 255, 255, 0.07);
+  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 26px 60px -24px rgba(0, 0, 0, 0.7);
+  --tile: rgba(255, 255, 255, 0.05);
+  --tile-border: rgba(255, 255, 255, 0.07);
+  --pill: rgba(255, 255, 255, 0.1);
+  --pill-strong: rgba(255, 255, 255, 0.16);
+  --track: rgba(255, 255, 255, 0.09);
+  --grid: rgba(255, 255, 255, 0.07);
 
-  /* Azul mais claro + texto escuro em cima, como o dourado já fazia aqui.
-     5,95:1 do texto sobre o botão; 6,97:1 do próprio azul como TEXTO no card. */
-  --primary: oklch(0.717 0.118 254); /* #6da7ec */
-  --primary-foreground: oklch(0.274 0.066 254); /* #0d2847 */
+  --background: var(--fog-base);
+  --foreground: #f2f4f8;
+
+  --card: var(--glass);
+  --card-foreground: #f2f4f8;
+  --popover: var(--glass-strong);
+  --popover-foreground: #f2f4f8;
+
+  /* `--primary` (texto) é azul claro; o PREENCHIMENTO do botão é um azul mais fundo com texto
+     branco (`--primary-fill`), porque o azul claro não sustenta texto branco em cima. */
+  --primary: #6ea7ec;
+  --primary-foreground: #0d2847;
+  --primary-fill: #1f6fe5;
+  --primary-fill-foreground: #ffffff;
 
   --secondary: oklch(0.265 0.012 262);
   --secondary-foreground: oklch(0.968 0.004 260); /* 13,96:1 no secondary */
 
   --muted: oklch(0.265 0.012 262);
-  --muted-foreground: oklch(0.715 0.015 260); /* 6,88:1 no card */
+  --muted-foreground: #a1a8b6;
+  --muted-on-fog: #a1a8b6;
 
-  --accent: oklch(0.305 0.035 256);
-  --accent-foreground: oklch(0.9 0.045 256); /* 9,94:1 no accent */
+  --accent: #233041;
+  --accent-foreground: #cbe0fc;
 
-  --destructive: oklch(0.704 0.191 22); /* já calibrado, mantido */
+  --destructive: #ff6468;
 
   /* No escuro o preenchimento já é legível como texto, então `-ink` repete o valor:
      success 5,19:1 · warning 9,50:1 · info 6,96:1 sobre --card. */
   --success: oklch(0.621 0.207 143);
   --success-foreground: oklch(1 0 0);
-  --success-ink: oklch(0.621 0.207 143);
+  --success-ink: #3fcf7f;
 
   --warning: oklch(0.811 0.164 78);
   --warning-foreground: oklch(0.25 0.05 78);
-  --warning-ink: oklch(0.811 0.164 78);
+  --warning-ink: #fab21c;
 
   --info: oklch(0.717 0.118 254);
   --info-foreground: oklch(1 0 0);
-  --info-ink: oklch(0.717 0.118 254);
+  --info-ink: #6ea7ec;
 
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.717 0.118 254);
+  --ring: #6ea7ec;
 
   /* Ver a nota no `:root`: apelido declarado nos dois temas de propósito. */
   --gold: var(--primary);
   --gold-foreground: var(--primary-foreground);
 
-  /* Mesma paleta, re-passo para a superfície escura (#171a20): 8/8 acima de
-     3:1 aqui, então o escuro não precisa do relevo que o claro exige. */
+  /* Mesma paleta, re-passo para a superfície escura (`--glass-solid`, #14171e): 8/8 acima
+     de 3:1 aqui, então o escuro não precisa do relevo que o claro exige. */
   --chart-1: #3987e5; /* azul */
   --chart-2: #d95926; /* laranja */
   --chart-3: #199e70; /* água */
@@ -241,7 +305,7 @@
 
   /* Derivada como no claro: a sidebar fica ENTRE o fundo (0,177) e o card
      (0,217). Medido: texto 11,57:1 e muted 7,21:1 sobre ela. */
-  --sidebar: oklch(0.197 0.011 264);
+  --sidebar: var(--glass);
   --sidebar-foreground: oklch(0.85 0.006 260);
   --sidebar-primary: oklch(0.717 0.118 254);
   --sidebar-primary-foreground: oklch(0.274 0.066 254);
