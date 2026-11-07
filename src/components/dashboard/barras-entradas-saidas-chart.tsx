@@ -20,7 +20,10 @@ import { monthLabel } from "./chart-theme";
 
 type Props = React.ComponentProps<
   typeof import("./barras-entradas-saidas-chart-impl").BarrasEntradasSaidasChart
->;
+> & {
+  /** Só a leitura textual o usa: depois deste mês ('AAAA-MM') o zero não é fato (K1). */
+  ultimoMesLido?: string;
+};
 
 // ⛔ O segundo argumento de `next/dynamic` tem de ser objeto literal escrito ali mesmo — o
 // compilador o lê estaticamente e recusa uma constante compartilhada.
@@ -32,7 +35,7 @@ const LazyBarrasEntradasSaidasChart = dynamic(
   },
 );
 
-export function BarrasEntradasSaidasChart(props: Props) {
+export function BarrasEntradasSaidasChart({ ultimoMesLido, ...props }: Props) {
   return (
     <div>
       {/* A altura reservada é a do gráfico; a legenda do mês parcial fica aqui, fora do
@@ -47,6 +50,7 @@ export function BarrasEntradasSaidasChart(props: Props) {
           series: props.series,
           nomes: props.nomes,
           rotuloDoMes: monthLabel,
+          ultimoMesLido,
         })}
       />
       {temDadosNasBarras(props.dados) && props.dados.some((p) => p.parcial) && (

@@ -184,3 +184,38 @@ describe("leituraDaForma", () => {
     ).toBeNull();
   });
 });
+
+describe("08 revisão · leituraDasBarras além da janela lida", () => {
+  // Além do último mês lido a leitura não trouxe nada: o zero das barras não é um fato medido,
+  // e a tabela lida em voz alta não pode dizer "R$ 0,00" ali (ausência nunca é zero).
+  const dados = [
+    { mes: "2026-05", entradas: 300, saidas: 120, saldo: 180, parcial: false },
+    { mes: "2026-06", entradas: 0, saidas: 0, saldo: 0, parcial: false },
+    { mes: "2026-07", entradas: 0, saidas: 0, saldo: 0, parcial: false },
+  ];
+
+  it("meses depois de ultimoMesLido dizem 'fora do período lido' em vez de valor", () => {
+    const leitura = leituraDasBarras({
+      dados,
+      nomes: { entradas: "Entradas", saidas: "Saídas" },
+      rotuloDoMes: mesAno,
+      ultimoMesLido: "2026-05",
+    });
+    expect(leitura?.linhas).toEqual([
+      { rotulo: "mês 2026-05", valores: [formatCurrency(300), formatCurrency(120)] },
+      {
+        rotulo: "mês 2026-06",
+        valores: [{ ausente: "fora do período lido" }, { ausente: "fora do período lido" }],
+      },
+      {
+        rotulo: "mês 2026-07",
+        valores: [{ ausente: "fora do período lido" }, { ausente: "fora do período lido" }],
+      },
+    ]);
+  });
+
+  it("sem ultimoMesLido (base caixa), nenhum mês é marcado", () => {
+    const leitura = leituraDasBarras({ dados, rotuloDoMes: mesAno });
+    expect(leitura?.linhas.every((l) => l.valores.every((v) => typeof v === "string"))).toBe(true);
+  });
+});

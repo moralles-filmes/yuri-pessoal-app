@@ -119,3 +119,28 @@ describe("08 C5.2 — a tabela oculta não alarga a página", () => {
     expect(fonte).not.toMatch(/<table className="sr-only"/);
   });
 });
+
+describe("08 revisão · as barras sabem até onde a leitura foi", () => {
+  it("a tabela escreve o motivo do valor ausente, não 'R$ 0,00'", () => {
+    const fonte = fonteSemComentarios(TABELA);
+    expect(fonte).toContain(".ausente");
+  });
+
+  it("a fachada das barras repassa ultimoMesLido à leitura e não ao -impl", () => {
+    const fonte = normalizada(fonteSemComentarios("src/components/dashboard/barras-entradas-saidas-chart.tsx"));
+    expect(fonte).toContain("ultimoMesLido");
+    expect(fonte).toContain("BarrasEntradasSaidasChart({ ultimoMesLido, ...props }: Props)");
+  });
+
+  it("o Painel passa ultimoMesLido só fora da base caixa", () => {
+    const fonte = normalizada(
+      fonteSemComentarios("src/app/(app)/dashboard/financeiro/financial-dashboard-client.tsx"),
+    );
+    expect(fonte).toMatch(/ultimoMesLido=\{graficosCaixa \? undefined : ultimoMesLido\(mesAtual\)\}/);
+  });
+
+  it("o Relatório passa o ultimoMesLido que o modelo calculou", () => {
+    const fonte = normalizada(fonteSemComentarios("src/app/(app)/relatorios/relatorios-client.tsx"));
+    expect(fonte).toContain("ultimoMesLido={financeiro.ultimoMesLidoDasBarras");
+  });
+});

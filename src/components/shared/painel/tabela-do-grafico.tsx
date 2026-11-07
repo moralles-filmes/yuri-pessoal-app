@@ -4,7 +4,7 @@ import { ValorComOlho } from "./valor-com-olho";
 /**
  * Leitura textual do gráfico (C5.2): a mesma informação em tabela visualmente oculta, para quem
  * usa leitor de tela. Mora na FACHADA do gráfico, então sai no HTML do servidor — sem `recharts`
- * e sem estado. Valor nulo é "sem registro", nunca zero.
+ * e sem estado. Valor nulo é "sem registro" e `{ ausente }` escreve o motivo — nunca zero.
  */
 export function TabelaDoGrafico({
   titulo,
@@ -35,7 +35,15 @@ export function TabelaDoGrafico({
           <tr key={i}>
             <th scope="row">{linha.rotulo}</th>
             {linha.valores.map((valor, j) => (
-              <td key={j}>{valor === null ? "sem registro" : <ValorComOlho texto={valor} />}</td>
+              <td key={j}>
+                {valor === null ? (
+                  "sem registro"
+                ) : typeof valor === "string" ? (
+                  <ValorComOlho texto={valor} />
+                ) : (
+                  valor.ausente
+                )}
+              </td>
             ))}
           </tr>
         ))}

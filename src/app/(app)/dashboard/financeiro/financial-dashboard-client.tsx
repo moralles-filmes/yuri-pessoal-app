@@ -50,7 +50,7 @@ import {
   type CartaoDoPainel,
   type UltimasDoPainel,
 } from "@/lib/finance/painel";
-import { foraDaJanelaLida } from "@/lib/finance/janela-lida";
+import { foraDaJanelaLida, ultimoMesLido } from "@/lib/finance/janela-lida";
 import { estadoDoBloco } from "@/lib/painel/bloco";
 import type { VistaDaGaveta } from "@/lib/painel/gaveta";
 import type { HrefsDoPainel } from "@/lib/painel/hrefs-do-painel";
@@ -469,6 +469,7 @@ export function DashboardClient({
           ) : (
             <BarrasEntradasSaidasChart
               dados={dadosDasBarras(graficosCaixa ? graficosCaixa.evolucao : evolucao, mesAtual)}
+              ultimoMesLido={graficosCaixa ? undefined : ultimoMesLido(mesAtual)}
             />
           )}
           {graficosCaixa && <RodapeDasFaturasSemTotal meses={graficosCaixa.semTotal.evolucao} />}

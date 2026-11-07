@@ -807,6 +807,7 @@ function AbaFinanceiro({
                   dados={financeiro.barras}
                   series={financeiro.seriesDasBarras}
                   nomes={texto.barras.nomes}
+                  ultimoMesLido={financeiro.ultimoMesLidoDasBarras ?? undefined}
                 />
                 {caixaOk ? <RodapeDasFaturasSemTotal meses={caixaOk.graficos.semTotal.evolucao} /> : null}
                 <p className="mt-2 text-xs text-muted-foreground">{FRASE_DO_MES}</p>

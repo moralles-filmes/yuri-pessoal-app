@@ -10,7 +10,10 @@ import { PAYMENT_METHOD_LABELS } from "@/lib/finance/constants";
 import type { FormaSlice, ProjecaoPonto } from "@/lib/finance/dashboard";
 import { temDadosNasBarras } from "@/components/dashboard/barras-dados";
 
-export type LinhaDaLeitura = { rotulo: string; valores: (string | null)[] };
+/** Valor de uma célula: texto formatado; `null` = "sem registro"; `{ ausente }` = o motivo de não haver número. */
+export type ValorDaLeitura = string | null | { ausente: string };
+
+export type LinhaDaLeitura = { rotulo: string; valores: ValorDaLeitura[] };
 
 /** `null` = gráfico vazio, sem tabela. */
 export type LeituraDoGrafico = { colunas: string[]; linhas: LinhaDaLeitura[] } | null;
@@ -25,22 +28,33 @@ export function leituraDasBarras(p: {
   series?: "ambas" | "saidas";
   nomes?: { entradas: string; saidas: string };
   rotuloDoMes: (mes: string) => string;
+  /** Último mês que a leitura alcançou ('AAAA-MM'); depois dele o zero das barras não é fato (K1). */
+  ultimoMesLido?: string;
 }): LeituraDoGrafico {
   const {
     dados,
     series = "ambas",
     nomes = { entradas: "Minhas entradas", saidas: "Minhas saídas" },
     rotuloDoMes,
+    ultimoMesLido,
   } = p;
   if (!temDadosNasBarras(dados)) return null;
 
   const soSaidas = series === "saidas";
+  const fora = { ausente: "fora do período lido" };
   return {
     colunas: soSaidas ? ["Mês", nomes.saidas] : ["Mês", nomes.entradas, nomes.saidas],
     linhas: dados.map((d) => ({
       // O mês em andamento sai marcado no texto, como sai hachurado no gráfico.
       rotulo: `${rotuloDoMes(d.mes)}${d.parcial ? " (parcial)" : ""}`,
-      valores: soSaidas ? [brl(d.saidas)] : [brl(d.entradas), brl(d.saidas)],
+      valores:
+        ultimoMesLido !== undefined && d.mes > ultimoMesLido
+          ? soSaidas
+            ? [fora]
+            : [fora, fora]
+          : soSaidas
+            ? [brl(d.saidas)]
+            : [brl(d.entradas), brl(d.saidas)],
     })),
   };
 }

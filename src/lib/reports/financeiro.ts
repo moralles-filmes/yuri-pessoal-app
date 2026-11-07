@@ -82,7 +82,7 @@ import {
   detalheDoNumero,
 } from "@/lib/finance/detalhe";
 import { saldoDasContas } from "@/lib/finance/saldo-das-contas";
-import { foraDaJanelaLida } from "@/lib/finance/janela-lida";
+import { foraDaJanelaLida, ultimoMesLido } from "@/lib/finance/janela-lida";
 import { formatCurrency } from "@/lib/format";
 import { urlComDetalhe, urlSemDetalhe } from "@/lib/painel/detalhe-url";
 import { type VistaDaGaveta, vistaDaGaveta } from "@/lib/painel/gaveta";
@@ -143,6 +143,8 @@ export type RelatorioFinanceiro = {
   /** `[]` quando o bloco não segue. */
   barras: (EvolucaoPonto & { parcial: boolean })[];
   seriesDasBarras: "ambas" | "saidas";
+  /** Na competência, o último mês que a leitura alcançou (K1); `null` no caixa, que não tem janela. */
+  ultimoMesLidoDasBarras: string | null;
   /** "Meu mês a mês", sempre a MINHA parte; `null` quando não segue (ou o caixa não foi lido). */
   mesAMes: MesAMesDados | null;
   /** O dia do corte do mês a mês no mês em andamento; `null` no mês fechado (ou sem mês a mês). */
@@ -582,6 +584,7 @@ export function montarRelatorioFinanceiro(p: ParametrosDoRelatorio): RelatorioFi
     barras,
     // No recorte de cartão as entradas não seguem (estorno não é entrada): só as saídas se desenham.
     seriesDasBarras: recorte.cartao !== null ? "saidas" : "ambas",
+    ultimoMesLidoDasBarras: emCaixa ? null : ultimoMesLido(mesAtual),
     mesAMes,
     ateODia,
     rosca,
