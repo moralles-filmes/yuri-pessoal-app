@@ -88,6 +88,9 @@ número errado ou acessibilidade; **M** = regressão de UX do redesign; **B** = 
 | K4 | "Faturas dos próximos meses" do Relatório não abre registros (o modelo agrega por mês, sem id de fatura) | 04-B §13.3/§13.5 D2 | ✅ **Decidido pelo dono (2026-11-06): adiar** (exige dar id ao modelo = funcionalidade) |
 | K5 | Rótulo "Faturas" ainda não é "Faturas e pagamentos" na IA e na busca | 05-B §12, 05-C §13 | ✅ **Decidido pelo dono (2026-11-06): não trocar.** Na busca, "Faturas" nomeia o grupo de resultados (cada um é uma fatura) e está certo; na IA é o nome da tela no contexto do prompt — trocar mexe no prompt (invariantes 21 e 100), vai ao backlog pós-redesign e é registrado no PR |
 | K6 | RR-D-15 / RR-D-6: a IA ainda diz "A receber de terceiros" em `finance.get_invoice` e no insight | 03-D, 07-D | ✅ **Decidido pelo dono (2026-11-06): adiar**, junto com o rótulo da K5 |
+| K7 | (achada na 08 pela leitura da matriz da 03-G2; não confundir com a K7 da 04-A) A aba Cartões de `/relatorios` mostra a fatura **prevista** como R$ 0,00 | 08 §4.3 | ✅ **Decidido pelo dono (2026-11-07): consertar aqui** — "sem lançamentos conhecidos", pela mesma `valorDaFatura` do Painel |
+| C5.1 | (medida na 08) Texto da face do cartão no Painel com `opacity-80`: 3,84:1 no escuro | 08 §6 | Consertado (acessibilidade, sem decisão) |
+| C5.2 | (medida na 08) Os quatro gráficos do redesign sem leitura textual | 08 §6 | ✅ **Decidido pelo dono (2026-11-07): consertar aqui** — tabela visualmente oculta na fachada, valores pelo olho |
 
 ### 4.3 Declarar e adiar (backlog pós-redesign, com destino)
 
@@ -197,4 +200,96 @@ performance. Execução via `ai-router-br:route`, TDD com teste vermelho antes, 
 
 ## 13. Resultado da execução
 
-_(preenchido no fim: achados não consertados com destino, decisões com o custo se estiverem erradas.)_
+Branch `feat/redesign-08-entrega`, nascida de `42af6c3` (ponta de `feat/redesign-00-auditoria` com a 04-B e
+a 04-C integradas). Executada em `C:/tmp/08-entrega`; o diretório principal não foi usado, exceto para copiar
+o `.env.local` (com o aval do dono, apagado no fim).
+
+### 13.1 Consertos (um commit cada, teste vermelho antes, mutação conferida por `git diff`)
+
+| # | Commit | O que mudou |
+| --- | --- | --- |
+| C2 | `19ab9c9` | `abreAGaveta(href)` em `detalhe-url.ts`; o link do `Indicador` usa `scroll={!abreAGaveta(href)}` |
+| C1 | `16201cc` | `comoFecharAGaveta` (puro, zero imports): gaveta aberta por navegação fecha com `router.back()`; aberta por link direto, com `replace` |
+| C3 | `c05eceb` | `urlDoDashboard` em `period.ts`; os 4 cards recebem `hrefDeNovo` com o período da URL |
+| C4 | `e997013` | `valor: { semDinheiro }` no `Indicador`: contagem de parcelamentos **e** a data do próximo vencimento de `/faturas` (escopo ampliado: a data também virava "R$ ••••") |
+| K1 | `a2bf1c3` | `janela-lida.ts` (zero imports): uma constante `MESES_DA_PROJECAO`, lida pelo pipeline e pela gaveta; os três indicadores em competência dizem "fora do período lido (até MM/AAAA)" |
+| K2 | `18e3596` | `DashCard.ativo`; `proximas6Faturas` não projeta fatura virtual de cartão desativado |
+| K7 | `4fbc87c` | A aba Cartões de `/relatorios` lê `valorDaFatura` (prevista → "sem lançamentos conhecidos") |
+| C5.1 | `1e6d988` | Sem `opacity-80` na face do cartão do Painel |
+| C5.2 | `745e567`, `737c501` | `leitura-dos-graficos.ts` + `TabelaDoGrafico` nas quatro fachadas; o segundo commit corrige uma **regressão que o primeiro criou** (abaixo) |
+
+### 13.2 Testes operacionais (§5)
+
+- **Fluxos que gravam: NÃO executados no banco real, por decisão do dono (2026-11-07, opção b).** Lançar,
+  editar, excluir, pagar/desfazer fatura, parcelar e dividir, receber reembolso ficam **conferidos pela suíte
+  e pela leitura**. Os consertos da 08 não tocam caminho de escrita. md5 dos saldos
+  `15d93bd1c1d3e55a40db6210dff0eb3b` no início e no fim.
+- **Registros de cada número (04-B):** 88 gavetas (Painel e Relatório, competência e caixa): 70 com rodapé
+  "= total", 18 vazias declaradas, **0 diferenças**.
+- **Responsabilidade × base:** meu, terceiros e consolidado × competência e caixa no Relatório, sem erro.
+- **Recortes:** conta, cartão, pessoa e categoria × duas bases, sem erro; gaveta vazia sempre com indicador
+  zero. ⚠️ **Cobertura fraca:** os primeiros itens de cada lista não tinham movimento no mês.
+- **Mês:** `mes=2099-01` mostra "fora do período lido" (K1); `mes=2026-13` volta ao mês atual.
+- **Dashboard (06):** 11 cards; reordenar por teclado (↑/↓ alcançáveis e com nome); cancelado sem gravar.
+- **C1 no navegador:** abrir e fechar a gaveta leva o índice do histórico 1 → 2 → 1.
+
+### 13.3 Visual e acessibilidade (§6)
+
+- **Larguras:** 14 rotas × 390/640/768/1280/1440 px, só pelo DOM (harness de iframes na aba do dono): nenhuma
+  rolagem horizontal **na segunda varredura**. A janela real redimensionada pegou o que a primeira não pegou
+  (próximo item). 640 px é o substituto do zoom de 200% em 1280.
+- ⚠️ **Regressão criada e corrigida na própria fase:** `sr-only` posto direto num `<table>` não o tira do
+  fluxo de largura (a tabela mede o próprio conteúdo): a página do Painel media 713 px numa janela de 490.
+  Correção em `737c501`: a tabela vai dentro de um `<div className="sr-only">`, com teste vermelho antes.
+- **Prints reais** do Painel a 1440 px em claro e escuro, com a sessão do dono: corretos. O tema voltou ao
+  padrão (chave `theme` removida).
+- **Contraste medido** (conversão manual lab/oklab/oklch → sRGB; a do canvas falhava com `lab`): abaixo de AA
+  e **anteriores ao redesign ou fora deste PR**, para o backlog: selos de status de Lançamentos no claro,
+  rótulo "Geral" da barra lateral, legenda "Mês anterior", avatar, contador "Urgentes" (destructive).
+- **Nomes acessíveis:** nenhum controle sem nome nas 14 rotas.
+
+### 13.4 Performance (§7)
+
+`origin/main` (`4261e03`, worktree temporária removida): 68 rotas, mediana **201,9 KB**. Integração: 71
+rotas, mediana **202,7**, todas ≤ 250. Rotas novas: `/cartoes/meus` 205,7, `/cartoes/proximos-meses` 187,1,
+`/cartoes/relatorios` 188,0. Cresceram ≥ 5 KB gz, todas pelas peças comuns do painel (indicador, olho,
+fachada da gaveta, bloco, rosca — a gaveta em si continua fora do manifest):
+
+| Rota | main → 08 | Por quê |
+| --- | --- | --- |
+| `/relatorios` | 196,7 → 208,3 (+11,6) | chunk de peças comuns 10,3 + cliente com filtros e projeções 8,7 |
+| `/dashboard/financeiro` | 194,1 → 203,6 (+9,5) | indicador, olho, gaveta, projeções |
+| `/faturas` | 192,4 → 199,2 (+6,8) | indicador, olho, gaveta |
+| `/dashboard` | 192,5 → 197,7 (+5,2) | bloco e card sem leitura (06) |
+| `/parcelamentos` | 193,2 → 198,2 (+5,0) | indicador, olho, gaveta |
+
+Maior queda: `/cartoes` −17,4 (05-C). Os números finais, depois de K7 e C5, estão no STATUS.
+
+### 13.5 Achados não consertados, com destino
+
+- **Contraste** dos cinco pontos do §13.3 → backlog pós-redesign (são do app original ou da casca).
+- **K1 cobre só os três indicadores:** os demais blocos de um mês além da janela (categorias, formas,
+  gráficos) mostram o que a leitura trouxe — vazio, sem a frase. → backlog.
+- **`leitura-dos-graficos.ts` (lib) importa `temDadosNasBarras` de `components/dashboard/barras-dados`** —
+  seta de camada invertida, aceita para reusar a mesma condição do gráfico (uma segunda cópia divergiria).
+  → mover `barras-dados` para `lib` numa limpeza.
+- **`painel.test.ts:261`** tem dois caracteres de controle (0x08) dentro de uma regex onde quase certamente
+  era `\b`: o teste passa com uma asserção mais fraca. O worker tentou trocar duas vezes; revertido por estar
+  fora do escopo. → tarefa avulsa.
+- **ai-router-br**: a inicialização automática removeu o bloco "AI Router BR" do `CLAUDE.md`; revertido com
+  `git checkout`. → avisar no plugin.
+- Backlog do §4.3 inteiro, K3/K4/K5/K6 adiadas, e o §4.4 do dono — listados no `PR-65.md`.
+
+### 13.6 Decisões com custo se estiverem erradas
+
+- **Não gravar no banco (opção b):** se um caminho de escrita tiver regressão que a suíte não pega, ela só
+  aparece em produção. Mitigação: os consertos da 08 não tocam escrita, e a 04-C conferiu os casos dourados
+  no banco.
+- **C4 ampliada para datas:** `semDinheiro` agora vale para qualquer texto que não é dinheiro; se alguém o
+  usar para valor, o olho deixa de escondê-lo. O nome do campo é a trava.
+- **Tabela oculta duplica o dado do gráfico no HTML:** o olho a cobre (`ValorComOlho`), mas a tooltip do
+  gráfico continua sem olho (já era assim, §4.3).
+
+### 13.7 Verificação final
+
+Ver a seção da 08 no `docs/redesign/STATUS.md` (os cinco comandos, `TZ=UTC`, md5 e a revisão final).
