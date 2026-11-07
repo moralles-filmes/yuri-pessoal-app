@@ -337,7 +337,7 @@ export function InstallmentsClient({
             icone={Layers}
             rotulo="Parcelamentos ativos"
             dica="Compras parceladas com pelo menos uma parcela ainda não paga."
-            valor={String(totais.ativos)}
+            valor={{ semDinheiro: String(totais.ativos) }}
             linhaDeBase="com parcela ainda não paga"
           />
           <Indicador

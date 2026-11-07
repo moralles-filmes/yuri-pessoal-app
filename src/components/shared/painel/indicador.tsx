@@ -80,6 +80,7 @@ function leituraDaVariacao(pct: number | null): {
  * vale para `{ naoSegue }` (o filtro ativo não alcança este número), que é outro fato. E a linha
  * de base (o que o número mede) fica sempre visível — número sem base não se interpreta.
  * `{ ausente }` é a falta de valor medido (ex.: fatura prevista): nem erro, nem zero.
+ * `{ semDinheiro }` é o valor que não é dinheiro (contagem, data): o olho dos valores não o esconde.
  */
 export function Indicador({
   tom,
@@ -99,7 +100,13 @@ export function Indicador({
   icone: LucideIcon;
   rotulo: string;
   dica: string;
-  valor: string | { erro: string } | { ausente: string } | { naoSegue: string };
+  valor:
+    | string
+    | { erro: string }
+    | { ausente: string }
+    | { naoSegue: string }
+    /** Contagem ou data: o olho só esconde dinheiro, então este valor continua visível. */
+    | { semDinheiro: string };
   linhaDeBase: string;
   /** Detalhe que contém dinheiro (ex.: "+ R$ X de terceiros"): some junto com o olho. */
   detalheComValor?: string | null;
@@ -165,6 +172,11 @@ export function Indicador({
               <span className="hidden group-data-[ocultar=true]/olho:block">
                 <span className="sr-only">valor oculto</span>
               </span>
+            </p>
+          ) : "semDinheiro" in valor ? (
+            // Contagem ou data: não é dinheiro, então o olho dos valores NÃO o esconde.
+            <p className="break-words text-2xl font-semibold tracking-tight tabular-nums">
+              {valor.semDinheiro}
             </p>
           ) : "naoSegue" in valor ? (
             // O quarto desenho (04-A2 L1): o bloco não segue o filtro. Texto, nunca número.

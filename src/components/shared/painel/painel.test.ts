@@ -294,3 +294,53 @@ describe("08-T1 — o Link do indicador não rola a página quando abre a gaveta
     expect(fonte).toContain("scroll={!abreAGaveta(href)}");
   });
 });
+
+describe("08 C4 - valor que nao e dinheiro", () => {
+  const fonte = semComentarios(ler("indicador.tsx"));
+
+  it("o tipo do valor aceita { semDinheiro: string } e o ramo é testado por 'semDinheiro' in valor", () => {
+    expect(fonte).toContain("{ semDinheiro: string }");
+    expect(fonte).toContain('"semDinheiro" in valor');
+  });
+
+  it("o ramo semDinheiro não desenha o R$ •••• nem o 'valor oculto'", () => {
+    const inicio = fonte.indexOf('"semDinheiro" in valor');
+    expect(inicio).toBeGreaterThan(-1);
+    const fim = fonte.indexOf(") : ", inicio);
+    expect(fim).toBeGreaterThan(inicio);
+    const ramo = fonte.slice(inicio, fim);
+    expect(ramo).not.toContain("R$ ••••");
+    expect(ramo).not.toContain("valor oculto");
+    expect(ramo).toContain("valor.semDinheiro");
+  });
+
+  const caminhoParcelamentos = path.resolve(
+    SRC,
+    "app",
+    "(app)",
+    "parcelamentos",
+    "installments-client.tsx",
+  );
+  const caminhoFaturas = path.resolve(
+    SRC,
+    "app",
+    "(app)",
+    "faturas",
+    "statements-client.tsx",
+  );
+
+  it("Parcelamentos ativos (contagem) é semDinheiro", () => {
+    const cliente = fs.readFileSync(caminhoParcelamentos, "utf8");
+    expect(cliente).toContain("valor={{ semDinheiro: String(totais.ativos) }}");
+  });
+
+  it("Próximo vencimento (data dd/mm) é semDinheiro", () => {
+    const cliente = fs.readFileSync(caminhoFaturas, "utf8");
+    expect(cliente).toContain("semDinheiro: diaMes(proximo.data)");
+  });
+
+  it("nenhum dos dois indicadores passa o valor por valor={String(...)}", () => {
+    expect(fs.readFileSync(caminhoParcelamentos, "utf8")).not.toContain("valor={String(");
+    expect(fs.readFileSync(caminhoFaturas, "utf8")).not.toContain("valor={String(");
+  });
+});
