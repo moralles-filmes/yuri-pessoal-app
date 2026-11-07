@@ -48,3 +48,17 @@ describe("aba Cartões de /relatorios — plural (05-C, revisão)", () => {
     expect(tela).not.toContain("${cartoesNaProvisao} cartões");
   });
 });
+
+describe("aba Cartões de /relatorios — fatura prevista não é zero (08 K7)", () => {
+  const tela = fonteSemComentarios(TELA).replace(/\s+/g, " ");
+
+  it("a linha do ciclo passa pelo valorDaFatura do painel (a mesma regra das outras telas)", () => {
+    expect(tela).toMatch(/import \{[^}]*\bvalorDaFatura\b[^}]*\} from "@\/lib\/finance\/painel"/);
+    expect(tela).toContain("valorDaFatura(f)");
+  });
+
+  it("prevista sem lançamentos escreve a frase, nunca formatCurrency(f.total) direto", () => {
+    expect(tela).toContain("sem lançamentos conhecidos");
+    expect(tela).not.toContain("formatCurrency(f.total)");
+  });
+});
