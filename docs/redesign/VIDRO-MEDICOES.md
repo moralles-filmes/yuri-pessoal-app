@@ -175,3 +175,83 @@ Safari do iPhone do dono, na mesma Wi-Fi, em `http://<IP do PC>:3000`, rolando `
 | 49.1 | `/` | 6 |
 | 49.1 | `/_not-found` | 6 |
 | 3.9 | `/_global-error` | 1 |
+
+## Desktop — depois (base do vidro, `75fd464`)
+
+Mesmo amostrador, mesmo iframe de 1280×800, servidor de produção, 2026-11-07. Rolagem total:
+`/dashboard` 1.724 px (+16, o raio maior); `/dashboard/financeiro` 4.382 px (+32).
+
+| Tela | Tema | Rodada | Quadros | fps médio | p95 (ms) | maior quadro (ms) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `/dashboard` | escuro | 1 | 1001 | 200,0 | 5,1 | 5,1 |
+| `/dashboard` | escuro | 2 | 1001 | 200,0 | 5,1 | 5,3 |
+| `/dashboard` | escuro | 3 | 1001 | 200,0 | 5,1 | 5,2 |
+| `/dashboard` | claro | 1 | 940 | 187,8 | 5,1 | 30,0 |
+| `/dashboard` | claro | 2 | 973 | 194,4 | 5,1 | 20,0 |
+| `/dashboard` | claro | 3 | 988 | 197,4 | 5,1 | 25,0 |
+| `/dashboard` | claro (2ª série) | 1 | 1001 | 200,0 | 5,1 | 5,2 |
+| `/dashboard` | claro (2ª série) | 2 | 1001 | 200,0 | 5,1 | 5,2 |
+| `/dashboard` | claro (2ª série) | 3 | 1001 | 200,0 | 5,1 | 5,3 |
+| `/dashboard/financeiro` | escuro | 1 | 1000 | 199,8 | 5,1 | 10,6 |
+| `/dashboard/financeiro` | escuro | 2 | 1001 | 200,0 | 5,1 | 5,3 |
+| `/dashboard/financeiro` | escuro | 3 | 999 | 199,6 | 5,1 | 11,1 |
+| `/dashboard/financeiro` | claro | 1 | 1001 | 200,0 | 5,1 | 5,2 |
+| `/dashboard/financeiro` | claro | 2 | 1001 | 200,0 | 5,1 | 5,2 |
+| `/dashboard/financeiro` | claro | 3 | 1001 | 200,0 | 5,1 | 5,2 |
+
+**Aceite: nenhum quadro acima de 50 ms** (o "antes" tinha um de 64,8). A 1ª série de
+`/dashboard` claro teve engasgos de 20–30 ms nas três rodadas; repetida logo em seguida, saiu
+limpa (5,2–5,3 ms nas três). Se fosse custo de pintura do vidro, ele voltaria na segunda série; o padrão
+aponta para trabalho de fundo da máquina naquele momento, não para a névoa. O p95 continua
+preso no intervalo de um quadro (5,1 ms), com o mesmo limite de medição do "antes" (sem
+desaceleração de CPU).
+
+## iPhone — depois
+
+Mesmo método do "antes": Safari do iPhone do dono, mesma Wi-Fi, `http://<IP do PC>:3000`,
+`/dashboard` e `/dashboard/financeiro` nos dois temas.
+
+> "Teste no iphone tudo ok" (resposta do dono, 2026-11-07).
+
+É a única confirmação do `backdrop-filter` no Safari/WebKit: o desktop mediu no Chrome.
+
+## Testes e orçamento — depois
+
+- `npm run test:run -- --testTimeout=30000`: **8.338 testes em 371 arquivos**, todos verdes
+  (+53 testes e +3 arquivos: `contraste`, `contraste-dos-tokens` e `vidro`).
+- `npm run lint` e `npx tsc --noEmit`: limpos.
+- `npm run build`: ok.
+- `npm run perf:bundle`: todas as rotas dentro do orçamento, mediana **203,0 KB** gz (igual),
+  71 rotas. Comparando as 71 com a tabela do "antes": **nenhuma subiu**; duas caíram 0,1 KB
+  (`/(app)/treinos/calendario` e `/(app)/ia`), as outras 69 ficaram idênticas. A névoa, os
+  materiais e a fonte são CSS e não entram na conta de JS. A Inter passou a `preload: false`:
+  o woff2 latino (47,3 KB) só baixa onde a fonte do sistema Apple não existe.
+
+## Conferência visual — depois
+
+`/dashboard`, `/financeiro` e `/todo` com a sessão do dono (iframes de 390/768/1280/1440 px),
+`/login` sem sessão (Chrome headless), claro e escuro. A névoa aparece atrás do conteúdo em
+todas, os cartões ficam translúcidos e o texto continua legível. Sem as primitivas (09-B) e a
+casca (09-C), estas coisas ainda destoam — anotadas, não corrigidas:
+
+- **Header** continua `bg-background/80`: no escuro vira uma faixa mais escura sobre a névoa (09-C).
+- **Painel da marca do `/login`** continua opaco e quase preto no escuro, cortando a névoa ao
+  meio da tela a partir de 768 px (09-C).
+- **Botão primário no escuro** continua `bg-primary` (azul-claro com texto escuro), não
+  `--primary-fill` (09-B).
+- **`Card` no claro** está sem borda de luz, então o cartão translúcido se separa da névoa só
+  pela sombra (09-B).
+
+## Raio de 1rem — onde ficou exagerado (T6, anotado sem corrigir)
+
+Percorrido a 390 e a 1440 px: `/dashboard`, `/financeiro/lancamentos` (com o diálogo "Novo
+lançamento" aberto), `/todo`, `/treinos` e `/configuracoes`, nos dois temas.
+
+| Onde | O que se vê | Quem corrige |
+| --- | --- | --- |
+| `Input`, `SelectTrigger` (altura ~32 px, `rounded-lg` = 1rem) | quase pílula; nos formulários densos (diálogo de lançamento, Configurações) os campos parecem botões | 09-B: campos são ladrilho de 14–16 px (desenho §6.5), não pílula |
+| `Textarea` ("Observações" do lançamento) | cantos de 1rem numa caixa baixa; a borda superior quase some nos cantos | 09-B |
+| Bloco "Classificação" dentro do diálogo (`rounded-xl` = 1,4rem) | raio maior que o do campo de dentro e sem relação com o do diálogo: não é concêntrico | 09-F (módulo financeiro) |
+| Fichas de contagem do TO-DO (Pendentes, Para hoje…) | raio de cartão em peças de ~40 px de altura, ficam ovais | 09-F (TO-DO) ou 09-B se forem `Card` |
+| Botões pequenos (`size="sm"`) e chips de filtro | já quase pílula; está na direção do desenho (botão em pílula) | — |
+| Caixas de seleção | continuam quadradas arredondadas; aceitável | — |
