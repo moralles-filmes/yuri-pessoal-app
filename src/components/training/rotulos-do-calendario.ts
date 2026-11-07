@@ -18,7 +18,7 @@ import {
   type DerivedScheduleStatus,
   type ScheduleStatus,
 } from "@/lib/training/constants";
-import { derivePlannedStatus } from "@/lib/training/schedule";
+import { derivePlannedStatus, trocaDoDia } from "@/lib/training/schedule";
 
 /** O que a tela mostra: o status derivado, ou "descanso" — que não é treino atrasado. */
 export type StatusExibido = DerivedScheduleStatus | "descanso";
@@ -88,4 +88,20 @@ export function rotuloDaCelulaDoMes(
     partes.push(status === "descanso" ? "descanso" : `${e.nome}: ${ROTULOS_DO_STATUS[status].toLowerCase()}`);
   }
   return `${partes.join(" · ")}. Adicionar treino`;
+}
+
+type EntradaComTroca = Parameters<typeof trocaDoDia>[0];
+
+/**
+ * O nome que o calendário mostra para um dia de treino: o que foi FEITO quando houve troca
+ * (planejou Peito, fez Costas), senão o planejado. O plano original aparece em `textoDaTroca`.
+ */
+export function nomeNoCalendario(entry: EntradaComTroca): string {
+  return trocaDoDia(entry)?.feito ?? entry.workoutName ?? entry.title ?? "Treino";
+}
+
+/** "no lugar de Peito" — ou `null` quando o dia não foi trocado. */
+export function textoDaTroca(entry: EntradaComTroca): string | null {
+  const troca = trocaDoDia(entry);
+  return troca ? `no lugar de ${troca.era}` : null;
 }

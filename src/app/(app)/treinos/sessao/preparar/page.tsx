@@ -40,7 +40,7 @@ export const metadata: Metadata = { title: "Preparar treino · Treinos" };
 export default async function PrepararPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; treino?: string; planejado?: string }>;
+  searchParams: Promise<{ id?: string; treino?: string; planejado?: string; trocar?: string }>;
 }) {
   const params = await searchParams;
 
@@ -146,6 +146,7 @@ export default async function PrepararPage({
         catalogSize={catalog.length}
         defaultWorkoutId={params.treino ?? null}
         defaultScheduledId={params.planejado ?? null}
+        startReplacing={params.trocar === "1"}
         preferences={preferences}
       />
     </div>

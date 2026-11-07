@@ -10,6 +10,8 @@ import {
   rotuloDeDescanso,
   statusExibido,
   textoDaColunaDaSemana,
+  nomeNoCalendario,
+  textoDaTroca,
 } from "./rotulos-do-calendario";
 import { textoDoDiaDaConsistencia } from "./rotulos-da-consistencia";
 import { rotuloDoChipDeSerie } from "./session/rotulos-da-sessao";
@@ -106,5 +108,20 @@ describe("consistência e chips de série", () => {
     expect(rotuloDoChipDeSerie({ setNumber: 3, isWarmup: false, status: "concluida" })).toBe("Série 3, concluída");
     expect(rotuloDoChipDeSerie({ setNumber: 1, isWarmup: true, status: "pulada" })).toBe("Série 1 de aquecimento, pulada");
     expect(rotuloDoChipDeSerie({ setNumber: 4, isWarmup: false, status: "pendente" })).toBe("Série 4, pendente");
+  });
+});
+
+describe("troca do treino do dia no calendário", () => {
+  const base = { workoutId: "peito", workoutName: "Peito", title: null };
+
+  it("mostra o que foi feito e diz o que estava planejado", () => {
+    const trocado = { ...base, performed: { workoutId: "costas", workoutName: "Costas" } };
+    expect(nomeNoCalendario(trocado)).toBe("Costas");
+    expect(textoDaTroca(trocado)).toBe("no lugar de Peito");
+  });
+
+  it("sem troca, o nome é o planejado e não há texto de troca", () => {
+    expect(nomeNoCalendario(base)).toBe("Peito");
+    expect(textoDaTroca(base)).toBeNull();
   });
 });

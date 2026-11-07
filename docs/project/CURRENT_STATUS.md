@@ -5,6 +5,21 @@
 > memória, 18-F Bloco 2 · botão flutuante, 18-F Bloco 1 + auditoria de performance + iteração:
 > transferência na importação de extrato).
 
+## 🟢 Tarefa avulsa · Treinos: trocar o treino do dia (2026-11-07)
+
+Relato do dono: planejou Peito na segunda, quis fazer Costas e teve de **apagar o dia** do
+calendário (visto no banco em 27/10). Não havia bloqueio: faltava o caminho. Iniciar outro treino
+deixava a sessão solta, e o dia planejado virava "Atrasado".
+
+- `/treinos/sessao/preparar` ganhou **"Fazer outro treino no lugar"** (e `/treinos/hoje`, o botão
+  **Trocar** → `?planejado=<id>&trocar=1`). Com a troca ativa, qualquer origem (cadastrado,
+  favorito, livre, repetir, duplicar) leva `scheduled_workout_id`; ao finalizar, o dia fica
+  `concluido` pelo caminho de sempre.
+- **A troca é DERIVADA, sem migration:** o planejamento continua dizendo o treino original;
+  `getScheduledWorkouts` lê a sessão concluída ligada ao dia (`performed`) e `trocaDoDia`
+  (`schedule.ts`, puro e testado) compara. O calendário mostra "Costas · no lugar de Peito".
+- Fora do escopo: o evento do Google Agenda mantém o nome do treino planejado.
+
 ## 🟢 Redesign financeiro (REDESIGN-00 a 08) — fechado em 2026-11-07, à espera do merge do PR #65
 
 O financeiro (Painel `/dashboard/financeiro`, `/relatorios`, `/faturas`, `/cartoes` e subpáginas,

@@ -18,6 +18,7 @@ import {
   derivePlannedStatus,
   diffDaysIso,
   duplicateWeek,
+  trocaDoDia,
   eachDayIso,
   endOfMonthIso,
   entriesForDay,
@@ -609,5 +610,34 @@ describe("summarizeAdherence — só o passado entra na conta", () => {
 
   it("sem nada planejado a taxa é null, e NÃO 0%", () => {
     expect(summarizeAdherence([], hoje).rate).toBeNull();
+  });
+});
+
+/* ───────────── Troca do treino do dia ───────────── */
+
+describe("trocaDoDia", () => {
+  const planejado = { workoutId: "peito", workoutName: "Peito", title: null };
+
+  it("sem sessão concluída não há troca", () => {
+    expect(trocaDoDia({ ...planejado, performed: null })).toBeNull();
+    expect(trocaDoDia(planejado)).toBeNull();
+  });
+
+  it("mesmo treino executado não é troca", () => {
+    expect(
+      trocaDoDia({ ...planejado, performed: { workoutId: "peito", workoutName: "Peito (v2)" } }),
+    ).toBeNull();
+  });
+
+  it("treino diferente executado no dia é troca, e o plano original continua dito", () => {
+    expect(
+      trocaDoDia({ ...planejado, performed: { workoutId: "costas", workoutName: "Costas" } }),
+    ).toEqual({ feito: "Costas", era: "Peito" });
+  });
+
+  it("treino livre (sem modelo) no lugar do planejado também é troca", () => {
+    expect(
+      trocaDoDia({ ...planejado, performed: { workoutId: null, workoutName: "Treino no hotel" } }),
+    ).toEqual({ feito: "Treino no hotel", era: "Peito" });
   });
 });
