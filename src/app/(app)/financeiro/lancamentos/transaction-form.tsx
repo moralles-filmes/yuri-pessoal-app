@@ -543,6 +543,12 @@ export function TransactionFormDialog({
                     value={field.value}
                     onValueChange={(v) => {
                       field.onChange(v);
+                      // 04-C (conferência visual) — o status liquidado acompanha o tipo: receita
+                      // "Pago" (herdado do padrão da despesa) não conta como pagamento de pessoa
+                      // nenhuma (a realocação só vê `recebido`), e a prévia diria "pendente".
+                      const statusAtual = getValues("status");
+                      if (v === "receita" && statusAtual === "pago") setValue("status", "recebido");
+                      if (v !== "receita" && statusAtual === "recebido") setValue("status", "pago");
                       if (v === "transferencia") {
                         setValue("category_id", NONE);
                         setValue("subcategory_id", NONE);
