@@ -28,6 +28,7 @@ import type { RecebivelParaProteger } from "@/lib/finance/protecao-do-recebivel"
 import {
   ehManual,
   montarEstadoDoReembolso,
+  partesDasReceitasVinculadas,
   type LinhaDeReceitaVinculada,
   type LinhaDeRecebivelDaPessoa,
 } from "@/lib/finance/recebimentos";
@@ -166,13 +167,17 @@ export async function lerEstadoDoReembolso(
   return montarEstadoDoReembolso({ receitas, recebiveis, recebimentos: [...unicos.values()] });
 }
 
+export type SituacaoDaPessoa = { devidoCentavos: number; saldoAFavorCentavos: number };
+export type PagamentoDaPessoa = { transactionId: string; centavos: number; data: string; contaId: string | null };
+
 /**
- * Quanto cada pessoa deve e quanto tem de saldo a favor, depois de aplicar a regra. Só aparece
- * quem tem recebível ou receita vinculada. `owner` (Cron) filtra `user_id` explicitamente.
+ * Quanto cada pessoa deve e quanto tem de saldo a favor, depois de aplicar a regra, e os
+ * PAGAMENTOS dela (as receitas vinculadas recebidas, mais recente primeiro). Só aparece quem tem
+ * recebível ou receita vinculada. `owner` (Cron) filtra `user_id` explicitamente.
  */
-export async function lerSituacoesDoReembolso(
+export async function lerReembolsosPorPessoa(
   owner?: LeituraDoDono,
-): Promise<Map<string, { devidoCentavos: number; saldoAFavorCentavos: number }>> {
+): Promise<{ situacoes: Map<string, SituacaoDaPessoa>; pagamentos: Map<string, PagamentoDaPessoa[]> }> {
   const supabase = owner?.client ?? (await createClient());
 
   const baseDasReceitas = supabase
@@ -215,18 +220,31 @@ export async function lerSituacoesDoReembolso(
     if (pReceita && pReceita !== pDivida) guardar(pReceita, x);
   }
 
-  const resultado = new Map<string, { devidoCentavos: number; saldoAFavorCentavos: number }>();
+  const situacoes = new Map<string, SituacaoDaPessoa>();
+  const pagamentos = new Map<string, PagamentoDaPessoa[]>();
   for (const pessoa of new Set([...receitasDe.keys(), ...recebiveisDe.keys()])) {
-    resultado.set(
+    const receitasDela = receitasDe.get(pessoa) ?? [];
+    situacoes.set(
       pessoa,
       situacaoDaPessoa(
         montarEstadoDoReembolso({
-          receitas: receitasDe.get(pessoa) ?? [],
+          receitas: receitasDela,
           recebiveis: recebiveisDe.get(pessoa) ?? [],
           recebimentos: recebimentosDe.get(pessoa) ?? [],
         }),
       ),
     );
+    pagamentos.set(
+      pessoa,
+      partesDasReceitasVinculadas(receitasDela).sort(
+        (a, b) => b.data.localeCompare(a.data) || a.transactionId.localeCompare(b.transactionId),
+      ),
+    );
   }
-  return resultado;
+  return { situacoes, pagamentos };
+}
+
+/** Só as situações (devido e saldo a favor) — a mesma leitura de `lerReembolsosPorPessoa`. */
+export async function lerSituacoesDoReembolso(owner?: LeituraDoDono): Promise<Map<string, SituacaoDaPessoa>> {
+  return (await lerReembolsosPorPessoa(owner)).situacoes;
 }

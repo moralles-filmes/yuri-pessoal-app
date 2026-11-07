@@ -1028,7 +1028,7 @@ describe("8 · 03-D — status de recebível, um a um", () => {
   });
 
   it("totalAReceber ignora status desconhecido — allowlist, não lista de proibidos", () => {
-    // ⚠️ O filtro é `RECEIVABLE_OPEN_STATUSES.includes(...)`. Um quinto status nasceria
+    // ⚠️ O filtro é `emAberto` (estado derivado, allowlist de `ESTADOS_EM_ABERTO`). Um quinto status nasceria
     // FORA do total, em silêncio — errando para "pode faltar coisa", que é o erro aceitável.
     expect(totalAReceber(um("parcial"))).toBe(0);
     expect(totalAReceber(um(""))).toBe(0);

@@ -378,18 +378,14 @@ export type LinhaDeRecebimentoDoReembolso = {
 };
 
 /**
- * As linhas cruas de UMA pessoa → o `EstadoDoReembolso` que a regra de `reembolso.ts` consome.
- * Puro (sem I/O). A ordem das dívidas é a da regra (`ordenarDividas`), que espelha o SQL; aqui só
- * se resolve a DATA DA DÍVIDA, na mesma precedência da M3: vencimento da fatura → competência do
- * lançamento de origem → data prevista → dia de criação EM BRASÍLIA.
+ * 04-C T8 — a conta ÚNICA da parte que uma receita vinculada paga: só `receita` + `recebido`,
+ * parte = amount − valor_pessoal (o que não é meu) e > 0, na data de liquidação (ou competência).
+ * `montarEstadoDoReembolso` e a ficha da pessoa leem daqui: duas contas fariam a tela e o motor
+ * discordarem sobre quanto a pessoa pagou.
  */
-export function montarEstadoDoReembolso(a: {
-  readonly receitas: readonly LinhaDeReceitaVinculada[];
-  readonly recebiveis: readonly LinhaDeRecebivelDaPessoa[];
-  readonly recebimentos: readonly LinhaDeRecebimentoDoReembolso[];
-}): EstadoDoReembolso {
+function pagamentosDasReceitas(receitas: readonly LinhaDeReceitaVinculada[]): PagamentoDoReembolso[] {
   const pagamentos: PagamentoDoReembolso[] = [];
-  for (const t of a.receitas) {
+  for (const t of receitas) {
     if (t.type !== "receita" || t.status !== "recebido") continue;
     const parteCentavos = cent(t.amount) - cent(t.valor_pessoal ?? 0);
     if (parteCentavos <= 0) continue;
@@ -401,6 +397,33 @@ export function montarEstadoDoReembolso(a: {
       criadoEm: t.created_at,
     });
   }
+  return pagamentos;
+}
+
+/** Os pagamentos da pessoa (receitas vinculadas), na forma que a ficha mostra. Centavos. */
+export function partesDasReceitasVinculadas(
+  receitas: readonly LinhaDeReceitaVinculada[],
+): { transactionId: string; centavos: number; data: string; contaId: string | null }[] {
+  return pagamentosDasReceitas(receitas).map((p) => ({
+    transactionId: p.transactionId,
+    centavos: p.parteCentavos,
+    data: p.recebidoEm,
+    contaId: p.contaId,
+  }));
+}
+
+/**
+ * As linhas cruas de UMA pessoa → o `EstadoDoReembolso` que a regra de `reembolso.ts` consome.
+ * Puro (sem I/O). A ordem das dívidas é a da regra (`ordenarDividas`), que espelha o SQL; aqui só
+ * se resolve a DATA DA DÍVIDA, na mesma precedência da M3: vencimento da fatura → competência do
+ * lançamento de origem → data prevista → dia de criação EM BRASÍLIA.
+ */
+export function montarEstadoDoReembolso(a: {
+  readonly receitas: readonly LinhaDeReceitaVinculada[];
+  readonly recebiveis: readonly LinhaDeRecebivelDaPessoa[];
+  readonly recebimentos: readonly LinhaDeRecebimentoDoReembolso[];
+}): EstadoDoReembolso {
+  const pagamentos = pagamentosDasReceitas(a.receitas);
 
   const idsDasDividas = new Set(a.recebiveis.map((r) => r.id));
   const idsDasReceitas = new Set(a.receitas.map((t) => t.id));
@@ -441,4 +464,59 @@ export function montarEstadoDoReembolso(a: {
   }));
 
   return { pagamentos, dividas, alocacoes };
+}
+
+// ───────────────────────────── 04-C T8 · Terceiros por pessoa ─────────────────────────────
+
+/**
+ * A ficha de UMA pessoa: o que ela deve (Σ dos SALDOS em aberto — parcelas futuras incluídas),
+ * o saldo a favor e os tamanhos das listas. É a ÚNICA soma por pessoa da tela de Terceiros
+ * (RR-D-21): por teste, igual ao `aReceberPorPessoa` do Painel quando todo recebimento está
+ * datado até o corte. O saldo a favor só aparece sem dívida — os dois nunca coexistem (§5.2).
+ */
+export function resumoDaPessoa(
+  recs: readonly RecebivelComRecebimentos[],
+  saldoAFavorCentavos: number,
+): { devidoCentavos: number; saldoAFavorCentavos: number; emAberto: number; pagos: number } {
+  const secoes = secoesDaLista(recs, (r) => estadoDoRecebivel(resumirRecebivel(r)));
+  const devidoCentavos = secoes.emAberto.reduce((s, r) => s + saldoCentavos(resumirRecebivel(r)), 0);
+  return {
+    devidoCentavos,
+    saldoAFavorCentavos: devidoCentavos > 0 ? 0 : Math.max(0, saldoAFavorCentavos),
+    emAberto: secoes.emAberto.length,
+    pagos: secoes.historico.length,
+  };
+}
+
+/**
+ * "Reembolsos recebidos neste período" de uma pessoa (ou de todas, juntando as listas): as
+ * entradas MANUAIS (já com o legado K0 — `entradasManuaisDoRecebivel`) mais a parte de cada
+ * receita vinculada. O pagamento conta INTEIRO, inclusive o que virou saldo a favor, porque o
+ * dinheiro entrou. Centavos; limites inclusivos; data nula (legado sem `pago_em`) fica de fora.
+ */
+export function recebidoDaPessoaNoPeriodo(a: {
+  readonly entradasManuais: readonly { readonly centavos: number; readonly data: string | null }[];
+  readonly partesDasReceitasVinculadas: readonly { readonly centavos: number; readonly data: string }[];
+  readonly periodo: { readonly de: string; readonly ate: string };
+}): number {
+  const { de, ate } = a.periodo;
+  let total = 0;
+  for (const e of a.entradasManuais) {
+    if (e.data === null || e.data < de || e.data > ate) continue;
+    total += e.centavos;
+  }
+  for (const p of a.partesDasReceitasVinculadas) {
+    if (p.data < de || p.data > ate) continue;
+    total += p.centavos;
+  }
+  return total;
+}
+
+/**
+ * O Desfazer só alcança o que o DONO registrou: um recebimento MANUAL, ou o legado K0 (`pago` sem
+ * nenhum recebimento). Recebimento automático nasce de uma receita e se desfaz editando ou
+ * excluindo a receita.
+ */
+export function recebimentoDesfazivel(r: RecebivelComRecebimentos): boolean {
+  return r.recebimentos.some(ehManual) || (r.status === "pago" && r.recebimentos.length === 0);
 }

@@ -268,10 +268,7 @@ export async function aplicarAcaoEmMassa(
   ctx: ContextoDoServico,
   ids: readonly string[],
   acao: BulkReceivableAction,
-  data: string,
-  hoje: string,
 ): Promise<ActionResult<{ afetados: number; ignorados: number }>> {
-  if (acao === "receber" && data > hoje) return invalid({ pago_em: [MSG.futuro] });
   const unicos = [...new Set(ids)];
   let afetados = 0;
 
@@ -293,37 +290,11 @@ export async function aplicarAcaoEmMassa(
       if (alvo.length === 0) continue;
       const { data: alterados, error: e } = await ctx.supabase
         .from("receivables")
-        .update(patchDaAcao(acao, data))
+        .update(patchDaAcao(acao))
         .in("id", alvo)
         .in("status", ORIGENS_DA_ACAO[acao])
         .select("id");
       if (e) return falhaNoMeio(afetados);
-      afetados += alterados?.length ?? 0;
-      continue;
-    }
-
-    if (acao === "receber") {
-      const novos: { user_id: string; receivable_id: string; valor: number; recebido_em: string; observacoes: null }[] = [];
-      const alvo: string[] = [];
-      for (const r of lidos) {
-        const { estado, saldo } = situacao(r);
-        if (!emAberto(resumirRecebivel(r)) && estado !== "pago") continue;
-        if (saldo > 0) {
-          novos.push({ user_id: ctx.userId, receivable_id: r.id, valor: centavosParaReais(saldo), recebido_em: data, observacoes: null });
-        }
-        alvo.push(r.id);
-      }
-      if (novos.length > 0) {
-        const { error: e } = await ctx.supabase.from("receivable_receipts").insert(novos);
-        if (e) return falhaNoMeio(afetados, e.code === "23514" ? MSG.saldoMudou : undefined);
-      }
-      if (alvo.length === 0) continue;
-      const { data: alterados, error: e } = await ctx.supabase
-        .from("receivables")
-        .update({ status: "pago", pago_em: data })
-        .in("id", alvo)
-        .select("id");
-      if (e) return falhaNoMeio(afetados, MSG.colunaDepois);
       afetados += alterados?.length ?? 0;
       continue;
     }

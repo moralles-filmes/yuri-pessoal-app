@@ -288,16 +288,15 @@ describe("decidir (K1)", () => {
 });
 
 describe("lote", () => {
-  it("K2: cada linha do insert de receber contém somente as cinco chaves permitidas", async () => {
-    const { fake, ctx } = cenario({}, [], [
-      { id: "rec-2", user_id: "user-1", valor: 100, status: "cobrado", pago_em: null },
-    ]);
-    const r = await aplicarAcaoEmMassa(ctx, [REC, "rec-2"], "receber", HOJE, HOJE);
-    expect(r.ok).toBe(true);
-    const linhas = fake.escritas("receivable_receipts")[0].valores as Linha[];
-    expect(linhas).toHaveLength(2);
-    for (const linha of linhas) {
-      expect(Object.keys(linha).sort()).toEqual(["observacoes", "recebido_em", "receivable_id", "user_id", "valor"]);
+  it("04-C T8: o lote não tem mais 'receber' e nenhuma ação em massa grava pago nem insere recebimento", async () => {
+    for (const acao of ["cobrado", "ignorar"] as const) {
+      const { fake, ctx } = cenario({}, [], [{ id: "rec-2", user_id: "user-1", valor: 100, status: "cobrado", pago_em: null }]);
+      const r = await aplicarAcaoEmMassa(ctx, [REC, "rec-2"], acao);
+      expect(r.ok).toBe(true);
+      expect(fake.escritas("receivable_receipts")).toHaveLength(0);
+      for (const escrita of fake.escritas("receivables")) {
+        expect((escrita.valores as { status?: string }).status).not.toBe("pago");
+      }
     }
   });
 
@@ -307,7 +306,7 @@ describe("lote", () => {
       op.tabela === "receivable_receipts" && op.tipo === "delete"
         ? { code: "57014", message: "Exclusão recusada." } : null,
     );
-    const r = await aplicarAcaoEmMassa(ctx, [REC], "desfazer", HOJE, HOJE);
+    const r = await aplicarAcaoEmMassa(ctx, [REC], "desfazer");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe("Os recebíveis voltaram para pendente, mas os recebimentos não foram removidos. Use Desfazer em cada recebível para concluir.");
     expect(fake.tabelas.receivables[0].status).toBe("pendente");
@@ -315,22 +314,9 @@ describe("lote", () => {
     expect(fake.operacoes.map((o) => `${o.tipo}:${o.tabela}`)).toEqual(["update:receivables"]);
   });
 
-  it("receber: um recebimento do SALDO por recebível; ignorado fica de fora", async () => {
-    const { fake, ctx } = cenario({}, [receb("r1", 250, "2026-06-05")], [
-      { id: "rec-2", user_id: "user-1", valor: 100, status: "ignorado", pago_em: null },
-    ]);
-    const r = await aplicarAcaoEmMassa(ctx, [REC, "rec-2"], "receber", "2026-06-25", HOJE);
-    expect(r).toEqual({ ok: true, data: { afetados: 1, ignorados: 1 } });
-    expect(fake.operacoes.map((o) => `${o.tipo}:${o.tabela}`)).toEqual([
-      "insert:receivable_receipts",
-      "update:receivables",
-    ]);
-    expect((fake.escritas("receivable_receipts")[0].valores as Linha[]).map((v) => v.valor)).toEqual([350]);
-  });
-
   it("desfazer: reabre a coluna ANTES de apagar o último", async () => {
     const { fake, ctx } = cenario({ status: "pago", pago_em: "2026-06-20" }, [receb("r1", 600, "2026-06-20")]);
-    await aplicarAcaoEmMassa(ctx, [REC], "desfazer", "2026-06-25", HOJE);
+    await aplicarAcaoEmMassa(ctx, [REC], "desfazer");
     expect(fake.operacoes.map((o) => `${o.tipo}:${o.tabela}`)).toEqual([
       "update:receivables",
       "delete:receivable_receipts",
@@ -346,7 +332,7 @@ describe("lote", () => {
       ],
       [{ id: "rec-2", user_id: "user-1", valor: 100, status: "pago", pago_em: "2026-06-20" }],
     );
-    const r = await aplicarAcaoEmMassa(ctx, [REC, "rec-2"], "desfazer", HOJE, HOJE);
+    const r = await aplicarAcaoEmMassa(ctx, [REC, "rec-2"], "desfazer");
     expect(r).toEqual({ ok: true, data: { afetados: 1, ignorados: 1 } });
     expect(fake.tabelas.receivable_receipts.map((x) => x.id)).toEqual(["a2"]);
     expect(fake.tabelas.receivables.find((x) => x.id === "rec-2")?.status).toBe("pago");
@@ -358,20 +344,20 @@ describe("lote", () => {
       receb("m1", 300, "2026-06-05", "2026-06-05T12:00:00Z"),
       { ...receb("a1", 300, "2026-06-20", "2026-06-20T12:00:00Z"), transaction_id: "tx-receita" },
     ]);
-    await aplicarAcaoEmMassa(ctx, [REC], "desfazer", HOJE, HOJE);
+    await aplicarAcaoEmMassa(ctx, [REC], "desfazer");
     expect(fake.tabelas.receivable_receipts.map((x) => x.id)).toEqual(["a1"]);
   });
 
   it("ignorar não alcança quem a soma já quitou (coluna ainda pendente)", async () => {
     const { fake, ctx } = cenario({}, [receb("r1", 600, "2026-06-05")]);
-    const r = await aplicarAcaoEmMassa(ctx, [REC], "ignorar", "2026-06-25", HOJE);
+    const r = await aplicarAcaoEmMassa(ctx, [REC], "ignorar");
     expect(r).toEqual({ ok: true, data: { afetados: 0, ignorados: 1 } });
     expect(fake.escritas("receivables")).toHaveLength(0);
   });
 });
 
 describe("K1 — a primeira escrita falha, a segunda nao acontece", () => {
-  it.each(["registrarRecebimento", "receberSaldo", "lote receber"] as const)(
+  it.each(["registrarRecebimento", "receberSaldo"] as const)(
     "%s: insert recusado impede atualizar a coluna", async (acao) => {
       const antesDeGravar = vi.fn((op: EscritaPretendida) =>
         op.tabela === "receivable_receipts" && op.tipo === "insert"
@@ -380,9 +366,7 @@ describe("K1 — a primeira escrita falha, a segunda nao acontece", () => {
       const { fake, ctx } = cenario({}, [receb("r1", 250, "2026-06-05")], [], antesDeGravar);
       const r = acao === "registrarRecebimento"
         ? await registrarRecebimento(ctx, { receivable_id: REC, valor: 350, recebido_em: HOJE, observacoes: null }, HOJE)
-        : acao === "receberSaldo"
-          ? await receberSaldo(ctx, REC, HOJE, HOJE)
-          : await aplicarAcaoEmMassa(ctx, [REC], "receber", HOJE, HOJE);
+        : await receberSaldo(ctx, REC, HOJE, HOJE);
       expect(r.ok).toBe(false);
       expect(antesDeGravar).toHaveBeenCalledTimes(1);
       expect(antesDeGravar.mock.calls[0][0]).toMatchObject({ tabela: "receivable_receipts", tipo: "insert" });
@@ -401,7 +385,7 @@ describe("K1 — a primeira escrita falha, a segunda nao acontece", () => {
       const { fake, ctx } = cenario({ status: "pago", pago_em: "2026-06-20" }, recebimentos, [], antesDeGravar);
       const r = acao === "desfazerUltimoRecebimento"
         ? await desfazerUltimoRecebimento(ctx, REC)
-        : await aplicarAcaoEmMassa(ctx, [REC], "desfazer", HOJE, HOJE);
+        : await aplicarAcaoEmMassa(ctx, [REC], "desfazer");
       expect(r.ok).toBe(false);
       expect(antesDeGravar).toHaveBeenCalledTimes(1);
       expect(antesDeGravar.mock.calls[0][0]).toMatchObject({ tabela: "receivables", tipo: "update" });

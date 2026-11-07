@@ -2,20 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
-import { hojeISO } from "@/lib/format";
 import type { ReceivableStatus } from "@/lib/finance/constants";
 import {
   aplicarAcaoEmMassa,
   decidirRecebivel,
   desfazerUltimoRecebimento,
-  receberSaldo,
-  registrarRecebimento,
 } from "@/lib/finance/recebimentos-servico";
-import {
-  bulkReceivablesSchema,
-  receberSaldoSchema,
-  registrarRecebimentoSchema,
-} from "@/lib/validators/receivable";
+import { bulkReceivablesSchema, receberSaldoSchema } from "@/lib/validators/receivable";
 import type { ActionResult } from "@/types/finance";
 
 function revalidateReceivables() {
@@ -24,30 +17,10 @@ function revalidateReceivables() {
   revalidatePath("/parcelamentos");
 }
 
-/** "Receber": recebimento do saldo restante + coluna em `pago` (K1). Data padrão: hoje. */
-export async function markReceivableReceived(id: string, pagoEm?: string): Promise<ActionResult> {
-  const ctx = await authContext();
-  if (!ctx) return notAuthed;
-  const parsed = receberSaldoSchema.safeParse({ id, ...(pagoEm ? { recebido_em: pagoEm } : {}) });
-  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
-  const hoje = hojeISO();
-  const res = await receberSaldo(ctx, parsed.data.id, parsed.data.recebido_em ?? hoje, hoje);
-  if (res.ok) revalidateReceivables();
-  return res;
-}
-
-/** Registrar um recebimento (parcial ou total). */
-export async function registrarRecebimentoAction(input: unknown): Promise<ActionResult> {
-  const ctx = await authContext();
-  if (!ctx) return notAuthed;
-  const parsed = registrarRecebimentoSchema.safeParse(input);
-  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
-  const res = await registrarRecebimento(ctx, parsed.data, hojeISO());
-  if (res.ok) revalidateReceivables();
-  return res;
-}
-
-/** "Desfazer": remove o ÚLTIMO recebimento (ou reabre o legado). */
+/**
+ * "Desfazer": remove o ÚLTIMO recebimento MANUAL (ou reabre o legado). 04-C T8: o "Receber" e o
+ * registro manual saíram da tela — o reembolso entra por uma receita vinculada à pessoa.
+ */
 export async function desfazerRecebimentoAction(id: string): Promise<ActionResult> {
   const ctx = await authContext();
   if (!ctx) return notAuthed;
@@ -66,7 +39,7 @@ export async function setReceivableStatus(id: string, status: ReceivableStatus):
   const ctx = await authContext();
   if (!ctx) return notAuthed;
   if (status !== "pendente" && status !== "cobrado" && status !== "ignorado") {
-    return dbError("Use Receber para marcar como recebido.");
+    return dbError("Um recebimento entra por uma receita vinculada à pessoa, não por aqui.");
   }
   const res = await decidirRecebivel(ctx, id, status);
   if (res.ok) revalidateReceivables();
@@ -85,8 +58,7 @@ export async function bulkSetReceivableStatus(
   if (!ctx) return notAuthed;
   const parsed = bulkReceivablesSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
-  const hoje = hojeISO();
-  const res = await aplicarAcaoEmMassa(ctx, parsed.data.ids, parsed.data.acao, parsed.data.pago_em ?? hoje, hoje);
+  const res = await aplicarAcaoEmMassa(ctx, parsed.data.ids, parsed.data.acao);
   if (res.ok) revalidateReceivables();
   return res;
 }
