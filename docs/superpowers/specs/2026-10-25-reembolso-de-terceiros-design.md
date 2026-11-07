@@ -501,8 +501,8 @@ mudou saldo.
 | /importar | 203,1 | 206,3 | +3,2 (diálogo de reembolso, sem `next/dynamic`, como o de divisão) |
 
 - Toda regra nova teve **mutação confirmada** (quebrar → teste vermelho → restaurar → conferir).
-- Casos dourados SQL (`verificar-reembolso.sql`, `begin … rollback`): **PENDENTE** — o MCP recusa o
-  script (tem `delete`); entregue ao dono para rodar no SQL Editor.
+- Casos dourados SQL (`verificar-reembolso.sql`, `begin … rollback`): **todos conferem** — rodado pelo
+  dono no SQL Editor em 2026-11-06 (o MCP recusa o script por ter `delete`); nada gravado.
 - Conferência visual (390/768/1280/1440, claro e escuro): **PENDENTE** — exige o `.env.local`,
   que só é copiado com o aval do dono.
 
