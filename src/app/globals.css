@@ -101,7 +101,7 @@
     "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
 
-  --radius: 0.7rem;
+  --radius: 1rem;
 
   /* NÉVOA (09-A): o fundo do app é uma base opaca com três manchas translúcidas. As manchas
      são desenhadas por cima da base; o vidro (`--glass`) é composto por cima delas.

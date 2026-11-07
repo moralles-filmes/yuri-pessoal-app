@@ -203,6 +203,12 @@ describe("REDESIGN-02-B · contrato dos tokens de tema", () => {
     expect(tema.get("ease-estalo")).toBe("cubic-bezier(.22,1.6,.36,1)");
   });
 
+  it("o raio base é 1rem no claro (09-A)", () => {
+    // Raio maior da base de vidro. A escala derivada (`--radius-sm…4xl`, `calc(var(--radius) * k)`)
+    // acompanha sozinha; por isso só o valor base é afirmado aqui.
+    expect(claro.get("radius"), "raio da 09-A (spec §6.5); a escala derivada acompanha").toBe("1rem");
+  });
+
   it("a paleta cobre as formas de pagamento sem repetir cor", () => {
     // Derivado da fonte real, não de um número escrito à mão: `forma-pagamento-chart-impl`
     // indexa com `i % CHART_COLORS.length` sobre as formas + "outro". Com 5 slots, três
