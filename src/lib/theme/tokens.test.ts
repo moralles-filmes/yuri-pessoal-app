@@ -209,6 +209,25 @@ describe("REDESIGN-02-B · contrato dos tokens de tema", () => {
     expect(claro.get("radius"), "raio da 09-A (spec §6.5); a escala derivada acompanha").toBe("1rem");
   });
 
+  it("a pilha de fontes é a do sistema Apple, com Inter de reserva (09-A)", () => {
+    const pilha = claro.get("font-sans") ?? "";
+    expect(pilha.replace(/\s+/g, " ")).toMatch(
+      /^-apple-system, BlinkMacSystemFont, var\(--font-inter\)/,
+    );
+    expect(pilha).not.toContain("Arial");
+  });
+
+  it("o layout carrega a Inter por next/font sem preload e a põe no <html>", () => {
+    const layout = semComentarios(
+      fs.readFileSync(path.join(SRC, "app", "layout.tsx"), "utf8"),
+    );
+    expect(layout).toMatch(/import\s*\{[^}]*\bInter\b[^}]*\}\s*from\s*"next\/font\/google"/);
+    expect(layout).toContain("preload: false");
+    expect(layout).toContain('variable: "--font-inter"');
+    expect(layout).toContain('subsets: ["latin"]');
+    expect(layout).toContain("inter.variable");
+  });
+
   it("a paleta cobre as formas de pagamento sem repetir cor", () => {
     // Derivado da fonte real, não de um número escrito à mão: `forma-pagamento-chart-impl`
     // indexa com `i % CHART_COLORS.length` sobre as formas + "outro". Com 5 slots, três

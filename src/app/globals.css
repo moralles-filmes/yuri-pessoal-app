@@ -97,8 +97,8 @@
 
 /* ---------- LIGHT (off-white / preto / dourado) ---------- */
 :root {
-  --font-sans: Arial, "Helvetica Neue", Helvetica, system-ui, -apple-system,
-    "Segoe UI", Roboto, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, var(--font-inter), "Segoe UI",
+    system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
 
   --radius: 1rem;
