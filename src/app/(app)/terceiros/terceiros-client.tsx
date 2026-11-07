@@ -349,8 +349,8 @@ export function TerceirosClient({
         {/* Barra de ações em massa. `top-18` e não `top-0`: o Header do app é sticky com
             h-16, e uma barra em top-0 escorregaria para trás dele e sumiria ao rolar. */}
         {selecionados.size > 0 && (
-          <div className="sticky top-18 z-20">
-            <Card className="border-primary/40 bg-card/95 shadow-md backdrop-blur">
+          <div className="sticky top-18 z-20 rounded-xl vidro-casca">
+            <Card className="border-0 bg-transparent shadow-none ring-0">
               <CardContent className="space-y-2 p-3">
                 <p className="text-sm font-medium">
                   {selecionadosVisiveis.length}{" "}

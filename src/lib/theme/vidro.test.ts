@@ -231,6 +231,31 @@ describe("superfícies que cobrem conteúdo rolando (T5)", () => {
     ).toEqual([]);
   });
 
+  it("nenhum elemento sticky/fixed tem como primeiro filho um elemento com bg-card", () => {
+    const ocorrencias: string[] = [];
+    // Abertura de tag JSX: nome + atributos (strings e chaves podem conter `>`), até o `>` de fechar.
+    const ABERTURA = /^\s*<[A-Za-z][\w.]*((?:"[^"]*"|'[^']*'|\{[^{}]*\}|[^>"'{])*)>/;
+    for (const { rel, fonte } of ARQUIVOS) {
+      for (const m of fonte.matchAll(/className="([^"]*)"/g)) {
+        const fixa = m[1].split(/\s+/).some((c) => /^(?:[\w-]+:)*(?:sticky|fixed)$/.test(c));
+        if (!fixa) continue;
+        // Fim da tag que carrega a className, e então a próxima tag de abertura (o primeiro filho).
+        const fimDaTag = fonte.indexOf(">", (m.index ?? 0) + m[0].length);
+        if (fimDaTag < 0) continue;
+        const filho = ABERTURA.exec(fonte.slice(fimDaTag + 1));
+        const classeDoFilho = /className="([^"]*)"/.exec(filho?.[1] ?? "")?.[1] ?? "";
+        if (classeDoFilho.split(/\s+/).some((c) => /^(?:[\w-]+:)*bg-card(?:\/\d+)?$/.test(c))) {
+          const posicao = fimDaTag + 1 + (fonte.slice(fimDaTag + 1).search(/<[A-Za-z]/));
+          ocorrencias.push(`${rel}:${linhaDe(fonte, posicao)}`);
+        }
+      }
+    }
+    expect(
+      ocorrencias,
+      `fundo translúcido sobre conteúdo que rola: use \`vidro-casca\` (barra) ou \`bg-glass-solid\` (coluna de tabela). O material vai no elemento sticky, não no filho:\n${ocorrencias.join("\n")}`,
+    ).toEqual([]);
+  });
+
   it("nenhum gráfico pinta stroke/fill com var(--card) (vira linha tingida, não vão)", () => {
     const ocorrencias: string[] = [];
     for (const { rel, fonte } of ARQUIVOS) {
