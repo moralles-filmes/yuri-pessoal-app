@@ -456,3 +456,109 @@ mudaria a contagem de avisos e as chaves de dedupe; fica fora (backlog), declara
 
 A prévia com dado sintético (Terceiros por pessoa e o formulário com "De quem?" e a pergunta da
 sobra) foi publicada à parte para a aprovação do dono; os números saem dos casos 2, 4 e 5 do §6.
+
+## 13. Resultado da execução (2026-11-06)
+
+Branch `feat/redesign-04c-reembolso-impl` (worktree `C:/tmp/04c-impl`), sobre `a034bb8`. Commits
+locais, um por passo; sem push, sem PR, sem merge (D67).
+
+### 13.1 O que foi entregue
+
+| Passo | Commit | O que faz |
+| --- | --- | --- |
+| T1 | `f0215dd` | regra pura da distribuição (`reembolso.ts`) + casos dourados (`reembolso-casos.ts`) |
+| T2 | `06fda17` | `decidirReembolso` + `reembolsoSchema` |
+| T3 | `445fa1f`, `a23c6e1` | M1 (vínculo), M2 (`realocar_reembolsos_da_pessoa` + 6 triggers de instrução), M3 (`salvar_lancamento` com pausa) + `scripts/finance/verificar-reembolso.sql` |
+| T4 | `d298c11` | `lerEstadoDoReembolso`, `lerSituacoesDoReembolso`; a proteção conta só recebimento manual |
+| T5 | `54e1fdf` | base caixa: a receita vinculada entra uma vez; alocação automática fora de "Reembolsos recebidos" |
+| tipos | `977f274` | `src/types/supabase.ts` regenerado — só as FKs compostas e a função desta fase |
+| T6 | `0a632a4` | lançamento: "De quem?", prévia, sobra sem padrão; o servidor decide antes de gravar |
+| T7 | `4439288` | importação do extrato: reembolso por linha, prévia em sequência por pessoa |
+| T8 | `043cce1` | Terceiros por pessoa: deve, saldo a favor, Em aberto, Pagamentos, Pagos; sai o Receber |
+| revisão | `3293037` | achados da revisão final (ver 13.4) |
+
+Migrations: a M1 aplicada por MCP; a M2 e a M3 aplicadas pelo dono no SQL Editor. Conferido no
+banco depois: 6 triggers, 4 funções `security invoker` com `search_path = ''`, `salvar_lancamento`
+com uma sobrecarga só, anon sem execute, nenhuma alocação nem receita vinculada pré-existente.
+**md5 dos saldos `15d93bd1c1d3e55a40db6210dff0eb3b` antes e depois de cada migration** — nenhuma
+mudou saldo.
+
+### 13.2 Verificação
+
+- `npm run test:run`: **8.197 testes / 364 arquivos**, verde (`--testTimeout=30000`).
+- `TZ=UTC npx vitest run src/lib/finance src/lib/reports src/lib/import`: 1.824 / 100, verde.
+- Conciliação 04-A (`painel-conciliacao`), 04-A2 (`conciliacao-relatorio-painel`) e 04-B
+  (`conciliacao-card-lista-grafico`): verdes, sem mudar número.
+- `npm run lint`, `npx tsc --noEmit`, `npm run build`: limpos. `npm run perf:bundle`: todas as
+  rotas no orçamento; mediana 202,7 KB (igual).
+
+| Rota (KB gz) | antes (`a034bb8`) | depois | Δ |
+| --- | --- | --- | --- |
+| /financeiro/lancamentos | 212,9 | 214,9 | +2,0 ("De quem?" e a prévia no formulário) |
+| /terceiros | 210,5 | 210,6 | +0,1 (sai o diálogo, entram as abas) |
+| /relatorios | 208,0 | 208,1 | +0,1 |
+| /dashboard/financeiro | 203,2 | 203,2 | 0 |
+| /importar | 203,1 | 206,3 | +3,2 (diálogo de reembolso, sem `next/dynamic`, como o de divisão) |
+
+- Toda regra nova teve **mutação confirmada** (quebrar → teste vermelho → restaurar → conferir).
+- Casos dourados SQL (`verificar-reembolso.sql`, `begin … rollback`): **PENDENTE** — o MCP recusa o
+  script (tem `delete`); entregue ao dono para rodar no SQL Editor.
+- Conferência visual (390/768/1280/1440, claro e escuro): **PENDENTE** — exige o `.env.local`,
+  que só é copiado com o aval do dono.
+
+### 13.3 Decisões tomadas na execução, com o custo
+
+1. **A prévia do formulário lê UMA pessoa sob demanda** (`lerPreviaDoReembolso`), em vez de
+   `lerSituacoesDoReembolso()` na `page.tsx` como o plano dizia. Custo: uma ida ao servidor ao
+   escolher a pessoa. Ganho: a página de lançamentos não lê a dívida de todo mundo a cada visita, e
+   a edição já vem com a contribuição da própria receita.
+2. **`recebidoDaPessoaNoPeriodo` recebe `entradasManuais`** (a saída de
+   `entradasManuaisDoRecebivel`, com o legado K0) em vez de `RecebimentoLido[]`. Custo: assinatura
+   diferente do plano. Ganho: o legado não some do KPI.
+3. **O "Deve" da ficha é sempre o total da pessoa**; os filtros de mês e cartão só recortam as
+   listas, e a tela avisa quando há filtro. Custo: o número grande não acompanha o filtro. Ganho:
+   ele é sempre o mesmo do Painel (RR-D-21).
+4. **A linha em aberto não mostra "parcela k/N"**: `lerRecebiveis` não traz o número. Mostra
+   descrição, cartão, fatura e datas, como o card antigo.
+5. **A importação não confere a "dívida vista"** (`reembolso_devido_visto` vazio): o servidor
+   recalcula linha a linha e o trigger da linha anterior já atualizou o estado. Linha com sobra e
+   sem escolha vira `erro` com o motivo; para reimportá-la, o dono escolhe a sobra e a devolve a
+   "importar".
+6. **O desfazer de recebimento manual chama a realocação pelo TS** (achado P2 da revisão), em vez
+   de um trigger de `delete` em `receivable_receipts`. Custo: um ponto a lembrar se surgir outro
+   caminho que apague recebimento manual. Ganho: sem migration nova nesta fase. A falha da
+   realocação é declarada na tela.
+7. **A ação em massa perdeu "receber"** (schema, serviço e tela). A seleção em massa continua para
+   cobrar, não cobrar e desfazer — RR-D-16 resolvido pela saída da ação, não da barra.
+8. **`RECEIVABLE_OPEN_STATUSES` saiu** — não tinha consumidor de código (RR-D-14).
+
+### 13.4 Revisão final (modelo mais capaz, só leitura, diff `a034bb8..HEAD`)
+
+Nenhum P0/P1. Corrigidos em `3293037`:
+- P2 — o desfazer de recebimento manual não realocava a pessoa;
+- P3 — o passo 2 da regra TS contava alocação já removida no passo 1 (divergia do SQL);
+- P3 — a prévia sem `.catch` travava o Salvar em "carregando";
+- P3 — editar uma receita vinculada pedia a escolha da sobra de novo.
+
+### 13.5 Achados NÃO corrigidos, com destino
+
+| Achado | Por que não agora | Destino |
+| --- | --- | --- |
+| Deadlock plausível entre duas edições concorrentes de despesas divididas com a mesma pessoa (o `for update` da M3 sem `order by`, depois o lock ordenado da M2; idem trigger de UPDATE em `receivables`) | single-user: chance baixa; corrigir exige migration nova | backlog — migration que ordena o lock em `salvar_lancamento` |
+| Alocação automática parcial numa dívida que depois vira "não será cobrado" fica nela (o dinheiro não volta a saldo a favor) | coerente com "só o dinheiro livre corre" (§5.2); é decisão de desenho | dono decide; se mudar, regra TS + SQL + caso dourado |
+| `registrarRecebimento`, `receberSaldo`, `registrarRecebimentoSchema` e as frases `colunaDepois`/`saldoMudou` ("clique em Receber") ficaram sem consumidor; as funções ainda gravam `pago` | remoção mexe em 5 arquivos de teste e no contador da varredura | limpeza logo após a integração (code-health) |
+| "De quem?" lista só pessoas ativas; editar receita vinculada a pessoa inativa mostra o seletor vazio (o vínculo é mantido no envio) | proposta do §11.5 não implementada | backlog — `getPeopleForSelect` com a pessoa vinculada |
+| O sino continua por recebível, não por pessoa | muda contagem e chaves de dedupe (§11.4) | backlog |
+| Pessoa inativa como filtro do Relatório | fora do escopo (§11.5) | backlog |
+
+### 13.6 Invariante nova (para quem integrar copiar onde couber — DV-5 proíbe editar CLAUDE.md aqui)
+
+> **O reembolso vinculado É a receita.** `transactions.reembolso_pessoa_id` + `status = 'recebido'`
+> é o pagamento da pessoa; a parte dela é `amount − coalesce(valor_pessoal, 0)`. As alocações
+> automáticas (`receivable_receipts.transaction_id` preenchido) são mantidas SÓ pelo banco
+> (`realocar_reembolsos_da_pessoa`, triggers de instrução em `transactions` e `receivables`, pausa
+> por GUC dentro de `salvar_lancamento`), e o desfazer de recebimento manual chama a mesma função.
+> Nenhum código grava `receivables.status` por causa disso; o saldo a favor é derivado, nunca
+> gravado; só recebimento MANUAL protege a divisão e conta em "Reembolsos recebidos" na base caixa.
+> A regra existe em TS (`reembolso.ts`) para a prévia e é provada igual à do SQL pelos mesmos casos
+> dourados (`reembolso-casos.ts` × `verificar-reembolso.sql`) — mexeu numa, mexa na outra.
