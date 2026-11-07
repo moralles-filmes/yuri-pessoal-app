@@ -1,8 +1,7 @@
 # REDESIGN-08 — Regressão e entrega (desenho)
 
 **Data:** 2026-11-06 · **Branch:** `feat/redesign-08-entrega` (worktree `C:/tmp/08-entrega`), nascida de
-`feat/redesign-00-auditoria` em `42af6c3` · **Situação:** rascunho para aprovação do dono. Nenhum conserto
-começa antes do "aprovado".
+`feat/redesign-00-auditoria` em `42af6c3` · **Situação:** **aprovado pelo dono em 2026-11-06**, com K1–K6 decididas uma a uma (§4.2).
 
 ## 1. Intenção
 
@@ -83,12 +82,12 @@ número errado ou acessibilidade; **M** = regressão de UX do redesign; **B** = 
 
 | # | Item | Origem | Proposta |
 | --- | --- | --- | --- |
-| K1 | Mês além da janela lida (atual + 5) mostra **R$ 0,00** no indicador; a gaveta já declara a falha. `?mes=2026-13` passa na regex | 04-B §13.5 D6, 04-A2 §13.5 | **(a)** o indicador escreve "fora do período lido" em vez de zero e a regex recusa mês 13 — ausência nunca é zero, sem ampliar a leitura |
-| K2 | `proximas6Faturas` projeta fatura de **cartão desativado** no Painel e na aba de `/relatorios` | 05-A §12, 05-C §13 | **consertar aqui** (número errado; a 05-C já tirou o desativado de `/faturas`) |
-| K3 | A subfase **04-D** (exportação com período/base/filtros/XLSX) nunca rodou; o JSON exportado mudou de forma na 04-A2 (`finance` → `financeiro`, números como texto) | PLANO §04, 04-A2 §13.5 | **declarar e adiar** como backlog pós-redesign; registrar a mudança de forma do JSON no PR |
-| K4 | "Faturas dos próximos meses" do Relatório não abre registros (o modelo agrega por mês, sem id de fatura) | 04-B §13.3/§13.5 D2 | **declarar e adiar** (exige dar id ao modelo = funcionalidade) |
-| K5 | Rótulo "Faturas" ainda não é "Faturas e pagamentos" na IA e na busca | 05-B §12, 05-C §13 | **consertar aqui** (texto, coerência de navegação) — ou adiar, se preferir não tocar a IA |
-| K6 | RR-D-15 / RR-D-6: a IA ainda diz "A receber de terceiros" em `finance.get_invoice` e no insight | 03-D, 07-D | **declarar e adiar** (mudar descrição de ferramenta exige o teste de frase da invariante 100) |
+| K1 | Mês além da janela lida (atual + 5) mostra **R$ 0,00** no indicador; a gaveta já declara a falha. `?mes=2026-13` passa na regex | 04-B §13.5 D6, 04-A2 §13.5 | ✅ **Decidido pelo dono (2026-11-06): (a)** — o indicador escreve "fora do período lido" em vez de zero e a regex recusa mês 13; ausência nunca é zero, sem ampliar a leitura |
+| K2 | `proximas6Faturas` projeta fatura de **cartão desativado** no Painel e na aba de `/relatorios` | 05-A §12, 05-C §13 | ✅ **Decidido pelo dono (2026-11-06): consertar aqui** (número errado; a 05-C já tirou o desativado de `/faturas`) |
+| K3 | A subfase **04-D** (exportação com período/base/filtros/XLSX) nunca rodou; o JSON exportado mudou de forma na 04-A2 (`finance` → `financeiro`, números como texto) | PLANO §04, 04-A2 §13.5 | ✅ **Decidido pelo dono (2026-11-06): adiar** para o backlog pós-redesign; a mudança de forma do JSON é descrita no PR |
+| K4 | "Faturas dos próximos meses" do Relatório não abre registros (o modelo agrega por mês, sem id de fatura) | 04-B §13.3/§13.5 D2 | ✅ **Decidido pelo dono (2026-11-06): adiar** (exige dar id ao modelo = funcionalidade) |
+| K5 | Rótulo "Faturas" ainda não é "Faturas e pagamentos" na IA e na busca | 05-B §12, 05-C §13 | ✅ **Decidido pelo dono (2026-11-06): não trocar.** Na busca, "Faturas" nomeia o grupo de resultados (cada um é uma fatura) e está certo; na IA é o nome da tela no contexto do prompt — trocar mexe no prompt (invariantes 21 e 100), vai ao backlog pós-redesign e é registrado no PR |
+| K6 | RR-D-15 / RR-D-6: a IA ainda diz "A receber de terceiros" em `finance.get_invoice` e no insight | 03-D, 07-D | ✅ **Decidido pelo dono (2026-11-06): adiar**, junto com o rótulo da K5 |
 
 ### 4.3 Declarar e adiar (backlog pós-redesign, com destino)
 
