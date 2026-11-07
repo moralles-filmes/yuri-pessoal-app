@@ -57,7 +57,7 @@ export default function AuthLayout({
       </div>
 
       {/* Formulário */}
-      <div className="flex items-center justify-center bg-background p-6">
+      <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-sm">{children}</div>
       </div>
     </div>

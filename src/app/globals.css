@@ -331,6 +331,24 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Cria o contexto de empilhamento do body: o `body::before` (z-index -1) fica ACIMA do
+       fundo do body e ABAIXO de todo o conteúdo, sem precisar de z-index em cada tela. */
+    isolation: isolate;
+  }
+  /* A névoa: três manchas fixas no viewport, atrás de tudo. `position: fixed` num pseudo-
+     elemento (NUNCA `background-attachment: fixed`, que o iOS ignora e que repinta a cada
+     rolagem). Tamanhos em vw para acompanhar a largura: no celular as manchas encolhem
+     junto. O vidro das casca/sobreposição desfoca ESTAS manchas. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(closest-side, var(--fog-1), transparent) -8vw -18vw / 68vw 56vw no-repeat,
+      radial-gradient(closest-side, var(--fog-2), transparent) right -18vw top 8vw / 62vw 58vw no-repeat,
+      radial-gradient(closest-side, var(--fog-3), transparent) 22vw 60vw / 70vw 54vw no-repeat;
   }
   ::selection {
     background: color-mix(in oklch, var(--primary) 30%, transparent);
