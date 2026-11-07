@@ -241,6 +241,31 @@ casca (09-C), estas coisas ainda destoam — anotadas, não corrigidas:
   `--primary-fill` (09-B).
 - **`Card` no claro** está sem borda de luz, então o cartão translúcido se separa da névoa só
   pela sombra (09-B).
+- **Texto direto sobre a névoa aberta** (revisão final da 09-A). Fora do vidro, o texto vê a
+  mancha composta sobre a base (`compor(fog-k, fog-base)`). Contraste medido com a fórmula de
+  `contraste.ts`:
+
+  | Claro | muted-foreground | muted-on-fog | foreground | primary | destructive | success-ink | warning-ink | info-ink |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | fog-1 | 3,81 | 5,27 | 10,73 | 3,41 | 3,51 | 4,55 | 3,58 | 3,41 |
+  | fog-2 | 4,15 | 5,75 | 11,70 | 3,72 | 3,83 | 4,97 | 3,91 | 3,72 |
+  | fog-3 | 4,76 | 6,59 | 13,41 | 4,27 | 4,39 | 5,69 | 4,48 | 4,27 |
+
+  | Escuro | muted-foreground | muted-on-fog | foreground | primary | destructive | success-ink | warning-ink | info-ink |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | fog-1 | 5,02 | 5,02 | 10,89 | 4,80 | 4,15 | 5,96 | 6,54 | 4,80 |
+  | fog-2 | 5,41 | 5,41 | 11,74 | 5,17 | 4,48 | 6,43 | 7,05 | 5,17 |
+  | fog-3 | 4,95 | 4,95 | 10,73 | 4,73 | 4,09 | 5,88 | 6,44 | 4,73 |
+
+  O secundário do `PageHeader` e o texto secundário do login (sobre a coluna do formulário, sem
+  Card) passaram de `text-muted-foreground` para `text-muted-on-fog`, que passa nas seis
+  combinações. `primary`, `destructive` e os `-ink` direto na névoa reprovam em 15 combinações
+  (claro: destructive, info-ink, primary e warning-ink nas três manchas; escuro: destructive nas
+  três) e ficam como **dívida declarada da 09-C**: o login/cadastro passa a pôr o formulário sobre
+  vidro e os links coloridos saem da névoa. O teste `contraste-dos-tokens.test.ts` fixa essa lista
+  (`DIVIDA_NA_NEVOA`) e fica vermelho se ela crescer ou encolher. O alfa da névoa **não foi
+  baixado**: para o `primary` claro passar seria preciso fog-1 <= 0,08 e fog-2 <= 0,15, o que
+  apaga a névoa aprovada.
 
 ## Raio de 1rem — onde ficou exagerado (T6, anotado sem corrigir)
 

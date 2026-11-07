@@ -107,7 +107,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         <h1 className="text-2xl font-semibold tracking-tight">
           {isLogin ? "Entrar" : "Criar conta"}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-on-fog">
           {isLogin
             ? "Acesse seu sistema pessoal."
             : "Comece a organizar sua vida pessoal."}
@@ -115,7 +115,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       </div>
 
       {!isSupabaseConfigured && (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs text-muted-foreground">
+        <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs text-muted-on-fog">
           <span className="font-medium text-foreground">Modo prévia:</span>{" "}
           o login ativa quando as chaves do Supabase forem adicionadas em{" "}
           <code className="rounded bg-muted px-1">.env.local</code>.
@@ -139,7 +139,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
 
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-border" />
-        <span className="text-xs text-muted-foreground">ou</span>
+        <span className="text-xs text-muted-on-fog">ou</span>
         <span className="h-px flex-1 bg-border" />
       </div>
 
@@ -182,7 +182,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="text-center text-sm text-muted-on-fog">
         {isLogin ? (
           <>
             Não tem conta?{" "}
@@ -210,7 +210,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         <Link
           href="/dashboard"
           className={cn(
-            "block text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline",
+            "block text-center text-xs text-muted-on-fog underline-offset-4 hover:text-foreground hover:underline",
           )}
         >
           Explorar o sistema sem login →

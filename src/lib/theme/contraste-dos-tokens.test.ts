@@ -58,6 +58,20 @@ const TEXTOS_SOBRE_VIDRO = [
   "success-ink", "warning-ink", "info-ink",
 ];
 const TEXTOS_SOBRE_NEVOA = ["foreground", "muted-on-fog"];
+const TEXTOS_DIRETOS_NA_NEVOA = [
+  "muted-on-fog", "foreground", "primary", "destructive",
+  "success-ink", "warning-ink", "info-ink",
+];
+
+// Dívida: texto colorido direto sobre a névoa aberta. Dona: 09-C (login/cadastro põem o
+// formulário sobre vidro). Nenhum texto daqui pode ganhar uso novo direto na névoa.
+const DIVIDA_NA_NEVOA = new Set<string>([
+  "claro:destructive:fog-1", "claro:destructive:fog-2", "claro:destructive:fog-3",
+  "claro:info-ink:fog-1", "claro:info-ink:fog-2", "claro:info-ink:fog-3",
+  "claro:primary:fog-1", "claro:primary:fog-2", "claro:primary:fog-3",
+  "claro:warning-ink:fog-1", "claro:warning-ink:fog-2", "claro:warning-ink:fog-3",
+  "escuro:destructive:fog-1", "escuro:destructive:fog-2", "escuro:destructive:fog-3",
+]);
 
 function exigir(tema: string, texto: string, sobre: string, razao: number) {
   const arredondada = (Math.round(razao * 100) / 100).toFixed(2).replace(".", ",");
@@ -113,4 +127,23 @@ describe("09-A · contraste dos tokens de vidro", () => {
       });
     });
   }
+
+  it("texto direto sobre a névoa aberta: só a dívida declarada reprova (< 4,5:1)", () => {
+    const reprovados = new Set<string>();
+    for (const [nomeTema, tema] of TEMAS) {
+      const base = valor(tema, "fog-base");
+      for (const k of [1, 2, 3]) {
+        const fundo = compor(valor(tema, `fog-${k}`), base);
+        for (const texto of TEXTOS_DIRETOS_NA_NEVOA) {
+          if (contraste(valor(tema, texto), fundo) < MINIMO) {
+            reprovados.add(`${nomeTema}:${texto}:fog-${k}`);
+          }
+        }
+      }
+    }
+    expect([...reprovados].sort()).toEqual([...DIVIDA_NA_NEVOA].sort());
+    for (const item of reprovados) {
+      expect(item).not.toMatch(/:(?:muted-on-fog|foreground):/);
+    }
+  });
 });

@@ -206,8 +206,9 @@
   /* A 01-B não especificou a sidebar. Derivada preservando as RELAÇÕES que o
      tema dourado já tinha (sidebar um pouco mais clara que o fundo; accent da
      sidebar igual ao accent geral), só re-matizada. Desde a 09-A ela é vidro
-     (`--glass`); o contraste do texto é o de qualquer texto sobre vidro, coberto por
-     contraste-dos-tokens.test.ts. */
+     (`--glass`). O contraste do texto da sidebar NÃO é medido por contraste-dos-tokens.test.ts
+     (`--sidebar-foreground`/`--sidebar-primary` são oklch e o teste só lê hex/rgba); conferido
+     à mão: ≈6,3:1 para `text-sidebar-foreground/80` sobre o vidro. */
   --sidebar: var(--glass);
   --sidebar-foreground: oklch(0.3 0.01 260);
   --sidebar-primary: oklch(0.527 0.15 256);
@@ -306,7 +307,8 @@
   --chart-8: #e66767; /* vermelho */
 
   /* Derivada como no claro: a sidebar é vidro (`--glass`), a mesma superfície do card.
-     O contraste do texto sobre ela é o do vidro, coberto por contraste-dos-tokens.test.ts. */
+     O contraste do texto da sidebar NÃO é medido por contraste-dos-tokens.test.ts (tokens em
+     oklch); conferido à mão: ≈6,3:1 para `text-sidebar-foreground/80` sobre o vidro. */
   --sidebar: var(--glass);
   --sidebar-foreground: oklch(0.85 0.006 260);
   --sidebar-primary: oklch(0.717 0.118 254);
@@ -320,6 +322,19 @@
      degradê tem tokens próprios aqui. Medido na Tarefa 7. */
   --banner-from: oklch(0.42 0.12 256);
   --banner-to: oklch(0.30 0.09 258);
+}
+
+/* Transparência reduzida no nível dos TOKENS (§6.12 do desenho): `--card`, `--popover` e
+   `--sidebar` apontam para o vidro, então sem isto todo `Card`, a sidebar e os popovers
+   continuariam translúcidos com a preferência ligada (as @utility só cobrem quem as usa).
+   Fica DEPOIS de `.dark { … }` de propósito: mesma especificidade, vence pela ordem. */
+@media (prefers-reduced-transparency: reduce) {
+  :root,
+  .dark {
+    --card: var(--glass-solid);
+    --popover: var(--glass-solid);
+    --sidebar: var(--glass-solid);
+  }
 }
 
 @layer base {

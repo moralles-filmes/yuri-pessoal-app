@@ -108,6 +108,50 @@ describe("os quatro materiais", () => {
   });
 });
 
+describe("transparência reduzida no nível dos tokens (§6.12)", () => {
+  /** O CSS sem o corpo de nenhuma `@utility`: sobra só o que está fora dos quatro materiais. */
+  function foraDasUtilitarias(): string {
+    let saida = "";
+    let i = 0;
+    for (const m of css.matchAll(/@utility\s+[\w-]+\s*\{/g)) {
+      const inicio = m.index ?? 0;
+      if (inicio < i) continue;
+      saida += css.slice(i, inicio);
+      let prof = 0;
+      let j = inicio + m[0].length - 1;
+      for (; j < css.length; j += 1) {
+        if (css[j] === "{") prof += 1;
+        else if (css[j] === "}" && (prof -= 1) === 0) break;
+      }
+      i = j + 1;
+    }
+    return saida + css.slice(i);
+  }
+
+  const CONDICAO = "prefers-reduced-transparency: reduce";
+
+  it("--card, --popover e --sidebar viram --glass-solid nos dois temas", () => {
+    const fora = foraDasUtilitarias();
+    expect(fora).not.toContain("@utility");
+    const corpoDoBloco = corpoDaMedia(fora, CONDICAO);
+    expect(corpoDoBloco, "falta o @media de topo que redefine os tokens").not.toBe("");
+    for (const token of ["card", "popover", "sidebar"]) {
+      expect(corpoDoBloco).toMatch(new RegExp(String.raw`--${token}\s*:\s*var\(--glass-solid\)`));
+    }
+    const seletor = corpoDoBloco.slice(0, corpoDoBloco.indexOf("{"));
+    expect(seletor).toMatch(/:root/);
+    expect(seletor).toMatch(/\.dark/);
+  });
+
+  it("o bloco vem DEPOIS de `.dark { … }` (mesma especificidade, vence pela ordem)", () => {
+    const fora = foraDasUtilitarias();
+    const dark = fora.indexOf(".dark {");
+    const media = fora.indexOf(`@media (${CONDICAO})`);
+    expect(dark).toBeGreaterThan(0);
+    expect(media).toBeGreaterThan(dark);
+  });
+});
+
 describe("a névoa no fundo (T4)", () => {
   const lerFonte = (...partes: string[]) =>
     semComentarios(fs.readFileSync(path.join(SRC, ...partes), "utf8"));

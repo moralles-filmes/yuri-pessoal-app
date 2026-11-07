@@ -28,7 +28,7 @@ export function PageHeader({
           {title}
         </h1>
         {description && (
-          <p className="text-sm break-words text-muted-foreground">{description}</p>
+          <p className="text-sm break-words text-muted-on-fog">{description}</p>
         )}
       </div>
       {/* `flex-wrap`: com três ou mais botões a linha quebra em vez de estourar no celular. */}
