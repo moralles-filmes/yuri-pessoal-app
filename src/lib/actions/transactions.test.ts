@@ -26,6 +26,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { criarSupabaseEmMemoria, type Linha } from "@/test/supabase-em-memoria";
 import { MOTIVO_RECEBIVEL_FECHADO } from "@/lib/finance/split";
 import { MSG_PARTE_TOTAL } from "@/lib/finance/responsabilidade-da-receita";
+import {
+  MSG_DIVIDA_MUDOU,
+  MSG_ESCOLHA_A_SOBRA,
+  MSG_ESTORNO_NAO_ABATE,
+  MSG_LEITURA_DO_REEMBOLSO_FALHOU,
+  type EstadoDoReembolso,
+} from "@/lib/finance/reembolso";
+import { ErroDeLeitura } from "@/lib/supabase/leitura";
 import { MSG_DATA_PAGAMENTO_FUTURA } from "@/lib/finance/caixa";
 import { checkLiquidadoEmCoerente } from "@/test/check-liquidado-em";
 import { revalidatePath } from "next/cache";
@@ -35,7 +43,14 @@ let fake = criarSupabaseEmMemoria({});
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => fake.client }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-const { updateTransaction, deleteTransaction, setTransactionStatus, preverExclusaoDoLancamento } = await import(
+// 04-C · T6 — só o estado do reembolso é dublado; o resto da leitura (proteção) continua real.
+const { lerEstadoDoReembolso } = vi.hoisted(() => ({ lerEstadoDoReembolso: vi.fn() }));
+vi.mock("@/lib/finance/recebimentos-leitura", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/finance/recebimentos-leitura")>()),
+  lerEstadoDoReembolso,
+}));
+
+const { updateTransaction, deleteTransaction, setTransactionStatus, preverExclusaoDoLancamento, lerPreviaDoReembolso } = await import(
   "@/lib/actions/transactions"
 );
 
@@ -1012,5 +1027,199 @@ describe("03-G2 E5a · preverExclusaoDoLancamento (K3, D-G2-17)", () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.data.bloqueio).toMatch(/recebimento registrado/);
     expect(fake.escritas()).toEqual([]);
+  });
+});
+
+// ───────────────────────────── 04-C · T6 — o reembolso na edição ─────────────────────────────
+
+describe("04-C T6 · updateTransaction — receita de uma pessoa", () => {
+  const CARTAO = "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b";
+  const TX_VINCULADA = {
+    type: "receita",
+    amount: 500,
+    status: "recebido",
+    classificacao: "terceiro",
+    valor_pessoal: 0,
+    reembolso_pessoa_id: PESSOA,
+  };
+
+  /** A pessoa deve 2.000,00; esta receita já pagou 500,00 e esses 500,00 estão alocados. */
+  const ESTADO_COM_ESTA_RECEITA: EstadoDoReembolso = {
+    pagamentos: [
+      { transactionId: ID, contaId: CONTA, parteCentavos: 50000, recebidoEm: "2026-11-01", criadoEm: "2026-11-01T10:00:00Z" },
+    ],
+    dividas: [
+      {
+        receivableId: "d1",
+        valorCentavos: 200000,
+        status: "pendente",
+        recebidoManualCentavos: 0,
+        dataDaDivida: "2026-05-01",
+        criadoEm: "2026-05-01T10:00:00Z",
+      },
+    ],
+    alocacoes: [
+      { id: "a1", receivableId: "d1", transactionId: ID, valorCentavos: 50000, recebidoEm: "2026-11-01", criadoEm: "2026-11-01T10:00:00Z" },
+    ],
+  };
+
+  beforeEach(() => {
+    lerEstadoDoReembolso.mockReset();
+  });
+
+  it("receita vinculada editada para 'pessoal' e sem pessoa: a linha grava reembolso_pessoa_id nulo", async () => {
+    fake = criarSupabaseEmMemoria({ transactions: [existente(TX_VINCULADA)] }, RPC_OK);
+    const r = await updateTransaction(
+      ID,
+      payload({ amount: 500, receita_classificacao: "pessoal", reembolso_pessoa_id: "", reembolso_sobra: "" }),
+    );
+    expect(r.ok).toBe(true);
+    expect(lerEstadoDoReembolso).not.toHaveBeenCalled();
+    expect(linhaDaRpc()).toMatchObject({ classificacao: "pessoal", valor_pessoal: null });
+    expect(linhaDaRpc().reembolso_pessoa_id).toBeNull();
+  });
+
+  it("receita vinculada que deixa de ser receita: grava reembolso_pessoa_id nulo", async () => {
+    fake = criarSupabaseEmMemoria({ transactions: [existente(TX_VINCULADA)] }, RPC_OK);
+    const r = await updateTransaction(ID, payload({ type: "despesa", status: "pago" }));
+    expect(r.ok).toBe(true);
+    expect(linhaDaRpc().reembolso_pessoa_id).toBeNull();
+  });
+
+  it("mantém a pessoa: a contribuição atual da própria receita sai da conta, e a dívida 'vista' confere", async () => {
+    lerEstadoDoReembolso.mockResolvedValue(ESTADO_COM_ESTA_RECEITA);
+    fake = criarSupabaseEmMemoria({ transactions: [existente(TX_VINCULADA)] }, RPC_OK);
+    const r = await updateTransaction(
+      ID,
+      payload({
+        amount: 500,
+        receita_classificacao: "terceiro",
+        reembolso_pessoa_id: PESSOA,
+        // sem a receita, a pessoa devia 2.000,00 — é o que a tela mostrou ao abrir a edição.
+        reembolso_devido_visto: 200000,
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(linhaDaRpc()).toMatchObject({
+      classificacao: "terceiro",
+      valor_pessoal: 0,
+      reembolso_pessoa_id: PESSOA,
+    });
+  });
+
+  it("aumenta o valor para além da dívida, sem escolha: recusa no campo, nada gravado", async () => {
+    lerEstadoDoReembolso.mockResolvedValue(ESTADO_COM_ESTA_RECEITA);
+    fake = criarSupabaseEmMemoria({ transactions: [existente(TX_VINCULADA)] }, RPC_OK);
+    const r = await updateTransaction(
+      ID,
+      payload({
+        amount: 2500,
+        receita_classificacao: "terceiro",
+        reembolso_pessoa_id: PESSOA,
+        reembolso_devido_visto: 200000,
+      }),
+    );
+    expect(r).toEqual({
+      ok: false,
+      error: expect.any(String),
+      fieldErrors: { reembolso_sobra: [MSG_ESCOLHA_A_SOBRA] },
+    });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("dívida mudou desde a prévia: MSG_DIVIDA_MUDOU, nada gravado", async () => {
+    lerEstadoDoReembolso.mockResolvedValue(ESTADO_COM_ESTA_RECEITA);
+    fake = criarSupabaseEmMemoria({ transactions: [existente(TX_VINCULADA)] }, RPC_OK);
+    const r = await updateTransaction(
+      ID,
+      payload({
+        amount: 500,
+        receita_classificacao: "terceiro",
+        reembolso_pessoa_id: PESSOA,
+        reembolso_devido_visto: 150000,
+      }),
+    );
+    expect(r).toMatchObject({ ok: false, fieldErrors: { reembolso_sobra: [MSG_DIVIDA_MUDOU] } });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("estorno de cartão com pessoa: recusa no campo, sem ler o estado nem gravar", async () => {
+    fake = criarSupabaseEmMemoria(
+      {
+        transactions: [
+          existente({ type: "receita", payment_method: null, account_id: null, card_id: CARTAO, statement_id: "st-9" }),
+        ],
+      },
+      RPC_OK,
+    );
+    const r = await updateTransaction(
+      ID,
+      payload({ payment_method: "", account_id: "", card_id: CARTAO, reembolso_pessoa_id: PESSOA }),
+    );
+    expect(r).toMatchObject({ ok: false, fieldErrors: { reembolso_pessoa_id: [MSG_ESTORNO_NAO_ABATE] } });
+    expect(lerEstadoDoReembolso).not.toHaveBeenCalled();
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("payload sem os campos de reembolso (o de hoje): grava como antes e nem lê o estado", async () => {
+    fake = criarSupabaseEmMemoria({ transactions: [existente({ type: "receita" })] }, RPC_OK);
+    const r = await updateTransaction(ID, payload({ receita_classificacao: "terceiro" }));
+    expect(r.ok).toBe(true);
+    expect(lerEstadoDoReembolso).not.toHaveBeenCalled();
+    expect(linhaDaRpc()).toMatchObject({ classificacao: "terceiro", valor_pessoal: 0 });
+    expect(linhaDaRpc().reembolso_pessoa_id).toBeNull();
+  });
+});
+
+describe("04-C T6 · lerPreviaDoReembolso — a leitura da tela", () => {
+  const OUTRA = "9a4b6c20-3e1d-4f87-b5a2-1c8d7e6f0a93";
+
+  beforeEach(() => {
+    lerEstadoDoReembolso.mockReset();
+  });
+
+  it("devolve a situação da pessoa e a contribuição da receita em edição", async () => {
+    lerEstadoDoReembolso.mockResolvedValue({
+      pagamentos: [
+        { transactionId: OUTRA, contaId: CONTA, parteCentavos: 50000, recebidoEm: "2026-11-01", criadoEm: "2026-11-01T10:00:00Z" },
+      ],
+      dividas: [
+        { receivableId: "d1", valorCentavos: 200000, status: "pendente", recebidoManualCentavos: 0, dataDaDivida: "2026-05-01", criadoEm: "2026-05-01T10:00:00Z" },
+      ],
+      alocacoes: [
+        { id: "a1", receivableId: "d1", transactionId: OUTRA, valorCentavos: 50000, recebidoEm: "2026-11-01", criadoEm: "2026-11-01T10:00:00Z" },
+      ],
+    });
+    fake = criarSupabaseEmMemoria({});
+    const r = await lerPreviaDoReembolso({ pessoaId: PESSOA, transactionId: OUTRA });
+    expect(r).toEqual({
+      ok: true,
+      data: { devidoCentavos: 150000, saldoAFavorCentavos: 0, parteAtualDestaCentavos: 50000, alocadoDestaCentavos: 50000 },
+    });
+    expect(fake.escritas()).toEqual([]);
+  });
+
+  it("sem transactionId (criação): contribuição 0 e 0", async () => {
+    lerEstadoDoReembolso.mockResolvedValue({ pagamentos: [], dividas: [], alocacoes: [] });
+    fake = criarSupabaseEmMemoria({});
+    const r = await lerPreviaDoReembolso({ pessoaId: PESSOA });
+    expect(r).toEqual({
+      ok: true,
+      data: { devidoCentavos: 0, saldoAFavorCentavos: 0, parteAtualDestaCentavos: 0, alocadoDestaCentavos: 0 },
+    });
+  });
+
+  it("id que não é uuid: recusa antes de ler", async () => {
+    fake = criarSupabaseEmMemoria({});
+    const r = await lerPreviaDoReembolso({ pessoaId: "nao-e-uuid" });
+    expect(r.ok).toBe(false);
+    expect(lerEstadoDoReembolso).not.toHaveBeenCalled();
+  });
+
+  it("leitura falhou: frase em pt-BR, sem estourar", async () => {
+    lerEstadoDoReembolso.mockRejectedValue(new ErroDeLeitura("as receitas vinculadas", { codigo: "XX000" }));
+    fake = criarSupabaseEmMemoria({});
+    const r = await lerPreviaDoReembolso({ pessoaId: PESSOA });
+    expect(r).toEqual({ ok: false, error: MSG_LEITURA_DO_REEMBOLSO_FALHOU });
   });
 });

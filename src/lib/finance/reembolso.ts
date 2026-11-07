@@ -21,6 +21,7 @@
  */
 
 import type { Classificacao } from "@/lib/finance/constants";
+import { centavosParaReais, formatCurrency } from "@/lib/format";
 
 /** A parte da pessoa numa receita vinculada com status `recebido`. */
 export type PagamentoDoReembolso = {
@@ -346,4 +347,84 @@ export function decidirReembolso(a: {
     return { ok: true, receita_classificacao: "compartilhada", minhaParteCentavos: sobra, vincula: true };
   }
   return { ok: true, receita_classificacao: "pessoal", minhaParteCentavos: null, vincula: false };
+}
+
+/**
+ * 04-C · T6 — o que a prévia de UM lançamento precisa do estado da pessoa. Puro: o servidor
+ * (`lerReembolsoDaReceita`), a leitura da tela (`lerPreviaDoReembolso`) e o teste usam ESTA conta.
+ * `transactionId` é a receita em edição (null na criação): a parte dela no pagamento e o que ela já
+ * alocou entram para `previaDoReembolso` tirá-los antes de aplicar o valor novo.
+ */
+export function entradaDaPrevia(
+  estado: EstadoDoReembolso,
+  transactionId: string | null,
+): {
+  devidoCentavos: number;
+  saldoAFavorCentavos: number;
+  parteAtualDestaCentavos: number;
+  alocadoDestaCentavos: number;
+} {
+  const { devidoCentavos, saldoAFavorCentavos } = situacaoDaPessoa(estado);
+  if (transactionId === null) {
+    return { devidoCentavos, saldoAFavorCentavos, parteAtualDestaCentavos: 0, alocadoDestaCentavos: 0 };
+  }
+  const parteAtualDestaCentavos =
+    estado.pagamentos.find((p) => p.transactionId === transactionId)?.parteCentavos ?? 0;
+  const alocadoDestaCentavos = estado.alocacoes
+    .filter((a) => a.transactionId === transactionId)
+    .reduce((soma, a) => soma + a.valorCentavos, 0);
+  return { devidoCentavos, saldoAFavorCentavos, parteAtualDestaCentavos, alocadoDestaCentavos };
+}
+
+export const MSG_ESTORNO_NAO_ABATE = "Estorno de cartão não abate o que uma pessoa deve.";
+export const MSG_LEITURA_DO_REEMBOLSO_FALHOU = "Não foi possível ler o que esta pessoa deve. Nada foi alterado.";
+
+const brl = (centavos: number): string => formatCurrency(centavosParaReais(centavos));
+
+export type FrasesDoReembolso = {
+  /** A linha principal da prévia. */
+  resumo: string;
+  /** Só quando a receita é recebida e nada passa do que a pessoa deve. */
+  foraDaRenda: string | null;
+  /** Só com sobra: o quanto passa. */
+  sobra: string | null;
+  /** Textos das duas opções da sobra (sem padrão). */
+  opcaoReceita: string | null;
+  opcaoSaldo: string | null;
+};
+
+/** As frases da prévia (§5.4 / §11.3 do desenho). Puro: a tela só as escreve. */
+export function frasesDoReembolso(a: {
+  nome: string;
+  previa: PreviaDoReembolso;
+  valorCentavos: number;
+  /** Receita ainda não recebida: não abate nada até ser marcada como recebida. */
+  pendente: boolean;
+}): FrasesDoReembolso {
+  const { nome, previa, valorCentavos } = a;
+  const sobra = previa.sobraCentavos;
+  const resumo = a.pendente
+    ? `${nome} deve ${brl(previa.devidoAntesCentavos)}. Receita pendente não abate; ao marcar como recebida, abate.`
+    : previa.devidoAntesCentavos === 0
+      ? `${nome} não deve nada agora.`
+      : `${nome} deve ${brl(previa.devidoAntesCentavos)} → passa a dever ${brl(previa.devidoDepoisCentavos)}`;
+  if (sobra === 0) {
+    return {
+      resumo,
+      foraDaRenda: a.pendente ? null : "Fica fora da sua renda.",
+      sobra: null,
+      opcaoReceita: null,
+      opcaoSaldo: null,
+    };
+  }
+  return {
+    resumo,
+    foraDaRenda: null,
+    sobra: `Passa ${brl(sobra)} do que ${nome} deve.`,
+    opcaoReceita:
+      sobra >= valorCentavos
+        ? "A entrada inteira vira receita sua e não abate nada."
+        : `${brl(sobra)} entra na sua renda; ${brl(valorCentavos - sobra)} abate o que ${nome} deve.`,
+    opcaoSaldo: `Os ${brl(sobra)} abatem sozinhos as próximas compras divididas com ${nome}.`,
+  };
 }

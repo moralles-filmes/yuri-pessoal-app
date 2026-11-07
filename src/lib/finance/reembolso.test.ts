@@ -3,6 +3,8 @@ import { CASOS_DO_REEMBOLSO } from "@/lib/finance/reembolso-casos";
 import {
   aplicarRealocacao,
   decidirReembolso,
+  entradaDaPrevia,
+  frasesDoReembolso,
   MSG_DIVIDA_MUDOU,
   MSG_ESCOLHA_A_SOBRA,
   MSG_REEMBOLSO_SO_DE_TERCEIRO,
@@ -421,5 +423,96 @@ describe("decidirReembolso", () => {
         devidoVistoCentavos: null,
       }),
     ).toEqual({ ok: true, receita_classificacao: "terceiro", minhaParteCentavos: null, vincula: true });
+  });
+});
+
+describe("entradaDaPrevia (T6)", () => {
+  const estado: EstadoDoReembolso = {
+    pagamentos: [pagamento("rec-1", 50000)],
+    dividas: [divida("d1", 200000, "2026-05-01")],
+    alocacoes: [
+      {
+        id: "a1",
+        receivableId: "d1",
+        transactionId: "rec-1",
+        valorCentavos: 50000,
+        recebidoEm: "2026-11-01",
+        criadoEm: "2026-11-01T10:00:00Z",
+      },
+    ],
+  };
+
+  it("na criação não há contribuição desta receita", () => {
+    expect(entradaDaPrevia(estado, null)).toEqual({
+      devidoCentavos: 150000,
+      saldoAFavorCentavos: 0,
+      parteAtualDestaCentavos: 0,
+      alocadoDestaCentavos: 0,
+    });
+  });
+
+  it("na edição devolve a parte e o alocado da receita em edição", () => {
+    expect(entradaDaPrevia(estado, "rec-1")).toEqual({
+      devidoCentavos: 150000,
+      saldoAFavorCentavos: 0,
+      parteAtualDestaCentavos: 50000,
+      alocadoDestaCentavos: 50000,
+    });
+  });
+
+  it("receita que não está no pagamento (pendente) contribui com 0", () => {
+    expect(entradaDaPrevia(estado, "outra")).toMatchObject({ parteAtualDestaCentavos: 0, alocadoDestaCentavos: 0 });
+  });
+
+  it("alimenta previaDoReembolso: editar sem mudar o valor devolve a mesma dívida de antes", () => {
+    const e = entradaDaPrevia(estado, "rec-1");
+    expect(previaDoReembolso({ ...e, valorCentavos: 50000 })).toEqual({
+      devidoAntesCentavos: 200000,
+      devidoDepoisCentavos: 150000,
+      sobraCentavos: 0,
+    });
+  });
+});
+
+describe("frasesDoReembolso (T6)", () => {
+  const sem = { devidoAntesCentavos: 200000, devidoDepoisCentavos: 150000, sobraCentavos: 0 };
+
+  it("sem sobra: deve → passa a dever, e fica fora da renda", () => {
+    const f = frasesDoReembolso({ nome: "Ana", previa: sem, valorCentavos: 50000, pendente: false });
+    expect(f.resumo).toMatch(/^Ana deve R\$\s2\.000,00 → passa a dever R\$\s1\.500,00$/);
+    expect(f.foraDaRenda).toBe("Fica fora da sua renda.");
+    expect(f.sobra).toBeNull();
+    expect(f.opcaoReceita).toBeNull();
+    expect(f.opcaoSaldo).toBeNull();
+  });
+
+  it("pendente não abate e não promete 'fora da renda'", () => {
+    const f = frasesDoReembolso({ nome: "Ana", previa: sem, valorCentavos: 50000, pendente: true });
+    expect(f.resumo).toMatch(/^Ana deve R\$\s2\.000,00\. Receita pendente não abate; ao marcar como recebida, abate\.$/);
+    expect(f.foraDaRenda).toBeNull();
+  });
+
+  it("com sobra parcial: pergunta a sobra e explica as duas opções", () => {
+    const f = frasesDoReembolso({
+      nome: "Ana",
+      previa: { devidoAntesCentavos: 200000, devidoDepoisCentavos: 0, sobraCentavos: 50000 },
+      valorCentavos: 250000,
+      pendente: false,
+    });
+    expect(f.sobra).toMatch(/^Passa R\$\s500,00 do que Ana deve\.$/);
+    expect(f.opcaoReceita).toMatch(/^R\$\s500,00 entra na sua renda; R\$\s2\.000,00 abate o que Ana deve\.$/);
+    expect(f.opcaoSaldo).toMatch(/^Os R\$\s500,00 abatem sozinhos as próximas compras divididas com Ana\.$/);
+    expect(f.foraDaRenda).toBeNull();
+  });
+
+  it("pessoa que não deve nada: a entrada inteira vira receita, sem abater", () => {
+    const f = frasesDoReembolso({
+      nome: "Ana",
+      previa: { devidoAntesCentavos: 0, devidoDepoisCentavos: 0, sobraCentavos: 50000 },
+      valorCentavos: 50000,
+      pendente: false,
+    });
+    expect(f.resumo).toBe("Ana não deve nada agora.");
+    expect(f.opcaoReceita).toBe("A entrada inteira vira receita sua e não abate nada.");
   });
 });
