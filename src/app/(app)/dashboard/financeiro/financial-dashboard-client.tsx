@@ -50,6 +50,7 @@ import {
   type CartaoDoPainel,
   type UltimasDoPainel,
 } from "@/lib/finance/painel";
+import { foraDaJanelaLida, ultimoMesLido } from "@/lib/finance/janela-lida";
 import { estadoDoBloco } from "@/lib/painel/bloco";
 import type { VistaDaGaveta } from "@/lib/painel/gaveta";
 import type { HrefsDoPainel } from "@/lib/painel/hrefs-do-painel";
@@ -297,6 +298,7 @@ export function DashboardClient({
     comparacao,
     pendente: { ate: totalPendente, rotuloAte: rotuloTotalPendente, referenteAoMes: aReceber },
     rotuloDoRecorte: null,
+    foraDaJanela: foraDaJanelaLida(mesSel, mesAtual),
   });
 
   /* ───────────── Cartões e próximas faturas ───────────── */
@@ -467,6 +469,7 @@ export function DashboardClient({
           ) : (
             <BarrasEntradasSaidasChart
               dados={dadosDasBarras(graficosCaixa ? graficosCaixa.evolucao : evolucao, mesAtual)}
+              ultimoMesLido={graficosCaixa ? undefined : ultimoMesLido(mesAtual)}
             />
           )}
           {graficosCaixa && <RodapeDasFaturasSemTotal meses={graficosCaixa.semTotal.evolucao} />}
@@ -542,7 +545,7 @@ export function DashboardClient({
                         <CreditCard aria-hidden="true" className="size-4 shrink-0" />
                         <span className="min-w-0 truncate text-sm font-medium">{c.nome}</span>
                       </div>
-                      <p className="mt-3 text-xs opacity-80">Fatura atual</p>
+                      <p className="mt-3 text-xs">Fatura atual</p>
                       {c.faturaAtual === null ? (
                         <p className="text-sm font-medium">sem lançamentos conhecidos</p>
                       ) : (
@@ -551,12 +554,12 @@ export function DashboardClient({
                         </p>
                       )}
                       {c.minhaParte !== null && (
-                        <p className="truncate text-xs tabular-nums opacity-80">
+                        <p className="truncate text-xs tabular-nums">
                           minha parte {formatCurrency(c.minhaParte)}
                         </p>
                       )}
                       {c.fechaEm !== null && (
-                        <p className="mt-1 text-xs opacity-80">fecha em {diaMes(c.fechaEm)}</p>
+                        <p className="mt-1 text-xs">fecha em {diaMes(c.fechaEm)}</p>
                       )}
                     </Link>
                     <VerRegistros href={hrefDaAtual} de={`fatura de ${c.nome}`} />

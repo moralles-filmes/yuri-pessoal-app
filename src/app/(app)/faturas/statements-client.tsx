@@ -859,7 +859,7 @@ export function StatementsClient({
             icone={CalendarClock}
             rotulo="Próximo vencimento"
             dica="Vencimento da próxima fatura fechada a pagar que ainda não venceu; sem nenhuma, o da fatura atual (se ainda não foi paga). As atrasadas estão em A pagar."
-            valor={proximo ? diaMes(proximo.data) : { ausente: "nenhum vencimento conhecido" }}
+            valor={proximo ? { semDinheiro: diaMes(proximo.data) } : { ausente: "nenhum vencimento conhecido" }}
             linhaDeBase={
               proximo
                 ? `fatura de ${mesPorExtenso(proximo.fatura.competencia)}${

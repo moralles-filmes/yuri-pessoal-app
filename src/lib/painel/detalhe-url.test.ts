@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { ChaveDoDetalhe } from "@/lib/finance/detalhe";
 import {
   CHAVES_DO_DETALHE,
+  abreAGaveta,
   mesDaUrl,
   pedidoDaUrl,
   urlComDetalhe,
@@ -81,6 +82,29 @@ describe("pedidoDaUrl", () => {
 
   it("alvo com letras, dígitos, _ e - passa", () => {
     expect(pedidoDaUrl({ detalhe: "fatura", alvo: "Abc_12-z" })?.alvo).toBe("Abc_12-z");
+  });
+});
+
+describe("abreAGaveta", () => {
+  it("URL com ?detalhe= abre a gaveta (não rola a página)", () => {
+    const href = urlComDetalhe(
+      "/dashboard/financeiro",
+      { mes: "2026-03" },
+      { chave: "saidas", parte: "meu", alvo: null },
+    );
+    expect(abreAGaveta(href)).toBe(true);
+  });
+
+  it("link para outra página sem detalhe rola ao topo", () => {
+    expect(abreAGaveta("/faturas")).toBe(false);
+  });
+
+  it("outros parâmetros (mes) não abrem a gaveta", () => {
+    expect(abreAGaveta("/financeiro/lancamentos?mes=2026-03")).toBe(false);
+  });
+
+  it("`detalhes` no plural não é o parâmetro `detalhe`", () => {
+    expect(abreAGaveta("/x?detalhes=1")).toBe(false);
   });
 });
 

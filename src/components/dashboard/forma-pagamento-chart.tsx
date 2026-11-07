@@ -16,6 +16,8 @@
 import type * as React from "react";
 import dynamic from "next/dynamic";
 import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
+import { TabelaDoGrafico } from "@/components/shared/painel/tabela-do-grafico";
+import { leituraDaForma } from "@/lib/painel/leitura-dos-graficos";
 
 type Props = React.ComponentProps<typeof import("./forma-pagamento-chart-impl").FormaPagamentoChart>;
 
@@ -33,6 +35,10 @@ export function FormaPagamentoChart(props: Props) {
   return (
     <div style={chartSkeletonHeightVar(Math.max(180, props.data.filter((d) => d.movimentado > 0).length * 46))}>
       <LazyFormaPagamentoChart {...props} />
+      <TabelaDoGrafico
+        titulo="Gastos por forma de pagamento"
+        leitura={leituraDaForma({ data: props.data, rotuloDaSerie: props.rotuloDaSerie })}
+      />
     </div>
   );
 }

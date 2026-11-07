@@ -105,7 +105,7 @@ describe("T10 · InvoicesCard chamado", () => {
       ],
     });
 
-    const elemento = await InvoicesCard({ todayIso: "2026-11-18" });
+    const elemento = await InvoicesCard({ todayIso: "2026-11-18", hrefDeNovo: "/dashboard" });
     const texto = JSON.stringify(elemento);
     expect(texto).toContain("sem lançamentos conhecidos");
     expect(texto).not.toMatch(/R\$\s?0,00/);

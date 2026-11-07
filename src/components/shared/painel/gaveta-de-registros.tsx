@@ -4,6 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type { VistaDaGaveta } from "@/lib/painel/gaveta";
+import { comoFecharAGaveta } from "@/lib/painel/gaveta-historico";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 
 /**
@@ -20,6 +21,10 @@ import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
  *  - a ÚLTIMA vista vive AQUI, fora da gaveta (invariante 95). Ao fechar, a URL perde o
  *    parâmetro e o servidor manda `null`; sem esta cópia a animação de saída desenharia vazio.
  *    `SheetContent` desmonta os filhos ao fechar — o estado não pode morar lá dentro.
+ *
+ * 08-C1: abrir é um `push`; fechar com `back` quando a abertura veio de navegação (senão o voltar
+ * reabre a mesma tela) e com `replace` quando veio de URL compartilhada/recarregada (senão o
+ * voltar sairia do app). O `abertaPorNavegacao` é derivado aqui, no mesmo bloco de render.
  */
 const GavetaDeRegistrosImpl = dynamic(
   () => import("./gaveta-de-registros-impl").then((m) => m.GavetaDeRegistrosImpl),
@@ -44,17 +49,21 @@ export function GavetaDeRegistros({
   const [visto, setVisto] = useState<VistaDaGaveta | null>(vista);
   // O link das contas acompanha a ÚLTIMA vista: na animação de fechar a URL já o perdeu.
   const [ultimoLinkContas, setUltimoLinkContas] = useState<string | null>(linkContas);
+  // A gaveta foi aberta por um `push` desta sessão? Então fechar é `back`, não `replace`.
+  const [abertaPorNavegacao, setAbertaPorNavegacao] = useState(false);
 
   // Estado derivado DURANTE o render (o padrão de `useLazyDialog`): uma vista nova da URL abre a
   // gaveta e passa a ser a última; `null` não apaga a última (a animação de fechar o usa).
   if (vista !== visto) {
     setVisto(vista);
     if (vista !== null) {
+      if (!aberto) setAbertaPorNavegacao(true);
       setUltimo(vista);
       setUltimoLinkContas(linkContas);
       setAberto(true);
     } else {
       setAberto(false);
+      setAbertaPorNavegacao(false);
     }
   }
 
@@ -63,7 +72,12 @@ export function GavetaDeRegistros({
 
   function aoFechar() {
     setAberto(false);
-    router.replace(urlAoFechar, { scroll: false });
+    if (comoFecharAGaveta({ abertaPorNavegacao }) === "voltar") {
+      router.back();
+    } else {
+      router.replace(urlAoFechar, { scroll: false });
+    }
+    setAbertaPorNavegacao(false);
   }
 
   return (

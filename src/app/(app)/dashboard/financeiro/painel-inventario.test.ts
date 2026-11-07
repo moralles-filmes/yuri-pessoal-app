@@ -142,3 +142,13 @@ describe("indicadores: o número de cada um sai da fonte certa", () => {
     expect(PAGINA).toMatch(/valoresOcultos\(/);
   });
 });
+
+describe("08 C5.1 — o texto da face do cartão não perde contraste", () => {
+  it("a face do cartão não usa opacity no texto (a cor já é escolhida pela luminância do cartão)", () => {
+    const inicio = CLIENTE.indexOf('c.texto === "branco"');
+    expect(inicio).toBeGreaterThan(-1);
+    const fim = CLIENTE.indexOf("<VerRegistros", inicio);
+    expect(fim).toBeGreaterThan(inicio);
+    expect(CLIENTE.slice(inicio, fim)).not.toMatch(/\bopacity-\d+/);
+  });
+});

@@ -37,6 +37,7 @@ import {
 import { toDateInputValue } from "@/lib/format";
 import { resumirRecebivel } from "@/lib/finance/recebimentos";
 import type { RecebimentoLido } from "@/lib/finance/recebimentos";
+import { MESES_DA_PROJECAO } from "@/lib/finance/janela-lida";
 
 /* ───────────────────────────── Tipos de linha (estritos) ───────────────────────────── */
 
@@ -130,6 +131,8 @@ export type LinhaCartao = {
   limite_total: Dinheiro;
   dia_fechamento: number;
   dia_vencimento: number;
+  /** 08 K2: `credit_cards.ativo`. Ausente ou `true` ⇒ o motor não recebe a chave. */
+  ativo?: boolean;
 };
 
 export type LinhaRecorrencia = {
@@ -384,6 +387,8 @@ export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): Entradas
       limite_total: num(c.limite_total),
       dia_fechamento: c.dia_fechamento,
       dia_vencimento: c.dia_vencimento,
+      // 08 K2: só o desativado carrega a chave — o ativo segue com a forma de antes.
+      ...(c.ativo === false ? { ativo: false } : {}),
     }));
     entradas.cards = cards;
   }
@@ -450,7 +455,7 @@ export function janelaDoRelatorio(params: {
   mesAtual: string;
 }): JanelaFinanceira & { evoMeses: string[]; projMeses: string[] } {
   const evoMeses = ultimosMeses(params.mesSel, 6);
-  const projMeses = proximosMeses(params.mesAtual, 6);
+  const projMeses = proximosMeses(params.mesAtual, MESES_DA_PROJECAO);
   return {
     from: `${evoMeses[0]}-01`,
     to: ultimoDiaDoMes(projMeses[projMeses.length - 1]),

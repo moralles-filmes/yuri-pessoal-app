@@ -9,7 +9,13 @@ import { CardSemLeitura } from "@/components/shared/card-sem-leitura";
 import { Quadro, MetricRow, CardEmpty } from "./primitives";
 
 /** Corpo do card Cartões & Faturas — abertas/fechadas, próximos vencimentos, a receber. */
-export async function InvoicesCard({ todayIso }: { todayIso: string }) {
+export async function InvoicesCard({
+  todayIso,
+  hrefDeNovo,
+}: {
+  todayIso: string;
+  hrefDeNovo: string;
+}) {
   // 03-G (L4, D-G17): captura SÓ ErroDeLeitura e SÓ a leitura; o JSX fica fora do try.
   let d: Awaited<ReturnType<typeof getInvoicesCardData>> | null = null;
   let falha: ErroDeLeitura | null = null;
@@ -21,7 +27,7 @@ export async function InvoicesCard({ todayIso }: { todayIso: string }) {
     registrarFalhaDeLeitura(e);
   }
   if (falha || !d) {
-    return <CardSemLeitura oQue={falha?.oQue ?? "os dados do card"} href="/dashboard" />;
+    return <CardSemLeitura oQue={falha?.oQue ?? "os dados do card"} href={hrefDeNovo} />;
   }
 
   if (!d.hasCards) {

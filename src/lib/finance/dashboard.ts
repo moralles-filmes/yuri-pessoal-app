@@ -109,6 +109,8 @@ export type DashCard = {
   limite_total: number;
   dia_fechamento: number;
   dia_vencimento: number;
+  /** 08 K2: ausente = true (a convenção de faturas-do-cartao.ts). Só `false` tira a previsão. */
+  ativo?: boolean;
 };
 
 export type DashRecurrence = {
@@ -793,7 +795,8 @@ export function proximas6Faturas(params: {
           ),
           virtual: false,
         });
-      } else {
+      } else if (card.ativo !== false) {
+        // 08 K2: cartão desativado não ganha previsão; o ciclo segue avançando abaixo.
         out.push({
           cardId: card.id,
           cardNome: card.nome,

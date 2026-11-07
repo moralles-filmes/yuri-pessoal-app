@@ -262,3 +262,24 @@ export function payloadDoSalvar(p: {
     view: visaoDoPeriodo(p.periodoPadrao),
   };
 }
+
+/* ───────────────────────────── URL do "Tentar de novo" ───────────────────────────── */
+
+/**
+ * URL de retorno do "Tentar de novo" do CardSemLeitura no Dashboard: preserva o período
+ * e a visão da URL (o que o usuário estava vendo) em vez de apontar para /dashboard puro.
+ * Só entra o parâmetro com string não vazia, nesta ordem fixa: periodo, visao, de, ate.
+ */
+export function urlDoDashboard(p: {
+  periodo?: string;
+  visao?: string;
+  de?: string;
+  ate?: string;
+}): string {
+  const partes: string[] = [];
+  if (p.periodo) partes.push(`periodo=${encodeURIComponent(p.periodo)}`);
+  if (p.visao) partes.push(`visao=${encodeURIComponent(p.visao)}`);
+  if (p.de) partes.push(`de=${encodeURIComponent(p.de)}`);
+  if (p.ate) partes.push(`ate=${encodeURIComponent(p.ate)}`);
+  return partes.length ? `/dashboard?${partes.join("&")}` : "/dashboard";
+}
