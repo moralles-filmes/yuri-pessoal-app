@@ -217,6 +217,7 @@ o `.env.local` (com o aval do dono, apagado no fim).
 | K7 | `4fbc87c` | A aba Cartões de `/relatorios` lê `valorDaFatura` (prevista → "sem lançamentos conhecidos") |
 | C5.1 | `1e6d988` | Sem `opacity-80` na face do cartão do Painel |
 | C5.2 | `745e567`, `737c501` | `leitura-dos-graficos.ts` + `TabelaDoGrafico` nas quatro fachadas; o segundo commit corrige uma **regressão que o primeiro criou** (abaixo) |
+| R1 | `a6189a6` | Achado da revisão final: num mês além da janela, a tabela oculta das barras lia "R$ 0,00" nos meses que a leitura não alcançou. Agora diz "fora do período lido" (competência; o caixa não tem janela) |
 
 ### 13.2 Testes operacionais (§5)
 
@@ -279,6 +280,19 @@ Maior queda: `/cartoes` −17,4 (05-C). Os números finais, depois de K7 e C5, e
 - **ai-router-br**: a inicialização automática removeu o bloco "AI Router BR" do `CLAUDE.md`; revertido com
   `git checkout`. → avisar no plugin.
 - Backlog do §4.3 inteiro, K3/K4/K5/K6 adiadas, e o §4.4 do dono — listados no `PR-65.md`.
+
+- **Da revisão final (Opus, nada crítico nem alto; o médio virou R1):**
+  - A K1 também troca o **4º indicador** (pendente/a receber de terceiros) por "fora do período lido",
+    embora os recebíveis talvez existam além da janela. Foi o aprovado ("os três indicadores"); erra para
+    esconder, nunca para inventar. → conferir o escopo da leitura de recebíveis no backlog.
+  - C1, caso que sobra: abrir a gaveta, seguir um link de dentro dela e voltar remonta a gaveta como
+    "aberta por link direto"; fechar faz `replace`. Recarregar com a gaveta aberta, idem. Não piora o
+    que havia antes.
+  - Os testes de C1, C2 e C4 são por varredura de fonte; a transição que decide o C1 (estado derivado no
+    render) não está numa função pura testada. → extrair numa limpeza.
+  - `LABELS` das formas copiado do `-impl`; dois `urlDoDashboard` com assinaturas diferentes (`period.ts`
+    e local no Painel); no `/relatorios` a tooltip e o eixo dos gráficos continuam sem olho (antigo).
+    → limpeza.
 
 ### 13.6 Decisões com custo se estiverem erradas
 

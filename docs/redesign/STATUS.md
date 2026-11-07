@@ -70,7 +70,8 @@ Sem funcionalidade nova e **sem migration**.
 histórico · C2 abrir a gaveta não rola a página · C3 "Tentar de novo" do Dashboard preserva o período ·
 C4 contagem e data não somem com o olho · K1 mês além da janela diz "fora do período lido", nunca
 R$ 0,00 · K2 cartão desativado sem fatura prevista · K7 aba Cartões de `/relatorios` sem prevista como
-R$ 0,00 · C5.1 contraste da face do cartão · C5.2 leitura textual dos quatro gráficos (tabela oculta).
+R$ 0,00 · C5.1 contraste da face do cartão · C5.2 leitura textual dos quatro gráficos (tabela oculta). Mais **R1**, achado médio da revisão final (Opus, nada crítico nem alto): a tabela oculta das barras dizia
+R$ 0,00 nos meses além da janela lida; agora diz "fora do período lido" (`a6189a6`).
 **A C5.2 criou uma regressão e a própria fase a pegou:** `sr-only` direto num `<table>` alargava o
 Painel para 713 px numa janela de 490; corrigida em `737c501` (a tabela vai dentro de um `div`).
 
@@ -80,9 +81,9 @@ larguras sem rolagem horizontal; prints do Painel em claro e escuro; nenhum cont
 medido (os abaixo de AA são do app original ou da casca, para o backlog). **Os fluxos que gravam NÃO
 rodaram no banco real, por decisão sua (opção b, 2026-11-07):** ficam conferidos pela suíte e pela leitura.
 
-**Provado na ponta (`737c501` + documentação):** `test:run` **368 / 8.279** · `lint` · `tsc` · `build` ·
+**Provado na ponta (`a6189a6`, com o conserto da revisão):** `test:run` **368 / 8.285** · `lint` · `tsc` · `build` ·
 `perf:bundle` (mediana **202,8 KB**, 71 rotas, todas ≤ 250, nenhuma com teto próprio; `main` era 201,9) ·
-`TZ=UTC npx vitest run` **368 / 8.279** ✅. md5 dos saldos **`15d93bd1c1d3e55a40db6210dff0eb3b`** no
+`TZ=UTC npx vitest run` **368 / 8.285** ✅. md5 dos saldos **`15d93bd1c1d3e55a40db6210dff0eb3b`** no
 início e no fim. Cresceram ≥ 5 KB desde `main`: `/relatorios` +11,6, `/dashboard/financeiro` +9,5,
 `/faturas` +6,8, `/dashboard` +5,2, `/parcelamentos` +5,0 (as peças comuns do painel); `/cartoes` −17,4.
 
