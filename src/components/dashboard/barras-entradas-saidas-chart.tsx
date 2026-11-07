@@ -13,7 +13,10 @@
 import type * as React from "react";
 import dynamic from "next/dynamic";
 import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
+import { TabelaDoGrafico } from "@/components/shared/painel/tabela-do-grafico";
+import { leituraDasBarras } from "@/lib/painel/leitura-dos-graficos";
 import { temDadosNasBarras } from "./barras-dados";
+import { monthLabel } from "./chart-theme";
 
 type Props = React.ComponentProps<
   typeof import("./barras-entradas-saidas-chart-impl").BarrasEntradasSaidasChart
@@ -37,6 +40,15 @@ export function BarrasEntradasSaidasChart(props: Props) {
       <div style={chartSkeletonHeightVar(280)}>
         <LazyBarrasEntradasSaidasChart {...props} />
       </div>
+      <TabelaDoGrafico
+        titulo="Entradas e saídas por mês"
+        leitura={leituraDasBarras({
+          dados: props.dados,
+          series: props.series,
+          nomes: props.nomes,
+          rotuloDoMes: monthLabel,
+        })}
+      />
       {temDadosNasBarras(props.dados) && props.dados.some((p) => p.parcial) && (
         <p className="mt-1 flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <svg width="16" height="12" aria-hidden="true" className="shrink-0">
