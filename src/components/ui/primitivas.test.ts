@@ -199,4 +199,45 @@ describe("Card", () => {
     }
     expect(culpados).toEqual([]);
   });
+
+  /** Aberturas de `<Card` em todo `src/`, com o arquivo de origem. */
+  const todasAsAberturas = () =>
+    arquivosTsx(SRC).flatMap((arquivo) =>
+      aberturasDeCard(semComentarios(fs.readFileSync(arquivo, "utf8"))).map((abertura) => ({
+        arquivo: path.relative(SRC, arquivo).replaceAll("\\", "/"),
+        abertura,
+      })),
+    );
+  /** Cada literal de string do `<Card ...>`: o que está junto num literal é aplicado junto. */
+  const literais = (abertura: string) =>
+    [...abertura.matchAll(/"([^"]*)"|'([^']*)'|`([^`]*)`/g)].map((m) =>
+      (m[1] ?? m[2] ?? m[3]).split(/\s+/).filter(Boolean),
+    );
+  const todosOsLiterais = () =>
+    todasAsAberturas().flatMap(({ arquivo, abertura }) =>
+      literais(abertura).map((classes) => ({ arquivo, classes })),
+    );
+
+  it("só um cartão invisível (bg-transparent) pode tirar a sombra de vidro com shadow-none", () => {
+    // por literal: `"overflow-hidden shadow-none"` incondicional com um `bg-transparent`
+    // condicional em outro literal do mesmo <Card> ainda tira a sombra de todos os cartões
+    const culpados = todosOsLiterais()
+      .filter(({ classes }) => classes.includes("shadow-none") && !classes.includes("bg-transparent"))
+      .map(({ arquivo }) => arquivo);
+    expect(culpados).toEqual([]);
+  });
+
+  it("borda tracejada declara a cor da borda (senão herda o branco do vidro, invisível no claro)", () => {
+    // largura (`border-0`, `border-2`), lado (`border-l-4`, `border-t`) e estilo não são cor
+    const naoECor = /^(\d+|[xytblrse](-.*)?|dashed|dotted|solid|double|none|hidden)$/;
+    const temCor = (classes: string[]) =>
+      classes.some((t) => {
+        const m = /^border-([a-z0-9-]+)(\/\d+)?$/.exec(t);
+        return m !== null && !naoECor.test(m[1]);
+      });
+    const culpados = todosOsLiterais()
+      .filter(({ classes }) => classes.includes("border-dashed") && !temCor(classes))
+      .map(({ arquivo }) => arquivo);
+    expect(culpados).toEqual([]);
+  });
 });

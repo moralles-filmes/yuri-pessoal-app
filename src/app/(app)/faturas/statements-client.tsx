@@ -433,9 +433,9 @@ function CartaoDaFatura({
   return (
     <Card
       className={cn(
-        "overflow-hidden shadow-none",
+        "overflow-hidden",
         f.estado === "atrasada" && "border-l-4 border-l-destructive",
-        v === null && "border border-dashed bg-transparent bg-none ring-0",
+        v === null && "border border-dashed border-border bg-transparent bg-none shadow-none ring-0",
       )}
     >
       <CardContent className="space-y-3 p-4">
