@@ -43,7 +43,7 @@ describe("Button", () => {
   });
 
   it("o brilho do botão padrão termina acima da letra (a letra ocupa de 30% a 70% da altura)", () => {
-    const fim = padrao.match(/rgba(255,255,255,.d+),transparent_(d+)%/);
+    const fim = padrao.match(/rgba\(255,255,255,\.\d+\),transparent_(\d+)%/);
     expect(fim).not.toBeNull();
     expect(Number(fim![1])).toBeLessThanOrEqual(30);
   });
