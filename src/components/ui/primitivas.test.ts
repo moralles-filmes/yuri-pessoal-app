@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { ALFA_PERIGO } from "@/lib/theme/alfas";
 import { buttonVariants } from "./button";
+import { PRESSAO } from "./materiais";
 
 describe("Button", () => {
   const padrao = buttonVariants();
@@ -34,12 +35,24 @@ describe("Button", () => {
     for (const m of padrao.matchAll(/(\S*)active:scale\S*/g)) {
       expect(m[1], m[0]).toMatch(/(^|:)not-aria-\[haspopup\]:$/);
     }
+    for (const m of padrao.matchAll(/(\S*)active:duration-120/g)) {
+      expect(m[1], m[0]).toMatch(/(^|:)not-aria-\[haspopup\]:$/);
+    }
     // e o movimento reduzido fica parado: a escala só nasce sob `motion-safe:`
     expect(padrao).toContain("motion-safe:not-aria-[haspopup]:active:scale");
     expect(padrao).toContain("motion-reduce:transition-none");
   });
 
+  it("a transição cobre `scale` (no Tailwind v4 a escala é a propriedade `scale`, não `transform`)", () => {
+    for (const texto of [padrao, PRESSAO]) {
+      const lista = texto.match(/transition-\[([^\]]+)\]/)?.[1].split(",");
+      expect(lista).toContain("scale");
+      expect(lista).toContain("transform");
+    }
+  });
+
   it("foco por contorno, não por anel", () => {
+    expect(padrao).toContain("focus-visible:outline-solid");
     expect(padrao).toContain("focus-visible:outline-2");
     expect(padrao).toContain("focus-visible:outline-offset-2");
     expect(padrao).toContain("focus-visible:outline-ring");

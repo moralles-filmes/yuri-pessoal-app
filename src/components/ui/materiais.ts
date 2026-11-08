@@ -8,4 +8,4 @@ export const MATERIAL_PILULA =
   "bg-pill border border-glass-border shadow-[inset_0_1px_0_var(--glass-hi),0_4px_12px_-6px_rgba(16,24,40,.25)]"
 
 export const PRESSAO =
-  "transition-[transform,background-color,box-shadow,filter] duration-500 ease-mola active:scale-[.96] active:duration-120 motion-reduce:transition-none motion-reduce:active:scale-100"
+  "transition-[transform,scale,color,background-color,border-color,box-shadow,filter] duration-500 ease-mola active:scale-[.96] active:duration-120 motion-reduce:transition-none motion-reduce:active:scale-100"
