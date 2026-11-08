@@ -86,6 +86,7 @@
   --color-primary-fill: var(--primary-fill);
   --color-primary-fill-foreground: var(--primary-fill-foreground);
   --color-muted-on-fog: var(--muted-on-fog);
+  --color-nav-ativo-ink: var(--nav-ativo-ink);
   --ease-mola: cubic-bezier(.22,1.45,.36,1);
   --ease-estalo: cubic-bezier(.22,1.6,.36,1);
   --shadow-vidro: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-shadow);
@@ -158,6 +159,8 @@
   --muted-foreground: #596070;
   /* Texto secundário sobre a NÉVOA aberta (fora de qualquer vidro). */
   --muted-on-fog: #454b5a;
+  /* 09-C: texto do item ativo do menu sobre pill-strong (o primary não chega a 4,5:1 ali). */
+  --nav-ativo-ink: #0062d6;
 
   --accent: #e7f1fe; /* fundo do item ativo */
   --accent-foreground: #1f4371;
@@ -279,6 +282,7 @@
   --muted: oklch(0.265 0.012 262);
   --muted-foreground: #a1a8b6;
   --muted-on-fog: #a1a8b6;
+  --nav-ativo-ink: #9cc4ff; /* 09-C: 4,78:1 medido sobre pill-strong */
 
   --accent: #233041;
   --accent-foreground: #cbe0fc;

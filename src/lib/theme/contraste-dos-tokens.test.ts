@@ -13,7 +13,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { compor, contraste, lerCor } from "./contraste";
 import { ALFA_PERIGO } from "./alfas";
-import { claro, escuro, SRC, semComentarios } from "./ler-tokens";
+import { claro, css, escuro, SRC, semComentarios } from "./ler-tokens";
 
 const MINIMO = 4.5;
 
@@ -339,6 +339,82 @@ describe("09-B · borda de campo >= 3:1", () => {
         expect(contraste(borda, superficie), nome + " × borda").toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
         expect(contraste(borda, ladrilho), nome + " × ladrilho").toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
       }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// 09-C · a casca do app em vidro: item ativo do menu, busca do cabeçalho e gaveta.
+// ---------------------------------------------------------------------------------------------
+
+/** As quatro composições de `glass-strong` (gaveta e menu): sobre a base e sobre cada mancha. */
+function fortes(tema: Tema): Array<[string, string]> {
+  const base = valor(tema, "fog-base");
+  const forte = valor(tema, "glass-strong");
+  const lista: Array<[string, string]> = [["glass-strong sobre a base", compor(forte, base)]];
+  for (const k of [1, 2, 3]) {
+    const nevoa = compor(valor(tema, `fog-${k}`), base);
+    lista.push([`glass-strong sobre fog-${k}`, compor(forte, nevoa)]);
+  }
+  return lista;
+}
+
+describe("09-C · casca", () => {
+  for (const [nomeTema, tema] of TEMAS) {
+    describe(nomeTema, () => {
+      const vidros = superficies(tema);
+      const gaveta = fortes(tema);
+      const todas = [...vidros, ...gaveta];
+
+      const exigirMinimo = (rotulo: string, razao: number, minimo: number) => {
+        const r = (Math.round(razao * 100) / 100).toFixed(2).replace(".", ",");
+        const m = String(minimo).replace(".", ",");
+        expect(razao, `${nomeTema} · ${rotulo}: ${r}:1 < ${m}:1`).toBeGreaterThanOrEqual(minimo);
+      };
+
+      it("a varredura leu o token do item ativo e as oito superfícies (anti-tautologia)", () => {
+        expect(tema.has("nav-ativo-ink"), "--nav-ativo-ink").toBe(true);
+        expect(tema.has("field-border"), "--field-border").toBe(true);
+        expect(vidros).toHaveLength(4);
+        expect(gaveta).toHaveLength(4);
+        expect(css).toContain("--color-nav-ativo-ink: var(--nav-ativo-ink)");
+      });
+
+      it("item ativo (e aro do modo recolhido): nav-ativo-ink sobre pill-strong >= 4,5:1", () => {
+        for (const [rotulo, s] of todas) {
+          const fundo = compor(valor(tema, "pill-strong"), s);
+          exigirMinimo(
+            `nav-ativo-ink sobre pill-strong em ${rotulo}`,
+            contraste(valor(tema, "nav-ativo-ink"), fundo),
+            MINIMO,
+          );
+        }
+      });
+
+      it("busca: muted-foreground sobre o ladrilho >= 4,5:1 e borda do campo >= 3:1", () => {
+        for (const [rotulo, s] of todas) {
+          const fundo = compor(valor(tema, "tile"), s);
+          exigirMinimo(
+            `muted-foreground sobre tile em ${rotulo}`,
+            contraste(valor(tema, "muted-foreground"), fundo),
+            MINIMO,
+          );
+          const borda = compor(valor(tema, "field-border"), fundo);
+          exigirMinimo(`field-border sobre tile em ${rotulo}`, contraste(borda, fundo), MINIMO_COMPONENTE);
+        }
+      });
+
+      it("gaveta: foreground e muted-foreground sobre glass-strong >= 4,5:1", () => {
+        for (const [rotulo, fundo] of gaveta) {
+          for (const texto of ["foreground", "muted-foreground"]) {
+            exigirMinimo(
+              `${texto} sobre ${rotulo}`,
+              contraste(valor(tema, texto), fundo),
+              MINIMO,
+            );
+          }
+        }
+      });
     });
   }
 });
