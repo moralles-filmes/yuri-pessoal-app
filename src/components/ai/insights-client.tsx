@@ -313,7 +313,7 @@ function CartaoDeInsight({
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-start gap-2">
           {/* `min-w-0` obrigatório: o título é longo e os badges são `shrink-0`. */}
-          <CardTitle className="min-w-0 flex-auto break-words text-base">{insight.titulo}</CardTitle>
+          <CardTitle className="min-w-0 flex-auto truncate text-base">{insight.titulo}</CardTitle>
           <Badge variant="secondary" className="shrink-0">
             {NOME_DO_MODULO[insight.modulo]}
           </Badge>
@@ -340,9 +340,9 @@ function CartaoDeInsight({
             {insight.fontes.map((fonte) => (
               <li key={fonte.indicador_id} className="min-w-0">
                 <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="min-w-0 text-muted-foreground">{fonte.rotulo}:</span>
+                  <span className="min-w-0 truncate text-muted-foreground">{fonte.rotulo}:</span>
                   {/* ⛔ Não medido escreve "não medido" com o motivo — nunca "—", nunca 0. */}
-                  <span className="font-medium">{textoDaFonte(fonte)}</span>
+                  <span className="min-w-0 truncate font-medium">{textoDaFonte(fonte)}</span>
                   <Link
                     href={fonte.rota}
                     className="inline-flex items-center gap-1 text-xs text-muted-foreground underline"

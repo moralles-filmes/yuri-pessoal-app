@@ -15,6 +15,9 @@ describe("adiamento conta dias de Brasília", () => {
   });
 });
 
-it.each(["src/components/ai/insights-client.tsx", "src/components/dashboard/general/insights-card.tsx"])("o título pode ocupar linha própria e quebrar palavras em %s", arquivo => {
-  expect(fs.readFileSync(arquivo, "utf8")).toContain("min-w-0 flex-auto break-words");
+it.each([
+  ["src/components/ai/insights-client.tsx", "min-w-0 flex-auto truncate text-base"],
+  ["src/components/dashboard/general/insights-card.tsx", "min-w-0 flex-auto break-words"],
+])("o título preserva o contrato de espaço em %s", (arquivo, classes) => {
+  expect(fs.readFileSync(arquivo, "utf8")).toContain(classes);
 });

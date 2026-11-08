@@ -416,3 +416,9 @@ describe("toolsForPermission — o que cada flag `allow_*` de fato libera", () =
     expect(incoerentes).toEqual([]);
   });
 });
+
+describe("Task 27 — definição do saldo de terceiros", () => {
+  it.each(["finance.get_spending", "finance.get_invoice"])("%s define o mesmo saldo", (name) => {
+    expect(findTool(name)?.description).toContain("a receber (o que ainda falta receber de terceiros: o devido menos o que já foi recebido)");
+  });
+});

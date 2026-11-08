@@ -206,3 +206,31 @@ describe("campos aposentados do chat livre", () => {
     expect(await resposta.json()).toMatchObject({ code: "AI_BAD_REQUEST", error: "O pedido trouxe um campo que o servidor não aceita." });
   });
 });
+
+describe("Task 27 — origem do gasto", () => {
+  it.each([
+    ["same-site", "http://irmao.localhost:3000", "localhost:3000", 403],
+    ["same-site", "http://localhost:3001", "localhost:3000", 403],
+    ["same-site", "https://localhost:3000", "localhost:3000", 403],
+    ["same-site", "http://localhost:3000", "localhost:3000", 429],
+    ["cross-site", "http://irmao.localhost:3000", "localhost:3000", 403],
+    [null, "http://localhost:3000", "localhost:3000", 429],
+    [null, "http://irmao.localhost:3000", "localhost:3000", 403],
+    [null, "inválida", "localhost:3000", 403],
+    [null, null, "localhost:3000", 403],
+    ["same-site", null, "localhost:3000", 403],
+    [null, "http://localhost:3000", null, 403],
+    ["same-origin", null, null, 429],
+  ])("site=%s origin=%s host=%s → %s", async (site, origin, host, status) => {
+    const headers = new Headers({ "content-type": "application/json" });
+    if (site) headers.set("sec-fetch-site", site);
+    if (origin) headers.set("origin", origin);
+    if (host) headers.set("host", host);
+    const r = await POST(new Request("http://localhost:3000/api/ia/chat", {
+      method: "POST", headers, body: JSON.stringify({ text: "oi" }),
+    }));
+    expect(r.status).toBe(status);
+    expect(runChatMock).toHaveBeenCalledTimes(status === 403 ? 0 : 1);
+    expect(runExperienceMock).not.toHaveBeenCalled();
+  });
+});

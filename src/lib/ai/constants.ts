@@ -21,7 +21,7 @@ export type AiSection = {
   readonly description: string;
 };
 
-/** Os 4 submódulos da 18-A. Os demais chegam nas subfases seguintes. */
+/** Navegação atual da IA, incluindo ações, comprovantes, insights e memória. */
 export const AI_SECTIONS: readonly AiSection[] = [
   {
     slug: "chat",

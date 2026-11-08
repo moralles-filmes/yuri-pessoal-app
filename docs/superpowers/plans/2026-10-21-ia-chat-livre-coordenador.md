@@ -1630,7 +1630,7 @@ individual. Sem migration, chamada paga, push, PR ou deploy. Próxima: Task 27.
   - os quatro comentários desatualizados: `constants.ts:24`, `ai-preferences-form.tsx:6-9`,
     `validators/ai.ts:318` e `search/types.ts:34`.
 
-- [ ] **Step 1: Testes que falham.**
+- [x] **Step 1: Testes que falham.**
   - (018) Em `route.test.ts`, `sec-fetch-site: same-site` com `Origin` diferente do `Host` →
     **403**. Com `same-origin` → segue.
   - (033) A descrição de `finance.get_invoice` define "a receber de terceiros" com a mesma frase
@@ -1638,13 +1638,30 @@ individual. Sem migration, chamada paga, push, PR ou deploy. Próxima: Task 27.
     `docs/superpowers/specs/2026-10-11-03d-recebiveis-design.md:1030` antes.
   - (FN-024) Teste de varredura: `proposal-card.tsx` não chama `Date.now()` dentro de `useState(`.
     Use um hook `useAgora()` com `useSyncExternalStore`, cujo snapshot do servidor é `null`.
-- [ ] **Step 2:** FAIL.
-- [ ] **Step 3: Implementar.**
+- [x] **Step 2:** FAIL.
+- [x] **Step 3: Implementar.**
   - (FN-023) Os nomes cortados ganham `min-w-0` + `truncate` no lado texto (regra 2 de layout
     do `CLAUDE.md`).
   - (FN-028) Os comentários passam a dizer a verdade.
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5: Commit** `fix(ia): Route Handler só same-origin, termo de terceiros definido nas duas ferramentas, miúdos de tela`.
+- [x] **Step 4:** PASS.
+- [x] **Step 5: Commit** `fix(ia): Route Handler só same-origin, termo de terceiros definido nas duas ferramentas, miúdos de tela`.
+
+
+**Resultado da Task 27 (2026-11-08):** concluída pelo Codex principal, na worktree
+exclusiva autorizada. Somente same-origin autoriza diretamente; fallback exige Host/porta
+e protocolo iguais, sem sinal suficiente recusa antes do runner. As duas ferramentas de
+Financeiro e seus agregados definem o saldo de terceiros como devido menos recebido, de
+todos os meses; valores continuam vindos do motor. useAgora usa useSyncExternalStore,
+snapshot em cache, servidor null, intervalo compartilhado de 30 s e limpeza no último
+assinante; antes da hora conhecida o cartão declara a conferência e bloqueia os botões.
+Truncamento no lado texto de ações e insights; quatro comentários corrigidos.
+Testes iniciais: 13 falhas antes da correção. Dois contratos anteriores exigiam break-words;
+foram atualizados ao truncate aprovado, preservando o contrato do dashboard. O lint apontou
+a chamada direta do hook mockado no teste; executor renomeado e todos os checks repetidos.
+40 mutações distintas vermelhas, restauradas por SHA-256 e git diff; nenhuma ativa.
+Suíte final: **7.087 testes em 321 arquivos**, TypeScript sem erros e lint limpo. Revisão
+própria de segurança e React, nenhuma auditoria externa. Sem migration, chamada paga,
+gravação de teste em produção, push, PR ou deploy. Conferência visual fica para Task 28.
 
 ---
 

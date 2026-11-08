@@ -211,7 +211,7 @@ export const aiPermissionsSchema = z.object(permissionShape).strict();
 export type AiPermissionsInput = z.infer<typeof aiPermissionsSchema>;
 
 /**
- * As cinco flags `allow_write_*` (18-C · Bloco 4), pela MESMA derivação e pelos mesmos
+ * As flags `allow_write_*`, incluindo memória, pela MESMA derivação e pelos mesmos
  * motivos. Objeto separado porque a decisão é separada: nenhuma leitura consulta este objeto,
  * e nenhuma escrita passa só com o outro.
  */

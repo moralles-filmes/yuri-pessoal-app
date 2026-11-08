@@ -25,10 +25,10 @@ describe("aviso de possível duplicata",()=>{
     expect(chat).toMatch(/propostasPendentes=\{\(b.propostas \?\? \[\]\).filter/);
     expect(chat).toContain('desfechos[q.id].tipo === "pendente"');
     expect(historico).toContain("possivelDuplicata={acao.possivelDuplicata}");
-    expect(historico).toContain("min-w-0 flex-auto break-words font-medium");
+    expect(historico).toContain("min-w-0 flex-auto truncate font-medium");
     expect(cartao).toContain("duplicataNoChat(proposta, propostasPendentes, agora)");
     expect(cartao).toMatch(/duplicada && <p role="status"[^>]*>\{AVISO_DUPLICATA\}/);
-    expect(cartao).toContain("disabled={!vista.podeConfirmar}");
+    expect(cartao).toContain("disabled={agora === null || !vista.podeConfirmar}");
     expect(AVISO_DUPLICATA).toBe("possível duplicata — há outra igual nesta conversa");
   });
 });

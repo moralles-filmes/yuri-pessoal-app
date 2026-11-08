@@ -307,20 +307,21 @@ export async function POST(request: Request) {
 }
 
 /**
- * `Sec-Fetch-Site` primeiro (é o sinal forte, o navegador não deixa forjar), `Origin`
- * depois. Requisição sem nenhum dos dois é recusada: no fluxo real da aplicação sempre
- * existe um deles, e aceitar a ausência transformaria a checagem em decoração.
+ * Só `same-origin` autoriza diretamente. Os demais valores exigem Origin com o mesmo
+ * Host (incluindo porta) e protocolo do pedido. Subdomínio irmão não autoriza gasto.
+ * Sem um sinal suficiente, o pedido é recusado.
  */
 function verificarOrigem(request: Request): { ok: boolean } {
   const site = request.headers.get("sec-fetch-site");
-  if (site) return { ok: site === "same-origin" || site === "same-site" };
+  if (site === "same-origin") return { ok: true };
 
   const origin = request.headers.get("origin");
   const host = request.headers.get("host");
   if (!origin || !host) return { ok: false };
 
   try {
-    return { ok: new URL(origin).host === host };
+    const origem = new URL(origin);
+    return { ok: origem.host === host && origem.protocol === new URL(request.url).protocol };
   } catch {
     return { ok: false };
   }

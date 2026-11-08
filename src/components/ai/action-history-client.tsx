@@ -164,7 +164,7 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
           <IconeDoEstado estado={acao.estado} />
           {ROTULO_DO_ESTADO_DA_ACAO[acao.estado]}
         </Badge>
-        <span className="min-w-0 flex-auto break-words font-medium">{acao.rotuloDoCommand}</span>
+        <span className="min-w-0 flex-auto truncate font-medium">{acao.rotuloDoCommand}</span>
         {acao.ehDesfazer && (
           <Badge variant="outline" className="text-[11px] font-normal">
             desfazer

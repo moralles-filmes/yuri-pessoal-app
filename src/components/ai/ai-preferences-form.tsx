@@ -3,9 +3,8 @@
 /**
  * Fase 18-A — IA · Preferências gerais do módulo.
  *
- * ⚠️ O "modo de confirmação" é gravado e a tela DIZ que ele ainda não faz nada — porque na
- * 18-A não existe escrita nenhuma. Mostrar um controle que promete o que não entrega seria
- * exatamente o tipo de mentira que a trava de honestidade existe para impedir.
+ * O modo de confirmação é guardado, mas ainda não altera o comportamento: toda escrita
+ * da IA pede confirmação do dono. A tela declara essa limitação junto do controle.
  */
 
 import * as React from "react";
@@ -556,7 +555,7 @@ export function AiPreferencesForm({
           </div>
         </div>
 
-        {/* ── Modo de confirmação: gravado agora, consumido na 18-C ─────────────────── */}
+        {/* ── Modo de confirmação: guardado, ainda sem efeito ─────────────────── */}
         <div className="min-w-0 space-y-1.5">
           <Label htmlFor="pref-confirmacao">Modo de confirmação</Label>
           <Select
