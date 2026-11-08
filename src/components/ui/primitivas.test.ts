@@ -162,6 +162,11 @@ describe("Card", () => {
   );
   const card = corpoDaFuncao(fonte, "Card");
 
+  it("desconta da medida o 1px da borda: a largura interna é a de antes do vidro", () => {
+    expect(card).toContain("[--card-spacing:calc(--spacing(4)_-_1px)]");
+    expect(card).toContain("data-[size=sm]:[--card-spacing:calc(--spacing(3)_-_1px)]");
+  });
+
   it("é vidro de cartão: material importado, raio de 24px (20px no sm)", () => {
     expect(fonte).toContain('import { MATERIAL_CARTAO } from "./materiais"');
     expect(card).toContain("MATERIAL_CARTAO");
