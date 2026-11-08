@@ -559,6 +559,27 @@ describe("Sobreposições em vidro", () => {
     expect(media![1].indexOf("-webkit-backdrop-filter")).toBeLessThan(media![1].indexOf(" backdrop-filter: none"));
   });
 
+  it("globals.css: o aviso focado por teclado mostra anel (a regra do vidro apagaria o do sonner)", () => {
+    // O sonner dá box-shadow ao :focus-visible do aviso (que é focável e sem outline).
+    // Nossa regra do vidro, mais específica, sempre define box-shadow: sem esta irmã, o foco some.
+    const alvo = '[data-sonner-toaster] [data-sonner-toast][data-styled="true"]:focus-visible';
+    const regra = css.match(
+      /\[data-sonner-toaster\]\s+\[data-sonner-toast\]\[data-styled="true"\]:focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(regra, "regra de foco do aviso").not.toBeNull();
+    const corpo = regra![1].replace(/\s+/g, " ");
+    expect(corpo).toContain("inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-shadow), 0 0 0 2px var(--ring)");
+    let profundidade = 0;
+    for (const c of css.slice(0, css.indexOf(regra![0]))) {
+      if (c === "{") profundidade += 1;
+      else if (c === "}") profundidade -= 1;
+    }
+    expect(profundidade).toBe(0);
+    // Depois da regra do vidro do aviso e antes da do vidro aninhado.
+    expect(css.indexOf(alvo)).toBeGreaterThan(css.indexOf('[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {'));
+    expect(css.indexOf(alvo)).toBeLessThan(css.indexOf("body:has("));
+  });
+
   it("globals.css: vidro dentro de Dialog/Sheet não desfoca de novo (vidro sobre vidro)", () => {
     const m = css.match(/body:has\(([^)]*)\)\s*:is\(([\s\S]*?)\)\s*\{([^}]*)\}/);
     expect(m, "regra do vidro aninhado").not.toBeNull();
