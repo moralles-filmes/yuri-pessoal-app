@@ -398,3 +398,117 @@ describe("09-D T2 - indicador em vidro", () => {
     expect(fonte).toContain("[&_.text-2xl]");
   });
 });
+
+describe("09-D T3 - bloco e moldura do dashboard em vidro", () => {
+  const bloco = semComentarios(ler("bloco.tsx"));
+  const cardShell = semComentarios(
+    fs.readFileSync(path.join(SRC, "components", "dashboard", "general", "card-shell.tsx"), "utf8"),
+  );
+  const financeiro = semComentarios(
+    fs.readFileSync(path.join(SRC, "app", "(app)", "dashboard", "financeiro", "financial-dashboard-client.tsx"), "utf8"),
+  );
+
+  const doCard = /<Card className=\{cn\(([\s\S]*?)\)\}/.exec(bloco)?.[1] ?? "";
+  const doH3 = /<h3 className="([^"]*)"/.exec(bloco)?.[1] ?? "";
+  const doLink = /<Link\s+href=\{verTodos\.href\}\s+className="([^"]*)"/.exec(bloco)?.[1] ?? "";
+  const doIcone = /<Icone\b[^>]*\/>/.exec(bloco)?.[0] ?? "";
+
+  it("a varredura leu o Card, o título, o link e o ícone (anti-tautologia)", () => {
+    expect(doCard).toContain("overflow-hidden");
+    expect(doH3).toContain("break-words");
+    expect(doLink).toContain("text-primary");
+    expect(doIcone).toContain("<Icone");
+  });
+
+  it("Bloco: o Card tem 28 px de raio", () => {
+    expect(doCard).toContain("rounded-[28px]");
+  });
+
+  it("Bloco: o título é 17 px, semibold, com tracking e quebra palavra", () => {
+    for (const classe of ["text-[1.0625rem]", "font-semibold", "tracking-[-0.018em]", "break-words"]) {
+      expect(doH3.split(/\s+/), classe).toContain(classe);
+    }
+  });
+
+  it("Bloco: o ícone é opcional, decorativo e não encolhe", () => {
+    expect(bloco).toContain("icone?: LucideIcon");
+    expect(bloco).toMatch(/\bicone:\s*Icone\b/);
+    expect(bloco).toMatch(/\{Icone\s*\?\s*\(/);
+    expect(doIcone).toContain('aria-hidden="true"');
+    expect(doIcone).toContain("size-[1.1875rem]");
+    expect(doIcone).toContain("shrink-0");
+    expect(bloco).toContain("min-w-0");
+  });
+
+  it('Bloco: o link de verTodos é text-sm font-medium text-primary e o texto padrão é "Ver tudo"', () => {
+    for (const classe of ["text-sm", "font-medium", "text-primary"]) {
+      expect(doLink.split(/\s+/), classe).toContain(classe);
+    }
+    expect(bloco).toContain('verTodos.rotulo ?? "Ver tudo"');
+    expect(bloco).not.toContain('"Ver todas"');
+  });
+
+  it("Bloco: os quatro estados continuam distintos", () => {
+    const vazio = bloco.slice(bloco.indexOf('estado === "vazio"'), bloco.indexOf('estado === "falha"'));
+    const falha = bloco.slice(bloco.indexOf('estado === "falha"'), bloco.indexOf('estado === "nao-segue"'));
+    const naoSegue = bloco.slice(bloco.indexOf('estado === "nao-segue"'));
+    expect(bloco).toContain('estado === "conteudo" ? children');
+    expect(vazio).toContain("<Inbox");
+    expect(falha).toContain("<AlertTriangle");
+    expect(falha).toContain('role="alert"');
+    expect(naoSegue).toContain("<CircleSlash");
+    expect(naoSegue).toContain("border-dashed");
+    expect(naoSegue).toContain("Ver sem o filtro");
+    expect(naoSegue).not.toContain("Inbox");
+    expect(naoSegue).not.toContain("AlertTriangle");
+  });
+
+  it("CardShell: raio de 28 px, título de 17 px com tracking, link Ver tudo em text-sm", () => {
+    const cn = /<Card[\s\S]*?className=\{cn\(([\s\S]*?)\n\s*\)\}/.exec(cardShell)?.[1] ?? "";
+    const titulo = /<CardTitle className="([^"]*)"/.exec(cardShell)?.[1] ?? "";
+    const link = /<Link\s+href=\{DASH_CARD_HREF\[id\]\}\s+className="([^"]*)"/.exec(cardShell)?.[1] ?? "";
+    expect(cn).toContain("overflow-hidden");
+    expect(cn).toContain("rounded-[28px]");
+    expect(titulo.split(/\s+/)).toContain("text-[1.0625rem]");
+    expect(titulo.split(/\s+/)).toContain("tracking-[-0.018em]");
+    expect(link.split(/\s+/)).toContain("text-sm");
+    expect(cardShell).toMatch(/Ver tudo\s*<ChevronRight/);
+    expect(cardShell).not.toContain("Ver mais");
+  });
+
+  it("CardShell: o modo Personalizar mantém o cursor de arrastar e o raio", () => {
+    expect(cardShell).toContain("cursor-grab");
+    expect(cardShell).toContain("draggable={personalizing}");
+    expect(cardShell).toContain("rounded-[28px]");
+    expect(cardShell).toContain('className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-primary/10 text-primary"');
+  });
+
+  it("financeiro: cada um dos seis <Bloco> tem icone={", () => {
+    const aberturas = [...financeiro.matchAll(/<Bloco\s[\s\S]*?\n {8}>\n/g)].map((m) => m[0]);
+    expect(aberturas).toHaveLength(6);
+    for (const abertura of aberturas) expect(abertura).toContain("icone={");
+  });
+
+  it("financeiro: o ícone vem do destino (relatórios, cartões, faturas, lançamentos, terceiros, categorias)", () => {
+    const porTitulo = (titulo: string) =>
+      /icone=\{(\w+)\}/.exec(
+        [...financeiro.matchAll(/<Bloco\s[\s\S]*?\n {8}>\n/g)].map((m) => m[0]).find((a) => a.includes(`titulo="${titulo}"`)) ?? "",
+      )?.[1];
+    expect(porTitulo("Minhas entradas × saídas")).toBe("BarChart3");
+    expect(porTitulo("Meus gastos por categoria")).toBe("PieChart");
+    expect(porTitulo("Cartões de crédito")).toBe("CreditCard");
+    expect(porTitulo("Próximas faturas")).toBe("Receipt");
+    expect(porTitulo("Últimas transações")).toBe("ArrowLeftRight");
+    expect(porTitulo("Pendente de terceiros")).toBe("Users");
+  });
+
+  it("financeiro: o card-âncora do detalhamento tem 19 px de respiro e o quadrado sem ring", () => {
+    const ancora = financeiro.slice(financeiro.indexOf('<section aria-labelledby="painel-detalhamento"'));
+    const conteudo = /<CardContent className="([^"]*)"/.exec(ancora)?.[1] ?? "";
+    const quadrado = /<div className="(grid size-10[^"]*)"/.exec(ancora)?.[1] ?? "";
+    expect(conteudo).toContain("p-[19px]");
+    expect(conteudo).not.toContain("p-5");
+    expect(quadrado).toContain("rounded-[12px]");
+    expect(quadrado).not.toContain("ring");
+  });
+});

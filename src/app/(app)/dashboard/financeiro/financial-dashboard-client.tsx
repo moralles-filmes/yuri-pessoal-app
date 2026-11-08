@@ -5,9 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  ArrowLeftRight,
+  BarChart3,
   CalendarClock,
   CreditCard,
+  PieChart,
   Plus,
+  Receipt,
   ReceiptText,
   Scale,
   TrendingDown,
@@ -459,6 +463,7 @@ export function DashboardClient({
       <div className="grid gap-4 lg:grid-cols-3">
         <Bloco
           className="lg:col-span-2"
+          icone={BarChart3}
           titulo="Minhas entradas × saídas"
           subtitulo={rotulos.evolucao.descricao}
           verTodos={{ href: "/relatorios", rotulo: "Ver relatório" }}
@@ -476,6 +481,7 @@ export function DashboardClient({
           <p className="text-xs text-muted-foreground">{FRASE_DO_MES}</p>
         </Bloco>
         <Bloco
+          icone={PieChart}
           titulo="Meus gastos por categoria"
           subtitulo={`${monthYearLabel(mesSel)}. ${rotulos.categorias.descricao}`}
           estado="conteudo"
@@ -506,6 +512,7 @@ export function DashboardClient({
       <div className="grid gap-4 lg:grid-cols-5">
         <Bloco
           className="lg:col-span-3"
+          icone={CreditCard}
           titulo="Cartões de crédito"
           subtitulo="Fatura atual de cada cartão, pelo valor cheio"
           verTodos={{ href: "/cartoes" }}
@@ -579,6 +586,7 @@ export function DashboardClient({
 
         <Bloco
           className="lg:col-span-2"
+          icone={Receipt}
           titulo="Próximas faturas"
           subtitulo={`${ciclos} ciclos de cada cartão · pelo vencimento`}
           verTodos={{ href: "/faturas" }}
@@ -651,6 +659,7 @@ export function DashboardClient({
       <div className="grid gap-4 lg:grid-cols-5">
         <Bloco
           className="lg:col-span-3"
+          icone={ArrowLeftRight}
           titulo="Últimas transações"
           subtitulo="Os lançamentos mais recentes que já aconteceram"
           verTodos={{ href: "/financeiro/lancamentos" }}
@@ -724,6 +733,7 @@ export function DashboardClient({
 
         <Bloco
           className="lg:col-span-2"
+          icone={Users}
           titulo="Pendente de terceiros"
           subtitulo="O que ainda não voltou para você"
           verTodos={{ href: "/terceiros" }}
@@ -777,7 +787,7 @@ export function DashboardClient({
         {/* Card-âncora: valor pessoal × terceiros + cartão × à vista + faturas + contas */}
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="overflow-hidden ring-1 ring-primary/25">
-            <CardContent className="p-5">
+            <CardContent className="p-[19px]">
               <div className="flex items-start justify-between gap-4">
                 {/* `min-w-0`: mesma razão do StatCard — sem ele o texto empurra o ícone
                     para fora e o `overflow-hidden` do Card corta o ícone pela metade. */}
@@ -798,7 +808,7 @@ export function DashboardClient({
                     </p>
                   )}
                 </div>
-                <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
+                <div className="grid size-10 shrink-0 place-items-center rounded-[12px] bg-primary/10 text-primary">
                   <Scale className="size-5" />
                 </div>
               </div>

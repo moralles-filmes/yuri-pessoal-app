@@ -72,13 +72,13 @@ export function CardShell({
       }}
       onDragEnd={onDragEnd}
       className={cn(
-        "flex h-full flex-col overflow-hidden",
+        "flex h-full flex-col overflow-hidden rounded-[28px]",
         personalizing && "cursor-grab ring-1 ring-border/80",
         personalizing && hidden && "opacity-55",
       )}
     >
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
-        <CardTitle className="flex min-w-0 items-center gap-2.5 text-base">
+        <CardTitle className="flex min-w-0 items-center gap-2.5 text-[1.0625rem] font-semibold tracking-[-0.018em]">
           {personalizing && (
             <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           )}
@@ -135,9 +135,9 @@ export function CardShell({
         ) : (
           <Link
             href={DASH_CARD_HREF[id]}
-            className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-primary transition-colors hover:underline"
+            className="inline-flex shrink-0 items-center gap-0.5 text-sm font-medium text-primary transition-colors hover:underline"
           >
-            Ver mais
+            Ver tudo
             <ChevronRight className="size-3" aria-hidden />
           </Link>
         )}
