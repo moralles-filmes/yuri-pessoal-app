@@ -27,7 +27,7 @@ export function StatCard({
     // 4 colunas o card pode ficar com ~115px mesmo num monitor grande — media query não
     // enxerga isso.
     <Card className={cn("@container overflow-hidden", className)}>
-      <CardContent className="flex items-start justify-between gap-3 p-4 sm:gap-4 sm:p-5">
+      <CardContent className="flex items-start justify-between gap-3 p-[15px] sm:gap-4 sm:p-[19px]">
         {/* `min-w-0` é obrigatório: item de flex não encolhe abaixo do conteúdo
             (`min-width: auto`). Sem ele o rótulo empurrava o ícone para fora e o
             `overflow-hidden` do Card o cortava pela metade. */}
@@ -42,7 +42,7 @@ export function StatCard({
                 <span
                   className={cn(
                     "font-medium",
-                    trend.direction === "up" && "text-emerald-500",
+                    trend.direction === "up" && "text-success-ink",
                     trend.direction === "down" && "text-destructive",
                     trend.direction === "neutral" && "text-muted-foreground",
                   )}
@@ -58,7 +58,7 @@ export function StatCard({
             em vez de o texto ser espremido a ponto de quebrar no meio da palavra. O ícone é
             decorativo — o rótulo ao lado já diz o que o número é —, então some sem perda. */}
         {Icon && (
-          <div className="hidden size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15 @[13rem]:grid">
+          <div className="hidden size-10 shrink-0 place-items-center rounded-[12px] bg-primary/10 text-primary @[13rem]:grid">
             <Icon className="size-5" />
           </div>
         )}

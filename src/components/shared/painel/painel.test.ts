@@ -512,3 +512,71 @@ describe("09-D T3 - bloco e moldura do dashboard em vidro", () => {
     expect(quadrado).not.toContain("ring");
   });
 });
+
+describe("09-D T4 - StatCard e PageHeader em vidro", () => {
+  const lerShared = (nome: string) =>
+    semComentarios(fs.readFileSync(path.resolve(PASTA, "..", nome), "utf8"));
+  const stat = lerShared("stat-card.tsx");
+  const header = lerShared("page-header.tsx");
+
+  const conteudo = /<CardContent className="([^"]*)"/.exec(stat)?.[1] ?? "";
+  const quadradoStat = /<div className="(hidden size-10[^"]*)"/.exec(stat)?.[1] ?? "";
+  const numero = /<p className="([^"]*\btext-2xl\b[^"]*)"/.exec(stat)?.[1] ?? "";
+  const h1 = /<h1 className="([^"]*)"/.exec(header)?.[1] ?? "";
+  const descricao = /<p className="([^"]*)"/.exec(header)?.[1] ?? "";
+  const props = /\{\s*title,\s*description,\s*children,\s*className,\s*\}/.exec(header)?.[0] ?? "";
+
+  it("a varredura leu o conteúdo, o quadrado, o número, o h1, a descrição e as props (anti-tautologia)", () => {
+    expect(conteudo).toContain("flex");
+    expect(quadradoStat).toContain("size-10");
+    expect(numero).toContain("tabular-nums");
+    expect(h1).toContain("break-words");
+    expect(descricao).toContain("text-sm");
+    expect(props).toContain("title");
+  });
+
+  it("StatCard: o respiro do CardContent é 15 px, e 19 px de sm para cima", () => {
+    const partes = conteudo.split(/\s+/);
+    expect(partes).toContain("p-[15px]");
+    expect(partes).toContain("sm:p-[19px]");
+    expect(partes).not.toContain("p-4");
+    expect(partes).not.toContain("sm:p-5");
+  });
+
+  it("StatCard: o quadrado do ícone é size-10 rounded-[12px], sem ring, e some abaixo de 13rem de card", () => {
+    const partes = quadradoStat.split(/\s+/);
+    expect(partes).toContain("size-10");
+    expect(partes).toContain("rounded-[12px]");
+    expect(partes).toContain("bg-primary/10");
+    expect(partes).toContain("text-primary");
+    expect(partes).toContain("hidden");
+    expect(partes).toContain("@[13rem]:grid");
+    expect(quadradoStat).not.toContain("ring");
+  });
+
+  it("StatCard: a seta up usa text-success-ink, não emerald", () => {
+    expect(stat).not.toContain("emerald");
+    expect(stat).toMatch(/direction === "up" && "text-success-ink"/);
+  });
+
+  it("StatCard: o número continua text-2xl e tabular-nums", () => {
+    expect(numero.split(/\s+/)).toContain("text-2xl");
+    expect(numero.split(/\s+/)).toContain("tabular-nums");
+  });
+
+  it("PageHeader: o <h1> tem 26 px no celular, 32 px de sm, negrito, tracking e quebra palavra", () => {
+    const partes = h1.split(/\s+/);
+    for (const classe of ["text-[1.625rem]", "sm:text-[2rem]", "font-bold", "tracking-[-0.03em]", "break-words"]) {
+      expect(partes, classe).toContain(classe);
+    }
+    expect(partes).not.toContain("text-xl");
+    expect(partes).not.toContain("sm:text-2xl");
+    expect(partes).not.toContain("font-semibold");
+  });
+
+  it("PageHeader: a descrição continua na névoa e a API não mudou", () => {
+    expect(descricao.split(/\s+/)).toContain("text-muted-on-fog");
+    expect(props).toContain("children");
+    expect(header).toMatch(/title: string;\s*description\?: string;\s*children\?: React\.ReactNode;\s*className\?: string;/);
+  });
+});
