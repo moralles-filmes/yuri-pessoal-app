@@ -735,6 +735,7 @@ export function ChatView({
                     desfecho={desfechos[p.id] ?? DESFECHO_INICIAL}
                     onDecidiu={avisarDecisao}
                     onDesfecho={(d) => registrarDesfecho(p.id, d)}
+                    propostasPendentes={(b.propostas ?? []).filter(q => !desfechos[q.id] || desfechos[q.id].tipo === "pendente")}
                   />
                 ))}
             </div>

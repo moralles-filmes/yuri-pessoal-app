@@ -111,6 +111,7 @@ export type MotivoDeRecusa =
    * quem decide é `ai_action_executions_undoes_user_uidx`, no banco.
    */
   | "JA_DESFEITA"
+  | "SEM_PERMISSAO"
   | "SEM_CONFIRMACAO";
 
 /**
@@ -139,6 +140,7 @@ export const MENSAGEM_DE_RECUSA: Record<MotivoDeRecusa, string> = {
     "Esta ação já foi executada. Nada foi feito de novo — confira o registro pelo link da ação.",
   JA_DESFEITA:
     "Esta ação já havia sido desfeita. Nada foi feito de novo — confira o registro pelo link da ação.",
+  SEM_PERMISSAO: "A permissão de leitura ou escrita deste módulo está desligada. Nada foi alterado. Confira as Configurações da IA antes de pedir uma nova proposta.",
   SEM_CONFIRMACAO:
     "Esta proposta ainda não foi confirmada. Nada foi alterado.",
 };

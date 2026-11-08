@@ -1408,11 +1408,11 @@ Unicode, persistência e adiamento da Task 22 não encerram este achado.
   - `src/lib/actions/ai-actions.ts:70-115`;
   - `src/components/ai/action-history-client.tsx:116,166,216-221` e `proposal-card.tsx:313`.
 
-- [ ] **Step 1: Migration (004).**
+- [x] **Step 1: Migration (004).**
   - Conferir no banco a definição de `ai_action_executions_undoes_user_uidx`.
   - Recriar como `unique (undoes_execution_id, user_id) where undoes_execution_id is not null and status <> 'falhou'`.
   - Teste de migration com mutação (tirar o `status <> 'falhou'` → vermelho).
-- [ ] **Step 2: Testes que falham.**
+- [x] **Step 2: Testes que falham.**
   - (004) `history.test.ts`: com A em `sucesso` e o inverso B em `falhou`, `desfazer.tipo === "disponivel"`;
     com B em `executando`, o rótulo é "sem desfecho registrado" e não "já desfeita".
   - (004) `jaFoiDesfeita` conta só `executando`/`sucesso`/`parcial`.
@@ -1429,15 +1429,15 @@ Unicode, persistência e adiamento da Task 22 não encerram este achado.
   - (022) Extraia `botaoDeDesfazerVolta(estadoDaProposta): boolean` (puro) em
     `src/components/ai/estado-da-acao.tsx` ou num arquivo puro vizinho, com teste: `expirada` e
     `recusada` → true.
-- [ ] **Step 3:** FAIL.
-- [ ] **Step 4: Implementar.**
+- [x] **Step 3:** FAIL.
+- [x] **Step 4: Implementar.**
   - **012:** o aviso "possível duplicata — há outra igual nesta conversa" aparece em `/ia/acoes`
     e no cartão do chat. No chat: dois cartões da mesma resposta com o mesmo `effectHash`.
     **Nunca bloqueia** (invariante 59).
   - **022:** o texto de `proposal-card.tsx:313` no desfazer deixa de mandar "peça de novo ao
     assistente" e diz "Você pode pedir o desfazer de novo pelo botão".
-- [ ] **Step 5:** PASS.
-- [ ] **Step 6: Commit.**
+- [x] **Step 5:** PASS.
+- [x] **Step 6: Commit.**
 - [ ] **Step 7: Aplicar a migration** com o "pode aplicar" do dono e conferir no banco por
   `pg_indexes`.
 - [ ] **Step 8: Commit** `fix(ia): desfazer que falhou pode ser repetido, chaves reconferidas na execução, duplicata sinalizada`.
@@ -1705,3 +1705,30 @@ Nenhum cartão confirmado, nenhuma preferência alterada e nenhum job automátic
 Verificação final da Task 22b (2026-11-08, servidor parado): **6.900 testes em 301 arquivos**,
 `npx tsc --noEmit` com zero erro e `npm run lint` limpo. Revisão pelo principal, sem auditoria
 externa. Somente a worktree autorizada foi alterada; sem push, PR, merge ou deploy.
+
+### Task 23 — preparação antes do aval da migration (2026-11-08)
+
+Índice vigente conferido no banco: `ai_action_executions_undoes_user_uidx`, único por
+`(undoes_execution_id, user_id)` onde o alvo não é nulo. MD5 da definição:
+`ca40e6bcffb3160ee88d782f94ac639a`. Zero conflitos no novo predicado; RLS e FORCE RLS presentes.
+Migration local `20261108031451_ai_desfazer_que_falhou.sql` **NÃO aplicada**: acrescenta somente
+`and status <> 'falhou'` ao índice. `main` continua compatível: mesmas colunas, RLS, grants e
+nome do índice; execuções em andamento, com sucesso ou parciais continuam exclusivas.
+
+Correções preparadas: histórico/consulta deixam de considerar a falha como desfazer concluído;
+execução em andamento é sem desfecho registrado, e parcial permanece bloqueada. Leitura e escrita
+são reconferidas antes da previsão e do claim, com as chaves derivadas da ferramenta original
+e herdadas pelos inversos; ambiguidade recusa. A confirmação passa pelas checagens do mesmo
+motor antes de gravar a decisão. Propostas pendentes iguais do mesmo run recebem aviso sem
+bloquear confirmação; no chat, somente pares pendentes da mesma resposta e no prazo. Botão de
+desfazer volta após expiração ou recusa, preservando estados incertos.
+
+Regressões escritas antes das correções; 36 mutações confirmadas, restaurações por SHA-256
+e `git diff`, com cópia durável antes de cada mutação. Revisão de segurança e React pelo
+principal, sem auditoria externa. Nenhuma escrita de teste em produção, confirmação real
+ou aplicação de migration nesta tarefa. Steps 7–8 aguardam o novo “pode aplicar” do dono.
+
+Checks finais da preparação da Task 23: **6.948 testes em 307 arquivos**,
+`npx tsc --noEmit` sem erros e `npm run lint` limpo. As 36 mutações foram repetidas em
+uma bateria completa; o alvo de uma delas foi refinado para atingir o SQL executável,
+sem confundi-lo com o comentário de reversão. Migration pendente do aval.

@@ -28,6 +28,7 @@ import {
   type EstadoDaProposta,
   type StatusDaExecucao,
 } from "./state";
+import { idsDePropostasDuplicadas } from "./duplicates";
 import type { ValorDeCampo } from "./contracts";
 
 // ══════════════════════════════════════════════════════════════════════════════════════
@@ -39,6 +40,7 @@ export type PropostaLida = {
   /** `'ferramenta'` (nasceu no chat) ou `'desfazer'` (nasceu do botão desta tela). */
   readonly origem: string;
   readonly conversationId: string | null;
+  readonly runId: string | null;
   readonly undoesExecutionId: string | null;
   readonly command: string;
   readonly module: string;
@@ -261,6 +263,8 @@ function disponibilidadeDoDesfazer(
       return { tipo: "indisponivel", porque: MOTIVO_SEM_DESFAZER.STATUS_DESCONHECIDO };
   }
 
+  if (desfeitaPor?.status === "executando") return { tipo: "indisponivel", porque: "O desfazer está sem desfecho registrado. Confira o registro no módulo antes de pedir de novo." };
+  if (desfeitaPor?.status === "parcial") return { tipo: "indisponivel", porque: MOTIVO_SEM_DESFAZER.PARCIAL };
   if (desfeitaPor) return { tipo: "ja-desfeita", em: desfeitaPor.startedAt };
   if (!ficha) {
     return { tipo: "indisponivel", porque: MOTIVO_SEM_DESFAZER.COMMAND_DESCONHECIDO };
@@ -306,6 +310,7 @@ export type AcaoDaIa = {
   /** `null` na execução órfã: sem proposta não há hash — e não há o que confirmar. */
   readonly effectHash: string | null;
   readonly estado: EstadoDaProposta;
+  readonly possivelDuplicata: boolean;
   /** O instante que ordena a lista: execução, ou decisão, ou criação da proposta. */
   readonly momento: string;
   readonly criadaEm: string | null;
@@ -366,7 +371,7 @@ export function montarHistorico(
   const execucaoPorProposta = new Map(fontes.execucoes.map((e) => [e.proposalId, e]));
   const desfeitaPor = new Map(
     fontes.execucoes
-      .filter((e) => e.undoesExecutionId !== null)
+      .filter((e) => e.undoesExecutionId !== null && ["executando", "sucesso", "parcial"].includes(e.status))
       .map((e) => [e.undoesExecutionId as string, e]),
   );
 
@@ -381,6 +386,7 @@ export function montarHistorico(
 
     linhas.push({
       chave: proposta.id,
+      possivelDuplicata: false,
       propostaId: proposta.id,
       effectHash: proposta.effectHash,
       estado: derivarEstadoDaProposta(
@@ -421,6 +427,7 @@ export function montarHistorico(
 
     linhas.push({
       chave: `execucao:${bruta.id}`,
+      possivelDuplicata: false,
       propostaId: null,
       effectHash: null,
       /**
@@ -456,7 +463,9 @@ export function montarHistorico(
 
   // Mais recente primeiro. O desempate por chave é só para a ordem ser determinística — dois
   // instantes iguais existem (uma proposta e o desfazer dela no mesmo milissegundo, num teste).
-  return linhas.sort((a, b) => {
+  const runPorProposta = new Map(fontes.propostas.map(p => [p.id, p.runId]));
+  const duplicadas = idsDePropostasDuplicadas(linhas.map(l => ({ id: l.chave, runId: runPorProposta.get(l.chave) ?? null, effectHash: l.effectHash ?? "", pendente: l.estado === "pendente" })));
+  return linhas.map(l => ({ ...l, possivelDuplicata: duplicadas.has(l.chave) })).sort((a, b) => {
     const d = Date.parse(b.momento) - Date.parse(a.momento);
     if (d !== 0 && Number.isFinite(d)) return d;
     return a.chave < b.chave ? 1 : a.chave > b.chave ? -1 : 0;

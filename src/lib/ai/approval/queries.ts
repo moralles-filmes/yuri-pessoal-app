@@ -92,7 +92,7 @@ export async function getAiActionHistory(
     supabase
       .from("ai_action_proposals")
       .select(
-        "id, origem, conversation_id, undoes_execution_id, command, module, risk, tool_name, created_at, expires_at, effect_hash, preview",
+        "id, origem, conversation_id, run_id, undoes_execution_id, command, module, risk, tool_name, created_at, expires_at, effect_hash, preview",
       )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
@@ -119,7 +119,7 @@ export async function getAiActionHistory(
     const { data } = await supabase
       .from("ai_action_proposals")
       .select(
-        "id, origem, conversation_id, undoes_execution_id, command, module, risk, tool_name, created_at, expires_at, effect_hash, preview",
+        "id, origem, conversation_id, run_id, undoes_execution_id, command, module, risk, tool_name, created_at, expires_at, effect_hash, preview",
       )
       .eq("user_id", userId)
       .in("id", faltantes)
@@ -184,6 +184,7 @@ export async function jaFoiDesfeita(userId: string, executionId: string): Promis
     .select("id")
     .eq("user_id", userId)
     .eq("undoes_execution_id", executionId)
+    .in("status", ["executando", "sucesso", "parcial"])
     .maybeSingle();
 
   return Boolean(data);
@@ -195,6 +196,7 @@ type LinhaDePropostaNoBanco = {
   id: string;
   origem: string;
   conversation_id: string | null;
+  run_id: string | null;
   undoes_execution_id: string | null;
   command: string;
   module: string;
@@ -211,6 +213,7 @@ function paraPropostaLida(linha: LinhaDePropostaNoBanco): PropostaLida {
     id: linha.id,
     origem: linha.origem,
     conversationId: linha.conversation_id,
+    runId: linha.run_id,
     undoesExecutionId: linha.undoes_execution_id,
     command: linha.command,
     module: linha.module,

@@ -21,6 +21,8 @@ import "server-only";
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { getAiPreferences } from "@/lib/ai/queries";
+import { permissoesDoCommand } from "./commands/permissions";
 import { safeLogFields } from "@/lib/ai/security/redact";
 import { aiError } from "@/lib/ai/core/errors";
 import { rotaInternaAceita } from "@/lib/ai/tools/sources";
@@ -160,6 +162,48 @@ function indiceDeDesfazer(erro: { message?: string; details?: string | null }): 
  * ║ proposta expirada seria trabalho para chegar à mesma recusa.                           ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
+type EntradaDaExecucao = { userId: string; proposalId: string; hashDaTela: string; agora: Date };
+
+async function lerFontesDaExecucao(input: Pick<EntradaDaExecucao, "userId" | "proposalId">) {
+  const supabase = await createClient();
+
+  const [{ data: proposta }, { data: aprovacao }, { data: execucaoExistente }] = await Promise.all([
+    supabase.from("ai_action_proposals")
+      .select("id, tool_name, tool_version, command, payload, effect_hash, expires_at, undoes_execution_id")
+      .eq("id", input.proposalId).eq("user_id", input.userId).maybeSingle(),
+    supabase.from("ai_action_approvals").select("id, decision")
+      .eq("proposal_id", input.proposalId).eq("user_id", input.userId).maybeSingle(),
+    supabase.from("ai_action_executions").select("id")
+      .eq("proposal_id", input.proposalId).eq("user_id", input.userId).maybeSingle(),
+  ]);
+
+  return { supabase, proposta, aprovacao, execucaoExistente };
+}
+
+/** Checagens baratas do mesmo motor, antes de consumir a decisão de confirmação. */
+export async function conferirConfirmacao(input: EntradaDaExecucao): Promise<ReturnType<typeof admitirExecucao>> {
+  const { proposta, aprovacao, execucaoExistente } = await lerFontesDaExecucao(input);
+  const admissao = admitirExecucao(
+    {
+      proposta: proposta
+        ? {
+            expiresAt: proposta.expires_at,
+            effectHash: proposta.effect_hash,
+            command: proposta.command,
+          }
+        : null,
+      hashDaTela: input.hashDaTela,
+      decisao: (aprovacao?.decision as DecisaoDoDono | undefined) ?? null,
+      jaExecutou: Boolean(execucaoExistente),
+      commandsConhecidos: nomesDeCommands(),
+    },
+    input.agora,
+  );
+  if (!admissao.ok) return admissao;
+  if (!commandExecutavel(proposta?.command ?? "")) return { ok: false, motivo: "COMMAND_DESCONHECIDO", mensagem: MENSAGEM_DE_RECUSA.COMMAND_DESCONHECIDO };
+  return admissao;
+}
+
 export async function executarAcaoAprovada(input: {
   userId: string;
   proposalId: string;
@@ -167,30 +211,7 @@ export async function executarAcaoAprovada(input: {
   /** Injetado. Nenhum `Date.now()` decide prazo neste módulo. */
   agora: Date;
 }): Promise<ResultadoDaExecucao> {
-  const supabase = await createClient();
-
-  const { data: proposta } = await supabase
-    .from("ai_action_proposals")
-    .select(
-      "id, tool_name, tool_version, command, payload, effect_hash, expires_at, undoes_execution_id",
-    )
-    .eq("id", input.proposalId)
-    .eq("user_id", input.userId)
-    .maybeSingle();
-
-  const { data: aprovacao } = await supabase
-    .from("ai_action_approvals")
-    .select("id, decision")
-    .eq("proposal_id", input.proposalId)
-    .eq("user_id", input.userId)
-    .maybeSingle();
-
-  const { data: execucaoExistente } = await supabase
-    .from("ai_action_executions")
-    .select("id")
-    .eq("proposal_id", input.proposalId)
-    .eq("user_id", input.userId)
-    .maybeSingle();
+  const { supabase, proposta, aprovacao, execucaoExistente } = await lerFontesDaExecucao(input);
 
   const admissao = admitirExecucao(
     {
@@ -217,6 +238,11 @@ export async function executarAcaoAprovada(input: {
 
   const command = commandExecutavel(proposta.command);
   if (!command) return negar("COMMAND_DESCONHECIDO");
+
+  const requisitos = permissoesDoCommand(command.name);
+  if (!requisitos) return negar("SEM_PERMISSAO");
+  const preferencias = await getAiPreferences(input.userId, supabase);
+  if (preferencias.permissions[requisitos.leitura] !== true || preferencias.writePermissions[requisitos.escrita] !== true) return negar("SEM_PERMISSAO");
 
   const parsed = command.parse(proposta.payload);
   // Payload que não passa mais no próprio schema é um efeito que não pode ser recalculado —
