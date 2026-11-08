@@ -8,7 +8,10 @@ import { describe, expect, it } from "vitest";
 import { ALFA_PERIGO } from "@/lib/theme/alfas";
 import { SRC, semComentarios } from "@/lib/theme/ler-tokens";
 import { buttonVariants } from "./button";
+import { Input } from "./input";
 import { PRESSAO } from "./materiais";
+import { SelectTrigger } from "./select";
+import { Textarea } from "./textarea";
 
 describe("Button", () => {
   const padrao = buttonVariants();
@@ -239,5 +242,110 @@ describe("Card", () => {
       .filter(({ classes }) => classes.includes("border-dashed") && !temCor(classes))
       .map(({ arquivo }) => arquivo);
     expect(culpados).toEqual([]);
+  });
+});
+
+/** `className` que a primitiva entrega ao elemento, chamando a função direto (sem hooks, sem render). */
+function classesDe(el: unknown): string {
+  return (el as { props: { className: string } }).props.className;
+}
+
+describe("Input", () => {
+  const fonte = semComentarios(fs.readFileSync(path.join(SRC, "components", "ui", "input.tsx"), "utf8"));
+  const base = classesDe(Input({}));
+
+  it("é ladrilho: material importado, raio de 10px e halo de foco de 4px", () => {
+    expect(fonte).toContain('import { MATERIAL_LADRILHO } from "./materiais"');
+    expect(fonte).toContain("MATERIAL_LADRILHO");
+    expect(base).toContain("rounded-[10px]");
+    expect(base).toContain("focus-visible:border-ring");
+    expect(base).toContain("focus-visible:ring-4");
+    expect(base).toContain("focus-visible:ring-ring/20");
+  });
+
+  it("não conserva o raio, o fundo transparente nem o fundo escuro antigos", () => {
+    expect(base).not.toContain("rounded-lg");
+    expect(base).not.toMatch(/(^|\s)bg-transparent/);
+    expect(base).not.toContain("dark:bg-input");
+    expect(base).not.toContain("disabled:bg-input");
+    expect(base).not.toContain("border-input");
+  });
+
+  it("mantém a altura e o inválido destrutivo", () => {
+    expect(base.split(/\s+/)).toContain("h-8");
+    expect(base).toContain("aria-invalid:border-destructive");
+    expect(base).toContain("aria-invalid:ring-destructive/20");
+  });
+
+  it("o chamador vence: border-0 bg-transparent shadow-none apaga o ladrilho", () => {
+    const c = classesDe(Input({ className: "border-0 bg-transparent shadow-none" })).split(/\s+/);
+    expect(c).toContain("border-0");
+    expect(c).not.toContain("border");
+    expect(c).not.toContain("bg-tile");
+    expect(c.some((t) => t.startsWith("shadow-[inset"))).toBe(false);
+  });
+});
+
+describe("Textarea", () => {
+  const fonte = semComentarios(fs.readFileSync(path.join(SRC, "components", "ui", "textarea.tsx"), "utf8"));
+  const base = classesDe(Textarea({}));
+
+  it("é ladrilho: material importado, raio de 14px e halo de foco de 4px", () => {
+    expect(fonte).toContain('import { MATERIAL_LADRILHO } from "./materiais"');
+    expect(fonte).toContain("MATERIAL_LADRILHO");
+    expect(base).toContain("rounded-[14px]");
+    expect(base).toContain("focus-visible:ring-4");
+    expect(base).toContain("focus-visible:ring-ring/20");
+  });
+
+  it("não conserva o raio, o fundo transparente nem o fundo escuro antigos", () => {
+    expect(base).not.toContain("rounded-lg");
+    expect(base).not.toMatch(/(^|\s)bg-transparent/);
+    expect(base).not.toContain("dark:bg-input");
+    expect(base).not.toContain("border-input");
+  });
+
+  it("mantém a altura mínima e o inválido destrutivo", () => {
+    expect(base.split(/\s+/)).toContain("min-h-16");
+    expect(base).toContain("aria-invalid:border-destructive");
+  });
+});
+
+describe("SelectTrigger", () => {
+  const fonte = semComentarios(fs.readFileSync(path.join(SRC, "components", "ui", "select.tsx"), "utf8"));
+  const corpo = corpoDaFuncao(fonte, "SelectTrigger");
+  const base = classesDe(SelectTrigger({ children: null }));
+
+  it("é ladrilho: material importado, raio de 10px (9px no sm), hover de pílula e halo de 4px", () => {
+    expect(fonte).toContain('import { MATERIAL_LADRILHO } from "./materiais"');
+    expect(corpo).toContain("MATERIAL_LADRILHO");
+    expect(base).toContain("rounded-[10px]");
+    expect(base).toContain("data-[size=sm]:rounded-[9px]");
+    expect(base).toContain("hover:bg-pill");
+    expect(base).toContain("focus-visible:ring-4");
+    expect(base).toContain("focus-visible:ring-ring/20");
+  });
+
+  it("não conserva o raio, o fundo transparente nem o fundo escuro antigos", () => {
+    expect(base).not.toContain("rounded-lg");
+    expect(base).not.toContain("--radius-md");
+    expect(base).not.toMatch(/(^|\s)bg-transparent/);
+    expect(base).not.toContain("dark:bg-input");
+    expect(base).not.toContain("dark:hover:bg-input");
+    expect(base).not.toContain("border-input");
+  });
+
+  it("mantém as alturas por tamanho e o inválido destrutivo", () => {
+    expect(base).toContain("data-[size=default]:h-8");
+    expect(base).toContain("data-[size=sm]:h-7");
+    expect(base).toContain("aria-invalid:border-destructive");
+  });
+
+  it("o chamador vence: border-0 ring-1 rounded-full tira borda e raio do ladrilho", () => {
+    const c = classesDe(SelectTrigger({ children: null, className: "rounded-full border-0 ring-1 ring-border" })).split(/\s+/);
+    expect(c).toContain("rounded-full");
+    expect(c).not.toContain("rounded-[10px]");
+    expect(c).toContain("border-0");
+    expect(c).not.toContain("border");
   });
 });
