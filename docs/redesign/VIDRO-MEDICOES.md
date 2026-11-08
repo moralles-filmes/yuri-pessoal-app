@@ -284,3 +284,50 @@ lançamento" aberto), `/todo`, `/treinos` e `/configuracoes`, nos dois temas.
 | Fichas de contagem do TO-DO (Pendentes, Para hoje…) | raio de cartão em peças de ~40 px de altura, ficam ovais | 09-F (TO-DO) ou 09-B se forem `Card` |
 | Botões pequenos (`size="sm"`) e chips de filtro | já quase pílula; está na direção do desenho (botão em pílula) | — |
 | Caixas de seleção | continuam quadradas arredondadas; aceitável | — |
+
+## REDESIGN-09-B — primitivas em vidro (2026-11-08)
+
+Servidor de produção local, Chrome do dono pela extensão, harness de iframes em 390, 768, 1280 e
+1440 px, claro e escuro. `/login` em Chrome headless, sem sessão.
+
+### Testes e orçamento
+
+| | Antes (5a753fb) | Depois |
+| --- | --- | --- |
+| Testes | 8.347 em 371 arquivos | 8.465 em 373 arquivos |
+| Mediana de JS por rota | 203,0 KB | 203,6 KB |
+| Rotas acima de +1 KB gz | | 0 de 71 |
+| Maior aumento | | `/(app)/nutricao/receitas`, +1,0 KB (203,2 → 204,2) |
+| `/_global-error` | 3,9 KB | 4,0 KB |
+
+### Amostrador (mesmo método da 09-A, iframe de 1280×800)
+
+| Tela | Tema | fps médio | p95 (ms) | maior quadro (ms), 3 rodadas |
+| --- | --- | --- | --- | --- |
+| `/dashboard` | claro | 61,3 | 20,1 | 20,2 · 20,1 · 20,1 |
+| `/dashboard` | escuro | 61,0–61,3 | 20,1 | 20,2 · 20,4 · 20,1 |
+| `/dashboard/financeiro` | claro | 61,2 | 20,1 | 20,1 · 20,2 · 20,2 |
+| `/dashboard/financeiro` | escuro | 60,6–61,2 | 20,1 | **100,0** · 20,1 · 20,2 |
+
+Lido por repetição, como na 09-A: o quadro de 100 ms é isolado e não se repete nas outras duas
+rodadas. Medido antes do último ajuste (brilho do botão e 1 px do indicador). Sem desaceleração de
+CPU: só pega engasgos grandes.
+
+### O que a conferência mostrou
+
+- Sem rolagem horizontal em nenhuma combinação de tela, largura e tema.
+- Diálogo, gaveta, `Select` e menu abertos: `backdrop-filter` real. Rodapé da gaveta opaco.
+- O CSS do build traz `-webkit-backdrop-filter` e `backdrop-filter` em todas as regras de vidro.
+- Reduzir transparência e reduzir movimento: conferidos aplicando as regras de `@media` do próprio
+  CSS no iframe, sem emulação do navegador. Sem desfoque, superfícies sólidas, transição `none`.
+- Aviso do `sonner`: conferido por um elemento com os atributos do componente, sem disparar uma
+  ação real. O vidro e a sombra da regra sem camada foram aplicados.
+- A borda de 1 px do `Card` tirava 2 px da largura interna e quebrava o valor do indicador em
+  1280 px. Corrigido em `--card-spacing` e no `indicador.tsx`.
+
+### Dívida para as próximas fases
+
+- 09-D: `StatCard` e outros `CardContent` com `p-N` não recebem o desconto de 1 px.
+- 09-F: anéis `ring-primary` somados à borda do cartão; `relatorios-client` com `sm:h-8` na lista
+  de abas.
+- Em aberto, decisão do dono: borda de campo quase invisível no tema claro (1,01:1 no diálogo).
