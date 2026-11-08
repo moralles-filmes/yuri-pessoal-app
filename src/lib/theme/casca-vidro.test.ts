@@ -194,3 +194,91 @@ describe("09-C · gatilho desktop da busca", () => {
     expect(kbd).not.toMatch(/(?:^|\s)text-(?!\[10px\])/);
   });
 });
+
+describe("09-C · gaveta do celular", () => {
+  const gaveta = ler("components", "layout", "mobile-nav.tsx");
+
+  it("a linha da marca perde a divisória e a gaveta segue à esquerda, só no celular", () => {
+    expect(gaveta).not.toContain("border-sidebar-border");
+    expect(gaveta).not.toMatch(/border-b\b/);
+    expect(tem(gaveta, "lg:hidden")).toBe(true);
+    expect(gaveta).toMatch(/<SheetContent side="left"/);
+  });
+});
+
+describe("09-C · botão do assistente", () => {
+  const fonte = ler("components", "ai", "floating-assistant.tsx");
+  // A tag de abertura do botão nativo, isolada: `rounded-full` também existe no selo.
+  const botao = fonte.match(/<button\b[^>]*?\n?[\s\S]*?\n\s*>\s*\n/)?.[0] ?? "";
+  const ramos = botao.match(/canto === "direita"\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"/);
+  // O selo informativo é o ramo que NÃO é `proposta`.
+  const selo = fonte.match(/aviso\.tipo === "proposta"\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"/);
+
+  it("é um <button> nativo (o Button traria fundo próprio) marcado como casca", () => {
+    expect(botao, "tag <button …>").not.toBe("");
+    expect(botao).toMatch(/^<button\b/);
+    expect(botao).toContain('type="button"');
+    expect(botao).toContain("data-casca");
+    expect(fonte).not.toMatch(/<Button\b/);
+    expect(fonte).not.toMatch(/from "@\/components\/ui\/button"/);
+  });
+
+  it("é um círculo de vidro fixo, centralizado, com pressão e foco por contorno", () => {
+    for (const c of [
+      "vidro-casca", "fixed", "bottom-4", "z-40", "size-12", "rounded-full",
+      "inline-flex", "items-center", "justify-center",
+      "focus-visible:outline-2", "focus-visible:outline-offset-2", "focus-visible:outline-ring",
+    ]) {
+      expect(tem(botao, c), c).toBe(true);
+    }
+    expect(botao).toMatch(/\bPRESSAO\b/);
+    expect(fonte).toMatch(/import \{ PRESSAO \} from "@\/components\/ui\/materiais"/);
+    // Sem fundo, borda ou sombra soltos junto do material (nem o `shadow-lg` antigo).
+    expect(botao).not.toMatch(/(?:^|[\s"'`])(?:[\w-]+:)*(?:bg|border|shadow)-/m);
+    expect(tem(botao, "relative")).toBe(false);
+  });
+
+  it("o canto escolhe só o lado", () => {
+    expect(ramos, 'ramo `canto === "direita" ? "…" : "…"`').not.toBeNull();
+    expect(tem(ramos?.[1] ?? "", "right-4")).toBe(true);
+    expect(tem(ramos?.[2] ?? "", "left-4")).toBe(true);
+    expect(tem(ramos?.[1] ?? "", "left-4")).toBe(false);
+    expect(tem(ramos?.[2] ?? "", "right-4")).toBe(false);
+  });
+
+  it("mantém o nome, o atalho e o estado do disclosure", () => {
+    for (const trecho of ["aria-label=", "aria-keyshortcuts=", "aria-haspopup=", "aria-expanded="]) {
+      expect(botao, trecho).toContain(trecho);
+    }
+  });
+
+  it("o ícone usa a tinta do item ativo", () => {
+    const icone = fonte.match(/<Sparkles\b[^>]*>/)?.[0] ?? "";
+    expect(icone, "<Sparkles …>").not.toBe("");
+    expect(tem(icone, "text-nav-ativo-ink")).toBe(true);
+  });
+
+  it("o selo de proposta segue destrutivo; o informativo usa o preenchimento primário", () => {
+    expect(selo, "ramos do selo").not.toBeNull();
+    expect(tem(selo?.[1] ?? "", "bg-destructive")).toBe(true);
+    expect(tem(selo?.[1] ?? "", "text-destructive-foreground")).toBe(true);
+    for (const c of ["bg-primary-fill", "text-primary-fill-foreground"]) {
+      expect(tem(selo?.[2] ?? "", c), c).toBe(true);
+    }
+    expect(tem(selo?.[2] ?? "", "bg-primary")).toBe(false);
+    expect(tem(selo?.[2] ?? "", "text-primary-foreground")).toBe(false);
+  });
+
+  it("a invariante 91: nada da lista proibida entra na casca e o dynamic é literal", () => {
+    const imports = [...fonte.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+    expect(imports.length).toBeGreaterThan(0);
+    for (const origem of imports) {
+      expect(origem, origem).not.toBe("@/lib/ai/constants");
+      expect(origem, origem).not.toMatch(/^@\/lib\/validators(\/|$)/);
+      expect(origem, origem).not.toMatch(/chat-client/);
+      expect(origem, origem).not.toBe("@/components/ui/sheet");
+      expect(origem, origem).not.toBe("@/components/ui/dropdown-menu");
+    }
+    expect(fonte).toMatch(/dynamic\(\s*\(\)\s*=>[\s\S]*?\{\s*ssr:\s*false,\s*loading:\s*\(\)\s*=>\s*null\s*\}\s*,?\s*\)/);
+  });
+});

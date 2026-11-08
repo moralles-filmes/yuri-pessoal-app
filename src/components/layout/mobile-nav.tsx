@@ -32,7 +32,7 @@ export function MobileNav() {
       </SheetTrigger>
       <SheetContent side="left" className="w-72 gap-0 p-0">
         <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
-        <div className="flex h-16 shrink-0 items-center border-b border-sidebar-border px-4">
+        <div className="flex h-16 shrink-0 items-center px-4">
           <Logo />
         </div>
         {/* Mesma regra da Sidebar: `min-h-0 flex-1` dentro do flex-col do

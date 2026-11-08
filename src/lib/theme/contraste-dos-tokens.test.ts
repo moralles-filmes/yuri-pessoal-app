@@ -391,6 +391,16 @@ describe("09-C · casca", () => {
         }
       });
 
+      it("botão do assistente: ícone nav-ativo-ink direto sobre o vidro >= 3:1", () => {
+        for (const [rotulo, fundo] of vidros) {
+          exigirMinimo(
+            `nav-ativo-ink sobre ${rotulo}`,
+            contraste(valor(tema, "nav-ativo-ink"), fundo),
+            MINIMO_COMPONENTE,
+          );
+        }
+      });
+
       it("busca: muted-foreground sobre o ladrilho >= 4,5:1 e borda do campo >= 3:1", () => {
         for (const [rotulo, s] of todas) {
           const fundo = compor(valor(tema, "tile"), s);
