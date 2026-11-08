@@ -331,3 +331,67 @@ CPU: só pega engasgos grandes.
 - 09-F: anéis `ring-primary` somados à borda do cartão; `relatorios-client` com `sm:h-8` na lista
   de abas.
 - Borda de campo: era 1,01:1 no diálogo claro; o dono delegou e ela passou a `--field-border` (foreground a 52%, escuro 42%), acima de 3:1.
+
+## REDESIGN-09-C — casca em vidro (2026-11-08)
+
+Servidor de produção local, Chrome do dono pela extensão, harness de iframes em 390, 768, 1280 e
+1440 px, claro e escuro. `/login` e `/cadastro` em Chrome headless sem sessão, por CDP, em 390 e
+1440 px.
+
+### Testes e orçamento
+
+| | Antes (7e6e61d) | Depois (78fa477) |
+| --- | --- | --- |
+| Testes | 8.470 em 373 arquivos | 8.525 em 374 arquivos |
+| Mediana de JS por rota | 203,6 KB | 203,9 KB |
+| Rotas acima de +1 KB gz | | 0 de 71 |
+| Maior aumento | | +0,259 KB (`/(app)/todo`, `/(app)/rotinas`, `/(app)/treinos/calendario`) |
+| `/(auth)/login` e `/(auth)/cadastro` | | -0,004 KB |
+
+Largura útil do conteúdo a 1280 px: não mudou, a coluna da sidebar continua com 256 px.
+
+### Amostrador (mesmo método da 09-A, iframe de 1280×800, janela em primeiro plano)
+
+| Tela | Tema | fps médio (3 rodadas) | p95 (ms) | maior quadro (ms), 3 rodadas |
+| --- | --- | --- | --- | --- |
+| `/dashboard` | claro | 75,8 · 61,1 · 61,3 | 20,0–20,1 | 30,0 · 20,2 · 20,1 |
+| `/dashboard` | escuro | 69,9 · 61,3 · 61,3 | 20,1 | 35,1 · 20,2 · 20,2 |
+| `/dashboard/financeiro` | claro | 117,3 · 61,3 · 61,2 | 20,0–20,1 | 35,1 · 35,0 · 35,1 |
+| `/dashboard/financeiro` | escuro | 61,0 · 61,1 · 61,2 | 20,1 | 35,0 · 35,1 · 34,9 |
+
+Nenhum quadro acima de 50 ms. Sem desaceleração de CPU. ⚠️ Com a janela fora do primeiro plano, o
+`requestAnimationFrame` cai para 1 fps e o número não vale: confira antes de ler.
+
+### iPhone
+
+Safari do iPhone do dono, servidor de produção na mesma Wi-Fi, `/dashboard` e
+`/dashboard/financeiro`, dois temas: "Testes no iphone passou" (resposta do dono, 2026-11-08).
+
+### O que a conferência mostrou
+
+- Sem rolagem horizontal em nenhuma combinação de tela, largura e tema. Header com 64 px exatos.
+- Sidebar normal, recolhida e oculta (largura 256, 76 e 0, sem filete). A 640 e 720 px de altura a
+  lista rola dentro do painel e "Recolher" continua visível.
+- Menu do celular, painel do assistente, diálogo "Novo lançamento" e gaveta do TO-DO abertos.
+  Com diálogo aberto a sidebar perde o desfoque e o header mantém.
+- Borda nova dos campos (`--field-border`) visível no diálogo nos dois temas. `Select` Radix
+  conferido no seletor de período do `/dashboard`.
+- O CSS do build traz `-webkit-backdrop-filter` antes de `backdrop-filter` na regra nova e na casca.
+- Reduzir transparência e movimento: **simulados**, aplicando as regras de `@media` do próprio CSS
+  no iframe. Header e sidebar ficam sólidos, sem desfoque, sem transição. Na mesma simulação o
+  `Select` aberto continuou com desfoque; a regra existe no CSS do build, e esse ponto não foi
+  esclarecido (o `Select` é da 09-B).
+
+### Decisões do dono e achados
+
+- **Header sobre foto clara no tema escuro:** com um bloco branco atrás do header, o texto da busca
+  cai para perto de 1,6:1 pela conta sem desfoque; ícones e botões continuam visíveis. O dono
+  **aceitou** (opção A): é passageiro e só acontece com foto grande rolando sob o header. O vidro do
+  header não ficou mais opaco.
+- **Assistente no canto esquerdo a partir de `lg`** cobre o botão "Recolher". Já acontecia antes da
+  09-C; não foi alterado.
+- **Fora do escopo, não corrigido:** com `yuri:sidebar-collapsed=true`, a página recarregada veio
+  com a sidebar expandida. `layout.tsx` e `app-shell.tsx` não mudaram nesta fase. Precisa de
+  investigação própria.
+- **`DIVIDA_NA_NEVOA`:** as 15 combinações continuam reprovando, porque os tokens não mudaram. Saiu o
+  uso real em login e cadastro, e um teste impede a volta. Os usos que restarem em páginas são da 09-F.

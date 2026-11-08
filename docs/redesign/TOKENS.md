@@ -403,6 +403,21 @@ ele cai e põe `inter.variable` no próprio `<html>`. `preload: false` continua 
 
 ---
 
+### Casca (REDESIGN-09-C)
+
+| Peça | Material e tokens |
+| --- | --- |
+| Sidebar | coluna transparente de 256 / 76 / 0 px; painel `vidro-casca` com raio 28 px e 12 px de afastamento |
+| Item ativo do menu | `bg-pill-strong` + `text-nav-ativo-ink` |
+| Header | `vidro-casca`, `sticky top-0 z-30 h-16` |
+| Busca (gatilho desktop) | pílula em `bg-tile` com `border-(--field-border)`; o hover muda só a borda |
+| Assistente | botão nativo `vidro-casca`, redondo, 48 px |
+| Login e cadastro | um cartão `vidro-cartao`, raio 28 px; a marca fica direto na névoa, só em `foreground` e `muted-on-fog` |
+
+`--nav-ativo-ink` é `#0062d6` no claro e `#9cc4ff` no escuro: no escuro o `primary` sobre a pílula dá
+3,42:1, e este token dá 4,78:1. `data-casca` marca a casca que perde o desfoque sob diálogo ou gaveta
+(sidebar e assistente). O header fica de fora de propósito, porque tem conteúdo passando atrás.
+
 ## 7. Paleta de gráficos — **validada, não escolhida no olho**
 
 Ordem fixa, atribuída por identidade, **nunca ciclada**. Slot 1 é o azul da marca.
