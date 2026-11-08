@@ -159,7 +159,7 @@ export function Indicador({
           </div>
 
           {typeof valor === "string" ? (
-            <p className="break-words text-2xl @[16.5rem]:text-[1.75rem] leading-[1.1] font-semibold tracking-[-0.028em] tabular-nums">
+            <p className="break-words text-2xl @[16rem]:text-[1.75rem] leading-[1.1] font-semibold tracking-[-0.028em] tabular-nums">
               <span className="group-data-[ocultar=true]/olho:hidden">{valor}</span>
               <span
                 aria-hidden="true"
@@ -175,7 +175,7 @@ export function Indicador({
             </p>
           ) : "semDinheiro" in valor ? (
             // Contagem ou data: não é dinheiro, então o olho dos valores NÃO o esconde.
-            <p className="break-words text-2xl @[16.5rem]:text-[1.75rem] leading-[1.1] font-semibold tracking-[-0.028em] tabular-nums">
+            <p className="break-words text-2xl @[16rem]:text-[1.75rem] leading-[1.1] font-semibold tracking-[-0.028em] tabular-nums">
               {valor.semDinheiro}
             </p>
           ) : "naoSegue" in valor ? (

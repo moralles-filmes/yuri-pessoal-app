@@ -370,7 +370,7 @@ describe("09-D T2 - indicador em vidro", () => {
     for (const classes of doNumero) {
       for (const parte of [
         "text-2xl",
-        "@[16.5rem]:text-[1.75rem]",
+        "@[16rem]:text-[1.75rem]",
         "tracking-[-0.028em]",
         "tabular-nums",
         "break-words",
