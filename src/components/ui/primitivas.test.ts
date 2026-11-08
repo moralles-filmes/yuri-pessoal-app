@@ -868,3 +868,40 @@ describe("Separator", () => {
     expect(lerUi("separator.tsx")).not.toMatch(/(?<![\w-])bg-border(?![\w-])/);
   });
 });
+
+describe("Controles desligados — contraste de componente (WCAG 1.4.11)", () => {
+  it("Checkbox: a borda desmarcada é foreground/50 e o twMerge tirou a borda clara do ladrilho", () => {
+    const classes = classesDe(Checkbox({})).split(/\s+/);
+    expect(classes).toContain("border-foreground/50");
+    expect(classes).not.toContain("border-tile-border");
+    expect(classes).toContain("bg-tile");
+    expect(classes).toContain("data-[state=checked]:border-primary-fill");
+  });
+
+  it("Switch: o trilho desligado ganha aro interno e o botão desligado ganha aro, só no estado desligado", () => {
+    const trilho = classesDe(Switch({})).split(/\s+/);
+    for (const c of [
+      "data-[state=unchecked]:ring-1",
+      "data-[state=unchecked]:ring-inset",
+      "data-[state=unchecked]:ring-foreground/50",
+    ]) {
+      expect(trilho, c).toContain(c);
+    }
+    // Ligado não ganha aro: nenhuma classe de ring sem o prefixo do estado desligado.
+    for (const c of trilho) {
+      if (/(^|:)ring-/.test(c)) expect(c, c).toMatch(/^data-\[state=unchecked\]:/);
+    }
+    const codigo = lerUi("switch.tsx");
+    const botao = codigo.slice(codigo.indexOf("<SwitchPrimitive.Thumb"));
+    expect(botao).toContain("data-[state=unchecked]:ring-1");
+    expect(botao).toContain("data-[state=unchecked]:ring-foreground/60");
+    expect(botao).not.toMatch(/(?<![\w:-])ring-(?:0|1)(?![\w-])/);
+  });
+
+  it("o aro não ocupa espaço: a geometria do trilho continua 52x32 sem borda", () => {
+    const trilho = classesDe(Switch({})).split(/\s+/);
+    expect(trilho).toContain("h-8");
+    expect(trilho).toContain("w-[52px]");
+    expect(trilho).not.toContain("border");
+  });
+});

@@ -8,10 +8,12 @@
  * Se um par falhar, a regra é BAIXAR O ALFA DA NÉVOA primeiro — nunca escurecer o texto — e
  * anotar o novo valor na tabela do plano (Task 2).
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { compor, contraste, lerCor } from "./contraste";
 import { ALFA_PERIGO } from "./alfas";
-import { claro, escuro } from "./ler-tokens";
+import { claro, escuro, SRC, semComentarios } from "./ler-tokens";
 
 const MINIMO = 4.5;
 
@@ -257,6 +259,65 @@ describe("09-B · contraste das superfícies das primitivas", () => {
           }
         }
       });
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// 09-B Task 7 · controles desligados (WCAG 1.4.11, 3:1 para componente de interface). O alfa de cada
+// aro é LIDO da classe no fonte: subir a classe sobe a prova junto, e baixá-la reprova.
+// ---------------------------------------------------------------------------------------------
+
+const MINIMO_COMPONENTE = 3;
+
+const fonteUi = (arquivo: string) =>
+  semComentarios(fs.readFileSync(path.join(SRC, "components", "ui", arquivo), "utf8"));
+
+/** Alfa (0–1) da classe `<prefixo>/NN` no fonte; falha se a classe não existir. */
+function alfaDaClasse(codigo: string, prefixo: string): number {
+  const inicio = codigo.indexOf(`${prefixo}/`);
+  if (inicio < 0) throw new Error(`classe ${prefixo}/NN não encontrada`);
+  const digitos = /^[0-9]+/.exec(codigo.slice(inicio + prefixo.length + 1))?.[0];
+  if (!digitos) throw new Error(`classe ${prefixo}/ sem alfa numérico`);
+  return Number(digitos) / 100;
+}
+
+function comAlfa(cor: string, alfa: number): string {
+  const { rgb } = lerCor(cor);
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alfa})`;
+}
+
+describe("09-B T7 · controles desligados >= 3:1", () => {
+  const alfaCaixa = alfaDaClasse(fonteUi("checkbox.tsx"), "border-foreground");
+  const alfaAroTrilho = alfaDaClasse(fonteUi("switch.tsx"), "data-[state=unchecked]:ring-foreground");
+  const trechoBotao = fonteUi("switch.tsx").slice(fonteUi("switch.tsx").indexOf("<SwitchPrimitive.Thumb"));
+  const alfaAroBotao = alfaDaClasse(trechoBotao, "data-[state=unchecked]:ring-foreground");
+  const alfaPreenchimento = 0.16; // spec: foreground a 16% no trilho desligado
+
+  for (const [nomeTema, tema] of TEMAS) {
+    it(`${nomeTema}: borda da caixa, aro do trilho e aro do botão`, () => {
+      const foreground = valor(tema, "foreground");
+      const cartao = compor(valor(tema, "glass"), valor(tema, "fog-base"));
+      const ladrilho = compor(valor(tema, "tile"), cartao);
+      const trilho = compor(comAlfa(foreground, alfaPreenchimento), cartao);
+
+      const bordaCaixa = compor(comAlfa(foreground, alfaCaixa), ladrilho);
+      const aroTrilho = compor(comAlfa(foreground, alfaAroTrilho), trilho);
+      const aroBotao = compor(comAlfa(foreground, alfaAroBotao), trilho);
+
+      const medidas: Array<[string, number]> = [
+        ["borda da caixa × cartão", contraste(bordaCaixa, cartao)],
+        ["borda da caixa × ladrilho", contraste(bordaCaixa, ladrilho)],
+        ["aro do trilho × cartão", contraste(aroTrilho, cartao)],
+        ["aro do botão × trilho desligado", contraste(aroBotao, trilho)],
+      ];
+      for (const [rotulo, razao] of medidas) {
+        const r = (Math.round(razao * 100) / 100).toFixed(2).replace(".", ",");
+        expect(
+          razao,
+          `${nomeTema} · ${rotulo}: ${r}:1 < 3:1 — suba só o alfa daquele aro`,
+        ).toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
+      }
     });
   }
 });

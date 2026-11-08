@@ -17,7 +17,7 @@ function Switch({
     <SwitchPrimitive.Root
       data-slot="switch"
       className={cn(
-        "group peer inline-flex h-8 w-[52px] shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors duration-300 outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none data-[state=checked]:bg-primary-fill data-[state=unchecked]:bg-[color-mix(in_oklch,var(--foreground)_16%,transparent)]",
+        "group peer inline-flex h-8 w-[52px] shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors duration-300 outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none data-[state=checked]:bg-primary-fill data-[state=unchecked]:bg-[color-mix(in_oklch,var(--foreground)_16%,transparent)] data-[state=unchecked]:ring-1 data-[state=unchecked]:ring-foreground/50 data-[state=unchecked]:ring-inset",
         className
       )}
       {...props}
@@ -25,7 +25,7 @@ function Switch({
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         className={cn(
-          "pointer-events-none block size-7 rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,.25)] ring-0 transition-[translate,width] duration-450 ease-mola motion-reduce:transition-none data-[state=checked]:translate-x-5 motion-safe:group-active:w-[34px] motion-safe:data-[state=checked]:group-active:translate-x-[14px]"
+          "pointer-events-none block size-7 rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,.25)] transition-[translate,width] duration-450 ease-mola motion-reduce:transition-none data-[state=checked]:translate-x-5 data-[state=unchecked]:ring-1 data-[state=unchecked]:ring-foreground/60 motion-safe:group-active:w-[34px] motion-safe:data-[state=checked]:group-active:translate-x-[14px]"
         )}
       />
     </SwitchPrimitive.Root>
