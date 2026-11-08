@@ -14,42 +14,39 @@ export default function AuthLayout({
 }) {
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
-      {/* Painel de marca (sempre preto/dourado — superfície premium) */}
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-neutral-950 p-10 text-neutral-100 lg:flex">
-        <div className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-primary/25 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-28 -left-16 size-80 rounded-full bg-primary/10 blur-3xl" />
-
-        <div className="relative flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-xl bg-primary font-bold text-primary-foreground">
+      {/* Coluna da marca: sem fundo próprio, o texto vai direto na névoa. */}
+      <div className="hidden flex-col justify-between p-10 text-foreground lg:flex">
+        <div className="flex items-center gap-3">
+          <span className="grid size-10 place-items-center rounded-xl bg-primary-fill font-bold text-primary-fill-foreground">
             Y
           </span>
           <div className="leading-tight">
             <p className="text-sm font-semibold">Sistema Pessoal</p>
-            <p className="text-xs text-neutral-400">por Yuri</p>
+            <p className="text-xs text-muted-on-fog">por Yuri</p>
           </div>
         </div>
 
-        <div className="relative space-y-4">
+        <div className="space-y-4">
           <h2 className="text-3xl font-semibold leading-tight">
             Sua vida pessoal,
             <br />
-            <span className="text-gradient-brand">organizada num só lugar.</span>
+            organizada num só lugar.
           </h2>
-          <p className="max-w-sm text-sm text-neutral-400">
+          <p className="max-w-sm text-sm text-muted-on-fog">
             Controle financeiro completo, cartões e faturas, agenda, tarefas,
             hábitos e estudos — com um visual premium e rápido de usar.
           </p>
         </div>
 
-        <ul className="relative space-y-3">
+        <ul className="space-y-3">
           {HIGHLIGHTS.map((item) => {
             const Icon = item.icon;
             return (
               <li key={item.label} className="flex items-center gap-3 text-sm">
-                <span className="grid size-8 place-items-center rounded-lg bg-white/5 text-primary ring-1 ring-white/10">
+                <span className="ladrilho grid size-8 place-items-center rounded-lg text-foreground">
                   <Icon className="size-4" />
                 </span>
-                <span className="text-neutral-300">{item.label}</span>
+                <span>{item.label}</span>
               </li>
             );
           })}
@@ -58,7 +55,7 @@ export default function AuthLayout({
 
       {/* Formulário */}
       <div className="flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">{children}</div>
+        <div className="vidro-cartao w-full max-w-sm rounded-[28px] p-6 sm:p-8">{children}</div>
       </div>
     </div>
   );

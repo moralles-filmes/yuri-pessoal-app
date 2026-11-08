@@ -66,8 +66,10 @@ const TEXTOS_DIRETOS_NA_NEVOA = [
   "success-ink", "warning-ink", "info-ink",
 ];
 
-// Dívida: texto colorido direto sobre a névoa aberta. Dona: 09-C (login/cadastro põem o
-// formulário sobre vidro). Nenhum texto daqui pode ganhar uso novo direto na névoa.
+// Dívida: texto colorido direto sobre a névoa aberta. É uma PROIBIÇÃO de uso direto na névoa,
+// não uma lista de usos: login e cadastro saíram dela na 09-C (links e erros foram para dentro
+// do cartão de vidro, onde já têm 4,5:1 medido) e `casca-vidro.test.ts` trava a volta. A dona
+// dos usos que restarem em páginas é a 09-F. Nenhum texto daqui pode ganhar uso novo direto na névoa.
 const DIVIDA_NA_NEVOA = new Set<string>([
   "claro:destructive:fog-1", "claro:destructive:fog-2", "claro:destructive:fog-3",
   "claro:info-ink:fog-1", "claro:info-ink:fog-2", "claro:info-ink:fog-3",
@@ -423,6 +425,30 @@ describe("09-C · casca", () => {
             `borda de hover sobre tile em ${rotulo}`,
             contraste(compor(borda60, fundo), fundo),
             MINIMO_COMPONENTE,
+          );
+        }
+      });
+
+      it("login: ícone dos destaques (foreground) sobre o ladrilho direto na névoa >= 4,5:1", () => {
+        for (const [rotulo, fundo] of aberturas(tema)) {
+          const ladrilho = compor(valor(tema, "tile"), fundo);
+          exigirMinimo(
+            `foreground sobre tile em ${rotulo}`,
+            contraste(valor(tema, "foreground"), ladrilho),
+            MINIMO,
+          );
+        }
+      });
+
+      it("login: aviso do modo prévia (muted-foreground sobre primary/5 no cartão) >= 4,5:1", () => {
+        const [r, g, b] = lerCor(valor(tema, "primary")).rgb;
+        const tinta = `rgba(${r}, ${g}, ${b}, 0.05)`;
+        for (const [rotulo, s] of vidros) {
+          const fundo = compor(tinta, s);
+          exigirMinimo(
+            `muted-foreground sobre primary/5 em ${rotulo}`,
+            contraste(valor(tema, "muted-foreground"), fundo),
+            MINIMO,
           );
         }
       });

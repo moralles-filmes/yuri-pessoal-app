@@ -282,3 +282,71 @@ describe("09-C · botão do assistente", () => {
     expect(fonte).toMatch(/dynamic\(\s*\(\)\s*=>[\s\S]*?\{\s*ssr:\s*false,\s*loading:\s*\(\)\s*=>\s*null\s*\}\s*,?\s*\)/);
   });
 });
+
+describe("09-C · login e cadastro", () => {
+  const layout = ler("app", "(auth)", "layout.tsx");
+  const formulario = ler("components", "auth", "auth-form.tsx");
+  const css = ler("app", "globals.css");
+  const linhas = layout.split("\n");
+  // A div que embrulha `{children}` abre na linha anterior à dele.
+  const iFilhos = linhas.findIndex((l) => l.includes("{children}"));
+  const cartao = linhas.slice(Math.max(0, iFilhos - 1), iFilhos + 1).join("\n");
+
+  it("o cartão do formulário é de vidro, com canto e respiro próprios", () => {
+    expect(iFilhos, "linha de {children}").toBeGreaterThan(0);
+    for (const c of ["vidro-cartao", "rounded-[28px]", "p-6", "sm:p-8"]) {
+      expect(tem(cartao, c), c).toBe(true);
+    }
+    // Material não convive com fundo, borda ou sombra soltos na mesma peça.
+    expect(cartao).not.toMatch(/(?:^|[\s"'`])(?:[\w-]+:)*(?:bg|border|shadow)-/m);
+  });
+
+  it("a coluna da marca não tem fundo próprio nem manchas: o texto vai direto na névoa", () => {
+    for (const proibida of ["bg-neutral-950", "text-neutral-", "-ink", "text-gradient-brand", "blur-3xl"]) {
+      expect(layout, proibida).not.toContain(proibida);
+    }
+    // Cores coloridas por classe inteira: `text-primary-fill-foreground` não é `text-primary`.
+    for (const proibida of ["text-primary", "text-destructive"]) {
+      expect(tem(layout, proibida), proibida).toBe(false);
+    }
+    // Sem cor colorida direta na névoa: só `text-foreground` e `text-muted-on-fog` (o monograma
+    // tem fundo próprio, e seu texto é medido sobre ele).
+    const cores = [...layout.matchAll(/\btext-([a-z][\w-]*)/g)]
+      .map((m) => m[1])
+      .filter((n) => !/^(sm|xs|lg|xl|[2-9]xl|base|center|left|right)$/.test(n));
+    for (const nome of cores) {
+      expect(["foreground", "muted-on-fog", "primary-fill-foreground"], `text-${nome}`).toContain(nome);
+    }
+    expect(tem(layout, "text-muted-on-fog")).toBe(true);
+  });
+
+  it("os ícones dos destaques ficam num ladrilho com text-foreground", () => {
+    const item = layout.match(/<span className="[^"]*ladrilho[^"]*">/)?.[0] ?? "";
+    expect(item, "span do ícone").not.toBe("");
+    expect(tem(item, "text-foreground")).toBe(true);
+    expect(tem(item, "ladrilho")).toBe(true);
+    expect(item).not.toMatch(/(?:^|[\s"'`])(?:[\w-]+:)*(?:bg|border|ring|shadow)-/m);
+  });
+
+  it("o monograma usa o preenchimento primário com contraste próprio", () => {
+    expect(tem(layout, "bg-primary-fill")).toBe(true);
+    expect(tem(layout, "text-primary-fill-foreground")).toBe(true);
+    expect(tem(layout, "bg-primary")).toBe(false);
+    expect(tem(layout, "text-primary-foreground")).toBe(false);
+  });
+
+  it("o texto da marca não mudou e o gradiente saiu do título", () => {
+    expect(layout).toContain("organizada num só lugar.");
+    expect(layout).toContain("<br />");
+    expect(layout).not.toContain("<span className=\"text-gradient");
+  });
+
+  it("o utilitário do gradiente deixou de existir", () => {
+    expect(css).not.toContain("@utility text-gradient-brand");
+  });
+
+  it("o formulário está sobre vidro: nenhum text-muted-on-fog sobrou", () => {
+    expect(formulario).not.toContain("text-muted-on-fog");
+    expect(tem(formulario, "text-muted-foreground")).toBe(true);
+  });
+});

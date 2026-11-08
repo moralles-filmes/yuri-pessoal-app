@@ -414,21 +414,6 @@
   }
 }
 
-/* Leve gradiente da MARCA para títulos/realces. Era `text-gradient-gold`; o
-   nome citava a cor, então prometia dourado para sempre. Um único consumidor:
-   `src/app/(auth)/layout.tsx`. */
-@utility text-gradient-brand {
-  background: linear-gradient(
-    100deg,
-    var(--primary) 0%,
-    color-mix(in oklch, var(--primary) 70%, white) 50%,
-    var(--primary) 100%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
 /* OS QUATRO MATERIAIS (REDESIGN-09-A). Nenhum define `border-radius`: o raio é do componente.
    Só `vidro-casca` e `vidro-sobreposicao` desfocam o que está atrás — o desfoque é o recurso
    caro, e `vidro-cartao`/`ladrilho` existem justamente para as superfícies que se repetem.
