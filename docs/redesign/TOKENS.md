@@ -364,9 +364,9 @@ mudam porque o desenho pede.
 | `Button` `ghost` | transparente; `hover` e `aria-expanded` em `bg-primary/10` |
 | `Button` `destructive` | `bg-destructive/3`, `text-destructive`, borda `destructive/25`; `hover` `border-destructive/50` (alfa baixado pela medição, não o texto escurecido) |
 | `Button` `link` | `text-primary`, sublinhado no hover |
-| `Input` | `MATERIAL_LADRILHO`; raio 10 px; `h-8` |
-| `Textarea` | `MATERIAL_LADRILHO`; raio 14 px; `min-h-16` |
-| `SelectTrigger` | `MATERIAL_LADRILHO`; raio 10 px (`sm`: 9 px); `hover:bg-pill`; `h-8` (`sm`: `h-7`) |
+| `Input` | `MATERIAL_LADRILHO` com borda `foreground/52` (`dark` `/42`, para 3:1); raio 10 px; `h-8` |
+| `Textarea` | `MATERIAL_LADRILHO` com a mesma borda; raio 14 px; `min-h-16` |
+| `SelectTrigger` | `MATERIAL_LADRILHO` com a mesma borda; raio 10 px (`sm`: 9 px); `hover:bg-pill`; `h-8` (`sm`: `h-7`) |
 | `SelectContent`, `PopoverContent`, `DropdownMenuContent`, `DropdownMenuSubContent` | `vidro-sobreposicao`; raio 18 px; setas de rolagem do select em `bg-popover-solid` |
 | `DialogContent`, `SheetContent` | `vidro-sobreposicao`; raio 28 px (gaveta: só os cantos livres); rodapés em `bg-tile` |
 | `TooltipContent` | `vidro-sobreposicao`; raio 10 px; seta em `bg-popover-solid`/`fill-popover-solid` |

@@ -321,3 +321,26 @@ describe("09-B T7 · controles desligados >= 3:1", () => {
     });
   }
 });
+
+describe("09-B · borda de campo >= 3:1", () => {
+  for (const arquivo of ["input.tsx", "textarea.tsx", "select.tsx"]) {
+    const fonte = fonteUi(arquivo);
+    const alfaClaro = alfaDaClasse(fonte, "border-foreground");
+    const alfaEscuro = alfaDaClasse(fonte, "dark:border-foreground");
+
+    TEMAS.forEach(([nomeTema, tema], i) => {
+      it(`${arquivo} · ${nomeTema}: borda × cartão, diálogo e ladrilho`, () => {
+        const alfa = i === 0 ? alfaClaro : alfaEscuro;
+        const foreground = valor(tema, "foreground");
+        const base = valor(tema, "fog-base");
+        for (const [nome, vidro] of [["cartão", "glass"], ["diálogo", "glass-strong"]] as const) {
+          const superficie = compor(valor(tema, vidro), base);
+          const ladrilho = compor(valor(tema, "tile"), superficie);
+          const borda = compor(comAlfa(foreground, alfa), ladrilho);
+          expect(contraste(borda, superficie), `${nome} × borda`).toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
+          expect(contraste(borda, ladrilho), `${nome} × ladrilho`).toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
+        }
+      });
+    });
+  }
+});

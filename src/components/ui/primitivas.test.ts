@@ -299,7 +299,7 @@ describe("Input", () => {
     expect(fonte).toContain('import { MATERIAL_LADRILHO } from "./materiais"');
     expect(corpo).toContain("MATERIAL_LADRILHO");
     expect(base.split(/\s+/)).toContain("bg-tile");
-    expect(base.split(/\s+/)).toContain("border-tile-border");
+    expect(base.split(/\s+/)).toContain("border-foreground/52");
     focoDeCampo(base);
     expect(base).toContain("rounded-[10px]");
     expect(base).toContain("focus-visible:border-ring");
@@ -337,7 +337,7 @@ describe("Textarea", () => {
     expect(fonte).toContain('import { MATERIAL_LADRILHO } from "./materiais"');
     expect(corpo).toContain("MATERIAL_LADRILHO");
     expect(base.split(/\s+/)).toContain("bg-tile");
-    expect(base.split(/\s+/)).toContain("border-tile-border");
+    expect(base.split(/\s+/)).toContain("border-foreground/52");
     focoDeCampo(base);
     expect(base).toContain("rounded-[14px]");
   });
@@ -368,7 +368,7 @@ describe("SelectTrigger", () => {
     expect(base).toContain("hover:bg-pill");
     focoDeCampo(base);
     expect(base.split(/\s+/)).toContain("bg-tile");
-    expect(base.split(/\s+/)).toContain("border-tile-border");
+    expect(base.split(/\s+/)).toContain("border-foreground/52");
   });
 
   it("não conserva o raio, o fundo transparente nem o fundo escuro antigos", () => {

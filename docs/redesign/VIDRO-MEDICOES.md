@@ -330,4 +330,4 @@ CPU: só pega engasgos grandes.
 - 09-D: `StatCard` e outros `CardContent` com `p-N` não recebem o desconto de 1 px.
 - 09-F: anéis `ring-primary` somados à borda do cartão; `relatorios-client` com `sm:h-8` na lista
   de abas.
-- Em aberto, decisão do dono: borda de campo quase invisível no tema claro (1,01:1 no diálogo).
+- Borda de campo: era 1,01:1 no diálogo claro; o dono delegou e ela passou a `foreground/52` (`dark` `/42`), acima de 3:1.
