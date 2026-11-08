@@ -24,6 +24,8 @@ import "server-only";
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { getTipoDoAnexoDoComprovante } from "@/lib/ai/queries";
+import { DOCUMENT_ENTITY_TYPE } from "@/lib/ai/vision/constants";
 import { rotuloDoCommand } from "@/lib/ai/constants";
 import { lerExtracaoGravada } from "@/lib/ai/vision/schema";
 import { descricaoDoLancamento, revisar, type CorrecoesDoDono } from "@/lib/ai/vision/review";
@@ -94,12 +96,20 @@ export async function prepararLancamentoDoComprovante(
 
   const { data: linha } = await supabase
     .from("ai_document_extractions")
-    .select("id, status, campos")
+    .select("id, document_id, status, campos")
     .eq("id", input.extractionId)
     .eq("user_id", input.userId)
     .maybeSingle();
 
   if (!linha || linha.status !== "extraida") return recusa(NAO_ENCONTRADA);
+
+  // O estado vem do anexo atual, nunca da extração antiga nem de um boolean do cliente.
+  // A leitura do anexo fica fora de approval/, que continua consultando somente ai_*.
+  const tipoDoAnexo = await getTipoDoAnexoDoComprovante(input.userId, linha.document_id);
+  if (tipoDoAnexo === null) return recusa(NAO_ENCONTRADA);
+  if (tipoDoAnexo !== DOCUMENT_ENTITY_TYPE) {
+    return recusa("Este comprovante já virou lançamento. Nada foi preparado.");
+  }
 
   const gravada = lerExtracaoGravada(linha.campos);
   if (!gravada) return recusa(ILEGIVEL);

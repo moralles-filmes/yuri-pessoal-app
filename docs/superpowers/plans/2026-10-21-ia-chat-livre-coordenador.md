@@ -1451,9 +1451,12 @@ Unicode, persistência e adiamento da Task 22 não encerram este achado.
   - `src/components/ai/receipt-review.tsx:157-167,159,623` e `receipt-upload.tsx:124`;
   - `src/lib/ai/server/document-store.ts:100-135`, `src/lib/ai/vision/probe.ts`,
     `src/lib/ai/usage/vision-tokens.ts:60-79` e `src/lib/ai/vision/limits.ts`;
-  - `next.config.ts`.
+  - `next.config.ts`;
+  - `src/lib/ai/queries.ts` (estado atual do anexo fora do Approval Engine);
+  - `src/lib/ai/server/extraction-runner.ts` (prazo antes da chamada);
+  - testes de preparo, envio, tela e runner.
 
-- [ ] **Step 1: Testes que falham.**
+- [x] **Step 1: Testes que falham.**
   - (006) `criarPropostaDeDocumento` para um documento cujo anexo já não é `ia_documento` recusa
     com "Este comprovante já virou lançamento. Nada foi preparado." **sem** gravar proposta.
   - (008) `guardarDocumento` com um PDF sintético de 30 `/Type /Page` recusa com "O PDF tem 30
@@ -1465,16 +1468,42 @@ Unicode, persistência e adiamento da Task 22 não encerram este achado.
     constantes de `vision/limits.ts`.
   - (010) Teste de varredura: `comprovantes/page.tsx` renderiza `<ReceiptReview` com `key=`.
   - (FN-021) Teste de varredura: `receipt-upload.tsx` não contém `capture=`.
-- [ ] **Step 2:** FAIL.
-- [ ] **Step 3: Implementar.**
+- [x] **Step 2:** FAIL.
+- [x] **Step 3: Implementar.**
   - A tela esconde "Preparar lançamento" quando `virouLancamento`.
   - (FN-019) O `Select` mostra "Escolha…" (o `placeholder` do Radix) em vez do sentinela sem item.
   - (FN-027) `?doc=` inexistente mostra "Esse comprovante não existe mais." acima da lista.
   - Corrigir os comentários de `probe.ts`/`vision-tokens.ts` que diziam que `null` "nunca
     reserva de menos".
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5: Mutação** no 006: tirar a checagem → vermelho → desfazer.
-- [ ] **Step 6: Commit** `fix(ia): comprovante lançado não lança de novo, PDF com teto de páginas e o limite de envio que cabe a foto`.
+- [x] **Step 4:** PASS.
+- [x] **Step 5: Mutação** no 006: tirar a checagem → vermelho → desfazer.
+- [x] **Step 6: Commit** `fix(ia): comprovante lançado não lança de novo, PDF com teto de páginas e o limite de envio que cabe a foto`.
+
+**Resultado (2026-11-08):** Task 24 concluída pelo Codex principal. Antes da correção,
+19 testes vermelhos reproduziram os defeitos; depois, 42 mutações distintas ficaram vermelhas,
+com restauração conferida por SHA-256 e git diff. Uma mutação de anexo indisponível passou
+na primeira rodada: o teste foi reforçado para distinguir a mensagem de ausência da de
+lançamento já feito, e a mutação foi repetida com vermelho confirmado.
+
+O preparo consulta o estado atual do anexo em queries.ts, com id e dono nas duas leituras,
+antes de prever/gravar; approval/ continua consultando só ai_*. A tela recebe virouLancamento,
+esconde o preparo e remonta por documento + extração. Conta/cartão usam vazio para o placeholder;
+documento ausente avisa e o seletor de arquivo preserva galeria/PDF. PDF legível acima de 20
+páginas é recusado; sem contagem, só até 2 MB, reservando 20 páginas sem inventar medição.
+Os limites aparecem antes do envio. A contagem continua heurística: objetos comprimidos podem
+subestimar; comentários deixam esse limite explícito. O Next 16.2.9 instalado documenta 1 MB
+como padrão; bodySizeLimit agora usa max(imagem, PDF) + 1 MB = 17 MB no Next. Nenhum upload
+real foi feito para validar limites externos de hospedagem.
+
+O prazo global da extração nasce antes do metadado; o timeout usa min(configurado, restante),
+e o piso é reconferido antes da tentativa e após abrir a credencial. Prazo esgotado fecha run,
+extração falha e tentativa aberta, com AI_DEADLINE. Metadados do Supabase confirmaram colunas,
+RLS + FORCE nas três tabelas; nenhuma migration ou gravação de teste em produção.
+
+Validação antes do commit: **6.973 testes / 310 arquivos**, TypeScript com zero erro,
+lint limpo e build aprovado. Revisão de segurança e React pelo principal; nenhuma auditoria
+externa. Router sugeriu worker Codex, execução mantida no principal pela restrição do dono
+à worktree única. Checkout principal conferido e preservado. Sem push, PR ou deploy.
 
 ### Task 25: Previsões completas e o desfazer do hábito (MOD-ia-007, MOD-ia-021)
 

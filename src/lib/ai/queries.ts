@@ -690,3 +690,28 @@ function offsetDeBrasiliaEm(instante: Date): number {
   const utc = new Date(instante.toLocaleString("en-US", { timeZone: "UTC" }));
   return local.getTime() - utc.getTime();
 }
+
+/** Estado atual do anexo, sem caminho ou URL. O preparo só aceita documento ainda guardado. */
+export async function getTipoDoAnexoDoComprovante(
+  userId: string,
+  documentoId: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: documento, error: erroDocumento } = await supabase
+    .from("ai_documents")
+    .select("attachment_id")
+    .eq("id", documentoId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (erroDocumento || !documento) return null;
+
+  // FK composta: duas leituras, como em server/document-queries.ts. RLS e dono nas duas.
+  const { data: anexo, error: erroAnexo } = await supabase
+    .from("attachments")
+    .select("entity_type")
+    .eq("id", documento.attachment_id)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (erroAnexo || !anexo) return null;
+  return anexo.entity_type;
+}

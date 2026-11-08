@@ -206,6 +206,8 @@ export default async function ComprovantesPage({
 
           {extracao && opcoes ? (
             <ReceiptReview
+              key={`${selecionado.documento.id}:${selecionado.documento.leitura!.id}`}
+              virouLancamento={selecionado.documento.virouLancamento}
               documentoId={selecionado.documento.id}
               extractionId={selecionado.documento.leitura!.id}
               extracao={extracao}
@@ -229,6 +231,12 @@ export default async function ComprovantesPage({
             </div>
           )}
         </section>
+      )}
+
+      {doc && !selecionado && (
+        <p role="status" className="rounded-xl border p-3 text-sm text-muted-foreground">
+          Esse comprovante não existe mais.
+        </p>
       )}
 
       {/* ── A lista ── */}

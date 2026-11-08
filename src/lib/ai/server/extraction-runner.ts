@@ -73,6 +73,7 @@ import { createClient } from "@/lib/supabase/server";
 import { dateInSaoPaulo } from "@/lib/format";
 import type { Json } from "@/types/supabase";
 import { AI_CRYPTO_NOT_CONFIGURED, getCryptoReadiness } from "./crypto-readiness";
+import { criarPrazo, timeoutDaChamada, AI_DEADLINE, MENSAGEM_DO_PRAZO } from "./prazo";
 import { resolveApiKey } from "./credential-store";
 import { lerBytesDoDocumento, lerDocumentoParaExtracao } from "./document-store";
 import {
@@ -116,8 +117,10 @@ export function capacidadesExigidas(
 export type ExtractionRunnerInput = {
   readonly userId: string;
   readonly documentoId: string;
-  /** Injetado. Nenhum `Date.now()` decide data nem prazo neste módulo. */
+  /** Data civil injetada para avaliar os campos lidos. */
   readonly agora: Date;
+  /** Relógio do prazo global; separado da data civil usada na leitura. */
+  readonly agoraMs?: () => number;
   readonly abortSignal?: AbortSignal;
 };
 
@@ -205,6 +208,9 @@ function tipoDaTentativa(
 export async function runExtraction(
   input: ExtractionRunnerInput,
 ): Promise<ExtractionRunnerResult> {
+  const agoraMs = input.agoraMs ?? Date.now;
+  const prazo = criarPrazo(agoraMs());
+
   // ── 1. Cripto pronta? ───────────────────────────────────────────────────────────────
   const readiness = getCryptoReadiness();
   if (!readiness.ready) {
@@ -421,6 +427,9 @@ export async function runExtraction(
 
     // ── 7. Tentativas ──────────────────────────────────────────────────────────────────
     while (alvoIdx < alvos.length) {
+      if (timeoutDaChamada(prazo, agoraMs(), config.timeoutMs) === null) {
+        return await desistir(aiError("ERRO_PERMANENTE", AI_DEADLINE, MENSAGEM_DO_PRAZO));
+      }
       const alvo = alvos[alvoIdx];
       const tarifa = rateFor(alvo.provider, alvo.model.id, hoje);
       if (!tarifa) {
@@ -490,6 +499,14 @@ export async function runExtraction(
 
       const client = createProviderClient(alvo.provider, chave.value);
 
+      const timeoutMs = timeoutDaChamada(prazo, agoraMs(), config.timeoutMs);
+      if (timeoutMs === null) {
+        const e = aiError("ERRO_PERMANENTE", AI_DEADLINE, MENSAGEM_DO_PRAZO);
+        await fecharInterrompida(e);
+        fecharInterrompida = null;
+        return await desistir(e);
+      }
+
       // ⛔ A ÚNICA CHAMADA EXTERNA DE TODA A SUBFASE. Sem streaming, sem ferramentas.
       const resposta = await client.generateObject({
         model: alvo.model.id,
@@ -498,7 +515,7 @@ export async function runExtraction(
         maxOutputTokens: alvo.model.outputCapTokens,
         // Extração não é criação: queremos a leitura mais provável, não uma variação dela.
         temperature: 0,
-        timeoutMs: config.timeoutMs,
+        timeoutMs,
         abortSignal: input.abortSignal,
         schema: EXTRACAO_JSON_SCHEMA,
         schemaName: NOME_DO_SCHEMA,

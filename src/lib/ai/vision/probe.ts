@@ -1,19 +1,8 @@
 /**
- * Fase 18-D — IA · O TAMANHO do conteúdo, lido do cabeçalho.
- *
- * ╔══════════════════════════════════════════════════════════════════════════════════════╗
- * ║ PARA QUE ISTO SERVE: a RESERVA de orçamento.                                          ║
- * ║                                                                                       ║
- * ║ `usage/vision-tokens.ts` cobra por megapixel e por página. Sem medida, ele cai no      ║
- * ║ TETO — 24 MP e 20 páginas —, que é seguro mas caro: uma foto de 2 MP reservaria 12×   ║
- * ║ o que vai custar, e o dono veria o orçamento encher sem motivo.                        ║
- * ║                                                                                       ║
- * ║ ⚠️ ENTÃO ESTE ARQUIVO É UMA OTIMIZAÇÃO, NÃO UMA GARANTIA. Devolver `null` é sempre    ║
- * ║ uma resposta CORRETA — o custo é reservar demais, nunca reservar de menos. É por isso  ║
- * ║ que ele pode ser best-effort sem que isso vire um risco.                                ║
- * ╚══════════════════════════════════════════════════════════════════════════════════════╝
- *
- * Puro. Nenhum I/O. Nenhuma dependência — decodificar cabeçalho é aritmética de bytes.
+ * Dimensões e páginas lidas dos bytes, sem parser externo nem I/O.
+ * A medição é best-effort. Sem medida, a reserva usa 24 MP ou 20 páginas como estimativa;
+ * esse teto não prova o tamanho real. O envio também aplica limites de bytes e recusa PDF
+ * sem contagem acima de 2 MB.
  */
 
 export type Dimensoes = { readonly larguraPx: number; readonly alturaPx: number };
@@ -139,22 +128,13 @@ export function dimensoesDaImagem(bytes: Uint8Array): Dimensoes | null {
 }
 
 /**
- * A contagem de páginas de um PDF — **best-effort declarado**.
+ * Conta ocorrências visíveis de /Type /Page, excluindo /Pages.
+ * Uma contagem exata exigiria percorrer a árvore de objetos, seguir referências e
+ * descomprimir object streams. Objetos comprimidos podem fazer esta heurística subestimar.
  *
- * ═══════════════════════ POR QUE HEURÍSTICA, E POR QUE TUDO BEM ═══════════════════════
- *
- * Contar páginas direito exige percorrer a árvore de objetos do PDF, seguir referências
- * indiretas e descomprimir *object streams*. Isso é um parser de PDF — uma dependência nova
- * e uma superfície de ataque nova (parsers de PDF são fonte histórica de CVE), para um
- * número que só serve para ESTIMAR CUSTO.
- *
- * A heurística abaixo conta as ocorrências de `/Type /Page` que não são `/Pages`. Ela acerta
- * em PDF não comprimido (que é a maioria dos comprovantes e notas fiscais eletrônicas) e
- * devolve `null` quando o arquivo usa *object streams* — e `null` só significa reservar o
- * teto de 20 páginas.
- *
- * ⛔ Ela NÃO é uma trava de segurança e não deve virar uma. O que impede um PDF gigante de
- * entrar é o limite de BYTES, que é medido sobre o arquivo real.
+ * Sem ocorrências legíveis devolve null. O envio recusa contagem conhecida acima do limite
+ * e, quando ela falta, aceita apenas PDF de até 2 MB. A reserva usa 20 páginas nesse caso,
+ * como estimativa conservadora: bytes pequenos não provam um número máximo de páginas.
  */
 export function paginasDoPdf(bytes: Uint8Array): number | null {
   // `latin1` porque a estrutura do PDF é ASCII; decodificar como UTF-8 corromperia os

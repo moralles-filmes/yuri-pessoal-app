@@ -138,6 +138,7 @@ const SEM_ESCOLHA = "__nenhum__";
 
 export function ReceiptReview({
   documentoId,
+  virouLancamento,
   extractionId,
   extracao,
   urlAssinada,
@@ -146,6 +147,7 @@ export function ReceiptReview({
   opcoes,
 }: {
   readonly documentoId: string;
+  readonly virouLancamento: boolean;
   readonly extractionId: string;
   readonly extracao: ExtracaoDeComprovante;
   readonly urlAssinada: string | null;
@@ -156,8 +158,8 @@ export function ReceiptReview({
   const router = useRouter();
   const [correcoes, setCorrecoes] = React.useState<CorrecoesDoDono>({});
   const [ondeEntra, setOndeEntra] = React.useState<"conta" | "cartao">("conta");
-  const [conta, setConta] = React.useState<string>(SEM_ESCOLHA);
-  const [cartao, setCartao] = React.useState<string>(SEM_ESCOLHA);
+  const [conta, setConta] = React.useState<string>("");
+  const [cartao, setCartao] = React.useState<string>("");
   const [categoria, setCategoria] = React.useState<string>(SEM_ESCOLHA);
   const [classificacao, setClassificacao] = React.useState<ItemClassificado[]>(() =>
     classificacaoInicial(extracao.itens),
@@ -171,7 +173,7 @@ export function ReceiptReview({
   const { efetiva, veredito } = revisar(extracao, correcoes);
 
   const escolheuOrigem =
-    ondeEntra === "conta" ? conta !== SEM_ESCOLHA : cartao !== SEM_ESCOLHA;
+    ondeEntra === "conta" ? conta !== "" : cartao !== "";
 
   // Total não identificado chega como ausência (REDESIGN-07-D · Z): `?? 0` fazia o resumo
   // escrever "o total de R$ 0,00".
@@ -183,14 +185,14 @@ export function ReceiptReview({
   }
 
   async function preparar() {
-    if (preparando) return;
+    if (preparando || virouLancamento) return;
     setPreparando(true);
 
     const r = await prepararLancamentoDoComprovante({
       extractionId,
       correcoes,
-      conta: ondeEntra === "conta" && conta !== SEM_ESCOLHA ? conta : null,
-      cartao: ondeEntra === "cartao" && cartao !== SEM_ESCOLHA ? cartao : null,
+      conta: ondeEntra === "conta" && conta !== "" ? conta : null,
+      cartao: ondeEntra === "cartao" && cartao !== "" ? cartao : null,
       categoria: categoria !== SEM_ESCOLHA ? categoria : null,
     });
     setPreparando(false);
@@ -606,7 +608,11 @@ export function ReceiptReview({
       </div>
 
       {/* ── ⛔ O BLOQUEIO. Não é aviso: é a ausência do botão, com o motivo escrito. ── */}
-      {!veredito.pode ? (
+      {virouLancamento ? (
+        <p role="status" className="rounded-xl border p-3 text-sm text-muted-foreground">
+          Este comprovante já virou lançamento. Nada foi preparado.
+        </p>
+      ) : !veredito.pode ? (
         <div className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm">
           <ShieldAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
           <div className="min-w-0">
