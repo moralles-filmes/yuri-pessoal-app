@@ -294,7 +294,7 @@ Servidor de produção local, Chrome do dono pela extensão, harness de iframes 
 
 | | Antes (5a753fb) | Depois |
 | --- | --- | --- |
-| Testes | 8.347 em 371 arquivos | 8.465 em 373 arquivos |
+| Testes | 8.347 em 371 arquivos | 8.470 em 373 arquivos |
 | Mediana de JS por rota | 203,0 KB | 203,6 KB |
 | Rotas acima de +1 KB gz | | 0 de 71 |
 | Maior aumento | | `/(app)/nutricao/receitas`, +1,0 KB (203,2 → 204,2) |
@@ -330,4 +330,4 @@ CPU: só pega engasgos grandes.
 - 09-D: `StatCard` e outros `CardContent` com `p-N` não recebem o desconto de 1 px.
 - 09-F: anéis `ring-primary` somados à borda do cartão; `relatorios-client` com `sm:h-8` na lista
   de abas.
-- Borda de campo: era 1,01:1 no diálogo claro; o dono delegou e ela passou a `foreground/52` (`dark` `/42`), acima de 3:1.
+- Borda de campo: era 1,01:1 no diálogo claro; o dono delegou e ela passou a `--field-border` (foreground a 52%, escuro 42%), acima de 3:1.

@@ -170,8 +170,8 @@ describe("Card", () => {
   const card = corpoDaFuncao(fonte, "Card");
 
   it("desconta da medida o 1px da borda: a largura interna é a de antes do vidro", () => {
-    expect(card).toContain("[--card-spacing:calc(--spacing(4)_-_1px)]");
-    expect(card).toContain("data-[size=sm]:[--card-spacing:calc(--spacing(3)_-_1px)]");
+    expect(card).toContain("[--card-spacing:15px]");
+    expect(card).toContain("data-[size=sm]:[--card-spacing:11px]");
   });
 
   it("é vidro de cartão: material importado, raio de 24px (20px no sm)", () => {
@@ -299,7 +299,7 @@ describe("Input", () => {
     expect(fonte).toContain('import { MATERIAL_LADRILHO } from "./materiais"');
     expect(corpo).toContain("MATERIAL_LADRILHO");
     expect(base.split(/\s+/)).toContain("bg-tile");
-    expect(base.split(/\s+/)).toContain("border-foreground/52");
+    expect(base.split(/\s+/)).toContain("border-(--field-border)");
     focoDeCampo(base);
     expect(base).toContain("rounded-[10px]");
     expect(base).toContain("focus-visible:border-ring");
@@ -337,7 +337,7 @@ describe("Textarea", () => {
     expect(fonte).toContain('import { MATERIAL_LADRILHO } from "./materiais"');
     expect(corpo).toContain("MATERIAL_LADRILHO");
     expect(base.split(/\s+/)).toContain("bg-tile");
-    expect(base.split(/\s+/)).toContain("border-foreground/52");
+    expect(base.split(/\s+/)).toContain("border-(--field-border)");
     focoDeCampo(base);
     expect(base).toContain("rounded-[14px]");
   });
@@ -368,7 +368,7 @@ describe("SelectTrigger", () => {
     expect(base).toContain("hover:bg-pill");
     focoDeCampo(base);
     expect(base.split(/\s+/)).toContain("bg-tile");
-    expect(base.split(/\s+/)).toContain("border-foreground/52");
+    expect(base.split(/\s+/)).toContain("border-(--field-border)");
   });
 
   it("não conserva o raio, o fundo transparente nem o fundo escuro antigos", () => {

@@ -130,6 +130,7 @@
   --tile-solid: #fbfbfd;
   --popover-solid: #fefefe;
   --tile-border: rgba(255, 255, 255, 0.7);
+  --field-border: rgba(22, 24, 29, 0.52); /* 09-B: >= 3:1 sobre cartão e diálogo; é o foreground a 52% */
   --pill: rgba(255, 255, 255, 0.82);
   --pill-strong: #ffffff;
   --track: rgba(22, 24, 29, 0.06); /* 09-B: era 0,07; a aba inativa caía a 4,45:1 sobre o vidro na mancha azul */
@@ -251,6 +252,7 @@
   --tile-solid: #202329; /* tile sobre glass-solid; ver o claro */
   --popover-solid: #252933; /* glass-strong sobre fog-base */
   --tile-border: rgba(255, 255, 255, 0.07);
+  --field-border: rgba(242, 244, 248, 0.42); /* 09-B: foreground a 42% */
   --pill: rgba(255, 255, 255, 0.1);
   --pill-strong: rgba(255, 255, 255, 0.16);
   --track: rgba(255, 255, 255, 0.09);
