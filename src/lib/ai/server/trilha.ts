@@ -254,8 +254,8 @@ export async function* runTrilha(
 
       // MOD-ia-005 — a primeira chamada, o retry e o fallback passam por aqui ANTES de abrir a
       // tentativa: abaixo do piso, nenhuma linha nova em `ai_usage_events` e nenhum `switch`.
-      const timeoutDaTentativa = timeoutDaChamada(e.prazo, e.agoraMs(), e.config.timeoutMs);
-      if (timeoutDaTentativa === null) return prazoEsgotado();
+      const cabeAntesDaTentativa = timeoutDaChamada(e.prazo, e.agoraMs(), e.config.timeoutMs);
+      if (cabeAntesDaTentativa === null) return prazoEsgotado();
 
       const attemptIndex = e.contadores.proximoAttemptIndex();
       const tipo = tipoDaTentativa(e.primeiroTipo, alvoAnterior, alvo);
@@ -349,6 +349,13 @@ export async function* runTrilha(
         return { ok: false, erro: chave.error, cancelado: false };
       }
 
+      // Banco e credencial podem consumir o prazo enquanto aguardamos.
+      const timeoutDaTentativa = timeoutDaChamada(e.prazo, e.agoraMs(), e.config.timeoutMs);
+      if (timeoutDaTentativa === null) {
+        await fecharTentativaAberta("failed", AI_DEADLINE);
+        return prazoEsgotado();
+      }
+
       // A latência conta a partir da chamada, não da decifração.
       atual.inicio = Date.now();
       // O timer do servidor nasce com o timeout que o PRAZO permite, não com o configurado.
@@ -363,8 +370,6 @@ export async function* runTrilha(
       // Só o modo `"uma-chamada"` preenche estes dois — e só com o que ESTA tentativa pediu.
       const pedidas: ChamadaPedida[] = [];
       const passoDaDecisao: { indice: number | null } = { indice: null };
-
-      let timeoutDestaChamada = timeoutDaTentativa;
 
       /**
        * Antes de cada passo do laço. O passo 0 usa a tentativa já aberta
@@ -391,7 +396,6 @@ export async function* runTrilha(
           await fecharTentativaAberta("completed", null);
           return aiError("TIMEOUT", AI_DEADLINE, MENSAGEM_DO_PRAZO);
         }
-        timeoutDestaChamada = cabe;
         await fecharTentativaAberta("completed", null);
         const nova = await startAttempt({
           runId,
@@ -429,6 +433,12 @@ export async function* runTrilha(
         passo: number,
       ): AsyncIterable<AiStreamEvent> =>
         (async function* () {
+          // Inclui o tempo de registrar TOOL_STEP e o passo modelo, depois da admissão.
+          const timeoutAtual = timeoutDaChamada(e.prazo, e.agoraMs(), e.config.timeoutMs);
+          if (timeoutAtual === null) {
+            yield { type: "error", error: aiError("TIMEOUT", AI_DEADLINE, MENSAGEM_DO_PRAZO) };
+            return;
+          }
           const client = createProviderClient(alvo.provider, chave.value);
           const exigir = exigeLeitura && passo === 0;
           yield* client.streamText({
@@ -436,7 +446,7 @@ export async function* runTrilha(
             system: e.system,
             messages: msgs,
             maxOutputTokens: Math.min(e.tetoDeSaida, alvo.model.outputCapTokens),
-            timeoutMs: timeoutDestaChamada,
+            timeoutMs: timeoutAtual,
             abortSignal: signal,
             // O laço executa SÓ o que passou pela allowlist do agente e pelo guard. O que
             // não está aqui não foi oferecido — e voltar assim mesmo encerra o run.

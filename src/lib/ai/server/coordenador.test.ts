@@ -64,6 +64,7 @@ const heartbeats: string[] = [];
 let marcacoesDeStreaming = 0;
 /** Rodada 1 — quando ligado, a linha do acionamento ACEITO não é gravada (`null`, como num `23505`). */
 let auditoriaDoAceitoFalha = false;
+let especialistaSemAuditoria: string | null = null;
 
 vi.mock("./run-store", () => ({
   startAttempt: async (input: {
@@ -106,7 +107,7 @@ vi.mock("./run-store", () => ({
       rejectionReason: input.rejectionReason,
       stepId: input.stepId,
     });
-    if (auditoriaDoAceitoFalha && input.status === "executada") return null;
+    if ((auditoriaDoAceitoFalha || input.especialistaId === especialistaSemAuditoria) && input.status === "executada") return null;
     return `tc-${acionamentos.length}`;
   },
 }));
@@ -392,6 +393,7 @@ beforeEach(() => {
   marcacoesDeStreaming = 0;
   passoQueFalha = null;
   auditoriaDoAceitoFalha = false;
+  especialistaSemAuditoria = null;
   permissoes = { allow_finance: true, allow_todo: true };
   escrita = {};
   cruzarModulos = false;
@@ -1448,5 +1450,25 @@ describe("conduzirCoordenador — Task 15b: o especialista lê antes de responde
     expect(desfecho).toMatchObject({ ok: true, texto: "Preparei o lançamento." });
     expect(eventos.filter((e) => e.type === "proposta")).toHaveLength(1);
     expect(resumo()).toEqual(["decisao#0:-", "financeiro#0:required", "financeiro#1:-"]);
+  });
+});
+
+
+describe("Task 28 — auditoria parcial dos acionamentos", () => {
+  it.each([1, 2])("declara Financeiro sem auditoria mesmo com %i especialista(s) respondendo", async (quantos) => {
+    cruzarModulos = true;
+    permissoes.allow_calendar = true;
+    especialistaSemAuditoria = "financeiro";
+    responder = ({ quem }) => quem === "decisao"
+      ? [aciona("financeiro", "gasto do mês"), aciona("todo", "tarefas"),
+          ...(quantos === 2 ? [aciona("agenda", "compromissos")] : []), FINISH]
+      : [delta(quem === "sintese" ? "Resumo." : "Resposta."), FINISH];
+    const { eventos, desfecho } = await conduzir();
+    const aviso = avisoDeEspecialistasQueFalharam(["Financeiro"]);
+    expect(chamadasPor("financeiro")).toBe(0);
+    expect(chamadasPor("todo")).toBe(1);
+    expect(chamadasPor("sintese")).toBe(quantos === 2 ? 1 : 0);
+    expect(desfecho).toMatchObject({ ok: true, texto: (quantos === 2 ? "Resumo." : "Resposta.") + "\n\n" + aviso });
+    expect(deltas(eventos).join("")).toBe(desfecho.ok ? desfecho.texto : "");
   });
 });

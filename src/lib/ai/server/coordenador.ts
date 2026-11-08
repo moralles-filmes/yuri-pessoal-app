@@ -236,11 +236,10 @@ function sistemaDoCoordenador(input: {
 export const RESERVA_DA_SINTESE_MS = 15_000;
 
 /**
- * Task 15b (Rodada 1) — as ferramentas de UM especialista, já filtradas pelas chaves do dono, e
- * as de LEITURA entre elas. As leituras vão sozinhas, com `required`, no primeiro passo de cada
- * tentativa (`runTrilha`): oferecer a allowlist inteira empurrava o modelo a propor escrita ou
- * memória com dado chutado em vez de perguntar. Quem sabe o que é leitura é o registry; por isso
- * a conta mora aqui, e `trilha.ts` só recebe a lista.
+ * Ferramentas de UM especialista, filtradas pelas chaves do dono. O passo 0 oferece TODAS;
+ * havendo leitura entre elas, usa `required`. Nos demais passos, `auto`. Oferecer somente
+ * leituras foi descartado na Task 15b porque quebrou a preparação de propostas no teste real.
+ * O registry identifica as leituras para decidir se há o que exigir.
  */
 function ferramentasDoEspecialista(
   esp: AiAgentProfile,
@@ -491,7 +490,9 @@ export async function* conduzirCoordenador(
    * sem proposta") aplicada ao pedido do coordenador.
    */
   const aceitos = await auditarAcionamentos(e.run, stepId, chamadas, decidido);
-  const semRegistro = decidido.aceitos.length - aceitos.length;
+  const semRegistro = decidido.aceitos.filter(
+    (pedido) => !aceitos.some((aceito) => aceito.callId === pedido.callId),
+  );
 
   const cruzouDesligado = decidido.recusados.some(
     (r) => r.motivo === "CRUZAR_MODULOS_DESLIGADO",
@@ -514,7 +515,7 @@ export async function* conduzirCoordenador(
       ),
     ];
     const resposta =
-      semRegistro > 0
+      semRegistro.length > 0
         ? AVISO_SEM_AUDITORIA
         : retido !== ""
           ? retido
@@ -536,7 +537,7 @@ export async function* conduzirCoordenador(
   if (aceitos.length > 1) {
     // ⚠️ Sem `cruzouDesligado`: com dois ou mais aceitos, "Cruzar módulos" está LIGADA
     // (`decidirAcionamentos` recusa o 2º quando ela está desligada) — ver `emParalelo`.
-    return yield* emParalelo({ e, coordenador, decisao, aceitos, comum });
+    return yield* emParalelo({ e, coordenador, decisao, aceitos, semRegistro, comum });
   }
 
   // ── 4. MODO DIRETO — a resposta do especialista É a resposta final (§4.4) ────────────
@@ -579,7 +580,7 @@ export async function* conduzirCoordenador(
       tetoDeSaida: e.alvos[0]?.model.outputCapTokens ?? Number.POSITIVE_INFINITY,
       primeiroTipo: "ESPECIALISTA",
       // Task 15b — acionado é porque a tarefa depende dos registros: ele LÊ antes de responder
-      // (só as leituras no primeiro passo; lista vazia = nada exigido).
+      // (todas oferecidas no primeiro passo; sem leitura = nada exigido).
       primeiroPassoExigeLeitura: ferramentas.leituras,
       promptMontado: system + textoDasMensagens(mensagens),
     }),
@@ -615,6 +616,12 @@ export async function* conduzirCoordenador(
    * texto (invariante 23): escrita antes da resposta, ela sumiria no primeiro retry.
    */
   let texto = direto.texto;
+  const avisoDeAuditoria = avisoDeEspecialistasQueFalharam(semRegistro.map((a) => a.rotulo));
+  if (avisoDeAuditoria) {
+    const trecho = texto === "" ? avisoDeAuditoria : `\n\n${avisoDeAuditoria}`;
+    texto += trecho;
+    yield { type: "delta", text: trecho };
+  }
   if (cruzouDesligado) {
     const aviso = avisoCruzarModulos();
     const trecho = texto === "" ? aviso : `\n\n${aviso}`;
@@ -702,6 +709,7 @@ async function* emParalelo(input: {
   readonly coordenador: AiAgentProfile;
   readonly decisao: ReturnType<typeof prepararDecisao>;
   readonly aceitos: readonly Acionamento[];
+  readonly semRegistro: readonly Acionamento[];
   readonly comum: Omit<
     Parameters<typeof runTrilha>[0],
     | "trilha"
@@ -964,7 +972,10 @@ async function* emParalelo(input: {
    */
   let texto = sintese.texto;
   const frases = [
-    avisoDeEspecialistasQueFalharam(falhos.map(({ p }) => p.aceito.rotulo)),
+    avisoDeEspecialistasQueFalharam([
+      ...input.semRegistro.map((a) => a.rotulo),
+      ...falhos.map(({ p }) => p.aceito.rotulo),
+    ]),
     avisoDeEspecialistasComLeituraIncompleta(incompletos),
   ];
   for (const frase of frases) {

@@ -27,9 +27,15 @@ import type { ToolOutput } from "@/lib/ai/tools/contracts";
 
 /** Quando ligado, decifrar a credencial LANÇA — a exceção inesperada de dentro da trilha. */
 let credencialLanca = false;
+let aoObterCredencial: (() => void) | null = null;
+let aoAbrirTentativa: ((tipo: string) => void) | null = null;
+let aoAbrirPasso: ((indice: number) => void) | null = null;
+const timeoutsRecebidos: number[] = [];
+let aoChamarModelo: ((sinal?: AbortSignal) => void) | null = null;
 
 vi.mock("./credential-store", () => ({
   resolveApiKey: async () => {
+    aoObterCredencial?.();
     if (credencialLanca) throw new Error("cofre fora do ar");
     return { ok: true, value: "sk-de-mentira" };
   },
@@ -57,6 +63,7 @@ vi.mock("./run-store", () => ({
     promptVersion?: string | null;
     agentId: string;
   }) => {
+    aoAbrirTentativa?.(input.attemptType);
     const id = `att-${input.attemptIndex}`;
     medicao.push({
       tipo: "start",
@@ -91,12 +98,15 @@ vi.mock("@/lib/ai/providers/provider-factory", () => ({
     streamText: (request: {
       abortSignal?: AbortSignal;
       maxOutputTokens: number;
+      timeoutMs: number;
       toolChoice?: string;
       tools: readonly { name: string }[];
     }) => {
+      aoChamarModelo?.(request.abortSignal);
       const indice = chamadasAoProvedor;
       chamadasAoProvedor += 1;
       sinaisRecebidos.push(request.abortSignal);
+      timeoutsRecebidos.push(request.timeoutMs);
       tetosRecebidos.push(request.maxOutputTokens);
       toolChoicesRecebidos.push(request.toolChoice);
       ferramentasRecebidas.push(request.tools.map((t) => t.name));
@@ -144,6 +154,7 @@ const passosFechados: { stepId: string; status: string }[] = [];
 
 vi.mock("@/lib/ai/tools/audit", () => ({
   startStep: async (input: { stepIndex: number; kind: string }) => {
+    if (input.kind === "modelo") aoAbrirPasso?.(input.stepIndex);
     passosAbertos.push({ stepIndex: input.stepIndex, kind: input.kind });
     return `step-${passosAbertos.length}`;
   },
@@ -264,6 +275,11 @@ beforeEach(() => {
   indiceDePasso = 0;
   vi.mocked(executeTool).mockClear();
   credencialLanca = false;
+  aoObterCredencial = null;
+  aoChamarModelo = null;
+  aoAbrirTentativa = null;
+  aoAbrirPasso = null;
+  timeoutsRecebidos.length = 0;
   sinaisRecebidos.length = 0;
   tetosRecebidos.length = 0;
   toolChoicesRecebidos.length = 0;
@@ -757,4 +773,62 @@ describe("runTrilha — primeiroPassoExigeLeitura", () => {
 
     expect(pedidos()).toEqual(["-:training.criar_treino"]);
   });
+});
+
+
+describe("Task 28 — prazo reconferido depois dos awaits", () => {
+  it.each([49_000, 51_000])("credencial lenta: relógio em %i ms", async (apos) => {
+    let relogio = 0;
+    aoObterCredencial = () => { relogio = apos; };
+    respostasPorChamada = [[{ type: "delta", text: "Resposta." }, FINISH]];
+    const { desfecho } = await rodar(entrada({ agoraMs: () => relogio }));
+    expect(chamadasAoProvedor).toBe(apos === 49_000 ? 1 : 0);
+    expect(timeoutsRecebidos).toEqual(apos === 49_000 ? [6_000] : []);
+    if (apos === 51_000) {
+      expect(desfecho).toMatchObject({ ok: false, erro: { code: "AI_DEADLINE" } });
+      expect(passosAbertos).toEqual([]);
+    }
+    expect(medicao.at(-1)).toMatchObject({ tipo: "close", status: apos === 49_000 ? "completed" : "failed" });
+  });
+
+  it.each(["tentativa", "passo"])("TOOL_STEP lento ao registrar %s não chama fora do prazo", async (onde) => {
+    let relogio = 0;
+    if (onde === "tentativa") aoAbrirTentativa = tipo => { if (tipo === "TOOL_STEP") relogio = 51_000; };
+    else aoAbrirPasso = indice => { if (indice === 2) relogio = 51_000; };
+    respostasPorChamada = [PEDE_VOLUME_E_TERMINA, [{ type: "delta", text: "Não deve sair." }, FINISH]];
+    const { desfecho } = await rodar(entrada({ agoraMs: () => relogio }));
+    expect(chamadasAoProvedor).toBe(1);
+    expect(desfecho).toMatchObject({ ok: false, erro: { code: "AI_DEADLINE" } });
+    expect(medicao.at(-1)).toMatchObject({ tipo: "close", id: "att-2", status: "failed" });
+  });
+
+  it("TOOL_STEP recorta timeout depois de registrar o passo modelo", async () => {
+    let relogio = 0;
+    aoAbrirPasso = indice => { if (indice === 2) relogio = 49_000; };
+    respostasPorChamada = [PEDE_VOLUME_E_TERMINA, [{ type: "delta", text: "Resposta." }, FINISH]];
+    const { desfecho } = await rodar(entrada({ agoraMs: () => relogio }));
+    expect(desfecho.ok).toBe(true);
+    expect(timeoutsRecebidos).toEqual([30_000, 6_000]);
+  });
+});
+
+
+it("Task 28 — timer do servidor também recorta o tempo consumido pela credencial", async () => {
+  vi.useFakeTimers();
+  try {
+    let relogio = 0;
+    aoObterCredencial = () => { relogio = 49_000; };
+    const estadosDoSinal: (boolean | undefined)[] = [];
+    aoChamarModelo = sinal => {
+      vi.advanceTimersByTime(5_999);
+      estadosDoSinal.push(sinal?.aborted);
+      vi.advanceTimersByTime(1);
+      estadosDoSinal.push(sinal?.aborted);
+    };
+    await rodar(entrada({ agoraMs: () => relogio }));
+    expect(chamadasAoProvedor).toBe(1);
+    expect(estadosDoSinal).toEqual([false, true]);
+  } finally {
+    vi.useRealTimers();
+  }
 });
