@@ -3,10 +3,14 @@ import {
   asPeriod,
   asView,
   isIsoDate,
+  payloadDoSalvar,
   resolveWindow,
+  urlDoDashboard,
+  visaoDoPeriodo,
   windowLabel,
 } from "@/lib/dashboard/period";
 import {
+  DASH_CARD_IDS,
   DEFAULT_DASHBOARD_LAYOUT,
   normalizeLayout,
   visibleCards,
@@ -173,5 +177,61 @@ describe("visibleCards", () => {
       view: "mes",
     };
     expect(visibleCards(layout)).toEqual(["financeiro", "agenda", "tarefas", "habitos", "estudos"]);
+  });
+});
+
+describe("visaoDoPeriodo", () => {
+  it("cada período cai na visão que a barra já usava", () => {
+    expect(visaoDoPeriodo("hoje")).toBe("dia");
+    expect(visaoDoPeriodo("semana")).toBe("semana");
+    expect(visaoDoPeriodo("mes")).toBe("mes");
+    expect(visaoDoPeriodo("mes_anterior")).toBe("mes");
+    expect(visaoDoPeriodo("custom")).toBe("mes");
+  });
+});
+
+describe("payloadDoSalvar", () => {
+  it("grava o período PADRÃO e a visão derivada, sem parâmetro de período da URL (R7)", () => {
+    expect(
+      payloadDoSalvar({
+        order: [...DASH_CARD_IDS],
+        hidden: ["todo"],
+        periodoPadrao: "hoje",
+      }),
+    ).toEqual({
+      order: [...DASH_CARD_IDS],
+      hidden: ["todo"],
+      period: "hoje",
+      view: "dia",
+    });
+  });
+});
+
+describe("urlDoDashboard", () => {
+  it("sem filtros → /dashboard", () => {
+    expect(urlDoDashboard({})).toBe("/dashboard");
+  });
+
+  it("preserva só o período", () => {
+    expect(urlDoDashboard({ periodo: "mes" })).toBe("/dashboard?periodo=mes");
+  });
+
+  it("preserva o período personalizado com de/ate", () => {
+    expect(urlDoDashboard({ periodo: "custom", de: "2026-01-01", ate: "2026-01-31" })).toBe(
+      "/dashboard?periodo=custom&de=2026-01-01&ate=2026-01-31",
+    );
+  });
+
+  it("ordem fixa periodo, visao, de, ate", () => {
+    expect(urlDoDashboard({ visao: "semana", periodo: "mes" })).toBe(
+      "/dashboard?periodo=mes&visao=semana",
+    );
+  });
+
+  it("ignora parâmetros vazios e codifica os valores", () => {
+    expect(urlDoDashboard({ periodo: "", visao: "mes", de: "", ate: "" })).toBe(
+      "/dashboard?visao=mes",
+    );
+    expect(urlDoDashboard({ periodo: "a b" })).toBe("/dashboard?periodo=a%20b");
   });
 });

@@ -19,8 +19,16 @@
  * ║ • Toda escrita vira uma `Operacao`, NA ORDEM em que aconteceu: é por ela que um teste ║
  * ║   prova "a recusa não gravou nada" ou "o update veio depois da limpeza".              ║
  * ║                                                                                       ║
+ * ║ • `rpc(nome, args)` REGISTRA a chamada (tipo `rpc`, `tabela` = nome da função) e      ║
+ * ║   devolve o que a opção `rpc` configurar; NÃO executa SQL nem mexe nas tabelas.       ║
+ * ║                                                                                       ║
+ * ║ • 03-G: `count` só vem quando a leitura pediu `{ count: "exact" }` (senão `null`,     ║
+ * ║   como o PostgREST); `head: true` devolve `data: null`. `falharLeitura` faz o         ║
+ * ║   `select` daquela tabela devolver `{ data: null, error }` — com a mensagem do banco ║
+ * ║   preenchida DE PROPÓSITO, para um teste provar que ela não chega à tela.            ║
+ * ║                                                                                       ║
  * ║ O QUE ELE IGNORA: `order`, `or`, colunas do `select` (devolve a linha inteira),       ║
- * ║ `count` exato além do tamanho do resultado, RLS e constraints do banco.               ║
+ * ║ RLS e constraints do banco.                                                           ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
  * Só para teste — nenhum arquivo de runtime o importa. Fixture sintética: o repositório é
@@ -38,13 +46,21 @@ export type EscritaPretendida = {
 };
 
 export type Operacao = {
+  /** Para `rpc`, o nome da função. */
   tabela: string;
-  tipo: "insert" | "update" | "delete";
+  tipo: "insert" | "update" | "delete" | "rpc";
   valores?: Linha | Linha[];
   filtros: Array<[string, string, unknown]>;
 };
 
-type Resultado = { data: unknown; error: { code: string; message: string } | null; count?: number };
+type Resultado = {
+  data: unknown;
+  error: { code: string; message: string } | null;
+  count?: number | null;
+};
+
+/** A mensagem que um teste procura na saída para provar que o texto do banco não vazou. */
+export const MENSAGEM_DO_BANCO_SIMULADA = "relation segredo_do_banco coluna_interna";
 
 function comparar(a: unknown, b: unknown): number {
   if (a == null || b == null) return Number.NaN;
@@ -72,6 +88,10 @@ export function criarSupabaseEmMemoria(
     antesDeGravar?: (op: EscritaPretendida) => ErroSimulado | null;
     /** Simula o `max_rows` do PostgREST: corta a leitura ANTES do `limit`; o `count` não muda. */
     maxRows?: number;
+    /** Resposta de `client.rpc(nome, args)`. Sem ela, a chamada devolve o erro `SEM_RPC`. */
+    rpc?: (nome: string, args: Record<string, unknown>) => { data: unknown; error: ErroSimulado | null };
+    /** 03-G — tabela → `code` do erro que o `select` dela devolve. Escritas não são afetadas. */
+    falharLeitura?: Record<string, string>;
   } = {},
 ) {
   const tabelas: Record<string, Linha[]> = Object.fromEntries(
@@ -84,8 +104,11 @@ export function criarSupabaseEmMemoria(
     let modo: "select" | "insert" | "update" | "delete" = "select";
     let devolveInseridas = false;
     let devolveAlteradas = false;
+    let devolveApagadas = false;
     let valores: Linha | Linha[] | undefined;
     let limite: number | undefined;
+    let pediuContagem = false;
+    let soCabecalho = false;
     const filtros: Array<[string, string, unknown]> = [];
     let executado: Resultado | undefined;
 
@@ -135,17 +158,31 @@ export function criarSupabaseEmMemoria(
       }
 
       if (modo === "delete") {
+        // 03-G2 (D-G2-21): `.delete().select()` devolve as linhas apagadas, como o PostgREST.
+        const apagadas = linhas.filter(casa).map((l) => ({ ...l }));
         tabelas[tabela] = linhas.filter((l) => !casa(l));
         operacoes.push({ tabela, tipo: "delete", filtros: [...filtros] });
-        executado = { data: null, error: null };
+        executado = { data: devolveApagadas ? apagadas : null, error: null };
+        return executado;
+      }
+
+      const codigo = opcoes.falharLeitura?.[tabela];
+      if (codigo) {
+        executado = {
+          data: null,
+          error: { code: codigo, message: `${MENSAGEM_DO_BANCO_SIMULADA} (${tabela})` },
+          count: null,
+        };
         return executado;
       }
 
       const todas = linhas.filter(casa).map((l) => ({ ...l }));
       executado = {
-        data: todas.slice(0, Math.min(limite ?? Infinity, opcoes.maxRows ?? Infinity)),
+        data: soCabecalho
+          ? null
+          : todas.slice(0, Math.min(limite ?? Infinity, opcoes.maxRows ?? Infinity)),
         error: null,
-        count: todas.length,
+        count: pediuContagem ? todas.length : null,
       };
       return executado;
     }
@@ -161,9 +198,12 @@ export function criarSupabaseEmMemoria(
       filtros.push(["not", coluna, [op, alvo]]);
       return builder;
     };
-    builder.select = () => {
+    builder.select = (_colunas?: string, opcoesDoSelect?: { count?: string; head?: boolean }) => {
+      if (opcoesDoSelect?.count === "exact") pediuContagem = true;
+      if (opcoesDoSelect?.head) soCabecalho = true;
       if (modo === "insert") devolveInseridas = true;
       if (modo === "update") devolveAlteradas = true;
+      if (modo === "delete") devolveApagadas = true;
       return builder;
     };
     builder.insert = (v: Linha | Linha[]) => {
@@ -188,6 +228,7 @@ export function criarSupabaseEmMemoria(
     };
     builder.single = async (): Promise<Resultado> => {
       const r = executar();
+      if (r.error) return r;
       const primeira = Array.isArray(r.data) ? (r.data[0] ?? null) : r.data;
       return primeira === null
         ? { data: null, error: { code: "PGRST116", message: "nenhuma linha" } }
@@ -195,6 +236,7 @@ export function criarSupabaseEmMemoria(
     };
     builder.maybeSingle = async (): Promise<Resultado> => {
       const r = executar();
+      if (r.error) return r;
       return { data: Array.isArray(r.data) ? (r.data[0] ?? null) : r.data, error: null };
     };
     builder.then = (
@@ -206,6 +248,13 @@ export function criarSupabaseEmMemoria(
 
   const client = {
     from,
+    rpc: async (nome: string, args: Record<string, unknown>): Promise<Resultado> => {
+      operacoes.push({ tabela: nome, tipo: "rpc", valores: args, filtros: [] });
+      if (!opcoes.rpc) {
+        return { data: null, error: { code: "SEM_RPC", message: "rpc não configurada no teste" } };
+      }
+      return opcoes.rpc(nome, args);
+    },
     auth: {
       getUser: async () => ({ data: { user: { id: opcoes.userId ?? "user-1" } }, error: null }),
     },
@@ -217,7 +266,7 @@ export function criarSupabaseEmMemoria(
     /** O estado CORRENTE das tabelas, depois das escritas. */
     tabelas,
     operacoes,
-    /** Só as escritas (insert/update/delete), na ordem — opcionalmente de uma tabela. */
+    /** Só as escritas (insert/update/delete) e as chamadas `rpc`, na ordem — opcionalmente de uma tabela (ou função). */
     escritas(tabela?: string): Operacao[] {
       return operacoes.filter((o) => tabela === undefined || o.tabela === tabela);
     },

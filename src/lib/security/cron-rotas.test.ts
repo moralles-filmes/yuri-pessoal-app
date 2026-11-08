@@ -7,7 +7,7 @@ vi.mock("@/lib/ai/server/insight-job", () => ({ runInsightJobForAllUsers: d.insi
 vi.mock("@/lib/notifications/cron", () => ({ runNotificationGeneration: d.notifications }));
 const insights = await import("@/app/api/cron/insights/route");
 const notifications = await import("@/app/api/cron/notifications/route");
-beforeEach(() => { vi.resetAllMocks(); d.confere.mockReturnValue(true); d.reconcile.mockResolvedValue({ runs: 0 }); d.insight.mockResolvedValue({ users: 1, resultados: [] }); d.notifications.mockResolvedValue({ users: 1, inserted: 0 }); });
+beforeEach(() => { vi.resetAllMocks(); d.confere.mockReturnValue(true); d.reconcile.mockResolvedValue({ runs: 0 }); d.insight.mockResolvedValue({ users: 1, resultados: [] }); d.notifications.mockResolvedValue({ users: 1, inserted: 0, results: [] }); });
 describe("autenticação e reconciliação das rotas Cron", () => {
   it.each([insights, notifications])("nega antes de executar qualquer job", async rota => {
     d.confere.mockReturnValue(false);

@@ -25,7 +25,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/empty-state";
-import { StatCard } from "@/components/shared/stat-card";
+import { Bloco } from "@/components/shared/painel/bloco";
+import { Indicador } from "@/components/shared/painel/indicador";
+import {
+  BotaoDoOlho,
+  OlhoDosValores,
+} from "@/components/shared/painel/olho-dos-valores";
+import { estadoDoBloco } from "@/lib/painel/bloco";
 import { DeleteConfirmDialog } from "@/components/financeiro/delete-confirm-dialog";
 import {
   CategoryPill,
@@ -37,6 +43,7 @@ import {
 import { InstallmentSplitDialog } from "./installment-split-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { statusEfetivo } from "@/lib/finance/invoice";
+import { agruparParcelamentos } from "@/lib/finance/parcelamentos-blocos";
 import {
   fraseDoPerdoado,
   parteDoTerceiroCentavos,
@@ -64,12 +71,31 @@ const ALL = "all";
 
 type Option = { id: string; name: string };
 
+function plural(n: number): string {
+  return n === 1 ? "1 compra" : `${n} compras`;
+}
+
 function mesAnoLabel(iso: string): string {
   const [y, m] = iso.split("-").map(Number);
   return new Intl.DateTimeFormat("pt-BR", {
     month: "long",
     year: "numeric",
   }).format(new Date(y, m - 1, 1));
+}
+
+/**
+ * Dinheiro que some com o olho dos valores: o valor real e o "R$ ••••" saem os dois no HTML e o CSS
+ * (`group-data-[ocultar=true]/olho`) escolhe qual aparece — o mesmo par do `Indicador`.
+ */
+function Valor({ children }: { children: string }) {
+  return (
+    <>
+      <span className="group-data-[ocultar=true]/olho:hidden">{children}</span>
+      <span aria-hidden="true" className="hidden group-data-[ocultar=true]/olho:inline">
+        R$ ••••
+      </span>
+    </>
+  );
 }
 
 type ParcelaView = {
@@ -209,6 +235,7 @@ export function InstallmentsClient({
   selectedCardId,
   selectedCategoryId,
   status,
+  ocultoInicial,
 }: {
   purchases: InstallmentPurchaseWithRelations[];
   cards: Option[];
@@ -218,6 +245,7 @@ export function InstallmentsClient({
   selectedCardId: string | null;
   selectedCategoryId: string | null;
   status: string | null;
+  ocultoInicial: boolean;
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = React.useState<string | null>(null);
@@ -255,6 +283,14 @@ export function InstallmentsClient({
     return { ativos, restante, pago };
   }, [items]);
 
+  const grupos = React.useMemo(
+    () => agruparParcelamentos(
+        items.map(({ p, d }) => ({ p, d, status: d.status, ultima: d.ultima })),
+        status,
+      ),
+    [items, status],
+  );
+
   async function handleCancel(parentId: string) {
     const res = await cancelInstallmentFuture(parentId);
     if (res.ok) {
@@ -276,328 +312,372 @@ export function InstallmentsClient({
     );
   }
 
-  return (
-    <div className="space-y-5">
-      {/* Resumo */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard
-          label="Parcelamentos ativos"
-          value={String(totais.ativos)}
-          icon={Layers}
-        />
-        <StatCard
-          label="Valor a pagar"
-          value={formatCurrency(totais.restante)}
-          icon={Wallet}
-          hint="Parcelas ainda não pagas"
-        />
-        <StatCard
-          label="Já pago"
-          value={formatCurrency(totais.pago)}
-          icon={CalendarClock}
-          hint="Parcelas em faturas pagas"
-        />
-      </div>
+  const BLOCOS = [
+    {
+      chave: "andamento",
+      titulo: "Em andamento",
+      itens: grupos.emAndamento,
+      subtitulo: `${plural(grupos.emAndamento.length)} · da que termina antes para a que termina depois`,
+    },
+    {
+      chave: "encerrados",
+      titulo: "Finalizados e cancelados",
+      itens: grupos.encerrados,
+      subtitulo: `${plural(grupos.encerrados.length)} · da que terminou há menos tempo para a mais antiga`,
+    },
+  ];
 
-      {/* Filtros */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label>Cartão</Label>
-          <Select
-            value={selectedCardId ?? ALL}
-            onValueChange={(v) => navigate({ card: v === ALL ? null : v })}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Todos os cartões</SelectItem>
-              {cards.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Categoria</Label>
-          {/* Filtro só de categoria (sem subcategoria): com pesquisa. Null = todas. */}
-          <CategoryPicker
-            categories={categories}
-            value={{ categoryId: selectedCategoryId, subcategoryId: null }}
-            onChange={(v) => navigate({ category: v.categoryId })}
-            placeholder="Todas"
-            noneLabel="Todas as categorias"
-            aria-label="Categoria"
+  return (
+    <OlhoDosValores ocultoInicial={ocultoInicial}>
+      <div className="space-y-5">
+        {/* Resumo */}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <Indicador
+            tom="saldo"
+            icone={Layers}
+            rotulo="Parcelamentos ativos"
+            dica="Compras parceladas com pelo menos uma parcela ainda não paga."
+            valor={{ semDinheiro: String(totais.ativos) }}
+            linhaDeBase="com parcela ainda não paga"
+          />
+          <Indicador
+            tom="saida"
+            icone={Wallet}
+            rotulo="Valor a pagar"
+            dica="Soma das parcelas ativas que ainda estão em faturas não pagas."
+            valor={formatCurrency(totais.restante)}
+            linhaDeBase="parcelas em faturas ainda não pagas"
+            acessorio={<BotaoDoOlho />}
+          />
+          <Indicador
+            tom="terceiros"
+            icone={CalendarClock}
+            rotulo="Já pago"
+            dica="Soma das parcelas ativas que estão em faturas já pagas."
+            valor={formatCurrency(totais.pago)}
+            linhaDeBase="parcelas em faturas pagas"
           />
         </div>
-        <div className="space-y-1.5">
-          <Label>Status</Label>
-          <Select
-            value={status ?? ALL}
-            onValueChange={(v) => navigate({ status: v === ALL ? null : v })}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Todos</SelectItem>
-              {INSTALLMENT_PURCHASE_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {INSTALLMENT_PURCHASE_STATUS_LABELS[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
+        {/* Filtros */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label>Cartão</Label>
+            <Select
+              value={selectedCardId ?? ALL}
+              onValueChange={(v) => navigate({ card: v === ALL ? null : v })}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todos os cartões</SelectItem>
+                {cards.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Categoria</Label>
+            {/* Filtro só de categoria (sem subcategoria): com pesquisa. Null = todas. */}
+            <CategoryPicker
+              categories={categories}
+              value={{ categoryId: selectedCategoryId, subcategoryId: null }}
+              onChange={(v) => navigate({ category: v.categoryId })}
+              placeholder="Todas"
+              noneLabel="Todas as categorias"
+              aria-label="Categoria"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Status</Label>
+            <Select
+              value={status ?? ALL}
+              onValueChange={(v) => navigate({ status: v === ALL ? null : v })}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todos</SelectItem>
+                {INSTALLMENT_PURCHASE_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {INSTALLMENT_PURCHASE_STATUS_LABELS[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-      </div>
 
-      {/* Lista */}
-      {items.length === 0 ? (
-        <EmptyState
-          icon={Layers}
-          title="Nenhum parcelamento"
-          description="Lance uma compra no cartão marcando “Essa compra é parcelada?” para distribuí-la nas faturas."
-        />
-      ) : (
-        <div className="grid gap-3">
-          {items.map(({ p, d }) => {
-            const isOpen = expanded === p.id;
-            const total = p.valor_total ?? p.amount;
-            return (
-              <Card key={p.id} className="overflow-hidden">
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">
-                          {p.description || "Compra parcelada"}
-                        </span>
-                        <InstallmentPurchaseStatusBadge status={d.status} />
-                        {p.classificacao !== "pessoal" && (
-                          <ClassificacaoBadge value={p.classificacao} />
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        {p.card && (
-                          <span className="inline-flex items-center gap-1">
-                            <CreditCard className="size-3" />
-                            {p.card.nome}
-                          </span>
-                        )}
-                        {p.category && (
-                          <CategoryPill
-                            name={p.category.name}
-                            color={p.category.color}
-                          />
-                        )}
-                        {d.primeira && d.ultima && (
-                          <span>
-                            {mesAnoLabel(d.primeira)} → {mesAnoLabel(d.ultima)}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {p.qtd_parcelas}x · {d.pagasCount} paga(s) ·{" "}
-                        {d.aPagarCount} a pagar
-                        {d.canceladasCount > 0 &&
-                          ` · ${d.canceladasCount} cancelada(s)`}
-                      </p>
-                      {d.terceiros.length > 0 && (
-                        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          <span>
-                            meu{" "}
-                            <span className="font-medium text-foreground tabular-nums">
-                              {formatCurrency(d.meu)}
-                            </span>
-                          </span>
-                          {d.terceiros.map((t) => (
-                            <span key={t.personId} className="min-w-0">
-                              <span className="truncate">{t.nome}</span>{" "}
-                              <span className="font-medium text-foreground tabular-nums">
-                                {formatCurrency(t.valor)}
-                              </span>
-                              {t.perdoado > 0 && (
-                                <span> · não será cobrado {formatCurrency(t.perdoado)}</span>
-                              )}
-                            </span>
-                          ))}
-                          {d.perdoado > 0 && <span>{fraseDoPerdoado(d.perdoado)}</span>}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
-                      <div className="text-right">
-                        <p className="text-base font-semibold tabular-nums">
-                          {formatCurrency(total)}
-                        </p>
-                        <p className="text-xs text-muted-foreground tabular-nums">
-                          Restam {formatCurrency(d.valorRestante)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {d.ativasCount > 0 && (
-                          <InstallmentSplitDialog
-                            parentId={p.id}
-                            descricao={p.description ?? ""}
-                            classificacao={p.classificacao}
-                            totalAtivoReais={d.totalAtivo}
-                            valorTotalReais={total}
-                            qtdParcelasAtivas={d.ativasCount}
-                            people={people}
-                            trigger={
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label="Dividir com terceiros"
-                                className={
-                                  d.terceiros.length > 0
-                                    ? "text-primary"
-                                    : "text-muted-foreground hover:text-primary"
-                                }
-                              >
-                                <Users />
-                              </Button>
-                            }
-                          />
-                        )}
-                        {d.status === "ativo" && d.podeCancelar && (
-                          <DeleteConfirmDialog
-                            title="Cancelar parcelas futuras"
-                            description="As parcelas ainda em faturas abertas serão canceladas. Parcelas já pagas ou em faturas fechadas não são afetadas."
-                            confirmLabel="Cancelar futuras"
-                            loadingLabel="Cancelando…"
-                            successMessage="Parcelas futuras canceladas."
-                            onConfirm={() => handleCancel(p.id)}
-                            trigger={
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label="Cancelar parcelas futuras"
-                                className="text-muted-foreground hover:text-amber-600"
-                              >
-                                <Ban />
-                              </Button>
-                            }
-                          />
-                        )}
-                        <DeleteConfirmDialog
-                          title="Excluir parcelamento"
-                          description="Exclui a compra parcelada e todas as parcelas, inclusive as já lançadas em faturas. Esta ação não pode ser desfeita."
-                          successMessage="Parcelamento excluído."
-                          onConfirm={async () => {
-                            const res = await deleteInstallmentPurchase(p.id);
-                            if (res.ok) router.refresh();
-                            return res;
-                          }}
-                          trigger={
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Excluir parcelamento"
-                              className="text-muted-foreground hover:text-destructive"
-                            >
-                              <Trash2 />
-                            </Button>
-                          }
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={isOpen ? "Recolher" : "Ver parcelas"}
-                          onClick={() => setExpanded(isOpen ? null : p.id)}
-                        >
-                          {isOpen ? <ChevronUp /> : <ChevronDown />}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {isOpen && (
-                    <div className="space-y-2 border-t pt-3">
-                      {d.parcelas.map((pv) => {
-                        const comp =
-                          pv.inst.statement?.competencia ??
-                          pv.inst.data_competencia;
-                        const partes =
-                          d.terceirosPorParcela.get(pv.inst.id) ?? [];
-                        return (
-                          <div
-                            key={pv.inst.id}
-                            className="flex flex-col gap-1 rounded-lg bg-muted/40 px-3 py-2"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <InstallmentBadge
-                                  numero={pv.inst.numero}
-                                  total={pv.inst.total_parcelas}
-                                />
-                                <div className="min-w-0 text-xs text-muted-foreground">
-                                  {comp && (
-                                    <span className="capitalize">
-                                      {mesAnoLabel(comp)}
+        {/* Lista */}
+        {items.length === 0 ? (
+          <EmptyState
+            icon={Layers}
+            title="Nenhum parcelamento"
+            description="Lance uma compra no cartão marcando “Essa compra é parcelada?” para distribuí-la nas faturas."
+          />
+        ) : (
+          <div className="space-y-4">
+            {BLOCOS.map(({ chave, titulo, itens, subtitulo }) =>
+              itens.length === 0 ? null : (
+                <Bloco
+                  key={chave}
+                  titulo={titulo}
+                  subtitulo={subtitulo}
+                  estado={estadoDoBloco({ ok: true, itens })}
+                >
+                  <div className="grid gap-3">
+                    {itens.map(({ p, d }) => {
+                      const isOpen = expanded === p.id;
+                      const total = p.valor_total ?? p.amount;
+                      return (
+                        <Card key={p.id} className="overflow-hidden">
+                          <CardContent className="space-y-3 p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0 space-y-1.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-medium">
+                                    {p.description || "Compra parcelada"}
+                                  </span>
+                                  <InstallmentPurchaseStatusBadge status={d.status} />
+                                  {p.classificacao !== "pessoal" && (
+                                    <ClassificacaoBadge value={p.classificacao} />
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                  {p.card && (
+                                    <span className="inline-flex items-center gap-1">
+                                      <CreditCard className="size-3" />
+                                      {p.card.nome}
                                     </span>
                                   )}
-                                  {pv.inst.statement && (
+                                  {p.category && (
+                                    <CategoryPill
+                                      name={p.category.name}
+                                      color={p.category.color}
+                                    />
+                                  )}
+                                  {d.primeira && d.ultima && (
                                     <span>
-                                      {" "}
-                                      · vence{" "}
-                                      {formatDate(
-                                        pv.inst.statement.data_vencimento,
-                                      )}
+                                      {mesAnoLabel(d.primeira)} → {mesAnoLabel(d.ultima)}
                                     </span>
                                   )}
                                 </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {p.qtd_parcelas}x · {d.pagasCount} paga(s) ·{" "}
+                                  {d.aPagarCount} a pagar
+                                  {d.canceladasCount > 0 &&
+                                    ` · ${d.canceladasCount} cancelada(s)`}
+                                </p>
+                                {d.terceiros.length > 0 && (
+                                  <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                    <span>
+                                      meu{" "}
+                                      <span className="font-medium text-foreground tabular-nums">
+                                        <Valor>{formatCurrency(d.meu)}</Valor>
+                                      </span>
+                                    </span>
+                                    {d.terceiros.map((t) => (
+                                      <span key={t.personId} className="min-w-0">
+                                        <span className="truncate">{t.nome}</span>{" "}
+                                        <span className="font-medium text-foreground tabular-nums">
+                                          <Valor>{formatCurrency(t.valor)}</Valor>
+                                        </span>
+                                        {t.perdoado > 0 && (
+                                          <span> · não será cobrado <Valor>{formatCurrency(t.perdoado)}</Valor></span>
+                                        )}
+                                      </span>
+                                    ))}
+                                    {d.perdoado > 0 && (
+                                      <span>
+                                        <Valor>{fraseDoPerdoado(d.perdoado) ?? ""}</Valor>
+                                      </span>
+                                    )}
+                                  </p>
+                                )}
                               </div>
-                              <div className="flex shrink-0 items-center gap-2">
-                                <InstallmentStatusBadge
-                                  status={pv.statusParcela}
-                                />
-                                <span className="text-sm font-medium tabular-nums">
-                                  {formatCurrency(pv.inst.valor)}
-                                </span>
+
+                              <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
+                                <div className="text-right">
+                                  <p className="text-base font-semibold tabular-nums">
+                                    <Valor>{formatCurrency(total)}</Valor>
+                                  </p>
+                                  <p className="text-xs text-muted-foreground tabular-nums">
+                                    Restam <Valor>{formatCurrency(d.valorRestante)}</Valor>
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {d.ativasCount > 0 && (
+                                    <InstallmentSplitDialog
+                                      parentId={p.id}
+                                      descricao={p.description ?? ""}
+                                      classificacao={p.classificacao}
+                                      totalAtivoReais={d.totalAtivo}
+                                      valorTotalReais={total}
+                                      qtdParcelasAtivas={d.ativasCount}
+                                      people={people}
+                                      trigger={
+                                        <Button
+                                          variant="ghost"
+                                          size="icon-sm"
+                                          aria-label="Dividir com terceiros"
+                                          className={
+                                            d.terceiros.length > 0
+                                              ? "text-primary"
+                                              : "text-muted-foreground hover:text-primary"
+                                          }
+                                        >
+                                          <Users />
+                                        </Button>
+                                      }
+                                    />
+                                  )}
+                                  {d.status === "ativo" && d.podeCancelar && (
+                                    <DeleteConfirmDialog
+                                      title="Cancelar parcelas futuras"
+                                      description="As parcelas ainda em faturas abertas serão canceladas. Parcelas já pagas ou em faturas fechadas não são afetadas."
+                                      confirmLabel="Cancelar futuras"
+                                      loadingLabel="Cancelando…"
+                                      successMessage="Parcelas futuras canceladas."
+                                      onConfirm={() => handleCancel(p.id)}
+                                      trigger={
+                                        <Button
+                                          variant="ghost"
+                                          size="icon-sm"
+                                          aria-label="Cancelar parcelas futuras"
+                                          className="text-muted-foreground hover:text-amber-600"
+                                        >
+                                          <Ban />
+                                        </Button>
+                                      }
+                                    />
+                                  )}
+                                  <DeleteConfirmDialog
+                                    title="Excluir parcelamento"
+                                    description="Exclui a compra parcelada e todas as parcelas, inclusive as já lançadas em faturas. Esta ação não pode ser desfeita."
+                                    successMessage="Parcelamento excluído."
+                                    onConfirm={async () => {
+                                      const res = await deleteInstallmentPurchase(p.id);
+                                      if (res.ok) router.refresh();
+                                      return res;
+                                    }}
+                                    trigger={
+                                      <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label="Excluir parcelamento"
+                                        className="text-muted-foreground hover:text-destructive"
+                                      >
+                                        <Trash2 />
+                                      </Button>
+                                    }
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label={isOpen ? "Recolher" : "Ver parcelas"}
+                                    onClick={() => setExpanded(isOpen ? null : p.id)}
+                                  >
+                                    {isOpen ? <ChevronUp /> : <ChevronDown />}
+                                  </Button>
+                                </div>
                               </div>
                             </div>
-                            {partes.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-1 text-[11px] text-muted-foreground">
-                                <span>
-                                  meu{" "}
-                                  <span className="font-medium tabular-nums text-foreground">
-                                    {formatCurrency(
-                                      pv.inst.valor -
-                                        partes.reduce(
-                                          (acc, t) => acc + t.valor,
-                                          0,
-                                        ),
-                                    )}
-                                  </span>
-                                </span>
-                                {partes.map((t) => (
-                                  <span key={t.personId} className="min-w-0">
-                                    <span className="truncate">{t.nome}</span>{" "}
-                                    <span className="font-medium tabular-nums text-foreground">
-                                      {formatCurrency(t.valor)}
-                                    </span>
-                                    {t.perdoado > 0 && (
-                                      <span> · não será cobrado {formatCurrency(t.perdoado)}</span>
-                                    )}
-                                  </span>
-                                ))}
+
+                            {isOpen && (
+                              <div className="space-y-2 border-t pt-3">
+                                {d.parcelas.map((pv) => {
+                                  const comp =
+                                    pv.inst.statement?.competencia ??
+                                    pv.inst.data_competencia;
+                                  const partes =
+                                    d.terceirosPorParcela.get(pv.inst.id) ?? [];
+                                  return (
+                                    <div
+                                      key={pv.inst.id}
+                                      className="flex flex-col gap-1 rounded-lg bg-muted/40 px-3 py-2"
+                                    >
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                          <InstallmentBadge
+                                            numero={pv.inst.numero}
+                                            total={pv.inst.total_parcelas}
+                                          />
+                                          <div className="min-w-0 text-xs text-muted-foreground">
+                                            {comp && (
+                                              <span className="capitalize">
+                                                {mesAnoLabel(comp)}
+                                              </span>
+                                            )}
+                                            {pv.inst.statement && (
+                                              <span>
+                                                {" "}
+                                                · vence{" "}
+                                                {formatDate(
+                                                  pv.inst.statement.data_vencimento,
+                                                )}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="flex shrink-0 items-center gap-2">
+                                          <InstallmentStatusBadge
+                                            status={pv.statusParcela}
+                                          />
+                                          <span className="text-sm font-medium tabular-nums">
+                                            <Valor>{formatCurrency(pv.inst.valor)}</Valor>
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {partes.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-1 text-[11px] text-muted-foreground">
+                                          <span>
+                                            meu{" "}
+                                            <span className="font-medium tabular-nums text-foreground">
+                                              <Valor>
+                                                {formatCurrency(
+                                                  pv.inst.valor -
+                                                    partes.reduce(
+                                                      (acc, t) => acc + t.valor,
+                                                      0,
+                                                    ),
+                                                )}
+                                              </Valor>
+                                            </span>
+                                          </span>
+                                          {partes.map((t) => (
+                                            <span key={t.personId} className="min-w-0">
+                                              <span className="truncate">{t.nome}</span>{" "}
+                                              <span className="font-medium tabular-nums text-foreground">
+                                                <Valor>{formatCurrency(t.valor)}</Valor>
+                                              </span>
+                                              {t.perdoado > 0 && (
+                                                <span> · não será cobrado <Valor>{formatCurrency(t.perdoado)}</Valor></span>
+                                              )}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </Bloco>
+              ),
+            )}
+          </div>
+        )}
+      </div>
+    </OlhoDosValores>
   );
 }

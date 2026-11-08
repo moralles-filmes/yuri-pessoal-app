@@ -3,16 +3,51 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { incrementHabit, setHabitDone } from "@/lib/actions/habits";
+import { setHabitDone } from "@/lib/actions/habits";
 import { formatAmount, formatHabitValue } from "@/lib/habits/constants";
-import { Metric, CardEmpty } from "./primitives";
+import { Quadro, CardEmpty } from "./primitives";
 import type { HabitsCardData } from "@/lib/dashboard/types";
 
-/** Corpo interativo do card Hábitos — check-in rápido (concluir / +copo) + streak. */
+/** Raio do anel de progresso (viewBox 0..64, traço 6). */
+const RAIO = 26;
+const CIRCUNFERENCIA = 2 * Math.PI * RAIO;
+
+/** Anel SVG inline (sem biblioteca): fundo `muted`, progresso `primary`, começa às 12h. */
+function AnelDoDia({ feitos, agendados }: { feitos: number; agendados: number }) {
+  const fracao = agendados > 0 ? Math.min(1, Math.max(0, feitos / agendados)) : 0;
+  return (
+    <div className="flex shrink-0 items-center gap-3">
+      <div className="relative size-16">
+        <svg viewBox="0 0 64 64" className="size-16" aria-hidden="true">
+          <circle cx="32" cy="32" r={RAIO} fill="none" strokeWidth="6" stroke="var(--muted)" />
+          <circle
+            cx="32"
+            cy="32"
+            r={RAIO}
+            fill="none"
+            strokeWidth="6"
+            strokeLinecap="round"
+            stroke="var(--primary)"
+            strokeDasharray={`${CIRCUNFERENCIA * fracao} ${CIRCUNFERENCIA}`}
+            style={{ transform: "rotate(-90deg)", transformOrigin: "center" }}
+          />
+        </svg>
+        {agendados > 0 && (
+          <span className="absolute inset-0 grid place-items-center text-sm font-semibold tabular-nums">
+            {feitos}/{agendados}
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {agendados > 0 ? "concluídos hoje" : "sem hábitos para hoje"}
+      </p>
+    </div>
+  );
+}
+
+/** Corpo interativo do card Hábitos — anel do dia, sequência e check-in da lista (a água só lê). */
 export function HabitsCardBody({
   data,
   todayIso,
@@ -44,39 +79,23 @@ export function HabitsCardBody({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <Metric
-          label="Concluídos hoje"
-          value={`${data.doneToday}/${data.scheduledToday}`}
-          accent={data.scheduledToday > 0 && data.doneToday === data.scheduledToday}
-        />
-        <Metric
-          label="Sequência"
-          value={`${data.topStreak} 🔥`}
-          hint={`${Math.round(data.periodRate * 100)}% ${periodLabel}`}
-        />
+      <div className="flex items-center justify-between gap-3">
+        <AnelDoDia feitos={data.doneToday} agendados={data.scheduledToday} />
+        <div className="min-w-0 flex-1">
+          <Quadro
+            valor={`${data.topStreak} dias 🔥`}
+            rotulo={`${Math.round(data.periodRate * 100)}% ${periodLabel}`}
+          />
+        </div>
       </div>
 
       {data.water && (
-        <div className="rounded-lg border bg-card/40 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium">💧 {data.water.name}</span>
-            <span className="text-sm tabular-nums">
-              {formatAmount(data.water.value)} /{" "}
-              {formatHabitValue(data.water.target, data.water.unit)}
-            </span>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-2"
-            disabled={busy}
-            onClick={() =>
-              run(incrementHabit(data.water!.id, todayIso, data.water!.step))
-            }
-          >
-            <Plus /> {formatHabitValue(data.water.step, data.water.unit)}
-          </Button>
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="min-w-0 truncate text-muted-foreground">💧 {data.water.name}</span>
+          <span className="shrink-0 font-medium tabular-nums">
+            {formatAmount(data.water.value)} /{" "}
+            {formatHabitValue(data.water.target, data.water.unit)}
+          </span>
         </div>
       )}
 

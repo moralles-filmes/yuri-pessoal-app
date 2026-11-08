@@ -17,6 +17,7 @@ import {
   DASH_VIEW_LABELS,
   DASH_VIEWS,
   VIEW_TO_PERIOD,
+  visaoDoPeriodo,
   windowLabel,
   type DashPeriod,
   type DashView,
@@ -70,8 +71,7 @@ export function PeriodToolbar({
       push({ period: "custom" });
       return;
     }
-    const v: DashView = p === "semana" ? "semana" : p === "hoje" ? "dia" : "mes";
-    push({ period: p, view: v });
+    push({ period: p, view: visaoDoPeriodo(p) });
   }
 
   function selectView(v: DashView) {
@@ -122,11 +122,16 @@ export function PeriodToolbar({
       )}
 
       {/* Alternância de visão dia/semana/mês */}
-      <div className="inline-flex items-center rounded-lg border border-input p-0.5">
+      <div
+        role="group"
+        aria-label="Visão"
+        className="inline-flex items-center rounded-lg border border-input p-0.5"
+      >
         {DASH_VIEWS.map((v) => (
           <button
             key={v}
             type="button"
+            aria-pressed={window.view === v}
             onClick={() => selectView(v)}
             className={cn(
               "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",

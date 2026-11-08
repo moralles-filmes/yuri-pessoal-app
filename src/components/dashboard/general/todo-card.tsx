@@ -13,7 +13,7 @@ import { getTodoProjects, getTodoTasks, summarizeTodo } from "@/lib/todo/queries
 import { addDaysIso, weekdayOf } from "@/lib/todo/recurrence";
 import { effectiveStatus, isDueToday, isOverdue, isUpcoming } from "@/lib/todo/status";
 import { TODO_PRIORITY_SHORT } from "@/lib/todo/constants";
-import { Metric, CardEmpty } from "./primitives";
+import { Quadro, CardEmpty } from "./primitives";
 
 export async function TodoCard({ todayIso }: { todayIso: string }) {
   const today = todayIso || hojeISO();
@@ -36,19 +36,11 @@ export async function TodoCard({ todayIso }: { todayIso: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-2">
-        <Metric label="Hoje" value={String(summary.dueToday)} />
-        <Metric label="Atrasadas" value={String(summary.overdue)} accent={summary.overdue > 0} />
-        <Metric label="Urgentes (P1)" value={String(summary.p1)} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <Metric label="Concluídas hoje" value={String(summary.completedToday)} />
-        <Metric
-          label="Conclusão na semana"
-          value={`${summary.weeklyCompletionRate}%`}
-          hint={`${summary.pending} pendente(s) no total`}
-        />
+      <div className="grid grid-cols-2 gap-2 @[26rem]:grid-cols-4">
+        <Quadro valor={String(summary.dueToday)} rotulo="Hoje" />
+        <Quadro valor={String(summary.overdue)} rotulo="Atrasadas" />
+        <Quadro valor={String(summary.p1)} rotulo="Urgentes (P1)" tom="vermelho" />
+        <Quadro valor={String(summary.completedToday)} rotulo="Concluídas hoje" tom="verde" />
       </div>
 
       <div className="space-y-1.5">
@@ -87,13 +79,6 @@ export async function TodoCard({ todayIso }: { todayIso: string }) {
           })
         )}
       </div>
-
-      {summary.activeProjects > 0 && (
-        <p className="border-t pt-3 text-xs text-muted-foreground">
-          {summary.activeProjects} projeto(s) ativo(s) · {summary.thisWeek} tarefa(s) nesta
-          semana
-        </p>
-      )}
     </div>
   );
 }

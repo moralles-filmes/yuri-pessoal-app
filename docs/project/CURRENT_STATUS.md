@@ -93,6 +93,41 @@ PR, merge ou deploy nesta entrega. Resultados completos no “Resultado do teste
 > memória, 18-F Bloco 2 · botão flutuante, 18-F Bloco 1 + auditoria de performance + iteração:
 > transferência na importação de extrato).
 
+## 🟢 Tarefa avulsa · Treinos: trocar o treino do dia (2026-11-07)
+
+Relato do dono: planejou Peito na segunda, quis fazer Costas e teve de **apagar o dia** do
+calendário (visto no banco em 27/10). Não havia bloqueio: faltava o caminho. Iniciar outro treino
+deixava a sessão solta, e o dia planejado virava "Atrasado".
+
+- `/treinos/sessao/preparar` ganhou **"Fazer outro treino no lugar"** (e `/treinos/hoje`, o botão
+  **Trocar** → `?planejado=<id>&trocar=1`). Com a troca ativa, qualquer origem (cadastrado,
+  favorito, livre, repetir, duplicar) leva `scheduled_workout_id`; ao finalizar, o dia fica
+  `concluido` pelo caminho de sempre.
+- **A troca é DERIVADA, sem migration:** o planejamento continua dizendo o treino original;
+  `getScheduledWorkouts` lê a sessão concluída ligada ao dia (`performed`) e `trocaDoDia`
+  (`schedule.ts`, puro e testado) compara. O calendário mostra "Costas · no lugar de Peito".
+- Fora do escopo: o evento do Google Agenda mantém o nome do treino planejado.
+
+## 🟢 Redesign financeiro (REDESIGN-00 a 08) — fechado em 2026-11-07, à espera do merge do PR #65
+
+O financeiro (Painel `/dashboard/financeiro`, `/relatorios`, `/faturas`, `/cartoes` e subpáginas,
+`/parcelamentos`, `/terceiros`, `/dashboard`) foi refeito em fases. **00 a 03-G já estão em `main`**
+(PRs #56–#64); **03-G2 a 08 estão integradas localmente em `feat/redesign-00-auditoria`** e vão a
+`main` pelo **PR único #65** (D67), num merge só, quando o dono pedir. Fonte de verdade:
+`docs/redesign/STATUS.md`; texto do PR: `docs/redesign/PR-65.md`; reversão: `docs/redesign/REVERSAO.md`.
+
+O que muda para quem chega depois:
+- **Banco:** quatro migrations do PR #65 já aplicadas (`salvar_lancamento_atomico` e as três do
+  reembolso da 04-C). O merge não aplica nada. Os triggers de realocação da 04-C ficam ativos mesmo
+  se o código for revertido (ver `REVERSAO.md` §4).
+- **Peças comuns do painel** em `src/components/shared/painel/` (indicador, olho dos valores,
+  gaveta de registros por `?detalhe=`, bloco, tabela oculta dos gráficos). Ausência nunca é zero:
+  mês além da janela lida diz "fora do período lido"; fatura prevista diz "sem lançamentos
+  conhecidos".
+- **Reembolso vinculado é a receita** (04-C): ver a regra no `CLAUDE.md`.
+- A 08 conferiu regressão, larguras, contraste e bundle e corrigiu 9 itens; o que ficou para depois
+  está no §13 de `docs/superpowers/specs/2026-11-06-08-regressao-e-entrega-design.md`.
+
 ## 🟡 Tarefa avulsa · gráficos financeiros "meus" seguindo a base (2026-10-18)
 
 Branch `feat/graficos-meus-e-base` (a partir de `feat/redesign-03e-caixa`, porque usa o código de

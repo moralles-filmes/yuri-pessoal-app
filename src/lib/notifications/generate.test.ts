@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  VOCABULARIO_DE_COBRANCA,
+  VOCABULARIO_DE_PRESCRICAO,
+  termosProibidosEm,
+} from "@/lib/tone/vocabulary";
+import { formatCurrency } from "@/lib/format";
+import { isOptInNotification } from "./constants";
+import { DEPENDE_DE, type Familia } from "./familias";
+import {
+  filterByPrefs,
   generateNotifications,
   selectNewCandidates,
   type GenerateInput,
@@ -368,6 +377,17 @@ describe("generateNotifications — gasto alto", () => {
     );
     expect(out).toHaveLength(0);
   });
+
+  it("K3 (04-A) — com ateODia o texto diz o corte e que o cartão fica de fora", () => {
+    const out = generateNotifications(
+      base({ spending: { mes: "2026-06", saidas: 1300, mediaSaidas: 1000, ateODia: 10 } }),
+    );
+    const n = out.find((c) => c.type === "high_spending");
+    expect(n?.description).toBe(
+      `As saídas à vista do mês até o dia 10 superam a média recente até o mesmo dia em 30% (${formatCurrency(1300)}). O cartão fica de fora desta conta.`,
+    );
+    expect(n?.dedupe_key).toBe("high_spending:2026-06");
+  });
 });
 
 describe("selectNewCandidates — idempotência por dedupe_key", () => {
@@ -442,5 +462,47 @@ describe("Fase 18-F — IA entra pelo mesmo gerador", () => {
 
   it("ai ausente não gera nada e não quebra", () => {
     expect(() => generateNotifications(base())).not.toThrow();
+  });
+});
+
+describe("03-G L7 · verificação incompleta (K1b, Z10)", () => {
+  const naoLidas = { familias: ["faturas", "contasFixas"] as const, janela: "manha" as const, hora: "09h" };
+
+  it("sem família não lida, nenhum aviso de sistema", () => {
+    expect(typesOf(generateNotifications(base()))).toEqual([]);
+    expect(
+      typesOf(generateNotifications(base({ naoLidas: { ...naoLidas, familias: [] } }))),
+    ).toEqual([]);
+  });
+
+  it("com famílias não lidas, UM aviso low, com link e dedupe por dia + janela", () => {
+    const out = generateNotifications(base({ naoLidas: { ...naoLidas, familias: [...naoLidas.familias] } }));
+    expect(out).toEqual([
+      {
+        type: "sistema_verificacao_incompleta",
+        priority: "low",
+        title: "Verificação incompleta",
+        description:
+          "Na verificação de hoje às 09h não foi possível ler: faturas, contas fixas. Os avisos delas podem estar faltando.",
+        link: "/notificacoes",
+        entity_type: null,
+        entity_id: null,
+        dedupe_key: `sistema_verificacao_incompleta:${TODAY}:manha`,
+      },
+    ]);
+  });
+
+  it("Z10 — não é opt-in: passa pelo filtro de preferências sem configuração nenhuma", () => {
+    const out = generateNotifications(base({ naoLidas: { ...naoLidas, familias: [...naoLidas.familias] } }));
+    expect(filterByPrefs(out, {})).toHaveLength(1);
+    expect(isOptInNotification("sistema_verificacao_incompleta")).toBe(false);
+  });
+
+  it("informa, não cobra: sem vocabulário proibido, com TODAS as famílias no texto", () => {
+    const todas = Object.keys(DEPENDE_DE) as Familia[];
+    const [aviso] = generateNotifications(base({ naoLidas: { ...naoLidas, familias: todas } }));
+    const texto = `${aviso.title} ${aviso.description ?? ""}`;
+    expect(termosProibidosEm(texto, VOCABULARIO_DE_COBRANCA)).toEqual([]);
+    expect(termosProibidosEm(texto, VOCABULARIO_DE_PRESCRICAO)).toEqual([]);
   });
 });

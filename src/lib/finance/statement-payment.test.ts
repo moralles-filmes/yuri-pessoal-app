@@ -1,8 +1,17 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  MSG_FATURA_JA_PAGA,
+  MSG_PAGAMENTO_INCERTO,
+  argumentosDoPagamento,
   descricaoPagamentoFatura,
+  desfechoDoPagamento,
+  mensagemDoErroDoPagamento,
   montarPagamentoFatura,
+  pagoEmTimestamp,
 } from "@/lib/finance/statement-payment";
+import { dateInSaoPaulo } from "@/lib/format";
 
 describe("montarPagamentoFatura", () => {
   const base = {
@@ -54,5 +63,119 @@ describe("montarPagamentoFatura", () => {
     expect(desc).toContain("Pagamento fatura");
     expect(desc).toContain("Nubank");
     expect(desc).toContain("2026");
+  });
+});
+
+describe("pagoEmTimestamp", () => {
+  it("grava meio-dia UTC da data escolhida", () => {
+    expect(pagoEmTimestamp("2031-01-10")).toBe("2031-01-10T12:00:00Z");
+  });
+
+  it("cai no mesmo dia do calendário em São Paulo", () => {
+    expect(dateInSaoPaulo(new Date(pagoEmTimestamp("2031-01-10")))).toBe("2031-01-10");
+  });
+});
+
+describe("argumentosDoPagamento", () => {
+  it("entrega à RPC o MESMO lançamento recebido e o instante do pagamento", () => {
+    const lancamento = montarPagamentoFatura({
+      contaId: "11111111-1111-1111-1111-111111111111",
+      total: 100,
+      cartaoNome: "Cartão Sintético",
+      competencia: "2031-01-01",
+      dataPagamento: "2031-01-10",
+    });
+    const args = argumentosDoPagamento({
+      statementId: "22222222-2222-2222-2222-222222222222",
+      dataPagamento: "2031-01-10",
+      lancamento,
+    });
+    expect(args.p_lancamento).toBe(lancamento);
+    expect(args.p_pago_em).toBe("2031-01-10T12:00:00Z");
+    expect(args.p_statement_id).toBe("22222222-2222-2222-2222-222222222222");
+  });
+});
+
+describe("mensagemDoErroDoPagamento", () => {
+  it("traduz os quatro códigos da RPC", () => {
+    expect(mensagemDoErroDoPagamento({ message: "FATURA_JA_PAGA" })).toBe(
+      "Esta fatura já está paga.",
+    );
+    expect(mensagemDoErroDoPagamento({ message: "FATURA_NAO_ENCONTRADA" })).toBe(
+      "Fatura não encontrada.",
+    );
+    expect(mensagemDoErroDoPagamento({ message: "FATURA_SEM_SESSAO" })).toBe(
+      "Sessão expirada. Faça login novamente.",
+    );
+    expect(mensagemDoErroDoPagamento({ message: "FATURA_PAGAMENTO_INVALIDO" })).toBe(
+      "Não foi possível registrar o pagamento.",
+    );
+  });
+
+  const incerto =
+    "Não foi possível confirmar o pagamento. Recarregue a página para ver se ele foi registrado.";
+
+  it("erro desconhecido não afirma que o pagamento falhou", () => {
+    expect(mensagemDoErroDoPagamento({ message: "fetch failed" })).toBe(incerto);
+  });
+
+  it("não casa por substring", () => {
+    expect(mensagemDoErroDoPagamento({ message: "xFATURA_JA_PAGA" })).toBe(incerto);
+  });
+
+  it("aceita erro nulo", () => {
+    expect(mensagemDoErroDoPagamento(null)).toBe(incerto);
+  });
+});
+
+describe("desfechoDoPagamento", () => {
+  it("ok → pago", () => {
+    expect(desfechoDoPagamento({ ok: true, data: undefined })).toEqual({ tipo: "pago" });
+  });
+
+  it("fatura já paga → ja-paga (converge, não é erro para a tela)", () => {
+    expect(desfechoDoPagamento({ ok: false, error: MSG_FATURA_JA_PAGA })).toEqual({
+      tipo: "ja-paga",
+    });
+  });
+
+  it("pagamento incerto → incerto", () => {
+    expect(desfechoDoPagamento({ ok: false, error: MSG_PAGAMENTO_INCERTO })).toEqual({
+      tipo: "incerto",
+    });
+  });
+
+  it("exceção no cliente → incerto (pode ter sido gravado antes da resposta se perder)", () => {
+    expect(desfechoDoPagamento({ excecao: true })).toEqual({ tipo: "incerto" });
+  });
+
+  it("erro de data → data, com a mensagem do campo", () => {
+    expect(
+      desfechoDoPagamento({
+        ok: false,
+        error: "x",
+        fieldErrors: { dataPagamento: ["futura"] },
+      }),
+    ).toEqual({ tipo: "data", mensagem: "futura" });
+  });
+
+  it("qualquer outro erro → recusado, com a mensagem recebida", () => {
+    expect(desfechoDoPagamento({ ok: false, error: "Conta não encontrada." })).toEqual({
+      tipo: "recusado",
+      mensagem: "Conta não encontrada.",
+    });
+  });
+});
+
+describe("src/lib/actions/statements.ts", () => {
+  it("usa MSG_FATURA_JA_PAGA no caminho rápido e não repete o literal", () => {
+    const fonte = readFileSync(
+      join(process.cwd(), "src/lib/actions/statements.ts"),
+      "utf8",
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(fonte).toContain("MSG_FATURA_JA_PAGA");
+    expect(fonte).not.toContain('"Esta fatura já está paga."');
   });
 });

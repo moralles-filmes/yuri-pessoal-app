@@ -9,6 +9,7 @@ import {
   type TransactionFilters,
 } from "@/lib/finance/queries";
 import { sugereTerceiros } from "@/lib/finance/marcacao-da-categoria";
+import { AvisoDeTeto } from "@/components/shared/aviso-de-teto";
 import { TransactionsClient } from "./transactions-client";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export default async function LancamentosPage({
     categoriasMarcadas: filtroDeTerceirosLigado,
   };
 
-  const [transactions, accounts, categories, subcategories, cards, people] =
+  const [leituraTx, accounts, categories, subcategories, cards, people] =
     await Promise.all([
       getTransactions(filters),
       getAccounts(),
@@ -44,6 +45,7 @@ export default async function LancamentosPage({
       getCreditCards(),
       getPeopleForSelect(),
     ]);
+  const transactions = leituraTx.linhas;
 
   const categoriasMarcadas = categories.filter((c) => sugereTerceiros(c.classificacao_padrao)).length;
 
@@ -55,31 +57,35 @@ export default async function LancamentosPage({
     dias: transactions.map((t) => t.competence_date),
   });
 
+  // Lista pura: o teto de 500 vira aviso, não erro (K2, D-G5).
   return (
-    <TransactionsClient
-      transactions={transactions}
-      filtroDeTerceiros={{ ligado: filtroDeTerceirosLigado, categoriasMarcadas }}
-      dailyBalances={dailyBalances}
-      balanceScope={filters.accountId ? "conta" : "todas"}
-      accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
-      categories={categories.map((c) => ({
-        id: c.id,
-        name: c.name,
-        kind: c.kind,
-        classificacao_padrao: c.classificacao_padrao,
-      }))}
-      subcategories={subcategories.map((s) => ({
-        id: s.id,
-        name: s.name,
-        category_id: s.category_id,
-      }))}
-      cards={cards.map((c) => ({
-        id: c.id,
-        nome: c.nome,
-        dia_fechamento: c.dia_fechamento,
-        dia_vencimento: c.dia_vencimento,
-      }))}
-      people={people}
-    />
+    <div className="space-y-4">
+      <AvisoDeTeto leitura={leituraTx} oQue="lançamentos" />
+      <TransactionsClient
+        transactions={transactions}
+        filtroDeTerceiros={{ ligado: filtroDeTerceirosLigado, categoriasMarcadas }}
+        dailyBalances={dailyBalances}
+        balanceScope={filters.accountId ? "conta" : "todas"}
+        accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+        categories={categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          kind: c.kind,
+          classificacao_padrao: c.classificacao_padrao,
+        }))}
+        subcategories={subcategories.map((s) => ({
+          id: s.id,
+          name: s.name,
+          category_id: s.category_id,
+        }))}
+        cards={cards.map((c) => ({
+          id: c.id,
+          nome: c.nome,
+          dia_fechamento: c.dia_fechamento,
+          dia_vencimento: c.dia_vencimento,
+        }))}
+        people={people}
+      />
+    </div>
   );
 }

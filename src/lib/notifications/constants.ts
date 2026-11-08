@@ -79,6 +79,8 @@ export const NOTIFICATION_TYPES = [
   "ai_provider_problem",
   "ai_action_stuck",
   "ai_insight_available",
+  // REDESIGN-03-G — a verificação do Cron não conseguiu ler alguma família.
+  "sistema_verificacao_incompleta",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -145,6 +147,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   ai_provider_problem: "IA · Provedor",
   ai_action_stuck: "IA · Ação sem desfecho",
   ai_insight_available: "IA · Análise disponível",
+  sistema_verificacao_incompleta: "Sistema · Verificação incompleta",
 };
 
 /** Rótulo amigável de um tipo (com fallback para tipos desconhecidos). */

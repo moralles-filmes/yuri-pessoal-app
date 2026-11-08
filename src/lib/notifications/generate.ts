@@ -32,6 +32,7 @@ import {
   type TrainingGenInput,
 } from "./training";
 import { generateAiNotifications, type AiGenInput } from "./ai";
+import { textoDasFamilias, type Familia, type JanelaDaVerificacao } from "./familias";
 import { notificationEnabled, type NotificationPrefs } from "@/lib/settings/constants";
 import type { NotificationPriority, NotificationType } from "./constants";
 
@@ -114,6 +115,8 @@ export type GenSpending = {
   mes: string; // 'yyyy-MM'
   saidas: number; // reais
   mediaSaidas: number; // reais
+  /** K3 (04-A): o dia do corte "até o dia D, sem o cartão"; ausente/`null` = mês inteiro. */
+  ateODia?: number | null;
 };
 
 /** Tarefa do módulo TO-DO (Fase 15). Datas em 'yyyy-MM-dd' puro. */
@@ -187,6 +190,11 @@ export type GenerateInput = {
    * então herda `dedupe_key`, `selectNewCandidates` e `filterByPrefs` sem nada novo.
    */
   ai?: AiGenInput | null;
+  /**
+   * REDESIGN-03-G (K1b, D-G30) — as famílias que o Cron NÃO conseguiu ler. Elas já chegam
+   * AUSENTES dos campos acima; isto é o que faz o sino dizer que a verificação foi parcial.
+   */
+  naoLidas?: { familias: Familia[]; janela: JanelaDaVerificacao; hora: string };
   options?: GenerateOptions;
 };
 
@@ -560,7 +568,10 @@ export function generateNotifications(input: GenerateInput): NotificationCandida
       type: "high_spending",
       priority: "medium",
       title: "Gasto acima da média",
-      description: `As saídas do mês superam a média recente em ${pct}% (${formatCurrency(sp.saidas)}).`,
+      description:
+        typeof sp.ateODia === "number"
+          ? `As saídas à vista do mês até o dia ${sp.ateODia} superam a média recente até o mesmo dia em ${pct}% (${formatCurrency(sp.saidas)}). O cartão fica de fora desta conta.`
+          : `As saídas do mês superam a média recente em ${pct}% (${formatCurrency(sp.saidas)}).`,
       link: "/dashboard/financeiro",
       entity_type: null,
       entity_id: null,
@@ -581,6 +592,24 @@ export function generateNotifications(input: GenerateInput): NotificationCandida
   /* ── Inteligência Artificial (Fase 18-F) ── */
   if (input.ai) {
     out.push(...generateAiNotifications(input.ai));
+  }
+
+  /* ── Verificação incompleta (03-G, K1b) ── */
+  // Um aviso só, `low`, com link. Ele não diz o que está errado nos dados — diz que algum outro
+  // aviso pode estar faltando. Dedupe por dia + janela (D-G13): a mesma execução rodada de novo
+  // não duplica; a das 21h é outra verificação.
+  if (input.naoLidas && input.naoLidas.familias.length > 0) {
+    const { familias, janela, hora } = input.naoLidas;
+    out.push({
+      type: "sistema_verificacao_incompleta",
+      priority: "low",
+      title: "Verificação incompleta",
+      description: `Na verificação de hoje às ${hora} não foi possível ler: ${textoDasFamilias(familias)}. Os avisos delas podem estar faltando.`,
+      link: "/notificacoes",
+      entity_type: null,
+      entity_id: null,
+      dedupe_key: `sistema_verificacao_incompleta:${today}:${janela}`,
+    });
   }
 
   return out;

@@ -16,7 +16,9 @@ import "server-only";
  *
  * `card_statements.pago_transacao_id` vem de TODAS as faturas, sem filtro de data (P10): o
  * pagamento de uma fatura antiga pode cair no período, e a fatura não carrega a data dele.
- * Os recebíveis são os de `/terceiros` (`getReceivables`) — a mesma leitura, não uma segunda.
+ * Os recebíveis são os de `/terceiros` (`lerRecebiveis`) — a mesma leitura, não uma segunda.
+ * 03-G (RR-E-9, D-G10): erro nela também é `{ ok: false }` (antes virava "nenhum recebível"), e
+ * recebíveis ou recebimentos saturados também são `parcial`.
  *
  * O client é o COM SESSÃO: a RLS escopa o dono, então nenhuma consulta leva `user_id`.
  */
@@ -52,7 +54,8 @@ import {
 } from "@/lib/finance/caixa-minha-parte";
 import { leituraComTeto } from "@/lib/finance/leitura-com-teto";
 import { montarEntradas, primeiro, type Embutido } from "@/lib/finance/pipeline";
-import { getReceivables, TX_SELECT } from "@/lib/finance/queries";
+import { lerRecebiveis, TX_SELECT } from "@/lib/finance/queries";
+import { ehErroDeLeitura, registrarFalhaDeLeitura } from "@/lib/supabase/leitura";
 import type { TransactionWithRelations } from "@/types/database";
 import type { RecebivelComRecebimentos } from "@/lib/finance/recebimentos";
 import { createClient } from "@/lib/supabase/server";
@@ -66,7 +69,7 @@ export const TETO_DO_CAIXA = 5000;
 
 const COLUNAS =
   "id,type,status,amount,valor_pessoal,competence_date,liquidado_em,account_id,transfer_account_id,card_id," +
-  "payment_method,category:categories(id,name,color)";
+  "payment_method,description,reembolso_pessoa_id,category:categories(id,name,color)";
 
 export type LeituraDoCaixa =
   | {
@@ -160,10 +163,16 @@ export async function lerCaixaDoMes(
       .from("card_statements")
       .select("id,pago_transacao_id", { count: "exact" })
       .not("pago_transacao_id", "is", null),
-    getReceivables(),
+    // A terceira leitura LANÇA (03-G); o caixa já sabe dizer erro, então ela passa a ser
+    // conferida como as outras duas — `null` aqui é "não li", nunca "nenhum recebível".
+    lerRecebiveis().catch((e: unknown) => {
+      if (!ehErroDeLeitura(e)) throw e;
+      registrarFalhaDeLeitura(e);
+      return null;
+    }),
   ]);
 
-  if (lancamentos.error || faturas.error) return { ok: false };
+  if (lancamentos.error || faturas.error || recebiveis === null) return { ok: false };
 
   const leituraTx = leituraComTeto((lancamentos.data ?? []) as unknown as LinhaBruta[], lancamentos.count);
   const leituraFaturas = leituraComTeto(
@@ -171,7 +180,11 @@ export async function lerCaixaDoMes(
     faturas.count,
   );
   // Sem contagem também é parcial: errar para "pode faltar coisa" é o único erro aceitável.
-  const parcial = leituraTx.situacao !== "completa" || leituraFaturas.situacao !== "completa";
+  const parcial =
+    leituraTx.situacao !== "completa" ||
+    leituraFaturas.situacao !== "completa" ||
+    recebiveis.situacao !== "completa" ||
+    recebiveis.situacaoDosRecebimentos !== "completa";
 
   const transactions: TxDeCaixa[] = leituraTx.linhas
     .map((l) => {
@@ -219,7 +232,7 @@ export async function lerCaixaDoMes(
     pagamentosDeFatura,
     pagamentos,
     comprasDasFaturasPagas,
-    recebiveis,
+    recebiveis: recebiveis.linhas,
     parcial: parcial || comprasParcial,
     periodoLido,
   };
@@ -239,8 +252,27 @@ export async function estadoDoCaixa(
   /** Os meses da evolução (o primeiro decide o começo da janela lida). */
   evoMeses: string[],
 ): Promise<EstadoDoCaixa> {
+  return (await lerEstadoDoCaixa(mesSel, hoje, motor, evoMeses)).estado;
+}
+
+/**
+ * 04-B — `estadoDoCaixa` COM a leitura e o motor que o alimentaram. A gaveta de registros precisa
+ * dos lançamentos crus para listar o que cada número do caixa soma, e relê-los numa segunda
+ * consulta abriria uma janela em que os dois discordariam. `leitura` e `motorDoCaixa` são `null`
+ * quando a leitura falhou (`estado: 'erro'`).
+ */
+export async function lerEstadoDoCaixa(
+  mesSel: string,
+  hoje: string,
+  motor: MotorDoCaixa,
+  evoMeses: string[],
+): Promise<{
+  estado: EstadoDoCaixa;
+  leitura: Extract<LeituraDoCaixa, { ok: true }> | null;
+  motorDoCaixa: MotorDoCaixa | null;
+}> {
   const leitura = await lerCaixaDoMes(mesSel, evoMeses[0]);
-  if (!leitura.ok) return { estado: "erro" };
+  if (!leitura.ok) return { estado: { estado: "erro" }, leitura: null, motorDoCaixa: null };
 
   const { transactions, pagamentosDeFatura, pagamentos, recebiveis, parcial } = leitura;
   // O motor só tem os lançamentos da janela evo..proj; as compras das faturas pagas entram pelo
@@ -249,11 +281,8 @@ export async function estadoDoCaixa(
   const extras = montarEntradas({ transacoes: leitura.comprasDasFaturasPagas }).txs.filter(
     (t) => !t.id || !doMotor.has(t.id),
   );
-  const doMes = {
-    transactions,
-    pagamentos,
-    motor: { ...motor, transactions: [...motor.transactions, ...extras] },
-  };
+  const motorDoCaixa: MotorDoCaixa = { ...motor, transactions: [...motor.transactions, ...extras] };
+  const doMes = { transactions, pagamentos, motor: motorDoCaixa };
 
   const atual = numerosDoCaixa({
     periodo: periodoAteODia(mesSel, 31),
@@ -269,7 +298,7 @@ export async function estadoDoCaixa(
   });
 
   const entradasDeCaixa = entradasDoCaixa(atual);
-  return {
+  const estado: EstadoDoCaixa = {
     estado: "ok",
     atual,
     anterior,
@@ -294,4 +323,5 @@ export async function estadoDoCaixa(
       },
     },
   };
+  return { estado, leitura, motorDoCaixa };
 }

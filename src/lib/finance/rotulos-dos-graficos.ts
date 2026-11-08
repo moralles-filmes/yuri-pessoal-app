@@ -8,6 +8,7 @@
  * A tela lê este módulo: ZERO imports de runtime (só `import type`).
  */
 import type { BaseFinanceira } from "@/lib/finance/base";
+import type { Responsabilidade } from "@/lib/finance/responsabilidade";
 
 type Rotulo = { titulo: string; descricao: string };
 
@@ -75,4 +76,40 @@ export function rotulosDosGraficos(p: {
       terceiros: caixa ? "Parte de terceiros no que saiu" : "Saídas de terceiros",
     },
   };
+}
+
+/**
+ * Os textos FIXOS das peças de composição (rosca e formas) que dependem de DE QUEM é o número
+ * (R1 da revisão da 04-A2). `meu` repete os defaults das peças — o painel não muda; terceiros e
+ * consolidado nunca falam em "minha"/"meu", porque o valor desenhado não é só a parte do dono.
+ */
+export type RotulosDaComposicao = {
+  /** `aria-label` da legenda da rosca. */
+  ariaDaLista: string;
+  /** Legenda embaixo do total, no centro da rosca. */
+  totalDaRosca: string;
+  /** Nome da série no tooltip das formas de pagamento. */
+  serieDaForma: string;
+};
+
+const ROTULOS_DA_COMPOSICAO: Record<Responsabilidade, RotulosDaComposicao> = {
+  meu: {
+    ariaDaLista: "Minhas saídas por categoria",
+    totalDaRosca: "minhas saídas",
+    serieDaForma: "Minha parte",
+  },
+  terceiros: {
+    ariaDaLista: "Saídas de terceiros por categoria",
+    totalDaRosca: "saídas de terceiros",
+    serieDaForma: "Parte de terceiros",
+  },
+  consolidado: {
+    ariaDaLista: "Saídas por categoria (valor cheio)",
+    totalDaRosca: "saídas (valor cheio)",
+    serieDaForma: "Valor cheio",
+  },
+};
+
+export function rotulosDaComposicao(resp: Responsabilidade): RotulosDaComposicao {
+  return ROTULOS_DA_COMPOSICAO[resp];
 }

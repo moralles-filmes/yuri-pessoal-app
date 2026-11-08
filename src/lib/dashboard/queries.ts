@@ -9,6 +9,7 @@
 import { addDays, format, startOfMonth, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import type { LeituraDoDono } from "@/lib/supabase/owner";
+import { ErroDeLeitura } from "@/lib/supabase/leitura";
 import { dateInSaoPaulo, saoPauloWallClockToInstant } from "@/lib/format";
 import { lerFinanceiro } from "@/lib/finance/queries";
 import {
@@ -61,7 +62,8 @@ import {
 } from "@/lib/training/goal-queries";
 import { getExercises, getMuscleGroups } from "@/lib/training/queries";
 import { aggregateSessions, partialExplanation, volumeRuleLabel } from "@/lib/training/metrics";
-import { dashboardRange, sessionsInRange } from "@/lib/training/dashboards";
+import { consistencyCalendar, dashboardRange, sessionsInRange } from "@/lib/training/dashboards";
+import { semanaDoCard } from "@/lib/dashboard/treinos-semana";
 import { addDaysIso, derivePlannedStatus } from "@/lib/training/schedule";
 import { isGoalOpen, sortGoalsForDisplay } from "@/lib/training/goals";
 import { DERIVED_SCHEDULE_STATUS_LABELS } from "@/lib/training/constants";
@@ -392,8 +394,8 @@ export async function getStudiesCardData(
 /* ───────────────────────────── Notificações (Fase 13) ───────────────────────────── */
 
 /**
- * Lê as não lidas reais da tabela `notifications` (Fase 13). Resiliente: se a leitura
- * falhar (ex.: Supabase não configurado), degrada para available=false sem quebrar o card.
+ * Lê as não lidas reais da tabela `notifications` (Fase 13). Tabela ausente (42P01) degrada
+ * para available=false; qualquer outro erro lança `ErroDeLeitura` (06 T11, D-06-M5).
  */
 export async function getNotificationsCardData(): Promise<NotificationsCardData> {
   const supabase = await createClient();
@@ -402,7 +404,13 @@ export async function getNotificationsCardData(): Promise<NotificationsCardData>
     .select("*", { count: "exact", head: true })
     .eq("is_read", false)
     .eq("is_resolved", false);
-  if (error) return { available: false, unread: 0 };
+  if (error) {
+    // 06 T11 (D-06-M5): só a tabela ausente é "indisponível" (o "Em breve" legítimo); qualquer
+    // outro erro é falha de leitura — o card a mostra como falha, nunca como "Em breve".
+    // 42P01 do Postgres ou PGRST205 do PostgREST ("table not found in the schema cache").
+    if (error.code === "42P01" || error.code === "PGRST205") return { available: false, unread: 0 };
+    throw new ErroDeLeitura("as notificações", { codigo: error.code ?? null, cause: error });
+  }
   return { available: true, unread: count ?? 0 };
 }
 
@@ -535,7 +543,9 @@ export async function getTrainingCardData(todayIso: string): Promise<TrainingCar
   const [preferences, scheduled, history, running, measurements, measurementTypes] =
     await Promise.all([
       getTrainingPreferences(),
-      getScheduledWorkouts(todayIso, todayIso),
+      // 6 dias para trás cobrem o começo de qualquer semana (weekStartsOn ainda não foi lido):
+      // sem isso, um descanso planejado que já passou aparecia como "dia livre" nas barras.
+      getScheduledWorkouts(addDaysIso(todayIso, -6), todayIso),
       // 60 dias cobrem a semana atual e o "último treino" sem trazer o histórico inteiro.
       getSessionHistory({ from: addDaysIso(todayIso, -60), to: todayIso }),
       supabase
@@ -558,11 +568,24 @@ export async function getTrainingCardData(todayIso: string): Promise<TrainingCar
   const weekRange = dashboardRange("semana", todayIso, preferences.weekStartsOn);
   const weekMetrics = aggregateSessions(sessionsInRange(history, weekRange), metricOptions);
   const semTreino = weekMetrics.sessionCount === 0;
+  // Barras Seg→Dom (REDESIGN-06 T12): mesmas sessões e o planejamento da semana até hoje.
+  const dias = consistencyCalendar(
+    sessionsInRange(history, weekRange),
+    scheduled.map((entry) => ({
+      scheduledDate: entry.scheduledDate,
+      entryKind: entry.entryKind,
+      status: entry.status,
+    })),
+    weekRange,
+    todayIso,
+    metricOptions,
+  );
 
   // ── Hoje ──
+  const scheduledToday = scheduled.filter((entry) => entry.scheduledDate === todayIso);
   const todayEntry =
-    scheduled.find((entry) => entry.entryKind === "treino" && entry.status !== "cancelado") ??
-    scheduled.find((entry) => entry.entryKind === "descanso") ??
+    scheduledToday.find((entry) => entry.entryKind === "treino" && entry.status !== "cancelado") ??
+    scheduledToday.find((entry) => entry.entryKind === "descanso") ??
     null;
   const trainedToday = history.some((item) => item.sessionDate === todayIso);
 
@@ -625,13 +648,15 @@ export async function getTrainingCardData(todayIso: string): Promise<TrainingCar
 
   const runningRow = (running.data ?? [])[0];
 
+  const hasModule =
+    history.length > 0 ||
+    scheduled.length > 0 ||
+    goals.length > 0 ||
+    Boolean(runningRow) ||
+    weightMeasurements.length > 0;
+
   return {
-    hasModule:
-      history.length > 0 ||
-      scheduled.length > 0 ||
-      goals.length > 0 ||
-      Boolean(runningRow) ||
-      weightMeasurements.length > 0,
+    hasModule,
     activeSession: runningRow
       ? {
           id: runningRow.id,
@@ -653,6 +678,8 @@ export async function getTrainingCardData(todayIso: string): Promise<TrainingCar
         }
       : null,
     trainedToday,
+    semana: hasModule ? semanaDoCard(dias) : [],
+    semanaDe: { de: weekRange.from, ate: weekRange.to },
     week: {
       sessions: weekMetrics.sessionCount,
       target: preferences.weeklyWorkoutGoal ?? null,

@@ -16,7 +16,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { authContext, invalid, notAuthed } from "@/lib/actions/helpers";
+import { authContext, dbError, invalid, notAuthed } from "@/lib/actions/helpers";
 import type { ModuloDeInsight } from "@/lib/ai/insights/contracts";
 import { getAiPreferences } from "@/lib/ai/queries";
 import { registrarFeedback } from "@/lib/ai/server/insight-store";
@@ -25,6 +25,7 @@ import {
   prepararTarefaDeInsight,
   type PropostaDeInsight,
 } from "@/lib/ai/approval/insight";
+import { ehErroDeLeitura, registrarFalhaDeLeitura } from "@/lib/supabase/leitura";
 import {
   feedbackDeInsightSchema,
   gerarInsightSchema,
@@ -88,12 +89,24 @@ export async function gerarInsight(
   const recusa = await moduloAutorizado(ctx.userId, parsed.data.modulo);
   if (recusa) return { ok: false, error: recusa };
 
-  const resultado = await runInsight({
-    userId: ctx.userId,
-    modulo: parsed.data.modulo,
-    janela: parsed.data.janela,
-    agora: new Date(),
-  });
+  // 03-G (D-G18): o coletor é o passo 1 do runner, ANTES de qualquer custo. Sem isto, uma falha
+  // de leitura chegaria à tela como exceção solta (e antes virava indicadores zerados e um
+  // insight pago sobre números falsos). Captura SÓ ErroDeLeitura; o resto da action não muda.
+  let resultado: Awaited<ReturnType<typeof runInsight>>;
+  try {
+    resultado = await runInsight({
+      userId: ctx.userId,
+      modulo: parsed.data.modulo,
+      janela: parsed.data.janela,
+      agora: new Date(),
+    });
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    registrarFalhaDeLeitura(e);
+    return dbError(
+      "Não foi possível ler os dados do módulo. Nenhuma análise foi gerada e nada foi gasto.",
+    );
+  }
 
   if (!resultado.ok) return { ok: false, error: resultado.message };
 

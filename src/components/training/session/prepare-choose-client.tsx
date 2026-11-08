@@ -13,6 +13,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowLeftRight,
   CalendarCheck,
   ClipboardList,
   Copy,
@@ -54,6 +55,7 @@ export function PrepareChooseClient({
   catalogSize,
   defaultWorkoutId,
   defaultScheduledId,
+  startReplacing = false,
   preferences,
 }: {
   scheduledToday: ScheduledWorkout[];
@@ -63,17 +65,31 @@ export function PrepareChooseClient({
   catalogSize: number;
   defaultWorkoutId: string | null;
   defaultScheduledId: string | null;
+  /** `?trocar=1` junto de `?planejado=`: abre já escolhendo o treino que vai no lugar. */
+  startReplacing?: boolean;
   preferences: TrainingPreferences;
 }) {
   const router = useRouter();
   const [busy, setBusy] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [emptyName, setEmptyName] = React.useState("");
+  /*
+   * Troca do treino do dia: o dono planejou A e vai fazer B. Com um dia escolhido aqui,
+   * QUALQUER caminho abaixo (cadastrado, favorito, livre, repetir, duplicar) leva o vínculo
+   * com o dia — ao finalizar, o dia fica concluído, e o calendário mostra o que foi feito e o
+   * que estava planejado (`trocaDoDia`). O planejamento em si não é reescrito.
+   */
+  const [replacing, setReplacing] = React.useState<ScheduledWorkout | null>(() =>
+    startReplacing && defaultScheduledId
+      ? (scheduledToday.find((entry) => entry.id === defaultScheduledId) ?? null)
+      : null,
+  );
 
   const start = async (input: Record<string, unknown>) => {
     setBusy(true);
     const result = await createSession({
       location_id: locations.find((item) => item.isDefault)?.id ?? null,
+      ...(replacing ? { scheduled_workout_id: replacing.id } : {}),
       ...input,
     });
     setBusy(false);
@@ -108,6 +124,14 @@ export function PrepareChooseClient({
   const favorites = workouts.filter((workout) => workout.isFavorite);
   const lastSession = recentSessions[0] ?? null;
 
+  const chooseReplacement = (entry: ScheduledWorkout) => {
+    setReplacing(entry);
+    // A escolha do substituto acontece nas listas abaixo; leva o dono até elas.
+    requestAnimationFrame(() =>
+      document.getElementById("troca-do-dia")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  };
+
   return (
     <div className="space-y-4">
       {busy && (
@@ -117,7 +141,34 @@ export function PrepareChooseClient({
         </p>
       )}
 
-      {(highlighted || highlightedEntry) && (
+      {replacing && (
+        <Card id="troca-do-dia" className="scroll-mt-20 border-primary">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ArrowLeftRight className="size-4 text-primary" />
+              Trocando o treino de hoje
+            </CardTitle>
+            <CardDescription>
+              Escolha abaixo o treino que vai no lugar de{" "}
+              <strong>{replacing.workoutName ?? replacing.title ?? "o programado"}</strong>. Ao
+              finalizar, o dia fica concluído com o treino que você fez — e o calendário guarda o
+              que estava planejado.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="outline"
+              className="h-11"
+              disabled={busy}
+              onClick={() => setReplacing(null)}
+            >
+              Cancelar a troca
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!replacing && (highlighted || highlightedEntry) && (
         <Card className="border-primary">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
@@ -127,7 +178,7 @@ export function PrepareChooseClient({
               Você veio de um atalho. Confirme para revisar este treino antes de começar.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-wrap gap-2">
             <Button
               className="h-12"
               disabled={busy}
@@ -143,12 +194,23 @@ export function PrepareChooseClient({
             >
               Preparar este treino
             </Button>
+            {highlightedEntry && (
+              <Button
+                variant="outline"
+                className="h-12"
+                disabled={busy}
+                onClick={() => chooseReplacement(highlightedEntry)}
+              >
+                <ArrowLeftRight className="size-4" />
+                Fazer outro treino no lugar
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
 
       {/* ───────── Programado para hoje ───────── */}
-      {scheduledToday.length > 0 && (
+      {!replacing && scheduledToday.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -157,34 +219,46 @@ export function PrepareChooseClient({
             </CardTitle>
             <CardDescription>
               Ao finalizar, este dia do calendário é marcado como concluído automaticamente.
+              Mudou de ideia? Faça outro treino no lugar — sem precisar apagar o planejado.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {scheduledToday.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                disabled={busy || !entry.workoutId}
-                onClick={() =>
-                  start({
-                    origin_kind: "planejado",
-                    workout_id: entry.workoutId,
-                    scheduled_workout_id: entry.id,
-                  })
-                }
-                className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-accent/50 disabled:opacity-60"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {entry.workoutName ?? entry.title ?? "Treino removido"}
+              <div key={entry.id} className="space-y-2 rounded-xl border p-2">
+                <button
+                  type="button"
+                  disabled={busy || !entry.workoutId}
+                  onClick={() =>
+                    start({
+                      origin_kind: "planejado",
+                      workout_id: entry.workoutId,
+                      scheduled_workout_id: entry.id,
+                    })
+                  }
+                  className="flex w-full items-center gap-3 rounded-lg p-1 text-left transition-colors hover:bg-accent/50 disabled:opacity-60"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                      {entry.workoutName ?? entry.title ?? "Treino removido"}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {entry.plannedTime ? `Previsto para ${entry.plannedTime.slice(0, 5)}` : "Sem horário definido"}
+                      {entry.programName ? ` · ${entry.programName}` : ""}
+                    </span>
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {entry.plannedTime ? `Previsto para ${entry.plannedTime.slice(0, 5)}` : "Sem horário definido"}
-                    {entry.programName ? ` · ${entry.programName}` : ""}
-                  </span>
-                </span>
-                <Badge>Programado</Badge>
-              </button>
+                  <Badge className="shrink-0">Programado</Badge>
+                </button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-10 w-full"
+                  disabled={busy}
+                  onClick={() => chooseReplacement(entry)}
+                >
+                  <ArrowLeftRight className="size-4" />
+                  Fazer outro treino no lugar
+                </Button>
+              </div>
             ))}
           </CardContent>
         </Card>

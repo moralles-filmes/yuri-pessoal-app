@@ -42,7 +42,7 @@ export const DASH_CARD_HREF: Record<DashCardId, string> = {
   tarefas: "/tarefas",
   habitos: "/habitos",
   estudos: "/estudos",
-  notificacoes: "/configuracoes",
+  notificacoes: "/notificacoes",
   treinos: "/treinos",
   // ⛔ O link vai para a TELA de insights, que é onde se gera. O card em si não gera nada.
   insights: "/ia/insights",

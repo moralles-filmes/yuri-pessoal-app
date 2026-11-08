@@ -2,6 +2,16 @@
 
 ## Iteração mais recente — chat livre com coordenador (2026-11-08)
 
+**Publicação autorizada pelo dono em 2026-11-08, após o fechamento:** integrada a main
+`e4f61c9` nesta worktree, preservando redesign e reembolsos. Três conflitos resolvidos
+(CLAUDE, este resumo e round-trip); o mock do Cron recebeu `results: []` do contrato atual.
+Dependências idênticas ao lockfile da main (Next 16.4.3, React 19.2.9, Zod 4.6.7). Checks
+da integração: **8.790 testes / 408 arquivos**, também UTC; lint e tipos limpos; build
+aprovado; **71 rotas** no teto, máximo **226,6 KB gz**, mediana **203,1 KB**. Nenhuma nova
+chamada ao provedor ou aplicação de migration. Os números abaixo registram a Task 28 antes
+da integração. `npm audit` reportou 16 alertas herdados da main, incluindo dois críticos
+em Vitest/tinypool (desenvolvimento); nenhuma atualização major incluída nesta integração.
+
 Tasks 1–27, extras 15b/22b e fechamento documental da Task 28. Coordenador + especialistas,
 trilhas auditadas, síntese sem ferramentas, painel compartilhado e formatador seguro;
 correções de memória, insights/Cron, aprovação/desfazer, comprovantes, preferências, retenção
@@ -37,6 +47,12 @@ Próxima ação: aguardar tarefa do dono, incluindo eventual conferência dos tr
 conta/cartão informados e novo aval. Nenhum push, PR, merge ou deploy autorizado.
 
 
+> 🟢 **Depois dela: o REDESIGN financeiro (00 a 08), fechado em 2026-11-07.** 00–03-G em `main`
+> (PRs #56–#64); 03-G2 a 08 integradas localmente em `feat/redesign-00-auditoria`, à espera do
+> merge do **PR único #65** pelo dono. Resumo, decisões e números em `docs/redesign/STATUS.md`;
+> a última subfase (08 — regressão e entrega) tem o resultado no §13 de
+> `docs/superpowers/specs/2026-11-06-08-regressao-e-entrega-design.md`.
+>
 > ✅ **ÚLTIMA: 18-F — IA · Memória, integrações e polimento (2026-09-20). CONCLUÍDA, com os
 > cinco blocos — e ela FECHA A FASE 18.** A IA deixou de ser uma ilha: entrou no sino, na busca
 > global e no backup (Bloco 1); ganhou um botão em toda tela (2); passou a conhecer as

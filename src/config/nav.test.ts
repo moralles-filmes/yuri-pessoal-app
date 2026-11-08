@@ -126,4 +126,13 @@ describe("rotas representadas", () => {
     expect(item?.tambem).toEqual(["/tarefas"]);
     expect(ABAS_DE_ROTINAS_E_TAREFAS.map((a) => a.href)).toEqual(item ? [...rotasDeclaradas(item)] : []);
   });
+
+  it("Cartões e faturas representa /faturas e /parcelamentos", () => {
+    const item = allNavItems.find((i) => i.title === "Cartões e faturas");
+    expect(item?.href).toBe("/cartoes");
+    expect(item?.tambem).toEqual(["/faturas", "/parcelamentos"]);
+    // A central é UM item: nenhum outro item volta a reivindicar as duas telas.
+    expect(allNavItems.filter((i) => i.title === "Faturas")).toEqual([]);
+    expect(allNavItems.filter((i) => i.title === "Parcelamentos")).toEqual([]);
+  });
 });

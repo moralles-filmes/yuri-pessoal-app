@@ -15,7 +15,12 @@ vi.mock("@/lib/finance/queries", () => ({
   getDailyBalances: vi.fn(async () => null),
   getPeopleForSelect: vi.fn(async () => []),
   getSubcategories: vi.fn(async () => []),
-  getTransactions: vi.fn(async () => [{ id: "t-1", competence_date: "2026-06-10" }]),
+  // 03-G (D-G7): a leitura devolve `LeituraComTeto`, e a página decide o teto.
+  getTransactions: vi.fn(async () => ({
+    linhas: [{ id: "t-1", competence_date: "2026-06-10" }],
+    situacao: "completa",
+    total: 1,
+  })),
 }));
 vi.mock("./transactions-client", () => ({ TransactionsClient: () => null }));
 
@@ -23,8 +28,19 @@ const queries = await import("@/lib/finance/queries");
 const { default: LancamentosPage } = await import("./page");
 
 type Props = { filtroDeTerceiros: { ligado: boolean; categoriasMarcadas: number } };
-const abrir = async (sp: Record<string, string>) =>
-  (await LancamentosPage({ searchParams: Promise.resolve(sp) })) as ReactElement<Props>;
+/**
+ * 03-G (L2): a página passou a embrulhar a lista com o aviso de teto; o elemento que interessa
+ * é o `TransactionsClient`, filho do invólucro (o que tem `filtroDeTerceiros`).
+ */
+const abrir = async (sp: Record<string, string>) => {
+  const raiz = (await LancamentosPage({ searchParams: Promise.resolve(sp) })) as ReactElement<{
+    children: ReactElement[];
+  }>;
+  const lista = raiz.props.children.find(
+    (filho) => (filho?.props as Partial<Props> | undefined)?.filtroDeTerceiros !== undefined,
+  );
+  return lista as ReactElement<Props>;
+};
 
 describe("03-C2 · A6 — página de lançamentos", () => {
   it("?marcadas=1 liga o filtro da lista e conta as categorias marcadas", async () => {

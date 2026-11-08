@@ -32,7 +32,14 @@ import {
 const LABELS: Record<string, string> = { ...PAYMENT_METHOD_LABELS, outro: "Outro" };
 
 /** MEUS gastos por forma de pagamento (barras horizontais) — desenha `meu` (desenho 2026-10-18). */
-export function FormaPagamentoChart({ data }: { data: FormaSlice[] }) {
+export function FormaPagamentoChart({
+  data,
+  rotuloDaSerie = "Minha parte",
+}: {
+  data: FormaSlice[];
+  /** Nome da série no tooltip; o default é o texto do painel. */
+  rotuloDaSerie?: string;
+}) {
   const positivos = data.filter((d) => d.meu > 0).sort((a, b) => b.meu - a.meu);
   if (positivos.length === 0) {
     return (
@@ -64,7 +71,7 @@ export function FormaPagamentoChart({ data }: { data: FormaSlice[] }) {
         />
         <Tooltip
           cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-          formatter={(value) => [formatCurrency(Number(value)), "Minha parte"]}
+          formatter={(value) => [formatCurrency(Number(value)), rotuloDaSerie]}
           contentStyle={tooltipStyle}
           labelStyle={tooltipLabelStyle}
           itemStyle={tooltipItemStyle}

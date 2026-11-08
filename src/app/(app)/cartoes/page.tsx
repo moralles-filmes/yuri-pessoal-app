@@ -1,41 +1,45 @@
 import type { Metadata } from "next";
-import { CreditCard, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
-import { StatCard } from "@/components/shared/stat-card";
-import { getCreditCards } from "@/lib/finance/queries";
-import { formatCurrency } from "@/lib/format";
-import { CardsClient } from "./cards-client";
+import { VisaoGeral } from "@/components/cartoes/visao-geral";
+import { montarVisaoGeral } from "@/lib/finance/central-cartoes";
+import {
+  getCreditCards,
+  getReceivablesByStatements,
+  getStatements,
+} from "@/lib/finance/queries";
+import { hojeISO } from "@/lib/format";
 
-export const metadata: Metadata = { title: "Cartões" };
+export const metadata: Metadata = { title: "Cartões e faturas" };
 export const dynamic = "force-dynamic";
 
+/**
+ * REDESIGN-05-A — Visão geral da central de cartões. Nenhuma regra aqui: as três leituras
+ * (que lançam se vierem cortadas, e o `error.tsx` do segmento responde) alimentam a função pura
+ * `montarVisaoGeral`, e a tela só formata.
+ */
 export default async function CartoesPage() {
-  const cards = await getCreditCards();
-  const ativos = cards.filter((c) => c.ativo);
-  const limiteTotal = ativos.reduce((s, c) => s + (c.limite_total ?? 0), 0);
+  const hoje = hojeISO();
+  const [cards, statements] = await Promise.all([getCreditCards(), getStatements()]);
+  // Só os recebíveis das faturas que a tela PODE mostrar — um superconjunto das linhas de
+  // `montarVisaoGeral` (toda linha real é não paga ou vence de hoje em diante). Mandar o
+  // histórico inteiro faria o `in(...)` crescer sem teto com os anos de faturas.
+  const relevantes = statements.filter((s) => !s.pago_em || s.data_vencimento >= hoje);
+  const receivables = await getReceivablesByStatements(relevantes.map((s) => s.id));
+  const visao = montarVisaoGeral({ hoje, cards, statements, receivables });
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Cartões"
-        description="Cartões de crédito: limites, fechamento e vencimento."
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard
-          label="Cartões ativos"
-          value={String(ativos.length)}
-          icon={CreditCard}
-          hint={`${cards.length} no total`}
+      <div className="space-y-2">
+        <PageHeader
+          title="Cartões e faturas"
+          description="O que está fechado para pagar e o que ainda está acumulando, por cartão."
         />
-        <StatCard
-          label="Limite total (ativos)"
-          value={formatCurrency(limiteTotal)}
-          icon={Wallet}
-        />
+        <p className="border-l-2 border-primary pl-2 text-xs text-muted-foreground">
+          Valores por fatura do cartão. Minha parte = total − parte dos terceiros.
+        </p>
       </div>
 
-      <CardsClient cards={cards} />
+      <VisaoGeral visao={visao} />
     </div>
   );
 }

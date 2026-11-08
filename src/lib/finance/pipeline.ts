@@ -37,6 +37,7 @@ import {
 import { toDateInputValue } from "@/lib/format";
 import { resumirRecebivel } from "@/lib/finance/recebimentos";
 import type { RecebimentoLido } from "@/lib/finance/recebimentos";
+import { MESES_DA_PROJECAO } from "@/lib/finance/janela-lida";
 
 /* ───────────────────────────── Tipos de linha (estritos) ───────────────────────────── */
 
@@ -78,6 +79,11 @@ export type LinhaTx = {
   parcelado: boolean | null;
   category_id: string | null;
   category: Embutido<CategoriaEmbutida>;
+  /** 04-A2 (D-A2-13): obrigatório — campo que o chamador não tem é `null` escrito. */
+  account_id: string | null;
+  /** 04-B: obrigatórios (estritos) — só exibição na gaveta de registros; nenhum número os lê. */
+  description: string | null;
+  purchase_date: string | null;
 };
 
 export type LinhaFatura = {
@@ -112,7 +118,10 @@ export type LinhaParcela = {
   statement_id: string | null;
   valor: Dinheiro;
   status: string;
-  parent: Embutido<{ category: Embutido<CategoriaEmbutida> }>;
+  /** 04-B: "k" de "k/N" — só exibição. */
+  numero: number;
+  total_parcelas: number;
+  parent: Embutido<{ description: string | null; category: Embutido<CategoriaEmbutida> }>;
 };
 
 export type LinhaCartao = {
@@ -122,6 +131,8 @@ export type LinhaCartao = {
   limite_total: Dinheiro;
   dia_fechamento: number;
   dia_vencimento: number;
+  /** 08 K2: `credit_cards.ativo`. Ausente ou `true` ⇒ o motor não recebe a chave. */
+  ativo?: boolean;
 };
 
 export type LinhaRecorrencia = {
@@ -297,6 +308,9 @@ export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): Entradas
           status: dominio.status,
           competence_date: t.competence_date,
           card_id: t.card_id,
+          account_id: t.account_id,
+          descricao: t.description,
+          data_compra: t.purchase_date,
           statement_id: t.statement_id,
           parcelado: Boolean(t.parcelado),
           category_id: t.category_id,
@@ -347,12 +361,16 @@ export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): Entradas
 
   if (linhas.parcelas !== undefined) {
     const inst: DashInstallmentItem[] = linhas.parcelas.map((it) => {
-      const categoria = primeiro(primeiro(it.parent)?.category ?? null);
+      const pai = primeiro(it.parent);
+      const categoria = primeiro(pai?.category ?? null);
       return {
         id: it.id,
         statement_id: it.statement_id,
         valor: num(it.valor),
         status: it.status,
+        numero: it.numero,
+        total_parcelas: it.total_parcelas,
+        descricao: pai?.description ?? null,
         parent: categoria
           ? { category: { id: categoria.id, name: categoria.name, color: categoria.color } }
           : { category: null },
@@ -369,6 +387,8 @@ export function montarEntradas<L extends LinhasFinanceiras>(linhas: L): Entradas
       limite_total: num(c.limite_total),
       dia_fechamento: c.dia_fechamento,
       dia_vencimento: c.dia_vencimento,
+      // 08 K2: só o desativado carrega a chave — o ativo segue com a forma de antes.
+      ...(c.ativo === false ? { ativo: false } : {}),
     }));
     entradas.cards = cards;
   }
@@ -435,7 +455,7 @@ export function janelaDoRelatorio(params: {
   mesAtual: string;
 }): JanelaFinanceira & { evoMeses: string[]; projMeses: string[] } {
   const evoMeses = ultimosMeses(params.mesSel, 6);
-  const projMeses = proximosMeses(params.mesAtual, 6);
+  const projMeses = proximosMeses(params.mesAtual, MESES_DA_PROJECAO);
   return {
     from: `${evoMeses[0]}-01`,
     to: ultimoDiaDoMes(projMeses[projMeses.length - 1]),
@@ -454,6 +474,15 @@ export function janelaDoRelatorio(params: {
  */
 export function janelaDoGastoAlto(mes: string): JanelaFinanceira {
   return { from: `${addMes(mes, -5)}-01`, to: ultimoDiaDoMes(mes) };
+}
+
+/**
+ * A janela do HISTÓRICO do dashboard (06 · T1): os 5 meses ANTERIORES ao `mes`, sem ele. O
+ * dashboard mostra 6 meses = o mês lido à parte (`janelaDoMes`) + este histórico; as duas leituras
+ * são disjuntas por construção. Nome próprio para não depender da régua do gasto alto.
+ */
+export function janelaDoHistoricoDoDashboard(mes: string): JanelaFinanceira {
+  return { from: `${addMes(mes, -5)}-01`, to: ultimoDiaDoMes(addMes(mes, -1)) };
 }
 
 /* ───────────────────────────── Escopos nomeados ───────────────────────────── */
@@ -490,6 +519,22 @@ export const ESCOPO_FATURAS = {
   parcelas: false,
 } as const;
 
+/**
+ * Histórico do dashboard (06 · T1): SÓ lançamentos, na janela de `janelaDoHistoricoDoDashboard`.
+ * Alimenta as barras e a comparação mês a mês; o mês corrente vem de `ESCOPO_CARD_FINANCEIRO`.
+ */
+export const ESCOPO_HISTORICO_DO_DASHBOARD = {
+  nome: "historico-do-dashboard",
+  contas: false,
+  cartoes: false,
+  faturas: false,
+  recebiveis: false,
+  contasFixas: false,
+  recorrencias: false,
+  transacoes: true,
+  parcelas: false,
+} as const;
+
 /** Relatório e página do dashboard financeiro: tudo, INCLUINDO parcelas. */
 export const ESCOPO_RELATORIO = {
   nome: "relatorio",
@@ -504,10 +549,22 @@ export const ESCOPO_RELATORIO = {
 } as const;
 
 /**
- * Um dos três escopos, e só. A união das três formas literais faz uma combinação solta
+ * Página do dashboard financeiro (04-A): o mesmo do relatório + os recebíveis crus com a pessoa
+ * (D-A-14), saídos da MESMA leitura de `receivables` — nenhuma leitura a mais.
+ */
+export const ESCOPO_PAINEL = {
+  ...ESCOPO_RELATORIO,
+  nome: "painel",
+  recebiveisCrus: true,
+} as const;
+
+/**
+ * Um dos quatro escopos, e só. A união das quatro formas literais faz uma combinação solta
  * (ex.: o card com parcelas) não tipar — ninguém escreve um objeto de escopo à mão.
  */
 export type EscopoFinanceiro =
   | typeof ESCOPO_CARD_FINANCEIRO
   | typeof ESCOPO_FATURAS
-  | typeof ESCOPO_RELATORIO;
+  | typeof ESCOPO_HISTORICO_DO_DASHBOARD
+  | typeof ESCOPO_RELATORIO
+  | typeof ESCOPO_PAINEL;

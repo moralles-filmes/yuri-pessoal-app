@@ -22,26 +22,32 @@ import "server-only";
  */
 
 import { randomUUID } from "node:crypto";
-import type { AuthContext } from "@/lib/actions/helpers";
+import { traduzirErroDaRpc, type AuthContext } from "@/lib/actions/helpers";
 import { transactionSchema } from "@/lib/validators/transaction";
-import { receitaResponsabilidadeSchema, splitSchema } from "@/lib/validators/split";
+import { receitaResponsabilidadeSchema, reembolsoSchema, splitSchema } from "@/lib/validators/split";
+import { ehErroDeLeitura } from "@/lib/supabase/leitura";
+import { ROTULOS_DE_LEITURA } from "@/lib/finance/rotulos-de-leitura";
 import {
   getOrCreateStatementForCompetencia,
   resolveOrCreateStatement,
 } from "@/lib/finance/statements";
-import { applySplit } from "@/lib/finance/split-persist";
-import { protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
+import { montarDivisaoAVista, type DivisaoPayload } from "@/lib/finance/split-persist";
+import { montarLinhaDoLancamento } from "@/lib/finance/linha-do-lancamento";
+import { lerEstadoDoReembolso, protecaoDosRecebiveis } from "@/lib/finance/recebimentos-leitura";
+import {
+  decidirReembolso,
+  entradaDaPrevia,
+  MSG_ESTORNO_NAO_ABATE,
+  MSG_LEITURA_DO_REEMBOLSO_FALHOU,
+  previaDoReembolso,
+} from "@/lib/finance/reembolso";
 import { motivoParaNaoApagar } from "@/lib/finance/protecao-do-recebivel";
 import {
   colunasDaReceita,
   decidirResponsabilidadeDaReceita,
 } from "@/lib/finance/responsabilidade-da-receita";
 import type { Classificacao } from "@/lib/finance/constants";
-import {
-  dataDeLiquidacaoAGravar,
-  dataDePagamentoFutura,
-  MSG_DATA_PAGAMENTO_FUTURA,
-} from "@/lib/finance/caixa";
+import { dataDePagamentoFutura, MSG_DATA_PAGAMENTO_FUTURA } from "@/lib/finance/caixa";
 import { centavosParaReais, hojeISO, reaisParaCentavos } from "@/lib/format";
 
 export type FinanceServiceContext = AuthContext;
@@ -58,7 +64,9 @@ export type ColunasDaResponsabilidade = {
  *
  * ⛔ Lê só as chaves PRÓPRIAS da receita (`receita_classificacao`, `receita_minha_parte`).
  * A chave `classificacao` do mesmo payload é da despesa e continua ignorada aqui — é o que
- * mantém a importação (que pode mandá-la numa linha virada receita) e a IA gravando `pessoal`.
+ * mantém a IA gravando `pessoal` e impede um resíduo de divisão de despesa de mudar de quem é uma
+ * entrada. A importação do extrato (04-C · T7) manda as chaves próprias: a linha de ENTRADA pode
+ * trazer `receita_classificacao` e o reembolso escolhidos na revisão; sem escolha, é `pessoal`.
  */
 export function lerResponsabilidadeDaReceita(
   input: unknown,
@@ -79,13 +87,96 @@ export function lerResponsabilidadeDaReceita(
   return { ok: true, colunas: colunasDaReceita(decisao.responsabilidade) };
 }
 
+/**
+ * REDESIGN-04-C · T6 — a receita de UMA PESSOA: o servidor decide classificação, minha parte e
+ * vínculo ANTES de gravar, pela sobra (`decidirReembolso`), e só então passa o resultado à fonte
+ * única das colunas (`decidirResponsabilidadeDaReceita` + `colunasDaReceita`).
+ *
+ * Sem `reembolso_pessoa_id` no payload (o formulário sem pessoa, a importação de hoje e a IA, que
+ * não manda o campo) delega a `lerResponsabilidadeDaReceita`: comportamento idêntico ao de antes.
+ *
+ * `transactionId` é a receita em edição (null na criação): a contribuição dela sai da conta antes
+ * de aplicar o valor novo. `estorno` recusa a pessoa — estorno de cartão não é dinheiro de terceiro.
+ */
+export async function lerReembolsoDaReceita(
+  ctx: FinanceServiceContext,
+  input: unknown,
+  a: { amountReais: number; transactionId: string | null; estorno: boolean },
+): Promise<
+  | { ok: true; colunas: ColunasDaResponsabilidade; reembolsoPessoaId: string | null }
+  | { ok: false; fieldErrors: Record<string, string[] | undefined> }
+> {
+  const reembolso = reembolsoSchema.safeParse(input);
+  if (!reembolso.success) return { ok: false, fieldErrors: reembolso.error.flatten().fieldErrors };
+
+  const pessoaId = reembolso.data.reembolso_pessoa_id;
+  if (pessoaId === null) {
+    const r = lerResponsabilidadeDaReceita(input, a.amountReais);
+    return r.ok ? { ok: true, colunas: r.colunas, reembolsoPessoaId: null } : r;
+  }
+
+  if (a.estorno) return { ok: false, fieldErrors: { reembolso_pessoa_id: [MSG_ESTORNO_NAO_ABATE] } };
+
+  const pedida = receitaResponsabilidadeSchema.safeParse(input);
+  if (!pedida.success) return { ok: false, fieldErrors: pedida.error.flatten().fieldErrors };
+
+  let estado;
+  try {
+    estado = await lerEstadoDoReembolso(ctx.supabase, pessoaId);
+  } catch (e) {
+    if (!ehErroDeLeitura(e)) throw e;
+    return { ok: false, fieldErrors: { reembolso_pessoa_id: [MSG_LEITURA_DO_REEMBOLSO_FALHOU] } };
+  }
+
+  const valorCentavos = reaisParaCentavos(a.amountReais);
+  const previa = previaDoReembolso({ ...entradaDaPrevia(estado, a.transactionId), valorCentavos });
+  const decisao = decidirReembolso({
+    classificacaoPedida: pedida.data.receita_classificacao,
+    previa,
+    valorCentavos,
+    escolha: reembolso.data.reembolso_sobra ?? null,
+    devidoVistoCentavos: reembolso.data.reembolso_devido_visto ?? null,
+  });
+  if (!decisao.ok) return { ok: false, fieldErrors: { [decisao.campo]: [decisao.mensagem] } };
+
+  const responsabilidade = decidirResponsabilidadeDaReceita({
+    classificacao: decisao.receita_classificacao,
+    minhaParteCentavos: decisao.minhaParteCentavos,
+    valorCentavos,
+  });
+  if (!responsabilidade.ok) {
+    return { ok: false, fieldErrors: { [responsabilidade.campo]: [responsabilidade.mensagem] } };
+  }
+  return {
+    ok: true,
+    colunas: colunasDaReceita(responsabilidade.responsabilidade),
+    reembolsoPessoaId: decisao.vincula ? pessoaId : null,
+  };
+}
+
 export type CriarTransacaoResultado =
   | { readonly ok: true; readonly id: string; readonly statementId: string | null }
   | {
       readonly ok: false;
       readonly erro: string;
       readonly fieldErrors?: Record<string, string[] | undefined>;
+      /**
+       * 03-G — a leitura que falhou (o rótulo), quando a falha foi de leitura. `erro` diz "Nada
+       * foi alterado." porque, NESTE serviço, nenhuma escrita veio antes; quem chama depois de
+       * já ter escrito (a transferência editada, que apaga antes de recriar) usa o rótulo para
+       * dizer a frase de "depois".
+       */
+      readonly leituraFalhou?: string;
     };
+
+/** 03-G2 (D-G2-16): o erro da rpc vira a frase da falha (nada gravado × desfecho desconhecido). */
+function falhaDaRpc(
+  error: { code?: string; message?: string } | null,
+  oQue: string,
+): { ok: false; erro: string } {
+  const t = traduzirErroDaRpc(error, oQue);
+  return { ok: false, erro: t.ok ? "" : t.error };
+}
 
 /**
  * Cria o lançamento. `input` é o objeto CRU — o mesmo que o formulário envia — porque a
@@ -116,53 +207,52 @@ export async function criarTransacao(
     };
   }
 
+  // 03-G2 (revisão final) — o schema aceita receita com cartão e sem conta só para a EDIÇÃO de um
+  // estorno existente (D-G2-19). Criar por aqui gravaria uma receita sem conta e sem cartão (o
+  // cartão só é resolvido para despesa); o estorno importado nasce por `createCardEstorno`.
+  if (d.type === "receita" && d.card_id && !d.account_id) {
+    return {
+      ok: false,
+      erro: "Verifique os campos destacados.",
+      fieldErrors: { account_id: ["Selecione a conta"] },
+    };
+  }
+
   if (d.type === "transferencia") {
     // UMA linha por transferência: `public.account_balance` já deriva os dois lados da
     // mesma linha (-amount na conta de origem `account_id`, +amount no destino
     // `transfer_account_id`). Gravar as duas pernas espelhadas fazia os efeitos se
     // anularem e o saldo das contas não mudava. `transfer_group_id` continua marcando
     // a linha como transferência (usado em update/delete/status).
-    const { data, error } = await ctx.supabase
-      .from("transactions")
-      .insert({
-        user_id: ctx.userId,
-        type: "transferencia" as const,
-        payment_method: "transferencia" as const,
-        account_id: d.account_id,
-        transfer_account_id: d.transfer_account_id,
-        transfer_group_id: randomUUID(),
-        amount: d.amount,
-        purchase_date: d.purchase_date,
-        competence_date: d.competence_date,
-        description: d.description,
-        notes: d.notes,
-        tags: d.tags,
-        status: d.status,
-        // K0: a transferência nunca tem cartão; só liquidada guarda a data.
-        liquidado_em: dataDeLiquidacaoAGravar({
-          status: d.status,
-          card_id: null,
-          liquidado_em: d.liquidado_em,
-        }),
-        category_id: null,
-        subcategory_id: null,
-      })
-      .select("id")
-      .single();
-    if (error || !data) {
-      return { ok: false, erro: "Não foi possível registrar a transferência." };
-    }
-    return { ok: true, id: data.id, statementId: null };
+    // 03-G2: uma chamada só; sem `colunas`, a classificação cai no coalesce 'pessoal' do SQL.
+    const linha = montarLinhaDoLancamento(d, {
+      cardId: null,
+      statementId: null,
+      transferGroupId: randomUUID(),
+    });
+    const { data, error } = await ctx.supabase.rpc("salvar_lancamento", {
+      p_lancamento: linha,
+      p_divisao: null,
+    });
+    if (error || !data) return falhaDaRpc(error, "registrar a transferência");
+    return { ok: true, id: data, statementId: null };
   }
 
   // REDESIGN-03-C · A2 — a receita decide de quem é o dinheiro ANTES de qualquer escrita.
+  // 04-C · T6 — com pessoa, a sobra decide a classificação, a minha parte e o vínculo.
   let colunasDaReceitaDecididas: ColunasDaResponsabilidade | null = null;
+  let reembolsoPessoaId: string | null = null;
   if (d.type === "receita") {
-    const r = lerResponsabilidadeDaReceita(input, d.amount);
+    const r = await lerReembolsoDaReceita(ctx, input, {
+      amountReais: d.amount,
+      transactionId: null,
+      estorno: false,
+    });
     if (!r.ok) {
       return { ok: false, erro: "Verifique os campos destacados.", fieldErrors: r.fieldErrors };
     }
     colunasDaReceitaDecididas = r.colunas;
+    reembolsoPessoaId = r.reembolsoPessoaId;
   }
 
   // Compra no cartão (Fase 03): resolve/cria a fatura e vincula statement_id. Na importação,
@@ -171,9 +261,21 @@ export async function criarTransacao(
   let statementId: string | null = null;
   if (d.type === "despesa" && d.payment_method === "cartao_credito" && d.card_id) {
     cardId = d.card_id;
-    statementId = d.statement_competencia
-      ? await getOrCreateStatementForCompetencia(ctx, d.card_id, d.statement_competencia)
-      : await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
+    // 03-G (D-G26): o ErroDeLeitura do busca-ou-cria vira a falha deste serviço; nenhuma escrita
+    // DESTE serviço veio antes dele, então "Nada foi alterado" é verdade aqui. Quem chama depois de
+    // ter escrito lê `leituraFalhou` e escolhe a frase (ver `updateTransaction`).
+    try {
+      statementId = d.statement_competencia
+        ? await getOrCreateStatementForCompetencia(ctx, d.card_id, d.statement_competencia)
+        : await resolveOrCreateStatement(ctx, d.card_id, d.purchase_date);
+    } catch (e) {
+      if (!ehErroDeLeitura(e)) throw e;
+      return {
+        ok: false,
+        erro: `Não foi possível ler ${ROTULOS_DE_LEITURA.fatura}. Nada foi alterado.`,
+        leituraFalhou: ROTULOS_DE_LEITURA.fatura,
+      };
+    }
     if (!statementId) {
       return { ok: false, erro: "Não foi possível resolver a fatura do cartão." };
     }
@@ -181,8 +283,9 @@ export async function criarTransacao(
 
   // Divisão (Fase 05): a máquina de divisão é só da DESPESA. A receita tem responsabilidade
   // própria (03-C, decidida acima), lida de chaves próprias — a chave `classificacao` do payload
-  // continua sendo só da despesa, e por isso a importação (que pode mandá-la numa linha que
-  // virou receita, imports.ts) e a IA continuam gravando receita `pessoal`. Ajuste fica pessoal.
+  // continua sendo só da despesa, e por isso a IA grava receita `pessoal`. A importação do extrato
+  // (04-C · T7) manda as chaves PRÓPRIAS da receita (classificação e reembolso escolhidos na
+  // revisão) e não manda a divisão de despesa numa entrada. Ajuste fica pessoal.
   const split = splitSchema.safeParse(input);
   if (!split.success) {
     return {
@@ -192,63 +295,39 @@ export async function criarTransacao(
     };
   }
   const isShared = d.type === "despesa" && split.data.classificacao !== "pessoal";
-  const classificacao = isShared ? split.data.classificacao : "pessoal";
 
-  const { data, error } = await ctx.supabase
-    .from("transactions")
-    .insert({
-      user_id: ctx.userId,
-      type: d.type,
-      payment_method: d.payment_method,
-      account_id: d.account_id,
-      transfer_account_id: null,
-      card_id: cardId,
-      statement_id: statementId,
-      category_id: d.category_id,
-      subcategory_id: d.subcategory_id,
-      amount: d.amount,
-      purchase_date: d.purchase_date,
-      competence_date: d.competence_date,
-      description: d.description,
-      notes: d.notes,
-      tags: d.tags,
-      status: d.status,
-      // K0: compra de cartão nunca guarda a data; fora de pago/recebido também é nulo.
-      liquidado_em: dataDeLiquidacaoAGravar({
-        status: d.status,
-        card_id: cardId,
-        liquidado_em: d.liquidado_em,
-      }),
-      // Despesa e ajuste: o objeto de sempre (sem `valor_pessoal`, que a divisão deriva depois).
-      // Receita: as duas colunas da A1.
-      ...(colunasDaReceitaDecididas ?? { classificacao }),
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) return { ok: false, erro: "Não foi possível salvar o lançamento." };
-
-  // Grava a divisão (shared_expenses + receivables) e deriva o valor_pessoal. Quase-atômico:
-  // se a divisão falhar, remove a transação para não deixar gasto sem divisão consistente.
-  if (isShared) {
-    const res = await applySplit(ctx, {
-      transactionId: data.id,
+  // 03-G2 (D-G2-14): o lançamento e a divisão vão numa chamada só, atômica — sem compensação.
+  // A conta da divisão roda ANTES: divisão que não fecha recusa sem nenhuma escrita.
+  let colunas: ColunasDaResponsabilidade | undefined;
+  let divisao: DivisaoPayload | null = null;
+  if (colunasDaReceitaDecididas) {
+    colunas = colunasDaReceitaDecididas;
+  } else if (isShared) {
+    const montada = montarDivisaoAVista({
       totalCentavos: reaisParaCentavos(d.amount),
+      parts: split.data.parts,
       statementId,
       cardId,
-      parts: split.data.parts,
+      alcance: "regra-cheia",
     });
-    if (!res.ok) {
-      await ctx.supabase.from("transactions").delete().eq("id", data.id);
-      return { ok: false, erro: res.error };
-    }
-    await ctx.supabase
-      .from("transactions")
-      .update({ valor_pessoal: centavosParaReais(res.minhaParteCentavos) })
-      .eq("id", data.id);
+    if (!montada.ok) return { ok: false, erro: montada.error };
+    colunas = {
+      classificacao: split.data.classificacao,
+      valor_pessoal: centavosParaReais(montada.minhaParteCentavos),
+    };
+    divisao = montada.divisao;
   }
 
-  return { ok: true, id: data.id, statementId };
+  // Despesa/ajuste pessoal: a linha não leva `classificacao` nem `valor_pessoal` (o SQL faz o
+  // coalesce 'pessoal' e deixa `valor_pessoal` nulo, como o insert de antes).
+  const linha = montarLinhaDoLancamento(d, { cardId, statementId, transferGroupId: null, colunas, reembolsoPessoaId });
+  const { data, error } = await ctx.supabase.rpc("salvar_lancamento", {
+    p_lancamento: linha,
+    p_divisao: divisao,
+  });
+  if (error || !data) return falhaDaRpc(error, "salvar o lançamento");
+
+  return { ok: true, id: data, statementId };
 }
 
 /**
@@ -267,11 +346,16 @@ export async function excluirTransacaoSimples(
   ctx: FinanceServiceContext,
   id: string,
 ): Promise<{ ok: true } | { ok: false; erro: string }> {
-  const { data: existente } = await ctx.supabase
+  // 03-G (D-G19): erro de leitura não é "não existe" — recusa antes de qualquer escrita.
+  const res = await ctx.supabase
     .from("transactions")
     .select("id, transfer_group_id")
     .eq("id", id)
     .maybeSingle();
+  if (res.error) {
+    return { ok: false, erro: `Não foi possível ler ${ROTULOS_DE_LEITURA.lancamento}. Nada foi alterado.` };
+  }
+  const existente = res.data;
 
   if (!existente) return { ok: false, erro: "O lançamento não existe mais (ou não é seu)." };
   if (existente.transfer_group_id) {

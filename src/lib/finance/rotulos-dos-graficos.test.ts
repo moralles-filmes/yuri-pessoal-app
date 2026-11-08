@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rotulosDosGraficos } from "@/lib/finance/rotulos-dos-graficos";
+import { rotulosDaComposicao, rotulosDosGraficos } from "@/lib/finance/rotulos-dos-graficos";
 
 describe("rotulosDosGraficos (desenho 2026-10-18, §5)", () => {
   it("competência: títulos dizem que é meu e a base aparece na descrição", () => {
@@ -46,5 +46,27 @@ describe("rotulosDosGraficos (desenho 2026-10-18, §5)", () => {
     const x = rotulosDosGraficos({ base: "caixa", ateODia: null }).cardMinhasSaidas;
     expect(x.titulo("outubro de 2026")).toBe("Minhas saídas · outubro de 2026 · Caixa realizado");
     expect([x.bruto, x.terceiros]).toEqual(["Saiu das contas (bruto)", "Parte de terceiros no que saiu"]);
+  });
+});
+
+describe("rotulosDaComposicao (R1: rosca e formas rotulam pela responsabilidade)", () => {
+  it("meu: os textos de hoje do painel", () => {
+    expect(rotulosDaComposicao("meu")).toEqual({
+      ariaDaLista: "Minhas saídas por categoria",
+      totalDaRosca: "minhas saídas",
+      serieDaForma: "Minha parte",
+    });
+  });
+
+  it("terceiros e consolidado: nenhum texto fala de 'minha', 'minhas' ou 'meu'", () => {
+    for (const resp of ["terceiros", "consolidado"] as const) {
+      const textos = Object.values(rotulosDaComposicao(resp));
+      expect(textos.length).toBe(3);
+      for (const t of textos) expect(t, `${resp}: ${t}`).not.toMatch(/\b(minha|minhas|meu|meus)\b/i);
+    }
+    expect(rotulosDaComposicao("terceiros").totalDaRosca).toBe("saídas de terceiros");
+    expect(rotulosDaComposicao("terceiros").serieDaForma).toBe("Parte de terceiros");
+    expect(rotulosDaComposicao("consolidado").totalDaRosca).toBe("saídas (valor cheio)");
+    expect(rotulosDaComposicao("consolidado").serieDaForma).toBe("Valor cheio");
   });
 });

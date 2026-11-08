@@ -12,6 +12,7 @@ import {
   Check,
   CheckCircle2,
   ExternalLink,
+  HandCoins,
   Loader2,
   RotateCcw,
   Settings2,
@@ -44,9 +45,15 @@ import {
 import { cn } from "@/lib/utils";
 import { ImportBatchStatusBadge, ImportRowStatusBadge } from "./import-badges";
 import { ImportRowSplitDialog } from "./import-split-dialog";
+import { ImportRowReembolsoDialog } from "./import-reembolso-dialog";
 import { InstallmentBadge } from "@/components/financeiro/badges";
 import { CLASSIFICACAO_LABELS } from "@/lib/finance/constants";
-import { centavosParaReais, formatCurrency, formatDate } from "@/lib/format";
+import {
+  centavosParaReais,
+  formatCurrency,
+  formatDate,
+  reaisParaCentavos,
+} from "@/lib/format";
 import { CategoryPicker } from "@/components/finance/category-picker";
 import {
   categoriaServeAoTipo,
@@ -70,6 +77,12 @@ import {
   coberturaDaFatura,
   type CoberturaFatura,
 } from "@/lib/import/cobertura";
+import {
+  previasDoReembolsoNoLote,
+  type LinhaDoReembolso,
+  type SituacaoDaPessoa,
+} from "@/lib/import/reembolso-do-lote";
+import type { PreviaDoReembolso } from "@/lib/finance/reembolso";
 import {
   cancelImportBatch,
   commitImport,
@@ -122,12 +135,37 @@ type Subcategoria = { id: string; name: string; category_id: string };
 type PersonOption = { id: string; nome: string };
 type AccountOption = { id: string; name: string };
 
+/**
+ * As linhas do lote que entram na SEQUÊNCIA do reembolso (04-C · T7): entrada de extrato que vai
+ * ser importada, de uma pessoa. Mesmo recorte do `commitImport` (`para_importar`, sem conta de
+ * destino) — a prévia só vale se descreve o que o commit vai gravar, na ordem do arquivo.
+ */
+function linhasDoReembolso(rows: ImportRowWithRelations[]): LinhaDoReembolso[] {
+  return rows
+    .filter(
+      (r) =>
+        r.tipo === "receita" &&
+        r.status === "para_importar" &&
+        !r.transfer_account_id &&
+        r.valor != null &&
+        r.receita_classificacao === "terceiro" &&
+        r.reembolso_pessoa_id != null,
+    )
+    .map((r) => ({
+      id: r.id,
+      valorCentavos: reaisParaCentavos(r.valor ?? 0),
+      pessoaId: r.reembolso_pessoa_id,
+      ordem: r.linha_index,
+    }));
+}
+
 export function ImportReview({
   batch,
   rows,
   categories,
   subcategories,
   people,
+  situacoesDoReembolso,
   accounts,
   today,
 }: {
@@ -136,6 +174,8 @@ export function ImportReview({
   categories: Categoria[];
   subcategories: Subcategoria[];
   people: PersonOption[];
+  /** O que cada pessoa deve (extrato). `null` = a leitura falhou; `{}` em lote de cartão (não se usa). */
+  situacoesDoReembolso: Record<string, SituacaoDaPessoa> | null;
   /** Contas do dono, para marcar uma linha do extrato como transferência. */
   accounts: AccountOption[];
   /** 'yyyy-MM-dd' de hoje, vindo do servidor (o fuso do aparelho não decide nada aqui). */
@@ -166,6 +206,12 @@ export function ImportReview({
   const temTransferencias = totais.transferencias > 0;
   // Em fatura de cartão, "receita" significa estorno/crédito (reduz a fatura).
   const creditoLabel = batch.origem === "cartao" ? "Estornos" : "Receitas";
+  // Reembolso: só extrato. A prévia de cada linha considera as anteriores da mesma pessoa.
+  const sequenciaDoReembolso = batch.origem === "conta" ? linhasDoReembolso(rows) : [];
+  const previasDoReembolso = previasDoReembolsoNoLote(
+    sequenciaDoReembolso,
+    situacoesDoReembolso ?? {},
+  );
 
   return (
     <div className="space-y-5">
@@ -368,6 +414,11 @@ export function ImportReview({
                   categories={categories}
                   subcategories={subcategories}
                   people={people}
+                  situacoesDoReembolso={situacoesDoReembolso}
+                  sequenciaDoReembolso={sequenciaDoReembolso}
+                  previaDoReembolso={
+                    situacoesDoReembolso ? (previasDoReembolso.get(r.id) ?? null) : null
+                  }
                   loteCancelado={isCancelado}
                   origem={batch.origem}
                   accounts={accounts}
@@ -1090,6 +1141,9 @@ function RowLine({
   categories,
   subcategories,
   people,
+  situacoesDoReembolso,
+  sequenciaDoReembolso,
+  previaDoReembolso,
   loteCancelado,
   origem,
   accounts,
@@ -1100,6 +1154,10 @@ function RowLine({
   categories: Categoria[];
   subcategories: Subcategoria[];
   people: PersonOption[];
+  situacoesDoReembolso: Record<string, SituacaoDaPessoa> | null;
+  sequenciaDoReembolso: LinhaDoReembolso[];
+  /** A prévia desta linha na sequência do lote; `null` = sem pessoa ou sem leitura. */
+  previaDoReembolso: PreviaDoReembolso | null;
   loteCancelado: boolean;
   origem: "cartao" | "conta";
   accounts: AccountOption[];
@@ -1141,6 +1199,22 @@ function RowLine({
   const podeDividir =
     isOpenForEdit && row.tipo === "despesa" && row.valor != null && !isTransferencia;
   const isShared = row.classificacao !== "pessoal";
+  // Reembolso (04-C · T7): só a ENTRADA de extrato, no mesmo lugar onde a despesa tem "Dividir".
+  const podeReembolsar =
+    origem === "conta" &&
+    isOpenForEdit &&
+    row.tipo === "receita" &&
+    row.valor != null &&
+    !isTransferencia;
+  const reembolsoDe =
+    origem === "conta" && row.tipo === "receita" && !isTransferencia
+      ? row.reembolso_pessoa_id
+      : null;
+  const faltaEscolherASobra =
+    row.status === "para_importar" &&
+    reembolsoDe != null &&
+    !row.reembolso_sobra &&
+    (previaDoReembolso?.sobraCentavos ?? 0) > 0;
   // Marcar como transferência só faz sentido em extrato, e só havendo OUTRA conta para onde
   // mandar o dinheiro (a do próprio lote não conta — `account_id` e `transfer_account_id`
   // iguais são recusados pelo schema do lançamento).
@@ -1210,6 +1284,21 @@ function RowLine({
                 {CLASSIFICACAO_LABELS[row.classificacao]}
               </span>
               <DivisaoDaLinhaResumo row={row} people={people} />
+            </span>
+          )}
+          {reembolsoDe && (
+            <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="inline-flex w-fit max-w-full items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary ring-1 ring-primary/20">
+                <HandCoins className="size-3 shrink-0" />
+                <span className="min-w-0 truncate">
+                  Reembolso · {nomeDaPessoa(people, reembolsoDe)}
+                </span>
+              </span>
+              {faltaEscolherASobra && (
+                <span className="text-[11px] text-amber-700 dark:text-amber-400">
+                  Falta escolher a sobra
+                </span>
+              )}
             </span>
           )}
           {(isTransferencia || podeSerTransferencia) && (
@@ -1329,6 +1418,34 @@ function RowLine({
                     className={cn(isShared && "text-primary")}
                   >
                     <Users />
+                  </Button>
+                }
+              />
+            )}
+            {podeReembolsar && (
+              <ImportRowReembolsoDialog
+                rowId={row.id}
+                descricao={row.descricao ?? ""}
+                valor={row.valor ?? 0}
+                ordem={row.linha_index}
+                classificacao={row.receita_classificacao === "terceiro" ? "terceiro" : "pessoal"}
+                pessoaId={row.reembolso_pessoa_id}
+                sobra={
+                  row.reembolso_sobra === "receita" || row.reembolso_sobra === "saldo"
+                    ? row.reembolso_sobra
+                    : null
+                }
+                people={people}
+                situacoes={situacoesDoReembolso}
+                outrasLinhas={sequenciaDoReembolso.filter((l) => l.id !== row.id)}
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Reembolso"
+                    className={cn(row.reembolso_pessoa_id && "text-primary")}
+                  >
+                    <HandCoins />
                   </Button>
                 }
               />

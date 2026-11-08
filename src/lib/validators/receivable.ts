@@ -18,11 +18,6 @@ export const bulkReceivablesSchema = z
       .min(1, "Selecione ao menos um recebível")
       .max(2000, "Selecione no máximo 2000 recebíveis de uma vez"),
     acao: z.enum(BULK_RECEIVABLE_ACTIONS),
-    /** Só tem efeito no `receber`; ausente ou inválida cai em hoje. */
-    pago_em: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida")
-      .optional(),
   })
   .strict();
 

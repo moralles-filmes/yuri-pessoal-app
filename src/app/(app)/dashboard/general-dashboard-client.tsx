@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CardShell } from "@/components/dashboard/general/card-shell";
 import { PeriodToolbar } from "@/components/dashboard/general/period-toolbar";
 import {
@@ -16,7 +23,14 @@ import {
   type DashboardLayout,
   type DashCardId,
 } from "@/lib/dashboard/cards";
-import type { DashPeriod, DashView, DashWindow } from "@/lib/dashboard/period";
+import {
+  DASH_PERIOD_LABELS,
+  DASH_PERIODS,
+  payloadDoSalvar,
+  type DashPeriod,
+  type DashView,
+  type DashWindow,
+} from "@/lib/dashboard/period";
 
 /** Move `id` para a posição de `overId`, preservando os demais. */
 function reorder(order: DashCardId[], id: DashCardId, overId: DashCardId): DashCardId[] {
@@ -36,6 +50,9 @@ export function GeneralDashboard({
   view,
   customFrom,
   customTo,
+  banner,
+  faixa,
+  subtituloById,
 }: {
   layout: DashboardLayout;
   contentById: Record<DashCardId, React.ReactNode>;
@@ -44,10 +61,18 @@ export function GeneralDashboard({
   view: DashView;
   customFrom: string;
   customTo: string;
+  banner: React.ReactNode;
+  faixa: React.ReactNode;
+  subtituloById: Partial<Record<DashCardId, string>>;
 }) {
   const router = useRouter();
   const [order, setOrder] = React.useState<DashCardId[]>(layout.order);
   const [hidden, setHidden] = React.useState<DashCardId[]>(layout.hidden);
+  // R7: o período que o "Salvar" grava é o PADRÃO escolhido aqui, nunca o da URL.
+  const [periodoPadrao, setPeriodoPadrao] = React.useState<DashPeriod>(
+    // "custom" não está entre as opções (sem de/até não há o que salvar): abre em "mes".
+    layout.period === "custom" ? "mes" : layout.period,
+  );
   const [personalizing, setPersonalizing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const dragId = React.useRef<DashCardId | null>(null);
@@ -74,7 +99,7 @@ export function GeneralDashboard({
 
   async function save() {
     setSaving(true);
-    const res = await saveDashboardLayout({ order, hidden, period, view });
+    const res = await saveDashboardLayout(payloadDoSalvar({ order, hidden, periodoPadrao }));
     setSaving(false);
     if (res.ok) {
       toast.success("Layout salvo.");
@@ -92,6 +117,7 @@ export function GeneralDashboard({
     if (res.ok) {
       setOrder(DEFAULT_DASHBOARD_LAYOUT.order);
       setHidden([]);
+      setPeriodoPadrao(DEFAULT_DASHBOARD_LAYOUT.period);
       toast.success("Layout restaurado ao padrão.");
       setPersonalizing(false);
       router.refresh();
@@ -103,6 +129,7 @@ export function GeneralDashboard({
   function cancel() {
     setOrder(layout.order);
     setHidden(layout.hidden);
+    setPeriodoPadrao(layout.period === "custom" ? "mes" : layout.period);
     setPersonalizing(false);
   }
 
@@ -141,13 +168,39 @@ export function GeneralDashboard({
       </div>
 
       {personalizing && (
-        <p className="rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Arraste os cards para reordenar (ou use ↑/↓) e clique no olho para
-          ocultar/mostrar. Lembre de <strong>Salvar</strong>.
-        </p>
+        <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-muted-foreground">
+            Arraste os cards para reordenar (ou use ↑/↓) e clique no olho para ocultar/mostrar.{" "}
+            <strong>Salvar</strong> grava a ordem, os ocultos e o período padrão escolhido.
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <label htmlFor="periodo-padrao" className="text-xs font-medium">
+              Período padrão
+            </label>
+            <Select
+              value={periodoPadrao}
+              onValueChange={(v) => setPeriodoPadrao(v as DashPeriod)}
+            >
+              <SelectTrigger id="periodo-padrao" size="sm" className="w-[9.5rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DASH_PERIODS.filter((p) => p !== "custom").map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {DASH_PERIOD_LABELS[p]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {banner}
+
+      {faixa}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {shown.map((id) => {
           const idx = order.indexOf(id);
           return (
@@ -155,6 +208,7 @@ export function GeneralDashboard({
               key={id}
               id={id}
               personalizing={personalizing}
+              subtitulo={subtituloById[id]}
               hidden={hiddenSet.has(id)}
               isFirst={idx === 0}
               isLast={idx === order.length - 1}

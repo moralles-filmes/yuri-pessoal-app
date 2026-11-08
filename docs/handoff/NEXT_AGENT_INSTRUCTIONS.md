@@ -47,6 +47,15 @@ e da 28 foram consumidas e não cobrem novas chamadas. Não há nova fase do roa
 
 As **14 fases do roadmap original**, a **15 (TO-DO)**, a **16 (Dieta)**, a **17 (Treinos)** e a
 **18 (IA)** estão concluídas. **Não há 18-G e não há Fase 19.**
+## 🟢 Redesign financeiro: fechado, falta o merge do PR #65 (2026-11-07)
+
+O redesign do financeiro terminou na REDESIGN-08. As fases 03-G2 a 08 estão em
+`feat/redesign-00-auditoria` (local, sem push) e vão a `main` pelo PR #65, **só a pedido do dono**.
+Antes de mexer em Painel, Relatório, Faturas, Cartões, Parcelamentos, Terceiros ou Dashboard, leia
+`docs/redesign/STATUS.md`. Para publicar: `docs/redesign/PR-65.md`. Para desfazer:
+`docs/redesign/REVERSAO.md` (as migrations não revertem). Backlog pós-redesign: §13.5 do desenho da
+08 e a seção "Fica de fora" do `PR-65.md`.
+
 
 **Melhoria entra como TAREFA AVULSA**, não como subfase: branch própria e o fluxo normal do
 projeto — brainstorming quando houver decisão de design em aberto, depois plano, depois

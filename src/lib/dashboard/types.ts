@@ -10,6 +10,7 @@ import type { CompletudeFinanceira } from "@/lib/finance/pipeline";
 import type { HabitCategory, HabitUnit } from "@/lib/habits/constants";
 import type { StudyCategory } from "@/lib/studies/constants";
 import type { TaskPriority, TaskStatus, TaskStoredStatus } from "@/lib/tasks/constants";
+import type { EstadoDoDiaNaSemana } from "@/lib/dashboard/treinos-semana";
 
 /* ───────────────────────────── Financeiro ───────────────────────────── */
 
@@ -148,6 +149,10 @@ export type StudiesCardData = {
 
 /* ───────────────────────────── Notificações (placeholder até a Fase 13) ───────────────────────────── */
 
+/**
+ * `available: false` é só "tabela ausente" (o "Em breve" legítimo). Erro de leitura NÃO chega
+ * aqui: `getNotificationsCardData` lança `ErroDeLeitura` e o card mostra a falha (D-06-M5).
+ */
 export type NotificationsCardData = {
   available: boolean;
   unread: number;
@@ -236,6 +241,10 @@ export type TrainingCardData = {
   } | null;
   /** Já houve sessão concluída hoje? */
   trainedToday: boolean;
+  /** Os 7 dias da semana (a partir de `weekStartsOn`), para as barras. Sem cobrança (inv. 22). */
+  semana: { data: string; rotulo: string; estado: EstadoDoDiaNaSemana }[];
+  /** Primeiro e último dia da semana mostrada, como data pura. */
+  semanaDe: { de: string; ate: string };
   /** Sessões da semana × meta semanal das preferências. `target` nulo = sem meta declarada. */
   week: { sessions: number; target: number | null; volumeKg: number | null; partialReason: string };
   /** A regra de contagem vigente, que viaja junto do volume (17-D). */

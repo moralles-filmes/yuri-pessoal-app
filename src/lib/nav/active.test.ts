@@ -153,6 +153,12 @@ describe("a sidebar sobre as rotas reais", () => {
     expect(findNavItem("/tarefas")?.title).toBe("Rotinas e tarefas");
     expect(findNavItem("/todo")?.title).toBe("TO-DO");
   });
+
+  it("Cartões e faturas: /faturas, /parcelamentos e /cartoes/meus acendem o mesmo item", () => {
+    expect(findNavItem("/faturas")?.title).toBe("Cartões e faturas");
+    expect(findNavItem("/parcelamentos")?.title).toBe("Cartões e faturas");
+    expect(findNavItem("/cartoes/meus")?.title).toBe("Cartões e faturas");
+  });
 });
 
 describe("a decisão continua sendo uma só", () => {

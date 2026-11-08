@@ -162,6 +162,105 @@ describe("03-E · numerosDoCaixa — reembolsos", () => {
   });
 });
 
+describe("04-C · numerosDoCaixa — reembolso vinculado conta UMA vez", () => {
+  const AUTO = (valor: number, em = "2026-10-10") => ({ valor, recebido_em: em, transaction_id: "t-vinc" });
+
+  it("receita vinculada de 500 com alocação automática de 500: entradas = 500, nunca 1.000", () => {
+    const vinculada = tx({
+      id: "t-vinc",
+      type: "receita",
+      status: "recebido",
+      amount: 500,
+      valor_pessoal: 0,
+      reembolso_pessoa_id: "pessoa-a",
+    });
+    // status `pago` de propósito: a alocação automática sozinha não pode virar legado K0.
+    const recebiveis: RecebivelComRecebimentos[] = [
+      { valor: 500, status: "pago", pago_em: "2026-10-10", recebimentos: [AUTO(500)] },
+    ];
+    const n = numeros([vinculada], { recebiveis });
+    expect(entradasDoCaixa(n)).toBe(500);
+    expect(n.reembolsosRecebidos).toBe(500);
+    expect(n.outrasEntradasDeTerceiros).toBe(0);
+    expect(n.reembolsosVinculados).toBe(500);
+    expect(n.rendaPessoalRecebida).toBe(0);
+    expect(n.resultadoDeCaixa).toBe(500);
+    expect(n.avisoDeSobreposicao).toBe(false);
+  });
+
+  it("vinculada compartilhada de 2.500 com valor_pessoal 500: renda +500, reembolsos +2.000", () => {
+    const vinculada = tx({
+      id: "t-vinc",
+      type: "receita",
+      status: "recebido",
+      amount: 2500,
+      valor_pessoal: 500,
+      reembolso_pessoa_id: "pessoa-a",
+    });
+    const recebiveis: RecebivelComRecebimentos[] = [
+      { valor: 2000, status: "pago", pago_em: "2026-10-10", recebimentos: [AUTO(2000)] },
+    ];
+    const n = numeros([vinculada], { recebiveis });
+    expect(n.rendaPessoalRecebida).toBe(500);
+    expect(n.reembolsosRecebidos).toBe(2000);
+    expect(n.reembolsosVinculados).toBe(2000);
+    expect(n.outrasEntradasDeTerceiros).toBe(0);
+    expect(entradasDoCaixa(n)).toBe(2500);
+    expect(n.resultadoDeCaixa).toBe(2500);
+  });
+
+  it("recebimento manual + vinculada: reembolsos somam os dois, sem sobreposição", () => {
+    const vinculada = tx({
+      id: "t-vinc",
+      type: "receita",
+      status: "recebido",
+      amount: 500,
+      valor_pessoal: 0,
+      reembolso_pessoa_id: "pessoa-a",
+    });
+    const recebiveis: RecebivelComRecebimentos[] = [
+      {
+        valor: 700,
+        status: "pago",
+        pago_em: "2026-10-10",
+        recebimentos: [{ valor: 200, recebido_em: "2026-10-03" }, AUTO(500)],
+      },
+    ];
+    const n = numeros([vinculada], { recebiveis });
+    expect(n.reembolsosRecebidos).toBe(700);
+    expect(n.reembolsosVinculados).toBe(500);
+    expect(entradasDoCaixa(n)).toBe(700);
+    expect(n.avisoDeSobreposicao).toBe(false);
+  });
+
+  it("legado: recebimento manual + receita de terceiro SEM pessoa continua acendendo o aviso", () => {
+    const solta = tx({ type: "receita", status: "recebido", amount: 500, valor_pessoal: 0 });
+    const recebiveis: RecebivelComRecebimentos[] = [
+      { valor: 100, status: "pago", pago_em: "2026-10-03", recebimentos: [{ valor: 100, recebido_em: "2026-10-03" }] },
+    ];
+    const n = numeros([solta], { recebiveis });
+    expect(n.reembolsosRecebidos).toBe(100);
+    expect(n.outrasEntradasDeTerceiros).toBe(500);
+    expect(n.reembolsosVinculados).toBe(0);
+    expect(n.avisoDeSobreposicao).toBe(true);
+  });
+
+  it("receita vinculada fora do período não entra em reembolsosVinculados", () => {
+    const vinculada = tx({
+      type: "receita",
+      status: "recebido",
+      amount: 500,
+      valor_pessoal: 0,
+      reembolso_pessoa_id: "pessoa-a",
+      competence_date: "2026-09-10",
+      liquidado_em: "2026-09-10",
+    });
+    const n = numeros([vinculada]);
+    expect(n.reembolsosVinculados).toBe(0);
+    expect(n.reembolsosRecebidos).toBe(0);
+  });
+});
+
 describe("03-E · numerosDoCaixa — saídas", () => {
   it("compras no cartão + pagamento de fatura: só o pagamento sai", () => {
     const compras = [

@@ -4,17 +4,19 @@
  * ⛔ O card é uma CASCA: todo número vem pronto de `getNutritionCardData`, que por sua vez
  * consome `reports.ts`, `diary.ts` e `body/measurements.ts`. Nenhuma conta acontece aqui.
  *
+ * REDESIGN-06 T11: sai Aderência, Água (é do módulo Hábitos), Lista de compras e Peso (é de
+ * `body_*`); ficam os quadros Energia/Proteína, "X de Y registradas" e a próxima refeição.
+ *
  * ⛔ DIA SEM REGISTRO NÃO É ZERO. Quando `amount` é `null`, a tela escreve "sem registro" —
  * nunca "0 kcal". E quando o total é parcial, isso aparece escrito, não só numa cor: um
  * número com cara de exato somado sobre itens sem o nutriente analisado é mentira numérica.
  */
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/format";
-import { formatMeasurement } from "@/lib/body/measurements";
+import { buttonVariants } from "@/components/ui/button";
 import { getNutritionCardData } from "@/lib/dashboard/queries";
 import type { DashNutrientValue } from "@/lib/dashboard/types";
-import { Metric, MetricRow, CardEmpty } from "./primitives";
+import { Quadro, MetricRow } from "./primitives";
 
 const nf = (digits = 0) =>
   new Intl.NumberFormat("pt-BR", { maximumFractionDigits: digits });
@@ -40,13 +42,12 @@ export async function NutritionCard({
 
   if (!data.hasModule) {
     return (
-      <CardEmpty>
-        Nada configurado ainda.{" "}
-        <Link href="/nutricao" className="underline underline-offset-2">
-          Abrir Dieta e Alimentação
+      <div className="flex flex-col items-center gap-3 py-6 text-center">
+        <p className="text-sm text-muted-foreground">Nada configurado ainda.</p>
+        <Link href="/nutricao" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          Configurar dieta
         </Link>
-        .
-      </CardEmpty>
+      </div>
     );
   }
 
@@ -56,15 +57,8 @@ export async function NutritionCard({
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
-        <Metric
-          label={data.energy?.label ?? "Energia"}
-          value={nutrientText(data.energy)}
-          accent={Boolean(data.energy?.amount !== null && data.energy?.percent !== null)}
-        />
-        <Metric
-          label={data.protein?.label ?? "Proteína"}
-          value={nutrientText(data.protein)}
-        />
+        <Quadro valor={nutrientText(data.energy)} rotulo={data.energy?.label ?? "Energia"} />
+        <Quadro valor={nutrientText(data.protein)} rotulo={data.protein?.label ?? "Proteína"} />
       </div>
 
       {parcial && (
@@ -74,20 +68,12 @@ export async function NutritionCard({
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        <Metric
-          label="Refeições registradas"
-          value={`${data.mealsDone} de ${data.mealsTotal}`}
-        />
-        <Metric
-          label="Pendentes"
-          value={String(data.mealsPending)}
-          accent={data.mealsLate > 0}
-          hint={data.mealsLate > 0 ? `${data.mealsLate} passou do horário` : undefined}
-        />
-      </div>
-
       <div className="space-y-1.5">
+        <MetricRow
+          label="Refeições"
+          value={`${data.mealsDone} de ${data.mealsTotal} registradas`}
+        />
+
         {data.nextMeal && (
           <MetricRow
             label={
@@ -111,13 +97,6 @@ export async function NutritionCard({
           />
         )}
 
-        {data.adherence !== null && (
-          <MetricRow
-            label="Aderência de hoje"
-            value={`${nf(0).format(data.adherence)}%`}
-          />
-        )}
-
         {!data.hasRecord && (
           <p className="text-sm text-muted-foreground">
             Nada registrado hoje ainda.{" "}
@@ -126,67 +105,6 @@ export async function NutritionCard({
             </Link>
             .
           </p>
-        )}
-
-        {data.water && (
-          <MetricRow
-            label={
-              // A ÁGUA É DO MÓDULO HÁBITOS — a Dieta só lê e linka para lá.
-              <Link href="/habitos?view=agua" className="hover:underline">
-                Água (Hábitos)
-              </Link>
-            }
-            value={`${nf(2).format(data.water.value)} / ${nf(2).format(data.water.target)} ${data.water.unit}`}
-          />
-        )}
-
-        {data.shoppingLists > 0 && (
-          <MetricRow
-            label={
-              <Link href="/nutricao/compras" className="hover:underline">
-                Lista de compras
-              </Link>
-            }
-            value={
-              data.shoppingPending > 0
-                ? `${data.shoppingPending} ${data.shoppingPending === 1 ? "item" : "itens"} a pegar`
-                : "tudo pego"
-            }
-          />
-        )}
-
-        {data.weight ? (
-          <MetricRow
-            label={
-              <Link href="/nutricao/medidas" className="hover:underline">
-                Peso · {formatDate(data.weight.measuredOn)}
-              </Link>
-            }
-            value={
-              <span className="flex items-center gap-1.5">
-                {formatMeasurement(data.weight.value, data.weight.unit, data.weight.decimals)}
-                {data.weight.sincePrevious !== null && data.weight.sincePrevious !== 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {data.weight.sincePrevious > 0 ? "+" : "−"}
-                    {formatMeasurement(
-                      Math.abs(data.weight.sincePrevious),
-                      data.weight.unit,
-                      data.weight.decimals,
-                    )}
-                  </span>
-                )}
-              </span>
-            }
-          />
-        ) : (
-          <MetricRow
-            label="Peso"
-            value={
-              <Link href="/nutricao/medidas" className="text-sm font-normal hover:underline">
-                sem registro
-              </Link>
-            }
-          />
         )}
       </div>
     </div>

@@ -61,6 +61,13 @@ export type TxDeCaixa = {
   /** Só os gráficos por forma/categoria leem (desenho 2026-10-18). Opcionais: os números não usam. */
   payment_method?: PaymentMethod | null;
   category?: { id: string; name: string; color: string | null } | null;
+  /** 04-B: só exibição na gaveta de registros. Opcional — nenhum número o lê. */
+  description?: string | null;
+  /**
+   * 04-C — a pessoa cujo reembolso esta receita é. Preenchido = a parte de terceiros (`amount −
+   * meu`) é reembolso vinculado, não "outra entrada". Opcional: ausente = sem vínculo.
+   */
+  reembolso_pessoa_id?: string | null;
 };
 
 /** Período INCLUSIVO nas duas pontas, 'yyyy-MM-dd'. */
@@ -71,8 +78,14 @@ export type NumerosDoCaixa = {
   rendaPessoalRecebida: number;
   /** `reembolsosRecebidosNoPeriodo` — chamada, nunca recalculada (03-D). */
   reembolsosRecebidos: number;
-  /** Σ (amount − meu) das mesmas receitas: o dinheiro de terceiros que entrou. */
+  /** Σ (amount − meu) das receitas SEM pessoa vinculada: o dinheiro de terceiros que entrou. */
   outrasEntradasDeTerceiros: number;
+  /**
+   * 04-C — Σ (amount − meu) das receitas COM `reembolso_pessoa_id`. Já está dentro de
+   * `reembolsosRecebidos` (que soma os recebimentos manuais + este); fica exposto para a gaveta
+   * e para a conciliação de "Entradas · terceiros" (= outras + vinculados). Nunca soma de novo.
+   */
+  reembolsosVinculados: number;
   /** Despesas com conta + pagamentos de fatura + transferências sem vínculo. */
   saidasDeCaixa: number;
   /** Parcela de `saidasDeCaixa`, para a tela abrir. */
@@ -119,6 +132,50 @@ export function filtroDaJanelaDeCaixa(p: Periodo): string {
 /* ───────────────────────────── Os números do caixa ───────────────────────────── */
 
 /**
+ * 04-B (D-B-3) — a classe de caixa de UM lançamento, extraída de `numerosDoCaixa` para a gaveta
+ * de registros listar exatamente o que cada número soma. Cada lançamento está em UMA classe;
+ * status e janela de datas ficam FORA dela (quem decide é quem chama).
+ *
+ *  - `renda`: receita com conta (renda pessoal + parte de terceiros);
+ *  - `despesa`: despesa com conta;
+ *  - `fatura`: transferência que pagou fatura (entra nas saídas);
+ *  - `sem-vinculo`: transferência com conta e sem destino (entra nas saídas, declarada);
+ *  - `entre-contas`: transferência com conta e destino (informativa);
+ *  - `sem-conta`: liquidado sem conta de origem — não moveu conta (P2), contado à parte;
+ *  - `fora`: compra/estorno de cartão e `ajuste`.
+ */
+export type ClasseDeCaixa =
+  | "renda"
+  | "despesa"
+  | "fatura"
+  | "sem-vinculo"
+  | "entre-contas"
+  | "sem-conta"
+  | "fora";
+
+export function classeDeCaixa(
+  t: TxDeCaixa,
+  pagamentosDeFatura: ReadonlySet<string>,
+): ClasseDeCaixa {
+  if (t.type === "receita") {
+    // Estorno de cartão: já reduz a fatura e não cai em conta.
+    if (t.card_id !== null) return "fora";
+    return t.account_id === null ? "sem-conta" : "renda";
+  }
+  if (t.type === "despesa") {
+    // Compra no cartão: quem sai da conta é o pagamento da fatura.
+    if (t.card_id !== null) return "fora";
+    return t.account_id === null ? "sem-conta" : "despesa";
+  }
+  if (t.type === "transferencia") {
+    if (pagamentosDeFatura.has(t.id)) return "fatura";
+    if (t.account_id === null) return "sem-conta";
+    return t.transfer_account_id !== null ? "entre-contas" : "sem-vinculo";
+  }
+  return "fora";
+}
+
+/**
  * Os números do §13.2 sobre os lançamentos `pago`/`recebido` (`SETTLED_STATUSES`) cuja data de
  * caixa cai em `periodo`. Cada lançamento entra em no máximo UM número; `ajuste`, compra e
  * estorno de cartão ficam fora de todos.
@@ -134,6 +191,7 @@ export function numerosDoCaixa(params: {
 
   let rendaCent = 0;
   let outrasCent = 0;
+  let vinculadosCent = 0;
   let saidasCent = 0;
   let pagamentosCent = 0;
   let semVinculoQtd = 0;
@@ -150,58 +208,60 @@ export function numerosDoCaixa(params: {
     // Quanto este lançamento entrou em algum número (para o contador de aproximados).
     let contado = false;
 
-    if (t.type === "receita") {
-      // Estorno de cartão: já reduz a fatura e não cai em conta.
-      if (t.card_id !== null) continue;
-      if (t.account_id === null) {
-        semConta += 1;
-        continue;
+    switch (classeDeCaixa(t, pagamentosDeFatura)) {
+      case "renda": {
+        const meu = meuCentavos(t);
+        rendaCent += meu;
+        // 04-C: a parte de terceiros de uma receita vinculada é reembolso, não "outra entrada".
+        if (t.reembolso_pessoa_id) vinculadosCent += cent(t.amount) - meu;
+        else outrasCent += cent(t.amount) - meu;
+        contado = true;
+        break;
       }
-      const meu = meuCentavos(t);
-      rendaCent += meu;
-      outrasCent += cent(t.amount) - meu;
-      contado = true;
-    } else if (t.type === "despesa") {
-      // Compra no cartão: quem sai da conta é o pagamento da fatura.
-      if (t.card_id !== null) continue;
-      if (t.account_id === null) {
-        semConta += 1;
-        continue;
-      }
-      saidasCent += cent(t.amount);
-      contado = true;
-    } else if (t.type === "transferencia") {
-      if (pagamentosDeFatura.has(t.id)) {
+      case "despesa":
+        saidasCent += cent(t.amount);
+        contado = true;
+        break;
+      case "fatura":
         saidasCent += cent(t.amount);
         pagamentosCent += cent(t.amount);
         contado = true;
-      } else if (t.account_id !== null && t.transfer_account_id !== null) {
+        break;
+      case "entre-contas":
         entreContasCent += cent(t.amount);
         contado = true;
-      } else if (t.account_id !== null) {
+        break;
+      case "sem-vinculo":
         // Sem destino e sem vínculo: o dinheiro saiu, mas não se sabe para onde. Entra nas
         // saídas e é DECLARADO à parte.
         saidasCent += cent(t.amount);
         semVinculoQtd += 1;
         semVinculoCent += cent(t.amount);
         contado = true;
-      } else {
-        // Sem conta de origem: não se sabe de qual conta o dinheiro saiu. Fica fora, mas
-        // CONTADA (P2) — nunca em silêncio.
+        break;
+      case "sem-conta":
+        // Receita/despesa/transferência sem conta de origem: não se sabe de qual conta o
+        // dinheiro mexeu. Fica fora, mas CONTADA (P2) — nunca em silêncio.
         semConta += 1;
-      }
+        break;
+      case "fora":
+        // Compra/estorno de cartão e `ajuste`: fora de todos os números.
+        break;
     }
-    // `ajuste`: fora de tudo.
 
     if (contado && aproximada) aproximados += 1;
   }
 
-  const reembolsosCent = cent(reembolsosRecebidosNoPeriodo(recebiveis, periodo));
+  // 04-C: só os recebimentos que o dono registrou. As alocações automáticas são a mesma receita
+  // vinculada, que já entrou acima — contá-las de novo dobraria o reembolso.
+  const manuaisCent = cent(reembolsosRecebidosNoPeriodo(recebiveis, periodo, { somenteManuais: true }));
+  const reembolsosCent = manuaisCent + vinculadosCent;
 
   return {
     rendaPessoalRecebida: reais(rendaCent),
     reembolsosRecebidos: reais(reembolsosCent),
     outrasEntradasDeTerceiros: reais(outrasCent),
+    reembolsosVinculados: reais(vinculadosCent),
     saidasDeCaixa: reais(saidasCent),
     pagamentosDeFatura: reais(pagamentosCent),
     transferenciasSemVinculo: { quantidade: semVinculoQtd, total: reais(semVinculoCent) },
@@ -209,7 +269,8 @@ export function numerosDoCaixa(params: {
     resultadoDeCaixa: reais(rendaCent + reembolsosCent + outrasCent - saidasCent),
     aproximados,
     semConta,
-    avisoDeSobreposicao: reembolsosCent > 0 && outrasCent > 0,
+    // Só o legado: recebimento manual + receita de terceiro sem pessoa. A vinculada não conta.
+    avisoDeSobreposicao: manuaisCent > 0 && outrasCent > 0,
   };
 }
 
@@ -260,7 +321,7 @@ export function mesAnteriorDe(mes: string): string {
  * `statements: []` — entradas = `entradas`, saídas = só o à vista; o cartão fica fora sem
  * reimplementar regra nenhuma.
  */
-function resumoAteODia(
+export function resumoAteODia(
   lado: string,
   dia: number,
   transactions: DashTx[],
@@ -408,6 +469,10 @@ export function dataDeLiquidacaoAGravar(params: {
 /** P8 — a mensagem de campo quando a "Data do pagamento" é posterior a hoje. */
 export const MSG_DATA_PAGAMENTO_FUTURA =
   "A data do pagamento não pode ser futura. Deixe vazio se ainda não foi pago.";
+
+// 03-F K3: a da P8 manda deixar vazio, e o campo do pagamento de fatura nunca fica vazio.
+export const MSG_DATA_PAGAMENTO_FATURA_FUTURA =
+  "A data do pagamento não pode ser futura. Pague a fatura quando o valor sair da conta.";
 
 /**
  * P8 — data futura num lançamento liquidado é previsão, não caixa. Comparação de texto
