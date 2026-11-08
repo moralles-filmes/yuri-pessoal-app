@@ -76,6 +76,8 @@
   --color-glass-strong: var(--glass-strong);
   --color-glass-border: var(--glass-border);
   --color-tile: var(--tile);
+  --color-tile-solid: var(--tile-solid);
+  --color-popover-solid: var(--popover-solid);
   --color-tile-border: var(--tile-border);
   --color-pill: var(--pill);
   --color-pill-strong: var(--pill-strong);
@@ -86,6 +88,7 @@
   --color-muted-on-fog: var(--muted-on-fog);
   --ease-mola: cubic-bezier(.22,1.45,.36,1);
   --ease-estalo: cubic-bezier(.22,1.6,.36,1);
+  --shadow-vidro: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -121,10 +124,15 @@
   --glass-sheen: rgba(255, 255, 255, 0.55);
   --glass-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 20px 50px -22px rgba(30, 45, 90, 0.28);
   --tile: rgba(255, 255, 255, 0.55);
+  /* Sólidos das primitivas (09-B): o que `--tile` e `--glass-strong` resolvem a quando não há
+     névoa atrás (transparência reduzida). Valor = `compor()` do teste, não aproximação:
+     tile-solid = tile sobre glass-solid; popover-solid = glass-strong sobre fog-base. */
+  --tile-solid: #fbfbfd;
+  --popover-solid: #fefefe;
   --tile-border: rgba(255, 255, 255, 0.7);
   --pill: rgba(255, 255, 255, 0.82);
   --pill-strong: #ffffff;
-  --track: rgba(22, 24, 29, 0.07);
+  --track: rgba(22, 24, 29, 0.06); /* 09-B: era 0,07; a aba inativa caía a 4,45:1 sobre o vidro na mancha azul */
   --grid: rgba(22, 24, 29, 0.07);
 
   --background: var(--fog-base);
@@ -233,13 +241,15 @@
 
   --glass: rgba(28, 31, 40, 0.58);
   --glass-solid: #14171e;
-  --glass-strong: rgba(38, 42, 52, 0.95);
+  --glass-strong: rgba(38, 42, 52, 0.97); /* 09-B: era 0,95; destructive sobre #fff atrás caía a 4,26:1 */
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-hi: rgba(255, 255, 255, 0.14);
   --glass-lo: rgba(255, 255, 255, 0.04);
   --glass-sheen: rgba(255, 255, 255, 0.07);
   --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 26px 60px -24px rgba(0, 0, 0, 0.7);
   --tile: rgba(255, 255, 255, 0.05);
+  --tile-solid: #202329; /* tile sobre glass-solid; ver o claro */
+  --popover-solid: #252933; /* glass-strong sobre fog-base */
   --tile-border: rgba(255, 255, 255, 0.07);
   --pill: rgba(255, 255, 255, 0.1);
   --pill-strong: rgba(255, 255, 255, 0.16);
@@ -334,6 +344,11 @@
     --card: var(--glass-solid);
     --popover: var(--glass-solid);
     --sidebar: var(--glass-solid);
+    /* 09-B: o campo/ladrilho e a pílula também perdem a translucidez; o ladrilho cai no SEU
+       sólido (1 degrau acima do cartão), a pílula e o popover no sólido do vidro. */
+    --tile: var(--tile-solid);
+    --pill: var(--glass-solid);
+    --popover-solid: var(--glass-solid);
   }
 }
 
@@ -486,7 +501,7 @@
   border: 1px solid var(--tile-border);
 
   @media (prefers-reduced-transparency: reduce) {
-    background: var(--glass-solid);
+    background: var(--tile-solid);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }

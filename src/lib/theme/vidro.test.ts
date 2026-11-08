@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { bloco, css, SRC, semComentarios } from "./ler-tokens";
+import { bloco, claro, css, escuro, SRC, semComentarios } from "./ler-tokens";
 
 const MATERIAIS = ["vidro-casca", "vidro-cartao", "vidro-sobreposicao", "ladrilho"] as const;
 const COM_DESFOQUE = new Set<string>(["vidro-casca", "vidro-sobreposicao"]);
@@ -62,7 +62,9 @@ describe("os quatro materiais", () => {
 
   it.each(MATERIAIS)("%s trata transparência reduzida e cores forçadas", (nome) => {
     const reduzida = corpoDaMedia(corpo(nome), "prefers-reduced-transparency: reduce");
-    expect(reduzida).toMatch(/background\s*:\s*var\(--glass-solid\)/);
+    // 09-B: o ladrilho cai no SEU sólido (1 degrau mais claro que o cartão em que está).
+    const solido = nome === "ladrilho" ? "--tile-solid" : "--glass-solid";
+    expect(reduzida).toMatch(new RegExp(String.raw`background\s*:\s*var\(${solido}\)`));
     expect(reduzida).toMatch(new RegExp(`${SEM_PREFIXO}none`));
     expect(reduzida).toMatch(new RegExp(`${COM_PREFIXO}none`));
 
@@ -105,6 +107,20 @@ describe("os quatro materiais", () => {
 
   it("nenhum lugar usa background-attachment: fixed (quebra no iOS)", () => {
     expect(css).not.toMatch(/background-attachment\s*:\s*fixed/);
+  });
+});
+
+describe("09-B · sólido do ladrilho", () => {
+  it("--tile-solid difere de --glass-solid nos dois temas (o campo continua 1 degrau acima do cartão)", () => {
+    for (const [nome, tm] of [["claro", claro], ["escuro", escuro]] as const) {
+      expect(tm.get("tile-solid"), nome).toBeDefined();
+      expect(tm.get("tile-solid"), nome).not.toBe(tm.get("glass-solid"));
+    }
+  });
+
+  it("o ladrilho não cai mais em --glass-solid com a transparência reduzida", () => {
+    const reduzida = corpoDaMedia(corpo("ladrilho"), "prefers-reduced-transparency: reduce");
+    expect(reduzida).not.toContain("--glass-solid");
   });
 });
 

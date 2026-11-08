@@ -9,7 +9,7 @@
  * anotar o novo valor na tabela do plano (Task 2).
  */
 import { describe, expect, it } from "vitest";
-import { compor, contraste } from "./contraste";
+import { compor, contraste, lerCor } from "./contraste";
 import { claro, escuro } from "./ler-tokens";
 
 const MINIMO = 4.5;
@@ -72,6 +72,29 @@ const DIVIDA_NA_NEVOA = new Set<string>([
   "claro:warning-ink:fog-1", "claro:warning-ink:fog-2", "claro:warning-ink:fog-3",
   "escuro:destructive:fog-1", "escuro:destructive:fog-2", "escuro:destructive:fog-3",
 ]);
+
+/**
+ * Alfa do tingimento do botão `destructive` (`bg-destructive/3`). O desenho dizia 0,10, mas
+ * `--destructive` (claro) já está a 4,72:1 na pior superfície de vidro e qualquer tingimento
+ * da própria cor come essa folga: 0,10 → 4,07:1; 0,05 → 4,37:1; 0,03 → 4,51:1. Vale para os
+ * dois temas (a classe `bg-destructive/N` não troca de alfa com o tema).
+ */
+const ALFA_PERIGO = 0.03;
+
+/** Mensagem da 09-B: as superfícies das primitivas (ladrilho, pílula, trilho, perigo, sobreposição). */
+function exigirPrimitiva(
+  tema: string,
+  texto: string,
+  material: string,
+  superficie: string,
+  razao: number,
+) {
+  const arredondada = (Math.round(razao * 100) / 100).toFixed(2).replace(".", ",");
+  expect(
+    razao,
+    `${tema} · ${texto} sobre ${material} em ${superficie}: ${arredondada}:1 < 4,5:1 — baixe o alfa do tingimento ou da névoa antes de escurecer o texto`,
+  ).toBeGreaterThanOrEqual(MINIMO);
+}
 
 function exigir(tema: string, texto: string, sobre: string, razao: number) {
   const arredondada = (Math.round(razao * 100) / 100).toFixed(2).replace(".", ",");
@@ -146,4 +169,101 @@ describe("09-A · contraste dos tokens de vidro", () => {
       expect(item).not.toMatch(/:(?:muted-on-fog|foreground):/);
     }
   });
+});
+
+describe("09-B · contraste das superfícies das primitivas", () => {
+  for (const [nomeTema, tema] of TEMAS) {
+    const vidros = superficies(tema);
+
+    describe(nomeTema, () => {
+      it("a varredura leu as superfícies de vidro e os tokens das primitivas (anti-tautologia)", () => {
+        expect(vidros).toHaveLength(4);
+        for (const token of ["tile", "pill", "pill-strong", "track", "glass-strong", "destructive"]) {
+          expect(tema.has(token), `--${token}`).toBe(true);
+        }
+      });
+
+      it("ladrilho: foreground e muted-foreground >= 4,5:1", () => {
+        for (const [rotulo, vidro] of vidros) {
+          const fundo = compor(valor(tema, "tile"), vidro);
+          for (const texto of ["foreground", "muted-foreground"]) {
+            exigirPrimitiva(nomeTema, texto, "ladrilho", rotulo, contraste(valor(tema, texto), fundo));
+          }
+        }
+      });
+
+      it("pílula e pílula forte: foreground >= 4,5:1", () => {
+        for (const [rotulo, vidro] of vidros) {
+          for (const material of ["pill", "pill-strong"]) {
+            const fundo = compor(valor(tema, material), vidro);
+            exigirPrimitiva(
+              nomeTema, "foreground", material, rotulo,
+              contraste(valor(tema, "foreground"), fundo),
+            );
+          }
+        }
+      });
+
+      it("trilho do seletor: aba inativa (muted-foreground) e ativa (foreground na pílula forte)", () => {
+        for (const [rotulo, vidro] of vidros) {
+          const trilho = compor(valor(tema, "track"), vidro);
+          exigirPrimitiva(
+            nomeTema, "muted-foreground", "track (aba inativa)", rotulo,
+            contraste(valor(tema, "muted-foreground"), trilho),
+          );
+          const aba = compor(valor(tema, "pill-strong"), trilho);
+          exigirPrimitiva(
+            nomeTema, "foreground", "pill-strong sobre track (aba ativa)", rotulo,
+            contraste(valor(tema, "foreground"), aba),
+          );
+        }
+      });
+
+      it("perigo tingido (botão destructive, 3%): destructive >= 4,5:1", () => {
+        const { rgb } = lerCor(valor(tema, "destructive"));
+        const tinta = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${ALFA_PERIGO})`;
+        for (const [rotulo, vidro] of vidros) {
+          const fundo = compor(tinta, vidro);
+          exigirPrimitiva(
+            nomeTema, "destructive", "destructive/3", rotulo,
+            contraste(valor(tema, "destructive"), fundo),
+          );
+        }
+      });
+
+      it("sobreposição (glass-strong): texto >= 4,5:1 sobre vidro, #000000 e #ffffff", () => {
+        const sobre: Array<[string, string]> = [
+          ...vidros,
+          ["#000000", "#000000"],
+          ["#ffffff", "#ffffff"],
+        ];
+        for (const [rotulo, s] of sobre) {
+          const fundo = compor(valor(tema, "glass-strong"), s);
+          for (const texto of ["foreground", "muted-foreground", "primary", "destructive"]) {
+            exigirPrimitiva(
+              nomeTema, texto, "glass-strong", rotulo, contraste(valor(tema, texto), fundo),
+            );
+          }
+        }
+        // Item ativo de menu/seletor: accent-foreground sobre accent (opaco, independe do fundo).
+        exigirPrimitiva(
+          nomeTema, "accent-foreground", "accent", "item ativo",
+          contraste(valor(tema, "accent-foreground"), valor(tema, "accent")),
+        );
+      });
+
+      it("sólidos das primitivas: tile-solid e popover-solid sustentam o texto", () => {
+        for (const material of ["tile-solid", "popover-solid"]) {
+          const fundo = valor(tema, material);
+          expect(fundo, `--${material}`).toMatch(/^#[0-9a-f]{6}$/);
+          for (const texto of ["foreground", "muted-foreground", "primary", "destructive"]) {
+            exigirPrimitiva(
+              nomeTema, texto, material, "transparência reduzida",
+              contraste(valor(tema, texto), fundo),
+            );
+          }
+        }
+      });
+    });
+  }
 });

@@ -26,7 +26,7 @@ import { describe, expect, it } from "vitest";
 import { CHART_COLORS } from "@/components/dashboard/chart-theme";
 import { PAYMENT_METHOD_LABELS } from "@/lib/finance/constants";
 import { claro, css, escuro, SRC, semComentarios, tema } from "./ler-tokens";
-import { lerCor } from "./contraste";
+import { compor, lerCor } from "./contraste";
 
 /**
  * Tokens que existem SÓ no claro de propósito: não são cor, não mudam com o tema.
@@ -201,6 +201,46 @@ describe("REDESIGN-02-B · contrato dos tokens de tema", () => {
     }
     expect(tema.get("ease-mola")).toBe("cubic-bezier(.22,1.45,.36,1)");
     expect(tema.get("ease-estalo")).toBe("cubic-bezier(.22,1.6,.36,1)");
+  });
+
+  it("09-B: --tile-solid e --popover-solid existem nos dois temas, como sólidos compostos", () => {
+    for (const [nome, tm] of [["claro", claro], ["escuro", escuro]] as const) {
+      for (const token of ["tile-solid", "popover-solid"]) {
+        expect(tm.get(token), `${nome}: --${token}`).toMatch(/^#[0-9a-f]{6}$/);
+      }
+      const v = (t: string) => tm.get(t) ?? "";
+      expect(compor(v("tile"), v("glass-solid")), `${nome}: tile-solid = tile sobre glass-solid`).toBe(
+        v("tile-solid"),
+      );
+      expect(
+        compor(v("glass-strong"), v("fog-base")),
+        `${nome}: popover-solid = glass-strong sobre fog-base`,
+      ).toBe(v("popover-solid"));
+    }
+  });
+
+  it("09-B: o bloco de transparência reduzida dos tokens redefine --tile, --pill e --popover-solid", () => {
+    const m = /@media \(prefers-reduced-transparency: reduce\)\s*\{\s*:root/.exec(css);
+    expect(m, "falta o @media de topo que redefine os tokens").not.toBeNull();
+    const inicio = css.indexOf("{", m?.index ?? 0);
+    let prof = 0;
+    let fim = inicio;
+    for (; fim < css.length; fim += 1) {
+      if (css[fim] === "{") prof += 1;
+      else if (css[fim] === "}" && (prof -= 1) === 0) break;
+    }
+    const corpo = css.slice(inicio, fim);
+    expect(corpo).toMatch(/--tile\s*:\s*var\(--tile-solid\)/);
+    expect(corpo).toMatch(/--pill\s*:\s*var\(--glass-solid\)/);
+    expect(corpo).toMatch(/--popover-solid\s*:\s*var\(--glass-solid\)/);
+  });
+
+  it("09-B: as utilitárias dos sólidos e a sombra de vidro estão registradas no @theme inline", () => {
+    expect(tema.get("color-tile-solid")).toBe("var(--tile-solid)");
+    expect(tema.get("color-popover-solid")).toBe("var(--popover-solid)");
+    expect(tema.get("shadow-vidro")).toBe(
+      "inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-shadow)",
+    );
   });
 
   it("o raio base é 1rem no claro (09-A)", () => {
