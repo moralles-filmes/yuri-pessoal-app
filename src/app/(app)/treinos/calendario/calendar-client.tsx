@@ -63,11 +63,13 @@ import { useChaveDeAbertura, useItemRetido } from "@/components/shared/use-item-
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import {
   ROTULOS_DO_STATUS,
+  nomeNoCalendario,
   rotuloDaCelulaDoMes,
   rotuloDeAdicionar,
   rotuloDeDescanso,
   statusExibido,
   textoDaColunaDaSemana,
+  textoDaTroca,
   type StatusExibido,
 } from "@/components/training/rotulos-do-calendario";
 import { ConsistencyCalendar } from "@/components/training/consistency-calendar";
@@ -662,7 +664,10 @@ function DraggableEntry({
         </button>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium">{entry.workoutName ?? entry.title ?? "Treino"}</p>
+          <p className="truncate font-medium">{nomeNoCalendario(entry)}</p>
+          {textoDaTroca(entry) && (
+            <p className="text-[10px] text-muted-foreground">{textoDaTroca(entry)}</p>
+          )}
           {entry.plannedTime && (
             <p className="text-[10px] text-muted-foreground">{entry.plannedTime.slice(0, 5)}</p>
           )}
@@ -761,7 +766,9 @@ function MonthView({
                   month,
                   dayEntries.map((entry) => ({
                     ...entry,
-                    nome: entry.workoutName ?? entry.title ?? "Treino",
+                    nome: textoDaTroca(entry)
+                      ? `${nomeNoCalendario(entry)} (${textoDaTroca(entry)})`
+                      : nomeNoCalendario(entry),
                   })),
                 )}
               >
@@ -783,9 +790,7 @@ function MonthView({
                     >
                       {Icone && <Icone aria-hidden className="size-2.5 shrink-0" />}
                       <span className="truncate">
-                        {entry.entryKind === "descanso"
-                          ? "Descanso"
-                          : (entry.workoutName ?? entry.title ?? "Treino")}
+                        {entry.entryKind === "descanso" ? "Descanso" : nomeNoCalendario(entry)}
                       </span>
                     </span>
                   );
@@ -841,10 +846,11 @@ function ListView({
               <p className="truncate text-sm font-medium">
                 {entry.entryKind === "descanso"
                   ? (entry.title ?? "Descanso")
-                  : (entry.workoutName ?? entry.title ?? "Treino")}
+                  : nomeNoCalendario(entry)}
               </p>
               <p className="truncate text-xs text-muted-foreground">
                 {ROTULOS_DO_STATUS[derived]}
+                {textoDaTroca(entry) ? ` · ${textoDaTroca(entry)}` : ""}
                 {entry.plannedTime ? ` · ${entry.plannedTime.slice(0, 5)}` : ""}
                 {entry.originalDate ? ` · era ${shortDate(entry.originalDate)}` : ""}
                 {entry.skipReason ? ` · ${entry.skipReason}` : ""}

@@ -416,6 +416,11 @@ export type ScheduledWorkout = {
   source: ScheduleSource;
   createdAt: string;
   updatedAt: string;
+  /**
+   * O treino que a SESSÃO concluída deste dia executou (lido de `training_sessions`, nunca
+   * gravado aqui). Quando difere do planejado, o dia foi TROCADO — ver `trocaDoDia`.
+   */
+  performed?: { workoutId: string | null; workoutName: string } | null;
 };
 
 /* ─────────────────────────── Filtros das telas ─────────────────────────── */
