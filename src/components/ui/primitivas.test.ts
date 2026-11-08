@@ -7,10 +7,16 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ALFA_PERIGO } from "@/lib/theme/alfas";
 import { css, SRC, semComentarios } from "@/lib/theme/ler-tokens";
+import { badgeVariants } from "./badge";
 import { buttonVariants } from "./button";
+import { Checkbox } from "./checkbox";
 import { Input } from "./input";
 import { PRESSAO } from "./materiais";
 import { SelectTrigger } from "./select";
+import { Separator } from "./separator";
+import { Skeleton } from "./skeleton";
+import { Switch } from "./switch";
+import { tabsListVariants, TabsTrigger } from "./tabs";
 import { Textarea } from "./textarea";
 
 describe("Button", () => {
@@ -663,5 +669,202 @@ describe("Rodapés de gaveta", () => {
     const chat = semComentarios(fs.readFileSync(path.join(SRC, "components", "ai", "chat-client.tsx"), "utf8"));
     expect(chat).toMatch(/compacto \? "bg-popover-solid" : "bg-background"/);
     expect(chat).toContain('"sticky bottom-0 space-y-2 border-t pt-3"');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Controles (Task 7): Switch, Checkbox, Tabs, Badge, Skeleton, Separator.
+// ---------------------------------------------------------------------------------------------
+
+const SEIS_CONTROLES = ["switch.tsx", "checkbox.tsx", "tabs.tsx", "badge.tsx", "skeleton.tsx", "separator.tsx"];
+
+describe("Controles — ausências nos seis arquivos", () => {
+  it("nenhum usa bg-primary nem border-primary sem -fill", () => {
+    for (const arquivo of SEIS_CONTROLES) {
+      expect(lerUi(arquivo), arquivo).not.toMatch(/(?<![\w-])bg-primary(?!-fill)(?![\w-])/);
+      expect(lerUi(arquivo), arquivo).not.toMatch(/(?<![\w-])border-primary(?!-fill)(?![\w-])/);
+    }
+  });
+});
+
+describe("Switch", () => {
+  const codigo = lerUi("switch.tsx");
+  const raiz = classesDe(Switch({}));
+  const classesRaiz = raiz.split(/\s+/);
+  const polegar = corpoDaFuncao(codigo, "Switch");
+
+  it("trilho 52x32, p-0.5, redondo, com o foco do Button", () => {
+    for (const c of [
+      "group",
+      "h-8",
+      "w-[52px]",
+      "p-0.5",
+      "rounded-full",
+      "outline-none",
+      "focus-visible:outline-2",
+      "focus-visible:outline-solid",
+      "focus-visible:outline-offset-2",
+      "focus-visible:outline-ring",
+    ]) {
+      expect(classesRaiz, c).toContain(c);
+    }
+  });
+
+  it("desligado é foreground a 16%, ligado é o azul de preenchimento", () => {
+    expect(raiz).toContain("data-[state=unchecked]:bg-[color-mix(in_oklch,var(--foreground)_16%,transparent)]");
+    expect(classesRaiz).toContain("data-[state=checked]:bg-primary-fill");
+  });
+
+  it("o botão é branco, 28 px, desliza 20 px e estica ao pressionar", () => {
+    for (const c of [
+      "size-7",
+      "bg-white",
+      "shadow-[0_2px_6px_rgba(0,0,0,.25)]",
+      "data-[state=checked]:translate-x-5",
+      "group-active:w-[34px]",
+      "data-[state=checked]:group-active:translate-x-[14px]",
+      "duration-450",
+      "ease-mola",
+      "motion-reduce:transition-none",
+    ]) {
+      expect(polegar, c).toContain(c);
+    }
+  });
+
+  it("a transição lista translate e width (translate-x-* não é transform no Tailwind v4)", () => {
+    expect(polegar).toMatch(/transition-\[translate,width\]/);
+  });
+
+  it("o estiramento só vale com movimento permitido", () => {
+    expect(polegar).toContain("motion-safe:group-active:w-[34px]");
+    expect(polegar).toContain("motion-safe:data-[state=checked]:group-active:translate-x-[14px]");
+  });
+
+  it("a medida antiga h-5 w-9 saiu", () => {
+    expect(codigo).not.toContain("h-5 w-9");
+  });
+});
+
+describe("Checkbox", () => {
+  const classes = classesDe(Checkbox({})).split(/\s+/);
+  const codigo = lerUi("checkbox.tsx");
+
+  it("continua quadrada, raio 6, ladrilho desligada", () => {
+    expect(classes).toContain("size-4.5");
+    expect(classes).toContain("rounded-[6px]");
+    expect(classes).toContain("bg-tile");
+  });
+
+  it("ligada é o azul de preenchimento", () => {
+    for (const c of [
+      "data-[state=checked]:bg-primary-fill",
+      "data-[state=checked]:border-primary-fill",
+      "data-[state=checked]:text-primary-fill-foreground",
+    ]) {
+      expect(classes, c).toContain(c);
+    }
+  });
+
+  it("o visto entra com estalo e o movimento reduzido o dispensa", () => {
+    for (const c of [
+      "data-[state=checked]:animate-in",
+      "data-[state=checked]:zoom-in-50",
+      "duration-300",
+      "ease-estalo",
+      "motion-reduce:animate-none",
+    ]) {
+      expect(codigo, c).toContain(c);
+    }
+  });
+
+  it("tem o foco do Button", () => {
+    for (const c of ["outline-none", "focus-visible:outline-2", "focus-visible:outline-solid", "focus-visible:outline-offset-2", "focus-visible:outline-ring"]) {
+      expect(classes, c).toContain(c);
+    }
+  });
+});
+
+describe("Tabs", () => {
+  const lista = tabsListVariants({ variant: "default" }).split(/\s+/);
+  const linha = tabsListVariants({ variant: "line" });
+  const codigo = lerUi("tabs.tsx");
+  const gatilho = classesDe(TabsTrigger({ value: "a" }));
+
+  it("a lista é um controle segmentado redondo sobre o trilho", () => {
+    for (const c of ["group-data-horizontal/tabs:h-9", "rounded-full", "bg-track", "border", "border-tile-border", "p-[3px]"]) {
+      expect(lista, c).toContain(c);
+    }
+    expect(lista).not.toContain("bg-muted");
+    expect(lista).not.toContain("rounded-lg");
+  });
+
+  it("a variante line não ganha trilho nem borda", () => {
+    expect(linha).not.toContain("bg-track");
+    expect(linha).not.toContain("border-tile-border");
+    expect(linha).toContain("bg-transparent");
+    expect(linha).toContain("data-[variant=line]:rounded-none");
+  });
+
+  it("o gatilho é redondo, mudo e, ativo, vira pílula forte", () => {
+    const c = gatilho.split(/\s+/);
+    expect(c).toContain("rounded-full");
+    expect(c).not.toContain("rounded-md");
+    expect(c).toContain("text-muted-foreground");
+    expect(gatilho).toContain("data-[state=active]:bg-pill-strong");
+    expect(gatilho).toContain("data-[state=active]:text-foreground");
+    expect(gatilho).toContain("shadow-[0_1px_3px_rgba(16,24,40,.14),inset_0_1px_0_var(--glass-hi)]");
+  });
+
+  it("a pressão encolhe, com mola, e o movimento reduzido a desliga", () => {
+    const c = gatilho.split(/\s+/);
+    expect(c).toContain("active:scale-[.96]");
+    expect(c).toContain("ease-mola");
+    expect(gatilho).toContain("motion-reduce:transition-none");
+    expect(gatilho).toContain("motion-reduce:active:scale-100");
+    // Tailwind v4: scale-* é a propriedade `scale`, não `transform`.
+    expect(gatilho).toMatch(/transition-\[[^\]]*\bscale\b[^\]]*\]/);
+  });
+
+  it("o estado ativo é escrito como data-[state=active], o atributo que o Radix grava", () => {
+    expect(codigo).not.toMatch(/(?<![\w-])data-active:/);
+    expect(codigo).toContain("data-[state=active]:bg-pill-strong");
+  });
+
+  it("não restou bg-background nem bg-muted", () => {
+    expect(codigo).not.toMatch(/(?<![\w-])bg-(?:background|muted)(?![\w-])/);
+  });
+});
+
+describe("Badge", () => {
+  it("é redondo (rounded-4xl virava 41 px com --radius 1rem) e mantém a altura", () => {
+    const base = badgeVariants({}).split(/\s+/);
+    expect(base).toContain("rounded-full");
+    expect(base).toContain("h-5");
+    expect(lerUi("badge.tsx")).not.toContain("rounded-4xl");
+  });
+
+  it("default é azul de preenchimento com texto sobre ele", () => {
+    const c = badgeVariants({ variant: "default" }).split(/\s+/);
+    expect(c).toContain("bg-primary-fill");
+    expect(c).toContain("text-primary-fill-foreground");
+    expect(c).not.toContain("bg-primary");
+  });
+});
+
+describe("Skeleton", () => {
+  it("é o trilho do vidro, pulsa e para com movimento reduzido", () => {
+    const c = classesDe(Skeleton({})).split(/\s+/);
+    for (const k of ["bg-track", "rounded-[10px]", "animate-pulse", "motion-reduce:animate-none"]) {
+      expect(c, k).toContain(k);
+    }
+    expect(lerUi("skeleton.tsx")).not.toMatch(/(?<![\w-])bg-muted(?![\w-])/);
+  });
+});
+
+describe("Separator", () => {
+  it("usa o traço de grade, não a borda opaca", () => {
+    const c = classesDe(Separator({})).split(/\s+/);
+    expect(c).toContain("bg-grid");
+    expect(lerUi("separator.tsx")).not.toMatch(/(?<![\w-])bg-border(?![\w-])/);
   });
 });
