@@ -71,6 +71,8 @@ import {
   type PermissoesDoForm,
 } from "@/components/ai/preferencias-cascata";
 
+import { fallbackDisponivel } from "./provider-config";
+
 const NENHUM = "__nenhum__";
 
 /** Os campos numéricos, com o id do input — para o erro ficar no campo e o foco ir até ele. */
@@ -152,6 +154,7 @@ export function AiPreferencesForm({
   catalogo: CatalogoDasPermissoes;
 }) {
   const router = useRouter();
+  const temOrdemDeFallback = cards.some((card) => fallbackDisponivel(card.fallbackOrder));
   const [salvando, setSalvando] = React.useState(false);
 
   const [form, setForm] = React.useState({
@@ -516,10 +519,12 @@ export function AiPreferencesForm({
             <p className="text-xs text-muted-foreground">
               Precisa estar ligado aqui <strong>e</strong> no provedor de origem. Chave
               inválida, cancelamento e conteúdo recusado nunca fazem fallback.
+              {!temOrdemDeFallback && " Não há ordem de fallback configurada."}
             </p>
           </div>
           <Switch
             id="pref-fallback"
+            disabled={!temOrdemDeFallback}
             checked={form.allowFallback}
             onCheckedChange={(v) => setForm((f) => ({ ...f, allowFallback: v }))}
             className="shrink-0"

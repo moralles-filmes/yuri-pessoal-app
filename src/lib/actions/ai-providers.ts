@@ -87,6 +87,18 @@ export async function saveAiProviderConfig(
     });
   }
 
+  // Reconfere no servidor: um formulário aberto antes de remover a chave pode estar obsoleto.
+  if (dados.enabled) {
+    const { data: credencial, error: erroCredencial } = await ctx.supabase
+      .from("ai_provider_credentials")
+      .select("provider")
+      .eq("user_id", ctx.userId)
+      .eq("provider", dados.provider)
+      .maybeSingle();
+    if (erroCredencial) return dbError("Não foi possível conferir a chave do provedor.");
+    if (!credencial) return invalid({ enabled: ["Cadastre a chave antes de ativar o provedor."] });
+  }
+
   // `ON CONFLICT` do PostgREST exige constraint que ele consiga inferir. Aqui a unique
   // `(user_id, provider)` é total (não é parcial nem de expressão), então o upsert é
   // seguro — mas o `onConflict` vai explícito, para não depender de inferência.
@@ -195,12 +207,13 @@ export async function removeAiCredential(
 
   // Sem credencial, o provedor não pode ficar ativo — senão o router o ofereceria e toda
   // conversa morreria na admissão.
-  await ctx.supabase
+  const { error } = await ctx.supabase
     .from("ai_provider_configs")
     .update({ enabled: false })
     .eq("user_id", ctx.userId)
     .eq("provider", parsed.data.provider);
 
   revalidar();
+  if (error) return dbError("A chave foi removida, mas não foi possível desativar o provedor. Recarregue e confira a configuração.");
   return { ok: true, data: { provider: parsed.data.provider } };
 }

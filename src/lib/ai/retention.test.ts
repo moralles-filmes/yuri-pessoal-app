@@ -83,3 +83,9 @@ describe("resumo", () => {
     );
   });
 });
+
+it("as conversas em andamento permanecem e a tela define o corte pela última mensagem", async () => {
+  for (const escopo of ["conversas", "conversas_antigas"] as const) expect(oQuePermanece(escopo).join(" ")).toContain("resposta em andamento");
+  const { readFileSync } = await import("node:fs");
+  expect(readFileSync("src/components/ai/retention-card.tsx", "utf8")).toContain("Última mensagem anterior a");
+});

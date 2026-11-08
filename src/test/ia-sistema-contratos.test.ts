@@ -229,7 +229,7 @@ export const CONTRATOS: Contrato[] = [
   // ── V — subpáginas de /ia ──
   { arquivo: INSIGHTS, exige: /<EmptyState\b[^>]*title="Nenhum módulo liberado para a IA ler"/, porque: "sem módulo liberado, o vazio é o EmptyState com o caminho para resolver" },
   { arquivo: INSIGHTS, exige: /disponiveis\.length === 0 \? null : \(\s*<EmptyState/, porque: "o vazio da lista ('escolha um módulo') não aparece junto do 'nenhum módulo liberado'" },
-  { arquivo: CONSUMO, exige: /<EmptyState\b[^>]*title="Nenhuma execução registrada neste mês"/, porque: "o vazio do consumo pelo EmptyState" },
+  { arquivo: CONSUMO, exige: /<EmptyState\b[^>]*title=\{porModelo\.parcial \? "Leitura por modelo indisponível ou parcial" : "Nenhuma execução registrada neste mês"\}/, porque: "o vazio do consumo usa EmptyState e distingue leitura parcial de ausência medida" },
   { arquivo: "app/(app)/ia/comprovantes/page.tsx", exige: /d\.mime === "application\/pdf" \? "PDF" : "Imagem"/, porque: "PDF × imagem em texto, não só pelo ícone" },
   { arquivo: "app/(app)/ia/comprovantes/page.tsx", exige: /break-words[^"]*">\s*\{selecionado\.documento\.nomeArquivo\}/, porque: "nome de arquivo sem espaço quebra em vez de empurrar a tela" },
 ];

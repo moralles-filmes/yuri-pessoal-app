@@ -545,6 +545,22 @@ export async function getRunSources(
 
 // ─────────────────────────── Consumo ───────────────────────────
 
+/** Página menor que o limite padrão da API. teto + 1 detecta truncamento. */
+async function lerConsumoComTeto<T>(
+  buscar: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: unknown; count: number | null }>,
+  teto: number,
+): Promise<{ linhas: T[]; parcial: boolean; falhou: boolean }> {
+  const linhas: T[] = [];
+  while (true) {
+    const { data, error, count } = await buscar(linhas.length, Math.min(linhas.length + 499, teto));
+    if (error || !data || count === null) return { linhas, parcial: true, falhou: true };
+    linhas.push(...data);
+    if (linhas.length > teto) return { linhas: linhas.slice(0, teto), parcial: true, falhou: false };
+    if (linhas.length >= count) return { linhas, parcial: false, falhou: false };
+    if (data.length === 0) return { linhas, parcial: true, falhou: true };
+  }
+}
+
 /**
  * O consumo do período, pelas DUAS vias do invariante: custo real dos terminais + reserva
  * dos não-terminais. O dia e o mês são os de BRASÍLIA — em UTC o período "viraria" às 21h.
@@ -567,31 +583,35 @@ export async function getUsageSummary(
   const supabase = dono?.client ?? (await createClient());
   const inicio = inicioDoPeriodoEmBrasilia(periodo, agora);
 
-  const { data: runs } = await supabase
+  const leitura = await lerConsumoComTeto((de, ate) => supabase
     .from("ai_runs")
-    .select("id, status, reserved_cost, reservation_expires_at")
+    .select("id, status, reserved_cost, reservation_expires_at", { count: "exact" })
     .eq("user_id", userId)
     .gte("created_at", inicio.toISOString())
-    .limit(2000);
-
-  const runIds = (runs ?? []).map((r) => r.id);
+    .order("id").range(de, ate), 2000);
+  const runs = leitura.linhas;
+  let parcial = leitura.parcial;
+  let falhou = leitura.falhou;
+  const runIds = runs.map((r) => r.id);
   const custosPorRun = new Map<string, (number | null)[]>();
-
-  if (runIds.length > 0) {
-    const { data: eventos } = await supabase
+  // Lista de IDs pequena evita URL excessiva; eventos de cada lote também são paginados.
+  for (let i = 0; i < runIds.length; i += 200) {
+    const eventos = await lerConsumoComTeto((de, ate) => supabase
       .from("ai_usage_events")
-      .select("run_id, estimated_cost")
+      .select("run_id, estimated_cost", { count: "exact" })
       .eq("user_id", userId)
-      .in("run_id", runIds);
-
-    for (const ev of eventos ?? []) {
+      .in("run_id", runIds.slice(i, i + 200))
+      .order("id").range(de, ate), 5000);
+    parcial ||= eventos.parcial;
+    falhou ||= eventos.falhou;
+    for (const ev of eventos.linhas) {
       const lista = custosPorRun.get(ev.run_id) ?? [];
       lista.push(ev.estimated_cost);
       custosPorRun.set(ev.run_id, lista);
     }
   }
 
-  const paraOrcamento: RunForBudget[] = (runs ?? []).map((r) => ({
+  const paraOrcamento: RunForBudget[] = runs.map((r) => ({
     id: r.id,
     status: r.status as BudgetRunStatus,
     reservedCost: r.reserved_cost,
@@ -600,20 +620,27 @@ export async function getUsageSummary(
   }));
 
   const uso = computeBudgetUsage(paraOrcamento, agora.getTime());
+  const semMedicao = paraOrcamento.some((r) =>
+    ["completed", "cancelled", "failed"].includes(r.status) &&
+    (r.attemptCosts.length === 0 || r.attemptCosts.some((c) => c === null)),
+  );
+  parcial ||= semMedicao;
+  const naoMedido = falhou || (semMedicao && uso.confirmadoUsd === 0 && uso.reservadoUsd === 0);
   const percentual =
-    limiteUsd !== null && limiteUsd > 0
+    !naoMedido && limiteUsd !== null && limiteUsd > 0
       ? round6((uso.totalUsd / limiteUsd) * 100)
       : null;
 
   return {
     periodo,
-    confirmadoUsd: uso.confirmadoUsd,
-    reservadoUsd: uso.reservadoUsd,
-    totalUsd: uso.totalUsd,
+    parcial,
+    confirmadoUsd: naoMedido ? null : uso.confirmadoUsd,
+    reservadoUsd: leitura.falhou ? null : uso.reservadoUsd,
+    totalUsd: naoMedido ? null : uso.totalUsd,
     limiteUsd,
-    restanteUsd: limiteUsd === null ? null : round6(limiteUsd - uso.totalUsd),
+    restanteUsd: naoMedido || parcial || limiteUsd === null ? null : round6(limiteUsd - uso.totalUsd),
     percentual,
-    nivelDeAlerta: nivelAtingido(uso.totalUsd, limiteUsd),
+    nivelDeAlerta: naoMedido ? null : nivelAtingido(uso.totalUsd, limiteUsd),
     execucoesSemCusto: uso.execucoesSemCusto,
     runsComReservaAtiva: uso.runsComReservaAtiva,
     execucoes: paraOrcamento.length,
@@ -624,16 +651,17 @@ export async function getUsageByModel(
   userId: string,
   periodo: "dia" | "mes",
   agora: Date,
-): Promise<ProviderUsageRow[]> {
+): Promise<{ linhas: ProviderUsageRow[]; parcial: boolean }> {
   const supabase = await createClient();
   const inicio = inicioDoPeriodoEmBrasilia(periodo, agora);
 
-  const { data } = await supabase
+  const leitura = await lerConsumoComTeto((de, ate) => supabase
     .from("ai_usage_events")
-    .select("provider, model_id, estimated_cost")
+    .select("provider, model_id, estimated_cost", { count: "exact" })
     .eq("user_id", userId)
     .gte("created_at", inicio.toISOString())
-    .limit(5000);
+    .order("id").range(de, ate), 5000);
+  const data = leitura.linhas;
 
   const agregado = new Map<string, ProviderUsageRow>();
   for (const ev of data ?? []) {
@@ -656,7 +684,10 @@ export async function getUsageByModel(
     });
   }
 
-  return [...agregado.values()].sort((a, b) => b.custoUsd - a.custoUsd);
+  return {
+    linhas: [...agregado.values()].sort((a, b) => b.custoUsd - a.custoUsd),
+    parcial: leitura.parcial || data.some((ev) => ev.estimated_cost === null),
+  };
 }
 
 /**

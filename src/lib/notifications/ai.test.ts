@@ -203,3 +203,13 @@ describe("tom e forma", () => {
     expect(generateAiNotifications(VAZIO)).toEqual([]);
   });
 });
+
+describe("consumo parcial no sino", () => {
+  it.each([null, 2, 9])("declara parcial sem inventar percentual para %s", (totalUsd) => {
+    const [c] = generateAiNotifications({ ...VAZIO, budgets: [{escopo:"mensal",competencia:"2026-11",totalUsd,limiteUsd:10,nivelJaAvisado:100,parcial:true}] });
+    expect(c.title).toBe("IA: consumo parcial do mês");
+    expect(c.title).not.toContain("null%");
+    expect(c.description).toContain("Medição parcial");
+    expect(c.dedupe_key).toBe("ai-orcamento:mensal:2026-11:parcial");
+  });
+});

@@ -1578,7 +1578,7 @@ o novo fato booleano da execução. Próxima: Task 26.
   - `src/lib/actions/ai-retention.ts:99-183` e `src/lib/ai/retention.ts`;
   - `src/lib/ai/queries.ts:557-623` (`getUsageSummary` e `getUsageByModel`).
 
-- [ ] **Step 1: Testes que falham.**
+- [x] **Step 1: Testes que falham.**
   - (019) Extraia a montagem do payload de `provider-card.tsx` em função pura. Ela não envia
     `visionModel` quando a tela não o editou (manda o valor atual). Depois de "Remover chave", o
     estado de `ativo` é `false`.
@@ -1589,11 +1589,34 @@ o novo fato booleano da execução. Próxima: Task 26.
     blocos de no máximo 200 ids.
   - (025) Quando o `.in(run_ids)` devolve `error`, `getUsageSummary` marca `parcial: true` e o
     custo **não** vira 0. Com `limit` saturado (teto + 1), também `parcial: true`.
-- [ ] **Step 2:** FAIL.
-- [ ] **Step 3: Implementar.** A tela de consumo e o sino escrevem "parcial" quando for o caso. A
+- [x] **Step 2:** FAIL.
+- [x] **Step 3: Implementar.** A tela de consumo e o sino escrevem "parcial" quando for o caso. A
   regra de exibição já existe (invariante 11).
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5: Commit** `fix(ia): configurações não reativam provedor sem chave, fallback sem ordem é declarado, retenção e consumo sem teto escondido`.
+- [x] **Step 4:** PASS.
+- [x] **Step 5: Commit** `fix(ia): configurações não reativam provedor sem chave, fallback sem ordem é declarado, retenção e consumo sem teto escondido`.
+
+**Resultado — Task 26 concluída pelo Codex principal.** O cartão preserva o modelo de visão,
+monta payload puro e desliga o estado local ao remover a chave. A action reconfere existência
+da credencial antes de ativar, com dono/provedor explícitos; erro na desativação não declara
+sucesso. Fallback sem ordem fica desabilitado e explicado no cartão e nas preferências.
+Retenção usa última mensagem e corte de Brasília; contagem exata e páginas de 200 também em
+documentos/anexos, sem embed de FK composta. Runs reserved/streaming ficam de fora e erro de
+leitura impede exclusão. Deletes em lotes de até 200; falha intermediária relata o que já saiu.
+Comprovante vinculado permanece, descarte solto segue pelo caminho oficial do bucket.
+Consumo pagina com sentinela teto + 1 (2000 runs/5000 eventos), divide listas de runs em 200
+ids, preserva a soma disponível e declara parcial. Falha de leitura deixa valores não medidos
+nulos; ausência não vira zero, inclusive reserva e contagens na tela. Tela, aviso e sino
+propagam parcial; vazio medido é distinguido de leitura incompleta pelo EmptyState. Contrato
+anterior da tela atualizado para os dois títulos, mantendo o componente comum.
+
+Verificação final: 7061 testes/319 arquivos, TypeScript sem erros e lint limpo. 69 mutações
+distintas confirmadas vermelhas e restauradas por SHA-256 + git diff; nenhuma ativa. Um teste
+foi reforçado para distinguir erro de consulta de chave ausente; um alvo foi refinado para a
+soma nova, e a reserva na tela passou a ser verificada no cartão correto. Revisão própria de
+segurança/React, sem auditoria externa. Metadados remotos confirmam RLS+FORCE nas oito tabelas,
+sem leitura de conteúdo pessoal nem escrita de teste em produção. Não há nova transação de
+exclusão: a checagem de runs segue o mesmo modelo de leitura antes do delete da exclusão
+individual. Sem migration, chamada paga, push, PR ou deploy. Próxima: Task 27.
 
 ### Task 27: Miúdos (MOD-ia-018, MOD-ia-033, FN-023, FN-024, FN-028)
 

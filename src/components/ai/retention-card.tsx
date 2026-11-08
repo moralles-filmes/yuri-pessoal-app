@@ -55,7 +55,7 @@ import {
 
 const ROTULO: Record<EscopoDeExclusao, string> = {
   conversas: "Todas as conversas",
-  conversas_antigas: "Conversas anteriores a uma data",
+  conversas_antigas: "Conversas com última mensagem anterior a uma data",
   documentos: "Comprovantes enviados",
   insights: "Análises geradas",
 };
@@ -153,7 +153,7 @@ export function RetentionCard() {
 
         {escopo === "conversas_antigas" && (
           <div className="space-y-2">
-            <Label htmlFor="anterior-a">Apagar o que for anterior a</Label>
+            <Label htmlFor="anterior-a">Última mensagem anterior a</Label>
             <Input
               id="anterior-a"
               type="date"
