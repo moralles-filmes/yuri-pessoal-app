@@ -34,7 +34,14 @@ describe("09-C · sidebar flutuante", () => {
   });
 
   it("oculta: sem padding (conta na largura) e sem transbordar; visível: recuo", () => {
-    for (const c of ["p-0", "overflow-hidden", "py-3", "pl-3"]) {
+    // As classes do ramo oculto são lidas DO RAMO (`hidden ? "…"`): `overflow-hidden` também
+    // existe no painel filho, então varrer o arquivo inteiro não provaria que o `aside` o tem.
+    const ramoOculto = sidebar.match(/\bhidden\s*\?\s*"([^"]*)"/)?.[1];
+    expect(ramoOculto, "ramo `hidden ? \"…\"` do aside").toBeDefined();
+    for (const c of ["w-0", "overflow-hidden", "p-0"]) {
+      expect(tem(ramoOculto ?? "", c), `oculto: ${c}`).toBe(true);
+    }
+    for (const c of ["py-3", "pl-3"]) {
       expect(tem(sidebar, c), c).toBe(true);
     }
     expect(sidebar).toMatch(/aria-hidden=\{hidden \|\| undefined\}/);
