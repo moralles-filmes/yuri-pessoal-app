@@ -350,7 +350,7 @@ export function TerceirosClient({
             h-16, e uma barra em top-0 escorregaria para trás dele e sumiria ao rolar. */}
         {selecionados.size > 0 && (
           <div className="sticky top-18 z-20 rounded-xl vidro-casca">
-            <Card className="border-0 bg-transparent shadow-none ring-0">
+            <Card className="border-0 bg-transparent bg-none shadow-none ring-0">
               <CardContent className="space-y-2 p-3">
                 <p className="text-sm font-medium">
                   {selecionadosVisiveis.length}{" "}

@@ -2,8 +2,11 @@
  * REDESIGN-09-B — as primitivas em vidro, provadas por chamada direta de `cva`/`cn`
  * (o projeto não tem teste de componente). Um `describe` por primitiva.
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ALFA_PERIGO } from "@/lib/theme/alfas";
+import { SRC, semComentarios } from "@/lib/theme/ler-tokens";
 import { buttonVariants } from "./button";
 import { PRESSAO } from "./materiais";
 
@@ -96,5 +99,104 @@ describe("Button", () => {
     expect(classes.split(/\s+/)).toContain(`bg-destructive/${alfa}`);
     expect(classes).toContain("text-destructive");
     expect(classes).toContain("border-destructive/25");
+  });
+});
+
+/** Corpo da função `nome` em `card.tsx`, sem comentários, até a próxima função de topo. */
+function corpoDaFuncao(codigo: string, nome: string): string {
+  const inicio = codigo.indexOf(`function ${nome}(`);
+  if (inicio < 0) return "";
+  const proxima = codigo.indexOf("\nfunction ", inicio + 1);
+  const fim = codigo.indexOf("\nexport {", inicio);
+  const limites = [proxima, fim].filter((n) => n > 0);
+  return codigo.slice(inicio, limites.length ? Math.min(...limites) : undefined);
+}
+
+/** Todos os arquivos `.tsx` sob `src/`. */
+function arquivosTsx(dir: string): string[] {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) return arquivosTsx(p);
+    return e.name.endsWith(".tsx") ? [p] : [];
+  });
+}
+
+/**
+ * Texto de cada abertura `<Card ...>` (só `Card`, não `CardHeader` etc.): vai até o `>` que
+ * fecha a tag, ignorando `>` dentro de `{ }` (como `=>`) e de aspas.
+ */
+function aberturasDeCard(codigo: string): string[] {
+  const achadas: string[] = [];
+  for (const m of codigo.matchAll(/<Card(?![A-Za-z0-9_])/g)) {
+    let profundidade = 0;
+    let aspas: string | null = null;
+    let i = m.index;
+    for (; i < codigo.length; i += 1) {
+      const c = codigo[i];
+      if (aspas) {
+        if (c === aspas) aspas = null;
+      } else if (profundidade === 0 && (c === '"' || c === "'")) aspas = c;
+      else if (c === "{") profundidade += 1;
+      else if (c === "}") profundidade -= 1;
+      else if (c === ">" && profundidade === 0) break;
+    }
+    achadas.push(codigo.slice(m.index, i + 1));
+  }
+  return achadas;
+}
+
+describe("Card", () => {
+  const fonte = semComentarios(
+    fs.readFileSync(path.join(SRC, "components", "ui", "card.tsx"), "utf8"),
+  );
+  const card = corpoDaFuncao(fonte, "Card");
+
+  it("é vidro de cartão: material importado, raio de 24px (20px no sm)", () => {
+    expect(fonte).toContain('import { MATERIAL_CARTAO } from "./materiais"');
+    expect(card).toContain("MATERIAL_CARTAO");
+    expect(card).toContain("rounded-[24px]");
+    expect(card).toContain("data-[size=sm]:rounded-[20px]");
+  });
+
+  it("não conserva o anel, o raio antigo nem classes vidro-*", () => {
+    expect(card).not.toContain("ring-1");
+    expect(card).not.toContain("ring-foreground");
+    expect(card).not.toContain("rounded-xl");
+    expect(card).not.toContain("vidro-");
+    expect(card).not.toMatch(/bg-card(\s|")/);
+  });
+
+  it("cabeçalho, rodapé e imagens herdam o raio (concêntrico, sem número repetido)", () => {
+    for (const nome of ["Card", "CardHeader", "CardFooter"]) {
+      const corpo = corpoDaFuncao(fonte, nome);
+      expect(corpo, nome).not.toContain("rounded-t-xl");
+      expect(corpo, nome).not.toContain("rounded-b-xl");
+    }
+    expect(corpoDaFuncao(fonte, "CardHeader")).toContain("rounded-t-[inherit]");
+    expect(corpoDaFuncao(fonte, "CardFooter")).toContain("rounded-b-[inherit]");
+    expect(card).toContain("*:[img:first-child]:rounded-t-[inherit]");
+    expect(card).toContain("*:[img:last-child]:rounded-b-[inherit]");
+  });
+
+  it("o rodapé é ladrilho com filete de luz", () => {
+    const rodape = corpoDaFuncao(fonte, "CardFooter");
+    expect(rodape).toContain("border-t border-glass-border");
+    expect(rodape).toContain("bg-tile");
+    expect(rodape).not.toContain("bg-muted/50");
+  });
+
+  it("nenhum chamador apaga o fundo do cartão com bg-transparent sem bg-none", () => {
+    // `bg-transparent` tira `bg-card`, mas o brilho do material é um `background-image`:
+    // só `bg-none` o remove. Sem ele, um cartão que quer ser invisível aparece com brilho.
+    const culpados: string[] = [];
+    for (const arquivo of arquivosTsx(SRC)) {
+      const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
+      for (const abertura of aberturasDeCard(codigo)) {
+        if (/(^|[\s"'`:])bg-transparent(?=[\s"'`])/.test(abertura) && !/(^|[\s"'`:])bg-none(?=[\s"'`])/.test(abertura)) {
+          culpados.push(path.relative(SRC, arquivo).replaceAll("\\", "/"));
+        }
+      }
+    }
+    expect(culpados).toEqual([]);
   });
 });
