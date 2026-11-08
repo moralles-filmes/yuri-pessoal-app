@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { compor, contraste, lerCor } from "./contraste";
+import { ALFA_PERIGO } from "./alfas";
 import { claro, escuro } from "./ler-tokens";
 
 const MINIMO = 4.5;
@@ -72,14 +73,6 @@ const DIVIDA_NA_NEVOA = new Set<string>([
   "claro:warning-ink:fog-1", "claro:warning-ink:fog-2", "claro:warning-ink:fog-3",
   "escuro:destructive:fog-1", "escuro:destructive:fog-2", "escuro:destructive:fog-3",
 ]);
-
-/**
- * Alfa do tingimento do botão `destructive` (`bg-destructive/3`). O desenho dizia 0,10, mas
- * `--destructive` (claro) já está a 4,72:1 na pior superfície de vidro e qualquer tingimento
- * da própria cor come essa folga: 0,10 → 4,07:1; 0,05 → 4,37:1; 0,03 → 4,51:1. Vale para os
- * dois temas (a classe `bg-destructive/N` não troca de alfa com o tema).
- */
-const ALFA_PERIGO = 0.03;
 
 /** Mensagem da 09-B: as superfícies das primitivas (ladrilho, pílula, trilho, perigo, sobreposição). */
 function exigirPrimitiva(

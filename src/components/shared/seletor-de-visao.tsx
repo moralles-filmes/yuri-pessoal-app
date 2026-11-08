@@ -75,7 +75,7 @@ export function SeletorDeVisao<V extends string>({
             className={cn(
               "px-3",
               ativa
-                ? "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground dark:hover:bg-primary"
+                ? "bg-primary-fill font-semibold text-primary-fill-foreground hover:bg-primary-fill hover:text-primary-fill-foreground dark:hover:bg-primary-fill"
                 : "text-muted-foreground",
             )}
           >
