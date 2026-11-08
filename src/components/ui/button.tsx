@@ -16,13 +16,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary-fill text-primary-fill-foreground bg-[linear-gradient(180deg,rgba(255,255,255,.24),transparent_55%)] shadow-[inset_0_1px_0_rgba(255,255,255,.35),0_8px_18px_-8px_color-mix(in_oklch,var(--primary-fill)_70%,transparent)] hover:brightness-110",
+          "bg-primary-fill text-primary-fill-foreground bg-[linear-gradient(180deg,rgba(255,255,255,.14),transparent_28%)] shadow-[inset_0_1px_0_rgba(255,255,255,.35),0_8px_18px_-8px_color-mix(in_oklch,var(--primary-fill)_70%,transparent)] hover:brightness-95",
         outline: `${MATERIAL_PILULA} text-foreground hover:bg-pill-strong aria-expanded:bg-pill-strong`,
         secondary: `${MATERIAL_PILULA} text-foreground hover:bg-pill-strong aria-expanded:bg-pill-strong`,
         ghost:
           "hover:bg-primary/10 hover:text-foreground aria-expanded:bg-primary/10 aria-expanded:text-foreground",
         destructive:
-          "bg-destructive/3 text-destructive border-destructive/25 hover:bg-destructive/6",
+          "bg-destructive/3 text-destructive border-destructive/25 hover:border-destructive/50",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

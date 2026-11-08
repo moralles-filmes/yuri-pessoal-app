@@ -17,7 +17,7 @@ function Checkbox({
       data-slot="checkbox"
       className={cn(
         MATERIAL_LADRILHO,
-        "peer size-4.5 shrink-0 rounded-[6px] border-foreground/50 transition-colors outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary-fill data-[state=checked]:bg-primary-fill data-[state=checked]:text-primary-fill-foreground",
+        "peer size-4.5 shrink-0 rounded-[6px] border-foreground/52 transition-colors outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary-fill data-[state=checked]:bg-primary-fill data-[state=checked]:text-primary-fill-foreground",
         className
       )}
       {...props}

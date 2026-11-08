@@ -359,10 +359,10 @@ mudam porque o desenho pede.
 | Primitiva | Material e forma |
 | --- | --- |
 | `Card` | `MATERIAL_CARTAO`; raio 24 px (`size="sm"`: 20 px); rodapé em `bg-tile` com `border-glass-border` |
-| `Button` `default` | `bg-primary-fill`/`text-primary-fill-foreground`, brilho em gradiente e sombra tingida do próprio azul; pílula; `hover:brightness-110` |
+| `Button` `default` | `bg-primary-fill`/`text-primary-fill-foreground`, brilho em gradiente e sombra tingida do próprio azul; pílula; brilho até 28% da altura, acima da letra; `hover:brightness-95` |
 | `Button` `outline`, `secondary` | `MATERIAL_PILULA`; `hover` e `aria-expanded` em `bg-pill-strong` |
 | `Button` `ghost` | transparente; `hover` e `aria-expanded` em `bg-primary/10` |
-| `Button` `destructive` | `bg-destructive/3`, `text-destructive`, borda `destructive/25`; `hover` `bg-destructive/6` (alfa baixado pela medição, não o texto escurecido) |
+| `Button` `destructive` | `bg-destructive/3`, `text-destructive`, borda `destructive/25`; `hover` `border-destructive/50` (alfa baixado pela medição, não o texto escurecido) |
 | `Button` `link` | `text-primary`, sublinhado no hover |
 | `Input` | `MATERIAL_LADRILHO`; raio 10 px; `h-8` |
 | `Textarea` | `MATERIAL_LADRILHO`; raio 14 px; `min-h-16` |
@@ -381,7 +381,7 @@ mudam porque o desenho pede.
 
 **Contraste dos controles desligados (WCAG 1.4.11, ≥ 3:1 nos dois temas, provado em teste).**
 O vidro faz uma borda clara sumir sobre a névoa clara, então o desligado ganhou aro próprio:
-`Checkbox` com `border-foreground/50`; trilho do `Switch` com
+`Checkbox` com `border-foreground/52`; trilho do `Switch` com
 `data-[state=unchecked]:ring-1 ring-foreground/50 ring-inset`; **botão** do `Switch` (o círculo)
 com `data-[state=unchecked]:ring-1 ring-foreground/60`. Como em toda a 09-B: contraste que
 falha baixa o alfa do tingimento ou da névoa; **o texto não é escurecido**.

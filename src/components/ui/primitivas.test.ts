@@ -38,7 +38,14 @@ describe("Button", () => {
     expect(padrao).not.toContain("translate-y-px");
     expect(padrao).not.toMatch(/bg-primary(\s|$|\/)/);
     expect(padrao).not.toContain("hover:bg-primary/80");
-    expect(padrao).toContain("hover:brightness-110");
+    expect(padrao).toContain("hover:brightness-95");
+    expect(padrao).not.toContain("hover:brightness-110");
+  });
+
+  it("o brilho do botão padrão termina acima da letra (a letra ocupa de 30% a 70% da altura)", () => {
+    const fim = padrao.match(/rgba(255,255,255,.d+),transparent_(d+)%/);
+    expect(fim).not.toBeNull();
+    expect(Number(fim![1])).toBeLessThanOrEqual(30);
   });
 
   it("a escala de pressão só vale fora de gatilho de menu (aria-haspopup)", () => {
@@ -875,9 +882,9 @@ describe("Separator", () => {
 });
 
 describe("Controles desligados — contraste de componente (WCAG 1.4.11)", () => {
-  it("Checkbox: a borda desmarcada é foreground/50 e o twMerge tirou a borda clara do ladrilho", () => {
+  it("Checkbox: a borda desmarcada é foreground/52 e o twMerge tirou a borda clara do ladrilho", () => {
     const classes = classesDe(Checkbox({})).split(/\s+/);
-    expect(classes).toContain("border-foreground/50");
+    expect(classes).toContain("border-foreground/52");
     expect(classes).not.toContain("border-tile-border");
     expect(classes).toContain("bg-tile");
     expect(classes).toContain("data-[state=checked]:border-primary-fill");

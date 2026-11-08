@@ -121,7 +121,7 @@ export function Indicador({
   return (
     // `@container`: a decisão de mostrar o ícone é do CARD, não da viewport (ver `StatCard`).
     <Card className={cn("@container overflow-hidden", className)}>
-      <CardContent className="flex items-start gap-3 p-4 sm:gap-4">
+      <CardContent className="flex items-start gap-3 p-[15px] sm:gap-4">
         <div
           aria-hidden="true"
           className={cn(

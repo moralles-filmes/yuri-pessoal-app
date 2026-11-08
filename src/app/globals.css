@@ -346,6 +346,7 @@
     --sidebar: var(--glass-solid);
     /* 09-B: o campo/ladrilho e a pílula também perdem a translucidez; o ladrilho cai no SEU
        sólido (1 degrau acima do cartão), a pílula e o popover no sólido do vidro. */
+    --glass-sheen: transparent;
     --tile: var(--tile-solid);
     --pill: var(--glass-solid);
     --popover-solid: var(--glass-solid);
