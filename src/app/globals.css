@@ -558,9 +558,11 @@ body:has([data-slot="dialog-content"], [data-slot="sheet-content"])
   backdrop-filter: none;
 }
 
-/* A casca (sidebar, header, botão do assistente) também não desfoca por baixo de um Dialog ou
-   Sheet: o overlay já escurece e desfoca a tela inteira, e um segundo filtro por cima do mesmo
-   fundo só custa. Regra própria e sem camada, no mesmo lugar da anterior. */
+/* A casca marcada com `data-casca` (sidebar e botão do assistente) também não desfoca por baixo
+   de um Dialog ou Sheet: o overlay só escurece, mas o que fica atrás delas é fundo, não texto, e
+   o filtro custa caro. O header NÃO leva o marcador, de propósito: é a única casca com conteúdo
+   da página passando atrás, e sem o desfoque o texto apareceria nítido atrás dos controles.
+   Regra própria e sem camada, no mesmo lugar da anterior. */
 body:has([data-slot="dialog-content"], [data-slot="sheet-content"]) [data-casca] {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;

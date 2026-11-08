@@ -138,11 +138,20 @@ describe("09-C · header em vidro", () => {
   const ramoVisivel = header.match(/sidebarHidden\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"/)?.[2];
   const ramoOculto = header.match(/sidebarHidden\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"/)?.[1];
 
-  it("é uma barra grudada ao topo, em vidro, com o marcador da casca", () => {
+  it("é uma barra grudada ao topo, em vidro", () => {
     for (const c of ["sticky", "top-0", "z-30", "h-16", "vidro-casca"]) {
       expect(tem(header, c), c).toBe(true);
     }
-    expect(header).toContain("data-casca");
+  });
+
+  it("fica FORA da regra que tira o desfoque sob diálogo: é a única casca com conteúdo passando atrás", () => {
+    expect(header).not.toContain("data-casca");
+  });
+
+  it("o recuo e o canto animam junto com a sidebar, sem saltar", () => {
+    for (const c of ["transition-[margin]", "duration-300", "ease-in-out", "motion-reduce:transition-none"]) {
+      expect(tem(header, c), c).toBe(true);
+    }
   });
 
   it("não sobra o desenho antigo nem fundo, borda ou sombra junto do material", () => {
@@ -187,11 +196,31 @@ describe("09-C · gatilho desktop da busca", () => {
     expect(gatilho).not.toMatch(/hover:bg-/);
   });
 
+  it("tem foco visível por contorno", () => {
+    for (const c of ["focus-visible:outline-2", "focus-visible:outline-offset-2", "focus-visible:outline-ring"]) {
+      expect(tem(gatilho, c), c).toBe(true);
+    }
+  });
+
   it("o kbd perde o fundo cinza, usa a borda do ladrilho e herda a cor do texto", () => {
     expect(kbd, "<kbd>").not.toBe("");
     expect(tem(kbd, "border-tile-border")).toBe(true);
     expect(tem(kbd, "bg-muted")).toBe(false);
     expect(kbd).not.toMatch(/(?:^|\s)text-(?!\[10px\])/);
+  });
+});
+
+describe("09-C · iniciais do avatar", () => {
+  const menu = ler("components", "layout", "user-menu.tsx");
+  const fallback = menu.match(/<AvatarFallback[^>]*>/)?.[0] ?? "";
+
+  it("usa a pílula forte com a tinta do item ativo (par medido), não primary sobre primary/15", () => {
+    expect(fallback, "<AvatarFallback …>").not.toBe("");
+    for (const c of ["bg-pill-strong", "text-nav-ativo-ink"]) {
+      expect(tem(fallback, c), c).toBe(true);
+    }
+    expect(tem(fallback, "text-primary")).toBe(false);
+    expect(tem(fallback, "bg-primary/15")).toBe(false);
   });
 });
 

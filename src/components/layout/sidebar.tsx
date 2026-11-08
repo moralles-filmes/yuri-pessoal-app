@@ -39,7 +39,7 @@ export function Sidebar({
       )}
     >
       {/* A coluna é transparente; quem tem material é este painel, flutuando à esquerda.
-          `data-casca` é o marcador que a Task 3 usa para alinhar o resto da casca. */}
+          `data-casca` marca a casca que perde o desfoque sob sobreposição. */}
       <div
         data-casca
         className="vidro-casca flex h-full min-h-0 flex-col overflow-hidden rounded-[28px]"

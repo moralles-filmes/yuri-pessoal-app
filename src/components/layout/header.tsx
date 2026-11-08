@@ -32,9 +32,8 @@ export function Header({
 }) {
   return (
     <header
-      data-casca
       className={cn(
-        "vidro-casca sticky top-0 z-30 flex h-16 items-center gap-2 px-3 sm:px-5",
+        "vidro-casca sticky top-0 z-30 flex h-16 items-center gap-2 px-3 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none sm:px-5",
         sidebarHidden ? "" : "lg:ml-3 lg:rounded-bl-[20px]",
       )}
     >

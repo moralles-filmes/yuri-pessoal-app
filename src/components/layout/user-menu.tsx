@@ -49,7 +49,7 @@ export function UserMenu({
           aria-label="Menu do usuário"
         >
           <Avatar className="size-8">
-            <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">
+            <AvatarFallback className="bg-pill-strong text-xs font-semibold text-nav-ativo-ink">
               {getInitials(displayName || email)}
             </AvatarFallback>
           </Avatar>

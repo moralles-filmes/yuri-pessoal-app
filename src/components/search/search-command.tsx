@@ -128,7 +128,7 @@ export function SearchCommand() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="hidden h-9 w-full max-w-sm items-center gap-2 rounded-full border border-(--field-border) bg-tile px-3 text-sm text-muted-foreground shadow-[inset_0_1px_0_var(--glass-hi)] transition-colors hover:border-foreground/60 sm:flex"
+        className="hidden h-9 w-full max-w-sm items-center gap-2 rounded-full border border-(--field-border) bg-tile px-3 text-sm text-muted-foreground shadow-[inset_0_1px_0_var(--glass-hi)] transition-colors hover:border-foreground/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex"
       >
         <Search className="size-4" />
         <span>Buscar transações, faturas, tarefas...</span>
