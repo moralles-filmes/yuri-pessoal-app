@@ -257,15 +257,39 @@ describe("REDESIGN-02-B · contrato dos tokens de tema", () => {
     expect(pilha).not.toContain("Arial");
   });
 
-  it("o layout carrega a Inter por next/font sem preload e a põe no <html>", () => {
+  it("fonts.ts é o ÚNICO lugar que chama a Inter por next/font, sem preload", () => {
+    // `next/font` exige a chamada literal em módulo; a de reserva (09-A) mora aqui para o
+    // layout e o `global-error` compartilharem a MESMA instância e a mesma variável CSS.
+    const fonts = semComentarios(fs.readFileSync(path.join(SRC, "app", "fonts.ts"), "utf8"));
+    expect(fonts).toMatch(/import\s*\{[^}]*\bInter\b[^}]*\}\s*from\s*"next\/font\/google"/);
+    expect(fonts).toMatch(/export\s+const\s+inter\s*=\s*Inter\(/);
+    expect(fonts).toContain("preload: false");
+    expect(fonts).toContain('variable: "--font-inter"');
+    expect(fonts).toContain('subsets: ["latin"]');
+    expect(fonts).toContain('display: "swap"');
+    for (const arquivo of ["layout.tsx", "global-error.tsx"]) {
+      const fonte = semComentarios(fs.readFileSync(path.join(SRC, "app", arquivo), "utf8"));
+      expect(fonte, `${arquivo} não chama next/font`).not.toContain("next/font");
+      expect(fonte, `${arquivo} não chama Inter()`).not.toMatch(/\bInter\(/);
+    }
+  });
+
+  it("o layout importa a Inter de ./fonts e a põe na className do <html>", () => {
     const layout = semComentarios(
       fs.readFileSync(path.join(SRC, "app", "layout.tsx"), "utf8"),
     );
-    expect(layout).toMatch(/import\s*\{[^}]*\bInter\b[^}]*\}\s*from\s*"next\/font\/google"/);
-    expect(layout).toContain("preload: false");
-    expect(layout).toContain('variable: "--font-inter"');
-    expect(layout).toContain('subsets: ["latin"]');
-    expect(layout).toContain("inter.variable");
+    expect(layout).toMatch(/import\s*\{\s*inter\s*\}\s*from\s*"\.\/fonts"/);
+    expect(layout).toMatch(/<html\b[^>]*className=\{[^>]*inter\.variable/);
+  });
+
+  it("o global-error importa a Inter de ./fonts e a põe na className do <html>", () => {
+    // Ele SUBSTITUI o layout raiz quando este cai, então não herda a variável: sem a classe,
+    // `--font-inter` fica indefinida e a pilha de fontes cai direto para `Segoe UI`/`system-ui`.
+    const erro = semComentarios(
+      fs.readFileSync(path.join(SRC, "app", "global-error.tsx"), "utf8"),
+    );
+    expect(erro).toMatch(/import\s*\{\s*inter\s*\}\s*from\s*"\.\/fonts"/);
+    expect(erro).toMatch(/<html\b[^>]*className=\{[^>]*inter\.variable/);
   });
 
   it("a paleta cobre as formas de pagamento sem repetir cor", () => {

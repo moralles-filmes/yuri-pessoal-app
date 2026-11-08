@@ -5,7 +5,8 @@ Claro: azul de destaque, branco e cinzas **frios**. Escuro: grafite frio, texto 
 
 ⚠️ **Desde 2026-11-07 a 09-A reescreveu a superfície**: a casca virou **vidro** sobre uma
 **névoa** de fundo, a fonte e o raio mudaram, e os textos foram remedidos sobre as superfícies
-novas. Os §1, §3, §4, §7 e a regra 7 do §8 abaixo já refletem isso. Desenho:
+novas. Os §1, §2, §3, §4, §5, §7 e a regra 7 do §8 abaixo já refletem isso, e a **09-B**
+acrescentou o §6-B (materiais e primitivas). Desenho:
 `docs/superpowers/specs/2026-11-07-redesign-09-vidro-design.md`.
 
 Nenhum valor aqui foi escolhido no olho: os de contraste foram medidos e a paleta de gráficos
@@ -63,6 +64,14 @@ não uma escolha sua. A regra proíbe a marca ocupar o lugar de um **dado**.
 **Prova:** `src/lib/theme/entity-colors.test.ts` (7 casos), **confirmado por 5 mutações** —
 cada uma das cinco linhas acima, revertida uma a uma, deixa a suíte vermelha.
 
+⚠️ **Nota da 09 (vidro): a superfície mudou, a trava não.** Nas tabelas acima "`bg-primary`" e
+"o branco puro" são do tempo das superfícies opacas. Hoje `--card` **é o vidro**
+(`var(--glass)`, translúcido sobre a névoa) e a superfície em que tudo é **medido** é
+`--glass-solid` — o vidro composto sobre `--fog-base`, opaco (`#f5f7fa` no claro, `#14171e` no
+escuro). Os substitutos de cor de entidade desta seção (`yellow-600`, `violet-500/25`,
+`text-warning-ink`…) não dependem da superfície e continuam valendo; o que mudou foi o fundo
+contra o qual os contrastes são conferidos (§3 e §4).
+
 ---
 
 ## 3. Tokens — tema CLARO ✅ **reescritos na 09-A (vidro)**
@@ -99,8 +108,10 @@ manchas** — o pior caso de verdade. Texto direto sobre a névoa aberta (`--for
   --glass-sheen: rgba(255, 255, 255, 0.55);
   --glass-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 20px 50px -22px rgba(30, 45, 90, 0.28);
   --tile: rgba(255, 255, 255, 0.55);       --tile-border: rgba(255, 255, 255, 0.7);
+  --tile-solid: #fbfbfd;                   /* 09-B: tile sobre --glass-solid */
+  --popover-solid: #fefefe;                /* 09-B: --glass-strong sobre --fog-base */
   --pill: rgba(255, 255, 255, 0.82);       --pill-strong: #ffffff;
-  --track: rgba(22, 24, 29, 0.07);         --grid: rgba(22, 24, 29, 0.07);
+  --track: rgba(22, 24, 29, 0.06);         --grid: rgba(22, 24, 29, 0.07);   /* --track era .07 */
 
   /* A casca aponta para o vidro */
   --background: var(--fog-base);
@@ -147,6 +158,13 @@ alfa de `--fog-1` no claro quebra o teste — e é para baixar o alfa, não escu
 **texto** (182 usos de `text-primary` não mudam); o **preenchimento** com texto branco é
 `--primary-fill`. No claro os dois valem `#0062d6`.
 
+⚠️ **Ajustado pela 09-B ao medir as primitivas** (a execução corrigiu o que o plano previa):
+`--track` caiu de `.07` para **`.06`** no claro — com `.07` a aba inativa (`--muted-foreground`
+sobre `--track` sobre o vidro, na mancha azul) media 4,45:1, abaixo de 4,5. Baixou-se o alfa do
+trilho, não se escureceu o texto. `--tile-solid` e `--popover-solid` são **sólidos compostos**
+(`compor()` do teste de contraste, não aproximação): é o que `--tile` e `--glass-strong`
+resolvem quando não há névoa atrás (transparência reduzida, ver §6-B).
+
 Não tocados pela 09-A (seguem como na 02-B): `--secondary`, `--muted`, `--border`, `--input`,
 `--success`/`--warning`/`--info` de preenchimento e os `--sidebar-*` restantes.
 
@@ -164,13 +182,15 @@ verde-azulado profundos; o vidro é grafite translúcido.
 
   --glass: rgba(28, 31, 40, 0.58);
   --glass-solid: #14171e;                  /* a superfície da validação */
-  --glass-strong: rgba(38, 42, 52, 0.95);
+  --glass-strong: rgba(38, 42, 52, 0.97);  /* 09-B: era .95 */
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-hi: rgba(255, 255, 255, 0.14);
   --glass-lo: rgba(255, 255, 255, 0.04);
   --glass-sheen: rgba(255, 255, 255, 0.07);
   --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 26px 60px -24px rgba(0, 0, 0, 0.7);
   --tile: rgba(255, 255, 255, 0.05);       --tile-border: rgba(255, 255, 255, 0.07);
+  --tile-solid: #202329;                   /* 09-B: tile sobre --glass-solid */
+  --popover-solid: #252933;                /* 09-B: --glass-strong sobre --fog-base */
   --pill: rgba(255, 255, 255, 0.1);        --pill-strong: rgba(255, 255, 255, 0.16);
   --track: rgba(255, 255, 255, 0.09);      --grid: rgba(255, 255, 255, 0.07);
 
@@ -212,6 +232,11 @@ Preenchimentos: `--primary-fill-foreground` sobre `--primary-fill` **4,70:1**;
 ⚠️ **Folga pequena no escuro:** `--muted-on-fog` (4,95:1) e `--primary-fill` (4,70:1). Subir o
 alfa de `--fog-3` no escuro quebra o teste.
 
+⚠️ **Ajustado pela 09-B:** `--glass-strong` subiu de `.95` para **`.97`** no escuro — com `.95` o
+`--destructive` sobre o popover, com um `#fff` atrás, caía a 4,26:1. Alfa mais alto, texto
+intocado. O sólido equivalente (`--popover-solid` `#252933`) e o do ladrilho (`--tile-solid`
+`#202329`) existem nos dois temas.
+
 ---
 
 ## 5. Tokens SEMÂNTICOS — novos
@@ -219,31 +244,33 @@ alfa de `--fog-3` no escuro quebra o teste.
 Hoje só existe `--destructive`. A ausência de `success`/`warning`/`info` é o que produziu
 **212 ocorrências** de `text-emerald`/`text-red-` em 105 arquivos e ~120 de `amber` em ~60.
 
-⚠️ **Os valores de `-ink` abaixo são os da 01-B.** Desde a 09-A os três `-ink` são hex medidos
-sobre o vidro (claro `#006303` · `#8a5a01` · `#0062d6`; escuro `#3fcf7f` · `#fab21c` ·
-`#6ea7ec`) — a tabela de contrastes está nas §3 e §4. O princípio e o motivo do `-ink`
-separado seguem valendo.
+✅ **Valores da 09-A** (os `oklch` de `-ink` da 01-B foram trocados por hex medidos sobre o
+vidro; a tabela de contrastes está nas §3 e §4). O princípio e o motivo do `-ink` separado
+seguem valendo. Os preenchimentos (`--success`, `--warning`, `--info`) não mudaram.
 
 ```css
 :root {
-  --success: oklch(0.621 0.207 143);        /* #0ca30c — 3,35:1 no branco */
+  --success: oklch(0.621 0.207 143);        /* preenchimento, ponto, ícone, borda */
   --success-foreground: oklch(1 0 0);
-  --success-ink: oklch(0.433 0.147 143);    /* #006300 — 7,54:1. TEXTO usa este */
+  --success-ink: #006303;                   /* TEXTO usa este — 6,11:1 */
 
-  --warning: oklch(0.811 0.164 78);         /* #fab219 */
-  --warning-foreground: oklch(0.250 0.050 78);
-  --warning-ink: oklch(0.508 0.108 73);     /* #8a5a00 — 5,93:1. TEXTO usa este */
+  --warning: oklch(0.811 0.164 78);
+  --warning-foreground: oklch(0.25 0.05 78);
+  --warning-ink: #8a5a01;                   /* 4,81:1 */
 
-  --info: oklch(0.575 0.163 256);           /* #2a78d6 */
+  --info: oklch(0.575 0.163 256);
   --info-foreground: oklch(1 0 0);
-  --info-ink: oklch(0.527 0.150 256);
+  --info-ink: #0062d6;                      /* 4,58:1 */
 }
 .dark {
-  --success: oklch(0.621 0.207 143);  --success-ink: oklch(0.621 0.207 143);  /* 5,19:1 */
-  --warning: oklch(0.811 0.164 78);   --warning-ink: oklch(0.811 0.164 78);   /* 9,50:1 */
-  --info: oklch(0.717 0.118 254);     --info-ink: oklch(0.717 0.118 254);     /* 6,96:1 */
+  --success: oklch(0.621 0.207 143);  --success-ink: #3fcf7f;   /* 7,26:1 */
+  --warning: oklch(0.811 0.164 78);   --warning-ink: #fab21c;   /* 7,96:1 */
+  --info: oklch(0.717 0.118 254);     --info-ink: #6ea7ec;      /* 5,84:1 */
 }
 ```
+
+⚠️ Os contrastes acima são o **mínimo entre as quatro superfícies de vidro** (a mancha que dá o
+mínimo está nas §3 e §4), não mais "sobre o branco" como na 01-B.
 
 ⛔ **Por que existe `-ink` separado.** `#0ca30c` sobre branco dá **3,35:1** — bom para um
 ponto, um ícone ou uma borda; **reprovado para texto**. Um token só levaria alguém a escrever
@@ -283,6 +310,96 @@ caso varrendo `src/` inteiro pelo nome antigo.
 marca, transformar `--gold` em alias de `--primary` propagaria a mudança para um dado seu.
 Depois da 02-A, **nenhuma cor de entidade passa por `--gold` nem por `--primary`** — sobraram
 só `::selection` e o gradiente da tela de login, os dois decorativos.
+
+---
+
+## 6-B. Materiais e primitivas em vidro — REDESIGN-09-B
+
+Dois sólidos e uma sombra entraram no `@theme inline` para as primitivas: `--color-tile-solid`
+e `--color-popover-solid` (as utilitárias `bg-tile-solid` e `bg-popover-solid`) e
+`--shadow-vidro` = `inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo),
+var(--glass-shadow)` (a utilitária `shadow-(--shadow-vidro)`).
+
+### Os quatro materiais (`@utility` em `globals.css`)
+
+Nenhum define `border-radius` — o raio é do componente. Só `vidro-casca` e `vidro-sobreposicao`
+desfocam o que está atrás (o desfoque é o recurso caro).
+
+| Material | Quem usa | Desfoque |
+| --- | --- | --- |
+| `vidro-casca` | sidebar, cabeçalho (09-C) | 30 px, saturação 175% |
+| `vidro-cartao` | superfícies que se repetem | nenhum |
+| `vidro-sobreposicao` | diálogo, gaveta, popover, menu, seleção aberta, dica | 24 px, saturação 160% |
+| `ladrilho` | campo e superfície interna | nenhum |
+
+Em todos, **transparência reduzida** troca o vidro pelo sólido validado (`--glass-solid`; o
+ladrilho vai para `--tile-solid`) e tira o filtro; **cores forçadas** devolvem a borda ao sistema
+(`CanvasText`). O mesmo vale no nível dos tokens: o `@media (prefers-reduced-transparency:
+reduce)` de topo redefine `--card`, `--popover`, `--sidebar`, `--tile` (para `--tile-solid`),
+`--pill` (para `--glass-solid`) e `--popover-solid` (para `--glass-solid`).
+Vidro sobre vidro não desfoca de novo: select, popover, menu, dica e aviso abertos **dentro** de
+diálogo ou gaveta perdem só o filtro (a regra `body:has(...)` de `globals.css`).
+
+### Os materiais como constantes (`src/components/ui/materiais.ts`, zero imports)
+
+| Constante | Conteúdo | Quem |
+| --- | --- | --- |
+| `MATERIAL_CARTAO` | `bg-card` + brilho em gradiente (`--glass-sheen`) + `border-glass-border` + `shadow-(--shadow-vidro)` | `Card` |
+| `MATERIAL_LADRILHO` | `bg-tile border-tile-border` + sombra interna `inset 0 1px 2px` | `Input`, `Textarea`, `SelectTrigger`, `Checkbox` |
+| `MATERIAL_PILULA` | `bg-pill border-glass-border` + realce interno + sombra curta | `Button` `outline` e `secondary` |
+| `PRESSAO` | transição de `transform/scale/cor/fundo/borda/sombra/filtro`, 500 ms, `ease-mola`; `active:scale-[.96]` em 120 ms; **desligada** em `motion-reduce` | `TabsTrigger` (o `Button` repete as classes com `motion-safe:` e o filtro `not-aria-[haspopup]`: o Tailwind só gera CSS para texto literal) |
+
+`ease-mola` = `cubic-bezier(.22,1.45,.36,1)`; `ease-estalo` = `cubic-bezier(.22,1.6,.36,1)`.
+
+### As primitivas (como ficaram no código)
+
+⚠️ **Alturas não mudam** em `Button`, `Input`, `SelectTrigger` e `Badge`. `Switch` e `TabsList`
+mudam porque o desenho pede.
+
+| Primitiva | Material e forma |
+| --- | --- |
+| `Card` | `MATERIAL_CARTAO`; raio 24 px (`size="sm"`: 20 px); rodapé em `bg-tile` com `border-glass-border` |
+| `Button` `default` | `bg-primary-fill`/`text-primary-fill-foreground`, brilho em gradiente e sombra tingida do próprio azul; pílula; `hover:brightness-110` |
+| `Button` `outline`, `secondary` | `MATERIAL_PILULA`; `hover` e `aria-expanded` em `bg-pill-strong` |
+| `Button` `ghost` | transparente; `hover` e `aria-expanded` em `bg-primary/10` |
+| `Button` `destructive` | `bg-destructive/3`, `text-destructive`, borda `destructive/25`; `hover` `bg-destructive/6` (alfa baixado pela medição, não o texto escurecido) |
+| `Button` `link` | `text-primary`, sublinhado no hover |
+| `Input` | `MATERIAL_LADRILHO`; raio 10 px; `h-8` |
+| `Textarea` | `MATERIAL_LADRILHO`; raio 14 px; `min-h-16` |
+| `SelectTrigger` | `MATERIAL_LADRILHO`; raio 10 px (`sm`: 9 px); `hover:bg-pill`; `h-8` (`sm`: `h-7`) |
+| `SelectContent`, `PopoverContent`, `DropdownMenuContent`, `DropdownMenuSubContent` | `vidro-sobreposicao`; raio 18 px; setas de rolagem do select em `bg-popover-solid` |
+| `DialogContent`, `SheetContent` | `vidro-sobreposicao`; raio 28 px (gaveta: só os cantos livres); rodapés em `bg-tile` |
+| `TooltipContent` | `vidro-sobreposicao`; raio 10 px; seta em `bg-popover-solid`/`fill-popover-solid` |
+| aviso (sonner) | regra de `globals.css` sem camada, `background: var(--popover)` + sombra de vidro + desfoque 24 px; o tipo vai no **ícone** (sem `richColors`); anel de foco devolvido por `:focus-visible` |
+| `Badge` `default` | `bg-primary-fill`/`text-primary-fill-foreground`; pílula; `h-5` |
+| `Badge` `secondary`, `destructive`, `outline`, `ghost`, `link` | tingimentos e bordas como na 02-B; `destructive` em `bg-destructive/10` (escuro `/20`) |
+| `Checkbox` | `MATERIAL_LADRILHO`; `size-4.5`, raio 6 px; marcada em `primary-fill`; o visto entra com `ease-estalo` (desligado em `motion-reduce`) |
+| `Switch` | trilho `h-8 w-[52px]`, pílula; ligado em `primary-fill`; botão `size-7` branco que **estica** (`w-[34px]`) enquanto pressionado, com `ease-mola` (desligado em `motion-reduce`) |
+| `TabsList` `default` | pílula `h-9` em `bg-track` com `border-tile-border`; a variante `line` segue sem fundo |
+| `TabsTrigger` | `PRESSAO`; ativa em `bg-pill-strong` + `text-foreground` + sombra curta |
+| `Skeleton` | `bg-track`, raio 10 px, `animate-pulse` (desligado em `motion-reduce`) |
+
+**Contraste dos controles desligados (WCAG 1.4.11, ≥ 3:1 nos dois temas, provado em teste).**
+O vidro faz uma borda clara sumir sobre a névoa clara, então o desligado ganhou aro próprio:
+`Checkbox` com `border-foreground/50`; trilho do `Switch` com
+`data-[state=unchecked]:ring-1 ring-foreground/50 ring-inset`; **botão** do `Switch` (o círculo)
+com `data-[state=unchecked]:ring-1 ring-foreground/60`. Como em toda a 09-B: contraste que
+falha baixa o alfa do tingimento ou da névoa; **o texto não é escurecido**.
+
+⚠️ **`cn()` é `twMerge`.** As `@utility` `vidro-*` e `ladrilho` são **desconhecidas** do
+twMerge: o chamador não as remove com uma classe de fundo. Já `bg-card`, `bg-tile`, `bg-pill`,
+`border-*`, `rounded-*` e `shadow-*` das constantes **são** removidas por quem passa a mesma
+classe no `className`.
+
+⚠️ **Toda primitiva entra em todas as rotas.** Nenhum import novo em `src/components/ui/*` além
+de `@/lib/utils`, `./materiais` e o que o arquivo já importava; é o que mantém o orçamento de JS
+(a mediana por rota não sobe por causa de material).
+
+### A fonte de reserva (09-B, T8)
+
+`next/font` exige a chamada literal em módulo, então a Inter mora em `src/app/fonts.ts` e o
+`layout.tsx` e o `global-error.tsx` a **importam** — este último substitui o layout raiz quando
+ele cai e põe `inter.variable` no próprio `<html>`. `preload: false` continua (§1).
 
 ---
 
