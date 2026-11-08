@@ -74,17 +74,24 @@ describe("inventário do painel financeiro — nenhum bloco do §2.3 sumiu", () 
   });
 });
 
-describe("o banner é só do servidor", () => {
-  it("BannerDeBoasVindas aparece em page.tsx e NÃO no cliente", () => {
-    expect(PAGINA).toContain("BannerDeBoasVindas");
-    expect(CLIENTE).not.toContain("BannerDeBoasVindas");
+describe("a abertura é só do servidor", () => {
+  it("Abertura aparece em page.tsx e NÃO no cliente", () => {
+    expect(PAGINA).toContain("Abertura");
+    expect(CLIENTE).not.toContain("Abertura");
   });
 
-  it("o cliente não importa o banner nem a montanha dele — recebe o banner pronto por prop", () => {
-    expect(CLIENTE).not.toMatch(/banner-de-boas-vindas/);
-    expect(CLIENTE).not.toMatch(/montanha/i);
-    expect(CLIENTE).toMatch(/\bbanner\b/);
-    expect(PAGINA).toMatch(/banner=\{/);
+  it("o cliente não importa a abertura — recebe-a pronta por prop, antes do filtro de mês", () => {
+    expect(CLIENTE).not.toMatch(/painel\/abertura/);
+    expect(CLIENTE).toMatch(/\babertura\b/);
+    expect(PAGINA).toMatch(/abertura=\{/);
+    expect(CLIENTE).toContain("{abertura}");
+    expect(CLIENTE.indexOf("{abertura}")).toBeLessThan(CLIENTE.indexOf('id="dash-mes"'));
+  });
+
+  it("o título é o <h1> da abertura: nem a página nem o cliente têm PageHeader, <h1 ou a frase do dia", () => {
+    expect(PAGINA).not.toContain("<PageHeader");
+    expect(PAGINA).not.toContain("FRASES_DO_BANNER");
+    expect(CLIENTE).not.toContain("<h1");
   });
 });
 

@@ -1,5 +1,5 @@
 /**
- * REDESIGN-04-A — as peças comuns do painel (banner, indicador, bloco, olho, montanha).
+ * REDESIGN-04-A — as peças comuns do painel (abertura, indicador, bloco, olho).
  *
  * O projeto não tem teste de componente (`environment: "node"`, zero `.test.tsx`), então o contrato
  * é verificado no CÓDIGO-FONTE, no molde de `src/lib/ai/chat-events.test.ts` — fraco, e melhor que
@@ -41,36 +41,54 @@ const arquivosDoPainel = fs
   .readdirSync(PASTA)
   .filter((f) => /\.tsx?$/.test(f) && !f.endsWith(".test.ts"));
 
-describe("banner e montanha — Server Components, sem JS de cliente", () => {
-  const permitido = (mod: string) =>
-    mod === "react" ||
-    mod === "./montanha" ||
-    mod === "@/lib/utils" ||
-    mod.startsWith("@/lib/painel/");
+describe("abertura — Server Component, direto na névoa", () => {
+  const fonte = semComentarios(ler("abertura.tsx"));
 
-  for (const arquivo of ["banner-de-boas-vindas.tsx", "montanha.tsx"]) {
-    it(`${arquivo} não declara "use client"`, () => {
-      expect(temUseClient(ler(arquivo))).toBe(false);
-    });
-
-    it(`${arquivo} só importa de react, ./montanha, @/lib/utils e @/lib/painel/*`, () => {
-      const fora = importsDe(ler(arquivo)).filter((m) => !permitido(m));
-      expect(fora).toEqual([]);
-    });
+  /** O `className` literal de cada `<tag className="...">` do arquivo, para ligar a classe ao elemento. */
+  function classesDe(tag: string): string[] {
+    return [...fonte.matchAll(new RegExp(`<${tag}\\b[^>]*?className="([^"]*)"`, "g"))].map((m) => m[1]);
   }
 
-  it("a frase só aparece de sm para cima", () => {
-    expect(ler("banner-de-boas-vindas.tsx")).toContain("hidden sm:block");
+  it('não declara "use client"', () => {
+    expect(temUseClient(fonte)).toBe(false);
   });
 
-  it("o emoji de aceno é aria-hidden", () => {
-    expect(ler("banner-de-boas-vindas.tsx")).toMatch(/aria-hidden[^>]*>\s*👋|👋/);
+  it("só importa de react, @/lib/utils e @/lib/painel/*", () => {
+    const fora = importsDe(fonte).filter(
+      (m) => !(m === "react" || m === "@/lib/utils" || m.startsWith("@/lib/painel/")),
+    );
+    expect(fora).toEqual([]);
   });
 
-  it("a montanha é aria-hidden e usa currentColor", () => {
-    const m = ler("montanha.tsx");
-    expect(m).toContain("aria-hidden");
-    expect(m).toContain("currentColor");
+  it("o <h1> é o título da página: 54 px no desktop, 38 px no celular, negrito, quebra palavra longa", () => {
+    const h1 = classesDe("h1");
+    expect(h1).toHaveLength(1);
+    for (const classe of ["text-[3.375rem]", "text-[2.375rem]", "font-bold", "break-words", "text-foreground"]) {
+      expect(h1[0].split(/\s+/).some((c) => c === classe || c.endsWith(`:${classe}`)), classe).toBe(true);
+    }
+  });
+
+  it("todo <p> direto na névoa usa text-muted-on-fog", () => {
+    const ps = classesDe("p");
+    expect(ps.length).toBeGreaterThanOrEqual(2);
+    for (const classe of ps) expect(classe.split(/\s+/)).toContain("text-muted-on-fog");
+  });
+
+  it("não tem cor de texto nem fundo que não sejam os da névoa", () => {
+    for (const proibido of ["bg-", "text-white", "text-primary", "text-destructive", "-ink", "👋", "Montanha"]) {
+      expect(fonte, proibido).not.toContain(proibido);
+    }
+  });
+
+  it("montanha.tsx e banner-de-boas-vindas.tsx não existem mais", () => {
+    expect(fs.existsSync(path.join(PASTA, "montanha.tsx"))).toBe(false);
+    expect(fs.existsSync(path.join(PASTA, "banner-de-boas-vindas.tsx"))).toBe(false);
+  });
+
+  it("globals.css não tem mais --banner-from nem --banner-to", () => {
+    const css = fs.readFileSync(path.join(SRC, "app", "globals.css"), "utf8");
+    expect(css).not.toContain("--banner-from");
+    expect(css).not.toContain("--banner-to");
   });
 });
 
@@ -217,7 +235,7 @@ describe("estadoDoBloco", () => {
 
 describe("fronteiras", () => {
   it("nenhuma peça importa @/lib/finance (as peças recebem texto pronto)", () => {
-    expect(arquivosDoPainel.length).toBeGreaterThanOrEqual(5);
+    expect(arquivosDoPainel.length).toBeGreaterThanOrEqual(4);
     for (const arquivo of arquivosDoPainel) {
       const finance = importsDe(ler(arquivo)).filter((m) =>
         m.startsWith("@/lib/finance"),
@@ -225,33 +243,6 @@ describe("fronteiras", () => {
       expect(finance, arquivo).toEqual([]);
     }
   });
-});
-
-describe("tokens do banner em globals.css", () => {
-  const css = fs.readFileSync(path.join(SRC, "app", "globals.css"), "utf8");
-
-  /** O corpo de um bloco de topo (`:root { … }` / `.dark { … }`), por contagem de chaves. */
-  function corpoDe(seletor: string): string {
-    const inicio = css.indexOf(`\n${seletor} {`);
-    expect(inicio, `não achei o bloco ${seletor}`).toBeGreaterThan(-1);
-    const abre = css.indexOf("{", inicio);
-    let fundo = 1;
-    let i = abre + 1;
-    while (fundo > 0 && i < css.length) {
-      if (css[i] === "{") fundo++;
-      else if (css[i] === "}") fundo--;
-      i++;
-    }
-    return css.slice(abre, i);
-  }
-
-  for (const seletor of [":root", ".dark"]) {
-    it(`${seletor} define --banner-from e --banner-to`, () => {
-      const corpo = corpoDe(seletor);
-      expect(corpo).toMatch(/--banner-from\s*:/);
-      expect(corpo).toMatch(/--banner-to\s*:/);
-    });
-  }
 });
 
 describe("conferência visual e revisão final (04-A) — o indicador", () => {

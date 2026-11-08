@@ -154,7 +154,7 @@ function ComRegistros({ href, children }: { href: string | undefined; children: 
 }
 
 export function DashboardClient({
-  banner,
+  abertura,
   ocultos,
   completude,
   mesSel,
@@ -191,8 +191,8 @@ export function DashboardClient({
   linkLancamentos,
   linkContas,
 }: {
-  /** O banner de boas-vindas, JÁ montado pelo servidor — o cliente não o importa. */
-  banner: React.ReactNode;
+  /** A abertura (saudação e título da página), JÁ montada pelo servidor — o cliente não a importa. */
+  abertura: React.ReactNode;
   ocultos: boolean;
   completude: CompletudeFinanceira;
   mesSel: string;
@@ -318,6 +318,9 @@ export function DashboardClient({
 
   return (
     <div className="space-y-6">
+      {/* Abertura (montada no servidor): é o <h1> da página */}
+      {abertura}
+
       {/* Filtro de período e base dos números */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
         <div className="flex flex-col gap-1.5 sm:max-w-xs">
@@ -341,9 +344,6 @@ export function DashboardClient({
           />
         </div>
       </div>
-
-      {/* Banner de boas-vindas (montado no servidor) */}
-      {banner}
 
       {/* Aviso "parcial": a leitura pode estar incompleta, e o painel diz por quê (peça única) */}
       <AvisoParcial completude={completude} />

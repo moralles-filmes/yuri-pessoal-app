@@ -1,5 +1,5 @@
 /**
- * REDESIGN-04-A — saudação e frase do banner do painel. PURO: `hoje` e a hora chegam de fora, nada
+ * REDESIGN-04-A — saudação, data e título da abertura do painel. PURO: `hoje` e a hora chegam de fora, nada
  * aqui lê o relógio.
  */
 
@@ -14,32 +14,33 @@ export function saudacaoPara(horaHHmm: string): "Bom dia" | "Boa tarde" | "Boa n
   return "Boa noite";
 }
 
-/**
- * Frases curtas do banner. Nem prescrevem nem cobram: não mandam o dono fazer nada, não apontam o
- * que ele deixou de fazer. O teste varre cada uma por `termosProibidosEm`.
- */
-export const FRASES_DO_BANNER: readonly string[] = [
-  "Um passo de cada vez.",
-  "Seu dinheiro, do seu jeito.",
-  "Clareza antes de qualquer decisão.",
-  "Cada registro conta uma parte da história.",
-  "Tudo o que importa, num só lugar.",
-  "Os números estão aqui quando você quiser olhar.",
-  "Sem pressa: o mês tem o tempo dele.",
-  "Organização também é descanso.",
-  "Cada lançamento deixa o quadro mais nítido.",
-  "Hoje é um bom dia para olhar com calma.",
-];
-
-const MS_POR_DIA = 86_400_000;
+const DIA_DA_SEMANA_E_MES = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+});
 
 /**
- * A frase do dia: a mesma para o mesmo `hoje` e uma diferente a cada dia, dando a volta na lista.
- * O índice é o número de dias desde 1970-01-01 (`Date.UTC`, sem fuso) módulo o tamanho da lista.
+ * A data da abertura do painel: "Sexta-feira, 6 de novembro". Recebe `'yyyy-MM-dd'` e a monta em
+ * `Date.UTC` sobre o texto, sem fuso: o dia que vem de fora é o dia que sai.
  */
-export function fraseDoDia(hoje: string, lista: readonly string[]): string {
-  const [ano, mes, dia] = hoje.split("-").map(Number);
-  const dias = Math.floor(Date.UTC(ano, mes - 1, dia) / MS_POR_DIA);
-  const indice = ((dias % lista.length) + lista.length) % lista.length;
-  return lista[indice];
+export function dataDaAbertura(hojeIso: string): string {
+  const [ano, mes, dia] = hojeIso.split("-").map(Number);
+  const texto = DIA_DA_SEMANA_E_MES.format(new Date(Date.UTC(ano, mes - 1, dia)));
+  // "sexta-feira, 6 de novembro": o "-feira" fica, só a inicial sobe.
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** Texto até o primeiro espaço. Nome só com espaços não é nome. */
+function primeiroNomeDe(nome: string | null): string | null {
+  const limpo = nome?.trim();
+  if (!limpo) return null;
+  return limpo.split(/\s+/)[0];
+}
+
+/** "Boa noite, Maria." — sem nome, "Boa noite." (nunca uma vírgula solta). */
+export function tituloDaAbertura(saudacao: string, nome: string | null): string {
+  const primeiro = primeiroNomeDe(nome);
+  return primeiro ? `${saudacao}, ${primeiro}.` : `${saudacao}.`;
 }

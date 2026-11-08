@@ -50,7 +50,7 @@ export function GeneralDashboard({
   view,
   customFrom,
   customTo,
-  banner,
+  abertura,
   faixa,
   subtituloById,
 }: {
@@ -61,7 +61,7 @@ export function GeneralDashboard({
   view: DashView;
   customFrom: string;
   customTo: string;
-  banner: React.ReactNode;
+  abertura: React.ReactNode;
   faixa: React.ReactNode;
   subtituloById: Partial<Record<DashCardId, string>>;
 }) {
@@ -135,6 +135,8 @@ export function GeneralDashboard({
 
   return (
     <div className="space-y-4">
+      {abertura}
+
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <PeriodToolbar
           window={window}
@@ -195,8 +197,6 @@ export function GeneralDashboard({
           </div>
         </div>
       )}
-
-      {banner}
 
       {faixa}
 
