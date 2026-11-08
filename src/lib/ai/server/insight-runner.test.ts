@@ -80,3 +80,31 @@ it("mantém o timeout configurado quando é menor que o prazo restante", async (
   await runInsight({ ...input, agoraMs: () => 0 });
   expect((d.generate.mock.calls[0][0] as AiObjectRequest).timeoutMs).toBe(10_000);
 });
+
+describe("Task 22b — recusa de sete evidências e contrato por módulo", () => {
+  it("recusa as duas respostas fora do teto sem persistir e fecha todas as tentativas", async () => {
+    d.generate.mockResolvedValue({ ...resposta, value: { ...valido, evidencias: Array.from({ length: 7 }, () => valido.evidencias[0]) } });
+    expect(await runInsight(input)).toMatchObject({ ok: false, code: "INSIGHT_SCHEMA_INVALID" });
+    expect(d.generate).toHaveBeenCalledTimes(2);
+    expect(d.close).toHaveBeenCalledTimes(2);
+    for (const [fechamento] of d.close.mock.calls) {
+      expect(fechamento).toMatchObject({ status: "failed", errorCode: "INSIGHT_SCHEMA_INVALID" });
+    }
+    expect(d.gravar).not.toHaveBeenCalled();
+    expect(d.complete).not.toHaveBeenCalled();
+    expect(d.fail).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["financeiro", "treinos", "dieta"] as const)("mantém a geração válida de %s", async modulo => {
+    const id = modulo + ".medido";
+    const indicadorDoModulo = { ...indicador, id, modulo };
+    const insightDoModulo = { ...valido, resumo: "Medido {{ind:" + id + "}}", evidencias: [{ afirmacao: "Dado medido", indicador_id: id }] };
+    d.coletar.mockResolvedValue({ indicadores: [indicadorDoModulo], periodo });
+    d.generate.mockResolvedValue({ ...resposta, value: insightDoModulo });
+    expect(await runInsight({ ...input, modulo })).toMatchObject({ ok: true, reaproveitado: false });
+    expect(d.gravar).toHaveBeenCalledWith(expect.objectContaining({ modulo, insight: insightDoModulo }), undefined);
+    expect(d.close).toHaveBeenCalledWith(expect.objectContaining({ status: "completed" }));
+    expect(d.complete).toHaveBeenCalledTimes(1);
+    expect(d.fail).not.toHaveBeenCalled();
+  });
+});

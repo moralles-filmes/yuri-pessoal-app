@@ -20,7 +20,7 @@
  *
  * A alternativa — o modelo escreve `R$ 1.234,56` e o servidor confere — exigiria casar essa
  * string com `1234.56`, decidir o que fazer com "mil duzentos", e ainda deixaria passar
- * "quase o dobro". Pedindo `{{ind:<id>}}`, a checagem vira `/\d/` sobre o texto sem tokens:
+ * "quase o dobro". Pedindo `{{ind:<id>}}`, a checagem usa `/\p{Nd}/u` sobre o texto sem tokens:
  * pobre, total, e sem margem para erro dos dois lados.
  */
 
@@ -29,7 +29,7 @@ import { z } from "zod";
 import { PRIORIDADES_DE_INSIGHT, TIPOS_DE_INSIGHT } from "./contracts";
 
 /** Gravada em cada insight. Mudar a forma invalida comparação com o que já foi gerado. */
-export const VERSAO_DO_SCHEMA = "insight-v1";
+export const VERSAO_DO_SCHEMA = "insight-v2";
 
 export const NOME_DO_SCHEMA = "insight";
 export const DESCRICAO_DO_SCHEMA =
@@ -46,6 +46,7 @@ export const MAX_RESUMO = 240;
 export const MAX_EXPLICACAO = 900;
 export const MAX_AFIRMACAO = 160;
 export const MAX_EVIDENCIAS = 6;
+export const MAX_INDICADOR_ID = 80;
 
 export const insightDoModeloSchema = z
   .object({
@@ -59,7 +60,7 @@ export const insightDoModeloSchema = z
         z
           .object({
             afirmacao: z.string().trim().min(1).max(MAX_AFIRMACAO),
-            indicador_id: z.string().trim().min(1).max(80),
+            indicador_id: z.string().trim().min(1).max(MAX_INDICADOR_ID),
           })
           .strict(),
       )
@@ -74,6 +75,10 @@ export const insightDoModeloSchema = z
  * descrições que divergem seriam um problema; uma derivada da outra esconderia que a
  * validação real acontece de um lado só.
  *
+ * O SDK instalado do Gemini converte este schema e omite maxLength/maxItems. Por isso
+ * os mesmos limites também são descritos em texto, que sobrevive à conversão. O Zod
+ * continua sendo a validação obrigatória; descrição não substitui a recusa.
+ *
  * `additionalProperties: false` em TODO nível — não só na raiz. Foi o defeito que a 18-D
  * pegou em revisão.
  */
@@ -87,24 +92,25 @@ export const INSIGHT_JSON_SCHEMA = {
     titulo: {
       type: "string",
       maxLength: MAX_TITULO,
-      description: "Título curto, sem nenhum dígito.",
+      description: `Título de 1 a ${MAX_TITULO} caracteres, sem nenhum dígito e sem marcador de indicador.`,
     },
     resumo: {
       type: "string",
       maxLength: MAX_RESUMO,
       description:
-        "Uma ou duas frases. Todo número aparece como {{ind:<id do indicador>}}; nenhum dígito é escrito à mão.",
+        `Resumo de 1 a ${MAX_RESUMO} caracteres, contando os marcadores completos. Todo número aparece como {{ind:<id do indicador>}}; nenhum dígito é escrito à mão.`,
     },
     explicacao: {
       type: "string",
       maxLength: MAX_EXPLICACAO,
       description:
-        "O raciocínio, em português do Brasil. Todo número aparece como {{ind:<id do indicador>}}; nenhum dígito é escrito à mão.",
+        `Explicação de 1 a ${MAX_EXPLICACAO} caracteres, contando os marcadores completos. Todo número aparece como {{ind:<id do indicador>}}; nenhum dígito é escrito à mão.`,
     },
     evidencias: {
       type: "array",
       minItems: 1,
       maxItems: MAX_EVIDENCIAS,
+      description: `Selecione de 1 a ${MAX_EVIDENCIAS} evidências para sustentar uma observação curta. Não é necessário citar todos os indicadores.`,
       items: {
         type: "object",
         additionalProperties: false,
@@ -113,11 +119,11 @@ export const INSIGHT_JSON_SCHEMA = {
           afirmacao: {
             type: "string",
             maxLength: MAX_AFIRMACAO,
-            description: "O que foi afirmado, sem nenhum dígito.",
+            description: `Afirmação de 1 a ${MAX_AFIRMACAO} caracteres, contando os marcadores completos, sem nenhum dígito fora deles.`,
           },
           indicador_id: {
             type: "string",
-            description: "O id exato de um indicador da lista recebida.",
+            description: `O id exato de um indicador da lista recebida, de 1 a ${MAX_INDICADOR_ID} caracteres.`,
           },
         },
       },

@@ -25,13 +25,21 @@ import { renderUntrusted, wrapUntrusted } from "@/lib/ai/security/untrusted";
 import type { AiMessage } from "@/lib/ai/core/contracts";
 
 import type { Indicador, ModuloDeInsight } from "./contracts";
-import { VERSAO_DO_SCHEMA } from "./schema";
+import {
+  MAX_AFIRMACAO,
+  MAX_EVIDENCIAS,
+  MAX_EXPLICACAO,
+  MAX_INDICADOR_ID,
+  MAX_RESUMO,
+  MAX_TITULO,
+  VERSAO_DO_SCHEMA,
+} from "./schema";
 
 /**
  * A versão do prompt, gravada em `ai_runs.prompt_version` e em `ai_insights.prompt_version`.
  * A versão do SCHEMA entra junto: a forma pedida faz parte do que produziu aquele texto.
  */
-export const INSIGHT_PROMPT_VERSION = "insight-v1";
+export const INSIGHT_PROMPT_VERSION = "insight-v2";
 
 export function versaoDoPromptDeInsight(): string {
   return `${INSIGHT_PROMPT_VERSION}+${VERSAO_DO_SCHEMA}`;
@@ -68,10 +76,11 @@ COMO OS NÚMEROS ENTRAM NO SEU TEXTO
 5. Um indicador com valor nulo pode ser citado: o sistema escreve "não medido" com o motivo. Nunca o trate como zero e nunca conclua nada a partir dele.
 
 O QUE VOCÊ ESCREVE
-- titulo: uma linha curta dizendo do que se trata.
-- resumo: uma ou duas frases com o que os números mostram.
-- explicacao: o raciocínio, ligando os indicadores citados. Quando um número vier com regra de contagem ou com ressalva de incompletude, mencione isso ao lado dele.
-- evidencias: cada afirmação sua amarrada ao id do indicador que a sustenta.
+- titulo: uma linha curta de 1 a ${MAX_TITULO} caracteres, sem marcador de indicador.
+- resumo: uma ou duas frases de 1 a ${MAX_RESUMO} caracteres com o que os números mostram.
+- explicacao: de 1 a ${MAX_EXPLICACAO} caracteres, ligando os indicadores citados. Quando um número vier com regra de contagem ou com ressalva de incompletude, mencione isso ao lado dele.
+- evidencias: selecione de 1 a ${MAX_EVIDENCIAS} evidências para sustentar uma observação curta. Não é necessário citar todos os indicadores. Cada evidência tem somente afirmacao (de 1 a ${MAX_AFIRMACAO} caracteres) e indicador_id (o id exato recebido, de 1 a ${MAX_INDICADOR_ID} caracteres).
+- Os limites de caracteres incluem os marcadores completos. Escolha um recorte que caiba nesses limites; os demais indicadores podem ficar de fora.
 
 TOM
 - Informe. Descreva o que foi registrado. Não avalie a pessoa, não atribua falha, não aponte repetição e não use palavra que soe a repreensão.

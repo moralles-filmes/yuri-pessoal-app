@@ -1373,25 +1373,25 @@ Unicode, persistência e adiamento da Task 22 não encerram este achado.
   `src/lib/ai/providers/adapter.contract.test.ts` e/ou
   `src/lib/ai/providers/ai-sdk/adapter.test.ts`.
 
-- [ ] **Step 1: Diagnóstico da causa.** Comparar o JSON Schema enviado, o objeto retornado
+- [x] **Step 1: Diagnóstico da causa.** Comparar o JSON Schema enviado, o objeto retornado
   por `generateObject`, o Zod e as instruções do prompt. Identificar qual regra reprova:
   campo obrigatório/extra, enum, tamanho, quantidade de evidências ou transformação do adapter.
   Não gravar resposta crua, indicadores financeiros ou mensagem de erro que contenha valores
   do dono em logs/fixtures. Registrar apenas a regra e o campo conhecido do schema; transformar
   o caso em fixture sintética. Não presumir a causa pelo toast nem gastar em retries exploratórios.
-- [ ] **Step 2: Regressão antes da correção.** Criar teste vermelho que reproduza a causa
+- [x] **Step 2: Regressão antes da correção.** Criar teste vermelho que reproduza a causa
   identificada, cobrindo a passagem adapter → Zod → runner e o fechamento de todas as tentativas.
   Manter a recusa de saída realmente inválida com mensagem segura.
-- [ ] **Step 3: Correção mínima.** Alinhar contrato e instruções ou corrigir a transformação
+- [x] **Step 3: Correção mínima.** Alinhar contrato e instruções ou corrigir a transformação
   defeituosa. Preservar limites de tamanho, enumerações, `.strict()`, confiança derivada no
   servidor, indicadores não confiáveis e números somente por tokens válidos. Aumentar a versão
   do prompt/schema se o comportamento ou a forma mudar. Não aceitar JSON inválido, truncar tokens
   nem ampliar tentativas para esconder a causa.
-- [ ] **Step 4: Mutação e checks.** Reverter temporariamente a correção no código local deve deixar o teste
+- [x] **Step 4: Mutação e checks.** Reverter temporariamente a correção no código local deve deixar o teste
   vermelho; restaurar por SHA-256 + `git diff`. Rodar a suíte inteira com
   `--testTimeout=30000`, `npx tsc --noEmit` e `npm run lint`. Confirmar por regressão
   que Dieta/Treinos e as garantias da Task 22 permanecem válidos.
-- [ ] **Step 5: Teste real e commit próprio.** Com login feito pelo dono no ambiente local,
+- [x] **Step 5: Teste real e commit próprio.** Com login feito pelo dono no ambiente local,
   gerar uma análise de Financeiro com o Gemini configurado, confirmar a exibição e persistência
   de insight/fontes, números renderizados, custo e ausência de run/tentativa aberta. Não ligar
   o job automático nem confirmar cartões. Se o provedor devolver um erro real, mantê-lo declarado.
@@ -1680,3 +1680,28 @@ Pedida pelo dono depois da Task 15. Commits: `bf229b6`, `ea459f9`, `bb4ddb4`, `e
 - **Registrado sem correção (§9.2):** numa rodada intermediária (com o desenho descartado), a
   síntese afirmou "Preparei uma proposta de compromisso" sem proposta existir. Correção sugerida
   se reaparecer: o servidor informa à síntese quantas propostas cada trilha criou de fato.
+
+### Task 22b — insight financeiro no Gemini (2026-11-07)
+
+O dono autorizou explicitamente duas gerações locais enviando indicadores financeiros agregados
+ao Gemini configurado. A reprodução falhou nas duas tentativas: diagnóstico temporário registrou
+somente `evidencias`, `too_big`, limite 6. Nenhuma resposta ou indicador financeiro foi copiado.
+O `@ai-sdk/google` instalado (4.0.33) remove `maxItems`/`maxLength` na conversão; as descrições
+não informavam os limites, e o prompt pedia evidência para cada afirmação sem limitar a seleção.
+
+Correção: limites existentes descritos no schema e no prompt, seleção de uma a seis evidências
+e orientação para um recorte curto. Zod estrito e tetos preservados; versão
+`insight-v2+insight-v2`. Regressão com SDK real e HTTP sintético: sete testes vermelhos antes
+da correção. Dezessete mutações confirmadas, restauração por SHA-256 e `git diff`; uma execução
+interrompida durante mutação foi restaurada e repetida integralmente. Diagnóstico temporário
+removido, runner idêntico ao commit.
+
+Validação real: análise exibida sem marcador cru e persistida com fontes, run `completed` na
+primeira tentativa, zero tentativas abertas. Metadados: uma análise e nove fontes gravadas
+(as fontes incluem todos os indicadores citados no texto, não só os itens de evidência).
+Custo: reprodução US$ 0,035729; validação US$ 0,021400; total US$ 0,057129.
+Nenhum cartão confirmado, nenhuma preferência alterada e nenhum job automático ligado.
+
+Verificação final da Task 22b (2026-11-08, servidor parado): **6.900 testes em 301 arquivos**,
+`npx tsc --noEmit` com zero erro e `npm run lint` limpo. Revisão pelo principal, sem auditoria
+externa. Somente a worktree autorizada foi alterada; sem push, PR, merge ou deploy.
