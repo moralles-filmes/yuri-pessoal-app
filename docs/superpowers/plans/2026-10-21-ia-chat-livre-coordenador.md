@@ -1438,9 +1438,9 @@ Unicode, persistência e adiamento da Task 22 não encerram este achado.
     assistente" e diz "Você pode pedir o desfazer de novo pelo botão".
 - [x] **Step 5:** PASS.
 - [x] **Step 6: Commit.**
-- [ ] **Step 7: Aplicar a migration** com o "pode aplicar" do dono e conferir no banco por
+- [x] **Step 7: Aplicar a migration** com o "pode aplicar" do dono e conferir no banco por
   `pg_indexes`.
-- [ ] **Step 8: Commit** `fix(ia): desfazer que falhou pode ser repetido, chaves reconferidas na execução, duplicata sinalizada`.
+- [x] **Step 8: Commit** `fix(ia): desfazer que falhou pode ser repetido, chaves reconferidas na execução, duplicata sinalizada`.
 
 ### Task 24: Comprovantes (MOD-ia-006, 008, 010, 028 e miúdos)
 
@@ -1732,3 +1732,21 @@ Checks finais da preparação da Task 23: **6.948 testes em 307 arquivos**,
 `npx tsc --noEmit` sem erros e `npm run lint` limpo. As 36 mutações foram repetidas em
 uma bateria completa; o alvo de uma delas foi refinado para atingir o SQL executável,
 sem confundi-lo com o comentário de reversão. Migration pendente do aval.
+
+### Task 23 — migration aplicada com aval (2026-11-08)
+
+O dono respondeu “Sim!” ao pedido de aplicação. Preflight reconfirmou a definição anterior
+(MD5 `ca40e6bcffb3160ee88d782f94ac639a`) e zero conflitos. Migration
+`ai_desfazer_que_falhou` aplicada pelo MCP no projeto `yjvnlbjvippefvzgrxxw`.
+Conferido por `pg_indexes`/`pg_index`: índice único, válido e pronto, com predicado
+`undoes_execution_id is not null and status <> 'falhou'`; RLS e FORCE RLS preservados.
+
+Tipos regenerados pelo MCP: o bloco `ai_action_executions` coincide integralmente com o tipo
+local; índice não altera o contrato da tabela. Nenhuma diferença de outras frentes foi integrada.
+Advisors sem achado novo relacionado ao índice. Não houve confirmação de ação nem escrita de
+teste em produção. A aplicação encerra a pendência da preparação registrada acima.
+
+Encerramento da Task 23: suíte inteira com **6.948 testes em 307 arquivos**,
+`npx tsc --noEmit` sem erros e `npm run lint` limpo após a aplicação. As 36 mutações da
+preparação permanecem válidas; nenhum código de produção foi alterado neste fechamento.
+Próxima tarefa: **24 — Comprovantes**.
