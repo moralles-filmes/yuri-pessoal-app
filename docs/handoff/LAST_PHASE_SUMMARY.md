@@ -1,5 +1,42 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
+## Iteração mais recente — chat livre com coordenador (2026-11-08)
+
+Tasks 1–27, extras 15b/22b e fechamento documental da Task 28. Coordenador + especialistas,
+trilhas auditadas, síntese sem ferramentas, painel compartilhado e formatador seguro;
+correções de memória, insights/Cron, aprovação/desfazer, comprovantes, preferências, retenção
+e consumo. Novas invariantes 107–120 no `CLAUDE.md`; anteriores revistas no próprio lugar.
+
+A revisão independente interna da branch encontrou dois P2, corrigidos com oito regressões
+e seis mutações vermelhas: omissão por auditoria parcial e prazo envelhecido por awaits.
+Sem skills Superpowers de review disponíveis, houve revisão equivalente e re-revisão do diff;
+nenhuma auditoria externa. **7.095 testes / 321 arquivos**, também em UTC. Resultados finais
+no plano e no bloco mais recente de `CURRENT_STATUS.md`.
+
+Contagens atuais: **133 tabelas públicas, 20 `ai_*`, RLS + FORCE RLS em todas; 30 ferramentas
+(22 leitura/8 escrita), 15 commands, 9 agentes**. Não houve migration nesta Task 28. As três
+migrations do coordenador, insight sem sessão e desfazer que falhou já estavam aplicadas e
+conferidas; não reaplicar. Tipos de outras frentes não foram sobrescritos.
+
+Conferência com aval: cinco runs concluídos no Gemini Flash-Lite, 29 tentativas, zero abertas,
+custo estimado **US$ 0,041295**. Uma tarefa TO-DO de teste confirmada; compromisso permaneceu
+sem confirmação. **Três escritas parcialmente conferidas:** despesa sem conta/cartão não virou
+proposta; o dono escolheu manter os cinco envios. Financeiro desligado recusou a leitura, e as
+chaves originais foram restauradas e recarregadas. Panorama concluiu; desktop/390/320 px vistos,
+sem rolagem horizontal em 320 px. Capturas na conversa; sem GIF ou arquivo visual persistido
+pela ferramenta. Não confundir essa amostra com validação de todos os critérios manuais.
+
+Desenho da Task 15b preservado: TODAS as ferramentas no passo 0, required quando há leitura,
+depois auto. O dono confirmou dois cartões na Task 15. A síntese que afirmou proposta inexistente
+na 15b, as leituras semanais sugeridas, o custo dos seis especialistas e os sete itens da spec
+§9.2 estão registrados no status e no resultado real. Desfazer de hábito exige registro_novo
+true, sem snapshot anterior; retenção usa leitura antes do delete, sem garantia transacional;
+PDF continua com contagem heurística; consumo incompleto não é zero.
+
+Próxima ação: aguardar tarefa do dono, incluindo eventual conferência dos três cartões com
+conta/cartão informados e novo aval. Nenhum push, PR, merge ou deploy autorizado.
+
+
 > ✅ **ÚLTIMA: 18-F — IA · Memória, integrações e polimento (2026-09-20). CONCLUÍDA, com os
 > cinco blocos — e ela FECHA A FASE 18.** A IA deixou de ser uma ilha: entrou no sino, na busca
 > global e no backup (Bloco 1); ganhou um botão em toda tela (2); passou a conhecer as

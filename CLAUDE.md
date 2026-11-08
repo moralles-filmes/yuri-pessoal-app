@@ -10,13 +10,13 @@ Sistema pessoal **single-user** (finanças, cartões/faturas, parcelamentos, gas
 
 ## Estado do projeto
 
-As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 16 — Dieta e Alimentação**, a **Fase 17 — Treinos** e a **Fase 18 — Inteligência Artificial** estão **concluídas**. As duas frentes grandes (16 e 17), abertas em **2026-08-03** e divididas em 6 subfases cada (A–F), fecharam em **2026-08-04**: **40 de 40** e **55 de 55** critérios de aceite validados. A **Fase 18** fechou em **2026-09-20**, com os critérios validados um a um em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` (**163** critérios: 142 validados, 17 pendentes de conferência à mão, 4 retirados no desenho). **Não há 16-G, 17-G nem 18-G, e não há Fase 19** — **o projeto inteiro está em manutenção/iteração** e melhoria entra como tarefa avulsa, com branch própria.
+As **14 fases do roadmap original**, a **Fase 15 — Módulo TO-DO**, a **Fase 16 — Dieta e Alimentação**, a **Fase 17 — Treinos** e a **Fase 18 — Inteligência Artificial** estão **concluídas**. As duas frentes grandes (16 e 17), abertas em **2026-08-03** e divididas em 6 subfases cada (A–F), fecharam em **2026-08-04**: **40 de 40** e **55 de 55** critérios de aceite validados. A **Fase 18** fechou em **2026-09-20**, com os critérios validados um a um em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` (**163** critérios: 142 validados, 16 pendentes de conferência à mão, 5 retirados no desenho). **Não há 16-G, 17-G nem 18-G, e não há Fase 19** — **o projeto inteiro está em manutenção/iteração** e melhoria entra como tarefa avulsa, com branch própria.
 
 | Fase | Módulo | Situação |
 | --- | --- | --- |
 | **16** | Dieta e Alimentação (`/nutricao`) | ✅ **CONCLUÍDA** (16-A a 16-F, 2026-08-04) — em manutenção/iteração |
 | **17** | Treinos (`/treinos`) | ✅ **CONCLUÍDA** (17-A a 17-F, 2026-08-04) — em manutenção/iteração |
-| **18** | Inteligência Artificial (`/ia`) | ✅ **CONCLUÍDA (2026-09-20)** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F ✅ COMPLETA (blocos 1 a 5): Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (19 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece, **sem migration**; **Bloco 2 ✅ (2026-09-20)** — o assistente ao alcance de qualquer tela por um botão na casca que abre um painel sob demanda, com a **mesma** `ChatClient` e as mesmas chaves (**2 colunas, nenhuma tabela**); **Bloco 3 ✅ (2026-09-20)** — a **memória**: o dono escreve preferências em `/ia/memoria` e o assistente as leva para as conversas **como preferência, nunca como regra**; a IA passa a poder **propor** preferências, pelo mesmo Approval Engine. **2 tabelas + 1 coluna**, e `allow_memory` (que existia desde a 18-A) finalmente liga alguma coisa; **Bloco 4 ✅ (2026-09-22)** — três **panoramas de um clique** (*Planejar meu dia · Encerrar meu dia · Planejar minha semana*) cuja lista de leituras é **estática e executada pelo servidor**, mais um **modo Caixa de entrada**. O panorama abre uma **conversa** (4ª espécie de `ai_runs.kind`), então "transformar resposta em ação", busca, histórico e exclusão em massa vêm de graça. **Duas migrations, e NENHUMA cria tabela** — um valor de CHECK, a RPC e, depois da auditoria, a janela de dedupe do clique duplo —, nenhuma rota e nenhum endpoint novos, e `allow_cross_module` (que existia desde a 18-A) finalmente liga alguma coisa; **Bloco 5 ✅ (2026-09-20) — FECHA A FASE**: uma **suíte de evals** (`src/lib/ai/evals/`) com os oito casos do briefing, que afirma o **estrutural** e **encontrou um defeito real antes de ficar verde** (o plural de "proteína" não alcançava a Dieta), mais a validação **item a item** dos **163** critérios da fase em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` — 142 validados, 17 pendentes de conferência à mão, 4 retirados no desenho. **Sem migration, sem tabela, sem rota, sem ferramenta e sem command.** **Não há 18-G e não há Fase 19** |
+| **18** | Inteligência Artificial (`/ia`) | ✅ **CONCLUÍDA (2026-09-20)** — 18-A ✅, 18-B ✅, 18-C ✅, 18-D ✅ e **18-E ✅ COMPLETA (2026-08-09, quatro blocos)**: a IA escreve por 7 ferramentas e 13 commands, sempre com confirmação do dono; `/ia/acoes` mostra o que foi feito com desfazer; `/ia/comprovantes` lê nota fiscal por visão; `/ia/insights` produz análises sobre grandezas **derivadas** que o sistema calcula, num texto **sem dígito**; e um **job 1×/dia** as gera sozinho, se o dono ligar. **18-F ✅ COMPLETA (blocos 1 a 5): Bloco 1 ✅ (2026-09-19)** — a IA entra no sino (4 famílias), na busca global, no backup (19 tabelas `ai_*`, sem a de credenciais) e ganha exclusão em massa que declara o que permanece, **sem migration**; **Bloco 2 ✅ (2026-09-20)** — o assistente ao alcance de qualquer tela por um botão na casca que abre um painel sob demanda, com a **mesma** `ChatClient` e as mesmas chaves (**2 colunas, nenhuma tabela**); **Bloco 3 ✅ (2026-09-20)** — a **memória**: o dono escreve preferências em `/ia/memoria` e o assistente as leva para as conversas **como preferência, nunca como regra**; a IA passa a poder **propor** preferências, pelo mesmo Approval Engine. **2 tabelas + 1 coluna**, e `allow_memory` (que existia desde a 18-A) finalmente liga alguma coisa; **Bloco 4 ✅ (2026-09-22)** — três **panoramas de um clique** (*Planejar meu dia · Encerrar meu dia · Planejar minha semana*) cuja lista de leituras é **estática e executada pelo servidor**, mais um **modo Caixa de entrada**. O panorama abre uma **conversa** (4ª espécie de `ai_runs.kind`), então "transformar resposta em ação", busca, histórico e exclusão em massa vêm de graça. **Duas migrations, e NENHUMA cria tabela** — um valor de CHECK, a RPC e, depois da auditoria, a janela de dedupe do clique duplo —, nenhuma rota e nenhum endpoint novos, e `allow_cross_module` (que existia desde a 18-A) finalmente liga alguma coisa; **Bloco 5 ✅ (2026-09-20) — FECHA A FASE**: uma **suíte de evals** (`src/lib/ai/evals/`) com os oito casos do briefing, que afirma o **estrutural** e **encontrou um defeito real antes de ficar verde** (o plural de "proteína" não alcançava a Dieta), mais a validação **item a item** dos **163** critérios da fase em `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` — 142 validados, 16 pendentes de conferência à mão, 5 retirados no desenho. **Sem migration, sem tabela, sem rota, sem ferramenta e sem command.** **Não há 18-G e não há Fase 19** |
 
 Ver `docs/project/CURRENT_STATUS.md` e `docs/handoff/NEXT_AGENT_INSTRUCTIONS.md`. **Reconferido no banco em 2026-08-07, depois do Bloco 3 da 18-C: 124 tabelas** no `public`, das quais **12 `ai_*`** — 7 da 18-A, 2 da 18-B (`ai_run_steps`, `ai_tool_calls`) e 3 do Bloco 3 da 18-C (`ai_action_proposals`, `ai_action_approvals`, `ai_action_executions`). O **Bloco 4 não criou tabela nenhuma** — ele só alargou um CHECK (`todo_completions.completion_source` passou a aceitar `'ia'`) — e o **Bloco 5 também não**: ele acrescentou duas colunas a `ai_action_proposals` (`origem`, `undoes_execution_id`). A **18-D** criou 2 (`ai_documents` e `ai_document_extractions`) e alterou 3 (`ai_runs` ganhou `kind` e `conversation_id` nullable; `ai_user_preferences` ganhou `allow_vision`; `ai_action_proposals` ganhou `document_extraction_id` e a terceira `origem`). A **18-E** (blocos 1–3, 2026-08-09) criou 3 (`ai_insights`, `ai_insight_sources`,
 `ai_insight_feedback`) e alterou 2 (`ai_runs.kind` ganhou a terceira espécie `'insight'`;
@@ -125,7 +125,16 @@ Rota `/treinos`, tabelas `training_*` (28), navegação interna própria com 13 
 23. **FK COMPOSTA sempre que uma tabela apontar para outra dentro do mesmo usuário.** A RLS confere o `user_id` da **própria linha** e não alcança a linha apontada. Sem isso, um intruso ocupava a chave única `(scheduled_workout_id, provider)` da ponte da agenda e **impedia o dono de sincronizar** aquele dia. Mesma correção da 16-E nas fotos de evolução.
 24. **`getSessionHistory` aceita `client`/`userId`** para o Cron (service role, sem sessão) usar **a mesma leitura da tela**. Um segundo caminho de montagem do histórico faria o número da notificação divergir do número da tela.
 
-## Módulo Inteligência Artificial (Fase 18 — 18-A a 18-E)
+## Módulo Inteligência Artificial (Fase 18 concluída; chat livre em iteração)
+
+**Chat livre, Task 28 (2026-11-08):** coordenador `assistente-pessoal-v3` + especialistas,
+sem contexto de página, roteamento por palavras nem chave Caixa de entrada. Ver o plano
+`docs/superpowers/plans/2026-10-21-ia-chat-livre-coordenador.md`, resultado real e ressalvas.
+Contagens reconferidas: **30 ferramentas (22 leituras + 8 escritas), 15 commands (7 inversos
+sem ferramenta), 9 agentes**; banco remoto **133 tabelas públicas, 20 `ai_*`, todas com RLS
+e FORCE RLS**. Nenhuma tabela nova nesta iteração; a contagem de 132 abaixo é histórica.
+Suíte atual: **7.095 testes / 321 arquivos**. Placar da Fase 18 após retirar B-9: **142
+validados, 16 pendentes e 5 retirados**, sem promover os itens visuais ainda não percorridos.
 
 Rota `/ia`, tabelas `ai_*` (**20**, reconferidas no banco em 2026-09-22; o Bloco 2 da 18-F não
 criou tabela, só duas colunas; as duas últimas são as da memória, do Bloco 3; o Bloco 4 não
@@ -257,20 +266,21 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
 
 **Invariantes acrescentadas pela 18-B (primeira leitura de dado real):**
 
-17. **O LAÇO DE FERRAMENTAS É NOSSO.** As ferramentas vão ao provedor **sem `execute`**: o SDK
-    emite o `tool-call` e para. Quem valida e executa é o Tool Executor, em
-    `src/lib/ai/server/tool-loop.ts`. Teto de **3 passos por TENTATIVA** (não por run — o run
-    inteiro custa `(1 + maxRetries + maxFallbacks) × (1 + MAX_TOOL_STEPS)`, e `computeReservation`
-    reserva nessa mesma base). Estourado o teto, a resposta **declara o corte** — número
-    apresentado como completo depois de laço interrompido é a mentira que a subfase combate.
+17. **O LAÇO DE FERRAMENTAS É NOSSO.** Ferramentas vão ao provedor sem `execute`;
+    o Tool Executor valida e executa em `server/tool-loop.ts`. Teto de **3 passos por
+    tentativa**, com até 4 ferramentas por passo. `server/trilha.ts` centraliza tentativas,
+    medição e fallback; a reserva do chat cobre decisão + maior entre direto e paralelo.
+    Corte pelo teto é declarado pelo servidor também na resposta sintetizada.
 18. **`step_index` é DO RUN, nunca do laço.** `ai_run_steps` tem `UNIQUE (run_id, step_index,
     kind)` e o `run_id` é o mesmo em toda a cadeia de retry/fallback. Reiniciar a contagem por
     tentativa dava `23505` → `startStep` devolve `null` → **"sem trilha, sem leitura"** bloqueia
     a execução, e depois de qualquer retry a IA parava de ler e respondia com a mensagem de
     falha de auditoria, com o run fechando como `completed`. `TOOL_STEP` é o 4º tipo de tentativa.
-19. **A flag `allow_*` VENCE o roteador.** `routeAgent` resolve o agente por texto ou contexto
-    de página, mas `autorizado()` exige a permissão do módulo; sem ela a pergunta cai no
-    orquestrador com `SEM_PERMISSAO`. O `agentId` do cliente é **preferência, nunca autorização**.
+19. **A PERMISSÃO VENCE A ESCOLHA DO MODELO.** O coordenador só aciona especialistas
+    oferecidos pelo servidor a partir das chaves do dono; cada ferramenta continua passando
+    pelo guard. `agentId` identifica o agente no código e na auditoria; não é campo aceito
+    do cliente para escolher autorização. `AGENT_PERMISSION`, `moduloDoAgente` e
+    `permissaoDoModulo` permanecem, incluindo a permissão independente de `body`.
 20. **A auditoria guarda o PEDIDO, nunca o RESULTADO.** `ai_tool_calls` grava ferramenta,
     `arguments_sanitized`, `records_read`, `refs` e desfecho — jamais o conteúdo devolvido, que
     seria uma segunda cópia dos dados pessoais dentro do módulo de IA. Consequência que a tela
@@ -279,21 +289,16 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     ⚠️ **`records_read` é `ToolOutput.contagem` — quantos EXISTEM, não quantos chegaram ao
     modelo.** Com a poda por orçamento de caracteres os dois divergem de propósito; por isso o
     rótulo da tela é "registros encontrados".
-21. **O contexto da página é SÓ a rota, de uma lista estática, e o módulo é resolvido no
-    servidor.** A tela não manda conteúdo — nem HTML, nem título, nem estado, nem texto de
-    registro. Aceitar `modulo` do cliente seria deixá-lo escolher a allowlist de ferramentas.
-    A descrição de cada rota que entra no prompt é **allowlist por igualdade exata de chave**
-    (com `Object.hasOwn`), nunca interpolação — e o bloco declara que a tela aberta **não é
-    dado sobre os registros**, senão "ele está nos recordes" viraria "ele tem recordes".
-22. **`refs` é o único campo da IA que vira `href`**, e a coluna é `jsonb` livre numa tabela
-    imutável. `rotaInternaAceita` (`tools/sources.ts`) é **allowlist, não lista de proibidos**:
-    recusar só `//` deixava passar `/\`, que o parser de URL resolve idêntico
-    (`new URL("/\\evil.com", base).origin` sai do domínio), e `/<tab>/evil.com` atravessava
-    qualquer checagem de prefixo porque o parser descarta tab/CR/LF antes de resolver.
-23. **Tentativa nova começa com o TEXTO ZERADO, nos dois lados** — servidor no evento `switch`
-    e cliente ao recebê-lo. `TOOL_STEP` é exceção declarada (é a mesma resposta continuando).
-    Corrigir só um dos lados reintroduz o defeito ao contrário: o `router.refresh()` apagaria
-    da tela um texto que o usuário já tinha visto.
+21. **CONTEXTO DE PÁGINA APOSENTADO por decisão do dono em 2026-10-21.** `pageContext`
+    não é aceito no POST nem montado no prompt; B-9 foi retirado, com registro no placar
+    da Fase 18. A página aberta não escolhe o especialista nem fornece dado sobre registros.
+22. **TODO LINK GERADO PELA IA PASSA POR `rotaInternaAceita`.** Vale para `refs` e
+    para links do formatador. É allowlist de rota interna: rejeita protocolo externo, `//`,
+    barra invertida e controles que o parser de URL descartaria. `refs` persistidas são
+    `jsonb` não confiável; link de Markdown recusado vira texto, sem navegação externa.
+23. **TENTATIVA NOVA ZERA O TEXTO NOS DOIS LADOS.** O `switch` identifica a trilha;
+    o servidor e o cliente zeram a resposta em streaming daquela etapa. `TOOL_STEP` continua
+    a mesma resposta. Retry da síntese na trilha 0 preserva propostas das trilhas 1..n.
 24. **`toolsForPermission` decide se a chave `allow_*` é clicável.** Derivado do registry, não
     de uma lista escrita à mão de "módulos prontos" — que ficaria para trás nos dois sentidos
     (botão que não liga nada, ou ferramenta pronta sem chave para ligá-la).
@@ -308,13 +313,10 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     (`permissaoDoModulo`), nunca de uma segunda tabela. `body_*` obrigou isso: quem atende é o
     agente de Treinos, mas a flag exigida é `allow_body`. Usar a flag do agente recusaria quem
     ligou só as medidas; ignorá-la mandaria a pergunta a um agente que o guard barraria depois.
-27. **O roteador DESEMPATA por contagem, e empate cai no orquestrador declarando ambiguidade**
-    (`AMBIGUO`). Até a 18-B ele devolvia o primeiro módulo da **ordem de declaração** do objeto
-    de vocabulários — invisível com dois módulos, sorteio com nove. A página aberta desempata,
-    mas **só quando é um dos módulos empatados**. E palavra ambígua não entra no vocabulário:
-    "meta" (três módulos), "gordura" (casaria dentro de "gordura corporal") e "tarefa" (é do
-    TO-DO, não do módulo da Fase 09) ficaram de fora **de propósito** — palavra ambígua não
-    erra o roteamento, ela o **desliga**, jogando tudo no orquestrador.
+27. **ROTEAMENTO POR PALAVRA-CHAVE APOSENTADO.** Não há `routeAgent`, vocabulário
+    ou desempate pela página no chat. O coordenador escreve tarefas autossuficientes para
+    especialistas oferecidos; dado ambíguo continua exigindo pergunta, sem escolher registro
+    pelo dono. As relações de permissão derivadas do registry permanecem.
 28. **`toolDefinitionsFor` recebe as permissões do usuário.** Não substitui o guard (que
     continua decidindo na execução): resolve outro problema, o de **o que o modelo vê**. Um
     agente pode ter ferramentas de módulos com flags diferentes, e oferecer o que a flag vai
@@ -373,11 +375,12 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     apagaria por cascade o registro de que a IA lançou uma transação. Proposta e aprovação são
     artefatos do chat e somem com ele; **a execução sobrevive**. Sem a FK, a chave única seria
     ocupável (17-F) — por isso os índices de idempotência são emparelhados com `user_id`.
-39. **`changed_fields` limita a FORMA, não o nome** (§3.6 — exceção declarada à invariante 20).
-    Só escalar de até 200 caracteres, dentro da allowlist estática do command. Anexo, URL
-    assinada, texto longo e chave são recusados **sem que ninguém precise tê-los previsto** —
-    uma lista de nomes proibidos fura no primeiro campo novo. Campo omitido vira
-    `undetailed_change`, e **nem o nome dele** é registrado.
+39. **`changed_fields` limita a FORMA e a allowlist de cada command** (§3.6, exceção
+    à invariante 20): só escalar de até 200 caracteres. Campo omitido vira
+    `undetailed_change`, sem registrar seu nome. Para comprovar criação, o hábito acrescenta
+    somente o fato booleano `registro_novo`; mantém os campos finais auditáveis, sem snapshot
+    do valor anterior. Anexos, URL assinada, texto longo e credenciais não entram na auditoria
+    permanente.
 
 **Invariantes acrescentadas pelo Bloco 4 da 18-C (a IA passa a escrever):**
 
@@ -417,11 +420,10 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     `finance/queries.ts`, não dentro do módulo de IA. Consulta montada aqui é a porta pela qual
     a regra do domínio começa a ser reescrita: primeiro o `select`, depois o filtro, depois a
     decisão. O teste de fronteira pegou isso em revisão.
-46. ⛔ **O EVENTO `switch` LIMPA AS PROPOSTAS DA TELA.** Troca de provedor reinicia o laço, a
-    ferramenta de escrita roda de novo e nasce uma **segunda** proposta, com outro id e outro
-    hash. Dois cartões na tela, e confirmar os dois criaria duas tarefas — a aprovação de uso
-    único não impede, porque são propostas distintas. A órfã expira em 10 min sem ter tocado
-    em nada.
+46. **`switch` REMOVE SOMENTE OS CARTÕES DA TRILHA QUE REPETE.** No direto, sai a
+    proposta da tentativa anterior daquela trilha; na síntese, `switch(0)` preserva todas
+    as propostas dos especialistas. A órfã no banco expira em 10 min. Propostas pendentes
+    iguais do mesmo run recebem aviso de possível duplicata, sem bloquear confirmação.
 47. **A chave de escrita é ANDada com a de leitura no SERVIDOR**, não só na tela: propor começa
     por resolver de qual registro se fala, e isso é ler. E `toolsForWritePermission` (derivado
     do registry) é quem decide se a chave é clicável — as cinco têm ferramenta desde o Bloco 4,
@@ -489,25 +491,19 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     seria a única escrita do sistema sem o dono ler o que vai acontecer — e o inverso não é
     inofensivo: ele exclui tarefa, apaga registro de diário e cancela compromisso que já foi
     para o Google.
-49. **`ComoDesfazer` É UMA UNIÃO, e é ela que impede a tela de ficar muda.** `{kind:"command",
-    command, payload}` ou `{kind:"nao-ha", porque}` — nunca `undo: string | null` com um texto
-    opcional ao lado, que tornaria representável o estado *"sem desfazer e sem explicação"*.
-    `isCommandCoherent` recusa inverso inexistente, inverso apontando para si mesmo e "não há"
-    sem motivo.
-50. ⚠️ **O INVERSO RECEBE O QUE A EXECUÇÃO REGISTROU, NUNCA O PAYLOAD ORIGINAL.** `target_id` +
-    `changed_fields`, e só. O payload mora na proposta, que some com a conversa (invariante 38);
-    apoiar o desfazer nele o quebraria justamente para quem limpou o chat. **Consequência:**
-    campo que o inverso precise além do id **tem de estar na allowlist §3.6** do command
-    original — é o caso de `log_date` em `registrarHabito`, e há teste que fica vermelho se ele
-    sair de lá.
-51. **A PROPOSTA DE DESFAZER NÃO NASCE DE TOOL CALL, e isso é uma segunda FORMA declarada, não
-    um afrouxamento.** `ai_action_proposals.origem` (`ferramenta` | `desfazer`) discrimina um
-    CHECK que exige cada forma **por inteiro**: `ferramenta` ⇒ conversa + run + tool call
-    presentes e `undoes_execution_id` nulo; `desfazer` ⇒ o contrário. "Proposta de ferramenta
-    sempre nasce de uma tool call" continua provado pelo banco. `undoes_execution_id` **não
-    entra no hash** (o payload do inverso já carrega o alvo); quem o protege é a FK composta
-    `(undoes_execution_id, user_id)` e o `ai_action_executions_undoes_user_uidx` — que fica na
-    tabela de EXECUÇÕES, porque recusar um desfazer não pode impedir de pedi-lo de novo.
+49. **`ComoDesfazer` É UMA UNIÃO:** command + payload, ou `nao-ha` + motivo.
+    `isCommandCoherent` exige inverso válido e explicação quando não há. A previsão hasheada
+    pode restringir o desfazer pelos fatos da execução: hábito só permite o inverso se
+    `registro_novo === true`. Substituição de registro e legado sem prova são recusados.
+50. **O INVERSO RECEBE `target_id` + `changed_fields`, NUNCA O PAYLOAD ORIGINAL.**
+    A proposta pode sumir com a conversa; a execução sobrevive. Para hábito, `log_date` e
+    `registro_novo` entram na allowlist, sem valor anterior. Histórico, preparo e executor
+    conferem a restrição; uma proposta de desfazer antiga não a contorna.
+51. **DESFAZER TEM FORMA PRÓPRIA**, com `origem = desfazer`, alvo do mesmo dono e
+    FK composta; não nasce de tool call. `ai_action_executions_undoes_user_uidx` preserva
+    exclusividade para execução em andamento, sucesso ou parcial, **excluindo `falhou`**.
+    Assim um desfazer que falhou pode ser preparado novamente; recusa/expiração da proposta
+    devolve o botão. Estado sem desfecho continua bloqueado.
 52. ⛔ **`executando` NÃO É SUCESSO NEM FALHA — NA TELA TAMBÉM.** Rótulo *"sem desfecho
     registrado"*, filtro **"Precisam de atenção"** (nunca "Aplicadas") e desfazer recusado com
     o motivo escrito. É o claim-first do Bloco 3 chegando à interface: erra para *"pode não ter
@@ -660,11 +656,12 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     `ai_conversations` → `ai_runs` → `ai_usage_events` é **cascade**, então apagar conversas
     apaga a **medição de custo** delas — o gasto sai de `/ia/consumo` e deixa de contar no teto
     do mês. Regra pura em `src/lib/ai/retention.ts`.
-89. **CONTAR E APAGAR SAEM DO MESMO SELETOR** (`alvosDoEscopo`, em `actions/ai-retention.ts`), e
-    **comprovante não é `delete from ai_documents`**: a exclusão chama `descartarDocumento`
-    (18-D) um a um, que apaga o ARQUIVO do bucket privado antes do metadado e recusa o que já
-    virou anexo de lançamento. Um delete direto deixaria o binário órfão no bucket com a tela
-    dizendo que apagou.
+89. **CONTAR E APAGAR USAM O MESMO SELETOR.** Conversas antigas são selecionadas
+    por `last_message_at` em Brasília, com contagem exata, páginas e deletes em lotes.
+    Runs `reserved`/`streaming` são excluídos dos alvos por **leitura antes do delete**; não
+    há garantia transacional contra uma nova admissão concorrente. Falha recusa ou declara
+    resultado parcial. Comprovante solto segue `descartarDocumento` (arquivo antes do
+    metadado); comprovante vinculado a lançamento permanece.
 
 **Invariantes acrescentadas pelo Bloco 2 da 18-F (o botão flutuante — 2026-09-20):**
 
@@ -698,49 +695,33 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
     `.slice(0,10)` — `expires_at` é `timestamptz`). E **esquecer ≠ apagar**: é por isso que o
     inverso de `lembrarPreferencia` é `esquecerPreferencia` e não uma exclusão — o desfazer da
     IA (invariante 48) tem de ser proporcional.
-98. ⛔ **A MEMÓRIA É O ÚNICO TEXTO DO DONO QUE ENTRA NO PROMPT SEM SER BLOCO NÃO CONFIÁVEL — E
-    ELA ENTRA POR ÚLTIMO.** `chat-runner` concatena SEGURANÇA + perfil + contexto de roteamento
-    + memória, e a ordem é varrida por teste sobre a fonte (a concatenação não é testável sem
-    provedor). A seção declara **em paralelo** que uma preferência **não desliga** regra, **não
-    autoriza** leitura, **não autoriza** alteração e **não é dado sobre os registros**
-    (invariante 21 aplicada à memória). Teto **visível** (20). Memória de módulo ANDa com a
-    `allow_<modulo>` daquele módulo, resolvida por `permissaoDoModulo` — ou seja, pelo módulo
-    da MEMÓRIA, nunca pelo agente que atende (invariante 26: `body` numa conversa de Treinos
-    exige `allow_body`). A validação é de **FORMA** (`memory/forma.ts`: uma linha, ≤300
-    **pontos de código** como o `char_length` do Postgres conta, sem endereço, sem bloco que
-    misture letra e dígito em 20+ caracteres); a proibição de ASSUNTO mora no prompt da
-    ferramenta, **descrita pelo lado positivo** — dizer o que PODE ser proposto é mais estreito
-    que listar assuntos e não planta palavra nenhuma no prompt (invariante 30).
-99. ⚠️ **`allow_memory` É A DÉCIMA `ToolPermission`, E ELA NÃO É UM MÓDULO DO DONO.** Está em
-    `TOOL_PERMISSIONS` porque `ToolDescriptor.requiredPermission` é desse tipo — fora dela, o
-    guard não teria como exigi-la. Consequência a conhecer: `permissaoDoModulo("memory")` passa
-    a existir, e o roteador **não** o alcança (sem vocabulário, sem agente).
-    `allow_write_memory` é a sexta de escrita e é **ANDada com `allow_memory`** na action.
-    ⚠️ **`memory/` é camada pura no `boundaries.test.ts` E mistura puro com I/O**: `queries.ts`
-    e `services.ts` declaram `server-only`, os quatro outros **não podem** (a TELA os lê). Há
-    teste próprio cobrindo as duas listas — e ele reprova arquivo novo fora delas. O I/O mora
-    ali, e não em `ai/server/`, porque `approval/commands/memory-preview.ts` precisa lê-lo sem
-    atravessar `ai/server/`.
-100. ⚠️ **FRASE DE AUSÊNCIA NA DESCRIÇÃO DE AGENTE ENVELHECE — E AGORA HÁ TESTE.** "Só lê — não
-    altera nada" caiu em Treinos, Estudos e Tarefas quando `memory.lembrar` entrou nas oito
-    allowlists. É a **quarta** vez que uma afirmação de ausência vira mentira neste módulo
-    (`AVISO_SEM_ACESSO` quatro vezes, o prompt-base três). `agents/registry.test.ts` passou a
-    derivar do REGISTRY quais agentes escrevem e a recusar "só lê" na descrição deles — nunca
-    de uma lista à mão, que é a que ficaria para trás. ⛔ **O orquestrador continua com
-    `allowedTools: []`** (invariante 74): o prompt dele afirma que não cria, edita nem exclui
-    nada, e incluí-lo custaria `assistente-pessoal-v3` — é decisão do dono. ⚠️ E a `.regex()`
-    de um schema roda **antes** do `.transform()`: um padrão de data que não aceite `""`
-    recusa o `<input type="date">` deixado em branco e o formulário nunca salva
-    (`round-trip.test.ts` pegou isso neste bloco).
-91. ⛔ **TUDO QUE A CASCA DO APP IMPORTA ENTRA NAS 67 ROTAS.** `floating-assistant.tsx` tem
-    orçamento medido e uma lista **escrita** do que não pode importar (`@/lib/ai/constants`,
-    `@/lib/validators/*`, `chat-client`, `ui/sheet`, `ui/dropdown-menu`); o painel inteiro fica
-    atrás de `next/dynamic` com **objeto literal** — trocá-lo por constante faz o painel voltar
-    ao manifest e o número de TODAS as rotas disparar. Medido em 2026-09-20:
-    `/(app)/configuracoes` em **281,4 KB gz de um teto próprio de 285 — 3,6 KB de folga**
-    (eram 5,8 antes do bloco). ⛔ **Estourar não se resolve subindo o teto**: uma exceção que
-    cresce a cada bloco é um orçamento que não existe. E a separação se PROVA no build — das
-    marcas de texto do painel e do chat, nenhuma aparece nos chunks contados para a rota.
+98. **MEMÓRIA ENTRA POR ÚLTIMO**, como preferência, sem bloco não confiável;
+    **`montarSystem` É A CONCATENAÇÃO ÚNICA**, em
+    `server/system-prompt.ts`: segurança/perfil + blocos do servidor + memória. Testes
+    cobrem a função e sua exclusividade. Preferência não desliga regra, não autoriza leitura
+    nem alteração e não prova registro. Teto visível de 20; memória de módulo exige a
+    `allow_*` do próprio módulo via `permissaoDoModulo`, inclusive `body`. A forma continua
+    uma linha, até 300 pontos de código, sem endereço ou bloco alfanumérico de 20+ caracteres.
+99. **`allow_memory` É A DÉCIMA `ToolPermission`, SEM AGENTE PRÓPRIO.** O guard
+    a exige e `allow_write_memory` é ANDada com ela. `memory/` mistura puro e I/O
+    declarado: `queries.ts` e `services.ts` são server-only; os quatro demais ficam
+    acessíveis à tela, com teste cobrindo ambas as listas. Falha ao registrar evento não
+    permite declarar desativação/esquecimento/exclusão concluídos. Criar/editar já gravados
+    podem retornar erro que declara a gravação parcial. Excluir memória informa que cópias
+    podem permanecer na conversa e em Ações até a exclusão correspondente.
+100. **FRASES DE AUSÊNCIA ENVELHECEM; O TESTE VARRE DESCRIÇÃO E PROMPT DOS AGENTES.**
+     A iteração aprovou `assistente-pessoal-v3`: `allowedTools: []` continua valendo para
+     ferramentas de domínio, mas o coordenador aciona especialistas por definições do
+     servidor, fora do Tool Registry. Ele transcreve números com recorte e contagem, sem
+     derivar novos, e distingue proposta de alteração aplicada. O antigo custo v2→v3 deixou
+     de ser pendência. As citações “provavelmente uns R$ 300” continuam nos prompts por
+     decisão do dono e pelos testes 78.
+91. **TUDO QUE A CASCA IMPORTA PESA EM TODAS AS ROTAS.** O painel segue atrás de
+    `next/dynamic` com objeto literal. `floating-assistant.tsx` não importa
+    `@/lib/ai/constants`, `@/lib/validators/*`, `chat-client`, `ui/sheet` ou
+    `ui/dropdown-menu`. O teto é **250 KB gz por rota**, sem exceção em `/configuracoes`;
+    o teto antigo de 285 foi removido na REDESIGN-07-D. A separação é conferida pelo build
+    e por `perf:bundle`; não se aumenta o orçamento para esconder regressão.
 92. **A FRASE DE BLOQUEIO DO CHAT SAI DE `prontidaoDoChat`** (`server/chat-readiness.ts`),
     consumida pela página `/ia` **e** pelo painel — duas cópias divergiriam na primeira edição
     e o dono leria um motivo em cada lugar para o mesmo sistema (invariantes 24 e 83 aplicadas
@@ -816,69 +797,77 @@ tela nem agente próprios: as duas ferramentas de medidas ficam na allowlist dos
      acabou de falhar. Vem **depois** do lock, senão ela mesma tem corrida. **São duas
      migrations** neste bloco; a aplicada não se edita.
 
-103. ⚠️ **`allow_cross_module` É O INTERRUPTOR DO MECANISMO, NÃO UMA `ToolPermission`.**
-     Ela é campo **solto** em `aiPreferencesSchema`, como `allowVision` e `allowInsightJobs` —
-     e `validators/ai.test.ts` usa **esta chave** como o exemplo do que `aiPermissionsSchema`
-     recusa, porque o nome engana. Desligada ⇒ nada roda; ligada ⇒ o módulo sem `allow_*` é
-     **PULADO e DECLARADO** (invariante 77), e **todos** pulados ⇒ recusa **antes** de gastar
-     (a lição do `NO_INDICATORS` da 18-E). ⛔ A frase do que ficou de fora é **nossa** e entra
-     no texto gravado, no **fim** do ramo de sucesso: tentativa nova zera o texto (invariante
-     23), e pedi-la ao modelo seria obediência "quase sempre" — num panorama diário, uma
-     omissão por mês. ⛔ **E são DUAS frases, não uma:** módulo pulado por preferência
-     (`avisoDoQueFicouDeFora`, que manda o dono a `/ia/configuracoes`) e leitura que **falhou**
-     (`falhas.ts`, que **não** manda — a chave já está ligada). Sem a segunda, a garantia da
-     falha era o bloco de erro pedindo ao modelo "diga que não conseguiu obter o dado" —
-     instrução, não garantia: redigindo texto corrido ele omite o módulo e o panorama sai
-     **parecendo completo**. `rejeitada` conta como falha junto com `falhou`/`timeout`, porque
-     a chave pode cair **entre** a seleção e a execução, e esse pulo o plano não conhece.
-
-104. ⛔ **O PLANO É UM OBJETO, E POR ISSO O `chat-runner` NÃO CONHECE O CATÁLOGO.**
-     `experience-runner.ts` lê o catálogo, confere as chaves, deriva os argumentos do dia e
-     entrega um `PlanoDaExperiencia` pronto; o runner do chat executa uma lista que recebeu —
-     irrepresentável vence recusado (invariantes 67 e 79). Três fronteiras provam isso, todas
-     confirmadas por mutação. ⚠️ **E não há um terceiro laço de tentativas**: retry, fallback,
-     medição por chamada, heartbeat e a regra "só uma tentativa aberta por run"
-     (`ai_usage_events_one_active_uidx`, que o próprio arquivo declara que **nenhum teste de
-     unidade pega, porque a trava é do banco**) continuam num lugar só. ⛔ **E QUALQUER RUNNER
-     QUE MONTE `system` CARREGA A MEMÓRIA JUNTO, POR ÚLTIMO** (invariante 98): a concatenação é
-     UMA, em `chat-runner`. Um panorama não tem "o módulo do agente" — a seleção do Bloco 3
-     roda uma vez por módulo do plano, mais uma com `null` para as globais, e a união é
-     deduplicada por id; o filtro fica intacto, então cada memória de módulo continua exigindo
-     a `allow_*` dele (invariante 26).
-
-105. ⛔ **A CAIXA DE ENTRADA USA O LAÇO NORMAL, E ISSO NÃO É PREGUIÇA.** Passá-la pelo runner
-     dirigido exigiria um agente com as ferramentas dos cinco módulos de escrita ao mesmo
-     tempo — um "agente de tudo", que é exatamente o que a allowlist por agente existe para
-     impedir. No laço normal, `routeAgent` entrega ao especialista que já tem as ferramentas
-     certas, e só elas; palavra ambígua **desliga** o roteamento (invariante 27) e cai no
-     orquestrador, que não tem ferramenta nenhuma e portanto **pergunta**. ⚠️ O bloco dela entra
-     no prompt **antes** da memória e sobe `prompt_version` para `<agente>+caixa-v1` — o modo
-     muda o comportamento, então a coluna tem de contá-lo. ⚠️ **E `z.union` engole as mensagens
-     dos ramos:** o Zod reporta `invalid_union` no topo, e as frases em pt-BR de dentro de cada
-     forma deixam de subir (a de contexto de página virou genérica; o 413 do texto longo virou
-     400). `problemasDoRamo`, em `route.ts`, escolhe o ramo **só para a mensagem e o status** —
-     quem ACEITA continua sendo a união, e as duas formas continuam `.strict()`.
+103. **`allow_cross_module` É CHAVE DO MECANISMO, NÃO `ToolPermission`.** Panorama
+     desligado recusa antes da chamada; com ele ligado, módulos sem leitura são pulados e
+     declarados. No chat, desligado permite **um especialista**, e o servidor recusa os
+     seguintes e acrescenta a orientação no fim da resposta. Falha de leitura tem frase
+     própria, sem mandar ligar chave já ligada. A validação do chat é a exceção declarada
+     à conferência na action e no RPC, pois os acionamentos só existem após a admissão.
+104. **O PLANO DO PANORAMA É OBJETO, NÃO CATÁLOGO DENTRO DO CHAT.**
+     `experience-runner.ts` deriva `PlanoDaExperiencia`; `chat-runner` executa o plano.
+     Não há terceiro laço: `server/trilha.ts` centraliza retry/fallback/medição e a trava
+     de uma tentativa aberta por trilha (`ai_usage_events_one_active_per_trilha_uidx`).
+     `montarSystem` mantém memória por último também no panorama; a seleção reúne globais
+     e memórias dos módulos do plano, deduplicadas por id e filtradas por suas chaves.
+105. **CAIXA DE ENTRADA VIROU COMPORTAMENTO DO COORDENADOR**, sem chave, campo
+     `caixaDeEntrada` nem versão `+caixa-v1`. Cada especialista mantém sua allowlist;
+     nenhum agente recebe todas as ferramentas. `problemasDoRamo` continua escolhendo só
+     a mensagem/status dos erros de Zod; a união estrita é quem aceita o POST. Mudança de
+     comportamento sobe a versão do prompt, inclusive nos especialistas.
 
 **Invariante acrescentada pelo Bloco 5 da 18-F (o fechamento — 2026-09-20):**
 
-106. ⛔ **A SUÍTE DE EVALS AFIRMA O ESTRUTURAL, E O CASO DESTRUTIVO É AUSÊNCIA DE CÓDIGO.**
-     "Exclua todas as minhas transações" não é recusado por prompt nem por confirmação
-     reforçada — as duas formas dependeriam de o modelo obedecer. Ele é **irrepresentável**: o
-     registry não tem ferramenta que apague, os **sete** `undo` moram fora dele, e
-     `evals/destrutivo.test.ts` afirma isso derivando as **duas** listas (commands alcançáveis
-     por ferramenta × inversos declarados pelos commands) — nunca de uma lista de nomes
-     proibidos escrita à mão, que furaria no primeiro command novo. Risco 4 continua sendo
-     ausência de código, não checagem. ⛔ **E um teste de ausência que nunca foi visto vermelho
-     pode estar afirmando `[] === []` sobre uma lista que ele não leu**: este foi confirmado por
-     mutação, e o desfazer da mutação foi conferido por `git diff`, não pelo verde.
-     ⚠️ **A suíte pagou por si na primeira execução:** uma das oito frases do briefing — *"Como
-     estão minhas proteínas nesta semana?"* — não alcançava a Dieta, porque o vocabulário
-     listava `"proteina"` no singular e o casamento é por **fronteira de palavra, sem stemming**
-     (de propósito: stemming faria palavras não relacionadas colidirem, e palavra ambígua
-     **desliga** o roteamento — invariante 27). **Cada forma precisa da própria entrada**, e a
-     convenção do arquivo já era essa (`"serie"`/`"series"`, `"caloria"`/`"calorias"`).
-     ⛔ Palavra nova no vocabulário pode **empatar** dois módulos e desligar o roteamento onde
-     ele funcionava — não acrescente "por via das dúvidas".
+106. **EVALS AFIRMAM O ESTRUTURAL.** O caso “Exclua todas as minhas transações”
+     permanece intacto e irrepresentável: nenhuma ferramenta alcança os sete inversos,
+     derivados dos commands, fora do Tool Registry. Os outros casos afirmam oferta por
+     permissão e validação do coordenador, sem provedor. Teste de ausência exige mutação
+     vermelha e restauração conferida por SHA-256 e `git diff`; verde sozinho não prova
+     que a mutação saiu. O antigo vocabulário de roteamento foi aposentado.
+
+**Invariantes do chat livre com coordenador (2026-11-08):**
+
+107. **OFERTA É DERIVADA.** Especialista aparece se ao menos uma leitura da sua allowlist
+     sobreviver às chaves. Escrita sozinha não oferece agente; `body` não exige Treinos.
+     O servidor valida cada acionamento; `agentId` identifica, não autoriza.
+108. **UMA RODADA POR MENSAGEM; SÍNTESE SEM FERRAMENTAS.** Até seis especialistas distintos,
+     tarefa estrita de 1 a 1.500 caracteres. Respostas intermediárias são dado não confiável
+     em mensagem user, nunca system nem auditoria; a síntese não aciona outro especialista.
+109. **ESPECIALISTA EM PARALELO NÃO REPETE NEM FAZ FALLBACK.** Uma falha não derruba os
+     demais. No direto pode repetir; retry da síntese reaproveita respostas em memória,
+     sem reler módulos nem remover cartões de outras trilhas.
+110. **TENTATIVA ABERTA É POR TRILHA**, 0 para coordenador e 1..6 para especialistas,
+     pelo índice `ai_usage_events_one_active_per_trilha_uidx`. `attempt_index` e
+     `step_index` seguem globais ao run; `prompt_version` é por tentativa e `agent_id`
+     por chamada auditada. Linha antiga nula não ganha agente inventado.
+111. **DATA VEM DO SERVIDOR.** `blocoDaData` leva data de Brasília e dia da semana antes
+     da memória. Use `hojeISO`/`dateInSaoPaulo`, nunca corte UTC de um instante.
+112. **`montarSystem` É A ÚNICA CONCATENAÇÃO DE MEMÓRIA.** Coordenador, especialista e
+     panorama usam segurança + perfil + blocos do servidor + memória por último.
+113. **FORMATAÇÃO É ÁRVORE REACT MÍNIMA.** Sem biblioteca nova, HTML executável,
+     `dangerouslySetInnerHTML`, imagem externa ou link fora da allowlist interna.
+     Grade dos panoramas depende do contêiner; painel e `/ia` compartilham a vista.
+114. **CRUZAR MÓDULOS É VALIDADO NO SERVIDOR APÓS A DECISÃO.** A reserva precede a
+     chamada; a chave limita os acionamentos aceitos e não depende de obediência do modelo.
+115. **PASSO 0 DO ESPECIALISTA OFERECE TODAS AS FERRAMENTAS PERMITIDAS.** Havendo
+     leitura, `toolChoice: required`; depois, auto. Oferecer só leituras foi testado e
+     quebrou propostas na Task 15b. Financeiro mostra “meu” e “de terceiros” por padrão;
+     a receber de terceiros é saldo global, independente do período da ferramenta.
+116. **PRAZO É RECONFERIDO APÓS OS AWAITS.** Banco/credencial e registro de TOOL_STEP
+     não congelam o timeout: há nova conferência antes de `streamText`, com recusa abaixo
+     do piso, fechamento de tentativa e timer do servidor limitado ao restante.
+117. **OMISSÃO POR FALHA TEM AVISO DO SERVIDOR.** Inclui auditoria parcial de acionamento,
+     mesmo quando outro especialista responde no direto ou no paralelo. SSE e texto final
+     carregam o mesmo aviso, acrescentado depois de qualquer retry.
+118. **SALVAR NÃO REATIVA PROVEDOR SEM CHAVE.** Action reconfere a credencial, remoção
+     sincroniza a tela e payload preserva modelo de visão que o formulário não edita.
+     Fallback sem ordem configurada fica desabilitado e explicado.
+119. **CONSUMO INCOMPLETO É PARCIAL, NÃO ZERO.** Runs usam teto+1, tentativas são paginadas
+     e erros de leitura contaminam o total, inclusive reserva e sino. Tentativa sem custo
+     continua não medida; ausência de medição não vira ausência de consumo.
+120. **COMPROVANTE LANÇADO NÃO PREPARA OUTRO LANÇAMENTO.** PDF usa contagem heurística:
+     legível acima de 20 páginas recusa; sem contagem, acima de 2 MB recusa e até esse
+     tamanho reserva 20 páginas. Isso não garante precisão absoluta nem valida upload
+     real no hosting. O limite de Server Action é 17 MB com folga multipart.
 
 ## Leitura obrigatória antes de mexer no código
 
@@ -906,7 +895,7 @@ npm run dev            # next dev (Turbopack) — http://localhost:3000
 npm run build          # build de produção (Turbopack; NÃO roda lint)
 npm run lint           # eslint (next lint foi removido no Next 16)
 npm run test           # vitest em watch
-npm run test:run       # vitest run (suíte completa; 3.738 testes / 185 arquivos em 2026-09-20 — conte antes de citar)
+npm run test:run       # vitest run (suíte completa; 7.095 testes / 321 arquivos em 2026-11-08 — conte antes de citar)
 npx vitest run src/lib/finance/invoice.test.ts   # um arquivo de teste
 npx vitest run -t "fatura"                        # por nome do teste
 npx tsc --noEmit       # checagem de tipos

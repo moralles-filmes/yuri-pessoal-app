@@ -1677,7 +1677,7 @@ gravação de teste em produção, push, PR ou deploy. Conferência visual fica 
   - `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` (B-9 retirado por decisão do dono em
     2026-10-21).
 
-- [ ] **Step 1: `CLAUDE.md`, editado de forma pontual** (outras frentes também o editam).
+- [x] **Step 1: `CLAUDE.md`, editado de forma pontual** (outras frentes também o editam).
   - **Invariantes novas, numeradas a partir de 107**, curtas e no estilo das vizinhas:
     - coordenador + especialistas e a regra de oferta derivada;
     - uma rodada de acionamentos e síntese sem ferramentas;
@@ -1691,9 +1691,9 @@ gravação de teste em produção, push, PR ou deploy. Conferência visual fica 
   - **Reescritas ou aposentadas:** 19, 21, 27, 91 (sem o teto de 285 de `/configuracoes`), 98
     (onde a concatenação mora) e 105.
   - **Contagens:** tabelas, ferramentas (30), commands e testes, conferidas **antes** de citar.
-- [ ] **Step 2: `CURRENT_STATUS.md` e `docs/handoff/*`:** o que mudou, as decisões do dono, os
+- [x] **Step 2: `CURRENT_STATUS.md` e `docs/handoff/*`:** o que mudou, as decisões do dono, os
   achados registrados que ficaram fora (§9.2 da spec) e a próxima ação.
-- [ ] **Step 3: Os cinco comandos na worktree:**
+- [x] **Step 3: Os cinco comandos na worktree:**
   - `npx vitest run --testTimeout=30000`;
   - `npm run lint`;
   - `npx tsc --noEmit`;
@@ -1702,10 +1702,10 @@ gravação de teste em produção, push, PR ou deploy. Conferência visual fica 
 
   Cole o resumo de cada um no commit. **Falha preexistente não se esconde**: registre e prove que
   não é desta branch.
-- [ ] **Step 4: `TZ=UTC npx vitest run --testTimeout=30000`** verde.
-- [ ] **Step 5: Revisão da branch inteira** com `superpowers:requesting-code-review`. Os achados
+- [x] **Step 4: `TZ=UTC npx vitest run --testTimeout=30000`** verde.
+- [x] **Step 5: Revisão da branch inteira** (equivalente interna; skills indisponíveis, ver resultado) — o plano previa `superpowers:requesting-code-review`. Os achados
   passam por `superpowers:receiving-code-review`.
-- [ ] **Step 6: Conferência ponta a ponta no navegador** (aval do dono, spec §10.2), com o
+- [x] **Step 6: Conferência ponta a ponta no navegador, com ressalvas aceitas pelo dono** (aval do dono, spec §10.2), com o
   `npm run dev` da Task 15:
   - uma pergunta de um módulo;
   - "como foi minha semana?";
@@ -1715,8 +1715,8 @@ gravação de teste em produção, push, PR ou deploy. Conferência visual fica 
 
   Inclua captura de tela (GIF com `gif_creator`) do painel no desktop e numa largura de celular.
   Registre na seção "Resultado do teste real".
-- [ ] **Step 7: Commit** `docs(ia): chat livre com coordenador — CLAUDE.md, status e handoff`.
-- [ ] **Step 8: Parar e relatar ao dono:**
+- [x] **Step 7: Commit** `docs(ia): chat livre com coordenador — CLAUDE.md, status e handoff`.
+- [x] **Step 8: Parar e relatar ao dono:**
   - o que foi feito;
   - as migrations aplicadas;
   - os números dos cinco comandos;
@@ -1856,3 +1856,79 @@ Encerramento da Task 23: suíte inteira com **6.948 testes em 307 arquivos**,
 `npx tsc --noEmit` sem erros e `npm run lint` limpo após a aplicação. As 36 mutações da
 preparação permanecem válidas; nenhum código de produção foi alterado neste fechamento.
 Próxima tarefa: **24 — Comprovantes**.
+
+### Task 28 — fechamento e conferência ponta a ponta (2026-11-08)
+
+Trabalho exclusivo em `C:/tmp/ia-chat`, branch `feat/ia-chat-livre`, a partir de `94bf48a`.
+AI Router: TIER 0, principal. Sem novas worktrees, leitura de `.env.local`, push, PR, merge,
+deploy ou alteração de migration. As três migrations anteriores já estavam aplicadas;
+metadados reconfirmaram índice por trilha, desfazer excluindo falha e insight invoker com
+guarda de sessão. Documentação e invariantes 107–120 atualizadas pontualmente; B-9 retirado.
+Placar atual da Fase 18: **142 validados, 16 manuais pendentes, 5 retirados** (163 no total).
+
+**Revisão equivalente:** as duas skills Superpowers de review não estavam disponíveis.
+Revisor independente interno examinou a branch contra a referência local `origin/main`
+(185 arquivos antes do fechamento), e o principal revisou os achados. Dois P2 corrigidos
+no commit `8184294`: módulo sem auditoria parcial agora aparece no aviso final, no direto
+e paralelo; prazo reconferido após credencial e antes da chamada, incluindo TOOL_STEP.
+Oito regressões novas; sete vermelhas antes da correção e uma de timer acrescentada depois.
+Seis mutações distintas vermelhas, restauração por SHA-256 e diff idênticos. Duas inicialmente
+sobreviveram; testes reforçados e bateria integral repetida. Re-revisão aprovou os dois P2.
+Nenhuma auditoria externa foi executada.
+
+**Avais desta tarefa:** o dono autorizou até cinco envios ao Gemini configurado, a confirmação
+somente da tarefa TO-DO indicada e o desligamento/restauração da leitura de Financeiro.
+A autorização da Task 22b não foi reutilizada. Não foi digitada senha. Os cinco envios ocorreram
+em conversas novas com `gemini-3.5-flash-lite`, no localhost:3100 iniciado nesta worktree.
+
+| Caso | Visto no navegador | Metadados: duração / tentativas / custo estimado |
+| --- | --- | --- |
+| “Quanto gastei este mês?” | Um especialista, leitura financeira e partes meu/terceiros com recorte e contagem | 4,014 s / 3 / US$ 0,003963 |
+| “Como foi minha semana?” | Seis especialistas: Treinos, Hábitos, Estudos, Dieta, Financeiro e TO-DO; recortes e limitações declarados | 9,698 s / 16 / US$ 0,024789 |
+| Três escritas | **PARCIAL:** dois cartões (tarefa e compromisso); despesa de teste sem conta/cartão pediu esse dado. Só a tarefa “Teste do chat — Task 28” foi confirmada; permaneceu no TO-DO, sem apagar/desfazer | 5,468 s / 8 / US$ 0,009810 |
+| Financeiro desligado | Respondeu que não consultou o módulo; zero especialista financeiro | 1,320 s / 1 / US$ 0,001488 |
+| Panorama “Planejar meu dia” | Concluiu com roteiro estático de TO-DO, Agenda, Hábitos e Rotinas, sem proposta | 1,376 s / 1 / US$ 0,001245 |
+
+**Total: cinco runs completed, 29 tentativas, zero started, zero tentativas sem custo,
+US$ 0,041295 estimados.** Uma única execução de sucesso, criarTarefaTodo; nenhum compromisso
+ou lançamento financeiro aplicado. O dono escolheu **registrar a limitação e manter cinco
+envios**, sem complemento: não declarar o caso de três cartões como totalmente aprovado.
+Ao desligar Financeiro, o formulário também desligou a escrita dependente; ambas restauradas
+ao estado original e confirmadas após recarregar. Demais preferências não foram editadas.
+
+**Visual:** painel visto em desktop (captura de 1278×944), 390×844 e 320×780; panoramas
+empilhados e sem rolagem horizontal em 320 (`clientWidth = scrollWidth = 320`). Capturas foram
+exibidas pelas ferramentas na conversa, inclusive tarefa aplicada + compromisso pendente.
+`gif_creator` indisponível; tentativa de gravar captura na worktree pela ferramenta visual
+falhou com EPERM. Sem GIF nem arquivo visual versionado. A medição de largura é emulação,
+não aparelho físico. Não foram conferidas todas as seções em todos os temas, upload no hosting,
+recarregamento durante streaming, teclado completo ou todos os deep-links.
+
+**Checks finais, servidor de desenvolvimento parado antes do TypeScript:**
+
+| Comando | Resultado |
+| --- | --- |
+| `npm run test:run` | 7.095 testes / 321 arquivos, todos aprovados (29,54 s); antes das correções, baseline 7.087/321 também verde |
+| `npx vitest run --testTimeout=30000` | 7.095/321 aprovados, TZ America/Sao_Paulo (28,56 s) |
+| `npm run lint` | Limpo, saída zero |
+| `npx tsc --noEmit` | Zero erros, após build e servidor 3100 parado |
+| `npm run build` | Aprovado, Next 16.2.9/Turbopack, compilação 8,8 s |
+| `npm run perf:bundle` | 68 rotas, zero acima de 250 KB gz, zero exceções; máximo /todo 240,9 KB, mediana 216,1 KB; /ia 213,7 KB, /configuracoes 209,6 KB |
+| `TZ=UTC npx vitest run --testTimeout=30000` | Suíte inteira 7.095/321 aprovada (27,49 s) |
+
+TZ configurado no processo PowerShell e valor anterior restaurado em finally. Não houve falha
+preexistente nos checks finais; vermelhos de regressão/mutação foram intencionais e restaurados.
+Contagens: 30 ferramentas (22 leitura/8 escrita), 15 commands (7 inversos), 9 agentes;
+133 tabelas públicas, 20 ai_*, todas RLS + FORCE. Logs locais ignorados em `.ai-router/RESULTS/`.
+
+**Pendências preservadas:** sete itens da spec §9.2, reserva em duas etapas, leituras semanais
+dedicadas e custo de acionar seis especialistas. O dono confirmou dois cartões na Task 15.
+A Task 15b teve síntese que afirmou proposta inexistente no desenho descartado; o desenho final
+oferece TODAS as ferramentas no passo 0 com required quando há leitura. Citações do prompt
+exigidas pelos testes 78 preservadas. Desfazer de hábito exige registro_novo true sem snapshot;
+retenção tem leitura antes do delete, sem garantia transacional; contagem PDF é heurística;
+consumo parcial/não medido e proteção do provedor sem chave permanecem explícitos.
+
+Fechamento documental no commit que contém esta entrada, com o título da Task 28 e trailer
+Codex; consulte `git log -1 -- docs/superpowers/plans/2026-10-21-ia-chat-livre-coordenador.md`.
+Próxima ação: parar e aguardar nova tarefa do dono; nenhum envio ou escrita adicional autorizado.
