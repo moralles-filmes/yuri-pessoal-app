@@ -250,17 +250,39 @@ function classesDe(el: unknown): string {
   return (el as { props: { className: string } }).props.className;
 }
 
+/** Foco de campo (spec 6.7): anel de 2px (contorno sobre a borda) + halo suave de 4px; inválido continua vermelho. */
+function focoDeCampo(base: string) {
+  const c = base.split(/\s+/);
+  for (const classe of [
+    "focus-visible:border-ring",
+    "focus-visible:outline-2",
+    "focus-visible:outline-solid",
+    "focus-visible:outline-ring",
+    "focus-visible:outline-offset-[-1px]",
+    "focus-visible:ring-4",
+    "focus-visible:ring-ring/20",
+    "aria-invalid:border-destructive",
+    "aria-invalid:ring-destructive/20",
+    "aria-invalid:focus-visible:outline-destructive",
+  ]) {
+    expect(c, classe).toContain(classe);
+  }
+  expect(c).toContain("outline-none");
+}
+
 describe("Input", () => {
   const fonte = semComentarios(fs.readFileSync(path.join(SRC, "components", "ui", "input.tsx"), "utf8"));
+  const corpo = corpoDaFuncao(fonte, "Input");
   const base = classesDe(Input({}));
 
   it("é ladrilho: material importado, raio de 10px e halo de foco de 4px", () => {
     expect(fonte).toContain('import { MATERIAL_LADRILHO } from "./materiais"');
-    expect(fonte).toContain("MATERIAL_LADRILHO");
+    expect(corpo).toContain("MATERIAL_LADRILHO");
+    expect(base.split(/\s+/)).toContain("bg-tile");
+    expect(base.split(/\s+/)).toContain("border-tile-border");
+    focoDeCampo(base);
     expect(base).toContain("rounded-[10px]");
     expect(base).toContain("focus-visible:border-ring");
-    expect(base).toContain("focus-visible:ring-4");
-    expect(base).toContain("focus-visible:ring-ring/20");
   });
 
   it("não conserva o raio, o fundo transparente nem o fundo escuro antigos", () => {
@@ -288,14 +310,16 @@ describe("Input", () => {
 
 describe("Textarea", () => {
   const fonte = semComentarios(fs.readFileSync(path.join(SRC, "components", "ui", "textarea.tsx"), "utf8"));
+  const corpo = corpoDaFuncao(fonte, "Textarea");
   const base = classesDe(Textarea({}));
 
   it("é ladrilho: material importado, raio de 14px e halo de foco de 4px", () => {
     expect(fonte).toContain('import { MATERIAL_LADRILHO } from "./materiais"');
-    expect(fonte).toContain("MATERIAL_LADRILHO");
+    expect(corpo).toContain("MATERIAL_LADRILHO");
+    expect(base.split(/\s+/)).toContain("bg-tile");
+    expect(base.split(/\s+/)).toContain("border-tile-border");
+    focoDeCampo(base);
     expect(base).toContain("rounded-[14px]");
-    expect(base).toContain("focus-visible:ring-4");
-    expect(base).toContain("focus-visible:ring-ring/20");
   });
 
   it("não conserva o raio, o fundo transparente nem o fundo escuro antigos", () => {
@@ -322,8 +346,9 @@ describe("SelectTrigger", () => {
     expect(base).toContain("rounded-[10px]");
     expect(base).toContain("data-[size=sm]:rounded-[9px]");
     expect(base).toContain("hover:bg-pill");
-    expect(base).toContain("focus-visible:ring-4");
-    expect(base).toContain("focus-visible:ring-ring/20");
+    focoDeCampo(base);
+    expect(base.split(/\s+/)).toContain("bg-tile");
+    expect(base.split(/\s+/)).toContain("border-tile-border");
   });
 
   it("não conserva o raio, o fundo transparente nem o fundo escuro antigos", () => {
@@ -347,5 +372,20 @@ describe("SelectTrigger", () => {
     expect(c).not.toContain("rounded-[10px]");
     expect(c).toContain("border-0");
     expect(c).not.toContain("border");
+  });
+
+  it("no size=sm o chamador precisa de data-[size=sm]:rounded-full para vencer o raio de 9px", () => {
+    const sem = classesDe(SelectTrigger({ children: null, size: "sm", className: "rounded-full" })).split(/\s+/);
+    expect(sem).toContain("data-[size=sm]:rounded-[9px]");
+    const com = classesDe(
+      SelectTrigger({ children: null, size: "sm", className: "rounded-full data-[size=sm]:rounded-full" }),
+    ).split(/\s+/);
+    expect(com).toContain("data-[size=sm]:rounded-full");
+    expect(com).not.toContain("data-[size=sm]:rounded-[9px]");
+  });
+
+  it("o caller de import-review passa data-[size=sm]:rounded-full", () => {
+    const f = fs.readFileSync(path.join(SRC, "app", "(app)", "importar", "import-review.tsx"), "utf8");
+    expect(f).toContain("rounded-full data-[size=sm]:rounded-full border-0");
   });
 });

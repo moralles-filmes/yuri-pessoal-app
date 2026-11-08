@@ -1120,7 +1120,7 @@ function TransferenciaDaLinha({
     <Select value="" onValueChange={onPick}>
       <SelectTrigger
         size="sm"
-        className="w-fit gap-1 rounded-full border-0 px-2 text-[11px] ring-1 ring-border"
+        className="w-fit gap-1 rounded-full data-[size=sm]:rounded-full border-0 px-2 text-[11px] ring-1 ring-border"
         disabled={disabled}
       >
         <SelectValue placeholder="É transferência?" />
