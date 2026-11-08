@@ -467,3 +467,66 @@ describe("09-C · casca", () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// 09-D · ícone do indicador sobre o quadrado tingido (token a 10% sobre a superfície de vidro).
+// ---------------------------------------------------------------------------------------------
+
+/** `oklch(L C H)` -> `#rrggbb` (sRGB, com recorte de gamut). Só para o `--success`, declarado em oklch. */
+function oklchParaHex(css: string): string {
+  const m = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/i.exec(css.trim());
+  if (!m) return css;
+  const [L, C, H] = [Number(m[1]), Number(m[2]), (Number(m[3]) * Math.PI) / 180];
+  const a = C * Math.cos(H);
+  const b = C * Math.sin(H);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const mm = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  const linear = [
+    4.0767416621 * l - 3.3077115913 * mm + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * mm - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * mm + 1.707614701 * s,
+  ];
+  const hex = linear
+    .map((c) => {
+      const v = Math.min(1, Math.max(0, c));
+      const g = v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055;
+      return Math.round(g * 255).toString(16).padStart(2, "0");
+    })
+    .join("");
+  return `#${hex}`;
+}
+
+describe("09-D · ícone sobre fundo tingido", () => {
+  const ALFA_TINGIMENTO = 0.1;
+  // [cor do ícone, token que tinge o quadrado]
+  const PARES: Array<[string, string]> = [
+    ["primary", "primary"],
+    ["success-ink", "success"],
+    ["destructive", "destructive"],
+    ["chart-7", "chart-7"],
+  ];
+
+  for (const [nomeTema, tema] of TEMAS) {
+    it(`${nomeTema}: os quatro tokens existem (anti-tautologia)`, () => {
+      for (const nome of ["primary", "success", "success-ink", "destructive", "chart-7"]) {
+        expect(tema.has(nome), `--${nome}`).toBe(true);
+      }
+      expect(superficies(tema)).toHaveLength(4);
+    });
+
+    it(`${nomeTema}: ícone sobre o tingimento a 10% >= 3:1 nas quatro superfícies`, () => {
+      for (const [rotulo, superficie] of superficies(tema)) {
+        for (const [icone, tinta] of PARES) {
+          const fundo = compor(comAlfa(oklchParaHex(valor(tema, tinta)), ALFA_TINGIMENTO), superficie);
+          const razao = contraste(oklchParaHex(valor(tema, icone)), fundo);
+          const r = (Math.round(razao * 100) / 100).toFixed(2).replace(".", ",");
+          expect(
+            razao,
+            `${nomeTema} · ${icone} sobre ${tinta}/10 em ${rotulo}: ${r}:1 < 3:1 — baixe o alfa do tingimento`,
+          ).toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
+        }
+      }
+    });
+  }
+});

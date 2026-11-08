@@ -27,10 +27,10 @@ export type ComparacaoDoIndicador = {
 
 /** Classes literais (o Tailwind só enxerga o que está escrito por inteiro no código). */
 const CHIP_POR_TOM: Record<TomDoIndicador, string> = {
-  saldo: "bg-primary/10 text-primary ring-primary/15",
-  entrada: "bg-success/10 text-success-ink ring-success/20",
-  saida: "bg-destructive/10 text-destructive ring-destructive/20",
-  terceiros: "bg-chart-7/10 text-chart-7 ring-chart-7/20",
+  saldo: "bg-primary/10 text-primary",
+  entrada: "bg-success/10 text-success-ink",
+  saida: "bg-destructive/10 text-destructive",
+  terceiros: "bg-chart-7/10 text-chart-7",
 };
 
 const COR_POR_SENTIDO: Record<ComparacaoDoIndicador["sentido"], string> = {
@@ -125,7 +125,7 @@ export function Indicador({
         <div
           aria-hidden="true"
           className={cn(
-            "hidden size-10 shrink-0 place-items-center rounded-xl ring-1 @[13rem]:grid",
+            "hidden size-10 shrink-0 place-items-center rounded-[12px] @[13rem]:grid",
             CHIP_POR_TOM[tom],
           )}
         >
@@ -159,7 +159,7 @@ export function Indicador({
           </div>
 
           {typeof valor === "string" ? (
-            <p className="break-words text-2xl font-semibold tracking-tight tabular-nums">
+            <p className="break-words text-2xl @[16.5rem]:text-[1.75rem] leading-[1.1] font-semibold tracking-[-0.028em] tabular-nums">
               <span className="group-data-[ocultar=true]/olho:hidden">{valor}</span>
               <span
                 aria-hidden="true"
@@ -175,7 +175,7 @@ export function Indicador({
             </p>
           ) : "semDinheiro" in valor ? (
             // Contagem ou data: não é dinheiro, então o olho dos valores NÃO o esconde.
-            <p className="break-words text-2xl font-semibold tracking-tight tabular-nums">
+            <p className="break-words text-2xl @[16.5rem]:text-[1.75rem] leading-[1.1] font-semibold tracking-[-0.028em] tabular-nums">
               {valor.semDinheiro}
             </p>
           ) : "naoSegue" in valor ? (

@@ -335,3 +335,66 @@ describe("08 C4 - valor que nao e dinheiro", () => {
     expect(fs.readFileSync(caminhoFaturas, "utf8")).not.toContain("valor={String(");
   });
 });
+
+describe("09-D T2 - indicador em vidro", () => {
+  const fonte = semComentarios(ler("indicador.tsx"));
+  const cartao = /<Card className=\{[^}]*\}/.exec(fonte)?.[0] ?? "";
+  const quadrado = /<div\s+aria-hidden="true"\s+className=\{cn\(([\s\S]*?)\)\}/.exec(fonte)?.[1] ?? "";
+  const mapaDeChips = /const CHIP_POR_TOM[\s\S]*?\n\};/.exec(fonte)?.[0] ?? "";
+  const paragrafos = [...fonte.matchAll(/<p\s+className="([^"]*)"/g)].map((m) => m[1]);
+  const doNumero = paragrafos.filter((c) => c.includes("text-2xl"));
+  const dosEstados = paragrafos.filter(
+    (c) => c.includes("border-dashed") || c.includes("italic") || /^text-sm text-muted-foreground$/.test(c),
+  );
+
+  it("a varredura leu o Card, o quadrado, o mapa e os parágrafos (anti-tautologia)", () => {
+    expect(cartao).toContain("<Card className=");
+    expect(quadrado).toContain("size-10");
+    expect(mapaDeChips).toContain("saldo:");
+    expect(doNumero).toHaveLength(2);
+    expect(dosEstados).toHaveLength(3);
+  });
+
+  it("o Card não declara raio: herda os 24 px da primitiva", () => {
+    expect(cartao).not.toContain("rounded-");
+  });
+
+  it("o quadrado do ícone é size-10 rounded-[12px], sem ring", () => {
+    expect(quadrado).toContain("size-10");
+    expect(quadrado).toContain("rounded-[12px]");
+    expect(quadrado).not.toContain("ring");
+    expect(mapaDeChips).not.toContain("ring-");
+  });
+
+  it("os dois parágrafos de número (string e semDinheiro) têm o degrau por contêiner", () => {
+    for (const classes of doNumero) {
+      for (const parte of [
+        "text-2xl",
+        "@[16.5rem]:text-[1.75rem]",
+        "tracking-[-0.028em]",
+        "tabular-nums",
+        "break-words",
+      ]) {
+        expect(classes, parte).toContain(parte);
+      }
+    }
+  });
+
+  it("naoSegue, ausente e erro não herdam o 28 px e seguem text-sm", () => {
+    for (const classes of dosEstados) {
+      expect(classes).not.toContain("1.75rem");
+      expect(classes).toContain("text-sm");
+    }
+    expect(fonte.match(/1\.75rem/g)).toHaveLength(2);
+  });
+
+  it("a comparação segue o significado: cor por sentido, seta e palavra", () => {
+    expect(fonte).toContain("COR_POR_SENTIDO[comparacao.sentido]");
+    expect(fonte).toContain("variacao.palavra");
+    expect(fonte).toContain("<variacao.Seta");
+  });
+
+  it("o celular continua vencendo no número pequeno dos secundários", () => {
+    expect(fonte).toContain("[&_.text-2xl]");
+  });
+});
