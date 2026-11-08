@@ -1,5 +1,52 @@
 # LAST_PHASE_SUMMARY — Resumo da última fase concluída
 
+## Iteração mais recente — chat livre com coordenador (2026-11-08)
+
+**Publicação autorizada pelo dono em 2026-11-08, após o fechamento:** integrada a main
+`e4f61c9` nesta worktree, preservando redesign e reembolsos. Três conflitos resolvidos
+(CLAUDE, este resumo e round-trip); o mock do Cron recebeu `results: []` do contrato atual.
+Dependências idênticas ao lockfile da main (Next 16.4.3, React 19.2.9, Zod 4.6.7). Checks
+da integração: **8.790 testes / 408 arquivos**, também UTC; lint e tipos limpos; build
+aprovado; **71 rotas** no teto, máximo **226,6 KB gz**, mediana **203,1 KB**. Nenhuma nova
+chamada ao provedor ou aplicação de migration. Os números abaixo registram a Task 28 antes
+da integração. `npm audit` reportou 16 alertas herdados da main, incluindo dois críticos
+em Vitest/tinypool (desenvolvimento); nenhuma atualização major incluída nesta integração.
+
+Tasks 1–27, extras 15b/22b e fechamento documental da Task 28. Coordenador + especialistas,
+trilhas auditadas, síntese sem ferramentas, painel compartilhado e formatador seguro;
+correções de memória, insights/Cron, aprovação/desfazer, comprovantes, preferências, retenção
+e consumo. Novas invariantes 107–120 no `CLAUDE.md`; anteriores revistas no próprio lugar.
+
+A revisão independente interna da branch encontrou dois P2, corrigidos com oito regressões
+e seis mutações vermelhas: omissão por auditoria parcial e prazo envelhecido por awaits.
+Sem skills Superpowers de review disponíveis, houve revisão equivalente e re-revisão do diff;
+nenhuma auditoria externa. **7.095 testes / 321 arquivos**, também em UTC. Resultados finais
+no plano e no bloco mais recente de `CURRENT_STATUS.md`.
+
+Contagens atuais: **133 tabelas públicas, 20 `ai_*`, RLS + FORCE RLS em todas; 30 ferramentas
+(22 leitura/8 escrita), 15 commands, 9 agentes**. Não houve migration nesta Task 28. As três
+migrations do coordenador, insight sem sessão e desfazer que falhou já estavam aplicadas e
+conferidas; não reaplicar. Tipos de outras frentes não foram sobrescritos.
+
+Conferência com aval: cinco runs concluídos no Gemini Flash-Lite, 29 tentativas, zero abertas,
+custo estimado **US$ 0,041295**. Uma tarefa TO-DO de teste confirmada; compromisso permaneceu
+sem confirmação. **Três escritas parcialmente conferidas:** despesa sem conta/cartão não virou
+proposta; o dono escolheu manter os cinco envios. Financeiro desligado recusou a leitura, e as
+chaves originais foram restauradas e recarregadas. Panorama concluiu; desktop/390/320 px vistos,
+sem rolagem horizontal em 320 px. Capturas na conversa; sem GIF ou arquivo visual persistido
+pela ferramenta. Não confundir essa amostra com validação de todos os critérios manuais.
+
+Desenho da Task 15b preservado: TODAS as ferramentas no passo 0, required quando há leitura,
+depois auto. O dono confirmou dois cartões na Task 15. A síntese que afirmou proposta inexistente
+na 15b, as leituras semanais sugeridas, o custo dos seis especialistas e os sete itens da spec
+§9.2 estão registrados no status e no resultado real. Desfazer de hábito exige registro_novo
+true, sem snapshot anterior; retenção usa leitura antes do delete, sem garantia transacional;
+PDF continua com contagem heurística; consumo incompleto não é zero.
+
+Próxima ação: aguardar tarefa do dono, incluindo eventual conferência dos três cartões com
+conta/cartão informados e novo aval. Nenhum push, PR, merge ou deploy autorizado.
+
+
 > 🟢 **Depois dela: o REDESIGN financeiro (00 a 08), fechado em 2026-11-07.** 00–03-G em `main`
 > (PRs #56–#64); 03-G2 a 08 integradas localmente em `feat/redesign-00-auditoria`, à espera do
 > merge do **PR único #65** pelo dono. Resumo, decisões e números em `docs/redesign/STATUS.md`;

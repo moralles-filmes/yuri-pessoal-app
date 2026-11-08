@@ -28,7 +28,12 @@
  */
 
 import { worstCaseRatePair, type AiRate } from "@/lib/ai/core/pricing";
-import { MAX_TOOLS_POR_PASSO, TOKENS_POR_RESULTADO_DE_FERRAMENTA } from "@/lib/ai/tools/limits";
+import { MAX_ESPECIALISTAS } from "@/lib/ai/agents/especialistas";
+import {
+  MAX_TOOL_STEPS,
+  MAX_TOOLS_POR_PASSO,
+  TOKENS_POR_RESULTADO_DE_FERRAMENTA,
+} from "@/lib/ai/tools/limits";
 import { ceil6 } from "./meter";
 // `CARACTERES_POR_TOKEN` e `estimarTokensDeEntrada` moraram aqui na 18-A. A 18-B precisou de
 // `tools/limits.ts` importando a constante de caracteres-por-token, e este arquivo precisou de
@@ -124,6 +129,117 @@ export function computeReservation(input: ReservationInput): Reservation {
       `(US$ ${piorEntrada}/M entrada e US$ ${piorSaida}/M saída), × ${multiplicador} tentativas × margem ${margem}` +
       (arquivos > 0 ? `, mais ${arquivos} tokens de arquivo em cada passo` : "") +
       (passos > 0 ? `, cobrindo ${passos} passos de ferramenta.` : "."),
+  };
+}
+
+/**
+ * Chat livre com coordenador · Task 8 — a reserva do COORDENADOR pelo pior caso.
+ *
+ * O coordenador do chat livre decide, consulta até
+ * `MAX_ESPECIALISTAS` especialistas em PARALELO e sintetiza — ou, no modo direto, faz tudo com
+ * um agente só. Não há como saber de antemão qual caminho o modelo escolhe, então a reserva
+ * cobre o MAIOR dos dois, mais a decisão, que roda sempre:
+ *
+ *   total = decisão + max( especialistas × MAX_ESPECIALISTAS + síntese , direto )
+ *
+ * Cada parte é um `computeReservation` com `margem: 1`, e a margem é aplicada UMA vez no fim.
+ * O especialista não repete (`maxRetries: 0`, `maxFallbacks: 0`): em paralelo a repetição
+ * não tem o que fazer — o que falha, falha naquele especialista e o coordenador segue.
+ *
+ * O número de especialistas vem da CONSTANTE, não de parâmetro: quem pode mudar a quantidade
+ * é `MAX_ESPECIALISTAS`, e a reserva acompanha sem um segundo lugar para editar.
+ */
+
+/** Teto de saída da DECISÃO do coordenador: o plano (quem consultar, com o quê). */
+export const TETO_SAIDA_DECISAO = 2_500;
+
+/** Teto de saída de CADA especialista: o texto curto que ele devolve ao coordenador. */
+export const TETO_SAIDA_ESPECIALISTA = 1_500;
+
+export type ReservationDoCoordenadorInput = {
+  /** Tarifas do coordenador, do especialista e da cadeia de fallback autorizada. */
+  readonly rates: readonly AiRate[];
+  readonly maxRetries: number;
+  readonly maxFallbacks: number;
+  readonly margem: number;
+  /** System + histórico + texto do coordenador, já montados. */
+  readonly tokensEntradaDoCoordenador: number;
+  /** O MAIOR system de especialista + `MAX_TAREFA_CHARS`. */
+  readonly tokensEntradaDoEspecialista: number;
+  /** `model.outputCapTokens` — o teto de saída da síntese (e do modo direto). */
+  readonly tetoSaidaDaSintese: number;
+};
+
+export function computeReservationDoCoordenador(
+  input: ReservationDoCoordenadorInput,
+): Reservation {
+  const comTentativas = {
+    rates: input.rates,
+    maxRetries: input.maxRetries,
+    maxFallbacks: input.maxFallbacks,
+    margem: 1,
+  };
+
+  // Decisão: o coordenador lê o contexto e escolhe, sem ferramenta própria.
+  const decisao = computeReservation({
+    ...comTentativas,
+    tokensEntradaEstimados: input.tokensEntradaDoCoordenador,
+    tetoDeSaida: TETO_SAIDA_DECISAO,
+    maxToolSteps: 0,
+  });
+
+  // Síntese: lê o contexto MAIS a resposta de cada especialista. Cada resposta entra com 10%
+  // de folga. A conta é em inteiro: `Math.ceil(1500 * 1.1)` dá 1.651 em ponto flutuante (o 1,1
+  // binário), e este número precisa ser 1.650 para a conta do pior caso bater com o brief.
+  const tokensPorResposta = Math.ceil((TETO_SAIDA_ESPECIALISTA * 11) / 10);
+  const sintese = computeReservation({
+    ...comTentativas,
+    tokensEntradaEstimados:
+      input.tokensEntradaDoCoordenador + MAX_ESPECIALISTAS * tokensPorResposta,
+    tetoDeSaida: input.tetoSaidaDaSintese,
+    maxToolSteps: 0,
+  });
+
+  // Especialista: UMA chamada por especialista, sem repetição, com até MAX_TOOL_STEPS passos.
+  const especialista = computeReservation({
+    rates: input.rates,
+    maxRetries: 0,
+    maxFallbacks: 0,
+    margem: 1,
+    tokensEntradaEstimados: input.tokensEntradaDoEspecialista,
+    tetoDeSaida: TETO_SAIDA_ESPECIALISTA,
+    maxToolSteps: MAX_TOOL_STEPS,
+  });
+
+  // Direto: um agente só, com as ferramentas e a síntese, com tentativas.
+  const direto = computeReservation({
+    ...comTentativas,
+    tokensEntradaEstimados: input.tokensEntradaDoEspecialista,
+    tetoDeSaida: input.tetoSaidaDaSintese,
+    maxToolSteps: MAX_TOOL_STEPS,
+  });
+
+  const paralelo = MAX_ESPECIALISTAS * especialista.valorUsd + sintese.valorUsd;
+  const caminhoMaior = paralelo >= direto.valorUsd ? "paralelo" : "direto";
+  const somaDosCaminhos = decisao.valorUsd + Math.max(paralelo, direto.valorUsd);
+
+  const margem = input.margem > 0 ? input.margem : MARGEM_PADRAO;
+  const valorUsd = ceil6(somaDosCaminhos * margem);
+
+  return {
+    valorUsd,
+    multiplicadorDeTentativas: decisao.multiplicadorDeTentativas,
+    margem,
+    tarifaEntradaUsada: decisao.tarifaEntradaUsada,
+    tarifaSaidaUsada: decisao.tarifaSaidaUsada,
+    explicacao:
+      `Reserva de US$ ${valorUsd.toFixed(6)} no pior caso do coordenador, × margem ${margem}. ` +
+      `A decisão custa até US$ ${decisao.valorUsd.toFixed(6)} (${input.tokensEntradaDoCoordenador} tokens de entrada, ` +
+      `saída até ${TETO_SAIDA_DECISAO}, × ${decisao.multiplicadorDeTentativas} tentativas). ` +
+      `Depois dela, o caminho mais caro (${caminhoMaior}): em paralelo, ${MAX_ESPECIALISTAS} especialistas ` +
+      `sem repetição a US$ ${especialista.valorUsd.toFixed(6)} cada (até ${MAX_TOOL_STEPS} passos de ferramenta) ` +
+      `mais a síntese a US$ ${sintese.valorUsd.toFixed(6)}, somando US$ ${paralelo.toFixed(6)}; ` +
+      `no modo direto, um especialista só, US$ ${direto.valorUsd.toFixed(6)}.`,
   };
 }
 

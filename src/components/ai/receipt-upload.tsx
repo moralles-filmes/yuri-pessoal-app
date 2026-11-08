@@ -12,8 +12,7 @@
  * ║ sobre os BYTES (`sniffMime`) — o texto aqui é aviso, nunca a validação.                ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  *
- * ⚠️ `capture="environment"` no input abre a CÂMERA TRASEIRA no celular, que é onde um
- * comprovante é fotografado. Sem ele, o iOS oferece a galeria primeiro.
+ * O seletor mantém disponíveis a câmera, a galeria e os PDFs conforme o aparelho.
  */
 
 import * as React from "react";
@@ -30,6 +29,8 @@ import {
   LIMITE_BYTES_IMAGEM,
   LIMITE_BYTES_PDF,
   LIMITE_MEGAPIXELS,
+  LIMITE_PAGINAS_PDF,
+  LIMITE_BYTES_PDF_SEM_CONTAGEM,
 } from "@/lib/ai/vision/limits";
 import { cn } from "@/lib/utils";
 import { mapServerFieldErrors, serverErrorMessage } from "@/lib/forms/server-errors";
@@ -120,8 +121,6 @@ export function ReceiptUpload({ desligado }: { readonly desligado: boolean }) {
             type="file"
             {...ariaDoErro("arquivo-comprovante-erro", erros.arquivo)}
             accept={ACEITOS_NO_INPUT}
-            // Abre a câmera traseira no celular — é onde um comprovante é fotografado.
-            capture="environment"
             disabled={desligado || enviando}
             onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
             className="max-w-sm"
@@ -171,7 +170,8 @@ export function ReceiptUpload({ desligado }: { readonly desligado: boolean }) {
         <p>
           <strong className="text-foreground">Formatos aceitos:</strong> JPEG, PNG, WEBP e PDF.
           Imagem até {mb(LIMITE_BYTES_IMAGEM)} MB e {LIMITE_MEGAPIXELS} megapixels; PDF até{" "}
-          {mb(LIMITE_BYTES_PDF)} MB.
+          {mb(LIMITE_BYTES_PDF)} MB e {LIMITE_PAGINAS_PDF} páginas. Sem contagem legível de páginas,
+          o PDF deve ter até {mb(LIMITE_BYTES_PDF_SEM_CONTAGEM)} MB.
         </p>
         <p>
           <strong className="text-foreground">HEIC não é aceito.</strong> É o formato padrão da

@@ -141,7 +141,7 @@ describe("schema — o que o modelo PODE devolver", () => {
 
 describe("prompt — a regra do dígito é POSITIVA, e o tom é descrito", () => {
   it("a versão carrega prompt e schema — a forma pedida faz parte do que produziu o texto", () => {
-    expect(versaoDoPromptDeInsight()).toBe("insight-v1+insight-v1");
+    expect(versaoDoPromptDeInsight()).toBe("insight-v2+insight-v2");
   });
 
   it("manda escrever o marcador, e não só proíbe inventar número", () => {

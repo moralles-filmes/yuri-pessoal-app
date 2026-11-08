@@ -21,6 +21,7 @@
  */
 
 import * as React from "react";
+import { AVISO_DUPLICATA } from "@/lib/ai/approval/duplicates";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -113,7 +114,7 @@ function BotaoDesfazer({
     });
   }
 
-  if (proposta) return <ProposalCardSobDemanda proposta={proposta} />;
+  if (proposta) return <ProposalCardSobDemanda proposta={proposta} ehDesfazer onSemExecucao={() => setProposta(null)} />;
 
   return (
     <Button
@@ -163,7 +164,7 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
           <IconeDoEstado estado={acao.estado} />
           {ROTULO_DO_ESTADO_DA_ACAO[acao.estado]}
         </Badge>
-        <span className="min-w-0 flex-1 truncate font-medium">{acao.rotuloDoCommand}</span>
+        <span className="min-w-0 flex-auto truncate font-medium">{acao.rotuloDoCommand}</span>
         {acao.ehDesfazer && (
           <Badge variant="outline" className="text-[11px] font-normal">
             desfazer
@@ -183,6 +184,7 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
         ⚠️ A PREVISÃO É O QUE O DONO LEU ANTES DE CONFIRMAR. Ela fica mesmo depois de aplicada:
         é a prova do que foi autorizado, e sem ela a linha diria só que "algo aconteceu".
       */}
+      {acao.possivelDuplicata && !decidirAqui && <p role="status" className="mt-2 text-warning-ink">{AVISO_DUPLICATA}</p>}
       {acao.previsao && !decidirAqui && <p className="mt-2">{acao.previsao.resumo}</p>}
 
       {acao.previsao && !decidirAqui && acao.previsao.linhas.length > 0 && (
@@ -292,6 +294,8 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
       {/* ─── A decisão em aberto: o mesmo cartão do chat, com o mesmo hash. ─── */}
       {decidirAqui && acao.previsao && (
         <ProposalCardSobDemanda
+          ehDesfazer={acao.ehDesfazer}
+          possivelDuplicata={acao.possivelDuplicata}
           proposta={{
             id: acao.propostaId as string,
             effectHash: acao.effectHash as string,

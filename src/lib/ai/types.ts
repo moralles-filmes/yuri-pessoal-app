@@ -164,9 +164,10 @@ export type ConversationDetail = {
 
 export type UsagePeriodSummary = {
   readonly periodo: "dia" | "mes";
-  readonly confirmadoUsd: number;
-  readonly reservadoUsd: number;
-  readonly totalUsd: number;
+  readonly confirmadoUsd: number | null;
+  readonly reservadoUsd: number | null;
+  readonly totalUsd: number | null;
+  readonly parcial: boolean;
   readonly limiteUsd: number | null;
   readonly restanteUsd: number | null;
   readonly percentual: number | null;

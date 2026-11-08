@@ -10,7 +10,7 @@ import {
   type ToolPermission,
   type ToolWritePermission,
 } from "@/lib/ai/tools/contracts";
-// ⚠️ Estas seis moram em `@/lib/ai/constants` (módulo PURO, sem um único import de runtime) e
+// ⚠️ Estas constantes moram em `@/lib/ai/constants` (módulo PURO, sem um único import de runtime) e
 // são REEXPORTADAS daqui para não quebrar nenhum import existente. Elas saíram deste arquivo
 // porque a TELA precisa delas, e importá-las de um módulo que começa com `import { z } from
 // "zod"` arrastava 62,7 KB gz de zod para o primeiro byte das rotas de /ia. Ver `.turbo/REPORT.md`.
@@ -19,10 +19,6 @@ import {
 import {
   MAX_CHAT_TEXT,
   MAX_OBSERVACAO_DOCUMENTO,
-  MODULOS_COM_CONTEXTO,
-  ROTAS_COM_CONTEXTO,
-  type ModuloComContexto,
-  type RotaComContexto,
 } from "@/lib/ai/constants";
 // 18-F Bloco 3. Mesma razão: os dois módulos da memória não têm um único import, e a TELA os
 // lê (o contador de caracteres e a mensagem de recusa). Ver `memory/forma.ts`.
@@ -38,10 +34,6 @@ import { formaDaMemoria, MOTIVO_DA_RECUSA } from "@/lib/ai/memory/forma";
 export {
   MAX_CHAT_TEXT,
   MAX_OBSERVACAO_DOCUMENTO,
-  MODULOS_COM_CONTEXTO,
-  ROTAS_COM_CONTEXTO,
-  type ModuloComContexto,
-  type RotaComContexto,
 };
 
 /**
@@ -74,92 +66,6 @@ const modelId = z
 /** Limite do CORPO HTTP inteiro. Bem acima do texto, para caber JSON e acentuação. */
 export const MAX_CHAT_BODY_BYTES = 64 * 1024;
 
-// ─────────────────────────── Contexto da página (18-B) ───────────────────────────
-
-/**
- * ╔══════════════════════════════════════════════════════════════════════════════════════╗
- * ║ A LISTA DE ROTAS É ESTÁTICA: UMA ROTA QUE NÃO ESTÁ AQUI NÃO EXISTE PARA A IA.         ║
- * ╚══════════════════════════════════════════════════════════════════════════════════════╝
- *
- * ⛔ **A PÁGINA NÃO MANDA CONTEÚDO.** Nem HTML, nem título, nem estado, nem texto de
- * registro. O único campo que atravessa o transporte é `rota`, e ele é um valor de uma
- * lista fechada escrita AQUI — não é texto do usuário. É a regra 5 do projeto ("dado é
- * dado, nunca instrução") aplicada à borda: se a página pudesse mandar texto, o conteúdo
- * da tela viraria entrada do modelo sem passar por bloco não confiável.
- *
- * ⛔ **O MÓDULO É RESOLVIDO PELO SERVIDOR**, por `MODULO_DA_ROTA`, e NÃO é aceito no
- * payload. O módulo é o que decide o agente (`routeAgent`) e, por tabela, a allowlist de
- * ferramentas — deixar a tela declará-lo seria deixar o cliente escolher o que a IA pode
- * ler. Recusar é melhor que aceitar-e-ignorar: um contexto que o roteador ignora em
- * silêncio é pior que um 400.
- *
- * ⛔ **NÃO HÁ `registroId` NEM `tipoRegistro`** nesta subfase, e a ausência é deliberada:
- *   1. nenhuma das rotas da lista é a de um registro (`/treinos/historico/[id]` **não**
- *      está aqui), então não há de onde sair um id; e
- *   2. nada na 18-B consome um id de registro — as três ferramentas de Treinos recebem os
- *      próprios argumentos do modelo (`dias`, `exercicio`), nenhuma recebe id.
- * Aceitar o campo agora seria campo fantasma: entraria validado, não seria lido por
- * ninguém, e o comentário que promete "a query do módulo confere sob RLS" descreveria
- * código que não existe. Ele entra JUNTO do consumidor que o resolver.
- *
- * `user_id` não existe aqui — como em todo schema deste arquivo, ele vem só de
- * `authContext()`. E entrada e saída têm a MESMA forma: `parse(parse(x))` funciona.
- */
-// A lista de rotas, a de módulos e os dois tipos moram em `@/lib/ai/constants` e estão
-// reexportados no topo deste arquivo. O docblock que explicava a regra foi junto.
-
-/**
- * `satisfies Record<…>` é a trava: uma rota nova em `ROTAS_COM_CONTEXTO` sem entrada aqui
- * é erro de compilação, não uma rota que silenciosamente não roteia para lugar nenhum.
- */
-const MODULO_DA_ROTA = {
-  "/treinos": "training",
-  "/treinos/historico": "training",
-  "/treinos/recordes": "training",
-  "/todo": "todo",
-  "/habitos": "habits",
-  "/estudos": "studies",
-  "/agenda": "calendar",
-  "/tarefas": "tasks",
-  "/rotinas": "tasks",
-  "/nutricao/medidas": "body",
-  "/financeiro": "finance",
-  "/faturas": "finance",
-  // ⚠️ `/nutricao` e `/nutricao/diario` são `nutrition`; só `/nutricao/medidas` é `body`.
-  // A tela mora dentro de Dieta, mas o dado é do módulo central.
-  "/nutricao": "nutrition",
-  "/nutricao/diario": "nutrition",
-} as const satisfies Record<RotaComContexto, ModuloComContexto>;
-
-/** O contexto como o runner o consome. Montado NO SERVIDOR, a partir da rota validada. */
-export function contextoDaRota(rota: RotaComContexto): {
-  readonly rota: RotaComContexto;
-  readonly modulo: ModuloComContexto;
-} {
-  return { rota, modulo: MODULO_DA_ROTA[rota] };
-}
-
-/*
- * ⛔ NÃO há um `isRotaComContexto` aqui, e a ausência é a mesma decisão que deixou
- * `registroId` de fora: ele existiu por um commit, prometendo no docblock servir para
- * "validar um parâmetro de URL", e nenhuma rota do projeto lê rota de query string. Era
- * função fantasma — e `pageContextSchema.safeParse({ rota }).success` já responde a mesma
- * pergunta. Ele volta JUNTO do link "Perguntar à IA" que o justificar.
- */
-
-export const pageContextSchema = z
-  .object({
-    // A mensagem em pt-BR é obrigatória, não decorativa: o `error` do Zod chega CRU ao
-    // `toast` da tela (`route.ts` devolve `issues[0].message`, `chat-client.tsx` mostra).
-    // Sem ela o usuário leria `Invalid option: expected one of "/treinos"|…` em inglês —
-    // e este é o primeiro campo que a interface de fato envia, então é o primeiro que pode
-    // ficar defasado (aba antiga aberta depois de a lista de rotas mudar).
-    rota: z.enum(ROTAS_COM_CONTEXTO, { error: "Página de contexto não reconhecida." }),
-  })
-  .strict();
-
-export type PageContextInput = z.infer<typeof pageContextSchema>;
-
 // ─────────────────────────── Chat ───────────────────────────
 
 /** Preferências de rota que as DUAS formas do payload aceitam, escritas uma vez só. */
@@ -182,17 +88,7 @@ export const chatMensagemSchema = z
       .trim()
       .min(1, "Escreva alguma coisa antes de enviar.")
       .max(MAX_CHAT_TEXT, `Máximo de ${MAX_CHAT_TEXT} caracteres`),
-    agentId: z
-      .string()
-      .trim()
-      .min(1, "Assistente inválido.")
-      .max(60, "Assistente inválido.")
-      .optional(),
-    /** Ausente = a tela não mandou contexto. Ver `pageContextSchema`. */
-    pageContext: pageContextSchema.optional(),
     ...preferenciaDeProvedor,
-    /** 18-F Bloco 4 — o MODO caixa de entrada. Ausente = conversa normal. */
-    caixaDeEntrada: z.boolean({ error: "Modo inválido." }).optional(),
   })
   .strict();
 
@@ -315,7 +211,7 @@ export const aiPermissionsSchema = z.object(permissionShape).strict();
 export type AiPermissionsInput = z.infer<typeof aiPermissionsSchema>;
 
 /**
- * As cinco flags `allow_write_*` (18-C · Bloco 4), pela MESMA derivação e pelos mesmos
+ * As flags `allow_write_*`, incluindo memória, pela MESMA derivação e pelos mesmos
  * motivos. Objeto separado porque a decisão é separada: nenhuma leitura consulta este objeto,
  * e nenhuma escrita passa só com o outro.
  */
@@ -598,10 +494,12 @@ export const memoriaSchema = z
   .object({
     id: z.uuid().nullish(),
     conteudo: z.string(),
-    modulo: z
-      .enum(MODULOS_DE_MEMORIA)
-      .nullish()
-      .transform((v) => v ?? null),
+    modulo: z.preprocess(
+      (v) => v === "__todas__" ? null : v,
+      z.enum(MODULOS_DE_MEMORIA, { error: "Módulo de memória não reconhecido." })
+        .nullish()
+        .transform((v) => v ?? null),
+    ),
     /**
      * ⚠️ O REGEX ACEITA A STRING VAZIA, e isso não é folga — é o que um `<input type="date">`
      * vazio de fato manda. `.regex()` roda ANTES do `.transform()`, então um padrão

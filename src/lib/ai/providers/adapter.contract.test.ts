@@ -282,6 +282,44 @@ describe("ferramentas (18-B)", () => {
     expect(opcoesRecebidas?.tools).toBeUndefined();
   });
 
+  /**
+   * Task 15b — `toolChoice: "required"` é como o especialista é OBRIGADO a ler antes de
+   * responder. Instrução no prompt é "quase sempre"; o valor no pedido ao provedor é estrutural.
+   */
+  it("toolChoice 'required' com ferramentas chega ao SDK", async () => {
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    for (const provider of AI_PROVIDERS) {
+      opcoesRecebidas = null;
+      await coletar(
+        createProviderClient(provider, "chave").streamText({
+          ...COM_FERRAMENTA,
+          toolChoice: "required",
+        }),
+      );
+      expect((opcoesRecebidas as Record<string, unknown> | null)?.toolChoice, provider).toBe("required");
+    }
+  });
+
+  it("com `tools` vazio, toolChoice NÃO é enviado — nem quando pedido 'required'", async () => {
+    // Sem ferramenta não há o que exigir: mandar `required` sem `tools` é erro no provedor
+    // (ou, pior, o pedido de uma ferramenta que não existe).
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    for (const provider of AI_PROVIDERS) {
+      opcoesRecebidas = null;
+      await coletar(
+        createProviderClient(provider, "chave").streamText({ ...PEDIDO, toolChoice: "required" }),
+      );
+      expect(opcoesRecebidas, provider).not.toBeNull();
+      expect("toolChoice" in opcoesRecebidas!, provider).toBe(false);
+    }
+  });
+
+  it("sem toolChoice no pedido, o campo não é enviado (o padrão do provedor continua)", async () => {
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    await coletar(createProviderClient("openai", "chave").streamText(COM_FERRAMENTA));
+    expect(opcoesRecebidas && "toolChoice" in opcoesRecebidas).toBe(false);
+  });
+
   it("o evento tool-call carrega os argumentos do modelo", async () => {
     partesDoSdk = [
       {
@@ -301,6 +339,71 @@ describe("ferramentas (18-B)", () => {
       callId: "call-1",
       input: { escopo: "geral" },
     });
+  });
+
+  it("MOD-ia-035: o providerMetadata da tool call sai como metadadosDoProvedor, o mesmo objeto", async () => {
+    const providerMetadata = { google: { thoughtSignature: "sig" } };
+    partesDoSdk = [
+      {
+        type: "tool-call",
+        toolName: "training.get_records",
+        toolCallId: "call-1",
+        input: {},
+        providerMetadata,
+      },
+      { type: "finish", finishReason: "tool-calls", totalUsage: USO_COMPLETO },
+    ];
+    const eventos = await coletar(
+      createProviderClient("gemini", "chave").streamText(COM_FERRAMENTA),
+    );
+    const chamada = eventos[0];
+    expect(chamada.type).toBe("tool-call");
+    if (chamada.type === "tool-call") {
+      expect(chamada.metadadosDoProvedor).toEqual(providerMetadata);
+    }
+  });
+
+  it("MOD-ia-035: sem providerMetadata, o campo não existe no evento (ausente continua ausente)", async () => {
+    partesDoSdk = [
+      { type: "tool-call", toolName: "t", toolCallId: "call-1", input: {} },
+      { type: "finish", finishReason: "tool-calls", totalUsage: USO_COMPLETO },
+    ];
+    const eventos = await coletar(
+      createProviderClient("gemini", "chave").streamText(COM_FERRAMENTA),
+    );
+    expect("metadadosDoProvedor" in eventos[0]).toBe(false);
+  });
+
+  it("MOD-ia-035: metadadosDoProvedor da parte tool-call volta como providerOptions da parte", async () => {
+    partesDoSdk = [{ type: "finish", finishReason: "stop", totalUsage: USO_COMPLETO }];
+    const metadados = { google: { thoughtSignature: "sig" } };
+    await coletar(
+      createProviderClient("gemini", "chave").streamText({
+        ...COM_FERRAMENTA,
+        messages: [
+          { role: "user", content: "meus recordes?" },
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool-call",
+                callId: "call-1",
+                toolName: "training.get_records",
+                input: {},
+                metadadosDoProvedor: metadados,
+              },
+              { type: "tool-call", callId: "call-2", toolName: "t", input: {} },
+            ],
+          },
+        ],
+      }),
+    );
+    const messages = opcoesRecebidas?.messages as Array<{
+      content: Array<Record<string, unknown>>;
+    }>;
+    expect(messages[1].content[0].providerOptions).toEqual(metadados);
+    // A parte sem metadado não ganha `{}` inventado.
+    expect("providerOptions" in messages[1].content[1]).toBe(false);
   });
 
   it("traduz o histórico com partes: tool-call do assistente e tool-result do papel tool", async () => {

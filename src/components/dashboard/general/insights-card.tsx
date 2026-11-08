@@ -55,7 +55,7 @@ export async function InsightsCard() {
           <li key={insight.id} className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               {/* `min-w-0` no texto, `shrink-0` no badge: sem isso o título corta o badge. */}
-              <p className="min-w-0 flex-1 truncate text-sm font-medium">
+              <p className="min-w-0 flex-auto break-words text-sm font-medium">
                 {insight.titulo}
               </p>
               <Badge variant="secondary" className="shrink-0 text-xs">

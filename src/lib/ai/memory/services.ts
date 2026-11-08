@@ -45,14 +45,15 @@ async function registrarEvento(
   memoryId: string,
   evento: EventoDeMemoria,
   origem: OrigemDeMemoria,
-): Promise<void> {
-  await ctx.supabase.from("ai_memory_events").insert({
+): Promise<boolean> {
+  const { error } = await ctx.supabase.from("ai_memory_events").insert({
     user_id: ctx.userId,
     memory_id: memoryId,
     evento,
     origem,
     // ⛔ E MAIS NADA. Ver o cabeçalho.
   });
+  return !error;
 }
 
 export async function criarMemoria(
@@ -77,7 +78,9 @@ export async function criarMemoria(
 
   if (error || !data) return { ok: false, erro: "Não foi possível salvar a memória." };
 
-  await registrarEvento(ctx, data.id, "criada", origem);
+  if (!(await registrarEvento(ctx, data.id, "criada", origem))) {
+    return { ok: false, erro: "A preferência foi salva, mas o registro do evento falhou. Confira a lista antes de tentar de novo." };
+  }
   return { ok: true, id: data.id };
 }
 
@@ -103,7 +106,9 @@ export async function editarMemoria(
 
   // ⚠️ Editar é sempre do DONO: a IA não tem ferramenta de editar memória, e a ausência é a
   // trava — ela não pode reescrever uma preferência que ele escreveu.
-  await registrarEvento(ctx, id, "editada", "dono");
+  if (!(await registrarEvento(ctx, id, "editada", "dono"))) {
+    return { ok: false, erro: "A preferência foi alterada, mas o registro do evento falhou." };
+  }
   return { ok: true, id };
 }
 
@@ -114,7 +119,9 @@ export async function alternarMemoria(
   ligar: boolean,
 ): Promise<ResultadoDaMemoria> {
   // ⚠️ Nenhum UPDATE: o estado é derivado. O que existe é o evento.
-  await registrarEvento(ctx, id, ligar ? "reativada" : "desativada", "dono");
+  if (!(await registrarEvento(ctx, id, ligar ? "reativada" : "desativada", "dono"))) {
+    return { ok: false, erro: "Não foi possível registrar a mudança da preferência." };
+  }
   return { ok: true, id };
 }
 
@@ -130,7 +137,9 @@ export async function esquecerMemoria(
   id: string,
   origem: OrigemDeMemoria,
 ): Promise<ResultadoDaMemoria> {
-  await registrarEvento(ctx, id, "esquecida", origem);
+  if (!(await registrarEvento(ctx, id, "esquecida", origem))) {
+    return { ok: false, erro: "Não foi possível registrar o esquecimento da preferência." };
+  }
   return { ok: true, id };
 }
 
@@ -147,7 +156,9 @@ export async function excluirMemoria(
   ctx: ContextoDaMemoria,
   id: string,
 ): Promise<ResultadoDaMemoria> {
-  await registrarEvento(ctx, id, "excluida", "dono");
+  if (!(await registrarEvento(ctx, id, "excluida", "dono"))) {
+    return { ok: false, erro: "Não foi possível registrar a exclusão. A preferência não foi apagada." };
+  }
 
   const { error } = await ctx.supabase
     .from("ai_memories")

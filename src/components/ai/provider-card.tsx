@@ -57,6 +57,8 @@ import type { ProviderCardView } from "@/lib/ai/types";
 import { lerDecimal } from "@/lib/ai/numero";
 import { errosDaAction, mensagemDaAction } from "@/lib/forms/mensagem-da-action";
 
+import { montarConfigDoProvedor, fallbackDisponivel } from "./provider-config";
+
 const NENHUM = "__nenhum__";
 
 /** Os campos deste cartão que podem receber erro (do conversor ou da action). */
@@ -165,21 +167,9 @@ export function ProviderCard({
     }
     setErros({});
     setSalvandoConfig(true);
-    const r = await saveAiProviderConfig({
-      provider: card.provider,
-      enabled: form.enabled,
-      displayName: card.displayName,
-      defaultModel: form.defaultModel === NENHUM ? null : form.defaultModel,
-      economyModel: form.economyModel === NENHUM ? null : form.economyModel,
-      advancedModel: form.advancedModel === NENHUM ? null : form.advancedModel,
-      visionModel: null,
-      timeoutMs: card.timeoutMs,
-      maxRetries: card.maxRetries,
-      dailyLimit: dia.valor,
-      monthlyLimit: mes.valor,
-      fallbackAllowed: form.fallbackAllowed,
-      fallbackOrder: card.fallbackOrder,
-    });
+    const r = await saveAiProviderConfig(montarConfigDoProvedor(
+      card, form, dia.valor, mes.valor,
+    ));
     setSalvandoConfig(false);
 
     if (!r.ok) {
@@ -374,11 +364,14 @@ export function ProviderCard({
             <div className="min-w-0">
               <Label htmlFor={`fb-${card.provider}`}>Permitir fallback a partir daqui</Label>
               <p className="text-xs text-muted-foreground">
-                Nasce desligado. Fallback gasta em outro provedor, então é escolha explícita.
+                {fallbackDisponivel(card.fallbackOrder)
+                  ? "Nasce desligado. Fallback gasta em outro provedor, então é escolha explícita."
+                  : "Não há ordem de fallback configurada."}
               </p>
             </div>
             <Switch
               id={`fb-${card.provider}`}
+              disabled={!fallbackDisponivel(card.fallbackOrder)}
               checked={form.fallbackAllowed}
               onCheckedChange={(v) => setForm((f) => ({ ...f, fallbackAllowed: v }))}
               className="shrink-0"
@@ -404,6 +397,7 @@ export function ProviderCard({
             focoDeVolta={botaoDeRemover}
             onRemovida={() => {
               setRemoverAberto(false);
+              setForm((f) => ({ ...f, enabled: false }));
               router.refresh();
             }}
           />

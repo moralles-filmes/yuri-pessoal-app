@@ -249,6 +249,40 @@ describe("runToolLoop — o smoke ponta a ponta", () => {
     ]);
   });
 
+  it("MOD-ia-035: o metadado opaco da tool call chega à parte tool-call do assistente no passo seguinte", async () => {
+    const assinatura = { google: { thoughtSignature: "sig" } };
+    const { chamarModelo, recebido } = modeloDeMentira([
+      [
+        {
+          type: "tool-call",
+          toolName: "training.get_volume",
+          callId: "call-1",
+          input: { dias: 7 },
+          metadadosDoProvedor: assinatura,
+        },
+        pedeVolume("call-2"),
+        FINISH,
+      ],
+      [{ type: "delta", text: "pronto" }, FINISH],
+    ]);
+
+    await coletar(
+      runToolLoop({
+        ctxBase: CTX_BASE,
+        mensagensIniciais: [{ role: "user", content: "volume?" }],
+        ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
+        chamarModelo,
+      }),
+    );
+
+    const partes = recebido[1][1].content as readonly Record<string, unknown>[];
+    expect(partes.find((p) => p.callId === "call-1")?.metadadosDoProvedor).toEqual(assinatura);
+    // Ausente continua ausente: a chamada sem metadado não ganha o campo.
+    const semMetadado = partes.find((p) => p.callId === "call-2");
+    expect(semMetadado && "metadadosDoProvedor" in semMetadado).toBe(false);
+  });
+
   it("a trilha fica completa: passos abertos e fechados, e a chamada auditada", async () => {
     const { chamarModelo } = modeloDeMentira([
       [pedeVolume(), FINISH],
@@ -721,5 +755,46 @@ describe("runToolLoop — nenhum passo fica `started` para sempre", () => {
 
     expect(passosFechados).toHaveLength(1);
     expect(passosFechados[0].status).toBe("failed");
+  });
+});
+
+describe("runToolLoop — a chamada recusada ANTES do passo", () => {
+  /**
+   * MOD-ia-005 (minor herdado da Task 4) — quando o dono do run recusa a próxima chamada
+   * (prazo esgotado, cancelamento, tentativa não registrada), o laço NÃO abre o passo
+   * `modelo`: um passo aberto e fechado `failed` com ~0 ms registraria na trilha uma chamada
+   * ao provedor que nunca aconteceu.
+   */
+  it("antesDaChamada recusando o passo 1: nenhum passo `modelo` novo, o erro sai como evento do provedor", async () => {
+    const { chamarModelo, recebido } = modeloDeMentira([[pedeVolume(), FINISH]]);
+    const recusa = {
+      class: "TIMEOUT" as const,
+      code: "AI_DEADLINE",
+      message: "A resposta passou do tempo máximo e foi encerrada.",
+      retryable: true,
+    };
+
+    const eventos = await coletar(
+      runToolLoop({
+        ctxBase: CTX_BASE,
+        mensagensIniciais: [{ role: "user", content: "volume?" }],
+        ferramentasOferecidas: OFERECIDAS,
+        proximoStepIndex,
+        chamarModelo,
+        antesDaChamada: async (passo) => (passo === 0 ? null : recusa),
+      }),
+    );
+
+    // A leitura do passo 0 aconteceu; a chamada do passo 1, não.
+    expect(argumentosRecebidos).toEqual([{ dias: 7 }]);
+    expect(recebido).toHaveLength(1);
+    expect(passosAbertos.map((p) => `${p.stepIndex}:${p.kind}`)).toEqual([
+      "1:modelo",
+      "1:ferramentas",
+    ]);
+    expect(eventos.at(-1)).toEqual({
+      type: "passthrough",
+      evento: { type: "error", error: recusa },
+    });
   });
 });

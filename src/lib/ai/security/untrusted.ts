@@ -31,7 +31,9 @@ export type UntrustedSource =
   | "resultado_de_ferramenta"
   | "documento"
   | "imagem"
-  | "busca_externa";
+  | "busca_externa"
+  /** Chat livre com coordenador — a resposta de um especialista, que a síntese só transcreve. */
+  | "resposta_de_especialista";
 
 export type UntrustedBlock = {
   readonly untrusted: true;

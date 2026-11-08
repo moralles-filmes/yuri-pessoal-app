@@ -40,6 +40,7 @@ export async function estadoDoPainelDaIa(): Promise<ProntidaoDoChat> {
   if (!ctx) {
     return {
       podeConversar: false,
+      podeCruzarModulos: false,
       motivoBloqueio: "Sua sessão expirou. Entre de novo para conversar.",
     };
   }

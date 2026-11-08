@@ -191,15 +191,15 @@ equivalentes numerados da 18-A (itens 79 a 84). A regra do projeto é contar ant
 
 | # | Critério | Evidência | |
 | --- | --- | --- | --- |
-| B-1 | Roteamento escolhe o agente certo | `agents/routing.test.ts` (42 testes) · `evals/casos.test.ts` · "chega ao agente …" para os oito casos do briefing | ✅ |
+| B-1 | Seleção de especialistas respeita a oferta do servidor | Atualizado no chat livre: `agents/especialistas.test.ts`, `evals/casos.test.ts` e `server/coordenador.test.ts`; vocabulário de `routeAgent` aposentado. A escolha do modelo não amplia permissões | ✅ |
 | B-2 | Ferramentas restritas por agente, comprovado por teste | `tools/registry.test.ts` · "a allowlist de todo agente é subconjunto do registry" e "allowedAgents e a allowlist do agente concordam nos dois sentidos" · `tools/guard.test.ts` · "rejeita ferramenta que existe mas está fora da allowlist do agente" | ✅ |
-| B-3 | Consulta cruzada funciona pelo orquestrador | ⚠️ **Não é o que foi entregue, e a diferença é decisão.** O orquestrador tem `allowedTools: []` (invariante 74), então ele **não** faz consulta cruzada — ele pergunta. A consulta cruzada chegou na **18-F Bloco 4**, como experiência dirigida pelo servidor, atrás de `allow_cross_module`: `experiences/catalog.test.ts` · `chat-runner.test.ts` · "executa a lista do plano ANTES de chamar o modelo, e na ordem do catálogo" | ✅ |
+| B-3 | Consulta cruzada funciona pelo coordenador | Chat livre: `server/coordenador.test.ts` — especialistas paralelos e síntese sem ferramentas, sob allow_cross_module; panoramas mantêm roteiro estático. Task 28 viu seis especialistas na semana e um panorama real, com aval | ✅ |
 | B-4 | Falta de dado é declarada, não preenchida | `tools/adapters/nutrition.test.ts` · "dia sem registro é ausência, nunca zero caloria" · `adapters/training.test.ts` · "período sem treino NÃO vira volume zero" · `tools/contracts.test.ts` · "saída vazia — declara o motivo e não finge zero" | ✅ |
 | B-5 | Toda resposta com dado mostra fontes, período e quantidade | `agents/registry.test.ts` · "8-C — a resposta cita o período e quantos registros entraram na conta" · `tools/sources.test.ts` · "resumirFontes — ausência não é zero" | ✅ |
 | B-6 | "Ver dados usados" abre os registros reais | Por teste: `tools/sources.test.ts` · "parseRefs — o único campo desta tela que vira navegação" e "nenhuma rota aceita resolve para fora do domínio". **A abertura na tela não foi percorrida** | ⏳ |
 | B-7 | Inferência e sugestão aparecem separadas de fato | `agents/registry.test.ts` · "prompt-base v3 — o que o modelo pode fazer com o resultado da ferramenta" + "78. proíbe também o disfarce do palpite — hipótese apresentada como dado" | ✅ |
 | B-8 | Troca de agente preserva a conversa | Não há teste de componente (invariante 25) | ⏳ |
-| B-9 | Contexto da página é explícito, mínimo, visível e desligável | Explícito e mínimo por teste: `validators/ai.test.ts` · "a saída não ganha campo nenhum — o que atravessa o transporte é SÓ a rota" e "aceita TODA rota da lista estática" · `routing.test.ts` · "o bloco proíbe concluir qualquer coisa sobre os registros a partir da tela". **Visível e desligável são da tela** | ⏳ |
+| B-9 | Contexto da página é explícito, mínimo, visível e desligável | ⊘ **RETIRADO por decisão do dono em 2026-10-21**, spec do chat livre §4.6. Task 20 removeu controle, campo e bloco do servidor; `pageContext` é recusado pelo schema estrito e pela rota | ⊘ |
 | B-10 | Nenhum cálculo é feito pelo modelo | `agents/registry.test.ts` · "8-A — o cálculo é do backend; o modelo repete, não recalcula" e "8-A — trocar a unidade para ler é permitido; refazer a conta não" | ✅ |
 | B-11 | Nenhuma query de módulo é reimplementada dentro de `src/lib/ai/` | `boundaries.test.ts` · "query e action de módulo só entram pelas TRÊS portas declaradas" · "nenhum `.from()` nem `select()` em `src/lib/ai/tools/`, exceto a auditoria" | ✅ |
 | B-12 | Ferramenta desconhecida, fora da allowlist ou com schema inválido é rejeitada e auditada | `tools/guard.test.ts` (11 recusas) · `tools/executor.test.ts` · "nada roda sem passar pelo guard" · `tools/audit.test.ts` | ✅ |
@@ -347,16 +347,16 @@ schema mais arriscada possível pelo menor ganho possível.
 | Subfase | Critérios | ✅ validados | ⏳ pendentes da conferência à mão | ⊘ retirados |
 | --- | --- | --- | --- | --- |
 | 18-A | 84 | 81 | 3 | — |
-| 18-B | 16 | 12 | 4 | — |
+| 18-B | 16 | 12 | 3 | 1 |
 | 18-C | 17 | 15 | 2 | — |
 | 18-D | 17 | 14 | 3 | — |
 | 18-E | 14 | 12 | 2 | — |
 | 18-F | 15 (16 linhas) | 8 | 3 | 4 |
-| **Fase 18** | **163** | **142** | **17** | **4** (+1 parcial) |
+| **Fase 18** | **163** | **142** | **16** | **5** (+1 parcial) |
 
-⚠️ **Os 4 retirados não contam no denominador do que foi prometido**; eles saíram do escopo no
-desenho, com motivo, e com o dono de acordo. Denominador efetivo: **159**, dos quais **142 estão
-validados** e **17 dependem da conferência à mão** (o critério F-4 conta uma vez, como pendente:
+⚠️ **Os 5 retirados não contam no denominador do que foi prometido**; eles saíram do escopo no
+desenho, com motivo, e com o dono de acordo. Denominador efetivo: **158**, dos quais **142 estão
+validados** e **16 dependem da conferência à mão** (o critério F-4 conta uma vez, como pendente:
 a metade entregue — teclado — está por conferir, e a outra, F-4b, foi retirada).
 
 ---
@@ -372,8 +372,7 @@ sessão, e o projeto roda em `environment: "node"` com zero `.test.tsx` (invaria
 | A-79 | pt-BR / BRL / data brasileira em toda a UI | As oito seções de `/ia` + o painel, lidas |
 | A-80 | Dark e light · responsividade | As oito seções em 1440 px e 320 px, nos dois temas |
 | B-6 | "Ver dados usados" abre os registros reais | Clicar numa fonte e conferir que o registro abre |
-| B-8 | Troca de agente preserva a conversa | Trocar de assistente no meio de uma conversa |
-| B-9 | Contexto da página é visível e desligável | O controle na tela do chat |
+| B-8 | Troca de especialista preserva a conversa | Mudar de assunto entre módulos na mesma conversa e recarregar; escolha agora é do coordenador |
 | B-16 · C-17 · D-17 · E-14 · F-15 | Transversais de cada subfase | Os dois itens visuais acima (os demais transversais estão verdes) |
 | C-13b | Compra dividida com terceiro pela IA | **Não é pendência de conferência: é decisão.** A ferramenta declara que não divide |
 | D-1 | Recibo legível extrai corretamente | Um comprovante real em `/ia/comprovantes` |
@@ -399,3 +398,14 @@ Rodada no fechamento do Bloco 5, em 2026-09-20:
 | `npm run build` | idem |
 | `npm run perf:bundle` | idem |
 | `TZ=UTC npx vitest run` | idem |
+
+## Atualização da Task 28 — 2026-11-08
+
+B-9 retirado, sem marcar como validado: placar 142 validados/16 pendentes/5 retirados.
+Teste real com aval: cinco runs concluídos, panorama e consultas de um e vários módulos;
+uma tarefa aplicada e chaves financeiras restauradas. O pedido de três escritas ficou parcial
+por ausência de conta/cartão, limitação aceita pelo dono mantendo cinco envios. Painel visto
+em desktop, 390 e 320 px, sem overflow horizontal em 320; isso não valida as oito seções
+nos dois temas, aparelho físico, teclado completo, upload ou deep-links. Capturas na conversa,
+sem GIF nem arquivo visual persistido. Evidências detalhadas e checks finais no resultado real
+do plano do coordenador; os demais critérios manuais permanecem pendentes.

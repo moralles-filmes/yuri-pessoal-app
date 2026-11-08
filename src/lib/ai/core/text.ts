@@ -101,3 +101,48 @@ export function textoDaMensagem(mensagem: AiMessage): string {
 export function textoDasMensagens(mensagens: readonly AiMessage[]): string {
   return mensagens.map(textoDaMensagem).join("\n");
 }
+
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ MOD-ia-027 — O HISTÓRICO ENVIADO AO MODELO TEM DE ALTERNAR, E COMEÇAR PELO DONO.      ║
+ * ║                                                                                       ║
+ * ║ O que vai ao provedor não é o registro fiel da conversa: é a fatia das últimas N       ║
+ * ║ mensagens. Um recorte no meio pode começar com a fala do assistente, ou produzir dois  ║
+ * ║ `user` seguidos (o usuário reenviou sem resposta). Vários provedores rejeitam ou        ║
+ * ║ degradam esse formato, e o modelo lê duas perguntas seguidas como uma só.             ║
+ * ║                                                                                       ║
+ * ║ Regras (todas determinísticas, sem I/O):                                              ║
+ * ║  • Descarta `assistant` do começo até o primeiro `user`.                               ║
+ * ║  • Dois `user` seguidos viram um só, juntados por "\n\n".                             ║
+ * ║  • Dois `assistant` seguidos ficam com o ÚLTIMO — o anterior foi substituído.         ║
+ * ║  • O conteúdo nunca é alterado além da fusão de `user`.                               ║
+ * ║  • Lista vazia devolve lista vazia.                                                    ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ */
+export function normalizarAlternancia<
+  T extends { role: "user" | "assistant"; content: string },
+>(msgs: readonly T[]): T[] {
+  const saida: T[] = [];
+
+  for (const msg of msgs) {
+    if (msg.role === "assistant" && saida.length === 0) continue;
+
+    const ultima = saida[saida.length - 1];
+    if (ultima && ultima.role === msg.role) {
+      if (msg.role === "user") {
+        saida[saida.length - 1] = {
+          ...ultima,
+          content: `${ultima.content}\n\n${msg.content}`,
+        };
+      } else {
+        // Dois assistant seguidos: fica o ÚLTIMO, que substituiu o anterior.
+        saida[saida.length - 1] = msg;
+      }
+      continue;
+    }
+
+    saida.push(msg);
+  }
+
+  return saida;
+}

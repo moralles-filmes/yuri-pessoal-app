@@ -3,9 +3,8 @@
 /**
  * Fase 18-A — IA · Preferências gerais do módulo.
  *
- * ⚠️ O "modo de confirmação" é gravado e a tela DIZ que ele ainda não faz nada — porque na
- * 18-A não existe escrita nenhuma. Mostrar um controle que promete o que não entrega seria
- * exatamente o tipo de mentira que a trava de honestidade existe para impedir.
+ * O modo de confirmação é guardado, mas ainda não altera o comportamento: toda escrita
+ * da IA pede confirmação do dono. A tela declara essa limitação junto do controle.
  */
 
 import * as React from "react";
@@ -35,6 +34,7 @@ import { activeModelsFor } from "@/lib/ai/core/models";
 import {
   AVISO_DA_ESCRITA,
   AVISO_MOEDA,
+  ROTULO_CRUZAR_MODULOS,
   ROTULO_DA_PERMISSAO,
   ROTULO_DA_PERMISSAO_DE_ESCRITA,
 } from "@/lib/ai/constants";
@@ -69,6 +69,8 @@ import {
   visaoVisivel,
   type PermissoesDoForm,
 } from "@/components/ai/preferencias-cascata";
+
+import { fallbackDisponivel } from "./provider-config";
 
 const NENHUM = "__nenhum__";
 
@@ -151,6 +153,7 @@ export function AiPreferencesForm({
   catalogo: CatalogoDasPermissoes;
 }) {
   const router = useRouter();
+  const temOrdemDeFallback = cards.some((card) => fallbackDisponivel(card.fallbackOrder));
   const [salvando, setSalvando] = React.useState(false);
 
   const [form, setForm] = React.useState({
@@ -421,14 +424,18 @@ export function AiPreferencesForm({
           </div>
         </div>
 
-        {/* ── Panoramas de vários módulos (18-F · Bloco 4) ──────────────────────────── */}
+        {/* ── Cruzar módulos (18-F · Bloco 4, e a conversa livre) ───────────────────────
+            Uma chave, dois usos: a conversa juntar vários módulos numa resposta e os atalhos
+            de panorama. O nome sai de `ROTULO_CRUZAR_MODULOS`, que o servidor cita ao mandar
+            ligá-la. */}
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <Label htmlFor="pref-panoramas">Panoramas de vários módulos</Label>
+            <Label htmlFor="pref-panoramas">{ROTULO_CRUZAR_MODULOS}</Label>
             <p className="text-xs text-muted-foreground">
-              Libera os atalhos “Planejar meu dia”, “Encerrar meu dia” e “Planejar minha
-              semana”. Cada panorama lê só os módulos cuja leitura estiver ligada acima — o que
-              estiver desligado fica de fora, e o panorama <strong>diz o que ficou</strong>.
+              Libera a conversa a juntar vários módulos numa mesma resposta e os atalhos
+              “Planejar meu dia”, “Encerrar meu dia” e “Planejar minha semana”. Só entram os
+              módulos cuja leitura estiver ligada acima — o que estiver desligado fica de fora, e
+              a resposta <strong>diz o que ficou</strong>.
             </p>
           </div>
           <Switch
@@ -511,10 +518,12 @@ export function AiPreferencesForm({
             <p className="text-xs text-muted-foreground">
               Precisa estar ligado aqui <strong>e</strong> no provedor de origem. Chave
               inválida, cancelamento e conteúdo recusado nunca fazem fallback.
+              {!temOrdemDeFallback && " Não há ordem de fallback configurada."}
             </p>
           </div>
           <Switch
             id="pref-fallback"
+            disabled={!temOrdemDeFallback}
             checked={form.allowFallback}
             onCheckedChange={(v) => setForm((f) => ({ ...f, allowFallback: v }))}
             className="shrink-0"
@@ -546,7 +555,7 @@ export function AiPreferencesForm({
           </div>
         </div>
 
-        {/* ── Modo de confirmação: gravado agora, consumido na 18-C ─────────────────── */}
+        {/* ── Modo de confirmação: guardado, ainda sem efeito ─────────────────── */}
         <div className="min-w-0 space-y-1.5">
           <Label htmlFor="pref-confirmacao">Modo de confirmação</Label>
           <Select

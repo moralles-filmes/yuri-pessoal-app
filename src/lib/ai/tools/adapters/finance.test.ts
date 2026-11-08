@@ -362,3 +362,15 @@ describe("finance.get_invoice", () => {
     expect(saida.observacao).toContain("não uma fatura de valor zero");
   });
 });
+
+describe("Task 27 — definição acompanha o saldo do motor", () => {
+  it.each(["resumo", "faturas"])("%s repassa o saldo e define o termo", async (tipo) => {
+    resumoFalso.aReceber = 123.45;
+    faturasFalsas.aReceber = 456.78;
+    const saida = tipo === "resumo" ? await getSpending({}) : await getInvoice();
+    expect(saida.agregados).toMatchObject({
+      a_receber_de_terceiros: tipo === "resumo" ? 123.45 : 456.78,
+      definicao_a_receber: "O que ainda falta receber de terceiros: o devido menos o que já foi recebido. Saldo de todos os meses.",
+    });
+  });
+});

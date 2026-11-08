@@ -72,6 +72,7 @@ import {
   type AttemptType,
 } from "./run-store";
 import { resolveApiKey } from "./credential-store";
+import { criarPrazo, timeoutDaChamada, AI_DEADLINE, MENSAGEM_DO_PRAZO } from "./prazo";
 import { AI_CRYPTO_NOT_CONFIGURED, getCryptoReadiness } from "./crypto-readiness";
 
 type Alvo = { readonly provider: AiProviderId; readonly model: AiModelEntry };
@@ -86,6 +87,7 @@ export type InsightRunnerInput = {
   readonly agora: Date;
   readonly janela?: number;
   readonly abortSignal?: AbortSignal;
+  readonly agoraMs?: () => number;
   /**
    * ⛔ **18-E Bloco 4 — só o job preenche.** Sem sessão, o escopo do usuário deixa de vir da
    * RLS: as leituras de módulo recebem o par e a camada `ai_*` recebe só o client (que já
@@ -135,6 +137,8 @@ async function coletar(
 export async function runInsight(
   input: InsightRunnerInput,
 ): Promise<InsightRunnerResult> {
+  const agoraMs = input.agoraMs ?? Date.now;
+  const prazo = criarPrazo(agoraMs());
   const readiness = getCryptoReadiness();
   if (!readiness.ready) return erro(AI_CRYPTO_NOT_CONFIGURED, readiness.message);
 
@@ -257,6 +261,14 @@ export async function runInsight(
   let alvoAnterior: Alvo | null = null;
   let custoAcumulado = 0;
 
+  let runFechado = false;
+  let fecharInterrompida: ((e: AiError) => Promise<void>) | null = null;
+  const falhaInesperada = aiError(
+    "ERRO_PERMANENTE",
+    "INSIGHT_INTERRUPTED",
+    "A análise foi interrompida antes de terminar o registro.",
+  );
+
   const contexto = (concluiu = false) => ({
     runId,
     userId: input.userId,
@@ -274,224 +286,269 @@ export async function runInsight(
 
   const desistir = async (e: AiError): Promise<InsightRunnerResult> => {
     await failRun(contexto(), e);
+    runFechado = true;
     return erro(e.code, safeUserMessage(e));
   };
 
-  // ── 5. Tentativas ──────────────────────────────────────────────────────────────────
-  while (alvoIdx < alvos.length) {
-    const alvo = alvos[alvoIdx];
-    const tarifa = rateFor(alvo.provider, alvo.model.id, hoje);
-    if (!tarifa) {
-      alvoIdx += 1;
-      continue;
-    }
+  try {
+    // ── 5. Tentativas ──────────────────────────────────────────────────────────────────
+    while (alvoIdx < alvos.length) {
+      if (timeoutDaChamada(prazo, agoraMs(), config.timeoutMs) === null) {
+        return await desistir(aiError("ERRO_PERMANENTE", AI_DEADLINE, MENSAGEM_DO_PRAZO));
+      }
+      const alvo = alvos[alvoIdx];
+      const tarifa = rateFor(alvo.provider, alvo.model.id, hoje);
+      if (!tarifa) {
+        alvoIdx += 1;
+        continue;
+      }
 
-    attemptIndex += 1;
-    const tipo = tipoDaTentativa(attemptIndex, alvoAnterior, alvo);
-    if (tipo === "FALLBACK") fallbackCount += 1;
+      attemptIndex += 1;
+      const tipo = tipoDaTentativa(attemptIndex, alvoAnterior, alvo);
+      if (tipo === "FALLBACK") fallbackCount += 1;
 
-    const tentativa = await startAttempt({
-      runId,
-      userId: input.userId,
-      client: input.owner?.client,
-      conversationId: null,
-      agentId: agenteDoInsight(input.modulo),
-      attemptIndex,
-      attemptType: tipo,
-      provider: alvo.provider,
-      modelId: alvo.model.id,
-      rate: tarifa,
-    });
-
-    if (!tentativa) {
-      return desistir(
-        aiError(
-          "ERRO_PERMANENTE",
-          "ATTEMPT_NOT_RECORDED",
-          "Não foi possível registrar a execução. Nenhuma chamada foi feita.",
-        ),
-      );
-    }
-
-    alvoAnterior = alvo;
-
-    const chave = await resolveApiKey(input.userId, alvo.provider, input.owner?.client);
-    if (!chave.ok) {
-      await closeAttempt({
-        attemptId: tentativa.id,
+      const tentativa = await startAttempt({
+        runId,
         userId: input.userId,
         client: input.owner?.client,
-        status: "failed",
-        usage: null,
+        conversationId: null,
+        agentId: agenteDoInsight(input.modulo),
+        attemptIndex,
+        attemptType: tipo,
+        provider: alvo.provider,
+        modelId: alvo.model.id,
         rate: tarifa,
-        latencyMs: 0,
-        providerRequestId: null,
-        errorCode: chave.error.code,
       });
-      return desistir(chave.error);
-    }
 
-    const inicioTentativa = Date.now();
-    const client = createProviderClient(alvo.provider, chave.value);
-
-    // ⛔ A ÚNICA CHAMADA EXTERNA. Sem streaming, sem ferramentas.
-    const resposta = await client.generateObject({
-      model: alvo.model.id,
-      system: INSIGHT_SYSTEM_PROMPT,
-      messages: mensagens,
-      maxOutputTokens: alvo.model.outputCapTokens,
-      // Não é criação livre: queremos a leitura mais provável dos números, não uma variação.
-      temperature: 0,
-      timeoutMs: config.timeoutMs,
-      abortSignal: input.abortSignal,
-      schema: INSIGHT_JSON_SCHEMA,
-      schemaName: NOME_DO_SCHEMA,
-      schemaDescription: DESCRICAO_DO_SCHEMA,
-    });
-
-    const uso: AiUsage = resposta.usage;
-    const fecharTentativa = async (
-      status: "completed" | "failed" | "cancelled",
-      errorCode: string | null,
-    ) => {
-      await closeAttempt({
-        attemptId: tentativa.id,
-        userId: input.userId,
-        client: input.owner?.client,
-        status,
-        usage: uso,
-        rate: tarifa,
-        latencyMs: Date.now() - inicioTentativa,
-        providerRequestId: resposta.providerRequestId,
-        errorCode,
-      });
-      const parcial = computeAttemptCost(uso, tarifa);
-      if (parcial.totalUsd !== null) custoAcumulado += parcial.totalUsd;
-    };
-
-    // ── 6. O NOSSO Zod, depois a validação de conteúdo ───────────────────────────────
-    let erroDaTentativa: AiError | null = resposta.ok ? null : resposta.error;
-
-    if (resposta.ok) {
-      const validadaPeloZod = insightDoModeloSchema.safeParse(resposta.value);
-
-      if (!validadaPeloZod.success) {
-        /**
-         * ⚠️ Fora da forma é ERRO_TEMPORARIO de propósito — é a classe que autoriza
-         * `decideFallback` a repetir ou trocar de modelo, e uma segunda tentativa costuma
-         * voltar bem-formada. A mensagem do Zod NÃO entra: ela cita nomes do nosso schema.
-         */
-        erroDaTentativa = aiError(
-          "ERRO_TEMPORARIO",
-          "INSIGHT_SCHEMA_INVALID",
-          "A análise voltou fora do formato esperado.",
+      if (!tentativa) {
+        return await desistir(
+          aiError(
+            "ERRO_PERMANENTE",
+            "ATTEMPT_NOT_RECORDED",
+            "Não foi possível registrar a execução. Nenhuma chamada foi feita.",
+          ),
         );
-      } else {
-        const conferido = validarInsight(validadaPeloZod.data, indicadores);
+      }
 
-        if (!conferido.ok) {
+      alvoAnterior = alvo;
+
+      const inicioTentativa = Date.now();
+      let consumoDaTentativa: AiUsage | null = null;
+      fecharInterrompida = async (e) => {
+        await closeAttempt({
+          attemptId: tentativa.id,
+          userId: input.userId,
+          client: input.owner?.client,
+          status: "failed",
+          usage: consumoDaTentativa,
+          rate: tarifa,
+          latencyMs: Date.now() - inicioTentativa,
+          providerRequestId: null,
+          errorCode: e.code,
+        });
+      };
+
+      const chave = await resolveApiKey(input.userId, alvo.provider, input.owner?.client);
+      if (!chave.ok) {
+        await closeAttempt({
+          attemptId: tentativa.id,
+          userId: input.userId,
+          client: input.owner?.client,
+          status: "failed",
+          usage: null,
+          rate: tarifa,
+          latencyMs: 0,
+          providerRequestId: null,
+          errorCode: chave.error.code,
+        });
+        fecharInterrompida = null;
+        return await desistir(chave.error);
+      }
+
+      const client = createProviderClient(alvo.provider, chave.value);
+
+      const timeoutMs = timeoutDaChamada(prazo, agoraMs(), config.timeoutMs);
+      if (timeoutMs === null) {
+        const e = aiError("ERRO_PERMANENTE", AI_DEADLINE, MENSAGEM_DO_PRAZO);
+        await fecharInterrompida(e);
+        fecharInterrompida = null;
+        return await desistir(e);
+      }
+
+      // ⛔ A ÚNICA CHAMADA EXTERNA. Sem streaming, sem ferramentas.
+      const resposta = await client.generateObject({
+        model: alvo.model.id,
+        system: INSIGHT_SYSTEM_PROMPT,
+        messages: mensagens,
+        maxOutputTokens: alvo.model.outputCapTokens,
+        // Não é criação livre: queremos a leitura mais provável dos números, não uma variação.
+        temperature: 0,
+        timeoutMs,
+        abortSignal: input.abortSignal,
+        schema: INSIGHT_JSON_SCHEMA,
+        schemaName: NOME_DO_SCHEMA,
+        schemaDescription: DESCRICAO_DO_SCHEMA,
+      });
+
+      consumoDaTentativa = resposta.usage;
+      const uso: AiUsage = resposta.usage;
+      const fecharTentativa = async (
+        status: "completed" | "failed" | "cancelled",
+        errorCode: string | null,
+      ) => {
+        await closeAttempt({
+          attemptId: tentativa.id,
+          userId: input.userId,
+          client: input.owner?.client,
+          status,
+          usage: uso,
+          rate: tarifa,
+          latencyMs: Date.now() - inicioTentativa,
+          providerRequestId: resposta.providerRequestId,
+          errorCode,
+        });
+        fecharInterrompida = null;
+        const parcial = computeAttemptCost(uso, tarifa);
+        if (parcial.totalUsd !== null) custoAcumulado += parcial.totalUsd;
+      };
+
+      // ── 6. O NOSSO Zod, depois a validação de conteúdo ───────────────────────────────
+      let erroDaTentativa: AiError | null = resposta.ok ? null : resposta.error;
+
+      if (resposta.ok) {
+        const validadaPeloZod = insightDoModeloSchema.safeParse(resposta.value);
+
+        if (!validadaPeloZod.success) {
           /**
-           * ⛔ TAMBÉM TEMPORÁRIO, e a decisão é deliberada: escrever um dígito ou usar uma
-           * palavra de cobrança é falha de OBEDIÊNCIA, não de capacidade. A tentativa
-           * seguinte costuma acertar, e desistir na primeira gastaria a reserva do dono para
-           * não entregar nada. O que NÃO acontece em hipótese nenhuma é gravar o texto: a
-           * recusa vem antes de qualquer escrita.
+           * ⚠️ Fora da forma é ERRO_TEMPORARIO de propósito — é a classe que autoriza
+           * `decideFallback` a repetir ou trocar de modelo, e uma segunda tentativa costuma
+           * voltar bem-formada. A mensagem do Zod NÃO entra: ela cita nomes do nosso schema.
            */
           erroDaTentativa = aiError(
             "ERRO_TEMPORARIO",
-            conferido.recusas[0].codigo,
-            `A análise gerada não passou na conferência: ${conferido.recusas[0].motivo}`,
+            "INSIGHT_SCHEMA_INVALID",
+            "A análise voltou fora do formato esperado.",
           );
         } else {
-          await fecharTentativa("completed", null);
-          await completeRun(contexto(true));
+          const conferido = validarInsight(validadaPeloZod.data, indicadores);
 
-          // ── 7. A CONFIANÇA É DERIVADA AQUI, e só desce ────────────────────────────
-          const { confianca } = confiancaDoInsight(indicadores, conferido.citados);
-
-          const gravado = await gravarInsight({
-            userId: input.userId,
-            runId,
-            modulo: input.modulo,
-            insight: validadaPeloZod.data,
-            confianca,
-            indicadores,
-            citados: conferido.citados,
-            periodo: coleta.periodo,
-            dedupeKey,
-            expiresAt: expiraEm(coleta.periodo, hoje),
-            provider: alvo.provider,
-            model: alvo.model.id,
-            promptVersion: versaoDoPromptDeInsight(),
-          }, input.owner?.client);
-
-          if (!gravado) {
-            return erro(
-              "INSIGHT_NOT_RECORDED",
-              "A análise foi feita, mas não foi possível registrá-la. Tente de novo.",
+          if (!conferido.ok) {
+            /**
+             * ⛔ TAMBÉM TEMPORÁRIO, e a decisão é deliberada: escrever um dígito ou usar uma
+             * palavra de cobrança é falha de OBEDIÊNCIA, não de capacidade. A tentativa
+             * seguinte costuma acertar, e desistir na primeira gastaria a reserva do dono para
+             * não entregar nada. O que NÃO acontece em hipótese nenhuma é gravar o texto: a
+             * recusa vem antes de qualquer escrita.
+             */
+            erroDaTentativa = aiError(
+              "ERRO_TEMPORARIO",
+              conferido.recusas[0].codigo,
+              `A análise gerada não passou na conferência: ${conferido.recusas[0].motivo}`,
             );
-          }
+          } else {
+            await fecharTentativa("completed", null);
 
-          return { ok: true, insightId: gravado.id, reaproveitado: false };
+            // ── 7. A CONFIANÇA É DERIVADA AQUI, e só desce ────────────────────────────
+            const { confianca } = confiancaDoInsight(indicadores, conferido.citados);
+
+            const gravado = await gravarInsight({
+              userId: input.userId,
+              runId,
+              modulo: input.modulo,
+              insight: validadaPeloZod.data,
+              confianca,
+              indicadores,
+              citados: conferido.citados,
+              periodo: coleta.periodo,
+              dedupeKey,
+              expiresAt: expiraEm(coleta.periodo, hoje),
+              provider: alvo.provider,
+              model: alvo.model.id,
+              promptVersion: versaoDoPromptDeInsight(),
+            }, input.owner?.client);
+
+            if (!gravado) {
+              return await desistir(aiError(
+                "ERRO_PERMANENTE",
+                "INSIGHT_NOT_RECORDED",
+                "A análise foi feita, mas não foi possível registrá-la. Tente de novo.",
+              ));
+            }
+
+            await completeRun(contexto(true));
+            runFechado = true;
+            return { ok: true, insightId: gravado.id, reaproveitado: gravado.reaproveitado };
+          }
         }
       }
-    }
 
-    const e =
-      erroDaTentativa ??
-      aiError("ERRO_TEMPORARIO", "NO_RESULT", "A análise terminou sem resultado.");
+      const e =
+        erroDaTentativa ??
+        aiError("ERRO_TEMPORARIO", "NO_RESULT", "A análise terminou sem resultado.");
 
-    await fecharTentativa(
-      e.class === "CANCELADO_PELO_USUARIO" ? "cancelled" : "failed",
-      e.code,
-    );
-
-    if (input.abortSignal?.aborted) {
-      return desistir(
-        aiError("CANCELADO_PELO_USUARIO", "INSIGHT_ABORTED", "A análise foi interrompida."),
+      await fecharTentativa(
+        e.class === "CANCELADO_PELO_USUARIO" ? "cancelled" : "failed",
+        e.code,
       );
+
+      if (input.abortSignal?.aborted) {
+        return await desistir(
+          aiError("CANCELADO_PELO_USUARIO", "INSIGHT_ABORTED", "A análise foi interrompida."),
+        );
+      }
+
+      const proximoAlvo = alvos[alvoIdx + 1];
+      const tarifaProximo = proximoAlvo
+        ? rateFor(proximoAlvo.provider, proximoAlvo.model.id, hoje)
+        : null;
+      const custoProjetado =
+        tarifaProximo && proximoAlvo
+          ? projetarCustoDoDestino(
+              tarifaProximo,
+              tokensDeEntrada,
+              proximoAlvo.model.outputCapTokens,
+            )
+          : Number.POSITIVE_INFINITY;
+
+      const veredito = decideFallback({
+        errorClass: e.class,
+        fallbackAllowed: fallbackLigado,
+        fallbackTargetsLeft: alvos.length - (alvoIdx + 1),
+        retriesUsed,
+        maxRetries: config.maxRetries,
+        reservaRestante: Math.max(0, reserva.valorUsd - custoAcumulado),
+        custoProjetadoDoDestino: custoProjetado,
+      });
+
+      if (veredito.kind === "retry") {
+        retriesUsed += 1;
+        continue;
+      }
+      if (veredito.kind === "fallback") {
+        alvoIdx += 1;
+        continue;
+      }
+
+      return await desistir(e);
     }
 
-    const proximoAlvo = alvos[alvoIdx + 1];
-    const tarifaProximo = proximoAlvo
-      ? rateFor(proximoAlvo.provider, proximoAlvo.model.id, hoje)
-      : null;
-    const custoProjetado =
-      tarifaProximo && proximoAlvo
-        ? projetarCustoDoDestino(
-            tarifaProximo,
-            tokensDeEntrada,
-            proximoAlvo.model.outputCapTokens,
-          )
-        : Number.POSITIVE_INFINITY;
-
-    const veredito = decideFallback({
-      errorClass: e.class,
-      fallbackAllowed: fallbackLigado,
-      fallbackTargetsLeft: alvos.length - (alvoIdx + 1),
-      retriesUsed,
-      maxRetries: config.maxRetries,
-      reservaRestante: Math.max(0, reserva.valorUsd - custoAcumulado),
-      custoProjetadoDoDestino: custoProjetado,
-    });
-
-    if (veredito.kind === "retry") {
-      retriesUsed += 1;
-      continue;
+    return await desistir(
+      aiError(
+        "ERRO_PERMANENTE",
+        "NO_TARGET_SUCCEEDED",
+        "Nenhum provedor autorizado conseguiu produzir uma análise conferida.",
+      ),
+    );
+  } catch {
+    return erro(falhaInesperada.code, safeUserMessage(falhaInesperada));
+  } finally {
+    // Uma exceção após a admissão não deixa reserva ou medição abertas até a lease.
+    if (!runFechado) {
+      try {
+        await fecharInterrompida?.(falhaInesperada);
+      } finally {
+        await failRun(contexto(), falhaInesperada);
+      }
     }
-    if (veredito.kind === "fallback") {
-      alvoIdx += 1;
-      continue;
-    }
-
-    return desistir(e);
   }
-
-  return desistir(
-    aiError(
-      "ERRO_PERMANENTE",
-      "NO_TARGET_SUCCEEDED",
-      "Nenhum provedor autorizado conseguiu produzir uma análise conferida.",
-    ),
-  );
 }

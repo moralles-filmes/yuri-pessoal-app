@@ -17,6 +17,7 @@ import "server-only";
  */
 
 import { randomUUID } from "node:crypto";
+import { ROTULO_CRUZAR_MODULOS } from "@/lib/ai/constants";
 import { createClient } from "@/lib/supabase/server";
 import type { ClienteDaIa } from "./client";
 import type { AiProviderId, AiUsage } from "@/lib/ai/core/contracts";
@@ -24,6 +25,10 @@ import type { AiError } from "@/lib/ai/core/errors";
 import { type AiRate, PRICING_VERSION, rateSnapshot } from "@/lib/ai/core/pricing";
 import { availabilityRecord, computeAttemptCost } from "@/lib/ai/usage/meter";
 import { sanitizedForStorage } from "@/lib/ai/security/redact";
+import { MAX_TAREFA_CHARS, TOOL_NAME_ACIONAMENTO } from "@/lib/ai/agents/especialistas";
+import { ASSISTENTE_PESSOAL_ID } from "@/lib/ai/agents/registry";
+import { recordToolCall } from "@/lib/ai/tools/audit";
+import type { ToolRejectionReason } from "@/lib/ai/tools/guard";
 
 /** Estados não-terminais. Todo fechamento é condicionado a estar num deles. */
 const ABERTOS = ["reserved", "streaming"] as const;
@@ -192,7 +197,7 @@ export const MENSAGEM_ADMISSAO: Record<BeginRunErrorCode, string> = {
   // que o dono vai procurá-lo.
   AI_EXPERIENCE_NOT_AVAILABLE: "Este panorama não está disponível.",
   AI_CROSS_MODULE_NOT_ALLOWED:
-    "Os panoramas de vários módulos estão desligados. Ligue “Panoramas de vários módulos” em /ia/configuracoes.",
+    `O cruzamento de módulos está desligado. Ligue “${ROTULO_CRUZAR_MODULOS}” em /ia/configuracoes.`,
   // ⚠️ A frase NÃO é de erro: o dono não fez nada errado, e o que ele pediu está acontecendo.
   // Dizer "aguarde" ou "muitas tentativas" transformaria um clique a mais em repreensão.
   AI_EXPERIENCE_JUST_STARTED:
@@ -588,8 +593,12 @@ async function fecharRun(
  * não é repetição (`RETRY`) nem troca de provedor (`FALLBACK`). Ela é uma linha própria
  * porque é uma chamada paga própria: medir a resposta inteira como uma tentativa só
  * esconderia o custo do laço, que é justamente o que a reserva por passos existe para cobrir.
+ *
+ * `ESPECIALISTA` é a PRIMEIRA chamada de um especialista acionado pelo coordenador. O banco a
+ * amarra à trilha (`ai_usage_events_tipo_coerente_com_trilha`): `PRIMARY` só na trilha 0,
+ * `ESPECIALISTA` só fora dela.
  */
-export type AttemptType = "PRIMARY" | "RETRY" | "FALLBACK" | "TOOL_STEP";
+export type AttemptType = "PRIMARY" | "RETRY" | "FALLBACK" | "TOOL_STEP" | "ESPECIALISTA";
 
 export type StartAttemptInput = {
   readonly runId: string;
@@ -604,6 +613,18 @@ export type StartAttemptInput = {
   readonly provider: AiProviderId;
   readonly modelId: string;
   readonly rate: AiRate;
+  /**
+   * 0 = o coordenador (decisão e síntese); 1..6 = um especialista, na ordem do acionamento.
+   * Definida pelo SERVIDOR, nunca pelo modelo. Ausente vale 0 — é o único caminho que existia
+   * antes do coordenador, e a trava nova na trilha 0 é exatamente a antiga.
+   */
+  readonly trilha?: number;
+  /**
+   * A versão do prompt do agente que FEZ esta chamada. `ai_runs.prompt_version` conta só o
+   * coordenador; sem esta coluna nada diria qual versão do especialista leu ou propôs.
+   * Ausente vai NULA — nunca preenchida com chute.
+   */
+  readonly promptVersion?: string | null;
 };
 
 /**
@@ -618,6 +639,13 @@ export type StartAttemptInput = {
  * `INSERT` → em `23505`, consulta a linha existente e devolve. NÃO é select-then-insert:
  * entre o SELECT e o INSERT cabem duas execuções, e as duas achariam "não existe". A
  * unicidade `(run_id, attempt_index)` é a autoridade; o código só reage a ela.
+ *
+ * ⛔ MAS NEM TODO `23505` É A MESMA TENTATIVA. `ai_usage_events_one_active_per_trilha_uidx`
+ * (uma tentativa `started` por `(run_id, trilha)`) também o levanta — quando OUTRA chamada
+ * ainda está aberta na mesma trilha, com outro `attempt_index`. Aquela linha não é desta
+ * chamada: reaproveitá-la faria duas chamadas pagas fecharem a mesma tentativa, e uma delas
+ * ficaria sem medição. Por isso a busca exige o MESMO `attempt_index` E a MESMA trilha; sem
+ * linha assim, `null` — e quem chama trata como falha de abrir a tentativa.
  */
 export async function startAttempt(
   input: StartAttemptInput,
@@ -637,6 +665,8 @@ export async function startAttempt(
       attempt_type: input.attemptType,
       provider: input.provider,
       model_id: input.modelId,
+      trilha: input.trilha ?? 0,
+      prompt_version: input.promptVersion ?? null,
       status: "started",
       rate_snapshot: rateSnapshot(input.rate),
       pricing_version: PRICING_VERSION,
@@ -656,11 +686,62 @@ export async function startAttempt(
       .select("id")
       .eq("run_id", input.runId)
       .eq("attempt_index", input.attemptIndex)
+      .eq("trilha", input.trilha ?? 0)
       .maybeSingle();
     if (existente) return { id: existente.id, jaExistia: true };
   }
 
   return null;
+}
+
+// ─────────────────────────── Acionamento de especialista ───────────────────────────
+
+/**
+ * Registra o ACIONAMENTO de um especialista pelo coordenador em `ai_tool_calls`.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════════════╗
+ * ║ GRAVA O PEDIDO, NUNCA A RESPOSTA (invariante 20). O que fica é qual especialista foi  ║
+ * ║ acionado e a tarefa que o coordenador escreveu para ele. A resposta do especialista   ║
+ * ║ é texto derivado dos registros do dono — gravá-la seria uma segunda cópia dos dados    ║
+ * ║ pessoais dentro do módulo de IA. As leituras do especialista já são auditadas, cada   ║
+ * ║ uma na sua linha, pelo Tool Executor.                                                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════════╝
+ *
+ * A tarefa é cortada em `MAX_TAREFA_CHARS` aqui também: a recusa por tamanho acontece antes
+ * (`decidirAcionamentos`), mas a linha de uma recusa grava o que o modelo mandou, e o que o
+ * modelo manda não tem teto.
+ *
+ * `recordsRead: null` e `refs: []` porque o acionamento não leu nada — nulo, não zero.
+ * Devolve o id da linha, ou `null` se a auditoria falhou (o log sai de `audit.ts`).
+ */
+export async function registrarAcionamento(input: {
+  readonly runId: string;
+  readonly userId: string;
+  readonly stepId: string;
+  readonly especialistaId: string;
+  readonly tarefa: string;
+  readonly providerCallId: string | null;
+  readonly status: "executada" | "rejeitada";
+  readonly rejectionReason: ToolRejectionReason | null;
+}): Promise<string | null> {
+  return recordToolCall({
+    runId: input.runId,
+    userId: input.userId,
+    stepId: input.stepId,
+    toolName: TOOL_NAME_ACIONAMENTO,
+    toolVersion: "v1",
+    providerCallId: input.providerCallId,
+    argumentos: {
+      especialista: input.especialistaId,
+      tarefa: input.tarefa.slice(0, MAX_TAREFA_CHARS),
+    },
+    status: input.status,
+    rejectionReason: input.rejectionReason,
+    recordsRead: null,
+    durationMs: 0,
+    refs: [],
+    agentId: ASSISTENTE_PESSOAL_ID,
+  });
 }
 
 export type CloseAttemptInput = {

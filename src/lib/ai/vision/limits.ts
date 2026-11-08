@@ -71,6 +71,9 @@ export const LIMITE_MEGAPIXELS = 24;
 /** Comprovante tem 1 ou 2 páginas. 20 é folga generosa, não um alvo. */
 export const LIMITE_PAGINAS_PDF = 20;
 
+/** Contagem ilegível só é admitida em PDF pequeno; a reserva usa o teto de páginas. */
+export const LIMITE_BYTES_PDF_SEM_CONTAGEM = 2 * 1024 * 1024;
+
 export function limiteDeBytes(especie: EspecieDeArquivo): number {
   return especie === "pdf" ? LIMITE_BYTES_PDF : LIMITE_BYTES_IMAGEM;
 }

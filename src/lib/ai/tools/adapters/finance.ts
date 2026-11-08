@@ -56,6 +56,9 @@ export const getSpendingInput = z
 
 export const getInvoiceInput = z.object({}).strict();
 
+const DEFINICAO_A_RECEBER =
+  "O que ainda falta receber de terceiros: o devido menos o que já foi recebido. Saldo de todos os meses.";
+
 const REF_CONTAS: ToolRef = { tipo: "painel_de_contas", id: "contas", rota: "/financeiro" };
 const REF_FATURAS: ToolRef = { tipo: "painel_de_faturas", id: "faturas", rota: "/faturas" };
 
@@ -149,6 +152,7 @@ export async function getSpending(input: { mes?: string }): Promise<ToolOutput> 
       no_cartao: d.cartao,
       a_vista: d.aVista,
       a_receber_de_terceiros: d.aReceber,
+      definicao_a_receber: DEFINICAO_A_RECEBER,
       contas_a_pagar_total: d.contasTotal,
       contas_a_pagar_quantidade: d.contasCount,
       proxima_conta: d.proximaConta,
@@ -199,6 +203,7 @@ export async function getInvoice(): Promise<ToolOutput> {
       faturas_pagas: d.pagas,
       total_das_nao_pagas: d.totalProximas,
       a_receber_de_terceiros: d.aReceber,
+      definicao_a_receber: DEFINICAO_A_RECEBER,
       /**
        * A fatura "virtual" é uma projeção do sistema para um mês que ainda não tem linha no
        * banco. Relatá-la como se fosse fatura fechada afirmaria um valor que ainda vai mudar.

@@ -8,7 +8,7 @@ import "server-only";
  */
 
 import { z } from "zod";
-import { getHabitsDashboard } from "@/lib/habits/queries";
+import { getHabitLogForDate, getHabitsDashboard } from "@/lib/habits/queries";
 /**
  * ⚠️ `formatHabitValue` E NÃO `HABIT_UNIT_LABELS`. O rótulo é para CABEÇALHO de tela
  * ("Vezes", "Mililitros (ml)"); a forma curta é a que compõe frase ("8 vezes", "250 ml"), e é
@@ -18,6 +18,7 @@ import { getHabitsDashboard } from "@/lib/habits/queries";
 import { formatHabitValue } from "@/lib/habits/constants";
 import type { HabitUnit } from "@/lib/habits/constants";
 import { hojeISO } from "@/lib/format";
+import { MOTIVO_REGISTRO_ANTERIOR } from "../desfazer-habito";
 import { EfeitoImpossivel, type EfeitoProposto } from "../contracts";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════
@@ -108,19 +109,13 @@ export async function preverRegistrarHabito(payload: unknown): Promise<EfeitoPro
   const meta = Number(habito.target_value);
   const unidade = (v: number) => formatHabitValue(v, habito.unit as HabitUnit);
 
-  /**
-   * ⚠️ O VALOR ATUAL DO DIA ENTRA NA PREVISÃO, E ISSO NÃO É DETALHE.
-   *
-   * `habit_logs` tem unique `(user_id, habit_id, log_date)` e o serviço faz `upsert`: o
-   * registro SOBRESCREVE o dia, não soma a ele. "De 4 para 8 copos" e "de 0 para 8" são
-   * efeitos diferentes, e quem confirma precisa saber qual dos dois está confirmando.
-   *
-   * ⚠️ E ele só é confiável para HOJE: `getHabitsDashboard` devolve `todayValue` do dia de
-   * hoje. Numa data passada, dizemos que não sabemos — em vez de mostrar o valor de hoje
-   * como se fosse o daquele dia, que seria pior que não mostrar nada.
-   */
+  // Existência é diferente de valor > 0. A leitura exata também alcança datas passadas.
+  const registroAnterior = await getHabitLogForDate(habito.id, data);
   const ehHoje = data === hoje;
-  const valorAtual = ehHoje ? habito.todayValue : null;
+  const valorAtual = registroAnterior === null ? null : Number(registroAnterior.value);
+  const comoDesfazer = registroAnterior === null
+    ? { kind: "command" as const, command: "desfazerHabito" }
+    : { kind: "nao-ha" as const, porque: MOTIVO_REGISTRO_ANTERIOR };
   const novoValor = d.valor ?? meta;
 
   const linhas = [
@@ -133,18 +128,13 @@ export async function preverRegistrarHabito(payload: unknown): Promise<EfeitoPro
   ];
 
   const ressalvas: string[] = [];
-  if (ehHoje && valorAtual !== null && valorAtual > 0) {
+  if (valorAtual !== null) {
     linhas.splice(2, 0, {
-      rotulo: "Já registrado hoje",
+      rotulo: ehHoje ? "Já registrado hoje" : "Já registrado nesse dia",
       valor: unidade(valorAtual),
     });
     ressalvas.push(
       `O registro SUBSTITUI o valor do dia: ${unidade(valorAtual)} passa a ser ${unidade(novoValor)}. Ele não soma ao que já estava lá.`,
-    );
-  }
-  if (!ehHoje) {
-    ressalvas.push(
-      "A data não é hoje: o valor que já houver registrado nesse dia será substituído, e ele não é mostrado aqui.",
     );
   }
   if (d.valor === undefined || d.valor === null) {
@@ -157,7 +147,14 @@ export async function preverRegistrarHabito(payload: unknown): Promise<EfeitoPro
     ressalvas.push("Este hábito não estava agendado para hoje. O registro é aceito mesmo assim.");
   }
 
+  linhas.push({
+    rotulo: "Desfazer",
+    valor: comoDesfazer.kind === "nao-ha" ? "Não há desfazer para esta substituição." : "Apaga o registro criado pela IA neste dia.",
+  });
+  if (comoDesfazer.kind === "nao-ha") ressalvas.push(comoDesfazer.porque);
+
   return {
+    comoDesfazer,
     command: "registrarHabito",
     payload: { ...d },
     entidades: [{ tipo: "habito", id: habito.id, rota: ROTA_DO_PAINEL }],

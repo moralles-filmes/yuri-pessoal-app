@@ -8,7 +8,6 @@ import { VazioDaConversa } from "@/components/ai/vazio-da-conversa";
 import { BudgetAlert } from "@/components/ai/budget-alert";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getAiPreferences, getUsageSummary } from "@/lib/ai/queries";
-import { RESUMO_DO_ASSISTENTE } from "@/lib/ai/constants";
 import { prontidaoDoChat } from "@/lib/ai/server/chat-readiness";
 import { reconcileOwnRuns } from "@/lib/ai/server/reconcile";
 import { conversationsLink, settingsLink } from "@/lib/search/ai-links";
@@ -47,23 +46,16 @@ export default async function IaPage() {
 
   return (
     <div className="space-y-4">
-      {/*
-        ⚠️ A descrição afirma a REGRA, nunca o ESTADO — mesma disciplina de `AVISO_SEM_ACESSO`
-        e do prompt-base `seguranca-v3`. O texto da 18-A ("sem acesso aos seus registros nesta
-        versão") era verdade enquanto o Tool Registry estava vazio e virou mentira quando as
-        leituras de Treinos entraram nele. O texto de agora vale com as chaves ligadas ou
-        desligadas, porque fala do que o sistema NÃO FAZ SEM AUTORIZAÇÃO.
-      */}
-      <PageHeader title="Conversar" description={RESUMO_DO_ASSISTENTE}>
+      <PageHeader title="Assistente">
         <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={conversationsLink()}>
-              <MessagesSquare className="size-4" /> Conversas
+          <Button asChild variant="ghost" size="icon">
+            <Link href={conversationsLink()} aria-label="Conversas">
+              <MessagesSquare className="size-4" />
             </Link>
           </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={settingsLink()}>
-              <Settings className="size-4" /> Configurações
+          <Button asChild variant="ghost" size="icon">
+            <Link href={settingsLink()} aria-label="Configurações">
+              <Settings className="size-4" />
             </Link>
           </Button>
         </div>
@@ -80,6 +72,7 @@ export default async function IaPage() {
         initialMessages={[]}
         runs={{}}
         podeConversar={prontidao.podeConversar}
+        podeCruzarModulos={prontidao.podeCruzarModulos}
         motivoBloqueio={prontidao.motivoBloqueio}
         vazio={<VazioDaConversa />}
       />

@@ -31,6 +31,12 @@ import { receiptLink, receiptsLink, settingsLink } from "@/lib/search/ai-links";
 
 export const metadata: Metadata = { title: "Comprovantes · IA" };
 export const dynamic = "force-dynamic";
+/**
+ * MOD-ia-005 — vale para as Server Actions desta página (é a página que as hospeda): ler um
+ * comprovante chama o provedor por uma delas. Sem a declaração, o limite é o padrão da
+ * plataforma.
+ */
+export const maxDuration = 60;
 
 /**
  * Fase 18-D · Bloco 5 — IA · Comprovantes. Os três processos, numa tela.
@@ -200,6 +206,8 @@ export default async function ComprovantesPage({
 
           {extracao && opcoes ? (
             <ReceiptReview
+              key={`${selecionado.documento.id}:${selecionado.documento.leitura!.id}`}
+              virouLancamento={selecionado.documento.virouLancamento}
               documentoId={selecionado.documento.id}
               extractionId={selecionado.documento.leitura!.id}
               extracao={extracao}
@@ -223,6 +231,12 @@ export default async function ComprovantesPage({
             </div>
           )}
         </section>
+      )}
+
+      {doc && !selecionado && (
+        <p role="status" className="rounded-xl border p-3 text-sm text-muted-foreground">
+          Esse comprovante não existe mais.
+        </p>
       )}
 
       {/* ── A lista ── */}

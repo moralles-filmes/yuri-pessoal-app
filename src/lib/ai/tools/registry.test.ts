@@ -355,8 +355,8 @@ describe("registry ↔ executores e propostas", () => {
  * ║ A TELA PRECISA SABER NOMEAR O QUE FOI CONSULTADO.                                     ║
  * ║                                                                                       ║
  * ║ `ROTULO_DA_FERRAMENTA` é `Record<string, string>` porque `ToolDescriptor.name` é       ║
- * ║ `string` — não há união fechada para um `satisfies` travar, como em                    ║
- * ║ `ROTULO_DA_ROTA_DE_CONTEXTO`. Então a cobertura é conferida AQUI, sobre o registry     ║
+ * ║ `string` — não há união fechada para um `satisfies` travar. Por isso,                    ║
+ * ║ a cobertura é conferida AQUI, sobre o registry     ║
  * ║ real: ferramenta nova sem rótulo apareceria na trilha como `training.get_algo`, que é  ║
  * ║ o identificador interno vazando para o usuário.                                        ║
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
@@ -414,5 +414,11 @@ describe("toolsForPermission — o que cada flag `allow_*` de fato libera", () =
     // rejeitada pelo guard — habilitar a chave por causa dela prometeria o que não roda.
     const incoerentes = AI_TOOL_REGISTRY.filter((t) => !isToolDescriptorCoherent(t));
     expect(incoerentes).toEqual([]);
+  });
+});
+
+describe("Task 27 — definição do saldo de terceiros", () => {
+  it.each(["finance.get_spending", "finance.get_invoice"])("%s define o mesmo saldo", (name) => {
+    expect(findTool(name)?.description).toContain("a receber (o que ainda falta receber de terceiros: o devido menos o que já foi recebido)");
   });
 });

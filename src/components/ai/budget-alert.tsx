@@ -15,7 +15,7 @@
 import * as React from "react";
 import { AlertTriangle, Ban } from "lucide-react";
 import { registerBudgetAlertLevel } from "@/lib/actions/ai-preferences";
-import { formatUsd } from "@/lib/ai/constants";
+import { formatUsd, formatUsdOrUnavailable } from "@/lib/ai/constants";
 import { cn } from "@/lib/utils";
 import type { UsagePeriodSummary } from "@/lib/ai/types";
 
@@ -43,7 +43,11 @@ export function BudgetAlert({
     }
   }, [nivel, nivelJaRegistrado]);
 
-  if (nivel === null || critico.limiteUsd === null) return null;
+  if (nivel === null || critico.limiteUsd === null) {
+    return dia.parcial || mes.parcial
+      ? <p role="status" className="text-sm text-muted-foreground">Consumo parcial: não foi possível medir todo o período. Confira Consumo.</p>
+      : null;
+  }
 
   const bloqueado = nivel >= 100;
   const rotuloPeriodo = critico.periodo === "dia" ? "diário" : "mensal";
@@ -69,12 +73,13 @@ export function BudgetAlert({
             : `Você já usou ${nivel}% do orçamento ${rotuloPeriodo}.`}
         </p>
         <p className={cn("text-xs", bloqueado ? "" : "text-muted-foreground")}>
-          {formatUsd(critico.totalUsd)} de {formatUsd(critico.limiteUsd)} — inclui{" "}
-          {formatUsd(critico.reservadoUsd)} reservados por{" "}
+          {formatUsdOrUnavailable(critico.totalUsd)} de {formatUsd(critico.limiteUsd)} — inclui{" "}
+          {formatUsdOrUnavailable(critico.reservadoUsd)} reservados por{" "}
           {critico.runsComReservaAtiva === 1
             ? "1 execução em andamento"
             : `${critico.runsComReservaAtiva} execuções em andamento`}
           .
+          {(dia.parcial || mes.parcial) && " Consumo parcial; os valores disponíveis podem ser menores que o gasto do período."}
           {critico.execucoesSemCusto > 0 && (
             <>
               {" "}

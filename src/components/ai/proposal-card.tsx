@@ -30,6 +30,9 @@ import { AlertTriangle, ArrowRight, Check, Clock, Loader2, X } from "lucide-reac
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAgora } from "./use-agora";
+import { botaoDeDesfazerVolta } from "./retomar-desfazer";
+import { AVISO_DUPLICATA, duplicataNoChat } from "@/lib/ai/approval/duplicates";
 import { IconeDoEstado, TOM_DO_ESTADO } from "@/components/ai/estado-da-acao";
 import { confirmarAcaoDaIa, recusarAcaoDaIa } from "@/lib/actions/ai-actions";
 import { rotuloDaFerramenta } from "@/lib/ai/constants";
@@ -96,12 +99,20 @@ function LinkComSeta({
 
 export function ProposalCard({
   proposta,
+  ehDesfazer = false,
+  possivelDuplicata = false,
+  propostasPendentes = [],
+  onSemExecucao,
   aoAplicar,
   desfecho: desfechoControlado,
   onDesfecho,
   onDecidiu,
 }: {
   readonly proposta: PropostaNaTela;
+  readonly ehDesfazer?: boolean;
+  readonly possivelDuplicata?: boolean;
+  readonly propostasPendentes?: readonly PropostaNaTela[];
+  readonly onSemExecucao?: () => void;
   /**
    * 18-D — chamado DEPOIS de a execução ter dado certo, com o registro que ela criou.
    *
@@ -131,17 +142,15 @@ export function ProposalCard({
   const router = useRouter();
   const [desfechoLocal, setDesfechoLocal] = React.useState<DesfechoDoCartao>(DESFECHO_INICIAL);
   const desfecho = desfechoControlado ?? desfechoLocal;
-  const [agora, setAgora] = React.useState<number>(() => Date.now());
+  const agora = useAgora(desfecho.tipo === "pendente");
 
-  // Um tique a cada 30 s só para a contagem não congelar. Nada aqui decide nada.
-  React.useEffect(() => {
-    if (desfecho.tipo !== "pendente") return;
-    const t = setInterval(() => setAgora(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, [desfecho.tipo]);
-
-  const vista = estadoDoCartao(desfecho, proposta.expiresAt, agora);
+  // Antes da assinatura, o prazo permanece desconhecido e os botões ficam desabilitados.
+  const vista = estadoDoCartao(desfecho, proposta.expiresAt, agora ?? Number.NEGATIVE_INFINITY);
   const tom = TOM_DO_ESTADO[vista.estado];
+  const duplicada = possivelDuplicata || (agora !== null && duplicataNoChat(proposta, propostasPendentes, agora));
+  React.useEffect(() => {
+    if (botaoDeDesfazerVolta(vista.estado)) onSemExecucao?.();
+  }, [vista.estado, onSemExecucao]);
 
   function registrar(proximo: DesfechoDoCartao) {
     if (onDesfecho) onDesfecho(proximo);
@@ -236,6 +245,7 @@ export function ProposalCard({
             acontece se você confirmar aqui.
           </p>
 
+          {duplicada && <p role="status" className="mt-2 text-warning-ink">{AVISO_DUPLICATA}</p>}
           <p className="mt-2 font-medium">{proposta.resumo}</p>
 
           <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
@@ -263,7 +273,7 @@ export function ProposalCard({
             <Button
               size="sm"
               onClick={confirmar}
-              disabled={!vista.podeConfirmar}
+              disabled={agora === null || !vista.podeConfirmar}
               aria-busy={vista.girando === "confirmar" || undefined}
               className="min-w-0"
             >
@@ -280,7 +290,7 @@ export function ProposalCard({
               size="sm"
               variant="outline"
               onClick={recusar}
-              disabled={!vista.podeRecusar}
+              disabled={agora === null || !vista.podeRecusar}
               aria-busy={vista.girando === "recusar" || undefined}
               className="min-w-0"
             >
@@ -298,7 +308,7 @@ export function ProposalCard({
               <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="size-3 shrink-0" aria-hidden />
                 <span className="truncate">
-                  Expira em {minutosRestantes(proposta.expiresAt, agora)} min
+                  {agora === null ? "Conferindo prazo…" : `Expira em ${minutosRestantes(proposta.expiresAt, agora)} min`}
                 </span>
               </span>
             )}
@@ -310,8 +320,7 @@ export function ProposalCard({
         <>
           <p className="mt-2 text-muted-foreground">
             <strong className="text-foreground">Nada foi aplicado.</strong> O prazo de confirmação
-            terminou sem decisão. Peça de novo ao assistente — a previsão é recalculada com os
-            dados de agora.
+            terminou sem decisão. {ehDesfazer ? "Você pode pedir o desfazer de novo pelo botão" : "Peça de novo ao assistente"} — a previsão é recalculada com os dados de agora.
           </p>
           <p className="mt-2 font-medium text-muted-foreground">{proposta.resumo}</p>
         </>

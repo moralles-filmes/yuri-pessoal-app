@@ -31,7 +31,7 @@ vi.mock("./crypto-readiness", () => ({
 }));
 
 vi.mock("./credential-store", () => ({
-  resolveApiKey: async () => ({ ok: true, value: "sk-de-mentira" }),
+  resolveApiKey: async () => { aoAbrirChave(); return { ok: true, value: "sk-de-mentira" }; },
 }));
 
 /**
@@ -39,6 +39,11 @@ vi.mock("./credential-store", () => ({
  * `visao` E `arquivo` verificadas. `defaultModel` é de TEXTO de propósito: é o que prova que
  * a rota da extração não cai nele.
  */
+let aoLerMetadado = () => {};
+let aoLerBytes = () => {};
+let aoAbrirChave = () => {};
+let aoGerar = () => {};
+let timeoutConfigurado = 30_000;
 let visionModel: string | null = "claude-sonnet-5";
 let permissoes: Record<string, boolean> = {
   allow_finance: true,
@@ -56,7 +61,7 @@ vi.mock("@/lib/ai/queries", () => ({
       fallbackAllowed: false,
       fallbackOrder: [],
       maxRetries: 1,
-      timeoutMs: 30_000,
+      timeoutMs: timeoutConfigurado,
       hasUsableCredential: true,
     },
   ],
@@ -93,11 +98,18 @@ let documento: {
 } | null = null;
 
 let bytesLidos = 0;
+let falharBytes = false;
+let falharGravacao = false;
+let falharProvedor = false;
+let negarGravacao = false;
+const usosFechados: unknown[] = [];
+const ordem: string[] = [];
 
 vi.mock("./document-store", () => ({
-  lerDocumentoParaExtracao: async () => documento,
+  lerDocumentoParaExtracao: async () => { aoLerMetadado(); return documento; },
   lerBytesDoDocumento: async () => {
-    bytesLidos += 1;
+    bytesLidos += 1; aoLerBytes();
+    if (falharBytes) throw new Error("detalhe privado");
     return documento
       ? { bytes: new Uint8Array([0xff, 0xd8, 0xff]), mime: documento.mime }
       : null;
@@ -143,16 +155,19 @@ vi.mock("./run-store", () => ({
     });
     return { id: `att-${input.attemptIndex}`, jaExistia: false };
   },
-  closeAttempt: async (input: { status: string; errorCode: string | null }) => {
+  closeAttempt: async (input: { status: string; errorCode: string | null; usage: unknown }) => {
+    usosFechados.push(input.usage);
     medicao.push({ tipo: "close", status: input.status, errorCode: input.errorCode });
   },
   completeRun: async (input: { assistantMessageId: unknown }) => {
     mensagemDoFechamento = input.assistantMessageId;
     statusDoRun = "completed";
+    ordem.push("complete");
   },
   failRun: async (input: { assistantMessageId: unknown }) => {
     mensagemDoFechamento = input.assistantMessageId;
     statusDoRun = "failed";
+    ordem.push("fail");
   },
 }));
 
@@ -168,11 +183,13 @@ vi.mock("@/lib/supabase/server", () => ({
       return {
         insert: (linha: Record<string, unknown>) => {
           linhasGravadas.push({ tabela, ...linha });
+          ordem.push("gravar");
+          if (falharGravacao) throw new Error("detalhe privado");
           return {
             select: () => ({
               single: async () => ({
-                data: { id: `ext-${linhasGravadas.length}` },
-                error: null,
+                data: negarGravacao ? null : { id: `ext-${linhasGravadas.length}` },
+                error: negarGravacao ? { code: "XX000" } : null,
               }),
             }),
           };
@@ -200,6 +217,7 @@ const pedidos: {
   model: string;
   system: string;
   maxOutputTokens: number;
+  timeoutMs: number;
   messages: readonly unknown[];
 }[] = [];
 
@@ -210,9 +228,11 @@ vi.mock("@/lib/ai/providers/provider-factory", () => ({
       model: string;
       system: string;
       maxOutputTokens: number;
+  timeoutMs: number;
       messages: readonly unknown[];
     }) => {
-      pedidos.push(request);
+      pedidos.push(request); aoGerar();
+      if (falharProvedor) throw new Error("detalhe privado");
       return (
         respostas[pedidos.length - 1] ?? {
           ok: false,
@@ -260,7 +280,9 @@ const ok = (valor: unknown): AiObjectResult => ({
 const AGORA = new Date("2026-08-09T14:00:00.000Z");
 
 beforeEach(() => {
+  aoLerMetadado = () => {}; aoLerBytes = () => {}; aoAbrirChave = () => {}; aoGerar = () => {}; timeoutConfigurado = 30_000;
   medicao.length = 0;
+  falharBytes = false; falharGravacao = false; falharProvedor = false; negarGravacao = false; usosFechados.length = 0; ordem.length = 0;
   pedidos.length = 0;
   tabelasTocadas.length = 0;
   linhasGravadas.length = 0;
@@ -578,5 +600,70 @@ describe("o servidor duvida, mesmo quando o modelo se declara certo", () => {
     };
     expect(campos.data.confianca).toBe("baixa");
     expect(campos.data.motivo).not.toBeNull();
+  });
+});
+
+describe("persistência antes do fechamento da extração", () => {
+  const entrada = { userId: "user-1", documentoId: "doc-1", agora: AGORA };
+  it("grava o resultado antes de concluir o run", async () => {
+    respostas = [ok(extracaoCrua())];
+    expect((await runExtraction(entrada)).ok).toBe(true);
+    expect(ordem.indexOf("gravar")).toBeLessThan(ordem.indexOf("complete"));
+  });
+  it.each(["bytes", "gravação"])("exceção na leitura de %s fecha o run como failed", async borda => {
+    falharBytes = borda === "bytes"; falharGravacao = borda === "gravação";
+    respostas = [ok(extracaoCrua())];
+    await runExtraction(entrada).catch(() => undefined);
+    expect(statusDoRun).toBe("failed");
+    expect(ordem).not.toContain("complete");
+  });
+});
+
+describe("fechamento da extração nas demais falhas", () => {
+  const entrada = { userId: "user-1", documentoId: "doc-1", agora: AGORA };
+  it("erro retornado pela gravação não conclui o run", async () => {
+    negarGravacao = true; respostas = [ok(extracaoCrua())];
+    expect(await runExtraction(entrada)).toMatchObject({ ok: false, code: "EXTRACTION_NOT_RECORDED" });
+    expect(statusDoRun).toBe("failed"); expect(ordem.filter(e => e === "fail")).toHaveLength(1);
+    expect(ordem).not.toContain("complete");
+  });
+  it("exceção do provedor fecha tentativa sem inventar consumo e fecha o run", async () => {
+    falharProvedor = true;
+    const resultado = await runExtraction(entrada);
+    expect(resultado).toMatchObject({ ok: false, code: "EXTRACTION_INTERRUPTED" });
+    expect(JSON.stringify(resultado)).not.toContain("detalhe privado");
+    expect(statusDoRun).toBe("failed"); expect(usosFechados).toEqual([null]);
+    expect(medicao.at(-1)).toMatchObject({ tipo: "close", status: "failed" });
+  });
+});
+
+describe("Task 24 — prazo global da extração", () => {
+  const entrada = { userId: "u1", documentoId: "doc-1", agora: AGORA };
+  it("conta desde antes do metadado e recorta o timeout restante", async () => {
+    let agora = 0; timeoutConfigurado = 60_000; aoLerMetadado = () => { agora = 10_000; }; respostas = [ok(extracaoCrua())];
+    expect((await runExtraction({ ...entrada, agoraMs: () => agora })).ok).toBe(true);
+    expect(pedidos[0].timeoutMs).toBe(45_000);
+  });
+  it("mantém timeout configurado quando é menor", async () => {
+    timeoutConfigurado = 10_000; respostas = [ok(extracaoCrua())];
+    await runExtraction({ ...entrada, agoraMs: () => 0 }); expect(pedidos[0].timeoutMs).toBe(10_000);
+  });
+  it("não abre primeira tentativa após gastar o prazo baixando o arquivo", async () => {
+    let agora = 0; aoLerBytes = () => { agora = 51_000; };
+    expect(await runExtraction({ ...entrada, agoraMs: () => agora })).toMatchObject({ ok: false, code: "AI_DEADLINE" });
+    expect(pedidos).toHaveLength(0); expect(medicao).toHaveLength(0); expect(statusDoRun).toBe("failed");
+    expect(linhasGravadas[0]).toMatchObject({ status: "falhou", erro_codigo: "AI_DEADLINE" });
+  });
+  it("reconfere depois da credencial, fecha a tentativa e não envia", async () => {
+    let agora = 0; aoAbrirChave = () => { agora = 51_000; };
+    expect(await runExtraction({ ...entrada, agoraMs: () => agora })).toMatchObject({ ok: false, code: "AI_DEADLINE" });
+    expect(pedidos).toHaveLength(0); expect(medicao.at(-1)).toMatchObject({ tipo: "close", status: "failed", errorCode: "AI_DEADLINE" });
+    expect(usosFechados).toEqual([null]); expect(ordem.filter(e => e === "fail")).toHaveLength(1);
+  });
+  it("não abre retry após consumir o prazo na primeira chamada", async () => {
+    let agora = 0; aoGerar = () => { agora = 55_000; };
+    expect(await runExtraction({ ...entrada, agoraMs: () => agora })).toMatchObject({ ok: false, code: "AI_DEADLINE" });
+    expect(pedidos).toHaveLength(1); expect(medicao.filter(e => e.tipo === "start")).toHaveLength(1);
+    expect(statusDoRun).toBe("failed"); expect(linhasGravadas[0]).toMatchObject({ erro_codigo: "AI_DEADLINE" });
   });
 });

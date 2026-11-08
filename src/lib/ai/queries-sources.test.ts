@@ -21,6 +21,8 @@ let linhas: Linha[] = [];
 const tabelasConsultadas: string[] = [];
 const colunasPedidas: string[] = [];
 const filtros: { coluna: string; valor: unknown }[] = [];
+/** Filtros de exclusão (`.neq`). O mock os APLICA, como o banco faria. */
+const exclusoes: { coluna: string; valor: unknown }[] = [];
 let tetoPedido: number | null = null;
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -40,10 +42,17 @@ vi.mock("@/lib/supabase/server", () => ({
           filtros.push({ coluna, valor });
           return encadeado;
         },
+        neq: (coluna: string, valor: unknown) => {
+          exclusoes.push({ coluna, valor });
+          return encadeado;
+        },
         order: () => encadeado,
         limit: (n: number) => {
           tetoPedido = n;
-          return Promise.resolve({ data: linhas, error: null });
+          const restantes = linhas.filter((l) =>
+            exclusoes.every(({ coluna, valor }) => l[coluna] !== valor),
+          );
+          return Promise.resolve({ data: restantes, error: null });
         },
       };
       return encadeado;
@@ -52,6 +61,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 const { getRunSources } = await import("./queries");
+const { TOOL_NAME_ACIONAMENTO } = await import("./agents/especialistas");
 
 const LINHA_BASE: Linha = {
   run_id: "run-1",
@@ -71,6 +81,7 @@ beforeEach(() => {
   tabelasConsultadas.length = 0;
   colunasPedidas.length = 0;
   filtros.length = 0;
+  exclusoes.length = 0;
   tetoPedido = null;
 });
 
@@ -187,6 +198,35 @@ describe("getRunSources", () => {
 
   it("banco sem linha nenhuma devolve mapa vazio — não inventa execução", async () => {
     linhas = [];
+    expect(await getRunSources("user-1", ["run-1"])).toEqual({});
+  });
+
+  /**
+   * O acionamento de um especialista é auditado em `ai_tool_calls` (é o PEDIDO do coordenador),
+   * mas não leu dado nenhum: mostrá-lo em "Ver dados usados" faria a tela listar como fonte uma
+   * chamada que não consultou registro algum.
+   */
+  it("não devolve as linhas de acionamento como fonte", async () => {
+    linhas = [
+      {
+        ...LINHA_BASE,
+        tool_name: TOOL_NAME_ACIONAMENTO,
+        tool_version: "v1",
+        records_read: null,
+        refs: [],
+        arguments_sanitized: { especialista: "treinos", tarefa: "volume da semana" },
+      },
+      { ...LINHA_BASE, tool_name: "training.get_volume" },
+    ];
+
+    const r = await getRunSources("user-1", ["run-1"]);
+
+    expect(r["run-1"].chamadas.map((c) => c.toolName)).toEqual(["training.get_volume"]);
+  });
+
+  it("run que só teve acionamento não aparece com fonte nenhuma", async () => {
+    linhas = [{ ...LINHA_BASE, tool_name: TOOL_NAME_ACIONAMENTO, refs: [] }];
+
     expect(await getRunSources("user-1", ["run-1"])).toEqual({});
   });
 });

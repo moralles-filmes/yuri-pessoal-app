@@ -108,8 +108,11 @@ export async function prepararDesfazer(input: {
    * valendo na corrida entre duas abas (o executor traduz o `23505` em `JA_DESFEITA`).
    */
   if (await jaFoiDesfeita(input.userId, input.executionId)) {
-    return recusa("Esta ação já foi desfeita. Nada foi feito de novo.");
+    return recusa("Já existe um desfazer aplicado ou sem desfecho registrado. Confira o registro no módulo antes de pedir de novo.");
   }
+
+  const impedimento = original.desfazer.impedimento?.({ targetId: execucao.targetId, changedFields: parseCamposTocados(execucao.changedFields) });
+  if (impedimento) return recusa(impedimento);
 
   const inverso = findCommand(original.desfazer.command);
   if (!inverso) return recusa(MOTIVO_SEM_DESFAZER.COMMAND_DESCONHECIDO);

@@ -298,6 +298,7 @@ export async function executeTool(
       recordsRead: saida?.contagem ?? null,
       durationMs: Date.now() - inicio,
       refs: saida?.refs ?? [],
+      agentId: ctx.agent.id,
     }).catch(() => {
       // ⚠️ Este `catch` NÃO cobre erro de banco: `supabase-js` devolve `{ error }` em vez de
       // lançar, e quem trata isso (com log operacional) é o próprio `audit.ts`. O que sobra
@@ -442,6 +443,7 @@ export async function executeTool(
       recordsRead: null,
       durationMs: Date.now() - inicio,
       refs: efeito.entidades,
+      agentId: ctx.agent.id,
     }).catch(() => null);
 
     if (!toolCallId) {

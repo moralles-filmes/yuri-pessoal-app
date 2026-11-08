@@ -183,3 +183,13 @@ export function avisoDoBotao(
 
   return null;
 }
+
+export type PreferenciaDoBotao = { readonly canto: CantoDoBotao; readonly oculto: boolean };
+export type EstadoDoBotao = { readonly servidor: PreferenciaDoBotao; readonly atual: PreferenciaDoBotao };
+
+/** Props novas reconciliam o estado; props iguais preservam a atualização otimista. */
+export function estadoDoBotao(anterior: EstadoDoBotao, props: PreferenciaDoBotao): EstadoDoBotao {
+  return anterior.servidor.canto === props.canto && anterior.servidor.oculto === props.oculto
+    ? anterior
+    : { servidor: props, atual: props };
+}

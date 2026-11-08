@@ -34,7 +34,7 @@ const FATOS: Record<string, FatosParaDesfazer> = {
   },
   registrarHabito: {
     targetId: UUID,
-    changedFields: { value: 8, is_done: true, log_date: "2026-08-12" },
+    changedFields: { value: 8, is_done: true, log_date: "2026-08-12", registro_novo: true },
   },
   criarEvento: {
     targetId: UUID,
@@ -117,7 +117,7 @@ describe("o desfazer do hábito depende de log_date estar na allowlist §3.6", (
     const command = findCommand("registrarHabito");
     if (!command || command.desfazer.kind !== "command") throw new Error("sem desfazer");
     expect(
-      command.desfazer.payload({ targetId: UUID, changedFields: { value: 8 } }),
+      command.desfazer.payload({ targetId: UUID, changedFields: { value: 8, registro_novo: true } }),
     ).toBeNull();
   });
 });

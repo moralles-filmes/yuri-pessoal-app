@@ -25,7 +25,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { authContext, invalid, notAuthed } from "@/lib/actions/helpers";
-import { executarAcaoAprovada, registrarDecisao } from "@/lib/ai/approval/execute";
+import { conferirConfirmacao, executarAcaoAprovada, registrarDecisao } from "@/lib/ai/approval/execute";
 import { prepararDesfazer, type PropostaDeDesfazer } from "@/lib/ai/approval/undo";
 import type { StatusDaExecucao } from "@/lib/ai/approval/state";
 import type { ActionResult } from "@/types/finance";
@@ -75,6 +75,9 @@ export async function confirmarAcaoDaIa(
 
   const parsed = decisaoSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+
+  const conferencia = await conferirConfirmacao({ userId: ctx.userId, proposalId: parsed.data.proposalId, hashDaTela: parsed.data.hash, agora: new Date() });
+  if (!conferencia.ok) return { ok: false, error: conferencia.mensagem };
 
   const decisao = await registrarDecisao({
     userId: ctx.userId,

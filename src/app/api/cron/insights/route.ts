@@ -18,19 +18,27 @@
  * como a de notificações). Runtime nodejs.
  */
 import { NextResponse } from "next/server";
+import { segredoConfere } from "@/lib/security/segredo-cron";
 
 import { createServiceClient, isServiceConfigured } from "@/lib/supabase/service";
+import { reconcileAllAbandonedRuns } from "@/lib/ai/server/reconcile";
 import { runInsightJobForAllUsers } from "@/lib/ai/server/insight-job";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/**
+ * MOD-ia-005 — explícito porque esta rota chama o provedor. Sem ele, o limite é o padrão da
+ * plataforma, e quem encerra uma análise travada passa a ser ela — sem `finally`, com o run
+ * aberto até a lease. O timeout de cada chamada (`generateObject`) mora no adapter.
+ */
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
   // Sem segredo configurado é 401 também: uma rota que gasta dinheiro nunca fica aberta
   // "porque a variável não foi definida".
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!segredoConfere(auth, secret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -40,6 +48,7 @@ export async function GET(request: Request) {
 
   try {
     const service = createServiceClient();
+    await reconcileAllAbandonedRuns();
     // `agora` nasce AQUI e é injetado: nada abaixo desta linha chama `new Date()`.
     const resultado = await runInsightJobForAllUsers(service, new Date());
 

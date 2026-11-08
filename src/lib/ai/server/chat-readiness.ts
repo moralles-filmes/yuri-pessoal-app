@@ -1,11 +1,12 @@
 import "server-only";
 
-import { getRouterConfigs } from "@/lib/ai/queries";
+import { getRouterConfigs, getAiPreferences } from "@/lib/ai/queries";
 import { usableProviders } from "@/lib/ai/core/router";
 import { cryptoProblemMessage } from "@/lib/ai/server/crypto-readiness";
 
 export type ProntidaoDoChat = {
   readonly podeConversar: boolean;
+  readonly podeCruzarModulos: boolean;
   readonly motivoBloqueio: string | null;
 };
 
@@ -23,7 +24,7 @@ export type ProntidaoDoChat = {
  */
 export async function prontidaoDoChat(userId: string): Promise<ProntidaoDoChat> {
   const problemaCripto = cryptoProblemMessage();
-  const configs = await getRouterConfigs(userId);
+  const [configs, prefs] = await Promise.all([getRouterConfigs(userId), getAiPreferences(userId)]);
   const prontos = usableProviders(configs);
 
   const motivoBloqueio =
@@ -32,5 +33,5 @@ export async function prontidaoDoChat(userId: string): Promise<ProntidaoDoChat> 
       ? "Nenhum provedor de IA está configurado e ativo. Cadastre uma chave em Configurações para começar."
       : null);
 
-  return { podeConversar: motivoBloqueio === null, motivoBloqueio };
+  return { podeConversar: motivoBloqueio === null, motivoBloqueio, podeCruzarModulos: prefs.allowCrossModule };
 }

@@ -74,11 +74,12 @@ export const AI_AGENT_REGISTRY: readonly AiAgentProfile[] = [
     id: ASSISTENTE_PESSOAL_ID,
     label: "Assistente Pessoal",
     description:
-      "Conversa, organiza ideias e ensina a usar o sistema. Encaminha para o assistente do módulo quando a pergunta for sobre seus registros.",
+      "Conversa, organiza ideias e ensina a usar o sistema. Quando a pergunta é sobre seus registros, consulta os assistentes dos módulos que você liberou e junta as respostas — o que eles preparam fica para você confirmar.",
     promptVersion: ASSISTENTE_PESSOAL_PROMPT_VERSION,
     prompt: ASSISTENTE_PESSOAL_PROMPT,
     requiredCapabilities: ["texto", "streaming"],
-    // O ORQUESTRADOR não lê módulo nenhum: quem lê Treinos é o especialista de Treinos.
+    // O COORDENADOR não lê módulo nenhum: ele aciona especialistas, e acionar não é ferramenta
+    // do Tool Registry (spec §4.2.1). Quem lê é o especialista, com o guard e a auditoria.
     allowedTools: [],
   },
   {
