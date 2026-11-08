@@ -131,3 +131,66 @@ describe("09-C · monograma", () => {
     expect(tem(logo, "bg-primary")).toBe(false);
   });
 });
+
+describe("09-C · header em vidro", () => {
+  const header = ler("components", "layout", "header.tsx");
+  // Só o ramo de cada estado da sidebar: `lg:ml-3` solto no arquivo não prova que ele é condicional.
+  const ramoVisivel = header.match(/sidebarHidden\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"/)?.[2];
+  const ramoOculto = header.match(/sidebarHidden\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"/)?.[1];
+
+  it("é uma barra grudada ao topo, em vidro, com o marcador da casca", () => {
+    for (const c of ["sticky", "top-0", "z-30", "h-16", "vidro-casca"]) {
+      expect(tem(header, c), c).toBe(true);
+    }
+    expect(header).toContain("data-casca");
+  });
+
+  it("não sobra o desenho antigo nem fundo, borda ou sombra junto do material", () => {
+    for (const c of ["backdrop-blur", "bg-background", "border-b", "border-border"]) {
+      expect(tem(header, c), c).toBe(false);
+    }
+    expect(header).not.toMatch(/supports-\[backdrop-filter\]/);
+    expect(header).not.toMatch(/(?:^|[\s"'`])(?:[\w-]+:)*(?:bg|border|shadow)-/m);
+  });
+
+  it("recuo e canto só existem com a sidebar visível", () => {
+    expect(ramoVisivel, "ramo `sidebarHidden ? \"…\" : \"…\"`").toBeDefined();
+    for (const c of ["lg:ml-3", "lg:rounded-bl-[20px]"]) {
+      expect(tem(ramoVisivel ?? "", c), `visível: ${c}`).toBe(true);
+      expect(tem(ramoOculto ?? "", c), `oculto: ${c}`).toBe(false);
+      // Fora de qualquer ramo, a classe valeria nos dois estados.
+      const foraDosRamos = header.replace(/sidebarHidden\s*\?\s*"[^"]*"\s*:\s*"[^"]*"/, "");
+      expect(tem(foraDosRamos, c), `fora do ramo: ${c}`).toBe(false);
+    }
+  });
+});
+
+describe("09-C · gatilho desktop da busca", () => {
+  const busca = ler("components", "search", "search-command.tsx");
+  const gatilho = busca.match(/<button[\s\S]*?<\/button>/)?.[0] ?? "";
+  const kbd = gatilho.match(/<kbd[^>]*>/)?.[0] ?? "";
+
+  it("é uma pílula em ladrilho com aro de campo e brilho interno", () => {
+    expect(gatilho, "gatilho desktop").not.toBe("");
+    for (const c of [
+      "rounded-full", "bg-tile", "border-(--field-border)", "hover:border-foreground/60",
+      "shadow-[inset_0_1px_0_var(--glass-hi)]", "h-9", "w-full", "max-w-sm",
+    ]) {
+      expect(tem(gatilho, c), c).toBe(true);
+    }
+  });
+
+  it("não tem cartão translúcido nem desfoque, e o hover não troca o fundo", () => {
+    expect(tem(gatilho, "bg-card")).toBe(false);
+    expect(gatilho).not.toMatch(/backdrop-/);
+    expect(tem(gatilho, "hover:bg-tile")).toBe(false);
+    expect(gatilho).not.toMatch(/hover:bg-/);
+  });
+
+  it("o kbd perde o fundo cinza, usa a borda do ladrilho e herda a cor do texto", () => {
+    expect(kbd, "<kbd>").not.toBe("");
+    expect(tem(kbd, "border-tile-border")).toBe(true);
+    expect(tem(kbd, "bg-muted")).toBe(false);
+    expect(kbd).not.toMatch(/(?:^|\s)text-(?!\[10px\])/);
+  });
+});

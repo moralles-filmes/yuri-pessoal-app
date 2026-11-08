@@ -329,3 +329,30 @@ describe("superfícies que cobrem conteúdo rolando (T5)", () => {
     ).toEqual([]);
   });
 });
+
+describe("09-C · a casca não desfoca sob sobreposição", () => {
+  const regra = css.match(/body:has\([^)]*\)\s*\[data-casca\]\s*\{[^}]*\}/)?.[0] ?? "";
+
+  it("tem regra própria para [data-casca] sob dialog/sheet, sem camada", () => {
+    expect(regra, "regra `body:has(…) [data-casca]`").not.toBe("");
+    expect(regra).toContain('[data-slot="dialog-content"]');
+    expect(regra).toContain('[data-slot="sheet-content"]');
+    const antes = css.slice(0, css.indexOf(regra));
+    // Sem camada: nenhum `@layer … {` ainda aberto na posição da regra.
+    const abertas = (antes.match(/\{/g) ?? []).length - (antes.match(/\}/g) ?? []).length;
+    expect(abertas).toBe(0);
+  });
+
+  it("zera o filtro nas duas grafias, com -webkit- antes", () => {
+    const comPrefixo = regra.search(new RegExp(COM_PREFIXO + "none"));
+    const semPrefixo = regra.search(new RegExp(SEM_PREFIXO + "none"));
+    expect(comPrefixo).toBeGreaterThan(-1);
+    expect(semPrefixo).toBeGreaterThan(comPrefixo);
+  });
+
+  it("vem depois da regra de vidro sobre vidro", () => {
+    const outra = css.indexOf('[data-sonner-toast][data-styled="true"]');
+    expect(outra).toBeGreaterThan(-1);
+    expect(css.indexOf(regra)).toBeGreaterThan(outra);
+  });
+});

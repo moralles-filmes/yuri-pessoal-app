@@ -128,11 +128,11 @@ export function SearchCommand() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="hidden h-9 w-full max-w-sm items-center gap-2 rounded-lg border border-input bg-card px-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 sm:flex"
+        className="hidden h-9 w-full max-w-sm items-center gap-2 rounded-full border border-(--field-border) bg-tile px-3 text-sm text-muted-foreground shadow-[inset_0_1px_0_var(--glass-hi)] transition-colors hover:border-foreground/60 sm:flex"
       >
         <Search className="size-4" />
         <span>Buscar transações, faturas, tarefas...</span>
-        <kbd className="ml-auto rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+        <kbd className="ml-auto rounded border border-tile-border px-1.5 py-0.5 text-[10px] font-medium">
           Ctrl K
         </kbd>
       </button>

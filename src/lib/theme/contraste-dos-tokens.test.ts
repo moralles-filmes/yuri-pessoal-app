@@ -404,6 +404,19 @@ describe("09-C · casca", () => {
         }
       });
 
+      it("busca em hover: a borda vira foreground a 60% (o fundo não muda) e segue >= 3:1", () => {
+        const [r, g, b] = lerCor(valor(tema, "foreground")).rgb;
+        const borda60 = `rgba(${r}, ${g}, ${b}, 0.6)`;
+        for (const [rotulo, s] of todas) {
+          const fundo = compor(valor(tema, "tile"), s);
+          exigirMinimo(
+            `borda de hover sobre tile em ${rotulo}`,
+            contraste(compor(borda60, fundo), fundo),
+            MINIMO_COMPONENTE,
+          );
+        }
+      });
+
       it("gaveta: foreground e muted-foreground sobre glass-strong >= 4,5:1", () => {
         for (const [rotulo, fundo] of gaveta) {
           for (const texto of ["foreground", "muted-foreground"]) {
