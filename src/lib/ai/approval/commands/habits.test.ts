@@ -16,9 +16,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Habito = Record<string, unknown>;
 let habitos: Habito[] = [];
+const leiturasDeLog: unknown[][] = [];
+let registroAnterior: { value: number } | null | undefined;
 
 vi.mock("@/lib/habits/queries", () => ({
   getHabitsDashboard: async () => ({ habits: habitos, consistency: {} }),
+  getHabitLogForDate: async (id: string, data: string) => { leiturasDeLog.push([id, data]); return registroAnterior !== undefined ? registroAnterior : data === "2026-08-07" && Number(habitos[0]?.todayValue) > 0 ? { value: Number(habitos[0]?.todayValue) } : null; },
 }));
 
 vi.mock("@/lib/format", async (original) => {
@@ -44,7 +47,7 @@ const agua = (extra: Partial<Record<string, unknown>> = {}) => ({
 });
 
 beforeEach(() => {
-  habitos = [agua()];
+  habitos = [agua()]; registroAnterior = undefined; leiturasDeLog.length = 0;
 });
 
 describe("a entrada é fechada", () => {
@@ -116,15 +119,15 @@ describe("preverRegistrarHabito", () => {
   });
 
   /**
-   * Numa data passada, `getHabitsDashboard` só sabe o valor de HOJE. Mostrar esse número como
-   * se fosse o daquele dia seria pior que não mostrar — a previsão declara que não sabe.
+   * Uma data passada consulta o log daquele dia; o valor do dashboard de hoje não vale lá.
    */
   it("em data passada, NÃO mostra o valor de hoje como se fosse o do dia", async () => {
     habitos = [agua({ todayValue: 6 })];
     const efeito = await preverRegistrarHabito({ habito: "água", valor: 3, data: "2026-08-05" });
 
     expect(efeito.previsao.linhas.map((l) => l.rotulo)).not.toContain("Já registrado hoje");
-    expect(efeito.previsao.ressalvas.join(" ")).toContain("não é mostrado aqui");
+    expect(efeito.previsao.linhas.some(l => l.valor === "6 vezes")).toBe(false);
+    expect(leiturasDeLog).toEqual([[ID, "2026-08-05"]]);
   });
 
   it("hábito inexistente cancela a proposta", async () => {
@@ -178,5 +181,25 @@ describe("preverRegistrarHabito", () => {
     const a = await preverRegistrarHabito({ habito: "água", valor: 4 });
     const b = await preverRegistrarHabito({ habito: "água", valor: 4 });
     expect(a).toEqual(b);
+  });
+});
+
+describe("Task 25 — desfazer não apaga registro anterior", () => {
+  it.each([0, 4])("registro anterior com valor %i declara que não há desfazer", async value => {
+    registroAnterior = { value };
+    const efeito = await preverRegistrarHabito({ habito: "água", valor: 8 });
+    expect(efeito).toMatchObject({ comoDesfazer: { kind: "nao-ha", porque: "O dia já tinha um registro; desfazer apagaria também o que estava antes." } });
+    expect(efeito.previsao.ressalvas).toContain("O dia já tinha um registro; desfazer apagaria também o que estava antes.");
+  });
+  it("dia vazio mantém o inverso", async () => {
+    registroAnterior = null;
+    expect(await preverRegistrarHabito({ habito: "água", valor: 8 })).toMatchObject({ comoDesfazer: { kind: "command", command: "desfazerHabito" } });
+  });
+  it("data passada consulta o registro daquela data", async () => {
+    registroAnterior = { value: 3 };
+    const efeito = await preverRegistrarHabito({ habito: "água", valor: 8, data: "2026-08-05" });
+    expect(efeito).toMatchObject({ comoDesfazer: { kind: "nao-ha" } });
+    expect(efeito.previsao.linhas).toContainEqual({ rotulo: "Já registrado nesse dia", valor: "3 vezes" });
+    expect(leiturasDeLog).toEqual([[ID, "2026-08-05"]]);
   });
 });

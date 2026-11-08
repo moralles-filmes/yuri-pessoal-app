@@ -1512,9 +1512,12 @@ externa. Router sugeriu worker Codex, execução mantida no principal pela restr
 - Modify:
   - `src/lib/ai/approval/commands/calendar-preview.ts:199-261`;
   - `src/lib/ai/approval/commands/habits-preview.ts:136-144,176-201` (e `habits.ts` se o
-    `ComoDesfazer` mora lá).
+    `ComoDesfazer` mora lá);
+  - `approval/{contracts,queries,history,undo,execute}.ts` e o helper puro
+    `approval/desfazer-habito.ts`;
+  - `src/lib/habits/{queries,services}.ts` e testes da leitura exata/insert exclusivo.
 
-- [ ] **Step 1: Teste que falha — paridade.**
+- [x] **Step 1: Teste que falha — paridade.**
   - Uma tabela `CAMPOS_VISIVEIS: Record<command, Record<campo, rótulo | "resumo">>` para cada
     command alcançável por ferramenta.
   - (a) Toda chave do schema de entrada da ferramenta está na tabela, então um campo novo deixa o
@@ -1522,14 +1525,48 @@ externa. Router sugeriu worker Codex, execução mantida no principal pela restr
   - (b) Com uma fixture que preenche todos os campos, cada rótulo mapeado aparece em
     `previsao.linhas[].rotulo`, ou o campo aparece no `resumo`.
   - Hoje, `criarEvento.descricao` falha.
-- [ ] **Step 2: Teste que falha (021).** `registrarHabito` num dia que **já tinha registro**
+- [x] **Step 2: Teste que falha (021).** `registrarHabito` num dia que **já tinha registro**
   devolve `comoDesfazer.kind === "nao-ha"`, com o motivo "O dia já tinha um registro; desfazer
   apagaria também o que estava antes." Num dia vazio, o `command` continua `desfazerHabito`.
-- [ ] **Step 3:** FAIL.
-- [ ] **Step 4: Implementar.** Linha `{ rotulo: "Descrição", valor: d.descricao }` quando a
+- [x] **Step 3:** FAIL.
+- [x] **Step 4: Implementar.** Linha `{ rotulo: "Descrição", valor: d.descricao }` quando a
   descrição existir.
-- [ ] **Step 5:** PASS. `isCommandCoherent` verde (invariante 49).
-- [ ] **Step 6: Commit** `fix(ia): o cartão mostra todo campo que vai ser gravado; desfazer de hábito não apaga o registro anterior`.
+- [x] **Step 5:** PASS. `isCommandCoherent` verde (invariante 49).
+- [x] **Step 6: Commit** `fix(ia): o cartão mostra todo campo que vai ser gravado; desfazer de hábito não apaga o registro anterior`.
+
+**Resultado (2026-11-08):** implementação pelo Codex principal, Router TIER 0.
+A tabela CAMPOS_VISIVEIS cobre os oito commands do registry de escrita, comparando todas
+as propriedades do schema e fixtures que preenchem cada campo, inclusive conta/cartão em
+cenários separados e evento de dia inteiro. Campo ou command novo sem decisão de exibição
+fica vermelho. A descrição da Agenda aparece inteira quando existe, até 2.000 caracteres;
+quando ausente, não inventa linha. Os 14 vermelhos iniciais reproduziram descrição omitida,
+desfazer inseguro e a corrida de sobrescrita de dia declarado vazio.
+
+O plano pressupunha desfazer dinâmico, mas o código tinha descriptor estático. A integração
+necessária acrescentou restrição pura por execução: a previsão declara comoDesfazer e exibe
+o motivo, coberto pelo hash da previsão; o histórico e o preparo avaliam a mesma restrição.
+O executor também reconfere a execução original, seu sucesso, o vínculo do inverso e a
+restrição, inclusive para proposta de desfazer já preparada. A precedência das recusas por
+execução sem desfecho, falha ou parcial foi preservada e confirmada por mutação na revisão.
+
+A leitura de habit_logs é exata por hábito/data e lança em erro, sem converter falha em
+ausência. Registro com zero também existe, e data passada não usa o valor do dashboard de
+hoje. Na auditoria entra só o booleano registro_novo, nunca o valor anterior. Ele sobrevive
+a apagar a conversa. Dia declarado vazio usa INSERT no mesmo serviço do módulo: se outro
+check-in chegar antes, a unicidade recusa, sem sobrescrever nem declarar criação. Os demais
+chamadores conservam o upsert. Execução antiga sem esse fato não oferece desfazer e explica
+a falta de prova. Nenhum campo foi acrescentado ao schema da ferramenta nem ao banco.
+
+**65 mutações distintas** confirmadas vermelhas, com backup durável, SHA-256 e git diff
+conferidos após cada restauração. A bateria cobre todos os rótulos, descrição sem truncamento,
+campo/command novo, zero, data passada, fatos permanentes, legado, dono, corrida no insert,
+histórico, preparo e execução. Suíte final: **7.015 testes / 315 arquivos**, TypeScript zero e lint limpo. Nenhuma mutação ficou ativa.
+
+Supabase conferido só por metadados: habit_logs mantém RLS + FORCE, policy por dono e índice
+único (user_id, habit_id, log_date). Sem migration, escrita de teste em produção, chamada
+real a IA, push, PR ou deploy. Revisão de segurança própria, nenhuma auditoria externa.
+Documentação global das invariantes fica para a Task 28, incluindo a restrição dinâmica e
+o novo fato booleano da execução. Próxima: Task 26.
 
 ### Task 26: Configurações, retenção e consumo (MOD-ia-019, 031, 024, 025)
 

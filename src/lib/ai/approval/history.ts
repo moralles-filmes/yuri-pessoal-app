@@ -22,6 +22,7 @@
  * UNIÃO das duas listas, e a execução sem proposta aparece marcada como `semTrilha`.
  */
 
+import type { FatosParaDesfazer } from "./contracts";
 import {
   derivarEstadoDaProposta,
   type DecisaoDoDono,
@@ -105,7 +106,7 @@ export type FichaDoCommand = {
   readonly rotulo: string;
   readonly modulo: string;
   readonly desfazer:
-    | { readonly tipo: "command"; readonly rotuloDoInverso: string }
+    | { readonly tipo: "command"; readonly rotuloDoInverso: string; readonly impedimento?: (fatos: FatosParaDesfazer) => string | null }
     | { readonly tipo: "nao-ha"; readonly porque: string };
 };
 
@@ -272,6 +273,8 @@ function disponibilidadeDoDesfazer(
   if (ficha.desfazer.tipo === "nao-ha") {
     return { tipo: "indisponivel", porque: ficha.desfazer.porque };
   }
+  const impedimento = ficha.desfazer.impedimento?.({ targetId: execucao.targetId, changedFields: execucao.campos });
+  if (impedimento) return { tipo: "indisponivel", porque: impedimento };
   // Sem alvo o command inverso não tem o que receber — e é melhor dizer isso do que oferecer
   // um botão que falharia no clique.
   if (!execucao.targetId) {

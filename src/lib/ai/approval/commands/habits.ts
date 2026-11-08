@@ -9,8 +9,9 @@ import "server-only";
  */
 
 import { desfazerCheckIn, metaDoHabito, registrarCheckIn } from "@/lib/habits/services";
-import { getHabitsDashboard } from "@/lib/habits/queries";
+import { getHabitLogForDate, getHabitsDashboard } from "@/lib/habits/queries";
 import { hojeISO } from "@/lib/format";
+import { impedimentoDoDesfazerDeHabito } from "../desfazer-habito";
 import { EfeitoImpossivel, type Command } from "../contracts";
 import {
   desfazerHabitoEntrada,
@@ -51,7 +52,8 @@ export const registrarHabito: Command = {
   module: "habits",
   risk: 2,
   revalidar: ["/habitos", "/dashboard"],
-  camposAuditaveis: ["value", "is_done", "log_date"],
+  // Só o fato de criação, nunca o valor anterior: ele sobrevive a apagar a conversa.
+  camposAuditaveis: ["value", "is_done", "log_date", "registro_novo"],
   /**
    * O único inverso desta subfase que precisa de mais que o id: o check-in é do HÁBITO **num
    * dia**, e o dia vem de `changed_fields.log_date` — que está na allowlist logo acima
@@ -60,7 +62,9 @@ export const registrarHabito: Command = {
   desfazer: {
     kind: "command",
     command: "desfazerHabito",
+    impedimento: impedimentoDoDesfazerDeHabito,
     payload: (fatos) => {
+      if (impedimentoDoDesfazerDeHabito(fatos)) return null;
       const data = fatos.changedFields.log_date;
       if (!fatos.targetId || typeof data !== "string") return null;
       return { habito_id: fatos.targetId, data };
@@ -86,13 +90,15 @@ export const registrarHabito: Command = {
     if (meta === null) throw new Error("Hábito não encontrado.");
     const valor = d.valor ?? meta;
 
-    const r = await registrarCheckIn(ctx, habito.id, { logDate: data, value: valor });
+    const registroNovo = (await getHabitLogForDate(habito.id, data)) === null;
+    // INSERT condicional fecha a janela entre esta leitura e a escrita do dia vazio.
+    const r = await registrarCheckIn(ctx, habito.id, { logDate: data, value: valor, somenteSeNovo: registroNovo });
     if (!r.ok) throw new Error(r.erro);
 
     return {
       targetId: habito.id,
       targetRoute: ROTA_DO_PAINEL,
-      alterados: { value: r.value, is_done: r.isDone, log_date: data },
+      alterados: { value: r.value, is_done: r.isDone, log_date: data, registro_novo: registroNovo },
       itens: [],
     };
   },

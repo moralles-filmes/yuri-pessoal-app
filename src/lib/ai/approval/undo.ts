@@ -111,6 +111,9 @@ export async function prepararDesfazer(input: {
     return recusa("Já existe um desfazer aplicado ou sem desfecho registrado. Confira o registro no módulo antes de pedir de novo.");
   }
 
+  const impedimento = original.desfazer.impedimento?.({ targetId: execucao.targetId, changedFields: parseCamposTocados(execucao.changedFields) });
+  if (impedimento) return recusa(impedimento);
+
   const inverso = findCommand(original.desfazer.command);
   if (!inverso) return recusa(MOTIVO_SEM_DESFAZER.COMMAND_DESCONHECIDO);
 

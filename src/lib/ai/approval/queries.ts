@@ -56,7 +56,7 @@ export function catalogoDeCommands(): CatalogoDeCommands {
       desfazer:
         command.desfazer.kind === "command"
           ? // O rótulo do INVERSO, para o botão dizer o que vai acontecer.
-            { tipo: "command", rotuloDoInverso: rotuloDoCommand(command.desfazer.command) }
+            { tipo: "command", rotuloDoInverso: rotuloDoCommand(command.desfazer.command), impedimento: command.desfazer.impedimento }
           : { tipo: "nao-ha", porque: command.desfazer.porque },
     };
   }

@@ -27,6 +27,8 @@ import { safeLogFields } from "@/lib/ai/security/redact";
 import { aiError } from "@/lib/ai/core/errors";
 import { rotaInternaAceita } from "@/lib/ai/tools/sources";
 import { hashDe } from "./proposals";
+import { getExecucaoDaIa } from "./queries";
+import { parseCamposTocados } from "./history";
 import { ACTION_COMMANDS, findCommand, nomesDeCommands } from "./commands";
 import {
   filtrarCamposTocados,
@@ -243,6 +245,14 @@ export async function executarAcaoAprovada(input: {
   if (!requisitos) return negar("SEM_PERMISSAO");
   const preferencias = await getAiPreferences(input.userId, supabase);
   if (preferencias.permissions[requisitos.leitura] !== true || preferencias.writePermissions[requisitos.escrita] !== true) return negar("SEM_PERMISSAO");
+
+  if (proposta.undoes_execution_id) {
+    const fonte = await getExecucaoDaIa(input.userId, proposta.undoes_execution_id);
+    const original = fonte ? findCommand(fonte.command) : null;
+    if (!fonte || fonte.status !== "sucesso" || !original || original.desfazer.kind !== "command" || original.desfazer.command !== command.name) return negar("EFEITO_MUDOU");
+    const impedimento = original.desfazer.impedimento?.({ targetId: fonte.targetId, changedFields: parseCamposTocados(fonte.changedFields) });
+    if (impedimento) return negar("EFEITO_MUDOU");
+  }
 
   const parsed = command.parse(proposta.payload);
   // Payload que não passa mais no próprio schema é um efeito que não pode ser recalculado —

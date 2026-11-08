@@ -60,6 +60,10 @@ export type EfeitoProposto = {
   /** Os registros que a ferramenta RESOLVEU. `rota` é para a tela; ela não entra no hash. */
   readonly entidades: readonly ToolRef[];
   readonly previsao: PrevisaoDoEfeito;
+  /** Decisão deste efeito; a restrição também aparece na previsão coberta pelo hash. */
+  readonly comoDesfazer?:
+    | { readonly kind: "command"; readonly command: string }
+    | { readonly kind: "nao-ha"; readonly porque: string };
 };
 
 export type PropostaGravada = {
@@ -188,6 +192,8 @@ export type ComoDesfazer =
       readonly kind: "command";
       /** O command INVERSO, que já existe porque a tela do módulo o usa. */
       readonly command: string;
+      /** Restrição pura baseada apenas nos fatos permanentes da execução. */
+      readonly impedimento?: (fatos: FatosParaDesfazer) => string | null;
       /**
        * PURO: monta a entrada do inverso a partir do que a execução registrou. `null` quando
        * a execução não guardou o necessário — e aí a tela diz isso, em vez de propor um

@@ -62,7 +62,7 @@ export type CheckInResultado =
 export async function registrarCheckIn(
   ctx: HabitServiceContext,
   habitId: string,
-  fields: { logDate: string; value: number; notes?: string | null; isDone?: boolean },
+  fields: { logDate: string; value: number; notes?: string | null; isDone?: boolean; somenteSeNovo?: boolean },
 ): Promise<CheckInResultado> {
   const target = await metaDoHabito(ctx, habitId);
   if (target === null) return { ok: false, erro: "Hábito não encontrado." };
@@ -70,17 +70,19 @@ export async function registrarCheckIn(
   const value = Math.max(0, fields.value);
   const isDone = fields.isDone ?? reachedTarget(value, target);
 
-  const { error } = await ctx.supabase.from("habit_logs").upsert(
-    {
-      user_id: ctx.userId,
-      habit_id: habitId,
-      log_date: fields.logDate,
-      value,
-      is_done: isDone,
-      notes: fields.notes ?? null,
-    },
-    { onConflict: "user_id,habit_id,log_date" },
-  );
+  const registro = {
+    user_id: ctx.userId,
+    habit_id: habitId,
+    log_date: fields.logDate,
+    value,
+    is_done: isDone,
+    notes: fields.notes ?? null,
+  };
+  const tabela = ctx.supabase.from("habit_logs");
+  // Para a IA declarar criação, a unicidade precisa confirmar que o dia ainda estava vazio.
+  const { error } = fields.somenteSeNovo
+    ? await tabela.insert(registro)
+    : await tabela.upsert(registro, { onConflict: "user_id,habit_id,log_date" });
 
   if (error) return { ok: false, erro: "Não foi possível registrar o check-in." };
   return { ok: true, value, isDone };
