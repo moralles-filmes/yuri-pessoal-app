@@ -44,7 +44,7 @@ export default function RootLayout({
           <QueryProvider>
             <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
           </QueryProvider>
-          <Toaster richColors position="top-right" />
+          <Toaster position="top-right" />
         </ThemeProvider>
       </body>
     </html>

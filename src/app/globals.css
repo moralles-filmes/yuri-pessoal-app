@@ -510,3 +510,47 @@
     border-color: CanvasText;
   }
 }
+
+/* AVISO (sonner) EM VIDRO (REDESIGN-09-B, T6). Regra SEM camada, de propósito: o sonner injeta
+   o próprio CSS em runtime e declara `box-shadow`/`background` fora de qualquer @layer, então um
+   utilitário do Tailwind (camada `utilities`) perde para ele. Camada vence camada; sem camada
+   vence com camada. A especificidade (3 atributos) também passa a do sonner (2 atributos).
+   `-webkit-backdrop-filter` ANTES de `backdrop-filter` (ver os quatro materiais acima). A cor do
+   tipo (sucesso, erro…) vai no ÍCONE; por isso o `<Toaster>` não usa `richColors`, que pintaria
+   o fundo opaco por cima deste vidro. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  background: var(--popover);
+  border-color: var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-hi),
+    inset 0 -1px 0 var(--glass-lo),
+    var(--glass-shadow);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+    background: var(--glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* VIDRO SOBRE VIDRO NÃO DESFOCA DE NOVO (§5). Select, popover, menu, dica e aviso abertos dentro
+   de um Dialog ou Sheet ficariam desfocando um painel que já desfoca — e o desfoque é o recurso
+   caro. Eles continuam translúcidos (fundo, borda e sombra intactos); só o filtro sai. Sem
+   camada e DEPOIS da regra do aviso: o `[data-styled="true"]` na lista leva a especificidade
+   a (0,3,1), acima da regra do aviso (0,3,0), então o empate não depende da ordem. */
+body:has([data-slot="dialog-content"], [data-slot="sheet-content"])
+  :is(
+    [data-slot="select-content"],
+    [data-slot="popover-content"],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="tooltip-content"],
+    [data-sonner-toast][data-styled="true"]
+  ) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

@@ -858,7 +858,7 @@ export function ChatView({
         </div>
       )}
 
-      <div className="sticky bottom-0 space-y-2 border-t bg-popover-solid pt-3">
+      <div className={cn("sticky bottom-0 space-y-2 border-t pt-3", compacto ? "bg-popover-solid" : "bg-background")}>
         {/*
           CONTEXTO DA PÁGINA — desligado por padrão. O que sai daqui é UMA ROTA de uma lista
           estática do servidor; nunca o que está escrito na tela.

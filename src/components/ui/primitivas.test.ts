@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ALFA_PERIGO } from "@/lib/theme/alfas";
-import { SRC, semComentarios } from "@/lib/theme/ler-tokens";
+import { css, SRC, semComentarios } from "@/lib/theme/ler-tokens";
 import { buttonVariants } from "./button";
 import { Input } from "./input";
 import { PRESSAO } from "./materiais";
@@ -507,16 +507,88 @@ describe("Sobreposições em vidro", () => {
     expect(fonte).toContain("bg-popover-solid fill-popover-solid");
   });
 
-  it("sonner: toast em vidro (cores, raio e desfoque)", () => {
+  it("sonner: variáveis de cor e raio; o vidro NÃO vem de classe Tailwind", () => {
     const fonte = lerUi("sonner.tsx");
     expect(fonte).toContain('"--normal-bg": "var(--popover)"');
     expect(fonte).toContain('"--normal-border": "var(--glass-border)"');
     expect(fonte).toContain('"--border-radius": "20px"');
-    expect(fonte).toContain("backdrop-blur-[24px] backdrop-saturate-160 shadow-(--shadow-vidro)");
-    expect(fonte).not.toContain('"--border-radius": "var(--radius)"');
+    // O sonner declara `box-shadow` fora de qualquer @layer: classe de utilitário perde para ele.
+    expect(fonte).not.toContain("backdrop-blur");
+    expect(fonte).not.toContain("shadow-(--shadow-vidro)");
   });
 
-  it("nenhum chamador sobrescreve fundo, raio, sombra ou anel de uma sobreposição", () => {
+  it("sonner: a cor do tipo vai para o ícone (tokens -ink), não para o fundo do aviso", () => {
+    const fonte = lerUi("sonner.tsx");
+    const icones: Record<string, string> = {
+      success: "text-success-ink",
+      info: "text-info-ink",
+      warning: "text-warning-ink",
+      error: "text-destructive",
+    };
+    for (const [tipo, classe] of Object.entries(icones)) {
+      expect(fonte, tipo).toMatch(new RegExp(tipo + String.raw`: \(\s*<\w+ className="[^"]*${classe}[^"]*"`));
+    }
+    const layout = semComentarios(fs.readFileSync(path.join(SRC, "app", "layout.tsx"), "utf8"));
+    const toaster = aberturasDe(layout, "Toaster")[0];
+    expect(toaster).toBeDefined();
+    expect(toaster).not.toContain("richColors");
+  });
+
+  it("globals.css: o vidro do aviso é regra SEM camada, mais específica que a do sonner", () => {
+    const regra = css.match(/\[data-sonner-toaster\]\s+\[data-sonner-toast\]\[data-styled="true"\]\s*\{([^}]*)\}/);
+    expect(regra, "regra do toast não encontrada").not.toBeNull();
+    const corpo = regra![1].replace(/\s+/g, " ");
+    expect(corpo).toContain("background: var(--popover)");
+    expect(corpo).toContain("border-color: var(--glass-border)");
+    expect(corpo).toContain("box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-shadow);");
+    expect(corpo).toContain("-webkit-backdrop-filter: blur(24px) saturate(160%)");
+    expect(corpo.indexOf("-webkit-backdrop-filter")).toBeLessThan(corpo.indexOf(" backdrop-filter:"));
+    // "Sem camada": a regra não pode estar dentro de um @layer nem de um @utility.
+    const antes = css.slice(0, css.indexOf(regra![0]));
+    let profundidade = 0;
+    for (const c of antes) {
+      if (c === "{") profundidade += 1;
+      else if (c === "}") profundidade -= 1;
+    }
+    expect(profundidade).toBe(0);
+    // Transparência reduzida: sólido e sem filtro (prefixado primeiro).
+    const media = css.match(/@media \(prefers-reduced-transparency: reduce\)\s*\{\s*\[data-sonner-toaster\][^{]*\{([^}]*)\}/);
+    expect(media, "media de transparência reduzida do aviso").not.toBeNull();
+    expect(media![1]).toContain("background: var(--glass-solid)");
+    expect(media![1]).toContain("-webkit-backdrop-filter: none");
+    expect(media![1].indexOf("-webkit-backdrop-filter")).toBeLessThan(media![1].indexOf(" backdrop-filter: none"));
+  });
+
+  it("globals.css: vidro dentro de Dialog/Sheet não desfoca de novo (vidro sobre vidro)", () => {
+    const m = css.match(/body:has\(([^)]*)\)\s*:is\(([\s\S]*?)\)\s*\{([^}]*)\}/);
+    expect(m, "regra do vidro aninhado").not.toBeNull();
+    const [, painel, filhos, corpo] = m!;
+    for (const slot of ["dialog-content", "sheet-content"]) expect(painel).toContain('[data-slot="' + slot + '"]');
+    for (const slot of ["select-content", "popover-content", "dropdown-menu-content", "dropdown-menu-sub-content", "tooltip-content"]) {
+      expect(filhos).toContain('[data-slot="' + slot + '"]');
+    }
+    expect(filhos).toContain('[data-sonner-toast][data-styled="true"]');
+    expect(corpo).toContain("-webkit-backdrop-filter: none");
+    expect(corpo.indexOf("-webkit-backdrop-filter")).toBeLessThan(corpo.indexOf(" backdrop-filter: none"));
+    // Vem DEPOIS da regra do aviso (empate de especificidade resolve pela ordem).
+    expect(css.indexOf(m![0])).toBeGreaterThan(css.indexOf('[data-sonner-toaster] [data-sonner-toast][data-styled="true"]'));
+  });
+
+  it("os slots citados pela regra existem nos componentes", () => {
+    for (const [arquivo, slot] of [
+      ["select.tsx", "select-content"],
+      ["popover.tsx", "popover-content"],
+      ["dropdown-menu.tsx", "dropdown-menu-content"],
+      ["dropdown-menu.tsx", "dropdown-menu-sub-content"],
+      ["tooltip.tsx", "tooltip-content"],
+      ["dialog.tsx", "dialog-content"],
+      ["sheet.tsx", "sheet-content"],
+    ]) {
+      expect(lerUi(arquivo), slot).toContain('data-slot="' + slot + '"');
+    }
+  });
+
+  it("nenhum chamador sobrescreve fundo, raio, sombra, anel, borda ou desfoque de uma sobreposição", () => {
     // `vidro-sobreposicao` é desconhecida do twMerge: ela não é removida pelo `className` do
     // chamador, e o `bg-`/`shadow-` dele ficaria brigando com ela. Lista fixa: chamador novo reprova.
     const EXCECOES = new Set(["components/shared/painel/gaveta-de-registros-impl.tsx"]); // rounded-t-2xl, da 09-D
@@ -533,7 +605,7 @@ describe("Sobreposições em vidro", () => {
           const classes = [...abertura.slice(inicio).matchAll(/"([^"]*)"|'([^']*)'|`([^`]*)`/g)]
             .map((m) => m[1] ?? m[2] ?? m[3])
             .join(" ");
-          if (/(^|[\s:])(bg-|rounded|shadow|ring)/.test(classes)) culpados.push(`${rel} <${tag}>`);
+          if (/(^|[\s:])(bg-|rounded|shadow|ring|border|backdrop-)/.test(classes)) culpados.push(`${rel} <${tag}>`);
         }
       }
     }
@@ -561,14 +633,14 @@ describe("Rodapés de gaveta", () => {
     expect(culpados).toEqual([]);
   });
 
-  it("as três gavetas usam o sólido da sobreposição", () => {
-    for (const rel of [
-      "components/todo/task-detail-sheet.tsx",
-      "components/training/workout-exercise-sheet.tsx",
-      "components/ai/chat-client.tsx",
-    ]) {
+  it("as gavetas usam o sólido da sobreposição; o chat só quando compacto", () => {
+    for (const rel of ["components/todo/task-detail-sheet.tsx", "components/training/workout-exercise-sheet.tsx"]) {
       const codigo = semComentarios(fs.readFileSync(path.join(SRC, rel), "utf8"));
       expect(codigo, rel).toMatch(/sticky bottom-0[^"]*bg-popover-solid/);
     }
+    // O mesmo ChatView aparece em /ia, fora de gaveta: lá o rodapé continua bg-background.
+    const chat = semComentarios(fs.readFileSync(path.join(SRC, "components", "ai", "chat-client.tsx"), "utf8"));
+    expect(chat).toMatch(/compacto \? "bg-popover-solid" : "bg-background"/);
+    expect(chat).toContain('"sticky bottom-0 space-y-2 border-t pt-3"');
   });
 });
