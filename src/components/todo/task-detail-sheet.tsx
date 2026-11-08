@@ -490,7 +490,7 @@ export function TaskDetailSheet({
               onChanged={() => loadDetail(task.id)}
             />
 
-            <div className="sticky bottom-0 -mx-4 border-t border-border bg-background px-4 py-3">
+            <div className="sticky bottom-0 -mx-4 border-t border-border bg-popover-solid px-4 py-3">
               <Button onClick={save} disabled={pending} className="w-full">
                 {pending ? "Salvando…" : "Salvar alterações"}
               </Button>

@@ -125,12 +125,12 @@ function arquivosTsx(dir: string): string[] {
 }
 
 /**
- * Texto de cada abertura `<Card ...>` (só `Card`, não `CardHeader` etc.): vai até o `>` que
+ * Texto de cada abertura `<Tag ...>` (só a tag exata, não `TagHeader` etc.): vai até o `>` que
  * fecha a tag, ignorando `>` dentro de `{ }` (como `=>`) e de aspas.
  */
-function aberturasDeCard(codigo: string): string[] {
+function aberturasDe(codigo: string, tag: string): string[] {
   const achadas: string[] = [];
-  for (const m of codigo.matchAll(/<Card(?![A-Za-z0-9_])/g)) {
+  for (const m of codigo.matchAll(new RegExp(`<${tag}(?![A-Za-z0-9_])`, "g"))) {
     let profundidade = 0;
     let aspas: string | null = null;
     let i = m.index;
@@ -147,6 +147,8 @@ function aberturasDeCard(codigo: string): string[] {
   }
   return achadas;
 }
+
+const aberturasDeCard = (codigo: string) => aberturasDe(codigo, "Card");
 
 describe("Card", () => {
   const fonte = semComentarios(
@@ -387,5 +389,186 @@ describe("SelectTrigger", () => {
   it("o caller de import-review passa data-[size=sm]:rounded-full", () => {
     const f = fs.readFileSync(path.join(SRC, "app", "(app)", "importar", "import-review.tsx"), "utf8");
     expect(f).toContain("rounded-full data-[size=sm]:rounded-full border-0");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Sobreposições (Task 6): Dialog, Sheet, Popover, DropdownMenu, Select, Tooltip, sonner.
+// ---------------------------------------------------------------------------------------------
+
+const lerUi = (arquivo: string) =>
+  semComentarios(fs.readFileSync(path.join(SRC, "components", "ui", arquivo), "utf8"));
+
+/** Conteúdos que são vidro de sobreposição: arquivo, função e o raio que cada um declara. */
+const SOBREPOSICOES = [
+  { arquivo: "dialog.tsx", funcao: "DialogContent", raio: "rounded-[28px]" },
+  { arquivo: "sheet.tsx", funcao: "SheetContent", raio: "data-[side=right]:rounded-l-[28px]" },
+  { arquivo: "popover.tsx", funcao: "PopoverContent", raio: "rounded-[18px]" },
+  { arquivo: "dropdown-menu.tsx", funcao: "DropdownMenuContent", raio: "rounded-[18px]" },
+  { arquivo: "dropdown-menu.tsx", funcao: "DropdownMenuSubContent", raio: "rounded-[18px]" },
+  { arquivo: "select.tsx", funcao: "SelectContent", raio: "rounded-[18px]" },
+  { arquivo: "tooltip.tsx", funcao: "TooltipContent", raio: "rounded-[10px]" },
+] as const;
+
+describe("Sobreposições em vidro", () => {
+  for (const { arquivo, funcao, raio } of SOBREPOSICOES) {
+    const corpo = corpoDaFuncao(lerUi(arquivo), funcao);
+
+    it(`${funcao} é vidro de sobreposição, sem fundo, anel nem sombra próprios`, () => {
+      expect(corpo, `${funcao} não encontrado`).not.toBe("");
+      expect(corpo).toContain("vidro-sobreposicao");
+      expect(corpo).not.toMatch(/(^|[\s"'`:])bg-popover(?![-\w])/);
+      expect(corpo).not.toContain("ring-foreground/10");
+      expect(corpo).not.toMatch(/(^|[\s"'`:])ring-1(?=[\s"'`])/);
+      expect(corpo).not.toMatch(/(^|[\s"'`:])shadow-(md|lg)(?=[\s"'`])/);
+      expect(corpo).toContain(raio);
+    });
+  }
+
+  it("nenhum arquivo de ui/ usa o véu desfocado (vidro sobre vidro)", () => {
+    const culpados = fs
+      .readdirSync(path.join(SRC, "components", "ui"))
+      .filter((n) => n.endsWith(".tsx"))
+      .filter((n) => lerUi(n).includes("backdrop-blur-xs"));
+    expect(culpados).toEqual([]);
+  });
+
+  it("o véu de Dialog e Sheet é preto translúcido, mais denso no escuro", () => {
+    for (const [arquivo, funcao] of [
+      ["dialog.tsx", "DialogOverlay"],
+      ["sheet.tsx", "SheetOverlay"],
+    ] as const) {
+      const corpo = corpoDaFuncao(lerUi(arquivo), funcao);
+      expect(corpo, funcao).toContain("bg-black/20 dark:bg-black/45");
+      expect(corpo, funcao).not.toContain("bg-black/10");
+      expect(corpo, funcao).not.toContain("backdrop-blur");
+    }
+  });
+
+  it("Dialog: raio de 28px, rodapé herda o raio e usa ladrilho", () => {
+    const fonte = lerUi("dialog.tsx");
+    expect(corpoDaFuncao(fonte, "DialogContent")).not.toContain("rounded-xl");
+    const rodape = corpoDaFuncao(fonte, "DialogFooter");
+    expect(rodape).toContain("rounded-b-[inherit]");
+    expect(rodape).toContain("bg-tile");
+    expect(rodape).not.toContain("rounded-b-xl");
+    expect(rodape).not.toContain("bg-muted/50");
+  });
+
+  it("Sheet: arredonda só a borda exposta e perde o filete de um lado só", () => {
+    const corpo = corpoDaFuncao(lerUi("sheet.tsx"), "SheetContent");
+    for (const lado of [
+      "data-[side=right]:rounded-l-[28px]",
+      "data-[side=left]:rounded-r-[28px]",
+      "data-[side=bottom]:rounded-t-[28px]",
+      "data-[side=top]:rounded-b-[28px]",
+    ]) {
+      expect(corpo, lado).toContain(lado);
+    }
+    for (const filete of ["border-l", "border-r", "border-t", "border-b"]) {
+      expect(corpo, filete).not.toMatch(new RegExp(`data-\\[side=\\w+\\]:${filete}(?=[\\s"'])`));
+    }
+    expect(corpo).not.toContain("bg-clip-padding");
+  });
+
+  it("DropdownMenu e Select: padding de 6px e itens concêntricos de 12px", () => {
+    const menu = lerUi("dropdown-menu.tsx");
+    for (const funcao of ["DropdownMenuContent", "DropdownMenuSubContent"]) {
+      expect(corpoDaFuncao(menu, funcao), funcao).toMatch(/(^|[\s"'`:])p-1\.5(?=[\s"'`])/);
+    }
+    for (const funcao of ["DropdownMenuItem", "DropdownMenuCheckboxItem", "DropdownMenuRadioItem", "DropdownMenuSubTrigger"]) {
+      const corpo = corpoDaFuncao(menu, funcao);
+      expect(corpo, funcao).toContain("rounded-[12px]");
+      expect(corpo, funcao).not.toContain("rounded-md");
+    }
+    const select = lerUi("select.tsx");
+    expect(corpoDaFuncao(select, "SelectItem")).toContain("rounded-[12px]");
+    expect(corpoDaFuncao(select, "SelectItem")).not.toContain("rounded-md");
+    // O padding do Select é do viewport (o conteúdo rola por inteiro).
+    expect(corpoDaFuncao(select, "SelectContent")).toMatch(/(^|[\s"'`:])p-1\.5(?=[\s"'`])/);
+    expect(corpoDaFuncao(select, "SelectContent")).not.toMatch(/(^|[\s"'`:])p-1(?=[\s"'`])/);
+  });
+
+  it("Select: botões de rolagem cobrem a lista com o sólido da sobreposição", () => {
+    const select = lerUi("select.tsx");
+    for (const funcao of ["SelectScrollUpButton", "SelectScrollDownButton"]) {
+      const corpo = corpoDaFuncao(select, funcao);
+      expect(corpo, funcao).toContain("bg-popover-solid");
+      expect(corpo, funcao).not.toMatch(/(^|[\s"'`:])bg-popover(?![-\w])/);
+    }
+  });
+
+  it("Tooltip: texto de popover (não invertido), seta no sólido, sem bg-foreground", () => {
+    const fonte = lerUi("tooltip.tsx");
+    expect(fonte).not.toContain("bg-foreground");
+    expect(fonte).not.toContain("fill-foreground");
+    expect(fonte).not.toContain("text-background");
+    expect(fonte).toContain("text-popover-foreground");
+    expect(fonte).toContain("bg-popover-solid fill-popover-solid");
+  });
+
+  it("sonner: toast em vidro (cores, raio e desfoque)", () => {
+    const fonte = lerUi("sonner.tsx");
+    expect(fonte).toContain('"--normal-bg": "var(--popover)"');
+    expect(fonte).toContain('"--normal-border": "var(--glass-border)"');
+    expect(fonte).toContain('"--border-radius": "20px"');
+    expect(fonte).toContain("backdrop-blur-[24px] backdrop-saturate-160 shadow-(--shadow-vidro)");
+    expect(fonte).not.toContain('"--border-radius": "var(--radius)"');
+  });
+
+  it("nenhum chamador sobrescreve fundo, raio, sombra ou anel de uma sobreposição", () => {
+    // `vidro-sobreposicao` é desconhecida do twMerge: ela não é removida pelo `className` do
+    // chamador, e o `bg-`/`shadow-` dele ficaria brigando com ela. Lista fixa: chamador novo reprova.
+    const EXCECOES = new Set(["components/shared/painel/gaveta-de-registros-impl.tsx"]); // rounded-t-2xl, da 09-D
+    const tags = SOBREPOSICOES.map((s) => s.funcao);
+    const culpados: string[] = [];
+    for (const arquivo of arquivosTsx(SRC)) {
+      const rel = path.relative(SRC, arquivo).replaceAll("\\", "/");
+      if (rel.startsWith("components/ui/") || EXCECOES.has(rel)) continue;
+      const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
+      for (const tag of tags) {
+        for (const abertura of aberturasDe(codigo, tag)) {
+          const inicio = abertura.indexOf("className=");
+          if (inicio < 0) continue;
+          const classes = [...abertura.slice(inicio).matchAll(/"([^"]*)"|'([^']*)'|`([^`]*)`/g)]
+            .map((m) => m[1] ?? m[2] ?? m[3])
+            .join(" ");
+          if (/(^|[\s:])(bg-|rounded|shadow|ring)/.test(classes)) culpados.push(`${rel} <${tag}>`);
+        }
+      }
+    }
+    expect(culpados).toEqual([]);
+  });
+
+  it("a exceção declarada ainda existe (senão a lista fixa está velha)", () => {
+    const f = fs.readFileSync(path.join(SRC, "components", "shared", "painel", "gaveta-de-registros-impl.tsx"), "utf8");
+    expect(f).toContain("data-[side=bottom]:rounded-t-2xl");
+  });
+});
+
+describe("Rodapés de gaveta", () => {
+  it("nenhum elemento sticky bottom-0 usa bg-background (transparente atrás do vidro)", () => {
+    const culpados: string[] = [];
+    for (const arquivo of arquivosTsx(SRC)) {
+      const codigo = semComentarios(fs.readFileSync(arquivo, "utf8"));
+      for (const m of codigo.matchAll(/(["'`])((?:(?!\1)[^\n])*)\1/g)) {
+        const classes = m[2];
+        if (/(^|\s)sticky(\s|$)/.test(classes) && /(^|\s)bottom-0(\s|$)/.test(classes) && /(^|\s)bg-background(\s|$)/.test(classes)) {
+          culpados.push(path.relative(SRC, arquivo).replaceAll("\\", "/"));
+        }
+      }
+    }
+    expect(culpados).toEqual([]);
+  });
+
+  it("as três gavetas usam o sólido da sobreposição", () => {
+    for (const rel of [
+      "components/todo/task-detail-sheet.tsx",
+      "components/training/workout-exercise-sheet.tsx",
+      "components/ai/chat-client.tsx",
+    ]) {
+      const codigo = semComentarios(fs.readFileSync(path.join(SRC, rel), "utf8"));
+      expect(codigo, rel).toMatch(/sticky bottom-0[^"]*bg-popover-solid/);
+    }
   });
 });
