@@ -512,3 +512,153 @@ describe("barras dos módulos", () => {
     }
   });
 });
+
+/**
+ * 09-E, Task 5 — linhas e áreas. Esmaecimento de grupo não se aplica (não há grupo), então não há
+ * `ObservadorDeFoco`; o gancho continua, porque é ele que fecha a dica ao tocar fora e ao rolar.
+ */
+type ConfigDeLinhas = {
+  caminho: string;
+  /** Arquivo com vários gráficos: a varredura fica só no trecho das linhas e áreas. */
+  trecho?: { de: string };
+  dinheiro: boolean;
+  /** `<Line` e `<Area` esperados (o trecho inteiro). */
+  linhas: number;
+  areas: number;
+  legendas: number;
+  /** Elementos com `ref` do foco: o `<div>` próprio ou o `<ChartFrame>` de Treinos. */
+  raiz: "div" | "ChartFrame";
+  raizes: number;
+};
+
+const LINHAS: ConfigDeLinhas[] = [
+  { caminho: "dashboard/evolucao-chart-impl.tsx", dinheiro: true, linhas: 3, areas: 0, legendas: 1, raiz: "div", raizes: 1 },
+  { caminho: "body/measurement-chart-impl.tsx", dinheiro: false, linhas: 2, areas: 0, legendas: 0, raiz: "div", raizes: 1 },
+  { caminho: "studies/evolution-chart-impl.tsx", dinheiro: false, linhas: 0, areas: 1, legendas: 0, raiz: "div", raizes: 1 },
+  {
+    caminho: "training/training-charts-impl.tsx",
+    trecho: { de: "export function EvolutionLineChart" },
+    dinheiro: false,
+    linhas: 1,
+    areas: 1,
+    legendas: 0,
+    raiz: "ChartFrame",
+    raizes: 2,
+  },
+];
+
+describe.each(LINHAS)("linhas e áreas em vidro: $caminho", (cfg) => {
+  const inteiro = lerComponente(cfg.caminho);
+  const fonte = cfg.trecho ? inteiro.slice(inteiro.indexOf(cfg.trecho.de)) : inteiro;
+
+  it("lê o arquivo e acha as séries esperadas (não afirma sobre vazio)", () => {
+    expect(fonte.length).toBeGreaterThan(300);
+    expect(elementos(fonte, "Line").length).toBe(cfg.linhas);
+    expect(elementos(fonte, "Area").length).toBe(cfg.areas);
+  });
+
+  it("toda <Line>/<Area> tem 2 px e sem animação da recharts", () => {
+    for (const e of [...elementos(fonte, "Line"), ...elementos(fonte, "Area")]) {
+      expect(e).toContain("strokeWidth={2}");
+      expect(e).toContain("isAnimationActive={false}");
+    }
+  });
+
+  it("toda <Area> tem preenchimento plano a 14% e nenhum arquivo usa degradê", () => {
+    for (const a of elementos(fonte, "Area")) {
+      expect(a).toContain('fill="var(--chart-1)"');
+      expect(a).toContain("fillOpacity={0.14}");
+    }
+    expect(inteiro).not.toContain("linearGradient");
+    expect(inteiro).not.toContain("url(#");
+  });
+
+  it("todo <Tooltip> de linha tem mira, dica em vidro, sem animação e preso ao foco", () => {
+    const dicas = elementos(fonte, "Tooltip");
+    expect(dicas.length).toBe(cfg.raizes);
+    for (const t of dicas) {
+      expect(t).toContain("cursor={MIRA_DA_LINHA}");
+      expect(t).toContain("content=");
+      expect(t).toContain("active={foco.dicaAtiva}");
+      expect(t).toContain("isAnimationActive={false}");
+      expect(t).not.toContain("contentStyle");
+      expect(t).not.toContain("formatter=");
+    }
+  });
+
+  it("o invólucro com ref do foco existe e não leva o crescimento das barras", () => {
+    const comRef = elementos(fonte, cfg.raiz).filter((e) =>
+      /\bref(DoGrafico)?=\{refDoGrafico\}/.test(e),
+    );
+    expect(comRef.length).toBe(cfg.raizes);
+    for (const e of comRef) expect(e).not.toContain("grafico-barras");
+    expect(fonte).toContain("{ ref: refDoGrafico, ...foco } = useFocoDoGrafico();");
+    expect(inteiro).toMatch(/from "[^"]*use-foco-do-grafico"/);
+    expect(fonte).not.toContain("ObservadorDeFoco");
+  });
+
+  it("só o gráfico em dinheiro leva grafico-dinheiro e dinheiro: true", () => {
+    const comRef = elementos(fonte, cfg.raiz).filter((e) =>
+      /\bref(DoGrafico)?=\{refDoGrafico\}/.test(e),
+    );
+    for (const e of comRef) expect(e.includes("grafico-dinheiro")).toBe(cfg.dinheiro);
+    expect(/dinheiro:\s*true/.test(fonte)).toBe(cfg.dinheiro);
+  });
+
+  it("a legenda, quando existe, é a LegendaDoGrafico", () => {
+    const legendas = elementos(fonte, "Legend");
+    expect(legendas.length).toBe(cfg.legendas);
+    for (const l of legendas) expect(l).toContain("content={<LegendaDoGrafico />}");
+  });
+
+  it("eixos sem linha nem marca, Y com largura automática, grade só horizontal", () => {
+    for (const e of [...elementos(fonte, "XAxis"), ...elementos(fonte, "YAxis")]) {
+      expect(e).toContain("axisLine={false}");
+      expect(e).toContain("tickLine={false}");
+    }
+    for (const y of elementos(fonte, "YAxis")) expect(y).toContain('width="auto"');
+    for (const g of elementos(fonte, "CartesianGrid")) expect(g).toContain("vertical={false}");
+  });
+
+  it("não sobrou estilo antigo de tooltip", () => {
+    expect(fonte).not.toMatch(/tooltip(Style|LabelStyle|ItemStyle|Props)/);
+    expect(inteiro).not.toMatch(/tooltip(Style|LabelStyle|ItemStyle)/);
+  });
+});
+
+describe("linhas e áreas em vidro: situações próprias", () => {
+  it("medidas: o buraco continua (connectNulls={false}) e a média sobe a 2 px", () => {
+    const f = lerComponente("body/measurement-chart-impl.tsx");
+    const linhas = elementos(f, "Line");
+    const medicao = linhas.find((l) => l.includes('dataKey="value"')) ?? "";
+    const media = linhas.find((l) => l.includes('dataKey="average"')) ?? "";
+    expect(medicao).toContain("connectNulls={false}");
+    expect(medicao).toContain("dot={{");
+    expect(media).toContain("strokeWidth={2}");
+    expect(media).toContain("strokeDasharray");
+    expect(f).toContain("<ReferenceLine");
+    // Rótulos de hoje; a medição ausente não vira zero.
+    expect(f).toContain('"Média móvel"');
+    expect(f).toContain('"Medição"');
+    expect(f).toMatch(/typeof e\.value === "number"/);
+  });
+
+  it("estudos: 'Semana de' e 'Estudado' continuam, e a dica lê os minutos do ponto", () => {
+    const f = lerComponente("studies/evolution-chart-impl.tsx");
+    expect(f).toContain("`Semana de ${");
+    expect(f).toContain('nome: "Estudado"');
+    expect(f).toContain("formatMinutes(");
+  });
+
+  it("treinos: a linha e a área mostram o texto já formatado do ponto, sem dinheiro", () => {
+    const f = lerComponente("training/training-charts-impl.tsx");
+    expect(f.match(/\(e\.payload as ChartPoint\)\.display/g)?.length).toBe(3);
+    expect(f).toContain('aria-hidden="true"');
+  });
+
+  it("evolução: usa o olho no eixo e na dica, e a legenda em vidro", () => {
+    const f = lerComponente("dashboard/evolucao-chart-impl.tsx");
+    expect(f).toContain("formatCurrency(");
+    expect(f).toContain("LegendaDoGrafico");
+  });
+});
