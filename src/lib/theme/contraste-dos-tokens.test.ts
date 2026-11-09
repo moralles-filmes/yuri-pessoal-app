@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import { compor, contraste, lerCor } from "./contraste";
 import { ALFA_PERIGO } from "./alfas";
 import { claro, css, escuro, SRC, semComentarios } from "./ler-tokens";
+import { OPACIDADE_ESMAECIDA } from "@/components/dashboard/chart-theme";
 
 const MINIMO = 4.5;
 
@@ -527,6 +528,122 @@ describe("09-D · ícone sobre fundo tingido", () => {
           ).toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
         }
       }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// 09-E · dica em vidro, legenda, amostra de cor e esmaecimento dos gráficos. O alfa do aro da
+// amostra é LIDO da classe no fonte (subir a classe sobe a prova junto, baixá-la reprova).
+// ---------------------------------------------------------------------------------------------
+
+describe("09-E · dica e legenda dos gráficos", () => {
+  const fonteDica = semComentarios(
+    fs.readFileSync(path.join(SRC, "components", "dashboard", "dica-do-grafico.tsx"), "utf8"),
+  );
+  const trechoAmostra = fonteDica.slice(
+    fonteDica.indexOf("export function AmostraDeCor"),
+    fonteDica.indexOf("export function DicaDoGrafico"),
+  );
+  const alfaDoAro = alfaDaClasse(trechoAmostra, "ring-foreground");
+
+  /** Sobre o que a dica pode cair: vidro, as quatro composições fortes e dois extremos de página. */
+  function fundosDaDica(tema: Tema): Array<[string, string]> {
+    const sobre: Array<[string, string]> = [
+      ...superficies(tema),
+      ["#000000", "#000000"],
+      ["#ffffff", "#ffffff"],
+    ];
+    const lista = sobre.map(([r, s]): [string, string] => [
+      `glass-strong sobre ${r}`,
+      compor(valor(tema, "glass-strong"), s),
+    ]);
+    return [...lista, ...fortes(tema)];
+  }
+
+  /** Sobre o que as barras e o contorno do mês em andamento são desenhados. */
+  function fundosDoGrafico(tema: Tema): Array<[string, string]> {
+    return [
+      ...superficies(tema),
+      ["#000000", "#000000"],
+      ["#ffffff", "#ffffff"],
+    ];
+  }
+
+  const razaoTexto = (r: number) => (Math.round(r * 100) / 100).toFixed(2).replace(".", ",");
+
+  for (const [nomeTema, tema] of TEMAS) {
+    describe(nomeTema, () => {
+      const exigirMinimo = (rotulo: string, razao: number, minimo: number) => {
+        expect(
+          razao,
+          `${nomeTema} · ${rotulo}: ${razaoTexto(razao)}:1 < ${String(minimo).replace(".", ",")}:1 — baixe o alfa antes de escurecer o texto`,
+        ).toBeGreaterThanOrEqual(minimo);
+      };
+
+      it("anti-tautologia: oito composições de glass-strong + os dois extremos", () => {
+        expect(fundosDaDica(tema)).toHaveLength(10);
+        expect(alfaDoAro).toBeGreaterThan(0);
+        expect(alfaDoAro).toBeLessThan(1);
+      });
+
+      it("foreground e muted-foreground sobre glass-strong >= 4,5:1", () => {
+        for (const [rotulo, fundo] of fundosDaDica(tema)) {
+          for (const texto of ["foreground", "muted-foreground"]) {
+            exigirMinimo(`${texto} sobre ${rotulo}`, contraste(valor(tema, texto), fundo), MINIMO);
+          }
+        }
+      });
+
+      it("aro da amostra de cor (alfa lido da classe) >= 3:1 sobre glass-strong composto", () => {
+        for (const [rotulo, fundo] of fundosDaDica(tema)) {
+          const aro = compor(comAlfa(valor(tema, "foreground"), alfaDoAro), fundo);
+          exigirMinimo(
+            `aro foreground/${Math.round(alfaDoAro * 100)} sobre ${rotulo}`,
+            contraste(aro, fundo),
+            MINIMO_COMPONENTE,
+          );
+        }
+      });
+
+      it("contorno do mês em andamento (chart-1 e muted-foreground) >= 3:1 nas quatro superfícies", () => {
+        const fundos = superficies(tema);
+        expect(fundos).toHaveLength(4);
+        for (const [rotulo, fundo] of fundos) {
+          for (const token of ["chart-1", "muted-foreground"]) {
+            exigirMinimo(
+              `contorno ${token} sobre ${rotulo}`,
+              contraste(oklchParaHex(valor(tema, token)), fundo),
+              MINIMO_COMPONENTE,
+            );
+          }
+        }
+      });
+
+      it("laudo do esmaecimento: 30% é REFORÇO de foco, não carrega o significado (sem exigir 3:1)", () => {
+        // Decisão do dono (09-E): o grupo fora de foco fica a 30% e o laudo é gravado, não exigido.
+        // O que o teste prova é o que sustenta a decisão: o foco continua sendo dito por outro
+        // meio (a dica abre com o nome e o valor do grupo) e o esmaecido é, de fato, mais fraco
+        // que o inteiro em todas as séries e fundos — uma série que ficasse MAIS contrastada
+        // esmaecida seria um defeito de cálculo, não de desenho.
+        expect(OPACIDADE_ESMAECIDA).toBe(0.3);
+        const series = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => `chart-${k}`).concat("muted-foreground");
+        const laudo: string[] = [];
+        for (const [rotulo, fundo] of fundosDoGrafico(tema)) {
+          for (const token of series) {
+            const cor = oklchParaHex(valor(tema, token));
+            const inteira = contraste(cor, fundo);
+            const esmaecida = contraste(compor(comAlfa(cor, OPACIDADE_ESMAECIDA), fundo), fundo);
+            expect(Number.isFinite(esmaecida), `${token} sobre ${rotulo}`).toBe(true);
+            expect(
+              esmaecida,
+              `${nomeTema} · ${token} esmaecida (${razaoTexto(esmaecida)}:1) deveria ser mais fraca que inteira (${razaoTexto(inteira)}:1) sobre ${rotulo}`,
+            ).toBeLessThan(inteira);
+            laudo.push(`${token}@${rotulo}=${razaoTexto(esmaecida)}`);
+          }
+        }
+        expect(laudo).toHaveLength(series.length * fundosDoGrafico(tema).length);
+      });
     });
   }
 });

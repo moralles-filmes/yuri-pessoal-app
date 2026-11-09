@@ -542,6 +542,7 @@ body:has([data-slot="dialog-content"], [data-slot="sheet-content"])
     [data-slot="dropdown-menu-content"],
     [data-slot="dropdown-menu-sub-content"],
     [data-slot="tooltip-content"],
+    [data-slot="chart-tooltip"],
     [data-sonner-toast][data-styled="true"]
   ) {
   -webkit-backdrop-filter: none;
@@ -601,4 +602,13 @@ body:has([data-slot="dialog-content"], [data-slot="sheet-content"]) [data-casca]
     animation: none;
     transition: none;
   }
+}
+
+/* O OLHO DOS VALORES NO EIXO (09-E). O rótulo do eixo é texto SVG desenhado pela recharts, fora do
+   alcance de `ValorComOlho`; o invólucro do gráfico em dinheiro leva `grafico-dinheiro` e, com o
+   olho fechado (`data-ocultar="true"` em algum ancestral), os valores do eixo somem. `visibility`
+   e não `display`: o eixo continua ocupando o mesmo espaço, e o gráfico não se mexe ao
+   abrir/fechar o olho. Sem camada, junto das outras regras do gráfico. */
+[data-ocultar="true"] .grafico-dinheiro .recharts-cartesian-axis-tick-value {
+  visibility: hidden;
 }
