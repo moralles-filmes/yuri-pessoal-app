@@ -395,3 +395,46 @@ Safari do iPhone do dono, servidor de produção na mesma Wi-Fi, `/dashboard` e
   investigação própria.
 - **`DIVIDA_NA_NEVOA`:** as 15 combinações continuam reprovando, porque os tokens não mudaram. Saiu o
   uso real em login e cadastro, e um teste impede a volta. Os usos que restarem em páginas são da 09-F.
+
+## REDESIGN-09-D — peças do painel em vidro (2026-11-08)
+
+Servidor de produção local, Chrome do dono pela extensão, harness de iframes em 390, 768, 1280 e
+1440 px, claro e escuro.
+
+### Testes e orçamento
+
+| | Antes (4e60329) | Depois |
+| --- | --- | --- |
+| Testes | 374 arquivos | 8.552 em 374 arquivos |
+| Mediana de JS por rota | 203,9 KB | 203,9 KB |
+| Rotas acima de +1 KB gz | | 0 de 71 |
+| Maior aumento | | +0,351 KB (`/(app)/dashboard/financeiro`, os ícones dos blocos) |
+
+### Amostrador (mesmo método da 09-A, iframe de 1280×800, `document.hasFocus()` verdadeiro)
+
+| Tela | Tema | fps médio (3 rodadas) | p95 (ms) | maior quadro (ms), 3 rodadas |
+| --- | --- | --- | --- | --- |
+| `/dashboard` | claro | 128,1 · 120,4 · 122,6 | 15,0 | 30,1 · 15,1 · 15,1 |
+| `/dashboard` | escuro | 120,3 · 119,1 · 119,8 | 15,0–15,1 | 15,3 · 30,0 · 30,0 |
+| `/dashboard/financeiro` | claro | 122,7 · 120,4 · 120,0 | 15,0–15,1 | 15,2 · 15,2 · 30,1 |
+| `/dashboard/financeiro` | escuro | 119,0 · 118,9 · 119,5 | 15,0–15,1 | 30,1 · 30,0 · 30,2 |
+
+Nenhum quadro acima de 50 ms. Sem desaceleração de CPU.
+
+### O que a conferência mostrou
+
+- Sem rolagem horizontal e um único `<h1>` em `/dashboard`, `/dashboard/financeiro`,
+  `/financeiro/lancamentos`, `/treinos` e `/configuracoes`, nas quatro larguras e nos dois temas.
+- Número do `Indicador`: 24 px a 1280 px (conteúdo do cartão com 222 px) e 28 px a 1440 px (263,5 px).
+  O degrau planejado de 16,5rem não alcançava 1440 px por 0,5 px e passou a 16rem.
+- Olho fechado mantém a máscara no tamanho do número. "Personalizar" mantém o raio de 28 px e o
+  cursor de arrasto, com a barra abaixo do título.
+- Sidebar recolhida a 1280 px: 76 px, sem rolagem horizontal; os cartões ganham largura e o número vai a 28 px.
+- Reduzir transparência e movimento: **simulados**, aplicando as regras de `@media` do próprio CSS no
+  iframe. O cartão fica sólido e sem filtro.
+
+### Achado para as próximas fases
+
+- A 1280 px, um `StatCard` de `/dashboard/financeiro` tem o número 7 px mais largo que a coluna de
+  texto (137 × 130 px). Ele avança sobre o espaço antes do ícone, sem encostar nem cortar. O valor
+  usa espaço inseparável, então `break-words` cortaria o número no meio. Fica para decisão do dono.

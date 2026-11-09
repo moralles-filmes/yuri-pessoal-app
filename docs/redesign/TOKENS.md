@@ -418,6 +418,20 @@ ele cai e põe `inter.variable` no próprio `<html>`. `preload: false` continua 
 3,42:1, e este token dá 4,78:1. `data-casca` marca a casca que perde o desfoque sob diálogo ou gaveta
 (sidebar e assistente). O header fica de fora de propósito, porque tem conteúdo passando atrás.
 
+### Peças do painel (REDESIGN-09-D)
+
+Nenhum token ou material novo. Saíram `--banner-from` e `--banner-to`.
+
+| Peça | Forma e tipografia |
+| --- | --- |
+| Abertura | sem caixa; data 15 px; `<h1>` 54 px (38 px no celular) / 700 / −0,04em; linha 19 px (17 px no celular); só `foreground` e `muted-on-fog` |
+| `Indicador` | `Card` (raio 24); ícone `size-10`, raio 12, tingimento a 10%, sem anel; número 24 px, 28 px com o cartão a partir de 16rem de conteúdo |
+| `Bloco` e `CardShell` | raio 28; título 17 px / 600 / −0,018em; "Ver tudo" em `text-sm` e `text-primary` |
+| `StatCard` | `Card` (raio 24); `p-[15px] sm:p-[19px]` (desconto da borda); ícone como o do `Indicador`; número 24 px |
+| `PageHeader` | `<h1>` 32 px (26 px no celular) / 700 / −0,03em |
+
+---
+
 ## 7. Paleta de gráficos — **validada, não escolhida no olho**
 
 Ordem fixa, atribuída por identidade, **nunca ciclada**. Slot 1 é o azul da marca.
