@@ -275,7 +275,7 @@ export default async function ComprovantesPage({
           dizer "estes são todos" quando não são.
         */}
         {lista.saturado && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-on-fog">
             Mostrando os {lista.teto} envios mais recentes. Há mais no histórico.
           </p>
         )}

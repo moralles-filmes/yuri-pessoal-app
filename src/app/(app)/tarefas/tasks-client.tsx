@@ -409,7 +409,7 @@ function ProjectChip({
         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
         active
           ? "border-primary bg-primary/10 font-semibold text-foreground"
-          : "text-muted-foreground hover:bg-accent",
+          : "text-muted-on-fog hover:bg-accent",
       )}
     >
       {color && (

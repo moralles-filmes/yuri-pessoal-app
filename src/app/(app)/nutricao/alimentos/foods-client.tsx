@@ -347,7 +347,7 @@ export function FoodsClient({
         />
       ) : (
         <div className="space-y-2">
-          <label className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
+          <label className="flex items-center gap-2 px-1 text-xs text-muted-on-fog">
             <Checkbox
               checked={allVisibleSelected}
               onCheckedChange={(checked) => {
@@ -507,7 +507,7 @@ function FoodRow({
           <MacroChip label="P" value={food.macros.proteina} unit="g" />
           <MacroChip label="C" value={food.macros.carboidrato} unit="g" />
           <MacroChip label="G" value={food.macros.lipidios} unit="g" />
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[11px] text-muted-on-fog">
             por {food.baseQuantity} {food.baseUnit}
           </span>
         </div>

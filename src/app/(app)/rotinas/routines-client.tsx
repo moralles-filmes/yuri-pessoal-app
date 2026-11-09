@@ -137,7 +137,7 @@ export function RoutinesClient({
 
           {/* Hoje */}
           <section className="space-y-2">
-            <h2 className="text-sm font-medium text-muted-foreground">
+            <h2 className="text-sm font-medium text-muted-on-fog">
               Rotinas de hoje ({todays.length})
             </h2>
             {todays.length === 0 ? (
@@ -211,10 +211,10 @@ function AllRoutinesSection({
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-muted-foreground">
+        <h2 className="text-sm font-medium text-muted-on-fog">
           Todas as rotinas
         </h2>
-        <p className="text-xs text-muted-foreground">Arraste ⠿ para reordenar</p>
+        <p className="text-xs text-muted-on-fog">Arraste ⠿ para reordenar</p>
       </div>
       <SortableList
         items={ordered}

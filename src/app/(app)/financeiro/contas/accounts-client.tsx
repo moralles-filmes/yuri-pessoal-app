@@ -25,7 +25,7 @@ export function AccountsClient({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-on-fog">
           {accounts.length} conta(s) · saldo total{" "}
           <span className="font-medium text-foreground">
             {formatCurrency(total)}

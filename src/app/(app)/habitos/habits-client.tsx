@@ -356,7 +356,7 @@ function ManageView({
         <h2 className="text-sm font-medium text-muted-foreground">
           Todos os hábitos ({ordered.length})
         </h2>
-        <p className="text-xs text-muted-foreground">Arraste ⠿ para reordenar</p>
+        <p className="text-xs text-muted-on-fog">Arraste ⠿ para reordenar</p>
       </div>
       <SortableList
         items={ordered}

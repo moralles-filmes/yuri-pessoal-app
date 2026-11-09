@@ -50,7 +50,7 @@ export async function ResumoFinanceiro({
         <h2 id="resumo-financeiro-titulo" className="text-base font-semibold tracking-tight">
           Resumo financeiro
         </h2>
-        <p className="text-xs text-muted-foreground">{mesPorExtenso} · base: competência</p>
+        <p className="text-xs text-muted-on-fog">{mesPorExtenso} · base: competência</p>
         {d.completudeDoMes.estado === "parcial" ? (
           <span
             role="status"

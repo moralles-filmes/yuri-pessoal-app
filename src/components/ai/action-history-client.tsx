@@ -419,7 +419,7 @@ export function ActionHistoryClient({
         mesma mentira que a subfase existe para impedir.
       */}
       {saturado && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-on-fog">
           Esta tela mostra as {teto} ações mais recentes. Pode haver mais no histórico.
         </p>
       )}

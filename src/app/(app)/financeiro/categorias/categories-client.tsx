@@ -65,7 +65,7 @@ export function CategoriesClient({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-on-fog">
           {categories.length} categoria(s)
         </p>
         <div className="flex items-center gap-2">
@@ -101,7 +101,7 @@ export function CategoriesClient({
         <div className="space-y-6">
           {grupos.map((grupo) => (
             <section key={grupo.chave} aria-labelledby={`grupo-${grupo.chave}`} className="space-y-3">
-              <h2 id={`grupo-${grupo.chave}`} className="text-sm font-medium text-muted-foreground">
+              <h2 id={`grupo-${grupo.chave}`} className="text-sm font-medium text-muted-on-fog">
                 {grupo.titulo} <span className="tabular-nums">({grupo.categorias.length})</span>
               </h2>
               <div className="grid gap-3 sm:grid-cols-2">

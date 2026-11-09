@@ -387,7 +387,7 @@ export function DiaryClient(props: DiaryClientProps) {
 
         <div className="min-w-0">
           <p className="text-sm font-semibold">{relativeDayLabel(props.date, props.hoje)}</p>
-          <p className="text-xs text-muted-foreground">{longDateLabel(props.date)}</p>
+          <p className="text-xs text-muted-on-fog">{longDateLabel(props.date)}</p>
         </div>
 
         <div className="ms-auto flex flex-wrap items-center gap-2">

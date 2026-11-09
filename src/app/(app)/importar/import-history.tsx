@@ -39,7 +39,7 @@ export function ImportHistory({
 
   return (
     <div className="space-y-2">
-      <h2 className="text-sm font-medium text-muted-foreground">
+      <h2 className="text-sm font-medium text-muted-on-fog">
         Importações recentes
       </h2>
       <div className="grid gap-2">

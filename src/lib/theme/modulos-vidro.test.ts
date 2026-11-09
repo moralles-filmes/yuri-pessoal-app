@@ -934,3 +934,136 @@ describe("09-F · T7 · hierarquia de títulos", () => {
     for (const a of h2) expect(classesDe(a)).toEqual(["text-sm", "font-medium"]);
   });
 });
+
+describe("09-F · T8 · texto direto na névoa: foreground ou muted-on-fog", () => {
+  const raiz = path.resolve(SRC, "..");
+  const A = "src/app/(app)/";
+
+  /**
+   * [arquivo, tag, texto-âncora]: o elemento é o `<tag …>` mais próximo ANTES do texto-âncora
+   * (que fica dentro dele, depois da abertura). O âncora é único no arquivo: "a classe aparece no
+   * arquivo" não prova que ela está no elemento que ficou sobre a névoa.
+   */
+  const NA_NEVOA: ReadonlyArray<readonly [string, string, string]> = [
+    // menu do módulo (coluna fixa e gaveta) e abas de rota
+    ["src/components/shared/module-shell.tsx", "p", "{grupo.titulo}"],
+    ["src/components/shared/module-shell.tsx", "Link", '<Icon className={cn("size-4 shrink-0"'],
+    ["src/components/shared/module-shell.tsx", "p", "<Conteudo nav={nav} />"],
+    ["src/components/shared/abas-de-rota.tsx", "Link", "{aba.rotulo}"],
+    // dashboard financeiro e dashboard geral
+    [`${A}dashboard/financeiro/financial-dashboard-client.tsx`, "p", "{a.detail}"],
+    ["src/components/dashboard/general/period-toolbar.tsx", "button", "{DASH_VIEW_LABELS[v]}"],
+    ["src/components/dashboard/general/period-toolbar.tsx", "span", "{windowLabel(window)}"],
+    ["src/components/dashboard/general/resumo-financeiro.tsx", "p", "base: competência"],
+    // cartões, faturas, parcelamentos
+    [`${A}cartoes/page.tsx`, "p", "Valores por fatura do cartão"],
+    [`${A}cartoes/proximos-meses/page.tsx`, "p", "Por competência"],
+    [`${A}cartoes/proximos-meses/page.tsx`, "span", "{mesPorExtenso(meses[0])}"],
+    [`${A}cartoes/relatorios/page.tsx`, "p", "{TEXTO_DA_BASE[dados.base]}"],
+    [`${A}cartoes/relatorios/page.tsx`, "label", "Cartão"],
+    ["src/components/cartoes/relatorio-de-cartao.tsx", "p", "Atenção: o mês atual"],
+    [`${A}faturas/page.tsx`, "p", "Valores por fatura do cartão"],
+    [`${A}parcelamentos/page.tsx`, "p", "Valores das parcelas"],
+    [`${A}cartoes/cards-client.tsx`, "p", "{cards.length} cartão"],
+    [`${A}financeiro/categorias/categories-client.tsx`, "p", "{categories.length} categoria"],
+    [`${A}financeiro/categorias/categories-client.tsx`, "h2", "{grupo.titulo}"],
+    [`${A}financeiro/contas/accounts-client.tsx`, "p", "{accounts.length} conta"],
+    [`${A}financeiro/contas-fixas/bills-client.tsx`, "p", "{bills.length} conta(s) fixa(s)"],
+    [`${A}financeiro/recorrencias/recurring-client.tsx`, "p", "{recurrences.length} recorrência"],
+    [`${A}importar/import-history.tsx`, "h2", "Importações recentes"],
+    [`${A}configuracoes/page.tsx`, "p", "Seus dados são protegidos"],
+    // hábitos e rotinas
+    [`${A}habitos/habits-client.tsx`, "p", "Arraste ⠿ para reordenar"],
+    [`${A}rotinas/routines-client.tsx`, "h2", "Rotinas de hoje"],
+    [`${A}rotinas/routines-client.tsx`, "h2", "Todas as rotinas"],
+    [`${A}rotinas/routines-client.tsx`, "p", "Arraste ⠿ para reordenar"],
+    // IA
+    [`${A}ia/memoria/page.tsx`, "div", "{!prefs.permissions.allow_memory ? ("],
+    [`${A}ia/comprovantes/page.tsx`, "p", "Mostrando os {lista.teto}"],
+    [`${A}ia/insights/page.tsx`, "p", "{varredura === null ? ("],
+    ["src/components/ai/memory-client.tsx", "p", "Preferências gerais"],
+    ["src/components/ai/action-history-client.tsx", "p", "Esta tela mostra as {teto}"],
+    ["src/components/ai/frase-de-gasto.tsx", "p", "<Wallet"],
+    // estudos
+    [`${A}estudos/[id]/course-detail-client.tsx`, "Link", "Voltar para Estudos"],
+    [`${A}estudos/[id]/course-detail-client.tsx`, "span", "{detail.platform}"],
+    ["src/components/studies/badges.tsx", "Badge", "{STUDY_CATEGORY_EMOJI[category]}"],
+    // dieta
+    [`${A}nutricao/alimentos/foods-client.tsx`, "label", "Selecionar os {visible"],
+    [`${A}nutricao/alimentos/foods-client.tsx`, "span", "por {food.baseQuantity}"],
+    ["src/components/nutrition/food-filters.tsx", "span", "{resultCount === totalCount"],
+    ["src/components/nutrition/food-filters.tsx", "button", "{active && <Filter"],
+    ["src/components/nutrition/nutrient-value.tsx", "span", "{label}</span>"],
+    [`${A}nutricao/diario/diary-client.tsx`, "p", "{longDateLabel(props.date)}"],
+    [`${A}nutricao/planejamento/planning-client.tsx`, "p", "{longDateLabel(props.date)}"],
+    // tarefas e TO-DO
+    [`${A}tarefas/tasks-client.tsx`, "button", "{color && ("],
+    ["src/components/todo/todo-nav.tsx", "button", "{Icon && <Icon"],
+    ["src/components/todo/todo-nav.tsx", "button", '<ChevronDown className={cn("size-3 transition-transform"'],
+    // treinos
+    [`${A}treinos/page.tsx`, "p", "grupos musculares · incremento padrão"],
+    [`${A}treinos/exercicios/exercises-client.tsx`, "span", "Selecionar visíveis"],
+    [`${A}treinos/treinos/workouts-client.tsx`, "p", "<Clock"],
+    [`${A}treinos/relatorios/reports-client.tsx`, "div", "{shortDateLabelIso(range.from)}"],
+    ["src/components/training/field.tsx", "Label", "{label}</Label>"],
+    [`${A}treinos/calendario/calendar-client.tsx`, "p", "No período carregado"],
+    [`${A}treinos/recordes/records-client.tsx`, "p", "O 1RM estimado"],
+    [`${A}treinos/historico/[id]/session-detail-client.tsx`, "p", "A ordem executada"],
+    [`${A}treinos/historico/[id]/session-detail-client.tsx`, "span", "{timeInSaoPaulo(new Date(session.startedAt))}"],
+    [`${A}treinos/historico/[id]/session-detail-client.tsx`, "span", "Peso corporal:"],
+  ];
+
+  /** A abertura do `<tag …>` mais próximo antes do âncora. */
+  function elementoDe(rel: string, tag: string, ancora: string) {
+    const fonte = fonteSemComentarios(path.join(raiz, rel));
+    const ocorrencias = fonte.split(ancora).length - 1;
+    expect(ocorrencias, `${rel}: âncora «${ancora}» tem de ser única`).toBe(1);
+    const alvo = fonte.indexOf(ancora);
+    let i = alvo;
+    for (;;) {
+      i = fonte.lastIndexOf(`<${tag}`, i - 1);
+      expect(i, `${rel}: nenhum <${tag}> antes de «${ancora}»`).toBeGreaterThanOrEqual(0);
+      const abertura = aberturas(fonte.slice(i), tag)[0] ?? "";
+      if (i + abertura.length <= alvo) return abertura;
+    }
+  }
+
+  it("a varredura leu a lista (anti-tautologia)", () => {
+    expect(NA_NEVOA.length).toBeGreaterThan(50);
+  });
+
+  it.each(NA_NEVOA)("%s · <%s> «%s»: texto em muted-on-fog, sem muted-foreground", (rel, tag, ancora) => {
+    const abertura = elementoDe(rel, tag, ancora);
+    const classes = classesDe(abertura);
+    expect(classes, `${rel}:${ancora}`).toContain("text-muted-on-fog");
+    expect(abertura, `${rel}:${ancora}`).not.toMatch(/text-muted-foreground/);
+  });
+
+  it("menu do módulo: nenhum cinza antigo, e o ativo continua distinto do inativo", () => {
+    const fonte = fonteSemComentarios(path.join(raiz, "src/components/shared/module-shell.tsx"));
+    expect(fonte).not.toMatch(/text-muted-foreground/);
+    expect(fonte).toMatch(/"bg-pill-strong font-medium text-foreground"/);
+    expect(fonte).toMatch(/text-muted-on-fog hover:bg-accent hover:text-foreground/);
+  });
+
+  it("abas e filtros: a inativa é muted-on-fog e a ativa continua distinta", () => {
+    const abas = fonteSemComentarios(path.join(raiz, "src/components/shared/abas-de-rota.tsx"));
+    expect(abas).toMatch(/"border-primary font-semibold text-foreground"/);
+    expect(abas).toMatch(/"border-transparent font-medium text-muted-on-fog hover:text-foreground"/);
+    const filtro = fonteSemComentarios(path.join(raiz, "src/components/nutrition/food-filters.tsx"));
+    expect(filtro).toMatch(/"border-primary\/30 bg-primary\/10 text-foreground"/);
+    const chip = fonteSemComentarios(path.join(raiz, `${A}tarefas/tasks-client.tsx`));
+    expect(chip).toMatch(/"border-primary bg-primary\/10 font-semibold text-foreground"/);
+  });
+
+  it("dashboard financeiro: «Ver registros ›» abaixo do cartão é foreground sublinhado, não primary", () => {
+    const fonte = fonteSemComentarios(path.join(raiz, `${A}dashboard/financeiro/financial-dashboard-client.tsx`));
+    const aberturaDoLink = aberturas(fonte, "VerRegistros").filter(
+      (a) => /href=\{href\}/.test(a) && !/\bde=/.test(a),
+    );
+    expect(aberturaDoLink).toHaveLength(1);
+    expect(classesDe(aberturaDoLink[0] ?? "")).toEqual(["text-foreground", "underline"]);
+    // A base continua primary: os outros usos moram dentro do Bloco, sobre vidro.
+    expect(aberturas(fonte, "Link").some((a) => /text-primary hover:underline/.test(a))).toBe(true);
+  });
+});

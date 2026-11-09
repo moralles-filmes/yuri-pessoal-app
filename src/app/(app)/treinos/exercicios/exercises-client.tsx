@@ -347,7 +347,7 @@ export function ExercisesClient({
               }}
               aria-label="Selecionar todos os exercícios visíveis"
             />
-            <span className="text-xs text-muted-foreground">Selecionar visíveis</span>
+            <span className="text-xs text-muted-on-fog">Selecionar visíveis</span>
           </div>
 
           <ul className="space-y-2">

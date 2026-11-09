@@ -140,7 +140,7 @@ export default async function ConfiguracoesPage() {
         })}
       </div>
 
-      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+      <p className="flex items-center gap-2 text-xs text-muted-on-fog">
         <Database className="size-3.5" />
         Seus dados são protegidos por RLS no Supabase (cada acesso filtra por usuário).
       </p>

@@ -368,7 +368,7 @@ export function CalendarClient({
 
       {/* Aderência do que já passou */}
       {adherence.due > 0 && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-on-fog">
           No período carregado: <strong>{adherence.done}</strong> concluídos ·{" "}
           <strong>{adherence.missed}</strong> não realizados · <strong>{adherence.open}</strong>{" "}
           ainda em aberto de {adherence.due} dias já vencidos

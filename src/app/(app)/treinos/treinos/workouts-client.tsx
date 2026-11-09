@@ -516,7 +516,7 @@ export function WorkoutsClient({
       )}
 
       {visible.length > 0 && (
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-xs text-muted-on-fog">
           <Clock className="size-3.5" />
           A duração é uma <strong>estimativa</strong>: execução das séries + descanso
           configurado. Não inclui troca de aparelho nem espera.

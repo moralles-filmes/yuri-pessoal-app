@@ -65,7 +65,7 @@ export default async function FaturasPage({
         title="Faturas e pagamentos"
         description="Primeiro o que precisa ser pago; depois o que ainda está acumulando."
       />
-      <p className="border-l-2 border-primary pl-2 text-xs text-muted-foreground">
+      <p className="border-l-2 border-primary pl-2 text-xs text-muted-on-fog">
         Valores por fatura do cartão. Minha parte = total − parte dos terceiros.
       </p>
       {/* Os itens listados são cortados no teto de 500; o TOTAL da fatura vem da view, não desta

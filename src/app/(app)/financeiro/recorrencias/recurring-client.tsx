@@ -82,7 +82,7 @@ export function RecurringClient({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-on-fog">
           {recurrences.length} recorrência(s)
         </p>
         <div className="flex items-center gap-2">

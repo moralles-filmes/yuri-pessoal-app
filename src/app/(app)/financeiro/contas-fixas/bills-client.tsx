@@ -79,7 +79,7 @@ export function BillsClient({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">{bills.length} conta(s) fixa(s)</p>
+        <p className="text-sm text-muted-on-fog">{bills.length} conta(s) fixa(s)</p>
         {newButton}
       </div>
 

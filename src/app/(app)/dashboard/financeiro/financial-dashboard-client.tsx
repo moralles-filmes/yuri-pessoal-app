@@ -152,7 +152,7 @@ function ComRegistros({ href, children }: { href: string | undefined; children: 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       {children}
-      <VerRegistros href={href} />
+      <VerRegistros href={href} className="text-foreground underline" />
     </div>
   );
 }
@@ -379,7 +379,7 @@ export function DashboardClient({
               </div>
               <div className="min-w-0 space-y-0.5">
                 <p className="text-sm font-medium">{a.title}</p>
-                <p className="text-xs text-muted-foreground">{a.detail}</p>
+                <p className="text-xs text-muted-on-fog">{a.detail}</p>
               </div>
             </div>
           ))}

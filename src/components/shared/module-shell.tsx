@@ -89,7 +89,7 @@ function Conteudo({
       {nav.grupos.map((grupo, indice) => (
         <div key={grupo.titulo ?? indice} className="space-y-1">
           {grupo.titulo && (
-            <p className="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            <p className="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-on-fog">
               {grupo.titulo}
             </p>
           )}
@@ -107,7 +107,7 @@ function Conteudo({
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   ativo
                     ? "bg-pill-strong font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                    : "text-muted-on-fog hover:bg-accent hover:text-foreground",
                 )}
               >
                 <Icon className={cn("size-4 shrink-0", ativo && "text-primary")} />
@@ -133,7 +133,7 @@ export function ModuleNav({ nav }: { nav: NavegacaoDeModulo }) {
        * ficariam inalcançáveis.
        */}
       <div className="sticky top-18 max-h-[calc(100vh-5.5rem)] overflow-y-auto">
-        <p className="px-2.5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="px-2.5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-on-fog">
           {nav.nome}
         </p>
         <Conteudo nav={nav} />

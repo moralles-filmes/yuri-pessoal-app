@@ -34,7 +34,7 @@ export default async function CartoesPage() {
           title="Cartões e faturas"
           description="O que está fechado para pagar e o que ainda está acumulando, por cartão."
         />
-        <p className="border-l-2 border-primary pl-2 text-xs text-muted-foreground">
+        <p className="border-l-2 border-primary pl-2 text-xs text-muted-on-fog">
           Valores por fatura do cartão. Minha parte = total − parte dos terceiros.
         </p>
       </div>

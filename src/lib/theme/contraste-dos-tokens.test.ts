@@ -63,17 +63,20 @@ const TEXTOS_SOBRE_VIDRO = [
 ];
 const TEXTOS_SOBRE_NEVOA = ["foreground", "muted-on-fog"];
 const TEXTOS_DIRETOS_NA_NEVOA = [
-  "muted-on-fog", "foreground", "primary", "destructive",
+  "muted-on-fog", "foreground", "muted-foreground", "primary", "destructive",
   "success-ink", "warning-ink", "info-ink",
 ];
 
-// Dívida: texto colorido direto sobre a névoa aberta. É uma PROIBIÇÃO de uso direto na névoa,
-// não uma lista de usos: login e cadastro saíram dela na 09-C (links e erros foram para dentro
-// do cartão de vidro, onde já têm 4,5:1 medido) e `casca-vidro.test.ts` trava a volta. A dona
-// dos usos que restarem em páginas é a 09-F. Nenhum texto daqui pode ganhar uso novo direto na névoa.
+// PARES PROIBIDOS, sem uso em página: texto direto sobre a névoa aberta que não passa de 4,5:1.
+// Nenhuma página usa nenhum destes pares: o texto cinza direto na névoa é `text-muted-on-fog`
+// (ou `text-foreground`), e o colorido vai para dentro de um material de vidro, onde já tem 4,5:1
+// medido. A varredura de fonte de `modulos-vidro.test.ts` (09-F · T8) trava a volta do cinza
+// `muted-foreground`; login e cadastro já tinham saído na 09-C (`casca-vidro.test.ts`).
+// A lista só pode encolher e nenhum par daqui pode ganhar uso direto na névoa.
 const DIVIDA_NA_NEVOA = new Set<string>([
   "claro:destructive:fog-1", "claro:destructive:fog-2", "claro:destructive:fog-3",
   "claro:info-ink:fog-1", "claro:info-ink:fog-2", "claro:info-ink:fog-3",
+  "claro:muted-foreground:fog-1", "claro:muted-foreground:fog-2",
   "claro:primary:fog-1", "claro:primary:fog-2", "claro:primary:fog-3",
   "claro:warning-ink:fog-1", "claro:warning-ink:fog-2", "claro:warning-ink:fog-3",
   "escuro:destructive:fog-1", "escuro:destructive:fog-2", "escuro:destructive:fog-3",
@@ -149,7 +152,7 @@ describe("09-A · contraste dos tokens de vidro", () => {
     });
   }
 
-  it("texto direto sobre a névoa aberta: só a dívida declarada reprova (< 4,5:1)", () => {
+  it("texto direto sobre a névoa aberta: só os pares proibidos declarados reprovam (< 4,5:1)", () => {
     const reprovados = new Set<string>();
     for (const [nomeTema, tema] of TEMAS) {
       const base = valor(tema, "fog-base");

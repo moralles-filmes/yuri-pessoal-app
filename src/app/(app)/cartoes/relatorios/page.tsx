@@ -96,7 +96,7 @@ export default async function RelatoriosDeCartaoPage({
           title="Relatórios de cartão"
           description="Quanto passou pelas faturas, quanto foi seu e quanto foi de terceiros."
         />
-        <p className="border-l-2 border-primary pl-2 text-xs text-muted-foreground">
+        <p className="border-l-2 border-primary pl-2 text-xs text-muted-on-fog">
           {TEXTO_DA_BASE[dados.base]} Total = minha parte + parte dos terceiros, fatura a fatura.
         </p>
       </div>
@@ -143,7 +143,7 @@ export default async function RelatoriosDeCartaoPage({
         <input type="hidden" name="base" value={dados.base} />
         <input type="hidden" name="meses" value={dados.n} />
         <div className="min-w-0 space-y-1">
-          <label htmlFor="cartao-do-relatorio" className="block text-xs text-muted-foreground">
+          <label htmlFor="cartao-do-relatorio" className="block text-xs text-muted-on-fog">
             Cartão
           </label>
           <select

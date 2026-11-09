@@ -200,7 +200,7 @@ export function RecordsClient({
             ))}
           </div>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-on-fog">
             O 1RM estimado usa a fórmula <strong>{oneRmFormula}</strong>, escolhida nas
             configurações do módulo — é estimativa, não medição, e o sistema não sugere tentar
             carga máxima. Séries de aquecimento, puladas e canceladas não geram recorde, e

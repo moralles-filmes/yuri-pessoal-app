@@ -60,7 +60,7 @@ export default async function ProximosMesesPage({
           title="Próximos meses"
           description={`As faturas de cada cartão nos próximos ${n} meses, das que já existem às que ainda não têm compra.`}
         />
-        <p className="border-l-2 border-primary pl-2 text-xs text-muted-foreground">
+        <p className="border-l-2 border-primary pl-2 text-xs text-muted-on-fog">
           Por competência — o mês em que a fatura fecha. Clique numa fatura para abri-la em Faturas
           e pagamentos; nada é pago daqui.
         </p>
@@ -85,7 +85,7 @@ export default async function ProximosMesesPage({
             </Link>
           ))}
         </nav>
-        <span className="min-w-0 text-xs text-muted-foreground">
+        <span className="min-w-0 text-xs text-muted-on-fog">
           {mesPorExtenso(meses[0])} a {mesPorExtenso(meses[meses.length - 1])} ·{" "}
           {plural(dados.cartoes.length, "cartão", "cartões")}
         </span>

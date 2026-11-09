@@ -124,7 +124,7 @@ export function CourseDetailClient({
     <div className="space-y-5">
       <Link
         href="/estudos"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-on-fog hover:text-foreground"
       >
         <ArrowLeft className="size-4" /> Voltar para Estudos
       </Link>
@@ -143,7 +143,7 @@ export function CourseDetailClient({
               <StudyCategoryBadge category={detail.category} />
               <StudyPriorityBadge priority={detail.priority} />
               {detail.platform && (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-on-fog">
                   {detail.platform}
                 </span>
               )}

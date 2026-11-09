@@ -247,7 +247,7 @@ export function RelatorioDeCartaoTela({
       <PorCartao dados={dados} />
       <MesAMes dados={dados} nomeDoArquivo={nomeDoArquivo} />
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-on-fog">
         Atenção: o mês atual ainda pode crescer — a fatura aberta segue recebendo compras até
         fechar.
       </p>
