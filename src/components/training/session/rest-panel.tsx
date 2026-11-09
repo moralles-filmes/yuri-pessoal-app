@@ -16,6 +16,7 @@
  */
 import * as React from "react";
 import { Check, Minus, Pause, Play, Plus, SkipForward } from "lucide-react";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatClock, restTimer, sessionTimes, shouldAutoAdvance } from "@/lib/training/timers";
@@ -95,8 +96,8 @@ export function RestPanel({
   return (
     <div
       className={cn(
-        "rounded-2xl border p-4 sm:p-5",
-        over ? "border-primary bg-primary/5" : "bg-card",
+        `${MATERIAL_CARTAO} rounded-[16px] p-4 sm:p-5`,
+        over && "border-primary",
       )}
     >
       <div className="flex items-center justify-between gap-3">

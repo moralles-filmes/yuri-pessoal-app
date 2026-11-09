@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -525,7 +526,7 @@ export function EvolutionClient({
                 {rules.map((rule) => (
                   <div
                     key={rule.id}
-                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3"
+                    className={`${MATERIAL_CARTAO} flex flex-wrap items-center gap-3 rounded-[16px] p-3`}
                   >
                     <div className="min-w-[180px] flex-1">
                       <p className="font-medium">

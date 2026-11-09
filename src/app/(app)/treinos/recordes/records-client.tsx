@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, RefreshCw, Trophy } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -160,7 +161,7 @@ export function RecordsClient({
                     key={record.id}
                     id={`recorde-${record.id}`}
                     active={record.id === highlightId}
-                    className="rounded-xl border border-border bg-card/60 p-3"
+                    className={`${MATERIAL_LADRILHO} rounded-[14px] p-3`}
                   >
                     <p className="text-sm text-muted-foreground">
                       {RECORD_TYPE_LABELS[record.recordType]}

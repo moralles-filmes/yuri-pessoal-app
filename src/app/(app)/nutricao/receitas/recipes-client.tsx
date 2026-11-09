@@ -286,7 +286,7 @@ export function RecipesClient(props: RecipesClientProps) {
 
       {/* ── Ações em massa: contagem e escopo sempre visíveis ── */}
       {selected.size > 0 && (
-        <Card className="border-primary/30 bg-primary/5">
+        <Card className="border-primary/30">
           <CardContent className="flex flex-wrap items-center gap-2 p-3">
             <span className="text-sm font-medium">
               {selected.size} selecionada{selected.size > 1 ? "s" : ""}

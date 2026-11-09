@@ -156,7 +156,7 @@ export function GoalsClient({
       ) : (
         <>
           {overlaps.length > 0 && (
-            <Card className="border-amber-500/40 bg-amber-500/5">
+            <Card className="border-amber-500/40">
               <CardContent className="flex items-start gap-3 p-4">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                 <div className="text-xs">

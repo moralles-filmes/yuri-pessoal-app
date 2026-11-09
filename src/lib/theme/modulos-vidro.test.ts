@@ -268,30 +268,9 @@ describe("09-F · T2 · círculo de concluir", () => {
 
 // ---------------------------------------------------------------------------------------------
 // 09-F · T3 a T5 · superfícies por módulo: nenhum `bg-card` feito à mão, nenhum Card trocando o
-// próprio fundo. `PENDENTES_DA_09F` é a dívida que ainda não foi paga (Tasks 4 e 5) e ENCOLHE a
-// cada lote; as exceções finais (`EXCECOES`) entram na Task 5.
+// próprio fundo. A dívida (`PENDENTES_DA_09F`) foi paga na Task 5: só restam as exceções
+// declaradas, com o motivo ao lado.
 // ---------------------------------------------------------------------------------------------
-
-/** Arquivos dos módulos que ainda têm `bg-card` à mão ou `<Card>` com fundo próprio. */
-const PENDENTES_DA_09F: string[] = [
-  "src/app/(app)/nutricao/compras/shopping-client.tsx",
-  "src/app/(app)/nutricao/diario/diary-client.tsx",
-  "src/app/(app)/nutricao/metas/goals-client.tsx",
-  "src/app/(app)/nutricao/receitas/recipes-client.tsx",
-  "src/app/(app)/nutricao/refeicoes/meal-templates-client.tsx",
-  "src/app/(app)/treinos/calendario/calendar-client.tsx",
-  "src/app/(app)/treinos/evolucao/evolution-client.tsx",
-  "src/app/(app)/treinos/exercicios/exercises-client.tsx",
-  "src/app/(app)/treinos/historico/history-client.tsx",
-  "src/app/(app)/treinos/programas/programs-client.tsx",
-  "src/app/(app)/treinos/recordes/records-client.tsx",
-  "src/app/(app)/treinos/treinos/workouts-client.tsx",
-  "src/app/(app)/treinos/treinos/[id]/builder-client.tsx",
-  "src/components/nutrition/pantry-panel.tsx",
-  "src/components/training/exercise-filters.tsx",
-  "src/components/training/session/rest-panel.tsx",
-  "src/components/training/session/session-live-client.tsx",
-];
 
 /** Exceções DECLARADAS (cada uma com o motivo ao lado). */
 const EXCECOES: string[] = [
@@ -341,8 +320,8 @@ describe("09-F · T3 · superfícies dos módulos", () => {
     expect(cards.length, "aberturas de <Card>").toBeGreaterThan(100);
   });
 
-  it("bg-card só nas exceções (e nos pendentes declarados)", () => {
-    const permitidos = new Set([...PENDENTES_DA_09F, ...EXCECOES]);
+  it("bg-card só nas exceções declaradas", () => {
+    const permitidos = new Set(EXCECOES);
     const sobrou: string[] = [];
     for (const arquivo of foraDeUi()) {
       if (permitidos.has(relativo(arquivo))) continue;
@@ -353,32 +332,13 @@ describe("09-F · T3 · superfícies dos módulos", () => {
   });
 
   it("nenhum Card troca o próprio fundo (a situação fica na borda)", () => {
-    const permitidos = new Set(PENDENTES_DA_09F);
     const sobrou: string[] = [];
     for (const arquivo of foraDeUi()) {
-      if (permitidos.has(relativo(arquivo))) continue;
       for (const linha of cardsComFundoProprio(fonteSemComentarios(arquivo))) {
         sobrou.push(`${relativo(arquivo)}:${linha}`);
       }
     }
     expect(sobrou, `<Card> com fundo próprio: ${sobrou.join(", ")}`).toEqual([]);
-  });
-
-  it("a lista de pendentes só cita arquivo que ainda tem a ocorrência", () => {
-    const todos = new Map(foraDeUi().map((p) => [relativo(p), p]));
-    const velhos: string[] = [];
-    for (const rel of PENDENTES_DA_09F) {
-      const arquivo = todos.get(rel);
-      if (!arquivo) {
-        velhos.push(`${rel} (não existe)`);
-        continue;
-      }
-      const fonte = fonteSemComentarios(arquivo);
-      if (ocorrenciasDeBgCard(fonte).length + cardsComFundoProprio(fonte).length === 0) {
-        velhos.push(rel);
-      }
-    }
-    expect(velhos, `tire da lista (já pagos): ${velhos.join(", ")}`).toEqual([]);
   });
 
   it("as exceções declaradas existem e ainda têm bg-card", () => {
@@ -558,5 +518,126 @@ describe("09-F · T4 · superfícies do TO-DO, agenda, estudos, hábitos e IA", 
     const fonte = fonteSemComentarios(path.join(RAIZ, "src/components/todo/task-calendar.tsx"));
     expect(fonte).not.toMatch(/MATERIAL_/);
     expect(ocorrenciasDeBgCard(fonte).length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 09-F · T5 · Treinos e Dieta. O ancestral de cada peça foi conferido lendo quem a renderiza
+// (relatório da task): direto na névoa é cartão; dentro de Card é ladrilho.
+// ---------------------------------------------------------------------------------------------
+
+describe("09-F · T5 · superfícies de Treinos e Dieta", () => {
+  const RAIZ = path.resolve(SRC, "..");
+  const T = "src/app/(app)/treinos/";
+  const MATERIAIS_T5: Array<[arquivo: string, material: string, raio: string, quantas: number]> = [
+    // Dieta: o resumo da lista de compras está direto na névoa e usa /60 (regra: ladrilho).
+    ["src/app/(app)/nutricao/compras/shopping-client.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 1],
+    // Treinos: barras de filtro e de ação, linhas e itens de lista direto na névoa.
+    [`${T}calendario/calendar-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    [`${T}evolucao/evolution-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    [`${T}exercicios/exercises-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    // Barra de ações em massa e cartão da linha do tempo na névoa; a linha da sessão está dentro do
+    // Card do grupo (ladrilho).
+    [`${T}historico/history-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 2],
+    [`${T}historico/history-client.tsx`, "MATERIAL_LADRILHO", "rounded-[14px]", 1],
+    [`${T}programas/programs-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    // O treino dentro do programa expandido está no CardContent do programa.
+    [`${T}programas/programs-client.tsx`, "MATERIAL_LADRILHO", "rounded-[14px]", 1],
+    // O recorde está dentro do Card "Constância".
+    [`${T}recordes/records-client.tsx`, "MATERIAL_LADRILHO", "rounded-[14px]", 1],
+    [`${T}treinos/workouts-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 2],
+    [`${T}treinos/[id]/builder-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    // O painel de filtros avançados é `bg-card/40` (regra: ladrilho), na névoa.
+    ["src/components/training/exercise-filters.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 1],
+    // Sessão ao vivo: só material e raio (rounded-2xl já era 16 px). Layout, cronômetro e handlers
+    // intactos.
+    ["src/components/training/session/rest-panel.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    ["src/components/training/session/session-live-client.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+  ];
+
+  for (const [rel, material, raio, quantas] of MATERIAIS_T5) {
+    it(`${rel}: ${quantas}× ${material} com ${raio}, sem borda nem fundo concorrente`, () => {
+      const fonte = fonteSemComentarios(path.join(RAIZ, rel));
+      expect(fonte).toMatch(
+        new RegExp(`import \\{[^}]*\\b${material}\\b[^}]*\\} from "@/components/ui/materiais"`),
+      );
+      const casam = literais(fonte).filter((l) => {
+        const classes = l.texto.split(/\s+/);
+        return l.texto.includes("${" + material + "}") && classes.includes(raio);
+      });
+      expect(casam, `literais com \${${material}} e ${raio}`).toHaveLength(quantas);
+      for (const l of casam) {
+        for (const c of l.texto.split(/\s+/)) {
+          expect(c, `classe que briga com ${material}`).not.toMatch(/^(?:border|border-border|bg-.+|shadow-.+)$/);
+        }
+      }
+    });
+  }
+
+  it("calendar-client: o estado 'planejado' é ladrilho e os outros sete continuam distintos, com ícone ou rótulo", () => {
+    const fonte = fonteSemComentarios(path.join(RAIZ, `${T}calendario/calendar-client.tsx`));
+    const mapa = fonte.match(/const STATUS_STYLES[^=]*=\s*\{([\s\S]*?)\n\};/)?.[1] ?? "";
+    expect(mapa).not.toBe("");
+    expect(mapa).toMatch(/planejado:\s*MATERIAL_LADRILHO,/);
+    // Cada estado continua com o SEU tratamento (borda/tom/traço), nenhum igual ao do planejado.
+    const valores = [...mapa.matchAll(/(\w+):\s*(?:"([^"]*)"|(MATERIAL_LADRILHO))/g)].map((m) => [m[1], m[2] ?? m[3]]);
+    expect(valores.map((v) => v[0])).toEqual([
+      "planejado", "hoje", "atrasado", "concluido", "nao_realizado", "reagendado", "cancelado", "descanso",
+    ]);
+    expect(new Set(valores.map((v) => v[1])).size, "oito tratamentos distintos").toBe(8);
+    expect(mapa).toMatch(/hoje:\s*"border-primary\/50 bg-primary\/10"/);
+    expect(mapa).toMatch(/cancelado:[^\n]*line-through/);
+    expect(mapa).toMatch(/descanso:\s*"border-dashed/);
+    // O estado não fica só na cor: ícone por estado e rótulo em texto continuam.
+    expect(fonte).toMatch(/const STATUS_ICONE/);
+    expect(fonte).toMatch(/title=\{ROTULOS_DO_STATUS\[status\]\}/);
+    // O arrasto continua dito pela sombra e pela opacidade, e o alvo por `isOver`.
+    expect(fonte).toMatch(/isDragging && "z-20 opacity-90 shadow-lg"/);
+    expect(fonte).toMatch(/isOver && "border-primary bg-primary\/10 ring-2 ring-primary\/30"/);
+  });
+
+  it("os cartões de Dieta com borda de situação perdem só o fundo e mantêm a borda e o texto", () => {
+    const casos: Array<[string, RegExp, RegExp]> = [
+      ["src/app/(app)/nutricao/compras/shopping-client.tsx", /<Card className="border-primary\/30">/, /item selecionado|itens selecionados/],
+      ["src/app/(app)/nutricao/diario/diary-client.tsx", /<Card className="border-primary\/30">/, /Há \{props\.planned\.length\} refeição/],
+      ["src/app/(app)/nutricao/metas/goals-client.tsx", /<Card className="border-amber-500\/40">/, /sobreposi/],
+      ["src/app/(app)/nutricao/receitas/recipes-client.tsx", /<Card className="border-primary\/30">/, /selecionada/],
+      ["src/app/(app)/nutricao/refeicoes/meal-templates-client.tsx", /<Card className="border-primary\/30">/, /selecionada/],
+      ["src/components/nutrition/pantry-panel.tsx", /<Card className="border-primary\/30">/, /abaixo do estoque mínimo/],
+    ];
+    for (const [rel, borda, texto] of casos) {
+      const fonte = fonteSemComentarios(path.join(RAIZ, rel));
+      expect(fonte, rel).toMatch(borda);
+      expect(fonte, `${rel}: a situação é dita por texto`).toMatch(texto);
+    }
+  });
+
+  it("pantry-panel: o aviso de escopo é bg-tile com a borda tracejada, sem constante", () => {
+    const fonte = fonteSemComentarios(path.join(RAIZ, "src/components/nutrition/pantry-panel.tsx"));
+    const aviso = literais(fonte).filter((l) => l.texto.includes("border-dashed"));
+    expect(aviso).toHaveLength(1);
+    const classes = (aviso[0]?.texto ?? "").split(/\s+/);
+    expect(classes).toContain("bg-tile");
+    expect(classes).toContain("border");
+    expect(classes).toContain("border-dashed");
+    expect(classes).toContain("border-border");
+    expect(fonte).not.toMatch(/MATERIAL_/);
+  });
+
+  it("estados que ficam depois da constante: seleção, descanso concluído e hover", () => {
+    const hist = fonteSemComentarios(path.join(RAIZ, `${T}historico/history-client.tsx`));
+    // Seleção: a borda continua; a caixa marcada (checked) já diz o estado em forma.
+    expect(hist).toMatch(/selected && "border-primary\/60",/);
+    expect(hist).toMatch(/checked=\{selected\}/);
+    expect(hist).toMatch(/hover:border-primary\/50/);
+    for (const rel of [`${T}exercicios/exercises-client.tsx`, `${T}treinos/workouts-client.tsx`]) {
+      expect(fonteSemComentarios(path.join(RAIZ, rel)), rel).toMatch(/selected\.has\([\w.]+\) && "ring-1 ring-primary\/40"/);
+    }
+    const rest = fonteSemComentarios(path.join(RAIZ, "src/components/training/session/rest-panel.tsx"));
+    expect(rest).toMatch(/over && "border-primary",/);
+    expect(rest).not.toMatch(/bg-primary\/5/);
+    // O descanso concluído continua dito por texto e pelo relógio em primary.
+    expect(rest).toMatch(/Descanso concluído/);
+    expect(rest).toMatch(/over && "text-primary"/);
   });
 });

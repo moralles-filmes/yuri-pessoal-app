@@ -47,6 +47,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_LADRILHO, MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -125,7 +126,7 @@ const VIEW_LABELS: Record<View, string> = {
 };
 
 const STATUS_STYLES: Record<StatusExibido, string> = {
-  planejado: "border-border bg-card",
+  planejado: MATERIAL_LADRILHO,
   hoje: "border-primary/50 bg-primary/10",
   atrasado: "border-destructive/40 bg-destructive/5",
   concluido: "border-emerald-500/40 bg-emerald-500/10",
@@ -300,7 +301,7 @@ export function CalendarClient({
       </PageHeader>
 
       {/* Barra de navegação e visão */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+      <div className={`${MATERIAL_CARTAO} flex flex-wrap items-center gap-2 rounded-[16px] p-3`}>
         <div className="flex items-center gap-1">
           <Button
             variant="outline"

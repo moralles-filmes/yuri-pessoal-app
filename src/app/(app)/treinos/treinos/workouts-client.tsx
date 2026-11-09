@@ -27,6 +27,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -264,7 +265,7 @@ export function WorkoutsClient({
       </PageHeader>
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+      <div className={`${MATERIAL_CARTAO} flex flex-wrap items-center gap-2 rounded-[16px] p-3`}>
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -414,7 +415,7 @@ export function WorkoutsClient({
               <li key={workout.id}>
                 <div
                   className={cn(
-                    "flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3 transition-colors",
+                    `${MATERIAL_CARTAO} flex flex-wrap items-center gap-3 rounded-[16px] p-3 transition-colors`,
                     selected.has(workout.id) && "ring-1 ring-primary/40",
                   )}
                 >

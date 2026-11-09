@@ -29,6 +29,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -354,7 +355,7 @@ export function ExercisesClient({
               <li key={exercise.id}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 rounded-xl border bg-card p-3 transition-colors",
+                    `${MATERIAL_CARTAO} flex items-center gap-3 rounded-[16px] p-3 transition-colors`,
                     selected.has(exercise.id) && "ring-1 ring-primary/40",
                   )}
                 >
