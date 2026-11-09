@@ -205,7 +205,7 @@ export function CreditCardFormDialog({
                     type="color"
                     value={field.value}
                     onChange={(e) => field.onChange(e.target.value)}
-                    className="h-8 w-full cursor-pointer rounded-lg border border-input bg-transparent px-1"
+                    className="h-8 w-full cursor-pointer campo-nativo px-1"
                   />
                 )}
               />

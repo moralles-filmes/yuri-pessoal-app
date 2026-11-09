@@ -127,7 +127,7 @@ const ShoppingGenerateDialog = dynamic(
 );
 
 const selectClass =
-  "h-11 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "h-11 campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export type ShoppingClientProps = {
   hoje: string;

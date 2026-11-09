@@ -122,7 +122,7 @@ export function PeriodDialog({
               id="period-type"
               value={goalType}
               onChange={(event) => setGoalType(event.target.value as GoalType)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {GOAL_TYPES.map((type) => (
                 <option key={type} value={type}>

@@ -377,7 +377,7 @@ function ScopePicker({
               onChange={(event) =>
                 onChange({ ...scope, weekday: event.target.value === "" ? null : Number(event.target.value) })
               }
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">Todos os dias</option>
               {WEEKDAY_LABELS.map((label, index) => (
@@ -398,7 +398,7 @@ function ScopePicker({
               onChange={(event) =>
                 onChange({ ...scope, dayKind: (event.target.value || null) as DayKind | null })
               }
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">Qualquer dia</option>
               {DAY_KINDS.map((kind) => (
@@ -416,7 +416,7 @@ function ScopePicker({
             id="scope-meal"
             value={scope.mealTypeId ?? ""}
             onChange={(event) => onChange({ ...scope, mealTypeId: event.target.value || null })}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">Dia inteiro</option>
             {mealTypes
@@ -612,7 +612,7 @@ function GoalTable({
             onChange={(event) => {
               if (event.target.value) setExtraCodes((current) => [...current, event.target.value]);
             }}
-            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Adicionar micronutriente"
           >
             <option value="">Adicionar nutriente…</option>

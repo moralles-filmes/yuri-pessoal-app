@@ -493,6 +493,26 @@
   }
 }
 
+/* CAMPO NATIVO EM LADRILHO (REDESIGN-09-F, T1). <input>/<select>/<textarea> escritos à mão nas
+   telas de módulo (os que não usam a primitiva `Input`/`Select`) tinham `border-input
+   bg-transparent`, o que sobre o vidro some. Este é o mesmo corpo do `Input`: ladrilho + borda
+   `--field-border` (>= 3:1) + raio de 10px. Altura, largura, padding e foco continuam na tela.
+   O raio vem junto, porque o campo tem um só. Não combine com `bg-*`/`border-*`/`shadow-*`: o twMerge não conhece esta utilitária. */
+@utility campo-nativo {
+  background: var(--tile);
+  border: 1px solid var(--field-border);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.06);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background: var(--tile-solid);
+  }
+
+  @media (forced-colors: active) {
+    border-color: CanvasText;
+  }
+}
+
 /* AVISO (sonner) EM VIDRO (REDESIGN-09-B, T6). Regra SEM camada, de propósito: o sonner injeta
    o próprio CSS em runtime e declara `box-shadow`/`background` fora de qualquer @layer, então um
    utilitário do Tailwind (camada `utilities`) perde para ele. Camada vence camada; sem camada

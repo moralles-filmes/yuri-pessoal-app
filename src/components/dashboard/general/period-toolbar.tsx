@@ -100,7 +100,7 @@ export function PeriodToolbar({
             value={de}
             onChange={(e) => setDe(e.target.value)}
             aria-label="Data inicial"
-            className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+            className="h-8 campo-nativo px-2.5 text-sm"
           />
           <span className="text-muted-foreground">–</span>
           <input
@@ -108,7 +108,7 @@ export function PeriodToolbar({
             value={ate}
             onChange={(e) => setAte(e.target.value)}
             aria-label="Data final"
-            className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+            className="h-8 campo-nativo px-2.5 text-sm"
           />
           <Button
             size="sm"

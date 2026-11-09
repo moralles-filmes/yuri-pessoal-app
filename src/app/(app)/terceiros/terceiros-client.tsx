@@ -325,7 +325,7 @@ export function TerceirosClient({
               type="month"
               value={mes}
               onChange={(e) => setMes(e.target.value)}
-              className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 text-sm"
+              className="h-9 w-full min-w-0 campo-nativo px-3 text-sm"
             />
           </div>
           <div className="min-w-0 space-y-1.5">

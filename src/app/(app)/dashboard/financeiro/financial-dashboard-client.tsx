@@ -334,7 +334,7 @@ export function DashboardClient({
             type="month"
             value={mesSel}
             onChange={(e) => setMes(e.target.value || mesSel)}
-            className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+            className="h-9 w-full campo-nativo px-3 text-sm"
           />
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">

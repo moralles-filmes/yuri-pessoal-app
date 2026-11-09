@@ -680,7 +680,7 @@ function FaturaCompetencia({
                 value={value}
                 disabled={saving}
                 onChange={(e) => change(e.target.value)}
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 [color-scheme:light] dark:[color-scheme:dark]"
+                className="h-9 campo-nativo px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
           )}

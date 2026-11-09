@@ -783,7 +783,7 @@ export function StatementsClient({
             type="month"
             value={month ?? ""}
             onChange={(e) => navigate({ month: e.target.value || null })}
-            className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+            className="h-9 w-full campo-nativo px-3 text-sm"
           />
         </div>
         <div className="space-y-1.5">
