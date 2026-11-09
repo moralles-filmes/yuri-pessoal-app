@@ -81,10 +81,7 @@ export function HabitCard({
   }
 
   return (
-    <Card
-      className={cn("border-l-4", habit.todayDone && "bg-primary/[0.03]")}
-      style={{ borderLeftColor: color }}
-    >
+    <Card className="border-l-4" style={{ borderLeftColor: color }}>
       <CardContent className="space-y-3 p-4">
         <div className="flex items-start gap-3">
           {/* 44 px de toque sem sobrepor ninguém: consome o gap (-mr-3) e o p-4 do cartão

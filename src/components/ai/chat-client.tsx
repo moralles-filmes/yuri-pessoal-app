@@ -63,6 +63,7 @@ import { FraseDeGasto } from "@/components/ai/frase-de-gasto";
 import { DESFECHO_INICIAL, type DesfechoDoCartao } from "@/lib/ai/cartao";
 import { faseDoEvento } from "@/lib/ai/fase-do-chat";
 import type { ConversationMessage, MessageRunInfo } from "@/lib/ai/types";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 type Evento =
   | {
@@ -711,7 +712,7 @@ export function ChatView({
                 "min-w-0 max-w-[min(46rem,90%)] rounded-2xl px-4 py-3 text-sm",
                 b.role === "user"
                   ? "bg-primary/10 text-foreground"
-                  : "border bg-card text-foreground",
+                  : `${MATERIAL_LADRILHO} text-foreground`,
                 b.status === "failed" && "border-destructive/40",
               )}
             >

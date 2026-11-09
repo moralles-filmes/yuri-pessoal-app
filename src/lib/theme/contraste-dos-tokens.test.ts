@@ -765,3 +765,36 @@ describe("09-F T3 · superfícies dos módulos", () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// 09-F T4 · pares novos: o ladrilho na gaveta (bolha do chat no painel, editor de repetição no
+// painel da tarefa) e o cartão de vidro dentro do ladrilho direto na névoa (cartão da tarefa e entrada rápida
+// dentro da coluna do quadro). O ladrilho na névoa e sobre o vidro já foram medidos na T3.
+// ---------------------------------------------------------------------------------------------
+
+describe("09-F T4 · superfícies do TO-DO e da IA", () => {
+  for (const [nomeTema, tema] of TEMAS) {
+    describe(nomeTema, () => {
+      it("ladrilho sobre a gaveta (glass-strong): foreground e muted-foreground >= 4,5:1", () => {
+        for (const [rotulo, gaveta] of fortes(tema)) {
+          const ladrilho = compor(valor(tema, "tile"), gaveta);
+          for (const texto of ["foreground", "muted-foreground"]) {
+            exigirPrimitiva(nomeTema, texto, "ladrilho na gaveta", rotulo, contraste(valor(tema, texto), ladrilho));
+          }
+        }
+      });
+
+      it("cartão (vidro) dentro do ladrilho direto na névoa (cartão da tarefa na coluna do quadro): >= 4,5:1", () => {
+        // O ladrilho dentro do ladrilho não chega lá no escuro (muted-foreground 4,01:1 em fog-1):
+        // dois tintos claros empilhados. O vidro, que escurece no escuro e clareia no claro, chega.
+        for (const [rotulo, nevoa] of aberturas(tema)) {
+          const coluna = compor(valor(tema, "tile"), nevoa);
+          const cartao = compor(valor(tema, "glass"), coluna);
+          for (const texto of ["foreground", "muted-foreground"]) {
+            exigirPrimitiva(nomeTema, texto, "cartão na coluna", rotulo, contraste(valor(tema, texto), cartao));
+          }
+        }
+      });
+    });
+  }
+});

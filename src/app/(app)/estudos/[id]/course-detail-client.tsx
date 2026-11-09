@@ -57,6 +57,7 @@ import type {
   StudyCourseOption,
   StudySessionWithRelations,
 } from "@/types/database";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 type Tab = "conteudo" | "sessoes" | "idioma";
 
@@ -271,7 +272,7 @@ export function CourseDetailClient({
       )}
 
       {detail.notes && (
-        <p className="rounded-lg border bg-card/40 p-3 text-sm whitespace-pre-wrap text-muted-foreground">
+        <p className={`${MATERIAL_LADRILHO} rounded-[14px] p-3 text-sm whitespace-pre-wrap text-muted-foreground`}>
           {detail.notes}
         </p>
       )}

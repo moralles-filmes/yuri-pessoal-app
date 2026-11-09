@@ -53,6 +53,7 @@ import { createTodoTask } from "@/lib/actions/todo";
 import { createTodoLabel } from "@/lib/actions/todo-projects";
 import { PriorityFlag } from "@/components/todo/badges";
 import type { TodoLabel, TodoProject } from "@/lib/todo/types";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 /** Ícone/cor de cada tipo de trecho reconhecido. */
 const TOKEN_STYLE: Record<string, string> = {
@@ -179,7 +180,7 @@ export function QuickTaskInput({
   return (
     <div
       className={cn(
-        "space-y-2 rounded-xl border border-border bg-card p-2.5",
+        `${MATERIAL_CARTAO} space-y-2 rounded-[16px] p-2.5`,
         className,
       )}
     >

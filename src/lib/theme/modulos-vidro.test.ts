@@ -274,13 +274,11 @@ describe("09-F · T2 · círculo de concluir", () => {
 
 /** Arquivos dos módulos que ainda têm `bg-card` à mão ou `<Card>` com fundo próprio. */
 const PENDENTES_DA_09F: string[] = [
-  "src/app/(app)/estudos/[id]/course-detail-client.tsx",
   "src/app/(app)/nutricao/compras/shopping-client.tsx",
   "src/app/(app)/nutricao/diario/diary-client.tsx",
   "src/app/(app)/nutricao/metas/goals-client.tsx",
   "src/app/(app)/nutricao/receitas/recipes-client.tsx",
   "src/app/(app)/nutricao/refeicoes/meal-templates-client.tsx",
-  "src/app/(app)/todo/todo-client.tsx",
   "src/app/(app)/treinos/calendario/calendar-client.tsx",
   "src/app/(app)/treinos/evolucao/evolution-client.tsx",
   "src/app/(app)/treinos/exercicios/exercises-client.tsx",
@@ -289,26 +287,18 @@ const PENDENTES_DA_09F: string[] = [
   "src/app/(app)/treinos/recordes/records-client.tsx",
   "src/app/(app)/treinos/treinos/workouts-client.tsx",
   "src/app/(app)/treinos/treinos/[id]/builder-client.tsx",
-  "src/components/ai/action-history-client.tsx",
-  "src/components/ai/chat-client.tsx",
-  "src/components/ai/conversation-list.tsx",
-  "src/components/ai/insights-client.tsx",
-  "src/components/calendar/month-view.tsx",
-  "src/components/calendar/time-grid.tsx",
-  "src/components/habits/habit-card.tsx",
   "src/components/nutrition/pantry-panel.tsx",
-  "src/components/todo/quick-task-input.tsx",
-  "src/components/todo/recurrence-editor.tsx",
-  "src/components/todo/task-board.tsx",
-  "src/components/todo/task-calendar.tsx",
-  "src/components/todo/task-row.tsx",
   "src/components/training/exercise-filters.tsx",
   "src/components/training/session/rest-panel.tsx",
   "src/components/training/session/session-live-client.tsx",
 ];
 
-/** Exceções DECLARADAS (com o motivo, na Task 5). */
-const EXCECOES: string[] = [];
+/** Exceções DECLARADAS (cada uma com o motivo ao lado). */
+const EXCECOES: string[] = [
+  // A célula do dia do calendário do TO-DO continua `bg-card` por decisão do dono: ela não ganha
+  // controle nem material próprio (o dia é uma grade de células, não um cartão).
+  "src/components/todo/task-calendar.tsx",
+];
 
 /** Literais de texto de uma fonte: "…", '…' e `…`, com a posição do início. */
 function literais(fonte: string): Array<{ texto: string; i: number }> {
@@ -481,5 +471,92 @@ describe("09-F · T3 · superfícies dos módulos", () => {
     const classes = (prevista?.texto ?? "").split(/\s+/);
     expect(classes).toContain("bg-transparent");
     expect(classes).toContain("shadow-none");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 09-F · T4 · TO-DO, agenda, estudos, hábitos e IA. O ancestral de cada peça foi conferido lendo
+// quem a renderiza (relatório da task): direto na névoa é cartão; dentro de Card, Dialog, Sheet ou
+// de outro ladrilho é ladrilho.
+// ---------------------------------------------------------------------------------------------
+
+describe("09-F · T4 · superfícies do TO-DO, agenda, estudos, hábitos e IA", () => {
+  const RAIZ = path.resolve(SRC, "..");
+  const MATERIAIS_T4: Array<[arquivo: string, material: string, raio: string, quantas: number]> = [
+    ["src/app/(app)/estudos/[id]/course-detail-client.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 1],
+    ["src/app/(app)/todo/todo-client.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 2],
+    ["src/components/ai/action-history-client.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    ["src/components/ai/conversation-list.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    ["src/components/calendar/month-view.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    ["src/components/calendar/time-grid.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    ["src/components/todo/task-row.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    // Usado direto na névoa (todo-client) e dentro da coluna do quadro (ladrilho): cartão nos dois.
+    ["src/components/todo/quick-task-input.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    ["src/components/todo/recurrence-editor.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 1],
+    // Coluna do quadro (ladrilho na névoa) e o cartão da tarefa dentro dela. Ladrilho dentro do
+    // ladrilho reprova no escuro (muted-foreground 4,01:1 em fog-1): o cartão de vidro passa.
+    ["src/components/todo/task-board.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 1],
+    ["src/components/todo/task-board.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+  ];
+
+  for (const [rel, material, raio, quantas] of MATERIAIS_T4) {
+    it(`${rel}: ${quantas}× ${material} com ${raio}, sem borda nem fundo concorrente`, () => {
+      const fonte = fonteSemComentarios(path.join(RAIZ, rel));
+      expect(fonte).toMatch(
+        new RegExp(`import \\{[^}]*\\b${material}\\b[^}]*\\} from "@/components/ui/materiais"`),
+      );
+      const casam = literais(fonte).filter((l) => {
+        const classes = l.texto.split(/\s+/);
+        return l.texto.includes("${" + material + "}") && classes.includes(raio);
+      });
+      expect(casam, `literais com \${${material}} e ${raio}`).toHaveLength(quantas);
+      for (const l of casam) {
+        // Depois da constante, `border`, `border-border` e `bg-*` sem variante removeriam parte do
+        // material (twMerge): o estado entra em outro literal do `cn()`, depois dela.
+        for (const c of l.texto.split(/\s+/)) {
+          expect(c, `classe que briga com ${material}`).not.toMatch(/^(?:border|border-border|bg-.+|shadow-.+)$/);
+        }
+      }
+    });
+  }
+
+  it("chat-client: a bolha do assistente é ladrilho (no /ia e no painel), com o raio da bolha e o erro depois", () => {
+    const fonte = fonteSemComentarios(path.join(RAIZ, "src/components/ai/chat-client.tsx"));
+    expect(fonte).toMatch(
+      /import \{[^}]*\bMATERIAL_LADRILHO\b[^}]*\} from "@\/components\/ui\/materiais"/,
+    );
+    const bolhas = aberturas(fonte, "div").filter((a) => a.includes("${MATERIAL_LADRILHO}"));
+    expect(bolhas, "uma bolha com o material").toHaveLength(1);
+    const bolha = bolhas[0] ?? "";
+    expect(bolha).toMatch(/rounded-2xl/);
+    expect(bolha).not.toMatch(/border bg-card/);
+    // A borda de falha vem DEPOIS da constante, ou o material a apagaria.
+    expect(bolha.indexOf("border-destructive/40")).toBeGreaterThan(bolha.indexOf("MATERIAL_LADRILHO"));
+    // A bolha do dono continua tingida (é dela, não material).
+    expect(bolha).toMatch(/bg-primary\/10 text-foreground/);
+  });
+
+  it("habit-card: concluído sem o tingimento do fundo; o estado segue dito por círculo, texto riscado e borda", () => {
+    const fonte = fonteSemComentarios(path.join(RAIZ, "src/components/habits/habit-card.tsx"));
+    const [card] = aberturas(fonte, "Card");
+    expect(card).not.toMatch(/bg-primary/);
+    expect(card).toMatch(/border-l-4/);
+    expect(card).toMatch(/borderLeftColor/);
+    expect(fonte).toMatch(/checked=\{habit\.todayDone\}/);
+    expect(fonte).toMatch(/habit\.todayDone &&\s*"text-muted-foreground line-through/);
+  });
+
+  it("insights-client: o insight não vigente perde o fundo e continua dito pelo selo de texto", () => {
+    const fonte = fonteSemComentarios(path.join(RAIZ, "src/components/ai/insights-client.tsx"));
+    const cards = aberturas(fonte, "Card");
+    expect(cards.some((c) => /bg-muted/.test(c))).toBe(false);
+    expect(fonte).toMatch(/ROTULO_DO_ESTADO_DE_INSIGHT\[insight\.estado\.estado\]/);
+    expect(fonte).toMatch(/\{!vigente \? \(\s*<Badge variant="outline"/);
+  });
+
+  it("a célula do dia do TO-DO é a exceção: continua bg-card, sem material e sem controle novo", () => {
+    const fonte = fonteSemComentarios(path.join(RAIZ, "src/components/todo/task-calendar.tsx"));
+    expect(fonte).not.toMatch(/MATERIAL_/);
+    expect(ocorrenciasDeBgCard(fonte).length).toBeGreaterThan(0);
   });
 });

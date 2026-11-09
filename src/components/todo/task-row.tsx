@@ -57,6 +57,7 @@ import {
   ScheduleChip,
 } from "@/components/todo/badges";
 import type { TodoProject, TodoTask } from "@/lib/todo/types";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 export interface TaskRowActions {
   onOpen: (task: TodoTask) => void;
@@ -114,7 +115,7 @@ export function TaskRow({
   return (
     <div
       className={cn(
-        "group flex items-start gap-2 rounded-xl border border-border bg-card px-2.5 py-2 transition-colors",
+        `${MATERIAL_CARTAO} group flex items-start gap-2 rounded-[16px] px-2.5 py-2 transition-colors`,
         overdue && "border-destructive/30",
         done && "opacity-60",
         className,

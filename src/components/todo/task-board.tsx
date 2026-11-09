@@ -59,6 +59,7 @@ import {
 } from "@/components/todo/badges";
 import { QuickTaskInput } from "@/components/todo/quick-task-input";
 import type { TodoLabel, TodoProject, TodoTask } from "@/lib/todo/types";
+import { MATERIAL_CARTAO, MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 const NO_SECTION = "__sem_secao__";
 
@@ -199,7 +200,7 @@ function BoardColumnView({
       ref={setNodeRef}
       aria-label={`Coluna ${column.title}`}
       className={cn(
-        "flex w-[17rem] shrink-0 flex-col gap-2 rounded-2xl border border-border bg-card/40 p-2.5 transition-colors sm:w-[19rem]",
+        `${MATERIAL_LADRILHO} flex w-[17rem] shrink-0 flex-col gap-2 rounded-[14px] p-2.5 transition-colors sm:w-[19rem]`,
         isOver && "border-primary/40 bg-primary/5",
       )}
     >
@@ -324,7 +325,7 @@ function BoardCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "space-y-2 rounded-xl border border-border bg-card p-2.5",
+        `${MATERIAL_CARTAO} space-y-2 rounded-[16px] p-2.5`,
         overdue && "border-destructive/30",
         done && "opacity-60",
         isDragging && "relative z-10 opacity-80",
