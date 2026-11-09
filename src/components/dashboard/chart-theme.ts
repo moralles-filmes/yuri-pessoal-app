@@ -102,6 +102,23 @@ export function opacidadeDoGrupo(indice: number, foco: number | null): number {
 }
 
 /**
+ * Numa pilha, só o segmento mais alto leva a ponta arredondada. Devolve a última chave (na ordem
+ * de empilhamento, de baixo para cima) com valor POSITIVO nesta linha — zero, nulo e ausente não
+ * têm barra, e arredondar a ponta de um segmento invisível deixaria a pilha reta. Sem nenhum
+ * valor positivo, não há topo.
+ */
+export function chaveDoTopoDaPilha<K extends string>(
+  linha: Readonly<Partial<Record<K, number | null | undefined>>>,
+  chaves: readonly K[],
+): K | null {
+  for (let i = chaves.length - 1; i >= 0; i--) {
+    const v = linha[chaves[i]];
+    if (typeof v === "number" && v > 0) return chaves[i];
+  }
+  return null;
+}
+
+/**
  * Vão entre fatias da rosca, em graus: o arco de `vaoPx` no raio médio da fatia
  * (`vaoPx / (2π·raio) · 360`). Com uma fatia (ou nenhuma) não há vizinha, então não há vão.
  */

@@ -7,6 +7,7 @@
  */
 
 import { BarChart3 } from "lucide-react";
+import { useMemo } from "react";
 import {
   Bar,
   BarChart,
@@ -27,28 +28,40 @@ import {
   brlCompact,
   CHART_COLORS,
   GRID_COLOR,
+  larguraDaBarra,
   monthLabel,
-  tooltipItemStyle,
-  tooltipLabelStyle,
-  tooltipStyle,
+  OPACIDADE_EM_ANDAMENTO,
+  opacidadeDoGrupo,
+  raioDaPonta,
+  VAO_ENTRE_BARRAS,
 } from "./chart-theme";
+import { DicaDoGrafico, LegendaDoGrafico } from "./dica-do-grafico";
+import { linhasDaDica } from "./linhas-da-dica";
+import { ObservadorDeFoco, useFocoDoGrafico } from "./use-foco-do-grafico";
 
 const COR_ENTRADAS = CHART_COLORS[0];
 const COR_SAIDAS = "var(--muted-foreground)";
 
-/** Listras diagonais na cor da série: o que é parcial NÃO se confunde com o realizado (D-A-10). */
-function Hachura({ id, cor }: { id: string; cor: string }) {
-  return (
-    <pattern id={id} patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
-      <rect width="6" height="6" fill={cor} fillOpacity={0.15} />
-      <line x1="0" y1="0" x2="0" y2="6" stroke={cor} strokeWidth={2.5} />
-    </pattern>
-  );
+/**
+ * O mês em andamento NÃO se confunde com o fechado (D-A-10): preenchimento a 35% e contorno
+ * tracejado, na cor da série. Entra na `Cell` por espalhamento condicional, e não por ternário:
+ * a recharts mescla as props da `Cell` por cima das da `Bar`, e um `fillOpacity` explicitamente
+ * `undefined` apagaria o 0,6 das saídas fechadas.
+ */
+function marcaDoMesParcial(cor: string) {
+  return {
+    fillOpacity: OPACIDADE_EM_ANDAMENTO,
+    stroke: cor,
+    strokeWidth: 1.5,
+    strokeDasharray: "4 3",
+  };
 }
+const PARCIAL_ENTRADAS = marcaDoMesParcial(COR_ENTRADAS);
+const PARCIAL_SAIDAS = marcaDoMesParcial(COR_SAIDAS);
 
 /**
  * Minhas entradas × minhas saídas por mês, barras agrupadas. O mês em andamento (`parcial`) sai
- * hachurado e com a borda tracejada, e a legenda abaixo diz por quê.
+ * a 35% e com a borda tracejada, e a legenda e a dica dizem por quê.
  */
 export function BarrasEntradasSaidasChart({
   dados,
@@ -61,6 +74,13 @@ export function BarrasEntradasSaidasChart({
   /** Os rótulos dependem da responsabilidade (Meu · Terceiros · Consolidado): quem chama os dá. */
   nomes?: { entradas: string; saidas: string };
 }) {
+  // O gancho vem ANTES do retorno do vazio: o gráfico pode sair do vazio para o cheio sem remontar.
+  // `ref` sai do objeto: um `ref={x.ref}` faz o lint do React tratar `x` inteiro como ref e recusar
+  // `x.dicaAtiva` na renderização.
+  const { ref: refDoGrafico, ...foco } = useFocoDoGrafico();
+  // Memorizado: o observador acha o índice por IDENTIDADE, e um array novo a cada render o faria
+  // errar enquanto a recharts ainda guarda o anterior.
+  const chartData = useMemo(() => dados.map((p) => ({ ...p, label: monthLabel(p.mes) })), [dados]);
   if (!temDadosNasBarras(dados)) {
     return (
       <EmptyState
@@ -72,43 +92,55 @@ export function BarrasEntradasSaidasChart({
     );
   }
 
-  const chartData = dados.map((p) => ({ ...p, label: monthLabel(p.mes) }));
-
   return (
-    <div>
+    <div ref={refDoGrafico} className="grafico-barras grafico-dinheiro">
       {/* A legenda do mês parcial mora na FACHADA (altura reservada exata, sem salto). */}
       <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
-          <defs>
-            <Hachura id="hachura-entradas" cor={COR_ENTRADAS} />
-            <Hachura id="hachura-saidas" cor={COR_SAIDAS} />
-          </defs>
+        <BarChart
+          data={chartData}
+          margin={{ left: 4, right: 12, top: 8 }}
+          barGap={VAO_ENTRE_BARRAS}
+        >
+          <ObservadorDeFoco dados={chartData} aoMudar={foco.aoMudar} />
           <CartesianGrid vertical={false} stroke={GRID_COLOR} />
           <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
           <YAxis tickFormatter={brlCompact} tick={axisTick} axisLine={false} tickLine={false} width="auto" />
           <Tooltip
-            cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-            formatter={(value) => formatCurrency(Number(value))}
-            contentStyle={tooltipStyle}
-            labelStyle={tooltipLabelStyle}
-            itemStyle={tooltipItemStyle}
+            cursor={false}
+            active={foco.dicaAtiva}
+            isAnimationActive={false}
+            content={({ payload, label }) => {
+              if (!payload || payload.length === 0) return null;
+              const linha = payload[0].payload as (typeof chartData)[number];
+              return (
+                <DicaDoGrafico
+                  titulo={String(label)}
+                  situacao={linha.parcial ? "ainda em andamento" : undefined}
+                  linhas={linhasDaDica(payload, (e) =>
+                    typeof e.value === "number"
+                      ? { valor: formatCurrency(e.value), dinheiro: true }
+                      : null,
+                  )}
+                />
+              );
+            }}
           />
-          <Legend wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }} />
+          <Legend content={<LegendaDoGrafico />} />
           {series !== "saidas" && (
             <Bar
               dataKey="entradas"
               name={nomes.entradas}
               fill={COR_ENTRADAS}
-              radius={[4, 4, 0, 0]}
-              maxBarSize={32}
+              radius={raioDaPonta("horizontal")}
+              maxBarSize={larguraDaBarra(chartData.length)}
+              isAnimationActive={false}
             >
-              {chartData.map((p) => (
+              {chartData.map((p, i) => (
                 <Cell
                   key={p.mes}
-                  fill={p.parcial ? "url(#hachura-entradas)" : COR_ENTRADAS}
-                  stroke={p.parcial ? COR_ENTRADAS : undefined}
-                  strokeWidth={p.parcial ? 1.5 : undefined}
-                  strokeDasharray={p.parcial ? "4 3" : undefined}
+                  fill={COR_ENTRADAS}
+                  opacity={opacidadeDoGrupo(i, foco.foco)}
+                  {...(p.parcial ? PARCIAL_ENTRADAS : {})}
                 />
               ))}
             </Bar>
@@ -118,16 +150,16 @@ export function BarrasEntradasSaidasChart({
             name={nomes.saidas}
             fill={COR_SAIDAS}
             fillOpacity={0.6}
-            radius={[4, 4, 0, 0]}
-            maxBarSize={32}
+            radius={raioDaPonta("horizontal")}
+            maxBarSize={larguraDaBarra(chartData.length)}
+            isAnimationActive={false}
           >
-            {chartData.map((p) => (
+            {chartData.map((p, i) => (
               <Cell
                 key={p.mes}
-                fill={p.parcial ? "url(#hachura-saidas)" : COR_SAIDAS}
-                stroke={p.parcial ? COR_SAIDAS : undefined}
-                strokeWidth={p.parcial ? 1.5 : undefined}
-                strokeDasharray={p.parcial ? "4 3" : undefined}
+                fill={COR_SAIDAS}
+                opacity={opacidadeDoGrupo(i, foco.foco)}
+                {...(p.parcial ? PARCIAL_SAIDAS : {})}
               />
             ))}
           </Bar>

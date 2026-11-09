@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { semComentarios } from "@/lib/theme/ler-tokens";
+import { chaveDoTopoDaPilha } from "./chart-theme";
 import { linhasDaDica, type EntradaDaDica } from "./linhas-da-dica";
 
 /**
@@ -175,5 +176,230 @@ describe("nenhum arquivo de gráfico diz 'Sobrou'", () => {
     for (const nome of arquivos) {
       expect(lerFonte(nome), nome).not.toContain("Sobrou");
     }
+  });
+});
+
+
+/**
+ * 09-E, Task 3 — as cinco barras financeiras em vidro. Varredura de fonte sem comentários:
+ * cada elemento JSX é extraído por inteiro (o `>` de uma seta dentro de `{...}` não o fecha), e
+ * a classe é amarrada ao elemento certo, não a "algum lugar do arquivo".
+ */
+const BARRAS = [
+  "barras-entradas-saidas-chart-impl.tsx",
+  "mes-a-mes-chart-impl.tsx",
+  "faturas-chart-impl.tsx",
+  "projecao-chart-impl.tsx",
+  "forma-pagamento-chart-impl.tsx",
+] as const;
+
+/** Todo elemento de abertura `<Nome ...>` (ou `/>`) da fonte, com os atributos inteiros. */
+function elementos(fonte: string, nome: string): string[] {
+  const achados: string[] = [];
+  const inicio = new RegExp(`<${nome}(?=[\\s/>])`, "g");
+  let m: RegExpExecArray | null;
+  while ((m = inicio.exec(fonte)) !== null) {
+    let i = m.index + m[0].length;
+    let chaves = 0;
+    let aspas: string | null = null;
+    for (; i < fonte.length; i++) {
+      const c = fonte[i];
+      if (aspas) {
+        if (c === aspas) aspas = null;
+      } else if (c === '"' || c === "'" || c === "`") aspas = c;
+      else if (c === "{") chaves++;
+      else if (c === "}") chaves--;
+      else if (c === ">" && chaves === 0 && fonte[i - 1] !== "=") break;
+    }
+    achados.push(fonte.slice(m.index, i + 1));
+  }
+  return achados;
+}
+
+const classesDe = (elemento: string) =>
+  (/className="([^"]*)"/.exec(elemento)?.[1] ?? "").split(/\s+/).filter(Boolean);
+
+describe("o extrator de elementos", () => {
+  it("não fecha no => de dentro de uma chave, e não confunde <Bar com <BarChart", () => {
+    const fonte = `<BarChart a={1}><Bar f={(v) => v} x="a>b" /><Bar y />`;
+    expect(elementos(fonte, "Bar")).toEqual([`<Bar f={(v) => v} x="a>b" />`, `<Bar y />`]);
+    expect(elementos(fonte, "BarChart")).toEqual([`<BarChart a={1}>`]);
+  });
+});
+
+describe.each(BARRAS)("barras em vidro: %s", (arquivo) => {
+  const fonte = lerFonte(arquivo);
+  const deitado = arquivo.startsWith("forma-pagamento");
+
+  it("lê o arquivo (não afirma sobre string vazia)", () => {
+    expect(fonte.length).toBeGreaterThan(800);
+  });
+
+  it("toda <Bar> desliga a animação da recharts e usa larguraDaBarra", () => {
+    const barras = elementos(fonte, "Bar");
+    expect(barras.length).toBeGreaterThan(0);
+    for (const b of barras) {
+      expect(b).toContain("isAnimationActive={false}");
+      expect(b).toContain("maxBarSize={larguraDaBarra(");
+    }
+  });
+
+  it("todo <BarChart> separa as vizinhas por VAO_ENTRE_BARRAS", () => {
+    const graficos = elementos(fonte, "BarChart");
+    expect(graficos.length).toBe(1);
+    expect(graficos[0]).toContain("barGap={VAO_ENTRE_BARRAS}");
+  });
+
+  it("todo <Tooltip> usa a dica em vidro, sem cursor, sem animação e preso ao foco", () => {
+    const dicas = elementos(fonte, "Tooltip");
+    expect(dicas.length).toBe(1);
+    for (const t of dicas) {
+      expect(t).toContain("content=");
+      expect(t).toContain("active={foco.dicaAtiva}");
+      expect(t).toContain("isAnimationActive={false}");
+      expect(t).toContain("cursor={false}");
+      expect(t).not.toContain("contentStyle");
+    }
+  });
+
+  it("o invólucro com ref do foco leva a classe de crescimento e a do olho", () => {
+    const comRef = elementos(fonte, "div").filter((e) => e.includes("ref={refDoGrafico}"));
+    expect(comRef.length).toBe(1);
+    const classes = classesDe(comRef[0]);
+    expect(classes).toContain(deitado ? "grafico-barras-deitadas" : "grafico-barras");
+    expect(classes).not.toContain(deitado ? "grafico-barras" : "grafico-barras-deitadas");
+    expect(classes).toContain("grafico-dinheiro");
+  });
+
+  it("o observador recebe o MESMO array que o gráfico (a recharts o acha por identidade)", () => {
+    const dadosDoGrafico = /<BarChart[^>]*\bdata=\{(\w+)\}/.exec(fonte)?.[1];
+    const dadosDoObservador =
+      /<ObservadorDeFoco\s+dados=\{(\w+)\}\s+aoMudar=\{foco\.aoMudar\}/.exec(fonte)?.[1];
+    expect(dadosDoGrafico).toBeTruthy();
+    expect(dadosDoObservador).toBe(dadosDoGrafico);
+  });
+
+  it("toda <Cell> esmaece pelo foco, com opacidadeDoGrupo", () => {
+    const celulas = elementos(fonte, "Cell");
+    expect(celulas.length).toBeGreaterThan(0);
+    for (const c of celulas) expect(c).toContain("opacity={opacidadeDoGrupo(");
+  });
+
+  it("o raio da ponta vem de raioDaPonta, no layout certo, e nunca é numérico solto", () => {
+    expect(fonte).toContain(`raioDaPonta("${deitado ? "vertical" : "horizontal"}")`);
+    expect(fonte).not.toMatch(/radius=\{\[/);
+  });
+
+  it("eixos sem linha nem marca, e Y com largura automática", () => {
+    for (const e of [...elementos(fonte, "XAxis"), ...elementos(fonte, "YAxis")]) {
+      expect(e).toContain("axisLine={false}");
+      expect(e).toContain("tickLine={false}");
+    }
+    for (const y of elementos(fonte, "YAxis")) expect(y).toContain('width="auto"');
+  });
+
+  it("grade só horizontal (e nenhuma no deitado)", () => {
+    const grades = elementos(fonte, "CartesianGrid");
+    if (deitado) expect(grades).toEqual([]);
+    else for (const g of grades) expect(g).toContain("vertical={false}");
+  });
+
+  it("não sobrou estilo antigo de tooltip nem a dica padrão da recharts", () => {
+    expect(fonte).not.toMatch(/tooltip(Style|LabelStyle|ItemStyle)/);
+    expect(fonte).not.toContain("formatter=");
+  });
+
+  it("usa a dica em vidro e os ganchos do foco", () => {
+    expect(fonte).toContain("DicaDoGrafico");
+    expect(fonte).toContain("{ ref: refDoGrafico, ...foco } = useFocoDoGrafico();");
+    expect(fonte).toContain('from "./use-foco-do-grafico"');
+  });
+
+  it("a legenda, quando existe, é a LegendaDoGrafico", () => {
+    const legendas = elementos(fonte, "Legend");
+    for (const l of legendas) expect(l).toContain("content={<LegendaDoGrafico />}");
+    expect(legendas.length).toBe(deitado ? 0 : 1);
+  });
+});
+
+describe("barras em vidro: situações próprias", () => {
+  it("barras-entradas-saidas: sem hachura; mês parcial a 35% com contorno tracejado", () => {
+    const f = lerFonte("barras-entradas-saidas-chart-impl.tsx");
+    expect(f).not.toContain("Hachura");
+    expect(f).not.toContain("url(#hachura");
+    expect(f).not.toContain("<pattern");
+    expect(f).toContain("OPACIDADE_EM_ANDAMENTO");
+    expect(f).toContain("strokeDasharray");
+    expect(f).toContain('situacao={linha.parcial ? "ainda em andamento" : undefined}');
+  });
+
+  it("barras-entradas-saidas: os atributos de parcial entram por espalhamento condicional", () => {
+    const f = lerFonte("barras-entradas-saidas-chart-impl.tsx");
+    // `fillOpacity` explicitamente `undefined` numa Cell SOBRESCREVE o da Bar (a recharts mescla
+    // as props da Cell por cima): o atributo entra por espalhamento condicional, nunca por ternário.
+    expect(f).not.toMatch(/fillOpacity=\{[^}]*\?/);
+    expect(f).toMatch(/\.\.\.\(\w+\.parcial \? \w+ : \{\}\)/);
+  });
+
+  it("barras-entradas-saidas: as saídas fechadas mantêm o 0,6 da Bar", () => {
+    const f = lerFonte("barras-entradas-saidas-chart-impl.tsx");
+    const saidas = elementos(f, "Bar").find((b) => b.includes('dataKey="saidas"')) ?? "";
+    expect(saidas).toContain("fillOpacity={0.6}");
+  });
+
+  it("a fachada das barras escreve 'ainda em andamento' e não desenha hachura", () => {
+    const f = lerFonte("barras-entradas-saidas-chart.tsx");
+    expect(f).toContain("ainda em andamento");
+    expect(f).not.toContain("<pattern");
+    expect(f).not.toContain("hachura");
+    expect(f).toContain("OPACIDADE_EM_ANDAMENTO");
+    expect(f).toContain("dashed");
+    expect(f).not.toContain("dica-do-grafico");
+  });
+
+  it("faturas: o total vai em total=, o título tem só o mês, e 'sem fatura' continua sem dinheiro", () => {
+    const f = lerFonte("faturas-chart-impl.tsx");
+    const dica = elementos(f, "DicaDoGrafico")[0] ?? "";
+    expect(dica).toContain("total={");
+    expect(dica).not.toMatch(/titulo=\{[^}]*total/);
+    expect(f).toContain('"sem fatura"');
+    expect(f).toMatch(/dinheiro:\s*false/);
+    expect(f).not.toContain("?? 0");
+  });
+
+  it("faturas e projeção: o segmento mais alto com valor leva a ponta", () => {
+    for (const nome of ["faturas-chart-impl.tsx", "projecao-chart-impl.tsx"]) {
+      const f = lerFonte(nome);
+      expect(f, nome).toContain("chaveDoTopoDaPilha(");
+      expect(f, nome).toContain('raioDaPonta("horizontal")');
+      for (const b of elementos(f, "Bar")) expect(b, nome).not.toContain("radius=");
+    }
+  });
+
+  it("projeção: mantém hachura e '(projetado)', e a Bar leva a cor sólida (a legenda a usa)", () => {
+    const f = lerFonte("projecao-chart-impl.tsx");
+    expect(f).toContain("<pattern");
+    expect(f).toContain("strokeDasharray");
+    expect(f).toContain("(projetado)");
+    for (const b of elementos(f, "Bar")) expect(b).not.toContain('fill="url(');
+  });
+
+  it("formas: a amostra da dica usa a cor da linha, e o filtro de positivos continua", () => {
+    const f = lerFonte("forma-pagamento-chart-impl.tsx");
+    expect(f).toMatch(/\.filter\(\(d\) => d\.meu > 0\)/);
+    expect(f).toContain("CHART_COLORS[i % CHART_COLORS.length]");
+  });
+});
+
+describe("chaveDoTopoDaPilha", () => {
+  const chaves = ["a", "b", "c"] as const;
+  it("devolve a última chave da ordem de empilhamento com valor positivo", () => {
+    expect(chaveDoTopoDaPilha({ a: 1, b: 2, c: 3 }, chaves)).toBe("c");
+    expect(chaveDoTopoDaPilha({ a: 1, b: 2, c: 0 }, chaves)).toBe("b");
+    expect(chaveDoTopoDaPilha({ a: 5, b: 0, c: 0 }, chaves)).toBe("a");
+  });
+  it("sem nenhum valor positivo (zero, nulo, ausente) não há topo", () => {
+    expect(chaveDoTopoDaPilha({ a: 0, b: null, c: undefined }, chaves)).toBeNull();
+    expect(chaveDoTopoDaPilha({}, chaves)).toBeNull();
   });
 });
