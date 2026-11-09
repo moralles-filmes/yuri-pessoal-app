@@ -22,3 +22,21 @@ export function percentualDaFatia(meu: number, total: number): string {
   const pct = totalCent > 0 ? (reaisParaCentavos(meu) / totalCent) * 100 : 0;
   return `${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(pct)}%`;
 }
+
+/**
+ * O que o centro da rosca mostra: sem foco, o total e o rótulo dele; com a fatia em foco, o nome,
+ * a parte dela e o percentual. Índice fora do intervalo (ou `null`) volta ao total — nunca estoura
+ * nem inventa uma fatia. Puro: o percentual é o mesmo da legenda (`percentualDaFatia`).
+ */
+export function centroDaRosca(
+  p: { fatias: CategoriaSlice[]; total: number; rotuloDoTotal: string },
+  foco: number | null,
+): { valor: number; rotulo: string; percentual: string | null } {
+  const fatia = foco === null ? undefined : p.fatias[foco];
+  if (fatia === undefined) return { valor: p.total, rotulo: p.rotuloDoTotal, percentual: null };
+  return {
+    valor: fatia.meu,
+    rotulo: fatia.name,
+    percentual: percentualDaFatia(fatia.meu, p.total),
+  };
+}

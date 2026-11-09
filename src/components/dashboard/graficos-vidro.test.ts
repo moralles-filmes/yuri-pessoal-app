@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { semComentarios } from "@/lib/theme/ler-tokens";
 import { chaveDoTopoDaPilha } from "./chart-theme";
+import { centroDaRosca, percentualDaFatia } from "./cores-da-rosca";
 import { linhasDaDica, type EntradaDaDica } from "./linhas-da-dica";
 
 /**
@@ -660,5 +661,114 @@ describe("linhas e áreas em vidro: situações próprias", () => {
     const f = lerComponente("dashboard/evolucao-chart-impl.tsx");
     expect(f).toContain("formatCurrency(");
     expect(f).toContain("LegendaDoGrafico");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Task 6 — a rosca com o centro em foco. Nenhum dado de categoria real: nomes abstratos.
+// ---------------------------------------------------------------------------------------------
+
+describe("centroDaRosca", () => {
+  const fatias = [
+    { categoryId: "a", name: "A", color: null, movimentado: 75, meu: 75 },
+    { categoryId: "b", name: "B", color: null, movimentado: 25, meu: 25 },
+  ];
+  const p = { fatias, total: 100, rotuloDoTotal: "minhas saídas" };
+
+  it("sem foco devolve o total, o rótulo do total e nenhum percentual", () => {
+    expect(centroDaRosca(p, null)).toEqual({ valor: 100, rotulo: "minhas saídas", percentual: null });
+  });
+
+  it("com índice devolve nome, valor e o percentual de percentualDaFatia", () => {
+    expect(centroDaRosca(p, 1)).toEqual({ valor: 25, rotulo: "B", percentual: percentualDaFatia(25, 100) });
+    expect(centroDaRosca(p, 0).percentual).toBe("75,0%");
+  });
+
+  it("índice fora do intervalo devolve o total, nunca estoura", () => {
+    for (const i of [-1, 2, 99]) expect(centroDaRosca(p, i)).toEqual(centroDaRosca(p, null));
+  });
+});
+
+describe("rosca de categorias em vidro", () => {
+  const impl = lerComponente("dashboard/rosca-categorias-chart-impl.tsx");
+  const fachada = lerComponente("dashboard/rosca-categorias-chart.tsx");
+  const orfao = lerComponente("dashboard/categoria-chart-impl.tsx");
+
+  it("lê os arquivos e acha a rosca (não afirma sobre vazio)", () => {
+    expect(impl.length).toBeGreaterThan(300);
+    expect(elementos(impl, "Pie").length).toBe(1);
+    expect(elementos(impl, "Cell").length).toBe(1);
+  });
+
+  it("o Pie tem vão em graus, sem animação e grava o foco por mouse e toque", () => {
+    const [pie] = elementos(impl, "Pie");
+    expect(pie).toContain("paddingAngle={anguloDoVao(fatias.length, 79)}");
+    expect(pie).toContain("isAnimationActive={false}");
+    expect(pie).toContain("onMouseEnter={(_, i) => foco.aoMudar(i)}");
+    expect(pie).toContain("onMouseLeave={() => foco.aoMudar(null)}");
+    expect(pie).toContain("onClick={(_, i) => foco.aoMudar(i)}");
+    expect(pie).not.toContain("strokeWidth");
+  });
+
+  it("a fatia não tem contorno e esmaece fora do foco", () => {
+    const [cell] = elementos(impl, "Cell");
+    expect(cell).toContain('stroke="none"');
+    expect(cell).toContain("opacity={opacidadeDoGrupo(i, foco.foco)}");
+  });
+
+  it("sem dica flutuante: Tooltip com content nulo e nenhum estilo antigo", () => {
+    const dicas = elementos(impl, "Tooltip");
+    expect(dicas.length).toBe(1);
+    expect(dicas[0]).toContain("content={() => null}");
+    expect(impl).not.toMatch(/tooltip(Style|LabelStyle|ItemStyle)/);
+    expect(impl).not.toMatch(/contentStyle|labelStyle|itemStyle|formatter=/);
+  });
+
+  it("o invólucro leva o ref do foco, sem crescimento de barras e sem grafico-dinheiro", () => {
+    expect(impl).toContain("{ ref: refDoGrafico, ...foco } = useFocoDoGrafico();");
+    expect(impl).toMatch(/from "\.\/use-foco-do-grafico"/);
+    const comRef = elementos(impl, "div").filter((e) => /\bref=\{refDoGrafico\}/.test(e));
+    expect(comRef.length).toBe(1);
+    expect(comRef[0]).not.toContain("grafico-barras");
+    expect(comRef[0]).toContain("relative");
+  });
+
+  it("o centro sai de centroDaRosca e o valor passa por ValorComOlho, no total e no foco", () => {
+    expect(impl).toContain("centroDaRosca(");
+    expect(impl).toContain('from "@/components/shared/painel/valor-com-olho"');
+    const olhos = elementos(impl, "ValorComOlho");
+    expect(olhos.length).toBe(1);
+    expect(olhos[0]).toContain("formatCurrency(centro.valor)");
+    expect(impl.match(/formatCurrency\(/g)?.length).toBe(1);
+  });
+
+  it("o centro mantém tabular-nums, trunca o nome e põe o percentual em muted-foreground", () => {
+    const centro = impl.slice(impl.indexOf("pointer-events-none"));
+    expect(centro).toContain("tabular-nums");
+    expect(centro).toContain("truncate");
+    expect(centro).toMatch(/centro\.percentual[\s\S]{0,120}text-muted-foreground/);
+  });
+
+  it("a legenda da fachada põe o VALOR em ValorComOlho e o percentual fora dele", () => {
+    expect(fachada).toContain('from "@/components/shared/painel/valor-com-olho"');
+    const olhos = elementos(fachada, "ValorComOlho");
+    expect(olhos.length).toBe(1);
+    expect(olhos[0]).toContain("formatCurrency(f.meu)");
+    expect(fachada).toContain("percentualDaFatia(f.meu, total)");
+    expect(fachada).not.toMatch(/<ValorComOlho[^>]*percentualDaFatia/);
+  });
+
+  it("a fachada não arrasta recharts, a dica nem o gancho de foco", () => {
+    expect(fachada).not.toMatch(/from "recharts"/);
+    expect(fachada).not.toContain("dica-do-grafico");
+    expect(fachada).not.toContain("use-foco-do-grafico");
+  });
+
+  it("CategoriaChart (órfão) recebe só o vão e a animação", () => {
+    const [pie] = elementos(orfao, "Pie");
+    expect(pie).toContain("paddingAngle={anguloDoVao(chartData.length, 75)}");
+    expect(pie).toContain("isAnimationActive={false}");
+    expect(orfao).not.toContain("use-foco-do-grafico");
+    expect(orfao).not.toContain("dica-do-grafico");
   });
 });

@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/format";
 import type { CategoriaSlice } from "@/lib/finance/dashboard";
 import {
+  anguloDoVao,
   CHART_COLORS,
   tooltipItemStyle,
   tooltipLabelStyle,
@@ -60,7 +61,8 @@ export function CategoriaChart({ data }: { data: CategoriaSlice[] }) {
           nameKey="name"
           innerRadius={58}
           outerRadius={92}
-          paddingAngle={2}
+          paddingAngle={anguloDoVao(chartData.length, 75)}
+          isAnimationActive={false}
           strokeWidth={1}
         >
           {chartData.map((d, i) => (

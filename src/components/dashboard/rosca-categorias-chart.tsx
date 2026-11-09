@@ -15,6 +15,7 @@ import dynamic from "next/dynamic";
 import { PieChart as PieIcon } from "lucide-react";
 import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart-skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ValorComOlho } from "@/components/shared/painel/valor-com-olho";
 import type { CategoriaSlice } from "@/lib/finance/dashboard";
 import { dadosDaRosca, foraDaRosca } from "@/lib/finance/painel";
 import { centavosParaReais, formatCurrency, reaisParaCentavos } from "@/lib/format";
@@ -83,7 +84,9 @@ export function RoscaCategoriasChart({
               <span className="min-w-0 flex-1 truncate" title={f.name}>
                 {f.name}
               </span>
-              <span className="shrink-0 tabular-nums">{formatCurrency(f.meu)}</span>
+              <span className="shrink-0 tabular-nums">
+                <ValorComOlho texto={formatCurrency(f.meu)} />
+              </span>
               <span className="w-12 shrink-0 text-right text-muted-foreground tabular-nums">
                 {percentualDaFatia(f.meu, total)}
               </span>

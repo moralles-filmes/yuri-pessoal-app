@@ -8,15 +8,18 @@
  */
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { ValorComOlho } from "@/components/shared/painel/valor-com-olho";
 import { formatCurrency } from "@/lib/format";
 import type { CategoriaSlice } from "@/lib/finance/dashboard";
-import { tooltipItemStyle, tooltipLabelStyle, tooltipStyle } from "./chart-theme";
-import { corDaFatia, percentualDaFatia } from "./cores-da-rosca";
+import { anguloDoVao, opacidadeDoGrupo } from "./chart-theme";
+import { centroDaRosca, corDaFatia } from "./cores-da-rosca";
+import { useFocoDoGrafico } from "./use-foco-do-grafico";
 
 /**
  * Rosca das MINHAS saídas por categoria. As fatias já chegam positivas e ordenadas pela fachada
  * (a mesma ordem da legenda, para a cor ser a mesma); o vazio também é decidido lá. Todas as
- * categorias aparecem — dobrar em "Outros" fica para a 06 (D15). O total fica no centro.
+ * categorias aparecem — dobrar em "Outros" fica para a 06 (D15). O total fica no centro e dá lugar
+ * à fatia em foco (mouse, toque), com o nome e o percentual dela.
  */
 export function RoscaCategoriasChart({
   fatias,
@@ -27,8 +30,12 @@ export function RoscaCategoriasChart({
   total: number;
   rotuloDoTotal?: string;
 }) {
+  // `ref` sai do objeto: um `ref={x.ref}` faz o lint do React tratar `x` inteiro como ref.
+  const { ref: refDoGrafico, ...foco } = useFocoDoGrafico();
+  const centro = centroDaRosca({ fatias, total, rotuloDoTotal }, foco.foco);
+
   return (
-    <div className="relative">
+    <div ref={refDoGrafico} className="relative">
       <ResponsiveContainer width="100%" height={260}>
         <PieChart>
           <Pie
@@ -37,29 +44,32 @@ export function RoscaCategoriasChart({
             nameKey="name"
             innerRadius={62}
             outerRadius={96}
-            paddingAngle={2}
-            strokeWidth={1}
+            paddingAngle={anguloDoVao(fatias.length, 79)}
+            isAnimationActive={false}
+            onMouseEnter={(_, i) => foco.aoMudar(i)}
+            onMouseLeave={() => foco.aoMudar(null)}
+            onClick={(_, i) => foco.aoMudar(i)}
           >
             {fatias.map((f, i) => (
-              <Cell key={f.categoryId ?? i} fill={corDaFatia(f, i)} stroke="var(--glass-solid)" />
+              <Cell
+                key={f.categoryId ?? i}
+                fill={corDaFatia(f, i)}
+                stroke="none"
+                opacity={opacidadeDoGrupo(i, foco.foco)}
+              />
             ))}
           </Pie>
-          <Tooltip
-            formatter={(value, name) => [
-              `${formatCurrency(Number(value))} · ${percentualDaFatia(Number(value), total)}`,
-              name,
-            ]}
-            contentStyle={tooltipStyle}
-            labelStyle={tooltipLabelStyle}
-            itemStyle={tooltipItemStyle}
-          />
+          <Tooltip content={() => null} />
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
         <span className="max-w-26 text-center text-base leading-tight font-semibold tabular-nums">
-          {formatCurrency(total)}
+          <ValorComOlho texto={formatCurrency(centro.valor)} />
         </span>
-        <span className="text-xs text-muted-foreground">{rotuloDoTotal}</span>
+        <span className="max-w-26 truncate text-xs text-muted-foreground">{centro.rotulo}</span>
+        {centro.percentual !== null && (
+          <span className="text-xs text-muted-foreground tabular-nums">{centro.percentual}</span>
+        )}
       </div>
     </div>
   );
