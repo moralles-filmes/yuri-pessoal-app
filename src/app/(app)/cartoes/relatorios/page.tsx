@@ -20,6 +20,7 @@ import {
 import { hojeISO } from "@/lib/format";
 import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
 import { cn } from "@/lib/utils";
+import { MATERIAL_PILULA } from "@/components/ui/materiais";
 
 export const metadata: Metadata = { title: "Relatórios de cartão" };
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ const TEXTO_DA_BASE: Record<BaseDoRelatorio, string> = {
   vencimento: "Por vencimento — o mês em que a fatura vence (quando o dinheiro sai).",
 };
 
-const CLASSE_DO_SELETOR = "inline-flex shrink-0 overflow-hidden rounded-lg border bg-card";
+const CLASSE_DO_SELETOR = `${MATERIAL_PILULA} inline-flex shrink-0 overflow-hidden rounded-full`;
 const CLASSE_DO_LINK =
   "border-r px-3 py-1.5 text-sm whitespace-nowrap last:border-r-0 hover:bg-muted/50";
 
@@ -109,7 +110,7 @@ export default async function RelatoriosDeCartaoPage({
               aria-current={b.valor === dados.base ? "page" : undefined}
               className={cn(
                 CLASSE_DO_LINK,
-                b.valor === dados.base && "bg-primary/10 font-semibold text-primary",
+                b.valor === dados.base && "bg-primary/10 font-semibold text-foreground",
               )}
             >
               {b.rotulo}
@@ -124,7 +125,7 @@ export default async function RelatoriosDeCartaoPage({
               aria-current={p === dados.n ? "page" : undefined}
               className={cn(
                 CLASSE_DO_LINK,
-                p === dados.n && "bg-primary/10 font-semibold text-primary",
+                p === dados.n && "bg-primary/10 font-semibold text-foreground",
               )}
             >
               {p} meses

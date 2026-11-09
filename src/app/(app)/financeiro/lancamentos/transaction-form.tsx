@@ -81,6 +81,7 @@ import type {
   SubcategoryRow,
   TransactionRow,
 } from "@/types/database";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 const NONE = "none";
 
@@ -750,7 +751,7 @@ export function TransactionFormDialog({
           )}
 
           {canParcelar && (
-            <div className="space-y-3 rounded-xl border border-border bg-card/40 p-3">
+            <div className={`${MATERIAL_LADRILHO} space-y-3 rounded-[14px] p-3`}>
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
                   <Label htmlFor="tx-parcelado">Essa compra é parcelada?</Label>
@@ -892,7 +893,7 @@ export function TransactionFormDialog({
           )}
 
           {canSplit && (
-            <div className="rounded-xl border border-border bg-card/40 p-3">
+            <div className={`${MATERIAL_LADRILHO} rounded-[14px] p-3`}>
               <Controller
                 control={control}
                 name="parts"
@@ -917,7 +918,7 @@ export function TransactionFormDialog({
           )}
 
           {isReceita && (
-            <div className="rounded-xl border border-border bg-card/40 p-3">
+            <div className={`${MATERIAL_LADRILHO} rounded-[14px] p-3`}>
               <Controller
                 control={control}
                 name="receita_classificacao"

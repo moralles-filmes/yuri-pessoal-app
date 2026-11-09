@@ -17,6 +17,7 @@ import {
   type previaDoReembolso,
 } from "@/lib/finance/reembolso";
 import { centavosParaReais, formatCurrency } from "@/lib/format";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 const NENHUMA = "none";
 
@@ -116,7 +117,7 @@ export function ReembolsoDaReceita({
   const frases = previa ? frasesDoReembolso({ nome, previa, valorCentavos, pendente }) : null;
 
   return (
-    <div className="min-w-0 space-y-3 rounded-xl border border-border bg-card/40 p-3">
+    <div className={`${MATERIAL_LADRILHO} min-w-0 space-y-3 rounded-[14px] p-3`}>
       <div className="min-w-0 space-y-1.5">
         <Label htmlFor="tx-reembolso-pessoa">De quem?</Label>
         <Select
@@ -181,7 +182,7 @@ export function ReembolsoDaReceita({
           ).map((o) => (
             <label
               key={o.valor}
-              className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-card/40 p-2 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+              className={`${MATERIAL_LADRILHO} flex cursor-pointer items-start gap-2 rounded-[14px] p-2 has-[:checked]:border-primary has-[:checked]:bg-primary/5`}
             >
               <input
                 type="radio"

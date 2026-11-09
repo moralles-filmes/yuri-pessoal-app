@@ -64,6 +64,7 @@ import { ROTULO_DA_BASE } from "@/lib/finance/base";
 import { PAYMENT_METHOD_LABELS } from "@/lib/finance/constants";
 import { valorDaFatura } from "@/lib/finance/painel";
 import type { ReportsData } from "@/lib/reports/queries";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 const FREQ_LABELS: Record<string, string> = {
   diaria: "Diária",
@@ -185,7 +186,7 @@ export function RelatoriosClient({
                       return (
                       <div
                         key={`${f.cardId}-${f.competencia}`}
-                        className="flex flex-col gap-1 rounded-lg border bg-card/40 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                        className={`${MATERIAL_LADRILHO} flex flex-col gap-1 rounded-[14px] px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between`}
                       >
                         <span className="flex items-center gap-2">
                           <span
@@ -276,7 +277,7 @@ export function RelatoriosClient({
                     {habits.ranking.map((h) => (
                       <li
                         key={h.id}
-                        className="flex items-center justify-between gap-3 rounded-lg border bg-card/40 px-3 py-2 text-sm"
+                        className={`${MATERIAL_LADRILHO} flex items-center justify-between gap-3 rounded-[14px] px-3 py-2 text-sm`}
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           <span
@@ -984,7 +985,7 @@ function AbaFinanceiro({
                   {financeiro.maiores.slice(0, 8).map((c) => (
                     <li
                       key={c.categoryId ?? c.name}
-                      className="flex items-center justify-between gap-3 rounded-lg border bg-card/40 px-3 py-2 text-sm"
+                      className={`${MATERIAL_LADRILHO} flex items-center justify-between gap-3 rounded-[14px] px-3 py-2 text-sm`}
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <span
@@ -1047,7 +1048,7 @@ function AbaFinanceiro({
                   {financeiro.assinaturas.slice(0, 8).map((a, i) => (
                     <li
                       key={`${a.nome}-${i}`}
-                      className="flex items-center justify-between gap-3 rounded-lg border bg-card/40 px-3 py-2 text-sm"
+                      className={`${MATERIAL_LADRILHO} flex items-center justify-between gap-3 rounded-[14px] px-3 py-2 text-sm`}
                     >
                       <span className="min-w-0 truncate">{a.nome}</span>
                       <span className="shrink-0 tabular-nums">

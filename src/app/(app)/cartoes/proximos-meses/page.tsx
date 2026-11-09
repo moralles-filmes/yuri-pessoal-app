@@ -18,6 +18,7 @@ import {
 import { hojeISO } from "@/lib/format";
 import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
 import { cn } from "@/lib/utils";
+import { MATERIAL_PILULA } from "@/components/ui/materiais";
 
 export const metadata: Metadata = { title: "Próximos meses" };
 export const dynamic = "force-dynamic";
@@ -68,7 +69,7 @@ export default async function ProximosMesesPage({
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <nav
           aria-label="Horizonte"
-          className="inline-flex shrink-0 overflow-hidden rounded-lg border bg-card"
+          className={`${MATERIAL_PILULA} inline-flex shrink-0 overflow-hidden rounded-full`}
         >
           {HORIZONTES.map((h) => (
             <Link
@@ -77,7 +78,7 @@ export default async function ProximosMesesPage({
               aria-current={h === n ? "page" : undefined}
               className={cn(
                 "border-r px-3 py-1.5 text-sm whitespace-nowrap last:border-r-0 hover:bg-muted/50",
-                h === n && "bg-primary/10 font-semibold text-primary",
+                h === n && "bg-primary/10 font-semibold text-foreground",
               )}
             >
               {h} meses

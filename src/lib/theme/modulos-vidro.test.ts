@@ -265,3 +265,222 @@ describe("09-F · T2 · círculo de concluir", () => {
     expect(classesDe(circulo ?? "").filter((c) => /^-m[xytrbl]?-/.test(c))).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// 09-F · T3 a T5 · superfícies por módulo: nenhum `bg-card` feito à mão, nenhum Card trocando o
+// próprio fundo. `PENDENTES_DA_09F` é a dívida que ainda não foi paga (Tasks 4 e 5) e ENCOLHE a
+// cada lote; as exceções finais (`EXCECOES`) entram na Task 5.
+// ---------------------------------------------------------------------------------------------
+
+/** Arquivos dos módulos que ainda têm `bg-card` à mão ou `<Card>` com fundo próprio. */
+const PENDENTES_DA_09F: string[] = [
+  "src/app/(app)/estudos/[id]/course-detail-client.tsx",
+  "src/app/(app)/nutricao/compras/shopping-client.tsx",
+  "src/app/(app)/nutricao/diario/diary-client.tsx",
+  "src/app/(app)/nutricao/metas/goals-client.tsx",
+  "src/app/(app)/nutricao/receitas/recipes-client.tsx",
+  "src/app/(app)/nutricao/refeicoes/meal-templates-client.tsx",
+  "src/app/(app)/todo/todo-client.tsx",
+  "src/app/(app)/treinos/calendario/calendar-client.tsx",
+  "src/app/(app)/treinos/evolucao/evolution-client.tsx",
+  "src/app/(app)/treinos/exercicios/exercises-client.tsx",
+  "src/app/(app)/treinos/historico/history-client.tsx",
+  "src/app/(app)/treinos/programas/programs-client.tsx",
+  "src/app/(app)/treinos/recordes/records-client.tsx",
+  "src/app/(app)/treinos/treinos/workouts-client.tsx",
+  "src/app/(app)/treinos/treinos/[id]/builder-client.tsx",
+  "src/components/ai/action-history-client.tsx",
+  "src/components/ai/chat-client.tsx",
+  "src/components/ai/conversation-list.tsx",
+  "src/components/ai/insights-client.tsx",
+  "src/components/calendar/month-view.tsx",
+  "src/components/calendar/time-grid.tsx",
+  "src/components/habits/habit-card.tsx",
+  "src/components/nutrition/pantry-panel.tsx",
+  "src/components/todo/quick-task-input.tsx",
+  "src/components/todo/recurrence-editor.tsx",
+  "src/components/todo/task-board.tsx",
+  "src/components/todo/task-calendar.tsx",
+  "src/components/todo/task-row.tsx",
+  "src/components/training/exercise-filters.tsx",
+  "src/components/training/session/rest-panel.tsx",
+  "src/components/training/session/session-live-client.tsx",
+];
+
+/** Exceções DECLARADAS (com o motivo, na Task 5). */
+const EXCECOES: string[] = [];
+
+/** Literais de texto de uma fonte: "…", '…' e `…`, com a posição do início. */
+function literais(fonte: string): Array<{ texto: string; i: number }> {
+  return [...fonte.matchAll(/"([^"\n]*)"|'([^'\n]*)'|`([^`]*)`/g)].map((m) => ({
+    texto: m[1] ?? m[2] ?? m[3] ?? "",
+    i: m.index ?? 0,
+  }));
+}
+
+/** `bg-card`, `bg-card/40`, `hover:bg-card/60`… — o fundo de cartão feito à mão. */
+const ehBgCard = (c: string) => /^(?:[^:\s]+:)*bg-card(?:\/\S+)?$/.test(c);
+
+function ocorrenciasDeBgCard(fonte: string): number[] {
+  return literais(fonte)
+    .filter((l) => l.texto.split(/\s+/).some(ehBgCard))
+    .map((l) => linhaDe(fonte, l.i));
+}
+
+/** `<Card …>` cujo className troca o fundo (`bg-primary/…`, `bg-amber-500/…`, `bg-muted/…`). */
+function cardsComFundoProprio(fonte: string): number[] {
+  const achados: number[] = [];
+  let de = 0;
+  for (const abertura of aberturas(fonte, "Card")) {
+    const i = fonte.indexOf(abertura, de);
+    de = i + abertura.length;
+    const k = abertura.indexOf("className=");
+    if (k >= 0 && /bg-(?:primary|amber-500|muted)\//.test(abertura.slice(k))) {
+      achados.push(linhaDe(fonte, i));
+    }
+  }
+  return achados;
+}
+
+const foraDeUi = () => todosOsTsx().filter((p) => !dentroDeUi(p));
+
+describe("09-F · T3 · superfícies dos módulos", () => {
+  it("a varredura leu código de verdade", () => {
+    expect(todosOsTsx().length).toBeGreaterThan(400);
+    const cards = foraDeUi().flatMap((p) => aberturas(fonteSemComentarios(p), "Card"));
+    expect(cards.length, "aberturas de <Card>").toBeGreaterThan(100);
+  });
+
+  it("bg-card só nas exceções (e nos pendentes declarados)", () => {
+    const permitidos = new Set([...PENDENTES_DA_09F, ...EXCECOES]);
+    const sobrou: string[] = [];
+    for (const arquivo of foraDeUi()) {
+      if (permitidos.has(relativo(arquivo))) continue;
+      const fonte = fonteSemComentarios(arquivo);
+      for (const linha of ocorrenciasDeBgCard(fonte)) sobrou.push(`${relativo(arquivo)}:${linha}`);
+    }
+    expect(sobrou, `bg-card à mão (use MATERIAL_*): ${sobrou.join(", ")}`).toEqual([]);
+  });
+
+  it("nenhum Card troca o próprio fundo (a situação fica na borda)", () => {
+    const permitidos = new Set(PENDENTES_DA_09F);
+    const sobrou: string[] = [];
+    for (const arquivo of foraDeUi()) {
+      if (permitidos.has(relativo(arquivo))) continue;
+      for (const linha of cardsComFundoProprio(fonteSemComentarios(arquivo))) {
+        sobrou.push(`${relativo(arquivo)}:${linha}`);
+      }
+    }
+    expect(sobrou, `<Card> com fundo próprio: ${sobrou.join(", ")}`).toEqual([]);
+  });
+
+  it("a lista de pendentes só cita arquivo que ainda tem a ocorrência", () => {
+    const todos = new Map(foraDeUi().map((p) => [relativo(p), p]));
+    const velhos: string[] = [];
+    for (const rel of PENDENTES_DA_09F) {
+      const arquivo = todos.get(rel);
+      if (!arquivo) {
+        velhos.push(`${rel} (não existe)`);
+        continue;
+      }
+      const fonte = fonteSemComentarios(arquivo);
+      if (ocorrenciasDeBgCard(fonte).length + cardsComFundoProprio(fonte).length === 0) {
+        velhos.push(rel);
+      }
+    }
+    expect(velhos, `tire da lista (já pagos): ${velhos.join(", ")}`).toEqual([]);
+  });
+
+  it("as exceções declaradas existem e ainda têm bg-card", () => {
+    const todos = new Map(foraDeUi().map((p) => [relativo(p), p]));
+    for (const rel of EXCECOES) {
+      const arquivo = todos.get(rel);
+      expect(arquivo, rel).toBeDefined();
+      expect(ocorrenciasDeBgCard(fonteSemComentarios(arquivo as string)).length, rel).toBeGreaterThan(0);
+    }
+  });
+
+  // Cada peça amarrada ao LITERAL do seu className: a constante do material e o raio da regra.
+  const MATERIAIS: Array<[arquivo: string, material: string, raio: string, quantas: number]> = [
+    ["src/app/(app)/busca/busca-client.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    ["src/app/(app)/configuracoes/page.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    ["src/app/(app)/notificacoes/notifications-client.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
+    ["src/components/cartoes/proximos-meses.tsx", "MATERIAL_CARTAO", "rounded-[14px]", 1],
+    ["src/components/quick-add/quick-add.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 2],
+    ["src/app/(app)/financeiro/lancamentos/transaction-form.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 3],
+    ["src/app/(app)/importar/import-review.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 1],
+    ["src/app/(app)/importar/import-upload.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 2],
+    ["src/app/(app)/relatorios/relatorios-client.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 4],
+    ["src/components/dashboard/general/invoices-card.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 1],
+    ["src/components/financeiro/reembolso-da-receita.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 2],
+    ["src/app/(app)/cartoes/proximos-meses/page.tsx", "MATERIAL_PILULA", "rounded-full", 1],
+    ["src/app/(app)/cartoes/relatorios/page.tsx", "MATERIAL_PILULA", "rounded-full", 1],
+  ];
+  const RAIZ = path.resolve(SRC, "..");
+
+  for (const [rel, material, raio, quantas] of MATERIAIS) {
+    it(`${rel}: ${quantas}× ${material} com ${raio} no mesmo className`, () => {
+      const fonte = fonteSemComentarios(path.join(RAIZ, rel));
+      expect(fonte).toMatch(
+        new RegExp(`import \\{[^}]*\\b${material}\\b[^}]*\\} from "@/components/ui/materiais"`),
+      );
+      const casam = literais(fonte).filter((l) => {
+        const classes = l.texto.split(/\s+/);
+        return l.texto.includes("${" + material + "}") && classes.includes(raio);
+      });
+      expect(casam, `literais com \${${material}} e ${raio}`).toHaveLength(quantas);
+      for (const l of casam) {
+        expect(l.texto, "sem borda concorrente da constante").not.toMatch(/(^|\s)border-border(\s|$)/);
+      }
+    });
+  }
+
+  it("seletores de cartões: o item ativo é foreground (primary não chega a 4,5:1 sobre a pílula no escuro)", () => {
+    for (const rel of [
+      "src/app/(app)/cartoes/proximos-meses/page.tsx",
+      "src/app/(app)/cartoes/relatorios/page.tsx",
+    ]) {
+      const fonte = fonteSemComentarios(path.join(RAIZ, rel));
+      const ativos = literais(fonte).filter((l) => l.texto.includes("bg-primary/10"));
+      expect(ativos.length, rel).toBeGreaterThan(0);
+      for (const l of ativos) {
+        const classes = l.texto.split(/\s+/);
+        expect(classes, rel).toContain("text-foreground");
+        expect(classes, rel).toContain("font-semibold");
+        expect(classes, rel).not.toContain("text-primary");
+      }
+      expect(fonte, rel).toMatch(/aria-current=\{[^}]*"page"/);
+    }
+  });
+
+  it("EmptyState: bg-tile com a borda tracejada (vazio continua distinto de zero e de falha)", () => {
+    const fonte = fonteSemComentarios(path.join(RAIZ, "src/components/shared/empty-state.tsx"));
+    const raiz = literais(fonte).filter((l) => l.texto.includes("border-dashed"));
+    expect(raiz).toHaveLength(1);
+    const classes = (raiz[0]?.texto ?? "").split(/\s+/);
+    expect(classes).toContain("bg-tile");
+    expect(classes).toContain("border");
+    expect(classes).toContain("border-border");
+    expect(classes.some(ehBgCard)).toBe(false);
+  });
+
+  it("notificações: a linha não lida perde o tingimento de fundo e mantém a borda e o texto", () => {
+    const fonte = fonteSemComentarios(
+      path.join(RAIZ, "src/app/(app)/notificacoes/notifications-client.tsx"),
+    );
+    const linha = aberturas(fonte, "li").find((a) => a.includes("MATERIAL_CARTAO")) ?? "";
+    expect(linha).not.toBe("");
+    expect(linha).toMatch(/border-primary\/30/);
+    expect(linha).not.toMatch(/bg-primary/);
+    expect(fonte).toMatch(/Não lida/);
+  });
+
+  it("proximos-meses: a célula prevista continua sem fundo (tracejada), sem sombra de cartão", () => {
+    const fonte = fonteSemComentarios(path.join(RAIZ, "src/components/cartoes/proximos-meses.tsx"));
+    const prevista = literais(fonte).find((l) => l.texto.includes("border-dashed"));
+    const classes = (prevista?.texto ?? "").split(/\s+/);
+    expect(classes).toContain("bg-transparent");
+    expect(classes).toContain("bg-none");
+    expect(classes).toContain("shadow-none");
+  });
+});

@@ -234,9 +234,9 @@
 /* ---------- DARK (grafite frio / off-white / azul) ---------- */
 .dark {
   --fog-base: #0a0c11;
-  --fog-1: rgba(34, 78, 170, 0.6);
+  --fog-1: rgba(34, 78, 170, 0.55);
   --fog-2: rgba(88, 56, 150, 0.6);
-  --fog-3: rgba(16, 96, 92, 0.6);
+  --fog-3: rgba(16, 96, 92, 0.54);
 
   --glass: rgba(28, 31, 40, 0.58);
   --glass-solid: #14171e;

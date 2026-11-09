@@ -708,3 +708,60 @@ describe("09-F T2 · círculo de concluir", () => {
     });
   }
 });
+
+describe("09-F T3 · superfícies dos módulos", () => {
+  for (const [nomeTema, tema] of TEMAS) {
+    describe(nomeTema, () => {
+      it("ladrilho direto na névoa (EmptyState): foreground e muted-foreground >= 4,5:1 em fog-1/2/3", () => {
+        const base = aberturas(tema);
+        expect(base).toHaveLength(4);
+        for (const [rotulo, nevoa] of base) {
+          const ladrilho = compor(valor(tema, "tile"), nevoa);
+          for (const texto of ["foreground", "muted-foreground"]) {
+            exigirPrimitiva(nomeTema, texto, "ladrilho", rotulo, contraste(valor(tema, texto), ladrilho));
+          }
+        }
+      });
+
+      it("ladrilho dentro de ladrilho (painel do formulário, EmptyState em card): >= 4,5:1", () => {
+        for (const [rotulo, vidro] of superficies(tema)) {
+          const externo = compor(valor(tema, "tile"), vidro);
+          const interno = compor(valor(tema, "tile"), externo);
+          for (const texto of ["foreground", "muted-foreground"]) {
+            exigirPrimitiva(nomeTema, texto, "ladrilho duplo", rotulo, contraste(valor(tema, texto), interno));
+          }
+        }
+      });
+
+      it("opção marcada do reembolso (primary/5 sobre o ladrilho): >= 4,5:1", () => {
+        for (const [rotulo, vidro] of superficies(tema)) {
+          const ladrilho = compor(valor(tema, "tile"), vidro);
+          const marcado = compor(comAlfa(valor(tema, "primary"), 0.05), ladrilho);
+          for (const texto of ["foreground", "muted-foreground"]) {
+            exigirPrimitiva(nomeTema, texto, "ladrilho marcado", rotulo, contraste(valor(tema, texto), marcado));
+          }
+        }
+      });
+
+      it("seletor de cartões: o item ativo (foreground sobre primary/10 na pílula) >= 4,5:1", () => {
+        // O `primary` como TEXTO não chega a 4,5:1 sobre a pílula no escuro (3,1 a 3,6:1 mesmo
+        // sem tingimento, em fog-1 e fog-3): a pílula clareia o fundo. O ativo fica em
+        // `foreground`, com o tingimento, `font-semibold` e `aria-current` dizendo a situação.
+        for (const [rotulo, nevoa] of aberturas(tema)) {
+          const pilula = compor(valor(tema, "pill"), nevoa);
+          const ativo = compor(comAlfa(valor(tema, "primary"), 0.1), pilula);
+          exigirPrimitiva(nomeTema, "foreground", "pílula ativa", rotulo, contraste(valor(tema, "foreground"), ativo));
+        }
+      });
+
+      it("célula de fatura (cartão direto na névoa): foreground e muted-foreground >= 4,5:1", () => {
+        for (const [rotulo, nevoa] of aberturas(tema)) {
+          const cartao = compor(valor(tema, "glass"), nevoa);
+          for (const texto of ["foreground", "muted-foreground"]) {
+            exigirPrimitiva(nomeTema, texto, "cartão", rotulo, contraste(valor(tema, texto), cartao));
+          }
+        }
+      });
+    });
+  }
+});

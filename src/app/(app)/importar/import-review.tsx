@@ -91,6 +91,7 @@ import {
   undoImportBatch,
   updateImportRow,
 } from "@/lib/actions/imports";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 import type {
   ImportBatchWithTarget,
   ImportRowWithRelations,
@@ -805,7 +806,7 @@ function MappingEditor({ batch }: { batch: ImportBatchWithTarget }) {
             {/* Convenção de sinal do arquivo. Em fatura ela é detectada na importação (OFX traz
                 compra negativa; planilha traz compra positiva) e fica aqui para corrigir se a
                 detecção errar — com a convenção invertida a fatura inteira vira estorno. */}
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card/40 p-3">
+            <div className={`${MATERIAL_LADRILHO} flex items-center justify-between gap-3 rounded-[14px] p-3`}>
               <div className="flex min-w-0 flex-col">
                 <Label htmlFor="map-sinal" className="text-xs">
                   {batch.origem === "cartao"

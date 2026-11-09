@@ -48,6 +48,7 @@ import {
 } from "@/components/notifications/notification-meta";
 import { notificacoesLink } from "@/components/notifications/notificacoes-links";
 import type { NotificationRow } from "@/types/database";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 /**
  * O que as actions desta tela devolvem (`ActionResult`), só com o que a tela lê.
@@ -213,8 +214,8 @@ export function NotificationsClient({
               <li
                 key={n.id}
                 className={cn(
-                  "flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row sm:items-start",
-                  !n.is_read && !n.is_resolved && "border-primary/30 bg-primary/[0.03]",
+                  `${MATERIAL_CARTAO} flex flex-col gap-3 rounded-[16px] p-3 sm:flex-row sm:items-start`,
+                  !n.is_read && !n.is_resolved && "border-primary/30",
                   n.is_resolved && "opacity-70",
                 )}
               >

@@ -176,9 +176,9 @@ verde-azulado profundos; o vidro é grafite translúcido.
 ```css
 .dark {
   --fog-base: #0a0c11;
-  --fog-1: rgba(34, 78, 170, 0.6);
+  --fog-1: rgba(34, 78, 170, 0.55);
   --fog-2: rgba(88, 56, 150, 0.6);
-  --fog-3: rgba(16, 96, 92, 0.6);
+  --fog-3: rgba(16, 96, 92, 0.54);
 
   --glass: rgba(28, 31, 40, 0.58);
   --glass-solid: #14171e;                  /* a superfície da validação */
@@ -225,6 +225,7 @@ sempre `fog-3`):
 | `--info-ink` | **5,84:1** |
 
 Direto sobre a névoa aberta: `--foreground` **10,73:1** · `--muted-on-fog` **4,95:1**.
+⚠️ **09-F T3:** o ladrilho direto na névoa (`EmptyState`) reprovou no escuro com `--muted-foreground` (4,36:1 em `fog-1`, 4,26:1 em `fog-3`). Baixou-se o alfa da névoa, não o texto: `--fog-1` 0,60 → **0,55** (4,63:1) e `--fog-3` 0,60 → **0,54** (4,56:1). `--fog-2` ficou.
 Preenchimentos: `--primary-fill-foreground` sobre `--primary-fill` **4,70:1**;
 `--primary-foreground` sobre `--primary` **5,95:1**; `--accent-foreground` sobre `--accent`
 **9,94:1**.
