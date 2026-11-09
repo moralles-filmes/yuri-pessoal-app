@@ -507,7 +507,7 @@ function ProgramCard({
   }
 
   return (
-    <Card className={cn(program.isActive && "border-primary/40")}>
+    <Card className={cn(program.isActive && "border-primary/75")}>
       <CardHeader className="pb-3">
         <div className="flex items-start gap-3">
           <button

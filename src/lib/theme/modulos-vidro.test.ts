@@ -657,7 +657,7 @@ describe("09-F · T5 · superfícies de Treinos e Dieta", () => {
     expect(hist).toMatch(/checked=\{selected\}/);
     expect(hist).toMatch(/hover:border-primary\/50/);
     for (const rel of [`${T}exercicios/exercises-client.tsx`, `${T}treinos/workouts-client.tsx`]) {
-      expect(fonteSemComentarios(path.join(RAIZ, rel)), rel).toMatch(/selected\.has\([\w.]+\) && "border-primary\/50"/);
+      expect(fonteSemComentarios(path.join(RAIZ, rel)), rel).toMatch(/selected\.has\([\w.]+\) && "border-primary\/75"/);
     }
     const rest = fonteSemComentarios(path.join(RAIZ, "src/components/training/session/rest-panel.tsx"));
     expect(rest).toMatch(/over && "border-primary",/);
@@ -710,20 +710,20 @@ describe("09-F · T6 · anéis e peças de estilo próprio", () => {
     expect(sobrou, `Card com anel: ${sobrou.join(", ")}`).toEqual([]);
   });
 
-  it("os dois cartões com situação (painel do dashboard e programa ativo) usam border-primary/40", () => {
+  it("os dois cartões com situação (painel do dashboard e programa ativo) usam border-primary/75", () => {
     const dash = fonteDe("src/app/(app)/dashboard/financeiro/financial-dashboard-client.tsx");
-    expect(dash).toMatch(/<Card className="overflow-hidden border-primary\/40">/);
+    expect(dash).toMatch(/<Card className="overflow-hidden border-primary\/75">/);
     const prog = fonteDe("src/app/(app)/treinos/programas/programs-client.tsx");
-    expect(prog).toMatch(/<Card className=\{cn\(program\.isActive && "border-primary\/40"\)\}>/);
+    expect(prog).toMatch(/<Card className=\{cn\(program\.isActive && "border-primary\/75"\)\}>/);
   });
 
-  it("linha selecionada (exercícios e treinos): border-primary/50 depois da constante, sem anel", () => {
+  it("linha selecionada (exercícios e treinos): border-primary/75 depois da constante, sem anel", () => {
     for (const rel of [
       "src/app/(app)/treinos/exercicios/exercises-client.tsx",
       "src/app/(app)/treinos/treinos/workouts-client.tsx",
     ]) {
       const fonte = fonteDe(rel);
-      expect(fonte, rel).toMatch(/\$\{MATERIAL_CARTAO\}[^`]*`,\s*selected\.has\([\w.]+\) && "border-primary\/50",/);
+      expect(fonte, rel).toMatch(/\$\{MATERIAL_CARTAO\}[^`]*`,\s*selected\.has\([\w.]+\) && "border-primary\/75",/);
       expect(fonte, rel).not.toMatch(/ring-1 ring-primary\/40/);
       // A caixa marcada continua dizendo a seleção em forma.
       expect(fonte, rel).toMatch(/checked=\{selected\.has\(/);
@@ -811,6 +811,13 @@ describe("09-F · T6 · anéis e peças de estilo próprio", () => {
     const mapa = fonte.match(/const STATE_STYLE[^=]*=\s*\{([\s\S]*?)\n\};/)?.[1] ?? "";
     expect(mapa).not.toBe("");
     expect(mapa).not.toMatch(/destructive|red-|rose-|amber-|orange-/);
+  });
+
+  it("deep-link-highlight: sem transition-shadow (o destaque é outline, não sombra: a classe ficaria morta)", () => {
+    // `outline-style` não é interpolável: o contorno entra de uma vez, e uma transição de
+    // `outline-color` partiria da cor do texto. Sem fade real, sem classe.
+    const fonte = fonteDe("src/components/shared/deep-link-highlight.tsx");
+    expect(fonte).not.toMatch(/transition-/);
   });
 
   it("gaveta de registros: sem rounded-t-2xl (o raio é o da SheetContent)", () => {

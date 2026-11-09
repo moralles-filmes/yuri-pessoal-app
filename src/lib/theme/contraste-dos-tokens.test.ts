@@ -852,3 +852,48 @@ describe("09-F T6 · anéis e preenchimentos", () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// 09-F T6 (rodada 1) · bordas de ESTADO novas: o cartão que perdeu o anel diz a situação só pela
+// borda, que é componente de interface (>= 3:1). Par: `primary` no alfa REAL da classe (lido do
+// fonte), composto sobre o cartão, contra o próprio cartão — nas 4 superfícies de vidro e nos 2
+// temas. Se reprovar, suba o alfa nas 4 peças (e nos testes que o citam), nunca o token.
+// ---------------------------------------------------------------------------------------------
+
+describe("09-F T6 · bordas de estado >= 3:1", () => {
+  const lerFonte = (rel: string) =>
+    semComentarios(fs.readFileSync(path.join(SRC, "..", ...rel.split("/")), "utf8"));
+  const PECAS: Array<[nome: string, arquivo: string, padrao: RegExp]> = [
+    ["painel do dashboard financeiro", "src/app/(app)/dashboard/financeiro/financial-dashboard-client.tsx", /<Card className="overflow-hidden border-primary\/(\d+)">/],
+    ["programa ativo", "src/app/(app)/treinos/programas/programs-client.tsx", /program\.isActive && "border-primary\/(\d+)"/],
+    ["exercício selecionado", "src/app/(app)/treinos/exercicios/exercises-client.tsx", /selected\.has\(exercise\.id\) && "border-primary\/(\d+)"/],
+    ["treino selecionado", "src/app/(app)/treinos/treinos/workouts-client.tsx", /selected\.has\(workout\.id\) && "border-primary\/(\d+)"/],
+  ];
+  const alfas = PECAS.map(([nome, arquivo, padrao]) => {
+    const m = padrao.exec(lerFonte(arquivo));
+    if (!m) throw new Error(`borda de estado não encontrada: ${nome}`);
+    return [nome, Number(m[1]) / 100] as const;
+  });
+
+  it("as quatro peças existem e usam o MESMO alfa", () => {
+    expect(alfas).toHaveLength(4);
+    expect(new Set(alfas.map((a) => a[1])).size, `alfas: ${alfas.map((a) => a.join("=")).join(", ")}`).toBe(1);
+  });
+
+  for (const [nomeTema, tema] of TEMAS) {
+    it(`${nomeTema}: primary no alfa da borda sobre o cartão, contra o cartão, >= 3:1`, () => {
+      const fundos = superficies(tema);
+      expect(fundos).toHaveLength(4);
+      for (const [nome, alfa] of alfas) {
+        for (const [rotulo, cartao] of fundos) {
+          const borda = compor(comAlfa(valor(tema, "primary"), alfa), cartao);
+          const razao = contraste(borda, cartao);
+          expect(
+            razao,
+            `${nomeTema} · borda ${nome} (primary/${Math.round(alfa * 100)}) sobre ${rotulo}: ${razaoTextoDoAnel(razao)}:1 < 3:1 — suba o alfa nas 4 peças`,
+          ).toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
+        }
+      }
+    });
+  }
+});

@@ -49,7 +49,7 @@ export function DeepLinkHighlight({
       className={cn(
         // `min-w-0`: o wrapper vira item de grid/flex na tela que o usa, e item de grade tem
         // `min-width: auto` — sem isso, um nome longo empurra a página na horizontal.
-        "min-w-0 scroll-mt-24 rounded-xl transition-shadow",
+        "min-w-0 scroll-mt-24 rounded-xl",
         active && "outline-2 outline-solid outline-offset-2 outline-primary",
         className,
       )}

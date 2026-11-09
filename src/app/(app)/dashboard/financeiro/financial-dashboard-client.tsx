@@ -787,7 +787,7 @@ export function DashboardClient({
 
         {/* Card-âncora: valor pessoal × terceiros + cartão × à vista + faturas + contas */}
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="overflow-hidden border-primary/40">
+          <Card className="overflow-hidden border-primary/75">
             <CardContent className="p-[19px]">
               <div className="flex items-start justify-between gap-4">
                 {/* `min-w-0`: mesma razão do StatCard — sem ele o texto empurra o ícone

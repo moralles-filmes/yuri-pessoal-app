@@ -416,7 +416,7 @@ export function WorkoutsClient({
                 <div
                   className={cn(
                     `${MATERIAL_CARTAO} flex flex-wrap items-center gap-3 rounded-[16px] p-3 transition-colors`,
-                    selected.has(workout.id) && "border-primary/50",
+                    selected.has(workout.id) && "border-primary/75",
                   )}
                 >
                   <Checkbox
