@@ -582,21 +582,30 @@ body:has([data-slot="dialog-content"], [data-slot="sheet-content"]) [data-casca]
   }
 }
 
-.grafico-barras .recharts-bar-rectangle path {
+/* O crescimento é ÚNICO, ao montar (desenho §6.6): o gancho do foco marca `data-crescido` na raiz
+   quando o `animationend` de `crescer-*` chega, e daí em diante o `animation` deixa de valer —
+   redimensionar remonta o path da barra (a chave dela muda com x) e, sem a marca, o `@keyframes`
+   recomeçaria. A transição de opacidade fica em regra SEM o `:not`: o esmaecimento continua. */
+.grafico-barras:not([data-crescido]) .recharts-bar-rectangle path {
   transform-box: fill-box;
   transform-origin: bottom;
   animation: crescer-y 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  transition: opacity 0.2s ease;
 }
 
-.grafico-barras-deitadas .recharts-bar-rectangle path {
+.grafico-barras-deitadas:not([data-crescido]) .recharts-bar-rectangle path {
   transform-box: fill-box;
   transform-origin: left;
   animation: crescer-x 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.grafico-barras .recharts-bar-rectangle path,
+.grafico-barras-deitadas .recharts-bar-rectangle path {
   transition: opacity 0.2s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .grafico-barras:not([data-crescido]) .recharts-bar-rectangle path,
+  .grafico-barras-deitadas:not([data-crescido]) .recharts-bar-rectangle path,
   .grafico-barras .recharts-bar-rectangle path,
   .grafico-barras-deitadas .recharts-bar-rectangle path {
     animation: none;
@@ -606,9 +615,19 @@ body:has([data-slot="dialog-content"], [data-slot="sheet-content"]) [data-casca]
 
 /* O OLHO DOS VALORES NO EIXO (09-E). O rótulo do eixo é texto SVG desenhado pela recharts, fora do
    alcance de `ValorComOlho`; o invólucro do gráfico em dinheiro leva `grafico-dinheiro` e, com o
-   olho fechado (`data-ocultar="true"` em algum ancestral), os valores do eixo somem. `visibility`
-   e não `display`: o eixo continua ocupando o mesmo espaço, e o gráfico não se mexe ao
-   abrir/fechar o olho. Sem camada, junto das outras regras do gráfico. */
-[data-ocultar="true"] .grafico-dinheiro .recharts-cartesian-axis-tick-value {
+   olho fechado (`data-ocultar="true"` em algum ancestral), os valores do eixo de VALOR somem — só
+   ele: o eixo de categorias (meses, categorias) continua legível. Em pé o valor está no Y; nas
+   barras deitadas, no X. A recharts PORTA os rótulos para uma camada de z-index, então eles não
+   são descendentes de `.recharts-yAxis`; o `<g>` portado leva `recharts-yAxis-tick-labels` (ou
+   `-xAxis-`). `visibility` e não `display`: o eixo continua ocupando o mesmo espaço, e o gráfico
+   não se mexe ao abrir/fechar o olho. Sem camada, junto das outras regras do gráfico. */
+[data-ocultar="true"]
+  .grafico-dinheiro:not(.grafico-barras-deitadas)
+  .recharts-yAxis-tick-labels
+  .recharts-cartesian-axis-tick-value,
+[data-ocultar="true"]
+  .grafico-dinheiro.grafico-barras-deitadas
+  .recharts-xAxis-tick-labels
+  .recharts-cartesian-axis-tick-value {
   visibility: hidden;
 }

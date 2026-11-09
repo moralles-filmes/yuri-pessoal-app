@@ -95,20 +95,26 @@ describe("barras em vidro — crescimento em CSS (09-E)", () => {
     return css.slice(abre + 1, css.indexOf("}", abre));
   };
 
-  it(".grafico-barras cresce de baixo, no path da barra", () => {
-    const r = regra(".grafico-barras .recharts-bar-rectangle path");
+  it(".grafico-barras cresce de baixo, no path da barra, SÓ até o gancho marcar data-crescido", () => {
+    const r = regra(".grafico-barras:not([data-crescido]) .recharts-bar-rectangle path");
     expect(r).toMatch(/transform-origin:\s*bottom/);
     expect(r).toMatch(/transform-box:\s*fill-box/);
     expect(r).toMatch(/animation:\s*crescer-y\b/);
-    expect(r).toMatch(/transition:\s*opacity/);
   });
 
-  it(".grafico-barras-deitadas cresce da esquerda, no path da barra", () => {
-    const r = regra(".grafico-barras-deitadas .recharts-bar-rectangle path");
+  it(".grafico-barras-deitadas cresce da esquerda, no path da barra, SÓ até data-crescido", () => {
+    const r = regra(".grafico-barras-deitadas:not([data-crescido]) .recharts-bar-rectangle path");
     expect(r).toMatch(/transform-origin:\s*left/);
     expect(r).toMatch(/transform-box:\s*fill-box/);
     expect(r).toMatch(/animation:\s*crescer-x\b/);
-    expect(r).toMatch(/transition:\s*opacity/);
+  });
+
+  it("a transição de opacidade (esmaecimento) fica em regra SEM o :not, e a animação não", () => {
+    for (const base of [".grafico-barras", ".grafico-barras-deitadas"]) {
+      const r = regra(`${base} .recharts-bar-rectangle path`);
+      expect(r, base).toMatch(/transition:\s*opacity/);
+      expect(r, base).not.toMatch(/animation:/);
+    }
   });
 
   it("os dois keyframes existem", () => {
@@ -127,8 +133,11 @@ describe("barras em vidro — crescimento em CSS (09-E)", () => {
       else if (css[fim] === "}" && --prof === 0) break;
     }
     const corpo = css.slice(abre + 1, fim);
-    expect(corpo).toContain(".grafico-barras .recharts-bar-rectangle path");
-    expect(corpo).toContain(".grafico-barras-deitadas .recharts-bar-rectangle path");
+    // com e sem o :not([data-crescido]): a regra sem o :not carrega a transição e também zera
+    for (const base of [".grafico-barras", ".grafico-barras-deitadas"]) {
+      expect(corpo).toContain(`${base} .recharts-bar-rectangle path`);
+      expect(corpo).toContain(`${base}:not([data-crescido]) .recharts-bar-rectangle path`);
+    }
     expect(corpo).toMatch(/animation:\s*none/);
     expect(corpo).toMatch(/transition:\s*none/);
   });

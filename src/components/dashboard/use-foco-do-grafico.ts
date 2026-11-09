@@ -44,18 +44,33 @@ export function useFocoDoGrafico({ zerarAoDispensar = false }: { zerarAoDispensa
       if (zerarAoDispensar) setBruto(null);
     };
     const aoMover = () => setDicaAtiva(undefined);
+    // Crescimento ÚNICO, ao montar: acabada a animação, a raiz leva `data-crescido` e o CSS para de
+    // aplicá-la. Sem isso, redimensionar remonta o path da barra (a chave dela muda com x) e o
+    // `@keyframes` recomeça. Só DOM: nada aqui renderiza.
+    const aoCrescer = (e: AnimationEvent) => {
+      if (e.animationName.startsWith("crescer-")) raiz?.setAttribute("data-crescido", "");
+    };
+    // A superfície da recharts tem `tabIndex` 0; receber foco por CLIQUE ativa a interação de
+    // teclado no índice 0 e deixa dica e esmaecimento presos. `preventDefault` no `mousedown`
+    // impede esse foco (o toque também sintetiza `mousedown`); Tab e setas seguem intactos. NÃO
+    // passivo, senão o `preventDefault` não vale.
+    const aoPressionar = (e: MouseEvent) => e.preventDefault();
 
     window.addEventListener("pointerdown", aoTocar, { passive: true });
     window.addEventListener("scroll", aoRolar, { passive: true });
     raiz?.addEventListener("pointermove", aoMover, { passive: true });
     raiz?.addEventListener("focusin", aoMover, { passive: true });
     raiz?.addEventListener("keydown", aoMover, { passive: true });
+    raiz?.addEventListener("animationend", aoCrescer);
+    raiz?.addEventListener("mousedown", aoPressionar);
     return () => {
       window.removeEventListener("pointerdown", aoTocar);
       window.removeEventListener("scroll", aoRolar);
       raiz?.removeEventListener("pointermove", aoMover);
       raiz?.removeEventListener("focusin", aoMover);
       raiz?.removeEventListener("keydown", aoMover);
+      raiz?.removeEventListener("animationend", aoCrescer);
+      raiz?.removeEventListener("mousedown", aoPressionar);
     };
   }, [raiz, zerarAoDispensar]);
 

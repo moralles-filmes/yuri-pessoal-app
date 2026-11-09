@@ -64,7 +64,7 @@ export function DicaDoGrafico({
         {linhas.map((l) => (
           <li key={l.chave} className="flex items-center gap-2">
             <AmostraDeCor cor={l.cor} />
-            <span className="min-w-0 flex-1 truncate text-muted-foreground">{l.nome}</span>
+            <span className="min-w-0 flex-1 text-muted-foreground">{l.nome}</span>
             <span className="shrink-0 font-medium tabular-nums">
               {l.dinheiro ? <ValorComOlho texto={l.valor} /> : l.valor}
             </span>

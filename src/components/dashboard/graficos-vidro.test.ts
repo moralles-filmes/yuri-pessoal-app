@@ -49,6 +49,12 @@ describe("dica em vidro", () => {
     expect(dica).toMatch(/dinheiro\s*\?[\s\S]{0,60}<ValorComOlho\s+texto=\{l\.valor\}/);
   });
 
+  it("o nome da série quebra linha (min-w-0), nunca corta com truncate: preserva \"(projetado)\"", () => {
+    const linha = dica.slice(dica.indexOf("{l.nome}") - 120, dica.indexOf("{l.nome}"));
+    expect(linha).toContain("min-w-0 flex-1");
+    expect(dica).not.toContain("truncate");
+  });
+
   it("não usa transição (a dica acompanha o ponteiro)", () => {
     expect(dica).not.toMatch(/transition/);
   });
@@ -81,9 +87,29 @@ describe("dica em vidro", () => {
 });
 
 describe("gráfico em dinheiro e o olho", () => {
-  it("esconde os valores do eixo com visibility: hidden sob [data-ocultar=\"true\"]", () => {
+  // O rótulo do eixo é portado pela recharts para uma camada de z-index: NÃO é descendente de
+  // `.recharts-yAxis`, mas o `<g>` portado leva `recharts-yAxis-tick-labels`.
+  it("esconde SÓ os valores do eixo de VALOR (Y em pé, X nas deitadas), com visibility: hidden", () => {
     expect(globals).toMatch(
-      /\[data-ocultar="true"\]\s+\.grafico-dinheiro\s+\.recharts-cartesian-axis-tick-value\s*\{[^}]*visibility:\s*hidden/,
+      /\[data-ocultar="true"\]\s+\.grafico-dinheiro:not\(\.grafico-barras-deitadas\)\s+\.recharts-yAxis-tick-labels\s+\.recharts-cartesian-axis-tick-value\s*,/,
+    );
+    expect(globals).toMatch(
+      /\[data-ocultar="true"\]\s+\.grafico-dinheiro\.grafico-barras-deitadas\s+\.recharts-xAxis-tick-labels\s+\.recharts-cartesian-axis-tick-value\s*\{[^}]*visibility:\s*hidden/,
+    );
+  });
+
+  it("nenhum seletor do olho apaga o eixo de CATEGORIAS (todo seletor de tick passa pelo eixo de valor)", () => {
+    const abre = globals.search(/\[data-ocultar="true"\]\s+\.grafico-dinheiro/);
+    expect(abre, "a regra do olho no eixo existe").toBeGreaterThan(-1);
+    const lista = globals.slice(abre, globals.indexOf("{", abre));
+    const seletores = lista.split(",").map((x) => x.replace(/\s+/g, " ").trim());
+    expect(seletores.length).toBe(2);
+    expect(seletores[0]).toContain(".recharts-yAxis-tick-labels");
+    expect(seletores[0]).toContain(":not(.grafico-barras-deitadas)");
+    expect(seletores[1]).toContain(".recharts-xAxis-tick-labels");
+    expect(seletores[1]).toContain(".grafico-barras-deitadas");
+    expect(globals).not.toMatch(
+      /\.grafico-dinheiro\s+\.recharts-cartesian-axis-tick-value/,
     );
   });
 });
@@ -106,6 +132,23 @@ describe("use-foco-do-grafico", () => {
       );
     }
     expect(foco).toMatch(/aoMover\s*=\s*\(\)\s*=>\s*setDicaAtiva\(undefined\)/);
+  });
+
+  it("animationend de crescer-* marca data-crescido na raiz (só DOM) e sai no cleanup", () => {
+    expect(foco).toMatch(/raiz\?\.addEventListener\("animationend",\s*aoCrescer\)/);
+    expect(foco).toMatch(/raiz\?\.removeEventListener\("animationend",\s*aoCrescer\)/);
+    const corpo = foco.slice(foco.indexOf("const aoCrescer"), foco.indexOf("const aoPressionar"));
+    expect(corpo).toMatch(/e\.animationName\.startsWith\("crescer-"\)/);
+    expect(corpo).toMatch(/raiz\??\.setAttribute\("data-crescido",\s*""\)/);
+    expect(corpo).not.toMatch(/set(Bruto|DicaAtiva)/);
+  });
+
+  it("mousedown NÃO passivo dentro do gráfico chama preventDefault (sem foco por clique) e sai no cleanup", () => {
+    expect(foco).toMatch(/raiz\?\.addEventListener\("mousedown",\s*aoPressionar\)/);
+    expect(foco).not.toMatch(/addEventListener\("mousedown",[^)]*passive/);
+    expect(foco).toMatch(/raiz\?\.removeEventListener\("mousedown",\s*aoPressionar\)/);
+    const corpo = foco.slice(foco.indexOf("const aoPressionar"), foco.indexOf("window.addEventListener"));
+    expect(corpo).toMatch(/e\.preventDefault\(\)/);
   });
 
   it("pointerdown só apaga a dica quando o alvo está FORA do ref", () => {

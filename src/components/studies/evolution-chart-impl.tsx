@@ -30,7 +30,6 @@ export function EvolutionChart({ weekly }: { weekly: StudyWeekPoint[] }) {
     minutes: w.minutes,
   }));
 
-
   // `ref` sai do objeto: um `ref={x.ref}` faz o lint do React tratar `x` inteiro como ref e recusar
   // `x.dicaAtiva` na renderização.
   const { ref: refDoGrafico, ...foco } = useFocoDoGrafico();
