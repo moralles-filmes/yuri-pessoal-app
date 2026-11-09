@@ -27,6 +27,8 @@ import { PRESSAO } from "@/components/ui/materiais";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import {
   avisoDoBotao,
+  estadoDoBotao,
+  type EstadoDoBotao,
   ESTADO_INICIAL,
   reduzirPainel,
   TECLA_DO_PAINEL,
@@ -38,12 +40,16 @@ import {
  * estaticamente e recusa constante compartilhada (`next/dynamic options must be an object
  * literal`). A repetição pelo projeto é exigida, não descuido.
  *
- * `loading: () => null` porque não há nada a reservar: o painel é uma gaveta que entra por
- * cima, não um bloco no fluxo — um esqueleto aqui piscaria no canto sem motivo.
+ * O indicador só cobre o carregamento inicial do chunk; o estado do chat nasce no painel.
  */
 const Painel = dynamic(
   () => import("./floating-assistant-panel").then((m) => m.FloatingAssistantPanel),
-  { ssr: false, loading: () => null },
+  { ssr: false, loading: () => (
+    <span role="status" className="fixed bottom-4 z-40 flex size-12 items-center justify-center rounded-full bg-background shadow-lg left-[var(--assistente-esquerda,auto)] right-[var(--assistente-direita,1rem)]">
+      <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />
+      <span className="sr-only">Abrindo o assistente…</span>
+    </span>
+  ) },
 );
 
 export function FloatingAssistant({
@@ -59,8 +65,13 @@ export function FloatingAssistant({
    * para mover o botão é o que tem de movê-lo na hora; a leitura do layout o confirma na
    * próxima navegação.
    */
-  const [canto, setCanto] = React.useState(cantoInicial);
-  const [oculto, setOculto] = React.useState(ocultoInicial);
+  const [preferencias, setPreferencias] = React.useState<EstadoDoBotao>(() => {
+    const inicial = { canto: cantoInicial, oculto: ocultoInicial };
+    return { servidor: inicial, atual: inicial };
+  });
+  const proximo = estadoDoBotao(preferencias, { canto: cantoInicial, oculto: ocultoInicial });
+  if (proximo !== preferencias) setPreferencias(proximo);
+  const { canto, oculto } = proximo.atual;
   const montado = useLazyDialog(estado.aberto);
 
   // O relógio vive no componente, nunca na regra: `avisoDoBotao` recebe `agora`. O minuto é
@@ -131,17 +142,18 @@ export function FloatingAssistant({
       )}
 
       {montado && (
+        <div className={canto === "esquerda" ? "[--assistente-esquerda:1rem] [--assistente-direita:auto]" : "[--assistente-esquerda:auto] [--assistente-direita:1rem]"}>
         <Painel
           aberto={estado.aberto}
           onOpenChange={(v) => despachar({ tipo: v ? "abriu" : "fechou" })}
           canto={canto}
           oculto={oculto}
           onPreferencia={(p) => {
-            setCanto(p.canto);
-            setOculto(p.oculto);
+            setPreferencias((atual) => ({ ...atual, atual: p }));
           }}
           onAtividade={despachar}
         />
+        </div>
       )}
     </>
   );

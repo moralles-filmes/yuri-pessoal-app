@@ -15,9 +15,11 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { EyeOff, Loader2, MoveHorizontal, SquareArrowOutUpRight } from "lucide-react";
+import { EyeOff, Loader2, MoreHorizontal, MoveHorizontal, Plus, SquareArrowOutUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { deveFecharAoNavegar } from "@/lib/ai/resposta-em-andamento";
 import {
   Sheet,
   SheetContent,
@@ -29,7 +31,7 @@ import { ChatView, useConversaDaIa } from "@/components/ai/chat-client";
 import { VazioDaConversa } from "@/components/ai/vazio-da-conversa";
 import { definirBotaoFlutuante, estadoDoPainelDaIa } from "@/lib/actions/ai-panel";
 import { mensagemDaAction } from "@/lib/forms/mensagem-da-action";
-import { AI_LINK_BASE, conversationLink } from "@/lib/search/ai-links";
+import { AI_LINK_BASE, conversationLink, conversationsLink } from "@/lib/search/ai-links";
 import {
   ATALHO_DO_PAINEL,
   ROTULO_DO_CANTO,
@@ -107,6 +109,7 @@ export function FloatingAssistantPanel({
     initialMessages: [],
     runs: {},
     podeConversar: prontidao?.podeConversar ?? false,
+    podeCruzarModulos: prontidao?.podeCruzarModulos ?? false,
     onAtividade,
   });
 
@@ -138,6 +141,7 @@ export function FloatingAssistantPanel({
         vivo
           ? setProntidao({
               podeConversar: false,
+              podeCruzarModulos: false,
               motivoBloqueio: "Não foi possível falar com o servidor agora.",
             })
           : undefined,
@@ -169,6 +173,11 @@ export function FloatingAssistantPanel({
     }
   }
 
+  function aoNavegar(e: React.MouseEvent<HTMLDivElement>) {
+    const link = e.target instanceof Element ? e.target.closest("a") : null;
+    if (deveFecharAoNavegar(link?.getAttribute("href") ?? null)) onOpenChange(false);
+  }
+
   const outroCanto: CantoDoBotao = canto === "direita" ? "esquerda" : "direita";
 
   return (
@@ -185,44 +194,39 @@ export function FloatingAssistantPanel({
         */
         className="flex flex-col gap-0 p-0 data-[side=bottom]:h-[85svh] data-[side=right]:sm:max-w-lg"
       >
-        {/* `pr-12`: o botão de fechar da primitiva fica em `absolute top-3 right-3`. */}
-        <SheetHeader className="shrink-0 border-b pr-12">
-          <SheetTitle>Assistente</SheetTitle>
-          {/*
-            A trava de honestidade neste caminho — é a versão curta da mesma regra, e é ela
-            que justifica o `compacto` do `ChatClient` abaixo esconder o texto longo.
-          */}
-          <SheetDescription>{RESUMO_DO_ASSISTENTE}</SheetDescription>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm">
-              {/*
-                D3 — com a conversa já aberta, a tela cheia é ESTA conversa; antes da primeira
-                resposta ainda não há conversa, e o botão leva ao chat vazio.
-              */}
+        <SheetHeader className="flex-row items-center justify-between gap-2 border-b py-3 pr-12">
+          <SheetTitle className="min-w-0 truncate">Assistente</SheetTitle>
+          <SheetDescription className="sr-only">{RESUMO_DO_ASSISTENTE}</SheetDescription>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button variant="ghost" size="icon" aria-label="Nova conversa" disabled={conversa.enviando} onClick={conversa.novaConversa}>
+              <Plus className="size-4" />
+            </Button>
+            <Button asChild variant="ghost" size="icon">
               <Link
+                aria-label="Tela cheia"
                 href={conversa.conversaId ? conversationLink(conversa.conversaId) : AI_LINK_BASE}
                 onClick={() => onOpenChange(false)}
               >
-                <SquareArrowOutUpRight className="size-4" />{" "}
-                {conversa.conversaId ? "Abrir esta conversa em tela cheia" : "Abrir em tela cheia"}
+                <SquareArrowOutUpRight className="size-4" />
               </Link>
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={salvando}
-              onClick={() => void salvarPreferencia({ canto: outroCanto, oculto })}
-            >
-              <MoveHorizontal className="size-4" /> {ROTULO_DO_CANTO[outroCanto]}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={salvando}
-              onClick={() => void salvarPreferencia({ canto, oculto: true })}
-            >
-              <EyeOff className="size-4" /> Ocultar o botão
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Mais opções"><MoreHorizontal className="size-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={salvando} onSelect={() => void salvarPreferencia({ canto: outroCanto, oculto })}>
+                  <MoveHorizontal className="size-4" /> Mover para o {ROTULO_DO_CANTO[outroCanto].toLocaleLowerCase("pt-BR")}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={salvando} onSelect={() => void salvarPreferencia({ canto, oculto: true })}>
+                  <EyeOff className="size-4" /> Ocultar o botão
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href={conversationsLink()} onClick={() => onOpenChange(false)}>Conversas anteriores</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </SheetHeader>
 
@@ -230,7 +234,7 @@ export function FloatingAssistantPanel({
           `min-h-0 flex-1` — a mesma linha que `mobile-nav.tsx` carrega, pelo mesmo motivo:
           dentro do `flex-col` do SheetContent, sem ela o conteúdo estoura a gaveta sem rolar.
         */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4" onClickCapture={aoNavegar}>
           {prontidao === null ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> Preparando o assistente…
@@ -240,6 +244,7 @@ export function FloatingAssistantPanel({
               conversa={conversa}
               runs={{}}
               podeConversar={prontidao.podeConversar}
+              podeCruzarModulos={prontidao.podeCruzarModulos}
               motivoBloqueio={prontidao.motivoBloqueio}
               compacto
               vazio={<VazioDaConversa />}

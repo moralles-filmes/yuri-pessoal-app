@@ -19,6 +19,8 @@ export type EventoDaFase =
   | { readonly tipo: "start" }
   | { readonly tipo: "tool"; readonly toolName: string }
   | { readonly tipo: "switch"; readonly motivo: string }
+  /** Anuncia o acionamento; a lista da bolha acompanha o desfecho de cada especialista. */
+  | { readonly tipo: "especialista"; readonly rotulo: string }
   | { readonly tipo: "proposta" }
   | { readonly tipo: "done" }
   | { readonly tipo: "error"; readonly mensagem: string }
@@ -39,6 +41,8 @@ export function faseDoEvento(evento: EventoDaFase): string {
     }
     case "switch":
       return evento.motivo;
+    case "especialista":
+      return `Consultando ${evento.rotulo}…`;
     case "proposta":
       return "Uma alteração aguardando você";
     case "done":

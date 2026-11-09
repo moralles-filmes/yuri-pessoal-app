@@ -685,6 +685,14 @@ describe("lançamento (03-E): a \"Data do pagamento\" aceita a própria saída",
   });
 });
 
+
+it("o valor REAL do formulário de memória passa no schema", () => {
+  const r = roundTrip(memoriaSchema, { conteudo: "Prefiro treinar à noite", modulo: "__todas__", expiraEm: "" });
+  expect(r.noCliente.success, fieldErrors(r.noCliente.error)).toBe(true);
+  expect(r.noServidor.success, fieldErrors(r.noServidor.error)).toBe(true);
+  expect(r.noCliente.data).toMatchObject({ modulo: null, expiraEm: null });
+});
+
 /**
  * 04-C · o reembolso no lançamento de receita. Quem decide se a combinação fecha é
  * `decidirReembolso`; o schema só traduz a forma, e a saída tem de ser aceita de novo.

@@ -218,3 +218,17 @@ function aggregateWindow(active: ActiveAgg[], fromIso: string, toIso: string) {
   }
   return { scheduled, done, rate: scheduled ? done / scheduled : 0 };
 }
+
+/** Leitura exata do dia para prever substituição, inclusive zero e datas fora da janela. */
+export async function getHabitLogForDate(habitId: string, logDate: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("habit_logs")
+    .select("id, value")
+    .eq("habit_id", habitId)
+    .eq("log_date", logDate)
+    .maybeSingle();
+  // Erro não prova ausência: a RLS de sessão continua valendo nesta leitura do módulo.
+  if (error) throw new Error("Não foi possível consultar o registro deste dia em Hábitos.");
+  return data;
+}

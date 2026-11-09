@@ -1,18 +1,17 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChatClient } from "@/components/ai/chat-client";
 import { VazioDaConversa } from "@/components/ai/vazio-da-conversa";
 import { getCurrentUser } from "@/lib/supabase/server";
-import { getConversation, getRouterConfigs, getRunSources } from "@/lib/ai/queries";
-import { usableProviders } from "@/lib/ai/core/router";
+import { getConversation, getRunSources } from "@/lib/ai/queries";
+import { prontidaoDoChat } from "@/lib/ai/server/chat-readiness";
 import { formatUsdOrUnavailable } from "@/lib/ai/constants";
-import { cryptoProblemMessage } from "@/lib/ai/server/crypto-readiness";
 import { reconcileOwnRuns } from "@/lib/ai/server/reconcile";
-import { conversationsLink } from "@/lib/search/ai-links";
+import { AI_LINK_BASE, conversationsLink } from "@/lib/search/ai-links";
 
 export const dynamic = "force-dynamic";
 
@@ -36,9 +35,9 @@ export default async function ConversaPage({
 
   await reconcileOwnRuns();
 
-  const [detalhe, configs] = await Promise.all([
+  const [detalhe, prontidao] = await Promise.all([
     getConversation(user.id, id),
-    getRouterConfigs(user.id),
+    prontidaoDoChat(user.id),
   ]);
 
   if (!detalhe) notFound();
@@ -47,17 +46,10 @@ export default async function ConversaPage({
   // uma por run seria N+1 na tela que mais tem runs.
   const fontes = await getRunSources(user.id, Object.keys(detalhe.runs));
 
-  const problemaCripto = cryptoProblemMessage();
-  const prontos = usableProviders(configs);
   const arquivada = detalhe.conversation.status === "arquivada";
-
-  const motivoBloqueio =
-    problemaCripto ??
-    (arquivada
-      ? "Esta conversa está arquivada. Reative-a na lista de conversas para continuar."
-      : prontos.length === 0
-        ? "Nenhum provedor de IA está configurado e ativo. Cadastre uma chave em Configurações."
-        : null);
+  const motivoBloqueio = arquivada
+    ? "Esta conversa está arquivada. Reative-a na lista de conversas para continuar."
+    : prontidao.motivoBloqueio;
 
   // O custo de cada execução da conversa. `null` continua sendo `null` — nunca zero.
   const execucoes = Object.values(detalhe.runs);
@@ -79,6 +71,9 @@ export default async function ConversaPage({
       >
         <div className="flex flex-wrap items-center gap-2">
           {arquivada && <Badge variant="outline">arquivada</Badge>}
+          <Button asChild variant="ghost" size="icon">
+            <Link href={AI_LINK_BASE} aria-label="Nova conversa"><Plus className="size-4" /></Link>
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href={conversationsLink()}>
               <ArrowLeft className="size-4" /> Voltar
@@ -88,11 +83,13 @@ export default async function ConversaPage({
       </PageHeader>
 
       <ChatClient
+        compacto
         conversationId={detalhe.conversation.id}
         initialMessages={detalhe.messages}
         runs={detalhe.runs}
         sources={fontes}
         podeConversar={motivoBloqueio === null}
+        podeCruzarModulos={prontidao.podeCruzarModulos}
         motivoBloqueio={motivoBloqueio}
         vazio={<VazioDaConversa />}
       />

@@ -1,6 +1,94 @@
 # CURRENT_STATUS — Estado atual do projeto
 
-> Atualizado ao final de **cada** fase. Última atualização: **2026-09-20**
+## Chat livre da IA — Task 28, fechamento (2026-11-08)
+
+Branch `feat/ia-chat-livre`, worktree exclusiva `C:/tmp/ia-chat`. Spec e plano:
+`docs/superpowers/specs/2026-10-21-ia-chat-livre-coordenador-design.md` e
+`docs/superpowers/plans/2026-10-21-ia-chat-livre-coordenador.md`.
+
+- Coordenador `assistente-pessoal-v3` decide uma rodada de até seis especialistas distintos;
+  cada um mantém sua allowlist. Um especialista responde direto; vários rodam em paralelo e
+  voltam a uma síntese sem ferramentas. Saíram contexto de página, vocabulário de roteamento
+  e chave Caixa de entrada. `agentId`, `moduloDoAgente`, `AGENT_PERMISSION` e
+  `permissaoDoModulo` seguem o contrato do código.
+- No passo 0 do especialista são oferecidas **todas** as ferramentas permitidas, com
+  `toolChoice: required` se houver leitura; depois, auto. Só leituras no primeiro passo
+  foi testado e quebrou propostas na Task 15b; não reintroduzir. Financeiro mostra “meu” e
+  “de terceiros” por padrão; saldo a receber de terceiros é global, sem recorte por mês.
+- Trilhas 0..6 têm exclusividade de tentativa aberta por trilha, versão de prompt por
+  tentativa e agente por chamada. Especialista paralelo não repete; retry da síntese não
+  repete leituras nem remove propostas de outras trilhas. O painel e `/ia` compartilham
+  vista limpa, Markdown mínimo seguro e panoramas por largura do contêiner.
+- Checkup: memória com erros de evento declarados; insight sem sessão reconciliado no Cron;
+  comparação constante dos secrets do Cron; insight com schema estrito e limites descritos
+  para o Gemini; comprovante lançado não propõe de novo; cartões mostram todos os campos;
+  permissões de leitura/escrita reconferidas na execução e no desfazer; duplicatas avisam.
+- Hábito só permite desfazer quando **`registro_novo === true`**. Não há snapshot anterior;
+  registro preexistente ou legado sem prova recusa, inclusive em proposta antiga já preparada.
+- Provedor sem chave não pode ser reativado ao salvar; visão não é apagada pelo payload.
+  Fallback sem ordem é declarado e desabilitado. Consumo com erro/saturação é **parcial**;
+  ausência de custo é **não medida**, inclusive no sino e na reserva.
+- Retenção usa última mensagem, contagem exata, páginas e lotes. Runs em andamento são
+  protegidos por **leitura antes do delete**, sem garantia transacional contra nova admissão.
+  PDF tem teto de 20 páginas quando a contagem heurística é legível; sem contagem, até 2 MB
+  reserva 20 e acima recusa. Não foi validado upload real no hosting nem precisão absoluta.
+
+**Contagens reconferidas nesta tarefa:** 30 ferramentas (22 leitura + 8 escrita), 15 commands
+(7 inversos sem ferramenta), 9 agentes. Metadados remotos: **133 tabelas no `public`, 20
+`ai_*`, todas com RLS e FORCE RLS**. A contagem histórica de 132 foi superada por outra frente;
+as três migrations desta iteração não criaram tabela. Nenhuma migration aplicada na Task 28.
+Já aplicadas e conferidas nas tarefas anteriores, sem reaplicação:
+`20261022000000_ai_coordenador_trilhas.sql`, `20261025220742_ai_insight_run_sem_sessao.sql`
+e `20261108031451_ai_desfazer_que_falhou.sql`. Não usar `supabase db push`.
+
+**Revisão:** branch inteira contra a referência local `origin/main` (185 arquivos antes do
+fechamento), revisão independente interna e decisão final do principal. As skills
+`superpowers:requesting-code-review` e `receiving-code-review` não estavam disponíveis;
+foi feita revisão equivalente, sem auditoria externa. Dois P2 encontrados e corrigidos:
+auditoria parcial agora declara o módulo ausente também no direto/paralelo; o prazo é
+reconferido depois de banco/credencial e antes de cada chamada, inclusive TOOL_STEP.
+Oito regressões novas, sete vermelhas antes da correção e uma específica do timer acrescentada
+depois; **seis mutações distintas vermelhas**, restauradas por SHA-256 e `git diff`.
+Duas mutações inicialmente sobreviveram: a regressão passou a exigir ausência de passo fictício
+e a asserção do timer passou a ser feita fora do tratamento de erro do runner. Só a bateria
+integral final conta. **7.095 testes / 321 arquivos** em Brasília e UTC; checks finais no resultado real do plano.
+
+**Teste real autorizado nesta Task 28:** Gemini `gemini-3.5-flash-lite`, cinco envios,
+cinco runs `completed`, 29 tentativas, zero `started` e zero tentativas sem custo.
+Custo estimado **US$ 0,041295**. Pergunta financeira mostrou as duas partes; semana acionou
+seis especialistas e declarou os recortes; Financeiro desligado não foi consultado; panorama
+“Planejar meu dia” concluiu. Leitura e escrita financeira restauradas ao estado original,
+confirmadas após recarregar. O formulário desligou a escrita dependente ao desligar leitura.
+No pedido de três escritas, **duas propostas**: tarefa e compromisso; a despesa pediu conta
+ou cartão ausente no pedido. Somente a tarefa **“Teste do chat — Task 28”** foi confirmada e
+permanece no TO-DO; compromisso não confirmado e nenhuma despesa gravada. O dono optou por
+registrar a limitação e manter cinco envios: o caso de três cartões continua **parcial**.
+Desktop, 390 px e 320 px vistos; em 320 px, painel com `scrollWidth = clientWidth = 320`.
+Capturas exibidas na conversa, sem GIF (`gif_creator` indisponível); gravação pela ferramenta
+visual na worktree falhou com EPERM. Não há arquivo visual versionado nem alegação de teste
+em aparelho físico. Os 16 critérios manuais remanescentes da Fase 18 não foram promovidos.
+
+**Decisões e pendências preservadas:** o dono confirmou dois cartões reais na Task 15; a
+Task 15b teve uma síntese que afirmou proposta de compromisso inexistente no desenho descartado.
+Se reaparecer, informar à síntese a contagem real de propostas por trilha é sugestão, não correção
+entregue. Leituras semanais dedicadas para TO-DO/Financeiro seguem sugeridas; “Como foi minha
+semana?” pode acionar os seis especialistas e é mais caro que uma pergunta de módulo.
+O antigo custo de reescrever orquestrador v2→v3 foi realizado; as citações “provavelmente uns
+R$ 300” continuam por decisão do dono e testes 78.
+
+Fora do escopo, spec §9.2: anexo de transação órfão no bucket ao excluir lançamento (ciclo de
+vida do Financeiro); retomar confirmação já consumida após falha transitória; retry com espera
+crescente/Retry-After; revogar chave não apaga dados já lidos do histórico; títulos de eventos
+externos chegam como dado não confiável; modo de confirmação guardado e declarado sem efeito;
+actions sem tela `descartarComprovante` e `renameConversation`. Reserva em duas etapas e custo
+por especialista na interface também ficam para tarefa própria. As duas gerações da Task 22b
+já foram consumidas; os cinco envios desta tarefa também. Qualquer novo envio precisa de aval.
+
+**Próxima ação:** conservar as ressalvas no handoff e aguardar nova tarefa do dono. Sem push,
+PR, merge ou deploy nesta entrega. Resultados completos no “Resultado do teste real” do plano.
+
+
+> Atualizado ao final de **cada** fase. Última atualização: **2026-11-08** (Task 28; histórico das fases abaixo)
 > (18-F Bloco 5 · fechamento da FASE 18; antes: 18-F Bloco 4 · experiências, 18-F Bloco 3 ·
 > memória, 18-F Bloco 2 · botão flutuante, 18-F Bloco 1 + auditoria de performance + iteração:
 > transferência na importação de extrato).
@@ -390,10 +478,11 @@ Este bloco a faz ligar alguma coisa — o mesmo movimento que o Bloco 4 da 18-E 
    (invariante 48). Esquecer tira do prompt e deixa legível; apagar de vez continua sendo botão
    do dono, na tela dele. E `content` fica **fora** de `camposAuditaveis`: `changed_fields` é
    auditoria permanente e não some com a conversa.
-7. **O orquestrador continua com `allowedTools: []`.** `memory.lembrar` foi para os OITO
-   especialistas. O prompt dele afirma que não cria, edita nem exclui nada; incluí-lo custaria
-   reescrever aquela frase, subir `assistente-pessoal-v2` para `v3` e trocar a invariante 74.
-   A tela cobre o buraco: preferência geral o dono escreve lá, e o texto diz isso.
+7. **Registro histórico atualizado na Task 28:** `allowedTools: []` permanece para
+   ferramentas de domínio; o custo de reescrever o orquestrador para `assistente-pessoal-v3`
+   já foi realizado. Agora ele aciona especialistas por definições do servidor, fora do
+   Tool Registry. `memory.lembrar` continua nas oito allowlists; preferências gerais também
+   podem ser escritas pelo dono na tela de Memória. Ver invariantes 100 e 107–120.
 
 ### Três descrições de agente viraram mentira — e agora há teste
 

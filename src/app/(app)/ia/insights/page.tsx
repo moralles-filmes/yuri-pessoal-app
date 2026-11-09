@@ -13,6 +13,11 @@ import type { ModuloDeInsight } from "@/lib/ai/insights/contracts";
 
 export const metadata: Metadata = { title: "Insights · IA" };
 export const dynamic = "force-dynamic";
+/**
+ * MOD-ia-005 — vale para as Server Actions desta página (é a página que as hospeda): gerar um
+ * insight chama o provedor por uma delas. Sem a declaração, o limite é o padrão da plataforma.
+ */
+export const maxDuration = 60;
 
 /**
  * Fase 18-E · Bloco 3 — IA · Insights.

@@ -19,11 +19,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 type Resposta = { data: unknown; error: { code: string; message: string } | null };
 
 let resposta: Resposta = { data: { id: "step-1" }, error: null };
+/** O que cada `.insert()` recebeu — é a linha que iria para o banco. */
+const inserts: Record<string, unknown>[] = [];
 
 /** Encadeamento mínimo do PostgREST: `.insert().select().single()` e `.update().eq().eq()`. */
 function encadeavel(): unknown {
   const alvo = {
-    insert: () => encadeavel(),
+    insert: (payload: Record<string, unknown>) => {
+      inserts.push(payload);
+      return encadeavel();
+    },
     update: () => encadeavel(),
     select: () => encadeavel(),
     eq: () => encadeavel(),
@@ -52,6 +57,7 @@ beforeEach(() => {
     logs.push(args);
   });
   resposta = { data: { id: "step-1" }, error: null };
+  inserts.length = 0;
 });
 
 afterEach(() => {
@@ -186,5 +192,42 @@ describe("auditoria — erro de banco é lido e registrado", () => {
     await chamadaDeFerramenta();
 
     expect(logs).toEqual([]);
+  });
+});
+
+describe("auditoria — qual agente pediu a chamada", () => {
+  /**
+   * `body.*` é compartilhada por Treinos e Dieta, e com o coordenador vários especialistas leem
+   * no MESMO run. Sem `agent_id` a trilha não diz quem leu o quê.
+   */
+  it("recordToolCall grava agent_id", async () => {
+    resposta = { data: { id: "tool-call-1" }, error: null };
+
+    await recordToolCall({
+      runId: "run-1",
+      userId: "user-1",
+      stepId: "step-1",
+      toolName: "body.get_measurements",
+      toolVersion: "1",
+      providerCallId: "call-1",
+      argumentos: {},
+      status: "executada",
+      rejectionReason: null,
+      recordsRead: 2,
+      durationMs: 5,
+      refs: [],
+      agentId: "dieta",
+    });
+
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].agent_id).toBe("dieta");
+  });
+
+  it("sem agentId, a coluna vai NULA — nunca deduzida", async () => {
+    resposta = { data: { id: "tool-call-1" }, error: null };
+
+    await chamadaDeFerramenta();
+
+    expect(inserts[0].agent_id).toBeNull();
   });
 });

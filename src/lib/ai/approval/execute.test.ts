@@ -15,10 +15,14 @@
  * ╚══════════════════════════════════════════════════════════════════════════════════════╝
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ToolDescriptor } from "@/lib/ai/tools/contracts";
 import { AI_TOOL_REGISTRY } from "@/lib/ai/tools/registry";
 import { isCommandCoherent } from "./contracts";
 
+const permissoes = vi.hoisted(()=>({leitura:true,escrita:true}));
+vi.mock("@/lib/ai/queries",()=>({getAiPreferences:async()=>({permissions:{allow_todo:true,allow_finance:permissoes.leitura},writePermissions:{allow_write_todo:true,allow_write_finance:permissoes.escrita}})}));
+afterEach(()=>vi.restoreAllMocks());
 type Resposta = { data: unknown; error: { code: string } | null };
 
 /** O que cada tabela devolve na consulta desta rodada. */
@@ -47,7 +51,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ from: (t: string) => encadeavel(t) }),
 }));
 
-const { ACTION_COMMANDS, commandExecutavel, findCommand, nomesDeCommands, executarAcaoAprovada } =
+const { ACTION_COMMANDS, commandExecutavel, findCommand, nomesDeCommands, executarAcaoAprovada, conferirConfirmacao } =
   await import("./execute");
 
 const HASH = "c".repeat(64);
@@ -56,6 +60,7 @@ const VENCE_DEPOIS = "2026-08-07T13:00:00.000Z";
 
 beforeEach(() => {
   respostas = {};
+  permissoes.leitura=true;permissoes.escrita=true;
   inserts.length = 0;
 });
 
@@ -408,4 +413,42 @@ describe("executarAcaoAprovada", () => {
     expect(r).toMatchObject({ ok: false, motivo: "JA_EXECUTADA" });
     expect(inserts).toEqual([]);
   });
+});
+
+
+describe("Task 23 — chaves reconferidas na execução",()=>{
+  it.each([["lancarTransacao",false,true],["lancarTransacao",true,false],["excluirTransacao",false,true],["excluirTransacao",true,false]] as const)("%s com leitura=%s e escrita=%s não consulta nem executa",async(command,leitura,escrita)=>{
+    permissoes.leitura=leitura;permissoes.escrita=escrita;
+    respostas={ai_action_proposals:{data:{id:"p-1",command,tool_name:"finance.lancar_transacao",tool_version:"1",payload:{},effect_hash:HASH,expires_at:VENCE_DEPOIS},error:null},ai_action_approvals:{data:{id:"a-1",decision:"confirmada"},error:null}};
+    const comando=findCommand(command)!;
+    const prever=vi.spyOn(comando,"prever");const executar=vi.spyOn(comando,"executar");
+    expect(await executarAcaoAprovada({userId:"u-1",proposalId:"p-1",hashDaTela:HASH,agora:AGORA})).toMatchObject({ok:false,motivo:"SEM_PERMISSAO",mensagem:expect.stringContaining("Nada foi alterado")});
+    expect(prever).not.toHaveBeenCalled();expect(executar).not.toHaveBeenCalled();expect(inserts).toEqual([]);
+  });
+});
+
+
+describe("conferência real antes de confirmar",()=>{
+  it.each([["2026-08-07T12:00:00Z","criarTarefaTodo","PROPOSTA_EXPIRADA"],[VENCE_DEPOIS,"inexistente","COMMAND_DESCONHECIDO"]])("%s / %s recusa sem inserir",async(expires_at,command,motivo)=>{
+    respostas={ai_action_proposals:{data:{id:"p",expires_at,command,effect_hash:HASH},error:null}};
+    expect(await conferirConfirmacao({userId:"u",proposalId:"p",hashDaTela:HASH,agora:AGORA})).toMatchObject({ok:false,motivo});
+    expect(inserts).toEqual([]);
+  });
+  it("uma proposta íntegra dentro do prazo pode seguir à decisão",async()=>{
+    respostas={ai_action_proposals:{data:{id:"p",expires_at:VENCE_DEPOIS,command:"criarTarefaTodo",effect_hash:HASH},error:null}};
+    expect(await conferirConfirmacao({userId:"u",proposalId:"p",hashDaTela:HASH,agora:AGORA})).toEqual({ok:true});
+    expect(inserts).toEqual([]);
+  });
+});
+
+
+it("metadados de permissão ambíguos recusam sem reservar nem executar",async()=>{
+  const tabela=AI_TOOL_REGISTRY as ToolDescriptor[];const tamanho=tabela.length;
+  const original=tabela.find(t=>t.command==="lancarTransacao")!;
+  try {
+    tabela.push({...original,name:"teste.ambigua",requiredPermission:"allow_todo",requiredWritePermission:"allow_write_todo"});
+    respostas={ai_action_proposals:{data:{id:"p",command:"lancarTransacao",tool_name:"finance.lancar_transacao",tool_version:"1",payload:{},effect_hash:HASH,expires_at:VENCE_DEPOIS},error:null},ai_action_approvals:{data:{id:"a",decision:"confirmada"},error:null}};
+    expect(await executarAcaoAprovada({userId:"u",proposalId:"p",hashDaTela:HASH,agora:AGORA})).toMatchObject({ok:false,motivo:"SEM_PERMISSAO"});
+    expect(inserts).toEqual([]);
+  } finally { tabela.length=tamanho; }
 });

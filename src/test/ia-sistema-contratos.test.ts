@@ -37,6 +37,16 @@ const CONSUMO = "app/(app)/ia/consumo/page.tsx";
 const dentroDe = (tag: string, ate: string) => `<${tag}\\b(?:(?!<\\/${tag}>)[\\s\\S])*?${ate}`;
 
 export const CONTRATOS: Contrato[] = [
+  { arquivo: CHAT, exige: /<FraseDeGasto id=\{idDoGasto\}/, porque: "uma só frase de gasto descreve todo o chat" },
+  { arquivo: CHAT, exige: /aria-describedby=\{idDoGasto\}/, porque: "panoramas e enviar apontam para o mesmo aviso" },
+  { arquivo: CHAT, exige: /aria-describedby=\{\x60\$\{idDoAtalho\} \$\{idDoGasto\}\x60\}/, porque: "o campo anuncia atalho e custo" },
+  { arquivo: CHAT, exige: /@container/, porque: "o layout responde à largura do painel" },
+  { arquivo: CHAT, exige: /@\[30rem\]:grid-cols-3/, porque: "os panoramas empilham no painel estreito" },
+  { arquivo: CHAT, exige: /\(pointer: coarse\)/, porque: "Enter no toque continua quebrando linha" },
+  { arquivo: CHAT, exige: /e\.shiftKey/, porque: "Shift+Enter quebra linha no desktop" },
+  { arquivo: CHAT, exige: /e\.nativeEvent\.isComposing/, porque: "a composição de texto nunca dispara envio" },
+  { arquivo: CHAT, exige: /<RespostaFormatada texto=\{b\.content\}/, porque: "a resposta usa a árvore segura de formatação" },
+
   // ── D1 — o cartão fala o vocabulário do Approval Engine ──
   { arquivo: CARTAO, exige: /estadoDoCartao\(/, porque: "o estado do cartão sai de uma função pura com o vocabulário de approval/state.ts (M1)" },
   { arquivo: CARTAO, exige: /desfechoDaConfirmacao\(/, porque: "cada status da execução vira o seu desfecho — falhou não vira 'em parte' (M25)" },
@@ -60,12 +70,7 @@ export const CONTRATOS: Contrato[] = [
 
   // ── D2 — o gasto é dito ANTES do clique, ao lado de cada gatilho (M4) ──
   { arquivo: "components/ai/frase-de-gasto.tsx", exige: /\{AVISO_DE_GASTO\}/, porque: "a frase de gasto é uma constante só, nunca reescrita por tela" },
-  { arquivo: CHAT, exige: /<FraseDeGasto id=\{idDoGastoPanorama\}/, porque: "os panoramas gastam e dizem isso ao lado deles (M4)" },
-  { arquivo: CHAT, exige: new RegExp(`ATALHOS_DE_EXPERIENCIA\\.map\\(\\(a\\) => \\(\\s*${dentroDe("Button", "aria-describedby=\\{idDoGastoPanorama\\}")}`), porque: "cada panorama é descrito pela frase de gasto (M4)" },
   { arquivo: CHAT, exige: />\s*\{a\.descricao\}\s*</, porque: "a descrição do panorama é visível, não só um title que o toque não alcança" },
-  { arquivo: CHAT, exige: /<FraseDeGasto id=\{idDoGastoEnvio\}/, porque: "o compositor gasta e diz isso sob o campo (M4)" },
-  { arquivo: CHAT, exige: new RegExp(`${dentroDe("Button", "aria-describedby=\\{idDoGastoEnvio\\}")}(?:(?!<\\/Button>)[\\s\\S])*?Enviar\\s*<\\/Button>`), porque: "o Enviar é descrito pela frase de gasto" },
-  { arquivo: CHAT, exige: /<Switch\b(?:(?!\/>)[\s\S])*?aria-describedby=\{idDoGastoEnvio\}/, porque: "a Caixa de entrada também envia ao modelo, e diz isso" },
   { arquivo: INSIGHTS, exige: /<FraseDeGasto id=\{idDoGasto\}/, porque: "'Gerar análise' gasta e diz isso sob o seletor (M4)" },
   { arquivo: INSIGHTS, exige: new RegExp(`${dentroDe("Button", "aria-describedby=\\{idDoGasto\\}")}(?:(?!<\\/Button>)[\\s\\S])*?Gerar análise`), porque: "o botão de gerar é descrito pela frase de gasto" },
   { arquivo: INSIGHTS, exige: /const \[gerando, iniciarGeracao\] = useTransition\(\)/, porque: "'Gerar análise' tem transição própria: clicar Útil não gira o botão de gerar (M33)" },
@@ -117,7 +122,6 @@ export const CONTRATOS: Contrato[] = [
   { arquivo: CHAT, exige: /Você disse: /, porque: "cada bolha diz quem falou para quem não vê o alinhamento" },
   { arquivo: CHAT, exige: /O assistente respondeu: /, porque: "idem, do lado do assistente" },
   { arquivo: CHAT, exige: /Mensagem para o assistente/, porque: "o campo tem rótulo, não só placeholder" },
-  { arquivo: CHAT, exige: /aria-describedby=\{`\$\{idDoAtalho\} \$\{idDoGastoEnvio\}`\}/, porque: "o atalho e o gasto descrevem o campo" },
   { arquivo: CHAT, exige: /React\.useId\(\)/, porque: "ids por useId: a vista aparece em /ia e no painel ao mesmo tempo (M9, G-h)" },
   { arquivo: CHAT, exige: /onAtividade\?\.\(\{ tipo: "decidiu"/, porque: "o hook avisa o painel quando um cartão termina (M11)" },
   { arquivo: CHAT, exige: /onSwitch: \(e\) => \{(?:(?!\bonTool:)[\s\S])*?setDesfechos\(/, porque: "as propostas zeradas no switch levam junto os desfechos delas (invariante 46, Review Focus 4)" },
@@ -209,7 +213,7 @@ export const CONTRATOS: Contrato[] = [
     exige: /vazio=\{<VazioDaConversa \/>\}/,
     porque: "o chat vazio mostra o EmptyState de todo o app, nos três lugares em que aparece",
   })),
-  ...["AI_PROVIDER_LABEL\\[b\\.provider\\]", "b\\.model", "enviada com o contexto"].map((conteudo) => ({
+  ...["AI_PROVIDER_LABEL\\[b\\.provider\\]", "b\\.model"].map((conteudo) => ({
     arquivo: CHAT,
     exige: new RegExp(
       `<Badge variant="outline" className="max-w-full min-w-0 [^"]*">\\s*<span className="min-w-0 truncate">\\s*\\{?${conteudo}`,
@@ -225,12 +229,16 @@ export const CONTRATOS: Contrato[] = [
   // ── V — subpáginas de /ia ──
   { arquivo: INSIGHTS, exige: /<EmptyState\b[^>]*title="Nenhum módulo liberado para a IA ler"/, porque: "sem módulo liberado, o vazio é o EmptyState com o caminho para resolver" },
   { arquivo: INSIGHTS, exige: /disponiveis\.length === 0 \? null : \(\s*<EmptyState/, porque: "o vazio da lista ('escolha um módulo') não aparece junto do 'nenhum módulo liberado'" },
-  { arquivo: CONSUMO, exige: /<EmptyState\b[^>]*title="Nenhuma execução registrada neste mês"/, porque: "o vazio do consumo pelo EmptyState" },
+  { arquivo: CONSUMO, exige: /<EmptyState\b[^>]*title=\{porModelo\.parcial \? "Leitura por modelo indisponível ou parcial" : "Nenhuma execução registrada neste mês"\}/, porque: "o vazio do consumo usa EmptyState e distingue leitura parcial de ausência medida" },
   { arquivo: "app/(app)/ia/comprovantes/page.tsx", exige: /d\.mime === "application\/pdf" \? "PDF" : "Imagem"/, porque: "PDF × imagem em texto, não só pelo ícone" },
   { arquivo: "app/(app)/ia/comprovantes/page.tsx", exige: /break-words[^"]*">\s*\{selecionado\.documento\.nomeArquivo\}/, porque: "nome de arquivo sem espaço quebra em vez de empurrar a tela" },
 ];
 
 export const PROIBIDOS: Contrato[] = [
+  ...["<Select", "<Switch", "setContexto", "caixaDeEntrada", "enviada com o contexto", "idDoGastoPanorama", "idDoGastoEnvio", "AVISO_SEM_ACESSO"].map((texto) => ({
+    arquivo: CHAT, exige: new RegExp(texto), porque: "o chat livre não exige modo nem contexto de página",
+  })),
+
   ...[CHAT, ACOES, INSIGHTS, "components/ai/receipt-review.tsx"].map((arquivo) => ({
     arquivo,
     exige: /import \{[^}]*\bProposalCard\b[^}]*\} from "@\/components\/ai\/proposal-card"/,
@@ -539,5 +547,76 @@ describe("07-D · D9 — os textos dizem o que o sistema faz hoje (M14)", () => 
     expect(revisao).toContain("O lançamento é um só, com o valor total e como despesa pessoal");
     expect(revisao).not.toMatch(/nesta versão/i);
     expect(revisao).not.toContain("⚠️");
+  });
+});
+
+
+describe("chat livre — uma só descrição do gasto e chaves do panorama", () => {
+  it("há exatamente uma frase de gasto, e cartões e enviar apontam para ela", () => {
+    const chat = fonte(CHAT);
+    expect([...chat.matchAll(/<FraseDeGasto id=\{idDoGasto\}/g)]).toHaveLength(1);
+    expect([...chat.matchAll(/aria-describedby=\{idDoGasto\}/g)]).toHaveLength(2);
+  });
+
+  it("panorama sem permissão explica a chave e oferece configurações", () => {
+    const chat = fonte(CHAT);
+    expect(chat).toContain("!podeCruzarModulos");
+    expect(chat).toContain('href={settingsLink()}');
+    expect(chat).toContain("Ligue 'Cruzar módulos' para usar");
+    expect(chat).toContain("if (enviando || !podeConversar || !podeCruzarModulos) return");
+  });
+
+  it("a recusa anterior ao start devolve só o texto da mensagem, preservando rascunho novo", () => {
+    const chat = fonte(CHAT);
+    expect(chat).toContain("iniciou = true");
+    expect(chat).toContain('!iniciou && typeof corpo.text === "string"');
+    expect(chat).toContain("setTexto((atual) => textoParaDevolver(textoDaBolha, atual))");
+    expect(chat).toContain("texto.length > MAX_CHAT_TEXT - 2000");
+    expect(chat).toContain("if (deveEnviarComEnter({");
+    expect(chat).toContain('onClick={() => enviando ? cancelar() : void enviar()}');
+  });
+});
+
+
+describe("chat livre — cabeçalho e nova conversa", () => {
+  const painel = fonte("components/ai/floating-assistant-panel.tsx");
+  const botao = fonte("components/ai/floating-assistant.tsx");
+  const chat = fonte(CHAT);
+  it("o cabeçalho oferece ícones acessíveis, menu e descrição oculta", () => {
+    expect(painel).toContain('aria-label="Nova conversa"');
+    expect(painel).toContain('aria-label="Mais opções"');
+    expect(painel).toContain('<SheetDescription className="sr-only">');
+    expect(painel).toContain("conversationsLink()");
+    expect(painel).toContain("conversa.novaConversa");
+    expect(painel).toContain('onClickCapture={aoNavegar}');
+    expect(painel).toContain('deveFecharAoNavegar(link?.getAttribute("href") ?? null)');
+  });
+  it("a casca continua leve e o carregamento dá retorno visual", () => {
+    expect(botao).not.toMatch(/from "@\/lib\/(?:ai\/constants|validators\/)/);
+    expect(botao).not.toMatch(/from "[^\"]*(?:chat-client|ui\/sheet|ui\/dropdown-menu)"/);
+    expect(botao).toMatch(/loading: \(\) => \(/);
+    expect(botao).toContain('role="status"');
+    expect(botao).toContain("Abrindo o assistente…");
+    expect(botao).toContain("estadoDoBotao(");
+    expect(botao).toContain("if (proximo !== preferencias) setPreferencias(proximo)");
+  });
+  it("nova conversa limpa o estado no motor, com envio protegido", () => {
+    const inicio = chat.indexOf("function novaConversa()");
+    expect(inicio).toBeGreaterThan(-1);
+    const corpo = chat.slice(inicio, chat.indexOf("function registrarDesfecho", inicio));
+    expect(corpo).toContain("if (enviando) return");
+    for (const reset of ['setBolhas([])', 'setConversa(null)', 'setDesfechos({})', 'setFase(null)', 'setTexto("")', 'propostasDaRespostaRef.current = []']) expect(corpo).toContain(reset);
+    expect(corpo).toContain('onAtividade?.({ tipo: "recomecou" })');
+    expect(chat).toContain("!compacto && bolhas.length > 0");
+    expect(chat).toContain('onClick={novaConversa}');
+    expect(chat).toMatch(/const \{[^}]*\bnovaConversa\b[^}]*\} = conversa/);
+  });
+  it("conversa indisponível prepara novo envio e não reenvia sozinha", () => {
+    const inicio = chat.indexOf('corpo?.code === "AI_CONVERSATION_NOT_AVAILABLE"');
+    expect(inicio).toBeGreaterThan(-1);
+    const bloco = chat.slice(inicio, chat.indexOf("marcarFalha(", inicio));
+    expect(bloco).toContain("setConversa(null)");
+    expect(bloco).toContain("Envie de novo para começar uma nova.");
+    expect(bloco).not.toMatch(/disparar\(|enviar\(/);
   });
 });

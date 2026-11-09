@@ -73,6 +73,7 @@ import { createClient } from "@/lib/supabase/server";
 import { dateInSaoPaulo } from "@/lib/format";
 import type { Json } from "@/types/supabase";
 import { AI_CRYPTO_NOT_CONFIGURED, getCryptoReadiness } from "./crypto-readiness";
+import { criarPrazo, timeoutDaChamada, AI_DEADLINE, MENSAGEM_DO_PRAZO } from "./prazo";
 import { resolveApiKey } from "./credential-store";
 import { lerBytesDoDocumento, lerDocumentoParaExtracao } from "./document-store";
 import {
@@ -116,8 +117,10 @@ export function capacidadesExigidas(
 export type ExtractionRunnerInput = {
   readonly userId: string;
   readonly documentoId: string;
-  /** Injetado. Nenhum `Date.now()` decide data nem prazo neste módulo. */
+  /** Data civil injetada para avaliar os campos lidos. */
   readonly agora: Date;
+  /** Relógio do prazo global; separado da data civil usada na leitura. */
+  readonly agoraMs?: () => number;
   readonly abortSignal?: AbortSignal;
 };
 
@@ -205,6 +208,9 @@ function tipoDaTentativa(
 export async function runExtraction(
   input: ExtractionRunnerInput,
 ): Promise<ExtractionRunnerResult> {
+  const agoraMs = input.agoraMs ?? Date.now;
+  const prazo = criarPrazo(agoraMs());
+
   // ── 1. Cripto pronta? ───────────────────────────────────────────────────────────────
   const readiness = getCryptoReadiness();
   if (!readiness.ready) {
@@ -349,6 +355,14 @@ export async function runExtraction(
   let alvoAnterior: Alvo | null = null;
   let custoAcumulado = 0;
 
+  let runFechado = false;
+  let fecharInterrompida: ((e: AiError) => Promise<void>) | null = null;
+  const falhaInesperada = aiError(
+    "ERRO_PERMANENTE",
+    "EXTRACTION_INTERRUPTED",
+    "A leitura foi interrompida antes de terminar o registro.",
+  );
+
   const contexto = (concluiu = false) => ({
     runId,
     userId: input.userId,
@@ -367,6 +381,7 @@ export async function runExtraction(
   /** Fecha o run como falho, registra a tentativa de leitura e devolve a recusa. */
   const desistir = async (e: AiError): Promise<ExtractionRunnerResult> => {
     await failRun(contexto(), e);
+    runFechado = true;
     const mensagem = safeUserMessage(e);
     const extractionId = await gravarExtracao({
       userId: input.userId,
@@ -380,233 +395,276 @@ export async function runExtraction(
     return erro(e.code, mensagem, extractionId);
   };
 
-  // ── 6. OS BYTES — lidos UMA vez, depois da admissão ────────────────────────────────
-  //
-  // Depois da admissão porque baixar 10 MB para descobrir que o orçamento estourou é pagar
-  // tráfego por uma chamada que não vai acontecer. Uma vez só porque retry e fallback usam
-  // o MESMO arquivo — relê-lo por tentativa não mudaria nada e multiplicaria o download.
-  //
-  // ⚠️ `lerBytesDoDocumento` RECONFERE o MIME sobre os bytes que voltaram do bucket. Se a
-  // coluna e o conteúdo divergirem, ele devolve `null` — e nada sai daqui.
-  const arquivoLido = await lerBytesDoDocumento(
-    supabase,
-    input.userId,
-    input.documentoId,
-  );
-  if (!arquivoLido) {
-    return desistir(
-      aiError(
-        "ERRO_PERMANENTE",
-        "DOCUMENT_UNREADABLE",
-        "Não foi possível ler o arquivo enviado. Ele pode ter sido removido — envie de novo.",
-      ),
+  try {
+    // ── 6. OS BYTES — lidos UMA vez, depois da admissão ────────────────────────────────
+    //
+    // Depois da admissão porque baixar 10 MB para descobrir que o orçamento estourou é pagar
+    // tráfego por uma chamada que não vai acontecer. Uma vez só porque retry e fallback usam
+    // o MESMO arquivo — relê-lo por tentativa não mudaria nada e multiplicaria o download.
+    //
+    // ⚠️ `lerBytesDoDocumento` RECONFERE o MIME sobre os bytes que voltaram do bucket. Se a
+    // coluna e o conteúdo divergirem, ele devolve `null` — e nada sai daqui.
+    const arquivoLido = await lerBytesDoDocumento(
+      supabase,
+      input.userId,
+      input.documentoId,
     );
-  }
-
-  const mensagens = montarMensagemDaExtracao({
-    bytes: arquivoLido.bytes,
-    mime: arquivoLido.mime,
-    observacao: documento.observacao,
-  });
-
-  // ── 7. Tentativas ──────────────────────────────────────────────────────────────────
-  while (alvoIdx < alvos.length) {
-    const alvo = alvos[alvoIdx];
-    const tarifa = rateFor(alvo.provider, alvo.model.id, hoje);
-    if (!tarifa) {
-      alvoIdx += 1;
-      continue;
-    }
-
-    attemptIndex += 1;
-    const tipo = tipoDaTentativa(attemptIndex, alvoAnterior, alvo);
-    if (tipo === "FALLBACK") fallbackCount += 1;
-
-    const tentativa = await startAttempt({
-      runId,
-      userId: input.userId,
-      conversationId: null,
-      agentId: AGENTE_DA_EXTRACAO,
-      attemptIndex,
-      attemptType: tipo,
-      provider: alvo.provider,
-      modelId: alvo.model.id,
-      rate: tarifa,
-    });
-
-    if (!tentativa) {
-      return desistir(
+    if (!arquivoLido) {
+      return await desistir(
         aiError(
           "ERRO_PERMANENTE",
-          "ATTEMPT_NOT_RECORDED",
-          "Não foi possível registrar a execução. Nenhuma chamada foi feita.",
+          "DOCUMENT_UNREADABLE",
+          "Não foi possível ler o arquivo enviado. Ele pode ter sido removido — envie de novo.",
         ),
       );
     }
 
-    alvoAnterior = alvo;
-
-    // A credencial é decifrada AQUI, no instante da chamada, para UMA chamada.
-    const chave = await resolveApiKey(input.userId, alvo.provider);
-    if (!chave.ok) {
-      await closeAttempt({
-        attemptId: tentativa.id,
-        userId: input.userId,
-        status: "failed",
-        usage: null,
-        rate: tarifa,
-        latencyMs: 0,
-        providerRequestId: null,
-        errorCode: chave.error.code,
-      });
-      return desistir(chave.error);
-    }
-
-    const inicioTentativa = Date.now();
-    const client = createProviderClient(alvo.provider, chave.value);
-
-    // ⛔ A ÚNICA CHAMADA EXTERNA DE TODA A SUBFASE. Sem streaming, sem ferramentas.
-    const resposta = await client.generateObject({
-      model: alvo.model.id,
-      system: EXTRACTION_SYSTEM_PROMPT,
-      messages: mensagens,
-      maxOutputTokens: alvo.model.outputCapTokens,
-      // Extração não é criação: queremos a leitura mais provável, não uma variação dela.
-      temperature: 0,
-      timeoutMs: config.timeoutMs,
-      abortSignal: input.abortSignal,
-      schema: EXTRACAO_JSON_SCHEMA,
-      schemaName: NOME_DO_SCHEMA,
-      schemaDescription: DESCRICAO_DO_SCHEMA,
+    const mensagens = montarMensagemDaExtracao({
+      bytes: arquivoLido.bytes,
+      mime: arquivoLido.mime,
+      observacao: documento.observacao,
     });
 
-    const usoDaTentativa: AiUsage = resposta.usage;
-    const fecharTentativa = async (
-      status: "completed" | "failed" | "cancelled",
-      errorCode: string | null,
-    ) => {
-      await closeAttempt({
-        attemptId: tentativa.id,
-        userId: input.userId,
-        status,
-        usage: usoDaTentativa,
-        rate: tarifa,
-        latencyMs: Date.now() - inicioTentativa,
-        providerRequestId: resposta.providerRequestId,
-        errorCode,
-      });
-      const parcial = computeAttemptCost(usoDaTentativa, tarifa);
-      if (parcial.totalUsd !== null) custoAcumulado += parcial.totalUsd;
-    };
-
-    // ── 8. O NOSSO Zod. O "structured output" do provedor é conveniência, nunca validação ──
-    let erroDaTentativa: AiError | null = resposta.ok ? null : resposta.error;
-    let extracao: ExtracaoDeComprovante | null = null;
-
-    if (resposta.ok) {
-      const validada = extracaoDoModeloSchema.safeParse(resposta.value);
-      if (validada.success) {
-        // ── 9. O REBAIXAMENTO. `hoje` injetado, regras puras, e nenhuma promove. ──
-        extracao = avaliarExtracao(validada.data, hoje);
-      } else {
-        /**
-         * ⚠️ Resposta fora da forma é ERRO_TEMPORARIO de propósito — e não porque seja
-         * "leve". É a classe que autoriza `decideFallback` a repetir ou trocar de modelo, e
-         * uma segunda tentativa de fato costuma voltar bem-formada. Classificá-la como
-         * permanente desperdiçaria o fallback que o dono autorizou e pagou reserva para ter.
-         *
-         * A mensagem do Zod NÃO entra: ela cita nomes de campo do nosso schema.
-         */
-        erroDaTentativa = aiError(
-          "ERRO_TEMPORARIO",
-          "EXTRACTION_SCHEMA_INVALID",
-          "A leitura voltou fora do formato esperado.",
-        );
+    // ── 7. Tentativas ──────────────────────────────────────────────────────────────────
+    while (alvoIdx < alvos.length) {
+      if (timeoutDaChamada(prazo, agoraMs(), config.timeoutMs) === null) {
+        return await desistir(aiError("ERRO_PERMANENTE", AI_DEADLINE, MENSAGEM_DO_PRAZO));
       }
-    }
+      const alvo = alvos[alvoIdx];
+      const tarifa = rateFor(alvo.provider, alvo.model.id, hoje);
+      if (!tarifa) {
+        alvoIdx += 1;
+        continue;
+      }
 
-    if (extracao) {
-      await fecharTentativa("completed", null);
-      await completeRun(contexto(true));
+      attemptIndex += 1;
+      const tipo = tipoDaTentativa(attemptIndex, alvoAnterior, alvo);
+      if (tipo === "FALLBACK") fallbackCount += 1;
 
-      const extractionId = await gravarExtracao({
-        userId: input.userId,
-        documentoId: documento.id,
+      const tentativa = await startAttempt({
         runId,
-        // O que vai para a coluna é a extração JÁ REBAIXADA — nunca a saída crua do modelo.
-        // A tela de revisão lê daqui, e ela precisa ler o que o servidor concluiu.
-        campos: extracao as unknown as Json,
-        status: "extraida",
+        userId: input.userId,
+        conversationId: null,
+        agentId: AGENTE_DA_EXTRACAO,
+        attemptIndex,
+        attemptType: tipo,
+        provider: alvo.provider,
+        modelId: alvo.model.id,
+        rate: tarifa,
       });
 
-      if (!extractionId) {
-        return erro(
-          "EXTRACTION_NOT_RECORDED",
-          "A leitura foi feita, mas não foi possível registrá-la. Tente extrair de novo.",
+      if (!tentativa) {
+        return await desistir(
+          aiError(
+            "ERRO_PERMANENTE",
+            "ATTEMPT_NOT_RECORDED",
+            "Não foi possível registrar a execução. Nenhuma chamada foi feita.",
+          ),
         );
       }
 
-      return { ok: true, runId, extractionId, extracao };
-    }
+      alvoAnterior = alvo;
 
-    // ── Falha da tentativa ──
-    const e =
-      erroDaTentativa ??
-      aiError("ERRO_TEMPORARIO", "NO_RESULT", "A leitura terminou sem resultado.");
+      const inicioTentativa = Date.now();
+      let consumoDaTentativa: AiUsage | null = null;
+      fecharInterrompida = async (e) => {
+        await closeAttempt({
+          attemptId: tentativa.id,
+          userId: input.userId,
+          status: "failed",
+          usage: consumoDaTentativa,
+          rate: tarifa,
+          latencyMs: Date.now() - inicioTentativa,
+          providerRequestId: null,
+          errorCode: e.code,
+        });
+      };
 
-    await fecharTentativa(
-      e.class === "CANCELADO_PELO_USUARIO" ? "cancelled" : "failed",
-      e.code,
-    );
+      // A credencial é decifrada AQUI, no instante da chamada, para UMA chamada.
+      const chave = await resolveApiKey(input.userId, alvo.provider);
+      if (!chave.ok) {
+        await closeAttempt({
+          attemptId: tentativa.id,
+          userId: input.userId,
+          status: "failed",
+          usage: null,
+          rate: tarifa,
+          latencyMs: 0,
+          providerRequestId: null,
+          errorCode: chave.error.code,
+        });
+        fecharInterrompida = null;
+        return await desistir(chave.error);
+      }
 
-    if (input.abortSignal?.aborted) {
-      return desistir(
-        aiError("CANCELADO_PELO_USUARIO", "EXTRACTION_ABORTED", "A leitura foi interrompida."),
+      const client = createProviderClient(alvo.provider, chave.value);
+
+      const timeoutMs = timeoutDaChamada(prazo, agoraMs(), config.timeoutMs);
+      if (timeoutMs === null) {
+        const e = aiError("ERRO_PERMANENTE", AI_DEADLINE, MENSAGEM_DO_PRAZO);
+        await fecharInterrompida(e);
+        fecharInterrompida = null;
+        return await desistir(e);
+      }
+
+      // ⛔ A ÚNICA CHAMADA EXTERNA DE TODA A SUBFASE. Sem streaming, sem ferramentas.
+      const resposta = await client.generateObject({
+        model: alvo.model.id,
+        system: EXTRACTION_SYSTEM_PROMPT,
+        messages: mensagens,
+        maxOutputTokens: alvo.model.outputCapTokens,
+        // Extração não é criação: queremos a leitura mais provável, não uma variação dela.
+        temperature: 0,
+        timeoutMs,
+        abortSignal: input.abortSignal,
+        schema: EXTRACAO_JSON_SCHEMA,
+        schemaName: NOME_DO_SCHEMA,
+        schemaDescription: DESCRICAO_DO_SCHEMA,
+      });
+
+      consumoDaTentativa = resposta.usage;
+      const usoDaTentativa: AiUsage = resposta.usage;
+      const fecharTentativa = async (
+        status: "completed" | "failed" | "cancelled",
+        errorCode: string | null,
+      ) => {
+        await closeAttempt({
+          attemptId: tentativa.id,
+          userId: input.userId,
+          status,
+          usage: usoDaTentativa,
+          rate: tarifa,
+          latencyMs: Date.now() - inicioTentativa,
+          providerRequestId: resposta.providerRequestId,
+          errorCode,
+        });
+        fecharInterrompida = null;
+        const parcial = computeAttemptCost(usoDaTentativa, tarifa);
+        if (parcial.totalUsd !== null) custoAcumulado += parcial.totalUsd;
+      };
+
+      // ── 8. O NOSSO Zod. O "structured output" do provedor é conveniência, nunca validação ──
+      let erroDaTentativa: AiError | null = resposta.ok ? null : resposta.error;
+      let extracao: ExtracaoDeComprovante | null = null;
+
+      if (resposta.ok) {
+        const validada = extracaoDoModeloSchema.safeParse(resposta.value);
+        if (validada.success) {
+          // ── 9. O REBAIXAMENTO. `hoje` injetado, regras puras, e nenhuma promove. ──
+          extracao = avaliarExtracao(validada.data, hoje);
+        } else {
+          /**
+           * ⚠️ Resposta fora da forma é ERRO_TEMPORARIO de propósito — e não porque seja
+           * "leve". É a classe que autoriza `decideFallback` a repetir ou trocar de modelo, e
+           * uma segunda tentativa de fato costuma voltar bem-formada. Classificá-la como
+           * permanente desperdiçaria o fallback que o dono autorizou e pagou reserva para ter.
+           *
+           * A mensagem do Zod NÃO entra: ela cita nomes de campo do nosso schema.
+           */
+          erroDaTentativa = aiError(
+            "ERRO_TEMPORARIO",
+            "EXTRACTION_SCHEMA_INVALID",
+            "A leitura voltou fora do formato esperado.",
+          );
+        }
+      }
+
+      if (extracao) {
+        await fecharTentativa("completed", null);
+
+        const extractionId = await gravarExtracao({
+          userId: input.userId,
+          documentoId: documento.id,
+          runId,
+          // O que vai para a coluna é a extração JÁ REBAIXADA — nunca a saída crua do modelo.
+          // A tela de revisão lê daqui, e ela precisa ler o que o servidor concluiu.
+          campos: extracao as unknown as Json,
+          status: "extraida",
+        });
+
+        if (!extractionId) {
+          return await desistir(aiError(
+            "ERRO_PERMANENTE",
+            "EXTRACTION_NOT_RECORDED",
+            "A leitura foi feita, mas não foi possível registrá-la. Tente extrair de novo.",
+          ));
+        }
+
+        await completeRun(contexto(true));
+        runFechado = true;
+        return { ok: true, runId, extractionId, extracao };
+      }
+
+      // ── Falha da tentativa ──
+      const e =
+        erroDaTentativa ??
+        aiError("ERRO_TEMPORARIO", "NO_RESULT", "A leitura terminou sem resultado.");
+
+      await fecharTentativa(
+        e.class === "CANCELADO_PELO_USUARIO" ? "cancelled" : "failed",
+        e.code,
       );
+
+      if (input.abortSignal?.aborted) {
+        return await desistir(
+          aiError("CANCELADO_PELO_USUARIO", "EXTRACTION_ABORTED", "A leitura foi interrompida."),
+        );
+      }
+
+      const proximoAlvo = alvos[alvoIdx + 1];
+      const tarifaProximo = proximoAlvo
+        ? rateFor(proximoAlvo.provider, proximoAlvo.model.id, hoje)
+        : null;
+      const custoProjetado =
+        tarifaProximo && proximoAlvo
+          ? projetarCustoDoDestino(
+              tarifaProximo,
+              // O arquivo entra na projeção também: um destino "barato" por token continua
+              // caro quando a entrada é uma foto de 12 MP.
+              tokensDeTexto + arquivo.tokens,
+              proximoAlvo.model.outputCapTokens,
+            )
+          : Number.POSITIVE_INFINITY;
+
+      const veredito = decideFallback({
+        errorClass: e.class,
+        fallbackAllowed: fallbackLigado,
+        fallbackTargetsLeft: alvos.length - (alvoIdx + 1),
+        retriesUsed,
+        maxRetries: config.maxRetries,
+        reservaRestante: Math.max(0, reserva.valorUsd - custoAcumulado),
+        custoProjetadoDoDestino: custoProjetado,
+      });
+
+      if (veredito.kind === "retry") {
+        retriesUsed += 1;
+        continue;
+      }
+      if (veredito.kind === "fallback") {
+        alvoIdx += 1;
+        continue;
+      }
+
+      return await desistir(e);
     }
 
-    const proximoAlvo = alvos[alvoIdx + 1];
-    const tarifaProximo = proximoAlvo
-      ? rateFor(proximoAlvo.provider, proximoAlvo.model.id, hoje)
-      : null;
-    const custoProjetado =
-      tarifaProximo && proximoAlvo
-        ? projetarCustoDoDestino(
-            tarifaProximo,
-            // O arquivo entra na projeção também: um destino "barato" por token continua
-            // caro quando a entrada é uma foto de 12 MP.
-            tokensDeTexto + arquivo.tokens,
-            proximoAlvo.model.outputCapTokens,
-          )
-        : Number.POSITIVE_INFINITY;
-
-    const veredito = decideFallback({
-      errorClass: e.class,
-      fallbackAllowed: fallbackLigado,
-      fallbackTargetsLeft: alvos.length - (alvoIdx + 1),
-      retriesUsed,
-      maxRetries: config.maxRetries,
-      reservaRestante: Math.max(0, reserva.valorUsd - custoAcumulado),
-      custoProjetadoDoDestino: custoProjetado,
-    });
-
-    if (veredito.kind === "retry") {
-      retriesUsed += 1;
-      continue;
+    return await desistir(
+      aiError(
+        "ERRO_PERMANENTE",
+        "NO_TARGET_SUCCEEDED",
+        "Nenhum provedor autorizado conseguiu ler este comprovante.",
+      ),
+    );
+  } catch {
+    return erro(falhaInesperada.code, safeUserMessage(falhaInesperada));
+  } finally {
+    // Uma exceção após a admissão não deixa reserva ou medição abertas até a lease.
+    if (!runFechado) {
+      try {
+        await fecharInterrompida?.(falhaInesperada);
+      } finally {
+        await failRun(contexto(), falhaInesperada);
+      }
     }
-    if (veredito.kind === "fallback") {
-      alvoIdx += 1;
-      continue;
-    }
-
-    return desistir(e);
   }
-
-  return desistir(
-    aiError(
-      "ERRO_PERMANENTE",
-      "NO_TARGET_SUCCEEDED",
-      "Nenhum provedor autorizado conseguiu ler este comprovante.",
-    ),
-  );
 }

@@ -206,6 +206,7 @@ export async function preverCriarEvento(payload: unknown): Promise<EfeitoPropost
     { rotulo: "Tipo", valor: EVENT_TYPE_LABELS[tipo] },
   ];
   if (d.local) linhas.push({ rotulo: "Local", valor: d.local });
+  if (d.descricao) linhas.push({ rotulo: "Descrição", valor: d.descricao });
 
   const ressalvas: string[] = [];
 

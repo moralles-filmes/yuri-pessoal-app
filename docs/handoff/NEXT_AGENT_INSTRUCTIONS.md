@@ -1,5 +1,46 @@
 # NEXT_AGENT_INSTRUCTIONS — Instruções para o próximo agente
 
+## Estado mais recente — chat livre da IA, Task 28 (2026-11-08)
+
+Retome por `docs/superpowers/plans/2026-10-21-ia-chat-livre-coordenador.md`, seção
+“Resultado do teste real”, e pelo ledger completo em
+`.superpowers/sdd/2026-10-21-ia-chat-livre-coordenador/progress.md`.
+Somente `C:/tmp/ia-chat`, branch `feat/ia-chat-livre`; checkout principal é de outras sessões.
+Não ler `.env.local`, reaplicar migrations, sobrescrever tipos, criar outra worktree ou usar stash.
+
+Task 28 documentou a entrega e corrigiu dois P2 da revisão independente interna: auditoria
+parcial declarada e prazo reconferido antes das chamadas. Oito regressões, seis mutações
+vermelhas restauradas por SHA-256 + diff; suíte **7.095/321** em Brasília e UTC. Contagens:
+**133 tabelas públicas/20 ai_*, todas RLS + FORCE; 30 ferramentas/15 commands/9 agentes**.
+Nenhuma migration aplicada nesta tarefa. Resultados finais e limitações no plano.
+
+A conferência real consumiu os **cinco envios autorizados**, US$ 0,041295 estimados, sem
+abertas/não medidas. Somente a tarefa “Teste do chat — Task 28” foi aplicada; não excluir
+nem desfazer sem pedido. Compromisso sem confirmação. **Caso das três escritas parcial**:
+a despesa ficou sem cartão por faltar conta/cartão. O dono escolheu manter os cinco envios e
+registrar essa limitação; novo teste precisa do dado e de novo aval. Financeiro
+foi desligado e restaurado, inclusive escrita dependente, conferido após recarregar.
+Desktop/390/320 px vistos; capturas na conversa, sem GIF (`gif_creator` indisponível) e sem
+arquivo visual gravado (EPERM da ferramenta). Os demais critérios manuais seguem pendentes.
+
+Não reintroduzir o desenho descartado: especialista recebe TODAS as ferramentas permitidas
+no passo 0, com required se houver leitura, depois auto. Síntese não recebe ferramentas,
+retry da trilha 0 preserva cartões das outras. Manter agentId, moduloDoAgente,
+AGENT_PERMISSION e permissaoDoModulo. As invariantes 107–120 e as revisadas no CLAUDE.md
+são a referência atual; seções históricas abaixo descrevem o estado de cada bloco na época.
+
+Pendências explícitas: síntese da 15b afirmou proposta inexistente; sugestão de contagem real
+por trilha se repetir; leituras semanais dedicadas de TO-DO/Financeiro; custo de acionar seis
+especialistas. O dono confirmou dois cartões na Task 15; não declarar que nenhum foi aplicado.
+As sete pendências fora do escopo da spec §9.2 estão em CURRENT_STATUS; não resolvê-las como
+“limpeza”. `registro_novo === true` é condição para desfazer hábito; sem snapshot anterior.
+Retenção não ganhou transação; PDF usa heurística; consumo parcial/não medido deve permanecer
+explícito. Provedor sem chave não reativa; fallback sem ordem fica desabilitado.
+
+Próxima ação: aguardar novo pedido, sem push, PR, merge ou deploy. As autorizações da 22b
+e da 28 foram consumidas e não cobrem novas chamadas. Não há nova fase do roadmap.
+
+
 > Atualizado em **2026-09-20**, ao fechar o **Bloco 5 da 18-F** — que fecha a **Fase 18**.
 
 ## ✅ NÃO HÁ PRÓXIMA FASE. O PROJETO ESTÁ EM MANUTENÇÃO/ITERAÇÃO.
@@ -32,8 +73,8 @@ Um assistente que lê os nove módulos, prepara alterações que **só o dono ap
 comprovantes por visão, produz insights sobre grandezas derivadas, conhece as preferências que
 o dono escreve e monta panoramas de um clique — tudo atrás de **16 chaves que nascem
 desligadas**, sem nunca tocar o banco direto. Placar item a item:
-`docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` (163 critérios: 142 validados, 17 pendentes de
-conferência à mão, 4 retirados no desenho).
+`docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md` (163 critérios: 142 validados, 16 pendentes de
+conferência à mão, 5 retirados no desenho).
 
 ---
 
@@ -49,9 +90,9 @@ vai para `main` depois da 03-E.
 
 Nenhuma delas bloqueia nada hoje. Todas são conhecidas, e é por isso que estão escritas.
 
-### 1. A conferência à mão nunca foi feita — e ela é UMA lista, não duas
+### 1. A conferência à mão ainda tem pendências — uma lista só
 
-O código está verde nas cinco verificações e em `TZ=UTC`, mas **17 critérios de aceite da Fase
+O código está verde nas cinco verificações e em `TZ=UTC`, mas **16 critérios de aceite da Fase
 18 dependem de um navegador com sessão** e continuam por conferir. A lista está em
 `docs/phases/PHASE_18_CRITERIOS_VALIDADOS.md`, seção "O que NÃO foi validado", e ela **inclui**
 a tabela de 10 itens que o Bloco 4 deixou pendente
@@ -65,7 +106,7 @@ importam:
 3. Responder ao panorama pedindo uma alteração → cartão de proposta normal, com prazo.
 4. Painel flutuante: disparar um atalho e **fechar o painel** no meio — a resposta continua
    (invariante 95).
-5. Caixa de entrada com "meta" (palavra ambígua) → tem de **perguntar**, não chutar.
+5. Pedido ambíguo ao coordenador → tem de **perguntar**, não chutar; a chave Caixa de entrada foi aposentada.
 6. 320 px: os três atalhos quebram linha, sem rolagem horizontal.
 7. Botão flutuante por **teclado**: `Ctrl/⌘ + I` abre · `Tab` alcança · `Esc` fecha · o foco
    volta · e com `floating_hidden` ligada o atalho **continua abrindo**.

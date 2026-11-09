@@ -480,20 +480,18 @@ describe("09-F · T4 · superfícies do TO-DO, agenda, estudos, hábitos e IA", 
     });
   }
 
-  it("chat-client: a bolha do assistente é ladrilho (no /ia e no painel), com o raio da bolha e o erro depois", () => {
+  it("chat-client: o campo de mensagem é ladrilho; a resposta do assistente fica sem cartão e a bolha do dono segue tingida", () => {
     const fonte = fonteSemComentarios(path.join(RAIZ, "src/components/ai/chat-client.tsx"));
     expect(fonte).toMatch(
       /import \{[^}]*\bMATERIAL_LADRILHO\b[^}]*\} from "@\/components\/ui\/materiais"/,
     );
-    const bolhas = aberturas(fonte, "div").filter((a) => a.includes("${MATERIAL_LADRILHO}"));
-    expect(bolhas, "uma bolha com o material").toHaveLength(1);
-    const bolha = bolhas[0] ?? "";
-    expect(bolha).toMatch(/rounded-2xl/);
-    expect(bolha).not.toMatch(/border bg-card/);
-    // A borda de falha vem DEPOIS da constante, ou o material a apagaria.
-    expect(bolha.indexOf("border-destructive/40")).toBeGreaterThan(bolha.indexOf("MATERIAL_LADRILHO"));
-    // A bolha do dono continua tingida (é dela, não material).
-    expect(bolha).toMatch(/bg-primary\/10 text-foreground/);
+    const campos = aberturas(fonte, "div").filter((a) => a.includes("MATERIAL_LADRILHO"));
+    expect(campos, "um campo com o material").toHaveLength(1);
+    expect(campos[0]).toMatch(/rounded-2xl/);
+    expect(campos[0]).not.toMatch(/border bg-card/);
+    // Desde o chat livre a resposta corre direto na névoa, e a bolha do dono continua tingida.
+    expect(fonte).toContain('"w-full py-2 text-foreground"');
+    expect(fonte).toContain("bg-primary/10 px-4 py-3 text-foreground");
   });
 
   it("habit-card: concluído sem o tingimento do fundo; o estado segue dito por círculo, texto riscado e borda", () => {
@@ -1110,7 +1108,7 @@ describe("09-F · T8 · últimos textos na névoa vistos no navegador", () => {
   });
   it("o convite aos panoramas do chat em muted-on-fog", () => {
     const f = fonteSemComentarios(path.join(raiz, "src/components/ai/chat-client.tsx"));
-    expect(f).toMatch(/<p className="text-xs text-muted-on-fog">\s*Ou comece por um panorama/);
+    expect(f).toMatch(/<p className="mb-2 text-xs text-muted-on-fog">\s*\{"Ligue/);
   });
 });
 

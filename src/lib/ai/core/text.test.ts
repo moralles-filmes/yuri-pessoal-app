@@ -18,7 +18,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AiMessage } from "./contracts";
-import { normalizarTexto, textoDaMensagem, textoDasMensagens } from "./text";
+import {
+  normalizarAlternancia,
+  normalizarTexto,
+  textoDaMensagem,
+  textoDasMensagens,
+} from "./text";
 
 describe("normalizarTexto", () => {
   it("tira acento sem mudar o comprimento", () => {
@@ -193,5 +198,63 @@ describe("textoDasMensagens", () => {
     expect(texto).toContain("training.get_records");
     expect(texto).toContain("RECORDE DE SUPINO 100 KG");
     expect(texto).not.toContain("[object Object]");
+  });
+});
+
+/**
+ * MOD-ia-027 — o histórico que vai ao modelo TEM DE ALTERNAR e começar pelo dono.
+ *
+ * Um recorte no meio da conversa pode começar com a fala do assistente; dois envios sem
+ * resposta produzem dois `user` seguidos. Vários provedores rejeitam ou degradam o formato.
+ */
+describe("normalizarAlternancia", () => {
+  type Msg = { role: "user" | "assistant"; content: string };
+  const u = (content: string): Msg => ({ role: "user", content });
+  const a = (content: string): Msg => ({ role: "assistant", content });
+
+  it("lista vazia devolve lista vazia", () => {
+    expect(normalizarAlternancia([])).toEqual([]);
+  });
+
+  it("descarta assistant do começo até o primeiro user", () => {
+    const saida = normalizarAlternancia<Msg>([a("a1"), u("u1"), a("a2")]);
+    expect(saida).toEqual([u("u1"), a("a2")]);
+  });
+
+  it("dois user seguidos viram um só, juntados por linha em branco", () => {
+    const saida = normalizarAlternancia<Msg>([u("primeiro"), u("segundo"), a("resposta")]);
+    expect(saida).toEqual([u("primeiro\n\nsegundo"), a("resposta")]);
+  });
+
+  it("dois assistant seguidos ficam com o ÚLTIMO", () => {
+    const saida = normalizarAlternancia<Msg>([u("pergunta"), a("rascunho"), a("final")]);
+    expect(saida).toEqual([u("pergunta"), a("final")]);
+  });
+
+  it("termina em assistant sem mexer no conteúdo", () => {
+    const entrada: Msg[] = [u("pergunta"), a("resposta")];
+    expect(normalizarAlternancia(entrada)).toEqual(entrada);
+  });
+
+  it("termina em user sem mexer no conteúdo", () => {
+    const entrada: Msg[] = [u("pergunta"), a("resposta"), u("nova pergunta")];
+    expect(normalizarAlternancia(entrada)).toEqual(entrada);
+  });
+
+  it("a saída sempre alterna e sempre começa pelo user", () => {
+    const saida = normalizarAlternancia<Msg>([
+      a("x"),
+      a("y"),
+      u("u1"),
+      u("u2"),
+      u("u3"),
+      a("a1"),
+      a("a2"),
+      u("u4"),
+    ]);
+    expect(saida.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(saida[0]).toEqual(u("u1\n\nu2\n\nu3"));
+    expect(saida[1]).toEqual(a("a2"));
+    expect(saida[2]).toEqual(u("u4"));
   });
 });

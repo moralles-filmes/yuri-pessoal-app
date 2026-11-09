@@ -125,10 +125,18 @@ export async function recordToolCall(input: {
   recordsRead: number | null;
   durationMs: number;
   refs: readonly ToolRef[];
+  /**
+   * QUAL agente pediu a chamada — o especialista que leu, ou o coordenador no acionamento.
+   * `body.*` é compartilhada por Treinos e Dieta, e com o coordenador vários especialistas
+   * leem no MESMO run: sem isto a trilha não diz quem leu o quê. Ausente vira NULO — nunca
+   * deduzido de `tool_name`.
+   */
+  agentId?: string | null;
 }): Promise<string | null> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("ai_tool_calls").insert({
     run_id: input.runId,
+    agent_id: input.agentId ?? null,
     user_id: input.userId,
     step_id: input.stepId,
     tool_name: input.toolName,

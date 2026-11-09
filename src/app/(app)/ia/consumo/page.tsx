@@ -14,7 +14,7 @@ import {
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getAiPreferences, getUsageByModel, getUsageSummary } from "@/lib/ai/queries";
 import { AI_PROVIDER_LABEL } from "@/lib/ai/core/contracts";
-import { AVISO_MOEDA, formatUsd } from "@/lib/ai/constants";
+import { AVISO_MOEDA, formatUsd, formatUsdOrUnavailable } from "@/lib/ai/constants";
 import { textoDoCusto } from "@/lib/ai/usage/texto-do-custo";
 import { reconcileOwnRuns } from "@/lib/ai/server/reconcile";
 
@@ -57,10 +57,14 @@ export default async function ConsumoPage() {
         <p className="min-w-0 text-muted-foreground">{AVISO_MOEDA}</p>
       </div>
 
+      {(dia.parcial || mes.parcial || porModelo.parcial) && (
+        <p role="status" className="text-sm text-muted-foreground">Consumo parcial: há medições ausentes ou uma leitura incompleta. Os valores disponíveis podem ser menores que o gasto do período.</p>
+      )}
+
       <div className="grid gap-4 @container sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Hoje"
-          value={formatUsd(dia.totalUsd)}
+          value={formatUsdOrUnavailable(dia.totalUsd)}
           icon={Clock}
           hint={
             dia.limiteUsd === null
@@ -70,7 +74,7 @@ export default async function ConsumoPage() {
         />
         <StatCard
           label="Este mês"
-          value={formatUsd(mes.totalUsd)}
+          value={formatUsdOrUnavailable(mes.totalUsd)}
           icon={CalendarDays}
           hint={
             mes.limiteUsd === null
@@ -80,20 +84,24 @@ export default async function ConsumoPage() {
         />
         <StatCard
           label="Reservado agora"
-          value={formatUsd(mes.reservadoUsd)}
+          value={formatUsdOrUnavailable(mes.reservadoUsd)}
           icon={CircleDollarSign}
           hint={
-            mes.runsComReservaAtiva === 1
+            mes.reservadoUsd === null
+              ? "reserva não medida"
+              : mes.runsComReservaAtiva === 1
               ? "1 execução em andamento"
               : `${mes.runsComReservaAtiva} execuções em andamento`
           }
         />
         <StatCard
           label="Execuções no mês"
-          value={String(mes.execucoes)}
+          value={mes.execucoes === 0 && mes.totalUsd === null ? "não medido" : String(mes.execucoes)}
           icon={Info}
           hint={
-            mes.execucoesSemCusto > 0
+            mes.parcial
+              ? "contagem parcial; há medições ausentes"
+              : mes.execucoesSemCusto > 0
               ? `${mes.execucoesSemCusto} sem custo informado`
               : "todas com custo informado"
           }
@@ -110,11 +118,11 @@ export default async function ConsumoPage() {
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
             <strong className="text-foreground">
-              {formatUsd(mes.confirmadoUsd)} confirmados
+              {formatUsdOrUnavailable(mes.confirmadoUsd)} confirmados
             </strong>{" "}
             (custo real das execuções já encerradas) +{" "}
             <strong className="text-foreground">
-              {formatUsd(mes.reservadoUsd)} reservados
+              {formatUsdOrUnavailable(mes.reservadoUsd)} reservados
             </strong>{" "}
             (das que ainda estão rodando).
           </p>
@@ -145,11 +153,11 @@ export default async function ConsumoPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {porModelo.length === 0 ? (
+          {porModelo.linhas.length === 0 ? (
             // V — o vazio pelo `EmptyState` de todo o app (página de servidor: não vai ao navegador).
             <EmptyState
               icon={CircleDollarSign}
-              title="Nenhuma execução registrada neste mês"
+              title={porModelo.parcial ? "Leitura por modelo indisponível ou parcial" : "Nenhuma execução registrada neste mês"}
               description="Cada tentativa de conversa, de leitura de comprovante ou de análise aparece aqui, por modelo."
               className="py-8"
             />
@@ -168,7 +176,7 @@ export default async function ConsumoPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {porModelo.map((linha) => (
+                  {porModelo.linhas.map((linha) => (
                     <tr
                       key={`${linha.provider}-${linha.model}`}
                       className="border-b last:border-0"

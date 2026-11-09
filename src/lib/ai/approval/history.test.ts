@@ -65,6 +65,7 @@ function proposta(over: Partial<PropostaLida> = {}): PropostaLida {
     id: "p-1",
     origem: "ferramenta",
     conversationId: "c-1",
+    runId: "run-1",
     undoesExecutionId: null,
     command: "criarTarefaTodo",
     module: "todo",
@@ -463,4 +464,35 @@ describe("os parsers do jsonb", () => {
       { ref: "a", ok: true, erro: null },
     ]);
   });
+});
+
+
+describe("Task 23 — desfazer e propostas iguais",()=>{
+  it("desfazer que falhou não marca a ação original como desfeita",()=>{
+    const linhas=so([proposta()],[],[execucao(),execucao({id:"e-2",proposalId:"p-2",undoesExecutionId:"e-1",status:"falhou"})]);
+    expect(linhas.find(l=>l.chave==="p-1")?.desfazer.tipo).toBe("disponivel");
+  });
+  it("desfazer em execução é sem desfecho, nunca já desfeita",()=>{
+    const linhas=so([proposta()],[],[execucao(),execucao({id:"e-2",proposalId:"p-2",undoesExecutionId:"e-1",status:"executando"})]);
+    expect(linhas.find(l=>l.chave==="p-1")?.desfazer).toMatchObject({tipo:"indisponivel",porque:expect.stringContaining("sem desfecho registrado")});
+  });
+  it("duas pendentes do mesmo run e hash ganham aviso",()=>{
+    const base={runId:"run",expiresAt:"2026-08-12T15:05:00Z"};
+    const linhas=so([proposta({...base,id:"p-1"}),proposta({...base,id:"p-2"})]);
+    expect(linhas.map(l=>l.possivelDuplicata)).toEqual([true,true]);
+  });
+  it.each(["run-diferente","hash-diferente","sem-run","executada"])("%s não é par de pendentes duplicadas",cenario=>{
+    const base={runId:"run",expiresAt:"2026-08-12T15:05:00Z"};
+    const outra=proposta({...base,id:"p-2",...(cenario==="run-diferente"?{runId:"outro"}:{}),...(cenario==="sem-run"?{runId:null}:{}),...(cenario==="hash-diferente"?{effectHash:"b".repeat(64)}:{})});
+    const linhas=so([proposta({...base,id:"p-1"}),outra],[],cenario==="executada"?[execucao({proposalId:"p-2"})]:[]);
+    expect(linhas.map(l=>l.possivelDuplicata)).toEqual([false,false]);
+  });
+});
+
+
+it("uma falha posterior não encobre o desfazer bem-sucedido e o parcial continua reservado",()=>{
+  for(const status of ["sucesso","parcial"]){
+    const linhas=so([proposta()],[],[execucao(),execucao({id:"inverso",proposalId:"p-2",undoesExecutionId:"e-1",status}),execucao({id:"falha",proposalId:"p-3",undoesExecutionId:"e-1",status:"falhou"})]);
+    expect(linhas.find(l=>l.chave==="p-1")?.desfazer.tipo).toBe(status==="sucesso"?"ja-desfeita":"indisponivel");
+  }
 });

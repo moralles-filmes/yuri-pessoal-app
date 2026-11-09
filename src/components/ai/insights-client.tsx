@@ -1,5 +1,7 @@
 "use client";
 
+import { dataDeAdiamento } from "@/lib/ai/insights/adiamento";
+
 /**
  * Fase 18-E · Bloco 3 — IA · A tela de insights.
  *
@@ -87,17 +89,6 @@ function rotuloDoProvedor(provider: string): string {
     : provider;
 }
 
-/** Adiar por uma semana. Data pura, aritmética em `Date.UTC`, sem passar por fuso local. */
-function daquiUmaSemana(): string {
-  const hoje = new Date();
-  const t = new Date(
-    Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()) +
-      7 * 86_400_000,
-  );
-  const dd = (n: number) => String(n).padStart(2, "0");
-  return `${t.getUTCFullYear()}-${dd(t.getUTCMonth() + 1)}-${dd(t.getUTCDate())}`;
-}
-
 export function InsightsClient({
   insights,
   disponiveis,
@@ -150,7 +141,7 @@ export function InsightsClient({
       const r = await registrarDecisaoDeInsight({
         insightId,
         decisao,
-        ...(decisao === "adiado" ? { adiadoAte: daquiUmaSemana() } : {}),
+        ...(decisao === "adiado" ? { adiadoAte: dataDeAdiamento(new Date(), 7) } : {}),
       });
       if (!r.ok) {
         toast.error(mensagemDaAction(r));
@@ -323,7 +314,7 @@ function CartaoDeInsight({
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-start gap-2">
           {/* `min-w-0` obrigatório: o título é longo e os badges são `shrink-0`. */}
-          <CardTitle className="min-w-0 flex-1 text-base">{insight.titulo}</CardTitle>
+          <CardTitle className="min-w-0 flex-auto truncate text-base">{insight.titulo}</CardTitle>
           <Badge variant="secondary" className="shrink-0">
             {NOME_DO_MODULO[insight.modulo]}
           </Badge>
@@ -350,9 +341,9 @@ function CartaoDeInsight({
             {insight.fontes.map((fonte) => (
               <li key={fonte.indicador_id} className="min-w-0">
                 <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="min-w-0 text-muted-foreground">{fonte.rotulo}:</span>
+                  <span className="min-w-0 truncate text-muted-foreground">{fonte.rotulo}:</span>
                   {/* ⛔ Não medido escreve "não medido" com o motivo — nunca "—", nunca 0. */}
-                  <span className="font-medium">{textoDaFonte(fonte)}</span>
+                  <span className="min-w-0 truncate font-medium">{textoDaFonte(fonte)}</span>
                   <Link
                     href={fonte.rota}
                     className="inline-flex items-center gap-1 text-xs text-muted-foreground underline"

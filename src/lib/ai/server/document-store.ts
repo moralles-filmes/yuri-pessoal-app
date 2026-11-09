@@ -32,6 +32,8 @@ import {
   isMimeAceito,
   limiteDeBytes,
   LIMITE_MEGAPIXELS,
+  LIMITE_PAGINAS_PDF,
+  LIMITE_BYTES_PDF_SEM_CONTAGEM,
   type MimeAceito,
 } from "@/lib/ai/vision/limits";
 import {
@@ -44,7 +46,14 @@ import {
 type Client = SupabaseClient<Database>;
 
 export type FalhaDoEnvio = {
-  readonly motivo: MotivoDeRecusa | "grande_demais" | "resolucao_demais" | "storage" | "banco";
+  readonly motivo:
+    | MotivoDeRecusa
+    | "grande_demais"
+    | "resolucao_demais"
+    | "paginas_demais"
+    | "paginas_desconhecidas"
+    | "storage"
+    | "banco";
   readonly mensagem: string;
 };
 
@@ -112,7 +121,7 @@ export async function guardarDocumento(entrada: {
     };
   }
 
-  // ── 3. DIMENSÕES / PÁGINAS — para a estimativa de custo ──────────────────────────
+  // ── 3. DIMENSÕES / PÁGINAS — admissão e estimativa de custo ──────────────────────────
   const dimensoes = especie === "imagem" ? dimensoesDaImagem(bytes) : null;
   const paginas = especie === "pdf" ? paginasDoPdf(bytes) : null;
 
@@ -129,6 +138,27 @@ export async function guardarDocumento(entrada: {
           mensagem:
             `A imagem tem ${mp.toFixed(1)} megapixels (${dimensoes.larguraPx}×${dimensoes.alturaPx}) ` +
             `e o limite é ${LIMITE_MEGAPIXELS}. Reduza a resolução antes de enviar.`,
+        },
+      };
+    }
+  }
+
+  if (especie === "pdf") {
+    if (paginas !== null && paginas > LIMITE_PAGINAS_PDF) {
+      return {
+        ok: false,
+        falha: {
+          motivo: "paginas_demais",
+          mensagem: `O PDF tem ${paginas} páginas; o limite é ${LIMITE_PAGINAS_PDF}. Envie só as páginas do comprovante.`,
+        },
+      };
+    }
+    if (paginas === null && bytes.byteLength > LIMITE_BYTES_PDF_SEM_CONTAGEM) {
+      return {
+        ok: false,
+        falha: {
+          motivo: "paginas_desconhecidas",
+          mensagem: "Não consegui contar as páginas deste PDF. Envie um arquivo menor ou só a página do comprovante.",
         },
       };
     }

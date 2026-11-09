@@ -14,11 +14,11 @@
  *
  * É a invariante 1 da Dieta aplicada ao custo. Imagem sem dimensão legível **não** vale 0
  * tokens: vale `LIMITE_MEGAPIXELS`, que é o maior arquivo que o envio aceita. PDF sem
- * contagem de páginas vale `LIMITE_PAGINAS_PDF`, pelo mesmo motivo.
+ * contagem de páginas reserva `LIMITE_PAGINAS_PDF`, como estimativa conservadora.
  *
- * Repare que isso não é um chute: o teto do que ACEITAMOS é um número que nós controlamos, e
- * o arquivo já passou pela validação de tamanho antes de chegar aqui. "Não sei quanto" e "no
- * máximo tanto" são coisas diferentes, e a segunda basta para reservar.
+ * A medida é best-effort: cabeçalho ilegível ou objetos PDF comprimidos podem esconder
+ * conteúdo. O envio limita bytes e recusa PDF sem contagem acima de 2 MB, mas isso não prova
+ * que ele tenha até 20 páginas. O teto é uma estimativa de reserva, não garantia de custo.
  *
  * Puro. Nenhum I/O.
  */

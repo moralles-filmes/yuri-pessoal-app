@@ -31,8 +31,7 @@ export const SEARCH_TYPES = [
   "treino_sessao",
   "treino_meta",
   "treino_recorde",
-  // Fase 18-F — módulo de IA. ⚠️ Memória NÃO entra aqui: `/ia/memoria` só existe no Bloco 3,
-  // e link para rota inexistente é 404 (a lição do `?aba=despensa` da 16-F).
+  // Fase 18-F — conversas, insights, ações e memória, com as rotas atuais do módulo.
   "ia_conversa",
   "ia_insight",
   "ia_acao",

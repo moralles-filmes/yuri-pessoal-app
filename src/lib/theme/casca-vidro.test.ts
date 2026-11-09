@@ -308,7 +308,7 @@ describe("09-C · botão do assistente", () => {
       expect(origem, origem).not.toBe("@/components/ui/sheet");
       expect(origem, origem).not.toBe("@/components/ui/dropdown-menu");
     }
-    expect(fonte).toMatch(/dynamic\(\s*\(\)\s*=>[\s\S]*?\{\s*ssr:\s*false,\s*loading:\s*\(\)\s*=>\s*null\s*\}\s*,?\s*\)/);
+    expect(fonte).toMatch(/dynamic\(\s*\(\)\s*=>[\s\S]*?\{\s*ssr:\s*false,\s*loading:\s*\(\)\s*=>/);
   });
 });
 

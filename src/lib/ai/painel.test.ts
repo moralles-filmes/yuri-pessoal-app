@@ -13,6 +13,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   avisoDoBotao,
+  estadoDoBotao,
   CANTO_PADRAO,
   CANTOS_DO_BOTAO,
   ESTADO_INICIAL,
@@ -200,5 +201,24 @@ describe("⛔ o selo não repete o sino", () => {
     // A lista acima é o contrato: se alguém acrescentar "insightNovo" ou "notificacao",
     // este teste fica vermelho e a conversa acontece antes do commit.
     expect(tipos).toHaveLength(6);
+  });
+});
+
+
+describe("preferências do botão após navegação", () => {
+  const servidor = { canto: "direita", oculto: false } as const;
+  const otimista = { canto: "esquerda", oculto: true } as const;
+  it("preserva a preferência otimista enquanto as props do servidor não mudam", () => {
+    const anterior = { servidor, atual: otimista };
+    expect(estadoDoBotao(anterior, { ...servidor })).toBe(anterior);
+  });
+  it.each([
+    { canto: "esquerda", oculto: false },
+    { canto: "direita", oculto: true },
+    { canto: "esquerda", oculto: true },
+  ] as const)("sincroniza quando mudam as props %o, sem mutar o anterior", (novas) => {
+    const anterior = Object.freeze({ servidor, atual: servidor });
+    expect(estadoDoBotao(anterior, novas)).toEqual({ servidor: novas, atual: novas });
+    expect(anterior.atual).toBe(servidor);
   });
 });

@@ -14,7 +14,15 @@ import {
   MAX_TOOLS_POR_PASSO,
   TOKENS_POR_RESULTADO_DE_FERRAMENTA,
 } from "@/lib/ai/tools/limits";
-import { computeReservation, estimarTokensDeEntrada, MARGEM_PADRAO } from "./reservation";
+import { MAX_ESPECIALISTAS } from "@/lib/ai/agents/especialistas";
+import {
+  computeReservation,
+  computeReservationDoCoordenador,
+  estimarTokensDeEntrada,
+  MARGEM_PADRAO,
+  TETO_SAIDA_DECISAO,
+  TETO_SAIDA_ESPECIALISTA,
+} from "./reservation";
 import { round6 } from "./meter";
 
 function tarifa(entrada: string, saida: string, id: string): AiRate {
@@ -315,5 +323,102 @@ describe("18-D · tokens de arquivo", () => {
   it("valor negativo não reduz a reserva", () => {
     const r = computeReservation({ ...comum, tokensDeArquivos: -99_999 });
     expect(r.valorUsd).toBe(computeReservation(comum).valorUsd);
+  });
+});
+
+/**
+ * Chat livre com coordenador · Task 8 — a reserva do COORDENADOR pelo pior caso.
+ *
+ * Conta (Gemini 3.6 Flash: US$ 1,50/M entrada, US$ 7,50/M saída; maxRetries 1, maxFallbacks 0,
+ * margem 1,15; coordenador 10.000 tokens; especialista 4.000; síntese com teto de saída 4.000):
+ *
+ *   Por especialista — 4 passos de ferramenta, entradas 4.000 + i·4·2.867 para i = 0..3:
+ *     4.000 + 15.468 + 26.936 + 38.404 = 84.808 tokens × 1,50/M = 0,127212
+ *     saída 4 × 1.500 = 6.000 × 7,50/M = 0,045
+ *     = 0,172212 por especialista · × 6 = 1,033272
+ *   Decisão — entrada 10.000, saída 2.500, 1 + 1 tentativas:
+ *     (0,015 + 0,01875) × 2 = 0,0675
+ *   Síntese — entrada 10.000 + 6 × 1.650 = 19.900, saída 4.000, 1 + 1 tentativas:
+ *     (19.900 × 1,50/M + 4.000 × 7,50/M) × 2 = 0,1197
+ *   Paralelo = 1,033272 + 0,1197 = 1,152972 · direto = 0,494424 (menor, não domina)
+ *   Total = (0,0675 + 1,152972) × 1,15 = 1,40354
+ */
+describe("chat livre · reserva do coordenador (pior caso por constantes)", () => {
+  const GEMINI_FLASH = tarifa("1.50", "7.50", "gemini-3.6-flash");
+
+  const PIOR_CASO = {
+    rates: [GEMINI_FLASH],
+    tokensEntradaDoCoordenador: 10_000,
+    tokensEntradaDoEspecialista: 4_000,
+    tetoSaidaDaSintese: 4_000,
+    maxRetries: 1,
+    maxFallbacks: 0,
+    margem: 1.15,
+  };
+
+  it("pior caso com o Gemini 3.6 Flash fica perto de US$ 1,40", () => {
+    const r = computeReservationDoCoordenador(PIOR_CASO);
+    expect(r.valorUsd).toBeCloseTo(1.4035, 2);
+  });
+
+  it("a síntese usa 1.650 tokens por resposta (1.500 × 1,1 em inteiro): o total bate com a conta à mão", () => {
+    // Com `Math.ceil(1500 * 1.1)` seriam 1.651 por resposta: +6 tokens de entrada na síntese,
+    // +2 × 6 × 1,50/M × 1,15 ≈ 0,0000207 — invisível em precisão 2, visível em precisão 5.
+    const r = computeReservationDoCoordenador(PIOR_CASO);
+    expect(r.valorUsd).toBeCloseTo(1.40354, 5);
+  });
+
+  it("o modo direto não domina o paralelo com estes números", () => {
+    const paralelo = 1.152972;
+    const direto = 0.494424;
+    expect(direto).toBeLessThan(paralelo);
+    const r = computeReservationDoCoordenador(PIOR_CASO);
+    expect(r.explicacao).toContain("(paralelo)");
+  });
+
+  it("quando o direto é o mais caro, a reserva o cobre (o max olha os dois caminhos)", () => {
+    // Síntese com teto de saída enorme: o direto gasta esse teto em CADA um dos 4 passos, a
+    // síntese só uma vez. Com 200.000 tokens de saída o direto passa o paralelo.
+    const r = computeReservationDoCoordenador({ ...PIOR_CASO, tetoSaidaDaSintese: 200_000 });
+    expect(r.explicacao).toContain("(direto)");
+    const direto = computeReservation({
+      rates: PIOR_CASO.rates,
+      maxRetries: 1,
+      maxFallbacks: 0,
+      margem: 1,
+      tokensEntradaEstimados: 4_000,
+      tetoDeSaida: 200_000,
+      maxToolSteps: MAX_TOOL_STEPS,
+    }).valorUsd;
+    const decisao = (10_000 * 1.5 + 2_500 * 7.5) / 1e6 * 2;
+    expect(r.valorUsd).toBeCloseTo((decisao + direto) * 1.15, 5);
+  });
+
+  it("os especialistas não carregam o multiplicador de tentativas", () => {
+    // Dobrar as tentativas do coordenador (1 → 2 retries) multiplica decisão e síntese por
+    // 3/2, e NÃO os seis especialistas (que não repetem). O delta é só a parte do coordenador:
+    //   (0,03375 + 0,05985) × 1,15 = 0,10764.
+    // Se os especialistas também multiplicassem, o delta seria ~0,10764 + 6 × 0,172212 × 1,15.
+    const um = computeReservationDoCoordenador({ ...PIOR_CASO, maxRetries: 1 });
+    const dois = computeReservationDoCoordenador({ ...PIOR_CASO, maxRetries: 2 });
+    expect(dois.valorUsd - um.valorUsd).toBeCloseTo((0.03375 + 0.05985) * 1.15, 4);
+  });
+
+  it("o número de especialistas vem da constante, não de um parâmetro", () => {
+    // A função não aceita quantidade (o tsc garante). Este teste documenta o valor que a conta usa.
+    expect(MAX_ESPECIALISTAS).toBe(6);
+    expect(TETO_SAIDA_DECISAO).toBe(2_500);
+    expect(TETO_SAIDA_ESPECIALISTA).toBe(1_500);
+  });
+
+  it("a explicação em pt-BR descreve as partes: decisão, especialistas e síntese", () => {
+    const r = computeReservationDoCoordenador(PIOR_CASO);
+    expect(r.explicacao).toContain("decisão");
+    expect(r.explicacao).toContain("6 especialistas");
+    expect(r.explicacao).toContain("síntese");
+    expect(r.multiplicadorDeTentativas).toBe(2);
+    expect(r.margem).toBe(1.15);
+    expect(r.tarifaEntradaUsada).toBe(1.5);
+    expect(r.tarifaSaidaUsada).toBe(7.5);
   });
 });

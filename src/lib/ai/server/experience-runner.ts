@@ -107,8 +107,6 @@ export async function* runExperience(
     // A experiência SEMPRE abre conversa nova (§7.3) — e o RPC nem tem parâmetro para outra.
     conversationId: null,
     text: experiencia.titulo,
-    agentId: null,
-    pageContext: null,
     providerPreference: input.providerPreference ?? null,
     modelPreference: input.modelPreference ?? null,
     abortSignal: input.abortSignal,

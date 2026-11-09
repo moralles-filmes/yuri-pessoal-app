@@ -61,6 +61,7 @@ export async function buildAiGenInput(
       escopo: "mensal",
       competencia: todayIso.slice(0, 7),
       totalUsd: mensal.totalUsd,
+      parcial: mensal.parcial,
       limiteUsd: mensal.limiteUsd,
       nivelJaAvisado: jaAvisado,
     });
@@ -70,6 +71,7 @@ export async function buildAiGenInput(
       escopo: "diario",
       competencia: todayIso,
       totalUsd: diario.totalUsd,
+      parcial: diario.parcial,
       limiteUsd: diario.limiteUsd,
       nivelJaAvisado: jaAvisado,
     });

@@ -30,10 +30,11 @@ const RASTRO_DE_ACOES =
   "O registro das ações que a IA aplicou nos seus módulos — o que foi feito, quando e em qual registro.";
 
 const PERMANECE: Record<EscopoDeExclusao, readonly string[]> = {
-  conversas: [RASTRO_DE_ACOES, "As análises geradas, que não dependem da conversa."],
+  conversas: [RASTRO_DE_ACOES, "As análises geradas, que não dependem da conversa.", "As conversas com resposta em andamento."],
   conversas_antigas: [
     RASTRO_DE_ACOES,
     "As conversas dentro do período que você escolheu manter.",
+    "As conversas com resposta em andamento.",
   ],
   documentos: [
     RASTRO_DE_ACOES,
@@ -122,3 +123,6 @@ export function resumoDaExclusao(
         : "foram";
   return `${quantidade} ${palavra} ${auxiliar} ${particip}${quantidade === 1 ? "" : "s"}.`;
 }
+
+/** Limite dos IDs por consulta e por exclusão solicitada. */
+export const TAMANHO_DO_LOTE = 200;

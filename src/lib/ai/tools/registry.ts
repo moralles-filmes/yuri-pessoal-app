@@ -717,7 +717,7 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     kind: "leitura",
     risk: 1,
     description:
-      "Resumo financeiro de um mês (AAAA-MM; ausente = mês atual): entradas (com quanto delas é seu — `entradas_meu` — e quanto é dinheiro de terceiros que passou pela sua conta — `entradas_terceiros`), saídas, quanto do gasto é seu e quanto é de terceiros, cartão × à vista, a receber (o que ainda falta receber de terceiros: o devido menos o que já foi recebido) e contas a pagar. Todos os totais já vêm somados pelo sistema — não refaça nenhuma conta. `meu` + `de terceiros` = `saídas`, `entradas_meu` + `entradas_terceiros` = `entradas`, e `cartão` + `à vista` = `saídas`: são partições, não parcelas a somar.",
+      "Resumo financeiro de um mês (AAAA-MM; ausente = mês atual): entradas (com quanto delas é seu — `entradas_meu` — e quanto é dinheiro de terceiros que passou pela sua conta — `entradas_terceiros`), saídas, quanto do gasto é seu e quanto é de terceiros, cartão × à vista, a receber (o que ainda falta receber de terceiros: o devido menos o que já foi recebido) — saldo de todos os meses — e contas a pagar. Todos os totais já vêm somados pelo sistema — não refaça nenhuma conta. `meu` + `de terceiros` = `saídas`, `entradas_meu` + `entradas_terceiros` = `entradas`, e `cartão` + `à vista` = `saídas`: são partições, não parcelas a somar.",
     inputSchema: {
       type: "object",
       properties: {
@@ -745,7 +745,7 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     kind: "leitura",
     risk: 1,
     description:
-      "As próximas faturas de cartão, com total, quanto é seu, quanto é de terceiros e o status (aberta, fechada, atrasada ou paga) — todos derivados na leitura pela regra de fechamento do sistema. Fatura marcada como projetada ainda não existe: é a estimativa do próximo ciclo e vai mudar.",
+      "As próximas faturas de cartão, com total, quanto é seu, quanto é de terceiros, a receber (o que ainda falta receber de terceiros: o devido menos o que já foi recebido) — saldo de todos os meses — e o status (aberta, fechada, atrasada ou paga) — todos derivados na leitura pela regra de fechamento do sistema. Fatura marcada como projetada ainda não existe: é a estimativa do próximo ciclo e vai mudar.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     outputSchema: { type: "object" },
     allowedAgents: ["financeiro"],
@@ -1029,12 +1029,12 @@ export const AI_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     },
     outputSchema: { type: "object" },
     /**
-     * ⚠️ OS OITO ESPECIALISTAS, e NÃO o orquestrador. O prompt dele afirma, literalmente, que
-     * ele "não consegue criar, editar nem excluir nada" — com uma ferramenta de escrita aqui,
-     * essa frase vira mentira, e incluí-lo custaria reescrevê-la, subir `assistente-pessoal-v2`
-     * para `v3` e trocar a invariante 74. O que se perde: preferência dita numa conversa geral
-     * não vira proposta. O que cobre: a tela `/ia/memoria`, onde o dono escreve a preferência
-     * global ele mesmo — e o texto de lá diz isso.
+     * ⚠️ OS OITO ESPECIALISTAS, e NÃO o orquestrador. Desde a `assistente-pessoal-v3` ele é o
+     * COORDENADOR do chat: aciona especialistas, e acionar não é ferramenta deste registry
+     * (`allowedTools: []`, invariante 74, spec §4.2.1). Dar-lhe esta ferramenta o tornaria dono
+     * de uma escrita e trocaria a invariante 74. Quem prepara a preferência numa conversa é o
+     * especialista acionado; a tela `/ia/memoria` continua sendo onde o dono escreve a
+     * preferência global ele mesmo — e o texto de lá diz isso.
      *
      * Um agente novo que entre no registry entra AQUI junto, ou o teste dos dois sentidos
      * (`allowedAgents` × allowlist) fica vermelho.

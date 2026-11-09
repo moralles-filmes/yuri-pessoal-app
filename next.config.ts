@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
+import { LIMITE_BYTES_IMAGEM, LIMITE_BYTES_PDF } from "./src/lib/ai/vision/limits";
 
 const nextConfig: NextConfig = {
   experimental: {
+    serverActions: {
+      // Maior arquivo aceito + folga para campos e enquadramento multipart do formulário.
+      bodySizeLimit: Math.max(LIMITE_BYTES_IMAGEM, LIMITE_BYTES_PDF) + 1024 * 1024,
+    },
     /**
      * `radix-ui` (pacote unificado v1.6.0) reexporta ~30 primitivas num barrel só, e
      * `src/components/ui/*` importa dele em 15 arquivos. Sem esta linha, cada import puxa o

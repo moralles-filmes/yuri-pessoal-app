@@ -142,6 +142,15 @@ describe("executeTool — o caminho feliz", () => {
     ]);
   });
 
+  it("o executor passa o id do agente para a auditoria — na execução e na recusa", async () => {
+    await executeTool(ctx, chamada({ dias: 7 }));
+    await executeTool({ ...ctx, agent: { id: "dieta", allowedTools: [] } }, chamada());
+
+    expect(auditadas).toHaveLength(2);
+    expect(auditadas[0].agentId).toBe("treinos");
+    expect(auditadas[1]).toMatchObject({ status: "rejeitada", agentId: "dieta" });
+  });
+
   it("entrada ausente vale como objeto vazio — a ferramenta sem argumento roda", async () => {
     const r = await executeTool(ctx, { callId: "c", toolName: "training.get_volume", input: null });
 

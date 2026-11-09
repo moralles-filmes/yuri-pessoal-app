@@ -680,7 +680,7 @@ describe("Rodapés de gaveta", () => {
     // O mesmo ChatView aparece em /ia, fora de gaveta: lá o rodapé continua bg-background.
     const chat = semComentarios(fs.readFileSync(path.join(SRC, "components", "ai", "chat-client.tsx"), "utf8"));
     expect(chat).toMatch(/compacto \? "bg-popover-solid" : "bg-background"/);
-    expect(chat).toContain('"sticky bottom-0 space-y-2 border-t pt-3"');
+    expect(chat).toContain('"sticky bottom-0 space-y-2 pt-3"');
   });
 });
 

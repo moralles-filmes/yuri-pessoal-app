@@ -22,7 +22,7 @@ import { z } from "zod";
 import { authContext, dbError, invalid, notAuthed, type AuthContext } from "./helpers";
 import type { ActionResult } from "@/types/finance";
 import { saoPauloWallClockToInstant } from "@/lib/format";
-import { ESCOPOS_DE_EXCLUSAO, type EscopoDeExclusao } from "@/lib/ai/retention";
+import { TAMANHO_DO_LOTE, ESCOPOS_DE_EXCLUSAO, type EscopoDeExclusao } from "@/lib/ai/retention";
 import { DOCUMENT_ENTITY_TYPE } from "@/lib/ai/vision/constants";
 import { descartarDocumento } from "@/lib/ai/server/document-store";
 
@@ -49,7 +49,7 @@ const exclusaoSchema = z
 type Alvo = { escopo: EscopoDeExclusao; anteriorA: string | null };
 
 /**
- * ⛔ `anteriorA` é DATA PURA de Brasília; `created_at` é `timestamptz`. Cortar em
+ * ⛔ `anteriorA` é DATA PURA de Brasília; `last_message_at` é `timestamptz`. Cortar em
  * `${anteriorA}T00:00:00.000Z` seria meia-noite **UTC** — 21h BRT da véspera —, e três horas
  * da noite anterior seriam apagadas junto sem aparecer na contagem.
  */
@@ -63,28 +63,35 @@ function corteEmSaoPaulo(anteriorA: string): string {
  * O que já virou anexo de um lançamento fica de fora — quem o apaga é o Financeiro, junto
  * com o lançamento (a mesma recusa de `descartarDocumento`). A FK composta
  * `(attachment_id, user_id)` impede o embed do PostgREST (invariante 21 da 16-E), então são
- * duas consultas de propósito.
+ * duas etapas de leitura paginada de propósito.
  */
 async function comprovantesSoltos(ctx: AuthContext): Promise<string[] | null> {
-  const { data: docs, error } = await ctx.supabase
-    .from("ai_documents")
-    .select("id, attachment_id")
-    .eq("user_id", ctx.userId);
-  if (error) return null;
-  if (!docs?.length) return [];
-
-  const { data: anexos, error: erroAnexos } = await ctx.supabase
-    .from("attachments")
-    .select("id")
-    .eq("user_id", ctx.userId)
-    .eq("entity_type", DOCUMENT_ENTITY_TYPE)
-    .in(
-      "id",
-      docs.map((d) => d.attachment_id),
-    );
-  if (erroAnexos) return null;
-
-  const soltos = new Set((anexos ?? []).map((a) => a.id));
+  const docs: { id: string; attachment_id: string }[] = [];
+  while (true) {
+    const { data, error, count } = await ctx.supabase.from("ai_documents")
+      .select("id, attachment_id", { count: "exact" }).eq("user_id", ctx.userId)
+      .order("id").range(docs.length, docs.length + TAMANHO_DO_LOTE - 1);
+    if (error || !data || count === null) return null;
+    docs.push(...data);
+    if (docs.length >= count) break;
+    if (data.length === 0) return null;
+  }
+  const soltos = new Set<string>();
+  for (let i = 0; i < docs.length; i += TAMANHO_DO_LOTE) {
+    let lidos = 0;
+    while (true) {
+      const { data, error, count } = await ctx.supabase.from("attachments")
+        .select("id", { count: "exact" }).eq("user_id", ctx.userId)
+        .eq("entity_type", DOCUMENT_ENTITY_TYPE)
+        .in("id", docs.slice(i, i + TAMANHO_DO_LOTE).map((d) => d.attachment_id))
+        .order("id").range(lidos, lidos + TAMANHO_DO_LOTE - 1);
+      if (error || !data || count === null) return null;
+      for (const anexo of data) soltos.add(anexo.id);
+      lidos += data.length;
+      if (lidos >= count) break;
+      if (data.length === 0) return null;
+    }
+  }
   return docs.filter((d) => soltos.has(d.attachment_id)).map((d) => d.id);
 }
 
@@ -96,24 +103,43 @@ function alvoIncompleto(alvo: Alvo): ActionResult<never> | null {
   return null;
 }
 
-/** Os ids no escopo. `null` = falha de leitura; a action traduz em erro, nunca em zero. */
+/** IDs paginados com ordem estável. Contagem ausente ou leitura interrompida é erro. */
 async function alvosDoEscopo(ctx: AuthContext, alvo: Alvo): Promise<string[] | null> {
   if (alvo.escopo === "documentos") return comprovantesSoltos(ctx);
-
-  if (alvo.escopo === "insights") {
-    const { data, error } = await ctx.supabase
-      .from("ai_insights")
-      .select("id")
-      .eq("user_id", ctx.userId);
-    return error ? null : (data ?? []).map((r) => r.id);
+  const tabela = alvo.escopo === "insights" ? "ai_insights" : "ai_conversations";
+  const ids: string[] = [];
+  while (true) {
+    let query = ctx.supabase.from(tabela).select("id", { count: "exact" }).eq("user_id", ctx.userId);
+    if (alvo.escopo === "conversas_antigas" && alvo.anteriorA) {
+      query = query.lt("last_message_at", corteEmSaoPaulo(alvo.anteriorA));
+    }
+    const { data, error, count } = await query.order("id").range(ids.length, ids.length + TAMANHO_DO_LOTE - 1);
+    if (error || count === null || count === undefined || !data) return null;
+    ids.push(...data.map((r) => r.id));
+    if (ids.length >= count) break;
+    if (data.length === 0) return null;
   }
+  if (alvo.escopo === "insights") return ids;
 
-  let query = ctx.supabase.from("ai_conversations").select("id").eq("user_id", ctx.userId);
-  if (alvo.escopo === "conversas_antigas" && alvo.anteriorA) {
-    query = query.lt("created_at", corteEmSaoPaulo(alvo.anteriorA));
+  // Sem embed: a FK é composta. Cada consulta é pequena e carrega o dono explicitamente.
+  const ocupadas = new Set<string>();
+  for (let i = 0; i < ids.length; i += TAMANHO_DO_LOTE) {
+    let lidos = 0;
+    while (true) {
+      const { data, error, count } = await ctx.supabase.from("ai_runs")
+        .select("id, conversation_id", { count: "exact" })
+        .eq("user_id", ctx.userId)
+        .in("conversation_id", ids.slice(i, i + TAMANHO_DO_LOTE))
+        .in("status", ["reserved", "streaming"])
+        .order("id").range(lidos, lidos + TAMANHO_DO_LOTE - 1);
+      if (error || count === null || count === undefined || !data) return null;
+      for (const run of data) if (run.conversation_id) ocupadas.add(run.conversation_id);
+      lidos += data.length;
+      if (lidos >= count) break;
+      if (data.length === 0) return null;
+    }
   }
-  const { data, error } = await query;
-  return error ? null : (data ?? []).map((r) => r.id);
+  return ids.filter((id) => !ocupadas.has(id));
 }
 
 /**
@@ -173,13 +199,19 @@ export async function apagarDadosDaIa(
     }
   } else if (ids.length > 0) {
     const tabela = alvo.escopo === "insights" ? "ai_insights" : "ai_conversations";
-    const { error, count } = await ctx.supabase
-      .from(tabela)
-      .delete({ count: "exact" })
-      .eq("user_id", ctx.userId)
-      .in("id", ids);
-    if (error) return dbError("Não foi possível apagar os dados da IA.");
-    apagados = count ?? 0;
+    for (let i = 0; i < ids.length; i += TAMANHO_DO_LOTE) {
+      const { error, count } = await ctx.supabase
+        .from(tabela)
+        .delete({ count: "exact" })
+        .eq("user_id", ctx.userId)
+        .in("id", ids.slice(i, i + TAMANHO_DO_LOTE));
+      if (error || count === null) return dbError(
+        apagados > 0
+          ? apagados + " registros foram apagados; não foi possível concluir a exclusão. Refaça a contagem antes de tentar novamente."
+          : "Não foi possível apagar os dados da IA.",
+      );
+      apagados += count;
+    }
   }
 
   revalidatePath("/ia");

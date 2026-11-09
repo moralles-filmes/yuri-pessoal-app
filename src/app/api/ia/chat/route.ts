@@ -25,7 +25,6 @@ import {
   chatExperienciaSchema,
   chatMensagemSchema,
   chatRequestSchema,
-  contextoDaRota,
   MAX_CHAT_BODY_BYTES,
   MAX_CHAT_TEXT,
 } from "@/lib/validators/ai";
@@ -231,20 +230,10 @@ export async function POST(request: Request) {
           userId: ctx.userId,
           conversationId: corpo.conversationId ?? null,
           text: corpo.text,
-          // ⚠️ PREFERÊNCIA, não decisão: quem escolhe o agente é `routeAgent`, no servidor,
-          // com as flags `allow_*` do usuário na mão. `null` (o caso de hoje — a tela não
-          // manda o campo) é "não pedi nenhum", diferente de "pedi o orquestrador".
-          agentId: corpo.agentId ?? null,
-          // ⚠️ Do contexto da página, SÓ A ROTA atravessa o transporte — e ela vem de uma
-          // lista estática, não de texto da tela. O MÓDULO é resolvido aqui, no servidor: é
-          // ele que decide o agente e, por tabela, a allowlist de ferramentas. Se a tela
-          // pudesse declará-lo, o cliente escolheria o que a IA pode ler.
-          pageContext: corpo.pageContext ? contextoDaRota(corpo.pageContext.rota) : null,
           providerPreference: corpo.providerPreference ?? null,
           modelPreference: corpo.modelPreference ?? null,
           abortSignal: request.signal,
           agora: new Date(),
-          caixaDeEntrada: corpo.caixaDeEntrada === true,
         })
   )[Symbol.asyncIterator]();
 
@@ -318,20 +307,21 @@ export async function POST(request: Request) {
 }
 
 /**
- * `Sec-Fetch-Site` primeiro (é o sinal forte, o navegador não deixa forjar), `Origin`
- * depois. Requisição sem nenhum dos dois é recusada: no fluxo real da aplicação sempre
- * existe um deles, e aceitar a ausência transformaria a checagem em decoração.
+ * Só `same-origin` autoriza diretamente. Os demais valores exigem Origin com o mesmo
+ * Host (incluindo porta) e protocolo do pedido. Subdomínio irmão não autoriza gasto.
+ * Sem um sinal suficiente, o pedido é recusado.
  */
 function verificarOrigem(request: Request): { ok: boolean } {
   const site = request.headers.get("sec-fetch-site");
-  if (site) return { ok: site === "same-origin" || site === "same-site" };
+  if (site === "same-origin") return { ok: true };
 
   const origin = request.headers.get("origin");
   const host = request.headers.get("host");
   if (!origin || !host) return { ok: false };
 
   try {
-    return { ok: new URL(origin).host === host };
+    const origem = new URL(origin);
+    return { ok: origem.host === host && origem.protocol === new URL(request.url).protocol };
   } catch {
     return { ok: false };
   }

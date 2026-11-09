@@ -8,8 +8,8 @@
  * "Nova preferência", nada disso é baixado.
  *
  * ⚠️ E ESTE ARQUIVO NÃO IMPORTA `@/lib/validators/ai` NEM `memory/state.ts`. O primeiro começa
- * com `import { z } from "zod"`; o segundo puxa `@/lib/format`, e `date-fns` atrás dele. O
- * estado já chega resolvido do servidor, como rótulo.
+ * com `import { z } from "zod"`; o estado e o corte de fuso chegam resolvidos do servidor.
+ * `formatDate` só apresenta as datas puras, sem convertê-las em instantes.
  */
 
 import * as React from "react";
@@ -29,6 +29,7 @@ import {
 } from "@/lib/actions/ai-memory";
 import { ROTULO_DA_PERMISSAO } from "@/lib/ai/constants";
 import { cn } from "@/lib/utils";
+import { formatDate } from "@/lib/format";
 import type { MemoriaNaLista } from "./memory-types";
 
 /**
@@ -192,10 +193,10 @@ export function MemoryClient({ memorias }: { readonly memorias: readonly Memoria
                     */}
                     {m.expirouEm ? (
                       <span className="text-muted-foreground">
-                        venceu em {m.expirouEm}
+                        venceu em {formatDate(m.expirouEm)}
                       </span>
                     ) : m.prazo ? (
-                      <span className="text-muted-foreground">vale até {m.prazo}</span>
+                      <span className="text-muted-foreground">vale até {formatDate(m.prazo)}</span>
                     ) : null}
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       {m.origem === "ia" ? (
@@ -301,8 +302,8 @@ export function MemoryClient({ memorias }: { readonly memorias: readonly Memoria
       )}
 
       {/*
-        ⛔ APAGAR PEDE CONFIRMAÇÃO, e o texto diz o que sobrevive e qual é a alternativa. É o único
-        dado do sistema que o dono escreveu à mão e que não tem como recuperar de lugar nenhum.
+        ⛔ APAGAR PEDE CONFIRMAÇÃO. O aviso declara onde as cópias continuam existindo
+        e oferece esquecer como alternativa à exclusão.
       */}
       {exclusaoMontada && (
         <ConfirmarExclusaoDialog
@@ -310,7 +311,7 @@ export function MemoryClient({ memorias }: { readonly memorias: readonly Memoria
           onFechar={() => setParaApagar(null)}
           titulo="Apagar esta preferência?"
           descricao={
-            "A frase sai daqui e não volta. Fica registrado que ela existiu e quando foi apagada — sem o texto. " +
+            "A frase sai daqui e deixa de valer. Uma cópia continua na conversa em que ela foi proposta e em Ações, até você apagar a conversa. Fica registrado que ela existiu e quando foi apagada — sem o texto. " +
             'Se você só quer que o assistente pare de usá-la, use "Esquecer": ela continua legível nesta tela.'
           }
           rotuloConfirmar="Apagar"

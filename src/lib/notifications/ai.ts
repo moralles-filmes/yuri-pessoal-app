@@ -61,7 +61,8 @@ export type GenAiBudget = {
   readonly escopo: "diario" | "mensal";
   /** 'yyyy-MM-dd' no diário, 'yyyy-MM' no mensal. Entra na chave de dedupe. */
   readonly competencia: string;
-  readonly totalUsd: number;
+  readonly totalUsd: number | null;
+  readonly parcial?: boolean;
   /** `null` = sem teto configurado. Sem teto não há percentual, então não há aviso. */
   readonly limiteUsd: number | null;
   /** `ai_user_preferences.budget_alert_level_reached` — o nível já avisado. */
@@ -113,22 +114,25 @@ export function generateAiNotifications(input: AiGenInput): Candidate[] {
   for (const b of input.budgets) {
     // `nivelAtingido` já devolve `null` para teto ausente ou não positivo — a decisão de
     // "sem teto não há percentual" mora lá, não aqui.
-    const nivel = nivelAtingido(b.totalUsd, b.limiteUsd);
-    if (!deveAvisar(nivel, b.nivelJaAvisado)) continue;
+    const nivel = b.totalUsd === null ? null : nivelAtingido(b.totalUsd, b.limiteUsd);
+    if (!deveAvisar(nivel, b.nivelJaAvisado) && !b.parcial) continue;
 
     out.push({
       type: "ai_budget_threshold",
       // Só o teto cheio é `medium`: nele a IA para de aceitar pedido novo.
       priority: nivel === 100 ? "medium" : "low",
-      title: `IA: ${nivel}% do orçamento ${ESCOPO_LABEL[b.escopo]}`,
-      description:
-        nivel === 100
+      title: b.parcial
+        ? `IA: consumo parcial ${ESCOPO_LABEL[b.escopo]}`
+        : `IA: ${nivel}% do orçamento ${ESCOPO_LABEL[b.escopo]}`,
+      description: b.parcial
+        ? "Medição parcial: há custos ausentes ou uma leitura incompleta. Confira o consumo disponível; ele pode ser menor que o gasto do período."
+        : nivel === 100
           ? "O teto foi alcançado. Você pode ajustá-lo nas configurações da IA."
           : "Dá para acompanhar o detalhe por modelo e por tentativa em Consumo.",
       link: usageLink(),
       entity_type: "ai_budget",
       entity_id: null,
-      dedupe_key: `ai-orcamento:${b.escopo}:${b.competencia}:${nivel}`,
+      dedupe_key: `ai-orcamento:${b.escopo}:${b.competencia}:${b.parcial ? "parcial" : nivel}`,
     });
   }
 
