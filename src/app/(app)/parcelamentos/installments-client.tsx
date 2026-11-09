@@ -425,6 +425,7 @@ export function InstallmentsClient({
             {BLOCOS.map(({ chave, titulo, itens, subtitulo }) =>
               itens.length === 0 ? null : (
                 <Bloco
+                  nivel={2}
                   key={chave}
                   titulo={titulo}
                   subtitulo={subtitulo}

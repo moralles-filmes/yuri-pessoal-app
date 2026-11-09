@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 export default function DashboardLoading() {
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <Skeleton className="h-7 w-40" />
-        <Skeleton className="h-4 w-80" />
+      <div className="space-y-3 pt-2">
+        <Skeleton className="h-4 w-44" />
+        <Skeleton className="h-14 w-80 max-w-full" />
+        <Skeleton className="h-5 w-96 max-w-full" />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

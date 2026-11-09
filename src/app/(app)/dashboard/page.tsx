@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
-import { PageHeader } from "@/components/shared/page-header";
 import { getDashboardLayout } from "@/lib/dashboard/settings";
 import { asPeriod, asView, resolveWindow, urlDoDashboard } from "@/lib/dashboard/period";
 import { type DashCardId } from "@/lib/dashboard/cards";
@@ -9,8 +8,8 @@ import { horaDeBrasiliaAgora, hojeISO } from "@/lib/format";
 import { getDisplayName } from "@/lib/settings/queries";
 import { rotuloDeHoje } from "@/lib/dashboard/rotulos";
 import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
-import { FRASES_DO_BANNER, fraseDoDia, saudacaoPara } from "@/lib/painel/saudacao";
-import { BannerDeBoasVindas } from "@/components/shared/painel/banner-de-boas-vindas";
+import { dataDaAbertura, saudacaoPara } from "@/lib/painel/saudacao";
+import { Abertura } from "@/components/shared/painel/abertura";
 import { LimiteDoBloco } from "@/components/dashboard/general/limite-do-bloco";
 import { ResumoFinanceiro } from "@/components/dashboard/general/resumo-financeiro";
 import { GeneralDashboard } from "./general-dashboard-client";
@@ -43,7 +42,7 @@ export default async function DashboardPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  // O olho dos valores é do aparelho (cookie); o nome do banner nunca lança.
+  // O olho dos valores é do aparelho (cookie); o nome da abertura nunca lança.
   const [layout, nome, cookieDoOlho] = await Promise.all([
     getDashboardLayout(),
     getDisplayName(),
@@ -158,12 +157,12 @@ export default async function DashboardPage({
     ),
   };
 
-  const banner = (
-    <BannerDeBoasVindas
+  const abertura = (
+    <Abertura
+      data={dataDaAbertura(todayIso)}
       saudacao={saudacaoPara(horaDeBrasiliaAgora())}
       nome={nome}
       linha="Aqui está um resumo da sua vida em um só lugar."
-      frase={fraseDoDia(todayIso, FRASES_DO_BANNER)}
     />
   );
 
@@ -189,10 +188,6 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Dashboard"
-        description="Sua vida em um só lugar — finanças, agenda, tarefas, hábitos e estudos."
-      />
       <GeneralDashboard
         layout={layout}
         contentById={contentById}
@@ -201,7 +196,7 @@ export default async function DashboardPage({
         view={view}
         customFrom={customFrom}
         customTo={customTo}
-        banner={banner}
+        abertura={abertura}
         faixa={faixa}
         subtituloById={subtituloById}
       />

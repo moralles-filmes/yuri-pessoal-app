@@ -33,6 +33,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -438,7 +439,7 @@ function ExerciseRow({
   const first = sets[0];
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+    <div className={`${MATERIAL_CARTAO} flex flex-wrap items-center gap-2 rounded-[16px] p-3`}>
       {handle}
 
       <button

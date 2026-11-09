@@ -87,7 +87,7 @@ export default async function InsightsPage() {
         como descobrir sozinho.
       */}
       {prefs.allowInsightJobs ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-on-fog">
           {varredura === null ? (
             "A análise automática está ligada, mas ainda não rodou nenhuma vez."
           ) : (

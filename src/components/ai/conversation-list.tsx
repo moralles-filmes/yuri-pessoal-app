@@ -30,6 +30,7 @@ import {
   setConversationStatus,
 } from "@/lib/actions/ai-conversations";
 import type { ConversationListItem } from "@/lib/ai/types";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 /**
  * REDESIGN-07-D · D8 — a confirmação de exclusão é um diálogo único, sob demanda, com trava de
@@ -74,7 +75,7 @@ export function ConversationList({
         {conversas.map((c) => (
           <li
             key={c.id}
-            className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3"
+            className={`${MATERIAL_CARTAO} flex flex-wrap items-center gap-2 rounded-[16px] p-3`}
           >
             <Link
               href={c.href}

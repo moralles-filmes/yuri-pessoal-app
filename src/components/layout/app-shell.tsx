@@ -60,7 +60,7 @@ export function AppShell({
   }, []);
 
   return (
-    <div className="flex min-h-svh bg-background">
+    <div className="flex min-h-svh">
       {/*
         PRIMEIRO elemento focável do documento, e por isso fora da ordem visual: no DOM a
         sidebar vem antes do Header, então quem navega por teclado atravessava os 20 links

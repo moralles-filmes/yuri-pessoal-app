@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { IMPORT_ORIGEM_LABELS } from "@/lib/import/constants";
 import { parseImportFile } from "@/lib/actions/imports";
 import type { ImportOrigem } from "@/lib/import/constants";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 type CardOption = { id: string; nome: string };
 type AccountOption = { id: string; name: string };
@@ -152,7 +153,7 @@ export function ImportUpload({
         </div>
 
         {origem === "conta" && (
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card/40 p-3">
+          <div className={`${MATERIAL_LADRILHO} flex items-center justify-between gap-3 rounded-[14px] p-3`}>
             <div className="space-y-0.5">
               <Label htmlFor="imp-sinal">Valores negativos são despesas</Label>
               <p className="text-xs text-muted-foreground">
@@ -195,7 +196,7 @@ export function ImportUpload({
                   : "border-border hover:border-primary/50 hover:bg-muted/40",
               )}
             >
-              <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
+              <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
                 <UploadCloud className="size-6" />
               </div>
               <p className="text-sm font-medium">
@@ -214,7 +215,7 @@ export function ImportUpload({
             </div>
 
             {file && (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card/40 p-3">
+              <div className={`${MATERIAL_LADRILHO} flex items-center justify-between gap-3 rounded-[14px] p-3`}>
                 <div className="flex min-w-0 items-center gap-2">
                   <FileSpreadsheet className="size-4 shrink-0 text-primary" />
                   <span className="truncate text-sm">{file.name}</span>

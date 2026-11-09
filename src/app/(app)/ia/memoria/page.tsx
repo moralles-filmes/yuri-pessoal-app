@@ -91,7 +91,7 @@ export default async function MemoriaPage() {
       {!prefs.permissions.allow_memory || !prefs.writePermissions.allow_write_memory ? (
         <div className="flex items-start gap-2 rounded-xl border border-dashed p-3 text-sm">
           <KeyRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0 space-y-1 text-muted-foreground">
+          <div className="min-w-0 space-y-1 text-muted-on-fog">
             {!prefs.permissions.allow_memory ? (
               <p>
                 O assistente ainda <strong>não usa</strong> a sua memória: estas frases não

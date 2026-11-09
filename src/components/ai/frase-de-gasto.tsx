@@ -10,7 +10,7 @@ import { AVISO_DE_GASTO } from "@/lib/ai/gasto";
  */
 export function FraseDeGasto({ id, className }: { id: string; className?: string }) {
   return (
-    <p id={id} className={cn("flex items-start gap-1.5 text-xs text-muted-foreground", className)}>
+    <p id={id} className={cn("flex items-start gap-1.5 text-xs text-muted-on-fog", className)}>
       <Wallet className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
       <span className="min-w-0">{AVISO_DE_GASTO}</span>
     </p>

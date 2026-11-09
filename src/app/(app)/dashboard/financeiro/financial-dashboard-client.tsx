@@ -5,9 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  ArrowLeftRight,
+  BarChart3,
   CalendarClock,
   CreditCard,
+  PieChart,
   Plus,
+  Receipt,
   ReceiptText,
   Scale,
   TrendingDown,
@@ -148,13 +152,13 @@ function ComRegistros({ href, children }: { href: string | undefined; children: 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       {children}
-      <VerRegistros href={href} />
+      <VerRegistros href={href} className="text-foreground underline" />
     </div>
   );
 }
 
 export function DashboardClient({
-  banner,
+  abertura,
   ocultos,
   completude,
   mesSel,
@@ -191,8 +195,8 @@ export function DashboardClient({
   linkLancamentos,
   linkContas,
 }: {
-  /** O banner de boas-vindas, JÁ montado pelo servidor — o cliente não o importa. */
-  banner: React.ReactNode;
+  /** A abertura (saudação e título da página), JÁ montada pelo servidor — o cliente não a importa. */
+  abertura: React.ReactNode;
   ocultos: boolean;
   completude: CompletudeFinanceira;
   mesSel: string;
@@ -318,6 +322,9 @@ export function DashboardClient({
 
   return (
     <div className="space-y-6">
+      {/* Abertura (montada no servidor): é o <h1> da página */}
+      {abertura}
+
       {/* Filtro de período e base dos números */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
         <div className="flex flex-col gap-1.5 sm:max-w-xs">
@@ -327,7 +334,7 @@ export function DashboardClient({
             type="month"
             value={mesSel}
             onChange={(e) => setMes(e.target.value || mesSel)}
-            className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+            className="h-9 w-full campo-nativo px-3 text-sm"
           />
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">
@@ -341,9 +348,6 @@ export function DashboardClient({
           />
         </div>
       </div>
-
-      {/* Banner de boas-vindas (montado no servidor) */}
-      {banner}
 
       {/* Aviso "parcial": a leitura pode estar incompleta, e o painel diz por quê (peça única) */}
       <AvisoParcial completude={completude} />
@@ -375,15 +379,17 @@ export function DashboardClient({
               </div>
               <div className="min-w-0 space-y-0.5">
                 <p className="text-sm font-medium">{a.title}</p>
-                <p className="text-xs text-muted-foreground">{a.detail}</p>
+                <p className="text-xs text-muted-on-fog">{a.detail}</p>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Os quatro indicadores. O olho esconde os quatro; só o Saldo leva o botão. */}
+      {/* O olho cobre os quatro indicadores, os gráficos e os blocos de valor do painel; só o Saldo
+          leva o botão. O invólucro é um bloco: o `space-y-6` de dentro mantém o ritmo do pai. */}
       <OlhoDosValores ocultoInicial={ocultos}>
+        <div className="space-y-6">
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           <Indicador
             className="col-span-3 sm:col-span-1"
@@ -448,7 +454,6 @@ export function DashboardClient({
           linkLancamentos={linkLancamentos}
           linkContas={linkContas}
         />
-      </OlhoDosValores>
 
       {/* Bloco do caixa (só na base caixa) */}
       {base === "caixa" && caixa && (
@@ -458,7 +463,9 @@ export function DashboardClient({
       {/* Entradas × saídas (barras) e gastos por categoria (rosca) */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Bloco
+          nivel={2}
           className="lg:col-span-2"
+          icone={BarChart3}
           titulo="Minhas entradas × saídas"
           subtitulo={rotulos.evolucao.descricao}
           verTodos={{ href: "/relatorios", rotulo: "Ver relatório" }}
@@ -476,6 +483,8 @@ export function DashboardClient({
           <p className="text-xs text-muted-foreground">{FRASE_DO_MES}</p>
         </Bloco>
         <Bloco
+          nivel={2}
+          icone={PieChart}
           titulo="Meus gastos por categoria"
           subtitulo={`${monthYearLabel(mesSel)}. ${rotulos.categorias.descricao}`}
           estado="conteudo"
@@ -505,7 +514,9 @@ export function DashboardClient({
       {/* Cartões de crédito e próximas faturas */}
       <div className="grid gap-4 lg:grid-cols-5">
         <Bloco
+          nivel={2}
           className="lg:col-span-3"
+          icone={CreditCard}
           titulo="Cartões de crédito"
           subtitulo="Fatura atual de cada cartão, pelo valor cheio"
           verTodos={{ href: "/cartoes" }}
@@ -578,7 +589,9 @@ export function DashboardClient({
         </Bloco>
 
         <Bloco
+          nivel={2}
           className="lg:col-span-2"
+          icone={Receipt}
           titulo="Próximas faturas"
           subtitulo={`${ciclos} ciclos de cada cartão · pelo vencimento`}
           verTodos={{ href: "/faturas" }}
@@ -650,7 +663,9 @@ export function DashboardClient({
       {/* Últimas transações e a receber de terceiros */}
       <div className="grid gap-4 lg:grid-cols-5">
         <Bloco
+          nivel={2}
           className="lg:col-span-3"
+          icone={ArrowLeftRight}
           titulo="Últimas transações"
           subtitulo="Os lançamentos mais recentes que já aconteceram"
           verTodos={{ href: "/financeiro/lancamentos" }}
@@ -723,7 +738,9 @@ export function DashboardClient({
         </Bloco>
 
         <Bloco
+          nivel={2}
           className="lg:col-span-2"
+          icone={Users}
           titulo="Pendente de terceiros"
           subtitulo="O que ainda não voltou para você"
           verTodos={{ href: "/terceiros" }}
@@ -776,8 +793,8 @@ export function DashboardClient({
 
         {/* Card-âncora: valor pessoal × terceiros + cartão × à vista + faturas + contas */}
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="overflow-hidden ring-1 ring-primary/25">
-            <CardContent className="p-5">
+          <Card className="overflow-hidden border-primary/75">
+            <CardContent className="p-[19px]">
               <div className="flex items-start justify-between gap-4">
                 {/* `min-w-0`: mesma razão do StatCard — sem ele o texto empurra o ícone
                     para fora e o `overflow-hidden` do Card corta o ícone pela metade. */}
@@ -798,7 +815,7 @@ export function DashboardClient({
                     </p>
                   )}
                 </div>
-                <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
+                <div className="grid size-10 shrink-0 place-items-center rounded-[12px] bg-primary/10 text-primary">
                   <Scale className="size-5" />
                 </div>
               </div>
@@ -934,6 +951,8 @@ export function DashboardClient({
           </Card>
         </div>
       </section>
+        </div>
+      </OlhoDosValores>
     </div>
   );
 }

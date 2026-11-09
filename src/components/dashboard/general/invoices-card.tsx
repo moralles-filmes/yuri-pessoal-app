@@ -7,6 +7,7 @@ import { rotuloTotalPendenteAte } from "@/lib/finance/recebimentos";
 import { ehErroDeLeitura, registrarFalhaDeLeitura, type ErroDeLeitura } from "@/lib/supabase/leitura";
 import { CardSemLeitura } from "@/components/shared/card-sem-leitura";
 import { Quadro, MetricRow, CardEmpty } from "./primitives";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 /** Corpo do card Cartões & Faturas — abertas/fechadas, próximos vencimentos, a receber. */
 export async function InvoicesCard({
@@ -60,7 +61,7 @@ export async function InvoicesCard({
           d.proximas.map((f, i) => (
             <div
               key={`${f.competencia}-${i}`}
-              className="flex items-center justify-between gap-2 rounded-lg border bg-card/40 p-2.5"
+              className={`${MATERIAL_LADRILHO} flex items-center justify-between gap-2 rounded-[14px] p-2.5`}
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">

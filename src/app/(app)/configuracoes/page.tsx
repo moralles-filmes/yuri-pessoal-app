@@ -23,6 +23,7 @@ import { getUserSettings } from "@/lib/settings/queries";
 import { getGoogleConnectionStatus } from "@/lib/calendar/queries";
 import { getProviderCards } from "@/lib/ai/queries";
 import { cryptoProblemMessage } from "@/lib/ai/server/crypto-readiness";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 export const metadata: Metadata = { title: "Configurações" };
 export const dynamic = "force-dynamic";
@@ -125,9 +126,9 @@ export default async function ConfiguracoesPage() {
             <Link
               key={item.href}
               href={item.href}
-              className="group flex items-start gap-3 rounded-2xl border bg-card p-5 transition-colors hover:border-primary/40"
+              className={`${MATERIAL_CARTAO} group flex items-start gap-3 rounded-[16px] p-5 transition-colors hover:border-primary/40`}
             >
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                 <Icon className="size-5" />
               </span>
               <div className="space-y-0.5">
@@ -139,7 +140,7 @@ export default async function ConfiguracoesPage() {
         })}
       </div>
 
-      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+      <p className="flex items-center gap-2 text-xs text-muted-on-fog">
         <Database className="size-3.5" />
         Seus dados são protegidos por RLS no Supabase (cada acesso filtra por usuário).
       </p>

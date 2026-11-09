@@ -15,13 +15,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  axisTick,
-  GRID_COLOR,
-  tooltipItemStyle,
-  tooltipLabelStyle,
-  tooltipStyle,
-} from "@/components/dashboard/chart-theme";
+import { axisTick, GRID_COLOR, MIRA_DA_LINHA } from "@/components/dashboard/chart-theme";
+import { DicaDoGrafico } from "@/components/dashboard/dica-do-grafico";
+import { linhasDaDica } from "@/components/dashboard/linhas-da-dica";
+import { useFocoDoGrafico } from "@/components/dashboard/use-foco-do-grafico";
 import { formatMinutes, minutesToHours } from "@/lib/studies/constants";
 import type { StudyWeekPoint } from "@/types/database";
 
@@ -33,44 +30,50 @@ export function EvolutionChart({ weekly }: { weekly: StudyWeekPoint[] }) {
     minutes: w.minutes,
   }));
 
+  // `ref` sai do objeto: um `ref={x.ref}` faz o lint do React tratar `x` inteiro como ref e recusar
+  // `x.dicaAtiva` na renderização.
+  const { ref: refDoGrafico, ...foco } = useFocoDoGrafico();
+
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <AreaChart data={data} margin={{ left: 4, right: 8, top: 8 }}>
-        <defs>
-          <linearGradient id="studyEvolution" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.4} />
-            <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-        <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-        <YAxis
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-          width="auto"
-          tickFormatter={(v) => `${v}h`}
-          allowDecimals
-        />
-        <Tooltip
-          cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.3 }}
-          formatter={(_value, _name, item) => {
-            const p = item?.payload as { minutes: number };
-            return [formatMinutes(p.minutes), "Estudado"];
-          }}
-          labelFormatter={(label) => `Semana de ${label}`}
-          contentStyle={tooltipStyle}
-          labelStyle={tooltipLabelStyle}
-          itemStyle={tooltipItemStyle}
-        />
-        <Area
-          type="monotone"
-          dataKey="hours"
-          stroke="var(--chart-1)"
-          strokeWidth={2}
-          fill="url(#studyEvolution)"
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div ref={refDoGrafico}>
+      <ResponsiveContainer width="100%" height={240}>
+        <AreaChart data={data} margin={{ left: 4, right: 8, top: 8 }}>
+          <CartesianGrid vertical={false} stroke={GRID_COLOR} />
+          <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
+          <YAxis
+            tick={axisTick}
+            axisLine={false}
+            tickLine={false}
+            width="auto"
+            tickFormatter={(v) => `${v}h`}
+            allowDecimals
+          />
+          <Tooltip
+            cursor={MIRA_DA_LINHA}
+            active={foco.dicaAtiva}
+            isAnimationActive={false}
+            content={({ payload, label }) => (
+              <DicaDoGrafico
+                titulo={`Semana de ${label}`}
+                linhas={linhasDaDica(payload ?? [], (e) => {
+                  if (typeof e.value !== "number") return null;
+                  const p = e.payload as { minutes: number };
+                  return { nome: "Estudado", valor: formatMinutes(p.minutes), dinheiro: false };
+                })}
+              />
+            )}
+          />
+          <Area
+            type="monotone"
+            dataKey="hours"
+            stroke="var(--chart-1)"
+            strokeWidth={2}
+            fill="var(--chart-1)"
+            fillOpacity={0.14}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

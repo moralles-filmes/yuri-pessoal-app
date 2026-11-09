@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, RefreshCw, Trophy } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -160,7 +161,7 @@ export function RecordsClient({
                     key={record.id}
                     id={`recorde-${record.id}`}
                     active={record.id === highlightId}
-                    className="rounded-xl border border-border bg-card/60 p-3"
+                    className={`${MATERIAL_LADRILHO} rounded-[14px] p-3`}
                   >
                     <p className="text-sm text-muted-foreground">
                       {RECORD_TYPE_LABELS[record.recordType]}
@@ -199,7 +200,7 @@ export function RecordsClient({
             ))}
           </div>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-on-fog">
             O 1RM estimado usa a fórmula <strong>{oneRmFormula}</strong>, escolhida nas
             configurações do módulo — é estimativa, não medição, e o sistema não sugere tentar
             carga máxima. Séries de aquecimento, puladas e canceladas não geram recorde, e

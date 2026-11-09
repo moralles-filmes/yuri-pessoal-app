@@ -29,6 +29,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -273,7 +274,7 @@ export function ExercisesClient({
       {selected.size > 0 && (
         // `top-18` = 4.5rem: o Header do app é `sticky top-0 h-16`, então em `top-2` esta
         // barra de seleção rolava para trás dele e as ações em massa ficavam inalcançáveis.
-        <div className="sticky top-18 z-10 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-sm">
+        <div className="sticky top-18 z-10 flex flex-wrap items-center gap-2 rounded-xl p-3 vidro-casca">
           <span className="text-sm font-medium">
             {selected.size} {selected.size === 1 ? "selecionado" : "selecionados"}
           </span>
@@ -346,7 +347,7 @@ export function ExercisesClient({
               }}
               aria-label="Selecionar todos os exercícios visíveis"
             />
-            <span className="text-xs text-muted-foreground">Selecionar visíveis</span>
+            <span className="text-xs text-muted-on-fog">Selecionar visíveis</span>
           </div>
 
           <ul className="space-y-2">
@@ -354,8 +355,8 @@ export function ExercisesClient({
               <li key={exercise.id}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 rounded-xl border bg-card p-3 transition-colors",
-                    selected.has(exercise.id) && "ring-1 ring-primary/40",
+                    `${MATERIAL_CARTAO} flex items-center gap-3 rounded-[16px] p-3 transition-colors`,
+                    selected.has(exercise.id) && "border-primary/75",
                   )}
                 >
                   <Checkbox

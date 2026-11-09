@@ -74,17 +74,28 @@ describe("inventário do painel financeiro — nenhum bloco do §2.3 sumiu", () 
   });
 });
 
-describe("o banner é só do servidor", () => {
-  it("BannerDeBoasVindas aparece em page.tsx e NÃO no cliente", () => {
-    expect(PAGINA).toContain("BannerDeBoasVindas");
-    expect(CLIENTE).not.toContain("BannerDeBoasVindas");
+describe("a abertura é só do servidor", () => {
+  it("Abertura aparece em page.tsx e NÃO no cliente", () => {
+    expect(PAGINA).toContain("Abertura");
+    expect(CLIENTE).not.toContain("Abertura");
   });
 
-  it("o cliente não importa o banner nem a montanha dele — recebe o banner pronto por prop", () => {
-    expect(CLIENTE).not.toMatch(/banner-de-boas-vindas/);
-    expect(CLIENTE).not.toMatch(/montanha/i);
-    expect(CLIENTE).toMatch(/\bbanner\b/);
-    expect(PAGINA).toMatch(/banner=\{/);
+  it("o cliente não importa a abertura — recebe-a pronta por prop, antes do filtro de mês", () => {
+    expect(CLIENTE).not.toMatch(/painel\/abertura/);
+    expect(CLIENTE).toMatch(/\babertura\b/);
+    expect(PAGINA).toMatch(/abertura=\{/);
+    expect(CLIENTE).toContain("{abertura}");
+    expect(CLIENTE.indexOf("{abertura}")).toBeLessThan(CLIENTE.indexOf('id="dash-mes"'));
+  });
+
+  it("a linha da abertura diz do que a tela trata: resumo financeiro de <mês>", () => {
+    expect(PAGINA).toContain("resumo financeiro de");
+  });
+
+  it("o título é o <h1> da abertura: nem a página nem o cliente têm PageHeader, <h1 ou a frase do dia", () => {
+    expect(PAGINA).not.toContain("<PageHeader");
+    expect(PAGINA).not.toContain("FRASES_DO_BANNER");
+    expect(CLIENTE).not.toContain("<h1");
   });
 });
 
@@ -140,6 +151,26 @@ describe("indicadores: o número de cada um sai da fonte certa", () => {
     expect(CLIENTE.match(/<BotaoDoOlho/g)).toHaveLength(1);
     expect(CLIENTE.match(/<Indicador\b/g)).toHaveLength(4);
     expect(PAGINA).toMatch(/valoresOcultos\(/);
+  });
+});
+
+describe("09-E R13 — o olho alcança os gráficos do painel", () => {
+  it("todo <...Chart> do cliente fica entre <OlhoDosValores e </OlhoDosValores>", () => {
+    const abre = CLIENTE.indexOf("<OlhoDosValores");
+    const fecha = CLIENTE.indexOf("</OlhoDosValores>");
+    expect(abre).toBeGreaterThanOrEqual(0);
+    expect(fecha).toBeGreaterThan(abre);
+    const graficos = [...CLIENTE.matchAll(/<[A-Z]\w*Chart\b/g)];
+    // Barras, rosca, formas, mês a mês, projeção e faturas.
+    expect(graficos.length).toBeGreaterThanOrEqual(6);
+    for (const g of graficos) {
+      expect(g.index, g[0]).toBeGreaterThan(abre);
+      expect(g.index, g[0]).toBeLessThan(fecha);
+    }
+  });
+
+  it("o invólucro do olho é bloco: o conteúdo vai num <div className=\"space-y-6\">", () => {
+    expect(CLIENTE).toMatch(/<OlhoDosValores[^>]*>\s*<div className="space-y-6">/);
   });
 });
 

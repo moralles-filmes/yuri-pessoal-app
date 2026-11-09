@@ -275,7 +275,8 @@ export function RoutineFormDialog({
                     onClick={() => field.onChange("")}
                     className={cn(
                       "grid size-7 place-items-center rounded-full border text-xs text-muted-foreground",
-                      !field.value && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                      !field.value &&
+                        "outline-2 outline-solid outline-offset-1 outline-primary border-primary text-foreground",
                     )}
                     aria-label="Sem cor"
                     aria-pressed={!field.value}
@@ -288,8 +289,8 @@ export function RoutineFormDialog({
                       type="button"
                       onClick={() => field.onChange(c)}
                       className={cn(
-                        "grid size-7 place-items-center rounded-full ring-offset-background transition",
-                        field.value === c && "ring-2 ring-primary ring-offset-1",
+                        "grid size-7 place-items-center rounded-full transition",
+                        field.value === c && "outline-2 outline-solid outline-offset-1 outline-primary",
                       )}
                       style={{ backgroundColor: c }}
                       aria-label={`Cor ${c}`}

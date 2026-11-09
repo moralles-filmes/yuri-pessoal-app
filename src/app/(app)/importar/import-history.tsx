@@ -39,7 +39,7 @@ export function ImportHistory({
 
   return (
     <div className="space-y-2">
-      <h2 className="text-sm font-medium text-muted-foreground">
+      <h2 className="text-sm font-medium text-muted-on-fog">
         Importações recentes
       </h2>
       <div className="grid gap-2">
@@ -47,7 +47,7 @@ export function ImportHistory({
           <Card key={b.id}>
             <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
+                <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                   {b.origem === "cartao" ? (
                     <CreditCard className="size-4" />
                   ) : (

@@ -6,6 +6,7 @@ import { formatTime } from "@/lib/calendar/format";
 import { eventsForDay } from "@/lib/calendar/events";
 import type { CalendarEventLite } from "@/lib/calendar/events";
 import type { GridDay } from "@/lib/calendar/grid";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MAX_VISIBLE = 3;
@@ -23,7 +24,7 @@ export function MonthView({
   onSelectEvent: (event: CalendarEventLite) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
+    <div className={`${MATERIAL_CARTAO} overflow-hidden rounded-[16px]`}>
       <div className="grid grid-cols-7 border-b bg-muted/40">
         {WEEKDAYS.map((w) => (
           <div

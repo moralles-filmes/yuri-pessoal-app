@@ -37,13 +37,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  axisTick,
-  GRID_COLOR,
-  tooltipItemStyle,
-  tooltipLabelStyle,
-  tooltipStyle,
-} from "@/components/dashboard/chart-theme";
+import { axisTick, GRID_COLOR, MIRA_DA_LINHA } from "@/components/dashboard/chart-theme";
+import { DicaDoGrafico } from "@/components/dashboard/dica-do-grafico";
+import { linhasDaDica } from "@/components/dashboard/linhas-da-dica";
+import { useFocoDoGrafico } from "@/components/dashboard/use-foco-do-grafico";
 import { shortDateLabel } from "@/lib/nutrition/calendar";
 import { formatMeasurement, measuredPoints, type SeriesPoint } from "@/lib/body/measurements";
 
@@ -94,78 +91,94 @@ export function MeasurementChart({
     return [min - padding, max + padding];
   }, [values, target]);
 
+  // `ref` sai do objeto: um `ref={x.ref}` faz o lint do React tratar `x` inteiro como ref e recusar
+  // `x.dicaAtiva` na renderização.
+  const { ref: refDoGrafico, ...foco } = useFocoDoGrafico();
+
   // O caso "nenhuma medição no período" é resolvido na FACHADA, antes de baixar este arquivo:
   // a mensagem aparece de imediato e o código do gráfico nem chega a ser pedido.
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 4 }}>
-        <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-        <XAxis
-          dataKey="label"
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-          minTickGap={24}
-        />
-        <YAxis
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-          width="auto"
-          domain={domain}
-          tickFormatter={(v) => formatMeasurement(Number(v), unit, decimals)}
-        />
-        <Tooltip
-          contentStyle={tooltipStyle}
-          labelStyle={tooltipLabelStyle}
-          itemStyle={tooltipItemStyle}
-          cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.3 }}
-          formatter={(value, name) => [
-            formatMeasurement(Number(value), unit, decimals),
-            name === "average" ? "Média móvel" : "Medição",
-          ]}
-        />
-
-        {target !== null && target !== undefined && (
-          <ReferenceLine
-            y={target}
-            stroke="var(--chart-2)"
-            strokeDasharray="4 4"
-            label={{
-              value: `Alvo: ${formatMeasurement(target, unit, decimals)}`,
-              position: "insideTopRight",
-              fill: "var(--muted-foreground)",
-              fontSize: 11,
-            }}
+    <div ref={refDoGrafico}>
+      <ResponsiveContainer width="100%" height={height}>
+        <LineChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 4 }}>
+          <CartesianGrid vertical={false} stroke={GRID_COLOR} />
+          <XAxis
+            dataKey="label"
+            tick={axisTick}
+            axisLine={false}
+            tickLine={false}
+            minTickGap={24}
           />
-        )}
+          <YAxis
+            tick={axisTick}
+            axisLine={false}
+            tickLine={false}
+            width="auto"
+            domain={domain}
+            tickFormatter={(v) => formatMeasurement(Number(v), unit, decimals)}
+          />
+          <Tooltip
+            cursor={MIRA_DA_LINHA}
+            active={foco.dicaAtiva}
+            isAnimationActive={false}
+            content={({ payload, label }) => (
+              <DicaDoGrafico
+                titulo={String(label)}
+                linhas={linhasDaDica(payload ?? [], (e) =>
+                  // Medição ausente (`null`) não entra: nunca vira zero.
+                  typeof e.value === "number"
+                    ? {
+                        nome: e.dataKey === "average" ? "Média móvel" : "Medição",
+                        valor: formatMeasurement(e.value, unit, decimals),
+                        dinheiro: false,
+                      }
+                    : null,
+                )}
+              />
+            )}
+          />
 
-        {/* ⛔ connectNulls={false}: o buraco fica visível, como deve. */}
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke="var(--chart-1)"
-          strokeWidth={2}
-          dot={{ r: 3, fill: "var(--chart-1)" }}
-          activeDot={{ r: 5 }}
-          connectNulls={false}
-          isAnimationActive={false}
-        />
+          {target !== null && target !== undefined && (
+            <ReferenceLine
+              y={target}
+              stroke="var(--chart-2)"
+              strokeDasharray="4 4"
+              label={{
+                value: `Alvo: ${formatMeasurement(target, unit, decimals)}`,
+                position: "insideTopRight",
+                fill: "var(--muted-foreground)",
+                fontSize: 11,
+              }}
+            />
+          )}
 
-        {showAverage && (
+          {/* ⛔ connectNulls={false}: o buraco fica visível, como deve. */}
           <Line
             type="monotone"
-            dataKey="average"
-            stroke="var(--chart-3)"
-            strokeWidth={1.5}
-            strokeDasharray="5 3"
-            dot={false}
-            connectNulls
+            dataKey="value"
+            stroke="var(--chart-1)"
+            strokeWidth={2}
+            dot={{ r: 3, fill: "var(--chart-1)" }}
+            activeDot={{ r: 5 }}
+            connectNulls={false}
             isAnimationActive={false}
           />
-        )}
-      </LineChart>
-    </ResponsiveContainer>
+
+          {showAverage && (
+            <Line
+              type="monotone"
+              dataKey="average"
+              stroke="var(--chart-3)"
+              strokeWidth={2}
+              strokeDasharray="5 3"
+              dot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+          )}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

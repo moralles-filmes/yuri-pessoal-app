@@ -23,7 +23,7 @@ import { matchesSearch } from "@/lib/nutrition/filters";
 import type { FoodListItem, MarketCategory, PantryItem } from "@/lib/nutrition/types";
 
 export const selectClass =
-  "h-11 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "h-11 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export type PantryFormValues = {
   food_id: string;

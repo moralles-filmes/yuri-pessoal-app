@@ -59,6 +59,7 @@ import {
 import { RespostaFormatada } from "@/components/ai/resposta-formatada";
 import { settingsLink } from "@/lib/search/ai-links";
 import type { ConversationMessage, MessageRunInfo } from "@/lib/ai/types";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 type Evento =
   | {
@@ -669,7 +670,7 @@ export function ChatView({
                 {b.role === "user" ? "Você disse: " : "O assistente respondeu: "}
               </span>
               {b.role === "assistant" && b.especialistas && (
-                <p className="mb-2 break-words text-xs text-muted-foreground">
+                <p className="mb-2 break-words text-xs text-muted-on-fog">
                   {linhaDeEspecialistas(b.especialistas)}
                 </p>
               )}
@@ -678,13 +679,13 @@ export function ChatView({
                   ? <RespostaFormatada texto={b.content} />
                   : <p className="whitespace-pre-wrap break-words">{b.content}</p>
               ) : b.status === "streaming" ? (
-                <span className="inline-flex items-center gap-2 text-muted-foreground">
+                <span className="inline-flex items-center gap-2 text-muted-on-fog">
                   <Loader2 className="size-3.5 animate-spin" /> escrevendo…
                 </span>
               ) : null}
 
               {b.status === "cancelled" && (
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="mt-2 text-xs text-muted-on-fog">
                   Cancelada. O trecho recebido até aqui foi guardado.
                 </p>
               )}
@@ -747,7 +748,7 @@ export function ChatView({
       {bolhas.length === 0 && podeConversar && (
         <div className="@container pb-1">
           {!podeCruzarModulos && (
-            <p className="mb-2 text-xs text-muted-foreground">
+            <p className="mb-2 text-xs text-muted-on-fog">
               {"Ligue 'Cruzar módulos' para usar os panoramas. "}<Link className="underline" href={settingsLink()}>Configurações da IA</Link>
             </p>
           )}
@@ -773,9 +774,9 @@ export function ChatView({
         </div>
       )}
 
-      <div className="sticky bottom-0 space-y-2 bg-background pt-3">
+      <div className={cn("sticky bottom-0 space-y-2 pt-3", compacto ? "bg-popover-solid" : "bg-background")}>
         <label htmlFor={idDoCampo} className="sr-only">Mensagem para o assistente</label>
-        <div className="flex items-end gap-2 rounded-2xl border bg-card p-2 focus-within:ring-2 focus-within:ring-ring">
+        <div className={cn("flex items-end gap-2 rounded-2xl p-2 focus-within:ring-2 focus-within:ring-ring", MATERIAL_LADRILHO)}>
           <Textarea
             id={idDoCampo}
             ref={campoRef}

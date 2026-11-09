@@ -409,7 +409,7 @@ function ProjectChip({
         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
         active
           ? "border-primary bg-primary/10 font-semibold text-foreground"
-          : "text-muted-foreground hover:bg-accent",
+          : "text-muted-on-fog hover:bg-accent",
       )}
     >
       {color && (
@@ -513,12 +513,13 @@ function TodayView({
             <span className="text-xs text-muted-foreground">Ver todas →</span>
           </button>
         )}
-        <h2 className="text-sm font-medium text-muted-foreground">
+        <h2 className="text-sm font-medium text-muted-on-fog">
           Para hoje ({todays.length})
         </h2>
         {todays.length === 0 ? (
           <EmptyState
             icon={CheckCircle2}
+            nivel={3}
             title="Dia tranquilo por aqui"
             description="Nada vence hoje. Que tal adiantar algo?"
           >
@@ -542,7 +543,7 @@ function TodayView({
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Rotinas de hoje</h2>
+        <h2 className="text-sm font-medium text-muted-on-fog">Rotinas de hoje</h2>
         <RoutinesTodayCard routines={todaysRoutines} todayIso={todayIso} />
       </div>
     </div>
@@ -561,6 +562,7 @@ function RoutinesTodayCard({
     return (
       <EmptyState
         icon={Repeat}
+        nivel={3}
         title="Nenhuma rotina para hoje"
         description="As rotinas ativas aparecem aqui nos dias em que estão agendadas."
         className="py-8"
@@ -627,11 +629,11 @@ function WeekView({
                 aria-current={day.isToday ? "date" : undefined}
                 className={cn(
                   "text-sm font-medium capitalize",
-                  day.isToday && "text-primary",
+                  day.isToday && "font-semibold text-foreground",
                 )}
               >
                 {weekdayFmt.format(day.date)}{" "}
-                <span className="text-muted-foreground">{dayFmt.format(day.date)}</span>
+                <span className="text-muted-on-fog">{dayFmt.format(day.date)}</span>
               </h3>
               <Button
                 variant="ghost"
@@ -643,7 +645,7 @@ function WeekView({
               </Button>
             </div>
             {dayTasks.length === 0 ? (
-              <p className="rounded-lg border border-dashed px-3 py-3 text-xs text-muted-foreground">
+              <p className="rounded-lg border border-dashed px-3 py-3 text-xs text-muted-on-fog">
                 Sem tarefas.
               </p>
             ) : (

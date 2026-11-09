@@ -39,6 +39,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -340,7 +341,7 @@ export function SessionLiveClient({
       )}
 
       {exercise && focusedSet ? (
-        <div className="rounded-2xl border bg-card p-4 sm:p-5">
+        <div className={`${MATERIAL_CARTAO} rounded-[16px] p-4 sm:p-5`}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">

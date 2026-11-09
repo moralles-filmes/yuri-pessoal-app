@@ -156,7 +156,7 @@ export function GoalsClient({
       ) : (
         <>
           {overlaps.length > 0 && (
-            <Card className="border-amber-500/40 bg-amber-500/5">
+            <Card className="border-amber-500/40">
               <CardContent className="flex items-start gap-3 p-4">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                 <div className="text-xs">
@@ -377,7 +377,7 @@ function ScopePicker({
               onChange={(event) =>
                 onChange({ ...scope, weekday: event.target.value === "" ? null : Number(event.target.value) })
               }
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">Todos os dias</option>
               {WEEKDAY_LABELS.map((label, index) => (
@@ -398,7 +398,7 @@ function ScopePicker({
               onChange={(event) =>
                 onChange({ ...scope, dayKind: (event.target.value || null) as DayKind | null })
               }
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">Qualquer dia</option>
               {DAY_KINDS.map((kind) => (
@@ -416,7 +416,7 @@ function ScopePicker({
             id="scope-meal"
             value={scope.mealTypeId ?? ""}
             onChange={(event) => onChange({ ...scope, mealTypeId: event.target.value || null })}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">Dia inteiro</option>
             {mealTypes
@@ -612,7 +612,7 @@ function GoalTable({
             onChange={(event) => {
               if (event.target.value) setExtraCodes((current) => [...current, event.target.value]);
             }}
-            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Adicionar micronutriente"
           >
             <option value="">Adicionar nutriente…</option>

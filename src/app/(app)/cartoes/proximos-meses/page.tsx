@@ -18,6 +18,7 @@ import {
 import { hojeISO } from "@/lib/format";
 import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
 import { cn } from "@/lib/utils";
+import { MATERIAL_PILULA } from "@/components/ui/materiais";
 
 export const metadata: Metadata = { title: "Próximos meses" };
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ export default async function ProximosMesesPage({
           title="Próximos meses"
           description={`As faturas de cada cartão nos próximos ${n} meses, das que já existem às que ainda não têm compra.`}
         />
-        <p className="border-l-2 border-primary pl-2 text-xs text-muted-foreground">
+        <p className="border-l-2 border-primary pl-2 text-xs text-muted-on-fog">
           Por competência — o mês em que a fatura fecha. Clique numa fatura para abri-la em Faturas
           e pagamentos; nada é pago daqui.
         </p>
@@ -68,7 +69,7 @@ export default async function ProximosMesesPage({
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <nav
           aria-label="Horizonte"
-          className="inline-flex shrink-0 overflow-hidden rounded-lg border bg-card"
+          className={`${MATERIAL_PILULA} inline-flex shrink-0 overflow-hidden rounded-full`}
         >
           {HORIZONTES.map((h) => (
             <Link
@@ -77,14 +78,14 @@ export default async function ProximosMesesPage({
               aria-current={h === n ? "page" : undefined}
               className={cn(
                 "border-r px-3 py-1.5 text-sm whitespace-nowrap last:border-r-0 hover:bg-muted/50",
-                h === n && "bg-primary/10 font-semibold text-primary",
+                h === n && "bg-primary/10 font-semibold text-foreground",
               )}
             >
               {h} meses
             </Link>
           ))}
         </nav>
-        <span className="min-w-0 text-xs text-muted-foreground">
+        <span className="min-w-0 text-xs text-muted-on-fog">
           {mesPorExtenso(meses[0])} a {mesPorExtenso(meses[meses.length - 1])} ·{" "}
           {plural(dados.cartoes.length, "cartão", "cartões")}
         </span>

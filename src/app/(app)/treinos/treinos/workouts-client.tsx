@@ -27,6 +27,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -264,7 +265,7 @@ export function WorkoutsClient({
       </PageHeader>
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+      <div className={`${MATERIAL_CARTAO} flex flex-wrap items-center gap-2 rounded-[16px] p-3`}>
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -340,7 +341,7 @@ export function WorkoutsClient({
       {selected.size > 0 && (
         // `top-18` = 4.5rem: mesma razão de exercises-client — em `top-2` a barra sumia
         // atrás do Header (`sticky top-0 h-16`) ao rolar a lista.
-        <div className="sticky top-18 z-10 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-sm">
+        <div className="sticky top-18 z-10 flex flex-wrap items-center gap-2 rounded-xl p-3 vidro-casca">
           <span className="text-sm font-medium">
             {selected.size} {selected.size === 1 ? "selecionado" : "selecionados"}
           </span>
@@ -414,8 +415,8 @@ export function WorkoutsClient({
               <li key={workout.id}>
                 <div
                   className={cn(
-                    "flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3 transition-colors",
-                    selected.has(workout.id) && "ring-1 ring-primary/40",
+                    `${MATERIAL_CARTAO} flex flex-wrap items-center gap-3 rounded-[16px] p-3 transition-colors`,
+                    selected.has(workout.id) && "border-primary/75",
                   )}
                 >
                   <Checkbox
@@ -515,7 +516,7 @@ export function WorkoutsClient({
       )}
 
       {visible.length > 0 && (
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-xs text-muted-on-fog">
           <Clock className="size-3.5" />
           A duração é uma <strong>estimativa</strong>: execução das séries + descanso
           configurado. Não inclui troca de aparelho nem espera.

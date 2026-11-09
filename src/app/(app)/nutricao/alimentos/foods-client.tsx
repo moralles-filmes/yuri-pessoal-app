@@ -308,7 +308,7 @@ export function FoodsClient({
 
       {/* Barra de seleção — só aparece quando há algo selecionado. */}
       {selected.size > 0 && (
-        <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-lg border bg-card/95 p-2.5 shadow-sm backdrop-blur">
+        <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-lg p-2.5 vidro-casca">
           <span className="text-sm font-medium">
             {selected.size} selecionado{selected.size > 1 ? "s" : ""}
           </span>
@@ -347,7 +347,7 @@ export function FoodsClient({
         />
       ) : (
         <div className="space-y-2">
-          <label className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
+          <label className="flex items-center gap-2 px-1 text-xs text-muted-on-fog">
             <Checkbox
               checked={allVisibleSelected}
               onCheckedChange={(checked) => {
@@ -500,14 +500,14 @@ function FoodRow({
       >
         <p className="truncate text-sm font-medium">
           {food.name}
-          {food.brand && <span className="ml-1.5 text-muted-foreground">· {food.brand}</span>}
+          {food.brand && <span className="ml-1.5 text-muted-on-fog">· {food.brand}</span>}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
           <MacroChip label="kcal" value={food.macros.energiaKcal} unit="" precision={0} />
           <MacroChip label="P" value={food.macros.proteina} unit="g" />
           <MacroChip label="C" value={food.macros.carboidrato} unit="g" />
           <MacroChip label="G" value={food.macros.lipidios} unit="g" />
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[11px] text-muted-on-fog">
             por {food.baseQuantity} {food.baseUnit}
           </span>
         </div>

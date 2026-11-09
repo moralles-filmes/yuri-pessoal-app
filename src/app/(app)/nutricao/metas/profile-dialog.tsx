@@ -110,7 +110,7 @@ export function ProfileDialog({
                 id="profile-sex"
                 value={sex}
                 onChange={(event) => setSex(event.target.value as typeof sex)}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-9 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {PROFILE_SEXES.map((value) => (
                   <option key={value} value={value}>
@@ -153,7 +153,7 @@ export function ProfileDialog({
               id="profile-activity"
               value={activity}
               onChange={(event) => setActivity(event.target.value as typeof activity)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {ACTIVITY_LEVELS.map((level) => (
                 <option key={level} value={level}>
@@ -170,7 +170,7 @@ export function ProfileDialog({
               id="profile-direction"
               value={direction}
               onChange={(event) => setDirection(event.target.value as typeof direction)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-9 w-full campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {GOAL_DIRECTIONS.map((value) => (
                 <option key={value} value={value}>

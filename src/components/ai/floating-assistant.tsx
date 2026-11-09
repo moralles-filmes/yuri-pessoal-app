@@ -23,7 +23,7 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { PRESSAO } from "@/components/ui/materiais";
 import { useLazyDialog } from "@/components/shared/use-lazy-dialog";
 import {
   avisoDoBotao,
@@ -100,9 +100,9 @@ export function FloatingAssistant({
   return (
     <>
       {!oculto && (
-        <Button
+        <button
           type="button"
-          size="icon"
+          data-casca
           // D3 — o selo é um número; o NOME do botão leva a frase inteira. Um span sr-only dentro
           // do botão seria lido como conteúdo depois do nome, e alguns leitores o omitem.
           aria-label={
@@ -113,12 +113,18 @@ export function FloatingAssistant({
           aria-expanded={estado.aberto}
           onClick={() => despachar({ tipo: "abriu" })}
           className={cn(
+            // Botão nativo: o `Button` traz fundo próprio, e o material (`background` abreviado)
+            // disputaria com ele. `fixed` já posiciona o selo `absolute`.
             // z-40: acima do Header (`sticky z-30`), abaixo do overlay do Sheet (`z-50`).
-            "fixed bottom-4 z-40 size-12 rounded-full shadow-lg",
+            "vidro-casca",
+            PRESSAO,
+            "fixed bottom-4 z-40 size-12 rounded-full",
+            "inline-flex items-center justify-center",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
             canto === "direita" ? "right-4" : "left-4",
           )}
         >
-          <Sparkles className="size-5" />
+          <Sparkles className="size-5 text-nav-ativo-ink" />
           {aviso && (
             <span
               aria-hidden
@@ -126,13 +132,13 @@ export function FloatingAssistant({
                 "absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-medium",
                 aviso.tipo === "proposta"
                   ? "bg-destructive text-destructive-foreground"
-                  : "bg-primary text-primary-foreground",
+                  : "bg-primary-fill text-primary-fill-foreground",
               )}
             >
               {aviso.quantas > 0 ? aviso.quantas : "•"}
             </span>
           )}
-        </Button>
+        </button>
       )}
 
       {montado && (

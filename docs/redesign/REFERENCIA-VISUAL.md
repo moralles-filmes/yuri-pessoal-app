@@ -34,7 +34,7 @@ no §6. Tokens, paleta e regras de uso continuam sendo os do `TOKENS.md`.
 ## 1. O que vale e o que não vale do print
 
 **Vale:**
-- o banner de boas-vindas no topo;
+- a abertura no topo;
 - a fileira de quatro indicadores logo abaixo dele;
 - a grade de blocos em cartões brancos, de raio grande, borda sutil e sombra leve;
 - o ícone em quadrado colorido;
@@ -52,31 +52,17 @@ no §6. Tokens, paleta e regras de uso continuam sendo os do `TOKENS.md`.
 
 ## 2. A linguagem comum — as duas telas usam as MESMAS peças
 
-⛔ **Quem chegar primeiro (04-A ou 06) cria as peças; a outra reusa.** Duas cópias do banner
+⛔ **Quem chegar primeiro (04-A ou 06) cria as peças; a outra reusa.** Duas cópias da abertura
 ou do indicador divergem na primeira edição, como já aconteceu com os seletores de visão (F3).
 
-### 2.1 Banner de boas-vindas
+### 2.1 Abertura (substituiu o banner na REDESIGN-09-D)
 
-- Largura total do conteúdo, faixa azul em degradê **suave**, feito com tons de `--primary`
-  (mais claro à esquerda, mais profundo à direita). Ilustração de montanhas no canto
-  inferior direito, **desenhada em SVG inline por nós**. Sem foto, sem banco de imagens, sem
-  arquivo de terceiros.
-- **Esquerda:**
-  - saudação pelo horário de **Brasília** ("Bom dia", "Boa tarde" ou "Boa noite"), calculado no
-    servidor com `timeInSaoPaulo`, nunca com a hora do processo;
-  - o primeiro nome, da mesma fonte que o menu do usuário já usa;
-  - uma linha que diz do que trata a tela.
-- **Direita (`lg` para cima):** uma frase curta numa caixa translúcida.
-  - A frase sai de uma **lista fixa** e é escolhida pelo dia (`hojeISO()`), então fica a mesma o
-    dia inteiro e não troca a cada recarregar.
-  - A lista passa pelo vocabulário de `src/lib/tone/`, com teste.
-- **Celular:** banner mais baixo, sem a frase, com a ilustração reduzida ou ausente.
-- **Escuro:** degradê mais profundo. O texto branco precisa medir **≥ 4,5:1 sobre o ponto mais
-  claro** do degradê, nos dois temas, e a medição fica registrada.
-- **Server Component, zero JS no cliente.** O emoji da saudação vai com `aria-hidden`.
-- ⚠️ **Exceção declarada à regra 7 do `TOKENS.md` §8** ("sem gradiente forte"): o banner é a
-  **única** superfície com degradê do sistema. Ele não abre precedente para card, botão ou
-  gráfico.
+- Sem caixa, direto sobre a névoa. Só usa `foreground` e `muted-on-fog`, medidos sobre o pico das manchas.
+- **Esquerda:** a data de hoje por extenso; a saudação grande ("Bom dia", "Boa tarde" ou "Boa noite", pelo horário de **Brasília**, calculada no servidor) com o primeiro nome (54 px, 38 px no celular), no único `<h1>` da página; a linha que diz do que trata a tela.
+- **Direita:** os botões de ação, se a tela tiver. `/dashboard` e `/dashboard/financeiro` não têm: "Personalizar" fica na barra de período, porque depende de estado do cliente.
+- Vem antes das barras de filtro e substitui o `PageHeader` nessas duas telas.
+- **Server Component, zero JS no cliente.**
+- Saíram a faixa em degradê, a montanha, a caixa e a frase do dia, o emoji e os tokens `--banner-from`/`--banner-to`.
 
 ### 2.2 Indicador (os quatro números do topo)
 
@@ -143,7 +129,7 @@ ou do indicador divergem na primeira edição, como já aconteceu com os seletor
 
 De cima para baixo, em 1280 px ou mais:
 
-1. **Banner**, com a linha "Aqui está um resumo da sua vida financeira".
+1. **Abertura**, com a linha "Aqui está um resumo da sua vida financeira".
 2. **Período e base** (Caixa realizado × Competência, da 03-E), visíveis.
 3. **Alertas**, que já existem: faixa compacta, só quando há algum.
 4. **Quatro indicadores:**
@@ -171,7 +157,7 @@ De cima para baixo, em 1280 px ou mais:
    - faturas dos próximos meses.
 
 **Celular (390 px):**
-- banner compacto;
+- abertura compacta;
 - Saldo das contas grande;
 - os outros três indicadores menores em linha, com `min-w-0` e `truncate`;
 - o gráfico;
@@ -180,7 +166,7 @@ De cima para baixo, em 1280 px ou mais:
 
 ## 4. Relatório — REDESIGN-04-A2 (`/relatorios`, aba Financeiro)
 
-- Mesmas peças do §2, **sem banner**, porque é tela de análise.
+- Mesmas peças do §2, **sem abertura**, porque é tela de análise.
 - Leva a barra de filtros completa que a 04-A previa: período, base, responsabilidade, conta,
   cartão, pessoa e categoria.
 - Mantém a sequência Resumo → Evolução → Composição → Detalhamento → Projeções.
@@ -190,7 +176,7 @@ De cima para baixo, em 1280 px ou mais:
 
 1. **Barra:** seletor de período do dashboard, **corrigindo o F3** (`aria-pressed`, a quinta
    cópia registrada na 07-A), e o botão **Personalizar**, que já existe.
-2. **Banner**, com a linha "Aqui está um resumo da sua vida em um só lugar".
+2. **Abertura**, com a linha "Aqui está um resumo da sua vida em um só lugar".
 3. **Resumo financeiro:** faixa fixa com quatro indicadores. Ela **não** é um dos 11 cards e não
    entra no "Personalizar".
    - **Saldo das contas**, com o olho;
@@ -230,7 +216,7 @@ nova e sem migration. Senão ficam fora e o desvio vai para o §6.
 | No print | Aqui | Por quê |
 | --- | --- | --- |
 | Sidebar e barra de abas do celular | ficam como estão | sua decisão, 2026-10-25 |
-| Montanha fotográfica | SVG desenhado por nós | sem asset de terceiros; peso zero de JS; funciona no escuro |
+| Montanha fotográfica | removida na 09-D | a abertura em vidro não tem ilustração |
 | Rosca em tons de azul | paleta validada de 8 slots | categorias precisam se distinguir (`TOKENS.md` §7) |
 | Logos dos bancos | marcador na cor do cartão + nome | sem marca de terceiros; a cor já está cadastrada |
 | Últimos 4 dígitos do cartão | nome + bandeira | o sistema não guarda os dígitos; guardá-los exigiria migration |
@@ -265,6 +251,6 @@ nova e sem migration. Senão ficam fora e o desvio vai para o §6.
   como na 01-C, conferida a 390, 768, 1280 e 1440 px e nos dois temas, e **aprovada por você
   antes de qualquer código de produção**. As prévias da 01-C foram aprovadas em 2026-09-20 **sem**
   este visual.
-- O contraste do banner é medido e registrado nos dois temas.
-- `perf:bundle` verde, e o banner não acrescenta JS de cliente.
+- O contraste da abertura é medido e registrado nos dois temas.
+- `perf:bundle` verde, e a abertura não acrescenta JS de cliente.
 - Nenhum valor, nome ou saldo real em documento, teste ou prévia versionada.

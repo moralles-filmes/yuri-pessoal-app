@@ -146,7 +146,7 @@ export function MemoryClient({ memorias }: { readonly memorias: readonly Memoria
         geral NÃO vira proposta. Dizer isso aqui é o que impede o dono de achar que o
         assistente ignorou o pedido dele.
       */}
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-on-fog">
         Preferências gerais — como você quer ser chamado, que formato prefere — escreva aqui. O
         assistente só propõe memória dentro de uma conversa de módulo.
       </p>

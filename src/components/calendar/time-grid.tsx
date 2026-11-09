@@ -8,6 +8,7 @@ import { eventsForDay } from "@/lib/calendar/events";
 import type { CalendarEventLite } from "@/lib/calendar/events";
 import { dayHours, layoutDayEvents } from "@/lib/calendar/grid";
 import type { GridDay } from "@/lib/calendar/grid";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 const HOUR_PX = 48;
 const TOTAL_PX = HOUR_PX * 24;
@@ -37,7 +38,7 @@ export function TimeGridView({
   const hasAllDay = allDayByDay.some((list) => list.length > 0);
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
+    <div className={`${MATERIAL_CARTAO} overflow-hidden rounded-[16px]`}>
       {showDayHeaders && (
         <div className="grid border-b" style={{ gridTemplateColumns: gridTemplate }}>
           <div className="border-r" />

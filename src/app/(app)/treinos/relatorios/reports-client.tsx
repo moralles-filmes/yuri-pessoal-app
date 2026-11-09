@@ -206,7 +206,7 @@ export function ReportsClient({
           </>
         ) : (
           <Field label="Janela">
-            <div className="flex h-9 items-center rounded-md border border-input px-3 text-sm text-muted-foreground">
+            <div className="flex h-9 items-center rounded-md border border-input px-3 text-sm text-muted-on-fog">
               {shortDateLabelIso(range.from)} a {shortDateLabelIso(range.to)}
             </div>
           </Field>

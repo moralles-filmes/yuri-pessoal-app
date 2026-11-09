@@ -51,6 +51,7 @@ import {
   type AcaoDaIa,
   type FiltroDoHistorico,
 } from "@/lib/ai/approval/history";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 /**
  * ⚠️ INSTANTE LIDO EM BRASÍLIA, nunca `.slice(0,10)` de `timestamptz`. `started_at`,
@@ -154,7 +155,7 @@ function LinhaDaAcao({ acao }: { readonly acao: AcaoDaIa }) {
     acao.propostaId !== null;
 
   return (
-    <li className="rounded-xl border bg-card p-3 text-sm">
+    <li className={`${MATERIAL_CARTAO} rounded-[16px] p-3 text-sm`}>
       {/* `min-w-0` no lado texto: rótulo longo não empurra os selos para fora do card. */}
       <div className="flex flex-wrap items-center gap-2">
         <Badge
@@ -422,7 +423,7 @@ export function ActionHistoryClient({
         mesma mentira que a subfase existe para impedir.
       */}
       {saturado && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-on-fog">
           Esta tela mostra as {teto} ações mais recentes. Pode haver mais no histórico.
         </p>
       )}

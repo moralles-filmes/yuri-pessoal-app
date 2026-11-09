@@ -286,7 +286,7 @@ export function GavetaDeRegistrosImpl({
             alvo.focus({ preventScroll: true });
           }
         }}
-        className="gap-0 p-0 data-[side=bottom]:max-h-[88dvh] data-[side=bottom]:rounded-t-2xl data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+        className="gap-0 p-0 data-[side=bottom]:max-h-[88dvh] data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
       >
         <div data-ocultar={oculto ? "true" : "false"} className="group/olho flex min-h-0 flex-1 flex-col">
           <SheetHeader className="gap-1 border-b px-4 pt-4 pr-12 pb-3">

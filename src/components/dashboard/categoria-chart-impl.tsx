@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/format";
 import type { CategoriaSlice } from "@/lib/finance/dashboard";
 import {
+  anguloDoVao,
   CHART_COLORS,
   tooltipItemStyle,
   tooltipLabelStyle,
@@ -27,6 +28,7 @@ export function CategoriaChart({ data }: { data: CategoriaSlice[] }) {
   if (positivos.length === 0) {
     return (
       <EmptyState
+        nivel={3}
         icon={PieIcon}
         title="Sem gastos no período"
         description="Lance despesas para ver a distribuição por categoria."
@@ -60,14 +62,15 @@ export function CategoriaChart({ data }: { data: CategoriaSlice[] }) {
           nameKey="name"
           innerRadius={58}
           outerRadius={92}
-          paddingAngle={2}
+          paddingAngle={anguloDoVao(chartData.length, 75)}
+          isAnimationActive={false}
           strokeWidth={1}
         >
           {chartData.map((d, i) => (
             <Cell
               key={d.categoryId ?? i}
               fill={d.color ?? CHART_COLORS[i % CHART_COLORS.length]}
-              stroke="var(--card)"
+              stroke="var(--glass-solid)"
             />
           ))}
         </Pie>

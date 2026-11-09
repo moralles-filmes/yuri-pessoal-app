@@ -178,13 +178,13 @@ export function SessionDetailClient({
           {SESSION_STATUS_LABELS[session.status]}
         </Badge>
         {session.startedAt && (
-          <span className="text-sm text-muted-foreground">
+          <span className="text-sm text-muted-on-fog">
             {timeInSaoPaulo(new Date(session.startedAt))}
             {session.endedAt && ` às ${timeInSaoPaulo(new Date(session.endedAt))}`}
           </span>
         )}
         {session.bodyWeightKg !== null && (
-          <span className="text-sm text-muted-foreground">
+          <span className="text-sm text-muted-on-fog">
             Peso corporal: {new Intl.NumberFormat("pt-BR").format(session.bodyWeightKg)} kg
           </span>
         )}
@@ -282,7 +282,7 @@ export function SessionDetailClient({
       {/* ── Exercícios ── */}
       <div className="space-y-3">
         {orderChanged && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-on-fog">
             A ordem executada foi diferente da planejada — cada exercício mostra as duas.
           </p>
         )}

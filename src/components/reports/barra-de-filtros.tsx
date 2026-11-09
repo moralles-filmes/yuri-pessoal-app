@@ -63,7 +63,7 @@ const ROTULO_DO_TIPO: Record<TipoDeRecorte, string> = {
 
 /** Mesmo desenho dos inputs do projeto; ligado, a borda vira primária (e não só a cor: há o chip). */
 const SELECT_BASE =
-  "h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 text-sm [&>option]:bg-background [&>option]:text-foreground";
+  "h-9 w-full min-w-0 campo-nativo px-3 text-sm [&>option]:bg-background [&>option]:text-foreground";
 const SELECT_LIGADO = "border-primary ring-1 ring-primary";
 
 function CamposDeRecorte({
@@ -121,7 +121,7 @@ export function SeletorDoMes({ filtros, id }: { filtros: FiltrosDoRelatorio; id:
         type="month"
         value={mes}
         onChange={(e) => router.push(urlDoRelatorio({ mes: e.target.value || mes, base, resp, recorte }))}
-        className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 text-sm"
+        className="h-9 w-full min-w-0 campo-nativo px-3 text-sm"
       />
     </div>
   );

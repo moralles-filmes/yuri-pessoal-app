@@ -93,12 +93,14 @@ describe("série futura e mês parcial são visualmente distintos do realizado",
     expect(fonte).toContain("(projetado)");
   });
 
-  it("barras: hachura e tracejado no -impl, legenda do mês parcial na fachada (altura exata)", () => {
+  it("barras: mês parcial a 35% com contorno tracejado no -impl, legenda na fachada (altura exata)", () => {
+    // 09-E: a hachura saiu das barras de entradas e saídas (a projeção a mantém).
     const fonte = ler("barras-entradas-saidas-chart-impl.tsx");
-    expect(fonte).toContain("<pattern");
+    expect(fonte).not.toContain("<pattern");
+    expect(fonte).toContain("OPACIDADE_EM_ANDAMENTO");
     expect(fonte).toContain("strokeDasharray");
-    expect(fonte).not.toContain("mês em andamento · parcial");
-    expect(ler("barras-entradas-saidas-chart.tsx")).toContain("mês em andamento · parcial");
+    expect(ler("barras-entradas-saidas-chart.tsx")).toContain("ainda em andamento");
+    expect(fonte).not.toContain("<span>ainda em andamento</span>");
   });
 
   it("04-A2: a legenda parcial só aparece com dado (fachada) e as séries/nomes são props do -impl", () => {

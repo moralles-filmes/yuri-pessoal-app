@@ -45,7 +45,7 @@ export function StudyStatusBadge({ status }: { status: StudyStatus }) {
 
 export function StudyCategoryBadge({ category }: { category: StudyCategory }) {
   return (
-    <Badge variant="outline" className="gap-1 text-muted-foreground">
+    <Badge variant="outline" className="gap-1 text-muted-on-fog">
       <span aria-hidden>{STUDY_CATEGORY_EMOJI[category]}</span>
       {STUDY_CATEGORY_LABELS[category]}
     </Badge>

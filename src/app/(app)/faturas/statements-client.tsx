@@ -433,9 +433,9 @@ function CartaoDaFatura({
   return (
     <Card
       className={cn(
-        "overflow-hidden shadow-none",
+        "overflow-hidden",
         f.estado === "atrasada" && "border-l-4 border-l-destructive",
-        v === null && "border border-dashed bg-transparent ring-0",
+        v === null && "border border-dashed border-border bg-transparent bg-none shadow-none ring-0",
       )}
     >
       <CardContent className="space-y-3 p-4">
@@ -783,7 +783,7 @@ export function StatementsClient({
             type="month"
             value={month ?? ""}
             onChange={(e) => navigate({ month: e.target.value || null })}
-            className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+            className="h-9 w-full campo-nativo px-3 text-sm"
           />
         </div>
         <div className="space-y-1.5">
@@ -885,6 +885,7 @@ export function StatementsClient({
         ) : (
           <div className="space-y-4">
             <Bloco
+              nivel={2}
               titulo="Precisam de pagamento"
               subtitulo="atrasadas primeiro, depois por vencimento"
               estado={estadoDoBloco({ ok: true, itens: grupos.pagar })}
@@ -901,6 +902,7 @@ export function StatementsClient({
               .filter((g) => g.linhas.length > 0)
               .map((g) => (
                 <Bloco
+                  nivel={2}
                   key={g.chave}
                   titulo={g.titulo}
                   subtitulo={g.subtitulo}

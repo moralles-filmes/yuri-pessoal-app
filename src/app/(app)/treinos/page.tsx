@@ -344,6 +344,7 @@ export default async function TreinosPage() {
         {dashboard.metrics.sessionCount === 0 && (
           <EmptyState
             icon={Dumbbell}
+            nivel={3}
             title="Nenhum treino registrado nesta semana ainda"
             description="Quando você finalizar uma sessão, o volume, as séries e a aderência aparecem aqui."
             className="py-8"
@@ -600,7 +601,7 @@ export default async function TreinosPage() {
         </Button>
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-on-fog">
         {groups.length} grupos musculares · incremento padrão {preferences.defaultIncrementKg}{" "}
         {preferences.weightUnit} · regra de volume:{" "}
         {preferences.countWarmupInVolume ? "aquecimento incluído" : "aquecimento fora"}. As

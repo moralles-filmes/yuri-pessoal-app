@@ -81,7 +81,7 @@ export function RegionalCard({
                 id="date_format"
                 value={fmt}
                 onChange={(e) => setFmt(e.target.value as DateFormatPreference)}
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+                className="h-9 w-full campo-nativo px-3 text-sm"
                 {...ariaDoErro("date_format-erro", erroDoFormato)}
               >
                 {DATE_FORMATS.map((f) => (

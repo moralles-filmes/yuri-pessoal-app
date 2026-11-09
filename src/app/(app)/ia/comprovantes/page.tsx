@@ -184,7 +184,7 @@ export default async function ComprovantesPage({
             </h2>
             <Link
               href={receiptsLink()}
-              className="shrink-0 text-xs font-medium text-primary hover:underline"
+              className="shrink-0 text-xs font-medium text-foreground underline"
             >
               Fechar
             </Link>
@@ -246,6 +246,7 @@ export default async function ComprovantesPage({
         {lista.itens.length === 0 ? (
           <EmptyState
             icon={FileText}
+            nivel={3}
             title="Nenhum comprovante enviado"
             description="Envie uma foto ou um PDF acima. Ele fica guardado aqui, e nada sai do sistema até você pedir a leitura."
           />
@@ -288,7 +289,7 @@ export default async function ComprovantesPage({
           dizer "estes são todos" quando não são.
         */}
         {lista.saturado && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-on-fog">
             Mostrando os {lista.teto} envios mais recentes. Há mais no histórico.
           </p>
         )}

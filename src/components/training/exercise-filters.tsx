@@ -9,6 +9,7 @@
  */
 import * as React from "react";
 import { Filter, Search, X } from "lucide-react";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,7 +132,7 @@ export function ExerciseFilters({
       </p>
 
       {open && (
-        <div className="grid gap-3 rounded-xl border bg-card/40 p-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={`${MATERIAL_LADRILHO} grid gap-3 rounded-[14px] p-4 sm:grid-cols-2 lg:grid-cols-3`}>
           <FilterSelect
             label="Grupo muscular"
             value={filters.muscleGroupId}

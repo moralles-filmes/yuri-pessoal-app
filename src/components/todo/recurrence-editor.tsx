@@ -34,6 +34,7 @@ import {
 } from "@/lib/todo/constants";
 import { describeRule, previewOccurrences, normalizeRule } from "@/lib/todo/recurrence";
 import { formatDate } from "@/lib/format";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 /** Shape do formulário (igual ao que o Zod do servidor espera). */
 export interface RecurrenceFormValue {
@@ -166,7 +167,7 @@ export function RecurrenceEditor({
   }
 
   return (
-    <div className={cn("space-y-3 rounded-xl border border-border bg-card/40 p-3", className)}>
+    <div className={cn(`${MATERIAL_LADRILHO} space-y-3 rounded-[14px] p-3`, className)}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium text-muted-foreground">Repetição</p>
         <Button

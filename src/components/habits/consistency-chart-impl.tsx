@@ -6,10 +6,12 @@
  * Importar daqui reintroduz o peso que a fachada existe para evitar. Ver `.turbo/REPORT.md`.
  */
 
+import { useMemo } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -18,60 +20,83 @@ import {
 import {
   axisTick,
   GRID_COLOR,
-  tooltipItemStyle,
-  tooltipLabelStyle,
-  tooltipStyle,
+  larguraDaBarra,
+  opacidadeDoGrupo,
+  raioDaPonta,
+  VAO_ENTRE_BARRAS,
 } from "@/components/dashboard/chart-theme";
+import { DicaDoGrafico } from "@/components/dashboard/dica-do-grafico";
+import { linhasDaDica } from "@/components/dashboard/linhas-da-dica";
+import { ObservadorDeFoco, useFocoDoGrafico } from "@/components/dashboard/use-foco-do-grafico";
 import type { HabitWeekPoint } from "@/types/database";
 
 const pct = (v: number | string) => `${Math.round(Number(v) * 100)}%`;
 
 /** Gráfico de consistência semanal (taxa de conclusão por semana, últimas 8). */
 export function ConsistencyChart({ weekly }: { weekly: HabitWeekPoint[] }) {
-  const data = weekly.map((w) => ({
-    label: w.label,
-    rate: w.rate,
-    done: w.done,
-    scheduled: w.scheduled,
-  }));
+  // Memorizado: o observador acha o índice por IDENTIDADE (ver `ObservadorDeFoco`).
+  const data = useMemo(
+    () =>
+      weekly.map((w) => ({
+        label: w.label,
+        rate: w.rate,
+        done: w.done,
+        scheduled: w.scheduled,
+      })),
+    [weekly],
+  );
+  // `ref` sai do objeto: um `ref={x.ref}` faz o lint do React tratar `x` inteiro como ref e recusar
+  // `x.dicaAtiva` na renderização.
+  const { ref: refDoGrafico, ...foco } = useFocoDoGrafico();
 
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={data} margin={{ left: 4, right: 8, top: 8 }}>
-        <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-        <XAxis
-          dataKey="label"
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          domain={[0, 1]}
-          tickFormatter={pct}
-          tick={axisTick}
-          axisLine={false}
-          tickLine={false}
-          width="auto"
-        />
-        <Tooltip
-          cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-          formatter={(value, _name, item) => {
-            const p = item?.payload as { done: number; scheduled: number };
-            return [`${pct(value as number)} (${p.done}/${p.scheduled})`, "Conclusão"];
-          }}
-          labelFormatter={(label) => `Semana de ${label}`}
-          contentStyle={tooltipStyle}
-          labelStyle={tooltipLabelStyle}
-          itemStyle={tooltipItemStyle}
-        />
-        <Bar
-          dataKey="rate"
-          name="Conclusão"
-          fill="var(--chart-1)"
-          radius={[4, 4, 0, 0]}
-          maxBarSize={44}
-        />
-      </BarChart>
-    </ResponsiveContainer>
+    <div ref={refDoGrafico} className="grafico-barras">
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={data} margin={{ left: 4, right: 8, top: 8 }} barGap={VAO_ENTRE_BARRAS}>
+          <ObservadorDeFoco dados={data} aoMudar={foco.aoMudar} />
+          <CartesianGrid vertical={false} stroke={GRID_COLOR} />
+          <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
+          <YAxis
+            domain={[0, 1]}
+            tickFormatter={pct}
+            tick={axisTick}
+            axisLine={false}
+            tickLine={false}
+            width="auto"
+          />
+          <Tooltip
+            cursor={false}
+            active={foco.dicaAtiva}
+            isAnimationActive={false}
+            content={({ payload, label }) => (
+              <DicaDoGrafico
+                titulo={`Semana de ${label}`}
+                linhas={linhasDaDica(payload ?? [], (e) => {
+                  if (typeof e.value !== "number") return null;
+                  const p = e.payload as { done: number; scheduled: number };
+                  return {
+                    nome: "Conclusão",
+                    valor: `${pct(e.value)} (${p.done}/${p.scheduled})`,
+                    dinheiro: false,
+                  };
+                })}
+              />
+            )}
+          />
+          <Bar
+            dataKey="rate"
+            name="Conclusão"
+            fill="var(--chart-1)"
+            radius={raioDaPonta("horizontal")}
+            maxBarSize={larguraDaBarra(data.length)}
+            isAnimationActive={false}
+          >
+            {data.map((d, i) => (
+              <Cell key={d.label} opacity={opacidadeDoGrupo(i, foco.foco)} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

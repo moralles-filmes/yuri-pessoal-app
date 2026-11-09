@@ -46,14 +46,27 @@ describe("page.tsx do dashboard geral", () => {
     expect(page.slice(abre, resumo)).not.toContain("</LimiteDoBloco>");
   });
 
-  it("tem o banner, a linha de apoio e o rótulo de hoje", () => {
+  it("tem a abertura, a linha de apoio e o rótulo de hoje", () => {
     expect(page).toContain("Aqui está um resumo da sua vida em um só lugar.");
-    expect(page).toContain("<BannerDeBoasVindas");
+    expect(page).toContain("<Abertura");
+    expect(page).toContain("dataDaAbertura(");
     expect(page).toContain("rotuloDeHoje(");
+  });
+
+  it("o título da página é o <h1> da abertura: nenhum PageHeader, nenhuma frase do dia", () => {
+    expect(page).not.toContain("<PageHeader");
+    expect(page).not.toContain("FRASES_DO_BANNER");
   });
 });
 
 describe("general-dashboard-client.tsx", () => {
+  it("recebe a abertura por prop e a põe antes da barra de período; não tem <h1>", () => {
+    expect(cliente).toContain("{abertura}");
+    expect(cliente.indexOf("{abertura}")).toBeLessThan(cliente.indexOf("<PeriodToolbar"));
+    expect(cliente).not.toContain("<h1");
+    expect(cliente).not.toMatch(/\bbanner\b/);
+  });
+
   it("grava o período PADRÃO (R7), não o da URL", () => {
     expect(cliente).toContain("payloadDoSalvar(");
     expect(cliente).toContain("Período padrão");

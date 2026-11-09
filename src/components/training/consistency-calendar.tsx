@@ -57,7 +57,7 @@ const STATE_STYLE: Record<ConsistencyState, string> = {
 };
 
 /** O anel de hoje: o mesmo na célula e na legenda. */
-const HOJE_STYLE = "ring-2 ring-primary ring-offset-1 ring-offset-background";
+const HOJE_STYLE = "outline-2 outline-solid outline-offset-1 outline-primary";
 
 const ORDER: ConsistencyState[] = [
   "treinado",

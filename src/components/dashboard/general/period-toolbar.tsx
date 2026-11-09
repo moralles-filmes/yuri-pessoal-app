@@ -100,15 +100,15 @@ export function PeriodToolbar({
             value={de}
             onChange={(e) => setDe(e.target.value)}
             aria-label="Data inicial"
-            className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+            className="h-8 campo-nativo px-2.5 text-sm"
           />
-          <span className="text-muted-foreground">–</span>
+          <span className="text-muted-on-fog">–</span>
           <input
             type="date"
             value={ate}
             onChange={(e) => setAte(e.target.value)}
             aria-label="Data final"
-            className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+            className="h-8 campo-nativo px-2.5 text-sm"
           />
           <Button
             size="sm"
@@ -137,7 +137,7 @@ export function PeriodToolbar({
               "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
               window.view === v
                 ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
+                : "text-muted-on-fog hover:text-foreground",
             )}
           >
             {DASH_VIEW_LABELS[v]}
@@ -145,7 +145,7 @@ export function PeriodToolbar({
         ))}
       </div>
 
-      <span className="ml-auto text-sm font-medium text-muted-foreground">
+      <span className="ml-auto text-sm font-medium text-muted-on-fog">
         {windowLabel(window)}
       </span>
     </div>

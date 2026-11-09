@@ -15,7 +15,7 @@ export function Logo({
     <div className={cn("flex items-center gap-2.5", className)}>
       <span
         aria-hidden
-        className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary font-bold text-primary-foreground shadow-sm ring-1 ring-black/5"
+        className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary-fill font-bold text-primary-fill-foreground shadow-sm ring-1 ring-black/5"
       >
         Y
       </span>

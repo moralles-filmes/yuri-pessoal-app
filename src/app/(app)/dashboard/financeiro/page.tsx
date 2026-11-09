@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { PageHeader } from "@/components/shared/page-header";
-import { BannerDeBoasVindas } from "@/components/shared/painel/banner-de-boas-vindas";
+import { Abertura } from "@/components/shared/painel/abertura";
 import { getUltimasTransacoes, lerFinanceiro, lerSaldoAte } from "@/lib/finance/queries";
 import { getDisplayName } from "@/lib/settings/queries";
 import {
@@ -48,7 +47,7 @@ import { mesDaUrl, pedidoDaUrl, urlSemDetalhe } from "@/lib/painel/detalhe-url";
 import { vistaDaGaveta } from "@/lib/painel/gaveta";
 import { hrefsDoPainel } from "@/lib/painel/hrefs-do-painel";
 import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
-import { FRASES_DO_BANNER, fraseDoDia, saudacaoPara } from "@/lib/painel/saudacao";
+import { dataDaAbertura, saudacaoPara } from "@/lib/painel/saudacao";
 import { DashboardClient } from "./financial-dashboard-client";
 
 export const metadata: Metadata = { title: "Dashboard financeiro" };
@@ -77,7 +76,7 @@ export default async function DashboardFinanceiroPage({
   // UMA rodada de leituras, sem N+1 (RLS escopa o dono). `lerFinanceiro` é a MESMA chamada do
   // relatório, com os recebíveis crus (com a pessoa) a mais (D-A-14). As outras três são do painel:
   // o saldo cortado em hoje (K2, `null` = não leu), as últimas transações (falha vira o estado de
-  // falha do BLOCO, nunca a página inteira) e o nome do banner (que nunca lança).
+  // falha do BLOCO, nunca a página inteira) e o nome da abertura (que nunca lança).
   const [leitura, saldoAte, ultimasLeitura, nome] = await Promise.all([
     lerFinanceiro({ janela, escopo: ESCOPO_PAINEL }),
     lerSaldoAte(nextDayISO(hoje)),
@@ -262,28 +261,24 @@ export default async function DashboardFinanceiroPage({
     meses: projecao.map((p) => p.mes),
   });
 
-  // O banner é Server Component, sem JS de cliente: chega pronto ao cliente como `ReactNode`.
+  // A abertura é Server Component, sem JS de cliente: chega pronto ao cliente como `ReactNode`.
   const [anoSel, mesNumSel] = mesSel.split("-").map(Number);
   const mesPorExtenso = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(
     new Date(anoSel, mesNumSel - 1, 1),
   );
-  const banner = (
-    <BannerDeBoasVindas
+  const abertura = (
+    <Abertura
+      data={dataDaAbertura(hoje)}
       saudacao={saudacaoPara(horaDeBrasiliaAgora())}
       nome={nome}
-      linha={`Aqui está o resumo de ${mesPorExtenso}.`}
-      frase={fraseDoDia(hoje, FRASES_DO_BANNER)}
+      linha={`Aqui está o resumo financeiro de ${mesPorExtenso}.`}
     />
   );
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Dashboard financeiro"
-        description="Quanto você realmente gastou e quanto vai receber de volta."
-      />
       <DashboardClient
-        banner={banner}
+        abertura={abertura}
         ocultos={ocultos}
         completude={completude}
         mesSel={mesSel}

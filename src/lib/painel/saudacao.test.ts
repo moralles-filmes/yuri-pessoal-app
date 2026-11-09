@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { termosProibidosEm } from "@/lib/tone/vocabulary";
-import { FRASES_DO_BANNER, fraseDoDia, saudacaoPara } from "./saudacao";
+import { dataDaAbertura, saudacaoPara, tituloDaAbertura } from "./saudacao";
 
 describe("saudacaoPara", () => {
   it("respeita as bordas de cada faixa", () => {
@@ -18,47 +17,20 @@ describe("saudacaoPara", () => {
   });
 });
 
-describe("fraseDoDia", () => {
-  const lista = ["Frase A", "Frase B", "Frase C"];
-
-  it("o mesmo dia devolve sempre a mesma frase", () => {
-    expect(fraseDoDia("2026-11-02", lista)).toBe(fraseDoDia("2026-11-02", lista));
-  });
-
-  it("dias consecutivos percorrem a lista, inclusive na virada do mês e do ano", () => {
-    const dias = ["2026-11-29", "2026-11-30", "2026-12-01"];
-    const frases = dias.map((d) => fraseDoDia(d, lista));
-    expect(new Set(frases).size).toBe(3);
-    const virada = ["2026-12-31", "2027-01-01", "2027-01-02"].map((d) => fraseDoDia(d, lista));
-    expect(new Set(virada).size).toBe(3);
-  });
-
-  it("a lista dá a volta depois de tantos dias quanto ela tem de frases", () => {
-    expect(fraseDoDia("2026-11-05", lista)).toBe(fraseDoDia("2026-11-02", lista));
-    expect(fraseDoDia("2026-11-03", lista)).not.toBe(fraseDoDia("2026-11-02", lista));
-  });
-
-  it("conta os dias desde 1970-01-01 (índice 0 no primeiro dia)", () => {
-    expect(fraseDoDia("1970-01-01", lista)).toBe("Frase A");
-    expect(fraseDoDia("1970-01-02", lista)).toBe("Frase B");
-    expect(fraseDoDia("1970-01-04", lista)).toBe("Frase A");
+describe("dataDaAbertura", () => {
+  it("escreve o dia da semana, o dia e o mês, com a inicial em maiúscula", () => {
+    expect(dataDaAbertura("2026-11-06")).toBe("Sexta-feira, 6 de novembro");
+    expect(dataDaAbertura("2026-03-01")).toBe("Domingo, 1 de março");
   });
 });
 
-describe("FRASES_DO_BANNER", () => {
-  it("tem ao menos 8 frases, curtas e sem repetição", () => {
-    expect(FRASES_DO_BANNER.length).toBeGreaterThanOrEqual(8);
-    expect(new Set(FRASES_DO_BANNER).size).toBe(FRASES_DO_BANNER.length);
-    for (const f of FRASES_DO_BANNER) {
-      expect(f.trim()).toBe(f);
-      expect(f.length).toBeGreaterThan(0);
-      expect(f.length).toBeLessThanOrEqual(80);
-    }
+describe("tituloDaAbertura", () => {
+  it("usa o primeiro nome e termina em ponto", () => {
+    expect(tituloDaAbertura("Boa noite", "Maria da Silva")).toBe("Boa noite, Maria.");
   });
 
-  it("nenhuma frase cobra nem prescreve", () => {
-    for (const f of FRASES_DO_BANNER) {
-      expect(termosProibidosEm(f), f).toEqual([]);
-    }
+  it("sem nome (null ou só espaços) não deixa vírgula solta", () => {
+    expect(tituloDaAbertura("Bom dia", null)).toBe("Bom dia.");
+    expect(tituloDaAbertura("Bom dia", "   ")).toBe("Bom dia.");
   });
 });

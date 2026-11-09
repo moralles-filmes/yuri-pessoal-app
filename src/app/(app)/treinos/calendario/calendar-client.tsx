@@ -47,6 +47,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_LADRILHO, MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -125,7 +126,7 @@ const VIEW_LABELS: Record<View, string> = {
 };
 
 const STATUS_STYLES: Record<StatusExibido, string> = {
-  planejado: "border-border bg-card",
+  planejado: MATERIAL_LADRILHO,
   hoje: "border-primary/50 bg-primary/10",
   atrasado: "border-destructive/40 bg-destructive/5",
   concluido: "border-emerald-500/40 bg-emerald-500/10",
@@ -134,7 +135,7 @@ const STATUS_STYLES: Record<StatusExibido, string> = {
   cancelado: "border-border bg-muted/40 line-through opacity-70",
   // G2 (REDESIGN-07-C): descanso era passado por derivePlannedStatus no mês e na lista e saía
   // "Atrasado", em tom de alarme. Agora tem o tratamento neutro que a semana já dava.
-  descanso: "border-dashed border-border bg-transparent text-muted-foreground",
+  descanso: "border-dashed border-border bg-transparent text-muted-on-fog",
 };
 
 /** O status do chip do mês também em forma, não só em cor (D4). */
@@ -300,7 +301,7 @@ export function CalendarClient({
       </PageHeader>
 
       {/* Barra de navegação e visão */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+      <div className={`${MATERIAL_CARTAO} flex flex-wrap items-center gap-2 rounded-[16px] p-3`}>
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
@@ -367,7 +368,7 @@ export function CalendarClient({
 
       {/* Aderência do que já passou */}
       {adherence.due > 0 && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-on-fog">
           No período carregado: <strong>{adherence.done}</strong> concluídos ·{" "}
           <strong>{adherence.missed}</strong> não realizados · <strong>{adherence.open}</strong>{" "}
           ainda em aberto de {adherence.due} dias já vencidos
@@ -571,7 +572,7 @@ function DayColumn({
         <span
           className={cn(
             "text-xs font-medium",
-            isToday ? "text-primary" : "text-muted-foreground",
+            isToday ? "font-semibold text-foreground" : "text-muted-on-fog",
           )}
         >
           {label}
@@ -625,7 +626,7 @@ function DraggableEntry({
 
   if (entry.entryKind === "descanso") {
     return (
-      <div className="flex items-center gap-1.5 rounded-lg border border-dashed p-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-1.5 rounded-lg border border-dashed p-2 text-xs text-muted-on-fog">
         <Moon className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{entry.title ?? "Descanso"}</span>
         <button

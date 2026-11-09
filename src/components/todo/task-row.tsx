@@ -29,6 +29,7 @@ import {
   Archive,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CirculoDeConcluir } from "@/components/shared/circulo-de-concluir";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -56,6 +57,7 @@ import {
   ScheduleChip,
 } from "@/components/todo/badges";
 import type { TodoProject, TodoTask } from "@/lib/todo/types";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 export interface TaskRowActions {
   onOpen: (task: TodoTask) => void;
@@ -113,7 +115,7 @@ export function TaskRow({
   return (
     <div
       className={cn(
-        "group flex items-start gap-2 rounded-xl border border-border bg-card px-2.5 py-2 transition-colors",
+        `${MATERIAL_CARTAO} group flex items-start gap-2 rounded-[16px] px-2.5 py-2 transition-colors`,
         overdue && "border-destructive/30",
         done && "opacity-60",
         className,
@@ -131,14 +133,16 @@ export function TaskRow({
         />
       )}
 
-      <Checkbox
+      {/* 44 px de toque sem sobrepor ninguém: a margem negativa consome o gap (-mx-2) e o
+          py-2 da linha (-my-2); o título desce 4 px (mt-1) para ficar na altura do círculo. */}
+      <CirculoDeConcluir
         checked={done}
         onCheckedChange={() => actions.onToggleComplete(task)}
         aria-label={done ? `Reabrir ${task.title}` : `Concluir ${task.title}`}
-        className="mt-1"
+        className="-mx-2 -my-2"
       />
 
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="mt-1 min-w-0 flex-1 space-y-1">
         <div className="flex items-start gap-1.5">
           {expandable && (
             <button

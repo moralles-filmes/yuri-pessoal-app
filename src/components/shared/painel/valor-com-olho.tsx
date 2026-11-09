@@ -4,8 +4,8 @@
  * de tela ouve "valor oculto".
  *
  * Sem `"use client"` de propósito: o olho age só por CSS, então a peça serve a Server Components
- * (o `BlocoDoCaixa`, o relatório). Fora de um `OlhoDosValores` o seletor não casa e o texto
- * aparece normalmente — é o caso do bloco do caixa no painel.
+ * (o `BlocoDoCaixa`, o relatório, a legenda e o centro dos gráficos). Fora de um `OlhoDosValores` o
+ * seletor não casa e o texto aparece normalmente.
  */
 export function ValorComOlho({ texto }: { texto: string }) {
   return (

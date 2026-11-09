@@ -123,6 +123,7 @@ import type {
   TodoSummary,
   TodoTask,
 } from "@/lib/todo/types";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 /* ───────────────────────── Carregamento sob demanda ─────────────────────────
  *
@@ -1169,7 +1170,7 @@ function TodoSummaryStrip({ summary }: { summary: TodoSummary }) {
         <div
           key={item.label}
           className={cn(
-            "rounded-lg border border-border bg-card px-2.5 py-1.5",
+            `${MATERIAL_CARTAO} rounded-[16px] px-2.5 py-1.5`,
             item.danger && "border-destructive/30",
           )}
         >
@@ -1713,7 +1714,7 @@ function ArchivedProjects({
       {projects.map((project) => (
         <li
           key={project.id}
-          className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2"
+          className={`${MATERIAL_CARTAO} flex items-center gap-2 rounded-[16px] px-3 py-2`}
         >
           <ColorDot color={project.color} />
           <button

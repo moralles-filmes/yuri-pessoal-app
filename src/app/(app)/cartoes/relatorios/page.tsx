@@ -20,6 +20,7 @@ import {
 import { hojeISO } from "@/lib/format";
 import { COOKIE_DO_OLHO, valoresOcultos } from "@/lib/painel/olho";
 import { cn } from "@/lib/utils";
+import { MATERIAL_PILULA } from "@/components/ui/materiais";
 
 export const metadata: Metadata = { title: "Relatórios de cartão" };
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ const TEXTO_DA_BASE: Record<BaseDoRelatorio, string> = {
   vencimento: "Por vencimento — o mês em que a fatura vence (quando o dinheiro sai).",
 };
 
-const CLASSE_DO_SELETOR = "inline-flex shrink-0 overflow-hidden rounded-lg border bg-card";
+const CLASSE_DO_SELETOR = `${MATERIAL_PILULA} inline-flex shrink-0 overflow-hidden rounded-full`;
 const CLASSE_DO_LINK =
   "border-r px-3 py-1.5 text-sm whitespace-nowrap last:border-r-0 hover:bg-muted/50";
 
@@ -95,7 +96,7 @@ export default async function RelatoriosDeCartaoPage({
           title="Relatórios de cartão"
           description="Quanto passou pelas faturas, quanto foi seu e quanto foi de terceiros."
         />
-        <p className="border-l-2 border-primary pl-2 text-xs text-muted-foreground">
+        <p className="border-l-2 border-primary pl-2 text-xs text-muted-on-fog">
           {TEXTO_DA_BASE[dados.base]} Total = minha parte + parte dos terceiros, fatura a fatura.
         </p>
       </div>
@@ -109,7 +110,7 @@ export default async function RelatoriosDeCartaoPage({
               aria-current={b.valor === dados.base ? "page" : undefined}
               className={cn(
                 CLASSE_DO_LINK,
-                b.valor === dados.base && "bg-primary/10 font-semibold text-primary",
+                b.valor === dados.base && "bg-primary/10 font-semibold text-foreground",
               )}
             >
               {b.rotulo}
@@ -124,7 +125,7 @@ export default async function RelatoriosDeCartaoPage({
               aria-current={p === dados.n ? "page" : undefined}
               className={cn(
                 CLASSE_DO_LINK,
-                p === dados.n && "bg-primary/10 font-semibold text-primary",
+                p === dados.n && "bg-primary/10 font-semibold text-foreground",
               )}
             >
               {p} meses
@@ -142,14 +143,14 @@ export default async function RelatoriosDeCartaoPage({
         <input type="hidden" name="base" value={dados.base} />
         <input type="hidden" name="meses" value={dados.n} />
         <div className="min-w-0 space-y-1">
-          <label htmlFor="cartao-do-relatorio" className="block text-xs text-muted-foreground">
+          <label htmlFor="cartao-do-relatorio" className="block text-xs text-muted-on-fog">
             Cartão
           </label>
           <select
             id="cartao-do-relatorio"
             name="cartao"
             defaultValue={dados.cardId ?? ""}
-            className="h-8 w-full max-w-full min-w-0 rounded-lg border border-input bg-background px-2 text-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none sm:w-64"
+            className="h-8 w-full max-w-full min-w-0 campo-nativo px-2 text-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none sm:w-64"
           >
             <option value="">Todos os cartões</option>
             {cards.map((c) => (

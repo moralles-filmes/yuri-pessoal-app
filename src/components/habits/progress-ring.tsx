@@ -2,7 +2,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * Anel de progresso (SVG) até a meta. Usado no rastreador de água e em cards de
- * progresso. Cores via tokens/hex do hábito — legível em dark e light.
+ * progresso. Cores via tokens/hex do hábito — legível em dark e light. O trilho é o `--track` do
+ * vidro; só o deslocamento do traço anima, e `prefers-reduced-motion` o desliga.
  */
 export function ProgressRing({
   value,
@@ -37,7 +38,7 @@ export function ProgressRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="var(--muted)"
+          stroke="var(--track)"
           strokeWidth={stroke}
         />
         <circle
@@ -50,7 +51,7 @@ export function ProgressRing({
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          className="transition-all duration-500"
+          className="transition-[stroke-dashoffset] duration-500 motion-reduce:transition-none"
         />
       </svg>
       <div className="absolute inset-0 grid place-items-center text-center">

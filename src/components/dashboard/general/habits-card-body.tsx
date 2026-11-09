@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CirculoDeConcluir } from "@/components/shared/circulo-de-concluir";
 import { cn } from "@/lib/utils";
 import { setHabitDone } from "@/lib/actions/habits";
 import { formatAmount, formatHabitValue } from "@/lib/habits/constants";
@@ -14,14 +14,14 @@ import type { HabitsCardData } from "@/lib/dashboard/types";
 const RAIO = 26;
 const CIRCUNFERENCIA = 2 * Math.PI * RAIO;
 
-/** Anel SVG inline (sem biblioteca): fundo `muted`, progresso `primary`, começa às 12h. */
+/** Anel SVG inline (sem biblioteca): trilho `track`, progresso `primary`, começa às 12h. */
 function AnelDoDia({ feitos, agendados }: { feitos: number; agendados: number }) {
   const fracao = agendados > 0 ? Math.min(1, Math.max(0, feitos / agendados)) : 0;
   return (
     <div className="flex shrink-0 items-center gap-3">
       <div className="relative size-16">
         <svg viewBox="0 0 64 64" className="size-16" aria-hidden="true">
-          <circle cx="32" cy="32" r={RAIO} fill="none" strokeWidth="6" stroke="var(--muted)" />
+          <circle cx="32" cy="32" r={RAIO} fill="none" strokeWidth="6" stroke="var(--track)" />
           <circle
             cx="32"
             cy="32"
@@ -106,9 +106,11 @@ export function HabitsCardBody({
           listItems.map((h) => (
             <label
               key={h.id}
-              className="flex cursor-pointer items-center gap-2.5 text-sm"
+              className="flex min-h-11 cursor-pointer items-center text-sm"
             >
-              <Checkbox
+              {/* O botão de 44 px é a própria altura da linha (min-h-11); o espaço transparente
+                  dele já faz o papel do gap, por isso a linha não tem gap. */}
+              <CirculoDeConcluir
                 checked={h.done}
                 disabled={busy}
                 aria-label={`Concluir ${h.name}`}

@@ -10,6 +10,7 @@ import { buscaLink } from "@/components/search/busca-links";
 import { globalSearch } from "@/lib/actions/search";
 import { searchIcon } from "@/components/search/search-meta";
 import type { SearchGroup } from "@/lib/search/types";
+import { MATERIAL_CARTAO } from "@/components/ui/materiais";
 
 /**
  * Página de busca global (Fase 13): caixa de busca + resultados agrupados por tipo.
@@ -138,7 +139,7 @@ export function BuscaClient({
                     <li key={`${r.type}-${r.id}`}>
                       <Link
                         href={r.link}
-                        className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/40"
+                        className={`${MATERIAL_CARTAO} flex items-center gap-3 rounded-[16px] p-3 transition-colors hover:border-primary/40`}
                       >
                         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
                           <Icon className="size-4" />

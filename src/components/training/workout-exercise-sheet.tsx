@@ -798,7 +798,7 @@ function Inner({
           </TabsContent>
         </Tabs>
 
-        <div className="sticky bottom-0 -mx-4 border-t bg-background px-4 py-3">
+        <div className="sticky bottom-0 -mx-4 border-t bg-popover-solid px-4 py-3">
           <Button className="w-full" disabled={saving} onClick={save}>
             {saving && <Loader2 className="size-4 animate-spin" />}
             Salvar exercício

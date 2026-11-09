@@ -295,7 +295,7 @@ function AddModelMealForm({
             setTime(type?.defaultTime ? type.defaultTime.slice(0, 5) : "");
           }}
           aria-label="Tipo de refeição"
-          className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-8 w-full campo-nativo px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {mealTypes.map((type) => (
             <option key={type.id} value={type.id}>

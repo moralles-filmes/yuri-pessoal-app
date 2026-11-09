@@ -102,7 +102,7 @@ function NavButton({
           handle ? "pr-1 pl-0.5" : "px-2.5",
           active
             ? "font-medium text-sidebar-accent-foreground"
-            : "text-muted-foreground group-hover:text-foreground",
+            : "text-muted-on-fog group-hover:text-foreground",
         )}
       >
         {Icon && <Icon className="size-4 shrink-0" />}
@@ -160,7 +160,7 @@ function NavSection({
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="flex items-center gap-1 text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground"
+          className="flex items-center gap-1 text-[0.7rem] font-semibold tracking-wide text-muted-on-fog uppercase transition-colors hover:text-foreground"
         >
           <ChevronDown className={cn("size-3 transition-transform", !open && "-rotate-90")} />
           {title}
@@ -275,7 +275,7 @@ function NavContent({
         }
       >
         {active.length === 0 ? (
-          <p className="px-2.5 py-1 text-xs text-muted-foreground">
+          <p className="px-2.5 py-1 text-xs text-muted-on-fog">
             Nenhum projeto ainda.
           </p>
         ) : (
@@ -329,7 +329,7 @@ function NavContent({
         defaultOpen={labels.length > 0}
       >
         {labels.length === 0 ? (
-          <p className="px-2.5 py-1 text-xs text-muted-foreground">
+          <p className="px-2.5 py-1 text-xs text-muted-on-fog">
             Nenhuma etiqueta ainda.
           </p>
         ) : (
@@ -373,7 +373,7 @@ function NavContent({
         defaultOpen={navFilters.length > 0}
       >
         {navFilters.length === 0 ? (
-          <p className="px-2.5 py-1 text-xs text-muted-foreground">
+          <p className="px-2.5 py-1 text-xs text-muted-on-fog">
             Salve um filtro para acessá-lo daqui.
           </p>
         ) : (

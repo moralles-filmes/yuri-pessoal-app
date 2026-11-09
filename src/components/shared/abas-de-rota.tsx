@@ -34,7 +34,7 @@ export function AbasDeRota({ rotulo, abas }: { rotulo: string; abas: readonly Ab
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
               ativa
                 ? "border-primary font-semibold text-foreground"
-                : "border-transparent font-medium text-muted-foreground hover:text-foreground",
+                : "border-transparent font-medium text-muted-on-fog hover:text-foreground",
             )}
           >
             {aba.rotulo}

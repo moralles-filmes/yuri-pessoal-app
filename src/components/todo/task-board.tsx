@@ -40,7 +40,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CirculoDeConcluir } from "@/components/shared/circulo-de-concluir";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -59,6 +59,7 @@ import {
 } from "@/components/todo/badges";
 import { QuickTaskInput } from "@/components/todo/quick-task-input";
 import type { TodoLabel, TodoProject, TodoTask } from "@/lib/todo/types";
+import { MATERIAL_CARTAO, MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 const NO_SECTION = "__sem_secao__";
 
@@ -199,12 +200,12 @@ function BoardColumnView({
       ref={setNodeRef}
       aria-label={`Coluna ${column.title}`}
       className={cn(
-        "flex w-[17rem] shrink-0 flex-col gap-2 rounded-2xl border border-border bg-card/40 p-2.5 transition-colors sm:w-[19rem]",
+        `${MATERIAL_LADRILHO} flex w-[17rem] shrink-0 flex-col gap-2 rounded-[14px] p-2.5 transition-colors sm:w-[19rem]`,
         isOver && "border-primary/40 bg-primary/5",
       )}
     >
       <header className="flex items-center justify-between gap-1 px-0.5">
-        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold">{column.title}</h3>
+        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{column.title}</h2>
         <span className="rounded-full bg-muted px-2 py-0.5 text-[0.7rem] text-muted-foreground">
           {column.tasks.length}
         </span>
@@ -324,7 +325,7 @@ function BoardCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "space-y-2 rounded-xl border border-border bg-card p-2.5",
+        `${MATERIAL_CARTAO} space-y-2 rounded-[16px] p-2.5`,
         overdue && "border-destructive/30",
         done && "opacity-60",
         isDragging && "relative z-10 opacity-80",
@@ -335,23 +336,25 @@ function BoardCard({
           type="button"
           ref={setActivatorNodeRef}
           aria-label={`Arrastar ${task.title}`}
-          className="mt-0.5 shrink-0 cursor-grab touch-none rounded text-muted-foreground/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:cursor-grabbing"
+          className="mt-1 shrink-0 cursor-grab touch-none rounded text-muted-foreground/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:cursor-grabbing"
           {...attributes}
           {...listeners}
         >
           <GripVertical className="size-4" />
         </button>
-        <Checkbox
+        {/* 44 px de toque sem sobrepor ninguém: só o topo avança sobre o p-2.5 do cartão (-mt-2.5)
+            e as laterais consomem o gap (-mx-1.5); o botão termina antes da linha de selos. */}
+        <CirculoDeConcluir
           checked={done}
           onCheckedChange={() => onToggleComplete(task)}
           aria-label={done ? `Reabrir ${task.title}` : `Concluir ${task.title}`}
-          className="mt-0.5"
+          className="-mx-1.5 -mt-2.5"
         />
         <button
           type="button"
           onClick={() => onOpen(task)}
           className={cn(
-            "min-w-0 flex-1 text-left text-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+            "mt-0.5 min-w-0 flex-1 text-left text-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
             done && "line-through",
           )}
         >
@@ -359,7 +362,7 @@ function BoardCard({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 pl-6">
+      <div className="flex flex-wrap items-center gap-1.5 pl-7">
         <PriorityBadge priority={task.priority} compact />
         <ScheduleChip
           dateIso={task.scheduledDate}
@@ -375,7 +378,7 @@ function BoardCard({
       </div>
 
       {(task.subtaskCount > 0 || task.commentCount > 0 || task.attachmentCount > 0) && (
-        <div className="flex items-center gap-3 pl-6 text-[0.7rem] text-muted-foreground">
+        <div className="flex items-center gap-3 pl-7 text-[0.7rem] text-muted-foreground">
           {task.subtaskCount > 0 && (
             <span>
               {task.subtaskDoneCount}/{task.subtaskCount} subtarefas

@@ -49,7 +49,7 @@ export default async function ParcelamentosPage({
         title="Parcelamentos"
         description="Compras parceladas e a distribuição das parcelas nas faturas."
       />
-      <p className="border-l-2 border-primary pl-2 text-xs text-muted-foreground">
+      <p className="border-l-2 border-primary pl-2 text-xs text-muted-on-fog">
         Valores das parcelas ainda ativas. Parcela cancelada sai da conta e leva a cobrança do
         terceiro junto.
       </p>

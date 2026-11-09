@@ -46,6 +46,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -127,7 +128,7 @@ const ShoppingGenerateDialog = dynamic(
 );
 
 const selectClass =
-  "h-11 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "h-11 campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export type ShoppingClientProps = {
   hoje: string;
@@ -700,7 +701,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
 
           {/* ── Ações em massa ── */}
           {scopedSelection.length > 0 && (
-            <Card className="border-primary/30 bg-primary/5">
+            <Card className="border-primary/30">
               <CardContent className="space-y-2 p-3">
                 <p className="text-sm font-medium">
                   {scopedSelection.length}{" "}
@@ -958,7 +959,7 @@ export function ShoppingClient(props: ShoppingClientProps) {
 
 function SummaryTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card/60 p-3">
+    <div className={`${MATERIAL_LADRILHO} rounded-[14px] p-3`}>
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-lg font-semibold tabular-nums">{value}</p>
       {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}

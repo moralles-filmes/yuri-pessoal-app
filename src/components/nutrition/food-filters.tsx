@@ -394,7 +394,7 @@ export function FoodFilters({
           Base do sistema
         </FilterChip>
 
-        <span className="ml-auto text-xs text-muted-foreground" aria-live="polite">
+        <span className="ml-auto text-xs text-muted-on-fog" aria-live="polite">
           {resultCount === totalCount
             ? `${totalCount.toLocaleString("pt-BR")} alimentos`
             : `${resultCount.toLocaleString("pt-BR")} de ${totalCount.toLocaleString("pt-BR")} alimentos`}
@@ -433,7 +433,7 @@ function FilterChip({
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active
           ? "border-primary/30 bg-primary/10 text-foreground"
-          : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+          : "border-border text-muted-on-fog hover:bg-accent hover:text-foreground",
       )}
     >
       {active && <Filter className="size-3" />}

@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_LADRILHO, MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -266,7 +267,7 @@ export function ProgramsClient({
       )}
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+      <div className={`${MATERIAL_CARTAO} flex flex-wrap items-center gap-2 rounded-[16px] p-3`}>
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -506,7 +507,7 @@ function ProgramCard({
   }
 
   return (
-    <Card className={cn(program.isActive && "ring-1 ring-primary/30")}>
+    <Card className={cn(program.isActive && "border-primary/75")}>
       <CardHeader className="pb-3">
         <div className="flex items-start gap-3">
           <button
@@ -594,7 +595,7 @@ function ProgramCard({
               onReorder={reorder}
               className="space-y-2"
               renderItem={(link, handle) => (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2.5">
+                <div className={`${MATERIAL_LADRILHO} flex flex-wrap items-center gap-2 rounded-[14px] p-2.5`}>
                   {handle}
                   <div className="min-w-0 flex-1">
                     <Link

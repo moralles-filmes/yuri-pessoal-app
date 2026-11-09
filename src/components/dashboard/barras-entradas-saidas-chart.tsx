@@ -16,7 +16,7 @@ import { ChartSkeleton, chartSkeletonHeightVar } from "@/components/shared/chart
 import { TabelaDoGrafico } from "@/components/shared/painel/tabela-do-grafico";
 import { leituraDasBarras } from "@/lib/painel/leitura-dos-graficos";
 import { temDadosNasBarras } from "./barras-dados";
-import { monthLabel } from "./chart-theme";
+import { monthLabel, OPACIDADE_EM_ANDAMENTO } from "./chart-theme";
 
 type Props = React.ComponentProps<
   typeof import("./barras-entradas-saidas-chart-impl").BarrasEntradasSaidasChart
@@ -55,32 +55,15 @@ export function BarrasEntradasSaidasChart({ ultimoMesLido, ...props }: Props) {
       />
       {temDadosNasBarras(props.dados) && props.dados.some((p) => p.parcial) && (
         <p className="mt-1 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <svg width="16" height="12" aria-hidden="true" className="shrink-0">
-            <defs>
-              <pattern
-                id="hachura-amostra"
-                patternUnits="userSpaceOnUse"
-                width="6"
-                height="6"
-                patternTransform="rotate(45)"
-              >
-                <rect width="6" height="6" fill="var(--muted-foreground)" fillOpacity={0.15} />
-                <line x1="0" y1="0" x2="0" y2="6" stroke="var(--muted-foreground)" strokeWidth={2.5} />
-              </pattern>
-            </defs>
-            <rect
-              x="0.75"
-              y="0.75"
-              width="14.5"
-              height="10.5"
-              rx="2"
-              fill="url(#hachura-amostra)"
-              stroke="var(--muted-foreground)"
-              strokeWidth={1.5}
-              strokeDasharray="4 3"
-            />
-          </svg>
-          <span>mês em andamento · parcial</span>
+          <span
+            aria-hidden="true"
+            className="inline-block size-3 shrink-0 rounded-[3px]"
+            style={{
+              background: `color-mix(in srgb, var(--muted-foreground) ${OPACIDADE_EM_ANDAMENTO * 100}%, transparent)`,
+              border: "1px dashed var(--muted-foreground)",
+            }}
+          />
+          <span>ainda em andamento</span>
         </p>
       )}
     </div>

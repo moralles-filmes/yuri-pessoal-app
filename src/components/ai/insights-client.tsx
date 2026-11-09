@@ -307,9 +307,10 @@ function CartaoDeInsight({
   }
 
   return (
-    // V — o não vigente se distingue pelo fundo e pelo SELO de texto abaixo, não por
-    // `opacity-70`: a opacidade apagava o texto inteiro para baixo do contraste mínimo.
-    <Card className={vigente ? undefined : "bg-muted/30"}>
+    // V — o não vigente se distingue pelo SELO de texto abaixo, não por `opacity-70` (a
+    // opacidade apagava o texto inteiro para baixo do contraste mínimo) nem pelo fundo (o
+    // cartão de vidro não troca o próprio material).
+    <Card>
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-start gap-2">
           {/* `min-w-0` obrigatório: o título é longo e os badges são `shrink-0`. */}

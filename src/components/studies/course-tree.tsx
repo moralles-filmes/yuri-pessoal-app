@@ -61,7 +61,7 @@ export function CourseTree({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-muted-foreground">
+        <h2 className="text-sm font-medium text-muted-on-fog">
           Conteúdo ({modules.length} módulo{modules.length === 1 ? "" : "s"})
         </h2>
         <Button size="sm" variant="outline" onClick={openCreateModule}>
@@ -72,6 +72,7 @@ export function CourseTree({
       {modules.length === 0 ? (
         <EmptyState
           icon={Layers}
+          nivel={3}
           title="Sem módulos ainda"
           description="Organize o curso em módulos e adicione as aulas de cada um."
         >

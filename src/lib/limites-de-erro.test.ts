@@ -35,7 +35,7 @@ describe("03-G L3 · os limites de erro (D-G14, com a decisão do dono de 2026-1
     const fonte = ler("src/app/global-error.tsx");
     const codigo = semComentarios(fonte);
     expect(fonte.trimStart().startsWith('"use client"')).toBe(true);
-    expect(codigo).toContain('<html lang="pt-BR">');
+    expect(codigo).toContain('<html lang="pt-BR" className={inter.variable}>');
     expect(codigo).toContain("<body");
     expect(codigo).toContain("<LimiteDeErro error={error} unstable_retry={unstable_retry} />");
     expect(codigo).not.toMatch(/\breset\b/);

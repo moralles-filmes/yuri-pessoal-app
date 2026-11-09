@@ -242,7 +242,7 @@ export function RecipesClient(props: RecipesClientProps) {
           value={categoryId}
           onChange={(event) => setCategoryId(event.target.value)}
           aria-label="Filtrar por categoria"
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-9 campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <option value="">Todas as categorias</option>
           {props.categories.map((category) => (
@@ -256,7 +256,7 @@ export function RecipesClient(props: RecipesClientProps) {
           value={sort}
           onChange={(event) => setSort(event.target.value as RecipeSort)}
           aria-label="Ordenar"
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-9 campo-nativo px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {RECIPE_SORTS.map((value) => (
             <option key={value} value={value}>
@@ -286,7 +286,7 @@ export function RecipesClient(props: RecipesClientProps) {
 
       {/* ── Ações em massa: contagem e escopo sempre visíveis ── */}
       {selected.size > 0 && (
-        <Card className="border-primary/30 bg-primary/5">
+        <Card className="border-primary/30">
           <CardContent className="flex flex-wrap items-center gap-2 p-3">
             <span className="text-sm font-medium">
               {selected.size} selecionada{selected.size > 1 ? "s" : ""}

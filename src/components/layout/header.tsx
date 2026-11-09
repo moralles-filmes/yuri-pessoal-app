@@ -3,6 +3,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
 import { MobileNav } from "./mobile-nav";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { SearchCommand } from "@/components/search/search-command";
 import { QuickAdd } from "@/components/quick-add/quick-add";
 import { NotificationBell } from "@/components/notifications/notification-bell";
@@ -30,7 +31,12 @@ export function Header({
   onToggleSidebar?: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/65 sm:px-5">
+    <header
+      className={cn(
+        "vidro-casca sticky top-0 z-30 flex h-16 items-center gap-2 px-3 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none sm:px-5",
+        sidebarHidden ? "" : "lg:ml-3 lg:rounded-bl-[20px]",
+      )}
+    >
       <MobileNav />
 
       {onToggleSidebar && (

@@ -120,7 +120,7 @@ export function MacroChip({
   const definition = { precision } as NutrientDefinition;
   return (
     <span className={cn("inline-flex items-baseline gap-1 text-xs", className)}>
-      <span className="text-muted-foreground">{label}</span>
+      <span className="text-muted-on-fog">{label}</span>
       <span className="font-medium tabular-nums text-foreground">
         {value === null ? "—" : `${formatNutrientAmount(value, definition)} ${unit}`}
       </span>

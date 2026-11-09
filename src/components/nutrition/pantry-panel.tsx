@@ -102,12 +102,12 @@ export function PantryPanel({
         </Button>
       </div>
 
-      <p className="rounded-md border border-dashed border-border bg-card/40 p-3 text-[11px] text-muted-foreground">
+      <p className="rounded-md border border-dashed border-border bg-tile p-3 text-[11px] text-muted-foreground">
         {PANTRY_SCOPE_NOTE}
       </p>
 
       {abaixoDoMinimo.length > 0 && onSendLowStock && (
-        <Card className="border-primary/30 bg-primary/5">
+        <Card className="border-primary/30">
           <CardContent className="flex flex-wrap items-center gap-2 p-3">
             <span className="text-sm">
               {abaixoDoMinimo.length}{" "}

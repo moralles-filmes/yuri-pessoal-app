@@ -300,7 +300,7 @@ export function PlanningClient(props: PlanningClientProps) {
                   ? `Semana de ${shortDateLabel(startOfWeekIso(props.date))}`
                   : relativeDayLabel(props.date, props.hoje)}
               </p>
-              <p className="text-xs text-muted-foreground">{longDateLabel(props.date)}</p>
+              <p className="text-xs text-muted-on-fog">{longDateLabel(props.date)}</p>
             </div>
           </>
         )}

@@ -207,9 +207,9 @@ describe("a aba reusa as peças da 04-A", () => {
 /* ─────────────────────── O que a aba não tem ─────────────────────── */
 
 describe("o que a aba Financeiro NÃO tem", () => {
-  it("nenhum BannerDeBoasVindas (o relatório é tela de análise)", () => {
-    expect(CLIENTE).not.toContain("BannerDeBoasVindas");
-    expect(PAGINA).not.toContain("BannerDeBoasVindas");
+  it("nenhum Abertura (o relatório é tela de análise)", () => {
+    expect(CLIENTE).not.toContain("Abertura");
+    expect(PAGINA).not.toContain("Abertura");
   });
 
   it("nenhum StatCard na aba Financeiro (os indicadores são as peças da 04-A)", () => {

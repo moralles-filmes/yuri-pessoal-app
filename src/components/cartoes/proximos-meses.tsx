@@ -9,6 +9,7 @@ import type { CartaoDaCentral } from "@/lib/finance/central-cartoes";
 import type { CelulaDoMes, ProximosMeses, TotalDoMes } from "@/lib/finance/proximos-meses";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 import { CLASSE_DO_TOM, rotuloDoEstado } from "./estado-da-fatura";
 
 /*
@@ -120,8 +121,8 @@ function textoParcial(total: NonNullable<TotalDoMes>): string | null {
 const TH =
   "px-2 py-2.5 text-left align-bottom text-[11px] font-semibold tracking-wide text-muted-foreground uppercase";
 const CEL =
-  "block min-h-16 rounded-lg border bg-card px-2.5 py-2 text-inherit no-underline hover:border-primary focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none";
-const MES_STICKY = "sticky left-0 z-[1] bg-card";
+  `${MATERIAL_LADRILHO} block min-h-16 rounded-[14px] px-2.5 py-2 text-inherit no-underline hover:border-primary focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none`;
+const MES_STICKY = "sticky left-0 z-[1] bg-glass-solid";
 /** O total do mês fica sempre à vista: com muitos cartões a grade rola entre as duas colunas fixas. */
 const TOTAL_STICKY = "sticky right-0 z-[1] border-l";
 
@@ -138,7 +139,7 @@ function CelulaDaTabela({ celula }: { celula: CelulaDoMes }) {
   }
   if (celula.tipo === "prevista") {
     return (
-      <Link href={celula.href} className={cn(CEL, "border-dashed bg-transparent")}>
+      <Link href={celula.href} className={cn(CEL, "border-dashed border-border bg-transparent shadow-none")}>
         <span className="block text-xs leading-snug text-muted-foreground italic">
           {SEM_LANCAMENTOS}
         </span>
@@ -234,7 +235,7 @@ function Tabela({ dados, mesAtual }: { dados: ProximosMeses; mesAtual: string })
             {dados.cartoes.map((c) => (
               <CabecalhoDoCartao key={c.id} cartao={c} />
             ))}
-            <th className={cn(TH, TOTAL_STICKY, "min-w-36 bg-card")}>
+            <th className={cn(TH, TOTAL_STICKY, "min-w-36 bg-glass-solid")}>
               Total conhecido
               <span className="block text-[10px] font-medium tracking-normal normal-case">
                 só faturas que existem
@@ -356,12 +357,12 @@ function ListaPorMes({ dados, mesAtual }: { dados: ProximosMeses; mesAtual: stri
         return (
           <section key={mes} className="border-b last:border-b-0">
             <div className="flex items-baseline justify-between gap-2.5 px-4 pt-3 pb-1.5">
-              <h4 className="min-w-0 text-sm font-semibold">
+              <h3 className="min-w-0 text-sm font-semibold">
                 {tituloDoMes(mes)}
                 {mes === mesAtual && (
                   <span className="text-xs font-normal text-muted-foreground"> · atual</span>
                 )}
-              </h4>
+              </h3>
               <span className="shrink-0 text-xs tabular-nums">
                 {total ? (
                   <>
@@ -446,6 +447,7 @@ export function ProximosMesesTela({
 
   return (
     <Bloco
+      nivel={2}
       titulo="Cartão × mês"
       subtitulo="valores por fatura · minha parte abaixo do total"
       acao={<BotaoDoOlho />}

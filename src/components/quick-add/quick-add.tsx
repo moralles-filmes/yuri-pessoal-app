@@ -85,6 +85,7 @@ import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "@/lib/tasks/constants";
 import { TODO_PRIORITIES, TODO_PRIORITY_LABELS } from "@/lib/todo/constants";
 import { EVENT_TYPES, EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
 import { STUDY_DIFFICULTIES, STUDY_DIFFICULTY_LABELS } from "@/lib/studies/constants";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 type Actionish = { ok: boolean; error?: string };
 type QuickType =
@@ -207,7 +208,7 @@ export function QuickAdd() {
                   key={t.id}
                   type="button"
                   onClick={() => setType(t.id)}
-                  className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4 text-center transition-colors hover:border-primary/40 hover:bg-muted"
+                  className={`${MATERIAL_LADRILHO} flex flex-col items-center gap-2 rounded-[14px] p-4 text-center transition-colors hover:border-primary/40 hover:bg-muted`}
                 >
                   <span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary">
                     <t.icon className="size-5" />
@@ -354,7 +355,7 @@ function SplitFields({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card/40 p-3">
+    <div className={`${MATERIAL_LADRILHO} space-y-3 rounded-[14px] p-3`}>
       <Field label="Classificação">
         <Select value={classificacao} onValueChange={(v) => setClassif(v as Classificacao)}>
           <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>

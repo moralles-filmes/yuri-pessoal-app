@@ -85,6 +85,7 @@ function CabecalhoDaTabela({ primeira }: { primeira: string }) {
 function PorCartao({ dados }: { dados: RelatorioDeCartao }) {
   return (
     <Bloco
+      nivel={2}
       titulo="Por cartão"
       subtitulo="no mesmo período"
       estado={dados.porCartao.length === 0 ? "vazio" : "conteudo"}
@@ -137,6 +138,7 @@ function MesAMes({ dados, nomeDoArquivo }: { dados: RelatorioDeCartao; nomeDoArq
 
   return (
     <Bloco
+      nivel={2}
       titulo="Mês a mês"
       subtitulo="do mais novo ao mais antigo"
       acao={<ExportarRelatorioDeCartao linhas={paraCsv} nomeDoArquivo={nomeDoArquivo} />}
@@ -225,7 +227,7 @@ export function RelatorioDeCartaoTela({
         />
       </div>
 
-      <Bloco titulo="Faturas por mês" subtitulo="minha parte + terceiros" estado="conteudo">
+      <Bloco nivel={2} titulo="Faturas por mês" subtitulo="minha parte + terceiros" estado="conteudo">
         {/* O olho também cobre o gráfico: o eixo e o tooltip mostram dinheiro. */}
         <p className="hidden py-8 text-center text-sm text-muted-foreground group-data-[ocultar=true]/olho:block">
           Gráfico oculto junto com os valores.
@@ -245,7 +247,7 @@ export function RelatorioDeCartaoTela({
       <PorCartao dados={dados} />
       <MesAMes dados={dados} nomeDoArquivo={nomeDoArquivo} />
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-on-fog">
         Atenção: o mês atual ainda pode crescer — a fatura aberta segue recebendo compras até
         fechar.
       </p>

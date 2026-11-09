@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { inter } from "./fonts";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -20,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning className="h-full">
+    <html lang="pt-BR" suppressHydrationWarning className={`${inter.variable} h-full`}>
       <body className="min-h-full antialiased">
         <ThemeProvider
           attribute="class"
@@ -31,7 +32,7 @@ export default function RootLayout({
           <QueryProvider>
             <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
           </QueryProvider>
-          <Toaster richColors position="top-right" />
+          <Toaster position="top-right" />
         </ThemeProvider>
       </body>
     </html>

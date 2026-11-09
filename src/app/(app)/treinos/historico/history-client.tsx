@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { MATERIAL_LADRILHO, MATERIAL_CARTAO } from "@/components/ui/materiais";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -453,7 +454,7 @@ export function HistoryClient({
 
           {/* ── Ações em massa ── */}
           {selectedItems.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+            <div className={`${MATERIAL_CARTAO} flex flex-wrap items-center justify-between gap-3 rounded-[16px] px-4 py-3`}>
               <p className="text-sm">
                 <strong>{selectedItems.length}</strong> treino(s) selecionados
                 <span className="text-muted-foreground"> · a ação alcança só o que está filtrado</span>
@@ -684,6 +685,7 @@ function HistoryContent({
             selected={selected.has(item.id)}
             onToggle={onToggle}
             onDelete={onDelete}
+            sobreNevoa
           />
         ))}
       </div>
@@ -730,20 +732,27 @@ function SessionRow({
   selected,
   onToggle,
   onDelete,
+  sobreNevoa = false,
 }: {
   item: HistoryItem;
   options: MetricOptions;
   selected: boolean;
   onToggle: (id: string) => void;
   onDelete: (item: HistoryItem) => void;
+  /** Sem Card em volta (agrupamento "nenhum"): o material é o do cartão, não o do ladrilho. */
+  sobreNevoa?: boolean;
 }) {
   const metrics = sessionMetrics(item, options);
 
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors",
-        selected && "border-primary/60 bg-primary/5",
+        "flex flex-wrap items-center gap-3 p-3 transition-colors",
+        // Direto na névoa é cartão; dentro de um Card do agrupamento é ladrilho.
+        sobreNevoa
+          ? `${MATERIAL_CARTAO} rounded-[16px]`
+          : `${MATERIAL_LADRILHO} rounded-[14px]`,
+        selected && "border-primary/60",
       )}
     >
       <input
@@ -931,7 +940,7 @@ function TimelineView({ items, options }: { items: HistoryItem[]; options: Metri
             <span className="absolute -left-[26px] top-1.5 grid size-3 place-items-center rounded-full bg-primary ring-4 ring-background" />
             <Link
               href={`${TRAINING_BASE_PATH}/historico/${item.id}`}
-              className="block rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/50"
+              className={`${MATERIAL_CARTAO} block rounded-[16px] p-3 transition-colors hover:border-primary/50`}
             >
               <p className="text-xs text-muted-foreground">{longDateLabelIso(item.sessionDate)}</p>
               <p className="font-medium">{item.workoutName}</p>

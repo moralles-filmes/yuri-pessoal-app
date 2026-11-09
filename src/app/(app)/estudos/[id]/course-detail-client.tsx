@@ -57,6 +57,7 @@ import type {
   StudyCourseOption,
   StudySessionWithRelations,
 } from "@/types/database";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 
 type Tab = "conteudo" | "sessoes" | "idioma";
 
@@ -123,7 +124,7 @@ export function CourseDetailClient({
     <div className="space-y-5">
       <Link
         href="/estudos"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-on-fog hover:text-foreground"
       >
         <ArrowLeft className="size-4" /> Voltar para Estudos
       </Link>
@@ -142,7 +143,7 @@ export function CourseDetailClient({
               <StudyCategoryBadge category={detail.category} />
               <StudyPriorityBadge priority={detail.priority} />
               {detail.platform && (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-on-fog">
                   {detail.platform}
                 </span>
               )}
@@ -151,7 +152,7 @@ export function CourseDetailClient({
                   href={withProtocol(detail.url)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  className="inline-flex items-center gap-1 text-xs text-foreground underline"
                 >
                   <ExternalLink className="size-3" /> Abrir curso
                 </a>
@@ -249,7 +250,7 @@ export function CourseDetailClient({
       {detail.nextLessonTitle && (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
           <BookOpen className="size-4 shrink-0 text-primary" />
-          <span className="text-muted-foreground">Próxima aula:</span>
+          <span className="text-muted-on-fog">Próxima aula:</span>
           <span className="truncate font-medium">{detail.nextLessonTitle}</span>
         </div>
       )}
@@ -271,7 +272,7 @@ export function CourseDetailClient({
       )}
 
       {detail.notes && (
-        <p className="rounded-lg border bg-card/40 p-3 text-sm whitespace-pre-wrap text-muted-foreground">
+        <p className={`${MATERIAL_LADRILHO} rounded-[14px] p-3 text-sm whitespace-pre-wrap text-muted-foreground`}>
           {detail.notes}
         </p>
       )}
@@ -292,7 +293,7 @@ export function CourseDetailClient({
       {tab === "sessoes" && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-muted-foreground">
+            <h2 className="text-sm font-medium text-muted-on-fog">
               Sessões deste curso ({detail.sessions.length})
             </h2>
             <Button size="sm" onClick={openCreateSession}>
@@ -302,6 +303,7 @@ export function CourseDetailClient({
           {detail.sessions.length === 0 ? (
             <EmptyState
               icon={NotebookPen}
+              nivel={3}
               title="Nenhuma sessão registrada para este curso"
               className="py-8"
             />

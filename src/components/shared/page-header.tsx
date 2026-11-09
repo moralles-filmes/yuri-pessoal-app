@@ -24,11 +24,11 @@ export function PageHeader({
       {/* `min-w-0` + `break-words`: título longo (ou nome cadastrado pelo usuário, sem
           espaço) não pode alargar a linha e empurrar as ações para fora da tela. */}
       <div className="min-w-0 space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight break-words sm:text-2xl">
+        <h1 className="text-[1.625rem] font-bold tracking-[-0.03em] break-words sm:text-[2rem]">
           {title}
         </h1>
         {description && (
-          <p className="text-sm break-words text-muted-foreground">{description}</p>
+          <p className="text-sm break-words text-muted-on-fog">{description}</p>
         )}
       </div>
       {/* `flex-wrap`: com três ou mais botões a linha quebra em vez de estourar no celular. */}

@@ -387,7 +387,7 @@ export function DiaryClient(props: DiaryClientProps) {
 
         <div className="min-w-0">
           <p className="text-sm font-semibold">{relativeDayLabel(props.date, props.hoje)}</p>
-          <p className="text-xs text-muted-foreground">{longDateLabel(props.date)}</p>
+          <p className="text-xs text-muted-on-fog">{longDateLabel(props.date)}</p>
         </div>
 
         <div className="ms-auto flex flex-wrap items-center gap-2">
@@ -491,7 +491,7 @@ export function DiaryClient(props: DiaryClientProps) {
           {/* ── Trazer o planejamento do dia ── */}
           {props.planned.length > 0 &&
             props.planned.some((meal) => !props.meals.some((m) => m.plannedMealId === meal.id)) && (
-              <Card className="border-primary/30 bg-primary/5">
+              <Card className="border-primary/30">
                 <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div>
                     <p className="text-sm font-medium">

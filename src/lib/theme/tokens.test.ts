@@ -25,46 +25,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CHART_COLORS } from "@/components/dashboard/chart-theme";
 import { PAYMENT_METHOD_LABELS } from "@/lib/finance/constants";
-
-const SRC = path.resolve(__dirname, "..", "..");
-
-function semComentarios(codigo: string): string {
-  return codigo.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
-}
-
-const css = semComentarios(
-  fs.readFileSync(path.join(SRC, "app", "globals.css"), "utf8"),
-);
-
-/** Recorta o corpo `{ … }` de um bloco CSS pelo seu seletor, contando profundidade. */
-function bloco(seletor: string): string {
-  const inicio = css.indexOf(seletor);
-  if (inicio < 0) return "";
-  const abre = css.indexOf("{", inicio);
-  if (abre < 0) return "";
-  let profundidade = 0;
-  for (let i = abre; i < css.length; i += 1) {
-    if (css[i] === "{") profundidade += 1;
-    else if (css[i] === "}") {
-      profundidade -= 1;
-      if (profundidade === 0) return css.slice(abre + 1, i);
-    }
-  }
-  return "";
-}
-
-/** Nome → valor das custom properties declaradas num corpo de bloco. */
-function tokens(corpo: string): Map<string, string> {
-  const mapa = new Map<string, string>();
-  for (const m of corpo.matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/g)) {
-    mapa.set(m[1], m[2].trim());
-  }
-  return mapa;
-}
-
-const tema = tokens(bloco("@theme inline"));
-const claro = tokens(bloco(":root"));
-const escuro = tokens(bloco(".dark {"));
+import { claro, css, escuro, SRC, semComentarios, tema } from "./ler-tokens";
+import { compor, lerCor } from "./contraste";
 
 /**
  * Tokens que existem SÓ no claro de propósito: não são cor, não mudam com o tema.
@@ -80,6 +42,15 @@ const PALETA_CLARA = [
 const PALETA_ESCURA = [
   "#3987e5", "#d95926", "#199e70", "#c98500",
   "#d55181", "#008300", "#9085e9", "#e66767",
+];
+
+/** Os 21 tokens que a 09-A acrescenta, todos obrigatórios nos dois temas. */
+const TOKENS_DE_VIDRO = [
+  "fog-base", "fog-1", "fog-2", "fog-3",
+  "glass", "glass-solid", "glass-strong", "glass-border", "glass-hi", "glass-lo",
+  "glass-sheen", "glass-shadow",
+  "tile", "tile-border", "pill", "pill-strong", "track", "grid",
+  "primary-fill", "primary-fill-foreground", "muted-on-fog",
 ];
 
 const REVALIDAR =
@@ -123,10 +94,22 @@ describe("REDESIGN-02-B · contrato dos tokens de tema", () => {
   });
 
   it("`--primary` deixou de ser dourado nos dois temas", () => {
-    // O dourado vivia em hue 83 (claro) e 84 (escuro), croma ~0,12. O azul está em 254–256.
-    const hue = (v: string) => Number(v.match(/oklch\([\d.]+\s+[\d.]+\s+([\d.]+)\)/)?.[1]);
-    expect(hue(claro.get("primary")!)).toBeGreaterThan(200);
-    expect(hue(escuro.get("primary")!)).toBeGreaterThan(200);
+    // O dourado vivia em hue 83 (claro) e 84 (escuro) em oklch. O azul medido em hex tem
+    // matiz HSL ~212; o dourado, em HSL, fica em ~40-50 e nunca chega a 200.
+    const matiz = (v: string) => {
+      const [r, g, b] = lerCor(v).rgb.map((c) => c / 255);
+      const max = Math.max(r, g, b);
+      const d = max - Math.min(r, g, b);
+      if (d === 0) return 0;
+      if (max === r) return (((g - b) / d + 6) % 6) * 60;
+      if (max === g) return ((b - r) / d + 2) * 60;
+      return ((r - g) / d + 4) * 60;
+    };
+    for (const tm of [claro, escuro]) {
+      const h = matiz(tm.get("primary")!);
+      expect(h).toBeGreaterThan(200);
+      expect(h).toBeLessThan(260);
+    }
   });
 
   it("`--gold` é apelido de `--primary`, e nos DOIS temas", () => {
@@ -181,11 +164,132 @@ describe("REDESIGN-02-B · contrato dos tokens de tema", () => {
     }
   });
 
-  it("`--card` continua sendo a superfície em que a paleta foi validada", () => {
-    // O laudo da §7 é sobre ESTAS duas superfícies. Trocar o card sem revalidar transforma
-    // "todas passam" numa afirmação sobre um fundo que não existe mais.
-    expect(claro.get("card"), REVALIDAR).toBe("oklch(1 0 0)");
-    expect(escuro.get("card"), REVALIDAR).toBe("oklch(0.217 0.013 264)");
+  it("`--glass-solid` é a superfície em que a paleta foi validada", () => {
+    // O laudo da §7 é sobre ESTAS duas superfícies. Trocar a superfície sem revalidar
+    // transforma "todas passam" numa afirmação sobre um fundo que não existe mais.
+    expect(claro.get("glass-solid"), REVALIDAR).toBe("#f5f7fa");
+    expect(escuro.get("glass-solid"), REVALIDAR).toBe("#14171e");
+  });
+
+  it("a casca aponta para o vidro", () => {
+    for (const [nome, tm] of [["claro", claro], ["escuro", escuro]] as const) {
+      expect(tm.get("card"), nome).toBe("var(--glass)");
+      expect(tm.get("popover"), nome).toBe("var(--glass-strong)");
+      expect(tm.get("background"), nome).toBe("var(--fog-base)");
+    }
+  });
+
+  it("os tokens de vidro existem nos dois temas", () => {
+    const faltando: string[] = [];
+    for (const [nome, tm] of [["claro", claro], ["escuro", escuro]] as const) {
+      for (const token of TOKENS_DE_VIDRO) {
+        if (!tm.has(token)) faltando.push(`${nome}: --${token}`);
+      }
+    }
+    expect(faltando, `Token de vidro sem valor: ${faltando.join(", ")}`).toEqual([]);
+    expect(TOKENS_DE_VIDRO.length).toBe(21);
+  });
+
+  it("as utilitárias de vidro estão registradas no @theme inline", () => {
+    const registradas = [
+      "glass", "glass-solid", "glass-strong", "glass-border", "tile", "tile-border",
+      "pill", "pill-strong", "track", "grid", "primary-fill", "primary-fill-foreground",
+      "muted-on-fog",
+    ];
+    for (const nome of registradas) {
+      expect(tema.get(`color-${nome}`), `--color-${nome}`).toBe(`var(--${nome})`);
+    }
+    expect(tema.get("ease-mola")).toBe("cubic-bezier(.22,1.45,.36,1)");
+    expect(tema.get("ease-estalo")).toBe("cubic-bezier(.22,1.6,.36,1)");
+  });
+
+  it("09-B: --tile-solid e --popover-solid existem nos dois temas, como sólidos compostos", () => {
+    for (const [nome, tm] of [["claro", claro], ["escuro", escuro]] as const) {
+      for (const token of ["tile-solid", "popover-solid"]) {
+        expect(tm.get(token), `${nome}: --${token}`).toMatch(/^#[0-9a-f]{6}$/);
+      }
+      const v = (t: string) => tm.get(t) ?? "";
+      expect(compor(v("tile"), v("glass-solid")), `${nome}: tile-solid = tile sobre glass-solid`).toBe(
+        v("tile-solid"),
+      );
+      expect(
+        compor(v("glass-strong"), v("fog-base")),
+        `${nome}: popover-solid = glass-strong sobre fog-base`,
+      ).toBe(v("popover-solid"));
+    }
+  });
+
+  it("09-B: o bloco de transparência reduzida dos tokens redefine --tile, --pill e --popover-solid", () => {
+    const m = /@media \(prefers-reduced-transparency: reduce\)\s*\{\s*:root/.exec(css);
+    expect(m, "falta o @media de topo que redefine os tokens").not.toBeNull();
+    const inicio = css.indexOf("{", m?.index ?? 0);
+    let prof = 0;
+    let fim = inicio;
+    for (; fim < css.length; fim += 1) {
+      if (css[fim] === "{") prof += 1;
+      else if (css[fim] === "}" && (prof -= 1) === 0) break;
+    }
+    const corpo = css.slice(inicio, fim);
+    expect(corpo).toMatch(/--tile\s*:\s*var\(--tile-solid\)/);
+    expect(corpo).toMatch(/--pill\s*:\s*var\(--glass-solid\)/);
+    expect(corpo).toMatch(/--popover-solid\s*:\s*var\(--glass-solid\)/);
+  });
+
+  it("09-B: as utilitárias dos sólidos e a sombra de vidro estão registradas no @theme inline", () => {
+    expect(tema.get("color-tile-solid")).toBe("var(--tile-solid)");
+    expect(tema.get("color-popover-solid")).toBe("var(--popover-solid)");
+    expect(tema.get("shadow-vidro")).toBe(
+      "inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-shadow)",
+    );
+  });
+
+  it("o raio base é 1rem no claro (09-A)", () => {
+    // Raio maior da base de vidro. A escala derivada (`--radius-sm…4xl`, `calc(var(--radius) * k)`)
+    // acompanha sozinha; por isso só o valor base é afirmado aqui.
+    expect(claro.get("radius"), "raio da 09-A (spec §6.5); a escala derivada acompanha").toBe("1rem");
+  });
+
+  it("a pilha de fontes é a do sistema Apple, com Inter de reserva (09-A)", () => {
+    const pilha = claro.get("font-sans") ?? "";
+    expect(pilha.replace(/\s+/g, " ")).toMatch(
+      /^-apple-system, BlinkMacSystemFont, var\(--font-inter\)/,
+    );
+    expect(pilha).not.toContain("Arial");
+  });
+
+  it("fonts.ts é o ÚNICO lugar que chama a Inter por next/font, sem preload", () => {
+    // `next/font` exige a chamada literal em módulo; a de reserva (09-A) mora aqui para o
+    // layout e o `global-error` compartilharem a MESMA instância e a mesma variável CSS.
+    const fonts = semComentarios(fs.readFileSync(path.join(SRC, "app", "fonts.ts"), "utf8"));
+    expect(fonts).toMatch(/import\s*\{[^}]*\bInter\b[^}]*\}\s*from\s*"next\/font\/google"/);
+    expect(fonts).toMatch(/export\s+const\s+inter\s*=\s*Inter\(/);
+    expect(fonts).toContain("preload: false");
+    expect(fonts).toContain('variable: "--font-inter"');
+    expect(fonts).toContain('subsets: ["latin"]');
+    expect(fonts).toContain('display: "swap"');
+    for (const arquivo of ["layout.tsx", "global-error.tsx"]) {
+      const fonte = semComentarios(fs.readFileSync(path.join(SRC, "app", arquivo), "utf8"));
+      expect(fonte, `${arquivo} não chama next/font`).not.toContain("next/font");
+      expect(fonte, `${arquivo} não chama Inter()`).not.toMatch(/\bInter\(/);
+    }
+  });
+
+  it("o layout importa a Inter de ./fonts e a põe na className do <html>", () => {
+    const layout = semComentarios(
+      fs.readFileSync(path.join(SRC, "app", "layout.tsx"), "utf8"),
+    );
+    expect(layout).toMatch(/import\s*\{\s*inter\s*\}\s*from\s*"\.\/fonts"/);
+    expect(layout).toMatch(/<html\b[^>]*className=\{[^>]*inter\.variable/);
+  });
+
+  it("o global-error importa a Inter de ./fonts e a põe na className do <html>", () => {
+    // Ele SUBSTITUI o layout raiz quando este cai, então não herda a variável: sem a classe,
+    // `--font-inter` fica indefinida e a pilha de fontes cai direto para `Segoe UI`/`system-ui`.
+    const erro = semComentarios(
+      fs.readFileSync(path.join(SRC, "app", "global-error.tsx"), "utf8"),
+    );
+    expect(erro).toMatch(/import\s*\{\s*inter\s*\}\s*from\s*"\.\/fonts"/);
+    expect(erro).toMatch(/<html\b[^>]*className=\{[^>]*inter\.variable/);
   });
 
   it("a paleta cobre as formas de pagamento sem repetir cor", () => {

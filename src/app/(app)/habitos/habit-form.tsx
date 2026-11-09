@@ -376,7 +376,7 @@ export function HabitFormDialog({
                       "grid size-7 place-items-center rounded-full border text-xs text-muted-foreground",
                       FOCO_DA_AMOSTRA,
                       !field.value &&
-                        "ring-2 ring-primary ring-offset-1 ring-offset-background",
+                        "outline-2 outline-solid outline-offset-1 outline-primary border-primary text-foreground",
                     )}
                     aria-label="Cor da categoria"
                   >
@@ -389,9 +389,9 @@ export function HabitFormDialog({
                       onClick={() => field.onChange(c)}
                       aria-pressed={field.value === c}
                       className={cn(
-                        "grid size-7 place-items-center rounded-full ring-offset-background transition",
+                        "grid size-7 place-items-center rounded-full transition",
                         FOCO_DA_AMOSTRA,
-                        field.value === c && "ring-2 ring-primary ring-offset-1",
+                        field.value === c && "outline-2 outline-solid outline-offset-1 outline-primary",
                       )}
                       style={{ backgroundColor: c }}
                       aria-label={`Cor ${c}`}

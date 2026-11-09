@@ -68,7 +68,7 @@ export function VocabularyView({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">
+        <h2 className="text-sm font-medium text-muted-on-fog">
           Vocabulário ({vocabulary.length})
         </h2>
         <Button
@@ -108,6 +108,7 @@ export function VocabularyView({
       {vocabulary.length === 0 ? (
         <EmptyState
           icon={Languages}
+          nivel={3}
           title="Sem vocabulário"
           description="Adicione termos com tradução, exemplo e nível de domínio."
         >
@@ -122,7 +123,7 @@ export function VocabularyView({
           </Button>
         </EmptyState>
       ) : shown.length === 0 ? (
-        <EmptyState icon={Languages} title="Nenhum termo neste nível" className="py-8" />
+        <EmptyState icon={Languages} nivel={3} title="Nenhum termo neste nível" className="py-8" />
       ) : (
         <div className="space-y-2">
           {shown.map((v) => (

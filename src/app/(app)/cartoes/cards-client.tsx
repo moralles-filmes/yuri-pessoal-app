@@ -20,7 +20,7 @@ export function CardsClient({ cards }: { cards: CreditCardRow[] }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-on-fog">
           {cards.length} cartão(ões) cadastrado(s)
         </p>
         <CreditCardFormDialog
