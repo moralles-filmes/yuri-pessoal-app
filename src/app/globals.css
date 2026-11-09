@@ -557,3 +557,48 @@ body:has([data-slot="dialog-content"], [data-slot="sheet-content"]) [data-casca]
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+
+/* GRÁFICOS DE BARRA EM VIDRO (09-E). O crescimento é CSS, não animação do recharts (que fica
+   desligada): a regra mira o `path` dentro de `.recharts-bar-rectangle`, e `transform-box:
+   fill-box` faz a origem ser a caixa da própria barra, não a do SVG. Em pé cresce de baixo,
+   deitada cresce da esquerda. A transição de opacidade é a do esmaecimento dos outros grupos.
+   Sem camada, no mesmo lugar das regras `body:has(...)`. */
+@keyframes crescer-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes crescer-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.grafico-barras .recharts-bar-rectangle path {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: crescer-y 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition: opacity 0.2s ease;
+}
+
+.grafico-barras-deitadas .recharts-bar-rectangle path {
+  transform-box: fill-box;
+  transform-origin: left;
+  animation: crescer-x 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition: opacity 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grafico-barras .recharts-bar-rectangle path,
+  .grafico-barras-deitadas .recharts-bar-rectangle path {
+    animation: none;
+    transition: none;
+  }
+}
