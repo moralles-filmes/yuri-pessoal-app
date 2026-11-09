@@ -1067,3 +1067,36 @@ describe("09-F · T8 · texto direto na névoa: foreground ou muted-on-fog", () 
     expect(aberturas(fonte, "Link").some((a) => /text-primary hover:underline/.test(a))).toBe(true);
   });
 });
+
+describe("09-F · T8 · restos da varredura no navegador", () => {
+  const raiz = path.resolve(SRC, "..");
+  const SEM_CINZA_DE_CARTAO = [
+    "src/app/(app)/habitos/habits-client.tsx",
+    "src/app/(app)/estudos/studies-client.tsx",
+    "src/app/(app)/estudos/[id]/course-detail-client.tsx",
+    "src/app/(app)/tarefas/tasks-client.tsx",
+    "src/components/studies/course-tree.tsx",
+    "src/components/studies/practice-view.tsx",
+    "src/components/studies/vocabulary-view.tsx",
+  ];
+
+  for (const rel of SEM_CINZA_DE_CARTAO) {
+    it(`${rel}: título de seção direto na névoa em muted-on-fog`, () => {
+      const f = fonteSemComentarios(path.join(raiz, rel));
+      expect(f).not.toMatch(/<h2 className="text-sm font-medium text-muted-foreground"/);
+      expect(f).toMatch(/<h2 className="text-sm font-medium text-muted-on-fog"/);
+    });
+  }
+
+  it("as dicas do menu do TO-DO saem da névoa em muted-on-fog", () => {
+    const f = fonteSemComentarios(path.join(raiz, "src/components/todo/todo-nav.tsx"));
+    expect(f).not.toMatch(/<p className="px-2\.5 py-1 text-xs text-muted-foreground"/);
+    expect(f.match(/<p className="px-2\.5 py-1 text-xs text-muted-on-fog"/g)).toHaveLength(3);
+  });
+
+  it("a lista de rotinas não estoura a 390 px: coluna minmax(0, 1fr) explícita", () => {
+    const f = fonteSemComentarios(path.join(raiz, "src/app/(app)/rotinas/routines-client.tsx"));
+    expect(f).toContain('className="grid grid-cols-1 gap-2"');
+    expect(f).not.toContain('className="grid gap-2"');
+  });
+});

@@ -27,7 +27,7 @@ export function Field({
     <div className={className}>
       <Label className="text-xs text-muted-on-fog">{label}</Label>
       <div className="mt-1.5">{children}</div>
-      {hint && !error && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      {hint && !error && <p className="mt-1 text-xs text-muted-on-fog">{hint}</p>}
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
     </div>
   );

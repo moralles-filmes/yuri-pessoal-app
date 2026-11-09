@@ -220,7 +220,7 @@ function AllRoutinesSection({
         items={ordered}
         getId={(r) => r.id}
         onReorder={handleReorder}
-        className="grid gap-2"
+        className="grid grid-cols-1 gap-2"
         renderItem={(r, handle) => (
           <Card className={cn(!r.is_active && "opacity-60")}>
             <CardContent className="flex items-center gap-3 p-3.5">

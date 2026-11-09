@@ -250,7 +250,7 @@ export function CourseDetailClient({
       {detail.nextLessonTitle && (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
           <BookOpen className="size-4 shrink-0 text-primary" />
-          <span className="text-muted-foreground">Próxima aula:</span>
+          <span className="text-muted-on-fog">Próxima aula:</span>
           <span className="truncate font-medium">{detail.nextLessonTitle}</span>
         </div>
       )}
@@ -293,7 +293,7 @@ export function CourseDetailClient({
       {tab === "sessoes" && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-muted-foreground">
+            <h2 className="text-sm font-medium text-muted-on-fog">
               Sessões deste curso ({detail.sessions.length})
             </h2>
             <Button size="sm" onClick={openCreateSession}>

@@ -275,7 +275,7 @@ function NavContent({
         }
       >
         {active.length === 0 ? (
-          <p className="px-2.5 py-1 text-xs text-muted-foreground">
+          <p className="px-2.5 py-1 text-xs text-muted-on-fog">
             Nenhum projeto ainda.
           </p>
         ) : (
@@ -329,7 +329,7 @@ function NavContent({
         defaultOpen={labels.length > 0}
       >
         {labels.length === 0 ? (
-          <p className="px-2.5 py-1 text-xs text-muted-foreground">
+          <p className="px-2.5 py-1 text-xs text-muted-on-fog">
             Nenhuma etiqueta ainda.
           </p>
         ) : (
@@ -373,7 +373,7 @@ function NavContent({
         defaultOpen={navFilters.length > 0}
       >
         {navFilters.length === 0 ? (
-          <p className="px-2.5 py-1 text-xs text-muted-foreground">
+          <p className="px-2.5 py-1 text-xs text-muted-on-fog">
             Salve um filtro para acessá-lo daqui.
           </p>
         ) : (

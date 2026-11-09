@@ -353,7 +353,7 @@ function ManageView({
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-muted-foreground">
+        <h2 className="text-sm font-medium text-muted-on-fog">
           Todos os hábitos ({ordered.length})
         </h2>
         <p className="text-xs text-muted-on-fog">Arraste ⠿ para reordenar</p>

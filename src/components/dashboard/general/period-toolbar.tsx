@@ -102,7 +102,7 @@ export function PeriodToolbar({
             aria-label="Data inicial"
             className="h-8 campo-nativo px-2.5 text-sm"
           />
-          <span className="text-muted-foreground">–</span>
+          <span className="text-muted-on-fog">–</span>
           <input
             type="date"
             value={ate}

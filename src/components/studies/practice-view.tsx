@@ -49,7 +49,7 @@ export function PracticeView({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">
+        <h2 className="text-sm font-medium text-muted-on-fog">
           Prática por habilidade
         </h2>
         <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
@@ -73,7 +73,7 @@ export function PracticeView({
             <StudyProgressBar value={pct} rotulo="Prática na semana" />
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-on-fog">
             Defina uma meta semanal (em minutos) para acompanhar o progresso.
           </p>
         )}
@@ -81,7 +81,7 @@ export function PracticeView({
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {LANGUAGE_SKILLS.map((s) => (
             <div key={s} className="rounded-lg bg-muted/40 p-2.5 text-center">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-on-fog">
                 {LANGUAGE_SKILL_LABELS[s]}
               </p>
               <p className="text-sm font-semibold tabular-nums">
@@ -117,7 +117,7 @@ export function PracticeView({
                       {formatMinutes(p.duration_minutes)}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-on-fog">
                     {formatDate(p.practice_date)}
                     {p.notes ? ` · ${p.notes}` : ""}
                   </p>

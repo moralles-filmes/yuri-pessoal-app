@@ -513,7 +513,7 @@ function TodayView({
             <span className="text-xs text-muted-foreground">Ver todas →</span>
           </button>
         )}
-        <h2 className="text-sm font-medium text-muted-foreground">
+        <h2 className="text-sm font-medium text-muted-on-fog">
           Para hoje ({todays.length})
         </h2>
         {todays.length === 0 ? (
@@ -543,7 +543,7 @@ function TodayView({
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Rotinas de hoje</h2>
+        <h2 className="text-sm font-medium text-muted-on-fog">Rotinas de hoje</h2>
         <RoutinesTodayCard routines={todaysRoutines} todayIso={todayIso} />
       </div>
     </div>

@@ -500,7 +500,7 @@ function FoodRow({
       >
         <p className="truncate text-sm font-medium">
           {food.name}
-          {food.brand && <span className="ml-1.5 text-muted-foreground">· {food.brand}</span>}
+          {food.brand && <span className="ml-1.5 text-muted-on-fog">· {food.brand}</span>}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
           <MacroChip label="kcal" value={food.macros.energiaKcal} unit="" precision={0} />
