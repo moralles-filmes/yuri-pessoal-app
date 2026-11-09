@@ -356,7 +356,7 @@ export function ExercisesClient({
                 <div
                   className={cn(
                     `${MATERIAL_CARTAO} flex items-center gap-3 rounded-[16px] p-3 transition-colors`,
-                    selected.has(exercise.id) && "ring-1 ring-primary/40",
+                    selected.has(exercise.id) && "border-primary/50",
                   )}
                 >
                   <Checkbox

@@ -128,7 +128,7 @@ export default async function ConfiguracoesPage() {
               href={item.href}
               className={`${MATERIAL_CARTAO} group flex items-start gap-3 rounded-[16px] p-5 transition-colors hover:border-primary/40`}
             >
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                 <Icon className="size-5" />
               </span>
               <div className="space-y-0.5">

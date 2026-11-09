@@ -73,7 +73,7 @@ export function CardShell({
       onDragEnd={onDragEnd}
       className={cn(
         "flex h-full flex-col overflow-hidden rounded-[28px]",
-        personalizing && "cursor-grab ring-1 ring-border/80",
+        personalizing && "cursor-grab border-dashed border-border",
         personalizing && hidden && "opacity-55",
       )}
     >

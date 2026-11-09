@@ -196,7 +196,7 @@ export function ImportUpload({
                   : "border-border hover:border-primary/50 hover:bg-muted/40",
               )}
             >
-              <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
+              <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
                 <UploadCloud className="size-6" />
               </div>
               <p className="text-sm font-medium">

@@ -193,7 +193,7 @@ function WaterCard({
 }
 
 /** Anel de hoje — o mesmo do heatmap: hoje se distingue pela FORMA, não pela cor. */
-const ANEL_HOJE = "ring-2 ring-foreground ring-offset-1 ring-offset-card";
+const ANEL_HOJE = "outline-2 outline-solid outline-offset-1 outline-foreground";
 
 /**
  * Tira da semana: 7 dias com o valor do dia e marca de meta atingida.

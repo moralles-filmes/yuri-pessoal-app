@@ -24,7 +24,7 @@ function cellClass(cell: HabitHeatCell): string {
 const CELULA = "aspect-square rounded-[3px]";
 const SEM_HABITOS = "border border-dashed border-muted-foreground/50";
 const PREENCHIDA = "ring-1 ring-inset ring-border/40";
-const ANEL_HOJE = "ring-2 ring-foreground ring-offset-1 ring-offset-card";
+const ANEL_HOJE = "outline-2 outline-solid outline-offset-1 outline-foreground";
 
 const LEGENDA = [
   { rotulo: "Sem hábitos", className: SEM_HABITOS },

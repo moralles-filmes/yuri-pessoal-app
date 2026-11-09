@@ -798,3 +798,57 @@ describe("09-F T4 · superfícies do TO-DO e da IA", () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// 09-F T6 · anéis e preenchimentos do calendário de consistência e do mapa de hábitos. O anel de
+// hoje e o preenchimento `treinado` são componente de interface (>= 3:1) sobre o cartão; o texto
+// que um dia sobre `parcial`/`descanso` pudesse ter (foreground) é medido sobre o tingimento
+// composto no cartão (>= 4,5:1). Os alfas são LIDOS do fonte do calendário.
+// ---------------------------------------------------------------------------------------------
+
+describe("09-F T6 · anéis e preenchimentos", () => {
+  const fonteCalendario = semComentarios(
+    fs.readFileSync(path.join(SRC, "components", "training", "consistency-calendar.tsx"), "utf8"),
+  );
+  const alfaParcial = alfaDaClasse(fonteCalendario, "bg-primary");
+  const alfaDescanso = alfaDaClasse(fonteCalendario, "bg-violet-500");
+  const violeta = oklchParaHex("oklch(0.606 0.25 292.717)"); // violet-500 do Tailwind v4
+
+  it("os alfas lidos do fonte são os do desenho (45 e 25)", () => {
+    expect(alfaParcial).toBeCloseTo(0.45, 5);
+    expect(alfaDescanso).toBeCloseTo(0.25, 5);
+  });
+
+  for (const [nomeTema, tema] of TEMAS) {
+    it(`${nomeTema}: anel de hoje (primary) e preenchimento treinado (primary) sobre o cartão >= 3:1`, () => {
+      const fundos = superficies(tema);
+      expect(fundos).toHaveLength(4);
+      for (const [rotulo, cartao] of fundos) {
+        const razao = contraste(valor(tema, "primary"), cartao);
+        expect(
+          razao,
+          `${nomeTema} · primary sobre ${rotulo}: ${razaoTextoDoAnel(razao)}:1 < 3:1`,
+        ).toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
+      }
+    });
+
+    it(`${nomeTema}: anel de hoje do mapa de hábitos e da água (foreground) sobre o cartão >= 3:1`, () => {
+      for (const [rotulo, cartao] of superficies(tema)) {
+        const razao = contraste(valor(tema, "foreground"), cartao);
+        expect(
+          razao,
+          `${nomeTema} · foreground sobre ${rotulo}: ${razaoTextoDoAnel(razao)}:1 < 3:1`,
+        ).toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
+      }
+    });
+
+    it(`${nomeTema}: foreground sobre primary/45 e violet-500/25 compostos no cartão >= 4,5:1`, () => {
+      for (const [rotulo, cartao] of superficies(tema)) {
+        const parcial = compor(comAlfa(valor(tema, "primary"), alfaParcial), cartao);
+        const descanso = compor(comAlfa(violeta, alfaDescanso), cartao);
+        exigirPrimitiva(nomeTema, "foreground", "primary/45", rotulo, contraste(valor(tema, "foreground"), parcial));
+        exigirPrimitiva(nomeTema, "foreground", "violet-500/25", rotulo, contraste(valor(tema, "foreground"), descanso));
+      }
+    });
+  }
+});

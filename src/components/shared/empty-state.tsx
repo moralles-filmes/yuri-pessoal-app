@@ -24,7 +24,7 @@ export function EmptyState({
         className,
       )}
     >
-      <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
+      <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
         <Icon className="size-7" />
       </div>
       <h3 className="text-base font-semibold">{title}</h3>

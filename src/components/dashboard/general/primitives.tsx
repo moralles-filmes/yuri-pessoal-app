@@ -22,7 +22,7 @@ export function Metric({
     <div
       className={cn(
         "rounded-lg bg-muted/50 p-3",
-        accent && "bg-primary/10 ring-1 ring-primary/15",
+        accent && "bg-primary/10",
         className,
       )}
     >

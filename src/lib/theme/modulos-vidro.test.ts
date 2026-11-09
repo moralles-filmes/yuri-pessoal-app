@@ -657,7 +657,7 @@ describe("09-F · T5 · superfícies de Treinos e Dieta", () => {
     expect(hist).toMatch(/checked=\{selected\}/);
     expect(hist).toMatch(/hover:border-primary\/50/);
     for (const rel of [`${T}exercicios/exercises-client.tsx`, `${T}treinos/workouts-client.tsx`]) {
-      expect(fonteSemComentarios(path.join(RAIZ, rel)), rel).toMatch(/selected\.has\([\w.]+\) && "ring-1 ring-primary\/40"/);
+      expect(fonteSemComentarios(path.join(RAIZ, rel)), rel).toMatch(/selected\.has\([\w.]+\) && "border-primary\/50"/);
     }
     const rest = fonteSemComentarios(path.join(RAIZ, "src/components/training/session/rest-panel.tsx"));
     expect(rest).toMatch(/over && "border-primary",/);
@@ -665,5 +665,160 @@ describe("09-F · T5 · superfícies de Treinos e Dieta", () => {
     // O descanso concluído continua dito por texto e pelo relógio em primary.
     expect(rest).toMatch(/Descanso concluído/);
     expect(rest).toMatch(/over && "text-primary"/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 09-F · T6 · anéis e peças de estilo próprio. O anel (`ring`) é `box-shadow`: o vão do
+// `ring-offset` é pintado com uma cor OPACA e sobre o vidro aparece como um remendo. O contorno
+// (`outline`) deixa o vão transparente. Cartão e linha selecionada trocam o anel pela BORDA.
+// ---------------------------------------------------------------------------------------------
+
+describe("09-F · T6 · anéis e peças de estilo próprio", () => {
+  const RAIZ = path.resolve(SRC, "..");
+  const fonteDe = (rel: string) => fonteSemComentarios(path.join(RAIZ, rel));
+  /** Classes de todos os literais de uma fonte. */
+  const classesDosLiterais = (fonte: string) =>
+    literais(fonte).flatMap((l) => l.texto.split(/\s+/).filter(Boolean));
+
+  it("nenhum ring-offset-background (nem ring-offset-card) em src/", () => {
+    const sobrou: string[] = [];
+    for (const arquivo of todosOsTsx()) {
+      const fonte = fonteSemComentarios(arquivo);
+      for (const m of fonte.matchAll(/ring-offset-(?:background|card)\b/g)) {
+        sobrou.push(`${relativo(arquivo)}:${linhaDe(fonte, m.index ?? 0)}`);
+      }
+    }
+    expect(sobrou, `O vão do ring-offset é opaco sobre o vidro: ${sobrou.join(", ")}`).toEqual([]);
+  });
+
+  it("nenhum <Card> tem ring-* no className (a situação do cartão é a borda)", () => {
+    const sobrou: string[] = [];
+    for (const arquivo of foraDeUi()) {
+      const fonte = fonteSemComentarios(arquivo);
+      let de = 0;
+      for (const abertura of aberturas(fonte, "Card")) {
+        const i = fonte.indexOf(abertura, de);
+        de = i + abertura.length;
+        const k = abertura.indexOf("className=");
+        if (k < 0) continue;
+        const classes = classesDosLiterais(abertura.slice(k));
+        // `ring-0` é o reset que tira o anel (cartão sem material), não um anel.
+        if (classes.some((c) => /^ring(?:-|$)/.test(c) && c !== "ring-0")) sobrou.push(`${relativo(arquivo)}:${linhaDe(fonte, i)}`);
+      }
+    }
+    expect(sobrou, `Card com anel: ${sobrou.join(", ")}`).toEqual([]);
+  });
+
+  it("os dois cartões com situação (painel do dashboard e programa ativo) usam border-primary/40", () => {
+    const dash = fonteDe("src/app/(app)/dashboard/financeiro/financial-dashboard-client.tsx");
+    expect(dash).toMatch(/<Card className="overflow-hidden border-primary\/40">/);
+    const prog = fonteDe("src/app/(app)/treinos/programas/programs-client.tsx");
+    expect(prog).toMatch(/<Card className=\{cn\(program\.isActive && "border-primary\/40"\)\}>/);
+  });
+
+  it("linha selecionada (exercícios e treinos): border-primary/50 depois da constante, sem anel", () => {
+    for (const rel of [
+      "src/app/(app)/treinos/exercicios/exercises-client.tsx",
+      "src/app/(app)/treinos/treinos/workouts-client.tsx",
+    ]) {
+      const fonte = fonteDe(rel);
+      expect(fonte, rel).toMatch(/\$\{MATERIAL_CARTAO\}[^`]*`,\s*selected\.has\([\w.]+\) && "border-primary\/50",/);
+      expect(fonte, rel).not.toMatch(/ring-1 ring-primary\/40/);
+      // A caixa marcada continua dizendo a seleção em forma.
+      expect(fonte, rel).toMatch(/checked=\{selected\.has\(/);
+    }
+  });
+
+  it("module-shell: o item ativo é bg-pill-strong com texto foreground e sem anel", () => {
+    const fonte = fonteDe("src/components/shared/module-shell.tsx");
+    const ativo = /ativo\s*\?\s*"([^"]*)"\s*:\s*"([^"]*)"/.exec(fonte);
+    expect(ativo, "ternário do item ativo").not.toBeNull();
+    const classes = (ativo?.[1] ?? "").split(/\s+/);
+    expect(classes).toContain("bg-pill-strong");
+    expect(classes).toContain("text-foreground");
+    expect(classes).toContain("font-medium");
+    expect(classes.filter((c) => /^ring(?:-|$)/.test(c)), "sem anel no ativo").toEqual([]);
+    expect(classes).not.toContain("bg-primary/10");
+    // O ativo continua dito sem cor: aria-current e o ícone em primary.
+    expect(fonte).toMatch(/aria-current=\{ativo \? "page" : undefined\}/);
+    expect(fonte).toMatch(/ativo && "text-primary"/);
+  });
+
+  it("os sete quadradinhos de ícone perdem o anel e mantêm o tom", () => {
+    const sete = [
+      "src/app/(app)/configuracoes/page.tsx",
+      "src/app/(app)/financeiro/page.tsx",
+      "src/app/(app)/importar/import-history.tsx",
+      "src/app/(app)/importar/import-upload.tsx",
+      "src/components/dashboard/general/finance-card.tsx",
+      "src/components/dashboard/general/primitives.tsx",
+      "src/components/shared/empty-state.tsx",
+    ];
+    for (const rel of sete) {
+      const fonte = fonteDe(rel);
+      expect(fonte, `${rel}: sem ring-primary/15`).not.toMatch(/ring-primary\/15/);
+      expect(fonte, `${rel}: o tom bg-primary/10 continua`).toMatch(/bg-primary\/10/);
+    }
+    // E nenhum outro literal do projeto junta o tom e o aro de 15%.
+    const sobrou: string[] = [];
+    for (const arquivo of todosOsTsx()) {
+      const fonte = fonteSemComentarios(arquivo);
+      for (const l of literais(fonte)) {
+        if (/\bbg-primary\/10\b/.test(l.texto) && /\bring-1 ring-primary\/15\b/.test(l.texto)) {
+          sobrou.push(`${relativo(arquivo)}:${linhaDe(fonte, l.i)}`);
+        }
+      }
+    }
+    expect(sobrou).toEqual([]);
+  });
+
+  it("o anel de 'hoje' e o da seleção de cor viram outline com vão transparente", () => {
+    const casos: Array<[rel: string, padrao: RegExp]> = [
+      ["src/components/training/consistency-calendar.tsx", /const HOJE_STYLE = "outline-2 outline-solid outline-offset-1 outline-primary";/],
+      ["src/components/habits/habit-heatmap.tsx", /const ANEL_HOJE = "outline-2 outline-solid outline-offset-1 outline-foreground";/],
+      ["src/components/habits/water-view.tsx", /const ANEL_HOJE = "outline-2 outline-solid outline-offset-1 outline-foreground";/],
+      ["src/components/shared/deep-link-highlight.tsx", /active && "outline-2 outline-solid outline-offset-2 outline-primary"/],
+    ];
+    for (const [rel, padrao] of casos) {
+      const fonte = fonteDe(rel);
+      expect(fonte, rel).toMatch(padrao);
+      expect(fonte, rel).not.toMatch(/(^|[\s"'`])ring-(?:2|offset)/);
+    }
+  });
+
+  it("os quatro formulários de cor: selecionada = outline-primary; o 'sem cor' ganha borda", () => {
+    const forms = [
+      "src/app/(app)/estudos/course-form.tsx",
+      "src/app/(app)/habitos/habit-form.tsx",
+      "src/app/(app)/rotinas/routine-form.tsx",
+      "src/app/(app)/tarefas/project-form.tsx",
+    ];
+    for (const rel of forms) {
+      const fonte = fonteDe(rel);
+      // `outline-solid` é obrigatório: o foco da amostra usa `outline-none`, que zera o estilo.
+      expect(fonte, rel).toMatch(/field\.value === c && "outline-2 outline-solid outline-offset-1 outline-primary"/);
+      expect(fonte, rel).toMatch(/!field\.value &&\s*"outline-2 outline-solid outline-offset-1 outline-primary border-primary text-foreground"/);
+      expect(fonte, rel).not.toMatch(/ring-2|ring-offset/);
+      // A seleção continua dita por forma: o visto dentro da amostra e aria-pressed.
+      expect(fonte, rel).toMatch(/aria-pressed=\{field\.value === c\}/);
+      expect(fonte, rel).toMatch(/<Check className="size-3\.5 text-white"/);
+    }
+  });
+
+  it("calendário de consistência: nenhum estado ganha vermelho nem cobrança", () => {
+    const fonte = fonteDe("src/components/training/consistency-calendar.tsx");
+    const mapa = fonte.match(/const STATE_STYLE[^=]*=\s*\{([\s\S]*?)\n\};/)?.[1] ?? "";
+    expect(mapa).not.toBe("");
+    expect(mapa).not.toMatch(/destructive|red-|rose-|amber-|orange-/);
+  });
+
+  it("gaveta de registros: sem rounded-t-2xl (o raio é o da SheetContent)", () => {
+    const fonte = fonteDe("src/components/shared/painel/gaveta-de-registros-impl.tsx");
+    expect(fonte).not.toMatch(/rounded-t-2xl/);
+    const abertura = aberturas(fonte, "SheetContent")[0] ?? "";
+    expect(abertura).not.toBe("");
+    expect(classesDosLiterais(abertura).filter((c) => /rounded/.test(c))).toEqual([]);
+    expect(abertura).toMatch(/data-\[side=bottom\]:max-h-\[88dvh\]/);
   });
 });

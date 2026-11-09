@@ -106,7 +106,7 @@ function Conteudo({
                   "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   ativo
-                    ? "bg-primary/10 font-medium text-foreground ring-1 ring-primary/20"
+                    ? "bg-pill-strong font-medium text-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >

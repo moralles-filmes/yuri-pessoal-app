@@ -145,7 +145,7 @@ export default async function FinanceiroOverviewPage() {
           <Card key={link.href} className="transition-colors hover:border-primary/40">
             <CardHeader>
               <div className="flex items-center gap-3">
-                <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
+                <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                   <link.icon className="size-5" />
                 </div>
                 <div className="space-y-0.5">

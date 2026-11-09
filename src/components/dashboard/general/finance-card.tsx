@@ -46,7 +46,7 @@ export async function FinanceCard({
       {/* A base em que este card lê os números. Sem seletor aqui: o card é vitrine, não painel. */}
       <p className="text-xs text-muted-foreground">Base: competência</p>
 
-      <div className="rounded-lg bg-primary/10 p-3 ring-1 ring-primary/15">
+      <div className="rounded-lg bg-primary/10 p-3">
         <p className="text-xs text-muted-foreground">Realmente meu</p>
         <p className="mt-0.5 text-2xl font-semibold tabular-nums text-primary">{formatCurrency(n.meu)}</p>
         <p className="text-[0.7rem] text-muted-foreground">

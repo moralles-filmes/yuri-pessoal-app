@@ -630,7 +630,7 @@ describe("Sobreposições em vidro", () => {
   it("nenhum chamador sobrescreve fundo, raio, sombra, anel, borda ou desfoque de uma sobreposição", () => {
     // `vidro-sobreposicao` é desconhecida do twMerge: ela não é removida pelo `className` do
     // chamador, e o `bg-`/`shadow-` dele ficaria brigando com ela. Lista fixa: chamador novo reprova.
-    const EXCECOES = new Set(["components/shared/painel/gaveta-de-registros-impl.tsx"]); // rounded-t-2xl, da 09-D
+    const EXCECOES = new Set<string>(); // a da gaveta (rounded-t-2xl, 09-D) saiu na 09-F T6
     const tags = SOBREPOSICOES.map((s) => s.funcao);
     const culpados: string[] = [];
     for (const arquivo of arquivosTsx(SRC)) {
@@ -651,9 +651,9 @@ describe("Sobreposições em vidro", () => {
     expect(culpados).toEqual([]);
   });
 
-  it("a exceção declarada ainda existe (senão a lista fixa está velha)", () => {
+  it("a lista de exceções está vazia: a gaveta de registros deixou o raio para a SheetContent", () => {
     const f = fs.readFileSync(path.join(SRC, "components", "shared", "painel", "gaveta-de-registros-impl.tsx"), "utf8");
-    expect(f).toContain("data-[side=bottom]:rounded-t-2xl");
+    expect(f).not.toContain("rounded-t-2xl");
   });
 });
 
