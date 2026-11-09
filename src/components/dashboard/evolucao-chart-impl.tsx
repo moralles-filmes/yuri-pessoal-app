@@ -41,6 +41,7 @@ export function EvolucaoChart({ data }: { data: EvolucaoPonto[] }) {
   if (!temDados) {
     return (
       <EmptyState
+        nivel={3}
         icon={LineChartIcon}
         title="Sem histórico ainda"
         description="A evolução aparece conforme você registra entradas e saídas."

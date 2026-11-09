@@ -463,6 +463,7 @@ export function DashboardClient({
       {/* Entradas × saídas (barras) e gastos por categoria (rosca) */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Bloco
+          nivel={2}
           className="lg:col-span-2"
           icone={BarChart3}
           titulo="Minhas entradas × saídas"
@@ -482,6 +483,7 @@ export function DashboardClient({
           <p className="text-xs text-muted-foreground">{FRASE_DO_MES}</p>
         </Bloco>
         <Bloco
+          nivel={2}
           icone={PieChart}
           titulo="Meus gastos por categoria"
           subtitulo={`${monthYearLabel(mesSel)}. ${rotulos.categorias.descricao}`}
@@ -512,6 +514,7 @@ export function DashboardClient({
       {/* Cartões de crédito e próximas faturas */}
       <div className="grid gap-4 lg:grid-cols-5">
         <Bloco
+          nivel={2}
           className="lg:col-span-3"
           icone={CreditCard}
           titulo="Cartões de crédito"
@@ -586,6 +589,7 @@ export function DashboardClient({
         </Bloco>
 
         <Bloco
+          nivel={2}
           className="lg:col-span-2"
           icone={Receipt}
           titulo="Próximas faturas"
@@ -659,6 +663,7 @@ export function DashboardClient({
       {/* Últimas transações e a receber de terceiros */}
       <div className="grid gap-4 lg:grid-cols-5">
         <Bloco
+          nivel={2}
           className="lg:col-span-3"
           icone={ArrowLeftRight}
           titulo="Últimas transações"
@@ -733,6 +738,7 @@ export function DashboardClient({
         </Bloco>
 
         <Bloco
+          nivel={2}
           className="lg:col-span-2"
           icone={Users}
           titulo="Pendente de terceiros"

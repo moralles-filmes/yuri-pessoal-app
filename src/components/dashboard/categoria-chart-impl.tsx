@@ -28,6 +28,7 @@ export function CategoriaChart({ data }: { data: CategoriaSlice[] }) {
   if (positivos.length === 0) {
     return (
       <EmptyState
+        nivel={3}
         icon={PieIcon}
         title="Sem gastos no período"
         description="Lance despesas para ver a distribuição por categoria."

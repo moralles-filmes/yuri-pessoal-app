@@ -87,6 +87,7 @@ export function ProjecaoChart({ data }: { data: ProjecaoPonto[] }) {
   if (!temDados) {
     return (
       <EmptyState
+        nivel={3}
         icon={TrendingUp}
         title="Sem projeção"
         description="Cadastre faturas, recorrências ou contas fixas para projetar os próximos meses."

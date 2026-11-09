@@ -84,6 +84,7 @@ export function BarrasEntradasSaidasChart({
   if (!temDadosNasBarras(dados)) {
     return (
       <EmptyState
+        nivel={3}
         icon={BarChart3}
         title="Sem histórico ainda"
         description="Os meses aparecem conforme você registra entradas e saídas."

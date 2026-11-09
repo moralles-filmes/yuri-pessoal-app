@@ -83,6 +83,7 @@ export function FaturasChart({
     const texto = vazio ?? VAZIO_PADRAO;
     return (
       <EmptyState
+        nivel={3}
         icon={ReceiptText}
         title={texto.titulo}
         description={texto.descricao}

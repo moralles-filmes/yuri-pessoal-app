@@ -66,6 +66,7 @@ export function FormaPagamentoChart({
   if (positivos.length === 0) {
     return (
       <EmptyState
+        nivel={3}
         icon={CreditCard}
         title="Sem gastos no período"
         description="Os gastos aparecem aqui agrupados por forma de pagamento."

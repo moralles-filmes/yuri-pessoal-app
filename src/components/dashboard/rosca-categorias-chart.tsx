@@ -52,6 +52,7 @@ export function RoscaCategoriasChart({
     return (
       <div className="space-y-3">
         <EmptyState
+          nivel={3}
           icon={PieIcon}
           title="Sem gastos no período"
           description="Lance despesas para ver a distribuição por categoria."

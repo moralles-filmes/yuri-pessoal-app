@@ -855,19 +855,31 @@ describe("09-F · T7 · hierarquia de títulos", () => {
     "src/app/(app)/parcelamentos/installments-client.tsx",
     "src/components/cartoes/proximos-meses.tsx",
     "src/components/cartoes/relatorio-de-cartao.tsx",
-  ])("%s: página sem <h2> — todo <Bloco> passa nivel={2}", (rel) => {
+    "src/app/(app)/dashboard/financeiro/financial-dashboard-client.tsx",
+  ])("%s: <Bloco> antes do primeiro <h2> da página — todo <Bloco> passa nivel={2}", (rel) => {
     const blocos = aberturas(fonteDe(rel), "Bloco");
     expect(blocos.length).toBeGreaterThan(0);
     for (const a of blocos) expect(a, a).toMatch(/\bnivel=\{2\}/);
   });
 
-  it("relatórios e painel financeiro: já há <h2> de seção acima — os <Bloco> ficam no padrão 3", () => {
-    for (const rel of [
-      "src/app/(app)/relatorios/relatorios-client.tsx",
-      "src/app/(app)/dashboard/financeiro/financial-dashboard-client.tsx",
-    ]) {
-      for (const a of aberturas(fonteDe(rel), "Bloco")) expect(a, rel).not.toMatch(/\bnivel=/);
-    }
+  it("relatórios: já há <h2> de seção acima de cada <Bloco> — eles ficam no padrão 3", () => {
+    const blocos = aberturas(fonteDe("src/app/(app)/relatorios/relatorios-client.tsx"), "Bloco");
+    expect(blocos.length).toBeGreaterThan(0);
+    for (const a of blocos) expect(a).not.toMatch(/\bnivel=/);
+  });
+
+  it.each([
+    "barras-entradas-saidas-chart-impl",
+    "categoria-chart-impl",
+    "evolucao-chart-impl",
+    "faturas-chart-impl",
+    "forma-pagamento-chart-impl",
+    "projecao-chart-impl",
+    "rosca-categorias-chart",
+  ])("gráfico %s: o EmptyState mora dentro de um <Bloco> e passa nivel={3}", (nome) => {
+    const vazios = aberturas(fonteDe(`src/components/dashboard/${nome}.tsx`), "EmptyState");
+    expect(vazios.length).toBeGreaterThan(0);
+    for (const a of vazios) expect(a, a).toMatch(/\bnivel=\{3\}/);
   });
 
   it("próximos meses: o título de cada mês é <h3> (sob o <h2> do Bloco), sem pular para <h4>", () => {
