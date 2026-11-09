@@ -438,3 +438,5 @@ Nenhum quadro acima de 50 ms. Sem desaceleração de CPU.
 - A 1280 px, um `StatCard` de `/dashboard/financeiro` tem o número 7 px mais largo que a coluna de
   texto (137 × 130 px). Ele avança sobre o espaço antes do ícone, sem encostar nem cortar. O valor
   usa espaço inseparável, então `break-words` cortaria o número no meio. Fica para decisão do dono.
+- Número do `Indicador` a 28 px: o dado de hoje cabe. Pela conta, sem medição, um valor de sete dígitos fica justo a 1440 px e um de oito não cabe; como o valor usa espaço inseparável, `break-words` o parte no meio dos dígitos. A 1280 px continua em 24 px. Fica para decisão do dono.
+- O número do `Indicador` usa peso 600 (`font-semibold`); o desenho (§6.4) citava 650.

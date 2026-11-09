@@ -271,7 +271,7 @@ export default async function DashboardFinanceiroPage({
       data={dataDaAbertura(hoje)}
       saudacao={saudacaoPara(horaDeBrasiliaAgora())}
       nome={nome}
-      linha={`Aqui está o resumo de ${mesPorExtenso}.`}
+      linha={`Aqui está o resumo financeiro de ${mesPorExtenso}.`}
     />
   );
 

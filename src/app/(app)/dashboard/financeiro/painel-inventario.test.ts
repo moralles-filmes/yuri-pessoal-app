@@ -88,6 +88,10 @@ describe("a abertura é só do servidor", () => {
     expect(CLIENTE.indexOf("{abertura}")).toBeLessThan(CLIENTE.indexOf('id="dash-mes"'));
   });
 
+  it("a linha da abertura diz do que a tela trata: resumo financeiro de <mês>", () => {
+    expect(PAGINA).toContain("resumo financeiro de");
+  });
+
   it("o título é o <h1> da abertura: nem a página nem o cliente têm PageHeader, <h1 ou a frase do dia", () => {
     expect(PAGINA).not.toContain("<PageHeader");
     expect(PAGINA).not.toContain("FRASES_DO_BANNER");
