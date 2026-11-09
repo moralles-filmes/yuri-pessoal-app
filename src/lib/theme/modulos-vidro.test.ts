@@ -62,6 +62,29 @@ describe("09-F · T1 · campos nativos em ladrilho", () => {
     expect(sobrou, `Campo sem o material (use campo-nativo): ${sobrou.join(", ")}`).toEqual([]);
   });
 
+  it("nenhum literal com campo-nativo carrega bg-*, shadow-* ou rounded-* (nem com variante)", () => {
+    // `campo-nativo` é desconhecida do twMerge e `.campo-nativo` sai ANTES das utilitárias com
+    // variante no CSS gerado: `dark:bg-input/30` sobrescreveria o ladrilho no escuro. Fora da
+    // proibição: `[&>option]:bg-*` (estiliza a <option>, não o campo) e variantes de BORDA.
+    const proibido = /^(?:bg|shadow|rounded)(?:-|$)/;
+    const sobrou: string[] = [];
+    for (const arquivo of todosOsTsx()) {
+      if (dentroDeUi(arquivo)) continue;
+      const fonte = fonteSemComentarios(arquivo);
+      for (const m of fonte.matchAll(/"([^"\n]*)"|'([^'\n]*)'|`([^`]*)`/g)) {
+        const classes = (m[1] ?? m[2] ?? m[3] ?? "").split(/\s+/);
+        if (!classes.includes("campo-nativo")) continue;
+        for (const c of classes) {
+          if (c.startsWith("[&>option]:")) continue;
+          if (proibido.test(c.slice(c.lastIndexOf(":") + 1))) {
+            sobrou.push(`${relativo(arquivo)}:${linhaDe(fonte, m.index ?? 0)} ${c}`);
+          }
+        }
+      }
+    }
+    expect(sobrou, `Classe que briga com campo-nativo: ${sobrou.join(", ")}`).toEqual([]);
+  });
+
   it("campo-nativo usa --field-border e --tile", () => {
     const b = semComentarios(bloco("@utility campo-nativo "));
     expect(b, "@utility campo-nativo existe").not.toBe("");
