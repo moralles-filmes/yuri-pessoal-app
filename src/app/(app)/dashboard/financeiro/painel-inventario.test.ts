@@ -154,6 +154,26 @@ describe("indicadores: o número de cada um sai da fonte certa", () => {
   });
 });
 
+describe("09-E R13 — o olho alcança os gráficos do painel", () => {
+  it("todo <...Chart> do cliente fica entre <OlhoDosValores e </OlhoDosValores>", () => {
+    const abre = CLIENTE.indexOf("<OlhoDosValores");
+    const fecha = CLIENTE.indexOf("</OlhoDosValores>");
+    expect(abre).toBeGreaterThanOrEqual(0);
+    expect(fecha).toBeGreaterThan(abre);
+    const graficos = [...CLIENTE.matchAll(/<[A-Z]\w*Chart\b/g)];
+    // Barras, rosca, formas, mês a mês, projeção e faturas.
+    expect(graficos.length).toBeGreaterThanOrEqual(6);
+    for (const g of graficos) {
+      expect(g.index, g[0]).toBeGreaterThan(abre);
+      expect(g.index, g[0]).toBeLessThan(fecha);
+    }
+  });
+
+  it("o invólucro do olho é bloco: o conteúdo vai num <div className=\"space-y-6\">", () => {
+    expect(CLIENTE).toMatch(/<OlhoDosValores[^>]*>\s*<div className="space-y-6">/);
+  });
+});
+
 describe("08 C5.1 — o texto da face do cartão não perde contraste", () => {
   it("a face do cartão não usa opacity no texto (a cor já é escolhida pela luminância do cartão)", () => {
     const inicio = CLIENTE.indexOf('c.texto === "branco"');

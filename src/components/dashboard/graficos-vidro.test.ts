@@ -747,16 +747,45 @@ describe("rosca de categorias em vidro", () => {
     const [pie] = elementos(impl, "Pie");
     expect(pie).toContain("paddingAngle={anguloDoVao(fatias.length, 79)}");
     expect(pie).toContain("isAnimationActive={false}");
-    expect(pie).toContain("onMouseEnter={(_, i) => foco.aoMudar(i)}");
-    expect(pie).toContain("onMouseLeave={() => foco.aoMudar(null)}");
-    expect(pie).toContain("onClick={(_, i) => foco.aoMudar(i)}");
+    expect(pie).toContain("onMouseEnter={(_, i) => aoMudar(i)}");
+    expect(pie).toContain("onMouseLeave={() => aoMudar(null)}");
+    expect(pie).toContain("onClick={(_, i) => aoMudar(i)}");
     expect(pie).not.toContain("strokeWidth");
   });
 
-  it("a fatia não tem contorno e esmaece fora do foco", () => {
+  it("a fatia não tem contorno e a <Cell> NÃO leva opacity (mudar prop de Cell remonta os paths)", () => {
     const [cell] = elementos(impl, "Cell");
     expect(cell).toContain('stroke="none"');
-    expect(cell).toContain("opacity={opacidadeDoGrupo(i, foco.foco)}");
+    expect(cell).not.toContain("opacity");
+  });
+
+  it("o <ResponsiveContainer> inteiro vai em useMemo, com [fatias, aoMudar] (foco não re-renderiza a recharts)", () => {
+    expect(impl).toMatch(/const\s*\{\s*aoMudar\s*,\s*foco:\s*focoAtual\s*\}\s*=\s*foco\s*;/);
+    const memo = /useMemo\(\s*\(\)\s*=>\s*\(\s*<ResponsiveContainer[\s\S]*?<\/ResponsiveContainer>\s*\),\s*\[([^\]]*)\],?\s*\)/.exec(
+      impl,
+    );
+    expect(memo, "useMemo envolvendo o ResponsiveContainer").not.toBeNull();
+    const deps = (memo?.[1] ?? "").split(",").map((d) => d.trim());
+    expect(deps).toEqual(["fatias", "aoMudar"]);
+    // O container memoizado não pode ler o foco (senão a memoização seria inútil).
+    const dentro = memo?.[0] ?? "";
+    expect(dentro).not.toMatch(/\bfoco\b/);
+    // E nenhum <ResponsiveContainer> fora do memo.
+    expect(impl.match(/<ResponsiveContainer/g)).toHaveLength(1);
+  });
+
+  it("o esmaecimento é aplicado por efeito, em cada .recharts-pie-sector, na ordem do DOM", () => {
+    expect(impl).toMatch(/import\s*\{[^}]*\buseEffect\b[^}]*\}\s*from "react"/);
+    expect(impl).toMatch(/import\s*\{[^}]*\buseRef\b[^}]*\}\s*from "react"/);
+    const efeito = /useEffect\(\(\)\s*=>\s*\{([\s\S]*?)\},\s*\[([^\]]*)\]\s*\)/.exec(impl);
+    expect(efeito, "useEffect de esmaecimento").not.toBeNull();
+    expect(efeito?.[1]).toContain(".recharts-pie-sector");
+    expect(efeito?.[1]).toMatch(/\.style\.opacity\s*=\s*String\(opacidadeDoGrupo\(\w+,\s*\w+\)\)/);
+    expect(efeito?.[2]).toMatch(/\bfocoAtual\b|\bfoco\b/);
+    // O invólucro memoizado leva o ref dos setores.
+    const comRef = elementos(impl, "div").filter((e) => /\bref=\{refDosSetores\}/.test(e));
+    expect(comRef.length).toBe(1);
+    expect(impl).not.toMatch(/transition/);
   });
 
   it("sem dica flutuante: Tooltip com content nulo e nenhum estilo antigo", () => {

@@ -386,8 +386,10 @@ export function DashboardClient({
         </div>
       )}
 
-      {/* Os quatro indicadores. O olho esconde os quatro; só o Saldo leva o botão. */}
+      {/* O olho cobre os quatro indicadores, os gráficos e os blocos de valor do painel; só o Saldo
+          leva o botão. O invólucro é um bloco: o `space-y-6` de dentro mantém o ritmo do pai. */}
       <OlhoDosValores ocultoInicial={ocultos}>
+        <div className="space-y-6">
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           <Indicador
             className="col-span-3 sm:col-span-1"
@@ -452,7 +454,6 @@ export function DashboardClient({
           linkLancamentos={linkLancamentos}
           linkContas={linkContas}
         />
-      </OlhoDosValores>
 
       {/* Bloco do caixa (só na base caixa) */}
       {base === "caixa" && caixa && (
@@ -944,6 +945,8 @@ export function DashboardClient({
           </Card>
         </div>
       </section>
+        </div>
+      </OlhoDosValores>
     </div>
   );
 }

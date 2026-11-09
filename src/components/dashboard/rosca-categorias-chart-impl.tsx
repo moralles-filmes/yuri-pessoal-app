@@ -7,6 +7,7 @@
  * fachada, porque não usam `recharts`.
  */
 
+import { useEffect, useMemo, useRef } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { ValorComOlho } from "@/components/shared/painel/valor-com-olho";
 import { formatCurrency } from "@/lib/format";
@@ -32,10 +33,15 @@ export function RoscaCategoriasChart({
 }) {
   // `ref` sai do objeto: um `ref={x.ref}` faz o lint do React tratar `x` inteiro como ref.
   const { ref: refDoGrafico, ...foco } = useFocoDoGrafico({ zerarAoDispensar: true });
-  const centro = centroDaRosca({ fatias, total, rotuloDoTotal }, foco.foco);
+  const { aoMudar, foco: focoAtual } = foco;
+  const centro = centroDaRosca({ fatias, total, rotuloDoTotal }, focoAtual);
+  const refDosSetores = useRef<HTMLDivElement>(null);
 
-  return (
-    <div ref={refDoGrafico} className="relative">
+  // O container da recharts é memoizado e a `<Cell>` não leva `opacity`: mudar prop de `Cell` troca
+  // a chave de animação e a recharts remonta os `path`, perdendo o hover. O esmaecimento vai direto
+  // no DOM, abaixo, e mudar o foco não re-renderiza a recharts (`aoMudar` é estável).
+  const grafico = useMemo(
+    () => (
       <ResponsiveContainer width="100%" height={260}>
         <PieChart>
           <Pie
@@ -46,22 +52,32 @@ export function RoscaCategoriasChart({
             outerRadius={96}
             paddingAngle={anguloDoVao(fatias.length, 79)}
             isAnimationActive={false}
-            onMouseEnter={(_, i) => foco.aoMudar(i)}
-            onMouseLeave={() => foco.aoMudar(null)}
-            onClick={(_, i) => foco.aoMudar(i)}
+            onMouseEnter={(_, i) => aoMudar(i)}
+            onMouseLeave={() => aoMudar(null)}
+            onClick={(_, i) => aoMudar(i)}
           >
             {fatias.map((f, i) => (
-              <Cell
-                key={f.categoryId ?? i}
-                fill={corDaFatia(f, i)}
-                stroke="none"
-                opacity={opacidadeDoGrupo(i, foco.foco)}
-              />
+              <Cell key={f.categoryId ?? i} fill={corDaFatia(f, i)} stroke="none" />
             ))}
           </Pie>
           <Tooltip content={() => null} />
         </PieChart>
       </ResponsiveContainer>
+    ),
+    [fatias, aoMudar],
+  );
+
+  // A ordem dos setores no DOM é a de `fatias`. Sem transição: o plano só a pede nas barras.
+  useEffect(() => {
+    const setores = refDosSetores.current?.querySelectorAll<SVGElement>(".recharts-pie-sector");
+    setores?.forEach((el, i) => {
+      el.style.opacity = String(opacidadeDoGrupo(i, focoAtual));
+    });
+  }, [focoAtual, fatias]);
+
+  return (
+    <div ref={refDoGrafico} className="relative">
+      <div ref={refDosSetores}>{grafico}</div>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
         <span className="max-w-26 text-center text-base leading-tight font-semibold tabular-nums">
           <ValorComOlho texto={formatCurrency(centro.valor)} />
