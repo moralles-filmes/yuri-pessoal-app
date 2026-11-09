@@ -224,6 +224,8 @@ sempre `fog-3`):
 | `--warning-ink` | **7,96:1** |
 | `--info-ink` | **5,84:1** |
 
+> **09-F:** `--fog-1` e `--fog-3` do escuro baixaram para .55 e .54; as razões desta tabela são as da 09-A e ficaram um pouco maiores. A verdade viva é `contraste-dos-tokens.test.ts`.
+
 Direto sobre a névoa aberta: `--foreground` **10,73:1** · `--muted-on-fog` **4,95:1**.
 ⚠️ **09-F T3:** o ladrilho direto na névoa (`EmptyState`) reprovou no escuro com `--muted-foreground` (4,36:1 em `fog-1`, 4,26:1 em `fog-3`). Baixou-se o alfa da névoa, não o texto: `--fog-1` 0,60 → **0,55** (4,63:1) e `--fog-3` 0,60 → **0,54** (4,56:1). `--fog-2` ficou.
 Preenchimentos: `--primary-fill-foreground` sobre `--primary-fill` **4,70:1**;
@@ -432,6 +434,15 @@ Nenhum token ou material novo. Saíram `--banner-from` e `--banner-to`.
 | `PageHeader` | `<h1>` 32 px (26 px no celular) / 700 / −0,03em |
 
 ---
+
+### 09-F · módulos
+
+- **`campo-nativo`** (`@utility`): `<select>` e `<input>` nativos fora das primitivas. O twMerge não a conhece: não combine com `bg-*`, `border-*`, `shadow-*` ou `rounded-*` no mesmo elemento.
+- **`CirculoDeConcluir`** (`src/components/shared/circulo-de-concluir.tsx`): círculo de 22 px dentro de área de toque de 44 px. Usado no TO-DO e em hábitos; rotinas, `/tarefas`, aulas e subtarefas continuam quadrados.
+- **Raio:** linha de lista e barra de ferramentas 16 px; painel interno 14 px; superfície que contém uma grade 24 px.
+- **Onde o texto pousa:** direto na névoa, só `foreground` e `muted-on-fog`. `muted-foreground` e os coloridos ficam dentro de vidro ou ladrilho.
+- **Borda de estado nova:** `border-primary/75`, medida a 3:1 sobre o cartão composto.
+- **Seleção sobre vidro:** `outline`, nunca `ring-offset-*`, cujo vão é opaco.
 
 ## 7. Paleta de gráficos — **validada, não escolhida no olho**
 

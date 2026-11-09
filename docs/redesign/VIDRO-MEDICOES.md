@@ -499,3 +499,59 @@ Nenhum quadro acima de 50 ms. Sem desaceleração de CPU.
 - Tabelas do painel com dinheiro sem `ValorComOlho` continuam visíveis com o olho fechado.
 - As pilhas (faturas, projeção) crescem por segmento, cada um da própria base.
 - Teclado não troca o centro da rosca; a legenda traz os mesmos dados.
+
+## REDESIGN-09-F — varredura dos módulos em vidro (2026-11-09)
+
+Base do bundle: início da fase (commit do plano `e773be0`). Servidor de produção, sessão real no Chrome.
+
+### Testes e orçamento
+
+| | Antes | Depois |
+| --- | --- | --- |
+| Testes | 8.787 (375 arquivos) | 9.003 (376 arquivos) |
+| Mediana de JS gz, 71 rotas | 203,860 KB | 203,842 KB |
+| Rota mais pesada (`/todo`) | 227,164 KB | 227,456 KB |
+| Maior alta | | `/terceiros` +0,645 KB |
+| Rotas acima de +1 KB | | 0 |
+| Lint, tsc, build, `perf:bundle` | verdes | verdes |
+
+### Amostrador (mesmo método da 09-A, iframe de 1280×800, `document.hasFocus()` verdadeiro em todas as rodadas)
+
+| Tela | Tema | fps médio (3 rodadas) | p95 (ms) | maior quadro (ms), 3 rodadas |
+| --- | --- | --- | --- | --- |
+| `/dashboard` | claro | 61,0 · 61,0 · 61,1 | 35,0 | 35,2 · 35,1 · 35,2 |
+| `/dashboard` | escuro | 74,1 · 61,1 · 61,1 | 35,0 | 35,2 · 35,2 · 35,1 |
+| `/dashboard/financeiro` | claro | 61,1 · 61,1 · 60,9 | 35,0–35,1 | 35,2 · 35,2 · 35,1 |
+| `/dashboard/financeiro` | escuro | 61,0 · 60,8 · 60,8 | 35,0 | 35,2 · 35,2 · 35,1 |
+| `/financeiro/lancamentos` | claro | 61,3 · 61,1 · 61,3 | 35,0–35,1 | 35,1 · 35,2 · 35,1 |
+| `/financeiro/lancamentos` | escuro | 76,2 · 61,2 · 61,0 | 35,0 | 35,2 · 35,2 · 35,2 |
+| `/todo` | claro e escuro | 200 | 5,1 | 5,2 (ver a ressalva) |
+
+Nenhum quadro acima de 50 ms. Sem desaceleração de CPU.
+
+⚠️ A média caiu de cerca de 120 fps (09-E) para cerca de 61 fps, com o p95 de 15 para 35 ms. A causa não foi isolada: esta medição não separa a fase de carga da máquina. `/todo` não tinha conteúdo que rolasse na janela (rolagem 0), então seu número não mede nada; por isso entrou `/financeiro/lancamentos`, com 18.646 px de rolagem.
+
+### iPhone
+
+Conferência do dono no Safari, servidor de produção na rede local: rolagem nos dois temas, círculo de concluir, toque na dica e na rosca, desfoque da dica, largura de `/rotinas`. Resposta: tudo certo.
+
+### O que a conferência mostrou
+
+- 63 rotas autenticadas varridas no DOM a 1280 px nos dois temas: `h1` único, nenhum salto de título, nenhuma rolagem horizontal.
+- Folhas de 62 rotas em 390, 768, 1280 e 1440 px nos dois temas, olhando a primeira dobra de cada uma, com medição de estouro em todas as larguras. Abaixo da dobra, só a medição.
+- Círculo de concluir: 44×44 em `/habitos` e `/todo`, a 390 e 1280 px. Grade de 49 pontos por círculo, nenhum em outro controle, sem clicar.
+- Hover, foco visível, menu, diálogo e gaveta conferidos. O seletor nativo aberto não aparece em captura.
+- Só mostraram vazio: `/financeiro/recorrencias`, `/tarefas`, `/nutricao/metas`, `/nutricao/compras`, `/nutricao/receitas`, `/nutricao/substituicoes`, `/nutricao/planejamento`, `/nutricao/diario`, `/ia/memoria`, `/busca` e a vista Hoje de `/todo`.
+- Não abertas: `/treinos/exercicios/[id]` (sem link com identificador na listagem), `/treinos/sessao/preparar`, `/treinos/sessao/revisar`.
+
+### Defeitos que só o navegador mostrou
+
+- `/rotinas` estourava 75 px a 390 px: texto em `truncate` numa grade sem coluna explícita. Corrigido com `grid-cols-1`.
+- `--muted-foreground` no claro direto na névoa dá 3,8:1 em `fog-1` e 4,18:1 em `fog-2`, um par que o teste não cobria. Passou a `--muted-on-fog` e entrou em `DIVIDA_NA_NEVOA`.
+- Bordas de estado planejadas a 40% e 50% davam 1,85:1. Subiram para `border-primary/75`, 3,08:1 no claro e 4,03:1 no escuro.
+
+### Para as próximas fases
+
+- O número do Indicador parte em duas linhas a 1280 px em `/cartoes/relatorios`, `/faturas` e `/parcelamentos`.
+- O calendário de `/treinos/calendario` a 1280 px trunca o nome do treino em uma letra.
+- Bordas de estado anteriores à 09-F não foram medidas a 3:1: `border-primary/30` em Dieta, `/60` no histórico e `/50` no dia de hoje do calendário.
