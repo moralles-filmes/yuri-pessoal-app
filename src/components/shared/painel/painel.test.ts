@@ -264,8 +264,8 @@ describe("conferência visual (04-A2) — o cabeçalho do bloco", () => {
   const fonteBloco = semComentarios(ler("bloco.tsx"));
 
   it("o título quebra linha em vez de cortar (a 390 px, 'valor cheio' e 'mês a mês' sumiam)", () => {
-    expect(fonteBloco).not.toMatch(/<h3 className="[^"]*\btruncate\b/);
-    expect(fonteBloco).toMatch(/<h3 className="[^"]*\bbreak-words\b/);
+    expect(fonteBloco).not.toMatch(/<Titulo className="[^"]*\btruncate\b/);
+    expect(fonteBloco).toMatch(/<Titulo className="[^"]*\bbreak-words\b/);
   });
 
   it("a ação (selo 'filtrado: …') desce para a linha de baixo quando falta espaço, em vez de espremer o título", () => {
@@ -409,7 +409,7 @@ describe("09-D T3 - bloco e moldura do dashboard em vidro", () => {
   );
 
   const doCard = /<Card className=\{cn\(([\s\S]*?)\)\}/.exec(bloco)?.[1] ?? "";
-  const doH3 = /<h3 className="([^"]*)"/.exec(bloco)?.[1] ?? "";
+  const doH3 = /<Titulo className="([^"]*)"/.exec(bloco)?.[1] ?? "";
   const doLink = /<Link\s+href=\{verTodos\.href\}\s+className="([^"]*)"/.exec(bloco)?.[1] ?? "";
   const doIcone = /<Icone\b[^>]*\/>/.exec(bloco)?.[0] ?? "";
 

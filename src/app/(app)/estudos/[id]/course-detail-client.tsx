@@ -303,6 +303,7 @@ export function CourseDetailClient({
           {detail.sessions.length === 0 ? (
             <EmptyState
               icon={NotebookPen}
+              nivel={3}
               title="Nenhuma sessão registrada para este curso"
               className="py-8"
             />

@@ -27,6 +27,7 @@ export function Bloco({
   vazio,
   falha,
   naoSegue,
+  nivel = 3,
   children,
   className,
 }: {
@@ -41,9 +42,15 @@ export function Bloco({
   falha?: { frase: string };
   /** A frase do motivo vem PRONTA de quem chama; o bloco só a mostra e oferece a saída. */
   naoSegue?: { frase: string; hrefSemFiltro: string };
+  /**
+   * Nível do título na página. `3` (padrão) quando já há um `<h2>` de seção acima do bloco; `2` quando
+   * o bloco é a própria seção, numa página que só tem o `<h1>`. Só troca a tag: o tamanho vem das classes.
+   */
+  nivel?: 2 | 3;
   children?: React.ReactNode;
   className?: string;
 }) {
+  const Titulo = nivel === 2 ? "h2" : "h3";
   return (
     <Card className={cn("overflow-hidden rounded-[28px]", className)}>
       <CardContent className="space-y-4 px-4 sm:px-5">
@@ -60,9 +67,9 @@ export function Bloco({
                 />
               ) : null}
               <div className="min-w-0">
-                <h3 className="text-[1.0625rem] leading-snug font-semibold tracking-[-0.018em] break-words">
+                <Titulo className="text-[1.0625rem] leading-snug font-semibold tracking-[-0.018em] break-words">
                   {titulo}
-                </h3>
+                </Titulo>
                 {subtitulo ? (
                   <p className="text-xs text-muted-foreground">{subtitulo}</p>
                 ) : null}

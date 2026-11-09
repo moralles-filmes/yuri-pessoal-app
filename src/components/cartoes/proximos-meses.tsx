@@ -357,12 +357,12 @@ function ListaPorMes({ dados, mesAtual }: { dados: ProximosMeses; mesAtual: stri
         return (
           <section key={mes} className="border-b last:border-b-0">
             <div className="flex items-baseline justify-between gap-2.5 px-4 pt-3 pb-1.5">
-              <h4 className="min-w-0 text-sm font-semibold">
+              <h3 className="min-w-0 text-sm font-semibold">
                 {tituloDoMes(mes)}
                 {mes === mesAtual && (
                   <span className="text-xs font-normal text-muted-foreground"> · atual</span>
                 )}
-              </h4>
+              </h3>
               <span className="shrink-0 text-xs tabular-nums">
                 {total ? (
                   <>
@@ -447,6 +447,7 @@ export function ProximosMesesTela({
 
   return (
     <Bloco
+      nivel={2}
       titulo="Cartão × mês"
       subtitulo="valores por fatura · minha parte abaixo do total"
       acao={<BotaoDoOlho />}

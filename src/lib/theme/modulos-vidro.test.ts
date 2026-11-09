@@ -829,3 +829,96 @@ describe("09-F · T6 · anéis e peças de estilo próprio", () => {
     expect(abertura).toMatch(/data-\[side=bottom\]:max-h-\[88dvh\]/);
   });
 });
+
+describe("09-F · T7 · hierarquia de títulos", () => {
+  const raiz = path.resolve(SRC, "..");
+  const fonteDe = (rel: string) => fonteSemComentarios(path.join(raiz, rel));
+  const classesDe = (abertura: string) =>
+    (/className="([^"]*)"/.exec(abertura)?.[1] ?? "").split(/\s+/).filter(Boolean);
+
+  it("Bloco: o título é a tag vinda de `nivel` (2 ou 3, padrão 3), sem <h3> fixo", () => {
+    const fonte = fonteDe("src/components/shared/painel/bloco.tsx");
+    expect(fonte).toContain("nivel?: 2 | 3");
+    expect(fonte).toMatch(/nivel\s*=\s*3\b/);
+    expect(fonte).toMatch(/const Titulo\s*=\s*nivel === 2 \? "h2" : "h3"/);
+    expect(fonte).not.toMatch(/<h3\b/);
+    const titulo = aberturas(fonte, "Titulo")[0] ?? "";
+    expect(titulo).not.toBe("");
+    // O tamanho visual é o mesmo de antes: 17 px, semibold, tracking e quebra de palavra.
+    for (const c of ["text-[1.0625rem]", "leading-snug", "font-semibold", "tracking-[-0.018em]", "break-words"]) {
+      expect(classesDe(titulo), c).toContain(c);
+    }
+  });
+
+  it.each([
+    "src/app/(app)/faturas/statements-client.tsx",
+    "src/app/(app)/parcelamentos/installments-client.tsx",
+    "src/components/cartoes/proximos-meses.tsx",
+    "src/components/cartoes/relatorio-de-cartao.tsx",
+  ])("%s: página sem <h2> — todo <Bloco> passa nivel={2}", (rel) => {
+    const blocos = aberturas(fonteDe(rel), "Bloco");
+    expect(blocos.length).toBeGreaterThan(0);
+    for (const a of blocos) expect(a, a).toMatch(/\bnivel=\{2\}/);
+  });
+
+  it("relatórios e painel financeiro: já há <h2> de seção acima — os <Bloco> ficam no padrão 3", () => {
+    for (const rel of [
+      "src/app/(app)/relatorios/relatorios-client.tsx",
+      "src/app/(app)/dashboard/financeiro/financial-dashboard-client.tsx",
+    ]) {
+      for (const a of aberturas(fonteDe(rel), "Bloco")) expect(a, rel).not.toMatch(/\bnivel=/);
+    }
+  });
+
+  it("próximos meses: o título de cada mês é <h3> (sob o <h2> do Bloco), sem pular para <h4>", () => {
+    const fonte = fonteDe("src/components/cartoes/proximos-meses.tsx");
+    expect(fonte).not.toMatch(/<h4\b/);
+    const h3 = aberturas(fonte, "h3")[0] ?? "";
+    expect(classesDe(h3)).toEqual(["min-w-0", "text-sm", "font-semibold"]);
+  });
+
+  it("EmptyState: o título é a tag vinda de `nivel` (2, 3 ou 4; padrão 2), sem <h3> fixo", () => {
+    const fonte = fonteDe("src/components/shared/empty-state.tsx");
+    expect(fonte).toContain("nivel?: 2 | 3 | 4");
+    expect(fonte).toMatch(/nivel\s*=\s*2\b/);
+    expect(fonte).toMatch(/const Titulo\s*=\s*`h\$\{nivel\}` as const/);
+    expect(fonte).not.toMatch(/<h3\b/);
+    expect(classesDe(aberturas(fonte, "Titulo")[0] ?? "")).toEqual(["text-base", "font-semibold"]);
+  });
+
+  // Chamadores que moram DENTRO de uma seção já titulada na mesma tela: o estado vazio é filho
+  // desse título e não pode empatar com ele. [arquivo, título do estado vazio, nível esperado]
+  it.each([
+    ["src/app/(app)/estudos/[id]/course-detail-client.tsx", "Nenhuma sessão registrada para este curso", 3],
+    ["src/components/studies/course-tree.tsx", "Sem módulos ainda", 3],
+    ["src/components/studies/vocabulary-view.tsx", "Sem vocabulário", 3],
+    ["src/components/studies/vocabulary-view.tsx", "Nenhum termo neste nível", 3],
+    ["src/components/studies/practice-view.tsx", "Nenhuma prática registrada ainda", 4],
+    ["src/app/(app)/rotinas/routines-client.tsx", "Nenhuma rotina para hoje", 3],
+    ["src/app/(app)/tarefas/tasks-client.tsx", "Dia tranquilo por aqui", 3],
+    ["src/app/(app)/tarefas/tasks-client.tsx", "Nenhuma rotina para hoje", 3],
+    ["src/app/(app)/treinos/page.tsx", "Nenhum treino registrado nesta semana ainda", 3],
+    ["src/app/(app)/ia/comprovantes/page.tsx", "Nenhum comprovante enviado", 3],
+  ] as const)("%s: EmptyState «%s» fica sob um título e passa nivel={%i}", (rel, titulo, nivel) => {
+    const alvo = aberturas(fonteDe(rel), "EmptyState").filter((a) => a.includes(`"${titulo}"`));
+    expect(alvo, titulo).toHaveLength(1);
+    expect(alvo[0]).toMatch(new RegExp(String.raw`\bnivel=\{${nivel}\}`));
+  });
+
+  it("colunas do quadro: o título da coluna é <h2>, com as mesmas classes", () => {
+    const todo = fonteDe("src/components/todo/task-board.tsx");
+    expect(todo).not.toMatch(/<h3\b/);
+    expect(classesDe(aberturas(todo, "h2")[0] ?? "")).toEqual(["min-w-0", "flex-1", "truncate", "text-sm", "font-semibold"]);
+    const tarefas = fonteDe("src/components/tasks/kanban-board.tsx");
+    expect(tarefas).not.toMatch(/<h3\b/);
+    expect(classesDe(aberturas(tarefas, "h2")[0] ?? "")).toEqual(["text-sm", "font-semibold"]);
+  });
+
+  it("preferências da IA: as três seções são <h2> (irmãs de «Provedores» e «Seus dados»), mesmas classes", () => {
+    const fonte = fonteDe("src/components/ai/ai-preferences-form.tsx");
+    expect(fonte).not.toMatch(/<h3\b/);
+    const h2 = aberturas(fonte, "h2");
+    expect(h2).toHaveLength(3);
+    for (const a of h2) expect(classesDe(a)).toEqual(["text-sm", "font-medium"]);
+  });
+});

@@ -87,7 +87,7 @@ export function KanbanBoard({
           )}
         >
           <div className="flex items-center justify-between px-1 pb-2">
-            <h3 className="text-sm font-semibold">{TASK_STATUS_LABELS[status]}</h3>
+            <h2 className="text-sm font-semibold">{TASK_STATUS_LABELS[status]}</h2>
             <span className="rounded-full bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
               {columns[status].length}
             </span>

@@ -143,6 +143,7 @@ export function RoutinesClient({
             {todays.length === 0 ? (
               <EmptyState
                 icon={CalendarCheck}
+                nivel={3}
                 title="Nenhuma rotina para hoje"
                 description="As rotinas ativas aparecem aqui nos dias em que estão agendadas."
                 className="py-8"

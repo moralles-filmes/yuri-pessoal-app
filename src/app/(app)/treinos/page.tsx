@@ -344,6 +344,7 @@ export default async function TreinosPage() {
         {dashboard.metrics.sessionCount === 0 && (
           <EmptyState
             icon={Dumbbell}
+            nivel={3}
             title="Nenhum treino registrado nesta semana ainda"
             description="Quando você finalizar uma sessão, o volume, as séries e a aderência aparecem aqui."
             className="py-8"

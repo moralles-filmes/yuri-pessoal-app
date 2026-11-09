@@ -312,7 +312,7 @@ export function AiPreferencesForm({
         {/* ── Leituras autorizadas ──────────────────────────────────────────────────── */}
         <div className="space-y-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-medium">Leituras autorizadas</h3>
+            <h2 className="text-sm font-medium">Leituras autorizadas</h2>
             <p className="text-xs text-muted-foreground">
               O assistente só consulta um módulo se a chave dele estiver ligada aqui. Todas
               nascem desligadas, valem só para <strong>leitura</strong> e podem ser
@@ -338,7 +338,7 @@ export function AiPreferencesForm({
         {/* ── Alterações autorizadas (18-C) ─────────────────────────────────────────── */}
         <div className="space-y-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-medium">Alterações autorizadas</h3>
+            <h2 className="text-sm font-medium">Alterações autorizadas</h2>
             <p className="text-xs text-muted-foreground">{AVISO_DA_ESCRITA}</p>
           </div>
 
@@ -581,7 +581,7 @@ export function AiPreferencesForm({
         */}
         <div className="space-y-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-medium">Botão flutuante</h3>
+            <h2 className="text-sm font-medium">Botão flutuante</h2>
             <p className="text-xs text-muted-foreground">
               O atalho para conversar com o assistente sem sair da tela em que você está.
               Ocultar tira o <strong>botão</strong> da tela — o atalho {ATALHO_DO_PAINEL}{" "}

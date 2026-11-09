@@ -99,6 +99,7 @@ export function PracticeView({
         {practice.length === 0 ? (
           <EmptyState
             icon={Languages}
+            nivel={4}
             title="Nenhuma prática registrada ainda"
             className="py-8"
           />

@@ -108,6 +108,7 @@ export function VocabularyView({
       {vocabulary.length === 0 ? (
         <EmptyState
           icon={Languages}
+          nivel={3}
           title="Sem vocabulário"
           description="Adicione termos com tradução, exemplo e nível de domínio."
         >
@@ -122,7 +123,7 @@ export function VocabularyView({
           </Button>
         </EmptyState>
       ) : shown.length === 0 ? (
-        <EmptyState icon={Languages} title="Nenhum termo neste nível" className="py-8" />
+        <EmptyState icon={Languages} nivel={3} title="Nenhum termo neste nível" className="py-8" />
       ) : (
         <div className="space-y-2">
           {shown.map((v) => (

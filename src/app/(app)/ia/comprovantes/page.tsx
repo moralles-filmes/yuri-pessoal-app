@@ -232,6 +232,7 @@ export default async function ComprovantesPage({
         {lista.itens.length === 0 ? (
           <EmptyState
             icon={FileText}
+            nivel={3}
             title="Nenhum comprovante enviado"
             description="Envie uma foto ou um PDF acima. Ele fica guardado aqui, e nada sai do sistema até você pedir a leitura."
           />

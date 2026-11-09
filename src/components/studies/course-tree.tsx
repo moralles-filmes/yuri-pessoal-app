@@ -72,6 +72,7 @@ export function CourseTree({
       {modules.length === 0 ? (
         <EmptyState
           icon={Layers}
+          nivel={3}
           title="Sem módulos ainda"
           description="Organize o curso em módulos e adicione as aulas de cada um."
         >

@@ -519,6 +519,7 @@ function TodayView({
         {todays.length === 0 ? (
           <EmptyState
             icon={CheckCircle2}
+            nivel={3}
             title="Dia tranquilo por aqui"
             description="Nada vence hoje. Que tal adiantar algo?"
           >
@@ -561,6 +562,7 @@ function RoutinesTodayCard({
     return (
       <EmptyState
         icon={Repeat}
+        nivel={3}
         title="Nenhuma rotina para hoje"
         description="As rotinas ativas aparecem aqui nos dias em que estão agendadas."
         className="py-8"

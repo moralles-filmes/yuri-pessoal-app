@@ -885,6 +885,7 @@ export function StatementsClient({
         ) : (
           <div className="space-y-4">
             <Bloco
+              nivel={2}
               titulo="Precisam de pagamento"
               subtitulo="atrasadas primeiro, depois por vencimento"
               estado={estadoDoBloco({ ok: true, itens: grupos.pagar })}
@@ -901,6 +902,7 @@ export function StatementsClient({
               .filter((g) => g.linhas.length > 0)
               .map((g) => (
                 <Bloco
+                  nivel={2}
                   key={g.chave}
                   titulo={g.titulo}
                   subtitulo={g.subtitulo}

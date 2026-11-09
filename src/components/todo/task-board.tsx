@@ -205,7 +205,7 @@ function BoardColumnView({
       )}
     >
       <header className="flex items-center justify-between gap-1 px-0.5">
-        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold">{column.title}</h3>
+        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{column.title}</h2>
         <span className="rounded-full bg-muted px-2 py-0.5 text-[0.7rem] text-muted-foreground">
           {column.tasks.length}
         </span>
