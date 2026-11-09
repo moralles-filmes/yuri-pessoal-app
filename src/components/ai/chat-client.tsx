@@ -828,7 +828,7 @@ export function ChatView({
       */}
       {bolhas.length === 0 && podeConversar && (
         <div className="space-y-2 pb-1">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-on-fog">
             Ou comece por um panorama — o assistente consulta os módulos que você liberou e
             escreve um resumo. O que estiver desligado fica de fora, e ele diz o que ficou.
           </p>

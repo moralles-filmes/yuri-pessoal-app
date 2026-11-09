@@ -1100,3 +1100,16 @@ describe("09-F · T8 · restos da varredura no navegador", () => {
     expect(f).not.toContain('className="grid gap-2"');
   });
 });
+
+describe("09-F · T8 · últimos textos na névoa vistos no navegador", () => {
+  const raiz = path.resolve(SRC, "..");
+  it("cabeçalho do dia e o estado Descanso do calendário em muted-on-fog", () => {
+    const f = fonteSemComentarios(path.join(raiz, "src/app/(app)/treinos/calendario/calendar-client.tsx"));
+    expect(f).toContain('isToday ? "text-primary" : "text-muted-on-fog"');
+    expect(f).toContain('descanso: "border-dashed border-border bg-transparent text-muted-on-fog"');
+  });
+  it("o convite aos panoramas do chat em muted-on-fog", () => {
+    const f = fonteSemComentarios(path.join(raiz, "src/components/ai/chat-client.tsx"));
+    expect(f).toMatch(/<p className="text-xs text-muted-on-fog">\s*Ou comece por um panorama/);
+  });
+});

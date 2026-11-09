@@ -135,7 +135,7 @@ const STATUS_STYLES: Record<StatusExibido, string> = {
   cancelado: "border-border bg-muted/40 line-through opacity-70",
   // G2 (REDESIGN-07-C): descanso era passado por derivePlannedStatus no mês e na lista e saía
   // "Atrasado", em tom de alarme. Agora tem o tratamento neutro que a semana já dava.
-  descanso: "border-dashed border-border bg-transparent text-muted-foreground",
+  descanso: "border-dashed border-border bg-transparent text-muted-on-fog",
 };
 
 /** O status do chip do mês também em forma, não só em cor (D4). */
@@ -572,7 +572,7 @@ function DayColumn({
         <span
           className={cn(
             "text-xs font-medium",
-            isToday ? "text-primary" : "text-muted-foreground",
+            isToday ? "text-primary" : "text-muted-on-fog",
           )}
         >
           {label}
@@ -626,7 +626,7 @@ function DraggableEntry({
 
   if (entry.entryKind === "descanso") {
     return (
-      <div className="flex items-center gap-1.5 rounded-lg border border-dashed p-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-1.5 rounded-lg border border-dashed p-2 text-xs text-muted-on-fog">
         <Moon className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{entry.title ?? "Descanso"}</span>
         <button
