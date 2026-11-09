@@ -164,7 +164,7 @@ describe("09-F · T2 · círculo de concluir", () => {
     const classes = classesDe(raiz[0] ?? "");
     expect(classes).toContain("size-11");
     expect(classes).toContain("shrink-0");
-    expect(classes).toContain("group");
+    expect(classes).toContain("group/circulo");
     expect(
       classes.filter((c) => c.includes("after:") || c.includes("-inset")),
       "a área de toque é espaço reservado, não uma sobreposição",
@@ -185,14 +185,34 @@ describe("09-F · T2 · círculo de concluir", () => {
     expect(transicao, "transition-[...] explícito").toBeDefined();
     expect(transicao).toMatch(/\bscale\b/);
     expect(classes.some((c) => c.startsWith("motion-reduce:"))).toBe(true);
-    expect(classes).toContain("group-active:scale-[.9]");
+    expect(classes).toContain("group-active/circulo:scale-[.9]");
+  });
+
+  it("o grupo é NOMEADO: nenhum group sem nome nem group-*: sem /circulo no componente", () => {
+    // Sem nome, `group-active:` casa com QUALQUER ancestral `.group` (a linha do TO-DO é um):
+    // pressionar o título ou o menu da linha encolheria o círculo.
+    const sem: string[] = [];
+    for (const m of fonte.matchAll(/"([^"\n]*)"/g)) {
+      for (const c of (m[1] ?? "").split(/\s+/)) {
+        const base = c.slice(c.lastIndexOf(":") + 1);
+        if (base === "group") sem.push(c);
+        const variantes = c.slice(0, c.lastIndexOf(":") + 1);
+        for (const v of variantes.split(":").filter(Boolean)) {
+          if (/^group-/.test(v) && !/^group-.+\/circulo$/.test(v.replace(/\[[^\]]*\]/g, ""))) {
+            sem.push(c);
+          }
+        }
+      }
+    }
+    expect(sem, `group sem nome em: ${sem.join(", ")}`).toEqual([]);
+    expect(classesDe(raiz[0] ?? "")).toContain("group/circulo");
   });
 
   it("o foco aparece no círculo, e o visto entra com ease-estalo", () => {
     const classes = classesDe(visivel[0] ?? "");
-    expect(classes).toContain("group-focus-visible:outline-2");
-    expect(classes).toContain("group-focus-visible:outline-offset-2");
-    expect(classes).toContain("group-focus-visible:outline-ring");
+    expect(classes).toContain("group-focus-visible/circulo:outline-2");
+    expect(classes).toContain("group-focus-visible/circulo:outline-offset-2");
+    expect(classes).toContain("group-focus-visible/circulo:outline-ring");
     expect(fonte).toMatch(/<CheckboxPrimitive\.Indicator/);
     expect(fonte).toMatch(/ease-estalo/);
   });

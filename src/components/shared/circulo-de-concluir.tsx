@@ -37,13 +37,13 @@ export function CirculoDeConcluir({
       disabled={disabled}
       aria-label={ariaLabel}
       className={cn(
-        "group grid size-11 shrink-0 place-items-center rounded-full outline-none disabled:cursor-not-allowed disabled:opacity-50",
+        "group/circulo grid size-11 shrink-0 place-items-center rounded-full outline-none disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
     >
       <span
         aria-hidden
-        className="grid size-[22px] place-items-center rounded-full border-2 border-foreground/52 transition-[background-color,border-color,color,scale] duration-200 ease-estalo group-focus-visible:outline-2 group-focus-visible:outline-solid group-focus-visible:outline-offset-2 group-focus-visible:outline-ring group-active:scale-[.9] group-data-[state=checked]:border-primary-fill group-data-[state=checked]:bg-primary-fill group-data-[state=checked]:text-primary-fill-foreground motion-reduce:transition-none"
+        className="grid size-[22px] place-items-center rounded-full border-2 border-foreground/52 transition-[background-color,border-color,color,scale] duration-200 ease-estalo group-focus-visible/circulo:outline-2 group-focus-visible/circulo:outline-solid group-focus-visible/circulo:outline-offset-2 group-focus-visible/circulo:outline-ring group-active/circulo:scale-[.9] group-data-[state=checked]/circulo:border-primary-fill group-data-[state=checked]/circulo:bg-primary-fill group-data-[state=checked]/circulo:text-primary-fill-foreground motion-reduce:transition-none"
       >
         <CheckboxPrimitive.Indicator
           data-slot="circulo-de-concluir-indicator"
