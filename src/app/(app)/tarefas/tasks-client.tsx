@@ -629,11 +629,11 @@ function WeekView({
                 aria-current={day.isToday ? "date" : undefined}
                 className={cn(
                   "text-sm font-medium capitalize",
-                  day.isToday && "text-primary",
+                  day.isToday && "font-semibold text-foreground",
                 )}
               >
                 {weekdayFmt.format(day.date)}{" "}
-                <span className="text-muted-foreground">{dayFmt.format(day.date)}</span>
+                <span className="text-muted-on-fog">{dayFmt.format(day.date)}</span>
               </h3>
               <Button
                 variant="ghost"
@@ -645,7 +645,7 @@ function WeekView({
               </Button>
             </div>
             {dayTasks.length === 0 ? (
-              <p className="rounded-lg border border-dashed px-3 py-3 text-xs text-muted-foreground">
+              <p className="rounded-lg border border-dashed px-3 py-3 text-xs text-muted-on-fog">
                 Sem tarefas.
               </p>
             ) : (

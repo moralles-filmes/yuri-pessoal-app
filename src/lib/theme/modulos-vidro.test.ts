@@ -1105,11 +1105,43 @@ describe("09-F · T8 · últimos textos na névoa vistos no navegador", () => {
   const raiz = path.resolve(SRC, "..");
   it("cabeçalho do dia e o estado Descanso do calendário em muted-on-fog", () => {
     const f = fonteSemComentarios(path.join(raiz, "src/app/(app)/treinos/calendario/calendar-client.tsx"));
-    expect(f).toContain('isToday ? "text-primary" : "text-muted-on-fog"');
+    expect(f).toContain('isToday ? "font-semibold text-foreground" : "text-muted-on-fog"');
     expect(f).toContain('descanso: "border-dashed border-border bg-transparent text-muted-on-fog"');
   });
   it("o convite aos panoramas do chat em muted-on-fog", () => {
     const f = fonteSemComentarios(path.join(raiz, "src/components/ai/chat-client.tsx"));
     expect(f).toMatch(/<p className="text-xs text-muted-on-fog">\s*Ou comece por um panorama/);
+  });
+});
+
+describe("09-F · revisão final · pontos que dependem do dado", () => {
+  const raiz = path.resolve(SRC, "..");
+  const ler = (rel: string) => fonteSemComentarios(path.join(raiz, rel));
+  it("dia de hoje em /tarefas: palavra em foreground, sem primary na névoa", () => {
+    const f = ler("src/app/(app)/tarefas/tasks-client.tsx");
+    expect(f).toContain('day.isToday && "font-semibold text-foreground"');
+    expect(f).not.toContain('day.isToday && "text-primary"');
+    expect(f).toContain('<span className="text-muted-on-fog">{dayFmt.format(day.date)}');
+  });
+  for (const [rel, ancora] of [
+    ["src/app/(app)/ia/comprovantes/page.tsx", "Fechar"],
+    ["src/app/(app)/relatorios/relatorios-client.tsx", "Ver o relatório de cartões"],
+    ["src/app/(app)/estudos/[id]/course-detail-client.tsx", "Abrir curso"],
+  ] as const) {
+    it(`${rel}: o link "${ancora}" direto na névoa em foreground sublinhado`, () => {
+      const f = ler(rel);
+      const fim = f.indexOf(ancora);
+      expect(fim).toBeGreaterThan(-1);
+      const trecho = f.slice(Math.max(f.lastIndexOf("<Link", fim), f.lastIndexOf("<a ", fim), f.lastIndexOf("<a
+", fim)), fim);
+      expect(trecho).toContain("text-foreground underline");
+      expect(trecho).not.toContain("text-primary");
+    });
+  }
+  it("o seletor nativo do relatório de cartões usa campo-nativo", () => {
+    const f = ler("src/app/(app)/cartoes/relatorios/page.tsx");
+    const trecho = f.slice(f.indexOf('id="cartao-do-relatorio"'), f.indexOf("Todos os cartões"));
+    expect(trecho).toContain("campo-nativo");
+    expect(trecho).not.toMatch(/(?:bg-background|border-input|rounded-lg)/);
   });
 });

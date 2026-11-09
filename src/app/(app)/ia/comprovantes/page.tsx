@@ -178,7 +178,7 @@ export default async function ComprovantesPage({
             </h2>
             <Link
               href={receiptsLink()}
-              className="shrink-0 text-xs font-medium text-primary hover:underline"
+              className="shrink-0 text-xs font-medium text-foreground underline"
             >
               Fechar
             </Link>

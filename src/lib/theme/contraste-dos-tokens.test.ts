@@ -68,10 +68,10 @@ const TEXTOS_DIRETOS_NA_NEVOA = [
 ];
 
 // PARES PROIBIDOS, sem uso em página: texto direto sobre a névoa aberta que não passa de 4,5:1.
-// Nenhuma página usa nenhum destes pares: o texto cinza direto na névoa é `text-muted-on-fog`
+// Na 09-F nenhuma página conhecida ficou com estes pares: o texto cinza direto na névoa é `text-muted-on-fog`
 // (ou `text-foreground`), e o colorido vai para dentro de um material de vidro, onde já tem 4,5:1
-// medido. A varredura de fonte de `modulos-vidro.test.ts` (09-F · T8) trava a volta do cinza
-// `muted-foreground`; login e cadastro já tinham saído na 09-C (`casca-vidro.test.ts`).
+// medido. `modulos-vidro.test.ts` (09-F · T8) amarra os pontos corrigidos, um a um; ele não barra
+// um uso novo em outro arquivo. Login e cadastro já tinham saído na 09-C (`casca-vidro.test.ts`).
 // A lista só pode encolher e nenhum par daqui pode ganhar uso direto na névoa.
 const DIVIDA_NA_NEVOA = new Set<string>([
   "claro:destructive:fog-1", "claro:destructive:fog-2", "claro:destructive:fog-3",

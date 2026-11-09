@@ -154,7 +154,7 @@ export function RelatoriosClient({
             />
           ) : (
             <>
-              <Link href="/cartoes/relatorios" className="text-sm text-primary hover:underline">
+              <Link href="/cartoes/relatorios" className="text-sm text-foreground underline">
                 Ver o relatório de cartões ›
               </Link>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

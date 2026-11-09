@@ -152,7 +152,7 @@ export function CourseDetailClient({
                   href={withProtocol(detail.url)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  className="inline-flex items-center gap-1 text-xs text-foreground underline"
                 >
                   <ExternalLink className="size-3" /> Abrir curso
                 </a>

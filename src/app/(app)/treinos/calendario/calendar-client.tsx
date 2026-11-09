@@ -572,7 +572,7 @@ function DayColumn({
         <span
           className={cn(
             "text-xs font-medium",
-            isToday ? "text-primary" : "text-muted-on-fog",
+            isToday ? "font-semibold text-foreground" : "text-muted-on-fog",
           )}
         >
           {label}
