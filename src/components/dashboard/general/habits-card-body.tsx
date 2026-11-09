@@ -14,14 +14,14 @@ import type { HabitsCardData } from "@/lib/dashboard/types";
 const RAIO = 26;
 const CIRCUNFERENCIA = 2 * Math.PI * RAIO;
 
-/** Anel SVG inline (sem biblioteca): fundo `muted`, progresso `primary`, começa às 12h. */
+/** Anel SVG inline (sem biblioteca): trilho `track`, progresso `primary`, começa às 12h. */
 function AnelDoDia({ feitos, agendados }: { feitos: number; agendados: number }) {
   const fracao = agendados > 0 ? Math.min(1, Math.max(0, feitos / agendados)) : 0;
   return (
     <div className="flex shrink-0 items-center gap-3">
       <div className="relative size-16">
         <svg viewBox="0 0 64 64" className="size-16" aria-hidden="true">
-          <circle cx="32" cy="32" r={RAIO} fill="none" strokeWidth="6" stroke="var(--muted)" />
+          <circle cx="32" cy="32" r={RAIO} fill="none" strokeWidth="6" stroke="var(--track)" />
           <circle
             cx="32"
             cy="32"

@@ -772,3 +772,34 @@ describe("rosca de categorias em vidro", () => {
     expect(orfao).not.toContain("dica-do-grafico");
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Task 7 — o anel de progresso: um só, trilho em --track, progresso por stroke-dashoffset.
+// ---------------------------------------------------------------------------------------------
+
+describe.each([
+  { caminho: "habits/progress-ring.tsx", comTransicao: true },
+  { caminho: "dashboard/general/habits-card-body.tsx", comTransicao: false },
+])("anel de progresso em vidro: $caminho", ({ caminho, comTransicao }) => {
+  const fonte = lerComponente(caminho);
+  const circulos = elementos(fonte, "circle");
+
+  it("tem exatamente dois círculos: o trilho e o progresso", () => {
+    expect(fonte.length).toBeGreaterThan(300);
+    expect(circulos.length).toBe(2);
+  });
+
+  it("o trilho (1º círculo) usa var(--track), nunca --muted, e o progresso não", () => {
+    expect(circulos[0]).toMatch(/stroke=\{?"var\(--track\)"\}?/);
+    expect(circulos[1]).not.toContain("var(--track)");
+    expect(fonte).not.toContain("var(--muted)");
+  });
+
+  it("a transição, quando existe, é só do deslocamento do traço e respeita reduced-motion", () => {
+    expect(fonte).not.toContain("transition-all");
+    if (!comTransicao) return;
+    const progresso = circulos[1];
+    expect(progresso).toContain("transition-[stroke-dashoffset]");
+    expect(progresso).toContain("motion-reduce:transition-none");
+  });
+});

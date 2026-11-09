@@ -647,3 +647,29 @@ describe("09-E · dica e legenda dos gráficos", () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// 09-E T7 · anel de progresso: o traço de progresso (`--primary`) sobre o trilho (`--track`)
+// composto sobre cada superfície é componente de interface, >= 3:1 (WCAG 1.4.11).
+// ---------------------------------------------------------------------------------------------
+
+describe("09-E T7 · anel de progresso >= 3:1", () => {
+  for (const [nomeTema, tema] of TEMAS) {
+    it(`${nomeTema}: primary sobre track composto nas quatro superfícies`, () => {
+      const fundos = superficies(tema);
+      expect(fundos).toHaveLength(4);
+      for (const [rotulo, superficie] of fundos) {
+        const trilho = compor(valor(tema, "track"), superficie);
+        const razao = contraste(oklchParaHex(valor(tema, "primary")), trilho);
+        expect(
+          razao,
+          `${nomeTema} · primary sobre track em ${rotulo}: ${razaoTextoDoAnel(razao)}:1 < 3:1`,
+        ).toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
+      }
+    });
+  }
+});
+
+function razaoTextoDoAnel(r: number): string {
+  return (Math.round(r * 100) / 100).toFixed(2).replace(".", ",");
+}
