@@ -538,7 +538,8 @@ describe("09-F · T5 · superfícies de Treinos e Dieta", () => {
     [`${T}exercicios/exercises-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 1],
     // Barra de ações em massa e cartão da linha do tempo na névoa; a linha da sessão está dentro do
     // Card do grupo (ladrilho).
-    [`${T}historico/history-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 2],
+    // + a `SessionRow` do agrupamento "nenhum", que também está direto na névoa (`sobreNevoa`).
+    [`${T}historico/history-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 3],
     [`${T}historico/history-client.tsx`, "MATERIAL_LADRILHO", "rounded-[14px]", 1],
     [`${T}programas/programs-client.tsx`, "MATERIAL_CARTAO", "rounded-[16px]", 1],
     // O treino dentro do programa expandido está no CardContent do programa.
@@ -570,9 +571,29 @@ describe("09-F · T5 · superfícies de Treinos e Dieta", () => {
         for (const c of l.texto.split(/\s+/)) {
           expect(c, `classe que briga com ${material}`).not.toMatch(/^(?:border|border-border|bg-.+|shadow-.+)$/);
         }
+        expect(l.texto, "raio antigo no mesmo literal").not.toMatch(/rounded-(?:lg|xl|2xl)\b/);
       }
     });
   }
+
+  it("history-client: SessionRow só é cartão quando está direto na névoa (sobreNevoa), senão ladrilho", () => {
+    const fonte = fonteSemComentarios(path.join(RAIZ, `${T}historico/history-client.tsx`));
+    const usos = aberturas(fonte, "SessionRow");
+    expect(usos, "três usos de SessionRow").toHaveLength(3);
+    const sobre = usos.filter((u) => /\bsobreNevoa\b/.test(u));
+    expect(sobre, "um uso na névoa").toHaveLength(1);
+    // O uso na névoa é o do agrupamento "nenhum" (sem Card em volta); os outros dois estão no Card.
+    const nenhum = fonte.indexOf('grouping === "nenhum"');
+    expect(nenhum).toBeGreaterThan(0);
+    expect(fonte.indexOf(sobre[0] ?? "")).toBeGreaterThan(nenhum);
+    const emCard = usos.filter((u) => !/\bsobreNevoa\b/.test(u));
+    for (const u of emCard) {
+      const i = fonte.indexOf(u);
+      expect(fonte.lastIndexOf("<Card", i), "dentro de um Card").toBeGreaterThan(fonte.lastIndexOf("</Card>", i));
+    }
+    // A definição escolhe o material pela prop.
+    expect(fonte).toMatch(/sobreNevoa\s*\?\s*`\$\{MATERIAL_CARTAO\} rounded-\[16px\]`\s*:\s*`\$\{MATERIAL_LADRILHO\} rounded-\[14px\]`/);
+  });
 
   it("calendar-client: o estado 'planejado' é ladrilho e os outros sete continuam distintos, com ícone ou rótulo", () => {
     const fonte = fonteSemComentarios(path.join(RAIZ, `${T}calendario/calendar-client.tsx`));
@@ -607,8 +628,13 @@ describe("09-F · T5 · superfícies de Treinos e Dieta", () => {
     ];
     for (const [rel, borda, texto] of casos) {
       const fonte = fonteSemComentarios(path.join(RAIZ, rel));
-      expect(fonte, rel).toMatch(borda);
-      expect(fonte, `${rel}: a situação é dita por texto`).toMatch(texto);
+      const achou = borda.exec(fonte);
+      expect(achou, rel).not.toBeNull();
+      // O texto tem de estar DENTRO do <Card> tingido, não em qualquer ponto do arquivo.
+      const de = achou?.index ?? 0;
+      const ate = fonte.indexOf("</Card>", de);
+      expect(ate, `${rel}: Card fechado`).toBeGreaterThan(de);
+      expect(fonte.slice(de, ate), `${rel}: a situação é dita por texto no Card`).toMatch(texto);
     }
   });
 

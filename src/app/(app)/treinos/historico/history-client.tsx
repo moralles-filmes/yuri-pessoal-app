@@ -685,6 +685,7 @@ function HistoryContent({
             selected={selected.has(item.id)}
             onToggle={onToggle}
             onDelete={onDelete}
+            sobreNevoa
           />
         ))}
       </div>
@@ -731,19 +732,26 @@ function SessionRow({
   selected,
   onToggle,
   onDelete,
+  sobreNevoa = false,
 }: {
   item: HistoryItem;
   options: MetricOptions;
   selected: boolean;
   onToggle: (id: string) => void;
   onDelete: (item: HistoryItem) => void;
+  /** Sem Card em volta (agrupamento "nenhum"): o material é o do cartão, não o do ladrilho. */
+  sobreNevoa?: boolean;
 }) {
   const metrics = sessionMetrics(item, options);
 
   return (
     <div
       className={cn(
-        `${MATERIAL_LADRILHO} flex flex-wrap items-center gap-3 rounded-[14px] p-3 transition-colors`,
+        "flex flex-wrap items-center gap-3 p-3 transition-colors",
+        // Direto na névoa é cartão; dentro de um Card do agrupamento é ladrilho.
+        sobreNevoa
+          ? `${MATERIAL_CARTAO} rounded-[16px]`
+          : `${MATERIAL_LADRILHO} rounded-[14px]`,
         selected && "border-primary/60",
       )}
     >
