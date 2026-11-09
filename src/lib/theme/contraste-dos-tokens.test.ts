@@ -754,11 +754,11 @@ describe("09-F T3 · superfícies dos módulos", () => {
         }
       });
 
-      it("célula de fatura (cartão direto na névoa): foreground e muted-foreground >= 4,5:1", () => {
-        for (const [rotulo, nevoa] of aberturas(tema)) {
-          const cartao = compor(valor(tema, "glass"), nevoa);
+      it("célula de fatura (ladrilho sobre o Card sobre a névoa): foreground e muted-foreground >= 4,5:1", () => {
+        for (const [rotulo, vidro] of superficies(tema)) {
+          const celula = compor(valor(tema, "tile"), vidro);
           for (const texto of ["foreground", "muted-foreground"]) {
-            exigirPrimitiva(nomeTema, texto, "cartão", rotulo, contraste(valor(tema, texto), cartao));
+            exigirPrimitiva(nomeTema, texto, "ladrilho", rotulo, contraste(valor(tema, texto), celula));
           }
         }
       });

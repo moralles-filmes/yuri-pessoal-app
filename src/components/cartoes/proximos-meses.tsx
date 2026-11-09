@@ -9,7 +9,7 @@ import type { CartaoDaCentral } from "@/lib/finance/central-cartoes";
 import type { CelulaDoMes, ProximosMeses, TotalDoMes } from "@/lib/finance/proximos-meses";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { MATERIAL_CARTAO } from "@/components/ui/materiais";
+import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
 import { CLASSE_DO_TOM, rotuloDoEstado } from "./estado-da-fatura";
 
 /*
@@ -121,7 +121,7 @@ function textoParcial(total: NonNullable<TotalDoMes>): string | null {
 const TH =
   "px-2 py-2.5 text-left align-bottom text-[11px] font-semibold tracking-wide text-muted-foreground uppercase";
 const CEL =
-  `${MATERIAL_CARTAO} block min-h-16 rounded-[14px] px-2.5 py-2 text-inherit no-underline hover:border-primary focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none`;
+  `${MATERIAL_LADRILHO} block min-h-16 rounded-[14px] px-2.5 py-2 text-inherit no-underline hover:border-primary focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none`;
 const MES_STICKY = "sticky left-0 z-[1] bg-glass-solid";
 /** O total do mês fica sempre à vista: com muitos cartões a grade rola entre as duas colunas fixas. */
 const TOTAL_STICKY = "sticky right-0 z-[1] border-l";
@@ -139,7 +139,7 @@ function CelulaDaTabela({ celula }: { celula: CelulaDoMes }) {
   }
   if (celula.tipo === "prevista") {
     return (
-      <Link href={celula.href} className={cn(CEL, "border-dashed border-border bg-transparent bg-none shadow-none")}>
+      <Link href={celula.href} className={cn(CEL, "border-dashed border-border bg-transparent shadow-none")}>
         <span className="block text-xs leading-snug text-muted-foreground italic">
           {SEM_LANCAMENTOS}
         </span>

@@ -405,7 +405,7 @@ describe("09-F · T3 · superfícies dos módulos", () => {
     ["src/app/(app)/busca/busca-client.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
     ["src/app/(app)/configuracoes/page.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
     ["src/app/(app)/notificacoes/notifications-client.tsx", "MATERIAL_CARTAO", "rounded-[16px]", 1],
-    ["src/components/cartoes/proximos-meses.tsx", "MATERIAL_CARTAO", "rounded-[14px]", 1],
+    ["src/components/cartoes/proximos-meses.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 1],
     ["src/components/quick-add/quick-add.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 2],
     ["src/app/(app)/financeiro/lancamentos/transaction-form.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 3],
     ["src/app/(app)/importar/import-review.tsx", "MATERIAL_LADRILHO", "rounded-[14px]", 1],
@@ -475,12 +475,11 @@ describe("09-F · T3 · superfícies dos módulos", () => {
     expect(fonte).toMatch(/Não lida/);
   });
 
-  it("proximos-meses: a célula prevista continua sem fundo (tracejada), sem sombra de cartão", () => {
+  it("proximos-meses: a célula prevista continua sem fundo (tracejada), sem o material do ladrilho", () => {
     const fonte = fonteSemComentarios(path.join(RAIZ, "src/components/cartoes/proximos-meses.tsx"));
     const prevista = literais(fonte).find((l) => l.texto.includes("border-dashed"));
     const classes = (prevista?.texto ?? "").split(/\s+/);
     expect(classes).toContain("bg-transparent");
-    expect(classes).toContain("bg-none");
     expect(classes).toContain("shadow-none");
   });
 });
