@@ -673,3 +673,38 @@ describe("09-E T7 · anel de progresso >= 3:1", () => {
 function razaoTextoDoAnel(r: number): string {
   return (Math.round(r * 100) / 100).toFixed(2).replace(".", ",");
 }
+
+// ---------------------------------------------------------------------------------------------
+// 09-F T2 · círculo de concluir: a borda do círculo vazio é componente de interface (>= 3:1) e o
+// visto sobre o preenchimento é ícone (>= 4,5:1). O alfa vem do próprio componente.
+// ---------------------------------------------------------------------------------------------
+
+describe("09-F T2 · círculo de concluir", () => {
+  const fonteCirculo = semComentarios(
+    fs.readFileSync(path.join(SRC, "components", "shared", "circulo-de-concluir.tsx"), "utf8"),
+  );
+  const alfaBorda = alfaDaClasse(fonteCirculo, "border-foreground");
+
+  for (const [nomeTema, tema] of TEMAS) {
+    it(`${nomeTema}: borda do círculo vazio sobre cartão e ladrilho >= 3:1`, () => {
+      const cartao = compor(valor(tema, "glass"), valor(tema, "fog-base"));
+      const ladrilho = compor(valor(tema, "tile"), cartao);
+      for (const [rotulo, superficie] of [["cartão", cartao], ["ladrilho", ladrilho]] as const) {
+        const borda = compor(comAlfa(valor(tema, "foreground"), alfaBorda), superficie);
+        const razao = contraste(borda, superficie);
+        expect(
+          razao,
+          `${nomeTema} · foreground/${Math.round(alfaBorda * 100)} sobre ${rotulo}: ${razaoTextoDoAnel(razao)}:1 < 3:1 — suba só o alfa da borda`,
+        ).toBeGreaterThanOrEqual(MINIMO_COMPONENTE);
+      }
+    });
+
+    it(`${nomeTema}: visto (primary-fill-foreground) sobre primary-fill >= 4,5:1`, () => {
+      const razao = contraste(valor(tema, "primary-fill-foreground"), valor(tema, "primary-fill"));
+      expect(
+        razao,
+        `${nomeTema} · visto sobre o preenchimento: ${razaoTextoDoAnel(razao)}:1 < 4,5:1`,
+      ).toBeGreaterThanOrEqual(MINIMO);
+    });
+  }
+});

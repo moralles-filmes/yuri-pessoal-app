@@ -97,3 +97,151 @@ describe("09-F · T1 · campos nativos em ladrilho", () => {
     expect(b).toMatch(/forced-colors[\s\S]*border-color\s*:\s*CanvasText/);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// 09-F · T2 · o círculo de concluir (TO-DO e hábitos).
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Abertura de um elemento JSX (`<Tag … >`), do `<` ao `>` que fecha a abertura. Percorre a fonte
+ * respeitando chaves e aspas: o `=>` de um handler não encerra a abertura.
+ */
+export function aberturas(fonte: string, tag: string): string[] {
+  const achados: string[] = [];
+  let de = 0;
+  for (;;) {
+    const i = fonte.indexOf(`<${tag}`, de);
+    if (i < 0) return achados;
+    const depois = fonte[i + tag.length + 1];
+    if (depois !== undefined && /[\w.]/.test(depois)) {
+      de = i + 1;
+      continue;
+    }
+    let chaves = 0;
+    let aspa: string | null = null;
+    let j = i + tag.length + 1;
+    for (; j < fonte.length; j += 1) {
+      const c = fonte[j];
+      if (aspa) {
+        if (c === aspa) aspa = null;
+        continue;
+      }
+      if (c === '"' || c === "'" || c === "`") aspa = c;
+      else if (c === "{") chaves += 1;
+      else if (c === "}") chaves -= 1;
+      else if (c === ">" && chaves === 0 && fonte[j - 1] !== "=") break;
+    }
+    achados.push(fonte.slice(i, j + 1));
+    de = j + 1;
+  }
+}
+
+/** Classes de todo literal de texto do `className` (`className="…"` ou `className={cn("…", …)}`). */
+function classesDe(abertura: string): string[] {
+  const i = abertura.indexOf("className=");
+  if (i < 0) return [];
+  const resto = abertura.slice(i);
+  const literais = [...resto.matchAll(/"([^"\n]*)"/g)].map((m) => m[1] ?? "");
+  // `className="a b"` tem um só literal; `className={cn("a", cond && "b")}` tem vários.
+  return literais.flatMap((l) => l.split(/\s+/)).filter(Boolean);
+}
+
+describe("09-F · T2 · círculo de concluir", () => {
+  const CIRCULO = path.join(SRC, "components/shared/circulo-de-concluir.tsx");
+  const existe = fs.existsSync(CIRCULO);
+  const fonte = existe ? fonteSemComentarios(CIRCULO) : "";
+  const raiz = existe ? aberturas(fonte, "CheckboxPrimitive.Root") : [];
+  const visivel = existe ? aberturas(fonte, "span").filter((s) => /aria-hidden/.test(s)) : [];
+
+  it("o componente existe e usa o Checkbox do radix", () => {
+    expect(existe, "src/components/shared/circulo-de-concluir.tsx existe").toBe(true);
+    expect(fonte).toMatch(/import \{ Checkbox as CheckboxPrimitive \} from "radix-ui"/);
+    expect(fonte).toMatch(/export function CirculoDeConcluir/);
+    expect(raiz).toHaveLength(1);
+  });
+
+  it("o botão tem 44 px de verdade: size-11 shrink-0, sem pseudo-elemento nem inset negativo", () => {
+    const classes = classesDe(raiz[0] ?? "");
+    expect(classes).toContain("size-11");
+    expect(classes).toContain("shrink-0");
+    expect(classes).toContain("group");
+    expect(
+      classes.filter((c) => c.includes("after:") || c.includes("-inset")),
+      "a área de toque é espaço reservado, não uma sobreposição",
+    ).toEqual([]);
+  });
+
+  it("o círculo visível é um span aria-hidden de 22 px, redondo", () => {
+    expect(visivel).toHaveLength(1);
+    const classes = classesDe(visivel[0] ?? "");
+    expect(classes).toContain("size-[22px]");
+    expect(classes).toContain("rounded-full");
+    expect(classes).toContain("border-foreground/52");
+  });
+
+  it("a transição do círculo lista scale e motion-reduce a desliga", () => {
+    const classes = classesDe(visivel[0] ?? "");
+    const transicao = classes.find((c) => c.startsWith("transition-["));
+    expect(transicao, "transition-[...] explícito").toBeDefined();
+    expect(transicao).toMatch(/\bscale\b/);
+    expect(classes.some((c) => c.startsWith("motion-reduce:"))).toBe(true);
+    expect(classes).toContain("group-active:scale-[.9]");
+  });
+
+  it("o foco aparece no círculo, e o visto entra com ease-estalo", () => {
+    const classes = classesDe(visivel[0] ?? "");
+    expect(classes).toContain("group-focus-visible:outline-2");
+    expect(classes).toContain("group-focus-visible:outline-offset-2");
+    expect(classes).toContain("group-focus-visible:outline-ring");
+    expect(fonte).toMatch(/<CheckboxPrimitive\.Indicator/);
+    expect(fonte).toMatch(/ease-estalo/);
+  });
+
+  const CHAMADORES = [
+    "src/components/todo/task-row.tsx",
+    "src/components/todo/task-board.tsx",
+    "src/components/habits/habit-card.tsx",
+    "src/components/dashboard/general/habits-card-body.tsx",
+  ];
+  const RAIZ = path.resolve(SRC, "..");
+
+  for (const rel of CHAMADORES) {
+    it(`${rel}: o controle de concluir é CirculoDeConcluir, e Checkbox não o faz mais`, () => {
+      const f = fonteSemComentarios(path.join(RAIZ, rel));
+      const circulos = aberturas(f, "CirculoDeConcluir");
+      expect(circulos, "um CirculoDeConcluir").toHaveLength(1);
+      expect(circulos[0]).toMatch(/aria-label=\{?(?:\w+\s*\?\s*)?[`"'](?:Concluir|Reabrir)\b/);
+      const quadradas = aberturas(f, "Checkbox").filter((a) => /(Concluir|Reabrir)/.test(a));
+      expect(quadradas, "nenhum Checkbox quadrado com aria-label Concluir/Reabrir").toEqual([]);
+    });
+  }
+
+  it("a caixa Selecionar do task-row continua Checkbox, quadrada", () => {
+    const f = fonteSemComentarios(path.join(RAIZ, "src/components/todo/task-row.tsx"));
+    const caixas = aberturas(f, "Checkbox");
+    expect(caixas).toHaveLength(1);
+    expect(caixas[0]).toMatch(/aria-label=\{`Selecionar /);
+    expect(f).toMatch(/import \{ Checkbox \} from "@\/components\/ui\/checkbox"/);
+  });
+
+  it("o botão de 44 px nunca sobrepõe vizinho: nenhum chamador usa after: nem inset", () => {
+    for (const rel of CHAMADORES) {
+      const f = fonteSemComentarios(path.join(RAIZ, rel));
+      const [circulo] = aberturas(f, "CirculoDeConcluir");
+      expect(
+        classesDe(circulo ?? "").filter((c) => c.includes("after:") || c.includes("inset")),
+        rel,
+      ).toEqual([]);
+    }
+  });
+
+  it("no card do dashboard a linha (label) reserva os 44 px em vez de usar margem negativa", () => {
+    const f = fonteSemComentarios(
+      path.join(RAIZ, "src/components/dashboard/general/habits-card-body.tsx"),
+    );
+    const [rotulo] = aberturas(f, "label");
+    expect(classesDe(rotulo ?? "")).toContain("min-h-11");
+    const [circulo] = aberturas(f, "CirculoDeConcluir");
+    expect(classesDe(circulo ?? "").filter((c) => /^-m[xytrbl]?-/.test(c))).toEqual([]);
+  });
+});

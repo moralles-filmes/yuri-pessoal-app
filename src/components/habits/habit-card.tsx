@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Clock, Plus, Pencil, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CirculoDeConcluir } from "@/components/shared/circulo-de-concluir";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -87,11 +87,13 @@ export function HabitCard({
     >
       <CardContent className="space-y-3 p-4">
         <div className="flex items-start gap-3">
-          <Checkbox
+          {/* 44 px de toque sem sobrepor ninguém: consome o gap (-mr-3) e o p-4 do cartão
+              (-ml-2.5, -mt-2.5); o bloco de título embaixo é mais alto que o botão. */}
+          <CirculoDeConcluir
             checked={habit.todayDone}
             disabled={busy}
             aria-label={`Concluir ${habit.name}`}
-            className="mt-0.5"
+            className="-ml-2.5 -mr-3 -mt-2.5"
             onCheckedChange={(v) =>
               run(setHabitDone(habit.id, todayIso, Boolean(v)))
             }

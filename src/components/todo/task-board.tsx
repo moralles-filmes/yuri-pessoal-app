@@ -40,7 +40,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CirculoDeConcluir } from "@/components/shared/circulo-de-concluir";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -335,23 +335,25 @@ function BoardCard({
           type="button"
           ref={setActivatorNodeRef}
           aria-label={`Arrastar ${task.title}`}
-          className="mt-0.5 shrink-0 cursor-grab touch-none rounded text-muted-foreground/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:cursor-grabbing"
+          className="mt-1 shrink-0 cursor-grab touch-none rounded text-muted-foreground/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:cursor-grabbing"
           {...attributes}
           {...listeners}
         >
           <GripVertical className="size-4" />
         </button>
-        <Checkbox
+        {/* 44 px de toque sem sobrepor ninguém: só o topo avança sobre o p-2.5 do cartão (-mt-2.5)
+            e as laterais consomem o gap (-mx-1.5); o botão termina antes da linha de selos. */}
+        <CirculoDeConcluir
           checked={done}
           onCheckedChange={() => onToggleComplete(task)}
           aria-label={done ? `Reabrir ${task.title}` : `Concluir ${task.title}`}
-          className="mt-0.5"
+          className="-mx-1.5 -mt-2.5"
         />
         <button
           type="button"
           onClick={() => onOpen(task)}
           className={cn(
-            "min-w-0 flex-1 text-left text-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+            "mt-0.5 min-w-0 flex-1 text-left text-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
             done && "line-through",
           )}
         >
@@ -359,7 +361,7 @@ function BoardCard({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 pl-6">
+      <div className="flex flex-wrap items-center gap-1.5 pl-7">
         <PriorityBadge priority={task.priority} compact />
         <ScheduleChip
           dateIso={task.scheduledDate}
@@ -375,7 +377,7 @@ function BoardCard({
       </div>
 
       {(task.subtaskCount > 0 || task.commentCount > 0 || task.attachmentCount > 0) && (
-        <div className="flex items-center gap-3 pl-6 text-[0.7rem] text-muted-foreground">
+        <div className="flex items-center gap-3 pl-7 text-[0.7rem] text-muted-foreground">
           {task.subtaskCount > 0 && (
             <span>
               {task.subtaskDoneCount}/{task.subtaskCount} subtarefas

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CirculoDeConcluir } from "@/components/shared/circulo-de-concluir";
 import { cn } from "@/lib/utils";
 import { setHabitDone } from "@/lib/actions/habits";
 import { formatAmount, formatHabitValue } from "@/lib/habits/constants";
@@ -106,9 +106,11 @@ export function HabitsCardBody({
           listItems.map((h) => (
             <label
               key={h.id}
-              className="flex cursor-pointer items-center gap-2.5 text-sm"
+              className="flex min-h-11 cursor-pointer items-center text-sm"
             >
-              <Checkbox
+              {/* O botão de 44 px é a própria altura da linha (min-h-11); o espaço transparente
+                  dele já faz o papel do gap, por isso a linha não tem gap. */}
+              <CirculoDeConcluir
                 checked={h.done}
                 disabled={busy}
                 aria-label={`Concluir ${h.name}`}

@@ -29,6 +29,7 @@ import {
   Archive,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CirculoDeConcluir } from "@/components/shared/circulo-de-concluir";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -131,14 +132,16 @@ export function TaskRow({
         />
       )}
 
-      <Checkbox
+      {/* 44 px de toque sem sobrepor ninguém: a margem negativa consome o gap (-mx-2) e o
+          py-2 da linha (-my-2); o título desce 4 px (mt-1) para ficar na altura do círculo. */}
+      <CirculoDeConcluir
         checked={done}
         onCheckedChange={() => actions.onToggleComplete(task)}
         aria-label={done ? `Reabrir ${task.title}` : `Concluir ${task.title}`}
-        className="mt-1"
+        className="-mx-2 -my-2"
       />
 
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="mt-1 min-w-0 flex-1 space-y-1">
         <div className="flex items-start gap-1.5">
           {expandable && (
             <button
