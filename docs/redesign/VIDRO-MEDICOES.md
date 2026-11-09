@@ -440,3 +440,62 @@ Nenhum quadro acima de 50 ms. Sem desaceleração de CPU.
   usa espaço inseparável, então `break-words` cortaria o número no meio. Fica para decisão do dono.
 - Número do `Indicador` a 28 px: o dado de hoje cabe. Pela conta, sem medição, um valor de sete dígitos fica justo a 1440 px e um de oito não cabe; como o valor usa espaço inseparável, `break-words` o parte no meio dos dígitos. A 1280 px continua em 24 px. Fica para decisão do dono.
 - O número do `Indicador` usa peso 600 (`font-semibold`); o desenho (§6.4) citava 650.
+
+## REDESIGN-09-E — gráficos em vidro (2026-11-08)
+
+Servidor de produção local, Chrome do dono pela extensão, harness de iframes em 390, 768, 1280 e
+1440 px, claro e escuro.
+
+### Testes e orçamento
+
+| | Antes (c2cd34b) | Depois |
+| --- | --- | --- |
+| Testes | 8.553 em 374 arquivos | 8.787 em 375 arquivos |
+| Mediana de JS por rota | 203,9 KB | 203,9 KB |
+| Rotas acima de +1 KB gz | | 0 de 71 |
+| Maior aumento | | +0,079 KB (`/(app)/cartoes/relatorios`) |
+| Maior queda | | −0,055 KB (`/(app)/dashboard`) |
+
+### Amostrador (mesmo método da 09-A, iframe de 1280×800, `document.hasFocus()` verdadeiro)
+
+| Tela | Tema | fps médio (3 rodadas) | p95 (ms) | maior quadro (ms), 3 rodadas |
+| --- | --- | --- | --- | --- |
+| `/dashboard` | claro | 126,6 · 120,4 · 122,9 | 15,0 | 30,1 · 15,1 · 15,1 |
+| `/dashboard` | escuro | 120,7 · 120,6 · 120,5 | 15,0 | 15,2 · 15,1 · 15,1 |
+| `/dashboard/financeiro` | claro | 123,4 · 120,7 · 119,3 | 15,0–15,1 | 20,0 · 15,2 · 30,1 |
+| `/dashboard/financeiro` | escuro | 119,3 · 120,2 · 120,7 | 15,0–15,1 | 30,1 · 29,9 · 30,1 |
+
+Nenhum quadro acima de 50 ms. Sem desaceleração de CPU.
+
+### O que a conferência mostrou
+
+- Sem rolagem horizontal em `/dashboard/financeiro`, `/dashboard`, `/relatorios`, `/habitos`,
+  `/treinos/evolucao`, `/treinos/relatorios`, `/nutricao/medidas` e `/estudos/[id]`, nas quatro
+  larguras e nos dois temas. `/nutricao/medidas` e `/estudos/[id]` não têm dado para desenhar nesta
+  conta: viu-se o estado vazio.
+- Dica em vidro aberta só no hover (uma por vez, desfoque de 24 px), esmaecimento dos outros grupos
+  a 30%, volta ao normal ao sair, e clique sem prender dica nem esmaecimento.
+- Rosca: o centro troca para a fatia e volta ao total. Anel de água: um arco só.
+- Olho fechado: dica, centro, legenda e eixo de valor mascarados; meses e nomes de categoria continuam.
+- Toque: **simulado** com eventos sintéticos. A dica abre, tocar fora ou rolar fecha, e reabre.
+- Crescimento das barras: o Chrome do dono informa `prefers-reduced-motion`, então nada anima ali (o
+  que prova o desligamento). A animação foi **simulada** forçando o `@keyframes`: roda uma vez e
+  marca `data-crescido`.
+- Reduzir transparência: **simulado**, aplicando a regra do material no iframe. A dica fica sólida e
+  sem filtro.
+- Nenhum gráfico vive dentro de diálogo ou gaveta hoje; a regra `body:has` cobre a dica se um dia viver.
+
+### Defeitos que só o navegador mostrou
+
+- Mudar props de `Cell` faz o recharts remontar os `path` (a chave de animação muda). Na rosca isso
+  perdia o hover: ela passou a memoizar a árvore e a aplicar a opacidade direto no DOM dos setores.
+  Nas barras a dica funciona porque o estado vem da própria recharts, mas o esmaecimento entra sem
+  transição.
+- Em `/dashboard/financeiro` o `OlhoDosValores` só envolvia os indicadores. Agora vai até o fim dos
+  gráficos, e o bloco do caixa passou a obedecer também.
+
+### Para as próximas fases
+
+- Tabelas do painel com dinheiro sem `ValorComOlho` continuam visíveis com o olho fechado.
+- As pilhas (faturas, projeção) crescem por segmento, cada um da própria base.
+- Teclado não troca o centro da rosca; a legenda traz os mesmos dados.

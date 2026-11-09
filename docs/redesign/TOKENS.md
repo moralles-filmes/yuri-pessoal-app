@@ -485,6 +485,21 @@ node "$V" "#3987e5,#d95926,#199e70,#c98500,#d55181,#008300,#9085e9,#e66767"   --
 ✅ **Re-executado na 09-A**, depois de os tokens de vidro entrarem: os dois modos reproduzem o
 laudo acima linha por linha.
 
+✅ **Re-executado na 09-E** (2026-11-08), sobre as mesmas superfícies: os dois modos reproduzem o
+laudo de novo. Os pares novos dos gráficos ficam em `contraste-dos-tokens.test.ts`, bloco 09-E:
+
+| Par | Mínimo | Resultado |
+| --- | --- | --- |
+| Texto da dica (`foreground`, `muted-foreground`) sobre `glass-strong` composto, inclusive sobre `#000` e `#fff` | 4,5:1 | passa |
+| Aro da amostra de cor (`foreground/50`) sobre `glass-strong` composto | 3:1 | passa |
+| Contorno tracejado do mês em andamento (`chart-1`, `muted-foreground`) sobre as quatro superfícies | 3:1 | passa |
+| Progresso do anel (`primary`) sobre `track` composto | 3:1 | passa (pior caso 4,69:1 no claro, 5,60:1 no escuro) |
+| Barra esmaecida a 30% sobre a superfície | sem mínimo | claro 1,16 a 1,69:1 · escuro 1,26 a 1,80:1 |
+
+⚠️ **O esmaecimento não alcança 3:1 e isso é decisão do dono (2026-11-08).** Ele é reforço: quem
+informa o grupo em foco é a dica, com o título do grupo. A 30%, nenhum slot passa de 3:1 sobre o
+vidro. `ProgressRing` aceita `color` por hábito: a medida do anel vale para o `--primary`.
+
 ⚠️ **Quem não roda o validador ainda é pego.** `src/lib/theme/tokens.test.ts` guarda os
 **oito hexes** e as **duas superfícies `--glass-solid`**: mexer em qualquer um deixa a suíte
 vermelha, com a instrução de revalidar no lugar da mensagem de erro. Sem isso, este laudo
