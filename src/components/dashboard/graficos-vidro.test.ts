@@ -185,13 +185,38 @@ describe("nenhum arquivo de gráfico diz 'Sobrou'", () => {
  * cada elemento JSX é extraído por inteiro (o `>` de uma seta dentro de `{...}` não o fecha), e
  * a classe é amarrada ao elemento certo, não a "algum lugar do arquivo".
  */
-const BARRAS = [
-  "barras-entradas-saidas-chart-impl.tsx",
-  "mes-a-mes-chart-impl.tsx",
-  "faturas-chart-impl.tsx",
-  "projecao-chart-impl.tsx",
-  "forma-pagamento-chart-impl.tsx",
-] as const;
+type ConfigDeBarras = {
+  /** Relativo a `src/components`. */
+  caminho: string;
+  deitado?: boolean;
+  /** `prop`: o invólucro só leva `grafico-dinheiro` quando a prop `dinheiro` é verdadeira. */
+  dinheiro: "sempre" | "nunca" | "prop";
+  legendas: number;
+  /** O elemento que leva o `ref` do foco: um `<div>` ou o `<ChartFrame>` de Treinos. */
+  raiz: "div" | "ChartFrame";
+  /** Arquivo com vários gráficos: a varredura fica só no trecho do componente de barras. */
+  trecho?: { de: string; ate: string };
+};
+
+const BARRAS: ConfigDeBarras[] = [
+  { caminho: "dashboard/barras-entradas-saidas-chart-impl.tsx", dinheiro: "sempre", legendas: 1, raiz: "div" },
+  { caminho: "dashboard/mes-a-mes-chart-impl.tsx", dinheiro: "sempre", legendas: 1, raiz: "div" },
+  { caminho: "dashboard/faturas-chart-impl.tsx", dinheiro: "sempre", legendas: 1, raiz: "div" },
+  { caminho: "dashboard/projecao-chart-impl.tsx", dinheiro: "sempre", legendas: 1, raiz: "div" },
+  { caminho: "dashboard/forma-pagamento-chart-impl.tsx", deitado: true, dinheiro: "sempre", legendas: 0, raiz: "div" },
+  { caminho: "habits/consistency-chart-impl.tsx", dinheiro: "nunca", legendas: 0, raiz: "div" },
+  { caminho: "reports/report-bar-chart-impl.tsx", dinheiro: "prop", legendas: 0, raiz: "div" },
+  {
+    caminho: "training/training-charts-impl.tsx",
+    dinheiro: "nunca",
+    legendas: 0,
+    raiz: "ChartFrame",
+    trecho: { de: "export function PeriodBarChart", ate: "export function EvolutionLineChart" },
+  },
+];
+
+const lerComponente = (caminho: string) =>
+  semComentarios(readFileSync(join(process.cwd(), "src", "components", caminho), "utf8"));
 
 /** Todo elemento de abertura `<Nome ...>` (ou `/>`) da fonte, com os atributos inteiros. */
 function elementos(fonte: string, nome: string): string[] {
@@ -227,12 +252,17 @@ describe("o extrator de elementos", () => {
   });
 });
 
-describe.each(BARRAS)("barras em vidro: %s", (arquivo) => {
-  const fonte = lerFonte(arquivo);
-  const deitado = arquivo.startsWith("forma-pagamento");
+describe.each(BARRAS)("barras em vidro: $caminho", (cfg) => {
+  const inteiro = lerComponente(cfg.caminho);
+  const fonte = cfg.trecho
+    ? inteiro.slice(inteiro.indexOf(cfg.trecho.de), inteiro.indexOf(cfg.trecho.ate))
+    : inteiro;
+  const deitado = cfg.deitado === true;
 
   it("lê o arquivo (não afirma sobre string vazia)", () => {
-    expect(fonte.length).toBeGreaterThan(800);
+    expect(inteiro.length).toBeGreaterThan(800);
+    expect(fonte.length).toBeGreaterThan(200);
+    expect(fonte).toContain("<BarChart");
   });
 
   it("toda <Bar> desliga a animação da recharts e usa larguraDaBarra", () => {
@@ -263,12 +293,20 @@ describe.each(BARRAS)("barras em vidro: %s", (arquivo) => {
   });
 
   it("o invólucro com ref do foco leva a classe de crescimento e a do olho", () => {
-    const comRef = elementos(fonte, "div").filter((e) => e.includes("ref={refDoGrafico}"));
+    const comRef = elementos(fonte, cfg.raiz).filter((e) =>
+      /\bref(DoGrafico)?=\{refDoGrafico\}/.test(e),
+    );
     expect(comRef.length).toBe(1);
-    const classes = classesDe(comRef[0]);
-    expect(classes).toContain(deitado ? "grafico-barras-deitadas" : "grafico-barras");
-    expect(classes).not.toContain(deitado ? "grafico-barras" : "grafico-barras-deitadas");
-    expect(classes).toContain("grafico-dinheiro");
+    const todas = comRef[0].match(/grafico-[a-z-]+/g) ?? [];
+    expect(todas).toContain(deitado ? "grafico-barras-deitadas" : "grafico-barras");
+    expect(todas).not.toContain(deitado ? "grafico-barras" : "grafico-barras-deitadas");
+    if (cfg.dinheiro === "sempre") expect(classesDe(comRef[0])).toContain("grafico-dinheiro");
+    if (cfg.dinheiro === "nunca") expect(todas).not.toContain("grafico-dinheiro");
+    if (cfg.dinheiro === "prop") {
+      // Só quando a prop é verdadeira: nunca a classe incondicional.
+      expect(comRef[0]).toMatch(/dinheiro\s*\?\s*"grafico-barras grafico-dinheiro"\s*:\s*"grafico-barras"/);
+      expect(classesDe(comRef[0])).not.toContain("grafico-dinheiro");
+    }
   });
 
   it("o observador recebe o MESMO array que o gráfico (a recharts o acha por identidade)", () => {
@@ -312,13 +350,13 @@ describe.each(BARRAS)("barras em vidro: %s", (arquivo) => {
   it("usa a dica em vidro e os ganchos do foco", () => {
     expect(fonte).toContain("DicaDoGrafico");
     expect(fonte).toContain("{ ref: refDoGrafico, ...foco } = useFocoDoGrafico();");
-    expect(fonte).toContain('from "./use-foco-do-grafico"');
+    expect(inteiro).toMatch(/from "[^"]*use-foco-do-grafico"/);
   });
 
   it("a legenda, quando existe, é a LegendaDoGrafico", () => {
     const legendas = elementos(fonte, "Legend");
     for (const l of legendas) expect(l).toContain("content={<LegendaDoGrafico />}");
-    expect(legendas.length).toBe(deitado ? 0 : 1);
+    expect(legendas.length).toBe(cfg.legendas);
   });
 });
 
@@ -401,5 +439,76 @@ describe("chaveDoTopoDaPilha", () => {
   it("sem nenhum valor positivo (zero, nulo, ausente) não há topo", () => {
     expect(chaveDoTopoDaPilha({ a: 0, b: null, c: undefined }, chaves)).toBeNull();
     expect(chaveDoTopoDaPilha({}, chaves)).toBeNull();
+  });
+});
+
+/**
+ * 09-E, Task 4 — as barras dos módulos. O que é DESTE grupo e não do molde: o `ReportBarChart`
+ * só trata o valor como dinheiro quando quem chama diz (`dinheiro`), e as fachadas dos três
+ * gráficos não podem arrastar a dica (ela traz recharts e o olho).
+ */
+describe("barras dos módulos", () => {
+  it("as fachadas não importam a dica nem o gancho de foco", () => {
+    for (const nome of [
+      "habits/consistency-chart.tsx",
+      "reports/report-bar-chart.tsx",
+      "training/training-charts.tsx",
+    ]) {
+      const f = lerComponente(nome);
+      expect(f.length, nome).toBeGreaterThan(300);
+      expect(f, nome).not.toContain("dica-do-grafico");
+      expect(f, nome).not.toContain("use-foco-do-grafico");
+    }
+  });
+
+  it("report-bar: `dinheiro?: boolean`, padrão false, e a dica só marca dinheiro por ele", () => {
+    const f = lerComponente("reports/report-bar-chart-impl.tsx");
+    expect(f).toMatch(/dinheiro\?:\s*boolean/);
+    expect(f).toMatch(/dinheiro\s*=\s*false/);
+    // O formatador da dica repassa a prop (`dinheiro,`), nunca um literal.
+    expect(f).toMatch(/String\(e\.value\),\s*dinheiro,\s*\}/);
+    expect(f).not.toMatch(/dinheiro:\s*true/);
+  });
+
+  it("report-bar: a dica mantém o rótulo e o formatador de hoje", () => {
+    const f = lerComponente("reports/report-bar-chart-impl.tsx");
+    expect(f).toContain("formatValue ? formatValue(");
+    expect(f).toContain("nome: name");
+  });
+
+  it("consistência: os textos de hoje continuam", () => {
+    const f = lerComponente("habits/consistency-chart-impl.tsx");
+    expect(f).toContain("`Semana de ${");
+    expect(f).toContain('nome: "Conclusão"');
+    expect(f).toMatch(/\(\$\{\w+\.done\}\/\$\{\w+\.scheduled\}\)/);
+  });
+
+  it("treinos: a barra mantém a tabela da fachada e o aria-hidden do quadro", () => {
+    const f = lerComponente("training/training-charts-impl.tsx");
+    expect(f).toContain('aria-hidden="true"');
+    expect(f).not.toContain("[6, 6, 0, 0]");
+  });
+
+  it("/relatorios liga `dinheiro` só nos gráficos em BRL", () => {
+    const f = semComentarios(
+      readFileSync(join(process.cwd(), "src", "app", "(app)", "relatorios", "relatorios-client.tsx"), "utf8"),
+    );
+    const graficos = elementos(f, "ReportBarChart");
+    expect(graficos.length).toBeGreaterThan(0);
+    for (const g of graficos) {
+      expect(g.includes("formatCurrency"), g).toBe(/(^|\s)dinheiro(\s|\/|=)/.test(g));
+    }
+    expect(graficos.some((g) => /(^|\s)dinheiro(\s|\/|=)/.test(g))).toBe(true);
+  });
+
+  it("raio: nenhuma barra dos módulos usa raio numérico solto", () => {
+    for (const nome of [
+      "habits/consistency-chart-impl.tsx",
+      "reports/report-bar-chart-impl.tsx",
+      "training/training-charts-impl.tsx",
+    ]) {
+      const f = lerComponente(nome);
+      expect(f, nome).not.toMatch(/radius=\{\[/);
+    }
   });
 });

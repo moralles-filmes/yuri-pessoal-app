@@ -167,7 +167,7 @@ export function RelatoriosClient({
                 {faturasMesData.length === 0 ? (
                   <EmptyState icon={CreditCard} title="Sem faturas ainda" className="py-8" />
                 ) : (
-                  <ReportBarChart data={faturasMesData} name="Total" formatValue={(v) => formatCurrency(v)} />
+                  <ReportBarChart data={faturasMesData} name="Total" formatValue={(v) => formatCurrency(v)} dinheiro />
                 )}
               </ChartCard>
 

@@ -25,6 +25,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -35,10 +36,17 @@ import {
 import {
   axisTick,
   GRID_COLOR,
+  larguraDaBarra,
+  opacidadeDoGrupo,
+  raioDaPonta,
   tooltipItemStyle,
   tooltipLabelStyle,
   tooltipStyle,
+  VAO_ENTRE_BARRAS,
 } from "@/components/dashboard/chart-theme";
+import { DicaDoGrafico } from "@/components/dashboard/dica-do-grafico";
+import { linhasDaDica } from "@/components/dashboard/linhas-da-dica";
+import { ObservadorDeFoco, useFocoDoGrafico } from "@/components/dashboard/use-foco-do-grafico";
 
 export type ChartPoint = {
   label: string;
@@ -53,14 +61,20 @@ export type ChartPoint = {
 function ChartFrame({
   children,
   height = 240,
+  className,
+  refDoGrafico,
 }: {
   points: ChartPoint[];
   valueLabel: string;
   children: React.ReactElement;
   height?: number;
+  /** Classes do gráfico (crescimento das barras). */
+  className?: string;
+  /** O `ref` do foco (09-E): a dica fecha ao tocar fora e ao rolar. */
+  refDoGrafico?: (elemento: HTMLDivElement | null) => void;
 }) {
   return (
-    <div aria-hidden="true">
+    <div aria-hidden="true" ref={refDoGrafico} className={className}>
       <ResponsiveContainer width="100%" height={height}>
         {children}
       </ResponsiveContainer>
@@ -85,20 +99,49 @@ export function PeriodBarChart({
   valueLabel: string;
   height?: number;
 }) {
+  // `ref` sai do objeto: um `ref={x.ref}` faz o lint do React tratar `x` inteiro como ref e recusar
+  // `x.dicaAtiva` na renderização.
+  const { ref: refDoGrafico, ...foco } = useFocoDoGrafico();
   return (
-    <ChartFrame points={points} valueLabel={valueLabel} height={height}>
-      <BarChart data={points} margin={{ left: 4, right: 8, top: 8 }}>
+    <ChartFrame
+      points={points}
+      valueLabel={valueLabel}
+      height={height}
+      className="grafico-barras"
+      refDoGrafico={refDoGrafico}
+    >
+      <BarChart data={points} margin={{ left: 4, right: 8, top: 8 }} barGap={VAO_ENTRE_BARRAS}>
+        <ObservadorDeFoco dados={points} aoMudar={foco.aoMudar} />
         <CartesianGrid vertical={false} stroke={GRID_COLOR} />
         <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
         <YAxis tick={axisTick} axisLine={false} tickLine={false} width="auto" />
         <Tooltip
-          {...tooltipProps}
-          formatter={(_value, _name, item) => [
-            (item?.payload as ChartPoint).display,
-            valueLabel,
-          ]}
+          cursor={false}
+          active={foco.dicaAtiva}
+          isAnimationActive={false}
+          content={({ payload, label }) => (
+            <DicaDoGrafico
+              titulo={String(label)}
+              linhas={linhasDaDica(payload ?? [], (e) => ({
+                nome: valueLabel,
+                valor: (e.payload as ChartPoint).display,
+                dinheiro: false,
+              }))}
+            />
+          )}
         />
-        <Bar dataKey="value" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
+        <Bar
+          dataKey="value"
+          name={valueLabel}
+          fill="var(--chart-1)"
+          radius={raioDaPonta("horizontal")}
+          maxBarSize={larguraDaBarra(points.length)}
+          isAnimationActive={false}
+        >
+          {points.map((p, i) => (
+            <Cell key={p.label} opacity={opacidadeDoGrupo(i, foco.foco)} />
+          ))}
+        </Bar>
       </BarChart>
     </ChartFrame>
   );
