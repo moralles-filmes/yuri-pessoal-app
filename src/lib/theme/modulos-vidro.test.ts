@@ -1132,8 +1132,8 @@ describe("09-F · revisão final · pontos que dependem do dado", () => {
       const f = ler(rel);
       const fim = f.indexOf(ancora);
       expect(fim).toBeGreaterThan(-1);
-      const trecho = f.slice(Math.max(f.lastIndexOf("<Link", fim), f.lastIndexOf("<a ", fim), f.lastIndexOf("<a
-", fim)), fim);
+      const aberturasDeLink = [...f.slice(0, fim).matchAll(/<(?:Link|a)\s/g)];
+      const trecho = f.slice(aberturasDeLink.at(-1)?.index ?? fim, fim);
       expect(trecho).toContain("text-foreground underline");
       expect(trecho).not.toContain("text-primary");
     });
