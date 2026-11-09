@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { semComentarios } from "@/lib/theme/ler-tokens";
@@ -725,7 +725,7 @@ describe("rosca de categorias em vidro", () => {
   });
 
   it("o invólucro leva o ref do foco, sem crescimento de barras e sem grafico-dinheiro", () => {
-    expect(impl).toContain("{ ref: refDoGrafico, ...foco } = useFocoDoGrafico();");
+    expect(impl).toContain("{ ref: refDoGrafico, ...foco } = useFocoDoGrafico({ zerarAoDispensar: true });");
     expect(impl).toMatch(/from "\.\/use-foco-do-grafico"/);
     const comRef = elementos(impl, "div").filter((e) => /\bref=\{refDoGrafico\}/.test(e));
     expect(comRef.length).toBe(1);
@@ -801,5 +801,48 @@ describe.each([
     const progresso = circulos[1];
     expect(progresso).toContain("transition-[stroke-dashoffset]");
     expect(progresso).toContain("motion-reduce:transition-none");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// R7 — a rosca zera o foco bruto ao dispensar (tocar fora ou rolar); os outros gráficos não.
+// ---------------------------------------------------------------------------------------------
+
+describe("foco da rosca zera ao dispensar", () => {
+  const trecho = (de: string, ate: string) => foco.slice(foco.indexOf(de), foco.indexOf(ate));
+  const aoTocar = trecho("const aoTocar", "const aoRolar");
+  const aoRolar = trecho("const aoRolar", "const aoMover");
+
+  it("o gancho aceita a opção zerarAoDispensar, desligada por padrão", () => {
+    expect(foco).toMatch(/useFocoDoGrafico\(\s*\{\s*zerarAoDispensar\s*=\s*false\s*\}/);
+    expect(foco).toMatch(/\[raiz,\s*zerarAoDispensar\]/);
+  });
+
+  it("tocar FORA zera o bruto dentro do ramo da opção; tocar dentro não", () => {
+    expect(aoTocar).toMatch(/if\s*\(\s*zerarAoDispensar\s*&&\s*!dentro\s*\)\s*setBruto\(null\)/);
+  });
+
+  it("rolar zera o bruto dentro do ramo da opção", () => {
+    expect(aoRolar).toMatch(/if\s*\(\s*zerarAoDispensar\s*\)\s*setBruto\(null\)/);
+  });
+
+  it("só a rosca liga a opção; os demais gráficos chamam o gancho sem argumento", () => {
+    const raiz = join(process.cwd(), "src");
+    const usuarios: string[] = [];
+    const varrer = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) varrer(p);
+        else if (/-impl\.tsx$/.test(e.name)) {
+          const f = semComentarios(readFileSync(p, "utf8"));
+          if (f.includes("useFocoDoGrafico(")) usuarios.push(e.name);
+          const liga = /useFocoDoGrafico\(\s*\{[^)]*zerarAoDispensar:\s*true/.test(f);
+          expect(liga, e.name).toBe(e.name === "rosca-categorias-chart-impl.tsx");
+        }
+      }
+    };
+    varrer(raiz);
+    expect(usuarios.length).toBeGreaterThan(10);
+    expect(usuarios).toContain("rosca-categorias-chart-impl.tsx");
   });
 });

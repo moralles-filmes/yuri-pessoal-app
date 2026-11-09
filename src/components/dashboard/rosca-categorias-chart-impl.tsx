@@ -31,7 +31,7 @@ export function RoscaCategoriasChart({
   rotuloDoTotal?: string;
 }) {
   // `ref` sai do objeto: um `ref={x.ref}` faz o lint do React tratar `x` inteiro como ref.
-  const { ref: refDoGrafico, ...foco } = useFocoDoGrafico();
+  const { ref: refDoGrafico, ...foco } = useFocoDoGrafico({ zerarAoDispensar: true });
   const centro = centroDaRosca({ fatias, total, rotuloDoTotal }, foco.foco);
 
   return (

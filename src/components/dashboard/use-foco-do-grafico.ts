@@ -14,8 +14,13 @@ import { useActiveTooltipDataPoints } from "recharts";
  * controle à recharts. No toque a dica fica presa até o dedo tocar fora ou a página rolar —
  * esses dois gestos a apagam, e o foco (grupo esmaecido) vai junto. Teclado (`focusin` e
  * `keydown` dentro do gráfico) a devolve: quem rola e navega por Tab e setas também vê a dica.
+ *
+ * `zerarAoDispensar` (só a rosca liga): tocar fora e rolar também zeram o foco bruto. Sem isso, o
+ * próximo `pointerdown` dentro do gráfico (o buraco da rosca) devolveria `dicaAtiva` e, com ele,
+ * a fatia antiga ao centro. Nos gráficos de barra NÃO se zera: `ObservadorDeFoco` só emite quando
+ * o índice muda, então zerar impediria reabrir a dica no mesmo grupo.
  */
-export function useFocoDoGrafico() {
+export function useFocoDoGrafico({ zerarAoDispensar = false }: { zerarAoDispensar?: boolean } = {}) {
   // Ref de CALLBACK, guardada em estado: o invólucro pode montar depois do hook (o gráfico sai do
   // vazio para o cheio sem remontar o componente), e um `useRef` lido num efeito de montagem
   // nunca veria o elemento — o `pointermove` ficaria sem ouvinte e a dica apagada por rolagem
@@ -32,8 +37,12 @@ export function useFocoDoGrafico() {
     const aoTocar = (e: PointerEvent) => {
       const dentro = raiz !== null && e.target instanceof Node && raiz.contains(e.target);
       setDicaAtiva(dentro ? undefined : false);
+      if (zerarAoDispensar && !dentro) setBruto(null);
     };
-    const aoRolar = () => setDicaAtiva(false);
+    const aoRolar = () => {
+      setDicaAtiva(false);
+      if (zerarAoDispensar) setBruto(null);
+    };
     const aoMover = () => setDicaAtiva(undefined);
 
     window.addEventListener("pointerdown", aoTocar, { passive: true });
@@ -48,7 +57,7 @@ export function useFocoDoGrafico() {
       raiz?.removeEventListener("focusin", aoMover);
       raiz?.removeEventListener("keydown", aoMover);
     };
-  }, [raiz]);
+  }, [raiz, zerarAoDispensar]);
 
   const foco = dicaAtiva === false ? null : bruto;
   return { ref, foco, aoMudar, dicaAtiva };
