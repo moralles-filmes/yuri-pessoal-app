@@ -12,7 +12,8 @@ import { useActiveTooltipDataPoints } from "recharts";
  *
  * `dicaAtiva` vai para `<Tooltip active>`: `false` força a dica apagada, `undefined` devolve o
  * controle à recharts. No toque a dica fica presa até o dedo tocar fora ou a página rolar —
- * esses dois gestos a apagam, e o foco (grupo esmaecido) vai junto.
+ * esses dois gestos a apagam, e o foco (grupo esmaecido) vai junto. Teclado (`focusin` e
+ * `keydown` dentro do gráfico) a devolve: quem rola e navega por Tab e setas também vê a dica.
  */
 export function useFocoDoGrafico() {
   // Ref de CALLBACK, guardada em estado: o invólucro pode montar depois do hook (o gráfico sai do
@@ -38,10 +39,14 @@ export function useFocoDoGrafico() {
     window.addEventListener("pointerdown", aoTocar, { passive: true });
     window.addEventListener("scroll", aoRolar, { passive: true });
     raiz?.addEventListener("pointermove", aoMover, { passive: true });
+    raiz?.addEventListener("focusin", aoMover, { passive: true });
+    raiz?.addEventListener("keydown", aoMover, { passive: true });
     return () => {
       window.removeEventListener("pointerdown", aoTocar);
       window.removeEventListener("scroll", aoRolar);
       raiz?.removeEventListener("pointermove", aoMover);
+      raiz?.removeEventListener("focusin", aoMover);
+      raiz?.removeEventListener("keydown", aoMover);
     };
   }, [raiz]);
 

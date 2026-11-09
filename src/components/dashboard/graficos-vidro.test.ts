@@ -94,6 +94,18 @@ describe("use-foco-do-grafico", () => {
     expect(foco).toMatch(/removeEventListener\("scroll"/);
   });
 
+  it("pointermove, focusin e keydown DENTRO do gráfico reabilitam a dica, e saem no cleanup", () => {
+    for (const evento of ["pointermove", "focusin", "keydown"]) {
+      expect(foco, `add ${evento}`).toMatch(
+        new RegExp(String.raw`raiz\?\.addEventListener\("${evento}",\s*aoMover,\s*\{\s*passive:\s*true`),
+      );
+      expect(foco, `remove ${evento}`).toMatch(
+        new RegExp(String.raw`raiz\?\.removeEventListener\("${evento}",\s*aoMover`),
+      );
+    }
+    expect(foco).toMatch(/aoMover\s*=\s*\(\)\s*=>\s*setDicaAtiva\(undefined\)/);
+  });
+
   it("pointerdown só apaga a dica quando o alvo está FORA do ref", () => {
     expect(foco).toMatch(/\.contains\(e\.target\)/);
     expect(foco).toMatch(/dentro\s*\?\s*undefined\s*:\s*false/);
