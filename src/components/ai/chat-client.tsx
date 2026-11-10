@@ -774,7 +774,7 @@ export function ChatView({
         </div>
       )}
 
-      <div className={cn("sticky bottom-0 space-y-2 pt-3", compacto ? "bg-popover-solid" : "bg-background")}>
+      <div className={cn("sticky space-y-2 pt-3", compacto ? "bottom-0 bg-popover-solid" : "bottom-(--recuo-barra-acoes) bg-background")}>
         <label htmlFor={idDoCampo} className="sr-only">Mensagem para o assistente</label>
         <div className={cn("flex items-end gap-2 rounded-2xl p-2 focus-within:ring-2 focus-within:ring-ring", MATERIAL_LADRILHO)}>
           <Textarea

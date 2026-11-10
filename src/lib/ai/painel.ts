@@ -68,6 +68,14 @@ export function cantoValido(valor: unknown): CantoDoBotao {
 export const TECLA_DO_PAINEL = "i";
 export const ATALHO_DO_PAINEL = "Ctrl/⌘ + I";
 
+/**
+ * 09-G — abaixo de `lg` o botão deixa de ser flutuante e vira um item da barra de ações; o
+ * canto escolhido só vale a partir de `lg`. As telas que oferecem o canto dizem isso com
+ * esta frase (fonte única, para o formulário e o menu não divergirem).
+ */
+export const AVISO_DO_CANTO_NO_CELULAR =
+  "Em telas estreitas, como a do celular e a do tablet em pé, o botão fica na barra de ações embaixo da tela, e a posição não se aplica.";
+
 // ─────────────────────────── O estado do painel ───────────────────────────
 
 /** Uma alteração preparada que ainda aguarda decisão, com o prazo dela (18-C). */

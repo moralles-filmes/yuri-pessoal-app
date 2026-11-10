@@ -330,6 +330,25 @@
   --sidebar-ring: oklch(0.717 0.118 254);
 }
 
+/* 09-G — barra de ações do celular. `--barra-acoes-altura` = 0,5 rem de respiro + 52 px de botão +
+   0,75 rem de base, escrita como `calc(52px + 1.25rem)` para a soma bater com as classes da barra
+   mesmo com fonte-base diferente de 16 px: mexer numa exige mexer na outra.
+   `--recuo-barra-acoes` é o que as telas reservam embaixo (a barra + a área segura do iOS) e
+   vale 0 a partir de `lg`, onde a barra não existe. */
+:root {
+  --barra-acoes-altura: calc(52px + 1.25rem);
+  --recuo-barra-acoes: calc(var(--barra-acoes-altura) + env(safe-area-inset-bottom, 0px));
+}
+/* WCAG 2.4.11: Tab, foco em campo com erro e `scrollIntoView` não param atrás da barra. */
+html {
+  scroll-padding-bottom: var(--recuo-barra-acoes);
+}
+@media (width >= 64rem) {
+  :root {
+    --recuo-barra-acoes: 0px;
+  }
+}
+
 /* Transparência reduzida no nível dos TOKENS (§6.12 do desenho): `--card`, `--popover` e
    `--sidebar` apontam para o vidro, então sem isto todo `Card`, a sidebar e os popovers
    continuariam translúcidos com a preferência ligada (as @utility só cobrem quem as usa).

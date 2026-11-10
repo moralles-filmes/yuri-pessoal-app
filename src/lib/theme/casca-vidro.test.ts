@@ -252,9 +252,11 @@ describe("09-C · botão do assistente", () => {
     expect(fonte).not.toMatch(/from "@\/components\/ui\/button"/);
   });
 
-  it("é um círculo de vidro fixo, centralizado, com pressão e foco por contorno", () => {
+  // 09-G: o botão mora na barra de ações no celular; `fixed`, `bottom-4`, `z-40`, `size-12`
+  // e o canto passaram para `lg:` (e ganhou `relative`, para ancorar o selo fora do `fixed`).
+  it("é um círculo de vidro centralizado, com pressão e foco por contorno", () => {
     for (const c of [
-      "vidro-casca", "fixed", "bottom-4", "z-40", "size-12", "rounded-full",
+      "vidro-casca", "lg:fixed", "lg:bottom-4", "lg:z-40", "lg:size-12", "size-[52px]", "rounded-full",
       "inline-flex", "items-center", "justify-center",
       "focus-visible:outline-2", "focus-visible:outline-offset-2", "focus-visible:outline-ring",
     ]) {
@@ -264,15 +266,16 @@ describe("09-C · botão do assistente", () => {
     expect(fonte).toMatch(/import \{ PRESSAO \} from "@\/components\/ui\/materiais"/);
     // Sem fundo, borda ou sombra soltos junto do material (nem o `shadow-lg` antigo).
     expect(botao).not.toMatch(/(?:^|[\s"'`])(?:[\w-]+:)*(?:bg|border|shadow)-/m);
-    expect(tem(botao, "relative")).toBe(false);
+    expect(tem(botao, "relative")).toBe(true);
+    for (const c of ["fixed", "bottom-4", "z-40", "size-12"]) expect(tem(botao, c), c).toBe(false);
   });
 
   it("o canto escolhe só o lado", () => {
     expect(ramos, 'ramo `canto === "direita" ? "…" : "…"`').not.toBeNull();
-    expect(tem(ramos?.[1] ?? "", "right-4")).toBe(true);
-    expect(tem(ramos?.[2] ?? "", "left-4")).toBe(true);
-    expect(tem(ramos?.[1] ?? "", "left-4")).toBe(false);
-    expect(tem(ramos?.[2] ?? "", "right-4")).toBe(false);
+    expect(tem(ramos?.[1] ?? "", "lg:right-4")).toBe(true);
+    expect(tem(ramos?.[2] ?? "", "lg:left-4")).toBe(true);
+    expect(tem(ramos?.[1] ?? "", "lg:left-4")).toBe(false);
+    expect(tem(ramos?.[2] ?? "", "lg:right-4")).toBe(false);
   });
 
   it("mantém o nome, o atalho e o estado do disclosure", () => {

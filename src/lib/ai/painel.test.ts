@@ -13,6 +13,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   avisoDoBotao,
+  AVISO_DO_CANTO_NO_CELULAR,
   estadoDoBotao,
   CANTO_PADRAO,
   CANTOS_DO_BOTAO,
@@ -220,5 +221,14 @@ describe("preferências do botão após navegação", () => {
     const anterior = Object.freeze({ servidor, atual: servidor });
     expect(estadoDoBotao(anterior, novas)).toEqual({ servidor: novas, atual: novas });
     expect(anterior.atual).toBe(servidor);
+  });
+});
+
+describe("09-G · o aviso do canto no celular", () => {
+  it("existe, é uma frase e termina em ponto", () => {
+    expect(AVISO_DO_CANTO_NO_CELULAR).toBe(
+      "Em telas estreitas, como a do celular e a do tablet em pé, o botão fica na barra de ações embaixo da tela, e a posição não se aplica.",
+    );
+    expect(AVISO_DO_CANTO_NO_CELULAR.endsWith(".")).toBe(true);
   });
 });

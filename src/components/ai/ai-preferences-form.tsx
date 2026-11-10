@@ -42,6 +42,7 @@ import {
 // acima: a tela não pode arrastar `zod` para ler quatro constantes.
 import {
   ATALHO_DO_PAINEL,
+  AVISO_DO_CANTO_NO_CELULAR,
   CANTOS_DO_BOTAO,
   ROTULO_DO_CANTO,
   type CantoDoBotao,
@@ -610,7 +611,11 @@ export function AiPreferencesForm({
               <SelectTrigger
                 id="pref-canto-botao"
                 className="w-full"
-                aria-describedby={form.floatingHidden ? "pref-canto-botao-aviso" : undefined}
+                aria-describedby={
+                  form.floatingHidden
+                    ? "pref-canto-botao-celular pref-canto-botao-aviso"
+                    : "pref-canto-botao-celular"
+                }
               >
                 <SelectValue />
               </SelectTrigger>
@@ -622,6 +627,10 @@ export function AiPreferencesForm({
                 ))}
               </SelectContent>
             </Select>
+            {/* 09-G — vale sempre: abaixo de lg o botão está na barra e o canto não se aplica. */}
+            <p id="pref-canto-botao-celular" className="text-xs text-muted-foreground">
+              {AVISO_DO_CANTO_NO_CELULAR}
+            </p>
             {/* D2 — o seletor desabilitado diz por quê, e o que continua valendo. */}
             {form.floatingHidden ? (
               <p id="pref-canto-botao-aviso" className="text-xs text-muted-foreground">

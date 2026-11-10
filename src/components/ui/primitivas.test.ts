@@ -679,8 +679,11 @@ describe("Rodapés de gaveta", () => {
     }
     // O mesmo ChatView aparece em /ia, fora de gaveta: lá o rodapé continua bg-background.
     const chat = semComentarios(fs.readFileSync(path.join(SRC, "components", "ai", "chat-client.tsx"), "utf8"));
-    expect(chat).toMatch(/compacto \? "bg-popover-solid" : "bg-background"/);
-    expect(chat).toContain('"sticky bottom-0 space-y-2 pt-3"');
+    // 09-G: o ramo cheio sobe pelo recuo da barra de ações; o compacto (gaveta) fica no fundo dela.
+    expect(chat).toMatch(
+      /compacto \? "bottom-0 bg-popover-solid" : "bottom-\(--recuo-barra-acoes\) bg-background"/,
+    );
+    expect(chat).toContain('"sticky space-y-2 pt-3"');
   });
 });
 

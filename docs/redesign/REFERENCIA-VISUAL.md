@@ -44,7 +44,9 @@ no §6. Tokens, paleta e regras de uso continuam sendo os do `TOKENS.md`.
 
 **Não vale:**
 - a **sidebar** e a **barra de abas inferior do celular**: a navegação fica como está, por decisão
-  sua;
+  sua. ⚠️ **A REDESIGN-09-G (2026-11-10, spec §10.2) revoga em parte a D65:** abaixo de `lg`
+  (64rem) entra uma barra de **ações** fixa no rodapé (Buscar, Novo lançamento e Assistente). A
+  barra de **abas** continua fora, e a navegação segue no menu de três linhas;
 - os valores mostrados;
 - tudo o que o sistema não tem (§6).
 
@@ -215,7 +217,7 @@ nova e sem migration. Senão ficam fora e o desvio vai para o §6.
 
 | No print | Aqui | Por quê |
 | --- | --- | --- |
-| Sidebar e barra de abas do celular | ficam como estão | sua decisão, 2026-10-25 |
+| Sidebar e barra de abas do celular | ficam como estão (a 09-G acrescenta só uma barra de **ações** abaixo de `lg`, sem abas) | sua decisão, 2026-10-25; revogada em parte em 2026-11-10 |
 | Montanha fotográfica | removida na 09-D | a abertura em vidro não tem ilustração |
 | Rosca em tons de azul | paleta validada de 8 slots | categorias precisam se distinguir (`TOKENS.md` §7) |
 | Logos dos bancos | marcador na cor do cartão + nome | sem marca de terceiros; a cor já está cadastrada |
