@@ -435,6 +435,24 @@ Nenhum token ou material novo. Saíram `--banner-from` e `--banner-to`.
 
 ---
 
+### Barra de ações do celular (REDESIGN-09-G)
+
+Nenhum material novo: os botões são `vidro-casca` + `PRESSAO`, de 52 px, com `data-casca` (o desfoque
+cai sob diálogo ou gaveta, como no assistente). Duas variáveis em `globals.css`, somadas à altura que
+a barra ocupa:
+
+| Variável | Valor | O que soma |
+| --- | --- | --- |
+| `--barra-acoes-altura` | `calc(52px + 1.25rem)` | `pt-2` (0,5 rem) + botão (52 px) + base (0,75 rem) da barra, sem misturar `px` e `rem` na conta. Mexer numa exige mexer na outra |
+| `--recuo-barra-acoes` | `calc(var(--barra-acoes-altura) + env(safe-area-inset-bottom, 0px))`; `0px` a partir de `64rem` | a barra mais a área segura do iOS (que só devolve valor com `viewport-fit=cover`) |
+
+`--recuo-barra-acoes` é o que cada tela reserva embaixo: o `pb` do `<main>`, as barras fixas das três
+telas de sessão de treino (`bottom-(--recuo-barra-acoes)`), o compositor do chat em `/ia` (fora da
+gaveta) e o indicador de carregamento do painel do assistente. A casca ganha ainda recuo lateral
+`env(safe-area-inset-left/right)`, que vale `0` fora da paisagem do iPhone.
+
+---
+
 ### 09-F · módulos
 
 - **`campo-nativo`** (`@utility`): `<select>` e `<input>` nativos fora das primitivas. O twMerge não a conhece: não combine com `bg-*`, `border-*`, `shadow-*` ou `rounded-*` no mesmo elemento.

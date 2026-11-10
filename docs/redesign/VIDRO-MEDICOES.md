@@ -555,3 +555,68 @@ Conferência do dono no Safari, servidor de produção na rede local: rolagem no
 - O número do Indicador parte em duas linhas a 1280 px em `/cartoes/relatorios`, `/faturas` e `/parcelamentos`.
 - O calendário de `/treinos/calendario` a 1280 px trunca o nome do treino em uma letra.
 - Bordas de estado anteriores à 09-F não foram medidas a 3:1: `border-primary/30` em Dieta, `/60` no histórico e `/50` no dia de hoje do calendário.
+
+## REDESIGN-09-G — barra de ações do celular (2026-11-10)
+
+Base do bundle: `8389279` (main com a 09-A a 09-F). Sem migration.
+
+### Testes e orçamento
+
+| | Antes | Depois |
+| --- | --- | --- |
+| Testes | 9.502 (416 arquivos) | 9.530 (417 arquivos) |
+| Mediana de JS gz, 71 rotas | 203,9 KB | 204,4 KB |
+| Rota mais pesada (`/(app)/todo`) | 227,6 KB | 228,1 KB |
+| Rotas com teto próprio | 0 | 0 |
+| Rotas acima de 250 KB | 0 | 0 |
+| `test:run`, lint, tsc, build, `perf:bundle` | | saída 0 |
+
+Custo de casca: **+0,5 KB gz em todas as rotas** (a barra entra em toda a casca autenticada).
+
+### Conferência no navegador
+
+Feita no Chrome em 2026-11-10, com o build de produção local e a sessão do dono, em 390, 768, 1280 e
+1440 px, nos temas claro e escuro (harness de iframes).
+
+| Largura | Resultado (claro e escuro) |
+| --- | --- |
+| 1280 e 1440 | Idêntico ao anterior: pílula de busca e "Lançar" no header; assistente `fixed` de 48 px a 16 px do canto, clicável; Buscar e "+" ocultos; recuo 0. |
+| 390 e 768 | Três botões de 52 px a 12 px da base, todos recebendo o toque; header sem os gatilhos duplicados; sem rolagem horizontal. |
+
+- Buscar, "+" e o assistente abrem um diálogo ou painel cada; Ctrl+K e Ctrl+I abrem um só. Diálogo,
+  painel e menu do celular cobrem a barra.
+- Fim de página longa: 48 px entre o último item e os botões. Em `/ia`, o compositor termina acima da
+  barra.
+- Com `floating_hidden` ligada: barra só com Buscar e "+", Ctrl+I abre o painel, aviso correto; a
+  preferência foi devolvida ao valor original.
+- O aviso do canto aparece no formulário e entra no `aria-describedby`; grupo e botão presentes na
+  árvore de acessibilidade em `lg`.
+- Achado e corrigido nesta rodada: o menu "Mais opções" do painel a 390 px (rótulo quebrava em quatro
+  linhas, a nota vazava do menu e o nome acessível saía colado).
+- Divergência registrada, fora do escopo: no chat, "Pergunte qualquer coisa…" usa
+  `text-muted-foreground` direto na névoa em `/ia`, e "Usa o provedor…" usa `text-muted-on-fog` dentro
+  do painel (superfície de sobreposição).
+
+### iPhone
+
+**Pendente, com o dono, no iPhone real.** Só o aparelho prova: a barra acima do indicador de início
+(`viewport-fit=cover` + `env(safe-area-inset-bottom)`), o header sob a barra de status no app da tela
+inicial, o fundo das gavetas, a paisagem (recorte lateral, inclusive nas barras da sessão de treino) e
+o teclado virtual aberto. Se a barra de status translúcida cobrir o header, o reparo é um
+`padding-top` no header, que quebra a premissa `top-16` das barras fixas e por isso não foi feito às
+cegas.
+
+### Fora do escopo
+
+- `themeColor` (§6.13 da spec) continua inexistente: não foi pedido nesta fase.
+- Rodada de correção final (itens 1, 2, 3 e 6):
+  - Impressão: o contêiner da barra leva `print:hidden` (a barra repetiria em todas as folhas).
+  - Foco e rolagem: `html` ganha `scroll-padding-bottom: var(--recuo-barra-acoes)` (WCAG 2.4.11).
+  - Área segura: `SheetContent` com `side="bottom"` ganha `pb-[env(safe-area-inset-bottom)]`, que
+    sobrevive ao `p-0` do chamador no `twMerge`.
+  - Altura: `--barra-acoes-altura` virou `calc(52px + 1.25rem)`, sem misturar `px` e `rem` com a
+    soma das classes da barra.
+- Gavetas laterais e diálogos não ganham recuo lateral de área segura; na paisagem podem encostar no
+  recorte.
+- Sessão de treino: as três barras fixas sobem para cima da barra de ações (cerca de 72 px a menos de
+  tela durante o treino no celular).
