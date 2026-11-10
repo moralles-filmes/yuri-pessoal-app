@@ -599,12 +599,13 @@ Feita no Chrome em 2026-11-10, com o build de produção local e a sessão do do
 
 ### iPhone
 
-**Pendente, com o dono, no iPhone real.** Só o aparelho prova: a barra acima do indicador de início
-(`viewport-fit=cover` + `env(safe-area-inset-bottom)`), o header sob a barra de status no app da tela
-inicial, o fundo das gavetas, a paisagem (recorte lateral, inclusive nas barras da sessão de treino) e
-o teclado virtual aberto. Se a barra de status translúcida cobrir o header, o reparo é um
-`padding-top` no header, que quebra a premissa `top-16` das barras fixas e por isso não foi feito às
-cegas.
+**Conferido pelo dono em 2026-11-10, no iPhone real: "tudo certo".** Safari do iPhone na mesma Wi-Fi,
+servidor de produção local (`next start -H 0.0.0.0`) com o código desta subfase. O roteiro entregue a
+ele cobria: a barra acima do indicador de início (`viewport-fit=cover` +
+`env(safe-area-inset-bottom)`), o header sob a barra de status, o fundo das gavetas, a paisagem (recorte
+lateral, inclusive nas barras da sessão de treino), o teclado virtual aberto e a rolagem. Se um dia a
+barra de status translúcida cobrir o header no app da tela inicial, o reparo é um `padding-top` no
+header, que quebra a premissa `top-16` das barras fixas — por isso não foi feito às cegas.
 
 ### Fora do escopo
 

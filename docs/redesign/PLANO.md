@@ -207,7 +207,7 @@ que nenhuma tela mostra nem o que nenhum número significa.** Nenhuma migration.
 | **09-D** | abertura (substitui o banner), indicador, bloco, `StatCard`, `PageHeader` | idem |
 | **09-E** | gráficos | idem |
 | **09-F** | varredura dos módulos e conferência de todas as rotas | idem |
-| **09-G** | barra de ações do celular (Buscar · Novo lançamento · Assistente) | idem |
+| **09-G** | barra de ações do celular (Buscar · Novo lançamento · Assistente) | `docs/superpowers/plans/2026-11-10-redesign-09g-barra-de-acoes.md` |
 
 Decisões do dono que entram com ela (numerar a partir da próxima D livre no STATUS na hora da
 integração):
