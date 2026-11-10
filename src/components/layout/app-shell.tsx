@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { BarraDeAcoes } from "./barra-de-acoes";
 import { FloatingAssistant } from "@/components/ai/floating-assistant";
 import type { CantoDoBotao } from "@/lib/ai/painel";
 
@@ -60,7 +61,7 @@ export function AppShell({
   }, []);
 
   return (
-    <div className="flex min-h-svh">
+    <div className="flex min-h-svh pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       {/*
         PRIMEIRO elemento focável do documento, e por isso fora da ordem visual: no DOM a
         sidebar vem antes do Header, então quem navega por teclado atravessava os 20 links
@@ -87,19 +88,22 @@ export function AppShell({
         <main
           id="conteudo"
           tabIndex={-1}
-          className="flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8"
+          className="flex-1 px-4 pt-6 pb-[calc(var(--recuo-barra-acoes)+1.5rem)] outline-none sm:px-6 lg:px-8"
         >
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>
 
       {/*
-        18-F Bloco 2. Fora do `<main>` e por último: `position: fixed` não depende do lugar no
-        DOM para se posicionar, mas depende dele para a ORDEM DE FOCO — e um botão flutuante
-        que entra antes do conteúdo faria o Tab passar por ele em toda tela, antes de qualquer
-        coisa que o dono veio fazer.
+        18-F Bloco 2 / 09-G. Fora do `<main>` e por último: o que vem por último no DOM agora é a
+        barra de ações (Buscar, Novo lançamento e o assistente). `position: fixed` não depende do
+        lugar no DOM para se posicionar, mas depende dele para a ORDEM DE FOCO — e uma barra ou
+        botão que entra antes do conteúdo faria o Tab passar por ele em toda tela, antes de
+        qualquer coisa que o dono veio fazer.
       */}
-      <FloatingAssistant canto={cantoDoAssistente} oculto={assistenteOculto} />
+      <BarraDeAcoes>
+        <FloatingAssistant canto={cantoDoAssistente} oculto={assistenteOculto} />
+      </BarraDeAcoes>
     </div>
   );
 }

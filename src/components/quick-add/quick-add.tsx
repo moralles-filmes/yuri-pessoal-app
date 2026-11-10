@@ -86,6 +86,7 @@ import { TODO_PRIORITIES, TODO_PRIORITY_LABELS } from "@/lib/todo/constants";
 import { EVENT_TYPES, EVENT_TYPE_LABELS } from "@/lib/calendar/constants";
 import { STUDY_DIFFICULTIES, STUDY_DIFFICULTY_LABELS } from "@/lib/studies/constants";
 import { MATERIAL_LADRILHO } from "@/components/ui/materiais";
+import { EVENTO_ABRIR_LANCAMENTO } from "@/components/layout/acoes-da-casca";
 
 type Actionish = { ok: boolean; error?: string };
 type QuickType =
@@ -133,7 +134,7 @@ const NUTRITION_TYPES: QuickType[] = ["alimento", "refeicao", "medida", "compra"
 // Hoje em Brasília — não a data do fuso do aparelho.
 const today = () => hojeISO();
 
-/** Lançamento rápido: triggers no header + modal com seletor de tipo e mini-forms. */
+/** Lançamento rápido: gatilho no header (a partir de lg; no celular, a barra de ações) + modal com seletor de tipo e mini-forms. */
 export function QuickAdd() {
   const [open, setOpen] = React.useState(false);
   const [type, setType] = React.useState<QuickType | null>(null);
@@ -165,22 +166,23 @@ export function QuickAdd() {
     }
   }
 
+  // A barra de ações do celular (09-G) pede o lançamento por evento: este componente é o dono do
+  // `open`. O ouvinte é estável, mas `handleOpenChange` lê as opções do render atual.
+  const abrirPorEvento = React.useEffectEvent(() => handleOpenChange(true));
+  React.useEffect(() => {
+    const abrir = () => abrirPorEvento();
+    window.addEventListener(EVENTO_ABRIR_LANCAMENTO, abrir);
+    return () => window.removeEventListener(EVENTO_ABRIR_LANCAMENTO, abrir);
+  }, []);
+
   const close = React.useCallback(() => setOpen(false), []);
   const current = TYPES.find((t) => t.id === type);
 
   return (
     <>
-      <Button className="hidden gap-2 sm:inline-flex" onClick={() => handleOpenChange(true)}>
+      <Button className="hidden gap-2 lg:inline-flex" onClick={() => handleOpenChange(true)}>
         <Plus className="size-4" />
         Lançar
-      </Button>
-      <Button
-        size="icon"
-        className="sm:hidden"
-        aria-label="Lançamento rápido"
-        onClick={() => handleOpenChange(true)}
-      >
-        <Plus className="size-5" />
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>

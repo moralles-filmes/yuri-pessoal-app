@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, SearchX } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -11,12 +10,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { EVENTO_ABRIR_BUSCA } from "@/components/layout/acoes-da-casca";
 import { globalSearch } from "@/lib/actions/search";
 import type { SearchGroup, SearchResult } from "@/lib/search/types";
 import { searchIcon } from "./search-meta";
 
 /**
- * Busca global (Fase 13): triggers no header (caixa no desktop, ícone no mobile) +
+ * Busca global (Fase 13): gatilho no header (caixa, a partir de lg; no celular, a barra de ações) +
  * command palette em Dialog. Abre com Ctrl/Cmd+K. Busca server-side (RLS) com debounce
  * e navegação por teclado (↑/↓/Enter). Resultados agrupados por tipo.
  *
@@ -57,6 +57,13 @@ export function SearchCommand() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // A barra de ações do celular (09-G) pede a busca por evento: este componente é o dono do `open`.
+  React.useEffect(() => {
+    const abrir = () => setOpen(true);
+    window.addEventListener(EVENTO_ABRIR_BUSCA, abrir);
+    return () => window.removeEventListener(EVENTO_ABRIR_BUSCA, abrir);
   }, []);
 
   function runSearch(value: string) {
@@ -124,11 +131,11 @@ export function SearchCommand() {
 
   return (
     <>
-      {/* Trigger desktop (caixa de busca) */}
+      {/* Gatilho (caixa de busca), só a partir de lg; abaixo disso a barra de ações pede por evento */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="hidden h-9 w-full max-w-sm items-center gap-2 rounded-full border border-(--field-border) bg-tile px-3 text-sm text-muted-foreground shadow-[inset_0_1px_0_var(--glass-hi)] transition-colors hover:border-foreground/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex"
+        className="hidden h-9 w-full max-w-sm items-center gap-2 rounded-full border border-(--field-border) bg-tile px-3 text-sm text-muted-foreground shadow-[inset_0_1px_0_var(--glass-hi)] transition-colors hover:border-foreground/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:flex"
       >
         <Search className="size-4" />
         <span>Buscar transações, faturas, tarefas...</span>
@@ -136,16 +143,6 @@ export function SearchCommand() {
           Ctrl K
         </kbd>
       </button>
-      {/* Trigger mobile (ícone) */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="sm:hidden"
-        aria-label="Buscar"
-        onClick={() => setOpen(true)}
-      >
-        <Search className="size-5" />
-      </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent

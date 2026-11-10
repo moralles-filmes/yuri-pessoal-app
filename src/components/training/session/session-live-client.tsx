@@ -682,7 +682,7 @@ function FinishBar({
   onFinish: () => void;
 }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur">
+    <div className="fixed inset-x-0 bottom-(--recuo-barra-acoes) z-20 border-t bg-background/95 p-3 backdrop-blur">
       <div className="mx-auto flex max-w-3xl items-center gap-2">
         <div className="min-w-0 flex-1">
           <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>

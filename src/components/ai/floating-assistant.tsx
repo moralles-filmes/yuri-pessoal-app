@@ -4,7 +4,7 @@
  * Fase 18-F · Bloco 2 — IA · O botão flutuante.
  *
  * ╔══════════════════════════════════════════════════════════════════════════════════════╗
- * ║ ⛔ ESTE ARQUIVO MORA NA CASCA DO APP, ENTÃO TUDO QUE ELE IMPORTA ENTRA NAS 67 ROTAS.   ║
+ * ║ ⛔ ESTE ARQUIVO MORA NA CASCA DO APP, ENTÃO TUDO QUE ELE IMPORTA ENTRA NAS 71 ROTAS.   ║
  * ║                                                                                       ║
  * ║ Medido em 2026-10-15 (REDESIGN-07-D · D4): `/(app)/configuracoes` saiu do teto próprio ║
  * ║ (205,6 KB gz, sem a Segurança no 1º carregamento), e a rota mais apertada passou a ser ║
@@ -45,7 +45,7 @@ import {
 const Painel = dynamic(
   () => import("./floating-assistant-panel").then((m) => m.FloatingAssistantPanel),
   { ssr: false, loading: () => (
-    <span role="status" className="fixed bottom-4 z-40 flex size-12 items-center justify-center rounded-full bg-background shadow-lg left-[var(--assistente-esquerda,auto)] right-[var(--assistente-direita,1rem)]">
+    <span role="status" className="fixed bottom-[calc(var(--recuo-barra-acoes)+1rem)] max-lg:right-4 max-lg:left-auto z-40 flex size-12 items-center justify-center rounded-full bg-background shadow-lg left-[var(--assistente-esquerda,auto)] right-[var(--assistente-direita,1rem)]">
       <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />
       <span className="sr-only">Abrindo o assistente…</span>
     </span>
@@ -114,14 +114,19 @@ export function FloatingAssistant({
           onClick={() => despachar({ tipo: "abriu" })}
           className={cn(
             // Botão nativo: o `Button` traz fundo próprio, e o material (`background` abreviado)
-            // disputaria com ele. `fixed` já posiciona o selo `absolute`.
+            // disputaria com ele.
+            // 09-G: abaixo de `lg` ele é item da barra de ações (52 px, na linha flex) e `relative`
+            // ancora o selo `absolute`; a partir de `lg` volta a ser o círculo `fixed` de sempre.
+            // `pointer-events-auto`: a barra é `pointer-events: none` e a propriedade é HERDADA,
+            // mesmo com `display: contents` — sem ela o botão não receberia toque.
             // z-40: acima do Header (`sticky z-30`), abaixo do overlay do Sheet (`z-50`).
             "vidro-casca",
             PRESSAO,
-            "fixed bottom-4 z-40 size-12 rounded-full",
+            "relative pointer-events-auto size-[52px] shrink-0 rounded-full",
+            "lg:fixed lg:bottom-4 lg:z-40 lg:size-12",
             "inline-flex items-center justify-center",
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-            canto === "direita" ? "right-4" : "left-4",
+            canto === "direita" ? "lg:right-4" : "lg:left-4",
           )}
         >
           <Sparkles className="size-5 text-nav-ativo-ink" />
@@ -142,7 +147,9 @@ export function FloatingAssistant({
       )}
 
       {montado && (
-        <div className={canto === "esquerda" ? "[--assistente-esquerda:1rem] [--assistente-direita:auto]" : "[--assistente-esquerda:auto] [--assistente-direita:1rem]"}>
+        // `contents`: este <div> só carrega as variáveis do indicador; como filho da barra, sem
+        // isto viraria um item vazio da linha flex e somaria um `gap`.
+        <div className={canto === "esquerda" ? "contents [--assistente-esquerda:1rem] [--assistente-direita:auto]" : "contents [--assistente-esquerda:auto] [--assistente-direita:1rem]"}>
         <Painel
           aberto={estado.aberto}
           onOpenChange={(v) => despachar({ tipo: v ? "abriu" : "fechou" })}

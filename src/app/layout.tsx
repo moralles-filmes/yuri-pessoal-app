@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { inter } from "./fonts";
 import { ThemeProvider } from "@/components/providers/theme-provider";
@@ -14,6 +14,12 @@ export const metadata: Metadata = {
   description:
     "Central pessoal: finanças, cartões e faturas, agenda, tarefas, hábitos e estudos.",
 };
+
+/**
+ * `viewport-fit=cover` faz o iOS informar `env(safe-area-inset-*)`; sem ele os valores vêm
+ * `0` e o recuo da barra de ações (globals.css) não teria efeito sobre o indicador de início.
+ */
+export const viewport: Viewport = { viewportFit: "cover" };
 
 export default function RootLayout({
   children,

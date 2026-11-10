@@ -168,7 +168,7 @@ export function FloatingAssistantPanel({
       return;
     }
     if (proximo.oculto) {
-      toast.success(`Botão oculto. O atalho ${ATALHO_DO_PAINEL} continua abrindo o painel.`);
+      toast.success(`Botão oculto. O atalho ${ATALHO_DO_PAINEL} e a página Conversar continuam abrindo o assistente.`);
       onOpenChange(false);
     }
   }
@@ -214,9 +214,13 @@ export function FloatingAssistantPanel({
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Mais opções"><MoreHorizontal className="size-4" /></Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuItem disabled={salvando} onSelect={() => void salvarPreferencia({ canto: outroCanto, oculto })}>
-                  <MoveHorizontal className="size-4" /> Mover para o {ROTULO_DO_CANTO[outroCanto].toLocaleLowerCase("pt-BR")}
+                  <MoveHorizontal className="size-4" />
+                  <span className="flex min-w-0 flex-col">
+                    Mover para o {ROTULO_DO_CANTO[outroCanto].toLocaleLowerCase("pt-BR")}{" "}
+                    <span className="text-xs text-muted-foreground lg:hidden">Só no computador</span>
+                  </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={salvando} onSelect={() => void salvarPreferencia({ canto, oculto: true })}>
                   <EyeOff className="size-4" /> Ocultar o botão

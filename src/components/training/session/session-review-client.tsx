@@ -515,7 +515,7 @@ export function SessionReviewClient({
       )}
 
       {/* ───────── Barra fixa ───────── */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-(--recuo-barra-acoes) z-20 border-t bg-background/95 p-3 backdrop-blur">
         {!isClosed && (!encerramento.ok || queue.state === "erro") && (
           <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <SyncStatus
